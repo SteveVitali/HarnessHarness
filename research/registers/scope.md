@@ -9,9 +9,9 @@ Every item must end Phase 5 as `specified` (interface contract + data model + ac
 
 | req-id | item | tier | novelty | owner WS | spec § | MoSCoW | status |
 |---|---|---|---|---|---|---|---|
-| R-2.1.1 | Ontology / conceptual systematization (7-plane + policy-stack formalism + validity vs compliance + compatibility surface + two participant classes) | C0 | — | WS-A2 (A1, L7) | 2 | Must | open |
-| R-2.1.2 | Harness IR — typed behavioral entities + edges | C0 | ⊕ NEW | WS-A3 | 3 | Must | open |
-| R-2.1.3 | Compilation model — IR → runtime + model profiles + protocol targets | C0 | ⊕ NEW | WS-A4 | 3 | Must | open |
+| R-2.1.1 | Ontology / conceptual systematization (7-plane + policy-stack formalism + validity vs compliance + compatibility surface + two participant classes) | C0 | — | WS-A2 (A1, L7) | 2 | Must | open (Ontology **v0.1** ratified: ADR-0004/0005/0008 terms + canonical-name table; WS-A2 owns v1; CF-020/CF-021 flagged) |
+| R-2.1.2 | Harness IR (HIR) — typed behavioral entities + edges | C0 | ⊕ NEW (conditional: novelty holds only if the seven-plane entity set with provenance is delivered — CF-011) | WS-A3 | 3 | Must | open (must satisfy T-LCD-01/-02/-06/-10/-12; answer OQ-040/041; ADR-0007) |
+| R-2.1.3 | Compilation model — IR → runtime + model profiles + protocol targets (lowering / lifting / lowering loss report) | C0 | ⊕ NEW | WS-A4 | 3 | Must | open (must expose `lcd_report`, `UnexpressibleSurface` as error — ADR-0007 T-LCD-04/-11; answer OQ-043) |
 | R-2.1.4 | Configuration & composition model; code-vs-config boundary | C0 | ↑ EXT | WS-A5 | 3, 6 | Must | open |
 | R-2.1.5 | Provenance & authority model | C0 | ⊕ NEW | WS-L3 | 8 | Must | open |
 | R-2.1.6 | Resource-economics & accounting model | C0 | ↑ EXT | WS-L2 | 8 | Must | open |
@@ -32,7 +32,7 @@ Every item must end Phase 5 as `specified` (interface contract + data model + ac
 |---|---|---|---|---|---|---|---|
 | R-2.3.1 | Model adapter / gateway | C0 | ↑ EXT | WS-C1 | 5 | Must | open |
 | R-2.3.2 | Model router | C1 | ↑ EXT | WS-C2 | 5 | Should | open |
-| R-2.3.3 | Model-profile compiler | C1 | ⊕ NEW | WS-C3 | 5 | Should | open |
+| R-2.3.3 | Model Profile / Profile Compiler | C1 | ⊕ NEW (WS-A1 §6.2 item 2: whitespace confirmed) | WS-C3 | 5 | Should | open (profile schema is sole owner of surface fields; conditioned rules carry assumption-debt records — ADR-0007 T-LCD-01/-05/-10) |
 | R-2.3.4 | Caching & token economics | C1 | — | WS-C4 | 5 | Should | open |
 
 ## 2.4 Context & memory plane (C0/C1/C2)
@@ -90,11 +90,11 @@ Every item must end Phase 5 as `specified` (interface contract + data model + ac
 | req-id | item | tier | novelty | owner WS | spec § | MoSCoW | status |
 |---|---|---|---|---|---|---|---|
 | R-2.9.1 | Telemetry, tracing & cost/latency instrumentation | C0 | ↑ EXT | WS-I1 | 5 | Must | open |
-| R-2.9.2 | Eval framework (factorial; 8-dim scorecard; distributions; process metrics) | C0 | ↑ EXT | WS-I2 | 5, 10 | Must | open |
+| R-2.9.2 | Eval framework (factorial; 8-dim scorecard; distributions; process metrics) | C0 | ↑ EXT | WS-I2 | 5, 10 | Must | open (`MetricDeclaration` / class-scoped metrics and interaction-effect factors are C0/Stage 1 — ADR-0004, ADR-0007 T-LCD-09/-13/-14/-15) |
 | R-2.9.3 | Reproducible harness bundle | C1 | ⊕ NEW | WS-I3 | 5, 10 | Should | open |
-| R-2.9.4 | Benchmark/environment integration (coding/terminal first) | C1 | — | WS-I4 | 10 | Should | open |
+| R-2.9.4 | Benchmark/environment integration (coding/terminal first) | C1 | — | WS-I4 | 10 | Should | open (non-goal N13: integrate Harbor/Inspect/HAL-hosted environments, never author benchmarks — ADR-0005/0006) |
 | R-2.9.5 | Evolution service (governed pipeline) | C4 | ↑ EXT | WS-I5 | 5 | Could* (ADR-0002: fully specified) | open |
-| R-2.9.6 | Assumption-debt manager | C4 | ⊕ NEW | WS-I6 | 5 | Could* | open |
+| R-2.9.6 | Assumption-debt manager | C4 | ⊕ NEW (WS-A1 §6.2 item 7: no precedent found) | WS-I6 | 5 | Could* | open — **stage note (ADR-0007):** the assumption-debt *record schema* is a C0/Stage-1 constraint on every conditioned rule (T-LCD-05); only the *manager* is C4 |
 | R-2.9.7 | Causal attribution & counterfactual execution | C4 | ⊕ NEW | WS-I7 | 5 | Could* | open |
 | R-2.9.8 | Model-harness co-evolution & consolidation | C4 | ⊕ NEW | WS-I8 | 5 | Could* (ADR-0002) | open |
 
@@ -105,9 +105,9 @@ Every item must end Phase 5 as `specified` (interface contract + data model + ac
 | R-2.10.1 | Harness assembly & declarative definition | C1 | ↑ EXT | WS-J1 | 6 | Should | open |
 | R-2.10.2 | Component-variation registry | C1 | ↑ EXT | WS-J2 | 6 | Should | open |
 | R-2.10.3 | Experiment & sweep engine | C1 | ⊕ NEW | WS-J3 | 6 | Should | open |
-| R-2.10.4 | Comparison & analysis engine (both participant classes) | C2 | ⊕ NEW | WS-J4 | 6 | Could | open |
+| R-2.10.4 | Comparison & analysis engine (both participant classes) | C2 | ⊕ NEW (narrowed: the *plane* is precedented; the component-level white-box axis + class-scoped metrics + conformance-as-data are novel — ADR-0004) | WS-J4 | 6 | Could | open (`MetricDeclaration` + comparison granularity are C0/Stage 1 — ADR-0004) |
 | R-2.10.5 | Results store, experiment ledger & leaderboard | C1 | ⊕ NEW | WS-J5 | 6 | Should | open |
-| R-2.10.6 | External-harness hosting / thin observational ABI | C2 | ⊕ NEW | WS-J6 | 6 | Could (first-class, secondary per ADR-0001) | open |
+| R-2.10.6 | External-harness hosting / Hosting ABI (thin observational ABI) | C2 | renamed (precedent: ACP, Omnigent, Codex app-server, Harbor installed agents, Inspect bridge — ADR-0004/0005; "cite and conform") | WS-J6 | 6 | **Should** (ADR-0010; first-class, secondary per ADR-0001; two-step delivery: native-vs-native Stage 3, hosted Stage 4) | open (minimum observable event set + capability declaration, mechanism-neutral — ADR-0005; T-LCD-06/-07) |
 
 ## 2.11 Surfaces (C1/C2)
 
@@ -116,7 +116,7 @@ Every item must end Phase 5 as `specified` (interface contract + data model + ac
 | R-2.11.1 | CLI | C1 | — | WS-K1 | 7 | Should | open |
 | R-2.11.2 | Web-based local dev-tooling | C2 | ↑ EXT | WS-K2 | 7 | Could | open |
 | R-2.11.3 | MCP server | C2 | ↑ EXT | WS-K3 | 7 | Could | open |
-| R-2.11.4 | SDK / embedding API | C1 | ⊕ NEW | WS-K4 | 7 | Should | open |
+| R-2.11.4 | SDK / embedding API | C1 | ⊕ NEW | WS-K4 | 7 | Should | open (ADR-0003: scoped as *embedding the instrument/runtime in a host app*, not a framework for building arbitrary agents; boundary contract WS-L1 §6.5 is its C0/Stage-1 input; must let a native harness act as a participant in external planes — ADR-0005) |
 
 ## 2.12 Cross-cutting & program concerns (C0/L)
 
@@ -124,9 +124,9 @@ Every item must end Phase 5 as `specified` (interface contract + data model + ac
 |---|---|---|---|---|---|---|---|
 | R-2.12.1 | Versioning, reproducibility & artifact identity | C0 | ↑ EXT | WS-L4 | 8 | Must | open |
 | R-2.12.2 | Extensibility / plugin architecture & third-party component contracts | C0 | ↑ EXT | WS-L5 | 8 | Must | open |
-| R-2.12.3 | Language/ecosystem selection (deferred, criteria-driven; outside C-tiers) | — | — | WS-L1 | 11 / ADR | Must (as a decision) | open |
+| R-2.12.3 | Language/ecosystem selection (deferred, criteria-driven; outside C-tiers) | — | — | WS-L1 | 11 / ADR | Must (as a decision) | open — **framed** (ADR-0009 proposed: criteria, candidate classes E1–E5, procedure; ratify end Phase 1 with the decision; questionnaire OQ-040…046 routed to A3/A4/A5/B1/I2/K4) |
 | R-2.12.4 | Packaging, licensing, OSS governance, docs & community | — | — | WS-L6 | 11 | Should | open |
-| R-2.12.5 | Novelty/differentiation thesis & naming | — | — | WS-L7 | 1 | Must | open |
+| R-2.12.5 | Novelty/differentiation thesis & naming | — | — | WS-L7 | 1 | Must | **specified** (ADR-0003 positioning + non-goals; ADR-0006 thesis + N1–N13; ADR-0007 LCD battery; ADR-0008 canonical names; text lands in Spec §1 at Phase 5; product-name qualifier pending OQ-035) |
 | R-2.12.6 | Human-agent organizational layer | C4 | ⊕ NEW | WS-L8 | 5 | Could* | open |
 
 ## Summary
@@ -146,3 +146,7 @@ Every item must end Phase 5 as `specified` (interface contract + data model + ac
 | date | req-id | change | ADR |
 |---|---|---|---|
 | 2026-09-09 | R-2.12.6 | Assigned owner WS-L8 (organizational layer had no WS id in §5) | ledger note; no scope change |
+| 2026-09-09 | R-2.10.6 | MoSCoW **Could → Should** (tier C2 unchanged; two-step delivery wording in Spec §1) | ADR-0010 |
+| 2026-09-09 | R-2.9.6 | Stage note: assumption-debt *record schema* is C0/Stage 1 on every conditioned rule; manager stays C4. No new item. | ADR-0007 |
+| 2026-09-09 | R-2.12.5 | Status → specified (Phase 0 deliverables complete) | ADR-0003, ADR-0006, ADR-0007, ADR-0008 |
+| 2026-09-09 | R-2.1.2, R-2.10.4, R-2.10.6 | Novelty annotations narrowed / re-labelled per WS-A1 audit (`precedent | renamed | novel` obligation for every ⊕ NEW / ↑ EXT item at Phase 5) | ADR-0003, ADR-0004 |

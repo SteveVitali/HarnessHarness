@@ -32,8 +32,8 @@
 | S-009 | Schick et al. (2023), Toolformer | paper | A | 1 | S | no | https://arxiv.org/abs/2302.04761 | E1 |
 | S-010 | Shinn et al. (2023), Reflexion | paper | A | 1 | S | no | https://arxiv.org/abs/2303.11366 | D3, G3 |
 | S-011 | Wang et al. (2023), Voyager | paper | A | 1 | S | no | https://arxiv.org/abs/2305.16291 | D5 |
-| S-012 | Wu et al. (2024), AutoGen (COLM 2024) | paper | A | 1 | S | no | https://www.microsoft.com/en-us/research/publication/autogen-enabling-next-gen-llm-applications-via-multi-agent-conversation-framework/ | A1, F3 |
-| S-013 | Khattab et al. (2023/24), DSPy | paper | A | 0 | S | no | https://arxiv.org/abs/2310.03714 | A1, A3, A4 |
+| S-012 | Wu et al. (2024), AutoGen (COLM 2024) | paper | A | 1 | P | no | https://www.microsoft.com/en-us/research/publication/autogen-enabling-next-gen-llm-applications-via-multi-agent-conversation-framework/ | A1, F3 |
+| S-013 | Khattab et al. (2023/24), DSPy | paper | A | 0 | P | no | https://arxiv.org/abs/2310.03714 | A1, A3, A4 |
 | S-014 | Yang et al. (NeurIPS 2024), SWE-agent (ACI) | paper | A | 1 | S | no | https://arxiv.org/abs/2405.15793 | E1, E2, I4 |
 | S-015 | Zhang et al. (ICLR 2025), AFlow | paper | A | 0 | S | no | https://proceedings.iclr.cc/paper_files/paper/2025/hash/5492ecbce4439401798dcd2c90be94cd-Abstract-Conference.html | A3, I5 |
 | S-016 | Packer et al. (2023), MemGPT | paper | C | 4 | S | no | https://arxiv.org/abs/2310.08560 | D3 |
@@ -49,14 +49,14 @@
 | S-021 | Yuksekgonul et al. (2024), TextGrad | paper | C | 0 | S | no | https://arxiv.org/abs/2406.07496 | I5 |
 | S-022 | Yuan et al. (2024), EvoAgent | paper | C | 0 | S | no | https://arxiv.org/abs/2406.14228 | I5, F3 |
 | S-023 | Hu, Lu & Clune (ICLR 2025), Automated Design of Agentic Systems (ADAS) | paper | A | 0 | S | no | https://proceedings.iclr.cc/paper_files/paper/2025/hash/36b7acf6f6010652b3f2a433774a66fe-Abstract-Conference.html | A3, I5 |
-| S-024 | Shang et al. (2024), AgentSquare | paper | C | 0 | S | no | https://arxiv.org/abs/2410.06153 | A3, J2, I5 |
+| S-024 | Shang et al. (2024), AgentSquare | paper | C | 0 | P | no | https://arxiv.org/abs/2410.06153 | A3, J2, I5 |
 | S-025 | FoundationAgents, AFlow code | repo | B | 0 | S | no | https://github.com/FoundationAgents/AFlow | A3, I5 |
 | S-026 | Zhang et al. (2025; ICLR 2026), Darwin Gödel Machine | paper | A | 0 | S | no | https://arxiv.org/abs/2505.22954 | I5 |
 | S-027 | jennyzzt/dgm — Darwin Gödel Machine reference implementation | repo | B | 0 | S | no | https://github.com/jennyzzt/dgm | I5 |
 | S-028 | Agrawal et al. (2025; ICLR 2026 Oral), GEPA | paper | A | 0 | S | no | https://arxiv.org/abs/2507.19457 | I5 |
 | S-029 | Wang et al. (2025), Maestro | paper | C | 0 | S | no | https://arxiv.org/abs/2509.04642 | I5 |
-| S-030 | Mei et al. (COLM 2025), AIOS: LLM Agent Operating System | paper | A | 0 | S | no | https://arxiv.org/abs/2403.16971 | A1, A2, B5, L2 |
-| S-031 | agiresearch/AIOS | repo | B | 0 | S | no | https://github.com/agiresearch/AIOS | A1, B5, L2 |
+| S-030 | Mei et al. (COLM 2025), AIOS: LLM Agent Operating System | paper | A | 0 | P | no | https://arxiv.org/abs/2403.16971 | A1, A2, B5, L2 |
+| S-031 | agiresearch/AIOS | repo | B | 0 | P | no | https://github.com/agiresearch/AIOS | A1, B5, L2 |
 
 ## C. Tier 2 — production harness engineering (posts, docs, protocols)
 
@@ -65,7 +65,7 @@
 | S-032 | Anthropic (2024), Building effective agents | post | B | 1 | S | no | https://www.anthropic.com/engineering/building-effective-agents | F1 |
 | S-033 | Anthropic (2024), Introducing the Model Context Protocol | post | B | 2 | S | no | https://www.anthropic.com/news/model-context-protocol | E4, K3 |
 | S-034 | Google (2025), Announcing the Agent2Agent Protocol (A2A) | post | B | 2 | S | no | https://developers.googleblog.com/en/a2a-a-new-era-of-agent-interoperability/ | E4 |
-| S-035 | Agent Client Protocol (ACP) | spec | B | 2 | S | no | https://github.com/agentclientprotocol/agent-client-protocol | E4, J6, K4 |
+| S-035 | Agent Client Protocol (ACP) | spec | B | 2 | P | no | https://github.com/agentclientprotocol/agent-client-protocol | E4, J6, K4 |
 | S-036 | Anthropic (2025), How we built our multi-agent research system | post | B | 2 | S | no | https://www.anthropic.com/engineering/multi-agent-research-system | F3, F5 |
 | S-037 | Aizawa et al. / Anthropic (2025), Writing effective tools for agents | post | B | 2 | S | no | https://www.anthropic.com/engineering/writing-tools-for-agents | E1, E2 |
 | S-038 | Anthropic (2025), Effective context engineering for AI agents | post | B | 2 | S | no | https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents | D1, D2 |
@@ -75,21 +75,21 @@
 | S-042 | Bolin / OpenAI (2026-01-23), Unrolling the Codex agent loop | post | B | 2 | S | no | https://openai.com/index/unrolling-the-codex-agent-loop/ | F1, F2 |
 | S-043 | Hashimoto (2026-02-05), My AI Adoption Journey | post | B | 2 | S | no | https://mitchellh.com/writing/my-ai-adoption-journey | A1, I6 |
 | S-044 | OpenAI (2026-02-11), Harness engineering: leveraging Codex in an agent-first world | post | B | 2 | S | no | https://openai.com/index/harness-engineering/ | G1, A1 |
-| S-045 | Trivedy / LangChain (2026-03-10), The Anatomy of an Agent Harness | post | B | 2 | S | no | https://www.langchain.com/blog/the-anatomy-of-an-agent-harness | A1, A2 |
+| S-045 | Trivedy / LangChain (2026-03-10), The Anatomy of an Agent Harness | post | B | 2 | P | no | https://www.langchain.com/blog/the-anatomy-of-an-agent-harness | A1, A2 |
 | S-046 | Rajasekaran / Anthropic (2026-03-24), Harness design for long-running application development | post | B | 2 | S | no | https://www.anthropic.com/engineering/harness-design-long-running-apps | G1, G3 |
-| S-047 | Anthropic (2026-04-08), Scaling Managed Agents: Decoupling the brain from the hands | post | B | 2 | S | no | https://www.anthropic.com/engineering/managed-agents | B1, B5, I6 |
+| S-047 | Anthropic (2026-04-08), Scaling Managed Agents: Decoupling the brain from the hands | post | B | 2 | P | no | https://www.anthropic.com/engineering/managed-agents | B1, B5, I6 |
 | S-048 | Kotliarskyi, Zhu & Brock / OpenAI (2026-04-27), Symphony (post) | post | B | 2 | S | no | https://openai.com/index/open-source-codex-orchestration-symphony/ | B3, F3, L-org |
-| S-049 | Heule & Katz / Cursor (2026-04-30), Continually improving our agent harness | post | B | 2 | S | no | https://cursor.com/blog/continually-improving-agent-harness | C3, E2, I6, I2 |
+| S-049 | Heule & Katz / Cursor (2026-04-30), Continually improving our agent harness | post | B | 2 | P | no | https://cursor.com/blog/continually-improving-agent-harness | C3, E2, I6, I2 |
 | S-050 | Katz / Cursor (2026-01-06), Dynamic context discovery | post | B | 2 | S | no | https://cursor.com/blog/dynamic-context-discovery | D1, D2, E3 |
 | S-051 | Cursor (2026-02-12), Expanding our long-running agents research preview | post | B | 2 | S | no | https://cursor.com/blog/long-running-agents | B3 |
 | S-052 | Ma / Cursor (2026-06-02), What we've learned building cloud agents | post | B | 2 | S | no | https://cursor.com/blog/cloud-agent-lessons | B3, B5, F3 |
-| S-053 | McGuinness et al. / Anthropic (2026-05-25), How we contain Claude across products | post | B | 2 | S | no | https://www.anthropic.com/engineering/how-we-contain-claude | H3, H4, H7 |
+| S-053 | McGuinness et al. / Anthropic (2026-05-25), How we contain Claude across products | post | B | 2 | P | no | https://www.anthropic.com/engineering/how-we-contain-claude | H3, H4, H7 |
 | S-054 | Cursor (2026-08-19), Cloud Agents and Cursor Harness Improvements (changelog) | post | B | 2 | S | no | https://cursor.com/changelog/08-19-26 | B3, F3 |
 | S-055 | OpenAI (2026), Unlocking the Codex harness: App Server | post | B | 2 | S | no | https://openai.com/index/unlocking-the-codex-harness/ | J6, K4 |
-| S-056 | Cloudflare (2026-06-03), Harnesses (Agents SDK docs) | doc | B | 2 | S | no | https://developers.cloudflare.com/agents/harnesses/ | A2, B3, J6 |
+| S-056 | Cloudflare (2026-06-03), Harnesses (Agents SDK docs) | doc | B | 2 | P | no | https://developers.cloudflare.com/agents/harnesses/ | A2, B3, J6 |
 | S-057 | Gauvin / Cloudflare (2026-06-17), Bringing more agent harnesses and frameworks to Cloudflare (Flue) | post | B | 2 | S | no | https://blog.cloudflare.com/agents-platform-flue-sdk/ | J6 |
-| S-058 | AWS (2026-06-17), AgentCore harness generally available | post | D | 2 | S | vendor | https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-bedrock-agentcore-harness-generally-available/ | A1, J6 |
-| S-059 | Microsoft (2026-07-22), Agent Framework Harness released | post | D | 2 | S | vendor | https://devblogs.microsoft.com/agent-framework/the-microsoft-agent-framework-harness-is-now-released/ | A1, J6 |
+| S-058 | AWS (2026-06-17), AgentCore harness generally available | post | D | 2 | P | vendor | https://aws.amazon.com/about-aws/whats-new/2026/06/amazon-bedrock-agentcore-harness-generally-available/ | A1, J6 |
+| S-059 | Microsoft (2026-07-22), Agent Framework Harness released | post | D | 2 | P | vendor | https://devblogs.microsoft.com/agent-framework/the-microsoft-agent-framework-harness-is-now-released/ | A1, J6 |
 | S-060 | Databricks (2026-09-02), Omnigent on Databricks | doc | D | 2 | S | vendor | https://docs.databricks.com/aws/en/omnigent/ | J6 |
 
 ## D. Tier 3 — 2026 research frontier
@@ -97,7 +97,7 @@
 | id | title | kind | tier | syllabus | P/S | provisional? | url | feeds |
 |---|---|---|---|---|---|---|---|---|
 | S-061 | Lin et al. (2026-04/05), Agentic Harness Engineering (AHE) | paper | C | 3 | S | yes | https://arxiv.org/abs/2604.25850 | I5, I7 |
-| S-062 | Yao et al. (2026-05-27), Harness-Bench | bench | C | 3 | S | yes (mech) | https://arxiv.org/abs/2605.27922 | I2, I4, G2, J4 |
+| S-062 | Yao et al. (2026-05-27), Harness-Bench | bench | C | 3 | P | yes (mech) | https://arxiv.org/abs/2605.27922 | I2, I4, G2, J4 |
 | S-063 | Pan et al. (2026), Retrospective Harness Optimization (RHO) — Findings of EMNLP 2026 | paper | A | 3 | S | yes (accepted; single-team) | https://arxiv.org/abs/2606.05922 | I5 |
 | S-064 | Lumer et al. (2026-06-11), Recursive Agent Harnesses | paper | D | 3 | S | yes | https://arxiv.org/abs/2606.13643 | F3 |
 | S-065 | Qi et al. (2026-06), LLM-as-Code: Agentic Programming for Agent Harness | paper | D | 3 | S | yes | https://arxiv.org/abs/2606.15874 | F1 |
@@ -107,9 +107,9 @@
 | S-069 | Karten et al. (2026-08-24), Prime Agent: A Self-Improving RLM Harness | paper | D | 3 | S | yes | https://arxiv.org/abs/2608.23552 | F3, B3 |
 | S-070 | Dhage (2026-08-25), Harness Engineering for Predictable Agentic Systems | paper | D | 3 | S | yes | https://arxiv.org/abs/2608.26197 | F1, F2 |
 | S-071 | Zhang et al. (2026-08-26), JIT-Agent | paper | D | 3 | S | yes | https://arxiv.org/abs/2608.25593 | I5 |
-| S-072 | Lewis (2026-08-26), Same Model, Different Harness | paper | D | 3 | S | yes (mech) | https://arxiv.org/abs/2608.26218 | I2, J4 |
-| S-073 | Jia et al. (2026-08-28), Logos: An Agent Harness on a Cross-Process Bus | paper | D | 3 | S | yes | https://arxiv.org/abs/2608.28553 | B1, B3, L5 |
-| S-074 | Barbaste et al. (2026), Harness Engineering: Source-Code Study of Eleven Systems | paper | C | 3 | S | yes (mech) | https://arxiv.org/abs/2609.00006 | A1, A5, E4, L5 |
+| S-072 | Lewis (2026-08-26), Same Model, Different Harness | paper | D | 3 | P | yes (mech) | https://arxiv.org/abs/2608.26218 | I2, J4 |
+| S-073 | Jia et al. (2026-08-28), Logos: An Agent Harness on a Cross-Process Bus | paper | D | 3 | P | yes | https://arxiv.org/abs/2608.28553 | B1, B3, L5 |
+| S-074 | Barbaste et al. (2026), Harness Engineering: Source-Code Study of Eleven Systems | paper | C | 3 | P | yes (mech) | https://arxiv.org/abs/2609.00006 | A1, A5, E4, L5 |
 | S-075 | Wu et al. (2026-09-01), HarnessDev | paper | D | 3 | S | yes | https://arxiv.org/abs/2609.01437 | I5 (counter) |
 | S-076 | Jin et al. (2026-09-01), HEART / Agent-Native Reusable Tool Primitives | paper | D | 3 | S | yes | https://arxiv.org/abs/2609.01736 | E2, E3 |
 
@@ -119,21 +119,21 @@
 |---|---|---|---|---|---|---|---|---|
 | S-077 | Wu & Canedo (2026-08-31), Invalidation Contracts for Cross-Episode Agent Memory | paper | D | 4 | S | yes (mech) | https://arxiv.org/abs/2609.00243 | D4, A2 |
 | S-078 | Yu et al. (2026-05-11), Shepherd: formalized execution trace substrate | paper | D | 4 | S | yes | https://arxiv.org/abs/2605.10913 | B4, I7 |
-| S-079 | Yan et al. (2026-09-01), Harness-of-Harness | paper | D | 4 | S | yes | https://arxiv.org/abs/2609.01481 | F3, J6 |
-| S-080 | Lee et al. (2026-03-30), Meta-Harness: End-to-End Optimization of Model Harnesses | paper | D | 4 | S | yes | https://arxiv.org/abs/2603.28052 | I5 |
+| S-079 | Yan et al. (2026-09-01), Harness-of-Harness | paper | D | 4 | P | yes | https://arxiv.org/abs/2609.01481 | F3, J6 |
+| S-080 | Lee et al. (2026-03-30), Meta-Harness: End-to-End Optimization of Model Harnesses | paper | D | 4 | P | yes | https://arxiv.org/abs/2603.28052 | I5 |
 | S-081 | Shao et al. (2026-08-03), Harness-R1 | paper | D | 4 | S | yes | https://arxiv.org/abs/2608.02276 | I5 |
 | S-082 | Miyai et al. (2026-08-20), Task-CoEvolve | paper | D | 4 | S | yes | https://arxiv.org/abs/2608.20169 | F4, I5 |
-| S-083 | Wang et al. (2026-07-14, rev. 08-27), Rethinking the Evaluation of Harness Evolution | paper | C | 4 | S | yes (counter-evidence; matched-budget) | https://arxiv.org/abs/2607.12227 | I5, I2 |
+| S-083 | Wang et al. (2026-07-14, rev. 08-27), Rethinking the Evaluation of Harness Evolution | paper | C | 4 | P | yes (counter-evidence; matched-budget) | https://arxiv.org/abs/2607.12227 | I5, I2 |
 | S-084 | Chen et al. (2026-07-17), Co-Harness | paper | D | 4 | S | yes | https://arxiv.org/abs/2607.22688 | I8 |
 | S-085 | Kim et al. (2026-08-31), WHALE | paper | D | 4 | S | yes | https://arxiv.org/abs/2609.00196 | I8 |
 | S-086 | Mao et al. (2026-09-02), SafeEvolve | paper | D | 4 | S | yes | https://arxiv.org/abs/2609.02786 | I5, I8, H1 |
 | S-087 | Luo et al. (2026-07-15), HarnessBank: gated semantic quality-diversity | paper | D | 4 | S | yes | https://arxiv.org/abs/2607.13683 | I5 |
-| S-088 | (2026), Harness Updating Is Not Harness Benefit | paper | D | 4 | S | yes (mech: validity vs compliance) | https://arxiv.org/abs/2605.30621 | A2, I2 |
+| S-088 | (2026), Harness Updating Is Not Harness Benefit | paper | D | 4 | P | yes (mech: validity vs compliance) | https://arxiv.org/abs/2605.30621 | A2, I2 |
 | S-089 | (2026-08-27), Verify Smarter, Evolve Further / HarnessLens | paper | D | 4 | S | yes | https://arxiv.org/abs/2608.27311 | I5, G3 |
 | S-090 | (2026), HarnessEvolve | paper | D | 4 | S | yes | https://arxiv.org/abs/2609.00829 | I5 |
 | S-091 | Ke et al. (2026-09-03), EVOHARNESSBENCH | bench | D | 4 | S | yes (counter) | https://arxiv.org/abs/2609.04280 | I5, I2 |
 | S-092 | (2026), Where Does Harness-Optimization Value Live? | paper | D | 4 | S | yes | https://arxiv.org/abs/2609.02889 | I5, I7 |
-| S-093 | Zhao et al. (EMNLP 2026), PRISM: Beyond Prompts — Measuring & Optimizing Tool-Agent Harnesses | paper | A | 4 | S | yes (accepted; single-team) | https://arxiv.org/abs/2609.05736 | I2, I5 |
+| S-093 | Zhao et al. (EMNLP 2026), PRISM: Beyond Prompts — Measuring & Optimizing Tool-Agent Harnesses | paper | A | 4 | P | yes (accepted; single-team) | https://arxiv.org/abs/2609.05736 | I2, I5 |
 | S-094 | (2026-09), Safe Harness Self-Evolution | paper | D | 4 | S | yes | https://arxiv.org/abs/2609.08175 | I5, H1 |
 | S-095 | (2026-09-08), Procedural Graphs: Self-Evolving Execution Structures | paper | D | 4 | S | yes | https://arxiv.org/abs/2609.09153 | D5 |
 | S-096 | (2026-09-08), Co-Evolving Harnesses and Models: On-Policy Correction | paper | D | 4 | S | yes | https://arxiv.org/abs/2609.09134 | I8, I6 |
@@ -157,18 +157,18 @@
 
 | id | title | kind | tier | syllabus | P/S | provisional? | url | feeds |
 |---|---|---|---|---|---|---|---|---|
-| S-107 | openai/codex | repo | B | 2 | S | no | https://github.com/openai/codex | B1, E5, F2, K1 |
+| S-107 | openai/codex | repo | B | 2 | P | no | https://github.com/openai/codex | B1, E5, F2, K1 |
 | S-108 | openai/symphony | repo | B | 2 | S | no | https://github.com/openai/symphony | B3, L-org |
-| S-109 | anthropics/claude-agent-sdk-python | repo | B | 2 | S | no | https://github.com/anthropics/claude-agent-sdk-python | K4 |
-| S-110 | OpenHands/software-agent-sdk | repo | B | 2 | S | no | https://github.com/OpenHands/software-agent-sdk | A1, B1, B5, K4 |
-| S-111 | anomalyco/opencode | repo | B | 2 | S | no | https://github.com/anomalyco/opencode | C1, K1, L5 |
-| S-112 | aaif-goose/goose | repo | B | 2 | S | no | https://github.com/aaif-goose/goose | C1, E4, K1 |
-| S-113 | badlogic/pi-mono | repo | B | 2 | S | no | https://github.com/badlogic/pi-mono | C1, K4, L5 |
+| S-109 | anthropics/claude-agent-sdk-python | repo | B | 2 | P | no | https://github.com/anthropics/claude-agent-sdk-python | K4 |
+| S-110 | OpenHands/software-agent-sdk | repo | B | 2 | P | no | https://github.com/OpenHands/software-agent-sdk | A1, B1, B5, K4 |
+| S-111 | anomalyco/opencode | repo | B | 2 | P | no | https://github.com/anomalyco/opencode | C1, K1, L5 |
+| S-112 | aaif-goose/goose | repo | B | 2 | P | no | https://github.com/aaif-goose/goose | C1, E4, K1 |
+| S-113 | badlogic/pi-mono | repo | B | 2 | P | no | https://github.com/badlogic/pi-mono | C1, K4, L5 |
 | S-114 | SWE-agent/SWE-agent | repo | B | 2 | S | no | https://github.com/SWE-agent/SWE-agent | I4, K1 |
 | S-115 | SWE-agent/mini-swe-agent | repo | B | 2 | S | no | https://github.com/SWE-agent/mini-swe-agent | F1, K1 |
-| S-116 | PrimeIntellect-ai/prime-agent | repo | D | 3 | S | yes | https://github.com/PrimeIntellect-ai/prime-agent | F3, B3 |
-| S-117 | HKUDS/OpenHarness | repo | D | 3 | S | yes | https://github.com/HKUDS/OpenHarness | A1 |
-| S-118 | omnigent-ai/omnigent (meta-harness) | repo | B | 3 | S | no | https://github.com/omnigent-ai/omnigent | J6, A1 |
+| S-116 | PrimeIntellect-ai/prime-agent | repo | D | 3 | P | yes | https://github.com/PrimeIntellect-ai/prime-agent | F3, B3 |
+| S-117 | HKUDS/OpenHarness | repo | D | 3 | P | yes | https://github.com/HKUDS/OpenHarness | A1 |
+| S-118 | omnigent-ai/omnigent (meta-harness) | repo | B | 3 | P | no | https://github.com/omnigent-ai/omnigent | J6, A1 |
 | S-119 | google-gemini/gemini-cli | repo | B | 2 | S | no | https://github.com/google-gemini/gemini-cli | C1, E4, K1 |
 | S-120 | mistralai/mistral-vibe | repo | B | 2 | S | no | https://github.com/mistralai/mistral-vibe | K1 |
 | S-121 | Aider-AI/aider | repo | B | 2 | S | no | https://github.com/Aider-AI/aider | D1, G1 |
@@ -197,7 +197,50 @@
 
 ## Workstream additions
 
-*Workstreams append below, continuing the `S-###` sequence (next: **S-132**). Synthesis passes may promote `S` → `P` and revise `provisional?` when corroboration is recorded.*
+*Workstreams append below, continuing the `S-###` sequence (next: **S-167** — see synthesis note at end of file). Synthesis passes may promote `S` → `P` and revise `provisional?` when corroboration is recorded.*
 
 | id | title | kind | tier | syllabus | P/S | provisional? | url | feeds | added-by |
 |---|---|---|---|---|---|---|---|---|---|
+| S-132 | harbor-framework/harbor — "Harbor: a framework for evaluating and optimizing agents and models in container environments" (v0.22.0; audited 7d5285b 2026-09-09; official Terminal-Bench 2.0 harness; also reachable as laude-institute/harbor) | repo | B | 2 | P | no | https://github.com/harbor-framework/harbor | A1, L1, J6, J3, J5, I3, I4 | WS-A1, WS-L1 |
+| S-133 | Harbor Adapters and Harbor-Index: Infrastructure and a Curated Meta-Dataset for Large-Scale Agentic Evaluation (2026) | paper | C | 4 | P | yes (mech) | https://arxiv.org/abs/2609.04298 | A1, J6, I4 | WS-A1 |
+| S-134 | princeton-pli/hal-harness (audited 16bb03e 2026-07-01) — `agent_function` runner, VM/Docker, Weave cost | repo | B | 2 | P | no | https://github.com/princeton-pli/hal-harness | A1, L7, J3, J5, L2 | WS-A1, WS-L7 |
+| S-135 | Holistic Agent Leaderboard (HAL): The Missing Infrastructure for AI Agent Evaluation (ICLR 2026, accepted) — companion repo S-134 | paper | A | 4 | P | no (accepted; single-team) | https://arxiv.org/abs/2510.11977 | A1, L7, I2, J4, J5, J6, L2 | WS-A1, WS-L7 |
+| S-136 | UKGovernmentBEIS/inspect_ai (audited 75f4891 2026-09-09) — agent bridge / sandbox agent bridge | repo | B | 2 | P | no | https://github.com/UKGovernmentBEIS/inspect_ai | A1, J6, I4, H7 | WS-A1 |
+| S-137 | Inspect AI docs — Agent Bridge (in-process and sandbox model-call interception) | doc | B | 2 | P | no | https://inspect.aisi.org.uk/agent-bridge.html | J6, L7, I2, I4 | WS-A1, WS-L7 |
+| S-138 | Open Agent Specification (Agent Spec): A Unified Representation for AI Agents (Oracle, arXiv 2510.04173 v4, 2025-11) | paper | C | 0 | P | no | https://arxiv.org/abs/2510.04173 | A1, A3, A4, A5, L7 | WS-A1 |
+| S-139 | oracle/agent-spec — pyagentspec/tsagentspec + adapters (LangGraph, AutoGen, CrewAI, OpenAI Agents, WayFlow, MS Agent Framework) (audited 6f0b6ae 2026-08-31) | repo | B | 0 | P | no | https://github.com/oracle/agent-spec | A3, A4, A5, J6 | WS-A1 |
+| S-140 | ClawGym II: Exploring Black-Box RL on Agent Harness (2026-08) | paper | D | 4 | P | yes | https://arxiv.org/abs/2608.16798 | J6, I8, L2 | WS-A1 |
+| S-141 | Winder.AI — A Comparison of AI Agent Harnesses in 2026 (2026-08-20; vendor blog) | post | D | — | P | vendor | https://winder.ai/ai-agent-harness-comparison/ | A1, L7 | WS-A1 |
+| S-142 | AgentManifest: a declarative spec where the harness is the first-class decision (personal blog RFC v0.3, 2026-04) | post | D | — | P | yes (proposal only) | https://dev.to/mouserider/agentmanifest-a-declarative-spec-where-the-harness-is-the-first-class-decision-lnc | A5, L7 | WS-A1 |
+| S-143 | langchain-ai/langgraph (audited e539ac1 2026-09-09) — Pregel runtime, checkpoint layer (`libs/checkpoint/.../serde/base.py`), `StateGraph` | repo | B | 2 | P | no | https://github.com/langchain-ai/langgraph | A1, L7, L1, B1, B3, F1 | WS-A1, WS-L7, WS-L1 |
+| S-144 | stanfordnlp/dspy (audited ca54a85 2026-09-09) — Signature/Adapter/teleprompt; code companion to S-013 | repo | B | 0 | P | no | https://github.com/stanfordnlp/dspy | A1, L7, A3, A4, C3, I5 | WS-A1, WS-L7 |
+| S-145 | microsoft/autogen (audited 027ecf0 2026-04-06) — `ComponentModel`, `ModelInfo`, agbench; code companion to S-012 | repo | B | 1 | P | no | https://github.com/microsoft/autogen | A1, L7, A5, C3, F3, F5 | WS-A1, WS-L7 |
+| S-146 | From Failed Trajectories to Reliable LLM Agents: Diagnosing and Repairing Harness Flaws (HarnessFix / HTIR), 2026-06 | paper | D | 4 | P | yes | https://arxiv.org/abs/2606.06324 | L7, A3, I7, I5 | WS-L7 |
+| S-147 | Seong et al., The Last Harness You'll Ever Build (meta-evolution blueprint), 2026-04 | paper | D | 4 | P | yes (counter to hand-designed instruments) | https://arxiv.org/abs/2604.21003 | L7, I5 | WS-L7 |
+| S-148 | Measuring Harness-Induced Belief Divergence in Multi-Step LLM Agents (BIWM), 2026-07 | paper | D | 4 | P | yes (mech) | https://arxiv.org/abs/2607.04528 | L7, G2, I2 | WS-L7 |
+| S-149 | ruvnet/metaharness — "meta-harness" CLI/Studio that scaffolds branded agent harnesses (MIT) | repo | D | — | P | vendor/naming | https://github.com/ruvnet/metaharness | L7, L6 | WS-L7 |
+| S-150 | SuperagenticAI/metaharness — unofficial Meta-Harness implementation (FSL-1.1-ALv2) | repo | D | — | P | vendor/naming | https://github.com/SuperagenticAI/metaharness | L7, L6, I5 | WS-L7 |
+| S-151 | stanford-iris-lab/meta-harness — reference code for S-080 | repo | C | 4 | P | yes | https://github.com/stanford-iris-lab/meta-harness | L7, I5 | WS-L7 |
+| S-152 | Language Server Protocol specification 3.17 (capabilities, `experimental`, `$/` methods) | spec | A | — | P | no | https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/ | L7, J6, E4, L5 | WS-L7 |
+| S-153 | modelcontextprotocol/modelcontextprotocol — spec repo, protocol 2026-07-28; `schema/2026-07-28/schema.ts` source of truth; `_meta` prefixed keys; JSON generation + CI checks | spec | B | 2 | P | no | https://github.com/modelcontextprotocol/modelcontextprotocol | L7, L1, E4, K3, A4 | WS-L7, WS-L1 |
+| S-154 | "Write once, run anywhere" / AWT peer model — lowest-common-denominator history (Wikipedia; Morelli & Walde "From AWT to Swing", LibreTexts) | doc | C (historical) | — | P | no | https://en.wikipedia.org/wiki/Write_once,_run_anywhere ; https://eng.libretexts.org/Bookshelves/Computer_Science/Programming_Languages/Java_Java_Java_-_Object-Oriented_Programming_(Morelli_and_Walde)/13%3A_Graphical_User_Interfaces/13.02%3A_Java_GUIs-_From_AWT_to_Swing | L7, A3, J6 | WS-L7 |
+| S-155 | Model Context Protocol — official SDKs and SDK tiers (protocol 2026-07-28) | doc | B | 2 | P | no | https://modelcontextprotocol.io/docs/sdk | L1, E4, K3 | WS-L1 |
+| S-156 | A2A Protocol Specification 1.0.0 and SDK list (JSON-RPC, gRPC, HTTP+JSON bindings) | spec | B | 2 | P | no | https://a2a-protocol.org/latest/specification/ ; https://a2a-protocol.org/latest/sdk/ | L1, E4 | WS-L1 |
+| S-157 | ACP — Transports page (stdio JSON-RPC; Streamable HTTP draft) and libraries index (repo `docs/libraries/*.mdx`) | spec | B | 2 | P | no | https://agentclientprotocol.com/protocol/transports | L1, E4, J6 | WS-L1 |
+| S-158 | Temporal — developer SDKs (eight ecosystems; Rust SDK 1.0.0) | doc | B | — | P | no | https://docs.temporal.io/develop | L1, B3 | WS-L1 |
+| S-159 | Restate — SDK repositories (five ecosystems; server in a compiled language) | repo | B | — | P | no | https://github.com/restatedev | L1, B3 | WS-L1 |
+| S-160 | DBOS — documentation (four ecosystems; Postgres-backed durable execution) | doc | B | — | P | no | https://docs.dbos.dev/ | L1, B3 | WS-L1 |
+| S-161 | Inspect AI (UK AISI) — main documentation; sandboxes Docker/K8s/Modal/Proxmox/Vagrant; runs external agents (Agent Bridge page is S-137) | doc | B | — | P | no | https://inspect.aisi.org.uk/ | L1, I2, I4 | WS-L1 |
+| S-162 | SWE-bench/SWE-bench — containerized evaluation harness; predictions interface (companion to S-123) | repo | B | — | P | no | https://github.com/SWE-bench/SWE-bench | L1, I4 | WS-L1 |
+| S-163 | GitHub Octoverse 2025 — contributor-count growth figures by language | post | B | — | P | no (population statistic) | https://github.blog/news-insights/octoverse/octoverse-a-new-developer-joins-github-every-second-as-ai-leads-typescript-to-1/ | L1, L6 | WS-L1 |
+| S-164 | Stack Overflow Developer Survey 2025 — Technology (admired/used) | post | B | — | P | no (population statistic) | https://survey.stackoverflow.co/2025/technology | L1, L6 | WS-L1 |
+| S-165 | WASI 0.3 release (2026-06-11) — native async in the component model; WASI 1.0 targeted late 2026/early 2027 | spec | B | — | P | yes (roadmap) | https://wasi.dev/releases/wasi-p3 | L1, L5, E5, H4 | WS-L1 |
+| S-166 | Barbaste et al. — HTML v1 of S-074 (per-system table: language, LoC, loop, sandbox, MCP/ACP/skills) | paper | C | 3 | P | yes (mech) | https://arxiv.org/html/2609.00006v1 | L1, A1, A5, E4 | WS-L1 |
+
+### Synthesis notes on folded rows (Phase 0, 2026-09-09)
+
+- **Dedup map (temp id → final):** WS-A1 01–14 → S-132…S-145 in order. WS-L7 01→S-135 (paper; repo S-134), 02→S-137, 03→S-146, 04→S-147, 05→S-148, 06→S-149, 07→S-150, 08→S-151, 09→S-152, 10→S-153, 12→S-154, 14→S-144, 15→S-145, 16→S-143. WS-L1 01→S-155, 02→S-156, 03→S-157, 04→S-158, 05→S-159, 06→S-160, 07→S-161, 08→S-132, 09→S-162, 10→S-163, 11→S-164, 12→S-165, 13→S-143, 14→S-153, 15→S-166.
+- **Promoted S → P (opened directly in Phase 0):** S-012, S-013, S-024, S-030, S-031, S-035, S-045, S-047, S-049, S-053, S-056, S-058, S-059, S-062, S-072, S-073, S-074, S-079, S-080, S-083, S-088, S-093, S-107, S-109, S-110, S-111, S-112, S-113, S-116, S-117, S-118. **Not opened:** S-055 (HTTP 403 for both WS-A1 and WS-L1; substituted by S-107 `codex-rs/app-server-*` source) — remains `S`.
+- **Corrections to seeded rows (WS-A1):** S-118 Omnigent now self-describes as "the open-source meta-harness" hosting Claude Code, Codex, Cursor, OpenCode, Hermes, Pi and custom agents; its bench is a *conformance* suite, not a performance benchmark (relevant to J6/J4). S-062 Harness-Bench evaluates in a Harbor-style shared environment with native execution preserved (relevant to I4). S-074's per-system language tally is internally inconsistent (CF-018); rely on direction only.
+
+*Next id: **S-167**.*
