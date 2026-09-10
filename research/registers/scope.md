@@ -150,3 +150,4 @@ Every item must end Phase 5 as `specified` (interface contract + data model + ac
 | 2026-09-09 | R-2.9.6 | Stage note: assumption-debt *record schema* is C0/Stage 1 on every conditioned rule; manager stays C4. No new item. | ADR-0007 |
 | 2026-09-09 | R-2.12.5 | Status → specified (Phase 0 deliverables complete) | ADR-0003, ADR-0006, ADR-0007, ADR-0008 |
 | 2026-09-09 | R-2.1.2, R-2.10.4, R-2.10.6 | Novelty annotations narrowed / re-labelled per WS-A1 audit (`precedent | renamed | novel` obligation for every ⊕ NEW / ↑ EXT item at Phase 5) | ADR-0003, ADR-0004 |
+| 2026-09-09 | (program) | Product renamed MetaHarness → HarnessHarness by sponsor; no requirement scope change | ADR-0011 |

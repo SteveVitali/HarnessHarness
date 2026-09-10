@@ -170,6 +170,8 @@ Fields per §11.2 step 4: `{id, track, phase, status, blocking-edges, dossier-pa
 | ADR-0009 | WS-L1 language/ecosystem decision criteria, candidate classes E1–E5, ratification procedure (no language chosen) | **proposed — ratify at end of Phase 1** with the decision | WS-L1 | 0→1 |
 | ADR-0010 | Scope change: R-2.10.6 hosting MoSCoW Could → Should; cross-participant comparison delivered in two steps | **ratified** (synthesis-authored) | synthesis (WS-A1, WS-L7 → WS-J6) | 0 |
 
+| ADR-0011 | Product name: HarnessHarness (sponsor decision; resolves OQ-035/CF-013) | **ratified** (sponsor, 2026-09-09) | WS-L7, WS-L6, WS-A2 | 0→1 boundary |
+
 *(Workstreams append `ADR-NNNN` rows with `status: proposed`; synthesis passes ratify/amend/reject. Next number: **ADR-0011**.)*
 
 ## Phase progress log

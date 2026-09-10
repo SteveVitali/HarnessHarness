@@ -120,7 +120,7 @@ Status values: `proposed` · `ratified (v0.1)` (Phase 0 synthesis, ADR cited) ·
 
 | concept | canonical name | short-form / rule |
 |---|---|---|
-| Product | **MetaHarness** (retained) | Public qualifier recommended: "MetaHarness — harness laboratory & reference runtime"; collision disclosed (CF-013, OQ-035); no sub-concept uses "meta-". |
+| Product | **HarnessHarness** (sponsor decision, ADR-0011, 2026-09-09; supersedes the provisional "MetaHarness") | Proper noun only; never replaces canonical concept names (rule 3). "MetaHarness" survives only as historical text in docs 1–3 and Phase-0 artifacts; every Phase ≥1 artifact and the Canonical Spec use "HarnessHarness". No sub-concept uses "meta-". WS-L6 publishes the qualifier line and re-checks collisions (OQ-035 follow-up). |
 | The representation | **Harness IR** | **HIR**; dialects HIR/1, HIR/2. Never "HTIR". |
 | A harness expressed in HIR | **Harness Definition** | "harness def". |
 | Participant classes | **native participant** · **hosted participant** | Short-forms of ADR-0001's long forms; first use expands. |
