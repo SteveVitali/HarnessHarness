@@ -1,0 +1,142 @@
+{
+"phase": "4",
+"wave": 8,
+"workstreams": [
+{
+"id": "WS-F3",
+"title": "Sub-agent orchestrator: spawn / isolate / merge; topology; recursive full-harness delegation",
+"scope": "Design subagent orchestration on top of durable runtime (B3), environments (B5), security kernel (H1: delegation narrows-or-preserves capabilities), budgets (L2): spawn with isolated context/environment and explicit budget; topology (orchestrator-worker, recursive full-harness delegation, pipelines); result merge via the shared artifact/event layer rather than a giant transcript; failure containment; subagents as AgentProcess IR entities (A3); when multi-agent is NOT justified (doc 2 §5.7).",
+"anchors": "doc 2 §5.7 (orchestrator-worker S-036; Cursor isolated subagent VMs S-052/S-054; Recursive Agent Harnesses S-064 provisional; Prime Agent S-069/S-116 provisional; processes-not-personas framing), §11 (Stage 4: subagents only for measurable reasons), §12 direction 6; Claude Agent SDK subagents (S-109), Pi subagents (S-113), opencode subagents (S-111) — read source; Harness-of-Harness (S-079 provisional)",
+"feeds": "Spec §5; WS-F4, F5, L8, J3",
+"tier": "C3",
+"reqs": "R-2.6.3",
+"upstream": [
+"WS-B3",
+"WS-B5",
+"WS-H1",
+"WS-L2",
+"WS-F1",
+"WS-A3"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-3.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: spawn/isolate/merge contract with capability and budget inheritance rules; topology catalogue; merge semantics via artifacts/events; failure-containment rules; the 'is multi-agent justified' decision inputs (for F4); acceptance criteria (delegation never widens authority; budgets are conserved; failures contained); ADR."
+},
+{
+"id": "WS-F4",
+"title": "Value-of-compute scheduler: predict marginal success-per-token/latency/risk of spawning a subagent / alt model / evaluator / longer search",
+"scope": "Design the value-of-compute scheduler as a policy component: estimating marginal value of a subagent, alternate model (C2), evaluator/critic (G3), longer search or retry, given budgets (L2) and priors learned from the lab (J4); online estimation under nonstationary models; value-of-information for evaluation budget (Task-CoEvolve S-082); the C3 heuristic baseline vs learned variants; auditability of scheduling decisions (B1).",
+"anchors": "doc 2 §10 (value-of-compute orchestration; optimization economics), §12 direction 6, §5.8 (Task-CoEvolve S-082 provisional; HarnessLens S-089 provisional), §4 (resource economics); Anthropic multi-agent cost observations (S-036); F3, L2, I2, J4 dossiers",
+"feeds": "Spec §5; WS-F3, I5, C2, G3",
+"tier": "C3",
+"reqs": "R-2.6.4",
+"upstream": [
+"WS-L2",
+"WS-I2",
+"WS-F3",
+"WS-J4",
+"WS-C2"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-3.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: the scheduler decision contract (options, estimated marginal value, cost, risk; output decision + rationale event); estimator interface (heuristic baseline first; learned variants as registry components); evaluation protocol proving the scheduler beats matched-budget baselines; acceptance criteria; ADR flagged with matched-budget conditionality."
+},
+{
+"id": "WS-F5",
+"title": "Multi-agent coordination & consistency: shared-state ownership, belief merge, conflict resolution, failure containment",
+"scope": "Design coordination semantics for parallel agents: shared-state ownership (who may write which artifacts/memories), belief merge (typed merge of claims/memories with provenance and conflict edges from A3/D4), conflict resolution, resource reservation (L2), failure containment (B3), communication via events/artifacts vs direct messaging, consistency levels.",
+"anchors": "doc 2 §5.7 (processes with isolated state, budgets, capabilities, failure domains), §10 (multi-agent consistency); Prime Agent direct agent-to-agent communication (S-069 provisional); Symphony reconciliation (S-108); classic distributed-systems consistency/ownership models (add sources); F3, B1, B2, D4 dossiers",
+"feeds": "Spec §5; WS-F3, L8",
+"tier": "C3",
+"reqs": "R-2.6.5",
+"upstream": [
+"WS-B1",
+"WS-B2",
+"WS-F3",
+"WS-D4",
+"WS-L3"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-3.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: ownership model; merge contract with provenance and conflict handling; reservation contract; consistency-level declarations; acceptance criteria (no lost writes, conflicts surfaced not silently overwritten); ADR."
+},
+{
+"id": "WS-I5",
+"title": "Evolution service as a governed deployment pipeline; safe self-modification; matched-budget gates",
+"scope": "Design the evolution service per ADR-0002: candidate generation (from traces: AHE/RHO/Meta-Harness/Harness-R1 families) → explicit failure hypothesis → targeted counterexample set → matched-budget evaluation → held-out regression → cross-model compatibility → security-invariant check (H1: the service cannot enlarge its own authority) → canary → rollout → retirement test; separation of proposal and deployment; edits as typed IR diffs (A3) on registry components (J2); attribution hooks (I7); experiment engine (J3) as the evaluation substrate; the seven-point evidence standard as acceptance criteria; the taxonomy of self-improving harnesses (offline search, continual compilation, test-time adaptation, learned editing, co-evolution, meta-harnessing).",
+"anchors": "doc 2 §5.8 (all families + taxonomy + credit/validation methods + negative evidence), §11 ('treat evolution as a deployment pipeline'; 'security kernel before self-modification'), §12 direction 3; AHE (S-061), RHO (S-063), Meta-Harness (S-080), Harness-R1 (S-081), MemoHarness (S-066), JIT-Agent (S-071), HarnessBank (S-087), HarnessLens (S-089), HarnessEvolve (S-090), Safe Harness Self-Evolution (S-094), SafeEvolve (S-086); COUNTER: Rethinking (S-083), HarnessDev (S-075), EVOHARNESSBENCH (S-091), Where-does-value-live (S-092), PRISM (S-093); lineage: DGM (S-026/S-027 — read source), AFlow (S-025 — read source), GEPA (S-028), ADAS (S-023)",
+"feeds": "Spec §5 (evolution service); WS-I6, I7, I8, F4",
+"tier": "C4",
+"reqs": "R-2.9.5",
+"upstream": [
+"WS-I2",
+"WS-I3",
+"WS-H1",
+"WS-B4",
+"WS-J2",
+"WS-J3",
+"WS-A3"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-3.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nRead DGM and AFlow source for how candidates are represented, evaluated, and archived. Deliver: pipeline stage contracts (inputs/outputs/gates) with the matched-budget gate normative; edit representation as typed IR diff; governance invariants (proposal ≠ deployment; no self-authorization; reversibility; expiry); per-family adapter sketches; acceptance criteria = the seven-point standard; ADR(s) with explicit matched-budget conditionality and maturity flags."
+},
+{
+"id": "WS-I6",
+"title": "Assumption-debt manager: every model-specific rule carries hypothesis, evidence, owner, expiry, removal test",
+"scope": "Design the assumption-debt manager: HarnessRule/profile/tool-shape entries (A3, C3, E2) carry hypothesis (which model deficiency), evidence (S-ids/experiments), owner, expiry/revalidation trigger (model version change), and an automated removal/retirement test run by the experiment engine (J3); debt dashboards (K2); the discipline applied to the spec's own decisions (doc 3 §9 RK-06).",
+"anchors": "doc 2 §5.9 (assumption debt; deletion of guardrails S-049/S-047; on-policy co-evolution compatibility failure S-096 provisional), §12 direction 2, §10; Cursor (S-049); Managed Agents (S-047); C3, E2, I2, J3 dossiers",
+"feeds": "Spec §5; WS-C3, E2, I5, I8",
+"tier": "C4",
+"reqs": "R-2.9.6",
+"upstream": [
+"WS-C3",
+"WS-E2",
+"WS-I2",
+"WS-J3"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-3.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: the debt-record schema and its binding to IR entities; lifecycle (hypothesized → evidenced → expiring → retired); retirement-test contract; trigger model (model-version change, profile change); acceptance criteria (no rule without a hypothesis; retirement tests execute); ADR."
+},
+{
+"id": "WS-I7",
+"title": "Causal attribution & counterfactual execution over trajectories",
+"scope": "Design component-level credit assignment: trajectory interventions (replace one component/variant and replay from a fork, B4), counterfactual execution validity conditions (nondeterminism boundaries), attribution methods (ablation, paired replays, interaction effects via J4), limits (where attribution is invalid), attribution as a required input to the evolution pipeline (I5) and to the scorecard's evolvability dimension (I2).",
+"anchors": "doc 2 §10 (causal attribution; counterfactual execution), §12 direction 3, §5.5 (Shepherd forks S-078 provisional), §5.8 (Where-does-value-live S-092; gated QD S-087 — provisional); B4 dossier; J4 dossier; causal inference / ablation methodology sources (add)",
+"feeds": "Spec §5; WS-I5, J4, B4",
+"tier": "C4",
+"reqs": "R-2.9.7",
+"upstream": [
+"WS-B4",
+"WS-I2",
+"WS-J4",
+"WS-J3"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-3.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: intervention/replay contract on top of B4; attribution method catalogue with validity conditions; attribution report schema; acceptance criteria (known-effect synthetic tests); ADR with honest 'novel / no precedent' flags."
+},
+{
+"id": "WS-I8",
+"title": "Model-harness co-evolution & consolidation (later-tier research)",
+"scope": "Specify (research-grade) the co-evolution/consolidation layer: alternating harness edits (I5) with weight updates as two plasticity rates; consolidation criteria (what stays explicit/reversible vs distilled); compatibility guards (harness edits tagged with assumed model behaviours; post-training includes harness regression suites); safety co-evolution (SafeEvolve); the interface MetaHarness exposes to an external training stack (it does not train models itself — confirm/define this boundary); maturity flags.",
+"anchors": "doc 2 §5.9 (Co-Harness S-084, WHALE S-085, SafeEvolve S-086, on-policy correction S-096 — all provisional; 'weights and harnesses are two timescales'), §10 (consolidation), ADR-0002; I5, I6 dossiers",
+"feeds": "Spec §5 (co-evolution, research-grade); WS-I5, I6",
+"tier": "C4",
+"reqs": "R-2.9.8",
+"upstream": [
+"WS-I5",
+"WS-I6",
+"WS-I3"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-3.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: the training-stack interface contract (exports: bundles, traces, harness regression suites, compatibility tags; imports: new model snapshot ids); consolidation decision procedure; compatibility-guard contract; maturity flag and explicit conditionality (all evidence provisional); acceptance criteria that are checkable without training a model; ADR."
+},
+{
+"id": "WS-L8",
+"title": "Human-agent organizational layer: event/ticket/webhook-triggered agent fleets; accountability, escalation, ownership",
+"scope": "Design the organizational layer over durable runtime (B3), subagents (F3), approvals (H7), audit (H6): work items/goals as first-class durable objects triggered by issues, schedules, webhooks, PRs, messages; a tracker/control plane pattern (Symphony); ownership and accountability model; escalation paths; fleet-level observability and cost (L2/I1); what is C4 vs deferred.",
+"anchors": "doc 2 §3 (human attention as bottleneck; Symphony S-048/S-108 — read source; Cursor always-on agents S-054), §10 (organizational semantics), §5.5; H7, B3, F3 dossiers",
+"feeds": "Spec §5 (organizational layer, C4)",
+"tier": "C4",
+"reqs": "R-2.12.6",
+"upstream": [
+"WS-F3",
+"WS-H7",
+"WS-B3",
+"WS-H6"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-3.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nRead Symphony source. Deliver: work-item/goal data model and trigger model; control-plane reconciliation contract; ownership/escalation model; fleet observability requirements; acceptance criteria; ADR (may propose partial deferral with rationale — as an ADR, never silently)."
+}
+],
+"synthesisFocus": "NAMING: enforce 'HarnessHarness' (ADR-0011) across all artifacts; residual 'MetaHarness' outside historical quotes is a defect. Phase 4 is the highest-uncertainty cluster (C3/C4). Focus: (1) EVIDENCE DISCIPLINE — every C3/C4 ADR must carry explicit matched-budget conditionality and a maturity flag; verify that NO C0–C2 ADR was modified to depend on provisional Phase-4 evidence; verify ADR-0002's governance invariants (proposal ≠ deployment; no self-authorization; reversibility; expiry) appear as acceptance criteria in I5 and are consistent with H1's monitor. (2) F3/F4/F5 must compose with the security kernel (delegation narrows-or-preserves) and the budget model (conservation across fan-out). (3) I5 ↔ I6 ↔ I7 ↔ I8 must form one evidence-bearing loop (edit → attribute → evaluate matched → expire/retire → consolidate) using J2/J3/J4/J5 as substrate — write the loop out in the memo. (4) L8 must not duplicate B3/H7; record boundaries. (5) Convert every remaining open question that Phase 4 could not resolve into a deferral ADR candidate list for Phase 5 (do not ratify deferrals here; list them). (6) Write research/synthesis/phase-4.md with 'settled for Phase 5' and the complete list of all ratified ADRs by tier to seed spec assembly.",
+"gateCriteria": "Phase 4 exit: all 8 workstreams done with ADRs dispositioned; every C3/C4 ADR carries matched-budget conditionality + maturity flag; no C0 decision rests on provisional evidence (re-audit the full ADR set); the evolution loop composes with the lab substrate and the security kernel; deferral candidates listed for Phase 5. If any criterion fails, set gate_pass=false with precise blockers."
+}
