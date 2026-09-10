@@ -1,6 +1,6 @@
 # WS-L1 — Language / ecosystem selection spike (Phase 0: framing only)
 
-**Track:** L · **Phase:** 0 (framing) → 1 (ratification) · **Tier(s) fed:** program (outside C-tiers); ADR at end of Phase 1; all implementation; Spec §11 · **Status:** done (framing, synthesized 2026-09-09); ratification pending end Phase 1
+**Track:** L · **Phase:** 0 (framing) → 1 (ratification) · **Tier(s) fed:** program (outside C-tiers); ADR at end of Phase 1; all implementation; Spec §11 · **Status:** done (framing, synthesized 2026-09-09; **ratification executed 2026-09-10 → ADR-0050**)
 **Owner agent:** WS-L1 research subagent (Fable 5.1) · **Date:** 2026-09-09
 **Feeds spec section(s):** §7.2 item 11 (deferred/decided items with rationale), §7.2 item 9 (build ladder — toolchain prerequisites), §7.2 item 7 (surfaces — only via K-track), the end-of-Phase-1 language ADR · **Scope register items:** R-2.12.3
 
@@ -327,8 +327,13 @@ CF-016 (doc 2 §7 framing "Rust cores vs Python/TS research" is too coarse relat
 
 ## 11. ADRs produced
 
-- ADR-0009 (**proposed — ratify at end of Phase 1 together with the decision; Phase 0 synthesis accepted the framing and made no decision**) — *Language/ecosystem decision criteria, candidate classes, and ratification procedure* (contains no language choice).
+- ADR-0009 (**ratified**, end of Phase 1, 2026-09-10, together with the decision) — *Language/ecosystem decision criteria, candidate classes, and ratification procedure* (contains no language choice; amendment log records how the procedure was executed).
+- ADR-0050 (**ratified**, 2026-09-10) — *WS-L1 language/ecosystem decision*: polyglot split E5a with a late-bound surface layer — kernel/reference runtime and sandbox helper in E1, laboratory in E2 over a per-run subprocess + JSON-RPC stdio boundary with generated bindings, surfaces via a generated client (E3 default, bound at Phase 3); frozen weights, matrix, sweep, tie-breakers, reversibility, revalidation triggers, Phase ≥ 2 language-use constraint.
+
+## 11a. Ratification record (2026-09-10)
+
+Executed by a fresh WS-L1 ratification subagent under ADR-0009 §6.3 with `research/synthesis/l1-inputs.md` (ADR-0049) as input. Preconditions P1–P3 held. Weights frozen and logged (ADR-0050 §0, 14:05:57Z) before any candidate evidence was opened. Candidates: E1–E4 and E5a–E5e (E5e added under the kernel-precedent rule). C2 gate: none excluded; C4/C6 not triggered (CF-112). Step 4 spikes were **not run** (program mandate, CF-117): `research/synthesis/l1-spike-spec.md` specifies S1/S2 as Stage-0 acceptance checks; C5/C7/C12 were scored from citable evidence, marked `unmeasured-by-spike` and swept with ±1 bands. Scores: E5a 85.7, E5e 85.1, E1 83.5, E2 81.0, E5b 80.2, E5c 79.8, E5d 78.8, E3 78.2, E4 65.1. Sweep: E5a win share 0.746 (1024 corners + 200 samples), E1-kernel family 0.979; widened/adversarial/contested/noise sweeps in ADR-0050 §4. Tie-breakers: T1 tie, T2 tie, T3 eliminates single-ecosystem E1, T4 late-binds the surface layer. Decision and per-layer reversibility, revalidation triggers (incl. "spike result contradicts assumed scores"), and the Phase ≥ 2 language-use constraint are in **ADR-0050**. Registers: OQ-001 resolved(ADR-0050); OQ-130 (surface binding, K2/K4), OQ-131 (Stage-0 spike execution) opened; CF-116 accepted tension, CF-117 resolved; S-242…S-250 added; R-2.12.3 specified(ADR-0050); LEDGER WS-L1 `done`.
 
 ## 12. Status
 
-`done (Phase 0 framing)` — synthesized 2026-09-09; the decision itself is Phase 1 work (ADR-0009 stays proposed). Questionnaire routed as OQ-040…046.
+`done` — framing synthesized 2026-09-09 (ADR-0009); ratification executed 2026-09-10 (ADR-0009 ratified; decision ADR-0050). Remaining WS-L1 obligations are register items only: OQ-130 (Phase 3, K2/K4) and OQ-131 (Stage 0 spike execution), plus the ADR-0050 §6 revalidation triggers exercised by phase synthesis.

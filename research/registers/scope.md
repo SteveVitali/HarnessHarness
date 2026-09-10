@@ -124,7 +124,7 @@ Every item must end Phase 5 as `specified` (interface contract + data model + ac
 |---|---|---|---|---|---|---|---|
 | R-2.12.1 | Versioning, reproducibility & artifact identity | C0 | ↑ EXT | WS-L4 | 8 | Must | **specified-by-ADR** (ADR-0036 identity model + `idp` + rotation, ADR-0037 immutability/supersession/sameness ladder, ADR-0038 reproducibility levels + bundle manifest + results keys; OQ-041 algorithm half closed) |
 | R-2.12.2 | Extensibility / plugin architecture & third-party component contracts | C0 | ↑ EXT | WS-L5 | 8 | Must | open |
-| R-2.12.3 | Language/ecosystem selection (deferred, criteria-driven; outside C-tiers) | — | — | WS-L1 | 11 / ADR | Must (as a decision) | open — **all Phase 1 inputs answered** (OQ-040…046; ADR-0049; `synthesis/l1-inputs.md`); ADR-0009 procedure runs next; no hard gate fires (CF-112) |
+| R-2.12.3 | Language/ecosystem selection (deferred, criteria-driven; outside C-tiers) | — | — | WS-L1 | 11 / ADR | Must (as a decision) | **specified(ADR-0050)** — decided 2026-09-10 by the ADR-0009 procedure (ADR-0009 ratified with it): polyglot split, kernel + helper in E1, lab in E2, surfaces late-bound (E3 default; OQ-130); binds Stage 0–1; spike spec as Stage-0 acceptance check (OQ-131) |
 | R-2.12.4 | Packaging, licensing, OSS governance, docs & community | — | — | WS-L6 | 11 | Should | open |
 | R-2.12.5 | Novelty/differentiation thesis & naming | — | — | WS-L7 | 1 | Must | **specified** (ADR-0003 positioning + non-goals; ADR-0006 thesis + N1–N13; ADR-0007 LCD battery; ADR-0008 canonical names; text lands in Spec §1 at Phase 5; product-name qualifier pending OQ-035) |
 | R-2.12.6 | Human-agent organizational layer | C4 | ⊕ NEW | WS-L8 | 5 | Could* | open |
