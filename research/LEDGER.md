@@ -19,7 +19,7 @@
 | Preflight | §11.2 steps 1–6 | **passed** | tree exists; sources/ledger/registers seeded; ADR-0001/0002 ratified | preflight commit |
 | 0 | WS-L1 (framing only), WS-A1, WS-L7; Ontology v0 → v0.1; Source Registry seeded + folded | **passed** (2026-09-09) | A1 + L7 dossiers done with ADR-0003/0004/0005 and ADR-0006/0007/0008 ratified; L1 criteria framed, not decided (ADR-0009 proposed); Ontology v0.1 in `registers/ontology.md`; Source Registry folded (S-132…S-166); CF-009 resolved; language-leak audit clean (CF-025) | pending (phase-boundary commit) |
 | 1 | WS-A2 A3 A4 A5 · B1 B2 · L2 L3 L4 · I1 I2 | todo | all 11 done; shared authority/label scheme converged (L3↔A3↔I1); IR vocabulary arbitrated by A3; **WS-L1 language ADR ratified at end of Phase 1** | — |
-| 2 | C1–C4 · D1–D5 · E1–E5 · F1 F2 · G1–G3 · H1–H7 · B3 B4 B5 · I3 I4 | todo | all 27 done; L3/H1/D1 authority scheme ratified together (§7.1); conflicts resolved in `conflicts.md` | — |
+| 2 | C1–C4 · D1–D5 · E1–E5 · F1 F2 · G1–G3 · H1–H7 · B3 B4 B5 · I3 I4 | todo | all 31 done; L3/H1/D1 authority scheme ratified together (§7.1); conflicts resolved in `conflicts.md` | — |
 | 3 | J1–J6 · K1–K4 · L5 | todo | all 11 done; thin observational ABI depth decided (J6); plugin contract (L5) consistent with J2 | — |
 | 4 | F3 F4 F5 · I5 I6 I7 I8 · organizational layer (WS-L8, see below) | todo | all 8 done; every C4 decision carries matched-budget conditionality; no C0 decision rests on provisional evidence | — |
 | 5 | Synthesis & Canonical Spec | todo | §7.2 skeleton authored; adversarial coherence review clean; `READINESS_REPORT.md` all-green | — |
