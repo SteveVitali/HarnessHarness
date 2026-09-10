@@ -172,7 +172,7 @@ Fields per §11.2 step 4: `{id, track, phase, status, blocking-edges, dossier-pa
 
 | ADR-0011 | Product name: HarnessHarness (sponsor decision; resolves OQ-035/CF-013) | **ratified** (sponsor, 2026-09-09) | WS-L7, WS-L6, WS-A2 | 0→1 boundary |
 
-*(Workstreams append `ADR-NNNN` rows with `status: proposed`; synthesis passes ratify/amend/reject. Next number: **ADR-0011**.)*
+*(Workstreams append `ADR-NNNN` rows with `status: proposed`; synthesis passes ratify/amend/reject. Next number: **ADR-0012**.)*
 
 ## Phase progress log
 
@@ -197,5 +197,5 @@ Fields per §11.2 step 4: `{id, track, phase, status, blocking-edges, dossier-pa
 - **Contracts converged for Phase 1:** WS-B1 must stamp `participant_class` + `observability_level` on every ledger event and add artefact *delivered/activated/followed* events (T-LCD-13); WS-A3 identity derivation excludes surface fields (T-LCD-10), free text only as typed provenance-bearing leaves (T-LCD-02), no per-model branches (T-LCD-01), no dependency edge into the Hosting ABI (T-LCD-06); WS-A4 emits lowering loss reports and raises `UnexpressibleSurface`; WS-A5/L5 contracts are operations not inheritance and receive the profile (T-LCD-08/-12); WS-I2 models factors + interaction effects, refuses un-budgeted arms, carries `applies_to` (T-LCD-09/-14/-15); WS-K4/L5 treat WS-L1 §6.5 boundary contract as C0/Stage-1 input (CF-023).
 - **Evidence discipline check:** every ratified ADR carries §3.3 (a)–(e); no C0 decision rests on `provisional` evidence — 2026 preprints (S-062/S-072/S-088/S-148/S-133/S-074) are used for mechanism only and corroborated by Tier-A (S-135) / Tier-B source at pinned commits.
 - **Open for later phases:** OQ-030 interchange format (J6), OQ-031 Agent Spec export (A3/A4), OQ-033 cost attribution per mechanism (L2/J4), OQ-034 DRIFT exclude-vs-annotate (J6/I6), OQ-036 opacity-ratio definition (A3/I2), OQ-037 gates vs checklists (P1 synthesis), OQ-038 grey-box interposition (J6/C1), OQ-039 T-LCD-03 anchor harness (A3/I4), OQ-047 spike execution (P1 synthesis). CF-017 (runtime-assumption exposure in B3/K2/E5/K4) stays pre-registered for Phase 2.
-- **Registers:** sources next S-167 · open-questions next OQ-048 · conflicts next CF-026 · ADR next ADR-0011.
+- **Registers:** sources next S-167 · open-questions next OQ-048 · conflicts next CF-026 · ADR next ADR-0012.
 - **Next phase (1):** fan out WS-A2 A3 A4 A5 · B1 B2 · L2 L3 L4 · I1 I2 with the "settled for Phase 1" section of `research/synthesis/phase-0.md` in every brief; end-of-Phase-1 synthesis runs the WS-L1 ratification (ADR-0009) only after A3/A4/A5/B1 ADRs are ratified and OQ-040…046 answered.
