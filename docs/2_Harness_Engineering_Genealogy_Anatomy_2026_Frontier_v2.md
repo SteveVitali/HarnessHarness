@@ -1,3 +1,5 @@
+# Harness Engineering: Genealogy, Anatomy, and the 2026 Frontier
+
 A canonical second-pass research survey of the model-external systems that turn foundation models into reliable, long-horizon agents - with an adversarial audit of the academic literature, production architectures, open-source runtimes, evaluation science, security, memory, and self-improving harnesses.
 
 ------------------------------------------------------------------------

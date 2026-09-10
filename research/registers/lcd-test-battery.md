@@ -71,3 +71,23 @@ Phase 5 readiness cannot pass with any row marked "not encoded" (ADR-0007 conseq
 ## Evidence summary (ADR-0007 §Evidence)
 
 Mechanism: S-154 (AWT peer model limited to intersection; WORA decay), S-152 (LSP capabilities; unknown properties ignored; `experimental`; `$/`), S-035 (ACP v2: all capabilities OPTIONAL, omitted = UNSUPPORTED, `_meta`, `_` extension methods), S-153 (MCP prefixed `_meta`); model-conditioned surfaces exist and matter — S-049, S-047 (Tier B), S-062/S-072/S-088/S-148 (`provisional`, corroborating one mechanism); validity vs compliance separable — S-088 (`provisional (mech)`), doc 2 §1; matched-budget necessity — S-083, doc 2 §8. Source-code precedents: codex `codex-rs/models-manager/models.json` + `core/src/tools/spec_plan.rs` (T-01/T-08); OpenHands `context/prompts/sections/static.py` (T-10); omnigent `harness_capabilities.py` + `designs/harness-capabilities-bench-seam.md` (T-07); DSPy `adapters/base.py` (T-04, one plane); AutoGen `autogen_core/models/_model_client.py` `ModelInfo` (T-05 shape). The battery as a whole and `LcdReport`/`UnexpressibleSurface` are `no-precedent / novel`. No `provisional` performance number is load-bearing: the tests check expressibility, declaration and reporting, not performance.
+
+## Phase 1 application record (ADR-0007 decision 5; Phase 1 synthesis, 2026-09-10)
+
+Every Phase 1 ADR that introduces an abstraction spanning models, targets or participants carries a T-LCD statement; the synthesis checked each statement against the ADR's decision text and found no "does not" without a mitigating owner. Static/contract tests are satisfied *on paper* (schema and contract rules stated); executable tests (T-03/-04/-11/-13) are Stage 3 obligations whose operations and acceptance criteria are now specified.
+
+| ADR | owner | satisfies (on paper) | executable at Stage 3 | verdict |
+|---|---|---|---|---|
+| ADR-0015 (A3 type discipline) | WS-A3 | T-01 (no model-identity field outside `ProfileRef`/`surface`; `ext` never decides authority/budget/validity), T-02 (two opaque leaf kinds; opacity ratio), T-06, T-10 (identity excludes surface), T-12 | T-03 via `equivalence_run` (AC-8) | **pass** |
+| ADR-0016 (HIR/1 catalogue) | WS-A3 | T-01/-02/-06/-10/-12 per kind; supplies T-05 (`assumption_debt`), T-13 (`delivery_id`), T-14 (Budget on every Goal/AgentProcess), T-15 (`hosted` has no components) | T-03/-04 with WS-A4/I2 | **pass** |
+| ADR-0017 (HirDiff) | WS-A3 | T-10 (rename ⇒ `SurfaceEdit` only), T-05 (conditioned-rule edits carry records) | — | **pass** |
+| ADR-0018 (OpaqueProcess; Agent Spec) | WS-A3 | T-06, T-07 (tri-state, never coerced), T-15, T-11 (Agent Spec loss report) | T-11 round-trip (C2) | **pass** |
+| ADR-0019 (compilation pipeline) | WS-A4 | T-01, T-02 (opacity report in bundle), T-05 (link refuses undocumented rules), T-10 (bundle identity content-derived), T-11 (loss report per target), T-12, T-13 (closed-world rule) | T-03/-04 (AC-7/AC-8) | **pass** |
+| ADR-0020 (Model Profile contract) | WS-A4 | T-01 (owned-field diff), T-05 (refuse/warn/retire), T-08, T-10, T-13 (behavioural suite) | T-04 (two minimal profiles) | **pass** |
+| ADR-0021 (protocol targets) | WS-A4 | T-04 (construction from one `RuntimePlan`), T-06, T-07-adjacent, T-11 (typed loss report + round trip), T-15 (granularity ceiling) | T-04/-11 (MCP export, Stage 3) | **pass** |
+| ADR-0022 (equivalence E1–E7) | WS-A4 | T-01 (supplies the semantic-equivalence validator), T-04, T-10 (E7), T-15 (`n/a` never 0) | E4 fixture suite | **pass** |
+| ADR-0023 (definition is data) | WS-A5 | T-08 (`required_inputs ⊇ {ModelProfile, ResourceAccount}`), T-12 (operation records; out-of-process binding), T-02, T-06, T-10 | T-03 input | **pass** |
+| ADR-0024 (code-vs-config) | WS-A5 | T-02 (ladder metric), T-01 (per-model branches are defects), T-05, T-14 (`authority_cap`), T-10 | — | **pass** |
+| ADR-0025 (assembly validation) | WS-A5 | T-10 (AC-6), T-12, T-08, T-02, T-06 (`hosting_edges = []`), T-05, T-14 (budget placeholders) | — | **pass** |
+
+Other Phase 1 ADRs (WS-A2, B1, B2, L2, L3, L4, I1, I2) carry T-LCD statements checked the same way; all pass on paper. OQ-037 (gate vs checklist) is resolved by ADR-0045: T-02/-09/-14/-15 and the `n/a`/outcome-class rules are automated gates; T-03/-13 are executable tests with review items. The readiness-report matrix above is filled at Phase 5.

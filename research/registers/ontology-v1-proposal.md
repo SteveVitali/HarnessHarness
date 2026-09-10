@@ -1,6 +1,6 @@
 # Ontology Register — v1 proposal (replacement candidate for `ontology.md` §1–§4)
 
-**Status:** proposed by WS-A2 (2026-09-10); synthesis promotes into `ontology.md` after WS-A2-adr-1/-2/-3 ratify. Sections §5–§7 of `ontology.md` are **not** replaced; the amendments they need are listed in §4h below.
+**Status:** **PROMOTED** into `ontology.md` v1 at Phase 1 synthesis (2026-09-10; ADR-0012/0013/0014 ratified). This file is kept as the WS-A2 proposal of record; `ontology.md` is authoritative. Sections §5–§7 of `ontology.md` are **not** replaced; the amendments they need are listed in §4h below.
 **Version line to become:** `v1 (Phase 1 synthesis) — v0 seed + v0.1 folds + WS-A2 formal model, planes-as-partition, boundaries, control boundary, validity/compliance pair, compatibility surface, participant formalization, first-class/derived split.`
 **Rules kept from v0.1:** every v0/v0.1 term keeps its definition unless a row below says `amended` with a rationale; canonical names per ADR-0008 and ADR-0011 (product = **HarnessHarness**); typed representation of any term marked `typed-by: WS-A3` is WS-A3's; nothing here names a language, runtime, package ecosystem or framework.
 
@@ -14,7 +14,7 @@
 | **Harness engineering** | The empirical design, implementation, measurement, and evolution of that runtime system. | doc 2 §1 | v0-seed (kept) |
 | **Agent** | A closed-loop system: model observes state → decides → acts through tools/environment → receives consequences → updates working state → eventually terminates. *Agent = Model + Harness (+ Environment).* | doc 2 §1 | v0-seed (kept) |
 | **Model (M)** | A **model snapshot**: provider, version identity, and sampling parameters; induces the stochastic policy π_M(a \| c) over rendered contexts c. *Amended:* "frozen" replaced by "snapshot" because provider-side updates can change behaviour without a version bump (S-047); the configuration pins the snapshot identity it *believes* it has, and drift is a fact to detect, not an assumption to make. | doc 2 §1; WS-A2 F-disconfirming | v0-seed → **amended (v1)** |
-| **Model set** | The set of model snapshots a harness binds in one run (primary, router alternates, subagents, judges). A configuration names the whole set; "the" model is the primary. | WS-A2 §5 | proposed (v1) — OQ-WS-A2-01 |
+| **Model set** | The set of model snapshots a harness binds in one run (primary, router alternates, subagents, judges). A configuration names the whole set; "the" model is the primary. | WS-A2 §5 | proposed (v1) — OQ-048 |
 | **Environment (E)** | The external world the agent acts in (filesystem, shell, browser, APIs, tracker, humans), with a state s and an effect semantics; reached only through the **environment boundary** (§2b). | doc 2 §1 | v0-seed (amended: boundary pointer) |
 | **Task distribution (D)** | The distribution of goals over which a harness is evaluated. | doc 2 §1 | v0-seed (kept) |
 | **Harness parameterization (θ)** | θ = (h, p, β, π_pol): a Harness Definition h in HIR, a Model Profile p, a **control boundary** β (§2c), and the policies h references (permission, budget, retry, stopping). *Amended:* the v0 list (prompts, context-selection policies, tool schemas, middleware, state machines, memory/retrieval policies, subagent topology, validators, permission rules, retry policies, stopping conditions) is the *content* of h and p; v1 names the structure. | doc 2 §1; WS-A2 §6.2 | v0-seed → **amended (v1)** |
@@ -27,13 +27,13 @@
 | **Harness validity** | For a harness artifact α, `validity(α, at) ∈ {valid, invalid, unknown}` decided by a protocol-layer check that never consults the beneficiary model (version stamp, validator, oracle, declared validity interval); `unknown` when no check exists. *Amended:* three-valued; "deterministic at the protocol layer" holds exactly where a check exists (S-077 mechanism). | doc 2 §1, §5.1; S-077; WS-A2 F4 | v0-seed → **amended (v1)** |
 | **Harness compliance** | The model-conditioned chain of events after delivery of a valid artifact: `activated(α)` (the model loaded/used/retrieved α) and `followed(α)` (behaviour consistent with α). Measured, never asserted; each event carries `detector ∈ {deterministic, judged}` and provenance. See §4e. | doc 2 §1, §5.1; S-088; WS-A2 F4 | v0-seed → **amended (v1)** |
 | **Realized-benefit decomposition** | E[Δ] ≈ P(valid) · P(activated \| delivered, valid) · P(followed \| activated) · E[Δ \| followed] — the reporting shape for any artifact-level effect (S-077 algebra, S-088 stages). | WS-A2 §6.2 | proposed (v1) |
-| **Compatibility surface** | Ψ_θ : F → Dist(Δ), a mapping from the **factor space** F (model snapshot, task distribution, environment image, budget vector, context window, tool-surface target, control boundary, …) to the *distribution of the paired harness effect*. A **derived view** estimated by designed experiment and persisted only as a **fitted-surface report**; unprobed factor levels are `unknown`, never interpolated across categorical axes. *Amended:* v0's "response surface … describing realized benefit" made formal; "optimization target" retained. | doc 2 §1, §10; S-WS-A2-01; WS-A2 F5 | v0-seed → **amended (v1)** |
+| **Compatibility surface** | Ψ_θ : F → Dist(Δ), a mapping from the **factor space** F (model snapshot, task distribution, environment image, budget vector, context window, tool-surface target, control boundary, …) to the *distribution of the paired harness effect*. A **derived view** estimated by designed experiment and persisted only as a **fitted-surface report**; unprobed factor levels are `unknown`, never interpolated across categorical axes. *Amended:* v0's "response surface … describing realized benefit" made formal; "optimization target" retained. | doc 2 §1, §10; S-167; WS-A2 F5 | v0-seed → **amended (v1)** |
 | **Portability / conditionality (of θ)** | Portability = sign-stability of Ψ_θ along the model axis; conditionality = the region of F where Δ > 0 with stated confidence. | WS-A2 §6.2 | proposed (v1) |
 | **Assumption debt** | Every model-specific rule is a hypothesis about a failure mode that carries evidence, ownership, an expiry condition, and a removal test (unit: *conditioned rule* / *assumption-debt record*, v0.1). | doc 2 §5.9 | v0-seed (kept) |
 | **Moving boundary of control** | The migration, as models change, of the **control boundary** β (§2c) — the allocation of each decision point to code, model or human. *Amended:* v0's informal "allocation of cognition" is given the object β so it can be varied (WS-F1/F2) and attributed (WS-I7). | doc 2 §9; WS-A2 F3 | v0-seed → **amended (v1)** |
 | **Mechanism evidence** vs **performance evidence** | Unchanged. | doc 2 §6; doc 3 §3.1 | v0-seed (kept) |
 | **Harness artifact** | Any identified, versioned, provenance-bearing thing a harness delivers to a model: `kind ∈ {instruction, rule, memory, tool_surface, procedure, observation}`; carries `validity_check_ref?` and `activation_observable: bool`. Identity is content-addressed (WS-L4). `typed-by: WS-A3` (as `ContextItem` payloads with `delivery_id`). | WS-A2 §6.4 | proposed (v1) |
-| **Detector** | The component that emits an `activated` or `followed` event: `deterministic` (a P1/P2 signal: skill load, retrieval injection, tool call naming the artifact, an executable validator referenced by the artifact) or `judged` (a P4 judge configuration with its own provenance and cost attribution — OQ-WS-A3-06). | WS-A2 F4 | proposed (v1) |
+| **Detector** | The component that emits an `activated` or `followed` event: `deterministic` (a P1/P2 signal: skill load, retrieval injection, tool call naming the artifact, an executable validator referenced by the artifact) or `judged` (a P4 judge configuration with its own provenance and cost attribution — OQ-059). | WS-A2 F4 | proposed (v1) |
 
 ### 1a. Two levels (v1, structural)
 
@@ -67,8 +67,8 @@ The table is unchanged from v0 (names, core questions, mechanisms, failures).
 - A plane is a **partition of harness responsibilities**, not an architectural layer: planes carry no dependency direction; the build DAG is by tier (C0–C4) and stage, never by plane.
 - **Home-plane rule:** every IR entity kind (WS-A3), component class (WS-A5), plane operator and event family (WS-B1) declares exactly one `home ∈ {P1..P7} ∪ {model_boundary, environment_boundary} ∪ {run_lifecycle}`. Cross-plane relations are typed edges. `classify_home(kind)` is total over registered kinds; an unclassifiable kind is a schema error (`UnclassifiedKind`) — the reflexive LCD check that nothing hides "between planes".
 - The seven planes are a **superset classification**: every industrial decomposition audited (AIOS kernel S-030/S-031; LangChain anatomy S-045; Cloudflare runtime/harness S-056; Harness-Bench definition S-062) is a strict subset, and all omit P4 and treat P7 as telemetry only (WS-A2 F1).
-- Adding a plane or boundary requires an ADR plus reclassification of affected kinds (OQ-WS-A2-05). No eighth column may be added ad hoc.
-- Event stamps: WS-B1's `plane ∈ {lifecycle, context, model, action, control, verification, security, measurement}` maps as `lifecycle → run_lifecycle` (instrument level), `model → model_boundary`, the rest → P1..P7 in order (CF-WS-A2-05).
+- Adding a plane or boundary requires an ADR plus reclassification of affected kinds (OQ-052). No eighth column may be added ad hoc.
+- Event stamps: WS-B1's `plane ∈ {lifecycle, context, model, action, control, verification, security, measurement}` maps as `lifecycle → run_lifecycle` (instrument level), `model → model_boundary`, the rest → P1..P7 in order (CF-030).
 
 ### 2b. Two boundaries (v1)
 
@@ -77,12 +77,12 @@ The table is unchanged from v0 (names, core questions, mechanisms, failures).
 | **Model boundary** (M \| H) | the harness and every model snapshot it binds | model gateway ("model adapter", WS-C1), model router, Profile Compiler, prompt/KV/semantic cache, model-call interposition | AIOS `LLMAdapter` behind a syscall queue; Omnigent `Executor.run_turn`; Cloudflare "model execution" inside the harness |
 | **Environment boundary** (H \| E) | the harness and the external world | environment/sandbox handle, effect capture, egress mediation | doc 2 §11 execution environments; WS-B5/E5 |
 
-Doc 3 §2.3's "Model plane" is a scope-catalogue grouping of model-boundary components (CF-WS-A2-01). `propose` (the model call) and `execute` (the environment effect) are the two plane operators that cross a boundary.
+Doc 3 §2.3's "Model plane" is a scope-catalogue grouping of model-boundary components (CF-026). `propose` (the model call) and `execute` (the environment effect) are the two plane operators that cross a boundary.
 
 ### 2c. Control boundary β (v1)
 
 - **Decision points** Δ = {next_action, continue_or_stop, retrieve_or_compact, delegate, authorize, verify, retry, escalate} (extensible by ADR).
-- **Control boundary** β : Δ → {code, model, human}, with per-decision-point guards (the control envelope, WS-F2). β is an element of θ (`typed-by: WS-A3`; representation open — OQ-WS-A2-04), a `component-level` factor at the instrument level, and observable in trajectories (a step whose owner is `code` has no model call — Harbor ATIF `Step.llm_call_count == 0`; Omnigent `Executor.handles_tools_internally`).
+- **Control boundary** β : Δ → {code, model, human}, with per-decision-point guards (the control envelope, WS-F2). β is an element of θ (`typed-by: WS-A3`; representation open — OQ-051), a `component-level` factor at the instrument level, and observable in trajectories (a step whose owner is `code` has no model call — Harbor ATIF `Step.llm_call_count == 0`; Omnigent `Executor.handles_tools_internally`).
 - The v0 design principle becomes a *default assignment* of β, not a fixed decision (CF-005 stays a Lab comparison target).
 
 ## 3. Three cross-cutting properties (v1: mandatory attributes, never planes)
@@ -101,10 +101,10 @@ Doc 3 §2.3's "Model plane" is a scope-catalogue grouping of model-boundary comp
 | **Hosted-external participant (black-box)** — short-form **hosted participant** | (ADR-0001, unchanged) A third-party harness joined through the Hosting ABI; shares environments, evals, scorecards, cost/latency/audit; never pretends to be component-decomposable. **Class criterion (v1):** H is *opaque*; θ_hosted = product version + ABI-settable coordinates. Typed as `AgentProcess.hosted = OpaqueProcess` (WS-A3). |
 | **Comparison plane** | (kept) The single experiment/eval/scorecard/analysis surface spanning both classes. |
 | **Hosting ABI** (= *thin observational ABI*) | (kept, ADR-0005/0008) Minimum observable event set + per-participant capability declaration; depth OQ-004. |
-| **Participant descriptor** (v1) | `ParticipantDescriptor{class ∈ {native, hosted}, hosting_mechanism ∈ {none, session-abi, model-boundary-intercept, container-installed}, capability_declaration, version_identity, observability_level ⊆ {events, model_io, end_state, ledger}, model_binding ∈ {bound(M-set), self-selected}}` — immutable per run; **class is declared, never inferred from mechanism**; `ledger ∈ observability_level ⇔ class = native` (CF-WS-B1-03 settled). |
+| **Participant descriptor** (v1) | `ParticipantDescriptor{class ∈ {native, hosted}, hosting_mechanism ∈ {none, session-abi, model-boundary-intercept, container-installed}, capability_declaration, version_identity, observability_level ⊆ {events, model_io, end_state, ledger}, model_binding ∈ {bound(M-set), self-selected}}` — immutable per run; **class is declared, never inferred from mechanism**; `ledger ∈ observability_level ⇔ class = native` (CF-059 settled). |
 | **Admissible granularities** (v1) | native ⊇ {component-level, configuration-level, product-level}; hosted ⊆ {configuration-level (only coordinates whose capability-vector entry is SUPPORTED), product-level}. A factor outside the set is `InadmissibleFactor`; results render `n/a`, never 0 (T-LCD-15). |
 | **ABI projection** (v1) | proj_ABI : native ledger → minimum observable event set is *total* (any native run can be presented as a hosted run — ADR-0005 "act as a participant"); no edge runs from any HIR entity to the Hosting ABI (T-LCD-06). Grey-box = `hosted` with `observability_level ⊇ {model_io}`; observability is a level, never a class. |
-| **Capability declaration / capability vector** (v0.1, kept; relation added) | `capability_vector = reconcile(capability_declaration, probes)` → `{declared, probed, unknown}`; DRIFT only when both sides are concrete and differ (Omnigent `verdict.py`); omitted-on-the-wire (ACP "UNSUPPORTED") is re-mapped to `unknown` at the analysis layer (CF-WS-A2-02). CF-020 confirmed distinct. |
+| **Capability declaration / capability vector** (v0.1, kept; relation added) | `capability_vector = reconcile(capability_declaration, probes)` → `{declared, probed, unknown}`; DRIFT only when both sides are concrete and differ (Omnigent `verdict.py`); omitted-on-the-wire (ACP "UNSUPPORTED") is re-mapped to `unknown` at the analysis layer (CF-027). CF-020 confirmed distinct. |
 
 ### 4a. Adjacent-discipline boundary (v0, kept verbatim)
 
@@ -120,7 +120,7 @@ Entities `Goal, Observation, ContextItem, Memory, Procedure, ToolCapability, Per
 
 ### 4d. Formal model (v1, for Spec §2.3)
 
-Objects M (snapshot; π_M), E, D, B, θ = (h, p, β, π_pol) as in §1. **Plane operators** compose into the harness step (§1 *Harness step*); π_system = H_{θ,E,B}[π_M] is the closed-loop policy induced by iterating it. **Objective** J and **harness effect** Δ as in §1. **Configuration** κ and **arm** (a set of κ under one hypothesis with matched B and separate `search_budget` / `eval_budget`) as in v0.1. Lineage, not load-bearing: temporal abstraction over a base policy (S-WS-A2-02); the formalism's only spec duty is to fix *what is held constant and what is varied* — it is never computed by the runtime.
+Objects M (snapshot; π_M), E, D, B, θ = (h, p, β, π_pol) as in §1. **Plane operators** compose into the harness step (§1 *Harness step*); π_system = H_{θ,E,B}[π_M] is the closed-loop policy induced by iterating it. **Objective** J and **harness effect** Δ as in §1. **Configuration** κ and **arm** (a set of κ under one hypothesis with matched B and separate `search_budget` / `eval_budget`) as in v0.1. Lineage, not load-bearing: temporal abstraction over a base policy (S-168); the formalism's only spec duty is to fix *what is held constant and what is varied* — it is never computed by the runtime.
 
 ### 4e. Validity vs compliance as a measured pair (v1)
 
@@ -131,7 +131,7 @@ Objects M (snapshot; π_M), E, D, B, θ = (h, p, β, π_pol) as in §1. **Plane 
 
 ### 4f. Compatibility surface as a derived view (v1)
 
-`fit_surface(runs[], factors[], metric, model_form) → FittedSurfaceReport{metric, factors, levels, design, model_form, sample_sizes, estimates_with_ci, interaction_terms, configuration_ids[], fitted_at, expiry_condition}`; refuses `UnknownLevel`; model form is WS-J4's (OQ-WS-A2-03); the report inherits assumption-debt expiry (T-LCD-05 applied reflexively).
+`fit_surface(runs[], factors[], metric, model_form) → FittedSurfaceReport{metric, factors, levels, design, model_form, sample_sizes, estimates_with_ci, interaction_terms, configuration_ids[], fitted_at, expiry_condition}`; refuses `UnknownLevel`; model form is WS-J4's (OQ-050); the report inherits assumption-debt expiry (T-LCD-05 applied reflexively).
 
 ### 4g. First-class entities vs derived views (v1)
 
@@ -142,11 +142,11 @@ Objects M (snapshot; π_M), E, D, B, θ = (h, p, β, π_pol) as in §1. **Plane 
 ### 4h. Vocabulary rules added at v1 (amendments to `ontology.md` §5–§6)
 
 1. **comparison granularity** enum values renamed `{component-level, configuration-level, product-level}` (CF-021); the noun *configuration* keeps its single meaning.
-2. **surface vs semantic identity** row reworded (CF-WS-A3-01): identity is content-addressed over the *semantic projection* (canonical form of kind + semantic fields + references by semantic id), excluding surface, provenance and extension fields; "semantic equivalence" is not promised.
-3. **No bare "capability"** in spec prose (CF-WS-A3-04): `ToolCapability` (P2 entity) · `Permission` (P6 grant) · *capability declaration* / *capability vector* (hosted participants) · *authority handle* (WS-H1 runtime object-capability).
-4. **observability level** row: add "`ledger` is entailed by `class = native` and never declared independently" (CF-WS-B1-03).
+2. **surface vs semantic identity** row reworded (CF-034): identity is content-addressed over the *semantic projection* (canonical form of kind + semantic fields + references by semantic id), excluding surface, provenance and extension fields; "semantic equivalence" is not promised.
+3. **No bare "capability"** in spec prose (CF-037): `ToolCapability` (P2 entity) · `Permission` (P6 grant) · *capability declaration* / *capability vector* (hosted participants) · *authority handle* (WS-H1 runtime object-capability).
+4. **observability level** row: add "`ledger` is entailed by `class = native` and never declared independently" (CF-059).
 5. **capability vector** row: add the relation `= reconcile(capability_declaration, probes)`.
-6. Spelling: prose *artifact*; identifiers registered by WS-B1 and the LCD battery keep *artefact*; the glossary check treats them as one term (CF-WS-A2-07).
+6. Spelling: prose *artifact*; identifiers registered by WS-B1 and the LCD battery keep *artefact*; the glossary check treats them as one term (CF-032).
 7. "Plane" is reserved for P1–P7; *comparison plane* (ratified, instrument level) is the one sanctioned exception and is never counted among the seven.
 
 ### 4i. Reflexive LCD check on the ontology's own abstractions
