@@ -1,0 +1,43 @@
+# ADR-NNNN — Durability means event reconstruction; deterministic control-loop replay is a declared capability of control-strategy variants, not a Core invariant (resolves OQ-042 part 3)
+
+**Status:** proposed
+**Owner workstream(s):** WS-B1 (with WS-B3 for recovery, WS-B4 for replay/branching, WS-I7 for counterfactual attribution, WS-F1 for control strategies) · **Phase:** 1 · **Related:** ADR-0002, ADR-0003, ADR-0007 (T-LCD-08), ADR-0009 (C3 durability criterion in WS-L1 §6.3); OQ-042, OQ-WS-B1-03; R-2.2.1, R-2.2.3, R-2.2.4, R-2.10.5; WS-B1-adr-1, WS-B2-adr-1
+
+## Context
+
+WS-L1 asks (Q-L1-06 / OQ-042) whether durability requires *deterministic replay of the control loop* (library-style durable execution) or *state reconstruction from events* only, because the first choice imposes determinism and serialization contracts on the ecosystem (WS-L1 M5) and on every control-strategy variant the Lab wants to vary. Doc 2 §5.5 lists deterministic environment snapshots as improving replay; doc 3 §2.2 asks for replay (B4) and counterfactual attribution (I7). No audited coding harness replays its loop deterministically; all reconstruct state from the record and continue live (WS-B1 §4a F8).
+
+## Options considered
+
+1. **Deterministic control-loop replay as a Core requirement** (Temporal-style: commands compared to history; every nondeterministic call routed through recorded activities; versioning/patching on every code change). *Rejected:* hostile to a research runtime whose purpose is to *vary* control strategies (T-LCD-08 variants would each have to satisfy determinism constraints); no coding harness audited does it; model sampling is not replayable without recorded I/O anyway.
+2. **No replay at all — reconstruction only, forever.** *Rejected:* forfeits WS-I7's counterfactual attribution and WS-B4's speculative branching for the variants that *can* be deterministic; the ledger already records what such variants need.
+3. **Reconstruction is Core; deterministic replay is a declared, tested capability of control-strategy variants (chosen).**
+
+## Decision
+
+1. **Core guarantee (C0/Stage 1): event reconstruction.** Any materialized view is rebuildable from the durable prefix (WS-B1-adr-1); a run resumes from its last durable effect phase (WS-B2 lifecycle; WS-B3 recovery decision recorded as `lifecycle.run.resumed{from_seq, recovery_decision}`); crash consistency is tested at the four tool-cycle kill points plus mid-batch append (AC-B1-2). Reconstruction never re-executes a committed effect and never resamples the model to rebuild a view.
+2. **Declared capability: `deterministic_replay`.** A control-strategy variant (WS-F1 component class) may declare it. To declare it, the variant must (a) consume recorded model I/O (`observability_level ⊇ model_io`; `model.call.requested.request_ref` and `model.call.completed.response_ref` present), (b) confine every nondeterministic input (time, randomness, environment reads) to recorded events, and (c) make control decisions a pure function of the durable prefix. The runtime provides a *replay driver* that feeds recorded model responses and effect outcomes instead of live ones.
+3. **Acceptance (Stage 3, AC-B1-4):** for a declaring variant, re-driving against the recorded run reproduces the same `control.decision` sequence and the same `context.assembled.view_hash` sequence; for non-declaring variants the test reports `n/a`, never a failure or a 0 (T-LCD-15 discipline applied to capabilities).
+4. **Consequences for consumers:** WS-B4's fork/branch semantics use reconstruction plus *re-execution with fresh samples* by default (Shepherd's model: byte-identical prefixes for cache reuse, no claim of deterministic resampling) and deterministic replay only where declared; WS-I7's counterfactual attribution must state which mode each result used (OQ-WS-B1-03).
+5. **Consequence for WS-L1:** the C3 durability criterion is scored against "owned event store + reconstruction" — durable-execution-library determinism constraints apply only to the optional replay driver, not to the kernel.
+
+**T-LCD statement.** Satisfies T-LCD-08 (a control-strategy variant declares replay capability inside its contract; Core is untouched), T-LCD-15 (`n/a` semantics for undeclared capability). Not applicable: the others (no model-facing surface or lowering introduced).
+
+## Evidence (doc 3 §3.3 synthesis contract — all five mandatory)
+
+- **(a) Mechanism evidence:** Temporal workflow-definition docs S-WS-B1-07 (determinism constraints: same API calls in the same sequence; nondeterminism from code change or intrinsic randomness; side effects via activities; versioning/patching) — the clearest statement of what deterministic replay *costs*; Cursor S-052 (adopted a durable-execution engine and shortened workflows "which makes version upgrades easier" — the cost observed in production); Managed Agents S-047 (stateless harness over an external session log; recovery by `wake(sessionId)` and re-reading events — reconstruction, not replay); Logos S-073 (`provisional`, mechanism: cold switching resumes from the transcript with no repeated effect); Shepherd S-078 (`provisional`, mechanism: replays "the suffix with the edited workflow" by re-execution with cache-friendly prefixes, not deterministic resampling); Fowler S-WS-B1-08 (external-gateway problem during replay).
+- **(b) Source-code precedent:** reconstruction in every audited harness — Codex S-107 @0735c51 `codex-rs/core/src/session/rollout_reconstruction.rs` (`reconstruct_history_from_rollout`, reverse scan to the last compaction checkpoint); OpenHands S-110 @3fc7b22 `openhands-sdk/openhands/sdk/conversation/state.py` (`rebuild_view` via `View.from_events`); Pi S-113 @400d690 `packages/agent/src/harness/runtime/drive/recovery.ts` (orphaned `effect_pending` settled synthetically with `recovery: true` and "the external outcome is unknown"), `session/types.ts` (persisted operation state machine `checkpoint → assistant.effect_pending → tools …`). Deterministic replay of a harness control loop: `no-precedent / novel` among audited coding harnesses (precedent exists only in general durable-execution engines, S-WS-B1-07).
+- **(c) Disconfirming evidence considered:** without deterministic replay, counterfactual attribution (WS-I7) compares a recorded run with a *re-sampled* branch, so attributed differences include sampling noise; "replay" in doc 3 §2.2 could be read as requiring determinism. *Why it does not overturn:* the ledger records everything a deterministic variant needs, so determinism is *available* where a variant pays for it; forcing it on every variant would either exclude stochastic control strategies from the Lab or impose Temporal-style constraints on research code; the noise problem is handled statistically by WS-I2/I7 (paired runs, seeds as a factor — T-LCD-09/-14) and is registered as OQ-WS-B1-03 rather than hidden.
+- **(d) Conditionality:** holds for any model tier; the deterministic-replay capability is only meaningful when `model_io` is recorded (native participants and model-boundary-intercepted hosted participants), never for container-installed hosted participants (`n/a`). Assumes environment reads are either recorded or reproducible from snapshots (WS-B4/B5).
+- **(e) Build-stage assignment:** reconstruction and crash-consistency tests C0 / Stage 1 (with WS-B2/B3); replay driver and AC-B1-4 C0 / Stage 3 (evaluation-first, before profiles and evolution per ADR-0007); counterfactual attribution over it C4 / Stage 6 (WS-I7).
+
+## Consequences
+
+- The Core control loop is not required to be deterministic; the ecosystem criterion C3 (WS-L1) is relaxed accordingly, and durable-execution libraries become optional, not required.
+- WS-F1's control-strategy contract gains a `capabilities.deterministic_replay: bool` declaration and the replay-driver interface; WS-A5 must pass recorded I/O through the same contract (T-LCD-08).
+- WS-I7 and WS-B4 must label every replay-derived result with its mode (`deterministic | re-executed`).
+- The event classes `model.call.requested/completed` must carry request/response blobs at `model_io` level (WS-B1-adr-4 offload) — without them the capability cannot be declared.
+
+## Reversibility
+
+**High.** Making deterministic replay mandatory later is an additive requirement on variants (they already declare it); relaxing it further is a documentation change. Nothing in Core storage changes either way.
