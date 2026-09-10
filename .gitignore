@@ -1,2 +1,5 @@
 .DS_Store
 **/.DS_Store
+
+# Agent scratch — never committed; this repo's durable memory is research/ and spec/
+.agents/
