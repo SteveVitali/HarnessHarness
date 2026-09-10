@@ -1,0 +1,43 @@
+# ADR-NNNN — Hosted participants in the IR: `AgentProcess.hosted = OpaqueProcess`; Open Agent Spec as a declared-lossy interop target
+
+**Status:** proposed
+**Owner workstream(s):** WS-A3 (consumers: WS-J6 Hosting ABI, WS-J4 comparison, WS-A4 export/import, WS-A2 ontology) · **Phase:** 1 · **Related:** ADR-0001 (two participant classes), ADR-0004 (`MetricDeclaration`, DRIFT), ADR-0005 (interoperate; act as a participant), ADR-0007 (T-LCD-06/-07/-15), ADR-0010 (hosting = Should, C2), WS-A3-adr-2; CF-003, CF-020, CF-023, CF-WS-A3-07; OQ-004, OQ-031, OQ-034; R-2.1.2, R-2.10.6
+
+## Context
+
+ADR-0001 fixes two participant classes on one comparison plane; ADR-0005 fixes the Hosting ABI as a minimum observable event set plus a per-participant capability declaration; T-LCD-06 forbids any dependency edge from IR entity definitions into the Hosting ABI and T-LCD-07 forbids coercing undeclared capabilities. The Phase 1 brief asks how a black-box participant is represented *inside the IR* so that experiments, budgets, permissions and `n/a` metrics apply uniformly. Separately, OQ-031 asks whether the IR should export to / import from Open Agent Spec (S-138/S-139), the nearest prior art, and what is lost. The audit found a direct precedent for the shape: OpenHands' `AgentProfile` is a discriminated union whose `acp` variant is a black-box agent "with no `llm_profile_ref` and no embedded credential" (S-110 `profiles/agent_profile.py` L209–226); and Agent Spec's entity set stops at agent/tool/flow/LLM-config with a single `requires_confirmation` boolean as its only permission construct (S-139 `tools/tool.py`).
+
+## Options considered
+
+1. **Hosted participants live only in the Lab, outside the IR.** *Rejected:* budgets, permissions, supplied context/tools and `delegated-to` edges would have no typed home; cross-class experiments could not be expressed in one definition.
+2. **Hosted participants are a native `AgentProcess` with nullable component fields.** *Rejected:* the T-LCD-06 failure signature ("an IR entity gaining a field so that hosted participants can fill it") and the T-LCD-15 risk of component metrics reading 0.
+3. **The IR imports the Hosting ABI's descriptor type.** *Rejected:* a dependency edge from IR to Hosting ABI (T-LCD-06), and it makes C0 depend on C2.
+4. **`AgentProcess` is a closed sum `{native, hosted}`; `hosted = OpaqueProcess` with a kernel-defined tri-state capability record; the Hosting ABI lowers to it (chosen).** For OQ-031: **Agent Spec is a declared-lossy lowering/lifting target at C2**, never the IR's model.
+
+## Decision
+
+- `AgentProcess.hosted = OpaqueProcess{participant_ref, declared_capabilities: CapabilityDeclarationRecord, observability_levels ⊆ {events, model_io, end_state, ledger}, version_identity = H(declaration ∥ participant_version), hosting_mechanism ∈ {session_abi, model_boundary_intercept, container_installed}, supplies{context: [Ref<ContextItem>], tools: [Ref<ToolCapability>], procedures: [Ref<Procedure>]}, budget: Ref<Budget>, permissions: Ref<Permission>}`.
+- `CapabilityDeclarationRecord` is a **kernel record** whose fields are the ratified ontology list (streaming, interrupt, steer, live_queue, resume, fork, compaction, images, subagents, permission_surface, instruction_delivery, model_family, effort_vocabulary, trajectory_export, native_config), each **tri-state `{supported, unsupported, unknown}`**; `unknown` is never coerced (T-LCD-07). WS-J6 may add fields only through `ext` or an HIR dialect bump.
+- **Invariants:** no component sub-entities or `ComponentVariantRef`s on `hosted`; comparison granularity `component` is inapplicable and class-scoped metrics render `n/a` (T-LCD-15); the IR defines this record itself and imports nothing from the Hosting ABI (T-LCD-06); `budget` and `permissions` are enforced at the boundary by the reference runtime, never delegated to the participant's self-report; `delegated-to` into a hosted process carries attenuated Permission and contained Budget exactly as for native processes.
+- **OQ-031:** the IR supports `export(sealed, target=agent_spec) → {document, LoweringLossReport}` and `import(agent_spec_doc) → doc` as a **C2/Stage 4** interop target (ADR-0005). Mapping: `AgentProcess.native → Agent{llm_config, system_prompt (concatenated Text leaves, opacity recorded), tools (surfaces)}`; `Procedure(compile_hint=workflow_node) → Flow` nodes; any grant requiring approval → `Tool.requires_confirmation`; ids → `Component.metadata`. **Declared lost:** Permission grants and delegation, EffectClass declarations, Validator, Budget, Memory validity/authority, HarnessRule and assumption debt, provenance, Observation authority. Import lifts with `provenance.origin = import`, `authority = imported` on all Text leaves, and a default-deny `Permission` with a single `permission_request` grant.
+
+## Evidence (doc 3 §3.3 synthesis contract — all five mandatory)
+
+- (a) Mechanism evidence: black-box agents as a sibling variant with fewer fields — OpenHands `ACPAgentProfile` (S-110); declared-vs-probed capabilities with `UNKNOWN ≠ unsupported` — Omnigent `HarnessCapabilities` and bench seam, Harbor `AgentCapabilities` (S-118, S-132 via WS-A1/WS-L7; Tier B); capability negotiation as the non-LCD pattern — ACP v2, LSP 3.17 (S-035, S-152, via WS-L7); Agent Spec's coverage boundary — `pyagentspec` has no permission/provenance/validator/budget entities (S-139), confirmed by WS-A1 F4; hosting mechanisms and their observability envelopes — WS-A1 F2 (S-118, S-136/S-137, S-132).
+- (b) Source-code precedent: `openhands-sdk/openhands/sdk/profiles/agent_profile.py` L77–226 (`agent_kind ∈ {openhands, acp}`, `extra="forbid"` union); `omnigent/harness_capabilities.py`, `designs/harness-capabilities-bench-seam.md` (S-118, via WS-A1); `harbor/src/harbor/agents/capabilities.py` (S-132, via WS-A1); `pyagentspec/src/pyagentspec/{agent.py,tools/tool.py,component.py}` (S-139) for the export mapping. The IR-side `OpaqueProcess` with kernel-owned tri-state record and boundary-enforced budget/permissions is `no-precedent / novel` in integration; each part is precedented.
+- (c) Disconfirming evidence considered: (i) a kernel-owned capability record could itself become an LCD list if J6's ABI evolves faster than dialects — mitigated by `ext` (registered, preserved) and by tri-state semantics (a field J6 needs but the record lacks is `unknown` until a dialect bump, never silently unsupported); (ii) Harbor/HAL/Inspect already host black boxes without an IR (S-132/S-135/S-136) — accepted per ADR-0004: the point of the IR-side record is joint native/hosted experiments with typed budgets/permissions, not hosting itself; (iii) Agent Spec export is so lossy that "interop" may be nominal — accepted and declared: the loss report is the product; the value is that Agent Spec's six runtime adapters become reachable for control-plane semantics (ADR-0005), and lifting supplies configuration-level participants. None overturns.
+- (d) Conditionality: assumes hosted participants can at minimum start/stream/cancel and account cost (ADR-0001); assumes Agent Spec remains at the agent/tool/flow level (re-check if it adds permissions/provenance — the loss list would shrink).
+- (e) Build-stage assignment: `AgentProcess` sum and `OpaqueProcess` schema **C0 / Stage 1** (so the plane is class-aware from the start, ADR-0010); population and probing **C2 / Stage 4**; Agent Spec export/import **C2 / Stage 4**.
+
+**T-LCD statement.** Satisfies T-LCD-06 (no IR→Hosting-ABI edge; native schema unchanged by hosting), T-LCD-07 (tri-state, never coerced), T-LCD-15 (no component fields ⇒ `n/a`), T-LCD-11 for the Agent Spec target (declared loss report). Does not address T-LCD-03/-04 (native executable tests).
+
+## Consequences
+
+- WS-J6 designs the Hosting ABI descriptor so that it *lowers to* `OpaqueProcess`; a field the ABI needs that the record lacks is added by HIR dialect bump, keeping the dependency direction ABI → IR.
+- WS-J4 stratifies on `declared_capabilities` and the derived capability vector (CF-020 both terms remain distinct: the record is the declaration; the vector is derived by probes).
+- WS-A4 implements the Agent Spec target and its loss report; WS-I3 stores the report in the bundle.
+- WS-A2 records `OpaqueProcess` and the `AgentProcess {native | hosted}` sum as the typed form of the participant classes.
+
+## Reversibility
+
+**High** for the Agent Spec mapping (a C2 target that can be dropped by ADR); **medium** for the `AgentProcess` sum — moving hosted processes out of the IR later would orphan typed budgets/permissions on hosted runs recorded in the ledger.

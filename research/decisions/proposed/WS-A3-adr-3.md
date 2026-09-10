@@ -1,0 +1,46 @@
+# ADR-NNNN — Typed diff (`HirDiff`) as the unit of harness edit
+
+**Status:** proposed
+**Owner workstream(s):** WS-A3 (consumers: WS-I5 evolution, WS-I6 assumption-debt, WS-I7 attribution, WS-J2 registry, WS-L4 versioning, WS-C3 profile edits, WS-H1) · **Phase:** 1 · **Related:** ADR-0002 (reversibility; no self-widening of authority), ADR-0007 (T-LCD-05/-10), WS-A3-adr-1/-2; OQ-040 (Q-L1-04), OQ-WS-A3-08; R-2.1.2, R-2.9.5, R-2.12.1
+
+## Context
+
+Doc 2 §11 states the payoff of a typed IR in one sentence: "harness edits become typed diffs rather than opaque prompt rewrites", enabling optimisation, attribution, compatibility testing, rollback and portability. ADR-0002 requires every accepted evolution change to be reversible and forbids the evolution service from widening its own authority. T-LCD-10 requires that a rename be recorded as a profile edit with its own experiment, not an IR edit. The audit shows what edits look like today: DSPy optimisers assign `signature.with_instructions(...)` and `.demos` (typed slots, no diff object); AFlow writes new `graph.py`/`prompt.py` files per round with a free-text `modification`; ADAS appends a new archive entry with `thought`; none produces an invertible, classified edit object. GumTree shows structural AST diffs with move actions are mature when identities are *not* stable; the IR has stable identities, so a simpler identity-keyed diff suffices.
+
+## Options considered
+
+1. **Textual diffs of serialized definitions.** *Rejected:* cannot distinguish surface from semantic edits (T-LCD-10), cannot classify authority/budget deltas (ADR-0002), and depends on serialization layout.
+2. **Whole-version replacement with a free-text rationale** (ADAS/AFlow pattern). *Rejected:* no attribution at component granularity; rollback is coarse; the rationale is unstructured.
+3. **Tree-matching structural diff** (GumTree-class) over the serialized tree. *Rejected for C0:* unnecessary when node ids are stable; kept as the extension for rebasing across id changes (OQ-WS-A3-08).
+4. **Identity-keyed typed diff with classification, invertibility and authority/budget delta checks (chosen).**
+
+## Decision
+
+- `HirDiff = {base, target: DefinitionVersionRef, dialect, ops: [DiffOp], classification, provenance: derived-from{hypothesis, trajectories[], candidate_id?}}`; `DiffOp = AddNode | RemoveNode | ReplaceField(id, path, old, new) | ReplaceLeaf(id, old_hash, new_hash) | AddEdge | RemoveEdge | Rebind(id, path, old_ref, new_ref) | SurfaceEdit(profile_ref, id, path, old, new) | ExtEdit(id, key, old, new)`, each op tagged `{plane, entity_kind, semantic: bool}`.
+- `classification = {semantic_ops, surface_ops, provenance_only_ops, ext_ops, authority_delta ∈ {none, narrowing, widening}, budget_delta ∈ {none, tightening, loosening}, touches_conditioned_rules: [rule_id]}`.
+- **Invariants:** computed by node identity; `apply(base, diff) = target` byte-for-byte in canonical form; `invert(diff)` exists and round-trips; a rename/reorder/reword-template produces only `SurfaceEdit` ops and changes no `semantic_id` (T-LCD-10 acceptance test); `authority_delta = widening` is rejected when `provenance.origin = evolution` (ADR-0002 iii) and requires `origin = human` with attestation otherwise; an op on a `conditioned_on` rule must carry or update its assumption-debt record (T-LCD-05); every diff carries `derived-from` (hypothesis + trajectories may be empty only for `origin = human | migration`).
+- **Surface diffs are profile edits:** a diff whose ops are all `SurfaceEdit` is filed against the Model Profile version (WS-C3) and gets its own experiment arm; it never changes the Harness Definition's `semantic_id` set.
+- Textual renderings of `ReplaceLeaf` are produced for humans on demand and are never the stored object. **No IR↔source round-trip is required** (Q-L1-04); the compiler's obligation is lower→lift per target (T-LCD-11, WS-A4).
+- Operations: `diff(a,b)`, `apply(a,d)`, `invert(d)`, `classify(d)`, `rebase(d, a')` (extension; GumTree-class matching).
+
+## Evidence (doc 3 §3.3 synthesis contract — all five mandatory)
+
+- (a) Mechanism evidence: optimisers already confine edits to typed slots — DSPy (S-013/S-144); edits carry rationale — AFlow `modification` (S-025), ADAS `thought` (S-WS-A3-01), Procedural Graphs' refiner commits edits only under held-out validation (S-095, `provisional (mech)`); renames change model behaviour and must be experimentally separable — doc 2 §9, S-049 (Tier B); reversibility and non-widening are ADR-0002 constraints; structural differencing with move actions is mature — GumTree (S-WS-A3-05, ASE 2014); content-addressed definitions make "what changed" a hash comparison — Unison (S-WS-A3-02).
+- (b) Source-code precedent: `dspy/teleprompt/mipro_optimizer_v2.py` L770/778, `gepa/gepa_utils.py` L232, `bootstrap.py` L270 (typed slot assignment); `FoundationAgents/AFlow/scripts/optimizer.py` L26–30 and `optimizer_utils/graph_utils.py` L115–118 (round-as-files with `modification`); `ShengranHu/ADAS/_arc/search.py` L295–330 (archive append with `thought`/`fitness`/`generation`); `GumTreeDiff/gumtree` (structural diff). The classified, invertible, authority-checked diff object is `no-precedent / novel` as an integrated contract.
+- (c) Disconfirming evidence considered: (i) most harness gains may come from opaque payload edits (S-080, S-083 `provisional`) so a typed diff would mostly say `ReplaceLeaf` — accepted: even then the diff localizes the change to one addressable leaf with a hash, which is what attribution needs; (ii) identity-keyed diffs break when ids change wholesale (re-import, migration) — mitigated by `rebase` as an extension and by `semantic_id` stability under migration; (iii) "surface edits are harmless" is false for models (S-049) — that is precisely why they are filed as profile experiments rather than ignored. None overturns.
+- (d) Conditionality: independent of model tier; assumes definitions are sealed (all refs pinned) before diffing; assumes WS-C3 accepts surface diffs as profile versions.
+- (e) Build-stage assignment: **C0 / Stage 1** (`diff/apply/invert/classify`); `rebase` extension C1/Stage 2+; consumed by evolution at C4/Stage 6.
+
+**T-LCD statement.** Satisfies T-LCD-10 (rename ⇒ surface-only diff, identity stable) and T-LCD-05 (conditioned-rule edits carry records); supplies ADR-0002's reversibility and non-widening checks. Does not address T-LCD-03/-04 (executable).
+
+## Consequences
+
+- WS-I5's pipeline stage "candidate generation" outputs `HirDiff`s, never definitions; canary/rollback are `apply`/`invert`.
+- WS-I7 attribution keys on `DiffOp` targets (node/leaf ids) rather than on prompt text.
+- WS-J2 registry stores definitions as version chains of diffs plus sealed snapshots (WS-L4 decides storage form).
+- WS-C3 treats an all-surface diff as a profile version with its own arm (T-LCD-10).
+- WS-H1 receives `classification.authority_delta` as a precondition input: `widening` from a non-human origin is refused before any run.
+
+## Reversibility
+
+**High.** The diff format is derivable from the schema; changing it does not affect stored definitions (only stored diffs, which can be regenerated from snapshot pairs).
