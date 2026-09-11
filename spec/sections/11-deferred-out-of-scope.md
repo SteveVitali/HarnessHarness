@@ -10,7 +10,7 @@ Vocabulary: "deferred" here is the register status `deferred(ADR-####)`, unrelat
 
 ### 11.2 Out of scope: the canonical non-goals N1–N13
 
-ADR-0006 decision 3 is the only non-goals list (ADR-0003's five are N1, N2, N3, N4, N13); §1.5 carries it as positioning. Here each is a boundary with rationale and the section specifying its near side — nothing is dropped.
+ADR-0006 decision 3 is the only non-goals list (ADR-0003's original five map, in order, to N1, N2, N4, N3, N13 — CF-019); §1.5 carries it as positioning. Here each is a boundary with rationale and the section specifying its near side — nothing is dropped.
 
 | id | out of scope | rationale | in scope instead — specified in |
 |---|---|---|---|
@@ -66,7 +66,7 @@ Reversing N1 re-opens the LCD trap and is the reversal ADR-0006 makes deliberate
 
 ### 11.4 Open questions unresolved after Phase 4
 
-**Count.** The register holds 466 rows (next OQ-467). After the Phase 4 fold, 264 are `open` and 14 are half-open (OQ-025, 085, 107, 112, 113, 124, 154, 165, 173, 189, 242, 281, 331, 350). Nineteen rows resolved in a Phase 4 note but still reading `open` in the status cell (OQ-007, 008, 009, 012, 013, 017, 026, 027, 082, 135, 147, 216, 278, 304, 313, 323, 347, 382, 390) were rewritten to `resolved (Phase 4)` at Phase 5 (register hygiene; ADR-0210 log) and are not counted. Classification follows the memos (phase-4 §5; phase-3 §5 "stands"; phase-2 §5 residue): a question **blocks a stage** when a C0–C3 contract cannot be built there without it and a MUST-data placeholder is in force until the named measurement; otherwise it is **program-level**. Doc 3 §8 requires a deferral ADR for every blocking question open at Phase 5; none existed after Phase 4 (ADR-0208: "nothing is ratified as deferred here"). Phase 5 authored them: ADR-0212 (Stage 0–1), ADR-0213 (Stage 2–3), ADR-0214 (Stage 4–6), ADR-0215 (program-level candidates and OQ-440), beside ADR-0210 (R-2.12.4) and ADR-0211 (D-1…D-6); each row below names its ADR, and each ADR row is a `registers/spec-debt.md` entry (§11.6).
+**Count.** The register holds 471 rows (next OQ-472; OQ-467…OQ-469 were opened by the Phase 5 fixer passes and OQ-470/OQ-471 by the hygiene pass, all `open`, non-blocking). After the Phase 4 fold, 264 are `open` and 14 are half-open (OQ-025, 085, 107, 112, 113, 124, 154, 165, 173, 189, 242, 281, 331, 350). Nineteen rows resolved in a Phase 4 note but still reading `open` in the status cell (OQ-007, 008, 009, 012, 013, 017, 026, 027, 082, 135, 147, 216, 278, 304, 313, 323, 347, 382, 390) were rewritten to `resolved (Phase 4)` at Phase 5 (register hygiene; ADR-0210 log) and are not counted. Classification follows the memos (phase-4 §5; phase-3 §5 "stands"; phase-2 §5 residue): a question **blocks a stage** when a C0–C3 contract cannot be built there without it and a MUST-data placeholder is in force until the named measurement; otherwise it is **program-level**. Doc 3 §8 requires a deferral ADR for every blocking question open at Phase 5; none existed after Phase 4 (ADR-0208: "nothing is ratified as deferred here"). Phase 5 authored them: ADR-0212 (Stage 0–1), ADR-0213 (Stage 2–3), ADR-0214 (Stage 4–6), ADR-0215 (program-level candidates and OQ-440), beside ADR-0210 (R-2.12.4) and ADR-0211 (D-1…D-6); each row below names its ADR, and each ADR row is a `registers/spec-debt.md` entry (§11.6).
 
 #### 11.4.1 Stage-blocking questions (deferral ADR required)
 
@@ -123,7 +123,7 @@ Reversing N1 re-opens the LCD trap and is the reversal ADR-0006 makes deliberate
 | | OQ-438 | evolution/diff · WS-A3/L4/I5 | re-propose against moved head (ADR-0195 D12) | ADR-0214 |
 | | OQ-448 | attribution · WS-I7/J4/J3 | OQ-323 constants until A13 `power` | ADR-0214 |
 | | OQ-450 | attribution/scheduler · WS-F4/I7/L2 | refuse-vs-degrade is campaign data | ADR-0214 |
-| | OQ-457, OQ-458 | co-evolution · WS-I6/I2/C3 | `k_cycles`, margins; `scope.snapshots` default (ADR-0203 D1) | ADR-0214 |
+| | OQ-457, OQ-458 | co-evolution · WS-I6/I2/C3 | `k_cycles`, margins; `scope.model_selectors` default (ADR-0203 D1) | ADR-0214 |
 
 Every placeholder is a conditioned rule (T-LCD-05): the closing deferral ADR carries an assumption-debt record whose `removal_test` is the named measurement (ADR-0197 D6; ADR-0198 D1) and a spec-debt row (§11.6).
 
@@ -204,7 +204,7 @@ A deferred item entering later must be removable without touching a lower tier (
 
 | scope item | disposition here |
 |---|---|
-| **R-2.12.3** Language/ecosystem selection (Must, as decision) | **Specified (ADR-0050)**; triggers and surface deferral §11.5 |
+| **R-2.12.3** Language/ecosystem selection (Must, as decision) | **Specified (ADR-0050)**; triggers and surface deferral §11.5. A program row: the nine-heading subsystem template of doc 3 §7.2 item 5 is inapplicable (a decision, not a subsystem); its acceptance is the Stage-0 spike (§10.6) and the ADR-0009 AC8 language-leak audit |
 | **R-2.12.4** Packaging, licensing, OSS governance, docs & community (Should) | **`deferred(ADR-0210)`** — entry tests in ADR-0210; §11.3 |
 | R-2.12.5 Thesis & naming | Non-goals restated §11.2; text §1 |
 | R-2.12.6 Organizational layer (C4) | D-1…D-6 §11.3; contracts §05e/§05h |
