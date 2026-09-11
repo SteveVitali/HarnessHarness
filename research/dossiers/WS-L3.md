@@ -142,11 +142,11 @@ Precedent status: the product lattice, join rules, reader sets and policy-at-too
 
 **Invariants.** I1 `authority ≤ default_authority(origin, scope, attestation)` unless an endorsement event (§6.3) names this item; I2 free-text rule R-TEXT: `kind = Text ∧ origin ∉ {kernel, definition-at-seal, human(principal)} ⇒ authority ≤ external`; I3 `taint ≠ ∅ ⇒ authority ≤ external`; I4 provenance is excluded from `semantic_id`, included in `version_id` (WS-A3 §6.1 — unchanged); I5 an item's `authority` never exceeds its `scope`'s write ceiling (§6.3 table); I6 `derived_from ≠ [] ⇒ label(item) ⊑ ⊔ label(inputs) ⊔ label(deriver)` (P1). Failure modes at validation/append: `MissingProvenance`, `AuthorityExceedsOrigin`, `TextAboveExternal`, `TaintedAboveExternal`, `IllegitimateEndorsement`, `ScopeCeilingExceeded`.
 
-### 6.2 The label lattice — ADR ADR-0033
+### 6.2 The label lattice — ADR-0033
 
 `Label = (authority, taint, readers)`; `L₁ ⊑ L₂` ("L₁ may flow to L₂"; L₂ at least as restricted) iff `authority₁ ≥ authority₂ ∧ taint₁ ⊆ taint₂ ∧ readers₁ ⊇ readers₂`. **Join** `L₁ ⊔ L₂ = (min(authority), taint₁ ∪ taint₂, readers₁ ∩ readers₂)` (Public is the identity of ∩); **meet** `= (max, ∩, ∪)`; top (least restricted) `= (kernel, ∅, Public)`, bottom `= (unverified, U, ∅)`. The product is exactly Fides' `ProductLabel[IntegrityLabel, Inverse[Powerset]]` with the two-point integrity lattice replaced by the seven-class chain and CaMeL's `sources_set` added as the taint component. At **C0** only `authority` is enforced (taint/readers are carried with defaults and joined, but no monitor check reads them); at **C2** WS-H2 enforces all three. The lattice is *closed per HIR dialect*: adding a class is a dialect bump with a migration (WS-A3 §6.1).
 
-### 6.3 Endorsement and declassification points — ADR ADR-0035
+### 6.3 Endorsement and declassification points — ADR-0035
 
 The only operations that may move a label *up* (raise authority, drop taint, widen readers). Each is a ledger event `security.label.endorsed{subject_ref, from: Label, to: Label, endorser: ProvenanceRecord, basis, basis_ref}` (or `security.label.declassified` for readers) and is valid only if `authority(endorser) ≥ authority(to)` and `basis` is in this closed list:
 
@@ -161,7 +161,7 @@ The only operations that may move a label *up* (raise authority, drop taint, wid
 
 A `delegate` origin (any model, subagent, evolution candidate, hosted participant) can **never** be an endorser — the type-level form of "the model can reason about permission but cannot grant itself permission" (doc 2 §5.6) and of DLM's "only the owner can declassify its own policy." **Persistence-scope write ceilings** (X-CPE defence): writing to `scope = user` requires effective authority ≥ `principal` *and* an `approval`; `project` ≥ `principal`; `session`/`run` ≥ `delegate`; `definition` only through `seal`. The written item's label is `⊔(context_label, label(writer))` — never higher than what the writer could command at that moment.
 
-### 6.4 Propagation rules — ADR ADR-0034
+### 6.4 Propagation rules — ADR-0034
 
 - **P1 Derivation.** `label(out) = ⊔ label(inputs) ⊔ label(deriver)`; `deriver = delegate` for any model-produced summary/compaction/extraction, `kernel` for deterministic projections (truncation, redaction, structured projection). A compaction summary of external content is `external` with the union taint; `derived_from` lists the forgotten ids (WS-B1 `context.compaction.completed{forgotten, summary_ref}`).
 - **P2 Delegation** (`delegated-to` edge, WS-A3): child `Permission ⊆` parent's, child `Budget ≤` parent's (already A3 invariants); **child authority ceiling ≤ parent's effective authority at spawn**; everything the child returns enters the parent at `≤ delegate` with `taint ⊇ child's accumulated taint` and `derived_from = subagent_result`. Hosted participants: identical, with `origin = participant`.

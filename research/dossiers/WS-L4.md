@@ -121,7 +121,7 @@ No performance number is load-bearing for any recommendation; every C0 decision 
 
 ## 6. Recommendation for the spec
 
-### 6.1 The unified identity model (Spec §8; ADR ADR-0036)
+### 6.1 The unified identity model (Spec §8; ADR-0036)
 
 Five identity kinds, each with a fixed domain of application. All hashed identities share one **identity profile** (§6.2).
 
@@ -146,7 +146,7 @@ Five identity kinds, each with a fixed domain of application. All hashed identit
 - **N7 Provider ids are surfaces.** Model snapshot ids, provider tool-call ids, container tags are `surface_ids{}`/claims with `provenance = reported`, never identity (T-LCD-10 applied to the run record; WS-B1 F5).
 - **N8 One tree rule.** All directory-shaped members use the identity profile's tree rule; foreign digests are recorded as claims (`foreign_digest{scheme, value, source}`), never as identity.
 
-### 6.2 Identity profile: hash pinning and rotation (answers OQ-056 / OQ-083; closes OQ-041 — ADR ADR-0036)
+### 6.2 Identity profile: hash pinning and rotation (answers OQ-056 / OQ-083; closes OQ-041 — ADR-0036)
 
 `IdentityProfile{idp_id: "idp/1", hash_algorithm, digest_length, canonical_form_version (WS-A3/B1 rule set: sorted keys by code point, UTF-8, no whitespace, no Unicode normalization, integers or decimal strings, explicit null), domain_tags: map<RecordKind, bytes>, tree_rule_version, id_text_form: "<algorithm>:<hex>"}` — itself a record with a `version_id` under the *previous* profile (bootstrapping: `idp/1` is hashed under itself and its bytes are also published verbatim).
 
@@ -155,7 +155,7 @@ Five identity kinds, each with a fixed domain of application. All hashed identit
 - **Rotation procedure (Phase 2 detail, contract fixed now).** (1) Publish `idp/2` as a record hashed under `idp/1` (the *bridge record*), recording the reason. (2) **Ids are never rewritten.** Existing `version_id`s, `semantic_id`s, content addresses and hash chains remain valid *under their recorded idp*; `verify` recomputes with the id's own algorithm. (3) A **rotation checkpoint** event (`security.audit.checkpoint{seq_range, chain_hash (idp/1), tree_head (idp/1), rehash{idp/2, chain_hash', tree_head'}, bridge_record_ref, attestation_ref}`) is appended to every live run and to every bundle manifest, signing the old head under the new algorithm (RFC 6962 consistency-proof shape). (4) New records are written under `idp/2`; a record referencing an `idp/1` id references it as-is (mixed-idp graphs are legal; N2). (5) **Identity migration map** `IdMigration{from: (idp/1, id), to: (idp/2, id'), method ∈ {recanonicalized, rehashed_bytes}, attested_by}` is produced *on demand* by re-canonicalizing stored canonical bytes (records) or re-hashing stored bytes (blobs); the map is itself a versioned record; `semantic_id` equality across idps is asserted only through the map, never by string comparison. (6) Canonical-form changes are handled identically (a new `idp` with the same algorithm and a new `canonical_form_version`); the WS-A3/B1 golden corpus gains the new form. (7) Dual-write period: during rotation a writer may emit both ids in `alt_ids[]` — `alt_ids` are never identity.
 - **Failure modes:** `UnknownIdentityProfile(idp)`, `AlgorithmMismatch(expected, found)`, `DigestLengthInvalid`, `TruncatedId`, `IdpNotWritable(idp)` (writing under a retired profile), `BridgeMissing` (an `idp/2` record with no bridge to `idp/1`).
 
-### 6.3 Immutability, supersession and revocation (Spec §8 "artifact lifecycle"; feeds D4, H6, H5, J2 — ADR ADR-0037)
+### 6.3 Immutability, supersession and revocation (Spec §8 "artifact lifecycle"; feeds D4, H6, H5, J2 — ADR-0037)
 
 **Immutability rules (I-rules).**
 - **I1** Anything with a `version_id` or `ContentAddress` is immutable: bytes never change; a changed record is a new record with a new id (SemVer "MUST NOT be modified"; OCI "MUST NOT modify content in ways that change identifiers").
@@ -174,7 +174,7 @@ Five identity kinds, each with a fixed domain of application. All hashed identit
 - **S7** Migration (`migrate(doc, from, to)`, WS-A3) yields `supersedes{reason: migration}` with `MigrationLoss` recorded on the new record; identity migration across idps (§6.2) is *not* supersession — the record is the same record under two ids.
 - **S8** Audit retention (WS-H6): every version that was ever *executed* (referenced by any run manifest) or *published* (has a name-history entry) is retained at least as its canonical bytes; blob GC follows WS-B1 §6.5 tiers; the name history and supersession edges are never GC'd.
 
-### 6.4 "The same harness" across edits — typed diff ↔ version (answers key question 4; ADR ADR-0037)
+### 6.4 "The same harness" across edits — typed diff ↔ version (answers key question 4; ADR-0037)
 
 Sameness is a *ladder*, computed from WS-A3's `HirDiff.classification` and this dossier's records — never from names or text similarity:
 
@@ -223,7 +223,7 @@ Invariants: every member is a `version_id`/`ContentAddress` (N5) or an explicitl
 
 **Audit (H6).** Every ledger event's `ir_refs[]` (WS-B1) carries `{semantic_id, version_id}`; `security.audit.checkpoint` includes `idp` and, on rotation, the bridge record (§6.2 step 3); the attestation subject is the bundle manifest `version_id` (SLSA `subject.digest`); redaction and yank are events, so the audit trail of *why* a version disappeared from default resolution is itself hash-chained.
 
-### 6.6 Reproducibility levels (Spec §10; ADR ADR-0038)
+### 6.6 Reproducibility levels (Spec §10; ADR-0038)
 
 | level | claim | requires (all pinned in the bundle) | verified by | who can claim it |
 |---|---|---|---|---|

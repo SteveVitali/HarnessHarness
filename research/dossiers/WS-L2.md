@@ -259,9 +259,9 @@ Listed with temporary ids in `WS-L2.additions.md`: **OQ-093** pricing-table gove
 
 ## 11. ADRs produced
 
-- `research/decisions/proposed/ADR-0039.md` (proposed) — Unified resource taxonomy and accounting contract: canonical token roles, counters vs gauges, raw usage on producing events, charges with attribution, spend derived with provenance/derivation/confidence/coverage (answers OQ-033), subject vs instrument ledgers, nothing unaccounted (C0/Stage 1).
-- `research/decisions/proposed/ADR-0040.md` (proposed) — Hierarchical budget contract: budget nodes as a tree with dynamic containment against *remaining*, `slice`/`pool` delegation with conservation, reserve-before-spend, root-first exhaustion checks, soft budgets as measurable model-facing artifacts vs hard budgets enforced at effect boundaries (C0/Stage 1; delegation C3/Stage 4).
-- `research/decisions/proposed/ADR-0041.md` (proposed) — Matched-budget comparison definitions (matched-cap, iso-cost, matched-total) with declared `MatchSpec`, engine refusal semantics, pinned pricing tables and provenance-stratified capability-cost Pareto reporting (T-LCD-14/-15; C0/Stage 3).
+- ADR-0039 (proposed) — Unified resource taxonomy and accounting contract: canonical token roles, counters vs gauges, raw usage on producing events, charges with attribution, spend derived with provenance/derivation/confidence/coverage (answers OQ-033), subject vs instrument ledgers, nothing unaccounted (C0/Stage 1).
+- ADR-0040 (proposed) — Hierarchical budget contract: budget nodes as a tree with dynamic containment against *remaining*, `slice`/`pool` delegation with conservation, reserve-before-spend, root-first exhaustion checks, soft budgets as measurable model-facing artifacts vs hard budgets enforced at effect boundaries (C0/Stage 1; delegation C3/Stage 4).
+- ADR-0041 (proposed) — Matched-budget comparison definitions (matched-cap, iso-cost, matched-total) with declared `MatchSpec`, engine refusal semantics, pinned pricing tables and provenance-stratified capability-cost Pareto reporting (T-LCD-14/-15; C0/Stage 3).
 
 ## 12. Status
 

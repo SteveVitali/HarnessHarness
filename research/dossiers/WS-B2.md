@@ -246,9 +246,9 @@ Defined in `WS-B2.additions.md`: `effect`, `effect intent`, `effect risk class` 
 
 ## 11. ADRs produced
 
-- `research/decisions/proposed/ADR-0030.md` (proposed) — Effect lifecycle as typed ledger events with a write-ahead commit record, explicit `unknown`/`probe`, and fencing-token inheritance from the run writer lease (C0/Stage 1).
-- `research/decisions/proposed/ADR-0031.md` (proposed) — Effect risk class taxonomy (reversibility × repeat-safety × scope), per-class delivery semantics ("effectively-once, never exactly-once"; at-most-once for irreversible), idempotency-key derivation, and monotone consumption by the kernel/approval policy (OQ-015).
-- `research/decisions/proposed/ADR-0032.md` (proposed) — Compensation as an audited, idempotent, best-effort saga over effects with an `abandoned` terminal state (schema C0/Stage 1; coordinator C1/Stage 2).
+- ADR-0030 (proposed) — Effect lifecycle as typed ledger events with a write-ahead commit record, explicit `unknown`/`probe`, and fencing-token inheritance from the run writer lease (C0/Stage 1).
+- ADR-0031 (proposed) — Effect risk class taxonomy (reversibility × repeat-safety × scope), per-class delivery semantics ("effectively-once, never exactly-once"; at-most-once for irreversible), idempotency-key derivation, and monotone consumption by the kernel/approval policy (OQ-015).
+- ADR-0032 (proposed) — Compensation as an audited, idempotent, best-effort saga over effects with an `abandoned` terminal state (schema C0/Stage 1; coordinator C1/Stage 2).
 
 ## 12. Status
 
