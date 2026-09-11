@@ -26,3 +26,6 @@ NAMING: enforce 'HarnessHarness' (ADR-0011) across all artifacts; residual 'Meta
 Phase 4 exit: all 8 workstreams done with ADRs dispositioned; every C3/C4 ADR carries matched-budget conditionality + maturity flag; no C0 decision rests on provisional evidence (re-audit the full ADR set); the evolution loop composes with the lab substrate and the security kernel; deferral candidates listed for Phase 5. If any criterion fails, set gate_pass=false with precise blockers.
 
 Return ONLY the structured JSON (schema enforced). `progress_summary` is a ~150-word summary for the human sponsor.
+
+## Resume note (orchestrator, 2026-09-10)
+A previous synthesis run for this phase was stopped shortly after it began; it had already appended SOME sidecar rows into `registers/sources.md` and `registers/open-questions.md` (committed at a13aecd) but had not touched conflicts.md, ontology.md, the ADRs, the LEDGER, or the scope register. Before folding: diff each sidecar against the registers, skip rows already present, dedupe, and make sure the "next id" lines match the actual last ids. All eight workstreams (WS-F3, F4, F5, I5, I6, I7, I8, L8) have complete artifacts on disk; the F3 and I8 research agents died on a 429 rate limit AFTER persisting, so treat them as done (read their dossier §10–§12 for their notes), not blocked.
