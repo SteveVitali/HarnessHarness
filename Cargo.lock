@@ -30,6 +30,14 @@ dependencies = [
 name = "hh-embed-schema"
 version = "0.0.1"
 dependencies = [
+ "hh-identity",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-identity"
+version = "0.0.1"
+dependencies = [
  "hh-wire",
 ]
 
@@ -46,6 +54,7 @@ dependencies = [
 name = "hh-ontology"
 version = "0.0.1"
 dependencies = [
+ "hh-identity",
  "hh-wire",
 ]
 

@@ -16,7 +16,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against (`sha256:<hex>`).
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:fbbf02de4ff017994380564938011118918cdf4e3fedadbfd30d8a35f37e3757";
+    "sha256:c6f41391ff48db1a2adf1ea99c876183350ecbef6369830bfefcd1ee27669370";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HelloParams {

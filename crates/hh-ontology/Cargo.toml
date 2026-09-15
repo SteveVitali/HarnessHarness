@@ -11,3 +11,7 @@ path = "src/lib.rs"
 
 [dependencies]
 hh-wire = { path = "../hh-wire" }
+# The idp/1 identity model (S1.2): κ's two configuration ids are computed through the one idp/1
+# content-addressing scheme (CC1 — no second canonicalization/hash scheme). ADR-0227 D2 flagged
+# this migration; it lands with S1.2.
+hh-identity = { path = "../hh-identity" }
