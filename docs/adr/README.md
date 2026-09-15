@@ -12,3 +12,5 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0220](ADR-0220-s0.1-boundary-spike-first-measurement.md) | S0.1 AC-R-2.11.4-9 first measurement and the retained boundary-spike harness | S0.1 | Accepted |
 | [ADR-0221](ADR-0221-s0.2-throwaway-baseline-crate.md) | S0.2 throwaway baseline lives in a workspace-member crate, deleted at the Stage-0 boundary | S0.2 | Accepted |
 | [ADR-0222](ADR-0222-s0.2-stage0-exit-class-mapping.md) | S0.2 Stage-0 exit-class mapping and interim exit-code numerals | S0.2 | Accepted |
+| [ADR-0223](ADR-0223-s0.3-spike-method-and-deviations.md) | S0.3 Stage-0 spike method — offline/hermetic scope, matched E1↔E1 crossing, CPU-vs-durable fan-out, and committed-throwaway trees | S0.3 | Accepted |
+| [ADR-0224](ADR-0224-s0.3-stage0-revalidation-verdict.md) | S0.3 Stage-0 revalidation verdict — the ADR-0009/ADR-0050 ecosystem decision holds; no trigger fires (feeds GATE-G1) | S0.3 | Accepted |

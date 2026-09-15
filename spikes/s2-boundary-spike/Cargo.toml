@@ -14,5 +14,6 @@ path = "src/main.rs"
 
 [dependencies]
 hh-embed-client-generated = { path = "../../crates/hh-embed-client-generated" }
+hh-wire = { path = "../../crates/hh-wire" }
 
 [workspace]
