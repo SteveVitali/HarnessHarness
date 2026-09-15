@@ -11,7 +11,7 @@
 
 ```
 projectStatus:   IN_PROGRESS        # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      GATE-G1
+nextTicket:      S0.3b
 lastCompleted:   S0.3
 blockedOn:       (nothing)          # REAL blocks only; a pending gate is a RETURN PASS row
 pauseRequested:  false
@@ -40,6 +40,7 @@ updatedAt:       2026-09-15
 | date | ticket | gate | item | answer | consequence |
 |---|---|---|---|---|---|
 | 2026-09-15 | S0.3 | Stage-0 spike budget (operator-gated live stage) | release spike budget | authorized — offline/hermetic only, no external spend | runs the S1/S2 measurement spikes (repeat-scored N≥3); discharges DF-S0.1-1, DF-S0.2-1; produces the measurement sheet feeding GATE-G1 |
+| 2026-09-15 | GATE-G1 | Stage-0 acceptance & ecosystem-decision revalidation | disposition | PENDING — authorize an ONLINE spike budget first | insert S0.3b to close the machine cells of DF-S0.3-1/-3 (online reference peers + E2/E3 candidate toolchains, no external model spend); gate stays STOPPED until S0.3b lands and the sheet is re-read; the R2 human cross-camp signature stays an operator residual |
 
 ## RETURN PASS
 
@@ -47,6 +48,8 @@ updatedAt:       2026-09-15
 |---|---|---|---|
 
 ## PHASE LOG
+
+- 2026-09-15 · **inserted** S0.3b (`003a_S0.3b__cross-candidate-online-spike.md`, row 3a) between S0.3 and GATE-G1 — operator dispositioned GATE-G1 as PENDING and authorized an ONLINE spike budget to close the machine cells of DF-S0.3-1 (MCP/ACP official-SDK round-trip + cross-candidate G1 byte-identity) and DF-S0.3-3 (E2/E3 cross-candidate scoring + E5b/E5c). Network egress + candidate toolchains (E2/E3) available; no external model spend. R2 human cross-camp signature stays an operator residual; DF-S0.3-2 (Stage-3 polyglot CI) not pulled forward. GATE-G1 readout `docs/build/readouts/GATE-G1.md` reading 1 written; gate STOPPED until S0.3b lands. nextTicket → S0.3b.
 
 - 2026-09-11 · Ledger created by decompose-spec from `spec/CANONICAL_SPEC.md` (v1.0-rc2, PASS 7/7); 100 implement-spec tickets + 3 milestone gates + 2 human prerequisites + GATE-ACCEPT (106 chain rows total); dispatch=subagent; plan is revisable at run time.
 - 2026-09-15 · SETUP done — worktree `MetaHarness-harnessharness` created off 85a3960 on branch `svitali/harnessharness` (operator-chosen prefix, not `whoami`); params resolved (dispatch=subagent, autonomy=manual, mergePolicy=OPERATOR); seed already committed at base (85a3960) so no separate first commit; baseline trivially green (no build system exists pre-S0.1); benchmarkSet left PENDING_CREATE (Stage-3 reference suite, not creatable at Stage 0); check-build-memory exit 0. nextTicket=001_S0.1__toolchain-codegen.md.
