@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # S2 boundary-crossing spike runner — the S0.1 first measurement of AC-R-2.11.4-9.
 # Builds the persistent kernel + codegen (release), runs the throwaway spike, and writes a
-# stamped measurement sheet to docs/build/measurements/. The full comparative spike (E5a/E5b/
+# stamped measurement sheet to docs/build/reports/. The full comparative spike (E5a/E5b/
 # E5c) and the ADR-0050 amendment-log append are S0.3 (see the S0.1 DEFERRALS row).
 set -euo pipefail
 
 ROOT="${1:-$(git rev-parse --show-toplevel)}"
 cd "$ROOT"
-SHEET="$ROOT/docs/build/measurements/S0.1-boundary-spike.md"
+SHEET="$ROOT/docs/build/reports/S0.1-boundary-spike.md"
 mkdir -p "$(dirname "$SHEET")"
 
 echo "spike: building release kernel + codegen…"

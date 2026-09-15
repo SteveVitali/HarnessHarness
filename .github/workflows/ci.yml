@@ -46,5 +46,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: s0.1-boundary-spike
-          path: docs/build/measurements/S0.1-boundary-spike.md
+          path: docs/build/reports/S0.1-boundary-spike.md
           if-no-files-found: warn
