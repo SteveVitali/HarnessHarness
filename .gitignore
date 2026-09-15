@@ -3,3 +3,8 @@
 
 # Agent scratch — never committed; this repo's durable memory is research/ and spec/
 .agents/
+
+# Rust build outputs (E1 workspace + throwaway spike trees). Cargo.lock IS committed.
+/target/
+**/target/
+.idea/

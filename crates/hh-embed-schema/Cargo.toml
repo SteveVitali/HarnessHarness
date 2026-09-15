@@ -1,0 +1,13 @@
+[package]
+name = "hh-embed-schema"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The single schema source (CC7) for the hh-embed/1 Stage-0 message set: hello, ContractIdentity, the closed error sum, and the JSON-Schema exporter every binding is generated from."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }

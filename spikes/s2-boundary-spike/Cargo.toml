@@ -1,0 +1,18 @@
+# Throwaway S2 boundary-crossing spike (ADR-0050 R1–R6). Standalone (not a workspace member):
+# it drives the persistent `hh-kernel serve` over stdio with the generated client and reports
+# per-crossing overhead — the S0.1 first measurement of AC-R-2.11.4-9. The full comparative
+# spike across the E5a/E5b/E5c splits, and the ADR-0050 amendment-log append, are S0.3.
+[package]
+name = "s2-boundary-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "s2-boundary-spike"
+path = "src/main.rs"
+
+[dependencies]
+hh-embed-client-generated = { path = "../../crates/hh-embed-client-generated" }
+
+[workspace]

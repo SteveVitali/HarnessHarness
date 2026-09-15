@@ -1,0 +1,20 @@
+[package]
+name = "hh-kernel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The E1 reference kernel binary (Stage-0 skeleton): schema export, the stdio JSON-RPC hello/ContractIdentity negotiation, and self-check subcommands. No runtime logic beyond the boundary skeleton (ADR-0050 (e))."
+
+[[bin]]
+name = "hh-kernel"
+path = "src/main.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+
+[dev-dependencies]
+# The generated, drift-checked client — used to prove the end-to-end codegen round trip over
+# stdio (a generated stub drives `hello` against the running kernel; AC-R-2.11.4-1 Stage-0).
+hh-embed-client-generated = { path = "../hh-embed-client-generated" }
