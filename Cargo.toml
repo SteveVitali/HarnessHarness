@@ -19,6 +19,13 @@ members = [
     # configuration ids, single-namespace publish/resolve, supersede/revoke, StaleIndex, the
     # sameness ladder and reproducibility levels. The single schema source for identity (CC7).
     "crates/hh-identity",
+    # The C0/Stage-1 provenance & authority model (spec §8.1, R-2.1.5; ticket S1.3). A
+    # PERSISTENT workspace member: the ONE canonical ProvenanceRecord + Label lattice, the
+    # seven-class AuthorityClass order, default_authority (conferred, never read — CC1/CC2),
+    # join/meet/leq, R-TEXT, ledger stamping, propagation P1/P6/P7 + RP, the seal/endorse/
+    # declassify basis, and monitor checks 1/2/5/7. hh-identity consumes the canonical record
+    # (DF-S1.2-1); the single schema source for provenance (CC7).
+    "crates/hh-provenance",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

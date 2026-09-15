@@ -1,59 +1,25 @@
 //! [`VersionedRef`] — the one reference type every consumer uses (§8.3 #3; ADR-0036 D1) — plus
-//! the `NameSelector` and the Stage-1 `Origin`/`Provenance` view.
+//! the `NameSelector` and the canonical provenance hand-off.
 //!
 //! Provenance note (CC1 / CC10). Provenance & authority are owned by **§8.1 / R-2.1.5** and land
-//! at **S1.3**. Identity must *carry* a provenance on every [`VersionedRef`] and name-history
-//! entry, but it must not define a *second* `ProvenanceRecord` (CC1). At Stage 1 this crate
-//! carries the minimal [`Origin`] the identity rules actually read (`publish` of a widening
-//! successor requires `origin = Human`); the canonical `ProvenanceRecord` and its seven
-//! `AuthorityClass`es (§8.1) subsume this at S1.3. Tracked by DEFERRALS row DF-S1.2-1.
+//! at **S1.3** in `hh-provenance`. Identity *carries* a provenance on every [`VersionedRef`] and
+//! name-history entry, and it is the **canonical [`ProvenanceRecord`]** — this crate does not
+//! define a second record (CC1). DF-S1.2-1 is closed: the interim `Origin`/`Provenance` view is
+//! replaced by `hh_provenance::{Origin, ProvenanceRecord}` and the widening-successor rule in
+//! [`crate::names`] reads the real `AuthorityClass` (§8.1), not the interim `attested` flag.
 
 use crate::kinds::RecordKind;
 
-/// The provenance **origin** an identity operation reads (the identity-slice view of §8.1's
-/// `Origin`). Closed here for what Stage-1 identity needs; S1.3 owns the canonical record.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Origin {
-    /// A human actor with attestation (required to publish a widening/loosening successor).
-    Human,
-    /// An agent process.
-    Agent,
-    /// The kernel itself (identity operations are `kernel`-origin facts).
-    Kernel,
-    /// A deterministic system derivation.
-    System,
-    /// A value reported by a foreign surface (provider ids, foreign digests — a claim, N7).
-    Reported,
-}
+// The canonical provenance types (§8.1 / R-2.1.5) — re-exported so `hh_identity::refs::Origin`
+// and `hh_identity::ProvenanceRecord` remain the paths consumers use. `hh-provenance` sits
+// *below* this crate in the build graph (a `ProvenanceRecord` carries identity coordinates as
+// strings; the typed `Ref<T>` projection lands at S1.4 — ADR-0230).
+pub use hh_provenance::{HumanRole, Origin, ProvenanceRecord};
 
-/// The Stage-1 provenance a [`VersionedRef`] / name entry carries. A thin wrapper over [`Origin`]
-/// so the field exists and the widening rule is enforceable now; S1.3 replaces the inner type
-/// with the canonical `ProvenanceRecord` without changing this field's role (CC8 additive).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Provenance {
-    pub origin: Origin,
-    /// Whether an attestation accompanies the record (required with `origin = Human` for a
-    /// widening successor; §8.3 #6).
-    pub attested: bool,
-}
-
-impl Provenance {
-    pub fn new(origin: Origin) -> Provenance {
-        Provenance {
-            origin,
-            attested: false,
-        }
-    }
-    pub fn human_attested() -> Provenance {
-        Provenance {
-            origin: Origin::Human,
-            attested: true,
-        }
-    }
-    pub fn kernel() -> Provenance {
-        Provenance::new(Origin::Kernel)
-    }
-}
+/// Back-compatible name for the canonical record (CC8 additive): the Stage-1 `Provenance`
+/// wrapper is gone; this alias keeps `hh_identity::Provenance` resolving to the one canonical
+/// type (never a second scheme — it *is* `ProvenanceRecord`).
+pub type Provenance = ProvenanceRecord;
 
 /// A **name selector** — a mutable pointer *not* an identity (N4). A selector inside a record to
 /// be sealed is refused (`UnresolvedRef`; N5). Resolving one records what it resolved to in
@@ -78,7 +44,9 @@ impl NameSelector {
 
 /// The **one reference type** every consumer uses (§8.3 #3). The HIR `Ref` is its projection; a
 /// `ContractRef` (08.4) is the dependency form over it. `version_id` is the execution coordinate,
-/// `semantic_id` the comparison coordinate (N6).
+/// `semantic_id` the comparison coordinate (N6). `provenance` is the canonical §8.1
+/// [`ProvenanceRecord`] — the field's role is unchanged (who produced this version), only its
+/// type is now the canonical record (DF-S1.2-1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VersionedRef {
     pub kind: RecordKind,
@@ -87,7 +55,7 @@ pub struct VersionedRef {
     pub name: Option<Name>,
     pub resolved_from: Option<NameSelector>,
     pub supersedes: Option<String>,
-    pub provenance: Provenance,
+    pub provenance: ProvenanceRecord,
     pub idp: &'static str,
 }
 
@@ -105,7 +73,7 @@ impl VersionedRef {
     pub fn pinned(
         kind: RecordKind,
         version_id: impl Into<String>,
-        provenance: Provenance,
+        provenance: ProvenanceRecord,
     ) -> VersionedRef {
         VersionedRef {
             kind,
@@ -125,27 +93,59 @@ impl VersionedRef {
     }
 }
 
+/// A verified attestation shared by the provenance-touching tests (hash-chain anchored).
+#[cfg(test)]
+pub(crate) fn test_attestation() -> hh_provenance::Attestation {
+    hh_provenance::Attestation {
+        kind: hh_provenance::AttestationKind::HashChain,
+        subject_hash: "sha256:sub".into(),
+        anchor: hh_provenance::AttestationAnchor::Chain("sha256:head".into()),
+        verified_by: "kernel:chain".into(),
+        verified_at: 1,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hh_provenance::PersistenceScope;
 
     #[test]
     fn versioned_ref_pins_idp_and_version() {
         let r = VersionedRef::pinned(
             RecordKind::VariantRecord,
             "sha256:abc",
-            Provenance::kernel(),
+            ProvenanceRecord::kernel("kernel:identity", 0),
         )
         .with_semantic("sha256:sem");
         assert_eq!(r.idp, "idp/1");
         assert_eq!(r.version_id, "sha256:abc");
         assert_eq!(r.semantic_id.as_deref(), Some("sha256:sem"));
+        // The provenance is the canonical record: a kernel origin mints `kernel` authority.
+        assert_eq!(
+            r.provenance.authority,
+            hh_provenance::AuthorityClass::Kernel
+        );
     }
 
     #[test]
-    fn widening_needs_human_attested_provenance() {
-        let p = Provenance::human_attested();
-        assert_eq!(p.origin, Origin::Human);
-        assert!(p.attested);
+    fn widening_needs_principal_authority_plus_attestation() {
+        // DF-S1.2-1: the widening rule now reads `authority == principal` + an attestation —
+        // a human principal with a verified attestation qualifies; an unattested one does not.
+        let attested = ProvenanceRecord::human_attested(
+            "alice",
+            HumanRole::Principal,
+            PersistenceScope::User,
+            0,
+            test_attestation(),
+        );
+        assert_eq!(attested.authority, hh_provenance::AuthorityClass::Principal);
+        assert!(attested.attestation.is_some());
+        let unattested = ProvenanceRecord::minted(
+            Origin::human("alice", HumanRole::Principal),
+            PersistenceScope::User,
+            0,
+        );
+        assert!(unattested.attestation.is_none());
     }
 }

@@ -11,3 +11,6 @@ path = "src/lib.rs"
 
 [dependencies]
 hh-wire = { path = "../hh-wire" }
+# The canonical §8.1 provenance/authority record this crate carries on every VersionedRef
+# and name-history entry (DF-S1.2-1; CC1 — identity never defines a second record).
+hh-provenance = { path = "../hh-provenance" }

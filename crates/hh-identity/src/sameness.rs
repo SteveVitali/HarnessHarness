@@ -124,10 +124,14 @@ pub fn is_resumable(s: Sameness) -> bool {
 mod tests {
     use super::*;
     use crate::kinds::RecordKind;
-    use crate::refs::Provenance;
+    use hh_provenance::ProvenanceRecord;
 
     fn vr(vid: &str, sem: Option<&str>) -> VersionedRef {
-        let mut r = VersionedRef::pinned(RecordKind::SealedDefinition, vid, Provenance::kernel());
+        let mut r = VersionedRef::pinned(
+            RecordKind::SealedDefinition,
+            vid,
+            ProvenanceRecord::kernel("kernel:test", 0),
+        );
         r.semantic_id = sem.map(|s| s.to_string());
         r
     }
