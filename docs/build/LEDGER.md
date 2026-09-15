@@ -39,6 +39,7 @@ updatedAt:       2026-09-15
 
 | date | ticket | gate | item | answer | consequence |
 |---|---|---|---|---|---|
+| 2026-09-15 | S0.3 | Stage-0 spike budget (operator-gated live stage) | release spike budget | authorized — offline/hermetic only, no external spend | runs the S1/S2 measurement spikes (repeat-scored N≥3); discharges DF-S0.1-1, DF-S0.2-1; produces the measurement sheet feeding GATE-G1 |
 
 ## RETURN PASS
 
