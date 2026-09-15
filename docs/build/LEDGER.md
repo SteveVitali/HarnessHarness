@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS        # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      GATE-G1
-lastCompleted:   S0.3b
+nextTicket:      S1.1
+lastCompleted:   GATE-G1
 blockedOn:       (nothing)          # REAL blocks only; a pending gate is a RETURN PASS row
 pauseRequested:  false
 returnPass:      (none)
@@ -33,7 +33,8 @@ updatedAt:       2026-09-15
 
 ## OPEN FINDINGS
 
-(none — carry cross-ticket findings here; not per-ticket blocks)
+- 2026-09-15 · **CC4 hygiene nit (minor).** `docs/build/reports/S0.3-measurement-sheet.md` names the E1 build tool ("cargo") once in prose describing how a gate was run. Arguably outside CC4's scope (a report, not a contract/data-model/criterion/stage) and it's the winning candidate's own tool — but flagged for the capstone's whole-build CC-recheck to adjudicate/scrub consistently. Not a per-ticket block; not reopening a landed ticket.
+- 2026-09-15 · **Accepted deviation to re-surface at GATE-ACCEPT.** GATE-G1 PASSED while carrying the DF-S0.3-3 **R2 cross-camp human-signature** residual OPEN, and treating the armed revalidation trigger (E2 kernel scores out of ±1) as ADR-0009 steps-5–7 **satisfied-by-analysis** (ADR-0226). Both are operator-accepted; list them in the CAP.3 ACCEPTED-deviations set for GATE-ACCEPT signing.
 
 ## GATE DECISIONS
 
@@ -41,6 +42,7 @@ updatedAt:       2026-09-15
 |---|---|---|---|---|---|
 | 2026-09-15 | S0.3 | Stage-0 spike budget (operator-gated live stage) | release spike budget | authorized — offline/hermetic only, no external spend | runs the S1/S2 measurement spikes (repeat-scored N≥3); discharges DF-S0.1-1, DF-S0.2-1; produces the measurement sheet feeding GATE-G1 |
 | 2026-09-15 | GATE-G1 | Stage-0 acceptance & ecosystem-decision revalidation | disposition | PENDING — authorize an ONLINE spike budget first | insert S0.3b to close the machine cells of DF-S0.3-1/-3 (online reference peers + E2/E3 candidate toolchains, no external model spend); gate stays STOPPED until S0.3b lands and the sheet is re-read; the R2 human cross-camp signature stays an operator residual |
+| 2026-09-15 | GATE-G1 | Stage-0 acceptance & ecosystem-decision revalidation | disposition (reading 2, post-S0.3b) | **PASSED** — accept ADR-0226 | armed trigger 5 (E2 kernel C5/C7 out of ±1) sits on a non-kernel candidate and does not move winner E5a; ADR-0009 steps 5–7 satisfied-by-analysis (accepted deviation); G1 byte-identity E1=E2=E3 holds. Stage 1 released (nextTicket → S1.1). Carried forward: DF-S0.3-3 R2 human-signature residual OPEN → GATE-ACCEPT |
 
 ## RETURN PASS
 
@@ -49,6 +51,7 @@ updatedAt:       2026-09-15
 
 ## PHASE LOG
 
+- 2026-09-15 · **GATE-G1 PASSED** (operator, reading 2) — Stage-0 acceptance & ecosystem-decision revalidation signed off. Winning decision E5a re-confirmed; G1 byte-identity E1=E2=E3 holds; revalidation trigger 5 armed on non-kernel candidate E2 and accepted as ADR-0009 steps-5–7 satisfied-by-analysis (ADR-0226, accepted deviation). Readout `docs/build/readouts/GATE-G1.md` reading 2 written; GATE DECISIONS recorded. Carried-forward residual: DF-S0.3-3 R2 human-signature (→ GATE-ACCEPT). Stage 1 released. lastCompleted → GATE-G1 · chainTip unchanged (svitali/harnessharness-s0.3b; gates create no branch) · next → S1.1.
 - 2026-09-15 · S0.3b done — branch `svitali/harnessharness-s0.3b` · PR https://github.com/SteveVitali/MetaHarness/pull/5 · base `svitali/harnessharness-s0.3` (@6ca7edb). Ran the **online** cross-candidate / MCP-ACP measurement spike (operator released the online spike budget: network + E2/E3 toolchains + official MCP/ACP SDKs against LOCAL reference peers, no external model spend) to close the machine cells of DF-S0.3-1 and DF-S0.3-3. Throwaway spike `spikes/s0.3b-online-spike/` (outside the workspace): E1 emits the shared corpus + reference head; E2/E3 implement independent from-spec kernels with their OWN canonical serializers; official SDKs measure M-S1-7; E5b/E5c splits measure C12 transport + cross-ecosystem hash-equality. Repeat-scored **N=5**; extended sheet appended to `docs/build/reports/S0.3-measurement-sheet.md` (S0.3b §1–§5) and the ADR-0050 amendment log (candidate ids only, CC4). **Revalidation (feeds GATE-G1): the winning decision E5a HOLDS/re-confirmed; trigger 5 ARMS on the non-winning candidate E2** (C5 4→1, C7 2→5 outside ±1; E3 within band) — routed to GATE-G1's phase-synthesis for the steps-5–7 re-run, which does NOT move the winner (E2's kernel scores don't affect E5a where E1 is the kernel and E2 the per-run/IO-bound lab; ADR-0050 §4 kernel-family robustness 0.979). **Verify:** `test-gates.sh` exit 0 (G1 E1=E2=E3 head `f0b9620d…` byte-identical + live negative test; M-S1-7 MCP echo + ACP session verified E2/E3; M-S2-7 hash-equality 100% E5b/E5c); headline medians — G1 head identical, M-S1-7 MCP E2 0.71 ms/E3 0.15 ms, ACP E2 220 ms/E3 54 ms, E5b overhead 1.60%/E5c 4.46%; workspace 84 tests/16 suites green (spikes excluded), fmt clean. **Deferrals:** closed DF-S0.3-1; DF-S0.3-3 machine cells DONE with the **R2 human-signature residual OPEN**; DF-S0.3-2 (polyglot CI + cross-ecosystem serialization COST) NOT pulled forward (Stage 3). **Deviations:** single-executor (R1) with the objective G1 byte-identity gate as compensating control (ADR-0225); committed-but-throwaway trees (ADR-0225 extends ADR-0223/0220). No harness claim at Stage 0 (R5). chainTip → svitali/harnessharness-s0.3b · next → GATE-G1 (STOP gate: operator re-reads the extended sheet + verdict; owns the armed-trigger steps-5–7 re-run before Stage 1).
 
 - 2026-09-15 · **inserted** S0.3b (`003a_S0.3b__cross-candidate-online-spike.md`, row 3a) between S0.3 and GATE-G1 — operator dispositioned GATE-G1 as PENDING and authorized an ONLINE spike budget to close the machine cells of DF-S0.3-1 (MCP/ACP official-SDK round-trip + cross-candidate G1 byte-identity) and DF-S0.3-3 (E2/E3 cross-candidate scoring + E5b/E5c). Network egress + candidate toolchains (E2/E3) available; no external model spend. R2 human cross-camp signature stays an operator residual; DF-S0.3-2 (Stage-3 polyglot CI) not pulled forward. GATE-G1 readout `docs/build/readouts/GATE-G1.md` reading 1 written; gate STOPPED until S0.3b lands. nextTicket → S0.3b.
