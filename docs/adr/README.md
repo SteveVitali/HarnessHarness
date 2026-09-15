@@ -10,3 +10,5 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0218](ADR-0218-s0.1-schema-export-codegen-drift.md) | S0.1 schema-export → codegen → drift-check pipeline | S0.1 | Accepted |
 | [ADR-0219](ADR-0219-s0.1-stage0-content-address-interim.md) | S0.1 Stage-0 content address is an interim for idp/1 | S0.1 | Accepted |
 | [ADR-0220](ADR-0220-s0.1-boundary-spike-first-measurement.md) | S0.1 AC-R-2.11.4-9 first measurement and the retained boundary-spike harness | S0.1 | Accepted |
+| [ADR-0221](ADR-0221-s0.2-throwaway-baseline-crate.md) | S0.2 throwaway baseline lives in a workspace-member crate, deleted at the Stage-0 boundary | S0.2 | Accepted |
+| [ADR-0222](ADR-0222-s0.2-stage0-exit-class-mapping.md) | S0.2 Stage-0 exit-class mapping and interim exit-code numerals | S0.2 | Accepted |

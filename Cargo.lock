@@ -3,6 +3,14 @@
 version = 4
 
 [[package]]
+name = "hh-baseline"
+version = "0.0.1"
+dependencies = [
+ "hh-embed-schema",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-codegen"
 version = "0.0.1"
 dependencies = [
