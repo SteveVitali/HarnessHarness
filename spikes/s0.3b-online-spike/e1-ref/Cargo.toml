@@ -1,0 +1,23 @@
+# Throwaway S0.3b reference emitter (ADR-0050 R1–R6; ticket S0.3b). Standalone workspace: links
+# only the landed E1 `s1-kernel-spike` throwaway lib (which links pure-std `hh-wire`) to emit the
+# SHARED CORPUS (same bytes for every candidate — l1-spike-spec §3.3) and the E1 REFERENCE head
+# hash that E2/E3 must reproduce byte-for-byte (cross-candidate gate G1). Output is data on the
+# sheet; the code is committed-but-throwaway (ADR-0223/0220), deletable at the Stage-0 boundary.
+[package]
+name = "s03b-e1-ref"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "s03b-e1-ref"
+path = "src/main.rs"
+
+[dependencies]
+s1-kernel-spike = { path = "../../s1-kernel-spike" }
+hh-wire = { path = "../../../crates/hh-wire" }
+
+[profile.release]
+opt-level = 3
+
+[workspace]
