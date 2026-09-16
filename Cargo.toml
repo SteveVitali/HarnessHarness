@@ -26,6 +26,13 @@ members = [
     # declassify basis, and monitor checks 1/2/5/7. hh-identity consumes the canonical record
     # (DF-S1.2-1); the single schema source for provenance (CC7).
     "crates/hh-provenance",
+    # The C0/Stage-1 Harness IR (spec §3.1, R-2.1.2; ticket S1.4). A PERSISTENT workspace
+    # member: the HIR/1 dialect — thirteen entity kinds, two opaque leaves, seven edge kinds,
+    # a provenance + version record on every node and edge; validate/canonicalize/identity/
+    # seal/diff/apply/invert/classify, migrate (identity), project, OpaqueProcess, and the
+    # canonical-bytes seam (hh-ir-op) for out-of-process execution. Sits above ontology /
+    # identity / provenance / wire; no Hosting ABI dependency (AC-IR-04).
+    "crates/hh-hir",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

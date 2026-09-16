@@ -10,13 +10,11 @@
 //! "between planes" (§2.2.2; §2.9.6; §2.10 "a `misc` plane" escape hatch is refused).
 //!
 //! **Scope boundary (S1.1 vs S1.4).** §2 fixes the home of every *event family*, *plane
-//! operator*, *component class named in §2*, and *boundary component group*; those are the
-//! classifiable domain of [`classify_home`] here. The per-kind plane values of the thirteen IR
-//! *entity* kinds are the §3.1.3 `classify_home` table — MUST-data owned by ticket S1.4
-//! (R-2.1.2) and held interim under **ADR-0216** (OQ-467) until WS-A2/WS-A3 ratify them. S1.1
-//! does not re-decide that deferred data (manifest: "tickets inherit; they do not re-decide");
-//! the entity-kind roster is registered as [`IR_ENTITY_KINDS`] with its home delegated there.
-//! See the S1.1 DEFERRALS row.
+//! operator*, *component class named in §2*, and *boundary component group*. The per-kind plane
+//! values of the thirteen IR *entity* kinds and the two leaves are the §3.1.3 `classify_home`
+//! table — published by **S1.4** (R-2.1.2) as [`IrEntityKind::home`], held interim under
+//! **ADR-0216** (OQ-467) until WS-A2/WS-A3 ratify them by an ADR-0048-class ruling (a changed
+//! row is then an HIR dialect bump, not an in-place edit).
 
 use std::fmt;
 
@@ -276,9 +274,10 @@ impl BoundaryComponent {
     }
 }
 
-/// A registered kind whose home §2 fixes directly — the classifiable domain of the home-plane
-/// rule at S1.1 (event families, plane operators, §2-named component classes, boundary
-/// components, the run envelope). `classify_home` is total (enum-exhaustive) over this domain.
+/// A registered kind whose home is fixed — the classifiable domain of the home-plane rule
+/// (event families, plane operators, §2-named component classes, boundary components, the run
+/// envelope, and — since S1.4 — the IR entity kinds and leaves). `classify_home` is total
+/// (enum-exhaustive) over this domain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
     /// An event family, homed by the `plane.noun.verb` prefix rule (§2.2.3; ADR-0048 §A).
@@ -291,6 +290,8 @@ pub enum Kind {
     BoundaryComponent(BoundaryComponent),
     /// The run envelope (`lifecycle.*`) — instrument level, `run_lifecycle`.
     RunLifecycle,
+    /// An IR entity kind or leaf (the §3.1.3 catalogue — published at S1.4, ADR-0216 interim).
+    IrEntity(IrEntityKind),
 }
 
 /// The event families homed by the identifier-prefix rule (§2.2.3). `state` is deliberately
@@ -364,9 +365,9 @@ impl EventFamily {
 }
 
 /// The thirteen IR entity kinds plus the two leaves (§2.2.3, ADR-0016). Their per-kind plane
-/// values are the §3.1.3 `classify_home` table — MUST-data owned by **S1.4 (R-2.1.2)**, held
-/// interim under **ADR-0216** (OQ-467). Registered here for the AC-A2-1 roster; S1.1 does not
-/// publish their planes (see the S1.1 DEFERRALS row).
+/// values are the §3.1.3 `classify_home` table — published by **S1.4 (R-2.1.2)** as
+/// [`IrEntityKind::home`], held interim under **ADR-0216** (OQ-467) until WS-A2/WS-A3 ratify the
+/// table by an ADR-0048-class ruling. Registered here for the AC-A2-1 roster.
 pub const IR_ENTITY_KINDS: [&str; 15] = [
     "Goal",
     "Observation",
@@ -384,6 +385,123 @@ pub const IR_ENTITY_KINDS: [&str; 15] = [
     "Text",
     "CompiledPayload",
 ];
+
+/// The thirteen IR entity kinds plus the two leaves — the §3.1.3 `classify_home` table,
+/// published at **S1.4** (R-2.1.2). The thirteen entity rows are the WS-A3 dossier §6.2 primary
+/// reading ratified as **MUST-data placeholders under ADR-0216** (OQ-467) until WS-A2/WS-A3
+/// ratify the table by an ADR-0048-class ruling; a changed row is then a dialect bump
+/// (ADR-0015), not an in-place edit.
+///
+/// The two **leaf** rows are not fixed by §3.1.3's table (which lists entities only); their
+/// assignments are the S1.4 interim reading under the same ADR-0216 umbrella: `Text` → **P1**
+/// (it is the only construct for model-facing prose — "what the model sees") and
+/// `CompiledPayload` → **P2** (it is the only construct for executable bodies — "what it can
+/// do, and how"). Recorded in the S1.4 build ADR; pending WS-A2/WS-A3 ratification.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum IrEntityKind {
+    /// `Goal` — the object control decides against.
+    Goal,
+    /// `Observation` — what the model sees.
+    Observation,
+    /// `ContextItem` — the delivered unit of context.
+    ContextItem,
+    /// `Memory` — what survives a turn/process/window.
+    Memory,
+    /// `Procedure` — who decides the next step.
+    Procedure,
+    /// `ToolCapability` — what it can do.
+    ToolCapability,
+    /// `Permission` — the maximum blast radius.
+    Permission,
+    /// `Effect` — the action's world change (recorded in P5's ledger, gated by P6).
+    Effect,
+    /// `Artifact` — durable content by hash.
+    Artifact,
+    /// `Validator` — how the system knows it is right.
+    Validator,
+    /// `AgentProcess` — the process the control boundary belongs to.
+    AgentProcess,
+    /// `Budget` — measured and accounted; enforced at P3 decision points.
+    Budget,
+    /// `HarnessRule` — the evolvable, debt-carrying rule.
+    HarnessRule,
+    /// `Text` leaf — the only construct for model-facing prose (§3.1.2). Interim home P1.
+    TextLeaf,
+    /// `CompiledPayload` leaf — the only construct for executable bodies (§3.1.2). Interim
+    /// home P2.
+    CompiledPayloadLeaf,
+}
+
+impl IrEntityKind {
+    /// All fifteen kinds (13 entities + 2 leaves), in the §3.1.3 catalogue order.
+    pub const ALL: [IrEntityKind; 15] = [
+        IrEntityKind::Goal,
+        IrEntityKind::Observation,
+        IrEntityKind::ContextItem,
+        IrEntityKind::Memory,
+        IrEntityKind::Procedure,
+        IrEntityKind::ToolCapability,
+        IrEntityKind::Permission,
+        IrEntityKind::Effect,
+        IrEntityKind::Artifact,
+        IrEntityKind::Validator,
+        IrEntityKind::AgentProcess,
+        IrEntityKind::Budget,
+        IrEntityKind::HarnessRule,
+        IrEntityKind::TextLeaf,
+        IrEntityKind::CompiledPayloadLeaf,
+    ];
+
+    /// The kind's name as it appears in the §3.1.3 catalogue / [`IR_ENTITY_KINDS`].
+    pub fn name(self) -> &'static str {
+        match self {
+            IrEntityKind::Goal => "Goal",
+            IrEntityKind::Observation => "Observation",
+            IrEntityKind::ContextItem => "ContextItem",
+            IrEntityKind::Memory => "Memory",
+            IrEntityKind::Procedure => "Procedure",
+            IrEntityKind::ToolCapability => "ToolCapability",
+            IrEntityKind::Permission => "Permission",
+            IrEntityKind::Effect => "Effect",
+            IrEntityKind::Artifact => "Artifact",
+            IrEntityKind::Validator => "Validator",
+            IrEntityKind::AgentProcess => "AgentProcess",
+            IrEntityKind::Budget => "Budget",
+            IrEntityKind::HarnessRule => "HarnessRule",
+            IrEntityKind::TextLeaf => "Text",
+            IrEntityKind::CompiledPayloadLeaf => "CompiledPayload",
+        }
+    }
+
+    /// The kind's home — the §3.1.3 `classify_home` value table (ADR-0216 interim MUST-data;
+    /// leaf rows are the S1.4 interim reading). One plane per kind; `home_plane` on every HIR
+    /// node is derived from this, never authored.
+    pub fn home(self) -> Home {
+        match self {
+            IrEntityKind::Goal => Home::Plane(Plane::Control),
+            IrEntityKind::Observation => Home::Plane(Plane::Observation),
+            IrEntityKind::ContextItem => Home::Plane(Plane::Observation),
+            IrEntityKind::Memory => Home::Plane(Plane::State),
+            IrEntityKind::Procedure => Home::Plane(Plane::Control),
+            IrEntityKind::ToolCapability => Home::Plane(Plane::Action),
+            IrEntityKind::Permission => Home::Plane(Plane::Security),
+            IrEntityKind::Effect => Home::Plane(Plane::Action),
+            IrEntityKind::Artifact => Home::Plane(Plane::State),
+            IrEntityKind::Validator => Home::Plane(Plane::Verification),
+            IrEntityKind::AgentProcess => Home::Plane(Plane::Control),
+            IrEntityKind::Budget => Home::Plane(Plane::Measurement),
+            IrEntityKind::HarnessRule => Home::Plane(Plane::Measurement),
+            IrEntityKind::TextLeaf => Home::Plane(Plane::Observation),
+            IrEntityKind::CompiledPayloadLeaf => Home::Plane(Plane::Action),
+        }
+    }
+
+    /// Parse a kind by its §3.1.3 catalogue name. `None` for anything unregistered (the HIR
+    /// layer maps that to `UnknownKind`/`UnclassifiedKind` as appropriate).
+    pub fn from_name(name: &str) -> Option<IrEntityKind> {
+        IrEntityKind::ALL.into_iter().find(|k| k.name() == name)
+    }
+}
 
 /// The schema error a total `classify_home` raises on an unclassifiable kind at IR validation
 /// (§2.2.2; §2.9.6; ADR-0012 D2). This is the escape-hatch guard: a "misc plane" or a kind that
@@ -416,6 +534,7 @@ pub fn classify_home(kind: &Kind) -> Home {
         Kind::ComponentClass(c) => c.home(),
         Kind::BoundaryComponent(b) => b.home(),
         Kind::RunLifecycle => Home::RunLifecycle,
+        Kind::IrEntity(e) => e.home(),
     }
 }
 
@@ -447,6 +566,10 @@ pub fn classify_home_identifier(identifier: &str) -> Result<Home, UnclassifiedKi
     {
         return Ok(c.home());
     }
+    // §3.1.3 IR entity kinds and leaves (published at S1.4; ADR-0216 interim).
+    if let Some(e) = IrEntityKind::from_name(identifier) {
+        return Ok(e.home());
+    }
     if identifier == "run_lifecycle" {
         return Ok(Home::RunLifecycle);
     }
@@ -470,6 +593,10 @@ pub fn registered_kinds() -> Vec<Kind> {
         kinds.push(Kind::BoundaryComponent(b));
     }
     kinds.push(Kind::RunLifecycle);
+    // Since S1.4 the domain includes the IR entity kinds and leaves (§3.1.3).
+    for e in IrEntityKind::ALL {
+        kinds.push(Kind::IrEntity(e));
+    }
     kinds
 }
 
@@ -602,6 +729,46 @@ mod tests {
             "CompiledPayload",
         ] {
             assert!(IR_ENTITY_KINDS.contains(&k), "missing entity kind {k}");
+        }
+    }
+    #[test]
+    fn ir_entity_home_table_matches_the_3_1_3_values() {
+        // DF-S1.1-1 / §3.1.3 `classify_home` table (ADR-0216 interim, OQ-467): the thirteen
+        // entity rows plus the two leaf rows, one plane each.
+        let table: [(IrEntityKind, Plane); 15] = [
+            (IrEntityKind::Goal, Plane::Control),
+            (IrEntityKind::Observation, Plane::Observation),
+            (IrEntityKind::ContextItem, Plane::Observation),
+            (IrEntityKind::Memory, Plane::State),
+            (IrEntityKind::Procedure, Plane::Control),
+            (IrEntityKind::ToolCapability, Plane::Action),
+            (IrEntityKind::Permission, Plane::Security),
+            (IrEntityKind::Effect, Plane::Action),
+            (IrEntityKind::Artifact, Plane::State),
+            (IrEntityKind::Validator, Plane::Verification),
+            (IrEntityKind::AgentProcess, Plane::Control),
+            (IrEntityKind::Budget, Plane::Measurement),
+            (IrEntityKind::HarnessRule, Plane::Measurement),
+            (IrEntityKind::TextLeaf, Plane::Observation),
+            (IrEntityKind::CompiledPayloadLeaf, Plane::Action),
+        ];
+        assert_eq!(table.len(), IrEntityKind::ALL.len());
+        for (kind, want) in table {
+            assert_eq!(kind.home(), Home::Plane(want), "{} home", kind.name());
+            // The roster and the enum agree on names.
+            assert!(IR_ENTITY_KINDS.contains(&kind.name()));
+            // The identifier path classifies them too (the IR-validation path).
+            assert_eq!(
+                classify_home_identifier(kind.name()).unwrap(),
+                Home::Plane(want),
+                "classify_home_identifier({})",
+                kind.name()
+            );
+        }
+        // registered_kinds now covers every IR entity kind (totality over the domain).
+        let registered = registered_kinds();
+        for e in IrEntityKind::ALL {
+            assert!(registered.contains(&Kind::IrEntity(e)));
         }
     }
 }

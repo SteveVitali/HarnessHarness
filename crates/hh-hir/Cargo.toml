@@ -1,0 +1,16 @@
+[package]
+name = "hh-hir"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 Harness IR — the HIR/1 dialect (spec §3.1, R-2.1.2; ADR-0015/0016/0017/0018): thirteen entity kinds, two opaque leaves, seven edges, a provenance and version record on every node and edge; validate/canonicalize/identity/seal/diff/apply/invert/classify, migrate (identity), project, and OpaqueProcess. Dialect bumps + migration are the CC8 mechanism for enum growth (anchors here); the §3.1.3 per-kind classify_home table is home-plane ownership data (CC10)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }

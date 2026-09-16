@@ -189,6 +189,20 @@ impl Origin {
     }
 }
 
+/// The sealed-definition context [`default_authority_in`] consults (§8.1 #3 minting: the
+/// `environment` class is conferred only for closed-schema structured values from
+/// **closed-world tools declared in the sealed definition**). The context is conferred by the
+/// runtime — it is the *sealed* definition's declaration, kernel-verified at `seal`, never the
+/// record's own claim (CC2 holds: authority is still derived, never declared by the payload).
+/// Empty context ⇒ no tool can mint `environment` (the pre-S1.4 floor).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MintingContext {
+    /// Identity coordinates (`semantic_id`s) of `ToolCapability`s declared **closed-world** in
+    /// the sealed definition (a tool whose declared effects are all `world = closed`, or
+    /// `effects = pure` — computed by `hh-hir`'s `SealedDefinition`).
+    pub closed_world_tools: std::collections::BTreeSet<String>,
+}
+
 /// `default_authority(origin, scope, attestation?) → AuthorityClass` (§8.1 #2): total, pure,
 /// the minting table of §8.1 #3. Returns `unverified` for anything unmatched; **never reads a
 /// payload's own claim** — authority is derived, never declared (CC2; ADR-0033 D2/D6).
@@ -200,16 +214,35 @@ impl Origin {
 ///   structurally inconsistent attestation (a self-claim with no anchor/verifier — the
 ///   attestation-failed case) mints `unverified`. Trust-root verification itself is
 ///   [`crate::record::verify_attestation`]; `pin` consults it (ADR-0035 D2).
-/// - `tool` mints `external`: the `environment` class requires a closed-schema structured value
-///   from a **closed-world tool declared in the sealed definition**, and no sealed definition
-///   exists at Stage 1 to consult — `environment` is reachable now only through the `validator`
-///   endorsement basis. Tracked: DF-S1.3-3.
+/// - `tool` mints `external` without a minting context, and `environment` only when the
+///   capability is declared **closed-world in the sealed definition** ([`default_authority_in`]
+///   with a non-empty [`MintingContext`]). Free text never rises: text values mint through
+///   [`default_text_authority`], which caps at `external` regardless (R-TEXT). The
+///   `validator`-basis endorsement path (`external → environment`, kernel endorser only)
+///   remains for content minted before the sealed-definition declaration existed.
+///   DF-S1.3-3 **closed** at S1.4.
 /// - `participant` mints `unverified`: the `≤ delegate` claim class applies only to content the
 ///   Hosting ABI vouches for, and no Hosting ABI exists at Stage 1 (T-LCD-06/07; ADR-0033 D2).
+///   Tracked: DF-S1.3-2.
 pub fn default_authority(
     origin: &Origin,
     scope: PersistenceScope,
     attestation: Option<&Attestation>,
+) -> AuthorityClass {
+    default_authority_in(origin, scope, attestation, &MintingContext::default())
+}
+
+/// `default_authority` with a sealed-definition [`MintingContext`] (§8.1 #3; CC8 additive —
+/// the two-arg form delegates with an empty context). The only behavioural difference: a
+/// `tool` origin whose capability is declared closed-world in the sealed definition mints
+/// `environment` instead of `external`. Callers minting a *free-text* (`Text` leaf) record use
+/// [`default_text_authority`] regardless — R-TEXT caps text at `external` either way, so a
+/// closed-world declaration can never lift prose above `external`.
+pub fn default_authority_in(
+    origin: &Origin,
+    scope: PersistenceScope,
+    attestation: Option<&Attestation>,
+    ctx: &MintingContext,
 ) -> AuthorityClass {
     let _ = scope; // never read: location may not elevate authority (ADR-0063 L1).
     if let Some(att) = attestation {
@@ -221,7 +254,13 @@ pub fn default_authority(
         Origin::Kernel { .. } => AuthorityClass::Kernel,
         Origin::Human { .. } => AuthorityClass::Principal,
         Origin::Model { .. } | Origin::Evolution { .. } => AuthorityClass::Delegate,
-        Origin::Tool { .. } => AuthorityClass::External,
+        Origin::Tool { capability, .. } => {
+            if ctx.closed_world_tools.contains(capability) {
+                AuthorityClass::Environment
+            } else {
+                AuthorityClass::External
+            }
+        }
         Origin::Import { .. } | Origin::Migration { .. } | Origin::Participant { .. } => {
             AuthorityClass::Unverified
         }
@@ -339,6 +378,36 @@ mod tests {
         assert_eq!(
             default_text_authority(&Origin::import("s", "v"), None),
             AuthorityClass::Unverified
+        );
+    }
+
+    #[test]
+    fn closed_world_tool_mints_environment_only_with_the_context() {
+        // DF-S1.3-3: `tool` mints `external` with no sealed-definition context, and
+        // `environment` when the capability is declared closed-world in the sealed definition.
+        let tool = Origin::tool("tool:closed-read", "inv:1");
+        assert_eq!(
+            default_authority(&tool, PersistenceScope::Run, None),
+            AuthorityClass::External
+        );
+        let mut ctx = MintingContext::default();
+        ctx.closed_world_tools
+            .insert("tool:closed-read".to_string());
+        assert_eq!(
+            default_authority_in(&tool, PersistenceScope::Run, None, &ctx),
+            AuthorityClass::Environment
+        );
+        // A tool NOT declared closed-world still mints external under the same context.
+        let open_tool = Origin::tool("tool:web", "inv:2");
+        assert_eq!(
+            default_authority_in(&open_tool, PersistenceScope::Run, None, &ctx),
+            AuthorityClass::External
+        );
+        // R-TEXT: free text from a closed-world tool still caps at external — a closed-world
+        // declaration never lifts prose (the mint applies to closed-schema structured values).
+        assert_eq!(
+            default_text_authority(&tool, None),
+            AuthorityClass::External
         );
     }
 

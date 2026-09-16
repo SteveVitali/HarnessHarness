@@ -49,5 +49,8 @@ pub use participant::{
     admissible_granularities, describe, Granularity, Observability, ParticipantClass,
     ParticipantDescriptor,
 };
-pub use planes::{classify_home, Boundary, Home, Kind, Plane, UnclassifiedKind};
+pub use planes::{
+    classify_home, classify_home_identifier, Boundary, Home, IrEntityKind, Kind, Plane,
+    UnclassifiedKind,
+};
 pub use structure::{CrossCuttingProperty, EntityStanding, Level};
