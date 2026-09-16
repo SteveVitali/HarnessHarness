@@ -145,13 +145,32 @@ fn conditioned_rule_without_debt_is_incomplete() {
 }
 
 #[test]
+fn unknown_budget_dimension_key_fails() {
+    // DF-S1.4-1 (closed at S1.6): `Budget.dimensions` keys resolve against the
+    // closed kernel registry — an unknown spelling is SchemaViolation, never
+    // silently carried.
+    let mut doc = valid_doc();
+    doc.nodes.push(budget_node(
+        "test:budget-unknown",
+        &[("tokens.total", 5000)],
+        9,
+    ));
+    let es = errs(&doc);
+    has(
+        &es,
+        |e| matches!(e, HirError::SchemaViolation { detail } if detail.contains("kernel dimension registry")),
+        "unknown dimension key SchemaViolation",
+    );
+}
+
+#[test]
 fn child_budget_exceeding_parent_fails() {
     // AC-IR-07: budget containment — child hard bound above parent's fails.
     let mut doc = valid_doc();
     doc.nodes.push(child_budget_node(
         "test:child",
         "test:budget",
-        &[("tokens.total", 5000)],
+        &[("tokens.blended", 5000)],
         8,
     ));
     let es = errs(&doc);

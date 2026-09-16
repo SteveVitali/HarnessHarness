@@ -1,0 +1,18 @@
+[package]
+name = "hh-budget"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 resource-economics & accounting model (spec §8.2, R-2.1.6): the canonical resource/accounting schema — ResourceQuantity/Vector, usage_mapping lowering to exclusive token roles, Attribution + charged_to, PricingTable + SpendRow provenance (confidence/coverage/derivation), the control.budget.* + measurement.cost.attributed payloads, the hierarchical BudgetTree projection (dynamic containment, slice/pool, reservations, exhaustion rules E1–E5), cost_totals, MatchSpec/search_budget/eval_budget, and the budget_delta governance gate. Sits above ontology/identity/provenance/ledger/hir/wire."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }

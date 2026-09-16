@@ -21,3 +21,6 @@ path = "src/bin/hh-baseline.rs"
 hh-wire = { path = "../hh-wire" }
 hh-embed-schema = { path = "../hh-embed-schema" }
 hh-provenance = { path = "../hh-provenance" }
+# CC1: the budget adapter wraps the canonical hh-budget types
+# (BudgetSpec/ResourceVector/DimensionId) — no second budget model.
+hh-budget = { path = "../hh-budget" }

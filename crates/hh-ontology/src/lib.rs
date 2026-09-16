@@ -30,6 +30,7 @@ pub mod compliance;
 pub mod config;
 pub mod control;
 pub mod dag;
+pub mod dimensions;
 pub mod formal;
 pub mod glossary;
 pub mod participant;
@@ -43,6 +44,9 @@ pub use compliance::{
 pub use config::{Configuration, ConfigurationId, ConfigurationVersionId, Factor};
 pub use control::{ControlBoundary, DecisionPoint, Owner};
 pub use dag::{spec_dag_check, DagReport};
+pub use dimensions::{
+    DerivedDimension, DimensionClass, DimensionId, DimensionKey, RegisteredDimension,
+};
 pub use formal::{resolve, Symbol, SymbolDef};
 pub use glossary::{glossary_check, GlossaryFinding};
 pub use participant::{

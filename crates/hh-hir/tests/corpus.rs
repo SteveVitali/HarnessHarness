@@ -20,7 +20,7 @@ fn corpus_doc(i: usize) -> hh_hir::document::HirDocument {
     doc.nodes.push(budget_node(
         "c:budget",
         &[
-            ("tokens.total", 1000 + i as u64 * 7),
+            ("tokens.blended", 1000 + i as u64 * 7),
             ("turns", 10 + i as u64),
         ],
         2,
@@ -50,7 +50,7 @@ fn corpus_target(i: usize) -> hh_hir::document::HirDocument {
     let mut doc = corpus_doc(i);
     if let KindRecord::Budget(b) = &mut doc.nodes[1].semantic {
         b.dimensions.insert(
-            "tokens.total".into(),
+            "tokens.blended".into(),
             DimensionBound {
                 hard: Some(900 + i as u64 * 7),
                 soft: None,

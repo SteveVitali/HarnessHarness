@@ -42,6 +42,15 @@ members = [
     # ontology/identity/provenance/wire; hashing through hh-identity (CC1), provenance
     # through hh-provenance, home planes through hh-ontology (CC10).
     "crates/hh-ledger",
+    # The C0/Stage-1 resource-economics & accounting model (spec §8.2, R-2.1.6; ticket S1.6).
+    # A PERSISTENT workspace member: the single schema source for resource quantities /
+    # usage mappings / attribution / pricing tables / spend rows, the `control.budget.*` +
+    # `measurement.cost.attributed` payload builders, the budget-tree projection (dynamic
+    # containment, slice/pool, reservations, E1–E5), `cost_totals`, `MatchSpec` /
+    # `search_budget` / `eval_budget` and the budget_delta governance gate. The closed
+    # `DimensionId` registry itself lives in hh-ontology (the vocabulary crate) so hh-hir
+    # can check bound keys — this crate is the accounting layer over it (CC7).
+    "crates/hh-budget",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
