@@ -277,6 +277,13 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // (ADR-0029 §5 names it; the artefact/compaction/retrieval classes land with
     // the context builder, §05c).
     row("context.observation.recorded",    Led, O::Events, false, false, None, None),
+    // `context.artefact.delivered` — the context builder's per-artefact delivery row
+    // (§5a.1: `{artefact_id, delivery_id, version, kind, activation_observable,
+    // model_call_id, position, rendering_ref, provenance}`; P1; one per artefact per
+    // model call). `verify_resume` (§3.3.4, S1.9) reads it as the removal witness —
+    // a delivered tool may not leave the inventory (T-LCD-13). Component-emitted
+    // (the context builder), provenance-bearing per the §8.1 table.
+    row_prov("context.artefact.delivered", Led, O::Events, false, false, true,  None, None),
     // `context.compaction.completed` — the E4 re-arm signal for budget soft
     // thresholds (§8.2 E4; ADR-0040/0107): advice re-arms only after a
     // `status ∈ {applied, fallback_applied}` completion. Kernel-produced.

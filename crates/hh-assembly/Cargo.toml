@@ -1,0 +1,20 @@
+[package]
+name = "hh-assembly"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 configuration & composition model (spec §3.3, R-2.1.4): the assembly grammar in the HIR/1 schema, the class catalog for control_strategy and context_policy over the registry's ClassRecord/VariantRecord, load, validate_assembly (stages 1–5 and 7, complete reports, never fail-fast), resolve (one resolver feeding seal), identity, diff via HirDiff, in-process instantiate with lifecycle.component.bound, verify_resume with lifecycle.definition.changed, and the closed AssemblyDiagnostic taxonomy. Reuses the one HIR (hh-hir), identity (hh-identity), provenance (hh-provenance), registry store (hh-registry) and event store (hh-ledger). compose/space/enumerate/opacity are Stage 3; stage 6a/6b are C1 — NOT this crate yet."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+hh-budget = { path = "../hh-budget" }
+hh-registry = { path = "../hh-registry" }

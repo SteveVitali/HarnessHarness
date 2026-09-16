@@ -81,4 +81,46 @@ pub mod wire {
     pub fn diff_from_json(j: &Json) -> Result<HirDiff, HirError> {
         crate::schema::diff_from_json(j)
     }
+
+    /// The canonical JSON of a `slots` map — the §3.3.2 slot grammar shared by
+    /// `native.slots` and `assembly.slots` (CC7; consumed by `hh-assembly`).
+    pub fn slots_json(
+        slots: &std::collections::BTreeMap<String, crate::records::SlotBindings>,
+        semantic: bool,
+    ) -> Json {
+        crate::schema::slots_json(slots, semantic)
+    }
+
+    /// Parse a `slots` map (CC7; consumed by `hh-assembly`'s `load`).
+    pub fn slots_from_json(
+        j: &Json,
+        path: &str,
+    ) -> Result<std::collections::BTreeMap<String, crate::records::SlotBindings>, HirError> {
+        crate::schema::slots_from_json(j, path)
+    }
+
+    /// The canonical JSON of one `SlotBinding`.
+    pub fn slot_binding_json(b: &crate::records::SlotBinding, semantic: bool) -> Json {
+        crate::schema::slot_binding_json(b, semantic)
+    }
+
+    /// Parse one `SlotBinding`.
+    pub fn slot_binding_from_json(
+        j: &Json,
+        path: &str,
+    ) -> Result<crate::records::SlotBinding, HirError> {
+        crate::schema::slot_binding_from_json(j, path)
+    }
+
+    /// The canonical JSON of a [`crate::document::Node`] (consumed by `hh-assembly`'s
+    /// stage-7 LCD walks — CC7: the schema source owns the encoding).
+    pub fn node_to_json(n: &crate::document::Node) -> Json {
+        crate::schema::node_to_json(n)
+    }
+
+    /// A node's canonical **semantic projection** (no surface/provenance/version —
+    /// the `semantic_id` basis, §3.1.2).
+    pub fn node_semantic_projection(n: &crate::document::Node) -> Json {
+        crate::schema::node_semantic_projection(n)
+    }
 }

@@ -1021,35 +1021,112 @@ fn cap_decl_from_json(j: &Json, path: &str) -> Result<CapabilityDeclarationRecor
     })
 }
 
-fn slots_json(slots: &BTreeMap<String, SlotBindings>, semantic: bool) -> Json {
+/// The canonical JSON of one `SlotBinding` (`semantic = true` drops the pin — the
+/// variant contributes by name, refs-by-semantic_id §3.1.2).
+pub fn slot_binding_json(b: &SlotBinding, semantic: bool) -> Json {
+    // `variant` contributes by name in the semantic projection (the pin is a version
+    // coordinate — refs-by-semantic_id, §3.1.2); `params`/`enabled` are semantic (§3.3.2:
+    // a disabled binding still counts toward identity); `locality` is a hint — semantic too
+    // (desired state), carried as declared.
+    let mut v = vec![
+        (
+            "variant",
+            if semantic {
+                b.variant.semantic_json()
+            } else {
+                b.variant.to_json()
+            },
+        ),
+        ("params", Json::Obj(b.params.clone())),
+        ("enabled", Json::Bool(b.enabled)),
+    ];
+    if let Some(l) = b.locality {
+        v.push(("locality", Json::str(l.name())));
+    }
+    Json::obj(v)
+}
+
+/// The canonical JSON of a `slots` map (`{name → {one|many}}`).
+pub fn slots_json(slots: &BTreeMap<String, SlotBindings>, semantic: bool) -> Json {
     Json::Obj(
         slots
             .iter()
             .map(|(name, bs)| {
                 let v = match bs {
-                    SlotBindings::One(b) => Json::obj([(
-                        "one",
-                        Json::obj([("variant", Json::str(b.variant.variant.clone()))]),
-                    )]),
+                    SlotBindings::One(b) => Json::obj([("one", slot_binding_json(b, semantic))]),
                     SlotBindings::Many(many) => Json::obj([(
                         "many",
                         Json::Arr(
                             many.iter()
-                                .map(|b| {
-                                    Json::obj([("variant", Json::str(b.variant.variant.clone()))])
-                                })
+                                .map(|b| slot_binding_json(b, semantic))
                                 .collect(),
                         ),
                     )]),
                 };
-                let _ = semantic;
                 (name.clone(), v)
             })
             .collect(),
     )
 }
 
-fn slots_from_json(j: &Json, path: &str) -> Result<BTreeMap<String, SlotBindings>, HirError> {
+/// Parse one `SlotBinding` (`{variant, params?, enabled?, locality?}`) — the §3.3.2
+/// record shape shared by `native.slots` and `assembly.slots` (CC7: one decoder).
+pub fn slot_binding_from_json(b: &Json, p: &str) -> Result<SlotBinding, HirError> {
+    let m = match b {
+        Json::Obj(m) => m,
+        _ => {
+            return Err(HirError::SchemaViolation {
+                detail: format!("{p} must be an object"),
+            })
+        }
+    };
+    for k in m.keys() {
+        if !matches!(k.as_str(), "variant" | "params" | "enabled" | "locality") {
+            return Err(HirError::SchemaViolation {
+                detail: format!("{p}.{k}: unknown SlotBinding member"),
+            });
+        }
+    }
+    let params = match b.get("params") {
+        None => BTreeMap::new(),
+        Some(Json::Obj(pm)) => pm.clone(),
+        Some(_) => {
+            return Err(HirError::SchemaViolation {
+                detail: format!("{p}.params must be an object"),
+            })
+        }
+    };
+    let enabled = match b.get("enabled") {
+        None => true,
+        Some(Json::Bool(e)) => *e,
+        Some(_) => {
+            return Err(HirError::SchemaViolation {
+                detail: format!("{p}.enabled must be a boolean"),
+            })
+        }
+    };
+    let locality = match b.get("locality") {
+        None => None,
+        Some(Json::Str(s)) => Some(Locality::parse(s).ok_or_else(|| HirError::UnknownKind {
+            kind: format!("locality:{s}"),
+        })?),
+        Some(_) => {
+            return Err(HirError::SchemaViolation {
+                detail: format!("{p}.locality must be a string"),
+            })
+        }
+    };
+    Ok(SlotBinding {
+        variant: ComponentVariantRef::from_json(req(b, "variant", p)?, &format!("{p}.variant"))?,
+        params,
+        enabled,
+        locality,
+    })
+}
+
+/// Parse a `slots` map — the §3.3.2 slot grammar shared by `native.slots` and
+/// `assembly.slots` (CC7: one decoder).
+pub fn slots_from_json(j: &Json, path: &str) -> Result<BTreeMap<String, SlotBindings>, HirError> {
     let m = match j {
         Json::Obj(m) => m,
         _ => {
@@ -1060,23 +1137,16 @@ fn slots_from_json(j: &Json, path: &str) -> Result<BTreeMap<String, SlotBindings
     };
     let mut out = BTreeMap::new();
     for (name, v) in m {
-        let binding = |b: &Json, p: &str| -> Result<SlotBinding, HirError> {
-            Ok(SlotBinding {
-                variant: ComponentVariantRef {
-                    variant: req_str(b, "variant", p)?,
-                },
-            })
-        };
         if let Some(one) = v.get("one") {
             out.insert(
                 name.clone(),
-                SlotBindings::One(binding(one, &format!("{path}.{name}.one"))?),
+                SlotBindings::One(slot_binding_from_json(one, &format!("{path}.{name}.one"))?),
             );
         } else if let Some(Json::Arr(items)) = v.get("many") {
             let many = items
                 .iter()
                 .enumerate()
-                .map(|(i, b)| binding(b, &format!("{path}.{name}.many[{i}]")))
+                .map(|(i, b)| slot_binding_from_json(b, &format!("{path}.{name}.many[{i}]")))
                 .collect::<Result<Vec<_>, _>>()?;
             out.insert(name.clone(), SlotBindings::Many(many));
         } else {
@@ -2085,7 +2155,7 @@ fn version_from_json(j: &Json, path: &str) -> Result<VersionRecord, HirError> {
 /// A node's canonical JSON. `version_id`/`semantic_id` appear inside `version` when set —
 /// the **identity basis** ([`crate::identity`]) serializes the same form with the id members
 /// removed, which is why `identity` is a pure projection, not a parse-time fact.
-pub(crate) fn node_to_json(n: &Node) -> Json {
+pub fn node_to_json(n: &Node) -> Json {
     Json::obj({
         let mut v = vec![
             ("kind", Json::str(n.kind.name())),
@@ -2110,7 +2180,7 @@ pub(crate) fn node_to_json(n: &Node) -> Json {
 /// The semantic projection of a node — `{kind ∥ semantic ∥ refs-by-semantic_id}` with
 /// `Text` leaves contributing their content hash; `surface`, `provenance`, `ext` and the
 /// version record are excluded (§3.1.2).
-pub(crate) fn node_semantic_projection(n: &Node) -> Json {
+pub fn node_semantic_projection(n: &Node) -> Json {
     Json::obj([
         ("kind", Json::str(n.kind.name())),
         ("semantic", semantic_record_json(&n.semantic, true)),

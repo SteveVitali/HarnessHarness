@@ -424,6 +424,24 @@ pub fn diff(
     })
 }
 
+/// Same semantic coordinate, both sides pinned — a version-only re-pin.
+fn is_repin(old_ref: &Json, new_ref: &Json) -> bool {
+    let pinned = |j: &Json| j.get("version_id").is_some() && j.get("version_selector").is_none();
+    let coordinate = |j: &Json| -> Option<(String, String)> {
+        match j.get("semantic_id").and_then(Json::as_str) {
+            Some(s) => Some((s.to_string(), String::new())),
+            None => Some((
+                j.get("class_id").and_then(Json::as_str)?.to_string(),
+                j.get("variant_id").and_then(Json::as_str)?.to_string(),
+            )),
+        }
+    };
+    pinned(old_ref)
+        && pinned(new_ref)
+        && coordinate(old_ref).is_some()
+        && coordinate(old_ref) == coordinate(new_ref)
+}
+
 fn origin_name(o: &Origin) -> &'static str {
     o.tag()
 }
@@ -508,14 +526,18 @@ fn diff_doc_members(base: &HirDocument, target: &HirDocument, ops: &mut Vec<Diff
             tag: doc_tag(),
         });
     }
-    if base.assembly != target.assembly {
-        ops.push(DiffOp::ReplaceField {
+    // The assembly section diffs at leaf granularity — `Rebind` for variant/entity refs,
+    // `ReplaceField` for values/params/enabled/constraints (§3.3.4 `diff`; S1.9).
+    match (&base.assembly, &target.assembly) {
+        (Some(o), Some(n)) => diff_json_tagged(o, n, "assembly", DOC, &doc_tag(), ops),
+        (o, n) if o != n => ops.push(DiffOp::ReplaceField {
             id: DOC.into(),
             path: "assembly".into(),
-            old: base.assembly.clone().unwrap_or(Json::Null),
-            new: target.assembly.clone().unwrap_or(Json::Null),
+            old: o.clone().unwrap_or(Json::Null),
+            new: n.clone().unwrap_or(Json::Null),
             tag: doc_tag(),
-        });
+        }),
+        _ => {}
     }
 }
 
@@ -780,13 +802,30 @@ fn diff_json(
     kind: EntityKind,
     ops: &mut Vec<DiffOp>,
 ) {
+    diff_json_tagged(old, new, path, id, &tag_for(kind, true), ops)
+}
+
+/// The same walk over an explicit tag (the document-level assembly section uses the
+/// document tag).
+fn diff_json_tagged(
+    old: &Json,
+    new: &Json,
+    path: &str,
+    id: &str,
+    tag: &DiffOpTag,
+    ops: &mut Vec<DiffOp>,
+) {
     if old == new {
         return;
     }
-    // A `Ref` — `{semantic_id, version_id|version_selector}` — diffs as a `Rebind`.
+    // A `Ref` — `{semantic_id, version_id|version_selector}` — or a `ComponentVariantRef` —
+    // `{class_id, variant_id, version_id|version_selector}` (§3.3.2) — diffs as a `Rebind`.
+    let has_version =
+        |j: &Json| j.get("version_id").is_some() || j.get("version_selector").is_some();
     let is_ref = |j: &Json| {
-        j.get("semantic_id").is_some()
-            && (j.get("version_id").is_some() || j.get("version_selector").is_some())
+        has_version(j)
+            && (j.get("semantic_id").is_some()
+                || (j.get("class_id").is_some() && j.get("variant_id").is_some()))
     };
     if is_ref(old) && is_ref(new) {
         ops.push(DiffOp::Rebind {
@@ -794,7 +833,7 @@ fn diff_json(
             path: path.to_string(),
             old_ref: old.clone(),
             new_ref: new.clone(),
-            tag: tag_for(kind, true),
+            tag: tag.clone(),
         });
         return;
     }
@@ -811,7 +850,7 @@ fn diff_json(
                 path: path.to_string(),
                 old_hash: oh.to_string(),
                 new_hash: nh.to_string(),
-                tag: tag_for(kind, true),
+                tag: tag.clone(),
             });
         }
         // Remaining leaf members diff as fields (owner, authority, language, …).
@@ -826,14 +865,14 @@ fn diff_json(
                 }
                 match (om.get(k), nm.get(k)) {
                     (Some(ov), Some(nv)) => {
-                        diff_json(ov, nv, &format!("{path}{}", seg_key(k)), id, kind, ops)
+                        diff_json_tagged(ov, nv, &format!("{path}{}", seg_key(k)), id, tag, ops)
                     }
                     (ov, nv) => ops.push(DiffOp::ReplaceField {
                         id: id.to_string(),
                         path: format!("{path}{}", seg_key(k)),
                         old: ov.cloned().unwrap_or(Json::Null),
                         new: nv.cloned().unwrap_or(Json::Null),
-                        tag: tag_for(kind, true),
+                        tag: tag.clone(),
                     }),
                 }
             }
@@ -849,14 +888,14 @@ fn diff_json(
             {
                 match (om.get(k), nm.get(k)) {
                     (Some(ov), Some(nv)) => {
-                        diff_json(ov, nv, &format!("{path}{}", seg_key(k)), id, kind, ops)
+                        diff_json_tagged(ov, nv, &format!("{path}{}", seg_key(k)), id, tag, ops)
                     }
                     (ov, nv) => ops.push(DiffOp::ReplaceField {
                         id: id.to_string(),
                         path: format!("{path}{}", seg_key(k)),
                         old: ov.cloned().unwrap_or(Json::Null),
                         new: nv.cloned().unwrap_or(Json::Null),
-                        tag: tag_for(kind, true),
+                        tag: tag.clone(),
                     }),
                 }
             }
@@ -865,14 +904,14 @@ fn diff_json(
             for i in 0..oa.len().max(na.len()) {
                 match (oa.get(i), na.get(i)) {
                     (Some(ov), Some(nv)) => {
-                        diff_json(ov, nv, &format!("{path}[{i}]"), id, kind, ops)
+                        diff_json_tagged(ov, nv, &format!("{path}[{i}]"), id, tag, ops)
                     }
                     (ov, nv) => ops.push(DiffOp::ReplaceField {
                         id: id.to_string(),
                         path: format!("{path}[{i}]"),
                         old: ov.cloned().unwrap_or(Json::Null),
                         new: nv.cloned().unwrap_or(Json::Null),
-                        tag: tag_for(kind, true),
+                        tag: tag.clone(),
                     }),
                 }
             }
@@ -882,7 +921,7 @@ fn diff_json(
             path: path.to_string(),
             old: old.clone(),
             new: new.clone(),
-            tag: tag_for(kind, true),
+            tag: tag.clone(),
         }),
     }
 }
@@ -982,8 +1021,28 @@ pub fn classify(base: &HirDocument, target: &HirDocument, ops: &[DiffOp]) -> Dif
                     c.semantic_ops += 1;
                 }
             }
-            DiffOp::ReplaceField { path, .. } | DiffOp::Rebind { path, .. } => {
+            DiffOp::ReplaceField { path, .. } => {
                 if path.starts_with("provenance") || path.starts_with("version") {
+                    c.provenance_only_ops += 1;
+                } else {
+                    c.semantic_ops += 1;
+                }
+            }
+            DiffOp::Rebind {
+                path,
+                old_ref,
+                new_ref,
+                ..
+            } => {
+                // A **re-pin** — both sides pinned, same semantic coordinate (a `Ref`'s
+                // `semantic_id`; a `ComponentVariantRef`'s `{class_id, variant_id}` name) — is
+                // a version-record consequence of sealing, not a semantic edit
+                // (refs-by-semantic_id, §3.1.2; S1.9/ADR-0240). A rebind to another
+                // semantic coordinate is semantic.
+                if path.starts_with("provenance")
+                    || path.starts_with("version")
+                    || is_repin(old_ref, new_ref)
+                {
                     c.provenance_only_ops += 1;
                 } else {
                     c.semantic_ops += 1;

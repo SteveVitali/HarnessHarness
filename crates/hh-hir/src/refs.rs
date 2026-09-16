@@ -104,6 +104,12 @@ impl Ref {
 /// `ProfileRef` — a reference to a Model Profile version (§3.1.3; the **only** kernel field
 /// typed by model identity — T-LCD-01). Carried as an identity coordinate string (the
 /// profile's `version_id` or a selector in the assembly section).
+///
+/// **The unbound sentinel (§3.3.2, T-LCD-04).** A definition's profile is a *configuration
+/// coordinate*, `unbound` by default; the compiler's `link` binds it (§3.2 stage 1). A sealed
+/// root therefore carries [`ProfileRef::unbound`] — `profile = "unbound"`, `pinned = false` —
+/// which `seal` admits as the one unpinned profile form (S1.9; ADR-0240). A pinned profile in
+/// the sealed root is the `profile_binding = ProfileRef` case (non-portable, OQ-078).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileRef {
     /// The profile's identity coordinate.
@@ -112,12 +118,137 @@ pub struct ProfileRef {
     pub pinned: bool,
 }
 
-/// `ComponentVariantRef` (§3.1.3; §3.3 owns the record it points at). Never legal on a
-/// `hosted` `AgentProcess` (T-LCD-15).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The `profile` spelling of the unbound sentinel (§3.3.2 `profile_binding = unbound`).
+pub const PROFILE_UNBOUND: &str = "unbound";
+
+impl ProfileRef {
+    /// The unbound profile — the definition constrains or pins no profile; `link` binds one.
+    pub fn unbound() -> ProfileRef {
+        ProfileRef {
+            profile: PROFILE_UNBOUND.into(),
+            pinned: false,
+        }
+    }
+
+    /// Whether this is the unbound sentinel.
+    pub fn is_unbound(&self) -> bool {
+        !self.pinned && self.profile == PROFILE_UNBOUND
+    }
+}
+
+/// `ComponentVariantRef{class_id, variant_id, version_selector | version_id}` (§3.3.2 —
+/// the §3.3 record shape, carried on `AgentProcess.native.slots`; §3.1.3 names the type).
+/// Never legal on a `hosted` `AgentProcess` (T-LCD-15). The authored form carries a
+/// selector; a sealed form carries a pinned `version_id` (§3.3.2). Variant tags are
+/// **open, registry-validated**: an unregistered `variant_id` is `UnresolvedRef` at
+/// `resolve`, never silently accepted (ADR-0023 decision 2).
+///
+/// Semantic projection: `{class_id, variant_id}` — the registry-validated *name*
+/// coordinate; the version coordinate is the pin (refs-by-semantic_id, §3.1.2), so a
+/// re-pin under one name changes `version_id` only (ADR-0240).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ComponentVariantRef {
-    /// The variant record's identity coordinate.
-    pub variant: String,
+    /// The component class the variant implements (the `slots` key).
+    pub class_id: String,
+    /// The open, registry-validated variant tag (`<namespace>/<name>` at Stage 1).
+    pub variant_id: String,
+    /// The version coordinate — a selector (authored) or a pinned `version_id` (sealed).
+    pub version: RefVersion,
+}
+
+impl ComponentVariantRef {
+    /// An authored (selector) variant ref.
+    pub fn selected(
+        class_id: impl Into<String>,
+        variant_id: impl Into<String>,
+        selector: impl Into<String>,
+    ) -> ComponentVariantRef {
+        ComponentVariantRef {
+            class_id: class_id.into(),
+            variant_id: variant_id.into(),
+            version: RefVersion::Selector(selector.into()),
+        }
+    }
+
+    /// A pinned variant ref.
+    pub fn pinned(
+        class_id: impl Into<String>,
+        variant_id: impl Into<String>,
+        version_id: impl Into<String>,
+    ) -> ComponentVariantRef {
+        ComponentVariantRef {
+            class_id: class_id.into(),
+            variant_id: variant_id.into(),
+            version: RefVersion::Pinned(version_id.into()),
+        }
+    }
+
+    /// Whether the version coordinate is pinned.
+    pub fn is_pinned(&self) -> bool {
+        matches!(self.version, RefVersion::Pinned(_))
+    }
+
+    /// The canonical JSON — `{class_id, variant_id, version_id | version_selector}`.
+    pub fn to_json(&self) -> Json {
+        let version = match &self.version {
+            RefVersion::Pinned(v) => ("version_id", Json::str(v.clone())),
+            RefVersion::Selector(s) => ("version_selector", Json::str(s.clone())),
+        };
+        Json::obj([
+            ("class_id", Json::str(self.class_id.clone())),
+            ("variant_id", Json::str(self.variant_id.clone())),
+            version,
+        ])
+    }
+
+    /// The semantic-projection form — `{class_id, variant_id}` (the pin is excluded).
+    pub fn semantic_json(&self) -> Json {
+        Json::obj([
+            ("class_id", Json::str(self.class_id.clone())),
+            ("variant_id", Json::str(self.variant_id.clone())),
+        ])
+    }
+
+    /// Parse from the canonical form.
+    pub fn from_json(j: &Json, path: &str) -> Result<ComponentVariantRef, HirError> {
+        let field = |k: &str| {
+            j.get(k)
+                .and_then(Json::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| HirError::SchemaViolation {
+                    detail: format!("{path}.{k} missing"),
+                })
+        };
+        let version = match (
+            j.get("version_id").and_then(Json::as_str),
+            j.get("version_selector").and_then(Json::as_str),
+        ) {
+            (Some(v), None) => RefVersion::Pinned(v.to_string()),
+            (None, Some(s)) => RefVersion::Selector(s.to_string()),
+            _ => {
+                return Err(HirError::SchemaViolation {
+                    detail: format!("{path} must carry exactly one of version_id|version_selector"),
+                })
+            }
+        };
+        if let Json::Obj(m) = j {
+            for k in m.keys() {
+                if !matches!(
+                    k.as_str(),
+                    "class_id" | "variant_id" | "version_id" | "version_selector"
+                ) {
+                    return Err(HirError::SchemaViolation {
+                        detail: format!("{path}.{k}: unknown ComponentVariantRef member"),
+                    });
+                }
+            }
+        }
+        Ok(ComponentVariantRef {
+            class_id: field("class_id")?,
+            variant_id: field("variant_id")?,
+            version,
+        })
+    }
 }
 
 /// `EnvironmentRef` (§3.1.3).
@@ -150,6 +281,30 @@ pub(crate) fn refs_from_json(j: &Json, path: &str) -> Result<Vec<Ref>, HirError>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn component_variant_ref_round_trips_and_projects_by_name() {
+        // §3.3.2: the authored form carries a selector, the sealed form a version_id; the
+        // semantic projection is the {class_id, variant_id} name coordinate (ADR-0240).
+        let a = ComponentVariantRef::selected("control_strategy", "hh/cs/react", "latest");
+        let p = ComponentVariantRef::pinned("control_strategy", "hh/cs/react", "sha256:v1");
+        assert_eq!(a.semantic_json(), p.semantic_json());
+        assert_ne!(a.to_json(), p.to_json());
+        assert_eq!(
+            ComponentVariantRef::from_json(&p.to_json(), "$").unwrap(),
+            p
+        );
+        assert_eq!(
+            ComponentVariantRef::from_json(&a.to_json(), "$").unwrap(),
+            a
+        );
+        let mut bad = p.to_json();
+        if let Json::Obj(m) = &mut bad {
+            m.insert("extra".into(), Json::Null);
+        }
+        assert!(ComponentVariantRef::from_json(&bad, "$").is_err());
+        assert!(ProfileRef::unbound().is_unbound());
+    }
 
     #[test]
     fn ref_semantic_projection_is_semantic_id_only() {

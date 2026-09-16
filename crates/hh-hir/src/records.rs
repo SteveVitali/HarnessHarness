@@ -503,11 +503,68 @@ pub enum SlotBindings {
     Many(Vec<SlotBinding>),
 }
 
-/// `SlotBinding{variant}` — the variant bound to a slot.
+/// `SlotBinding{variant: ComponentVariantRef, params: map<name, Value | $param:<id> |
+/// $entity:<id>>, enabled = true, locality?}` (§3.3.2 — the §3.3 grammar row this node
+/// carries). In a **sealed** form `variant` is pinned and every `params` value is a resolved
+/// `Value` (no `$param`/`$entity` forms remain — §3.3.4 `resolve`); `enabled = false` is the
+/// canonical whole-component ablation switch and a disabled binding still counts toward
+/// identity (§3.3.2); `locality` is a hint — locality is a property of the variant
+/// registration (`implementation.placement`), never of the class contract (Q-L1-10).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SlotBinding {
     /// The bound component variant.
     pub variant: ComponentVariantRef,
+    /// The parameter bindings for this binding (`name → Value` once resolved).
+    pub params: BTreeMap<String, Json>,
+    /// The ablation switch (`true` by default).
+    pub enabled: bool,
+    /// The locality hint, when authored.
+    pub locality: Option<Locality>,
+}
+
+impl SlotBinding {
+    /// A binding with no params, enabled, no locality hint.
+    pub fn of(variant: ComponentVariantRef) -> SlotBinding {
+        SlotBinding {
+            variant,
+            params: BTreeMap::new(),
+            enabled: true,
+            locality: None,
+        }
+    }
+}
+
+/// `SlotBinding.locality ∈ {in_process, out_of_process, inherit}` — a hint (§3.3.2;
+/// ADR-0023 decision 5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Locality {
+    /// Bind in the kernel process.
+    InProcess,
+    /// Bind through the variant host.
+    OutOfProcess,
+    /// Inherit the registration's placement.
+    Inherit,
+}
+
+impl Locality {
+    /// Canonical name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Locality::InProcess => "in_process",
+            Locality::OutOfProcess => "out_of_process",
+            Locality::Inherit => "inherit",
+        }
+    }
+
+    /// Parse the closed sum.
+    pub fn parse(s: &str) -> Option<Locality> {
+        match s {
+            "in_process" => Some(Locality::InProcess),
+            "out_of_process" => Some(Locality::OutOfProcess),
+            "inherit" => Some(Locality::Inherit),
+            _ => None,
+        }
+    }
 }
 
 /// `hosted{OpaqueProcess}` — the opaque participant boundary (§3.1.6; ADR-0015 decision 4).
