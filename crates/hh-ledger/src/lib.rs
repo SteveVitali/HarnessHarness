@@ -26,14 +26,18 @@
 #![warn(missing_docs)]
 
 pub mod classes;
+pub mod effect;
 pub mod errors;
 pub mod event;
 pub mod ids;
 pub mod manifest;
+pub mod recovery;
 pub mod schema;
 pub mod store;
 pub mod views;
 
+pub use effect::{CommitOutcome, CommitToken, EffectFold, EffectPhase};
 pub use errors::{LedgerError, MissingReason, Tampered, TamperedKind};
+pub use recovery::{RestoreAction, RestoreReport, RetryTimer};
 pub use store::{LineageEntry, Store, Subscription, DEFAULT_BLOB_MAX_BYTES};
 pub use views::{View, ViewKind, VIEW_POLICY_VERSION};

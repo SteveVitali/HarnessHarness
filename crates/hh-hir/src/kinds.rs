@@ -373,33 +373,11 @@ impl Mutability {
     }
 }
 
-/// `repeat_safety ∈ {idempotent, non_idempotent}`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum RepeatSafety {
-    /// Safe to repeat.
-    Idempotent,
-    /// Not safe to repeat.
-    NonIdempotent,
-}
-
-impl RepeatSafety {
-    /// Canonical name.
-    pub fn name(self) -> &'static str {
-        match self {
-            RepeatSafety::Idempotent => "idempotent",
-            RepeatSafety::NonIdempotent => "non_idempotent",
-        }
-    }
-    fn parse(s: &str) -> Result<RepeatSafety, HirError> {
-        match s {
-            "idempotent" => Ok(RepeatSafety::Idempotent),
-            "non_idempotent" => Ok(RepeatSafety::NonIdempotent),
-            _ => Err(HirError::UnknownKind {
-                kind: format!("repeat_safety {s}"),
-            }),
-        }
-    }
-}
+/// `repeat_safety ∈ {idempotent, non_idempotent}` — the canonical sum lives in
+/// `hh_ontology::risk` (the risk-class projection carries it verbatim, ADR-0031 §1 —
+/// one sum, one spelling; CC1). Re-exported here so `hh_hir::kinds::RepeatSafety`
+/// keeps resolving.
+pub use hh_ontology::risk::RepeatSafety;
 
 /// `world ∈ {closed, open}`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -583,7 +561,14 @@ fn attributes_from_json(j: &Json, path: &str) -> Result<EffectAttributes, HirErr
     };
     Ok(EffectAttributes {
         mutability: Mutability::parse(get_str("mutability")?)?,
-        repeat_safety: RepeatSafety::parse(get_str("repeat_safety")?)?,
+        repeat_safety: RepeatSafety::parse(get_str("repeat_safety")?).ok_or_else(|| {
+            HirError::UnknownKind {
+                kind: format!(
+                    "repeat_safety {s}",
+                    s = get_str("repeat_safety").unwrap_or("?")
+                ),
+            }
+        })?,
         world: World::parse(get_str("world")?)?,
         reversibility: Reversibility::from_json(
             j.get("reversibility")

@@ -54,6 +54,40 @@ fn ev(id: &str, class: &str, payload: hh_wire::json::Json) -> Event {
     }
 }
 
+/// An `action.effect.*` row — every effect class is audit-grade, so the producer
+/// is a kernel component with kernel provenance; `fencing` > 0 stamps the live
+/// lease generation for the post-`prepared` phases (§5a.2 invariant 6).
+fn effect_ev(
+    id: &str,
+    class: &str,
+    effect_id: &str,
+    payload: hh_wire::json::Json,
+    fencing: u64,
+) -> Event {
+    let mut e = ev(id, class, payload);
+    e.producer = Producer::kernel("kernel:test");
+    e.provenance = Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0));
+    e.scope.effect_id = Some(effect_id.to_string());
+    if fencing > 0 {
+        if let hh_wire::json::Json::Obj(m) = &mut e.payload {
+            m.insert(
+                "fencing_token".to_string(),
+                hh_wire::json::Json::Int(fencing as i64),
+            );
+        }
+    }
+    e
+}
+
+/// A `{reversibility, repeat_safety, scope}` risk-class payload member.
+fn risk_class(rev: &str, rs: &str, scope: &str) -> hh_wire::json::Json {
+    hh_wire::json::Json::obj([
+        ("reversibility", hh_wire::json::Json::str(rev)),
+        ("repeat_safety", hh_wire::json::Json::str(rs)),
+        ("scope", hh_wire::json::Json::str(scope)),
+    ])
+}
+
 /// Append an accountable event and return its `EventRef` — the charge source.
 fn source_event(store: &mut Store, run: &str, lease: &Lease, n: u64) -> EventRef {
     let e = ev(
@@ -385,16 +419,56 @@ fn e1_exhaust_refuses_while_an_effect_is_open_then_succeeds() {
         )
         .unwrap();
     }
-    // Open an effect scope — E1: exhaustion waits for the committed effect.
-    let mut eff = ev(
-        "eff-open",
-        "action.effect.intended",
-        hh_wire::json::Json::obj([("effect_id", hh_wire::json::Json::str("eff-1"))]),
-    );
-    eff.producer = Producer::kernel("kernel:test");
-    eff.provenance = Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0));
-    eff.scope.effect_id = Some("eff-1".into());
-    s.append(&run, &lease, vec![eff]).unwrap();
+    // Open a NON-`read_only` effect and drive it to `committed` — E1 blocks on
+    // real risk (the write-ahead record is durable; the world may already differ).
+    let gen = lease.generation;
+    let risky = risk_class("irreversible", "non_idempotent", "external");
+    s.append(
+        &run,
+        &lease,
+        vec![effect_ev(
+            "eff-i",
+            "action.effect.intended",
+            "eff-1",
+            hh_wire::json::Json::obj([
+                ("effect_id", hh_wire::json::Json::str("eff-1")),
+                ("effective_risk_class", risky.clone()),
+            ]),
+            0,
+        )],
+    )
+    .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![
+            effect_ev(
+                "eff-a",
+                "action.effect.authorized",
+                "eff-1",
+                hh_wire::json::Json::obj([("effective_risk_class", risky)]),
+                0,
+            ),
+            effect_ev(
+                "eff-p",
+                "action.effect.prepared",
+                "eff-1",
+                hh_wire::json::Json::obj([(
+                    "idempotency_key",
+                    hh_wire::json::Json::str("k-eff-1"),
+                )]),
+                0,
+            ),
+            effect_ev(
+                "eff-c",
+                "action.effect.committed",
+                "eff-1",
+                hh_wire::json::Json::obj([("attempt_no", hh_wire::json::Json::Int(1))]),
+                gen,
+            ),
+        ],
+    )
+    .unwrap();
     {
         let mut acc = Account::open(&mut s, &run).unwrap();
         let e = acc
@@ -408,15 +482,21 @@ fn e1_exhaust_refuses_while_an_effect_is_open_then_succeeds() {
         assert!(matches!(e, BudgetError::EffectsInFlight { .. }));
     }
     // Close the effect — exhaustion now proceeds.
-    let mut term = ev(
-        "eff-close",
-        "action.effect.observed",
-        hh_wire::json::Json::obj([("effect_id", hh_wire::json::Json::str("eff-1"))]),
-    );
-    term.producer = Producer::kernel("kernel:test");
-    term.provenance = Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0));
-    term.scope.effect_id = Some("eff-1".into());
-    s.append(&run, &lease, vec![term]).unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![effect_ev(
+            "eff-o",
+            "action.effect.observed",
+            "eff-1",
+            hh_wire::json::Json::obj([
+                ("attempt_no", hh_wire::json::Json::Int(1)),
+                ("outcome", hh_wire::json::Json::str("applied")),
+            ]),
+            gen,
+        )],
+    )
+    .unwrap();
     let mut acc = Account::open(&mut s, &run).unwrap();
     acc.exhaust(
         &lease,
@@ -441,6 +521,153 @@ fn e1_exhaust_refuses_while_an_effect_is_open_then_succeeds() {
         )
         .unwrap_err();
     assert!(matches!(e, BudgetError::AlreadyStopped { .. }));
+}
+
+// ── DF-S1.6-1 — read_only effects never block exhaustion ────────────────
+
+#[test]
+fn df_s1_6_1_read_only_effect_never_blocks_exhaustion() {
+    let (mut s, run, lease) = open("df-ro");
+    let src = source_event(&mut s, &run, &lease, 1);
+    let root;
+    {
+        let mut acc = Account::open(&mut s, &run).unwrap();
+        root = alloc_root(&mut acc, &lease, caps(&[(DimensionId::ModelCalls, 1)]));
+        acc.charge(
+            &lease,
+            &charge_req(&run, &root, DimensionId::ModelCalls, 1, &src),
+        )
+        .unwrap();
+    }
+    // Open a `read_only` effect and LEAVE it open — no recovery obligation is
+    // outstanding, so the budget envelope may close (DF-S1.6-1 half 1).
+    s.append(
+        &run,
+        &lease,
+        vec![effect_ev(
+            "ro-i",
+            "action.effect.intended",
+            "eff-ro",
+            hh_wire::json::Json::obj([
+                ("effect_id", hh_wire::json::Json::str("eff-ro")),
+                (
+                    "effective_risk_class",
+                    risk_class("read_only", "idempotent", "workspace_local"),
+                ),
+            ]),
+            0,
+        )],
+    )
+    .unwrap();
+    let mut acc = Account::open(&mut s, &run).unwrap();
+    acc.exhaust(
+        &lease,
+        &root,
+        DimensionKey::Primary(DimensionId::ModelCalls),
+        None,
+    )
+    .unwrap();
+    assert_eq!(acc.tree.exceeded.len(), 1);
+}
+
+#[test]
+fn df_s1_6_1_mixed_open_effects_still_block() {
+    let (mut s, run, lease) = open("df-mix");
+    let src = source_event(&mut s, &run, &lease, 1);
+    let root;
+    {
+        let mut acc = Account::open(&mut s, &run).unwrap();
+        root = alloc_root(&mut acc, &lease, caps(&[(DimensionId::ModelCalls, 1)]));
+        acc.charge(
+            &lease,
+            &charge_req(&run, &root, DimensionId::ModelCalls, 1, &src),
+        )
+        .unwrap();
+    }
+    let gen = lease.generation;
+    // A read_only intent (open, harmless) …
+    s.append(
+        &run,
+        &lease,
+        vec![effect_ev(
+            "ro-i",
+            "action.effect.intended",
+            "eff-ro",
+            hh_wire::json::Json::obj([
+                ("effect_id", hh_wire::json::Json::str("eff-ro")),
+                (
+                    "effective_risk_class",
+                    risk_class("read_only", "idempotent", "workspace_local"),
+                ),
+            ]),
+            0,
+        )],
+    )
+    .unwrap();
+    // … beside a committed irreversible one — DF-S1.6-1 half 2: still blocks,
+    // and the refusal names only the risky effect.
+    s.append(
+        &run,
+        &lease,
+        vec![
+            effect_ev(
+                "rk-i",
+                "action.effect.intended",
+                "eff-risky",
+                hh_wire::json::Json::obj([
+                    ("effect_id", hh_wire::json::Json::str("eff-risky")),
+                    (
+                        "effective_risk_class",
+                        risk_class("irreversible", "non_idempotent", "external"),
+                    ),
+                ]),
+                0,
+            ),
+            effect_ev(
+                "rk-a",
+                "action.effect.authorized",
+                "eff-risky",
+                hh_wire::json::Json::obj([(
+                    "effective_risk_class",
+                    risk_class("irreversible", "non_idempotent", "external"),
+                )]),
+                0,
+            ),
+            effect_ev(
+                "rk-p",
+                "action.effect.prepared",
+                "eff-risky",
+                hh_wire::json::Json::obj([(
+                    "idempotency_key",
+                    hh_wire::json::Json::str("k-risky"),
+                )]),
+                0,
+            ),
+            effect_ev(
+                "rk-c",
+                "action.effect.committed",
+                "eff-risky",
+                hh_wire::json::Json::obj([("attempt_no", hh_wire::json::Json::Int(1))]),
+                gen,
+            ),
+        ],
+    )
+    .unwrap();
+    let mut acc = Account::open(&mut s, &run).unwrap();
+    let e = acc
+        .exhaust(
+            &lease,
+            &root,
+            DimensionKey::Primary(DimensionId::ModelCalls),
+            None,
+        )
+        .unwrap_err();
+    match e {
+        BudgetError::EffectsInFlight { open } => {
+            assert_eq!(open, vec!["eff-risky".to_string()]);
+        }
+        other => panic!("expected EffectsInFlight, got {other:?}"),
+    }
 }
 
 #[test]

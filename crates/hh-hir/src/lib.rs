@@ -25,6 +25,7 @@ pub mod leaves;
 pub mod ops;
 pub mod records;
 pub mod refs;
+pub mod risk;
 pub(crate) mod schema;
 pub mod validate;
 

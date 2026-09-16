@@ -574,8 +574,9 @@ impl<'a> Account<'a> {
     /// `exhaust(budget_id, dimension)` — the envelope's rule (§8.2 §2; ADR-0040
     /// D5; E1/E2). Appends `control.budget.exceeded` then
     /// `control.decision{kind: stop, reason: budget_exhausted{dimension}}` in one
-    /// atomic batch. `EffectsInFlight` while an effect scope is open (E1 — the
-    /// committed effect reaches a terminal or `unknown` first); `AlreadyStopped`
+    /// atomic batch. `EffectsInFlight` while a non-`read_only` effect scope is open
+    /// (E1 + DF-S1.6-1 — the committed effect reaches a terminal or `unknown`
+    /// first; `read_only` intents never block); `AlreadyStopped`
     /// when a stop decision exists (a stop decision is made once). Callers use
     /// [`Account::check`] first — `exhaust` also records the *outermost*
     /// exceeded node when `budget_id` names a descendant of it.
@@ -586,10 +587,18 @@ impl<'a> Account<'a> {
         dimension: DimensionKey,
         triggered_by: Option<&EventRef>,
     ) -> Result<SeqRange, BudgetError> {
-        if !self.tree.open_effects.is_empty() {
-            return Err(BudgetError::EffectsInFlight {
-                open: self.tree.open_effects.iter().cloned().collect(),
-            });
+        // E1 as refined by DF-S1.6-1 (§5a.2): exhaustion is refused while a
+        // non-`read_only` effect is in flight — a `read_only` intent holds no
+        // recovery obligation, so it never blocks the drain.
+        let in_flight: Vec<String> = self
+            .tree
+            .open_effects
+            .iter()
+            .filter(|(_, rc)| !rc.is_read_only())
+            .map(|(id, _)| id.clone())
+            .collect();
+        if !in_flight.is_empty() {
+            return Err(BudgetError::EffectsInFlight { open: in_flight });
         }
         if let Some(d) = &self.tree.stop_decision {
             return Err(BudgetError::AlreadyStopped {

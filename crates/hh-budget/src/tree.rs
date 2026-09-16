@@ -110,10 +110,29 @@ pub struct BudgetTree {
     pub reverted_effects: BTreeSet<String>,
     /// `event_id → effect_id` for scope-carrying producers (the exclusion join).
     pub event_effect: BTreeMap<String, String>,
-    /// Open effect scopes (E1 — `exhaust` refuses while any are open).
-    pub open_effects: BTreeSet<String>,
+    /// Open effect scopes → their effective risk class (E1 — `exhaust` refuses
+    /// while any **non-`read_only`** effect is open; `read_only` intents never
+    /// block exhaustion — DF-S1.6-1, §5a.2's open-risk set). A missing or
+    /// unreadable `effective_risk_class` projects to `RiskClass::UNKNOWN` (the
+    /// most dangerous class — legacy rows stay conservative).
+    pub open_effects: BTreeMap<String, hh_ontology::risk::RiskClass>,
+    /// `effect_id → last probe verdict` — invariant 4 needs it: a `not_applied`
+    /// settlement is effect-terminal only when the class forecloses retry
+    /// (`irreversible`, or non-`idempotent` without a `not_applied` probe —
+    /// ADR-0238 §1).
+    pub probe_verdicts: BTreeMap<String, String>,
     /// The recorded stop decision, if any (a stop decision is made once).
     pub stop_decision: Option<DecisionRow>,
+}
+
+/// Invariant 4 (ADR-0030 §1; ADR-0238 §1): a `not_applied` settlement stays
+/// redispatchable iff the class isn't `irreversible` and either
+/// `repeat_safety = idempotent` or the last probe returned `not_applied`.
+fn not_applied_retryable(rc: &hh_ontology::risk::RiskClass, last_probe: Option<&String>) -> bool {
+    use hh_ontology::risk::{RepeatSafety, RiskReversibility};
+    rc.reversibility != RiskReversibility::Irreversible
+        && (rc.repeat_safety == RepeatSafety::Idempotent
+            || last_probe.map(String::as_str) == Some("not_applied"))
 }
 
 impl BudgetTree {
@@ -143,19 +162,88 @@ impl BudgetTree {
 
     /// Fold one envelope into the projection.
     pub fn fold(&mut self, e: &EventEnvelope) -> Result<(), BudgetError> {
-        // Track scope bookkeeping needed for E1 (open effects) and revert exclusion.
-        if let Some(eff) = &e.scope.effect_id {
-            self.event_effect.insert(e.event_id.clone(), eff.clone());
+        // Track scope bookkeeping needed for E1 (open effects) and revert
+        // exclusion. The subject is `scope.effect_id` or — for the
+        // `compensated`/`reverted` marker form — `payload.original_effect_id`.
+        let eff = e.scope.effect_id.as_deref().or_else(|| {
+            e.payload
+                .get("original_effect_id")
+                .and_then(hh_wire::json::Json::as_str)
+        });
+        if let Some(eff) = eff {
+            self.event_effect
+                .insert(e.event_id.clone(), eff.to_string());
             match e.class.as_str() {
                 "action.effect.intended" => {
-                    self.open_effects.insert(eff.clone());
+                    let rc = e
+                        .payload
+                        .get("effective_risk_class")
+                        .and_then(hh_ontology::risk::RiskClass::from_json)
+                        .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN);
+                    self.open_effects.insert(eff.to_string(), rc);
                 }
-                "action.effect.observed" | "action.effect.refused" | "action.effect.abandoned" => {
+                "action.effect.observed" => {
+                    // `observed{partial}` is non-terminal — still open;
+                    // `observed{not_applied}` closes the effect only when the
+                    // class forecloses retry (invariant 4 — ADR-0238 §1).
+                    match e
+                        .payload
+                        .get("outcome")
+                        .and_then(hh_wire::json::Json::as_str)
+                    {
+                        Some("partial") => {}
+                        Some("not_applied") => {
+                            let rc = self
+                                .open_effects
+                                .get(eff)
+                                .cloned()
+                                .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN);
+                            if !not_applied_retryable(&rc, self.probe_verdicts.get(eff)) {
+                                self.open_effects.remove(eff);
+                            }
+                        }
+                        _ => {
+                            self.open_effects.remove(eff);
+                        }
+                    }
+                }
+                "action.effect.probed" => {
+                    // A conclusive probe verdict is the observed transition;
+                    // `undeterminable` returns to `unknown` — still open, and a
+                    // `not_applied` verdict keeps a retryable class open
+                    // (invariant 4 — ADR-0238 §1).
+                    let verdict = e
+                        .payload
+                        .get("verdict")
+                        .and_then(hh_wire::json::Json::as_str);
+                    if let Some(v) = verdict {
+                        self.probe_verdicts.insert(eff.to_string(), v.to_string());
+                    }
+                    match verdict {
+                        Some("applied") => {
+                            self.open_effects.remove(eff);
+                        }
+                        Some("not_applied") => {
+                            let rc = self
+                                .open_effects
+                                .get(eff)
+                                .cloned()
+                                .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN);
+                            if !not_applied_retryable(&rc, Some(&"not_applied".to_string())) {
+                                self.open_effects.remove(eff);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                "action.effect.refused"
+                | "action.effect.abandoned"
+                | "action.effect.compensated" => {
                     self.open_effects.remove(eff);
                 }
                 "action.effect.reverted" => {
                     self.open_effects.remove(eff);
-                    self.reverted_effects.insert(eff.clone());
+                    self.reverted_effects.insert(eff.to_string());
                 }
                 _ => {}
             }

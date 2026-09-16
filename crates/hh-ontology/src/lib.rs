@@ -35,6 +35,7 @@ pub mod formal;
 pub mod glossary;
 pub mod participant;
 pub mod planes;
+pub mod risk;
 pub mod structure;
 pub mod surface;
 
