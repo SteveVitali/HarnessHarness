@@ -154,6 +154,25 @@ members = [
     # model.cache.resolved. Consumes hh-compiler's ModelProfile/1 (CC1 — never
     # a duplicate record) and appends through the run's fenced writer.
     "crates/hh-gateway",
+    # The C0/Stage-1 context builder / policy engine + C0 memory slices (spec
+    # §5c.1/§5c.3/§5c.4, R-2.4.1, R-2.4.3⁰, R-2.4.4⁰; ticket S1.19;
+    # ADR-0072…0083). A PERSISTENT workspace member: the content-addressed
+    # `ContextPlan` and its candidate/slot/budget schemas, the six kernel-
+    # reserved slots and floors with `InvalidLayout`/`VolatileInStaticTier`
+    # at link, the `default` policy + the no-widen policy seam
+    # (`PolicyViolation`), the fixed kernel step order with `ContextWindowExceeded`
+    # → `CompactionRequired` handled as stop at Stage 0/1, `context.assembled`
+    # emission; the C0 `MemoryStore` (`put`/`bind`/`revoke`/`resolve`/`manifest`/
+    # `enumerate`/`stale_candidates`) over immutable memory versions with
+    # scope-lease fencing, `lexical_index` + `memory_stale_index` materialized
+    # views stamped through `hh-ledger`'s `View` (one shape, CC7), deterministic
+    # `retrieve` under the fixed validity→authority→readers→rank order; the
+    # R-2.4.4⁰ lifecycle pure functions E1–E4 (`lifecycle_state`,
+    # `check_contract`, `filter_for_slot`, `write`), deterministic conflict sets,
+    # `promote`/`revalidate`. Consumes `hh-hir`'s `ContextItem`/`Memory`/
+    # `Artifact` records (never duplicated — CC7) and appends through the run's
+    # fenced writer.
+    "crates/hh-context",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

@@ -398,9 +398,12 @@ mod tests {
 
     #[test]
     fn pending_classes_are_declared_not_violations() {
-        let m = metric("artifact_activation_rate").unwrap();
+        // `context.artefact.activated` landed with the context builder
+        // (S1.19); `verification.artefact.followed` is still a declared-
+        // pending Stage-3 class — `artifact_follow_rate` reads both.
+        let m = metric("artifact_follow_rate").unwrap();
         let check = registry_check(m);
-        assert!(check.pending.contains(&"context.artefact.activated"));
+        assert!(check.pending.contains(&"verification.artefact.followed"));
         assert!(check.violations.is_empty());
     }
 

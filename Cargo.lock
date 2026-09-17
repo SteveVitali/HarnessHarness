@@ -72,6 +72,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-context"
+version = "0.0.1"
+dependencies = [
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-provenance",
+ "hh-telemetry",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-embed-client-generated"
 version = "0.0.1"
 dependencies = [

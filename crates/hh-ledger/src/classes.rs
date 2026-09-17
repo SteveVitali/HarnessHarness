@@ -799,6 +799,29 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // thresholds (§8.2 E4; ADR-0040/0107): advice re-arms only after a
     // `status ∈ {applied, fallback_applied}` completion. Kernel-produced.
     row("context.compaction.completed",    Led, O::Events, false, true,  None, None),
+    // `context.assembled` — the context builder's per-call plan row (§5c.1;
+    // ADR-0072 d5): `{model_call_id, plan_id, derived_from{…view_hash},
+    // layout_ref, policy_ref, estimator_ref, reserved, occupancy_estimate,
+    // context_label, items[]|items_ref, omitted[], pending_expansions[],
+    // compaction_state, assembly_ms{measured_at}}`. M5's point event
+    // (`assembly_ms` is a payload field — CF-092; `O::Events` like the
+    // sibling context rows). A hashed leaf citable by `audit_ref`, NOT an
+    // audit-grade class (ADR-0066 d2); per-item provenance + the kernel-
+    // stamped `context_label` are mandatory (ADR-0035 d4). Component-emitted
+    // — the builder computes the payload; the caller owns `append`.
+    row_prov("context.assembled",          Led, O::Events, false, false, true,  None, None),
+    // `context.artefact.activated` — `{artefact_id, delivery_id, detector ∈
+    // {deterministic, judged, human}, signal?, detector_ref, confidence,
+    // evidence}` (§2.6.2/§5c.1; ADR-0110 detector sum; ADR-0014 as amended,
+    // CF-483). P1; never emitted for `activation_observable = false` kinds;
+    // not audit-grade (ADR-0066 d2).
+    row_prov("context.artefact.activated", Led, O::Events, false, false, true,  None, None),
+    // `context.retrieval.completed` — `{model_call_id, request_hash,
+    // query_kind, layers, watermark, report}` — the deterministic-retrieval
+    // report row (§5c.3; ADR-0079 d8). `durability = ledger`, P1, provenance
+    // mandatory; not audit-grade (ADR-0066 as amended, CF-173/CF-179) — the
+    // audit-grade half is the structural part of `context.memory.read`.
+    row_prov("context.retrieval.completed",Led, O::Events, false, false, true,  None, None),
     // `context.memory.written/invalidated` and the structural part of
     // `context.memory.read` are audit-grade (§5g.6 §3; ADR-0066 as amended,
     // CF-180) — the memory lifecycle is a consequential act.
