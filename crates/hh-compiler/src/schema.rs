@@ -162,8 +162,16 @@ fn version_pattern_json(p: &VersionPattern) -> Json {
     match p {
         VersionPattern::Exact(v) => Json::obj([("exact", Json::str(v.clone()))]),
         VersionPattern::Prefix(v) => Json::obj([("prefix", Json::str(v.clone()))]),
-        VersionPattern::Range(lo, hi) => {
-            Json::obj([("hi", Json::str(hi.clone())), ("lo", Json::str(lo.clone()))])
+        VersionPattern::Range { family, lo, hi } => {
+            let mut m = std::collections::BTreeMap::new();
+            m.insert("family".to_string(), Json::str(family.clone()));
+            if let Some(lo) = lo {
+                m.insert("lo".to_string(), Json::str(lo.clone()));
+            }
+            if let Some(hi) = hi {
+                m.insert("hi".to_string(), Json::str(hi.clone()));
+            }
+            Json::Obj(m)
         }
         VersionPattern::Any => Json::str("any"),
     }
@@ -179,11 +187,22 @@ fn version_pattern_from_json(j: &Json, path: &str) -> Result<VersionPattern, Com
             if let Some(v) = j.get("prefix").and_then(Json::as_str) {
                 return Ok(VersionPattern::Prefix(v.to_string()));
             }
-            if let (Some(lo), Some(hi)) = (
-                j.get("lo").and_then(Json::as_str),
-                j.get("hi").and_then(Json::as_str),
-            ) {
-                return Ok(VersionPattern::Range(lo.to_string(), hi.to_string()));
+            // `range{family, lo?, hi?}` — either bound may be absent
+            // (unbounded); `{lo, hi}` without `family` reads with the
+            // selector's own `model_family` (legacy spelling).
+            if j.get("family").and_then(Json::as_str).is_some()
+                || j.get("lo").and_then(Json::as_str).is_some()
+                || j.get("hi").and_then(Json::as_str).is_some()
+            {
+                return Ok(VersionPattern::Range {
+                    family: j
+                        .get("family")
+                        .and_then(Json::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                    lo: j.get("lo").and_then(Json::as_str).map(str::to_string),
+                    hi: j.get("hi").and_then(Json::as_str).map(str::to_string),
+                });
             }
             Err(schema_err(path, "version_pattern: not a closed-set member"))
         }

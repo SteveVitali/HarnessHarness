@@ -1,0 +1,29 @@
+[package]
+name = "hh-gateway"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 model adapter / gateway and the C0 model-plane slices (spec §5b.1–§5b.4, R-2.3.1, the R-2.3.2 C0 static slice, R-2.3.3⁰, R-2.3.4⁰; ticket S1.18; ADR-0118…0128). The model-blind, dialect-parameterised gateway — WireDialect/1 descriptors with complete debt records, the normalized ModelEvent grammar (G1–G7) + ModelMessage (T1–T7), closed StopReason/ModelErrorClass with kernel retry_class defaults, AttemptPolicy as data + R-RT-1…6, usage on model.call.completed through hh-telemetry's TokenVector, kernel-held credentials (provided: yes/no only), the H4 endpoint allow-list refusal; the C0 static router slice (ModelRoleTable, RoutingPolicy{static,role_table}, guards G-1/G-2/G-4, the closed RoutingRefusal sum, model.route.decided); the §5b.3⁰ profile slice lands in hh-compiler (the ModelProfile/1 owner) reconciled — selector resolution, null profile, expiry state machine, test-record schemas; the §5b.4⁰ slice lands here — CacheSemantics as data, LC-1…LC-9 layout invariants, the affinity key, expected/observed cache state, model.cache.resolved."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh-gateway-stub"
+path = "src/bin/hh-gateway-stub.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ledger = { path = "../hh-ledger" }
+hh-budget = { path = "../hh-budget" }
+hh-telemetry = { path = "../hh-telemetry" }
+hh-secrets = { path = "../hh-secrets" }
+hh-containment = { path = "../hh-containment" }
+# The model-plane records this crate consumes are the profile owner's own types —
+# ModelProfile/1, the CF-049 debt shape, ModelRole, selector resolution (CC1 —
+# never a duplicate model). The dependency direction is gateway → compiler; the
+# compiler never names the gateway.
+hh-compiler = { path = "../hh-compiler" }
