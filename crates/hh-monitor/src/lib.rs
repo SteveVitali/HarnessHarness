@@ -41,6 +41,6 @@ pub mod tcb;
 
 pub use decision::{Decider, Decision, DenyReason, KernelDecision};
 pub use handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
-pub use monitor::{Monitor, MonitorError, Proposal};
+pub use monitor::{ContainmentGate, Monitor, MonitorError, Proposal};
 pub use policy::{Mode, PiVerdict, PolicyTable};
 pub use table::HandleTable;

@@ -62,9 +62,44 @@ pub struct Proposal {
     /// For `spawn_process`/`Delegate` proposals: the requested child grants
     /// (step 6's operands — checked against the covering handle).
     pub requested_grants: Vec<hh_hir::records::Grant>,
+    /// The recorded containment-floor verdict (§5g.4; ADR-0062 D3 — the
+    /// `authorize` precondition). The kernel computes it through
+    /// `hh_containment` (`admit::floor_gate`) at resolve and stamps it on
+    /// the proposal like `inputs` — the monitor never evaluates
+    /// containment itself; the operation edge is R-2.8.4 → R-2.8.1.
+    pub containment: ContainmentGate,
     /// The decision's logical time (`at` — the seq the `time` constraint's
     /// bound compares against).
     pub at: u64,
+}
+
+/// `ContainmentGate` — the recorded containment-floor verdict `authorize`
+/// consumes (ADR-0062 D3; R-2.8.4). A recorded input like
+/// `AssessmentInputs` — produced by `hh_containment` from the effective
+/// policy + the attach `ContainmentReport` + the proposal's canonical
+/// arguments, never computed inside the monitor.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ContainmentGate {
+    /// Required field-group evidence is in force and `admits()` admitted
+    /// (or the domain engages no governed surface).
+    Clear,
+    /// `admits()` returned `refused` or `amendable` — an affirmative
+    /// boundary denial: `deny{containment}` before any check; Π is never
+    /// consulted and `ask` is never produced (AC-R-2.8.4-14). `detail` is
+    /// the recorded tag (`refused:<reason>` / `amendable:<diff>`).
+    Denied {
+        /// The recorded admits tag.
+        detail: String,
+    },
+    /// A required field group's `enforcement_evidence` is `unknown` (or no
+    /// report exists / the stored report is stale) —
+    /// `deny{ContainmentUnverified}` before any check (I-C4 fail-closed).
+    /// `group` spells the field group, `attach` (helper absent / backend
+    /// unsupported) or `report` (stale on resume).
+    Unverified {
+        /// The unverified subject's spelling.
+        group: String,
+    },
 }
 
 /// The operational (non-decision) failure of `authorize` — distinct from a
@@ -201,6 +236,46 @@ impl Monitor {
             },
             decider: Decider::Policy,
         };
+        // The containment precondition (ADR-0062 D3; R-2.8.4) — BEFORE any
+        // check: a required field group's `unknown` evidence ⇒
+        // `deny{ContainmentUnverified}`; a recorded floor denial ⇒
+        // `deny{containment}` — Π is never consulted and `ask` never
+        // produced (AC-R-2.8.4-14). The precondition records at step 0 —
+        // on a refusal the trail's first record is it.
+        match &p.containment {
+            ContainmentGate::Unverified { group } => {
+                checks.push(CheckRecord {
+                    step: 0,
+                    outcome: "fail",
+                    detail: format!("containment:unverified:{group}"),
+                });
+                return Ok(deny(
+                    checks,
+                    0,
+                    DenyReason::ContainmentUnverified,
+                    AuthorityClass::Unverified,
+                    BTreeSet::new(),
+                    RiskClass::UNKNOWN,
+                ));
+            }
+            ContainmentGate::Denied { detail } => {
+                checks.push(CheckRecord {
+                    step: 0,
+                    outcome: "fail",
+                    detail: detail.clone(),
+                });
+                return Ok(deny(
+                    checks,
+                    0,
+                    DenyReason::Containment,
+                    AuthorityClass::Unverified,
+                    BTreeSet::new(),
+                    RiskClass::UNKNOWN,
+                ));
+            }
+            ContainmentGate::Clear => {}
+        }
+
         // Step 0 — well-formedness: provenance present, proposer registered,
         // every argument through `SurfaceArgMap`.
         let Some(args_prov) = &p.args_provenance else {

@@ -60,6 +60,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-containment"
+version = "0.0.1"
+dependencies = [
+ "hh-compiler",
+ "hh-hir",
+ "hh-identity",
+ "hh-monitor",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-embed-client-generated"
 version = "0.0.1"
 dependencies = [

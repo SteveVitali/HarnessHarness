@@ -89,6 +89,15 @@ members = [
     # context_label stamp, the HandleLeak checks, the no-Text/no-model-call
     # static + runtime protections. MUST-code (the TCB); never model-facing.
     "crates/hh-monitor",
+    # The C0/Stage-1 containment floor (spec §5g.4, R-2.8.4; ticket S1.12). A
+    # PERSISTENT workspace member: the typed, provenance-bearing,
+    # content-addressed ContainmentPolicy/1 record (one schema — CC7), the
+    # deny-by-default kernel policy + KERNEL_PROTECTED, the authority-ordered
+    # layered meet `effective()` with ContainmentWidening, the `admits` floor,
+    # the ContainmentReport/evidence model, the EP2 model backend + probe
+    # battery, and `attach`'s fail-closed / warn_and_degrade paths. Identity
+    # through hh-identity (CC1); no second canonicalization scheme.
+    "crates/hh-containment",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
