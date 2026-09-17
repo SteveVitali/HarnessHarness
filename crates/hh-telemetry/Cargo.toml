@@ -1,0 +1,21 @@
+[package]
+name = "hh-telemetry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 telemetry, tracing & cost/latency instrumentation — the closed measurement-point table (M1–M19 + M-ENV, scope kinds M1–M12 wired), the Span/trace_view/cost_view/metric_view projections (pure folds over the durable prefix, never a second store), TokenVector normalization with normalizer_ref, MeasuredAt/clock_tolerance/clock_skew_flag conventions, SinkPolicy + the L0–L3 content classes, export() with the recorded TelemetryLossReport, propagation at the subprocess seam, the process-metric catalogue + the requires_observability registry check, and the measurement.export.delivered/metric.emitted payload builders (spec §5h.1, R-2.9.1; ticket S1.14; ADR-0042/0043/0044)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-ledger = { path = "../hh-ledger" }
+# Money/CostProvenance/ProvenanceClass/Confidence/SpendRow/ResourceVector and the
+# `measurement.cost.attributed` payload contract live here (the one schema source,
+# CC7) — cost_view decodes them, never redefines them.
+hh-budget = { path = "../hh-budget" }

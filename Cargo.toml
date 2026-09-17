@@ -110,6 +110,19 @@ members = [
     # (the TCB); never model-facing; the Stage-2 egress mediator executes the
     # staged deliveries this crate audits (DF-S1.12-1 → S2.4).
     "crates/hh-secrets",
+    # The C0/Stage-1 telemetry backbone — measurement points, views, sinks and
+    # propagation (spec §5h.1, R-2.9.1; ticket S1.14). A PERSISTENT workspace
+    # member: the closed M1–M19 measurement-point table with the M1–M12 scope
+    # kinds wired to the ledger classes, the `trace_view`/`cost_view`/
+    # `metric_view` projections (pure folds over the durable prefix — never a
+    # second store, ADR-0042 D1/D2), `TokenVector` normalization +
+    # `normalizer_ref`, `MeasuredAt`/`clock_tolerance_ms`/`clock_skew_flag`,
+    # `SinkPolicy` + the L0–L3 content classes, `export()` with the recorded
+    # `TelemetryLossReport`, `PropagationContext` at the subprocess seam, the
+    # process-metric catalogue + `registry_check` (the DF-S1.5-2 consumer), and
+    # the `measurement.export.delivered`/`measurement.metric.emitted` payload
+    # builders. Views stamp through `hh-ledger`'s `View` (one shape, CC7).
+    "crates/hh-telemetry",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

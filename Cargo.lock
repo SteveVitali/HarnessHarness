@@ -180,5 +180,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-telemetry"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-identity",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-wire"
 version = "0.0.1"
