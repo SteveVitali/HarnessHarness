@@ -152,6 +152,26 @@ pub enum LedgerError {
         /// The effect.
         effect_id: String,
     },
+    /// `action.effect.committed` with no preceding
+    /// `security.permission.decided{decision = allow}` for that `effect_id` and
+    /// attempt cycle — complete mediation as an append rule (ADR-0052 D6;
+    /// §5g.1 I-H7; Anderson "always invoked").
+    Undecided {
+        /// The effect.
+        effect_id: String,
+        /// The attempt the commit names.
+        attempt_no: u64,
+    },
+    /// A second *final* gate decision (`decision ∈ {allow, deny}`) for one
+    /// `(effect_id, attempt)` — "exactly one `decided` per attempt cycle"
+    /// (ADR-0052 D6). Non-final rows (`ask`, `timed_out`, `cancelled`, and any
+    /// request-closure spelling) never count toward the gate.
+    DuplicateDecision {
+        /// The effect.
+        effect_id: String,
+        /// The attempt cycle.
+        attempt_no: u64,
+    },
     /// The WAL write/flush failed — the batch is not visible; retry is safe.
     Durability {
         /// The io detail.

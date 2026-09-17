@@ -139,6 +139,29 @@ fn prepared_x(id: &str, effect_id: &str, key: &str, extra: Json) -> Event {
     eff(id, "action.effect.prepared", effect_id, Json::Obj(m), 0)
 }
 
+/// A `security.permission.decided` row — the complete-mediation pre-record
+/// (ADR-0052 D6; §5g.1 I-H7) every `committed` must be preceded by.
+fn decided(id: &str, effect_id: &str, attempt: i64, decision: &str) -> Event {
+    let mut ev = eff(
+        id,
+        "security.permission.decided",
+        effect_id,
+        Json::obj([
+            ("effect_id", Json::str(effect_id)),
+            ("attempt_no", Json::Int(attempt)),
+            ("decision", Json::str(decision)),
+        ]),
+        0,
+    );
+    // The class carries the effect in scope too (decision_effect reads either).
+    ev.scope.effect_id = Some(effect_id.to_string());
+    ev
+}
+
+fn allow(id: &str, effect_id: &str, attempt: i64) -> Event {
+    decided(id, effect_id, attempt, "allow")
+}
+
 fn committed(id: &str, effect_id: &str, attempt: i64, fencing: u64) -> Event {
     eff(
         id,
@@ -242,7 +265,10 @@ fn ac_2_2_2_10_tool_started_requires_committed_for_non_read_only() {
     s.append(
         &run,
         &lease,
-        vec![committed("c1", "e1", 1, lease.generation)],
+        vec![
+            allow("a1", "e1", 1),
+            committed("c1", "e1", 1, lease.generation),
+        ],
     )
     .unwrap();
     s.append(&run, &lease, vec![tool_started("t2", "e1")])
@@ -257,6 +283,8 @@ fn ac_2_2_2_10_tool_started_requires_committed_for_non_read_only() {
 fn ac_2_2_2_10_commit_token_binds_attempt_and_generation() {
     let (mut s, run, lease, clock) = open_at("tok", 1_000);
     to_prepared(&mut s, &run, &lease, "e1", irreversible());
+    // Complete mediation: the gate decision precedes the write-ahead commit.
+    s.append(&run, &lease, vec![allow("a1", "e1", 1)]).unwrap();
     // commit_effect is idempotent — a repeat returns the same token.
     let out = s.commit_effect(&run, &lease, "e1", None).unwrap();
     let CommitOutcome::Committed(tok) = out else {
@@ -411,8 +439,12 @@ fn ac_2_2_2_3_lifecycle_closure_and_no_redispatch() {
     let (mut s, run, lease) = open("nodangle");
     let gen = lease.generation;
     to_prepared(&mut s, &run, &lease, "e1", irreversible());
-    s.append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a1", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
     // `observed{partial}` is non-terminal — the scope stays open.
     s.append(&run, &lease, vec![observed("o1", "e1", 1, "partial", gen)])
         .unwrap();
@@ -463,12 +495,20 @@ fn ac_2_2_2_3_retry_from_unknown_needs_idempotent_or_probed_not_applied() {
         risk("compensable", "idempotent", "external"),
         Json::obj([("compensation_plan_id", Json::str("plan-1"))]),
     );
-    s.append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a1", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
     s.append(&run, &lease, vec![unknown("u1", "e1", "timeout", gen)])
         .unwrap();
-    s.append(&run, &lease, vec![committed("c2", "e1", 2, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a2", "e1", 2), committed("c2", "e1", 2, gen)],
+    )
+    .unwrap();
     let f = s.effect_fold(&run, "e1").unwrap().unwrap();
     assert_eq!(f.attempt_no, 2);
     // The same attempt can never be re-committed (no redispatch of attempt n).
@@ -496,8 +536,12 @@ fn not_applied_probe_leaves_retryable_effect_open_for_retry() {
         risk("compensable", "non_idempotent", "external"),
         Json::obj([("compensation_plan_id", Json::str("plan-1"))]),
     );
-    s.append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a1", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
     s.append(&run, &lease, vec![unknown("u1", "e1", "timeout", gen)])
         .unwrap();
     s.append(&run, &lease, vec![probed("p1", "e1", "not_applied", gen)])
@@ -509,8 +553,12 @@ fn not_applied_probe_leaves_retryable_effect_open_for_retry() {
         "retryable not_applied is not effect-terminal"
     );
     // The effect scope is still open — the retry commits in-scope.
-    s.append(&run, &lease, vec![committed("c2", "e1", 2, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a2", "e1", 2), committed("c2", "e1", 2, gen)],
+    )
+    .unwrap();
     s.append(&run, &lease, vec![observed("o2", "e1", 2, "applied", gen)])
         .unwrap();
     let f = s.effect_fold(&run, "e1").unwrap().unwrap();
@@ -518,8 +566,12 @@ fn not_applied_probe_leaves_retryable_effect_open_for_retry() {
 
     // `irreversible` forecloses: `not_applied` is terminal, no retry ever.
     to_prepared(&mut s, &run, &lease, "e2", irreversible());
-    s.append(&run, &lease, vec![committed("c3", "e2", 1, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a3", "e2", 1), committed("c3", "e2", 1, gen)],
+    )
+    .unwrap();
     s.append(&run, &lease, vec![unknown("u2", "e2", "timeout", gen)])
         .unwrap();
     s.append(&run, &lease, vec![probed("p2", "e2", "not_applied", gen)])
@@ -548,8 +600,12 @@ fn not_applied_probe_leaves_retryable_effect_open_for_retry() {
         risk("compensable", "non_idempotent", "external"),
         Json::obj([("compensation_plan_id", Json::str("plan-2"))]),
     );
-    s.append(&run, &lease, vec![committed("c5", "e3", 1, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a5", "e3", 1), committed("c5", "e3", 1, gen)],
+    )
+    .unwrap();
     s.append(
         &run,
         &lease,
@@ -606,8 +662,12 @@ fn deferred_holds_until_promotion_or_discard() {
         matches!(e, LedgerError::BadEffectTransition { .. }),
         "{e:?}"
     );
-    s.append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a1", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
     s.append(&run, &lease, vec![observed("o2", "e1", 1, "applied", gen)])
         .unwrap();
     let f = s.effect_fold(&run, "e1").unwrap().unwrap();
@@ -619,8 +679,12 @@ fn abandoned_requires_an_escalation_ref() {
     let (mut s, run, lease) = open("abandon");
     let gen = lease.generation;
     to_prepared(&mut s, &run, &lease, "e1", irreversible());
-    s.append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a1", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
     s.append(&run, &lease, vec![unknown("u1", "e1", "worker_lost", gen)])
         .unwrap();
     // `abandoned` without an escalation → refused (always escalated).
@@ -732,8 +796,12 @@ fn ac_2_2_3_2_restore_fences_marks_unknown_and_audits() {
     // A committed non-read_only effect + an open model call + a read_only
     // prepared effect + a pending permission — the crash tableau.
     to_prepared(&mut s, &run, &lease, "e1", irreversible());
-    s.append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
-        .unwrap();
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a1", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
     to_prepared(&mut s, &run, &lease, "e-ro", READ_ONLY());
     model_call_open(&mut s, &run, &lease, "turn-1", "mc-1", 1);
     s.append(
@@ -800,7 +868,10 @@ fn ac_2_2_3_2_retry_due_is_a_pure_fold() {
     s.append(
         &run,
         &lease,
-        vec![committed("c1", "e1", 1, lease.generation)],
+        vec![
+            allow("a1", "e1", 1),
+            committed("c1", "e1", 1, lease.generation),
+        ],
     )
     .unwrap();
     // Restore takes over (writer-a expired); the report hands back the live
@@ -839,4 +910,121 @@ fn ac_2_2_3_2_retry_due_is_a_pure_fold() {
     };
     s.append(&run, &rep.lease, vec![fired]).unwrap();
     assert!(s.retry_due(&run, now + 2_000).unwrap().is_empty());
+}
+
+// ── Complete mediation (§5g.1 I-H7; ADR-0052 D6; S1.11) ─────────────────
+// `action.effect.committed` requires a preceding same-effect/same-attempt
+// `security.permission.decided{decision = allow}`; exactly one final
+// allow/deny per attempt cycle.
+
+#[test]
+fn mediation_committed_without_allow_is_undecided() {
+    let (mut s, run, lease) = open("med-undecided");
+    let gen = lease.generation;
+    to_prepared(&mut s, &run, &lease, "e1", irreversible());
+    // No `decided` row at all → Undecided.
+    let e = s
+        .append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
+        .unwrap_err();
+    assert!(matches!(e, LedgerError::Undecided { .. }), "{e:?}");
+    // A `deny` decision does not open the gate.
+    s.append(&run, &lease, vec![decided("d1", "e1", 1, "deny")])
+        .unwrap();
+    let e = s
+        .append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
+        .unwrap_err();
+    assert!(matches!(e, LedgerError::Undecided { .. }), "{e:?}");
+    // `ask` is non-final — the gate stays closed.
+    // (a final deny already closed attempt 1; a fresh attempt needs its own
+    // allow.)
+}
+
+#[test]
+fn mediation_duplicate_final_decision_refused() {
+    let (mut s, run, lease) = open("med-dup");
+    to_prepared(&mut s, &run, &lease, "e1", irreversible());
+    s.append(&run, &lease, vec![allow("d1", "e1", 1)]).unwrap();
+    // A second final decision for the same (effect, attempt) — refused, even
+    // for a different verdict.
+    let e = s
+        .append(&run, &lease, vec![decided("d2", "e1", 1, "deny")])
+        .unwrap_err();
+    assert!(matches!(e, LedgerError::DuplicateDecision { .. }), "{e:?}");
+    let e = s
+        .append(&run, &lease, vec![allow("d3", "e1", 1)])
+        .unwrap_err();
+    assert!(matches!(e, LedgerError::DuplicateDecision { .. }), "{e:?}");
+    // A different attempt cycle has its own decision slot.
+    s.append(&run, &lease, vec![decided("d4", "e1", 2, "deny")])
+        .unwrap();
+}
+
+#[test]
+fn mediation_decision_binds_effect_and_attempt() {
+    let (mut s, run, lease) = open("med-bind");
+    let gen = lease.generation;
+    to_prepared(&mut s, &run, &lease, "e1", irreversible());
+    to_prepared(&mut s, &run, &lease, "e2", irreversible());
+    // An `allow` for a *different* effect does not open e1's gate.
+    s.append(&run, &lease, vec![allow("d1", "e2", 1)]).unwrap();
+    let e = s
+        .append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
+        .unwrap_err();
+    assert!(matches!(e, LedgerError::Undecided { .. }), "{e:?}");
+    // An `allow` for a *different attempt* does not open e1's attempt-1 gate.
+    s.append(&run, &lease, vec![allow("d2", "e1", 2)]).unwrap();
+    let e = s
+        .append(&run, &lease, vec![committed("c1", "e1", 1, gen)])
+        .unwrap_err();
+    assert!(matches!(e, LedgerError::Undecided { .. }), "{e:?}");
+    // The right (effect, attempt) pair opens it.
+    s.append(
+        &run,
+        &lease,
+        vec![allow("d3", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
+}
+
+#[test]
+fn mediation_allow_decision_survives_rebuild() {
+    let d = dir("med-rebuild");
+    let (mut s, run, lease) = {
+        let mut s = Store::open_test(&d, 1_000).unwrap();
+        let (run, lease) = s
+            .open_run(RunManifest::minimal(RunKind::Agent), "writer-a")
+            .unwrap();
+        (s, run, lease)
+    };
+    let gen = lease.generation;
+    to_prepared(&mut s, &run, &lease, "e1", irreversible());
+    s.append(
+        &run,
+        &lease,
+        vec![allow("d1", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
+    drop(s);
+    // Rebuild: the decision fold lands — a `committed` for attempt 1 after
+    // restart is refused `DuplicateDecision`-adjacent (the fold knows the
+    // attempt closed) — and the effect is committed.
+    let clock2 = hh_ledger::ids::ManualClock::at(1_000);
+    let mut s2 = Store::open_with(
+        &d,
+        Box::new(clock2.clone()),
+        Some(Box::new(hh_ledger::ids::SeqIds::new())),
+        hh_ledger::store::DEFAULT_BLOB_MAX_BYTES,
+    )
+    .unwrap();
+    let f = s2.effect_fold(&run, "e1").unwrap().unwrap();
+    assert_eq!(f.phase, EffectPhase::Committed);
+    // A second final decision for the committed attempt is refused post-
+    // rebuild (the decision fold rebuilt from the durable log). Writer-a's
+    // lease expired while the store was down — writer-b takes over.
+    clock2.advance(61_000);
+    let lease2 = s2.acquire_writer("writer-b", &run, 60_000).unwrap();
+    let e = s2
+        .append(&run, &lease2, vec![decided("d2", "e1", 1, "deny")])
+        .unwrap_err();
+    assert!(matches!(e, LedgerError::DuplicateDecision { .. }), "{e:?}");
 }

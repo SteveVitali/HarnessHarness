@@ -166,6 +166,10 @@ pub(crate) struct RunState {
     /// on the commit path and rebuilt from the WAL, so `Store::effect_fold` and
     /// the I-1 write-ahead gate answer without a rescan.
     pub(crate) effects: BTreeMap<String, EffectFold>,
+    /// The `security.permission.decided` gate fold — `(effect_id, attempt_no) →
+    /// final verdict` (ADR-0052 D6 complete mediation; §5g.1 I-H7). Same
+    /// commit/rebuild discipline as `effects`.
+    pub(crate) decisions: effect::DecisionFolds,
     head: Option<Head>,
     pub(crate) finished: bool,
     subscribers: Vec<Subscriber>,
@@ -375,6 +379,7 @@ impl Store {
             ir_index: HashMap::new(),
             open_scopes: BTreeMap::new(),
             effects: BTreeMap::new(),
+            decisions: BTreeMap::new(),
             head: None,
             finished: false,
             subscribers: Vec::new(),
@@ -393,6 +398,7 @@ impl Store {
             }
             apply_scope_marks(&mut state.open_scopes, &state.effects, &env);
             effect::fold_event(&mut state.effects, &env);
+            effect::apply_decision(&mut state.decisions, &state.effects, &env);
             if env.class == "lifecycle.run.finished" {
                 state.finished = true;
             }
@@ -463,6 +469,7 @@ impl Store {
             ir_index: HashMap::new(),
             open_scopes: BTreeMap::new(),
             effects: BTreeMap::new(),
+            decisions: BTreeMap::new(),
             head: None,
             finished: false,
             subscribers: Vec::new(),
@@ -823,6 +830,9 @@ impl Store {
         // The §5a.2 effect fold, batch-local: each `action.effect.*` validates
         // against committed ∪ earlier-in-batch state (one machine — CC1).
         let mut effect_folds = state.effects.clone();
+        // The complete-mediation gate fold, batch-local with the same committed
+        // ∪ earlier-in-batch semantics (one machine — CC1).
+        let mut decision_folds = state.decisions.clone();
         let mut staged: Vec<Staged> = Vec::new();
         let mut next_seq = state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0);
         let mut prev_hash = state
@@ -887,8 +897,13 @@ impl Store {
                     committed_class_of: &committed_class_of,
                     batch_class_of: &batch_class_of,
                 };
-                effect::validate_event(&ev, &mut effect_folds, &ectx)?;
+                effect::validate_event(&ev, &mut effect_folds, &decision_folds, &ectx)?;
             }
+            // ADR-0052 D6 / §5g.1 I-H7: the permission-decision gate — at most one
+            // final `decided` per `(effect_id, attempt)`; `committed` events read
+            // this fold for their allow pre-record. Runs after the effect fold so
+            // the decided row resolves its attempt against the newest state.
+            effect::validate_decision(&ev, &mut decision_folds, &effect_folds)?;
             // The I-1 write-ahead gate (AC-R-2.2.2-10; ADR-0100): a dispatch
             // naming a non-`read_only` effect may land only while the durable
             // `committed` record is the effect's live phase.
@@ -1648,6 +1663,7 @@ fn commit_envelopes(state: &mut RunState, staged: Vec<Staged>) -> Result<SeqRang
                 }
                 apply_scope_marks(&mut state.open_scopes, &state.effects, &env);
                 effect::fold_event(&mut state.effects, &env);
+                effect::apply_decision(&mut state.decisions, &state.effects, &env);
                 if env.class == "lifecycle.run.finished" {
                     state.finished = true;
                 }

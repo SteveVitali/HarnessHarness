@@ -568,6 +568,99 @@ fn str_field(p: &Json, k: &str) -> Option<String> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Complete mediation — the `security.permission.decided` gate fold (ADR-0052 D6;
+// §5g.1 I-H7: "the ledger refuses `action.effect.committed` unless a
+// `security.permission.decided{decision = allow}` for that `effect_id` and
+// attempt cycle precedes it in `seq`; exactly one `decided` per attempt cycle")
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `(effect_id, attempt_no) → final gate decision` — the `allow`/`deny` verdicts
+/// the committed-gate reads. `decided{ask}` and request-closure rows
+/// (`timed_out`, `cancelled`, `allow_lease`, …) are non-final and never write
+/// here; `decided` rows naming no `effect_id` (e.g. a budget-driven denial that
+/// precedes any proposal) are outside the gate entirely.
+pub type DecisionFolds = BTreeMap<(String, u64), String>;
+
+/// The decided row's attempt: the payload's `attempt_no` when present, else the
+/// effect's pending attempt (last committed + 1; `1` before any commit).
+fn decision_attempt(
+    effects: &BTreeMap<String, EffectFold>,
+    payload: &Json,
+    effect_id: &str,
+) -> u64 {
+    match payload.get("attempt_no").and_then(Json::as_int) {
+        Some(n) if n >= 1 => n as u64,
+        _ => effects
+            .get(effect_id)
+            .map(|f| f.attempt_no + 1)
+            .unwrap_or(1),
+    }
+}
+
+/// The decided row's effect: `scope.effect_id`, else `payload.effect_id`.
+fn decision_effect(payload: &Json, scope: &Scope) -> Option<String> {
+    scope
+        .effect_id
+        .clone()
+        .or_else(|| str_field(payload, "effect_id"))
+}
+
+/// Lenient rebuild fold (the durable record was already validated): final gate
+/// verdicts land; a second one keeps the first — the log is the record.
+pub fn apply_decision(
+    decisions: &mut DecisionFolds,
+    effects: &BTreeMap<String, EffectFold>,
+    env: &EventEnvelope,
+) {
+    if env.class != "security.permission.decided" {
+        return;
+    }
+    let Some(effect_id) = decision_effect(&env.payload, &env.scope) else {
+        return;
+    };
+    let Some(decision) = str_field(&env.payload, "decision") else {
+        return;
+    };
+    if !matches!(decision.as_str(), "allow" | "deny") {
+        return;
+    }
+    let attempt = decision_attempt(effects, &env.payload, &effect_id);
+    decisions.entry((effect_id, attempt)).or_insert(decision);
+}
+
+/// Strict append-path fold — runs per event in `Store::append`'s validation loop
+/// *after* the effect fold for that event. Enforces the "exactly one final
+/// decided per attempt cycle" half of the append rule.
+pub fn validate_decision(
+    ev: &Event,
+    decisions: &mut DecisionFolds,
+    effects: &BTreeMap<String, EffectFold>,
+) -> Result<(), LedgerError> {
+    if ev.class != "security.permission.decided" {
+        return Ok(());
+    }
+    let Some(effect_id) = decision_effect(&ev.payload, &ev.scope) else {
+        return Ok(());
+    };
+    let Some(decision) = str_field(&ev.payload, "decision") else {
+        return Ok(());
+    };
+    if !matches!(decision.as_str(), "allow" | "deny") {
+        return Ok(());
+    }
+    let attempt = decision_attempt(effects, &ev.payload, &effect_id);
+    let key = (effect_id.clone(), attempt);
+    if decisions.contains_key(&key) {
+        return Err(LedgerError::DuplicateDecision {
+            effect_id,
+            attempt_no: attempt,
+        });
+    }
+    decisions.insert(key, decision);
+    Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Validation (strict — the append path)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -643,6 +736,7 @@ fn check_fencing(ev: &Event, ctx: &EffectCtx) -> Result<(), LedgerError> {
 pub fn validate_event(
     ev: &Event,
     effects: &mut BTreeMap<String, EffectFold>,
+    decisions: &DecisionFolds,
     ctx: &EffectCtx,
 ) -> Result<(), LedgerError> {
     if !ev.class.starts_with("action.effect.") {
@@ -739,7 +833,7 @@ pub fn validate_event(
             );
             Ok(())
         }
-        "action.effect.committed" => validate_committed(ev, effects, effect_id),
+        "action.effect.committed" => validate_committed(ev, effects, decisions, effect_id),
         "action.effect.observed" => validate_observed(ev, effects, effect_id),
         "action.effect.unknown" => {
             let f = get_fold(effects, effect_id)?;
@@ -1019,6 +1113,7 @@ fn validate_prepared(
 fn validate_committed(
     ev: &Event,
     effects: &mut BTreeMap<String, EffectFold>,
+    decisions: &DecisionFolds,
     effect_id: &str,
 ) -> Result<(), LedgerError> {
     let f = get_fold(effects, effect_id)?;
@@ -1068,6 +1163,19 @@ fn validate_committed(
                 other.as_str(),
                 "action.effect.committed",
             ))
+        }
+    }
+    // Complete mediation (ADR-0052 D6; §5g.1 I-H7): the ledger refuses a
+    // `committed` no `security.permission.decided{decision = allow}` for this
+    // `effect_id` and attempt precedes. This is Anderson's "always invoked" as a
+    // durable-log invariant — the decision record is the write-ahead gate.
+    match decisions.get(&(effect_id.to_string(), attempt)) {
+        Some(d) if d == "allow" => {}
+        _ => {
+            return Err(LedgerError::Undecided {
+                effect_id: effect_id.to_string(),
+                attempt_no: attempt,
+            })
         }
     }
     apply_event_fields(

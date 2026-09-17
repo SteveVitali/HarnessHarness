@@ -290,10 +290,15 @@ pub fn check_equivalence(
     let _ = &declared;
 
     // E2 — totality + domain membership: every `argument_order` entry has a transform
-    // (totality over S's args) and every `rename`/`coerce`/`parse` target names a
-    // declared input_schema property; a `const` value must satisfy the parameter's
-    // declared domain.
-    let e2 = e2_check(binding, t);
+    // (totality over S's args — checked, not assumed: a surface field absent from
+    // `arg_map` is a `fail`, AC-R-2.8.1-10) and every `rename`/`coerce`/`parse`
+    // target names a declared input_schema property; a `const` value must satisfy
+    // the parameter's declared domain.
+    let declared_args: &[String] = match &capability.surface {
+        Some(hh_hir::SurfaceRecord::Tool(ts)) => &ts.argument_order,
+        _ => &[],
+    };
+    let e2 = e2_check(binding, t, declared_args);
 
     // E3 — precondition-domain preservation: each surface arg's domain ⊆ the capability
     // parameter's declared domain under the admitted keyword subset.
@@ -353,11 +358,25 @@ fn schema_properties(schema: &Json) -> BTreeMap<String, Json> {
     }
 }
 
-fn e2_check(binding: &SurfaceBinding, t: &ToolCapabilityRecord) -> EvidenceVerdict {
+fn e2_check(
+    binding: &SurfaceBinding,
+    t: &ToolCapabilityRecord,
+    declared_args: &[String],
+) -> EvidenceVerdict {
     let props = schema_properties(&t.input_schema);
-    // Totality is by construction (arg_map covers argument_order); check that every
-    // entry's `capability_param` names a declared property (the root segment for a
-    // `project` path) and the transform is sound.
+    // Totality over the surface's declared argument list: a surface field absent
+    // from `arg_map` fails compilation (AC-R-2.8.1-10; §5g.1 I-H5 — the monitor
+    // resolves authority over canonical parameters only, so an unmapped surface
+    // field could otherwise smuggle an argument past the map).
+    for arg in declared_args {
+        if !binding.arg_map.contains_key(arg) {
+            return EvidenceVerdict::fail(format!(
+                "surface field {arg} is absent from the SurfaceArgMap"
+            ));
+        }
+    }
+    // Then check that every entry's `capability_param` names a declared property
+    // (the root segment for a `project` path) and the transform is sound.
     for (arg, entry) in &binding.arg_map {
         let root = entry
             .capability_param
