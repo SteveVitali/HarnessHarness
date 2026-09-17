@@ -67,6 +67,7 @@ pub fn granted_payload(h: &AuthorityHandle) -> Json {
         ),
         ("delegable", Json::Bool(h.delegable)),
         ("origin_basis", Json::str(h.origin_basis.as_str())),
+        ("scope", Json::str(h.scope.as_str())),
         ("basis_ref", Json::str(h.basis_ref.clone())),
         (
             "budget_ref",
@@ -156,5 +157,10 @@ pub fn handle_from_granted(env: &EventEnvelope) -> Option<AuthorityHandle> {
         origin_basis: OriginBasis::parse(str_at(p, "origin_basis")?)?,
         basis_ref: str_at(p, "basis_ref")?.to_string(),
         budget_ref: p.get("budget_ref").and_then(Json::as_str).map(String::from),
+        // `scope` joined the dossier at S1.15 — a stored row without it is a
+        // seal/delegation-minted handle, in force for the run: `session`.
+        scope: str_at(p, "scope")
+            .and_then(crate::decision::DecisionScope::parse)
+            .unwrap_or(crate::decision::DecisionScope::Session),
     })
 }

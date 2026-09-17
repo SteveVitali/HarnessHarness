@@ -296,6 +296,7 @@ fn root_handle(id: &str, grants: Vec<Grant>, ceiling: AuthorityClass) -> Authori
         origin_basis: OriginBasis::Seal,
         basis_ref: "test:agent#sha256:def".into(),
         budget_ref: None,
+        scope: hh_monitor::decision::DecisionScope::Session,
     }
 }
 

@@ -335,6 +335,15 @@ pub struct RunManifest {
     pub healing_policy_ref: Option<String>,
     /// `{writer, environment, wakeup_claim}`.
     pub lease_ttl: LeaseTtl,
+    /// `audit_policy_ref` — a pinned `AuditPolicy` `version_id` (§5g.6's "the
+    /// audit obligations a run declared"). Optional: absent declares the run's
+    /// obligations are the base Rule-O set ([`crate::audit::OBLIGATIONS`]).
+    /// Emitted only when `Some`.
+    pub audit_policy_ref: Option<String>,
+    /// `signer_key_ids` — the kernel signer key ids for `security.audit.checkpoint`
+    /// sign-off (§5g.6 §9: the manifest declares the keys; checkpoint emission
+    /// is Stage 2). Emitted only when non-empty.
+    pub signer_key_ids: Vec<String>,
     /// The reattach grace window (ms).
     pub grace_ms: u64,
     /// The bound task coordinate.
@@ -376,6 +385,8 @@ impl RunManifest {
                 environment_ms: 60_000,
                 wakeup_claim_ms: 60_000,
             },
+            audit_policy_ref: None,
+            signer_key_ids: Vec::new(),
             grace_ms: 0,
             task_ref: None,
             extra: BTreeMap::new(),
@@ -446,6 +457,7 @@ impl RunManifest {
             ("overrides_layer_id", &self.overrides_layer_id),
             ("envelope_policy_ref", &self.envelope_policy_ref),
             ("healing_policy_ref", &self.healing_policy_ref),
+            ("audit_policy_ref", &self.audit_policy_ref),
         ] {
             if let Some(v) = value {
                 if !is_pinned_id(v) {
@@ -455,6 +467,9 @@ impl RunManifest {
                     });
                 }
             }
+        }
+        if self.signer_key_ids.iter().any(|k| k.is_empty()) {
+            return Err(bad("signer_key_ids members must be non-empty".into()));
         }
         for link in [&self.forked_from, &self.continued_from]
             .into_iter()
@@ -535,10 +550,17 @@ impl RunManifest {
             ("overrides_layer_id", &self.overrides_layer_id),
             ("envelope_policy_ref", &self.envelope_policy_ref),
             ("healing_policy_ref", &self.healing_policy_ref),
+            ("audit_policy_ref", &self.audit_policy_ref),
         ] {
             if let Some(v) = v {
                 put(k, Json::str(v));
             }
+        }
+        if !self.signer_key_ids.is_empty() {
+            put(
+                "signer_key_ids",
+                Json::Arr(self.signer_key_ids.iter().map(Json::str).collect()),
+            );
         }
         if let Some(seed) = self.seed {
             put("seed", Json::Int(seed as i64));
@@ -682,9 +704,22 @@ impl RunManifest {
                     .ok_or_else(|| bad("task_ref.split_label missing".into()))?,
             }),
         };
+        let signer_key_ids = match j.get("signer_key_ids") {
+            None => Vec::new(),
+            Some(Json::Arr(items)) => items
+                .iter()
+                .map(|i| {
+                    i.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| bad("signer_key_ids member not a string".into()))
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            _ => return Err(bad("signer_key_ids not an array".into())),
+        };
         // Anything not in the typed vocabulary is preserved in `extra` (CC3).
         const TYPED: &[&str] = &[
             "activation_no",
+            "audit_policy_ref",
             "attendance",
             "budget",
             "capability_declaration_ref",
@@ -708,6 +743,7 @@ impl RunManifest {
             "participant_class",
             "run_kind",
             "seed",
+            "signer_key_ids",
             "spawn_event",
             "task_ref",
             "workspace_trust",
@@ -751,6 +787,8 @@ impl RunManifest {
                 wakeup_claim_ms: ttl_i("wakeup_claim")?,
             },
             grace_ms: req_int("grace_ms")?,
+            audit_policy_ref: opt_str("audit_policy_ref"),
+            signer_key_ids,
             task_ref,
             extra,
         })

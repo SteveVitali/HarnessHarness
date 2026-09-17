@@ -213,18 +213,24 @@ pub enum LedgerError {
         /// The record's authority.
         authority: AuthorityClass,
     },
-    /// A non-kernel producer (or a `provenance.origin ≠ kernel`) on an audit-grade or
-    /// kernel-origin class (ADR-0066 Rule P; §5a.1 §5 "origin = kernel on
-    /// lifecycle/environment rows").
+    /// A producer outside the class's declared set — or an audit-grade row whose
+    /// provenance `authority ≠ kernel` — on an audit-grade or kernel-origin class
+    /// (ADR-0066 Rule P; §5g.6 §2 "accepted only if `producer.component_class ∈
+    /// class.producers` and provenance `authority = kernel`"; §5a.1 §5
+    /// "origin = kernel on lifecycle/environment rows").
     AuditProducerInvalid {
         /// The class.
         class: String,
         /// The offending producer component_class.
         producer: String,
+        /// Which half of Rule P failed (`component_class ∉ producers` /
+        /// `provenance.authority ≠ kernel` / `provenance.origin ≠ kernel`).
+        detail: String,
     },
-    /// An audit-grade row's payload exceeds the content-free audit-fields budget
-    /// (ADR-0066 Rule C; interim size cap until the per-class field whitelists land
-    /// with the §05g audit catalogue — ADR-0234).
+    /// An audit-grade row's `audit_fields` exceed their declared bound — a
+    /// per-member canonical-bytes bound or the class's `offload_threshold`
+    /// total (ADR-0066 Rule C; §5g.6 AC-R-2.8.6-12 — a schema error, never an
+    /// offload opportunity).
     AuditFieldsTooLarge {
         /// The class.
         class: String,
@@ -406,6 +412,12 @@ pub enum TamperedKind {
     DuplicateEventId,
     /// `parent_event_id` resolves to nothing committed.
     DanglingParent,
+    /// A committed line's bytes are not its canonical re-rendering — the WAL was
+    /// rewritten (§5g.6 `edit`; byte-exact verification, ADR-0067 D5/§5a.1 §6).
+    NonCanonicalBytes,
+    /// An audit-grade row in the committed prefix carries a producer outside the
+    /// class's producer set or `provenance.authority ≠ kernel` (§5g.6 `producer`).
+    Producer,
 }
 
 impl TamperedKind {
@@ -419,6 +431,8 @@ impl TamperedKind {
             TamperedKind::DuplicateSeq => "duplicate_seq",
             TamperedKind::DuplicateEventId => "duplicate_event_id",
             TamperedKind::DanglingParent => "dangling_parent",
+            TamperedKind::NonCanonicalBytes => "noncanonical_bytes",
+            TamperedKind::Producer => "producer",
         }
     }
 }

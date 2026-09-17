@@ -25,6 +25,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod audit;
 pub mod classes;
 pub mod effect;
 pub mod errors;
@@ -36,6 +37,7 @@ pub mod schema;
 pub mod store;
 pub mod views;
 
+pub use audit::{AuditObligation, ObligationQuantifier, Unmet, DEFERRED_OBLIGATIONS, OBLIGATIONS};
 pub use effect::{CommitOutcome, CommitToken, EffectFold, EffectPhase};
 pub use errors::{LedgerError, MissingReason, Tampered, TamperedKind};
 pub use recovery::{RestoreAction, RestoreReport, RetryTimer};

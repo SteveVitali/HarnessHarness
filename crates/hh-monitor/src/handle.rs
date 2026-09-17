@@ -179,6 +179,12 @@ pub struct AuthorityHandle {
     pub basis_ref: String,
     /// The budget node the handle's effects charge, when declared.
     pub budget_ref: Option<String>,
+    /// The dossier's `scope ∈ {once, session, persisted}` (§5g.6 §6.1) — the
+    /// lifetime the grant is in force for. Seal-minted root handles are
+    /// `session` (they expire with the run); a `persisted` widening is the one
+    /// that must pair a human-origin `lifecycle.definition.changed` (ADR-0066
+    /// D5 `persisted_widening`).
+    pub scope: crate::decision::DecisionScope,
 }
 
 impl AuthorityHandle {

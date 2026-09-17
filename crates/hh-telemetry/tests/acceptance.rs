@@ -148,7 +148,8 @@ fn model_call(tag: &str, scope_turn: &str, timing: (i64, i64, i64, i64)) -> Vec<
                 model_call_id: Some(mc.clone()),
                 ..Scope::default()
             },
-            Json::Null,
+            // audit-grade ⇒ Rule-C partitioned object payload.
+            Json::obj([]),
         ),
         ev(
             &format!("at0-{tag}"),

@@ -163,6 +163,9 @@ pub fn delegate(
         origin_basis: OriginBasis::Delegation,
         basis_ref: parent_id.as_str().to_string(),
         budget_ref: None,
+        // A delegated handle inherits the parent's scope — attenuation narrows
+        // grants/ceiling, never the lifetime the grant is in force for.
+        scope: parent.scope,
     }])
 }
 

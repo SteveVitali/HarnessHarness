@@ -45,6 +45,11 @@ pub enum ViewKind {
     /// `metric_view` — declared metrics folded to `MetricValue`s (§5h.1 §2.1;
     /// ADR-0044 D5). Folded by `hh-telemetry`.
     MetricView,
+    /// `audit_view` — the §5g.6 audit projection (Rule-O obligations,
+    /// producer/partition rechecks, content-ref accounting, the completeness
+    /// vector). Folded by `hh-ledger` itself — the audit trail *is* the ledger
+    /// (ADR-0066 D1: no second store).
+    AuditView,
 }
 
 impl ViewKind {
@@ -58,6 +63,7 @@ impl ViewKind {
             ViewKind::TraceView => "trace_view",
             ViewKind::CostView => "cost_view",
             ViewKind::MetricView => "metric_view",
+            ViewKind::AuditView => "audit_view",
         }
     }
 
@@ -71,6 +77,7 @@ impl ViewKind {
             "trace_view" => Some(ViewKind::TraceView),
             "cost_view" => Some(ViewKind::CostView),
             "metric_view" => Some(ViewKind::MetricView),
+            "audit_view" => Some(ViewKind::AuditView),
             _ => None,
         }
     }
