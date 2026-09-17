@@ -285,6 +285,32 @@ const EFFECT_FIELDS: &[AuditField] = &[
     af("kind"),
     af("model"),
     af("branch_id"),
+    // S1.16 (R-2.5.5; ADR-0100/0101/0102) — the execution-contract members:
+    // `prepared{attribution_token_hash, deadline, output_policy_ref}`,
+    // `observed{exit_status, outcome_ref, output_artifact_ids,
+    // postcondition_results, cost, capture_manifest_ref, completeness}`,
+    // `committed{dispatched_at}` (commit_effect's own member — declared so the
+    // partition admits it), `unattributed{signal_kind, evidence_ref,
+    // detection}` (the unattributable-signal marker, scope-free).
+    af("dispatched_at"),
+    af("attribution_token_hash"),
+    af("deadline"),
+    af("output_policy_ref"),
+    af("capture_manifest_ref"),
+    af("completeness"),
+    af("exit_status"),
+    af("outcome_ref"),
+    afb("output_artifact_ids", AUDIT_FIELD_LIST_BYTES),
+    afb("postcondition_results", AUDIT_FIELD_LIST_BYTES),
+    afb("cost", AUDIT_FIELD_LIST_BYTES),
+    af("signal_kind"),
+    af("evidence_ref"),
+    af("detection"),
+    af("env_handle"),
+    af("execution_id"),
+    af("ordinal"),
+    af("status"),
+    af("error"),
 ];
 
 /// `security.permission.decided` — the §5g.6 §3 dossier partition (the
@@ -620,6 +646,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("action.effect.compensated", O::Events, false, EFFECT_FIELDS, &[], None, Some(Effect)),
     row_audit("action.effect.reverted",    O::Events, false, EFFECT_FIELDS, &[], None, Some(Effect)),
     row_audit("action.effect.abandoned",   O::Events, false, EFFECT_FIELDS, &[], None, Some(Effect)),
+    // `unattributed` (ADR-0101 D4; S1.16) — the audit-grade marker for a
+    // capture-path signal that could not be attributed to any effect. It never
+    // carries `scope.effect_id` (non-attribution is the fact recorded); the
+    // effect.rs marker validator admits it scope-free and it mutates no fold.
+    row_audit("action.effect.unattributed",O::Events, false, EFFECT_FIELDS, &[], None, None),
     // The `action.tool.*` set — `proposed`/`started` are audit-grade (§5g.6 §3:
     // `started` carries `{execution_id, attribution_token_hash}` — CF-214);
     // `proposed` opens the tool_call scope, the three terminals close it; the two
@@ -651,6 +682,25 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("action.environment.snapshot.uploaded",    Led, O::Events, false, true, None, None),
     row("action.environment.snapshot.listed",      Led, O::Events, false, true, None, None),
     row("action.environment.drift.detected",       Led, O::Events, false, true, None, None),
+    // The §5a.5 §3 lifecycle spellings (ADR-0136 §7; S1.16) — kernel-origin
+    // ledger rows (`healed` above is the family's one audit-grade member).
+    // `attached.containment_report_ref` names the `security.containment.
+    // applied` blob/event (the attach-time link, DF-S1.12-3).
+    row("action.environment.declared",             Led, O::Events, false, true, None, None),
+    row("action.environment.provisioning",         Led, O::Events, false, true, None, None),
+    row("action.environment.attached",             Led, O::Events, false, true, None, None),
+    row("action.environment.selected",             Led, O::Events, false, true, None, None),
+    row("action.environment.detached",             Led, O::Events, false, true, None, None),
+    row("action.environment.unreachable",          Led, O::Events, false, true, None, None),
+    row("action.environment.reattached",           Led, O::Events, false, true, None, None),
+    row("action.environment.snapshot",             Led, O::Events, false, true, None, None),
+    row("action.environment.restored",             Led, O::Events, false, true, None, None),
+    row("action.environment.derived",              Led, O::Events, false, true, None, None),
+    row("action.environment.replaced",             Led, O::Events, false, true, None, None),
+    row("action.environment.failed",               Led, O::Events, false, true, None, None),
+    row("action.environment.torn_down",            Led, O::Events, false, true, None, None),
+    row("action.environment.meters_sampled",       Led, O::Events, false, true, None, None),
+    row("action.environment.verified",             Led, O::Events, false, true, None, None),
     // `action.environment.healed` is audit-grade (§5g.6 §3 — the heal record is a
     // consequential act an auditor must answer for; the emitter lands with the
     // environment manager's heal path).

@@ -88,6 +88,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-env"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-compiler",
+ "hh-containment",
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-monitor",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-secrets",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-hir"
 version = "0.0.1"
 dependencies = [
