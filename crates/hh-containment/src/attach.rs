@@ -303,10 +303,7 @@ pub fn attach(input: &AttachInput) -> Result<AttachOutcome, AttachError> {
         return Err(AttachError::Unverified {
             field_group: events::ATTACH_GROUP.to_string(),
             reason: "policy_ref_mismatch".to_string(),
-            event: events::unverified_payload(
-                events::ATTACH_GROUP,
-                "policy_ref_mismatch",
-            ),
+            event: events::unverified_payload(events::ATTACH_GROUP, "policy_ref_mismatch"),
         });
     }
     let policy = input.policy.policy();
