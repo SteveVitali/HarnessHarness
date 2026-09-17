@@ -278,6 +278,21 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_prov("security.containment.applied",    Led, O::Events, true,  true,  true,  None, None),
     row_prov("security.containment.violated",   Led, O::Events, true,  true,  true,  None, None),
     row_prov("security.containment.unverified", Led, O::Events, true,  true,  true,  None, None),
+    // The credential/secret rows (§5g.3 §3 events; ADR-0058 D4/D6) — audit-grade,
+    // kernel-origin, provenance-mandatory. Payloads are content-free by contract:
+    // refs, revisions, modes, destinations, the closed `code`, `provided: yes/no` —
+    // never a secret value or materialising byte (SV-2). `used`/`denied` carry
+    // `effect_id` (SV-5: every use audited); `denied` fires before any refusal is
+    // visible; `redacted` is the at-source tombstone row; `leak_detected` is the
+    // test-battery's audit+triage row (it is a scan verdict, never a runtime
+    // detector firing on a live path — ADR-0059 D2).
+    row("security.credential.bound",        Led, O::Events, true,  true,  None, None),
+    row("security.credential.used",         Led, O::Events, true,  true,  None, None),
+    row("security.credential.denied",       Led, O::Events, true,  true,  None, None),
+    row("security.credential.revoked",      Led, O::Events, true,  true,  None, None),
+    row("security.credential.rotated",      Led, O::Events, true,  true,  None, None),
+    row("security.secret.redacted",         Led, O::Events, true,  true,  None, None),
+    row("security.secret.leak_detected",    Led, O::Events, true,  true,  None, None),
 
     // ── context (P1) ─────────────────────────────────────────────────────
     // The one context-plane row this slice needs so `context_view` is non-vacuous
@@ -506,6 +521,27 @@ mod tests {
             if spec.class.starts_with("security.permission.") {
                 assert!(spec.requires_provenance, "{}", spec.class);
             }
+        }
+    }
+
+    #[test]
+    fn credential_and_secret_families_are_audit_grade_and_provenance_mandatory() {
+        // §5g.3 §3 (R-2.8.3; S1.13): the seven rows are registered, audit-grade,
+        // kernel-origin and provenance-mandatory.
+        for c in [
+            "security.credential.bound",
+            "security.credential.used",
+            "security.credential.denied",
+            "security.credential.revoked",
+            "security.credential.rotated",
+            "security.secret.redacted",
+            "security.secret.leak_detected",
+        ] {
+            let spec = lookup(c).unwrap_or_else(|| panic!("{c} not registered"));
+            assert!(spec.audit_grade, "{c}");
+            assert!(spec.kernel_origin, "{c}");
+            assert!(spec.requires_provenance, "{c}");
+            assert_eq!(spec.durability, Durability::Ledger, "{c}");
         }
     }
 

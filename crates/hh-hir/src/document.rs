@@ -11,7 +11,10 @@ use hh_wire::json::Json;
 
 use crate::errors::HirError;
 use crate::kinds::EntityKind;
-use crate::records::{EdgeRecord, KindRecord, SurfaceRecord, VersionRecord};
+use crate::leaves::Text;
+use crate::records::{
+    EdgeRecord, KindRecord, ObservationContent, ProcedureStep, SurfaceRecord, VersionRecord,
+};
 use crate::refs::Ref;
 
 /// A HIR node — `{kind, provenance, semantic, surface?, ext, version}` (§3.1.2).
@@ -69,6 +72,57 @@ impl Node {
             None => crate::identity::version_id(self),
         }
     }
+
+    /// Every `Text` leaf reachable from this node (the in-memory prose bodies —
+    /// the canonical form carries `content_hash` only, so a *content-level* scan
+    /// such as R-2.8.3's `SecretValueInDefinition` needs this enumeration).
+    /// Enumerated here, next to the record definitions, so a new `Text` member on
+    /// a kind forces the walk to grow (CC7). `CompiledPayload` carries no bytes
+    /// in memory — it is fully hash-addressed, so nothing here reaches it.
+    pub fn text_leaves(&self) -> Vec<&Text> {
+        let mut out: Vec<&Text> = Vec::new();
+        match &self.semantic {
+            KindRecord::Goal(g) => {
+                out.push(&g.statement);
+                if let Some(t) = &g.unverifiable_reason {
+                    out.push(t);
+                }
+            }
+            KindRecord::Observation(o) => {
+                if let ObservationContent::Text(t) = &o.content {
+                    out.push(t);
+                }
+            }
+            KindRecord::Memory(m) => out.push(&m.content),
+            KindRecord::Procedure(p) => collect_step_texts(&p.steps, &mut out),
+            KindRecord::ToolCapability(t) => out.push(&t.purpose),
+            _ => {}
+        }
+        if let Some(SurfaceRecord::Tool(ts)) = &self.surface {
+            out.push(&ts.description_template);
+        }
+        out
+    }
+}
+
+/// The recursive step walk — `Instruction` is the only `Text`-bearing step kind;
+/// `Branch`/`Loop` bodies recurse (the closed sum, §3.1.3).
+fn collect_step_texts<'a>(steps: &'a [ProcedureStep], out: &mut Vec<&'a Text>) {
+    for s in steps {
+        match s {
+            ProcedureStep::Instruction(t) => out.push(t),
+            ProcedureStep::Branch {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_step_texts(then_body, out);
+                collect_step_texts(else_body, out);
+            }
+            ProcedureStep::Loop { body, .. } => collect_step_texts(body, out),
+            _ => {}
+        }
+    }
 }
 
 /// A HIR edge — `{kind, from, to, provenance, fields}` plus the mandatory version record
@@ -116,6 +170,15 @@ impl Edge {
         match &self.version.version_id {
             Some(v) => v.clone(),
             None => crate::identity::edge_version_id(self),
+        }
+    }
+
+    /// The edge's `Text` leaves (`derived-from.hypothesis` is the only
+    /// `Text`-bearing edge record).
+    pub fn text_leaves(&self) -> Vec<&Text> {
+        match &self.fields {
+            EdgeRecord::DerivedFrom { hypothesis, .. } => vec![hypothesis.as_ref()],
+            _ => Vec::new(),
         }
     }
 }
@@ -176,6 +239,16 @@ impl HirDocument {
     /// The canonical encoding of the document — `canonicalize` (§3.1.7).
     pub fn canonical_bytes(&self) -> Vec<u8> {
         self.to_json().to_canonical_string().into_bytes()
+    }
+
+    /// Every `Text` leaf in the document (nodes + edges) — the in-memory prose
+    /// a content-level scan must cover (the canonical form carries hashes only).
+    pub fn text_leaves(&self) -> Vec<&Text> {
+        self.nodes
+            .iter()
+            .flat_map(|n| n.text_leaves())
+            .chain(self.edges.iter().flat_map(|e| e.text_leaves()))
+            .collect()
     }
 }
 

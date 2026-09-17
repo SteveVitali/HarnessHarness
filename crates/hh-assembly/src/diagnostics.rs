@@ -434,6 +434,7 @@ pub const KERN_VARIANTS: &[&str] = &[
     "MigrationLoss",
     "DialectIncompatible",
     "SchemaViolation",
+    "SecretValueInDefinition",
 ];
 
 /// The `C-KERN-*` mirror — one code per `HirError` variant, 1:1 (ADR-0148).
@@ -461,6 +462,7 @@ pub fn kern_code(e: &HirError) -> Code {
         MigrationLoss { .. } => "MigrationLoss",
         DialectIncompatible { .. } => "DialectIncompatible",
         SchemaViolation { .. } => "SchemaViolation",
+        SecretValueInDefinition { .. } => "SecretValueInDefinition",
     })
 }
 

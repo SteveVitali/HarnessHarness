@@ -139,6 +139,16 @@ pub enum HirError {
         /// The member and what was wrong with it.
         detail: String,
     },
+    /// A literal credential (a known mask-set value, a registered credential pattern, or a
+    /// canary) appears in a definition's canonical bytes or in a `HirDiff`'s ops — the
+    /// seal/evolution gate R-2.8.3's secret detectors run before sealing (§5g.3; S1.13).
+    /// Raised by `hh_secrets::seal_checked`/`check_diff`, collected alongside the other
+    /// `seal` failures.
+    SecretValueInDefinition {
+        /// Where the detector fired (a path or node ref + the detector name — never the
+        /// matched bytes).
+        detail: String,
+    },
 }
 
 impl fmt::Display for HirError {
@@ -190,6 +200,9 @@ impl fmt::Display for HirError {
                 write!(f, "DialectIncompatible: {detail}")
             }
             HirError::SchemaViolation { detail } => write!(f, "SchemaViolation: {detail}"),
+            HirError::SecretValueInDefinition { detail } => {
+                write!(f, "SecretValueInDefinition: {detail}")
+            }
         }
     }
 }

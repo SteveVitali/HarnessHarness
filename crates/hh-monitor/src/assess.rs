@@ -51,8 +51,10 @@ pub enum ParseOutcome {
     Failed,
 }
 
-/// `secret_access` transport — the ADR-0059 D4 row discriminator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// `secret_access` transport — the ADR-0059 D4 row discriminator. The broker
+/// reuses this one sum as its `BindingMode` (CC7 — the channel's
+/// `binding_modes` member spells these tags; §5g.3 R-2.8.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SecretTransport {
     /// Broker-injected proxy (the secret never enters context).
     ProxyInjected,
@@ -61,6 +63,27 @@ pub enum SecretTransport {
     /// A wrapped long-lived credential — deny unless a sealed `HarnessRule`
     /// names channel and destination.
     WrappedLongLived,
+}
+
+impl SecretTransport {
+    /// The canonical spelling (§5g.3 §2 `BindingMode`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SecretTransport::ProxyInjected => "proxy_injected",
+            SecretTransport::MintedScoped => "minted_scoped",
+            SecretTransport::WrappedLongLived => "wrapped_long_lived",
+        }
+    }
+
+    /// Parse the canonical spelling (`None` for an unknown tag — never coerced).
+    pub fn parse(s: &str) -> Option<SecretTransport> {
+        match s {
+            "proxy_injected" => Some(SecretTransport::ProxyInjected),
+            "minted_scoped" => Some(SecretTransport::MintedScoped),
+            "wrapped_long_lived" => Some(SecretTransport::WrappedLongLived),
+            _ => None,
+        }
+    }
 }
 
 /// `AssessmentInputs` — the *recorded* inputs the assessors and Π rows read

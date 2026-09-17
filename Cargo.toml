@@ -98,6 +98,18 @@ members = [
     # battery, and `attach`'s fail-closed / warn_and_degrade paths. Identity
     # through hh-identity (CC1); no second canonicalization scheme.
     "crates/hh-containment",
+    # The C0/Stage-1 credential broker — secret channels, binding & redaction
+    # (spec §5g.3, R-2.8.3; ticket S1.13). A PERSISTENT workspace member: the
+    # value-free `SecretRef`/`SecretChannel`/`ProvidedSecret` records, the
+    # kernel-side `CredentialBroker` verbs (the failure-typed contract — the
+    # monitor decides, the broker delivers), the deny-by-default `EnvSpec`
+    # projection (placeholders only, the kernel-non-inheritable list), source
+    # redaction + the known-value mask set (every live channel, every rotated
+    # revision), the `security.credential.*`/`security.secret.*` payload
+    # builders, and the SV-1…SV-10 invariants as static/contract tests. MUST-code
+    # (the TCB); never model-facing; the Stage-2 egress mediator executes the
+    # staged deliveries this crate audits (DF-S1.12-1 → S2.4).
+    "crates/hh-secrets",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

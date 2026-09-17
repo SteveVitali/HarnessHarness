@@ -73,6 +73,14 @@ pub enum RecordKind {
     /// semantic projection (`policy_id` — normalised policy members only;
     /// provenance, ext and ids excluded — ADR-0060 D1).
     ContainmentPolicy,
+    /// A `SecretChannel` record (§5g.3) — `{channel_id, spec, revision, provenance}`;
+    /// carries the channel spec and revision, **never** a secret value or placeholder
+    /// (SV-2). Version-only (the `channel_id` is the comparison coordinate).
+    SecretChannel,
+    /// A `CredentialBinding` record (§5g.3) — the broker's binding row
+    /// `{binding_id, channel_id, channel_revision, holder, env_handle_ref, mode, …}`;
+    /// value-free by construction. Version-only.
+    CredentialBinding,
 }
 
 impl RecordKind {
@@ -103,6 +111,8 @@ impl RecordKind {
             RecordKind::Configuration => "configuration",
             RecordKind::ConfigurationVersion => "configuration_version",
             RecordKind::ContainmentPolicy => "containment_policy",
+            RecordKind::SecretChannel => "secret.channel",
+            RecordKind::CredentialBinding => "credential.binding",
         }
     }
 
@@ -200,6 +210,8 @@ mod tests {
             RecordKind::Configuration,
             RecordKind::ConfigurationVersion,
             RecordKind::ContainmentPolicy,
+            RecordKind::SecretChannel,
+            RecordKind::CredentialBinding,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for k in kinds {
