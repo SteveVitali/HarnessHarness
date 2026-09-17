@@ -289,6 +289,19 @@ fn binding() -> SurfaceBinding {
             })
             .collect(),
         dialect: "json-schema-2020-12".to_string(),
+        surface_id: String::new(),
+        exposure_mode: hh_compiler::surface::CompileExposureMode::Primitive,
+        capability_refs: vec!["test:write_file".to_string()],
+        mapping: hh_compiler::surface::BindingMapping::SurfaceArgMap,
+        rule_ids: vec![],
+        evidence_ref: None,
+        safety_ref: None,
+        effects_bound: vec![],
+        family_id: None,
+        variant_id: None,
+        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        pinned: false,
+        hidden: false,
     }
 }
 

@@ -12,8 +12,10 @@
 //!   external}`).
 
 use hh_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
+use hh_provenance::AuthorityClass;
 
-use crate::kinds::{EffectAttributes, Mutability, Reversibility, World};
+use crate::kinds::{EffectAttributes, Mutability, Reversibility, ToolEffects, World};
+use crate::records::ToolCapabilityRecord;
 
 /// `project_risk(attributes) → RiskClass` — `None` (no declared attribute vector, an
 /// `unverified`/`unknown_domain` declaration) projects to the most dangerous class.
@@ -39,6 +41,30 @@ pub fn project_risk(attributes: Option<&EffectAttributes>) -> RiskClass {
         reversibility,
         repeat_safety: a.repeat_safety,
         scope,
+    }
+}
+
+/// `capability_risk(record, authority) → RiskClass` — the capability-level
+/// projection the registry's `project_risk` verb serves (R-2.5.1; AC-R-2.5.1-3):
+///
+/// - a declaration at `unverified` authority projects to
+///   [`RiskClass::UNKNOWN`] — lifted sources never earn a lower claim at
+///   register (ADR-0031 §2);
+/// - `pure` projects to [`RiskClass::READ_ONLY`] (the least-dangerous class —
+///   a pure capability moves nothing);
+/// - `declared` folds [`project_risk`] over the set with
+///   [`RiskClass::max_by_danger`] — monotone; the most dangerous declared
+///   effect class wins.
+pub fn capability_risk(rec: &ToolCapabilityRecord, authority: AuthorityClass) -> RiskClass {
+    if authority == AuthorityClass::Unverified {
+        return RiskClass::UNKNOWN;
+    }
+    match &rec.effects {
+        ToolEffects::Pure => RiskClass::READ_ONLY,
+        ToolEffects::Declared(set) => set
+            .iter()
+            .map(|e| project_risk(e.attributes.as_ref()))
+            .fold(RiskClass::READ_ONLY, RiskClass::max_by_danger),
     }
 }
 

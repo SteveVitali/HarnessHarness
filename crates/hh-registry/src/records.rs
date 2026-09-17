@@ -433,6 +433,20 @@ pub struct RegistryEnvelope {
     pub ext: BTreeMap<String, Json>,
 }
 
+/// The `capability` record body (§5d.1; ADR-0087/0088/0089; S1.17): a
+/// `ToolCapability` HIR/1 node registered as the body — semantic, surface and
+/// provenance included; the `RegistryEnvelope` stays registration metadata and
+/// never feeds identity. Both identity coordinates are **the node's own**
+/// (V-E1-9 — `version_id = H(canonical node)`, `semantic_id` over the semantic
+/// projection with `exposure_hint`/`cost_model.measured_ref` excluded): the same
+/// capability carries one `version_id` wherever it is pinned (CC1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CapabilityRecord {
+    /// The `ToolCapability` node (`EntityKind::ToolCapability` — enforced at
+    /// `record_from_json` and `register`).
+    pub node: hh_hir::document::Node,
+}
+
 /// A typed registry record body — the closed Stage-1 schema set (kinds without a
 /// landed schema are refused `SchemaViolation{path: "kind"}`, never silently
 /// admitted — R2/CC3). `Variant` is boxed: it dwarfs the other variants and the
@@ -454,6 +468,8 @@ pub enum RegistryRecord {
     Snapshot(RegistrySnapshot),
     /// A `foreign_import`.
     ForeignImport(ForeignImport),
+    /// A `capability` — a registered `ToolCapability` HIR/1 node.
+    Capability(CapabilityRecord),
 }
 
 impl RegistryRecord {
@@ -467,6 +483,7 @@ impl RegistryRecord {
             RegistryRecord::Namespace(_) => RecordKind::Namespace,
             RegistryRecord::Snapshot(_) => RecordKind::RegistrySnapshot,
             RegistryRecord::ForeignImport(_) => RecordKind::ForeignImport,
+            RegistryRecord::Capability(_) => RecordKind::Capability,
         }
     }
 
@@ -482,6 +499,22 @@ impl RegistryRecord {
             }
             RegistryRecord::Namespace(_) | RegistryRecord::ForeignImport(_) => Vec::new(),
             RegistryRecord::Snapshot(s) => s.members.iter().cloned().collect(),
+            // A capability's pinned postcondition refs close over the Validators/
+            // Observations it names (the snapshot closure — R7; unpinned selectors
+            // cannot appear inside a sealed/registered body).
+            RegistryRecord::Capability(c) => {
+                if let hh_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic {
+                    t.postconditions
+                        .iter()
+                        .filter_map(|r| match &r.version {
+                            hh_hir::refs::RefVersion::Pinned(v) => Some(v.clone()),
+                            hh_hir::refs::RefVersion::Selector(_) => None,
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                }
+            }
         }
     }
 }

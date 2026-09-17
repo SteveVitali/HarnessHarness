@@ -1287,6 +1287,19 @@ fn check_equivalence_e4_is_na_open_world_for_open_world_capabilities() {
         hir_node_id: "test:tool".to_string(),
         arg_map: BTreeMap::new(),
         dialect: "json-schema-2020-12".to_string(),
+        surface_id: String::new(),
+        exposure_mode: hh_compiler::surface::CompileExposureMode::Primitive,
+        capability_refs: vec!["test:tool".to_string()],
+        mapping: hh_compiler::surface::BindingMapping::SurfaceArgMap,
+        rule_ids: vec![],
+        evidence_ref: None,
+        safety_ref: None,
+        effects_bound: vec![],
+        family_id: None,
+        variant_id: None,
+        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        pinned: false,
+        hidden: false,
     };
     let e = hh_compiler::equiv::check_equivalence(&binding, &n, None).expect("evidence");
     match &e.e4_differential {
@@ -1317,6 +1330,19 @@ fn check_equivalence_e7_fails_on_a_misattributed_binding() {
         hir_node_id: "test:other".to_string(),
         arg_map: BTreeMap::new(),
         dialect: "json-schema-2020-12".to_string(),
+        surface_id: String::new(),
+        exposure_mode: hh_compiler::surface::CompileExposureMode::Primitive,
+        capability_refs: vec!["test:other".to_string()],
+        mapping: hh_compiler::surface::BindingMapping::SurfaceArgMap,
+        rule_ids: vec![],
+        evidence_ref: None,
+        safety_ref: None,
+        effects_bound: vec![],
+        family_id: None,
+        variant_id: None,
+        admitted_modes: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        pinned: false,
+        hidden: false,
     };
     let e = hh_compiler::equiv::check_equivalence(&binding, &n, None).expect("evidence");
     assert!(matches!(

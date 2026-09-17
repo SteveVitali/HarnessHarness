@@ -64,6 +64,8 @@ pub fn validate(doc: &HirDocument) -> Result<ValidationReport, Vec<HirError>> {
     check_refs_and_endpoints(doc, &index, &mut errs);
     check_acyclic(doc, &mut errs);
     check_effect_coverage(doc, &index, &mut errs);
+    check_capability_procedure_sources(doc, &index, &mut errs);
+    check_discovery_capability(doc, &mut errs);
     check_delegation(doc, &index, &mut errs);
     check_budgets(doc, &index, &mut errs);
     check_root(doc, &index, &mut errs);
@@ -104,6 +106,9 @@ const CHECKS: &[&str] = &[
     "validator_inputs",
     "observation_authority",
     "hosted_invariants",
+    "capability_v_e1",
+    "capability_procedure_source",
+    "discovery_capability",
     "root",
 ];
 
@@ -609,6 +614,19 @@ fn check_kind_record(node: &Node, index: &BTreeMap<String, &Node>, errs: &mut Ve
         }
         KindRecord::ToolCapability(t) => {
             check_text_leaf(&t.purpose, "tool.purpose", errs);
+            // V-E1 record checks (§5d.1 §3; ADR-0087 D6) — `authority` is the node's
+            // conferred provenance class (lifted ⇒ `unverified`, V-E1-7).
+            errs.extend(crate::tools::validate_capability(
+                t,
+                node.provenance.authority,
+            ));
+            // The authored `exposure_mode` member (OQ-240 interim — admitted_modes
+            // spellings are the run-time sum; closed only).
+            if let Some(SurfaceRecord::Tool(ts)) = &node.surface {
+                if let Err(e) = crate::tools::authored_exposure(Some(&ts.exposure_mode)) {
+                    errs.push(e);
+                }
+            }
         }
         KindRecord::Permission(p) => {
             // `issuer.authority ≠ model_claim` — a model claim cannot confer a permission
@@ -1166,6 +1184,94 @@ fn collect_invoked_tools(steps: &[ProcedureStep], out: &mut BTreeSet<String>) {
             ProcedureStep::Loop { body, .. } => collect_invoked_tools(body, out),
             _ => {}
         }
+    }
+}
+
+/// V-E1-10 (§5d.1 §3): a `source.kind = "procedure"` capability must declare
+/// exactly its source procedure's derived effects — the derivation is the
+/// honest lower bound; drift is `DerivedEffectsMismatch`. An unresolvable
+/// `source.ref` (a pinned version outside the document) is not a violation
+/// here — endpoint resolution is `check_refs`' job and the registry's
+/// admission re-checks co-registered pairs.
+fn check_capability_procedure_sources(
+    doc: &HirDocument,
+    index: &BTreeMap<String, &Node>,
+    errs: &mut Vec<HirError>,
+) {
+    for node in &doc.nodes {
+        let KindRecord::ToolCapability(t) = &node.semantic else {
+            continue;
+        };
+        if t.source.get("kind").and_then(Json::as_str) != Some("procedure") {
+            continue;
+        }
+        let Some(target) = t
+            .source
+            .get("ref")
+            .and_then(Json::as_str)
+            .and_then(|r| index.get(r))
+        else {
+            continue;
+        };
+        let KindRecord::Procedure(p) = &target.semantic else {
+            errs.push(HirError::DerivedEffectsMismatch {
+                detail: format!(
+                    "{}: source.ref does not resolve to a Procedure",
+                    node.semantic_id()
+                ),
+            });
+            continue;
+        };
+        let mut derived = Vec::new();
+        derived_effects(&p.steps, index, &mut derived);
+        let derived_set: BTreeSet<EffectClass> = derived.into_iter().collect();
+        let declared = match &t.effects {
+            ToolEffects::Declared(set) => set.clone(),
+            ToolEffects::Pure => BTreeSet::new(),
+        };
+        if declared != derived_set {
+            errs.push(HirError::DerivedEffectsMismatch {
+                detail: format!(
+                    "{}: declared {} effects, procedure derives {}",
+                    node.semantic_id(),
+                    declared.len(),
+                    derived_set.len()
+                ),
+            });
+        }
+    }
+}
+
+/// I-DISCOVERY (§5d.3 §2; ADR-0093 D8): a definition that admits `deferred`
+/// on any capability surface must carry a `discover_surfaces` capability
+/// (`exposure_hint.discovery = true`) — deferred/indexed reachability has no
+/// other path. The run-time half lives in `hh-compiler`'s `select_surfaces`.
+fn check_discovery_capability(doc: &HirDocument, errs: &mut Vec<HirError>) {
+    let admits_deferred = doc.nodes.iter().any(|n| {
+        if !matches!(&n.semantic, KindRecord::ToolCapability(_)) {
+            return false;
+        }
+        match &n.surface {
+            Some(SurfaceRecord::Tool(ts)) => {
+                crate::tools::authored_exposure(Some(&ts.exposure_mode))
+                    .map(|a| {
+                        a.admitted.contains(&crate::tools::ExposureMode::Deferred)
+                            || a.admitted.contains(&crate::tools::ExposureMode::Indexed)
+                    })
+                    .unwrap_or(false)
+            }
+            _ => false,
+        }
+    });
+    if !admits_deferred {
+        return;
+    }
+    let has_discovery = doc.nodes.iter().any(|n| {
+        matches!(&n.semantic, KindRecord::ToolCapability(t)
+            if crate::tools::is_discovery_capability(t))
+    });
+    if !has_discovery {
+        errs.push(HirError::NoDiscoverySurface);
     }
 }
 

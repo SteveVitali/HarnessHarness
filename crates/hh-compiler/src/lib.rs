@@ -36,12 +36,14 @@
 pub mod compiler;
 pub mod equiv;
 pub mod errors;
+pub mod exposure;
 pub mod lcd;
 pub mod link;
 pub mod plan;
 pub mod profile;
 pub mod schema;
 pub mod seal;
+pub mod surface;
 pub mod trace;
 
 pub use compiler::{accept, accept_bytes, compile, CompileInputs};

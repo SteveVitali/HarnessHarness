@@ -146,6 +146,7 @@ impl RecordKind {
                 | RecordKind::Namespace
                 | RecordKind::RegistrySnapshot
                 | RecordKind::ForeignImport
+                | RecordKind::Capability
         )
     }
 
@@ -174,7 +175,10 @@ impl RecordKind {
     pub fn has_semantic_projection(self) -> bool {
         matches!(
             self,
-            RecordKind::Variant | RecordKind::Class | RecordKind::SealedDefinition
+            RecordKind::Variant
+                | RecordKind::Class
+                | RecordKind::SealedDefinition
+                | RecordKind::Capability
         )
     }
 }

@@ -522,7 +522,9 @@ impl IsolationClass {
         }
     }
 
-    fn parse(s: &str) -> Result<IsolationClass, PolicyError> {
+    /// Parse the canonical spelling (public for `hh-env`'s `ExecutionRequirement`
+    /// reader — CC7: this is the one spelling source).
+    pub fn parse(s: &str) -> Result<IsolationClass, PolicyError> {
         match s {
             "none" => Ok(IsolationClass::None),
             "process_sandbox" => Ok(IsolationClass::ProcessSandbox),

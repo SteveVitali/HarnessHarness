@@ -33,8 +33,8 @@ use crate::events::RegistryEvent;
 use crate::identity;
 use crate::kinds::{Admission, OwnerRef, Placement, PublishRule, RecordKind, RequireConformance};
 use crate::records::{
-    NamespaceRecord, RegistryDiagnostic, RegistryEnvelope, RegistryPolicy, RegistryRecord,
-    RegistrySnapshot, VariantRecord,
+    CapabilityRecord, NamespaceRecord, RegistryDiagnostic, RegistryEnvelope, RegistryPolicy,
+    RegistryRecord, RegistrySnapshot, VariantRecord,
 };
 use crate::schema;
 
@@ -622,6 +622,30 @@ impl RegistryStore {
         self.records.get(version_id)
     }
 
+    /// `lookup(version_id)` — the direct-read verb (§5d.1): the stored
+    /// envelope + body for an exact `version_id`, `Unresolved` for an unknown
+    /// id (fail-closed — never an empty result). Reads are *not* resolution:
+    /// a quarantined record is returned with its admission attached (a caller
+    /// needing the governed path uses `resolve`). Never loads the
+    /// implementation body (R3).
+    pub fn lookup(&self, version_id: &str) -> Result<ResolvedRecord, RegistryError> {
+        let (env, rec) = self
+            .records
+            .get(version_id)
+            .ok_or_else(|| RegistryError::Unresolved {
+                detail: format!("unregistered version {version_id}"),
+            })?;
+        // An `audit`-grade read — the same projection `resolve` uses, minus
+        // the execute-mode admission gates.
+        self.project(
+            env,
+            rec,
+            None,
+            ResolveMode::Audit,
+            &ResolveRequest::default(),
+        )
+    }
+
     /// All registered `version_id`s.
     pub fn version_ids(&self) -> impl Iterator<Item = &String> {
         self.records.keys()
@@ -741,6 +765,11 @@ impl RegistryStore {
                 }
             }
             RegistryRecord::ForeignImport(_) | RegistryRecord::Snapshot(_) => {}
+            RegistryRecord::Capability(c) => {
+                if let Err(e) = check_capability(c) {
+                    bail!(e);
+                }
+            }
         }
         // Trust record: mandatory for non-kernel/definition registrars.
         let first_party = matches!(
@@ -767,6 +796,20 @@ impl RegistryStore {
         // authority + policy (ADR-0063; `revoked` stays derived).
         let admission = if matches!(record, RegistryRecord::ForeignImport(_)) {
             self.policy.foreign_import_default_admission
+        } else if let RegistryRecord::Capability(c) = &record {
+            // ADR-0088 amendment / CF-210: a lifted source (`mcp_listing`,
+            // `participant_supplied`) or a declaration carrying `effects` with
+            // undeclared attribute vectors (`unknown_domain`) registers
+            // `quarantined` — never model-visible until `seal`.
+            if capability_needs_quarantine(c)
+                || self.policy.require_signature_for_kinds.contains(&kind)
+            {
+                Admission::Quarantined
+            } else if first_party {
+                Admission::Resolved
+            } else {
+                Admission::Quarantined
+            }
         } else if self.policy.require_signature_for_kinds.contains(&kind) {
             Admission::Quarantined
         } else if first_party {
@@ -800,13 +843,30 @@ impl RegistryStore {
         self.records
             .insert(version_id.clone(), (env.clone(), record.clone()));
         self.seq += 1;
-        self.ok_event(RegistryEvent::registered(
-            kind.as_str(),
-            &version_id,
-            env.semantic_id.as_deref(),
-            admission.as_str(),
-            registrar.origin.tag(),
-        ));
+        if let RegistryRecord::Capability(c) = &record {
+            // ADR-0088 D8 / CF-327: capability registration emits the
+            // kind-specific `lifecycle.capability.registered` class.
+            let source_kind = match &c.node.semantic {
+                hh_hir::records::KindRecord::ToolCapability(t) => {
+                    hh_hir::tools::source_kind(&t.source).unwrap_or_default()
+                }
+                _ => String::new(),
+            };
+            self.ok_event(RegistryEvent::capability_registered(
+                &version_id,
+                env.semantic_id.as_deref(),
+                &source_kind,
+                registrar.origin.tag(),
+            ));
+        } else {
+            self.ok_event(RegistryEvent::registered(
+                kind.as_str(),
+                &version_id,
+                env.semantic_id.as_deref(),
+                admission.as_str(),
+                registrar.origin.tag(),
+            ));
+        }
         if let RegistryRecord::Report(r) = &record {
             self.ok_event(RegistryEvent::conformance(
                 &r.report_id,
@@ -2219,6 +2279,58 @@ fn check_declaration(
 
 /// Placement privilege rank for the widening-successor check — more local is
 /// more privileged (`in_process` is the top of the lattice).
+/// The capability admission checks (§5d.1 §3 — V-E1 at `register`, ADR-0088
+/// D1's `ValidationErrors`): the node must be a `tool_capability` whose own
+/// provenance validates, and `hh_hir::tools::validate_capability` must be
+/// clean. Failures are collected, never fail-fast.
+fn check_capability(c: &CapabilityRecord) -> Result<(), RegistryError> {
+    if c.node.kind != hh_hir::kinds::EntityKind::ToolCapability {
+        return Err(RegistryError::SchemaViolation {
+            path: "kind".to_string(),
+            detail: format!(
+                "capability record must be a tool_capability node, not {}",
+                c.node.kind.name()
+            ),
+        });
+    }
+    if let Err(pe) = c.node.provenance.validate(None) {
+        return Err(RegistryError::SchemaViolation {
+            path: "record.provenance".to_string(),
+            detail: format!("{pe:?}"),
+        });
+    }
+    let hh_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic else {
+        return Err(RegistryError::SchemaViolation {
+            path: "semantic".to_string(),
+            detail: "node kind/semantic mismatch".to_string(),
+        });
+    };
+    let violations = hh_hir::tools::validate_capability(t, c.node.provenance.authority);
+    if !violations.is_empty() {
+        return Err(RegistryError::CapabilityValidation { violations });
+    }
+    Ok(())
+}
+
+/// Whether a capability record must register `quarantined` (ADR-0088
+/// amendment; CF-210): a lifted source (`mcp_listing`/`participant_supplied`),
+/// or a `declared` effect set carrying members with no attribute vector (the
+/// `unknown_domain` honesty form — `effects = unknown` at the record level).
+fn capability_needs_quarantine(c: &CapabilityRecord) -> bool {
+    let hh_hir::records::KindRecord::ToolCapability(t) = &c.node.semantic else {
+        return false;
+    };
+    if hh_hir::tools::lifted_source_kind(&t.source).is_some() {
+        return true;
+    }
+    if let hh_hir::kinds::ToolEffects::Declared(set) = &t.effects {
+        if set.iter().any(|e| e.attributes.is_none()) {
+            return true;
+        }
+    }
+    false
+}
+
 fn placement_rank(p: Placement) -> u8 {
     match p {
         Placement::Remote => 0,

@@ -94,6 +94,11 @@ pub enum RecordKind {
     /// `configuration_id`, `version_id` in `configuration_version_id` and the
     /// run manifest. Has a semantic projection (S1.16, R-2.2.5).
     EnvironmentRecord,
+    /// A compiled `ToolSurface` record — `surface_id = H(surface record)`
+    /// (§5d.2 §3, `HarnessArtifact{kind: tool_surface}`, ADR-0016/0090; S1.17,
+    /// R-2.5.2). Version-only: a rename is a profile edit and mints a new
+    /// `surface_id` (T-LCD-10).
+    ToolSurface,
 }
 
 impl RecordKind {
@@ -128,6 +133,7 @@ impl RecordKind {
             RecordKind::CredentialBinding => "credential.binding",
             RecordKind::SinkPolicy => "sink_policy",
             RecordKind::EnvironmentRecord => "environment",
+            RecordKind::ToolSurface => "tool_surface",
         }
     }
 

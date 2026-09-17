@@ -39,6 +39,16 @@ impl DedupSupport {
             DedupSupport::Durable => "durable",
         }
     }
+
+    /// Parse the canonical spelling.
+    pub fn parse(s: &str) -> Option<DedupSupport> {
+        match s {
+            "none" => Some(DedupSupport::None),
+            "best_effort" => Some(DedupSupport::BestEffort),
+            "durable" => Some(DedupSupport::Durable),
+            _ => None,
+        }
+    }
 }
 
 /// `ProbeSupport` — whether the executor can answer a `probe` (a lapsed-window
@@ -159,6 +169,11 @@ pub enum BindError {
         /// The domain.
         domain: String,
     },
+    /// An `execution_requirement` member outside the closed spelling set.
+    MalformedRequirement {
+        /// The offending member.
+        member: String,
+    },
 }
 
 impl std::fmt::Display for BindError {
@@ -178,6 +193,9 @@ impl std::fmt::Display for BindError {
             ),
             BindError::UnsupportedDomain { domain } => {
                 write!(f, "UnsupportedDomain: {domain}")
+            }
+            BindError::MalformedRequirement { member } => {
+                write!(f, "MalformedRequirement: {member}")
             }
         }
     }
@@ -238,6 +256,42 @@ impl Default for ExecutionRequirement {
             minimum_isolation: IsolationClass::None,
             minimum_dedup: DedupSupport::None,
         }
+    }
+}
+
+impl ExecutionRequirement {
+    /// Parse the members of a capability's `execution_requirement` the bind
+    /// check reads — `minimum_isolation`/`isolation` and
+    /// `minimum_dedup`/`dedup` spellings; absent members default to the honest
+    /// minimum (no floor ⇒ nothing to check). Unknown spellings are refused,
+    /// never coerced.
+    pub fn from_json(j: &Json) -> Result<ExecutionRequirement, BindError> {
+        let iso = j
+            .get("minimum_isolation")
+            .or_else(|| j.get("isolation"))
+            .and_then(Json::as_str)
+            .map(|s| {
+                IsolationClass::parse(s).map_err(|_| BindError::MalformedRequirement {
+                    member: format!("minimum_isolation={s}"),
+                })
+            })
+            .transpose()?
+            .unwrap_or(IsolationClass::None);
+        let dedup = j
+            .get("minimum_dedup")
+            .or_else(|| j.get("dedup"))
+            .and_then(Json::as_str)
+            .map(|s| {
+                DedupSupport::parse(s).ok_or_else(|| BindError::MalformedRequirement {
+                    member: format!("minimum_dedup={s}"),
+                })
+            })
+            .transpose()?
+            .unwrap_or(DedupSupport::None);
+        Ok(ExecutionRequirement {
+            minimum_isolation: iso,
+            minimum_dedup: dedup,
+        })
     }
 }
 
@@ -365,4 +419,191 @@ impl ProbeVerdict {
             ProbeVerdict::Undeterminable => "undeterminable",
         }
     }
+}
+
+// ── The registry `bind` verb (§5d.1 §2; ADR-0088 D5; S1.17) ──────────────────
+
+/// `ExecutorBinding{capability_version, executor_ref,
+/// environment_handle_class, dedup_support, interrupt, isolation, usability}`
+/// — the record `bind` produces (ledgered `lifecycle.component.bound{class_id
+/// = tool_executor}` by the caller).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExecutorBinding {
+    /// The capability's `version_id` (the registered record).
+    pub capability_version: String,
+    /// The executor's id.
+    pub executor_ref: String,
+    /// The environment handle class the binding targets (`kernel_internal` or
+    /// `sandbox_helper` at C0 — the `environment_class` member of the
+    /// capability's `execution_requirement`).
+    pub environment_handle_class: String,
+    /// The executor's dedup support.
+    pub dedup_support: DedupSupport,
+    /// The executor's interrupt support.
+    pub interrupt: InterruptSupport,
+    /// The executor's isolation support.
+    pub isolation: IsolationClass,
+    /// `usable` | `unusable` (the catalogue's per-view usability — AC-E1-8:
+    /// an unbindable capability is `unusable`, never silently dropped).
+    pub usability: &'static str,
+}
+
+/// The spec-spelled `bind` failure sum — `env_requires_unmet |
+/// isolation_insufficient | dedup_required_unsupported | not_installed`
+/// (§5d.1 §2; `env_requires` matching itself is the Stage-2 row — the variant
+/// is declared now so the spelling is stable).
+#[derive(Debug, Clone, PartialEq)]
+pub enum BindFailure {
+    /// An `env_requires` member the environment cannot satisfy (Stage-2 check).
+    EnvRequiresUnmet {
+        /// The unmet requirement.
+        requirement: String,
+    },
+    /// `isolation_support` weaker than the declared floor.
+    IsolationInsufficient {
+        /// The required floor.
+        required: IsolationClass,
+        /// What the executor declared.
+        declared: IsolationClass,
+    },
+    /// `dedup_support` cannot cover the idempotency requirement.
+    DedupRequiredUnsupported {
+        /// What the capability needs.
+        required: DedupSupport,
+        /// What the executor declared.
+        declared: DedupSupport,
+    },
+    /// No declared executor covers the capability (its domain or its
+    /// `environment_class`) — the request `not_installed` spelling.
+    NotInstalled {
+        /// Why no executor matched.
+        detail: String,
+    },
+}
+
+impl std::fmt::Display for BindFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BindFailure::EnvRequiresUnmet { requirement } => {
+                write!(f, "env_requires_unmet: {requirement}")
+            }
+            BindFailure::IsolationInsufficient { required, declared } => write!(
+                f,
+                "isolation_insufficient: need {} got {}",
+                required.as_str(),
+                declared.as_str()
+            ),
+            BindFailure::DedupRequiredUnsupported { required, declared } => write!(
+                f,
+                "dedup_required_unsupported: need {} got {}",
+                required.as_str(),
+                declared.as_str()
+            ),
+            BindFailure::NotInstalled { detail } => write!(f, "not_installed: {detail}"),
+        }
+    }
+}
+
+impl std::error::Error for BindFailure {}
+
+/// `bind(version_id, executors[])` — the §5d.1 registry verb (ADR-0088 D5).
+/// Reads the registered capability's `execution_requirement` and declared
+/// effect domains, runs [`bind`] against each [`ExecutorDeclaration`], and
+/// returns the first admissible [`ExecutorBinding`] (deterministic: executors
+/// are tried in declaration order). `env_requires` members are the Stage-2 row
+/// — declared but not yet matched (their presence is recorded on the binding
+/// path, never silently honoured).
+pub fn bind_capability(
+    store: &hh_registry::store::RegistryStore,
+    version_id: &str,
+    executors: &[ExecutorDeclaration],
+) -> Result<ExecutorBinding, BindFailure> {
+    let (cap, _registrar) =
+        hh_registry::capability::capability_at(store, version_id).map_err(|e| {
+            BindFailure::NotInstalled {
+                detail: format!("capability lookup failed: {e:?}"),
+            }
+        })?;
+    let hh_hir::records::KindRecord::ToolCapability(t) = &cap.node.semantic else {
+        return Err(BindFailure::NotInstalled {
+            detail: "record is not a capability".into(),
+        });
+    };
+    let requirement = ExecutionRequirement::from_json(&t.execution_requirement).map_err(|e| {
+        BindFailure::NotInstalled {
+            detail: format!("{e}"),
+        }
+    })?;
+    let env_class = t
+        .execution_requirement
+        .get("environment_class")
+        .and_then(Json::as_str)
+        .unwrap_or("kernel_internal")
+        .to_string();
+    let domains: Vec<hh_hir::kinds::EffectDomain> = match &t.effects {
+        hh_hir::kinds::ToolEffects::Pure => Vec::new(),
+        hh_hir::kinds::ToolEffects::Declared(set) => set.iter().map(|e| e.domain).collect(),
+    };
+    let mut first_failure: Option<BindFailure> = None;
+    for decl in executors {
+        // A `pure` capability names no domain — only the floors are checked.
+        let verdict = if domains.is_empty() {
+            if decl.isolation_support.strength() < requirement.minimum_isolation.strength() {
+                Err(BindError::InsufficientIsolation {
+                    required: requirement.minimum_isolation,
+                    declared: decl.isolation_support,
+                })
+            } else if decl.dedup_support < requirement.minimum_dedup {
+                Err(BindError::InsufficientDedup {
+                    required: requirement.minimum_dedup,
+                    declared: decl.dedup_support,
+                })
+            } else {
+                Ok(())
+            }
+        } else {
+            let mut res = Ok(());
+            for d in &domains {
+                res = bind(decl, *d, &requirement);
+                if res.is_err() {
+                    break;
+                }
+            }
+            res
+        };
+        match verdict {
+            Ok(()) => {
+                return Ok(ExecutorBinding {
+                    capability_version: version_id.to_string(),
+                    executor_ref: decl.executor_id.clone(),
+                    environment_handle_class: env_class,
+                    dedup_support: decl.dedup_support,
+                    interrupt: decl.interrupt,
+                    isolation: decl.isolation_support,
+                    usability: "usable",
+                });
+            }
+            Err(BindError::InsufficientIsolation { required, declared }) => {
+                first_failure
+                    .get_or_insert(BindFailure::IsolationInsufficient { required, declared });
+            }
+            Err(BindError::InsufficientDedup { required, declared }) => {
+                first_failure
+                    .get_or_insert(BindFailure::DedupRequiredUnsupported { required, declared });
+            }
+            Err(BindError::UnsupportedDomain { domain }) => {
+                first_failure.get_or_insert(BindFailure::NotInstalled {
+                    detail: format!("no executor covers domain {domain}"),
+                });
+            }
+            Err(BindError::MalformedRequirement { member }) => {
+                first_failure.get_or_insert(BindFailure::NotInstalled {
+                    detail: format!("malformed requirement {member}"),
+                });
+            }
+        }
+    }
+    Err(first_failure.unwrap_or(BindFailure::NotInstalled {
+        detail: "no executors declared".into(),
+    }))
 }
