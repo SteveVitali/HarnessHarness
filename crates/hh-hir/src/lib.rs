@@ -52,8 +52,9 @@ pub use identity::{
 pub use kinds::*;
 pub use leaves::{CompiledPayload, DeclaredInterface, Text};
 pub use ops::{
-    apply_bytes, canonicalize, canonicalize_bytes, diff_bytes, migrate, migrate_bytes, project,
-    project_bytes, seal, seal_bytes, validate_bytes, validate_doc, ProjectSelector, SubGraph,
+    apply_bytes, canonicalize, canonicalize_bytes, closed_world_tools, diff_bytes, migrate,
+    migrate_bytes, project, project_bytes, seal, seal_bytes, validate_bytes, validate_doc,
+    ProjectSelector, SubGraph,
 };
 pub use records::*;
 pub use refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref, RefVersion, RunRef};
@@ -112,6 +113,13 @@ pub mod wire {
         crate::schema::slot_binding_from_json(j, path)
     }
 
+    /// Parse a [`crate::document::HirDocument`] from its canonical JSON — the
+    /// out-of-process seam's read direction (`hh-compile` — CC7: the schema source
+    /// owns the decoding; `parse_document` owns the byte-level entry).
+    pub fn document_from_json(j: &Json) -> Result<crate::document::HirDocument, HirError> {
+        crate::schema::document_from_json(j)
+    }
+
     /// The canonical JSON of a [`crate::document::Node`] (consumed by `hh-assembly`'s
     /// stage-7 LCD walks — CC7: the schema source owns the encoding).
     pub fn node_to_json(n: &crate::document::Node) -> Json {
@@ -122,5 +130,19 @@ pub mod wire {
     /// the `semantic_id` basis, §3.1.2).
     pub fn node_semantic_projection(n: &crate::document::Node) -> Json {
         crate::schema::node_semantic_projection(n)
+    }
+
+    /// The canonical JSON of a `ControlBoundary` (the CC11 record — consumed by
+    /// `hh-compiler`'s `BudgetEnvelope` codec; the schema source owns the encoding).
+    pub fn boundary_json(b: &hh_ontology::control::ControlBoundary) -> Json {
+        crate::schema::boundary_json(b)
+    }
+
+    /// Parse a `ControlBoundary` (the codec's read direction).
+    pub fn boundary_from_json(
+        j: &Json,
+        path: &str,
+    ) -> Result<hh_ontology::control::ControlBoundary, HirError> {
+        crate::schema::boundary_from_json(j, path)
     }
 }

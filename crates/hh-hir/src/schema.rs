@@ -877,7 +877,7 @@ fn owner_parse(s: &str) -> Result<Owner, HirError> {
     }
 }
 
-fn boundary_json(b: &ControlBoundary) -> Json {
+pub fn boundary_json(b: &ControlBoundary) -> Json {
     Json::obj([
         (
             "assignments",
@@ -905,7 +905,7 @@ fn boundary_json(b: &ControlBoundary) -> Json {
     ])
 }
 
-fn boundary_from_json(j: &Json, path: &str) -> Result<ControlBoundary, HirError> {
+pub fn boundary_from_json(j: &Json, path: &str) -> Result<ControlBoundary, HirError> {
     let mut b = ControlBoundary::default();
     if let Some(Json::Obj(m)) = j.get("assignments") {
         for (k, v) in m {

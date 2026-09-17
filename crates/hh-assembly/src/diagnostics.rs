@@ -194,9 +194,36 @@ pub enum Code {
     /// `C-LINK-2 NoProfile` — no bound profile and no `fallback_profile` with a dated
     /// debt hypothesis.
     LinkNoProfile,
+    /// `C-LINK-3 MissingDebtRecord` — a conditioned rule without a complete debt record
+    /// (T-LCD-05; **S1.10-owned**).
+    LinkMissingDebtRecord,
+    /// `C-LINK-4 VersionConflict` — a pinned ref the bound view cannot satisfy, or a
+    /// definition-pinned profile the bound chain doesn't contain (**S1.10-owned**).
+    LinkVersionConflict,
+    /// `C-LINK-5 UnknownTarget` — a `target_ref` naming no registered target
+    /// (**S1.10-owned**).
+    LinkUnknownTarget,
+    /// `C-LINK-6 ExpiredRule` — a conditioned rule whose debt status is `expired`/
+    /// `violated`, compiled under an explicit recorded intent (warning; **S1.10-owned**).
+    LinkExpiredRule,
+    /// `C-LINK-7 CapabilityRequiresUnsatisfied` — a `PreconditionDomain::Capability`
+    /// requirement with no `depends-on` edge to another `ToolCapability` (ADR-0087;
+    /// **S1.10-owned**).
+    LinkCapabilityRequires,
+    /// `C-LINK-8 AmbiguousSelector` — a profile-selector tie at link (**S1.10-owned**).
+    LinkAmbiguousSelector,
+    /// `C-LINK-9 DialectNarrowingUndeclared` — a surface narrows the schema dialect
+    /// without the declaration the bound profile requires (**S1.10-owned**).
+    LinkDialectNarrowing,
     // ── plan / resume / internal ─────────────────────────────────────────────────
     /// `C-PLAN-1 PlanRefusal` — the assembly service's `plan` refuses (§6; registered).
     PlanRefusal,
+    /// `C-PLAN-2 UnsupportedConstruct` — a HIR construct with no `RuntimePlan/1` lowering
+    /// (`PlanError{unsupported_construct}`; **S1.10-owned**).
+    PlanUnsupportedConstruct,
+    /// `C-SEAL-1 NonCanonical` — stage-5 seal: the bundle does not re-encode to the
+    /// hashed bytes (`SealError{non_canonical}`; **S1.10-owned**).
+    SealNonCanonical,
     /// `C-RES-1 Incompatible` — `verify_resume` refuses.
     ResIncompatible,
     /// `C-INT-1 UncodedRejection` — a rejection that reached the caller with no code:
@@ -248,7 +275,16 @@ impl Code {
             SecInlineSecret => "C-SEC-1".into(),
             LinkUnboundSlot => "C-LINK-1".into(),
             LinkNoProfile => "C-LINK-2".into(),
+            LinkMissingDebtRecord => "C-LINK-3".into(),
+            LinkVersionConflict => "C-LINK-4".into(),
+            LinkUnknownTarget => "C-LINK-5".into(),
+            LinkExpiredRule => "C-LINK-6".into(),
+            LinkCapabilityRequires => "C-LINK-7".into(),
+            LinkAmbiguousSelector => "C-LINK-8".into(),
+            LinkDialectNarrowing => "C-LINK-9".into(),
             PlanRefusal => "C-PLAN-1".into(),
+            PlanUnsupportedConstruct => "C-PLAN-2".into(),
+            SealNonCanonical => "C-SEAL-1".into(),
             ResIncompatible => "C-RES-1".into(),
             IntUncodedRejection => "C-INT-1".into(),
         }
@@ -297,7 +333,16 @@ impl Code {
             SecInlineSecret => "InlineSecret",
             LinkUnboundSlot => "UnboundSlot",
             LinkNoProfile => "NoProfile",
+            LinkMissingDebtRecord => "MissingDebtRecord",
+            LinkVersionConflict => "VersionConflict",
+            LinkUnknownTarget => "UnknownTarget",
+            LinkExpiredRule => "ExpiredRule",
+            LinkCapabilityRequires => "CapabilityRequiresUnsatisfied",
+            LinkAmbiguousSelector => "AmbiguousSelector",
+            LinkDialectNarrowing => "DialectNarrowingUndeclared",
             PlanRefusal => "PlanRefusal",
+            PlanUnsupportedConstruct => "UnsupportedConstruct",
+            SealNonCanonical => "NonCanonical",
             ResIncompatible => "Incompatible",
             IntUncodedRejection => "UncodedRejection",
         }
@@ -346,7 +391,16 @@ impl Code {
             SecInlineSecret,
             LinkUnboundSlot,
             LinkNoProfile,
+            LinkMissingDebtRecord,
+            LinkVersionConflict,
+            LinkUnknownTarget,
+            LinkExpiredRule,
+            LinkCapabilityRequires,
+            LinkAmbiguousSelector,
+            LinkDialectNarrowing,
             PlanRefusal,
+            PlanUnsupportedConstruct,
+            SealNonCanonical,
             ResIncompatible,
             IntUncodedRejection,
         ];
@@ -440,6 +494,167 @@ pub struct AssemblyDiagnostic {
 /// minted `external` authority — diagnostics are kernel output, never authored content).
 pub fn detail_text(detail: impl Into<String>, kernel: &ProvenanceRecord) -> Text {
     Text::new(detail.into(), "kernel", kernel.clone())
+}
+
+impl Code {
+    /// Parse a `C-…` spelling (the canonical table; `C-KERN-*` resolves its variant).
+    pub fn parse(s: &str) -> Option<Code> {
+        use Code::*;
+        Some(match s {
+            "C-LOAD-1" => LoadParse,
+            "C-LOAD-2" => LoadDialect,
+            "C-LOAD-3" => LoadUnknownKey,
+            "C-COMP-1" => CompAuthorityViolation,
+            "C-COMP-2" => CompLayerConflict,
+            "C-COMP-3" => CompLayerProvenanceMissing,
+            "C-COMP-4" => CompForbiddenBelow,
+            "C-REF-1" => RefUnresolved,
+            "C-REF-2" => RefAmbiguous,
+            "C-REF-3" => RefNameCollision,
+            "C-REF-4" => RefStaleIndex,
+            "C-REF-5" => RefDenyListNoop,
+            "C-REF-6" => RefSnapshotDrift,
+            "C-CLASS-1" => ClassUnknown,
+            "C-CLASS-2" => ClassVariantMismatch,
+            "C-CLASS-3" => ClassCardinality,
+            "C-CLASS-4" => ClassContractMalformed,
+            "C-CLASS-5" => ClassRequiredInputs,
+            "C-CLASS-6" => ClassSlotsOnHosted,
+            "C-CLASS-7" => ClassDialectIncompatible,
+            "C-PARAM-1" => ParamUnknown,
+            "C-PARAM-2" => ParamMissingDomain,
+            "C-PARAM-3" => ParamUndeclaredRef,
+            "C-PARAM-4" => ParamUnused,
+            "C-PARAM-5" => ParamDefaultedBudgetRelevant,
+            "C-CONS-1" => ConsViolation,
+            "C-PROF-1" => ProfIncompatible,
+            "C-PROF-2" => ProfUnexpressible,
+            "C-PROF-3" => ProfPinnedAcrossProfiles,
+            "C-LCD-1" => LcdHostingEdge,
+            "C-LCD-2" => LcdIdentityIncludesSurface,
+            "C-LCD-3" => LcdInheritanceContract,
+            "C-LCD-4" => LcdBenchmarkConditionedRule,
+            "C-LOC-1" => LocUnsupported,
+            "C-TRUST-1" => TrustDenied,
+            "C-SEC-1" => SecInlineSecret,
+            "C-LINK-1" => LinkUnboundSlot,
+            "C-LINK-2" => LinkNoProfile,
+            "C-LINK-3" => LinkMissingDebtRecord,
+            "C-LINK-4" => LinkVersionConflict,
+            "C-LINK-5" => LinkUnknownTarget,
+            "C-LINK-6" => LinkExpiredRule,
+            "C-LINK-7" => LinkCapabilityRequires,
+            "C-LINK-8" => LinkAmbiguousSelector,
+            "C-LINK-9" => LinkDialectNarrowing,
+            "C-PLAN-1" => PlanRefusal,
+            "C-PLAN-2" => PlanUnsupportedConstruct,
+            "C-RES-1" => ResIncompatible,
+            "C-SEAL-1" => SealNonCanonical,
+            "C-INT-1" => IntUncodedRejection,
+            _ => match s.strip_prefix("C-KERN-") {
+                Some(v) => match KERN_VARIANTS.iter().find(|k| **k == v) {
+                    Some(k) => Kern(k),
+                    None => return None,
+                },
+                None => return None,
+            },
+        })
+    }
+}
+
+/// The canonical JSON of an `AssemblyDiagnostic` (CC7 — the schema source owns the
+/// encoding; consumed by `hh-compiler`'s `CompiledBundle.diagnostics[]`).
+pub fn diagnostic_json(d: &AssemblyDiagnostic) -> hh_wire::json::Json {
+    use hh_wire::json::Json;
+    let mut pairs = vec![
+        ("code", Json::str(d.code.code())),
+        ("severity", Json::str(d.severity.as_str())),
+        ("path", Json::str(d.path.clone())),
+        ("subject", Json::str(d.subject.clone())),
+        ("stage", Json::str(d.stage.as_str())),
+        ("detail", d.detail.to_json()),
+        ("remedy", Json::str(d.remedy.clone())),
+        ("owner_adr", Json::str(d.owner_adr.clone())),
+    ];
+    if let Some(c) = &d.class {
+        pairs.push(("class", Json::str(c.clone())));
+    }
+    if let Some(l) = &d.source_layer {
+        pairs.push(("source_layer", Json::str(l.clone())));
+    }
+    Json::obj(pairs)
+}
+
+/// Parse an `AssemblyDiagnostic` (the codec's read direction).
+pub fn diagnostic_from_json(
+    j: &hh_wire::json::Json,
+    path: &str,
+) -> Result<AssemblyDiagnostic, HirError> {
+    use hh_wire::json::Json;
+    let get = |k: &str| -> Result<&Json, HirError> {
+        j.get(k).ok_or_else(|| HirError::SchemaViolation {
+            detail: format!("{path}.{k} missing"),
+        })
+    };
+    let str_at = |k: &str| -> Result<String, HirError> {
+        get(k)?
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| HirError::SchemaViolation {
+                detail: format!("{path}.{k} must be a string"),
+            })
+    };
+    let code = Code::parse(&str_at("code")?).ok_or_else(|| HirError::UnknownKind {
+        kind: format!("{path}.code"),
+    })?;
+    let severity = match str_at("severity")?.as_str() {
+        "error" => Severity::Error,
+        "warning" => Severity::Warning,
+        "info" => Severity::Info,
+        other => {
+            return Err(HirError::SchemaViolation {
+                detail: format!("{path}.severity: {other}"),
+            })
+        }
+    };
+    let stage = parse_stage(&str_at("stage")?).ok_or_else(|| HirError::UnknownKind {
+        kind: format!("{path}.stage"),
+    })?;
+    let detail = Text::from_json(get("detail")?, &format!("{path}.detail"))?;
+    Ok(AssemblyDiagnostic {
+        code,
+        class: j.get("class").and_then(Json::as_str).map(str::to_string),
+        severity,
+        path: str_at("path")?,
+        source_layer: j
+            .get("source_layer")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        subject: str_at("subject")?,
+        stage,
+        detail,
+        remedy: str_at("remedy")?,
+        owner_adr: str_at("owner_adr")?,
+    })
+}
+
+fn parse_stage(s: &str) -> Option<Stage> {
+    Some(match s {
+        "desugar" => Stage::Desugar,
+        "compose" => Stage::Compose,
+        "resolve" => Stage::Resolve,
+        "link" => Stage::Link,
+        "lower" => Stage::Lower,
+        "instantiate" => Stage::Instantiate,
+        "resume" => Stage::Resume,
+        _ => {
+            if let Some(n) = s.strip_prefix("validate:") {
+                Stage::Validate(n.parse().ok()?)
+            } else {
+                return None;
+            }
+        }
+    })
 }
 
 /// A `n/a` reason class on a `StageOutcome` (§3.3.8: `n/a{not_run}` — the stage belongs

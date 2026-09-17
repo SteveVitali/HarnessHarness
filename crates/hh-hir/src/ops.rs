@@ -493,8 +493,29 @@ pub fn seal(doc: &HirDocument, sealed_at: u64) -> Result<SealedDefinition, Vec<H
 
     // The closed-world tool set — the minting context `environment` authority confers
     // through (DF-S1.3-3): `pure` capabilities, or every declared effect `world = closed`.
-    let closed_world_tools = sealed
-        .nodes
+    let closed_world_tools = closed_world_tools(&sealed);
+
+    let root_node = sealed
+        .node(&sealed.root.semantic_id)
+        .expect("root resolved above");
+    Ok(SealedDefinition {
+        definition_ref: DefinitionVersionRef {
+            semantic_id: root_node.semantic_id(),
+            version_id: root_node.version_id(),
+        },
+        document: sealed,
+        closed_world_tools,
+    })
+}
+
+/// The closed-world tool set of a sealed document — the minting context `environment`
+/// authority confers through (DF-S1.3-3): `pure` capabilities, or capabilities whose
+/// every declared effect is `world = closed`. The single rule home (CC1) — `seal` and the
+/// compiler's `accept_bytes` (§3.2 stage 0) share it.
+pub fn closed_world_tools(
+    doc: &crate::document::HirDocument,
+) -> std::collections::BTreeSet<String> {
+    doc.nodes
         .iter()
         .filter_map(|n| match &n.semantic {
             KindRecord::ToolCapability(t) => match &t.effects {
@@ -508,19 +529,7 @@ pub fn seal(doc: &HirDocument, sealed_at: u64) -> Result<SealedDefinition, Vec<H
             },
             _ => None,
         })
-        .collect();
-
-    let root_node = sealed
-        .node(&sealed.root.semantic_id)
-        .expect("root resolved above");
-    Ok(SealedDefinition {
-        definition_ref: DefinitionVersionRef {
-            semantic_id: root_node.semantic_id(),
-            version_id: root_node.version_id(),
-        },
-        document: sealed,
-        closed_world_tools,
-    })
+        .collect()
 }
 
 /// The grammar-neutral "is this assembly section resolved?" walk (§3.1.3): any object

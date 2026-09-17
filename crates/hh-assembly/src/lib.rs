@@ -43,8 +43,9 @@ pub mod validate;
 pub use boundary::{LadderRung, MUST_BE_CODE, MUST_BE_DATA, RUNG};
 pub use catalog::{ClassCatalog, RegistryCatalog, Stage1Catalog, STAGE1_CLASSES};
 pub use diagnostics::{
-    detail_text, kern_code, AssemblyDiagnostic, Code, DerivedResults, NaReason, OpacitySummary,
-    ReportStatus, Severity, Stage, StageOutcome, ValidationReport,
+    detail_text, diagnostic_from_json, diagnostic_json, kern_code, AssemblyDiagnostic, Code,
+    DerivedResults, NaReason, OpacitySummary, ReportStatus, Severity, Stage, StageOutcome,
+    ValidationReport,
 };
 pub use diff::diff;
 pub use events::{
