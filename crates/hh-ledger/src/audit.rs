@@ -614,10 +614,7 @@ pub fn audit_view(
                     "redacted",
                     Json::Arr(refs_redacted.iter().map(Json::str).collect()),
                 ),
-                (
-                    "gc",
-                    Json::Arr(refs_gc.iter().map(Json::str).collect()),
-                ),
+                ("gc", Json::Arr(refs_gc.iter().map(Json::str).collect())),
                 (
                     "missing",
                     Json::Arr(refs_missing.iter().map(Json::str).collect()),
