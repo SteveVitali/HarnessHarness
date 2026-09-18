@@ -15,7 +15,7 @@ use hh_hir::{
     refs::RefVersion,
     DefinitionVersionRef, HirDocument, Node, Ref,
 };
-use hh_ontology::control::ControlBoundary;
+use hh_ontology::control::{ControlBoundary, StopKind};
 use hh_wire::json::Json;
 
 use crate::errors::CompileError;
@@ -226,44 +226,15 @@ pub struct DelegateNode {
 /// envelope-reserved points and bound budgets lower into.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StopRuleNode {
-    /// The closed reason set.
-    pub reason: StopReason,
+    /// The `StopKind` tag of the control-plane `StopReason` the rule fires
+    /// (§5e.2; ADR-0106 D6 — the sum is owned by `hh_ontology::control`; this
+    /// node's `reason` member carries the tag spelling, never a second
+    /// three-member subset — retired at S1.20, CC1).
+    pub reason: StopKind,
     /// The budget the rule binds (for `budget_exhausted`).
     pub bound: Option<PinnedRef>,
     /// The guard condition (a boundary `guards` entry or rule trigger — carried as data).
     pub condition: Option<Json>,
-}
-
-/// The closed `stop-rule` reasons (§3.2.4/§5e spellings).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StopReason {
-    /// The bound budget exhausted.
-    BudgetExhausted,
-    /// The run was cancelled.
-    Cancelled,
-    /// The context window is exhausted.
-    ContextExhausted,
-}
-
-impl StopReason {
-    /// Canonical spelling.
-    pub fn name(self) -> &'static str {
-        match self {
-            StopReason::BudgetExhausted => "budget_exhausted",
-            StopReason::Cancelled => "cancelled",
-            StopReason::ContextExhausted => "context_exhausted",
-        }
-    }
-
-    /// Parse a spelling.
-    pub fn parse(s: &str) -> Option<Self> {
-        Some(match s {
-            "budget_exhausted" => StopReason::BudgetExhausted,
-            "cancelled" => StopReason::Cancelled,
-            "context_exhausted" => StopReason::ContextExhausted,
-            _ => return None,
-        })
-    }
 }
 
 /// `ToolBinding` — the plan's tool table row (§3.2.4): the capability's declared
@@ -751,7 +722,7 @@ fn lower_native_process(
             })
             .unwrap_or_default();
         let mut stop_nodes: Vec<String> = Vec::new();
-        let mut mk = |lw: &mut Lowering, reason: StopReason, condition: Option<Json>| {
+        let mut mk = |lw: &mut Lowering, reason: StopKind, condition: Option<Json>| {
             let id = lw.fresh_id();
             stop_nodes.push(id.clone());
             PlanNode {
@@ -765,12 +736,12 @@ fn lower_native_process(
                 }),
             }
         };
-        control.push(mk(lw, StopReason::BudgetExhausted, None));
+        control.push(mk(lw, StopKind::BudgetExhausted, None));
         use hh_ontology::control::DecisionPoint;
         if let Some(guard) = n.control_boundary.guards.get(&DecisionPoint::Stop) {
             control.push(mk(
                 lw,
-                StopReason::Cancelled,
+                StopKind::Cancelled,
                 Some(Json::obj([("guard", Json::str(guard.clone()))])),
             ));
         }

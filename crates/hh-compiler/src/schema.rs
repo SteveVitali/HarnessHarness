@@ -17,8 +17,7 @@ use crate::link::{ConditionedRule, ConditionedRuleHome, TargetSpec};
 use crate::plan::{
     BoundSlot, BranchOnValidatorNode, BudgetEnvelope, BudgetRow, DelegateNode, EffectRow, LoopNode,
     PermissionRow, PinnedRef, PlanIds, PlanNode, PlanNodePayload, PolicyTables, ReplanOn,
-    RuntimePlan, StepAction, StepMode, StepNode, StopReason, StopRuleNode, ToolBinding,
-    ValidatorBinding,
+    RuntimePlan, StepAction, StepMode, StepNode, StopRuleNode, ToolBinding, ValidatorBinding,
 };
 use crate::profile::{
     CapabilityState, Compliance, ComplianceDetector, DebtStatus, ExpiryCondition, ExpiryKind,
@@ -27,6 +26,7 @@ use crate::profile::{
 };
 use crate::seal::{CompiledBundle, ModelSurface, ModelSurfaceState};
 use crate::trace::{TraceEntry, TraceMap};
+use hh_ontology::control::StopKind;
 
 fn schema_err(path: &str, what: impl Into<String>) -> CompileError {
     CompileError::InvalidModelProfile {
@@ -669,7 +669,7 @@ fn plan_node_json(n: &PlanNode) -> Json {
         PlanNodePayload::StopRule(s) => (
             "stop-rule",
             Json::obj({
-                let mut p = vec![("reason", Json::str(s.reason.name()))];
+                let mut p = vec![("reason", Json::str(s.reason.as_str()))];
                 if let Some(b) = &s.bound {
                     p.push(("bound", pinned_ref_json(b)));
                 }
@@ -756,8 +756,8 @@ fn plan_node_from_json(j: &Json, path: &str) -> Result<PlanNode, CompileError> {
             )?,
         }),
         "stop-rule" => PlanNodePayload::StopRule(StopRuleNode {
-            reason: StopReason::parse(&str_at(payload, "reason", &pp)?)
-                .ok_or_else(|| schema_err(&pp, "reason: bad StopReason"))?,
+            reason: StopKind::parse(&str_at(payload, "reason", &pp)?)
+                .ok_or_else(|| schema_err(&pp, "reason: bad StopKind"))?,
             bound: payload
                 .get("bound")
                 .map(|b| pinned_ref_from_json(b, &format!("{pp}.bound")))
