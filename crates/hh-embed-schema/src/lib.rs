@@ -396,6 +396,21 @@ fn types_schema() -> Json {
             ("source", "AttendanceSource", true),
         ]),
     );
+    m.insert("OutputFormat".into(), str_enum(&["human", "json", "jsonl"]));
+    m.insert(
+        "InvocationRecord".into(),
+        strct(&[
+            ("argv_canonical", "[string]", true),
+            ("cwd_ref", "string", true),
+            ("principal", "string", true),
+            ("attendance", "AttendanceDeclaration", true),
+            ("output_format", "OutputFormat", true),
+            ("stdin_digest", "string", false),
+            ("overrides_layer_id", "string", false),
+            ("instrument_record", "json", true),
+            ("idempotency_key", "string", true),
+        ]),
+    );
     m.insert(
         "DefinitionInput".into(),
         tagged(&[
@@ -467,6 +482,7 @@ fn types_schema() -> Json {
         strct(&[
             ("spec", "OpenSpec", true),
             ("idempotency_key", "string", true),
+            ("invocation", "InvocationRecord", false),
         ]),
     );
     m.insert(
@@ -741,6 +757,7 @@ fn types_schema() -> Json {
             ("at", "ForkPoint", true),
             ("manifest_delta", "json", false),
             ("idempotency_key", "string", false),
+            ("invocation", "InvocationRecord", false),
         ]),
     );
     m.insert(
@@ -861,6 +878,7 @@ fn types_schema() -> Json {
             ("value", "json", true),
             ("attestation", "json", false),
             ("idempotency_key", "string", false),
+            ("invocation", "InvocationRecord", false),
         ]),
     );
     m.insert(
@@ -1085,6 +1103,7 @@ fn errors_schema() -> Json {
         ("AuthorityViolation", 1303, &["layer", "detail"]),
         ("UnexpressibleSurface", 1304, &["detail"]),
         ("LinkError", 1305, &["detail"]),
+        ("AuthorityWideningRequiresHuman", 1306, &["detail"]),
         ("InsufficientBudget", 1400, &["dimension"]),
         ("UnbudgetedArm", 1401, &[]),
         ("UnattendedRequiresInput", 1402, &[]),

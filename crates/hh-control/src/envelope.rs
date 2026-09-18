@@ -223,7 +223,7 @@ impl Envelope {
                 // records `decider: envelope`, preceded by the guard's
                 // evidence rows (`control.invariant.violated`, …).
                 CheckVerdict::Refused {
-                    reason: format!("stop{{{}}}", reason.kind().as_str()),
+                    reason: format!("stop{{{}}}", reason.to_json().to_canonical_string()),
                     events,
                 }
             }

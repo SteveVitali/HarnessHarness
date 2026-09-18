@@ -775,23 +775,38 @@ impl OpenSpec {
 pub struct OpenSessionParams {
     pub spec: OpenSpec,
     pub idempotency_key: String,
+    /// The surface's invocation audit — minted durable as
+    /// `lifecycle.surface.invoked` when the spec opens a run
+    /// (`new`); absent for every non-surface caller.
+    pub invocation: Option<InvocationRecord>,
 }
 
 impl OpenSessionParams {
     pub fn to_json(&self) -> Json {
-        Json::obj([
-            ("spec", self.spec.to_json()),
-            ("idempotency_key", Json::str(self.idempotency_key.clone())),
-        ])
+        let mut m = BTreeMap::new();
+        m.insert("spec".into(), self.spec.to_json());
+        m.insert(
+            "idempotency_key".into(),
+            Json::str(self.idempotency_key.clone()),
+        );
+        if let Some(i) = &self.invocation {
+            m.insert("invocation".into(), i.to_json());
+        }
+        Json::Obj(m)
     }
     pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
         let mut s = StrictObj::new(v, "open_session")?;
         let spec = OpenSpec::from_json(s.req("spec")?, "open_session/spec")?;
         let idempotency_key = s.req_str("idempotency_key")?;
+        let invocation = s
+            .take("invocation")
+            .map(|i| InvocationRecord::from_json(i, "open_session/invocation"))
+            .transpose()?;
         s.finish()?;
         Ok(OpenSessionParams {
             spec,
             idempotency_key,
+            invocation,
         })
     }
 }
@@ -956,6 +971,111 @@ impl CloseParams {
 }
 
 // ── Work (Group W) ──────────────────────────────────────────────────────
+
+/// `InvocationRecord` — the surface's audit of one CLI invocation
+/// (CANONICAL_SPEC §7.1): minted durable as `lifecycle.surface.invoked`
+/// by the boundary on the run the invocation opens (or amends/forks).
+/// The CLI *is* a generated client + renderer, so this record is the
+/// only durable trace of "a surface drove this" — it never carries
+/// runtime handles (I-7) nor secrets (I-9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvocationRecord {
+    /// Canonical argv (the parsed form, not the raw shell line).
+    pub argv_canonical: Vec<String>,
+    /// The invocation working directory, as a ref/digest — surfaces
+    /// never ship absolute host paths through the payload plane.
+    pub cwd_ref: String,
+    /// The operating principal identity.
+    pub principal: String,
+    /// The attendance declaration the surface settled on
+    /// (declared | tty_inferred | forced).
+    pub attendance: AttendanceDeclaration,
+    /// The negotiated output format — `human | json | jsonl`.
+    pub output_format: String,
+    /// Digest of typed stdin when the prompt came from `-`/a pipe.
+    pub stdin_digest: Option<String>,
+    /// The applied overrides layer id, when the invocation carried
+    /// an overrides layer (ADR-0184 D2 / I-1).
+    pub overrides_layer_id: Option<String>,
+    /// The instrument record (opaque surface telemetry block).
+    pub instrument_record: Json,
+    /// The idempotency key the surface derived for this invocation.
+    pub idempotency_key: String,
+}
+
+pub const OUTPUT_FORMATS: &[&str] = &["human", "json", "jsonl"];
+
+impl InvocationRecord {
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert(
+            "argv_canonical".into(),
+            Json::Arr(
+                self.argv_canonical
+                    .iter()
+                    .map(|a| Json::str(a.clone()))
+                    .collect(),
+            ),
+        );
+        m.insert("cwd_ref".into(), Json::str(self.cwd_ref.clone()));
+        m.insert("principal".into(), Json::str(self.principal.clone()));
+        m.insert("attendance".into(), self.attendance.to_json());
+        m.insert(
+            "output_format".into(),
+            Json::str(self.output_format.clone()),
+        );
+        if let Some(d) = &self.stdin_digest {
+            m.insert("stdin_digest".into(), Json::str(d.clone()));
+        }
+        if let Some(l) = &self.overrides_layer_id {
+            m.insert("overrides_layer_id".into(), Json::str(l.clone()));
+        }
+        m.insert("instrument_record".into(), self.instrument_record.clone());
+        m.insert(
+            "idempotency_key".into(),
+            Json::str(self.idempotency_key.clone()),
+        );
+        Json::Obj(m)
+    }
+
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let argv_canonical = s
+            .req_arr("argv_canonical")?
+            .iter()
+            .map(|a| a.as_str().map(str::to_string))
+            .collect::<Option<Vec<String>>>()
+            .ok_or_else(|| EmbedError::SchemaViolation {
+                path: format!("{path}/argv_canonical"),
+                code: "expected_string_array".to_string(),
+            })?;
+        let cwd_ref = s.req_str("cwd_ref")?;
+        let principal = s.req_str("principal")?;
+        let attendance =
+            AttendanceDeclaration::from_json(s.req("attendance")?, &format!("{path}/attendance"))?;
+        let output_format = closed_str(
+            s.req("output_format")?,
+            OUTPUT_FORMATS,
+            &format!("{path}/output_format"),
+        )?;
+        let stdin_digest = s.opt_str("stdin_digest")?;
+        let overrides_layer_id = s.opt_str("overrides_layer_id")?;
+        let instrument_record = s.req("instrument_record")?.clone();
+        let idempotency_key = s.req_str("idempotency_key")?;
+        s.finish()?;
+        Ok(InvocationRecord {
+            argv_canonical,
+            cwd_ref,
+            principal,
+            attendance,
+            output_format,
+            stdin_digest,
+            overrides_layer_id,
+            instrument_record,
+            idempotency_key,
+        })
+    }
+}
 
 /// `submit` params — `input` is `ContentBlock[] | ContextItem-ref[]`
 /// (opaque records; the injection table fixes their labels, never the
@@ -1693,13 +1813,16 @@ impl ForkPoint {
     }
 }
 
-/// `fork` params — `{session_id, at, manifest_delta?, idempotency_key?}`.
+/// `fork` params — `{session_id, at, manifest_delta?, idempotency_key?,
+/// invocation?}`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ForkParams {
     pub session_id: String,
     pub at: ForkPoint,
     pub manifest_delta: Option<Json>,
     pub idempotency_key: Option<String>,
+    /// The surface's invocation audit — minted durable on the child run.
+    pub invocation: Option<InvocationRecord>,
 }
 impl ForkParams {
     pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
@@ -1708,12 +1831,74 @@ impl ForkParams {
         let at = ForkPoint::from_json(s.req("at")?, "fork/at")?;
         let manifest_delta = s.take("manifest_delta").cloned();
         let idempotency_key = s.opt_str("idempotency_key")?;
+        let invocation = s
+            .take("invocation")
+            .map(|i| InvocationRecord::from_json(i, "fork/invocation"))
+            .transpose()?;
         s.finish()?;
         Ok(ForkParams {
             session_id,
             at,
             manifest_delta,
             idempotency_key,
+            invocation,
+        })
+    }
+}
+
+/// `amend` params — `{session_id, target, value, attestation?,
+/// idempotency_key?, invocation?}` — the ADR-0216 OQ-468 interim
+/// signature; `target ∈ {budget, approval_mode, attendance}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AmendParams {
+    pub session_id: String,
+    pub target: String,
+    pub value: Json,
+    pub attestation: Option<Json>,
+    pub idempotency_key: Option<String>,
+    /// The surface's invocation audit — minted durable as
+    /// `lifecycle.surface.invoked` (amending a run is durable-class).
+    pub invocation: Option<InvocationRecord>,
+}
+
+pub const AMEND_TARGETS: &[&str] = &["budget", "approval_mode", "attendance"];
+
+impl AmendParams {
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("session_id".into(), Json::str(self.session_id.clone()));
+        m.insert("target".into(), Json::str(self.target.clone()));
+        m.insert("value".into(), self.value.clone());
+        if let Some(a) = &self.attestation {
+            m.insert("attestation".into(), a.clone());
+        }
+        if let Some(k) = &self.idempotency_key {
+            m.insert("idempotency_key".into(), Json::str(k.clone()));
+        }
+        if let Some(i) = &self.invocation {
+            m.insert("invocation".into(), i.to_json());
+        }
+        Json::Obj(m)
+    }
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "amend")?;
+        let session_id = s.req_str("session_id")?;
+        let target = closed_str(s.req("target")?, AMEND_TARGETS, "amend/target")?;
+        let value = s.req("value")?.clone();
+        let attestation = s.take("attestation").cloned();
+        let idempotency_key = s.opt_str("idempotency_key")?;
+        let invocation = s
+            .take("invocation")
+            .map(|i| InvocationRecord::from_json(i, "amend/invocation"))
+            .transpose()?;
+        s.finish()?;
+        Ok(AmendParams {
+            session_id,
+            target,
+            value,
+            attestation,
+            idempotency_key,
+            invocation,
         })
     }
 }

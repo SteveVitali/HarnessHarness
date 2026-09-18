@@ -717,6 +717,35 @@ impl Store {
 
     /// `release(lease, reason)` — marks the lease released and audits it.
     pub fn release(&mut self, lease: &Lease, reason: &str) -> Result<(), LedgerError> {
+        let run_id = lease.run_id.clone();
+        let new_rec = self.mark_released(lease)?;
+        let state = self.runs.get_mut(&run_id).unwrap();
+        emit_lease_row(
+            &*self.ids,
+            &*self.clock,
+            state,
+            "lifecycle.lease.released",
+            &new_rec,
+            Json::Obj(BTreeMap::from([("reason".to_string(), Json::str(reason))])),
+        )?;
+        Ok(())
+    }
+
+    /// `release_silent(lease)` — the same lease-record transition as
+    /// `release` but without minting `lifecycle.lease.released`: used
+    /// when the run's event stream is already sealed at
+    /// `lifecycle.run.finished`, where a post-terminal row would break
+    /// the stream ≡ export byte-identity (`run events --from 0` must
+    /// equal what the live stream carried — AC-R-2.11.1-3). The lease
+    /// file still records `Released`.
+    pub fn release_silent(&mut self, lease: &Lease) -> Result<(), LedgerError> {
+        self.mark_released(lease)?;
+        Ok(())
+    }
+
+    /// Shared fencing check + lease-record update for `release` /
+    /// `release_silent`. Returns the new record so callers may audit it.
+    fn mark_released(&mut self, lease: &Lease) -> Result<LeaseRecord, LedgerError> {
         if !self.runs.contains_key(&lease.run_id) {
             return Err(LedgerError::UnknownRun {
                 run_id: lease.run_id.clone(),
@@ -740,16 +769,7 @@ impl Store {
             ..rec
         };
         write_lease_file(&self.run_dir(&lease.run_id), &new_rec)?;
-        let state = self.runs.get_mut(&lease.run_id).unwrap();
-        emit_lease_row(
-            &*self.ids,
-            &*self.clock,
-            state,
-            "lifecycle.lease.released",
-            &new_rec,
-            Json::Obj(BTreeMap::from([("reason".to_string(), Json::str(reason))])),
-        )?;
-        Ok(())
+        Ok(new_rec)
     }
 
     // ── append ───────────────────────────────────────────────────────────

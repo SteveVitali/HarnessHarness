@@ -75,6 +75,10 @@ pub enum EmbedError {
     UnexpressibleSurface { detail: String },
     /// A link-time refusal (ADR-0019).
     LinkError { detail: String },
+    /// An override whose `HirDiff` classification widens authority or
+    /// loosens budget from a non-interactive, unattested invocation
+    /// (I-1; ADR-0168 D4; §7.1 — refused before any run opens).
+    AuthorityWideningRequiresHuman { detail: String },
     // ── Budget / policy ──────────────────────────────────────────────────
     /// The declared budget cannot cover the arm/dispatch.
     InsufficientBudget { dimension: Option<String> },
@@ -142,6 +146,7 @@ impl EmbedError {
             EmbedError::AuthorityViolation { .. } => 1303,
             EmbedError::UnexpressibleSurface { .. } => 1304,
             EmbedError::LinkError { .. } => 1305,
+            EmbedError::AuthorityWideningRequiresHuman { .. } => 1306,
             EmbedError::InsufficientBudget { .. } => 1400,
             EmbedError::UnbudgetedArm => 1401,
             EmbedError::UnattendedRequiresInput => 1402,
@@ -186,6 +191,7 @@ impl EmbedError {
             EmbedError::AuthorityViolation { .. } => "AuthorityViolation",
             EmbedError::UnexpressibleSurface { .. } => "UnexpressibleSurface",
             EmbedError::LinkError { .. } => "LinkError",
+            EmbedError::AuthorityWideningRequiresHuman { .. } => "AuthorityWideningRequiresHuman",
             EmbedError::InsufficientBudget { .. } => "InsufficientBudget",
             EmbedError::UnbudgetedArm => "UnbudgetedArm",
             EmbedError::UnattendedRequiresInput => "UnattendedRequiresInput",
@@ -273,6 +279,9 @@ impl EmbedError {
                 format!("unexpressible surface: {detail}")
             }
             EmbedError::LinkError { detail } => format!("link error: {detail}"),
+            EmbedError::AuthorityWideningRequiresHuman { detail } => {
+                format!("authority widening requires a human invocation: {detail}")
+            }
             EmbedError::InsufficientBudget { dimension } => match dimension {
                 Some(d) => format!("insufficient budget on {d}"),
                 None => "insufficient budget".into(),
@@ -398,6 +407,7 @@ impl EmbedError {
             }
             EmbedError::UnexpressibleSurface { detail }
             | EmbedError::LinkError { detail }
+            | EmbedError::AuthorityWideningRequiresHuman { detail }
             | EmbedError::Fenced { detail } => {
                 put(&mut m, "detail", Json::str(detail.clone()));
             }
@@ -464,6 +474,7 @@ pub const ALL_ERROR_KINDS: &[&str] = &[
     "AuthorityViolation",
     "UnexpressibleSurface",
     "LinkError",
+    "AuthorityWideningRequiresHuman",
     "InsufficientBudget",
     "UnbudgetedArm",
     "UnattendedRequiresInput",

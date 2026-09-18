@@ -24,6 +24,7 @@
 pub mod frames;
 pub mod inject;
 pub mod open;
+pub mod overrides;
 pub mod runtime;
 pub mod service;
 pub mod stdio;

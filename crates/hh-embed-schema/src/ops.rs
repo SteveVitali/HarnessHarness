@@ -377,7 +377,33 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
-        staged_exp("amend", "W", "AmendParams", "Session"),
+        // `amend` — the ADR-0216 OQ-468 interim op is implemented for
+        // the C0 exhaustion path: `target = budget` mints
+        // `control.budget.amended` + lifts the driver's ceiling + wakes
+        // the parked loop (`amend{attendance|approval_mode}` answers the
+        // honest `Refused{stage_pending}` at Stage 1 — DF-S1.26-*).
+        OpSpec {
+            tier: Tier::Experimental,
+            implemented: true,
+            ..call(
+                "amend",
+                "W",
+                "AmendParams",
+                "Session",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "AuthorityWideningRequiresHuman",
+                    "Draining",
+                    "SessionDetached",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
         staged_exp("set_coordinate", "W", "SetCoordinateParams", "Recorded"),
         staged_exp(
             "coherent_fork_points",

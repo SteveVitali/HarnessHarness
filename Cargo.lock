@@ -29,6 +29,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-cli"
+version = "0.0.1"
+dependencies = [
+ "hh-assembly",
+ "hh-embed",
+ "hh-embed-client-generated",
+ "hh-embed-schema",
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-codegen"
 version = "0.0.1"
 dependencies = [

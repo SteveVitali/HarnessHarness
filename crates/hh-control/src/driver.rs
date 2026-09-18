@@ -375,6 +375,20 @@ impl<S: ControlStrategy> Driver<S> {
         self.now_ms = self.now_ms.saturating_add(ms.max(1));
     }
 
+    /// `amend_budget_ceiling(dimension, new_cap)` — the runtime half of a
+    /// ledgered `amend{budget}`: lift (or re-pin) the hard ceiling the
+    /// guard fold reads. The boundary mints `control.budget.amended`
+    /// first — this call only re-arms the in-memory ceiling so the next
+    /// `guard_ctx` reports `new_cap − consumed` (the parked escalation's
+    /// wake cue then re-drives `propose`; ADR-0168 D6). A `new_cap` still
+    /// below consumed keeps `remaining ≤ 0` — the next guard crossing
+    /// escalates again (attended) or stops (unattended).
+    pub fn amend_budget_ceiling(&mut self, dimension: &str, new_cap: i64) {
+        self.config
+            .budget_ceiling
+            .insert(dimension.to_string(), new_cap);
+    }
+
     /// `checkpoint_ref` — the content address of the state's canonical
     /// checkpoint (`H("control.checkpoint" ∥ bytes)` — every
     /// `control.decision` carries it; resume-by-leaf restores it).
@@ -527,7 +541,14 @@ impl<S: ControlStrategy> Driver<S> {
                     // next decision).
                     let is_kernel_stop = reason.starts_with("stop{");
                     if is_kernel_stop {
-                        let stop_kind = reason.trim_start_matches("stop{").trim_end_matches('}');
+                        // Strip exactly the wrapper's `stop{` + `}` — the
+                        // payload is the reason's canonical JSON whose own
+                        // braces must survive (`trim_end_matches` would eat
+                        // them).
+                        let stop_kind = reason
+                            .strip_prefix("stop{")
+                            .and_then(|s| s.strip_suffix('}'))
+                            .unwrap_or(&reason);
                         // A kernel stop rule fired during `check` — the
                         // envelope owns the stop (decider: envelope).
                         let sr = kernel_stop_reason(stop_kind, &self.envelope.policy);
@@ -1315,10 +1336,17 @@ fn scope_empty() -> Scope {
     }
 }
 
-/// Map a kernel stop-rule tag to a `StopReason` (the `check` path's
-/// `stop{kind}` spellings — `cancelled` keeps its `by`, `budget_exhausted`
-/// its dimension; the rest default by kind).
+/// Map a kernel stop-rule payload to a `StopReason` (the `check` path's
+/// `stop{<canonical StopReason json>}` spellings — the fired members
+/// (`budget_exhausted`'s dimension, `cancelled`'s `by`,
+/// `format_failure`'s count) survive verbatim; the bare-kind spellings
+/// remain as a fallback for any hand-made refusal).
 fn kernel_stop_reason(kind: &str, policy: &EnvelopePolicy) -> StopReason {
+    if let Ok(j) = hh_wire::json::parse(kind) {
+        if let Some(r) = StopReason::from_json(&j) {
+            return r;
+        }
+    }
     match kind {
         "completed" => StopReason::Completed,
         "format_failure" => StopReason::FormatFailure { count: 0 },

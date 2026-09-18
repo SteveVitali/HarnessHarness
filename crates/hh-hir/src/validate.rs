@@ -713,10 +713,9 @@ fn check_kind_record(node: &Node, index: &BTreeMap<String, &Node>, errs: &mut Ve
                 ) {
                     Ok(()) => {}
                     Err(
-                        e @ (crate::debt::DebtError::MissingField { .. }
-                        | crate::debt::DebtError::UnknownDebtHome { .. }),
+                        crate::debt::DebtError::MissingField { .. }
+                        | crate::debt::DebtError::UnknownDebtHome { .. },
                     ) => {
-                        eprintln!("DEBT-DEBUG: {e:?}");
                         errs.push(HirError::ConditionedRuleIncomplete {
                             rule_id: r.rule_id.clone(),
                         });

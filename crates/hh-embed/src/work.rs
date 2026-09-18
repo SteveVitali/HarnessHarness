@@ -80,7 +80,7 @@ impl EmbedService {
             s.next_completion = completion.clone();
             s.next_response_ref = response_ref;
         }
-        let payload_ref = self.record_input(&p.session_id)?;
+        let payload_ref = self.record_input(&p.session_id, &p.input)?;
         {
             let s = self.session_mut(&p.session_id)?;
             if let Some(d) = s.driver.as_mut() {
@@ -96,14 +96,16 @@ impl EmbedService {
         Ok(out)
     }
 
-    /// Mint the submitted input as a `context.artefact.delivered` durable
-    /// row (§8394: `submit.input` items are `ContextItem`/`Procedure`
-    /// deliveries — the class table's registered row); returns the artefact
-    /// id the follow-up cue carries (the cue names a record, never bytes,
-    /// I2). Payload shape per §5c.1: `{artefact_id, delivery_id, kind,
-    /// rendering_ref?, by_reference}` — the principal's inline input is
-    /// `kind:"instruction"`, delivered by value.
-    fn record_input(&mut self, sess_id: &str) -> Result<String, EmbedError> {
+    /// Mint the submitted input as `context.artefact.delivered` durable
+    /// rows (§8394: `submit.input` items are `ContextItem`/`Procedure`
+    /// deliveries — the class table's registered row; one row per input
+    /// block, S1.26); returns the artefact id the follow-up cue carries
+    /// (the cue names a record, never bytes, I2). Payload shape per
+    /// §5c.1: `{artefact_id, delivery_id, kind, rendering_ref?,
+    /// by_reference}` — the principal's inline input is
+    /// `kind:"instruction"`, delivered by value; an `{kind:"invoke"}`
+    /// block is a capability delivery (`kind:"capability"`).
+    fn record_input(&mut self, sess_id: &str, input: &[Json]) -> Result<String, EmbedError> {
         let (run_id, lease) = {
             let s = self.session(sess_id)?;
             (
@@ -113,19 +115,29 @@ impl EmbedService {
                 })?,
             )
         };
-        let input_id = self.alloc("input");
-        self.mint(
-            &run_id,
-            &lease,
-            "context.artefact.delivered",
-            Json::obj([
-                ("artefact_id", Json::str(input_id.clone())),
-                ("delivery_id", Json::str(input_id.clone())),
-                ("kind", Json::str("instruction")),
-                ("by_reference", Json::Bool(false)),
-            ]),
-        )?;
-        Ok(input_id)
+        let mut first = String::new();
+        for (i, block) in input.iter().enumerate() {
+            let input_id = self.alloc("input");
+            if i == 0 {
+                first = input_id.clone();
+            }
+            let kind = match block.get("kind").and_then(Json::as_str) {
+                Some("invoke") => "capability",
+                _ => "instruction",
+            };
+            self.mint(
+                &run_id,
+                &lease,
+                "context.artefact.delivered",
+                Json::obj([
+                    ("artefact_id", Json::str(input_id.clone())),
+                    ("delivery_id", Json::str(input_id.clone())),
+                    ("kind", Json::str(kind)),
+                    ("by_reference", Json::Bool(false)),
+                ]),
+            )?;
+        }
+        Ok(first)
     }
 
     /// `cancel` — the principal's `interrupt` cue. `scope{kind:"turn"}`
@@ -285,6 +297,164 @@ impl EmbedService {
         Ok(out)
     }
 
+    /// `amend` — the ADR-0216 OQ-468 interim op. At Stage 1 the one
+    /// honoured target is `budget` (the attended-exhaustion wake):
+    /// `value = {dimensions: {<dim>: <new_ceiling>}}` mints a
+    /// `control.budget.amended` audit row per dimension, re-arms the
+    /// driver's hard ceiling (`amend_budget_ceiling`), and wakes the
+    /// parked escalation (`follow_up` → the loop re-proposes under the
+    /// new `remaining`). I-1 applies: a *loosening* amendment requires
+    /// the run's `interactive` attendance or a caller `attestation`;
+    /// anything less is `AuthorityWideningRequiresHuman`. A tightening
+    /// amendment is admitted unconditionally. `amend{approval_mode |
+    /// attendance}` answers `Refused{stage_pending}` (C1/Stage 2 —
+    /// ADR-0168(e)).
+    pub(crate) fn amend(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        inject::refuse_handle_keys(params, "amend")?;
+        inject::refuse_secrets(params)?;
+        let p = AmendParams::from_json(params)?;
+        {
+            let s = self.writer_session(&p.session_id)?;
+            if let Some(k) = &p.idempotency_key {
+                if let Some(hit) = s.idem.get(k) {
+                    return Ok(hit.clone());
+                }
+            }
+            if s.finished {
+                return Err(EmbedError::Draining);
+            }
+        }
+        if p.target != "budget" {
+            return Err(EmbedError::Refused {
+                reason: "stage_pending".to_string(),
+            });
+        }
+        let dims: Vec<(String, i64)> = match p.value.get("dimensions") {
+            Some(Json::Obj(m)) => m
+                .iter()
+                .filter_map(|(d, v)| v.as_int().map(|n| (d.clone(), n)))
+                .collect(),
+            _ => match (
+                p.value.get("dimension").and_then(Json::as_str),
+                p.value.get("ceiling").and_then(Json::as_int),
+            ) {
+                (Some(d), Some(n)) => vec![(d.to_string(), n)],
+                _ => {
+                    return Err(EmbedError::SchemaViolation {
+                        path: "amend/value".to_string(),
+                        code: "bad_amend_value".to_string(),
+                    })
+                }
+            },
+        };
+        if dims.is_empty() {
+            return Err(EmbedError::SchemaViolation {
+                path: "amend/value".to_string(),
+                code: "bad_amend_value".to_string(),
+            });
+        }
+        let (run_id, lease, manifest, realized) = {
+            let s = self.session(&p.session_id)?;
+            (
+                s.run_id.clone(),
+                s.lease.clone().ok_or(EmbedError::Refused {
+                    reason: "session_is_read_only".to_string(),
+                })?,
+                self.store.manifest(&s.run_id).map_err(ledger_err)?.clone(),
+                s.realized.clone(),
+            )
+        };
+        let interactive =
+            manifest.attendance.0 == hh_ledger::manifest::AttendanceValue::Interactive;
+        let budget_id = manifest.budget.clone().unwrap_or_else(|| "b-1".to_string());
+        for (dim, new_cap) in &dims {
+            // I-1 — a loosening amendment widens spend: human at the
+            // terminal (interactive manifest attendance) or a caller
+            // attestation; tightening is admitted unconditionally.
+            let old_cap = {
+                let s = self.session(&p.session_id)?;
+                s.budget_ceiling.get(dim).copied()
+            };
+            let loosening = old_cap.map(|o| *new_cap > o).unwrap_or(true);
+            if loosening && !interactive && p.attestation.is_none() {
+                return Err(EmbedError::AuthorityWideningRequiresHuman {
+                    detail: format!(
+                        "amend(budget) loosens dimension {dim} ({old_cap:?} → {new_cap})                          without interactive attendance or attestation"
+                    ),
+                });
+            }
+            self.mint(
+                &run_id,
+                &lease,
+                "control.budget.amended",
+                Json::obj([
+                    ("budget_id", Json::str(budget_id.clone())),
+                    ("dimension", Json::str(dim.clone())),
+                    ("value", Json::Int(*new_cap)),
+                    ("limit", Json::Int(*new_cap)),
+                    (
+                        "old",
+                        Json::str(
+                            Json::obj([("hard", old_cap.map(Json::Int).unwrap_or(Json::Null))])
+                                .to_canonical_string(),
+                        ),
+                    ),
+                    (
+                        "new",
+                        Json::str(Json::obj([("hard", Json::Int(*new_cap))]).to_canonical_string()),
+                    ),
+                    ("authority", Json::str("principal")),
+                ]),
+            )?;
+            {
+                let s = self.session_mut(&p.session_id)?;
+                s.budget_ceiling.insert(dim.clone(), *new_cap);
+                if let Some(d) = s.driver.as_mut() {
+                    d.amend_budget_ceiling(dim, *new_cap);
+                }
+            }
+        }
+        // `lifecycle.surface.invoked` — an amendment is a run-amending
+        // surface invocation.
+        if let Some(inv) = &p.invocation {
+            self.mint(&run_id, &lease, "lifecycle.surface.invoked", inv.to_json())?;
+        }
+        // Wake the parked loop — the escalation decision parked the
+        // drive on `human_input`; the amendment is the principal's
+        // follow-up (the durable `control.budget.amended` row is the
+        // record; the cue carries its artefact ref).
+        {
+            let amend_ref = self.alloc("amend");
+            let s = self.session_mut(&p.session_id)?;
+            if let Some(d) = s.driver.as_mut() {
+                d.submit(Cue::HumanInput(HumanInput::FollowUp {
+                    payload_ref: amend_ref,
+                }));
+            }
+        }
+        self.drive(&p.session_id)?;
+        let head = self.store.head(&run_id).map_err(ledger_err)?;
+        let out = session_json(
+            &p.session_id,
+            &run_id,
+            &p.session_id,
+            &sess_manifest_ref(&manifest),
+            &manifest.configuration_id.clone().unwrap_or_default(),
+            &manifest
+                .configuration_version_id
+                .clone()
+                .unwrap_or_default(),
+            &realized,
+            head.seq as i64,
+        );
+        if let Some(k) = &p.idempotency_key {
+            self.session_mut(&p.session_id)?
+                .idem
+                .insert(k.clone(), out.clone());
+        }
+        Ok(out)
+    }
+
     /// `fork` — `open_run` a child bound to the parent's head at `at`
     /// (`forked_from{run_id, at_seq, head_hash}` — the ledger re-checks
     /// the anchor; `manifest_delta` applies no Stage-1 fields and is
@@ -337,6 +507,15 @@ impl EmbedService {
             .store
             .open_run(child.clone(), &holder)
             .map_err(ledger_err)?;
+        // `lifecycle.surface.invoked` — a fork opens a child run.
+        if let Some(inv) = &p.invocation {
+            self.mint(
+                &child_run,
+                &lease,
+                "lifecycle.surface.invoked",
+                inv.to_json(),
+            )?;
+        }
         let session_id = self.alloc("sess");
         self.mint(
             &child_run,
@@ -368,6 +547,7 @@ impl EmbedService {
             decided: Default::default(),
             host_asks: Default::default(),
             idem: Default::default(),
+            budget_ceiling: Default::default(),
             scan_seq: head.seq,
             next_invoke: None,
             next_completion: String::new(),

@@ -47,8 +47,8 @@ use crate::strategy::{
     RestoreError, StrategyParams, VariantRequires,
 };
 use crate::vocab::{
-    ActMode, ControlDecision, Cue, DecisionKind, EnvelopeSignal, ExpectedOutput, HumanInput,
-    OnPartial, RetryTarget, SettledOutcome, WaitUntil,
+    ActMode, ControlDecision, Cue, DecisionKind, EnvelopeSignal, EscalateAsk, ExpectedOutput,
+    HumanInput, OnPartial, RetryTarget, SettledOutcome, WaitUntil,
 };
 
 /// The `react/minimal` variant ref (`hh/` namespace — the kernel-shipped
@@ -436,7 +436,22 @@ impl ControlStrategy for ReactMinimal {
                     decision_ref,
                     reason,
                 } => {
-                    if reason.starts_with("retry_budget_exhausted") || reason.starts_with("give_up")
+                    // `escalate_on_exhaustion` arrives here when the
+                    // decide-point guard fired it (the `envelope.check`
+                    // seam reports Respond verdicts as `Refused{kind}` —
+                    // unlike the post-effect path's `GuardFired` cue).
+                    // Same landing: `escalate{handoff}` parks for the
+                    // principal's ledgered `amend(budget)` or `stop`
+                    // (ADR-0168 D6).
+                    if reason == "escalate_on_exhaustion" {
+                        ControlDecision {
+                            stamp: stamp_for(state, DecisionPoint::Escalate, None),
+                            kind: DecisionKind::Escalate {
+                                ask: EscalateAsk::Handoff,
+                            },
+                        }
+                    } else if reason.starts_with("retry_budget_exhausted")
+                        || reason.starts_with("give_up")
                     {
                         self.infra_stop(state)
                     } else {
@@ -490,8 +505,25 @@ impl ControlStrategy for ReactMinimal {
             // `guard_fired` — a nudge landed or a refused `stop{completed}`
             // was converted; the loop proposes again (bounded by
             // `max_continue_nudges` — react/minimal's is 0, so the envelope's
-            // second conversion is `refused{blocking_effect_id}`).
-            Cue::GuardFired { .. } => self.propose(state),
+            // second conversion is `refused{blocking_effect_id}`). The one
+            // exception is `escalate_on_exhaustion`: the envelope fired it
+            // only because `ExhaustionAction::Escalate` met
+            // `interactive_attendance`, so the honest decision is
+            // `escalate{handoff}` — the loop parks for the principal's
+            // ledgered `amend(budget)` or `stop` (ADR-0168 D6;
+            // AC-R-2.11.1-14).
+            Cue::GuardFired { guard_id, .. } => {
+                if guard_id == "escalate_on_exhaustion" {
+                    ControlDecision {
+                        stamp: stamp_for(state, DecisionPoint::Escalate, None),
+                        kind: DecisionKind::Escalate {
+                            ask: EscalateAsk::Handoff,
+                        },
+                    }
+                } else {
+                    self.propose(state)
+                }
+            }
 
             // `woken` — every wakeup (peer messages included) resumes the
             // loop with a proposal; the payload rides the context, never
