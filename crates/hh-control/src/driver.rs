@@ -1229,7 +1229,15 @@ impl<S: ControlStrategy> Driver<S> {
             class,
             self.ts(),
             Scope {
-                turn_id: Some("turn-1".into()),
+                // `lifecycle.run.*` rows are run-scope — they live beside
+                // the turn chain, not inside it (`run.finished` lands after
+                // `turn.finished` closed the turn scope, so a `turn_id`
+                // stamp would trip the ledger's `ScopeNotOpen` gate).
+                turn_id: if class.starts_with("lifecycle.run.") {
+                    None
+                } else {
+                    Some("turn-1".into())
+                },
                 effect_id: scope_id
                     .filter(|_| class.starts_with("action.effect."))
                     .map(String::from),

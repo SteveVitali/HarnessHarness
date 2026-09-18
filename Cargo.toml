@@ -215,6 +215,10 @@ members = [
     # `ComparisonReport`, `RenderSpec`); and the debt views (`DebtIndexRow`,
     # `DebtReport`, `DebtNotice`). Engines/samplers land at Stage 3.
     "crates/hh-lab",
+    # The hh-embed/1 embedding boundary (spec §7.4, R-2.11.4⁰ᵇ; ticket S1.25) — EmbedService
+    # (binding a) + the stdio loop (binding b) over Store/EnvDriver/Driver; the kernel binary
+    # delegates to it. A PERSISTENT workspace member.
+    "crates/hh-embed",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
