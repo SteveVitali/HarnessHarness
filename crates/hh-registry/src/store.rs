@@ -814,6 +814,29 @@ impl RegistryStore {
                 if let Err(e) = crate::extension::validate_extension_record(e) {
                     bail!(e);
                 }
+                // §8.4 §2 (R-2.12.2): an `ExtensionRecord{kind: plugin}` admits
+                // only when its `PluginManifest/1` decodes strictly and passes
+                // `admit_plugin` — pin, locality, tier and
+                // `check_compatibility` all run here, **before** any
+                // executable is fetched, unpacked or launched (AC-1/-2).
+                if crate::extension::plugin::is_plugin(&e.kind) {
+                    let manifest =
+                        crate::extension::plugin::manifest_from_json(&e.manifest, "manifest")
+                            .map_err(
+                                crate::extension::plugin::ManifestError::into_registry_error,
+                            )?;
+                    let ctx = crate::extension::plugin::AdmissionContext {
+                        first_party: matches!(
+                            registrar.authority,
+                            AuthorityClass::Kernel | AuthorityClass::Definition
+                        ),
+                        now: hh_plugin::EvalPoint::kernel(),
+                        requests_cap: None, // claims recorded; the cap binds at seal
+                    };
+                    if let Err(e2) = crate::extension::plugin::admit_plugin(self, &manifest, &ctx) {
+                        bail!(e2.into_registry_error());
+                    }
+                }
             }
             RegistryRecord::EnvironmentFamily(f) => {
                 // The family record's own schema checks are the admission gate
@@ -1431,6 +1454,16 @@ impl RegistryStore {
                         }
                         other => other,
                     })?;
+            }
+        }
+        // §8.4 §2 (R-2.12.2): execute-mode resolution re-runs
+        // `check_compatibility` on a plugin's manifest — a sunset that passed
+        // between admission and execute refuses here, dated, before launch.
+        if mode == ResolveMode::Execute {
+            if let RegistryRecord::Extension(e) = rec {
+                if crate::extension::plugin::is_plugin(&e.kind) {
+                    crate::extension::plugin::execute_mode_compat_check(self, &e.manifest)?;
+                }
             }
         }
         let mut vref = self.to_versioned_ref(env, rec);
@@ -2283,33 +2316,12 @@ fn registrar_origin_tagged(p: &ProvenanceRecord) -> String {
 
 /// Version/range containment: `*` covers all; `v` exact; `a-b` inclusive bounds;
 /// `>=v` / `<=v` open bounds. Versions compare as numeric tuples (unknown shapes
-/// compare lexically — deterministic).
+/// compare lexically — deterministic). Since S1.27 the grammar is **owned by
+/// `hh-plugin::contract`** — the one contract-version range grammar shared with
+/// `ContractRef`s, `ContractVersionPolicy`s and `check_compatibility` (CC1;
+/// §8.4 §2). This function is a delegate; semantics unchanged.
 pub(crate) fn range_covers(range: &str, version: &str) -> bool {
-    let range = range.trim();
-    if range == "*" || range.is_empty() {
-        return true;
-    }
-    if let Some(v) = range.strip_prefix(">=") {
-        return version_cmp(version, v.trim()) != std::cmp::Ordering::Less;
-    }
-    if let Some(v) = range.strip_prefix("<=") {
-        return version_cmp(version, v.trim()) != std::cmp::Ordering::Greater;
-    }
-    if let Some((a, b)) = range.split_once('-') {
-        return version_cmp(version, a.trim()) != std::cmp::Ordering::Less
-            && version_cmp(version, b.trim()) != std::cmp::Ordering::Greater;
-    }
-    version_cmp(version, range) == std::cmp::Ordering::Equal
-}
-
-fn version_cmp(a: &str, b: &str) -> std::cmp::Ordering {
-    let parse = |s: &str| -> Vec<u64> {
-        s.trim_start_matches('v')
-            .split('.')
-            .map(|p| p.parse::<u64>().unwrap_or(0))
-            .collect()
-    };
-    parse(a).cmp(&parse(b))
+    hh_plugin::contract::range_covers(range, version)
 }
 
 /// Whether a `dialect_range` admits `registry/1`.

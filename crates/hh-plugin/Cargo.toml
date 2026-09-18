@@ -1,0 +1,20 @@
+[package]
+name = "hh-plugin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 extensibility / plugin-architecture contract surface (spec §8.4, R-2.12.2; ticket S1.27; ADR-0180…0182): `ContractRef`/`ContractVersionPolicy`/`check_compatibility` (version-range ∩ supported − sunset, typed `ContractIncompatible`), the tier/`depends_on` declarations and the spec-DAG readiness tool (X2 — `tier_violations`/`cycles`), the module-graph lint for first-party in-process variants (X1), the golden manifest corpus driver, and the `hh-plugin-check` readiness binary. The `PluginManifest/1` codec and candidate admission live in `hh-registry::extension::plugin` (the manifest is an `ExtensionRecord{kind: plugin}` payload — its record home is the extension lifecycle's store); the `plugin_abi/1` schema lives in `hh-embed-schema::plugin_abi` (the one kernel schema source — V6). Pure data + pure functions; no executable is ever fetched, unpacked or launched here (AC-2)."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh-plugin-check"
+path = "src/bin/plugin_check.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }

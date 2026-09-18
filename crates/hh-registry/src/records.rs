@@ -140,6 +140,12 @@ pub struct ClassRecord {
     pub slot_key: String,
     /// The class tier (ADR-0182 X1 — e.g. `C0`).
     pub tier: String,
+    /// The class's `depends_on` contract refs (ADR-0182 D1 — "`depends_on:
+    /// [ContractRef]` on … every `ClassRecord`"; X1 makes `ContractRef` the
+    /// only reach — the spec-DAG check and `admit_plugin`'s tier rule consume
+    /// it). Empty = substrate-only (the class contract depends on the kernel
+    /// substrate, which is C0 by definition).
+    pub depends_on: Vec<hh_plugin::ContractRef>,
 }
 
 /// The `VariantRecord` (ADR-0023 shape + ADR-0151 D5 as amended / ADR-0153). The
@@ -326,6 +332,12 @@ pub struct RegistryPolicy {
     pub allowed_localities_by_origin: BTreeMap<String, BTreeSet<Placement>>,
     /// The foreign systems `import` may read (Stage 4 — held as data here).
     pub allowed_foreign_systems: BTreeSet<String>,
+    /// The operator/layered `ContractVersionPolicy` records (§8.4 §3;
+    /// ADR-0180 D3) — checked by `check_compatibility` inside `resolve`/
+    /// `admit_plugin` alongside the kernel table (`hh-plugin`'s
+    /// `kernel_contract_policies`). Carried on the policy because a dedicated
+    /// `RecordKind` would be a `registry/2` dialect bump (ADR-0262).
+    pub contract_version_policies: Vec<hh_plugin::ContractVersionPolicy>,
 }
 
 impl RegistryPolicy {
@@ -343,6 +355,7 @@ impl RegistryPolicy {
             foreign_import_default_admission: Admission::Quarantined,
             allowed_localities_by_origin: BTreeMap::new(),
             allowed_foreign_systems: BTreeSet::new(),
+            contract_version_policies: Vec::new(),
         }
     }
 }

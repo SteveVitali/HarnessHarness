@@ -73,6 +73,10 @@ pub fn control_strategy_class() -> ClassRecord {
         metrics_declared: vec!["refusals".to_string()],
         slot_key: "control_strategy".to_string(),
         tier: "C0".to_string(),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
     }
 }
 
@@ -129,6 +133,10 @@ pub fn context_policy_class() -> ClassRecord {
         metrics_declared: vec!["truncations".to_string()],
         slot_key: "context_policy".to_string(),
         tier: "C0".to_string(),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
     }
 }
 
@@ -256,6 +264,10 @@ pub fn validator_class() -> ClassRecord {
         ],
         slot_key: "validator".to_string(),
         tier: "C0".to_string(),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
     }
 }
 
@@ -329,6 +341,10 @@ pub fn execution_alignment_class() -> ClassRecord {
         ],
         slot_key: "execution_alignment".to_string(),
         tier: "C0".to_string(),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
     }
 }
 
