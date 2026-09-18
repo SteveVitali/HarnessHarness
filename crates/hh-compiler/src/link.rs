@@ -87,11 +87,17 @@ pub struct ConditionedRule {
     pub rule_id: String,
     /// The rule's home.
     pub home: ConditionedRuleHome,
-    /// The debt status spelling (`active|expiring|expired|retired` on the profile
-    /// vocabulary; `open|discharged|violated` on the §3.1 one).
+    /// The debt status spelling (`active|expiring|expired|retired` — the
+    /// canonical four-value sum on both vocabularies).
     pub status: String,
     /// The owning profile coordinate / variant version / definition rule id.
     pub owner: String,
+    /// `evidence_grade` — derived, never stored on the record (§5h.6 §3;
+    /// ADR-0197); `lcd_report.conditioned_rules[]` surfaces it.
+    pub evidence_grade: Option<String>,
+    /// Whether the debt's typed `removal_test` instantiates at the member
+    /// level (`lcd_report.conditioned_rules[].removal_test.executable`).
+    pub removal_test_executable: Option<bool>,
 }
 
 /// Where a conditioned rule lives.
@@ -378,6 +384,8 @@ pub fn link(
                 home: ConditionedRuleHome::Profile,
                 status: r.debt.status.name().to_string(),
                 owner: profile_coordinate(p),
+                evidence_grade: Some(r.debt.evidence_grade().name().to_string()),
+                removal_test_executable: r.debt.removal_test.as_ref().map(|t| t.instantiates()),
             });
         }
         for (k, ext) in &p.ext {
@@ -389,6 +397,8 @@ pub fn link(
                 home: ConditionedRuleHome::Profile,
                 status: ext.debt.status.name().to_string(),
                 owner: profile_coordinate(p),
+                evidence_grade: Some(ext.debt.evidence_grade().name().to_string()),
+                removal_test_executable: ext.debt.removal_test.as_ref().map(|t| t.instantiates()),
             });
         }
     }
@@ -401,14 +411,14 @@ pub fn link(
             if r.conditioned_on.is_some() {
                 match &r.assumption_debt {
                     Some(d) if debt_complete(d) => {
-                        if d.status == hh_hir::DebtStatus::Violated {
+                        if d.status == hh_hir::DebtStatus::Expired {
                             expired.push(diag(
                                 Code::LinkExpiredRule,
                                 Severity::Warning,
                                 &format!("/nodes/{}", node.semantic_id()),
                                 &r.rule_id,
                                 &format!(
-                                    "definition rule {} carries a violated debt record",
+                                    "definition rule {} carries an expired debt record",
                                     r.rule_id
                                 ),
                                 "discharge or retire the rule before relying on the bundle",
@@ -420,6 +430,11 @@ pub fn link(
                             home: ConditionedRuleHome::Definition,
                             status: d.status.name().to_string(),
                             owner: node.semantic_id(),
+                            evidence_grade: Some(d.evidence_grade().name().to_string()),
+                            removal_test_executable: d
+                                .removal_test
+                                .as_ref()
+                                .map(|t| t.instantiates()),
                         });
                     }
                     _ => missing_debt.push(diag(
@@ -493,14 +508,14 @@ pub fn link(
         );
         for (rule_id, debt) in &record.conditioned_rules {
             if debt_complete(debt) {
-                if debt.status == hh_hir::DebtStatus::Violated {
+                if debt.status == hh_hir::DebtStatus::Expired {
                     expired.push(diag(
                         Code::LinkExpiredRule,
                         Severity::Warning,
                         &format!("/slots/{slot}"),
                         rule_id,
                         &format!(
-                            "variant rule {rule_id} on {} carries a violated debt record",
+                            "variant rule {rule_id} on {} carries an expired debt record",
                             binding.variant.variant_id
                         ),
                         "discharge or retire the rule before relying on the bundle",
@@ -512,6 +527,8 @@ pub fn link(
                     home: ConditionedRuleHome::Variant,
                     status: debt.status.name().to_string(),
                     owner: version_id.clone(),
+                    evidence_grade: Some(debt.evidence_grade().name().to_string()),
+                    removal_test_executable: debt.removal_test.as_ref().map(|t| t.instantiates()),
                 });
             } else {
                 missing_debt.push(diag(
@@ -735,11 +752,13 @@ fn parse_slot_list(
 /// The §3.1 `AssumptionDebtRecord` completeness check (definition/variant home):
 /// every field populated.
 fn debt_complete(d: &hh_hir::records::AssumptionDebtRecord) -> bool {
+    // The `/1` required set (§5h.6 §3; REQUIRED_FIELDS_BASE ∪ {removal_test}).
     !d.rule_id.is_empty()
         && !d.hypothesis.content_hash.is_empty()
-        && !d.owner.is_empty()
-        && !d.expiry_condition.is_empty()
+        && !d.evidence_refs.is_empty()
+        && !d.owner.id.is_empty()
         && !d.removal_test_ref.is_empty()
+        && d.removal_test.is_some()
 }
 
 fn check_profile_rule_debt(

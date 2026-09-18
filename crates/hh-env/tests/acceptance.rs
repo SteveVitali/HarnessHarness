@@ -1472,7 +1472,8 @@ fn ac_r_2_8_7_ask_emits_pending_then_ephemeral_requested_then_refusal() {
     assert!(pending < refused, "pending precedes the refusal");
     assert!(seq_of("action.tool.rejected").is_some(), "rejected lands");
     assert!(
-        envs.iter().all(|e| e.class != "security.permission.requested"),
+        envs.iter()
+            .all(|e| e.class != "security.permission.requested"),
         "the ephemeral rendering never reaches the durable log"
     );
 
@@ -1529,6 +1530,7 @@ fn ac_r_2_8_7_ask_emits_pending_then_ephemeral_requested_then_refusal() {
         )
     });
     assert!(
-        saw_requested, "ephemeral requested on subscribe: {frames:?}"
+        saw_requested,
+        "ephemeral requested on subscribe: {frames:?}"
     );
 }

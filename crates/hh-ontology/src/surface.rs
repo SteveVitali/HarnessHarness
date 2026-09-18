@@ -7,7 +7,9 @@
 //! cell below the minimum design is `unknown{insufficient, n}`, never dropped or estimated
 //! (§2.5.7 "No interpolation"; T-LCD-07). Fitting from real rows is Stage 3.
 
-/// The persisted, expiring form of Ψ_θ (§2.5.7 "Derived view"). Shape only at Stage 1.
+/// The persisted, expiring form of Ψ_θ (§2.5.7 "Derived view") — carries an
+/// expiry and a debt record (debt home 11; the `debt_record_ref` binding
+/// landed at S1.24). Shape only at Stage 1.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FittedSurfaceReport {
     /// The metric fitted.
@@ -24,6 +26,13 @@ pub struct FittedSurfaceReport {
     pub configuration_ids: Vec<String>,
     /// Cells that were below the minimum design (`unknown{insufficient, n}`), never estimated.
     pub unknown_cells: Vec<UnknownCell>,
+    /// The report's expiry (§2.5.7 "Expiry" — the fitted surface expires with
+    /// the configurations it was fitted over).
+    pub expiry: Option<crate::debt::ExpiryCondition>,
+    /// `debt_record_ref` — the `AssumptionDebtRecord` the fit carries (debt
+    /// home 11; §2.5.7 "its only persisted form carries an expiry and a debt
+    /// record").
+    pub debt_record_ref: Option<String>,
     /// The report status.
     pub status: SurfaceStatus,
 }
@@ -117,6 +126,8 @@ mod tests {
             model_form: ModelForm::Contrast,
             configuration_ids: vec!["cfg:a".into(), "cfg:b".into()],
             unknown_cells: vec![],
+            expiry: None,
+            debt_record_ref: Some("debt:surface-fit-1".into()),
             status: SurfaceStatus::Active,
         }
     }

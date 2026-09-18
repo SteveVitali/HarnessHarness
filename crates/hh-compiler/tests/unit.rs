@@ -371,7 +371,7 @@ fn link_missing_debt_record_on_a_conditioned_rule() {
         },
         Some(complete_debt(
             "test:crule.rule",
-            hh_hir::DebtStatus::Discharged,
+            hh_hir::DebtStatus::Retired,
             5,
         )),
         5,

@@ -199,6 +199,22 @@ members = [
     # wired gate, live D2/D3/D5/D6 detectors, judged validators/critics and
     # probe/resume halves are Stage 2/3/4 (DF-S1.21-*).
     "crates/hh-verification",
+    # The C0/Stage-1 Lab schema plane (spec §6, R-2.9.4⁰ᵃ/2.9.8⁰/2.10.3⁰ᵃ/2.10.4⁰ᵃ +
+    # the R-2.10.5⁰ row-key fields; ticket S1.24; ADR-0142…0144, 0154…0160,
+    # 0197/0198, 0202/0203). A PERSISTENT workspace member: the benchmark/
+    # environment records (`EnvironmentFamilyRecord`, `TaskRecord`,
+    # `SuiteManifest`, `SuiteValidityRecord`, `SplitAssignmentRecord`,
+    # `ParityReport`) with the import-side checks (disjoint surfaces,
+    # `HeldOutInEnvironment`); the foreign-model claim records (`ForeignRef`,
+    # `SnapshotClaim`, `TrainingCutoffClaim`, `CompatibilityRecord`); the
+    # experiment dialect `hh-experiment/1` (`ExperimentSpec`, `FactorSpec`,
+    # `LevelSpec`, `ArmSpec`, `SuiteBinding`, `SchedulingPolicy`,
+    # `ReattemptPolicy`, `ValidationStrategy`, `CellPlan`/`RunPlan`/`OrderPlan`,
+    # `run_plan_id`, the closed `ExperimentRefusal` register set); the analysis
+    # records (`AnalysisSpec`, `AnalysisRecord`, `AnalysisReport`,
+    # `ComparisonReport`, `RenderSpec`); and the debt views (`DebtIndexRow`,
+    # `DebtReport`, `DebtNotice`). Engines/samplers land at Stage 3.
+    "crates/hh-lab",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

@@ -476,6 +476,7 @@ pub fn kern_code(e: &HirError) -> Code {
         AuthorityWidening { .. } => "AuthorityWidening",
         BudgetExceedsParent { .. } => "BudgetExceedsParent",
         ConditionedRuleIncomplete { .. } => "ConditionedRuleIncomplete",
+        RemovalTestRefusal { .. } => "RemovalTestRefusal",
         NonCanonicalInput { .. } => "NonCanonicalInput",
         OpaqueWithoutInterface { .. } => "OpaqueWithoutInterface",
         UnexpressibleSurface { .. } => "UnexpressibleSurface",

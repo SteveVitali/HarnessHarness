@@ -16,6 +16,7 @@
 //! [`document::parse_document`] (`NonCanonicalInput` / `MissingProvenance` / `UnknownKind` /
 //! `DialectUnsupported`), encode via `to_json`/`canonical_bytes`.
 
+pub mod debt;
 pub mod diff;
 pub mod document;
 pub mod errors;

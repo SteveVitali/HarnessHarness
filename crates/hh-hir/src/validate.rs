@@ -698,6 +698,34 @@ fn check_kind_record(node: &Node, index: &BTreeMap<String, &Node>, errs: &mut Ve
             }
             if let Some(d) = &r.assumption_debt {
                 check_text_leaf(&d.hypothesis, "rule.assumption_debt.hypothesis", errs);
+                // §5h.6 §4 — the seal-time `validate_removal_test` battery
+                // (member-level ctx: the resolvable checks are register/
+                // engine-side; the member-level checks run here —
+                // AC-R-2.9.6-2 static half).
+                let ctx = crate::debt::RemovalTestContext::member_level();
+                let policy = hh_ontology::debt::DebtPolicy::default();
+                match crate::debt::validate_for_home(
+                    d,
+                    "harness_rule",
+                    "assumption_debt",
+                    &policy,
+                    &ctx,
+                ) {
+                    Ok(()) => {}
+                    Err(
+                        e @ (crate::debt::DebtError::MissingField { .. }
+                        | crate::debt::DebtError::UnknownDebtHome { .. }),
+                    ) => {
+                        eprintln!("DEBT-DEBUG: {e:?}");
+                        errs.push(HirError::ConditionedRuleIncomplete {
+                            rule_id: r.rule_id.clone(),
+                        });
+                    }
+                    Err(e) => errs.push(HirError::RemovalTestRefusal {
+                        rule_id: r.rule_id.clone(),
+                        detail: format!("{e:?}"),
+                    }),
+                }
             }
         }
         _ => {}
@@ -796,10 +824,13 @@ fn check_hosted(h: &OpaqueProcess, errs: &mut Vec<HirError>) {
 }
 
 fn debt_complete(d: &AssumptionDebtRecord) -> bool {
+    // The ratified `/1` base members (§5h.6 §3; REQUIRED_FIELDS_BASE) — the
+    // per-home richer check is `hh_hir::debt::validate_for_home` at
+    // seal/register; this is the in-document completeness half.
     !d.rule_id.is_empty()
         && !d.hypothesis.content_hash.is_empty()
-        && !d.owner.is_empty()
-        && !d.expiry_condition.is_empty()
+        && !d.evidence_refs.is_empty()
+        && !d.owner.id.is_empty()
         && !d.removal_test_ref.is_empty()
 }
 

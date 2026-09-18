@@ -179,10 +179,23 @@ fn register_refuses_conditioned_rule_without_complete_debt() {
             rule_id: "r1".to_string(),
             hypothesis: text("", &kernel()),
             evidence_refs: vec![],
-            owner: String::new(), // incomplete: empty owner
-            expiry_condition: "x".to_string(),
+            owner: hh_hir::OwnerRef::principal(""), // incomplete: empty owner
+            expiry_condition: hh_hir::ExpiryCondition {
+                kind: hh_hir::ExpiryKind::EvidenceRefreshDue,
+                value: None,
+            },
             removal_test_ref: "t".to_string(),
-            status: hh_hir::records::DebtStatus::Open,
+            status: hh_hir::records::DebtStatus::Active,
+            debt_class: None,
+            hypothesis_typed: None,
+            scope: None,
+            expiry: None,
+            runway_ms: None,
+            revalidation: None,
+            removal_test: None,
+            created_by: None,
+            created_at: None,
+            supersedes: None,
         },
     )];
     let e = s
@@ -1171,4 +1184,68 @@ fn lineage_reports_supersedes_revocations_and_name_entries() {
     let lin3 = s.lineage(&v1.version_id).unwrap();
     assert_eq!(lin3.revocations.len(), 1);
     assert_eq!(lin3.revocations[0].replacement, Some(v2.version_id.clone()));
+}
+
+#[test]
+fn environment_family_registers_and_a_family_scoped_metric_resolves() {
+    // DF-S1.22-3 (closed at S1.24): `MetricDeclaration.applies_to_families`
+    // carries typed `EnvironmentFamily` values; a family-scoped metric
+    // resolves against the registered `environment_family` record; the
+    // canonical spellings are unchanged, so old name-spelling bodies decode.
+    use hh_ontology::compliance::MetricDeclaration;
+    use hh_ontology::lab::{
+        EnvironmentFamily, EnvironmentFamilyRecord, EpisodeModel, SubmissionKind, VerifierIsolation,
+    };
+
+    let d = dir("env-family");
+    let mut s = RegistryStore::open(&d, &kernel()).unwrap();
+    let family = EnvironmentFamilyRecord {
+        family_id: EnvironmentFamily::CodingTerminal,
+        version: "1".into(),
+        requires: BTreeMap::new(),
+        oracle_classes_available: vec!["executable".into(), "end_state".into()],
+        submission_kind: SubmissionKind::Patch,
+        verifier_isolation_default: VerifierIsolation::Separate,
+        process_metrics: vec!["wall_seconds".into()],
+        fault_profiles_admissible: vec![],
+        perturbation_profiles_admissible: vec![],
+        episode_model: EpisodeModel::SingleEpisode,
+        provenance: kernel(),
+    };
+    s.register(RegistryRecord::EnvironmentFamily(family), &kernel(), None)
+        .unwrap();
+    assert!(s
+        .resolve_environment_family(EnvironmentFamily::CodingTerminal)
+        .is_some());
+    assert!(s
+        .resolve_environment_family(EnvironmentFamily::SearchResearch)
+        .is_none());
+
+    // A family-scoped metric resolves through the registry against the
+    // registered record — never a bare name.
+    let metric = MetricDeclaration {
+        name: "family.scoped.metric".into(),
+        applies_to_families: [EnvironmentFamily::CodingTerminal].into_iter().collect(),
+        ..MetricDeclaration::default()
+    };
+    for f in &metric.applies_to_families {
+        assert!(
+            s.resolve_environment_family(*f).is_some(),
+            "family {f:?} must resolve against a registered record"
+        );
+    }
+    assert!(!metric
+        .applies_to_families
+        .contains(&EnvironmentFamily::SearchResearch));
+
+    // The canonical spellings are unchanged — a name-spelling body decodes
+    // into the typed set (the DF-S1.22-3 migration is additive, CC8).
+    let j = metric.to_json();
+    let body = match &j {
+        Json::Obj(m) => m.get("applies_to_families").cloned().unwrap_or(Json::Null),
+        _ => Json::Null,
+    };
+    assert_eq!(body, Json::Arr(vec![Json::str("coding_terminal")]));
+    let back = MetricDeclaration::from_json(&j).unwrap();
+    assert_eq!(back.applies_to_families, metric.applies_to_families);
 }

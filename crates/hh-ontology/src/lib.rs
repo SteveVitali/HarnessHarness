@@ -30,10 +30,12 @@ pub mod compliance;
 pub mod config;
 pub mod control;
 pub mod dag;
+pub mod debt;
 pub mod dimensions;
 pub mod eval;
 pub mod formal;
 pub mod glossary;
+pub mod lab;
 pub mod participant;
 pub mod planes;
 pub mod risk;
@@ -60,6 +62,10 @@ pub use eval::{
 };
 pub use formal::{resolve, Symbol, SymbolDef};
 pub use glossary::{glossary_check, GlossaryFinding};
+pub use lab::{
+    BenchmarkNetworkMode, ContaminationStratum, EnvironmentFamily, EpisodeModel, HandleCapability,
+    SplitLabel, SubmissionKind, Support, TaskValidityState, VerifierIsolation,
+};
 pub use participant::{
     admissible_granularities, describe, Granularity, Observability, ParticipantClass,
     ParticipantDescriptor,

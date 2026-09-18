@@ -12,7 +12,15 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use hh_ontology::control::ControlBoundary;
-use hh_provenance::{AuthorityClass, PersistenceScope, TaintTag};
+/// The canonical `/1` debt vocabulary — re-exported so debt-bearing record
+/// owners and fixtures share the one schema source (CC7).
+pub use hh_ontology::debt::{
+    DebtClass, DebtExpiry, DebtPolicy, DebtRef, DebtScope, DebtStatus, DeficiencyClass,
+    EvidenceGrade, EvidenceKind, EvidenceRef, ExpiryCondition, ExpiryKind, HypothesisTyped,
+    ModelSelector, OwnerRef, RemovalTest, RemovalTestKind, RemovalVerdict, Revalidation,
+    UnexecutableReason,
+};
+use hh_provenance::{AuthorityClass, PersistenceScope, ProvenanceRecord, TaintTag};
 use hh_wire::json::Json;
 
 use hh_ontology::participant::HostingMechanism;
@@ -787,46 +795,105 @@ pub enum RuleAction {
     },
 }
 
-/// The assumption-debt record — the complete record `{rule_id, hypothesis, evidence_refs[],
-/// owner, expiry_condition, removal_test_ref, status}` that must ride on every
-/// `conditioned_on` rule and every `judge` validator (§3.1.4; T-LCD-05).
+/// `AssumptionDebtRecord/1` — the complete record `{rule_id, hypothesis: Text,
+/// evidence_refs[], owner, expiry_condition, removal_test_ref, status}` plus the
+/// additive `/1` members (§5h.6 §3; R-2.9.6⁰ᵃ; ADR-0197/0198): `{debt_class?,
+/// hypothesis_typed?, scope?, expiry?, runway_ms?, revalidation?, removal_test?,
+/// created_by?, created_at?, supersedes?}`. It rides on every `conditioned_on`
+/// rule and every `judge` validator (§3.1.4; T-LCD-05) and on every `DebtHomes/1`
+/// row's field — CF-049: one schema, the vocabulary differs across homes.
+///
+/// Field-shape notes (the `/1` upgrade): `evidence_refs` is typed
+/// (`EvidenceRef{kind, ref, observed_at?, tier?, provisional?}` — a bare string
+/// decodes as `{kind: source, ref}` for landed bodies); `owner` is typed
+/// (`principal{id}`/`team{id}` + `reach_via` — a bare string decodes as
+/// `principal{id}`); `expiry_condition` is `{kind, value?}` (a bare spelling
+/// decodes as `{kind}`); `status` is the canonical four-value sum — legacy
+/// `open`/`discharged`/`violated` decode per [`DebtStatus::parse_legacy`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssumptionDebtRecord {
     /// The rule this debt belongs to (matches `HarnessRuleRecord.rule_id` / the validator's
     /// semantic id).
     pub rule_id: String,
-    /// The hypothesis (prose — `Text`).
+    /// The hypothesis (prose — `Text`, provenance-bearing).
     pub hypothesis: Text,
-    /// The evidence the hypothesis rests on (identity coordinates).
-    pub evidence_refs: Vec<String>,
-    /// The owner (identity coordinate).
-    pub owner: String,
-    /// The expiry condition.
-    pub expiry_condition: String,
-    /// The removal test (identity coordinate of the test).
+    /// The evidence the hypothesis rests on — typed `EvidenceRef`s.
+    pub evidence_refs: Vec<EvidenceRef>,
+    /// The owner (`principal{id}` | `team{id}` + `reach_via` sinks).
+    pub owner: OwnerRef,
+    /// The expiry condition (`{kind, value?}`).
+    pub expiry_condition: ExpiryCondition,
+    /// The removal test reference (the template/design pointer).
     pub removal_test_ref: String,
-    /// The debt status.
+    /// The debt status (`active`/`expiring`/`expired`/`retired`).
     pub status: DebtStatus,
+    /// `/1`: the closed debt class (defaulted per home).
+    pub debt_class: Option<DebtClass>,
+    /// `/1`: the typed hypothesis `{subject, deficiency_class, predicted_effect}`.
+    pub hypothesis_typed: Option<HypothesisTyped>,
+    /// `/1`: the applicability scope `{model_selectors[], task_classes[], roles[]}`.
+    pub scope: Option<DebtScope>,
+    /// `/1`: the parameterized expiry `{condition, params{until?, …}}`.
+    pub expiry: Option<DebtExpiry>,
+    /// `/1`: the declared runway (ms).
+    pub runway_ms: Option<u64>,
+    /// `/1`: the revalidation policy `{on[], action}`.
+    pub revalidation: Option<Revalidation>,
+    /// `/1`: the typed removal test (instantiates per kind; validated by
+    /// `hh_hir::debt::validate_removal_test`).
+    pub removal_test: Option<RemovalTest>,
+    /// `/1`: who created the record (provenance).
+    pub created_by: Option<ProvenanceRecord>,
+    /// `/1`: when the record was created (transaction time).
+    pub created_at: Option<u64>,
+    /// `/1`: the `RetirementRecord` this debt supersedes, when it does
+    /// (`supersedes{reason: expiry}` chains).
+    pub supersedes: Option<String>,
 }
 
-/// `AssumptionDebtRecord.status` — the closed status sum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DebtStatus {
-    /// Open — the assumption is live.
-    Open,
-    /// Discharged — the removal test passed.
-    Discharged,
-    /// Violated — the expiry condition fired with the test failing.
-    Violated,
-}
+impl AssumptionDebtRecord {
+    /// The derived `evidence_grade` (ADR-0197 — derived from `evidence_refs`,
+    /// never stored).
+    pub fn evidence_grade(&self) -> EvidenceGrade {
+        hh_ontology::debt::evidence_grade(&self.evidence_refs)
+    }
 
-impl DebtStatus {
-    /// Canonical name.
-    pub fn name(self) -> &'static str {
-        match self {
-            DebtStatus::Open => "open",
-            DebtStatus::Discharged => "discharged",
-            DebtStatus::Violated => "violated",
+    /// Whether the field `name` is *present* on the record for
+    /// `required_fields` completeness checks — a non-`Option` member counts
+    /// present except `evidence_refs`/`scope.model_selectors` which count
+    /// present only non-empty.
+    pub fn has_field(&self, name: &str) -> bool {
+        match name {
+            "rule_id" => !self.rule_id.is_empty(),
+            "hypothesis" => {
+                !self.hypothesis.content_hash.is_empty() || self.hypothesis.content.is_some()
+            }
+            "evidence_refs" => !self.evidence_refs.is_empty(),
+            "owner" => !self.owner.id.is_empty(),
+            "expiry_condition" => true,
+            "removal_test_ref" => !self.removal_test_ref.is_empty(),
+            "status" => true,
+            "debt_class" => self.debt_class.is_some(),
+            "hypothesis_typed" => self.hypothesis_typed.is_some(),
+            "scope" => self.scope.is_some(),
+            "scope.model_selectors" => self
+                .scope
+                .as_ref()
+                .map(|s| !s.model_selectors.is_empty())
+                .unwrap_or(false),
+            "scope.task_classes" => self
+                .scope
+                .as_ref()
+                .map(|s| !s.task_classes.is_empty())
+                .unwrap_or(false),
+            "expiry" => self.expiry.is_some(),
+            "runway_ms" => self.runway_ms.is_some(),
+            "revalidation" => self.revalidation.is_some(),
+            "removal_test" => self.removal_test.is_some(),
+            "created_by" => self.created_by.is_some(),
+            "created_at" => self.created_at.is_some(),
+            "supersedes" => self.supersedes.is_some(),
+            _ => false,
         }
     }
 }

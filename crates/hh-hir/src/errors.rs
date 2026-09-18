@@ -59,6 +59,15 @@ pub enum HirError {
         /// The rule's id.
         rule_id: String,
     },
+    /// A conditioned rule's typed `removal_test` failed the member-level
+    /// `validate_removal_test` battery (§5h.6 §4 — the static/dry-run
+    /// instantiation check at seal; AC-R-2.9.6-2 static half).
+    RemovalTestRefusal {
+        /// The rule's id.
+        rule_id: String,
+        /// The `DebtError` refusal detail.
+        detail: String,
+    },
     /// Input bytes are not the canonical encoding (duplicate keys, non-sorted members,
     /// insignificant whitespace, or a serialization that does not round-trip).
     NonCanonicalInput {
@@ -214,6 +223,9 @@ impl fmt::Display for HirError {
             }
             HirError::ConditionedRuleIncomplete { rule_id } => {
                 write!(f, "ConditionedRuleIncomplete: {rule_id}")
+            }
+            HirError::RemovalTestRefusal { rule_id, detail } => {
+                write!(f, "RemovalTestRefusal: {rule_id} — {detail}")
             }
             HirError::NonCanonicalInput { detail } => write!(f, "NonCanonicalInput: {detail}"),
             HirError::OpaqueWithoutInterface { detail } => {

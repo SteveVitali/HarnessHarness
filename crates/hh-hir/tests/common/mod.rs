@@ -98,11 +98,36 @@ pub fn debt_record(rule_id: &str, seq: u64) -> AssumptionDebtRecord {
     AssumptionDebtRecord {
         rule_id: rule_id.into(),
         hypothesis: text("debt hypothesis", seq),
-        evidence_refs: vec![],
-        owner: "test:owner".into(),
-        expiry_condition: "superseded".into(),
+        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
+        owner: hh_hir::OwnerRef::principal("test:owner"),
+        expiry_condition: hh_hir::ExpiryCondition {
+            kind: hh_hir::ExpiryKind::EvidenceRefreshDue,
+            value: None,
+        },
         removal_test_ref: "sha256:test".into(),
-        status: DebtStatus::Open,
+        status: DebtStatus::Active,
+        // `AssumptionDebtRecord/1` per-home completeness for the `harness_rule`
+        // home (DebtHomes/1 id 1: `debt_class` + `scope.model_selectors` are
+        // required fields there — the seal-time `validate_for_home` battery).
+        debt_class: Some(hh_hir::DebtClass::Hypothesized),
+        hypothesis_typed: None,
+        scope: Some(hh_hir::DebtScope {
+            model_selectors: vec![hh_hir::ModelSelector::Exact {
+                model_id: "test:model".into(),
+            }],
+            ..Default::default()
+        }),
+        expiry: None,
+        runway_ms: None,
+        revalidation: None,
+        removal_test: Some(hh_hir::RemovalTest {
+            kind: hh_hir::RemovalTestKind::Inspection,
+            criteria: Some("human inspection".into()),
+            ..hh_hir::RemovalTest::new(hh_hir::RemovalTestKind::Inspection)
+        }),
+        created_by: None,
+        created_at: None,
+        supersedes: None,
     }
 }
 

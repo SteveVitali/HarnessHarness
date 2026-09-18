@@ -623,42 +623,95 @@ impl IntervalMethod {
 }
 
 /// `EstimatorSelection` — the record every computed interval carries
-/// (CF-337; OQ-129): the selected method and the selection rule that admitted
-/// it (ADR-0158's `T_clt`/`T_bca` floors are the Stage-3 parameters; the
-/// schema records which rule ran and the floor values it applied).
+/// (CF-337; OQ-129; the §6.4 additive bump — S1.24): `declared` (the selected
+/// method — the member renamed from `method` at the bump; legacy bodies
+/// carrying `method` still decode), `selection_rule`, `floors`,
+/// `fallback_chain`, `substituted?{from, to, reason}` (ADR-0158's
+/// `T_clt`/`T_bca` floors are the Stage-3 parameters; the schema records
+/// which rule ran, the floor values it applied, and any fallback the rule
+/// took).
 #[derive(Debug, Clone, PartialEq)]
 pub struct EstimatorSelection {
-    /// The selected interval method.
+    /// The declared (selected) interval method.
     pub method: IntervalMethod,
     /// The selection rule's id (e.g. `adr-0158.clt_floor`).
     pub selection_rule: String,
     /// The floor values the rule applied (`name → threshold`).
     pub floors: BTreeMap<String, u64>,
+    /// `fallback_chain` — the methods the rule may fall back through, in
+    /// order (§6.4 bump).
+    pub fallback_chain: Vec<IntervalMethod>,
+    /// `substituted{from, to, reason}` — set when the rule substituted a
+    /// fallback for the declared method (§6.4 bump).
+    pub substituted: Option<Substitution>,
+}
+
+/// `substituted{from, to, reason}` — a selection-rule substitution record
+/// (§6.4's `EstimatorSelection` bump; S1.24).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Substitution {
+    /// The method the rule declared.
+    pub from: IntervalMethod,
+    /// The method it substituted.
+    pub to: IntervalMethod,
+    /// Why the substitution ran (`floor_unmet`, …).
+    pub reason: String,
 }
 
 impl EstimatorSelection {
-    /// The canonical JSON form.
+    /// The canonical JSON form — the §6.4 bump emits `declared` (the
+    /// renamed `method` member) plus `fallback_chain`/`substituted` when
+    /// populated.
     pub fn to_json(&self) -> Json {
-        Json::obj([
-            ("method", self.method.to_json()),
-            ("selection_rule", Json::str(&self.selection_rule)),
-            (
-                "floors",
-                Json::Obj(
-                    self.floors
-                        .iter()
-                        .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
-                        .collect(),
-                ),
+        let mut m = BTreeMap::new();
+        m.insert("declared".into(), self.method.to_json());
+        m.insert("selection_rule".into(), Json::str(&self.selection_rule));
+        m.insert(
+            "floors".into(),
+            Json::Obj(
+                self.floors
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                    .collect(),
             ),
-        ])
+        );
+        if !self.fallback_chain.is_empty() {
+            m.insert(
+                "fallback_chain".into(),
+                Json::Arr(self.fallback_chain.iter().map(|f| f.to_json()).collect()),
+            );
+        }
+        if let Some(sub) = &self.substituted {
+            m.insert(
+                "substituted".into(),
+                Json::obj([
+                    ("from", sub.from.to_json()),
+                    ("to", sub.to.to_json()),
+                    ("reason", Json::str(&sub.reason)),
+                ]),
+            );
+        }
+        Json::Obj(m)
     }
 
-    /// Strict decode — [`EvalError::SchemaViolation`] on missing/unknown members.
+    /// Strict decode — [`EvalError::SchemaViolation`] on missing/unknown
+    /// members. `declared` (the bump's name) and the legacy `method` member
+    /// both decode; both present must agree.
     pub fn from_json(j: &Json) -> Result<EstimatorSelection, EvalError> {
         const REC: &str = "EstimatorSelection";
         let m = expect_obj(j, REC)?;
-        reject_unknown(m, &["method", "selection_rule", "floors"], REC)?;
+        reject_unknown(
+            m,
+            &[
+                "declared",
+                "method",
+                "selection_rule",
+                "floors",
+                "fallback_chain",
+                "substituted",
+            ],
+            REC,
+        )?;
         let mut floors = BTreeMap::new();
         match m.get("floors") {
             Some(Json::Obj(fm)) => {
@@ -679,19 +732,88 @@ impl EstimatorSelection {
                 })
             }
         }
-        Ok(EstimatorSelection {
-            method: IntervalMethod::from_json(m.get("method").ok_or_else(|| {
-                EvalError::SchemaViolation {
-                    member: "method".into(),
-                    detail: "missing member".into(),
-                }
-            })?)
+        let declared = m.get("declared").or_else(|| m.get("method"));
+        let method = declared
+            .and_then(|d| {
+                IntervalMethod::from_json(d).or({
+                    // `declared`/`method` present but not a valid method — the
+                    // caller reports the violation below via `None`.
+                    None
+                })
+            })
             .ok_or_else(|| EvalError::SchemaViolation {
-                member: "method".into(),
-                detail: "unknown interval method".into(),
-            })?,
+                member: "declared".into(),
+                detail: "missing or unknown interval method".into(),
+            })?;
+        // Both spellings present must agree (a record claiming two different
+        // methods is malformed).
+        if let (Some(d), Some(legacy)) = (m.get("declared"), m.get("method")) {
+            let dj = IntervalMethod::from_json(d);
+            let lj = IntervalMethod::from_json(legacy);
+            if dj != lj {
+                return Err(EvalError::SchemaViolation {
+                    member: "declared".into(),
+                    detail: "`declared` and `method` disagree".into(),
+                });
+            }
+        }
+        let fallback_chain = match m.get("fallback_chain") {
+            None | Some(Json::Null) => Vec::new(),
+            Some(Json::Arr(a)) => {
+                let mut chain = Vec::with_capacity(a.len());
+                for item in a {
+                    chain.push(IntervalMethod::from_json(item).ok_or_else(|| {
+                        EvalError::SchemaViolation {
+                            member: "fallback_chain".into(),
+                            detail: "unknown interval method".into(),
+                        }
+                    })?);
+                }
+                chain
+            }
+            Some(_) => {
+                return Err(EvalError::SchemaViolation {
+                    member: "fallback_chain".into(),
+                    detail: "must be an array".into(),
+                })
+            }
+        };
+        let substituted = match m.get("substituted") {
+            None | Some(Json::Null) => None,
+            Some(sub) => {
+                let sm = expect_obj(sub, "substituted")?;
+                reject_unknown(sm, &["from", "to", "reason"], "substituted")?;
+                Some(Substitution {
+                    from: IntervalMethod::from_json(sm.get("from").ok_or_else(|| {
+                        EvalError::SchemaViolation {
+                            member: "from".into(),
+                            detail: "missing member".into(),
+                        }
+                    })?)
+                    .ok_or_else(|| EvalError::SchemaViolation {
+                        member: "from".into(),
+                        detail: "unknown interval method".into(),
+                    })?,
+                    to: IntervalMethod::from_json(sm.get("to").ok_or_else(|| {
+                        EvalError::SchemaViolation {
+                            member: "to".into(),
+                            detail: "missing member".into(),
+                        }
+                    })?)
+                    .ok_or_else(|| EvalError::SchemaViolation {
+                        member: "to".into(),
+                        detail: "unknown interval method".into(),
+                    })?,
+                    reason: str_at(sm, "reason", "substituted")?.to_string(),
+                })
+            }
+        };
+        Ok(EstimatorSelection {
+            method,
             selection_rule: str_at(m, "selection_rule", REC)?.to_string(),
             floors,
+            fallback_chain,
+            substituted,
         })
     }
 }

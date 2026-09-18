@@ -720,11 +720,28 @@ fn ac_r_2_4_1_11_and_2_4_2_6_registration_contract() {
     let debt = AssumptionDebtRecord {
         rule_id: "r1".into(),
         hypothesis: hh_hir::leaves::Text::new("h", "alice", kernel_prov()),
-        evidence_refs: vec![],
-        owner: "alice".into(),
-        expiry_condition: "on_model_change".into(),
+        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
+        owner: hh_hir::OwnerRef::principal("alice"),
+        expiry_condition: hh_hir::ExpiryCondition {
+            kind: hh_hir::ExpiryKind::ModelVersionChange,
+            value: None,
+        },
         removal_test_ref: "sha256:test".into(),
-        status: DebtStatus::Open,
+        status: DebtStatus::Active,
+        debt_class: None,
+        hypothesis_typed: None,
+        scope: None,
+        expiry: None,
+        runway_ms: None,
+        revalidation: None,
+        removal_test: Some(hh_hir::RemovalTest {
+            kind: hh_hir::RemovalTestKind::Inspection,
+            criteria: Some("human inspection".into()),
+            ..hh_hir::RemovalTest::new(hh_hir::RemovalTestKind::Inspection)
+        }),
+        created_by: None,
+        created_at: None,
+        supersedes: None,
     };
     let d = PolicyDeclaration {
         variant_id: "context_policy/x".into(),

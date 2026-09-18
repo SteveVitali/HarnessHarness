@@ -405,7 +405,7 @@ fn run_refs_from_json(j: &Json, path: &str) -> Result<Vec<RunRef>, HirError> {
         .collect::<Result<_, HirError>>()
 }
 
-fn text_json(t: &Text, semantic: bool) -> Json {
+pub(crate) fn text_json(t: &Text, semantic: bool) -> Json {
     if semantic {
         t.semantic_json()
     } else {
@@ -470,51 +470,161 @@ fn observation_source_parse(s: &str) -> Result<ObservationSource, HirError> {
     }
 }
 
-/// The canonical `AssumptionDebtRecord` encoding (CC7 — the schema source owns
+/// The canonical `AssumptionDebtRecord/1` encoding (CC7 — the schema source owns
 /// both directions; `hh-registry` reuses it for `VariantRecord.conditioned_rules`).
+/// The `/1` additive members emit only when present (CC8 additive discipline).
 pub fn debt_json(d: &AssumptionDebtRecord, semantic: bool) -> Json {
-    Json::obj([
-        ("rule_id", Json::str(d.rule_id.clone())),
-        ("hypothesis", text_json(&d.hypothesis, semantic)),
-        (
-            "evidence_refs",
-            Json::Arr(
-                d.evidence_refs
-                    .iter()
-                    .map(|e| Json::str(e.clone()))
-                    .collect(),
-            ),
-        ),
-        ("owner", Json::str(d.owner.clone())),
-        ("expiry_condition", Json::str(d.expiry_condition.clone())),
-        ("removal_test_ref", Json::str(d.removal_test_ref.clone())),
-        ("status", Json::str(d.status.name())),
-    ])
+    let mut m = BTreeMap::new();
+    m.insert("rule_id".into(), Json::str(d.rule_id.clone()));
+    m.insert("hypothesis".into(), text_json(&d.hypothesis, semantic));
+    m.insert(
+        "evidence_refs".into(),
+        Json::Arr(d.evidence_refs.iter().map(|e| e.to_json()).collect()),
+    );
+    m.insert("owner".into(), d.owner.to_json());
+    m.insert("expiry_condition".into(), d.expiry_condition.to_json());
+    m.insert(
+        "removal_test_ref".into(),
+        Json::str(d.removal_test_ref.clone()),
+    );
+    m.insert("status".into(), Json::str(d.status.name()));
+    if let Some(c) = &d.debt_class {
+        m.insert("debt_class".into(), Json::str(c.name()));
+    }
+    if let Some(h) = &d.hypothesis_typed {
+        m.insert("hypothesis_typed".into(), h.to_json());
+    }
+    if let Some(s) = &d.scope {
+        m.insert("scope".into(), s.to_json());
+    }
+    if let Some(e) = &d.expiry {
+        m.insert("expiry".into(), e.to_json());
+    }
+    if let Some(r) = d.runway_ms {
+        m.insert("runway_ms".into(), Json::Int(r as i64));
+    }
+    if let Some(r) = &d.revalidation {
+        m.insert("revalidation".into(), r.to_json());
+    }
+    if let Some(t) = &d.removal_test {
+        m.insert("removal_test".into(), t.to_json());
+    }
+    if let Some(c) = &d.created_by {
+        m.insert("created_by".into(), c.to_json());
+    }
+    if let Some(c) = d.created_at {
+        m.insert("created_at".into(), Json::Int(c as i64));
+    }
+    if let Some(s) = &d.supersedes {
+        m.insert("supersedes".into(), Json::str(s.clone()));
+    }
+    Json::Obj(m)
 }
 
-/// Decode a canonical `AssumptionDebtRecord` (the [`debt_json`] direction).
+fn debt_member_err(e: hh_ontology::debt::DebtSchemaError) -> HirError {
+    HirError::SchemaViolation { detail: e.detail }
+}
+
+/// Decode a canonical `AssumptionDebtRecord/1` (the [`debt_json`] direction;
+/// legacy `evidence_refs` strings, bare `owner`/`expiry_condition` spellings
+/// and legacy `status` spellings decode per the `/1` field-shape notes).
 pub fn debt_from_json(j: &Json, path: &str) -> Result<AssumptionDebtRecord, HirError> {
-    let status = match req_str(j, "status", path)?.as_str() {
-        "open" => DebtStatus::Open,
-        "discharged" => DebtStatus::Discharged,
-        "violated" => DebtStatus::Violated,
-        other => {
-            return Err(HirError::UnknownKind {
-                kind: format!("debt status {other}"),
-            })
-        }
-    };
+    let status_s = req_str(j, "status", path)?;
+    let status = DebtStatus::parse_legacy(&status_s).ok_or_else(|| HirError::UnknownKind {
+        kind: format!("debt status {status_s}"),
+    })?;
+    let mut evidence_refs = Vec::new();
+    for (i, v) in arr(j, "evidence_refs", path)?.iter().enumerate() {
+        evidence_refs.push(
+            hh_ontology::debt::EvidenceRef::from_json(v, &format!("{path}.evidence_refs[{i}]"))
+                .map_err(debt_member_err)?,
+        );
+    }
+    let debt_class =
+        match opt_str(j, "debt_class") {
+            None => None,
+            Some(s) => Some(hh_ontology::debt::DebtClass::parse(&s).ok_or_else(|| {
+                HirError::UnknownKind {
+                    kind: format!("debt class {s}"),
+                }
+            })?),
+        };
     Ok(AssumptionDebtRecord {
         rule_id: req_str(j, "rule_id", path)?,
         hypothesis: Text::from_json(req(j, "hypothesis", path)?, &format!("{path}.hypothesis"))?,
-        evidence_refs: str_arr(
-            arr(j, "evidence_refs", path)?,
-            &format!("{path}.evidence_refs"),
-        )?,
-        owner: req_str(j, "owner", path)?,
-        expiry_condition: req_str(j, "expiry_condition", path)?,
+        evidence_refs,
+        owner: hh_ontology::debt::OwnerRef::from_json(
+            req(j, "owner", path)?,
+            &format!("{path}.owner"),
+        )
+        .map_err(debt_member_err)?,
+        expiry_condition: hh_ontology::debt::ExpiryCondition::from_json(
+            req(j, "expiry_condition", path)?,
+            &format!("{path}.expiry_condition"),
+        )
+        .map_err(debt_member_err)?,
         removal_test_ref: req_str(j, "removal_test_ref", path)?,
         status,
+        debt_class,
+        hypothesis_typed: match j.get("hypothesis_typed") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::HypothesisTyped::from_json(
+                    v,
+                    &format!("{path}.hypothesis_typed"),
+                )
+                .map_err(debt_member_err)?,
+            ),
+        },
+        scope: match j.get("scope") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::DebtScope::from_json(v, &format!("{path}.scope"))
+                    .map_err(debt_member_err)?,
+            ),
+        },
+        expiry: match j.get("expiry") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::DebtExpiry::from_json(v, &format!("{path}.expiry"))
+                    .map_err(debt_member_err)?,
+            ),
+        },
+        runway_ms: match j.get("runway_ms") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(v.as_int().map(|i| i.max(0) as u64).ok_or_else(|| {
+                HirError::SchemaViolation {
+                    detail: format!("{path}.runway_ms is not an integer"),
+                }
+            })?),
+        },
+        revalidation: match j.get("revalidation") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::Revalidation::from_json(v, &format!("{path}.revalidation"))
+                    .map_err(debt_member_err)?,
+            ),
+        },
+        removal_test: match j.get("removal_test") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::RemovalTest::from_json(v, &format!("{path}.removal_test"))
+                    .map_err(debt_member_err)?,
+            ),
+        },
+        created_by: match j.get("created_by") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(provenance_from_json(v, &format!("{path}.created_by"))?),
+        },
+        created_at: match j.get("created_at") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(v.as_int().map(|i| i.max(0) as u64).ok_or_else(|| {
+                HirError::SchemaViolation {
+                    detail: format!("{path}.created_at is not an integer"),
+                }
+            })?),
+        },
+        supersedes: opt_str(j, "supersedes"),
     })
 }
 

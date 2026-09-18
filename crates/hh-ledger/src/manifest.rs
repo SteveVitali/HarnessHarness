@@ -239,7 +239,8 @@ pub struct LeaseTtl {
     pub wakeup_claim_ms: u64,
 }
 
-/// `task_ref{task_id, suite_id, split_label}`.
+/// `task_ref{task_id, suite_id, split_label}` — `split_label` is the typed
+/// `SplitLabel` closed set (§5h.4 §3; R-2.9.4⁰ᵃ), never an open string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskRef {
     /// The task id.
@@ -247,7 +248,58 @@ pub struct TaskRef {
     /// The suite id.
     pub suite_id: String,
     /// The split label (benchmark hygiene — never a feature).
-    pub split_label: String,
+    pub split_label: hh_ontology::lab::SplitLabel,
+}
+
+/// `experiment{…}` — the manifest's experiment-binding member (§6.3/§6.5;
+/// R-2.10.3⁰ᵃ + the R-2.10.5⁰ row-key fields; S1.24). Two roles:
+///
+/// - on a `run_kind = experiment` run — the engine's binding
+///   (`experiment_id`, `plan_id`, scheduling/reattempt policies, budgets, the
+///   design/pre-registration/match-spec/suite-manifest refs,
+///   `leaderboard_targets`);
+/// - on an `agent` subject run — the row-key binding the result row's
+///   `experiment?` member is built from (`experiment_run_id`, `arm_id`,
+///   `cell_id`, `design_ref?`, `pre_registration_ref?`, `replicate_index`,
+///   `attempt_no`, `comparable`).
+///
+/// Every field is `Option` at the schema level; `RunManifest::validate`
+/// enforces the per-`run_kind` presence rules.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ExperimentBinding {
+    /// `experiment_id` — the experiment's content address (experiment runs).
+    pub experiment_id: Option<String>,
+    /// `plan_id` — the `CellPlan` content address.
+    pub plan_id: Option<String>,
+    /// `scheduling_policy` — the experiment run's scheduling policy.
+    pub scheduling_policy: Option<String>,
+    /// `reattempt_policy` — the experiment run's reattempt policy.
+    pub reattempt_policy: Option<String>,
+    /// `budgets` — the experiment run's `{experiment, instrument}` budget
+    /// block (opaque here — the budget owner's shape).
+    pub budgets: Option<Json>,
+    /// `design_ref` — the pinned design reference.
+    pub design_ref: Option<String>,
+    /// `pre_registration_ref` — the pinned pre-registration reference.
+    pub pre_registration_ref: Option<String>,
+    /// `match_spec_ref` — the pinned match-spec reference.
+    pub match_spec_ref: Option<String>,
+    /// `suite_manifest_ref` — the pinned suite manifest.
+    pub suite_manifest_ref: Option<String>,
+    /// `leaderboard_targets[]` — the leaderboards the experiment feeds.
+    pub leaderboard_targets: Vec<String>,
+    /// `experiment_run_id` — the parent experiment run (subject runs).
+    pub experiment_run_id: Option<String>,
+    /// `arm_id` — the arm the subject run executes.
+    pub arm_id: Option<String>,
+    /// `cell_id` — the cell the subject run executes.
+    pub cell_id: Option<String>,
+    /// `replicate_index` — the replicate within the cell.
+    pub replicate_index: Option<u64>,
+    /// `attempt_no` — the attempt ordinal within the replicate.
+    pub attempt_no: Option<u64>,
+    /// `comparable` — whether the run's outcome is comparable across arms.
+    pub comparable: Option<bool>,
 }
 
 /// `forked_from` / `continued_from` — `{run_id, at_seq, head_hash}` (ADR-0027 §6;
@@ -348,6 +400,8 @@ pub struct RunManifest {
     pub grace_ms: u64,
     /// The bound task coordinate.
     pub task_ref: Option<TaskRef>,
+    /// The experiment binding (experiment + subject runs; §6.3/§6.5 row keys).
+    pub experiment: Option<ExperimentBinding>,
     /// The spec's trailing `…` — additional manifest facts preserved verbatim.
     pub extra: BTreeMap<String, Json>,
 }
@@ -389,6 +443,7 @@ impl RunManifest {
             signer_key_ids: Vec::new(),
             grace_ms: 0,
             task_ref: None,
+            experiment: None,
             extra: BTreeMap::new(),
         }
     }
@@ -468,8 +523,77 @@ impl RunManifest {
                 }
             }
         }
+        // The `experiment` member's per-`run_kind` rules (§6.3/§6.5 row keys):
+        // an experiment run binds `{experiment_id, plan_id}`; an agent subject
+        // run carries the complete row-key binding when it declares
+        // `experiment`; non-agent non-experiment runs never carry it.
+        if let Some(e) = &self.experiment {
+            match self.run_kind {
+                RunKind::Experiment => {
+                    for (field, value) in [
+                        ("experiment.experiment_id", &e.experiment_id),
+                        ("experiment.plan_id", &e.plan_id),
+                    ] {
+                        if value.is_none() {
+                            return Err(bad(format!("{field} required on run_kind = experiment")));
+                        }
+                    }
+                }
+                RunKind::Agent => {
+                    // A subject run's experiment binding is all-or-nothing: the
+                    // row key is complete or the member is absent.
+                    let any = [&e.experiment_run_id, &e.arm_id, &e.cell_id]
+                        .iter()
+                        .any(|v| v.is_some())
+                        || e.replicate_index.is_some()
+                        || e.attempt_no.is_some()
+                        || e.comparable.is_some();
+                    if any {
+                        for (field, present) in [
+                            ("experiment_run_id", e.experiment_run_id.is_some()),
+                            ("arm_id", e.arm_id.is_some()),
+                            ("cell_id", e.cell_id.is_some()),
+                            ("replicate_index", e.replicate_index.is_some()),
+                            ("attempt_no", e.attempt_no.is_some()),
+                            ("comparable", e.comparable.is_some()),
+                        ] {
+                            if !present {
+                                return Err(bad(format!(
+                                    "experiment.{field} required on an agent subject run                                      that binds an experiment"
+                                )));
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    return Err(bad(format!(
+                        "experiment present on run_kind = {}",
+                        self.run_kind.as_str()
+                    )));
+                }
+            }
+        }
         if self.signer_key_ids.iter().any(|k| k.is_empty()) {
             return Err(bad("signer_key_ids members must be non-empty".into()));
+        }
+        if let Some(e) = &self.experiment {
+            for (field, value) in [
+                ("experiment.experiment_id", &e.experiment_id),
+                ("experiment.plan_id", &e.plan_id),
+                ("experiment.design_ref", &e.design_ref),
+                ("experiment.pre_registration_ref", &e.pre_registration_ref),
+                ("experiment.match_spec_ref", &e.match_spec_ref),
+                ("experiment.suite_manifest_ref", &e.suite_manifest_ref),
+            ] {
+                if let Some(v) = value {
+                    if !is_pinned_id(v) {
+                        return Err(LedgerError::UnresolvedRef {
+                            field,
+                            value: v.clone(),
+                        });
+                    }
+                }
+            }
         }
         for link in [&self.forked_from, &self.continued_from]
             .into_iter()
@@ -574,13 +698,52 @@ impl RunManifest {
         if let Some(ev) = &self.spawn_event {
             put("spawn_event", event_ref_json(ev));
         }
+        if let Some(e) = &self.experiment {
+            let mut em: BTreeMap<String, Json> = BTreeMap::new();
+            for (k, v) in [
+                ("experiment_id", &e.experiment_id),
+                ("plan_id", &e.plan_id),
+                ("scheduling_policy", &e.scheduling_policy),
+                ("reattempt_policy", &e.reattempt_policy),
+                ("design_ref", &e.design_ref),
+                ("pre_registration_ref", &e.pre_registration_ref),
+                ("match_spec_ref", &e.match_spec_ref),
+                ("suite_manifest_ref", &e.suite_manifest_ref),
+                ("experiment_run_id", &e.experiment_run_id),
+                ("arm_id", &e.arm_id),
+                ("cell_id", &e.cell_id),
+            ] {
+                if let Some(v) = v {
+                    em.insert(k.to_string(), Json::str(v));
+                }
+            }
+            if let Some(b) = &e.budgets {
+                em.insert("budgets".to_string(), b.clone());
+            }
+            if !e.leaderboard_targets.is_empty() {
+                em.insert(
+                    "leaderboard_targets".to_string(),
+                    Json::Arr(e.leaderboard_targets.iter().map(Json::str).collect()),
+                );
+            }
+            if let Some(r) = e.replicate_index {
+                em.insert("replicate_index".to_string(), Json::Int(r as i64));
+            }
+            if let Some(a) = e.attempt_no {
+                em.insert("attempt_no".to_string(), Json::Int(a as i64));
+            }
+            if let Some(c) = e.comparable {
+                em.insert("comparable".to_string(), Json::Bool(c));
+            }
+            put("experiment", Json::Obj(em));
+        }
         if let Some(t) = &self.task_ref {
             put(
                 "task_ref",
                 Json::Obj(BTreeMap::from([
                     ("task_id".to_string(), Json::str(&t.task_id)),
                     ("suite_id".to_string(), Json::str(&t.suite_id)),
-                    ("split_label".to_string(), Json::str(&t.split_label)),
+                    ("split_label".to_string(), Json::str(t.split_label.name())),
                 ])),
             );
         }
@@ -700,9 +863,53 @@ impl RunManifest {
                 split_label: t
                     .get("split_label")
                     .and_then(Json::as_str)
-                    .map(str::to_string)
-                    .ok_or_else(|| bad("task_ref.split_label missing".into()))?,
+                    .and_then(hh_ontology::lab::SplitLabel::parse)
+                    .ok_or_else(|| bad("task_ref.split_label missing/not a SplitLabel".into()))?,
             }),
+        };
+        let experiment = match j.get("experiment") {
+            None | Some(Json::Null) => None,
+            Some(e) => {
+                let e_str = |k: &str| e.get(k).and_then(Json::as_str).map(str::to_string);
+                let e_u64 = |k: &str, path: &str| -> Result<Option<u64>, LedgerError> {
+                    match e.get(k) {
+                        None | Some(Json::Null) => Ok(None),
+                        Some(v) => v
+                            .as_int()
+                            .map(|i| Some(i.max(0) as u64))
+                            .ok_or_else(|| bad(format!("{path}.{k} not an integer"))),
+                    }
+                };
+                Some(ExperimentBinding {
+                    experiment_id: e_str("experiment_id"),
+                    plan_id: e_str("plan_id"),
+                    scheduling_policy: e_str("scheduling_policy"),
+                    reattempt_policy: e_str("reattempt_policy"),
+                    budgets: e.get("budgets").cloned(),
+                    design_ref: e_str("design_ref"),
+                    pre_registration_ref: e_str("pre_registration_ref"),
+                    match_spec_ref: e_str("match_spec_ref"),
+                    suite_manifest_ref: e_str("suite_manifest_ref"),
+                    leaderboard_targets: match e.get("leaderboard_targets") {
+                        None | Some(Json::Null) => Vec::new(),
+                        Some(Json::Arr(items)) => items
+                            .iter()
+                            .filter_map(|i| i.as_str().map(str::to_string))
+                            .collect(),
+                        _ => return Err(bad("experiment.leaderboard_targets not an array".into())),
+                    },
+                    experiment_run_id: e_str("experiment_run_id"),
+                    arm_id: e_str("arm_id"),
+                    cell_id: e_str("cell_id"),
+                    replicate_index: e_u64("replicate_index", "experiment")?,
+                    attempt_no: e_u64("attempt_no", "experiment")?,
+                    comparable: match e.get("comparable") {
+                        None | Some(Json::Null) => None,
+                        Some(Json::Bool(b)) => Some(*b),
+                        _ => return Err(bad("experiment.comparable not a bool".into())),
+                    },
+                })
+            }
         };
         let signer_key_ids = match j.get("signer_key_ids") {
             None => Vec::new(),
@@ -790,6 +997,7 @@ impl RunManifest {
             audit_policy_ref: opt_str("audit_policy_ref"),
             signer_key_ids,
             task_ref,
+            experiment,
             extra,
         })
     }
@@ -859,6 +1067,58 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn experiment_member_follows_the_run_kind_rules() {
+        // §6.3/§6.5 row keys (S1.24): an `experiment` run binds
+        // `{experiment_id, plan_id}`; a subject `agent` run's binding is
+        // all-or-nothing; other kinds never carry the member.
+        let mut m = RunManifest::minimal(RunKind::Experiment);
+        m.configuration_id = None;
+        m.configuration_version_id = None;
+        m.experiment = Some(ExperimentBinding {
+            experiment_id: Some(format!("sha256:{}", "e".repeat(64))),
+            plan_id: Some(format!("sha256:{}", "f".repeat(64))),
+            ..Default::default()
+        });
+        assert!(m.validate().is_ok());
+
+        // An experiment run without the binding members refuses.
+        let mut m = RunManifest::minimal(RunKind::Experiment);
+        m.configuration_id = None;
+        m.configuration_version_id = None;
+        m.experiment = Some(ExperimentBinding::default());
+        assert!(m.validate().is_err());
+
+        // A subject run's binding is all-or-nothing.
+        let mut m = RunManifest::minimal(RunKind::Agent);
+        m.experiment = Some(ExperimentBinding {
+            experiment_run_id: Some("run:exp".into()),
+            ..Default::default()
+        });
+        assert!(m.validate().is_err());
+        let mut m = RunManifest::minimal(RunKind::Agent);
+        m.experiment = Some(ExperimentBinding {
+            experiment_run_id: Some("run:exp".into()),
+            arm_id: Some("arm:a".into()),
+            cell_id: Some("cell:1".into()),
+            replicate_index: Some(0),
+            attempt_no: Some(1),
+            comparable: Some(true),
+            ..Default::default()
+        });
+        assert!(m.validate().is_ok());
+
+        // A non-agent non-experiment kind never carries the member.
+        let mut m = RunManifest::minimal(RunKind::Surface);
+        m.experiment = Some(ExperimentBinding::default());
+        assert!(m.validate().is_err());
+
+        // The member round-trips through the canonical codec.
+        let j = m.to_json();
+        let back = RunManifest::from_json(&j).unwrap();
+        assert_eq!(back.experiment, m.experiment);
     }
 
     #[test]

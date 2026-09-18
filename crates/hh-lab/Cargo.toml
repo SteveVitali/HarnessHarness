@@ -1,0 +1,12 @@
+[package]
+name = "hh-lab"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-budget = { path = "../hh-budget" }
