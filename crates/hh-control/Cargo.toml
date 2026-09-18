@@ -21,3 +21,7 @@ hh-compiler = { path = "../hh-compiler" }
 hh-gateway = { path = "../hh-gateway" }
 hh-env = { path = "../hh-env" }
 hh-context = { path = "../hh-context" }
+# `Claim`/claim-extraction substrate; the driver emits
+# `verification.claim.recorded` on every admitted `stop{completed}` (S1.21 —
+# R-2.7.2a; AC-R-2.7.2a-1).
+hh-verification = { path = "../hh-verification" }

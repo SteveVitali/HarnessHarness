@@ -235,8 +235,8 @@ pub const PROCESS_METRICS: &[ProcessMetric] = &[
         computed_from: &["verification.validator.invoked", "verification.validator.verdict"],
         unit: MetricUnit::Ppm, fold: N(NA::Capability) }, // `verdict` is §05f's
     ProcessMetric { name: "claim_state_agreement", requires_observability: &[EV], applies_to: BOTH,
-        computed_from: &["verification.claim.assessed"], unit: MetricUnit::Ppm,
-        fold: N(NA::Capability) },
+        computed_from: &["verification.claim.reconciled"], unit: MetricUnit::Ppm,
+        fold: N(NA::Capability) }, // the class is S1.21's; the fold is Stage 3's
     ProcessMetric { name: "evidence_traceability", requires_observability: &[EV, LG], applies_to: BOTH,
         computed_from: &["verification.evidence.recorded"], unit: MetricUnit::Ppm,
         fold: N(NA::NotRun) }, // the evidence corpus is Stage 3's
@@ -399,12 +399,17 @@ mod tests {
     #[test]
     fn pending_classes_are_declared_not_violations() {
         // `context.artefact.activated` landed with the context builder
-        // (S1.19); `verification.artefact.followed` is still a declared-
-        // pending Stage-3 class — `artifact_follow_rate` reads both.
+        // (S1.19); `verification.artefact.followed` landed registered with
+        // the verification substrate (S1.21) — `artifact_follow_rate`'s
+        // classes resolve and the metric is still fold-pending (Stage 3).
         let m = metric("artifact_follow_rate").unwrap();
         let check = registry_check(m);
-        assert!(check.pending.contains(&"verification.artefact.followed"));
+        assert!(!check.pending.contains(&"verification.artefact.followed"));
         assert!(check.violations.is_empty());
+        // `verification.evidence.recorded` remains a declared-pending class.
+        let m = metric("evidence_traceability").unwrap();
+        let check = registry_check(m);
+        assert!(check.pending.contains(&"verification.evidence.recorded"));
     }
 
     #[test]

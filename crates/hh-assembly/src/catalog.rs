@@ -33,12 +33,16 @@ pub struct Stage1Catalog {
 }
 
 impl Stage1Catalog {
-    /// The two mandatory Stage-1 classes.
+    /// The Stage-1 classes (the two mandatory hot-path classes plus the
+    /// S1.21 verification-plane registrations — `validator` ordered-many and
+    /// `execution_alignment` floors-only).
     pub fn stage1() -> Stage1Catalog {
         let mut classes = BTreeMap::new();
         for c in [
             hh_registry::suites::control_strategy_class(),
             hh_registry::suites::context_policy_class(),
+            hh_registry::suites::validator_class(),
+            hh_registry::suites::execution_alignment_class(),
         ] {
             classes.insert(c.class_id.clone(), c);
         }

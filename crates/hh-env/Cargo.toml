@@ -37,3 +37,7 @@ hh-secrets = { path = "../hh-secrets" }
 # `prepare`'s `reserve` (ADR-0040 D3 — reserve-before-spend) binds through the
 # `ReservationSource` seam implemented on `budget::Account`.
 hh-budget = { path = "../hh-budget" }
+# The kernel local checks (a)–(c) at the `verify` placement — `run_local_checks`
+# over the terminal capture after `action.effect.observed` (S1.21; ADR-0111
+# D1/(e); AC-R-2.7.1-1). hh-verification sits below hh-env in the DAG.
+hh-verification = { path = "../hh-verification" }

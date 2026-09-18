@@ -105,12 +105,16 @@ fn risk_class(rev: &str, rs: &str, scope: &str) -> hh_wire::json::Json {
 }
 
 /// Append an accountable event and return its `EventRef` — the charge source.
+/// `verification.validator.invoked` is a provenance-mandatory class (S1.21 —
+/// every `verification.*` row carries a record), so the test row stamps kernel
+/// provenance the way the real kernel validator dispatcher would.
 fn source_event(store: &mut Store, run: &str, lease: &Lease, n: u64) -> EventRef {
-    let e = ev(
+    let mut e = ev(
         &format!("src-{n}"),
         "verification.validator.invoked",
         hh_wire::json::Json::obj([("validator", hh_wire::json::Json::str("v1"))]),
     );
+    e.provenance = Some(hh_provenance::ProvenanceRecord::kernel("kernel:test", 0));
     store.append(run, lease, vec![e]).unwrap();
     EventRef {
         run_id: run.to_string(),

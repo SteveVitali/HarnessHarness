@@ -132,6 +132,206 @@ pub fn context_policy_class() -> ClassRecord {
     }
 }
 
+/// `validator` — the verification-plane `Validator` component class
+/// (spec §5f.1; ADR-0110/0111; S1.21). Ordered-many: several validators may
+/// bind at once (the kernel local checks (a)–(c) ride the reference
+/// `hir/kernel/local_checks` node; declaration-side `ordered-many` keeps the
+/// C1+ slots open). `required_inputs ⊇ {ModelProfile, ResourceAccount}` —
+/// AC-R-2.7.1-11 / T-LCD-08.
+pub fn validator_class() -> ClassRecord {
+    ClassRecord {
+        class_id: "validator".to_string(),
+        contract: vec![
+            ContractOperation {
+                name: "declare".to_string(),
+                inputs: Json::obj([("validator_ref", Json::str("ref"))]),
+                outputs: Json::obj([("declaration", Json::str("ValidatorDeclaration"))]),
+                invariants: vec![
+                    "evidence_inputs never empty (I-V1)".to_string(),
+                    "kind = judge ⇒ ¬deterministic ∧ profile_ref ∧ assumption_debt".to_string(),
+                    "threshold-conditioned ⇒ assumption_debt (AC-R-2.7.1-12)".to_string(),
+                ],
+                failure_modes: vec!["IncompleteDeclaration".to_string()],
+            },
+            ContractOperation {
+                name: "bind".to_string(),
+                inputs: Json::obj([
+                    ("validator_ref", Json::str("ref")),
+                    ("profile", Json::str("model_profile")),
+                    ("account", Json::str("resource_account")),
+                ]),
+                outputs: Json::obj([("bound", Json::str("BoundValidator"))]),
+                invariants: vec![
+                    "a validator is effect-free — side_effects ⊆ {fs_read}".to_string()
+                ],
+                failure_modes: vec![
+                    "PayloadHashMismatch".to_string(),
+                    "UnboundFixture".to_string(),
+                    "ValidatorHasEffects".to_string(),
+                ],
+            },
+            ContractOperation {
+                name: "collect".to_string(),
+                inputs: Json::obj([
+                    ("bound", Json::str("BoundValidator")),
+                    ("target", Json::str("TargetRef")),
+                    ("cursor", Json::str("ledger_cursor")),
+                ]),
+                outputs: Json::obj([("bundle", Json::str("EvidenceBundle"))]),
+                invariants: vec![
+                    "the kernel resolves handles — the validator body never fetches".to_string(),
+                    "claims are never evidence (ClaimOnlyEvidence)".to_string(),
+                ],
+                failure_modes: vec![
+                    "EvidenceMissing".to_string(),
+                    "EvidenceStale".to_string(),
+                    "EvidenceUnauthoritative".to_string(),
+                    "ClaimOnlyEvidence".to_string(),
+                    "EvidenceTampered".to_string(),
+                ],
+            },
+            ContractOperation {
+                name: "check".to_string(),
+                inputs: Json::obj([
+                    ("bound", Json::str("BoundValidator")),
+                    ("bundle", Json::str("EvidenceBundle")),
+                ]),
+                outputs: Json::obj([("verdict", Json::str("Verdict"))]),
+                invariants: vec![
+                    "pure in (inputs_digest, validator version_id) when deterministic".to_string(),
+                    "a verdict never rewrites its inputs".to_string(),
+                ],
+                failure_modes: vec!["OracleFailure".to_string(), "BudgetExhausted".to_string()],
+            },
+        ],
+        cardinality: crate::kinds::Cardinality::OrderedMany,
+        required_inputs: BTreeSet::from([
+            "ModelProfile".to_string(),
+            "ResourceAccount".to_string(),
+        ]),
+        base_param_schema: BTreeMap::new(),
+        hot_path: false,
+        dialect_introduced: "registry/1".to_string(),
+        contract_version: "1.0".to_string(),
+        home: "kernel".to_string(),
+        declaration_schema: Json::obj([
+            (
+                "properties",
+                Json::obj([
+                    ("kind", Json::Null),
+                    ("oracle_class", Json::Null),
+                    ("deterministic", Json::Null),
+                    ("evidence_inputs", Json::Null),
+                    ("evidence_out", Json::Null),
+                    ("verdict_type", Json::Null),
+                    ("requires_observability", Json::Null),
+                    ("cost_model", Json::Null),
+                    ("isolation", Json::Null),
+                    ("side_effects", Json::Null),
+                    ("profile_ref", Json::Null),
+                    ("calibration_ref", Json::Null),
+                    ("charged_to", Json::Null),
+                    ("assumption_debt", Json::Null),
+                ]),
+            ),
+            ("additionalProperties", Json::Bool(false)),
+            (
+                "required",
+                Json::Arr(vec![
+                    Json::str("kind"),
+                    Json::str("oracle_class"),
+                    Json::str("deterministic"),
+                    Json::str("evidence_inputs"),
+                    Json::str("verdict_type"),
+                    Json::str("isolation"),
+                    Json::str("charged_to"),
+                ]),
+            ),
+        ]),
+        conformance_suite_ref: None,
+        decision_points: vec!["verify".to_string()],
+        metrics_declared: vec![
+            "claim_state_agreement".to_string(),
+            "false_completion_rate".to_string(),
+        ],
+        slot_key: "validator".to_string(),
+        tier: "C0".to_string(),
+    }
+}
+
+/// `execution_alignment` — the claim-reconciliation component class
+/// (spec §5f.2; ADR-0112/0114; S1.21). The C2 variant adds D1/D4/D7–D10,
+/// `probe` mode and judged triage; the Stage-1 registration is the
+/// **floors-only default** — the slot exists, the deterministic D2/D3/D5/D6
+/// register and the `SeverityRecord` shape are the floor (ADR-0114 D4/D5:
+/// "interventions on vs off" stays a matched-budget factor, never a
+/// permanent guardrail).
+pub fn execution_alignment_class() -> ClassRecord {
+    ClassRecord {
+        class_id: "execution_alignment".to_string(),
+        contract: vec![
+            ContractOperation {
+                name: "bind".to_string(),
+                inputs: Json::obj([("claim", Json::str("Claim"))]),
+                outputs: Json::obj([("handles", Json::str("[HandleRef]"))]),
+                invariants: vec![
+                    "a handle is a record at authority ≥ environment — never the model's own text"
+                        .to_string(),
+                    "Unbindable ⇒ unverifiable, never agree".to_string(),
+                ],
+                failure_modes: vec!["Unbindable".to_string()],
+            },
+            ContractOperation {
+                name: "reconcile".to_string(),
+                inputs: Json::obj([
+                    ("claim", Json::str("Claim")),
+                    ("handles", Json::str("[AuthoritativeHandle]")),
+                ]),
+                outputs: Json::obj([("record", Json::str("ReconciliationRecord"))]),
+                invariants: vec![
+                    "ledger_only mode is a pure fold over the durable prefix".to_string(),
+                    "unachievable claims are the honest-failure channel — never a divergence alone"
+                        .to_string(),
+                ],
+                failure_modes: vec!["Unreconciled".to_string()],
+            },
+        ],
+        cardinality: crate::kinds::Cardinality::Optional,
+        required_inputs: BTreeSet::from([
+            "ModelProfile".to_string(),
+            "ResourceAccount".to_string(),
+        ]),
+        base_param_schema: BTreeMap::new(),
+        hot_path: false,
+        dialect_introduced: "registry/1".to_string(),
+        contract_version: "1.0".to_string(),
+        home: "kernel".to_string(),
+        declaration_schema: Json::obj([
+            (
+                "properties",
+                Json::obj([
+                    ("divergence_classes", Json::Null),
+                    ("modes", Json::Null),
+                    ("deterministic", Json::Null),
+                ]),
+            ),
+            ("additionalProperties", Json::Bool(false)),
+            ("required", Json::Arr(vec![Json::str("deterministic")])),
+        ]),
+        conformance_suite_ref: None,
+        decision_points: vec!["stop".to_string()],
+        metrics_declared: vec![
+            "claim_state_agreement".to_string(),
+            "execution_alignment_failure_rate".to_string(),
+            "false_completion_rate".to_string(),
+            "honest_failure_rate".to_string(),
+            "gate_hold_count".to_string(),
+        ],
+        slot_key: "execution_alignment".to_string(),
+        tier: "C0".to_string(),
+    }
+}
+
 /// The `control_strategy` conformance suite — one test per kind (ADR-0152 D1/D2;
 /// deterministic oracles only at C0).
 pub fn control_strategy_suite(class_version_id: &str) -> ConformanceSuite {

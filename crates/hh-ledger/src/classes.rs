@@ -930,7 +930,17 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
 
     // ── verification (P4) — `verification.validator.invoked` is an accountable
     // event class (R-ACC-2): every invocation is charged (to the instrument).
-    row("verification.validator.invoked",  Led, O::Events, false, false, None, None),
+    // Provenance is mandatory on every `verification.*` class (§5f.1 §6;
+    // ADR-0035 §4 ∪ the class flag) — the deterministic producers are kernel
+    // components, but `origin` is *not* pinned to kernel: claim records carry
+    // `delegate` model origins and judged verdicts/reconciliations (C2) will
+    // carry `delegate` origins, so `kernel_origin` stays false (S1.21).
+    row_prov("verification.validator.invoked",  Led, O::Events, false, false, true,  None, None),
+    row_prov("verification.validator.verdict",  Led, O::Events, false, false, true,  None, None),
+    row_prov("verification.claim.recorded",     Led, O::Events, false, false, true,  None, None),
+    row_prov("verification.claim.reconciled",   Led, O::Events, false, false, true,  None, None),
+    row_prov("verification.completion.proposed",Led, O::Events, false, false, true,  None, None),
+    row_prov("verification.artefact.followed",  Led, O::Events, false, false, true,  None, None),
     // `verification.gate.evaluated` / `verification.completion.decided` are
     // audit-grade (§5g.6 §3) — the gate verdicts are consequential decisions.
     row_audit("verification.gate.evaluated",      O::Events, true,  OPEN_AUDIT, &[], None, None),

@@ -87,6 +87,7 @@ dependencies = [
  "hh-ledger",
  "hh-ontology",
  "hh-provenance",
+ "hh-verification",
  "hh-wire",
 ]
 
@@ -121,6 +122,7 @@ dependencies = [
  "hh-provenance",
  "hh-registry",
  "hh-secrets",
+ "hh-verification",
  "hh-wire",
 ]
 
@@ -240,6 +242,19 @@ dependencies = [
  "hh-ledger",
  "hh-ontology",
  "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-verification"
+version = "0.0.1"
+dependencies = [
+ "hh-compiler",
+ "hh-hir",
+ "hh-identity",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-telemetry",
  "hh-wire",
 ]
 

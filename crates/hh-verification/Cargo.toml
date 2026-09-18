@@ -1,0 +1,21 @@
+[package]
+name = "hh-verification"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 verification-plane substrate (spec §5f, R-2.7.2a, R-2.7.1⁰, R-2.7.3⁰; ticket S1.21; ADR-0109…0117). The claim-ledger substrate — `Claim`/`ClaimKind`/`SubjectRef`, `extract`/`validate` (authority = delegate, `AuthorityExceedsOrigin`), `AuthoritativeHandle` + the `ClaimKind × subject` bind table, `ReconciliationRecord`/`Agreement`/`DivergenceClass` (D1–D10, the C0 subset marked), `SeverityRecord` + the execution-alignment register, `GateResult` + the kernel floors as constants, the Γ schema + `validate_gamma` refusal on floor-loosening — and the verification fabric's C0 slices: `ValidatorDeclaration` + `declare`/`bind`, `Verdict`/`EvidenceHandle`/`EvidenceBundle`, `inputs_digest`, `ClaimOnlyEvidence`/no-rewrite rules, kernel local checks (a)–(c), `ValidatesRecord`/`TaskContract`/`VerificationSummary` + `HeldOutLeak` — and the critic schema slice: `CriticDeclaration`, closed `evidence_class`, `IndependenceVector` + per-use minimums, `CriticVerdict`/`CalibrationRecord`, `grounding`/`consume` admissibility, `RedundantJudge`, the `ProgrammaticCritic` contract, and the `verification.*` payload builders + ADR-0114 metric register. The wired gate evaluator, D2/D3/D5/D6 live detectors, judged validators/critics and probe/resume halves are spec-staged to Stage 3+ (DF-S1.21-*)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+
+[dev-dependencies]
+hh-telemetry = { path = "../hh-telemetry" }
+hh-compiler = { path = "../hh-compiler" }

@@ -205,6 +205,17 @@ pub fn build(dir: &Path) -> Result<(String, Vec<String>), RegistryError> {
         }
     }
 
+    // ── S1.21 verification-plane classes — floors-only registrations (spec
+    // §5f.2 tier map: "the C0 floors of R-2.7.2a exist with no variant
+    // bound"); registered with no suite and no variants — they are not in
+    // `class_vids`, so the 3-variants-per-class loop below never sees them.
+    for class in [
+        crate::suites::validator_class(),
+        crate::suites::execution_alignment_class(),
+    ] {
+        store.register(RegistryRecord::Class(class), &kernel, None)?;
+    }
+
     // ── variants: 3 per class, mixed namespaces ──
     let mut variant_vids = Vec::new();
     for (ci, class_vid) in class_vids.iter().enumerate() {

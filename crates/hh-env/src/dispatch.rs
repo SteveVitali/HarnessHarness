@@ -805,8 +805,122 @@ impl<'a> Dispatcher<'a> {
         self.store
             .append(&self.run_id, lease, vec![observed, completed])?;
         self.emit_unattributed(&unattributed, lease)?;
+        // ── verification: the kernel local checks (a)–(c) ride every
+        // `observed` terminal (S1.21 — ADR-0111 D1/(e); AC-R-2.7.1-1:
+        // `detector = deterministic`, `inputs_digest`, `charged_to =
+        // subject`; the appended observation is never touched — I-V3;
+        // (d) `diff_sanity` is Stage 2). The `effect`/`tool_call` scopes
+        // closed with `observed`/`completed`, so the verdict rows scope
+        // to the still-open turn/model_call chain.
+        self.emit_local_verdicts(
+            lease,
+            input,
+            &report,
+            &class,
+            &diff,
+            outcome,
+            &raw_output,
+            &effect_id,
+        )?;
         self.minter.expire(&effect_id, attempt_no);
         Ok(DispatchOutcome::Observed(Box::new(obs)))
+    }
+
+    /// The S1.21 local-check emission: run the kernel's built-in checks
+    /// (a)–(c) over the terminal capture and append
+    /// `verification.validator.invoked` + `verification.validator.verdict`
+    /// per applicable check (`phase = local`, `detector = deterministic`,
+    /// `charged_to = subject` — ADR-0111 D1). No applicable check ⇒ no rows
+    /// (a refused/never-captured terminal emits nothing — "exactly the
+    /// applicable" is the AC).
+    #[allow(clippy::too_many_arguments)]
+    fn emit_local_verdicts(
+        &mut self,
+        lease: &Lease,
+        input: &DispatchInput,
+        report: &TerminalReport,
+        report_class: &ErrorClass,
+        diff: &crate::snapshot::FsChangeSet,
+        outcome: EffectOutcome,
+        raw_output: &str,
+        effect_id: &str,
+    ) -> Result<(), EnvError> {
+        let cap = hh_verification::validators::TerminalCapture {
+            effect_id: effect_id.to_string(),
+            domain: Some(input.declared.domain),
+            output: if raw_output.is_empty() {
+                Json::Null
+            } else {
+                Json::Str(raw_output.to_string())
+            },
+            output_schema: input.capability.output_schema.clone(),
+            exit_status: report.exit_status,
+            timed_out: matches!(report_class, ErrorClass::Timeout),
+            signalled: matches!(report_class, ErrorClass::Signalled { .. }),
+            patch_status: match input.declared.domain {
+                EffectDomain::FsWrite => Some(match outcome {
+                    EffectOutcome::Applied => hh_verification::validators::PatchStatus::Applied,
+                    EffectOutcome::Partial => hh_verification::validators::PatchStatus::Partial,
+                    _ => hh_verification::validators::PatchStatus::Rejected(0),
+                }),
+                _ => None,
+            },
+            touched_paths: diff
+                .entries()
+                .map(|(e, _)| e.path_canonical.clone())
+                .collect(),
+            resource_keys: match &input.capability.resources {
+                hh_hir::records::Resources::Declared(keys) => keys.iter().cloned().collect(),
+                _ => Vec::new(),
+            },
+        };
+        let now = self.store.now_ms();
+        let head = self
+            .store
+            .events(&self.run_id)
+            .ok()
+            .and_then(|evs| evs.last().map(|e| e.seq))
+            .unwrap_or(0);
+        let verdicts = hh_verification::validators::run_local_checks(
+            &cap,
+            &local_checks_ref(),
+            ProvenanceRecord::kernel(crate::events::COMPONENT, now),
+            head,
+            now,
+        );
+        if verdicts.is_empty() {
+            return Ok(());
+        }
+        let mut rows = Vec::with_capacity(verdicts.len() * 2);
+        {
+            let m = self.minter_ev();
+            for v in &verdicts {
+                let mut invoked = m.mint(
+                    "verification.validator.invoked",
+                    hh_verification::events::validator_invoked(
+                        v,
+                        &hh_verification::vocab::Isolation::Kernel,
+                    ),
+                )?;
+                let mut verdict = m.mint(
+                    "verification.validator.verdict",
+                    hh_verification::events::validator_verdict(v),
+                )?;
+                // `effect`/`tool_call` closed — the rows scope to the
+                // still-open turn/model_call chain.
+                for e in [&mut invoked, &mut verdict] {
+                    e.scope = hh_ledger::event::Scope {
+                        turn_id: Some(input.chain.turn_id.clone()),
+                        model_call_id: Some(input.chain.model_call_id.clone()),
+                        ..Default::default()
+                    };
+                }
+                rows.push(invoked);
+                rows.push(verdict);
+            }
+        }
+        self.store.append(&self.run_id, lease, rows)?;
+        Ok(())
     }
 
     /// Append one `action.effect.unattributed` marker per unresolvable signal
@@ -993,6 +1107,19 @@ fn classify_command(args: &Json) -> ParseOutcome {
 /// `args` the executor receives).
 fn canonical_json(canonical: &CanonicalArgs) -> Json {
     Json::Obj(canonical.params.clone())
+}
+
+/// The pinned `validator_ref` the kernel local checks (a)–(c) run under —
+/// `hir/kernel/local_checks@1`, a built-in `Validator` node in the reference
+/// dialect (ADR-0111 D1: built-ins are `hir/kernel/<check>` nodes so they
+/// appear in `lcd_report.conditioned_rules` and are ablatable). The version is
+/// an `inputs_digest` input (AC-R-2.7.1-4's purity reads it).
+fn local_checks_ref() -> hh_identity::refs::VersionedRef {
+    hh_identity::refs::VersionedRef::pinned(
+        hh_identity::kinds::RecordKind::Validator,
+        "hir/kernel/local_checks@1",
+        ProvenanceRecord::kernel("hir/kernel/local_checks", 0),
+    )
 }
 
 /// Build the `terminal` capture item from the executor's report.
