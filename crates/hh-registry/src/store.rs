@@ -793,6 +793,14 @@ impl RegistryStore {
                     });
                 }
             }
+            RegistryRecord::Extension(e) => {
+                // §5g.5 L1–L3 admission gate: minted `text_authority` equality
+                // (LocationElevation), credential-free locator, verified-status
+                // consistency, claims-never-grants (LegCrossing).
+                if let Err(e) = crate::extension::validate_extension_record(e) {
+                    bail!(e);
+                }
+            }
         }
         // Trust record: mandatory for non-kernel/definition registrars.
         let first_party = matches!(

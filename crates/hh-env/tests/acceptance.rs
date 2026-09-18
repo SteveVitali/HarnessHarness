@@ -342,6 +342,15 @@ fn root_handle() -> AuthorityHandle {
                 constraints: GrantConstraints::default(),
                 delegable: true,
             },
+            // `permission_request` is covered so the ask-floor tests reach
+            // the Π gate — an uncovered domain denies at authorize step 2
+            // (`NoCoveringGrant`) before the floor can ask.
+            Grant {
+                effect: EffectClass::domain_only(EffectDomain::PermissionRequest),
+                scope: "*".to_string(),
+                constraints: GrantConstraints::default(),
+                delegable: true,
+            },
         ],
         ceiling: AuthorityClass::Definition,
         validity: HandleValidity {
@@ -1391,4 +1400,135 @@ fn ac_r_2_7_1_1_local_verdicts_after_observed() {
     // fabric never mutates durable observations).
     assert!(observed.scope.effect_id.is_some());
     assert!(observed.payload.get("outcome").is_some() || observed.payload.get("status").is_some());
+}
+
+// ── R-2.8.7⁰ — the C0 owed-decision trail (S1.23) ────────────────────────────
+// `Decision::Ask` emits `security.permission.decided{ask}` → durable
+// `security.permission.pending` → ephemeral `security.permission.requested` →
+// the Stage-1 terminal `action.effect.refused{ask_required}` +
+// `action.tool.rejected`. `requested` is subscribe-only — the durable
+// owed-decision is `pending` (AC-R-2.8.7-{1,6,7}).
+
+#[test]
+fn ac_r_2_8_7_ask_emits_pending_then_ephemeral_requested_then_refusal() {
+    let (mut store, run, lease, _clock) = open("ask-trail");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("ask-trail");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    // `permission_request` ⇒ Π-8 / floor `ask` under the attended default
+    // table — scope-independent, so the containment gate stays out of the way.
+    let cap = capability(
+        EffectDomain::PermissionRequest,
+        attrs(Reversibility::Irreversible),
+        scope_bindings(),
+    );
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [7u8; 32], DetectorSet::default());
+    // `requested` is subscribe-only — capture it live.
+    let mut sub = disp
+        .store_mut()
+        .subscribe(&run, Cursor::Now)
+        .expect("subscribe");
+    let mut exec = MockExecutor::ok();
+    exec.decl.domains.insert(EffectDomain::PermissionRequest);
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        // The arg-map only carries the declared surface params — a `path`
+        // inside the writable roots keeps `scope = workspace_local`.
+        Json::obj([
+            ("path", Json::str(ws.join("perm-req.txt").to_str().unwrap())),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::PermissionRequest,
+            attributes: Some(attrs(Reversibility::Irreversible)),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(
+        matches!(out, DispatchOutcome::Refused { ref reason } if reason == "ask_required"),
+        "{out:?}"
+    );
+    assert_eq!(exec.calls.get(), 0, "an asked effect never executes");
+
+    // The durable log: `decided` → `pending` → `refused` → `rejected`;
+    // `requested` is the ephemeral prompt-rendering fact (§5g.7 §3) — it
+    // rides subscribe, never the durable log.
+    let envs = read_all(disp.store_mut(), &run);
+    let seq_of = |c: &str| envs.iter().find(|e| e.class == c).map(|e| e.seq);
+    let decided = seq_of("security.permission.decided").expect("decided");
+    let pending = seq_of("security.permission.pending").expect("durable pending");
+    let refused = seq_of("action.effect.refused").expect("refused");
+    assert!(decided < pending, "decided precedes pending");
+    assert!(pending < refused, "pending precedes the refusal");
+    assert!(seq_of("action.tool.rejected").is_some(), "rejected lands");
+    assert!(
+        envs.iter().all(|e| e.class != "security.permission.requested"),
+        "the ephemeral rendering never reaches the durable log"
+    );
+
+    // The pending row carries the owed-decision record (§5g.7 §3).
+    let prow = envs
+        .iter()
+        .find(|e| e.class == "security.permission.pending")
+        .unwrap();
+    let pid = prow
+        .payload
+        .get("permission_id")
+        .and_then(Json::as_str)
+        .expect("permission_id");
+    assert_eq!(
+        prow.payload.get("effect_id").and_then(Json::as_str),
+        prow.scope.effect_id.as_deref()
+    );
+    let req = prow.payload.get("request").expect("request member");
+    assert_eq!(
+        req.get("capability_ref")
+            .and_then(|c| c.get("semantic_id"))
+            .and_then(Json::as_str),
+        Some("test:write_file")
+    );
+    assert!(req
+        .get("args_canonical_hash")
+        .and_then(Json::as_str)
+        .is_some());
+    // One `permission_id` threads decided → pending → requested.
+    let decided_row = envs
+        .iter()
+        .find(|e| e.class == "security.permission.decided")
+        .unwrap();
+    assert_eq!(
+        decided_row
+            .payload
+            .get("permission_id")
+            .and_then(Json::as_str),
+        Some(pid)
+    );
+
+    // The ephemeral `requested` rendering rode subscribe, carrying the same
+    // `permission_id` (the whole record is ephemeral — no durable form).
+    let mut frames = Vec::new();
+    while let Some(f) = sub.try_next() {
+        frames.push(f);
+    }
+    let saw_requested = frames.iter().any(|f| {
+        matches!(
+            f,
+            hh_ledger::event::EventFrame::Ephemeral { event }
+                if event.class == "security.permission.requested"
+                    && event.payload.get("permission_id").and_then(Json::as_str) == Some(pid)
+        )
+    });
+    assert!(
+        saw_requested, "ephemeral requested on subscribe: {frames:?}"
+    );
 }

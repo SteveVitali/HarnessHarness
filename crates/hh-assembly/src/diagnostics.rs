@@ -188,6 +188,20 @@ pub enum Code {
     /// `C-SEC-1 InlineSecret` — an inline secret where a channel name (`$secret:<name>`)
     /// is required.
     SecInlineSecret,
+    // ── extension trust (§5g.5; S1.23) ─────────────────────────────────────────
+    /// `C-EXT-1 UnpinnedInSealedForm` — a sealed/resolved section carrying an
+    /// extension ref whose locator selector survived, or whose `content` /
+    /// `resolved`/`fetched_at` pin is absent (L4; AC-R-2.8.5-1).
+    ExtUnpinnedInSealedForm,
+    /// `C-EXT-2 UndeclaredSource` — an extension ref whose locator scheme is not
+    /// covered by `extensions.sources[]` (declared sources only, CF-079).
+    ExtUndeclaredSource,
+    /// `C-EXT-3 ExtensionNameCollision` — two refs binding the same `(name, kind)`
+    /// under `merge_policy = exact_only`.
+    ExtNameCollision,
+    /// `C-EXT-4 UnresolvedExtension` — `resolve` could not pin a ref: no admissible
+    /// `extension` record in the snapshot (or the authored pin's record is absent).
+    ExtUnresolved,
     // ── link ─────────────────────────────────────────────────────────────────────
     /// `C-LINK-1 UnboundSlot` — an unpinned selector reaches the compiler's stage 1.
     LinkUnboundSlot,
@@ -273,6 +287,10 @@ impl Code {
             LocUnsupported => "C-LOC-1".into(),
             TrustDenied => "C-TRUST-1".into(),
             SecInlineSecret => "C-SEC-1".into(),
+            ExtUnpinnedInSealedForm => "C-EXT-1".into(),
+            ExtUndeclaredSource => "C-EXT-2".into(),
+            ExtNameCollision => "C-EXT-3".into(),
+            ExtUnresolved => "C-EXT-4".into(),
             LinkUnboundSlot => "C-LINK-1".into(),
             LinkNoProfile => "C-LINK-2".into(),
             LinkMissingDebtRecord => "C-LINK-3".into(),
@@ -331,6 +349,10 @@ impl Code {
             LocUnsupported => "LocalityUnsupported",
             TrustDenied => "TrustDenied",
             SecInlineSecret => "InlineSecret",
+            ExtUnpinnedInSealedForm => "UnpinnedInSealedForm",
+            ExtUndeclaredSource => "UndeclaredSource",
+            ExtNameCollision => "ExtensionNameCollision",
+            ExtUnresolved => "UnresolvedExtension",
             LinkUnboundSlot => "UnboundSlot",
             LinkNoProfile => "NoProfile",
             LinkMissingDebtRecord => "MissingDebtRecord",
@@ -389,6 +411,10 @@ impl Code {
             LocUnsupported,
             TrustDenied,
             SecInlineSecret,
+            ExtUnpinnedInSealedForm,
+            ExtUndeclaredSource,
+            ExtNameCollision,
+            ExtUnresolved,
             LinkUnboundSlot,
             LinkNoProfile,
             LinkMissingDebtRecord,
@@ -435,6 +461,7 @@ pub const KERN_VARIANTS: &[&str] = &[
     "DialectIncompatible",
     "SchemaViolation",
     "SecretValueInDefinition",
+    "UnpinnedInSealedForm",
 ];
 
 /// The `C-KERN-*` mirror — one code per `HirError` variant, 1:1 (ADR-0148).
@@ -470,6 +497,7 @@ pub fn kern_code(e: &HirError) -> Code {
         ExactCostUnmeasured { .. } => "ExactCostUnmeasured",
         DerivedEffectsMismatch { .. } => "DerivedEffectsMismatch",
         NoDiscoverySurface => "NoDiscoverySurface",
+        UnpinnedInSealedForm { .. } => "UnpinnedInSealedForm",
     })
 }
 

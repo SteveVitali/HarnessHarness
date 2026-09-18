@@ -347,6 +347,50 @@ const DECIDED_FIELDS: &[AuditField] = &[
 ];
 const DECIDED_REFS: &[&str] = &["rendering_ref"];
 
+/// `security.permission.pending` — the durable owed-decision row (§5g.7 §3
+/// `{permission_id, request, requested_at}` + the attached `effect_ids` —
+/// coalesced requests share the row). `request` embeds the `PermissionRequest`
+/// record `{subject_ref, capability_ref, args_canonical_hash, reason}`.
+const PENDING_FIELDS: &[AuditField] = &[
+    af("permission_id"),
+    af("effect_id"),
+    afb("effect_ids", AUDIT_FIELD_LIST_BYTES),
+    afb("request", AUDIT_FIELD_LIST_BYTES),
+    af("requested_at"),
+    af("subject_ref"),
+    afb("capability_ref", AUDIT_FIELD_LIST_BYTES),
+    af("args_canonical_hash"),
+    af("mode"),
+    af("timeout"),
+];
+
+/// `security.permission.escalated` — the chain-hop row (§5g.7 §4):
+/// `{permission_id, from_stage, to_stage, reason}`.
+const ESCALATED_FIELDS: &[AuditField] = &[
+    af("permission_id"),
+    af("from_stage"),
+    af("to_stage"),
+    af("reason"),
+];
+
+/// `security.permission.lease.{granted,used,expired,revoked}` — the exact-hash
+/// lease lifecycle rows (ADR-0071 D1): `{lease_id, key_hash, capability_ref,
+/// args_canonical_hash, scope, basis, max_uses, uses, granted_at,
+/// revoked_at, permission_id}`.
+const LEASE_APPROVAL_FIELDS: &[AuditField] = &[
+    af("lease_id"),
+    af("key_hash"),
+    afb("capability_ref", AUDIT_FIELD_LIST_BYTES),
+    af("args_canonical_hash"),
+    af("scope"),
+    af("basis"),
+    af("max_uses"),
+    af("uses"),
+    af("granted_at"),
+    af("revoked_at"),
+    af("permission_id"),
+];
+
 /// `security.permission.granted` / `revoked` — the dossier partition
 /// (`handle_id, holder, capability semantic_id, scope, issuer provenance,
 /// basis, basis_ref, expiry, rule_ref, authority_delta`; the record members
@@ -741,21 +785,30 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("action.world_state.discontinuity",        Led, O::Events, false, true, None, None),
 
     // ── security ─────────────────────────────────────────────────────────
-    // `requested` is ledger; its `rendering` member is ephemeral. `pending` is ledger
-    // (ADR-0026 Phase 2 log). The family is provenance-mandatory at this stage
-    // (ADR-0234 — `granted` is the §8.1-table row; the request/decision/grant/revoke
-    // chain is the same fact class and §5a.1 §3's provenance rule is applied
-    // uniformly pending the §8.1/§5a.1 spelling reconciliation).
-    row_eph("security.permission.requested", Led, O::Events, false, false, true, &["rendering"]),
+    // `requested` is the ephemeral prompt-rendering fact (§5g.7 §3 — the
+    // durable owed-decision is `pending`; S1.23 supersedes the ADR-0234 interim
+    // durable+stripped-member ruling, which stood only while no durable
+    // `pending` row existed). The family stays provenance-mandatory at this
+    // stage (ADR-0234 — `granted` is the §8.1-table row; the request/decision/
+    // grant/revoke chain is the same fact class and §5a.1 §3's provenance rule
+    // is applied uniformly pending the §8.1/§5a.1 spelling reconciliation).
+    row_eph("security.permission.requested", Eph, O::Events, false, false, true, &[]),
     // `pending`/`decided`/`granted`/`revoked` are audit-grade (§5g.6 §3) — the
     // permission lifecycle is the consequential act the trail exists to answer
     // for. `requested` stays non-audit (I-A4: nothing audit-grade lives only
-    // there). `pending`'s payload dossier is S2.6's approval machinery — open
-    // partition.
-    row_audit("security.permission.pending",  O::Events, false, OPEN_AUDIT, &[], None, None),
+    // there). `pending` is the durable owed-decision record (S1.23 — the
+    // enumerated §5g.7 partition).
+    row_audit("security.permission.pending",  O::Events, false, PENDING_FIELDS, &[], None, None),
     row_audit("security.permission.decided",  O::Events, false, DECIDED_FIELDS, DECIDED_REFS, None, None),
     row_audit("security.permission.granted",  O::Events, false, GRANT_FIELDS, &[], None, None),
     row_audit("security.permission.revoked",  O::Events, false, GRANT_FIELDS, &[], None, None),
+    // The chain-hop + exact-hash lease lifecycle rows (§5g.7 §4; ADR-0071 D1;
+    // S1.23) — audit-grade like the rest of the lifecycle.
+    row_audit("security.permission.escalated",      O::Events, false, ESCALATED_FIELDS, &[], None, None),
+    row_audit("security.permission.lease.granted",  O::Events, false, LEASE_APPROVAL_FIELDS, &[], None, None),
+    row_audit("security.permission.lease.used",     O::Events, false, LEASE_APPROVAL_FIELDS, &[], None, None),
+    row_audit("security.permission.lease.expired",  O::Events, false, LEASE_APPROVAL_FIELDS, &[], None, None),
+    row_audit("security.permission.lease.revoked",  O::Events, false, LEASE_APPROVAL_FIELDS, &[], None, None),
     row_audit("security.label.applied",       O::Events, false, LABEL_FIELDS, &[], None, None),
     row_audit("security.label.endorsed",      O::Events, false, LABEL_FIELDS, &[], None, None),
     row_audit("security.label.declassified",  O::Events, false, LABEL_FIELDS, &[], None, None),
@@ -765,9 +818,20 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // a kernel component.
     row_audit("security.egress.requested",    O::Events, false, OPEN_AUDIT, &[], None, None),
     row_audit("security.egress.decided",      O::Events, false, OPEN_AUDIT, &[], None, None),
-    // `security.extension.loaded` (and the family per ADR-0064 D7) — the pin
-    // attestation the Rule-O producer obligation resolves against.
-    row_audit("security.extension.loaded",    O::Events, false, OPEN_AUDIT, &[], None, None),
+    // The `security.extension.*` family (§5g.5 §6; ADR-0064 D7; S1.23) —
+    // audit-grade, provenance-mandatory. `loaded` is the pin attestation the
+    // Rule-O producer obligation resolves against; `resolved`/`sealed` are the
+    // resolve/seal trail, `quarantined`/`revoked` the admission status,
+    // `drift` the surface/pin drift row, `install_*` the install procedure
+    // trail (Stage-4 emitters — the classes land with the record kinds).
+    row_audit("security.extension.resolved",          O::Events, false, OPEN_AUDIT, &[], None, None),
+    row_audit("security.extension.quarantined",       O::Events, false, OPEN_AUDIT, &[], None, None),
+    row_audit("security.extension.sealed",            O::Events, false, OPEN_AUDIT, &[], None, None),
+    row_audit("security.extension.loaded",            O::Events, false, OPEN_AUDIT, &[], None, None),
+    row_audit("security.extension.drift",             O::Events, false, OPEN_AUDIT, &[], None, None),
+    row_audit("security.extension.install_requested", O::Events, false, OPEN_AUDIT, &[], None, None),
+    row_audit("security.extension.install_completed", O::Events, false, OPEN_AUDIT, &[], None, None),
+    row_audit("security.extension.revoked",           O::Events, false, OPEN_AUDIT, &[], None, None),
     // `security.audit.checkpoint` — the signed-checkpoint row (emitter at
     // Stage 2); the enumerated §5g.6 §3 partition — nothing offloaded.
     row_audit("security.audit.checkpoint",    O::Events, true,  CHECKPOINT_FIELDS, &[], None, None),
@@ -1128,14 +1192,11 @@ mod tests {
             [
                 "model.stream.delta",
                 "action.tool.output_chunk",
-                "action.tool.progress"
+                "action.tool.progress",
+                // §5g.7 §3 — the ephemeral prompt rendering (S1.23; the
+                // durable owed-decision is `pending`).
+                "security.permission.requested"
             ]
-        );
-        assert_eq!(
-            lookup("security.permission.requested")
-                .unwrap()
-                .ephemeral_fields,
-            &["rendering"]
         );
         assert_eq!(
             lookup("security.permission.pending").unwrap().durability,

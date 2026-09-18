@@ -251,8 +251,31 @@ impl<'a> Dispatcher<'a> {
             .clone();
         handle.verify_environment()?;
 
+        // `action.tool.proposed` opens the tool_call scope. It is minted
+        // before the arg-map eval so a `resolve`-stage refusal can close the
+        // scope it opens — `action.tool.rejected` is a `tool_call` closer, and
+        // the ledger's scope rules refuse a close of a scope that was never
+        // opened (`ScopeNotOpen`). The proposal exists the moment the kernel
+        // accepts the dispatch input, independent of how the args resolve.
+        let mut proposed = self.minter_ev().mint(
+            "action.tool.proposed",
+            events::tool_proposed_payload(
+                &input.capability_ref.semantic_id,
+                &input.capability_ref.version_id,
+            ),
+        )?;
+        proposed.scope = hh_ledger::event::Scope {
+            turn_id: Some(input.chain.turn_id.clone()),
+            model_call_id: Some(input.chain.model_call_id.clone()),
+            tool_call_id: Some(input.chain.tool_call_id.clone()),
+            ..Default::default()
+        };
+
         // The arg-map eval — `UnmappedArgument`/`UnscopedParameter` is a
-        // `resolve`-stage refusal (`action.tool.rejected{source: args}`).
+        // `resolve`-stage refusal (`action.tool.rejected{source: args}`). No
+        // effect scope exists yet (the effect coordinate is derived from the
+        // canonical args), so the `rejected` row carries the `turn ⊃
+        // model_call ⊃ tool_call` chain only.
         let canonical = match hh_monitor::args::eval(
             input.binding,
             input.scope_bindings,
@@ -260,13 +283,18 @@ impl<'a> Dispatcher<'a> {
         ) {
             Ok(c) => c,
             Err(e) => {
-                let ev = self.minter_ev().mint_effect(
+                let mut rejected = self.minter_ev().mint(
                     "action.tool.rejected",
                     events::tool_rejected_payload("args", &format!("{e:?}")),
-                    "",
-                    &input.chain,
                 )?;
-                self.store.append(&self.run_id, lease, vec![ev])?;
+                rejected.scope = hh_ledger::event::Scope {
+                    turn_id: Some(input.chain.turn_id.clone()),
+                    model_call_id: Some(input.chain.model_call_id.clone()),
+                    tool_call_id: Some(input.chain.tool_call_id.clone()),
+                    ..Default::default()
+                };
+                self.store
+                    .append(&self.run_id, lease, vec![proposed, rejected])?;
                 return Ok(DispatchOutcome::Refused {
                     reason: format!("arg_eval: {e:?}"),
                 });
@@ -366,21 +394,8 @@ impl<'a> Dispatcher<'a> {
             });
         }
 
-        // `action.tool.proposed` opens the tool_call scope; `intended` opens
-        // the effect scope under it.
-        let mut proposed = self.minter_ev().mint(
-            "action.tool.proposed",
-            events::tool_proposed_payload(
-                &input.capability_ref.semantic_id,
-                &input.capability_ref.version_id,
-            ),
-        )?;
-        proposed.scope = hh_ledger::event::Scope {
-            turn_id: Some(input.chain.turn_id.clone()),
-            model_call_id: Some(input.chain.model_call_id.clone()),
-            tool_call_id: Some(input.chain.tool_call_id.clone()),
-            ..Default::default()
-        };
+        // `proposed` (minted above, before the arg-map eval) opens the
+        // tool_call scope; `intended` opens the effect scope under it.
         let intended = self.minter_ev().mint_effect(
             "action.effect.intended",
             events::intended_payload(
@@ -419,10 +434,32 @@ impl<'a> Dispatcher<'a> {
             .monitor
             .authorize(&proposal)
             .map_err(|e| EnvError::Blob(format!("authorize: {e:?}")))?;
-        let decided = self.minter_ev().mint(
-            "security.permission.decided",
-            decided_payload(&decision, 1, "proposal"),
-        )?;
+        // The `ask` path's durable owed-decision id — minted before the
+        // `decided` row so the whole trail (`decided → pending → requested →
+        // refused`) shares one `permission_id` (§5g.7 §5; S1.23). The mint is
+        // deterministic — identical pending `(capability_ref,
+        // args_canonical_hash)` asks mint the same id (the coalescing rule);
+        // `irreversible`/`unknown` never coalesce (the effect salts the mint).
+        let never_auto = hh_monitor::approval::never_auto(decision.effective_risk_class);
+        let permission_id = matches!(decision.decision, Decision::Ask { .. }).then(|| {
+            hh_monitor::approval::mint_permission_id(
+                &input.capability_ref,
+                &args_canonical_hash,
+                never_auto,
+                &effect_id,
+            )
+        });
+        let mut decided_payload = decided_payload(&decision, 1, "proposal");
+        if let (Json::Obj(m), Some(pid)) = (&mut decided_payload, &permission_id) {
+            m.insert("permission_id".to_string(), Json::str(pid.clone()));
+            m.insert(
+                "requested_at".to_string(),
+                Json::Int(self.store.now_ms() as i64),
+            );
+        }
+        let decided = self
+            .minter_ev()
+            .mint("security.permission.decided", decided_payload)?;
         self.store.append(&self.run_id, lease, vec![decided])?;
         let risk = decision.effective_risk_class;
 
@@ -459,10 +496,55 @@ impl<'a> Dispatcher<'a> {
                     reason: format!("{reason:?}"),
                 });
             }
-            Decision::Ask { .. } => {
-                // Stage 1 has no mid-dispatch human round-trip — the control
-                // envelope owns the ask loop; the dispatcher refuses
-                // (`refused{ask_required}`).
+            Decision::Ask { options, remedies } => {
+                // The C0 owed-decision trail (§5g.7 §5; S1.23): `pending` is
+                // the durable record, `requested` the ephemeral prompt
+                // rendering — then the Stage-1 terminal: no mid-dispatch human
+                // round-trip exists (the control envelope owns the ask loop —
+                // S2.6), so the pending resolves `cancelled` by refusal, never
+                // `unknown` (AC-R-2.8.7-6).
+                let pid = permission_id
+                    .clone()
+                    .expect("permission_id minted for every Ask decision");
+                let asked_at = self.store.now_ms();
+                let request = hh_monitor::approval::ApprovalRequest {
+                    permission_id: pid.clone(),
+                    request: hh_monitor::approval::PermissionRequest {
+                        subject_ref: input.proposer.clone(),
+                        capability_ref: input.capability_ref.clone(),
+                        args_canonical_hash: args_canonical_hash.clone(),
+                        reason: "pi ask".to_string(),
+                    },
+                    options: options
+                        .iter()
+                        .filter_map(|o| {
+                            hh_monitor::approval::ApprovalOptionId::parse(o).map(|id| {
+                                hh_monitor::approval::ApprovalOption {
+                                    id,
+                                    label: o.clone(),
+                                }
+                            })
+                        })
+                        .collect(),
+                    mode: hh_monitor::approval::ApprovalMode::Sync,
+                    timeout: None,
+                    explanation: hh_monitor::approval::Explanation {
+                        display: format!("pi asked: {} option(s)", options.len()),
+                        rows: decision.checks.clone(),
+                    },
+                };
+                let pending = self.minter_ev().mint_effect(
+                    "security.permission.pending",
+                    hh_monitor::approval::pending_payload(&request, &effect_id, asked_at),
+                    &effect_id,
+                    &input.chain,
+                )?;
+                let requested = self.minter_ev().mint_effect(
+                    "security.permission.requested",
+                    hh_monitor::approval::requested_payload(&request, &effect_id, asked_at),
+                    &effect_id,
+                    &input.chain,
+                )?;
                 let refused = self.minter_ev().mint_effect(
                     "action.effect.refused",
                     events::refused_payload("ask_required"),
@@ -470,8 +552,12 @@ impl<'a> Dispatcher<'a> {
                     &input.chain,
                 )?;
                 let rejected = tool_rejected(&self.minter_ev(), "ask_required")?;
-                self.store
-                    .append(&self.run_id, lease, vec![refused, rejected])?;
+                let _ = remedies;
+                self.store.append(
+                    &self.run_id,
+                    lease,
+                    vec![pending, requested, refused, rejected],
+                )?;
                 return Ok(DispatchOutcome::Refused {
                     reason: "ask_required".to_string(),
                 });

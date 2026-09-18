@@ -695,6 +695,91 @@ fn bad(detail: impl Into<String>) -> LedgerError {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AC-R-2.8.7-1 — the ordering invariant as a checkable fold (§5g.7 §5: "the
+// decision precedes `action.effect.prepared`"; I-H7's committed gate is the
+// enforcement half — this is the property the test battery/verifier replays)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Fold a committed prefix and check the mediation ordering (AC-R-2.8.7-1):
+/// every `action.effect.prepared`/`observed` is preceded in `seq` by a
+/// `security.permission.decided{decision = allow}` **or a Π `allow`** — the
+/// `action.effect.authorized` record — for the same `(effect_id, attempt)`;
+/// every `action.effect.committed` requires the `decided{allow}` specifically
+/// (I-H7 — the same verdict the strict append gate raises, so the offline
+/// check and the append rule report one verdict, CC1). A final `deny` for the
+/// attempt vetoes any later effect motion. `LedgerError::Undecided` on
+/// violation.
+pub fn check_mediation(events: &[EventEnvelope]) -> Result<(), LedgerError> {
+    let mut effects: BTreeMap<String, EffectFold> = BTreeMap::new();
+    let mut decisions = DecisionFolds::new();
+    // `(effect_id, attempt)` the Π `allow` (`action.effect.authorized`) covers —
+    // the policy decision record AC-R-2.8.7-1's "or a Π allow" half reads.
+    let mut authorized_attempts: std::collections::BTreeSet<(String, u64)> =
+        std::collections::BTreeSet::new();
+    for env in events {
+        match env.class.as_str() {
+            "security.permission.decided" => {
+                apply_decision(&mut decisions, &effects, env);
+            }
+            "action.effect.authorized" => {
+                if let Some(effect_id) = decision_effect(&env.payload, &env.scope) {
+                    let attempt = decision_attempt(&effects, &env.payload, &effect_id);
+                    authorized_attempts.insert((effect_id, attempt));
+                }
+                apply_event_fields(
+                    &mut effects,
+                    env.class.as_str(),
+                    &env.payload,
+                    &env.scope,
+                    &env.event_id,
+                    env.seq,
+                );
+            }
+            "action.effect.prepared" | "action.effect.committed" | "action.effect.observed" => {
+                if let Some(effect_id) = decision_effect(&env.payload, &env.scope) {
+                    let attempt = decision_attempt(&effects, &env.payload, &effect_id);
+                    let mediated = match decisions.get(&(effect_id.clone(), attempt)) {
+                        Some(d) => d == "allow",
+                        // A Π `allow` mediates preparation/observation; the
+                        // write-ahead gate for `committed` is `decided{allow}`
+                        // specifically (I-H7).
+                        None => {
+                            env.class != "action.effect.committed"
+                                && authorized_attempts.contains(&(effect_id.clone(), attempt))
+                        }
+                    };
+                    if !mediated {
+                        return Err(LedgerError::Undecided {
+                            effect_id,
+                            attempt_no: attempt,
+                        });
+                    }
+                }
+                apply_event_fields(
+                    &mut effects,
+                    env.class.as_str(),
+                    &env.payload,
+                    &env.scope,
+                    &env.event_id,
+                    env.seq,
+                );
+            }
+            _ => {
+                apply_event_fields(
+                    &mut effects,
+                    env.class.as_str(),
+                    &env.payload,
+                    &env.scope,
+                    &env.event_id,
+                    env.seq,
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 fn transition_err(effect_id: &str, from: &str, to: &str) -> LedgerError {
     LedgerError::BadEffectTransition {
         effect_id: effect_id.to_string(),

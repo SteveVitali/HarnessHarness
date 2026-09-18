@@ -437,8 +437,14 @@ pub fn checkpoint(run_id: &str, events: &[EventEnvelope], until: Option<u64>) ->
     let mut effects = BTreeMap::new();
     let mut head = None;
     let mut watermark = None;
-    let mut requested: BTreeMap<String, u64> = BTreeMap::new();
+    // The durable owed-decision source is `security.permission.pending`
+    // (S1.23 — `requested` is the ephemeral prompt rendering; the view's
+    // `pending_permissions` projects the durable rows).
+    // `permission_id → (opened_seq, attached effect_ids)` — coalesced pendings
+    // merge at the fold (the identical-request rule).
+    let mut requested: BTreeMap<String, (u64, BTreeSet<String>)> = BTreeMap::new();
     let mut decided: BTreeSet<String> = BTreeSet::new();
+    let mut terminated_effects: BTreeSet<String> = BTreeSet::new();
     for e in events {
         if let Some(u) = until {
             if e.seq > u {
@@ -466,14 +472,49 @@ pub fn checkpoint(run_id: &str, events: &[EventEnvelope], until: Option<u64>) ->
         }
         crate::effect::fold_event(&mut effects, e);
         match e.class.as_str() {
-            "security.permission.requested" => {
+            "security.permission.pending" => {
                 if let Some(id) = e.payload.get("permission_id").and_then(Json::as_str) {
-                    requested.insert(id.to_string(), e.seq);
+                    let row = requested
+                        .entry(id.to_string())
+                        .or_insert((e.seq, BTreeSet::new()));
+                    if let Some(eid) = e
+                        .scope
+                        .effect_id
+                        .as_deref()
+                        .or_else(|| e.payload.get("effect_id").and_then(Json::as_str))
+                    {
+                        row.1.insert(eid.to_string());
+                    }
+                    if let Some(Json::Arr(ids)) = e.payload.get("effect_ids") {
+                        row.1
+                            .extend(ids.iter().filter_map(Json::as_str).map(str::to_string));
+                    }
                 }
             }
             "security.permission.decided" => {
-                if let Some(id) = e.payload.get("permission_id").and_then(Json::as_str) {
-                    decided.insert(id.to_string());
+                // Only a *final* verdict resolves a pending — a
+                // `decision = ask` row is the verdict that opened it.
+                let final_verdict = e
+                    .payload
+                    .get("decision")
+                    .and_then(Json::as_str)
+                    .is_some_and(|d| d == "allow" || d == "deny");
+                if final_verdict {
+                    if let Some(id) = e.payload.get("permission_id").and_then(Json::as_str) {
+                        decided.insert(id.to_string());
+                    }
+                }
+            }
+            "action.effect.refused" | "action.effect.unknown" => {
+                // A refused/unknowned effect resolves its pending `cancelled`
+                // (§5g.7 §5 — never `unknown`).
+                if let Some(eid) = e
+                    .scope
+                    .effect_id
+                    .as_deref()
+                    .or_else(|| e.payload.get("effect_id").and_then(Json::as_str))
+                {
+                    terminated_effects.insert(eid.to_string());
                 }
             }
             _ => {}
@@ -490,12 +531,15 @@ pub fn checkpoint(run_id: &str, events: &[EventEnvelope], until: Option<u64>) ->
         None => Json::Null,
     };
     let pending_permissions: Vec<Json> = requested
-        .keys()
-        .filter(|id| !decided.contains(*id))
-        .map(|id| {
+        .iter()
+        .filter(|(id, (_, effects))| {
+            !decided.contains(*id)
+                && (effects.is_empty() || !effects.iter().all(|e| terminated_effects.contains(e)))
+        })
+        .map(|(id, (seq, _))| {
             Json::Obj(BTreeMap::from([
                 ("permission_id".to_string(), Json::str(id.clone())),
-                ("requested_seq".to_string(), Json::Int(requested[id] as i64)),
+                ("requested_seq".to_string(), Json::Int(*seq as i64)),
             ]))
         })
         .collect();

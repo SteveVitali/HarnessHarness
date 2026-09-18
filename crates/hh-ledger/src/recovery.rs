@@ -20,7 +20,7 @@
 //! | effect `committed`, no terminal | `unknown{cause: worker_lost}` + probe timer |
 //! | effect `unknown` | keep — ensure a probe timer is live |
 //! | open `model_call` scope | `model.call.failed{cause: worker_lost}` + retry timer |
-//! | pending `security.permission.requested` | keep — reported in `pending_permissions` |
+//! | pending `security.permission.pending` | keep — reported in `pending_permissions` |
 //! | retry schedule | `retry_due(now)` recomputes from `control.retry.*` |
 //!
 //! Stage-2 `suspend`/wakeup subscriptions and detached reconciliation are
@@ -88,7 +88,7 @@ pub struct RestoreReport {
     pub effects_to_prepare: Vec<String>,
     /// Model-call scopes failed `worker_lost` and scheduled for retry.
     pub failed_model_calls: Vec<String>,
-    /// `security.permission.requested` with no `decided` — kept pending.
+    /// `security.permission.pending` with no final `decided` — kept pending.
     pub pending_permissions: Vec<String>,
     /// Terminal-`observed` effects whose charge repost is the caller's to check
     /// (the ledger records; `hh-budget` reposts — idempotent by source event).
@@ -394,24 +394,89 @@ impl Store {
         }
 
         // ── pending permissions — keep (refuse-on-timeout is §05g's) ────
+        // The durable owed-decision row is `security.permission.pending`
+        // (S1.23 — `requested` is the ephemeral prompt *rendering*, never the
+        // owed-decision source). A pending resolves when a `decided` row lands
+        // for its `permission_id`, or when every attached `effect_id` reached a
+        // refusal/terminal (the `timed_out`/`cancelled` refusal — a pending
+        // never ends `unknown`; §5g.7 §5).
         {
             let st = self.run(run_id)?;
             let mut decided = BTreeSet::new();
+            let mut terminated_effects = BTreeSet::new();
+            // `permission_id → attached effect_ids` — coalesced pendings
+            // arrive as duplicate `pending` rows with the same id and merge
+            // (the identical-request rule, §5g.7 §5).
+            let mut pendings: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
             for e in &st.events {
-                if e.class == "security.permission.decided" {
-                    if let Some(id) = e.payload.get("permission_id").and_then(Json::as_str) {
-                        decided.insert(id.to_string());
-                    }
-                }
-            }
-            for e in &st.events {
-                if e.class == "security.permission.requested" {
-                    if let Some(id) = e.payload.get("permission_id").and_then(Json::as_str) {
-                        if !decided.contains(id) {
-                            out.pending_permissions.push(id.to_string());
+                match e.class.as_str() {
+                    "security.permission.decided" => {
+                        // Only a *final* verdict resolves a pending — a
+                        // `decision = ask` row is the verdict that opened it.
+                        let final_verdict = e
+                            .payload
+                            .get("decision")
+                            .and_then(Json::as_str)
+                            .is_some_and(|d| d == "allow" || d == "deny");
+                        if final_verdict {
+                            if let Some(id) = e.payload.get("permission_id").and_then(Json::as_str)
+                            {
+                                decided.insert(id.to_string());
+                            }
                         }
                     }
+                    "action.effect.refused" | "action.effect.unknown" => {
+                        if let Some(id) = e
+                            .scope
+                            .effect_id
+                            .as_deref()
+                            .or_else(|| e.payload.get("effect_id").and_then(Json::as_str))
+                        {
+                            terminated_effects.insert(id.to_string());
+                        }
+                    }
+                    "security.permission.pending" => {
+                        if let Some(id) = e.payload.get("permission_id").and_then(Json::as_str) {
+                            // The attached effects — `effect_ids[]` when the
+                            // row coalesced, `effect_id`/`scope.effect_id`
+                            // for the single-effect form.
+                            let mut effects: BTreeSet<String> = e
+                                .payload
+                                .get("effect_ids")
+                                .and_then(|v| match v {
+                                    Json::Arr(rows) => Some(
+                                        rows.iter()
+                                            .filter_map(Json::as_str)
+                                            .map(str::to_string)
+                                            .collect(),
+                                    ),
+                                    _ => None,
+                                })
+                                .unwrap_or_default();
+                            if let Some(one) = e
+                                .scope
+                                .effect_id
+                                .as_deref()
+                                .or_else(|| e.payload.get("effect_id").and_then(Json::as_str))
+                            {
+                                effects.insert(one.to_string());
+                            }
+                            pendings.entry(id.to_string()).or_default().extend(effects);
+                        }
+                    }
+                    _ => {}
                 }
+            }
+            for (id, effects) in pendings {
+                if decided.contains(&id) {
+                    continue;
+                }
+                // Every attached effect refused/unknowned → the pending is
+                // `cancelled`, never still-owed.
+                if !effects.is_empty() && effects.iter().all(|e| terminated_effects.contains(e)) {
+                    continue;
+                }
+                out.pending_permissions.push(id);
             }
         }
 

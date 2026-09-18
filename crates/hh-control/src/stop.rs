@@ -23,7 +23,7 @@
 //! `causes[]` (the `error_class` member is a `KernelInfraCause` spelling —
 //! CF-479).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use hh_ledger::event::EventEnvelope;
 use hh_ontology::control::{InfraError, InfraErrorFamily, KernelInfraCause, StopReason};
@@ -135,26 +135,66 @@ pub fn in_flight(events: &[EventEnvelope]) -> BTreeSet<String> {
     open
 }
 
-/// The permissions still pending (a `security.permission.decided` closes
-/// its `permission_id` — read from the payload's scope member).
+/// The permissions still pending — sourced from the durable
+/// `security.permission.pending` owed-decision rows (S1.23; `requested` is the
+/// prompt *rendering* fact, never the owed-decision source). A *final*
+/// `security.permission.decided` (`allow`/`deny` — an `ask` verdict is the
+/// one that opened the pending) resolves its `permission_id`; a refusal/
+/// `unknown` terminal on every attached `effect_id` resolves the pending
+/// `cancelled` (§5g.7 §5 — never `unknown`).
 pub fn pending_permissions(events: &[EventEnvelope]) -> BTreeSet<String> {
-    let mut open = BTreeSet::new();
+    // `permission_id → attached effect_ids` — coalesced pendings merge.
+    let mut open: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut decided = BTreeSet::new();
+    let mut terminated = BTreeSet::new();
     for ev in events {
         match ev.class.as_str() {
-            "security.permission.requested" => {
+            "security.permission.pending" => {
                 if let Some(id) = ev.payload.get("permission_id").and_then(Json::as_str) {
-                    open.insert(id.to_string());
+                    let row = open.entry(id.to_string()).or_default();
+                    if let Some(e) = ev
+                        .scope
+                        .effect_id
+                        .as_deref()
+                        .or_else(|| ev.payload.get("effect_id").and_then(Json::as_str))
+                    {
+                        row.insert(e.to_string());
+                    }
+                    if let Some(Json::Arr(ids)) = ev.payload.get("effect_ids") {
+                        row.extend(ids.iter().filter_map(Json::as_str).map(str::to_string));
+                    }
                 }
             }
             "security.permission.decided" => {
-                if let Some(id) = ev.payload.get("permission_id").and_then(Json::as_str) {
-                    open.remove(id);
+                let final_verdict = ev
+                    .payload
+                    .get("decision")
+                    .and_then(Json::as_str)
+                    .is_some_and(|d| d == "allow" || d == "deny");
+                if final_verdict {
+                    if let Some(id) = ev.payload.get("permission_id").and_then(Json::as_str) {
+                        decided.insert(id.to_string());
+                    }
+                }
+            }
+            "action.effect.refused" | "action.effect.unknown" => {
+                if let Some(e) = ev
+                    .scope
+                    .effect_id
+                    .as_deref()
+                    .or_else(|| ev.payload.get("effect_id").and_then(Json::as_str))
+                {
+                    terminated.insert(e.to_string());
                 }
             }
             _ => {}
         }
     }
-    open
+    open.retain(|id, effects| {
+        !decided.contains(id)
+            && (effects.is_empty() || !effects.iter().all(|e| terminated.contains(e)))
+    });
+    open.keys().cloned().collect()
 }
 
 /// `stop(run, reason, triggered_by)` → `DrainReport` — evaluates the drain
@@ -267,6 +307,71 @@ mod tests {
             prev_hash: "h".into(),
             hash: "h".into(),
         }
+    }
+
+    /// A permission-class envelope — `payload` carries the owed-decision
+    /// members (`permission_id`, `decision`, …); `effect` sets the scope.
+    fn perm_ev(seq: u64, class: &str, effect: Option<&str>, payload: Json) -> EventEnvelope {
+        let mut e = ev(seq, class, effect);
+        e.plane = EventPlane::Security;
+        e.payload = payload;
+        e
+    }
+
+    #[test]
+    fn pending_permissions_fold_durable_rows_only() {
+        let pid = Json::obj([("permission_id", Json::str("perm-1"))]);
+        // An `ask` verdict opens the pending — it must NOT resolve it.
+        let events = vec![
+            perm_ev(0, "security.permission.decided", Some("e1"), {
+                let mut m = match pid.clone() {
+                    Json::Obj(m) => m,
+                    _ => unreachable!(),
+                };
+                m.insert("decision".to_string(), Json::str("ask"));
+                Json::Obj(m)
+            }),
+            perm_ev(1, "security.permission.pending", Some("e1"), pid.clone()),
+        ];
+        assert_eq!(pending_permissions(&events), ["perm-1".to_string()].into());
+
+        // A final `deny` resolves it.
+        let mut events2 = events.clone();
+        events2.push(perm_ev(2, "security.permission.decided", Some("e1"), {
+            let mut m = match pid {
+                Json::Obj(m) => m,
+                _ => unreachable!(),
+            };
+            m.insert("decision".to_string(), Json::str("deny"));
+            Json::Obj(m)
+        }));
+        assert!(pending_permissions(&events2).is_empty());
+    }
+
+    #[test]
+    fn pending_permissions_cancelled_when_every_effect_terminates() {
+        let events = vec![
+            perm_ev(
+                0,
+                "security.permission.pending",
+                Some("e1"),
+                Json::obj([("permission_id", Json::str("perm-1"))]),
+            ),
+            ev(1, "action.effect.refused", Some("e1")),
+        ];
+        // The refused effect resolves the pending `cancelled` — never owed.
+        assert!(pending_permissions(&events).is_empty());
+        // A pending whose effect is still open stays owed.
+        let still_open = vec![perm_ev(
+            0,
+            "security.permission.pending",
+            Some("e2"),
+            Json::obj([("permission_id", Json::str("perm-2"))]),
+        )];
+        assert_eq!(
+            pending_permissions(&still_open),
+            ["perm-2".to_string()].into()
+        );
     }
 
     #[test]

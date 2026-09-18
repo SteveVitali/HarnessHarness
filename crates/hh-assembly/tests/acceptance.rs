@@ -987,3 +987,265 @@ fn the_must_lists_and_rung_are_declared() {
     }
     assert_eq!(hh_assembly::RUNG, hh_assembly::boundary::LadderRung::C0);
 }
+
+// ── extension trust (§5g.5; S1.23) ───────────────────────────────────────────
+
+use hh_assembly::grammar::{ExtensionBlock, MergePolicy};
+use hh_registry::extension::{DeclaredSource, ExtensionKind, ExtensionRef};
+
+fn git_source() -> DeclaredSource {
+    DeclaredSource::Git {
+        url: "https://example.com".into(),
+        ref_: "main".into(),
+    }
+}
+
+fn ext_block(sources: Vec<DeclaredSource>, refs: Vec<ExtensionRef>) -> ExtensionBlock {
+    ExtensionBlock {
+        sources,
+        refs,
+        merge_policy: MergePolicy::ExactOnly,
+    }
+}
+
+#[test]
+fn extensions_member_round_trips_through_the_grammar() {
+    let mut a = stage1_assembly();
+    a.extensions = Some(ext_block(
+        vec![git_source()],
+        vec![extension_ref(
+            "demo",
+            ExtensionKind::Skill,
+            "git",
+            Some("latest"),
+        )],
+    ));
+    let bytes = hh_assembly::schema::encode(&a);
+    let decoded = hh_assembly::schema::load(&bytes, None).expect("round-trips");
+    assert_eq!(decoded, a, "load(encode(a)) = a");
+}
+
+#[test]
+fn extensions_member_malformed_is_a_load_diagnostic() {
+    let mut j = stage1_assembly().to_json();
+    if let Json::Obj(m) = &mut j {
+        m.insert("extensions".into(), Json::str("nope"));
+    }
+    let mut diags = Vec::new();
+    Assembly::from_json(&j, "/assembly", &kernel(), &mut diags);
+    assert!(diags.iter().any(|d| d.code == Code::LoadParse));
+}
+
+#[test]
+fn ac_2_8_5_1_resolve_pins_extension_refs() {
+    let (mut store, _) = seeded_store("ext-resolve");
+    let v = store
+        .register(
+            RegistryRecord::Extension(extension_record("demo", ExtensionKind::Skill)),
+            &kernel(),
+            None,
+        )
+        .expect("register");
+    let cat = Stage1Catalog::stage1();
+    let mut a = stage1_assembly();
+    a.extensions = Some(ext_block(
+        vec![git_source()],
+        vec![extension_ref(
+            "demo",
+            ExtensionKind::Skill,
+            "git",
+            Some("latest"),
+        )],
+    ));
+    let doc = doc_with(&a);
+    let sealed = {
+        let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
+        hh_assembly::resolve(&doc, &mut env).expect("resolve")
+    };
+    let s = sealed
+        .document
+        .assembly
+        .as_ref()
+        .unwrap()
+        .to_canonical_string();
+    assert!(!s.contains("\"selector\""), "the selector is consumed: {s}");
+    assert!(s.contains(&v.version_id), "extension_id pinned: {s}");
+    assert!(s.contains("\"resolved\""), "locator.resolved filled: {s}");
+    assert!(s.contains("\"fetched_at\":7"), "fetched_at stamped: {s}");
+    assert!(s.contains("\"content\""), "the content pin landed: {s}");
+}
+
+/// Inject an `extensions` member into an already-resolved document's assembly
+/// (the slots stay pinned so `seal` reaches the extension check).
+fn doc_with_extensions(tag: &str, refs: Vec<ExtensionRef>) -> hh_hir::document::HirDocument {
+    let (sealed, _store) = resolved_sealed(tag);
+    let mut doc = sealed.document.clone();
+    let ext_j = Json::obj([
+        (
+            "sources",
+            Json::Arr(vec![hh_registry::extension::declared_source_json(
+                &git_source(),
+            )]),
+        ),
+        (
+            "refs",
+            Json::Arr(
+                refs.iter()
+                    .map(hh_registry::extension::extension_ref_json)
+                    .collect(),
+            ),
+        ),
+        ("merge_policy", Json::str("exact_only")),
+    ]);
+    if let Some(Json::Obj(m)) = &mut doc.assembly {
+        m.insert("extensions".into(), ext_j);
+    }
+    doc
+}
+
+#[test]
+fn ac_2_8_5_1_seal_refuses_unpinned_extension_ref() {
+    let doc = doc_with_extensions(
+        "ext-seal-unpinned",
+        vec![extension_ref(
+            "demo",
+            ExtensionKind::Skill,
+            "git",
+            Some("latest"),
+        )],
+    );
+    let errs = hh_hir::seal(&doc, 9).expect_err("unpinned ref refuses");
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, hh_hir::errors::HirError::UnpinnedInSealedForm { .. })),
+        "UnpinnedInSealedForm: {errs:?}"
+    );
+}
+
+#[test]
+fn ac_2_8_5_1_seal_refuses_a_pin_missing_content() {
+    let mut r = extension_ref("demo", ExtensionKind::Skill, "git", None);
+    // A locator pin without `content` is still unpinned (L4).
+    r.locator.resolved = Some("abc".into());
+    r.locator.fetched_at = Some(1);
+    let doc = doc_with_extensions("ext-seal-nocontent", vec![r]);
+    let errs = hh_hir::seal(&doc, 9).expect_err("content-less pin refuses");
+    assert!(errs
+        .iter()
+        .any(|e| matches!(e, hh_hir::errors::HirError::UnpinnedInSealedForm { .. })));
+}
+
+#[test]
+fn resolve_extension_ref_reports_undeclared_source() {
+    let (mut store, _) = seeded_store("ext-undeclared");
+    store
+        .register(
+            RegistryRecord::Extension(extension_record("demo", ExtensionKind::Skill)),
+            &kernel(),
+            None,
+        )
+        .unwrap();
+    let cat = Stage1Catalog::stage1();
+    let mut a = stage1_assembly();
+    // The ref's scheme is `marketplace` — only `git` is declared.
+    a.extensions = Some(ext_block(
+        vec![git_source()],
+        vec![extension_ref(
+            "demo",
+            ExtensionKind::Skill,
+            "marketplace",
+            Some("latest"),
+        )],
+    ));
+    let doc = doc_with(&a);
+    let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
+    let errs = hh_assembly::resolve(&doc, &mut env).expect_err("undeclared source refuses");
+    assert!(
+        errs.iter().any(|d| d.code == Code::ExtUndeclaredSource),
+        "C-EXT-2: {:?}",
+        errs.iter().map(|d| d.code.code()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn resolve_extension_ref_unmatched_is_typed_refusal() {
+    let (mut store, _) = seeded_store("ext-unmatched");
+    let cat = Stage1Catalog::stage1();
+    let mut a = stage1_assembly();
+    a.extensions = Some(ext_block(
+        vec![git_source()],
+        vec![extension_ref(
+            "ghost",
+            ExtensionKind::Skill,
+            "git",
+            Some("latest"),
+        )],
+    ));
+    let doc = doc_with(&a);
+    let mut env = resolve_env(&mut store, &cat, ResolveMode::Audit);
+    let errs = hh_assembly::resolve(&doc, &mut env).expect_err("no record refuses");
+    assert!(
+        errs.iter().any(|d| d.code == Code::ExtUnresolved),
+        "C-EXT-4: {:?}",
+        errs.iter().map(|d| d.code.code()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn validate_reports_extension_name_collision_under_exact_only() {
+    let mut a = stage1_assembly();
+    a.extensions = Some(ext_block(
+        vec![git_source()],
+        vec![
+            extension_ref("demo", ExtensionKind::Skill, "git", Some("latest")),
+            extension_ref("demo", ExtensionKind::Skill, "git", Some("version:x")),
+        ],
+    ));
+    let r = validate_authored(&doc_with(&a), &Stage1Catalog::stage1());
+    assert!(has_code(&r, "C-EXT-3"), "{:?}", report_codes(&r));
+
+    // `disjoint` declares the collision away.
+    let mut b = stage1_assembly();
+    let mut eb = ext_block(
+        vec![git_source()],
+        vec![
+            extension_ref("demo", ExtensionKind::Skill, "git", Some("latest")),
+            extension_ref("demo", ExtensionKind::Skill, "git", Some("version:x")),
+        ],
+    );
+    eb.merge_policy = MergePolicy::Disjoint;
+    b.extensions = Some(eb);
+    let r2 = validate_authored(&doc_with(&b), &Stage1Catalog::stage1());
+    assert!(!has_code(&r2, "C-EXT-3"), "{:?}", report_codes(&r2));
+}
+
+#[test]
+fn validate_sealed_reports_an_unpinned_extension_ref() {
+    // Fabricate a sealed doc carrying an unpinned ref (seal itself refuses —
+    // validate_assembly(Sealed) still reports the C-EXT-1 it would have caught).
+    let (sealed, _store) = resolved_sealed("ext-sealed-unpinned");
+    let mut bad = sealed.document.clone();
+    let mut a = stage1_assembly();
+    a.extensions = Some(ext_block(
+        vec![git_source()],
+        vec![extension_ref(
+            "demo",
+            ExtensionKind::Skill,
+            "git",
+            Some("latest"),
+        )],
+    ));
+    bad.assembly = Some(a.to_json());
+    let fabricated = SealedDefinition {
+        document: bad,
+        definition_ref: sealed.definition_ref.clone(),
+        closed_world_tools: sealed.closed_world_tools.clone(),
+    };
+    let r = hh_assembly::validate_assembly(
+        hh_assembly::Subject::Sealed(&fabricated),
+        &Stage1Catalog::stage1(),
+        None,
+        &kernel(),
+    );
+    assert!(has_code(&r, "C-EXT-1"), "{:?}", report_codes(&r));
+}

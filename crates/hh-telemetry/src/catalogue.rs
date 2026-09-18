@@ -279,7 +279,9 @@ pub const PROCESS_METRICS: &[ProcessMetric] = &[
     ProcessMetric { name: "human_interventions", dimension: Dimension::Autonomy, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.permission.decided"], unit: MetricUnit::Count, fold: C },
     ProcessMetric { name: "approval_requests", dimension: Dimension::Autonomy, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
-        computed_from: &["security.permission.requested"], unit: MetricUnit::Count, fold: C },
+        // I-P5 (S1.23): `approvals.requested` counts the durable owed-decision
+        // rows (`pending`), never the ephemeral prompt renderings.
+        computed_from: &["security.permission.pending"], unit: MetricUnit::Count, fold: C },
     ProcessMetric { name: "approval_wait_ms", dimension: Dimension::Autonomy, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.permission.decided"], unit: MetricUnit::Milliseconds, fold: C },
     ProcessMetric { name: "approval_cache_hit_rate", dimension: Dimension::Autonomy, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,

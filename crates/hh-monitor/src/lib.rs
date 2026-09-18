@@ -24,6 +24,7 @@
 //! - **`unknown ⇒ irreversible`** (2.3): unparseable assessor input projects to
 //!   `RiskClass::UNKNOWN`; hints and self-reports are raise-only.
 
+pub mod approval;
 pub mod args;
 pub mod assess;
 pub mod context;

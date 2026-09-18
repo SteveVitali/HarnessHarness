@@ -386,3 +386,59 @@ pub fn seeded_store(tag: &str) -> (RegistryStore, BTreeMap<String, String>) {
     }
     (s, vids)
 }
+
+// ── extension fixtures (§5g.5; S1.23) ────────────────────────────────────────
+
+/// A registerable `ExtensionRecord` — minted `text_authority` (L1 passes),
+/// credential-free locator, `resolved` trust status.
+pub fn extension_record(
+    name: &str,
+    kind: hh_registry::extension::ExtensionKind,
+) -> hh_registry::extension::ExtensionRecord {
+    use hh_registry::extension::*;
+    let origin = Origin::human("test:author", HumanRole::Author);
+    let status = AttestationStatus::Missing;
+    ExtensionRecord {
+        kind: kind.clone(),
+        name: name.to_string(),
+        content: address(format!("ext-{name}").as_bytes(), "application/octet-stream"),
+        manifest: Json::obj([]),
+        contributes: vec![],
+        locator: SourceLocator {
+            scheme: "git".to_string(),
+            credential_free_uri: format!("https://example.com/{name}.git"),
+            selector: None,
+            resolved: Some("abc123".to_string()),
+            fetched_at: Some(7),
+        },
+        trust: ExtensionTrustRecord {
+            text_authority: default_text_authority(&kind, &origin, &status),
+            ..ExtensionTrustRecord::unresolved_default(PersistenceScope::Run)
+        },
+        provenance: ProvenanceRecord::minted(origin, PersistenceScope::Run, 7),
+        ext: BTreeMap::new(),
+    }
+}
+
+/// An authored (unpinned) `ExtensionRef` — selector-bearing locator, no
+/// `content`/`extension_id` pin (what `resolve` fills).
+pub fn extension_ref(
+    name: &str,
+    kind: hh_registry::extension::ExtensionKind,
+    scheme: &str,
+    selector: Option<&str>,
+) -> hh_registry::extension::ExtensionRef {
+    hh_registry::extension::ExtensionRef {
+        name: name.to_string(),
+        kind,
+        locator: hh_registry::extension::SourceLocator {
+            scheme: scheme.to_string(),
+            credential_free_uri: format!("https://example.com/{name}.git"),
+            selector: selector.map(str::to_string),
+            resolved: None,
+            fetched_at: None,
+        },
+        content: None,
+        extension_id: None,
+    }
+}

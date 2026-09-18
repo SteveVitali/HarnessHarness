@@ -435,7 +435,11 @@ fn ac12_ephemeral_classes_are_subscribe_only_never_durable() {
 }
 
 #[test]
-fn ac12_declared_ephemeral_members_are_stripped_and_delivered_as_fragments() {
+fn ac12_ephemeral_requested_is_delivered_never_durable() {
+    // §5g.7 §3 (S1.23): `security.permission.requested` is the *ephemeral*
+    // prompt-rendering fact — the durable owed-decision is
+    // `security.permission.pending`. The append delivers a live `Ephemeral`
+    // frame to subscribers and writes nothing to the durable log.
     let (mut s, run, lease) = open("frag");
     let mut sub = s.subscribe(&run, Cursor::Now).unwrap();
     let mut e = k_ev(
@@ -449,28 +453,26 @@ fn ac12_declared_ephemeral_members_are_stripped_and_delivered_as_fragments() {
     e.provenance = Some(ProvenanceRecord::kernel("kernel:perm", 0));
     s.append(&run, &lease, vec![e]).unwrap();
     let _ = sub.next(); // sync
-    let dur = match sub.next() {
-        Some(EventFrame::Durable { event, seq, .. }) => {
-            // `rendering` was stripped from the durable form.
-            assert!(event.payload.get("rendering").is_none());
+    match sub.next() {
+        Some(EventFrame::Ephemeral { event }) => {
+            assert_eq!(event.class, "security.permission.requested");
             assert_eq!(
                 event.payload.get("permission_id").and_then(Json::as_str),
                 Some("perm-1")
             );
-            seq
-        }
-        other => panic!("expected durable, got {other:?}"),
-    };
-    match sub.next() {
-        Some(EventFrame::Ephemeral { event }) => {
-            assert_eq!(event.durable_event_seq, Some(dur));
             assert_eq!(
                 event.payload.get("rendering").and_then(Json::as_str),
                 Some("approve? [y/n]")
             );
         }
-        other => panic!("expected fragment, got {other:?}"),
+        other => panic!("expected the ephemeral frame, got {other:?}"),
     }
+    // Nothing lands durably — the owed-decision record is `pending`.
+    assert!(!s
+        .events(&run)
+        .unwrap()
+        .iter()
+        .any(|e| e.class == "security.permission.requested"));
 }
 
 // ── read / subscribe surface ─────────────────────────────────────────────────

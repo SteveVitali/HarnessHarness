@@ -1030,9 +1030,10 @@ fn compute_metric(name: &str, ev: &[&EventEnvelope]) -> Json {
                 })
                 .count() as i64,
         ),
-        // `security.permission.requested` is ephemeral — over a durable-only
-        // prefix the honest count is what the prefix contains.
-        "approval_requests" => Json::Int(count(&["security.permission.requested"])),
+        // `approval_requests` counts the durable owed-decision rows — the
+        // `pending` class (I-P5; `requested` is the ephemeral prompt
+        // rendering, never the count source).
+        "approval_requests" => Json::Int(count(&["security.permission.pending"])),
         "approval_wait_ms" => Json::Int(
             ev.iter()
                 .filter(|e| e.class == "security.permission.decided")

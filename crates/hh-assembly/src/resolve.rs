@@ -110,6 +110,12 @@ pub fn resolve(
     // process's `native.slots` (nested natives bind through the same resolver).
     resolve_slots(&mut assembly, env, &snapshot_id, &mut diags, &kernel);
 
+    // Extension refs pin against the snapshot's `extension` records (§5g.5 §3 —
+    // the resolve-time pin; a selector matching nothing is `C-EXT-4`, an
+    // ambiguous match is `C-REF-2`, and an authored pin that no longer resolves
+    // is `C-REF-4`).
+    resolve_extensions(&mut assembly, env, &snapshot_id, &mut diags, &kernel);
+
     // Secrets resolve to channel names only — an inline value where a `$secret:` name
     // belongs is `C-SEC-1`.
     secret_scan(&assembly, &mut diags, &kernel);
@@ -845,6 +851,153 @@ fn resolve_range_excluding(
         }
     }
     best.map(|(_, v)| v)
+}
+
+/// §5g.5 §3 resolve-time pin (S1.23): every `assembly.extensions.refs[]` member
+/// is pinned against the store's `extension` records. Selector spellings are
+/// `version:<version_id>` (exact) or `latest`/absent (the most recently
+/// registered matching record — deterministic on `(registered_at, version_id)`);
+/// an absent selector matching more than one record is `C-REF-2`. The final
+/// pick always re-enters the ONE governed path (`RegistryStore::resolve` —
+/// revoked/stale still refuses under `execute`). A ref's locator scheme must be
+/// covered by `extensions.sources[]` (`C-EXT-2` — declared sources only,
+/// CF-079); an authored pin whose record is absent or whose `content` no longer
+/// matches is `C-EXT-4` — the pin never silently moves.
+fn resolve_extensions(
+    a: &mut Assembly,
+    env: &ResolveEnv,
+    _snapshot_id: &str,
+    diags: &mut Vec<AssemblyDiagnostic>,
+    kernel: &ProvenanceRecord,
+) {
+    let Some(block) = a.extensions.as_mut() else {
+        return;
+    };
+    let declared: std::collections::BTreeSet<&str> =
+        block.sources.iter().map(|s| s.kind_str()).collect();
+    for (i, r) in block.refs.iter_mut().enumerate() {
+        let path = format!("/assembly/extensions/refs/{i}");
+        if !declared.contains(r.locator.scheme.as_str()) {
+            diags.push(rdiag(
+                Code::ExtUndeclaredSource,
+                &path,
+                &r.name,
+                "the ref's locator scheme is not covered by `extensions.sources[]`",
+                "declare the source kind in `extensions.sources[]` — sources are declared, never implicit",
+                kernel,
+            ));
+        }
+        // The target record: authored pin / `version:` selector → exact lookup;
+        // `latest`/absent → newest matching `extension` record.
+        let target: Option<String> = if let Some(vid) = &r.extension_id {
+            Some(vid.clone())
+        } else {
+            match r.locator.selector.as_deref() {
+                Some(sel) if sel.starts_with("version:") => {
+                    Some(sel.trim_start_matches("version:").to_string())
+                }
+                None | Some("latest") => {
+                    let mut best: Option<(u64, String)> = None;
+                    for vid in env.registry.version_ids() {
+                        let Some((env_r, rec)) = env.registry.get(vid) else {
+                            continue;
+                        };
+                        let hh_registry::records::RegistryRecord::Extension(e) = rec else {
+                            continue;
+                        };
+                        if e.name != r.name || e.kind != r.kind {
+                            continue;
+                        }
+                        let cand = (env_r.registered_at, vid.clone());
+                        if best.as_ref().map(|b| cand > *b).unwrap_or(true) {
+                            best = Some(cand);
+                        }
+                    }
+                    match r.locator.selector.as_deref() {
+                        Some("latest") => best.map(|(_, v)| v),
+                        None => best.map(|(_, v)| v),
+                        _ => unreachable!(),
+                    }
+                }
+                Some(other) => {
+                    diags.push(rdiag(
+                        Code::ExtUnresolved,
+                        &path,
+                        other,
+                        "unknown extension selector spelling",
+                        "spell the selector as `latest` or `version:<version_id>`",
+                        kernel,
+                    ));
+                    continue;
+                }
+            }
+        };
+        let Some(vid) = target else {
+            diags.push(rdiag(
+                Code::ExtUnresolved,
+                &path,
+                &r.name,
+                "no `extension` record matches the ref",
+                "register the extension record or fix `name`/`kind`",
+                kernel,
+            ));
+            continue;
+        };
+        // The governed path — revoked/stale refuses under `execute`.
+        let resolved = match env.registry.resolve(
+            &ResolveInput::Version(vid.clone()),
+            env.mode,
+            &ResolveRequest::default(),
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                diags.push(reg_err(&e, &path, &r.name, kernel));
+                continue;
+            }
+        };
+        let hh_registry::records::RegistryRecord::Extension(rec) = &resolved.record else {
+            diags.push(rdiag(
+                Code::ExtUnresolved,
+                &path,
+                &r.name,
+                "the pin names a non-extension record",
+                "pin an `extension` record",
+                kernel,
+            ));
+            continue;
+        };
+        if rec.name != r.name || rec.kind != r.kind {
+            diags.push(rdiag(
+                Code::ExtUnresolved,
+                &path,
+                &r.name,
+                "the pinned record's name/kind disagrees with the ref",
+                "fix the ref's `name`/`kind` or the pin",
+                kernel,
+            ));
+            continue;
+        }
+        // An authored `content` pin that disagrees with the record is a refusal —
+        // the pin never silently moves.
+        if let Some(c) = &r.content {
+            if *c != rec.content {
+                diags.push(rdiag(
+                    Code::ExtUnresolved,
+                    &path,
+                    &r.name,
+                    "the authored content pin disagrees with the resolved record",
+                    "re-resolve or correct the pin",
+                    kernel,
+                ));
+                continue;
+            }
+        }
+        r.locator.selector = None;
+        r.locator.resolved = Some(vid.clone());
+        r.locator.fetched_at = Some(env.resolved_at);
+        r.content = Some(rec.content.clone());
+        r.extension_id = Some(vid);
+    }
 }
 
 /// Resolve every binding in `assembly.slots`.
