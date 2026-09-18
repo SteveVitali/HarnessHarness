@@ -1169,6 +1169,10 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         // The capability body IS the canonical HIR node (V-E1-9 — the `semantic`
         // flag is irrelevant: the node's own codec already splits identity).
         RegistryRecord::Capability(c) => hh_hir::wire::node_to_json(&c.node),
+        // The eval declarations' canonical bodies are the ontology codecs (CC7 —
+        // the registry re-encodes, never re-schemas).
+        RegistryRecord::MetricDeclaration(m) => m.to_json(),
+        RegistryRecord::Validator(o) => o.to_json(),
     }
 }
 
@@ -1220,6 +1224,22 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             }
             Ok(RegistryRecord::Capability(CapabilityRecord { node }))
         }
+        RecordKind::MetricDeclaration => Ok(RegistryRecord::MetricDeclaration(
+            hh_ontology::compliance::MetricDeclaration::from_json(j).map_err(|d| {
+                RegistryError::SchemaViolation {
+                    path: path.to_string(),
+                    detail: d,
+                }
+            })?,
+        )),
+        RecordKind::Validator => Ok(RegistryRecord::Validator(
+            hh_ontology::eval::OracleDeclaration::from_json(j).map_err(|e| {
+                RegistryError::SchemaViolation {
+                    path: path.to_string(),
+                    detail: format!("{e:?}"),
+                }
+            })?,
+        )),
         other if !other.has_stage1_schema() => Err(RegistryError::SchemaViolation {
             path: "kind".to_string(),
             detail: format!(

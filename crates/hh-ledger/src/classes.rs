@@ -922,9 +922,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // (`hypothesis_ref`, `evidence_refs`).
     row_audit("measurement.evolution.candidate.transitioned", O::Events, true, TRANSITION_FIELDS, &[], None, None),
     row_audit("measurement.harness_edit.applied",             O::Events, true, OPEN_AUDIT, &[], None, None),
-    // `measurement.metric.emitted{subject, metric_ref, value, unit,
-    // detector_ref}` (§5h.1 §2.2 — restricted to observations *not derivable*
-    // from other events; producers are oracles/judges over the scorer boundary,
+    // `measurement.metric.emitted{metric_ref, value, applies_to, oracle_ref,
+    // detector, confidence, evidence_ref}` (§5h.2 §3 / ADR-0045 D9 — the
+    // `MetricValue` record; restricted to observations *not derivable* from
+    // other events; producers are oracles/judges over the scorer boundary,
     // not the kernel). Provenance mandatory per the same table.
     row_prov("measurement.metric.emitted", Led, O::Events, false, false, true,  None, None),
 

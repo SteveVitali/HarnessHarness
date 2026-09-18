@@ -26,6 +26,25 @@ pub enum ParticipantClass {
     Hosted,
 }
 
+impl ParticipantClass {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ParticipantClass::Native => "native",
+            ParticipantClass::Hosted => "hosted",
+        }
+    }
+
+    /// Parse a canonical spelling; `None` on any other input.
+    pub fn parse(s: &str) -> Option<ParticipantClass> {
+        match s {
+            "native" => Some(ParticipantClass::Native),
+            "hosted" => Some(ParticipantClass::Hosted),
+            _ => None,
+        }
+    }
+}
+
 /// Comparison granularity — the unit at which a factor varies (§2.7.4; CF-021).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Granularity {
@@ -35,6 +54,27 @@ pub enum Granularity {
     ConfigurationLevel,
     /// A participant version as a whole.
     ProductLevel,
+}
+
+impl Granularity {
+    /// The canonical spelling (the spec's hyphenated form — §2.7.4).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Granularity::ComponentLevel => "component-level",
+            Granularity::ConfigurationLevel => "configuration-level",
+            Granularity::ProductLevel => "product-level",
+        }
+    }
+
+    /// Parse a canonical spelling; `None` on any other input.
+    pub fn parse(s: &str) -> Option<Granularity> {
+        match s {
+            "component-level" => Some(Granularity::ComponentLevel),
+            "configuration-level" => Some(Granularity::ConfigurationLevel),
+            "product-level" => Some(Granularity::ProductLevel),
+            _ => None,
+        }
+    }
 }
 
 /// The observability levels (§2.7.2). `ledger` is entailed by `native`, never declarable.
@@ -48,6 +88,30 @@ pub enum Observability {
     EndState,
     /// The full run ledger (⇔ native).
     Ledger,
+}
+
+impl Observability {
+    /// The canonical spelling (spec §2.7.2 — `requires_observability ⊆
+    /// {events, model_io, end_state, ledger}`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Observability::Events => "events",
+            Observability::ModelIo => "model_io",
+            Observability::EndState => "end_state",
+            Observability::Ledger => "ledger",
+        }
+    }
+
+    /// Parse a canonical spelling; `None` on any other input.
+    pub fn parse(s: &str) -> Option<Observability> {
+        match s {
+            "events" => Some(Observability::Events),
+            "model_io" => Some(Observability::ModelIo),
+            "end_state" => Some(Observability::EndState),
+            "ledger" => Some(Observability::Ledger),
+            _ => None,
+        }
+    }
 }
 
 /// The hosting mechanism (§2.7.2). `none` only on a native descriptor.

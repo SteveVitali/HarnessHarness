@@ -32,6 +32,29 @@ impl Ref {
             version_id: version_id.into(),
         }
     }
+
+    /// The canonical JSON form `{semantic_id, version_id}`.
+    pub fn to_json(&self) -> hh_wire::Json {
+        hh_wire::Json::obj([
+            ("semantic_id", hh_wire::Json::str(&self.semantic_id)),
+            ("version_id", hh_wire::Json::str(&self.version_id)),
+        ])
+    }
+
+    /// Strict decode of `{semantic_id, version_id}`.
+    pub fn from_json(j: &hh_wire::Json) -> Option<Ref> {
+        let m = match j {
+            hh_wire::Json::Obj(m) => m,
+            _ => return None,
+        };
+        if m.len() != 2 {
+            return None;
+        }
+        Some(Ref {
+            semantic_id: m.get("semantic_id")?.as_str()?.to_string(),
+            version_id: m.get("version_id")?.as_str()?.to_string(),
+        })
+    }
 }
 
 /// The factor-space F axes (§2.5.7). β is one of them — *representable as a factor* (AC-A2-5).
@@ -74,6 +97,28 @@ impl Factor {
         Factor::Profile,
         Factor::HostingMechanism,
     ];
+
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Factor::ModelSnapshot => "model_snapshot",
+            Factor::TaskDistribution => "task_distribution",
+            Factor::EnvironmentImage => "environment_image",
+            Factor::BudgetVector => "budget_vector",
+            Factor::ContextWindow => "context_window",
+            Factor::ToolSurfaceTarget => "tool_surface_target",
+            Factor::ControlBoundaryBeta => "control_boundary_beta",
+            Factor::ComponentVariant => "component_variant",
+            Factor::Profile => "profile",
+            Factor::HostingMechanism => "hosting_mechanism",
+        }
+    }
+
+    /// Parse a canonical spelling; `None` on any other input (closed sum —
+    /// unknown spellings are never coerced).
+    pub fn parse(s: &str) -> Option<Factor> {
+        Factor::ALL.into_iter().find(|f| f.as_str() == s)
+    }
 }
 
 /// The **configuration** κ = (M-set, h, p, E, B, seed) — one factorial point (§2.5.6). All six
@@ -142,6 +187,39 @@ impl Configuration {
             self.seed,
         );
         ConfigurationVersionId(format!("cfgv:sha256:{}", sha256_hex(body.as_bytes())))
+    }
+
+    /// The canonical JSON form `{m_set, h, p, e, b, seed}` — every factor a
+    /// pinned [`Ref`] (AC-A2-5).
+    pub fn to_json(&self) -> hh_wire::Json {
+        hh_wire::Json::obj([
+            ("m_set", self.m_set.to_json()),
+            ("h", self.h.to_json()),
+            ("p", self.p.to_json()),
+            ("e", self.e.to_json()),
+            ("b", self.b.to_json()),
+            ("seed", hh_wire::Json::str(&self.seed)),
+        ])
+    }
+
+    /// Strict decode of `{m_set, h, p, e, b, seed}`; `None` on any malformed
+    /// member.
+    pub fn from_json(j: &hh_wire::Json) -> Option<Configuration> {
+        let m = match j {
+            hh_wire::Json::Obj(m) => m,
+            _ => return None,
+        };
+        if m.len() != 6 {
+            return None;
+        }
+        Some(Configuration {
+            m_set: Ref::from_json(m.get("m_set")?)?,
+            h: Ref::from_json(m.get("h")?)?,
+            p: Ref::from_json(m.get("p")?)?,
+            e: Ref::from_json(m.get("e")?)?,
+            b: Ref::from_json(m.get("b")?)?,
+            seed: m.get("seed")?.as_str()?.to_string(),
+        })
     }
 }
 

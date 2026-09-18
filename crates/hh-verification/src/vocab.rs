@@ -7,6 +7,7 @@ use hh_wire::Json;
 
 pub use hh_hir::kinds::ChargedTo;
 pub use hh_ontology::compliance::Detector;
+pub use hh_ontology::eval::{EvidenceKind, LatticeValue, OracleClass, VerdictType};
 
 // ── Claims (§5f.2 §3; ADR-0112 D1/D5) ─────────────────────────────────────────
 
@@ -547,68 +548,6 @@ impl HandleKind {
 
 // ── Evidence + verdicts (§5f.1 §3; ADR-0109/0110/0111) ────────────────────────
 
-/// `EvidenceKind` — the closed evidence-kind sum (ADR-0110 D2). `model_io` is
-/// judges-only (I-V4).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum EvidenceKind {
-    /// `end_state` — an environment handle's end state.
-    EndState,
-    /// `snapshot` — a content-addressed snapshot.
-    Snapshot,
-    /// `artifact` — a content-addressed artifact.
-    Artifact,
-    /// `effect_record` — an `action.effect.*` chain.
-    EffectRecord,
-    /// `observation` — an `Observation` event ref.
-    Observation,
-    /// `ledger_range` — a ledger range `(run_id, from, to)`.
-    LedgerRange,
-    /// `world_state_patch` — a content-addressed world-state patch.
-    WorldStatePatch,
-    /// `external_probe` — a read-only `ToolCapability` probe.
-    ExternalProbe,
-    /// `model_io` — a model-io event ref — **judges only** (I-V4).
-    ModelIo,
-    /// `human_attestation` — a human attestation.
-    HumanAttestation,
-}
-
-impl EvidenceKind {
-    /// The canonical spelling.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            EvidenceKind::EndState => "end_state",
-            EvidenceKind::Snapshot => "snapshot",
-            EvidenceKind::Artifact => "artifact",
-            EvidenceKind::EffectRecord => "effect_record",
-            EvidenceKind::Observation => "observation",
-            EvidenceKind::LedgerRange => "ledger_range",
-            EvidenceKind::WorldStatePatch => "world_state_patch",
-            EvidenceKind::ExternalProbe => "external_probe",
-            EvidenceKind::ModelIo => "model_io",
-            EvidenceKind::HumanAttestation => "human_attestation",
-        }
-    }
-
-    /// Parse; unknown spellings refuse.
-    pub fn parse(s: &str) -> Option<EvidenceKind> {
-        [
-            EvidenceKind::EndState,
-            EvidenceKind::Snapshot,
-            EvidenceKind::Artifact,
-            EvidenceKind::EffectRecord,
-            EvidenceKind::Observation,
-            EvidenceKind::LedgerRange,
-            EvidenceKind::WorldStatePatch,
-            EvidenceKind::ExternalProbe,
-            EvidenceKind::ModelIo,
-            EvidenceKind::HumanAttestation,
-        ]
-        .into_iter()
-        .find(|k| k.as_str() == s)
-    }
-}
-
 /// `Freshness` — an `EvidenceRequirement`'s freshness arm (ADR-0109 D2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Freshness {
@@ -735,139 +674,6 @@ pub enum CompletionPolicy {
     /// `unverifiable(reason)` — requires `Goal.unverifiable_reason`; the run
     /// ends `succeeded_unverified`, never `succeeded`.
     Unverifiable(String),
-}
-
-/// `OracleClass` — the nine-class oracle taxonomy (ADR-0047 D1). Headline
-/// capability at C0 admits only the deterministic set
-/// ([`OracleClass::is_c0_headline`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum OracleClass {
-    /// `executable` — an executable oracle.
-    Executable,
-    /// `end_state` — an end-state oracle.
-    EndState,
-    /// `output_check` — an output-check oracle.
-    OutputCheck,
-    /// `trace_predicate` — a trace-predicate oracle.
-    TracePredicate,
-    /// `protocol_check` — a protocol-check oracle.
-    ProtocolCheck,
-    /// `judge` — a model judge (C2).
-    Judge,
-    /// `human` — a human oracle.
-    Human,
-    /// `teacher_relative` — teacher-relative lift (C4; `provisional`).
-    TeacherRelative,
-    /// `reference_relative` — the derived three-valued `equivalence_run` class.
-    ReferenceRelative,
-}
-
-impl OracleClass {
-    /// The canonical spelling.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            OracleClass::Executable => "executable",
-            OracleClass::EndState => "end_state",
-            OracleClass::OutputCheck => "output_check",
-            OracleClass::TracePredicate => "trace_predicate",
-            OracleClass::ProtocolCheck => "protocol_check",
-            OracleClass::Judge => "judge",
-            OracleClass::Human => "human",
-            OracleClass::TeacherRelative => "teacher_relative",
-            OracleClass::ReferenceRelative => "reference_relative",
-        }
-    }
-
-    /// Parse; unknown spellings refuse.
-    pub fn parse(s: &str) -> Option<OracleClass> {
-        [
-            OracleClass::Executable,
-            OracleClass::EndState,
-            OracleClass::OutputCheck,
-            OracleClass::TracePredicate,
-            OracleClass::ProtocolCheck,
-            OracleClass::Judge,
-            OracleClass::Human,
-            OracleClass::TeacherRelative,
-            OracleClass::ReferenceRelative,
-        ]
-        .into_iter()
-        .find(|c| c.as_str() == s)
-    }
-
-    /// The C0 headline set (ADR-0047 D2): the five deterministic classes.
-    pub fn is_c0_headline(self) -> bool {
-        matches!(
-            self,
-            OracleClass::Executable
-                | OracleClass::EndState
-                | OracleClass::OutputCheck
-                | OracleClass::TracePredicate
-                | OracleClass::ProtocolCheck
-        )
-    }
-
-    /// The detector class the oracle's verdicts carry.
-    pub fn detector(self) -> Detector {
-        match self {
-            OracleClass::Judge => Detector::Judged,
-            OracleClass::Human => Detector::Human,
-            _ => Detector::Deterministic,
-        }
-    }
-}
-
-/// `VerdictType` — a declaration's `verdict_type` (ADR-0110 D1; ADR-0047 D1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VerdictType {
-    /// `bool`.
-    Bool,
-    /// `graded`.
-    Graded,
-    /// `lattice{C,I,P,N}` (the `verdict_lattice`).
-    Lattice,
-    /// `three_valued{pass, fail, inconclusive}`.
-    ThreeValued,
-    /// `vector`.
-    Vector,
-}
-
-impl VerdictType {
-    /// The canonical spelling.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            VerdictType::Bool => "bool",
-            VerdictType::Graded => "graded",
-            VerdictType::Lattice => "lattice",
-            VerdictType::ThreeValued => "three_valued",
-            VerdictType::Vector => "vector",
-        }
-    }
-}
-
-/// `LatticeValue` — the `verdict_lattice{C,I,P,N}` values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LatticeValue {
-    /// `C` — contradicted.
-    C,
-    /// `I` — inconclusive.
-    I,
-    /// `P` — partially supported.
-    P,
-    /// `N` — supported (non-negative).
-    N,
-}
-
-impl LatticeValue {
-    /// The canonical spelling.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            LatticeValue::C => "C",
-            LatticeValue::I => "I",
-            LatticeValue::P => "P",
-            LatticeValue::N => "N",
-        }
-    }
 }
 
 /// `ThreeValued` — `pass | fail | inconclusive`.

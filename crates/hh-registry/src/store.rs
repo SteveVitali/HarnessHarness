@@ -770,6 +770,29 @@ impl RegistryStore {
                     bail!(e);
                 }
             }
+            RegistryRecord::MetricDeclaration(m) => {
+                // The declaration's own schema checks are the admission gate —
+                // a metric admitting no detector/oracle, or a headline metric
+                // admitting a non-deterministic oracle, never registers
+                // (AC-R-2.9.2-13; ADR-0047 D2).
+                if let Err(e) = m.validate() {
+                    bail!(RegistryError::SchemaViolation {
+                        path: "metric_declaration".to_string(),
+                        detail: format!("{e:?}"),
+                    });
+                }
+            }
+            RegistryRecord::Validator(o) => {
+                // ADR-0047's Stage-1 enforceable obligations (`judge ⇒
+                // instrument`, `judge ⇒ ¬deterministic`, `reference_relative ⇒
+                // three_valued`) refuse at registration, never at first use.
+                if let Err(e) = o.validate() {
+                    bail!(RegistryError::SchemaViolation {
+                        path: "validator".to_string(),
+                        detail: format!("{e:?}"),
+                    });
+                }
+            }
         }
         // Trust record: mandatory for non-kernel/definition registrars.
         let first_party = matches!(

@@ -17,6 +17,8 @@ use hh_hir::leaves::Text;
 use hh_hir::records::AssumptionDebtRecord;
 use hh_identity::idp::ContentAddress;
 use hh_identity::repro::InstrumentRecord;
+use hh_ontology::compliance::MetricDeclaration;
+use hh_ontology::eval::OracleDeclaration;
 use hh_provenance::ProvenanceRecord;
 use hh_wire::json::Json;
 
@@ -470,6 +472,13 @@ pub enum RegistryRecord {
     ForeignImport(ForeignImport),
     /// A `capability` — a registered `ToolCapability` HIR/1 node.
     Capability(CapabilityRecord),
+    /// A `metric_declaration` — the full §5h.2 `MetricDeclaration` is the body
+    /// (R-2.9.2; the ontology owns the schema — CC7).
+    MetricDeclaration(MetricDeclaration),
+    /// A `validator` — the §5h.2 `OracleDeclaration` is the body (R-2.9.2;
+    /// ADR-0047). A Validator *component* registers as a `variant` of the
+    /// `validator` class; this kind is the oracle's declaration record.
+    Validator(OracleDeclaration),
 }
 
 impl RegistryRecord {
@@ -484,6 +493,8 @@ impl RegistryRecord {
             RegistryRecord::Snapshot(_) => RecordKind::RegistrySnapshot,
             RegistryRecord::ForeignImport(_) => RecordKind::ForeignImport,
             RegistryRecord::Capability(_) => RecordKind::Capability,
+            RegistryRecord::MetricDeclaration(_) => RecordKind::MetricDeclaration,
+            RegistryRecord::Validator(_) => RecordKind::Validator,
         }
     }
 
@@ -498,6 +509,12 @@ impl RegistryRecord {
                 vec![r.subject_ref.clone(), r.suite_ref.clone()]
             }
             RegistryRecord::Namespace(_) | RegistryRecord::ForeignImport(_) => Vec::new(),
+            // `applies_to_families` scopes by family *name* (the same treatment
+            // `VariantRecord.applies_to.families` gets) — names are never pins.
+            RegistryRecord::MetricDeclaration(_) => Vec::new(),
+            // `calibration_ref` is a pinned `version_id` of the deterministic
+            // oracle the judge calibrates against (ADR-0047(c)(ii)).
+            RegistryRecord::Validator(o) => o.calibration_ref.iter().cloned().collect(),
             RegistryRecord::Snapshot(s) => s.members.iter().cloned().collect(),
             // A capability's pinned postcondition refs close over the Validators/
             // Observations it names (the snapshot closure — R7; unpinned selectors

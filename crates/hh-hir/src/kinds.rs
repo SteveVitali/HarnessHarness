@@ -620,24 +620,12 @@ pub struct JudgeProfile {
     pub charged_to: ChargedTo,
 }
 
-/// `charged_to: subject | instrument`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChargedTo {
-    /// Charged to the judged subject.
-    Subject,
-    /// Charged to the judging instrument.
-    Instrument,
-}
-
-impl ChargedTo {
-    /// Canonical name.
-    pub fn name(self) -> &'static str {
-        match self {
-            ChargedTo::Subject => "subject",
-            ChargedTo::Instrument => "instrument",
-        }
-    }
-}
+/// `charged_to: subject | instrument`. The canonical definition lives in
+/// `hh-ontology::eval` (S1.22, R-2.9.2 — the eval vocabulary was lowered so
+/// P7 records may name it without reaching above the telemetry layer); this
+/// re-export keeps the `hh_hir::kinds::ChargedTo` spelling (CC7 — one
+/// definition, two spellings resolve to it).
+pub use hh_ontology::eval::ChargedTo;
 
 /// `ToolCapability.effects` (§3.1.3): `pure | declared{effects: set<EffectClass>}` — **closed
 /// only**: the spec's declarative language is closed-effects-only; an agent that needs open
