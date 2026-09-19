@@ -1009,3 +1009,100 @@ fn hex(bytes: &[u8]) -> String {
     }
     s
 }
+
+// ── R-2.8.6 audit surface (S2.5) ────────────────────────────────────────
+
+impl EmbedService {
+    /// `audit_view` — the ledger's own audit fold (ADR-0066 D1: no second
+    /// store). Returns the `View` record (`payload` is the `AuditView`
+    /// dossier — checkpoints, cross-run anchors, content-refs accounting,
+    /// completeness vector; `view_hash` per §7.4 §2.4).
+    pub(crate) fn audit_view(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let p = AuditViewParams::from_json(params)?;
+        let s = self.live_session(&p.session_id)?;
+        let v = self
+            .store
+            .project(
+                &s.run_id,
+                ViewKind::AuditView,
+                p.until_seq.map(|u| u as u64),
+            )
+            .map_err(ledger_err)?;
+        let derived_hash = match v.derived_from_seq {
+            Some(seq) => self
+                .store
+                .events(&s.run_id)
+                .ok()
+                .and_then(|evs| evs.iter().find(|e| e.seq == seq))
+                .map(|e| e.hash.clone())
+                .unwrap_or_default(),
+            None => String::new(),
+        };
+        Ok(View {
+            payload: v.payload,
+            derived_from_seq: v.derived_from_seq.map(|s| s as i64).unwrap_or(-1),
+            derived_from_hash: derived_hash,
+            view_hash: v.view_hash,
+        }
+        .to_json())
+    }
+
+    /// `verify` — recompute the session run's chain, tree heads, signed
+    /// checkpoints and cross-run anchors from the WAL. The `Tampered`
+    /// taxonomy is *data* (`{verdict: tampered, at_seq, kind}`), not a
+    /// transport error — a corrupted ledger still answers.
+    pub(crate) fn verify(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let p = VerifyParams::from_json(params)?;
+        let s = self.live_session(&p.session_id)?;
+        match self.store.verify_run(
+            &s.run_id,
+            None,
+            p.until_seq.map(|u| u as u64),
+            self.store.audit_key_resolver(),
+        ) {
+            Ok(()) => Ok(Json::obj([("verdict", Json::str("ok"))])),
+            Err(hh_ledger::errors::LedgerError::Tampered(t)) => Ok(Json::obj([
+                ("verdict", Json::str("tampered")),
+                ("at_seq", Json::Int(t.at_seq as i64)),
+                ("kind", Json::str(t.kind.as_str())),
+            ])),
+            Err(e) => Err(ledger_err(e)),
+        }
+    }
+
+    /// `prove_inclusion` — the Merkle audit path for the event at `seq`
+    /// under the session run's current tree head (§5g.6 §3).
+    pub(crate) fn prove_inclusion(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let p = ProveInclusionParams::from_json(params)?;
+        let s = self.live_session(&p.session_id)?;
+        if p.seq < 0 {
+            return Err(EmbedError::SchemaViolation {
+                path: "prove_inclusion/seq".to_string(),
+                code: "negative".to_string(),
+            });
+        }
+        let proof = self
+            .store
+            .prove_inclusion(&s.run_id, p.seq as u64, None)
+            .map_err(ledger_err)?;
+        Ok(proof.to_json())
+    }
+
+    /// `prove_consistency` — the append-only consistency proof between
+    /// `first_size` and `second_size` of the session run's tree.
+    pub(crate) fn prove_consistency(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let p = ProveConsistencyParams::from_json(params)?;
+        let s = self.live_session(&p.session_id)?;
+        if p.first_size < 0 || p.second_size < 0 {
+            return Err(EmbedError::SchemaViolation {
+                path: "prove_consistency/size".to_string(),
+                code: "negative".to_string(),
+            });
+        }
+        let proof = self
+            .store
+            .prove_consistency(&s.run_id, p.first_size as u64, p.second_size as u64)
+            .map_err(ledger_err)?;
+        Ok(proof.to_json())
+    }
+}

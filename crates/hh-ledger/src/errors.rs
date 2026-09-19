@@ -380,6 +380,47 @@ pub enum LedgerError {
     },
     /// `verify` found the durable prefix broken — the tamper report.
     Tampered(Tampered),
+
+    // ── audit checkpoints / GC (R-2.8.6; ADR-0067 §5(b)) ─────────────────
+    /// `checkpoint` was asked for a signed head but no usable signer exists:
+    /// the run's `signer_key_ids` is empty or the configured signer cannot
+    /// resolve a declared key id. Never silently unsigned — the refusal is
+    /// the honest answer (CC4).
+    SignerUnavailable {
+        /// The run.
+        run_id: String,
+        /// Why no signer could sign.
+        detail: String,
+    },
+    /// `checkpoint` recomputed its own consistency check before signing and
+    /// found the new head is not a consistency-verified extension of the
+    /// previous signed head — the kernel refuses to sign (§5g.6 checkpoint
+    /// contract). Also raised by the auditor-facing compare when a newly
+    /// observed head is inconsistent with a held head.
+    InconsistentHead {
+        /// The run.
+        run_id: String,
+        /// The held/claimed pair detail.
+        detail: String,
+    },
+    /// `gc`/`redact` named an address that is pinned — a live fork prefix
+    /// member, another run's `refs`/`content_refs`, or an id the fold still
+    /// needs. Refusal is typed, not silent (ADR-0068 R4).
+    Pinned {
+        /// The address that is pinned.
+        address: String,
+        /// Which pin fired.
+        reason: String,
+    },
+    /// `redact` named a target that is not redactable: an `audit_fields`
+    /// member of an audit-grade event (AC-R-2.8.6-2's `NotRedactable`), an
+    /// undeclared field, or a non-address value.
+    NotRedactable {
+        /// The refused target (`<event_id>.<field>` or an address).
+        target: String,
+        /// Why it is not redactable.
+        reason: String,
+    },
     /// A store-level io failure outside the append path.
     Io {
         /// The io detail.
@@ -472,6 +513,28 @@ pub enum TamperedKind {
     /// An audit-grade row in the committed prefix carries a producer outside the
     /// class's producer set or `provenance.authority ≠ kernel` (§5g.6 `producer`).
     Producer,
+    /// The durable prefix is shorter than a caller-asserted bound, a signed
+    /// checkpoint covers a seq no longer present, or a run that declared
+    /// signers committed `lifecycle.run.finished` with no `final` checkpoint
+    /// (§5g.6 `truncate` — "absent-with-later-head", "never silently absent").
+    Truncate,
+    /// A signed checkpoint's claim does not recompute: `tree_size ≠ seq`,
+    /// `tree_head`/`chain_hash` disagree with the covered prefix, the
+    /// `prev_checkpoint` chain is broken, or the claim's `idp` does not match
+    /// its unsigned bytes (§5g.6 `checkpoint_invalid`).
+    CheckpointInvalid,
+    /// A checkpoint row carries no `signatures` at all — a forged or stripped
+    /// claim (§5g.6 `sig_missing`).
+    SigMissing,
+    /// A checkpoint signature fails verification: unknown `key_id`,
+    /// unsupported `alg_ref`, malformed `sig`, or the HMAC does not match the
+    /// unsigned claim (§5g.6 `bad_signature`).
+    BadSignature,
+    /// Two signed heads disagree — a checkpoint claims a `tree_head` the
+    /// covered prefix does not produce, an auditor-held head conflicts, or a
+    /// cross-run anchor's `other_head` does not recompute over the named
+    /// run's durable prefix (§5g.6 `fork_equivocation` / `split_view`).
+    ForkEquivocation,
 }
 
 impl TamperedKind {
@@ -487,6 +550,11 @@ impl TamperedKind {
             TamperedKind::DanglingParent => "dangling_parent",
             TamperedKind::NonCanonicalBytes => "noncanonical_bytes",
             TamperedKind::Producer => "producer",
+            TamperedKind::Truncate => "truncate",
+            TamperedKind::CheckpointInvalid => "checkpoint_invalid",
+            TamperedKind::SigMissing => "sig_missing",
+            TamperedKind::BadSignature => "bad_signature",
+            TamperedKind::ForkEquivocation => "fork_equivocation",
         }
     }
 }

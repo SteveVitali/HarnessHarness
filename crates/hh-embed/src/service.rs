@@ -458,6 +458,10 @@ impl EmbedService {
             "list_leases" => self.list_leases(&req.params),
             "lineage" => self.lineage(&req.params),
             "get_artifact" => self.get_artifact(&req.params),
+            "audit_view" => self.audit_view(&req.params),
+            "verify" => self.verify(&req.params),
+            "prove_inclusion" => self.prove_inclusion(&req.params),
+            "prove_consistency" => self.prove_consistency(&req.params),
             _ => Err(EmbedError::SchemaViolation {
                 path: "/method".to_string(),
                 code: "unknown_method".to_string(),
