@@ -232,6 +232,7 @@ fn dispatch(
             attribution_token,
             commit_proof,
             idempotency_key,
+            env_clear,
         } => {
             let nonce = srv.shared.session_nonce.lock().unwrap().clone();
             if !verify_commit_proof(&nonce, &commit_proof, &effect_id, attempt_no) {
@@ -273,6 +274,7 @@ fn dispatch(
                 retain_bytes_cap,
                 attribution_token,
                 idempotency_key,
+                env_clear,
             )
         }
         HelperRequest::Read {
@@ -625,6 +627,7 @@ fn spawn_exec(
     retain_bytes_cap: u64,
     attribution_token: String,
     idempotency_key: Option<String>,
+    env_clear: bool,
 ) -> (Option<HelperResponse>, bool) {
     // argv extraction — `command` runs through sh -c; `argv` is exec'd.
     let argv: Vec<String> = if let Some(s) = args.get("command").and_then(Json::as_str) {
@@ -691,6 +694,12 @@ fn spawn_exec(
     };
     if backend != "container" {
         cmd.current_dir(&cwd);
+        // `env_clear` — the child inherits nothing of the helper's ambient
+        // environment; the projected `env` pairs are its whole environment
+        // (S2.2: the `subprocess_confined` placement contract, §8.4 V4).
+        if env_clear {
+            cmd.env_clear();
+        }
         for (k, v) in &env {
             cmd.env(k, v);
         }

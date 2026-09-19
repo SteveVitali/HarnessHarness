@@ -167,6 +167,11 @@ pub enum HelperRequest {
         commit_proof: CommitProof,
         /// The idempotency key (the executor-side dedup store's operand — C1).
         idempotency_key: Option<String>,
+        /// `env_clear` — the child starts from a *cleared* environment, not
+        /// the helper's inherited one (additive; S2.2 — the variant host's
+        /// `subprocess_confined` contract is "cleared environment + declared
+        /// env keys"; §8.4 §3 Placement row, V4). Default `false`.
+        env_clear: bool,
     },
     /// `read{execution_id, after_seq, max_bytes, wait_ms}` — long-poll the
     /// journal: buffered chunks after `after_seq`, `exited`, `exit_status`,
@@ -522,6 +527,7 @@ impl HelperRequest {
                 attribution_token,
                 commit_proof,
                 idempotency_key,
+                env_clear,
             } => Json::obj([
                 v,
                 ("op", Json::str("exec")),
@@ -563,6 +569,7 @@ impl HelperRequest {
                         .as_ref()
                         .map_or(Json::Null, |k| Json::str(k.clone())),
                 ),
+                ("env_clear", Json::Bool(*env_clear)),
             ]),
             HelperRequest::Read {
                 execution_id,
@@ -749,6 +756,7 @@ impl HelperRequest {
                     attribution_token: jstr(j, "attribution_token")?,
                     commit_proof: commit_proof_parse(j.get("commit_proof"))?,
                     idempotency_key: jstr_opt(j, "idempotency_key"),
+                    env_clear: matches!(j.get("env_clear"), Some(Json::Bool(true))),
                 })
             }
             "read" => Ok(HelperRequest::Read {
@@ -997,9 +1005,23 @@ mod tests {
                 commit_seq: 7,
             },
             idempotency_key: Some("k".into()),
+            env_clear: false,
         };
         let j = r.to_json();
+        // `env_clear` round-trips and defaults to `false` on older frames
+        // (additive member — the sender may omit it).
+        let mut j2 = r.to_json();
         assert_eq!(HelperRequest::from_json(&j), Ok(r));
+        if let Json::Obj(m) = &mut j2 {
+            m.remove("env_clear");
+        }
+        assert!(matches!(
+            HelperRequest::from_json(&j2),
+            Ok(HelperRequest::Exec {
+                env_clear: false,
+                ..
+            })
+        ));
     }
 
     #[test]

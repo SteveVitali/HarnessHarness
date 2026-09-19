@@ -1,0 +1,16 @@
+[package]
+name = "hh-plugin-fixture"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The S2.2 plugin-side `plugin_abi/1` runtime + conformance fixture (spec §8.4, R-2.12.2): the shared plugin-side loop (`VariantLogic` over a framed channel — hello, bind, invoke, stream, guard, conformance, callbacks) plus the fixture modes — null (well-behaved, one per class), hostile (authority-crossing/reach/isolation probes), guard (canned verdicts), crash, slow. `hh-compact-evict-oldest` builds on the same runtime."
+
+[[bin]]
+name = "hh-plugin-fixture"
+path = "src/main.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+hh-varhost = { path = "../hh-varhost" }

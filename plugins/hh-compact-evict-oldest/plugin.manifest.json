@@ -1,0 +1,91 @@
+{
+  "claims": {},
+  "conformance_claims": [],
+  "contributions": [
+    {
+      "contract_range": "1.0",
+      "declaration": {
+        "class_id": "compaction_strategy",
+        "deterministic": true,
+        "model_call": false,
+        "op_kinds": [
+          "evict"
+        ],
+        "placement": "subprocess_confined"
+      },
+      "executable": {
+        "code_pointer": {
+          "algorithm": "sha256",
+          "digest": "0000000000000000000000000000000000000000000000000000000000000000",
+          "idp": "idp/1",
+          "media_type": "application/octet-stream",
+          "size": 0
+        },
+        "host_requirements": {},
+        "isolation": "subprocess_confined",
+        "placement_preference": "subprocess_confined"
+      },
+      "kind": "variant",
+      "path_or_locator": "bin/hh-compact-evict-oldest"
+    }
+  ],
+  "depends_on": [
+    {
+      "id": "hir/1",
+      "kind": "dialect",
+      "version_range": "*"
+    },
+    {
+      "id": "registry/1",
+      "kind": "dialect",
+      "version_range": "*"
+    },
+    {
+      "id": "compaction_strategy",
+      "kind": "class_contract",
+      "version_range": "1.0"
+    }
+  ],
+  "ext": {},
+  "identity": {
+    "name": "hh-compact-evict-oldest",
+    "namespace": "hh",
+    "version_label": "0.1.0"
+  },
+  "requests": {
+    "effects": [],
+    "egress": [],
+    "env_keys": [],
+    "fs_roots": [],
+    "hot_path_operations": []
+  },
+  "requires": {
+    "contracts": [
+      {
+        "id": "compaction_strategy",
+        "kind": "class_contract",
+        "version_range": "1.0"
+      }
+    ],
+    "hir_dialect": "1.0",
+    "plugin_abi": "1.0",
+    "records": [],
+    "registry_dialect": "1.0"
+  },
+  "summary": {
+    "authority": "external",
+    "content_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "owner": "hh",
+    "provenance": {
+      "authority": "external",
+      "created_at": 0,
+      "origin": {
+        "author_ref": "hh",
+        "kind": "human",
+        "role": "author"
+      },
+      "scope": "run"
+    }
+  },
+  "tier": "C0"
+}

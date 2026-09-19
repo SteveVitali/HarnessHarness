@@ -434,6 +434,7 @@ mod tests {
                 tool_call_id: None,
                 effect_id: None,
                 child_run_id: None,
+                component_call_id: None,
                 branch_id: None,
             },
             lease_generation: 1,
