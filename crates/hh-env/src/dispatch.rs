@@ -172,6 +172,16 @@ pub enum DispatchOutcome {
         /// The prior effect id.
         prior_effect_id: String,
     },
+    /// `suspended` — the ask is a durable `security.permission.pending` and
+    /// the run suspended `awaiting_approval` behind a `permission_decided`
+    /// wakeup subscription (§5a.3; R-2.8.7 `defer`/human stage). The caller
+    /// surfaces the request; `respond` mints `decided`, the occurrence fires
+    /// and the run resumes — the lease or the recorded decision then serves
+    /// the re-dispatched effect.
+    Suspended {
+        /// The owed permission (the durable `pending` row).
+        permission_id: String,
+    },
 }
 
 /// `Dispatcher` — the seven-stage pipeline over `store` + `driver` +
@@ -235,7 +245,7 @@ impl<'a> Dispatcher<'a> {
         &mut self,
         driver: &mut EnvDriver,
         executor: &mut dyn ToolExecutor,
-        reserve_src: Option<&mut dyn ReservationSource>,
+        mut reserve_src: Option<&mut dyn ReservationSource>,
         input: &DispatchInput,
         lease: &Lease,
     ) -> Result<DispatchOutcome, EnvError> {
@@ -250,6 +260,23 @@ impl<'a> Dispatcher<'a> {
             })?
             .clone();
         handle.verify_environment()?;
+
+        // The effect coordinate is derivable before any stage — the resume
+        // leg needs it: an effect left `intended` by a suspended ask (the
+        // `awaiting_approval` defer) re-enters at `authorize`. `proposed`/
+        // `intended` already opened the scopes — re-minting them would
+        // double-open (`ScopeNotOpen` on the close side).
+        let effect_id = Store::effect_id(
+            &self.run_id,
+            &input.chain.model_call_id,
+            &input.chain.tool_call_id,
+            input.ordinal,
+        );
+        let resumed = self
+            .store
+            .effect_folds(&self.run_id)?
+            .iter()
+            .any(|(id, f)| id == &effect_id && f.phase == hh_ledger::effect::EffectPhase::Intended);
 
         // `action.tool.proposed` opens the tool_call scope. It is minted
         // before the arg-map eval so a `resolve`-stage refusal can close the
@@ -293,8 +320,12 @@ impl<'a> Dispatcher<'a> {
                     tool_call_id: Some(input.chain.tool_call_id.clone()),
                     ..Default::default()
                 };
-                self.store
-                    .append(&self.run_id, lease, vec![proposed, rejected])?;
+                let rows = if resumed {
+                    vec![rejected]
+                } else {
+                    vec![proposed, rejected]
+                };
+                self.store.append(&self.run_id, lease, rows)?;
                 return Ok(DispatchOutcome::Refused {
                     reason: format!("arg_eval: {e:?}"),
                 });
@@ -353,6 +384,15 @@ impl<'a> Dispatcher<'a> {
             } else {
                 Tri::Unknown
             },
+            // ADR-0053 D5 — a live `policy_rule`-basis handle covering the
+            // proposer + domain over the canonical args confers
+            // `pre_authorized` (the unattended-ask exception; the record
+            // confers, never a flag).
+            pre_authorized: self.monitor.pre_authorized(
+                &input.proposer,
+                input.declared.domain,
+                &canonical,
+            ),
             ..AssessmentInputs::default()
         };
         let assessed = kernel_assessed(
@@ -360,13 +400,6 @@ impl<'a> Dispatcher<'a> {
             input.declared.domain == EffectDomain::FsWrite,
             &inputs,
         );
-        let effect_id = Store::effect_id(
-            &self.run_id,
-            &input.chain.model_call_id,
-            &input.chain.tool_call_id,
-            input.ordinal,
-        );
-
         // The dedup gate — a replayed idempotency key never redispatches.
         let key = idempotency_key(
             &self.run_id,
@@ -395,21 +428,25 @@ impl<'a> Dispatcher<'a> {
         }
 
         // `proposed` (minted above, before the arg-map eval) opens the
-        // tool_call scope; `intended` opens the effect scope under it.
-        let intended = self.minter_ev().mint_effect(
-            "action.effect.intended",
-            events::intended_payload(
-                &assessed,
-                Some(&declared_risk),
-                &input.capability_ref.version_id,
-                &args_canonical_hash,
-                input.ordinal,
-            ),
-            &effect_id,
-            &input.chain,
-        )?;
-        self.store
-            .append(&self.run_id, lease, vec![proposed, intended])?;
+        // tool_call scope; `intended` opens the effect scope under it. A
+        // resumed dispatch (the effect already `intended` under a suspended
+        // ask) skips the pair — the scopes are open, the trail stands.
+        if !resumed {
+            let intended = self.minter_ev().mint_effect(
+                "action.effect.intended",
+                events::intended_payload(
+                    &assessed,
+                    Some(&declared_risk),
+                    &input.capability_ref.version_id,
+                    &args_canonical_hash,
+                    input.ordinal,
+                ),
+                &effect_id,
+                &input.chain,
+            )?;
+            self.store
+                .append(&self.run_id, lease, vec![proposed, intended])?;
+        }
 
         // ── 2 authorize ────────────────────────────────────────────────────
         // The containment gate — the recorded verdict `authorize` consumes.
@@ -457,10 +494,19 @@ impl<'a> Dispatcher<'a> {
                 Json::Int(self.store.now_ms() as i64),
             );
         }
-        let decided = self
-            .minter_ev()
-            .mint("security.permission.decided", decided_payload)?;
-        self.store.append(&self.run_id, lease, vec![decided])?;
+        // A decision restating a *recorded* `decided` row (the resume path —
+        // `decider = human` with an `origin_permission_id` back-reference) is
+        // not re-minted: the recorded row already holds the `(effect_id,
+        // attempt)` gate slot, and a second final decided would be
+        // `DuplicateDecision` (§5g.1 I-H7 — exactly one per attempt cycle).
+        let recorded_served = decision.decider == hh_monitor::decision::Decider::Human
+            && decision.origin_permission_id.is_some();
+        if !recorded_served {
+            let decided = self
+                .minter_ev()
+                .mint("security.permission.decided", decided_payload)?;
+            self.store.append(&self.run_id, lease, vec![decided])?;
+        }
         let risk = decision.effective_risk_class;
 
         // A refused decision never executed — the `tool_call` scope closes
@@ -497,72 +543,321 @@ impl<'a> Dispatcher<'a> {
                 });
             }
             Decision::Ask { options, remedies } => {
-                // The C0 owed-decision trail (§5g.7 §5; S1.23): `pending` is
-                // the durable record, `requested` the ephemeral prompt
-                // rendering — then the Stage-1 terminal: no mid-dispatch human
-                // round-trip exists (the control envelope owns the ask loop —
-                // S2.6), so the pending resolves `cancelled` by refusal, never
-                // `unknown` (AC-R-2.8.7-6).
+                // ── C1 reviewer chain (§5g.7 §4) ─────────────────────────
+                // `authorize` steps 7–8 already ran over the same fold — a
+                // serving lease lands `decider = cache` (never `ask`), and an
+                // exhausted approvals budget converts to `deny` at step 7.
+                // The chain re-derives those record-level legs and runs the
+                // remaining stages: Π-12 unattended policy, the attested hook
+                // stage, sealed `auto_review` rules, then the human stage.
+                // The offline stage declares no hook reports or auto-review
+                // rules here — the never-auto and Π-12 members fail closed
+                // regardless (I-P1).
+                let cap = self
+                    .monitor
+                    .capabilities
+                    .get(&input.capability_ref.semantic_id)
+                    .expect("authorize resolved the capability");
+                let esc = self.monitor.escalation_input(
+                    &proposal,
+                    &canonical,
+                    cap,
+                    decision.effective_authority,
+                    decision.effective_risk_class,
+                );
+                let chain = hh_monitor::approval::run_chain(
+                    &esc,
+                    &self.monitor.approvals.leases,
+                    &[],
+                    &self.monitor.auto_review_rules,
+                    hh_monitor::approval::LeaseScope::Run,
+                );
                 let pid = permission_id
                     .clone()
                     .expect("permission_id minted for every Ask decision");
-                let asked_at = self.store.now_ms();
-                let request = hh_monitor::approval::ApprovalRequest {
-                    permission_id: pid.clone(),
-                    request: hh_monitor::approval::PermissionRequest {
-                        subject_ref: input.proposer.clone(),
-                        capability_ref: input.capability_ref.clone(),
-                        args_canonical_hash: args_canonical_hash.clone(),
-                        reason: "pi ask".to_string(),
-                    },
-                    options: options
-                        .iter()
-                        .filter_map(|o| {
-                            hh_monitor::approval::ApprovalOptionId::parse(o).map(|id| {
-                                hh_monitor::approval::ApprovalOption {
-                                    id,
-                                    label: o.clone(),
-                                }
-                            })
-                        })
-                        .collect(),
-                    mode: hh_monitor::approval::ApprovalMode::Sync,
-                    timeout: None,
-                    explanation: hh_monitor::approval::Explanation {
-                        display: format!("pi asked: {} option(s)", options.len()),
-                        rows: decision.checks.clone(),
-                    },
-                };
-                let pending = self.minter_ev().mint_effect(
-                    "security.permission.pending",
-                    hh_monitor::approval::pending_payload(&request, &effect_id, asked_at),
-                    &effect_id,
-                    &input.chain,
-                )?;
-                let requested = self.minter_ev().mint_effect(
-                    "security.permission.requested",
-                    hh_monitor::approval::requested_payload(&request, &effect_id, asked_at),
-                    &effect_id,
-                    &input.chain,
-                )?;
-                let refused = self.minter_ev().mint_effect(
-                    "action.effect.refused",
-                    events::refused_payload("ask_required"),
-                    &effect_id,
-                    &input.chain,
-                )?;
-                let rejected = tool_rejected(&self.minter_ev(), "ask_required")?;
-                let _ = remedies;
-                self.store.append(
-                    &self.run_id,
-                    lease,
-                    vec![pending, requested, refused, rejected],
-                )?;
-                return Ok(DispatchOutcome::Refused {
-                    reason: "ask_required".to_string(),
-                });
+                // `security.permission.escalated` — one chain-hop audit row
+                // per stage transition (§5g.7 §4 `{permission_id, from_stage,
+                // to_stage, reason}`).
+                for (from, to, why) in &chain.escalations {
+                    let hop = self.minter_ev().mint_effect(
+                        "security.permission.escalated",
+                        Json::obj([
+                            ("permission_id", Json::str(pid.clone())),
+                            ("from_stage", Json::str(from.as_str())),
+                            ("to_stage", Json::str(to.as_str())),
+                            ("reason", Json::str(why.clone())),
+                        ]),
+                        &effect_id,
+                        &input.chain,
+                    )?;
+                    self.store.append(&self.run_id, lease, vec![hop])?;
+                }
+                match &chain.decision {
+                    hh_monitor::approval::ChainDecision::Allow {
+                        decider,
+                        cache_key,
+                        lease_id,
+                        origin_permission_id,
+                        ..
+                    } => {
+                        // A lease resolved at the chain (a fold newer than
+                        // `authorize`'s view): `decided{ask}` was non-final —
+                        // the final `decided{allow}` and the `lease.used` row
+                        // land, then the effect proceeds (the committed gate
+                        // credits decided{allow} — H-7).
+                        let mut m = Json::obj([
+                            ("permission_id", Json::str(pid.clone())),
+                            ("decision", Json::str("allow")),
+                            ("decider", Json::str(decider.as_str())),
+                            ("decision_scope", Json::str("session")),
+                            ("reason", Json::str("lease_hit")),
+                            ("attempt_no", Json::Int(1)),
+                        ]);
+                        if let (Json::Obj(mm), Some(k)) = (&mut m, cache_key) {
+                            mm.insert("cache_key".to_string(), Json::str(k.clone()));
+                        }
+                        if let (Json::Obj(mm), Some(o)) = (&mut m, origin_permission_id) {
+                            mm.insert("origin_permission_id".to_string(), Json::str(o.clone()));
+                        }
+                        let decided_allow = self.minter_ev().mint_effect(
+                            "security.permission.decided",
+                            m,
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let mut rows = vec![decided_allow];
+                        if let (Some(k), Some(lid)) = (cache_key, lease_id) {
+                            let uses = self
+                                .monitor
+                                .approvals
+                                .leases
+                                .get(k)
+                                .map(|l| l.uses + 1)
+                                .unwrap_or(1);
+                            rows.push(self.minter_ev().mint_effect(
+                                "security.permission.lease.used",
+                                Json::obj([
+                                    ("lease_id", Json::str(lid.clone())),
+                                    ("key_hash", Json::str(k.clone())),
+                                    ("uses", Json::Int(uses as i64)),
+                                    ("permission_id", Json::str(pid.clone())),
+                                ]),
+                                &effect_id,
+                                &input.chain,
+                            )?);
+                        }
+                        self.store.append(&self.run_id, lease, rows)?;
+                        // Fall through to the `authorized` path.
+                    }
+                    hh_monitor::approval::ChainDecision::Deny { reason, .. } => {
+                        // The chain resolved deny inside the ask window —
+                        // Π-12 unattended, a hook deny or the exhaustion
+                        // conversion. `decided{ask}` was non-final; this deny
+                        // is the attempt cycle's terminal verdict.
+                        let decided_deny = self.minter_ev().mint_effect(
+                            "security.permission.decided",
+                            Json::obj([
+                                ("permission_id", Json::str(pid.clone())),
+                                ("decision", Json::str("deny")),
+                                ("decider", Json::str("policy")),
+                                ("reason", Json::str(reason.as_str())),
+                                ("attempt_no", Json::Int(1)),
+                            ]),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let refused = self.minter_ev().mint_effect(
+                            "action.effect.refused",
+                            events::refused_payload(reason.as_str()),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let rejected = tool_rejected(&self.minter_ev(), reason.as_str())?;
+                        self.store.append(
+                            &self.run_id,
+                            lease,
+                            vec![decided_deny, refused, rejected],
+                        )?;
+                        return Ok(DispatchOutcome::Refused {
+                            reason: reason.as_str().to_string(),
+                        });
+                    }
+                    hh_monitor::approval::ChainDecision::AskHuman { .. }
+                    | hh_monitor::approval::ChainDecision::Defer { .. } => {
+                        let deferred = matches!(
+                            chain.decision,
+                            hh_monitor::approval::ChainDecision::Defer { .. }
+                        );
+                        // Step 7's consumption half (ADR-0040 D6): a
+                        // human-targeted ask reserves `approvals.requested =
+                        // 1` on the effect's budget node when the dispatch
+                        // names one — a refusal converts the ask to
+                        // `deny{ApprovalsExhausted}`, the same verdict the
+                        // monitor's `approvals_max` fold produces.
+                        if let (Some(req), Some(src)) = (&input.reserve, reserve_src.as_deref_mut())
+                        {
+                            if src
+                                .reserve(
+                                    &req.budget_id,
+                                    &hh_budget::quantity::ResourceVector::one(
+                                        hh_ontology::dimensions::DimensionId::ApprovalsRequested,
+                                        1,
+                                    ),
+                                    &input.proposer,
+                                    req.ttl_ms,
+                                )
+                                .is_err()
+                            {
+                                let decided_deny = self.minter_ev().mint_effect(
+                                    "security.permission.decided",
+                                    Json::obj([
+                                        ("permission_id", Json::str(pid.clone())),
+                                        ("decision", Json::str("deny")),
+                                        ("decider", Json::str("policy")),
+                                        ("reason", Json::str("ApprovalsExhausted")),
+                                        ("attempt_no", Json::Int(1)),
+                                    ]),
+                                    &effect_id,
+                                    &input.chain,
+                                )?;
+                                let refused = self.minter_ev().mint_effect(
+                                    "action.effect.refused",
+                                    events::refused_payload("ApprovalsExhausted"),
+                                    &effect_id,
+                                    &input.chain,
+                                )?;
+                                let rejected =
+                                    tool_rejected(&self.minter_ev(), "ApprovalsExhausted")?;
+                                self.store.append(
+                                    &self.run_id,
+                                    lease,
+                                    vec![decided_deny, refused, rejected],
+                                )?;
+                                return Ok(DispatchOutcome::Refused {
+                                    reason: "ApprovalsExhausted".to_string(),
+                                });
+                            }
+                        }
+                        // The owed-decision trail (§5g.7 §5): `pending` is
+                        // the durable record, `requested` the ephemeral
+                        // prompt rendering — then the C1 terminal: the run
+                        // suspends `awaiting_approval` behind a
+                        // `permission_decided` wakeup subscription and the
+                        // surface's `respond` resolves it (never `unknown` —
+                        // AC-R-2.8.7-6).
+                        let asked_at = self.store.now_ms();
+                        let request = hh_monitor::approval::ApprovalRequest {
+                            permission_id: pid.clone(),
+                            request: hh_monitor::approval::PermissionRequest {
+                                subject_ref: input.proposer.clone(),
+                                capability_ref: input.capability_ref.clone(),
+                                args_canonical_hash: args_canonical_hash.clone(),
+                                reason: "pi ask".to_string(),
+                            },
+                            options: options
+                                .iter()
+                                .filter_map(|o| {
+                                    hh_monitor::approval::ApprovalOptionId::parse(o).map(|id| {
+                                        hh_monitor::approval::ApprovalOption {
+                                            id,
+                                            label: o.clone(),
+                                        }
+                                    })
+                                })
+                                .collect(),
+                            mode: if deferred {
+                                hh_monitor::approval::ApprovalMode::Async
+                            } else {
+                                hh_monitor::approval::ApprovalMode::Sync
+                            },
+                            timeout: None,
+                            explanation: hh_monitor::approval::Explanation {
+                                display: format!("pi asked: {} option(s)", options.len()),
+                                rows: decision.checks.clone(),
+                                model_justification: None,
+                            },
+                            batch_id: None,
+                        };
+                        let pending = self.minter_ev().mint_effect(
+                            "security.permission.pending",
+                            hh_monitor::approval::pending_payload(&request, &effect_id, asked_at),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let requested = self.minter_ev().mint_effect(
+                            "security.permission.requested",
+                            hh_monitor::approval::requested_payload(&request, &effect_id, asked_at),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let pending_event_id = pending.event_id.clone();
+                        self.store
+                            .append(&self.run_id, lease, vec![pending, requested])?;
+                        // The defer slice (§5a.3): the `permission_decided`
+                        // subscription fires when `respond` mints `decided`;
+                        // `suspend` records `awaiting_approval` (the writer
+                        // lease is kept — the resume is in-process at the
+                        // offline stage). On a non-C1 build these refuse
+                        // typed `UnsupportedTier`, never a silent skip.
+                        let sub = self.store.wakeup_subscribe(
+                            &self.run_id,
+                            lease,
+                            hh_ledger::wakeup::Trigger::PermissionDecided {
+                                permission_id: pid.clone(),
+                            },
+                            hh_ledger::wakeup::WakeupPolicy::default_policy(),
+                            &hh_ledger::manifest::EventRef {
+                                run_id: self.run_id.clone(),
+                                event_id: pending_event_id,
+                            },
+                        )?;
+                        self.store.suspend(
+                            &self.run_id,
+                            lease,
+                            &[hh_ledger::suspend::SuspendReason::AwaitingApproval {
+                                permission_id: pid.clone(),
+                            }],
+                            &[sub],
+                            Json::obj([("on", Json::str("permission_decided"))]),
+                            false,
+                        )?;
+                        let _ = remedies;
+                        return Ok(DispatchOutcome::Suspended { permission_id: pid });
+                    }
+                }
             }
-            Decision::Allow => {}
+            Decision::Allow => {
+                // Step 8's lease hit (`authorize` resolved `ask → allow` under
+                // `decider = cache`) consumes a use — the `lease.used` row is
+                // the fold's accounting (the rebuild recomputes `uses`).
+                if let Some(k) = &decision.cache_key {
+                    let uses = self
+                        .monitor
+                        .approvals
+                        .leases
+                        .get(k)
+                        .map(|l| l.uses + 1)
+                        .unwrap_or(1);
+                    let lease_used = self.minter_ev().mint_effect(
+                        "security.permission.lease.used",
+                        Json::obj([
+                            ("key_hash", Json::str(k.clone())),
+                            ("uses", Json::Int(uses as i64)),
+                            (
+                                "permission_id",
+                                decision
+                                    .origin_permission_id
+                                    .as_ref()
+                                    .map(|o| Json::str(o.clone()))
+                                    .unwrap_or(Json::Null),
+                            ),
+                        ]),
+                        &effect_id,
+                        &input.chain,
+                    )?;
+                    self.store.append(&self.run_id, lease, vec![lease_used])?;
+                }
+            }
         }
         let authorized = self.minter_ev().mint_effect(
             "action.effect.authorized",

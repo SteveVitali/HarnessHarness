@@ -1108,6 +1108,130 @@ fn w_permission_flow_pending_decided_already_decided() {
 }
 
 #[test]
+fn w_permission_allow_lease_mints_lease_row() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("serves_permission_channel", true)])),
+    );
+    assert!(r.get("result").is_some());
+    // A capability asking approval and offering the canonical lease option —
+    // the pending carries `request{capability_ref, args_canonical_hash,
+    // subject_ref}`, the material `allow_lease` mints the lease over.
+    let supplies = Json::obj(vec![(
+        "host_capabilities",
+        Json::Arr(vec![Json::obj(vec![
+            ("capability_id", Json::str("cap:shell")),
+            ("surface", Json::str("host.exec.shell")),
+            ("requires_approval", Json::Bool(true)),
+            (
+                "options",
+                Json::Arr(vec![
+                    Json::str("allow_once"),
+                    Json::str("allow_lease"),
+                    Json::str("deny"),
+                ]),
+            ),
+        ])]),
+    )]);
+    let s = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            ("spec", new_spec(Some(supplies))),
+            ("idempotency_key", Json::str("k")),
+        ]),
+    ));
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let pid = svc
+        .store()
+        .events(&run_id)
+        .unwrap()
+        .iter()
+        .find(|e| e.class == "security.permission.pending")
+        .and_then(|e| e.payload.get("permission_id").and_then(Json::as_str))
+        .map(String::from)
+        .expect("the declared capability ask landed durable");
+    let r = call(
+        &mut svc,
+        "respond_permission",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("permission_id", Json::str(pid.clone())),
+            (
+                "outcome",
+                Json::obj(vec![
+                    ("kind", Json::str("selected")),
+                    ("option_id", Json::str("allow_lease")),
+                ]),
+            ),
+            ("idempotency_key", Json::str("r-lease")),
+        ]),
+    );
+    assert!(r.get("result").is_some(), "{}", r.to_canonical_string());
+    let evs = svc.store().events(&run_id).unwrap();
+    let decided = evs
+        .iter()
+        .find(|e| {
+            e.class == "security.permission.decided"
+                && e.payload.get("permission_id").and_then(Json::as_str) == Some(pid.as_str())
+        })
+        .expect("the final decided row");
+    assert_eq!(
+        decided.payload.get("decision").and_then(Json::as_str),
+        Some("allow")
+    );
+    assert_eq!(
+        decided.payload.get("decider").and_then(Json::as_str),
+        Some("human")
+    );
+    assert_eq!(
+        decided.payload.get("decision_scope").and_then(Json::as_str),
+        Some("session")
+    );
+    let lease = evs
+        .iter()
+        .find(|e| e.class == "security.permission.lease.granted")
+        .expect("allow_lease minted the lease row");
+    assert_eq!(
+        lease.payload.get("permission_id").and_then(Json::as_str),
+        Some(pid.as_str())
+    );
+    assert_eq!(
+        lease
+            .payload
+            .get("capability_ref")
+            .and_then(|c| c.get("semantic_id"))
+            .and_then(Json::as_str),
+        Some("cap:shell")
+    );
+    assert_eq!(
+        lease.payload.get("scope").and_then(Json::as_str),
+        Some("run")
+    );
+    // The fold reads the row back — the lease is live for the run.
+    let st = hh_monitor::approval::ApprovalState::project(evs, u64::MAX);
+    assert!(!st.leases.is_empty(), "the lease folded live");
+    let (rpid, rec) = st
+        .decisions
+        .iter()
+        .next()
+        .expect("the decided record folded");
+    assert_eq!(rpid, &pid);
+    assert!(matches!(
+        rec.decision,
+        hh_monitor::decision::Decision::Allow
+    ));
+    assert!(rec.lease_id.is_some(), "the decided↔lease link folded");
+}
+
+#[test]
 fn w_experimental_and_capability_gates() {
     let mut svc = service();
     // No experimental opt-in, no host-executor/permission services.

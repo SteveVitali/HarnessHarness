@@ -552,6 +552,7 @@ pub fn discover_surfaces_capability(purpose: Text) -> ToolCapabilityRecord {
         ]),
         postconditions: Vec::new(),
         flow_contract: None,
+        action_patterns: Vec::new(),
     }
 }
 
@@ -611,6 +612,7 @@ mod tests {
             exposure_hint: Json::obj([("default", Json::str("direct"))]),
             postconditions: Vec::new(),
             flow_contract: None,
+            action_patterns: Vec::new(),
         }
     }
 

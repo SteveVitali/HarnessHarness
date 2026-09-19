@@ -1056,11 +1056,13 @@ fn default_unmatched_ask_endorse_lease_amends_and_forwards() {
     assert_eq!(asks.len(), 1);
     assert!(transport.log.lock().unwrap().is_empty());
 
-    // The human endorses allow_lease{session}.
+    // The human endorses allow_lease{scope: run} — the lease's run is the
+    // run (§5g.4 §2's bound; the Stage-2 `LeaseScope` spelling).
     let response = ApprovalResponse {
         permission_id: permission_id.clone(),
         choice: ResponseChoice::AllowLease(LeaseSpec {
-            scope: DecisionScope::Session,
+            pattern: None,
+            scope: hh_monitor::approval::LeaseScope::Run,
             max_uses: None,
         }),
         scope: DecisionScope::Session,

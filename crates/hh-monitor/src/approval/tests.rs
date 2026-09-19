@@ -34,7 +34,9 @@ fn request(args_hash: &str) -> ApprovalRequest {
         explanation: Explanation {
             display: "Π asked".to_string(),
             rows: Vec::new(),
+            model_justification: None,
         },
+        batch_id: None,
     }
 }
 
@@ -67,14 +69,25 @@ fn allow_once(permission_id: &str) -> ApprovalResponse {
 // ── request_approval ──────────────────────────────────────────────────────────
 
 #[test]
-fn sync_only_at_stage1() {
+fn sync_and_async_admit_immediate_refused() {
     let mut st = ApprovalState::default();
     let mut r = request("h1");
     r.mode = ApprovalMode::Async;
+    // `async` (defer) is admitted at Stage 2 — the pending outlives the
+    // dispatch; the run suspends on `awaiting_approval`. The pending keys on
+    // the minted id (returned on the request — the caller's field is blank).
+    let admitted = st
+        .request_approval(r, false, "e1", 1)
+        .expect("async admits");
+    assert!(st.pending.contains_key(&admitted.permission_id));
+    // `immediate` never reaches `request_approval` — it is the chain-internal
+    // "resolved before the human stage" marker.
+    let mut r2 = request("h2");
+    r2.mode = ApprovalMode::Immediate;
     assert!(matches!(
-        st.request_approval(r, false, "e1", 1),
+        st.request_approval(r2, false, "e2", 1),
         Err(ApprovalError::UnsupportedMode {
-            mode: ApprovalMode::Async
+            mode: ApprovalMode::Immediate
         })
     ));
 }
@@ -179,14 +192,32 @@ fn ac_3_delegate_endorser_illegitimate() {
     // The pending survives — an illegitimate response decides nothing.
     assert!(st.pending.contains_key(&r.permission_id));
     assert!(st.decisions.is_empty());
-    // An ApproverGrant endorser is legitimate.
+    // An ApproverGrant endorser is legitimate only under a *covering live
+    // grant* (AC-R-2.8.7-3) — an unrecorded ref fails IllegitimateEndorsement.
     let ok = ApprovalResponse {
         decided_by: EndorserRef::ApproverGrant {
             grant_ref: "grant-1".to_string(),
         },
         ..allow_once(&r.permission_id)
     };
-    assert!(st.respond(&ok, false, 6).is_ok());
+    assert!(matches!(
+        st.respond(&ok, false, 6),
+        Err(ApprovalError::IllegitimateEndorsement { .. })
+    ));
+    // A covering grant admits it (the grant record confers — never the name).
+    let ctx = RespondCtx {
+        grants: vec![ApproverGrant {
+            grant_ref: "grant-1".to_string(),
+            grantor: "principal-1".to_string(),
+            grantee: "reviewer-1".to_string(),
+            capability_prefixes: vec!["cap:fs".to_string()],
+            max_risk: hh_ontology::risk::RiskClass::UNKNOWN,
+            expires_at: None,
+            revoked_at: None,
+        }],
+        ..RespondCtx::stage1()
+    };
+    assert!(st.respond_with_ctx(&ok, false, 7, &ctx).is_ok());
 }
 
 #[test]
@@ -228,7 +259,8 @@ fn allow_lease(permission_id: &str, max_uses: Option<u64>) -> ApprovalResponse {
     ApprovalResponse {
         permission_id: permission_id.to_string(),
         choice: ResponseChoice::AllowLease(LeaseSpec {
-            scope: DecisionScope::Session,
+            pattern: None,
+            scope: LeaseScope::Run,
             max_uses,
         }),
         scope: DecisionScope::Session,
@@ -250,22 +282,39 @@ fn allow_lease_mints_exact_hash_lease() {
         .expect("respond");
     let lease = out.lease.expect("lease");
     // The key is the exact-hash tuple.
-    let expected = lease_key(&cap(), "h1", DecisionScope::Session, "fp-1");
+    let expected = lease_key(&cap(), "h1", LeaseScope::Run, "fp-1");
     assert_eq!(lease.lease_id, expected);
     assert_eq!(lease.key_hash, expected);
-    assert_eq!(lease.scope, DecisionScope::Session);
+    assert_eq!(lease.scope, LeaseScope::Run);
     assert_eq!(lease.uses, 0);
+    assert_eq!(lease.holder, "agent-1");
+    assert_eq!(lease.origin_permission_id, r.permission_id);
+    assert_eq!(lease.policy_fingerprint, "fp-1");
     // The lease stage now serves the identical ask — cache decider, no
     // approval consumed.
     let input = EscalationInput {
         effect_id: "e9".to_string(),
+        scope_ref: "run".to_string(),
         capability_ref: cap(),
         args_canonical_hash: "h1".to_string(),
+        pattern_keys: Vec::new(),
+        domain: hh_hir::kinds::EffectDomain::FsWrite,
+        risk: hh_ontology::risk::RiskClass::READ_ONLY,
+        eff: AuthorityClass::Principal,
+        holder: "agent-1".to_string(),
         irreversible: false,
         mode: Mode::Attended,
+        unattended_policy: crate::policy::UnattendedPolicy::Deny,
+        approval_mode: ApprovalMode::Sync,
         policy_fingerprint: "fp-1".to_string(),
         approvals_used: 0,
         approvals_max: None,
+        explicit_ask: false,
+        consent_step: false,
+        revoked_or_stale: false,
+        user_scope_persistence: false,
+        batchable: false,
+        context_authority: AuthorityClass::Principal,
     };
     let d = escalate(&input, &st.leases);
     assert!(d.lease_hit);
@@ -289,7 +338,10 @@ fn irreversible_lease_requires_max_uses() {
     let bad = ApprovalResponse {
         max_uses: None,
         choice: ResponseChoice::AllowLease(LeaseSpec {
-            scope: DecisionScope::Session,
+            pattern: Some(ActionPattern {
+                fields: ["target".to_string()].into_iter().collect(),
+            }),
+            scope: LeaseScope::Run,
             max_uses: None,
         }),
         ..allow_lease(&r.permission_id, None)
@@ -298,9 +350,29 @@ fn irreversible_lease_requires_max_uses() {
         st.respond(&bad, true, 5),
         Err(ApprovalError::LeaseScopeViolation { .. })
     ));
-    // With max_uses the irreversible lease mints.
-    let ok = allow_lease(&r.permission_id, Some(3));
-    assert!(st.respond(&ok, true, 6).is_ok());
+    // max_uses alone is not enough — an irreversible lease also requires a
+    // declared ActionPattern (ADR-0071 D1).
+    let no_pattern = allow_lease(&r.permission_id, Some(3));
+    assert!(matches!(
+        st.respond(&no_pattern, true, 6),
+        Err(ApprovalError::LeaseScopeViolation { .. })
+    ));
+    // With a declared pattern + max_uses + scope ≤ run the irreversible lease
+    // mints.
+    let ok = ApprovalResponse {
+        choice: ResponseChoice::AllowLease(LeaseSpec {
+            pattern: Some(ActionPattern {
+                fields: ["target".to_string()].into_iter().collect(),
+            }),
+            scope: LeaseScope::Run,
+            max_uses: Some(3),
+        }),
+        ..allow_lease(&r.permission_id, Some(3))
+    };
+    let out = st.respond(&ok, true, 7).expect("respond");
+    let lease = out.lease.expect("lease");
+    assert!(lease.pattern.is_some());
+    assert_eq!(lease.max_uses, Some(3));
 }
 
 #[test]
@@ -311,17 +383,10 @@ fn lease_max_uses_bounds_hits() {
         .expect("request");
     st.respond_with_policy(&allow_lease(&r.permission_id, Some(1)), false, 5, "fp")
         .expect("respond");
-    let key = lease_key(&cap(), "h1", DecisionScope::Session, "fp");
-    let mut input = EscalationInput {
-        effect_id: "e2".to_string(),
-        capability_ref: cap(),
-        args_canonical_hash: "h1".to_string(),
-        irreversible: false,
-        mode: Mode::Attended,
-        policy_fingerprint: "fp".to_string(),
-        approvals_used: 0,
-        approvals_max: None,
-    };
+    let key = lease_key(&cap(), "h1", LeaseScope::Run, "fp");
+    let mut input = input(Mode::Attended);
+    input.effect_id = "e2".to_string();
+    input.policy_fingerprint = "fp".to_string();
     // First hit allowed.
     assert!(escalate(&input, &st.leases).lease_hit);
     st.mark_lease_used(&key);
@@ -338,13 +403,27 @@ fn lease_max_uses_bounds_hits() {
 fn input(mode: Mode) -> EscalationInput {
     EscalationInput {
         effect_id: "e1".to_string(),
+        scope_ref: "run".to_string(),
         capability_ref: cap(),
         args_canonical_hash: "h1".to_string(),
+        pattern_keys: Vec::new(),
+        domain: hh_hir::kinds::EffectDomain::FsWrite,
+        risk: hh_ontology::risk::RiskClass::READ_ONLY,
+        eff: AuthorityClass::Principal,
+        holder: "agent-1".to_string(),
         irreversible: false,
         mode,
+        unattended_policy: crate::policy::UnattendedPolicy::Deny,
+        approval_mode: ApprovalMode::Sync,
         policy_fingerprint: "fp".to_string(),
         approvals_used: 0,
         approvals_max: None,
+        explicit_ask: false,
+        consent_step: false,
+        revoked_or_stale: false,
+        user_scope_persistence: false,
+        batchable: false,
+        context_authority: AuthorityClass::Principal,
     }
 }
 
@@ -495,4 +574,456 @@ fn response_payload_shape() {
     assert!(matches!(c, ResponseChoice::AllowLease(_)));
     let e = decode_endorser(j.get("decided_by").unwrap()).expect("endorser");
     assert!(matches!(e, EndorserRef::Human { .. }));
+}
+
+// ── Stage-2: the reviewer chain (AC-R-2.8.7-{2,4,5}) ────────────────────────
+
+#[test]
+fn chain_hook_deny_resolves_before_human() {
+    let hooks = vec![HookReport {
+        hook_ref: "hook-1".to_string(),
+        attestation_ref: "att-1".to_string(),
+        verdict: HookVerdict::Deny,
+    }];
+    let out = run_chain(
+        &input(Mode::Attended),
+        &BTreeMap::new(),
+        &hooks,
+        &[],
+        LeaseScope::Run,
+    );
+    assert!(matches!(
+        out.decision,
+        ChainDecision::Deny {
+            stage: ReviewStage::Hook,
+            ..
+        }
+    ));
+    // The human stage never ran — the hook resolved the ask.
+    assert!(out.stages.iter().all(|s| s.stage != ReviewStage::Human));
+}
+
+#[test]
+fn chain_hook_allow_never_endorses_without_rule() {
+    // I-P2: a hook `allow` alone is a `pass` — only a matching sealed
+    // auto_review rule turns it into an endorsement.
+    let hooks = vec![HookReport {
+        hook_ref: "hook-1".to_string(),
+        attestation_ref: "att-1".to_string(),
+        verdict: HookVerdict::Allow,
+    }];
+    let out = run_chain(
+        &input(Mode::Attended),
+        &BTreeMap::new(),
+        &hooks,
+        &[],
+        LeaseScope::Run,
+    );
+    // No rule matched → the human stage gets the ask.
+    assert!(matches!(out.decision, ChainDecision::AskHuman { .. }));
+    // With a matching rule the allow resolves at `auto_reviewer` with the
+    // `policy_rule` basis — never the hook's bare allow.
+    let rules = vec![AutoReviewRule {
+        rule_ref: "rule-1".to_string(),
+        domains: Vec::new(),
+        max_risk: hh_ontology::risk::RiskClass::UNKNOWN,
+        eff_at_most: None,
+        verdict: ReviewVerdictKind::Allow,
+    }];
+    let out2 = run_chain(
+        &input(Mode::Attended),
+        &BTreeMap::new(),
+        &hooks,
+        &rules,
+        LeaseScope::Run,
+    );
+    match out2.decision {
+        ChainDecision::Allow {
+            decider,
+            basis: LeaseBasis::PolicyRule { ref rule_ref, .. },
+            ..
+        } => {
+            assert_eq!(decider, crate::decision::Decider::AutoReviewer);
+            assert_eq!(rule_ref, "rule-1");
+        }
+        other => panic!("expected auto_reviewer allow, got {other:?}"),
+    }
+}
+
+#[test]
+fn chain_never_auto_skips_nonhuman_stages() {
+    // Π-8 — a `permission_request` effect is constitutionally never-auto: the
+    // lease/hook/auto_reviewer stages are recorded `pass` with the member tag
+    // and the human stage gets the ask (AC-R-2.8.7-2).
+    let mut i = input(Mode::Attended);
+    i.domain = hh_hir::kinds::EffectDomain::PermissionRequest;
+    let hooks = vec![HookReport {
+        hook_ref: "hook-1".to_string(),
+        attestation_ref: "att-1".to_string(),
+        verdict: HookVerdict::Allow,
+    }];
+    let rules = vec![AutoReviewRule {
+        rule_ref: "rule-1".to_string(),
+        domains: Vec::new(),
+        max_risk: hh_ontology::risk::RiskClass::UNKNOWN,
+        eff_at_most: None,
+        verdict: ReviewVerdictKind::Allow,
+    }];
+    let out = run_chain(&i, &BTreeMap::new(), &hooks, &rules, LeaseScope::Run);
+    assert!(matches!(out.decision, ChainDecision::AskHuman { .. }));
+    // No non-human stage resolved an allow for a never-auto member.
+    assert!(out
+        .stages
+        .iter()
+        .all(|s| { s.stage == ReviewStage::Human || s.outcome != StageOutcome::ResolveAllow }));
+}
+
+#[test]
+fn chain_async_mode_defers_to_human_stage() {
+    let mut i = input(Mode::Attended);
+    i.approval_mode = ApprovalMode::Async;
+    let out = run_chain(&i, &BTreeMap::new(), &[], &[], LeaseScope::Run);
+    assert!(matches!(out.decision, ChainDecision::Defer { .. }));
+}
+
+#[test]
+fn chain_unattended_auto_review_resolves_or_denies() {
+    // Π-12 `auto_review`: a matching sealed rule resolves (never-auto members
+    // deny); no rule → deny (fail-closed — never a surface trip).
+    let mut i = input(Mode::Unattended);
+    i.unattended_policy = crate::policy::UnattendedPolicy::AutoReview;
+    let rules = vec![AutoReviewRule {
+        rule_ref: "rule-1".to_string(),
+        domains: Vec::new(),
+        max_risk: hh_ontology::risk::RiskClass::UNKNOWN,
+        eff_at_most: None,
+        verdict: ReviewVerdictKind::Allow,
+    }];
+    let out = run_chain(&i, &BTreeMap::new(), &[], &rules, LeaseScope::Run);
+    assert!(matches!(
+        out.decision,
+        ChainDecision::Allow {
+            decider: crate::decision::Decider::AutoReviewer,
+            ..
+        }
+    ));
+    let out2 = run_chain(&i, &BTreeMap::new(), &[], &[], LeaseScope::Run);
+    assert!(matches!(
+        out2.decision,
+        ChainDecision::Deny {
+            reason: DenyReason::UnattendedAsk,
+            ..
+        }
+    ));
+    // Π-12 `defer` suspends instead of denying.
+    let mut i3 = input(Mode::Unattended);
+    i3.unattended_policy = crate::policy::UnattendedPolicy::Defer;
+    let out3 = run_chain(&i3, &BTreeMap::new(), &[], &[], LeaseScope::Run);
+    assert!(matches!(out3.decision, ChainDecision::Defer { .. }));
+}
+
+#[test]
+fn chain_lease_stage_serves_pattern_key() {
+    // An `ActionPattern` lease serves an ask whose declared projection key
+    // matches — the `pattern:` key material leg (ADR-0071 D1).
+    let mut st = ApprovalState::default();
+    let r = st
+        .request_approval(request("h1"), false, "e1", 1)
+        .expect("request");
+    let pat = ActionPattern {
+        fields: ["target".to_string()].into_iter().collect(),
+    };
+    let resp = ApprovalResponse {
+        choice: ResponseChoice::AllowLease(LeaseSpec {
+            pattern: Some(pat.clone()),
+            scope: LeaseScope::Run,
+            max_uses: Some(2),
+        }),
+        ..allow_lease(&r.permission_id, Some(2))
+    };
+    let out = st.respond(&resp, false, 5).expect("respond");
+    let lease = out.lease.expect("lease");
+    // The lease keyed on `pattern:{pattern_id}:{args_hash}` — the exact-args
+    // leg does NOT serve (the lease binds the projection, not the whole tuple).
+    let material = format!("pattern:{}:{}", pat.pattern_id(), "h1");
+    let key = lease_key(&cap(), &material, LeaseScope::Run, "policy");
+    assert_eq!(lease.lease_id, key);
+    let mut i = input(Mode::Attended);
+    i.pattern_keys = vec![material];
+    i.policy_fingerprint = "policy".to_string();
+    let d = escalate(&i, &st.leases);
+    assert!(d.lease_hit);
+    assert_eq!(d.decision, Decision::Allow);
+    // Without the declared pattern key the exact-args ask misses the lease —
+    // the lease binds only its declared projection.
+    let i2 = input(Mode::Attended);
+    let d2 = escalate(&i2, &st.leases);
+    assert!(!d2.lease_hit);
+}
+
+#[test]
+fn repeated_denial_fires_typed_fallback() {
+    // §5g.7 §5 — the denial ceiling: `deny` decisions count per
+    // (capability, args) key; crossing `max_denials` fires the sealed
+    // fallback — never a widening, never a silent retry.
+    let pol = DenialPolicy {
+        max_denials: 1,
+        fallback: DenialFallback::StopRun,
+    };
+    let ctx = RespondCtx {
+        denial_policy: Some(pol),
+        ..RespondCtx::stage1()
+    };
+    let mut st = ApprovalState::default();
+    for i in 0..2usize {
+        // Irreversible requests salt the id by effect — each is its own
+        // pending under the shared (capability, args) denial key.
+        let r = st
+            .request_approval(request("h1"), true, &format!("e{i}"), i as u64 + 1)
+            .expect("request");
+        let deny = ApprovalResponse {
+            choice: ResponseChoice::Deny {
+                reason: "no".to_string(),
+            },
+            ..allow_once(&r.permission_id)
+        };
+        let out = st
+            .respond_with_ctx(&deny, false, (i as u64 + 2) * 10, &ctx)
+            .expect("respond");
+        if i == 0 {
+            assert_eq!(out.denial_fallback, None);
+        } else {
+            assert_eq!(out.denial_fallback, Some(DenialFallback::StopRun));
+        }
+    }
+    // One (capability, args) key accumulated both denials.
+    assert_eq!(st.denial_counts.values().next(), Some(&2));
+    assert_eq!(st.denial_counts.len(), 1);
+}
+
+// ── ApprovalState::project — the CC1 trail fold ───────────────────────────────
+
+fn env(seq: u64, class: &str, payload: Json) -> hh_ledger::event::EventEnvelope {
+    hh_ledger::event::EventEnvelope {
+        event_id: format!("evt-{seq:04}"),
+        run_id: "run-1".into(),
+        seq,
+        ts: "2026-09-15T00:00:00.000Z".into(),
+        hlc: None,
+        plane: hh_ledger::event::EventPlane::Security,
+        class: class.into(),
+        schema_version: 1,
+        producer: hh_ledger::event::Producer::kernel("kernel:test"),
+        participant_class: hh_ledger::manifest::ParticipantClass::Native,
+        observability_level: std::collections::BTreeSet::from([
+            hh_ledger::manifest::ObservabilityLevel::Ledger,
+        ]),
+        durability: hh_ledger::classes::Durability::Ledger,
+        scope: hh_ledger::event::Scope::default(),
+        lease_generation: 1,
+        parent_event_id: "root".into(),
+        causes: vec![],
+        refs: vec![],
+        ir_refs: vec![],
+        surface_ids: std::collections::BTreeMap::new(),
+        provenance: None,
+        prev_hash: String::new(),
+        payload,
+        hash: String::new(),
+    }
+}
+
+fn pending_row(
+    seq: u64,
+    pid: &str,
+    args_hash: &str,
+    effect_id: &str,
+) -> hh_ledger::event::EventEnvelope {
+    env(
+        seq,
+        "security.permission.pending",
+        Json::obj([
+            ("permission_id", Json::str(pid)),
+            ("effect_id", Json::str(effect_id)),
+            (
+                "request",
+                Json::obj([
+                    ("subject_ref", Json::str("agent-1")),
+                    (
+                        "capability_ref",
+                        Json::obj([
+                            ("semantic_id", Json::str("cap:fs.write")),
+                            ("version_id", Json::str("capv-1")),
+                        ]),
+                    ),
+                    ("args_canonical_hash", Json::str(args_hash)),
+                    ("reason", Json::str("needs write")),
+                ]),
+            ),
+            ("requested_at", Json::Int(100)),
+            ("mode", Json::str("async")),
+        ]),
+    )
+}
+
+#[test]
+fn fold_pending_decided_allow_serves_resume() {
+    // The defer slice's fold: `pending` opens the owed row, the non-final
+    // `decided{ask}` never occupies the exactly-one slot, and the final
+    // `decided{allow}` resolves it — `decision_for_effect` serves the
+    // re-dispatch.
+    let events = vec![
+        // The attempt cycle's non-final ask verdict (dispatch mints it with
+        // the permission_id attached).
+        env(
+            1,
+            "security.permission.decided",
+            Json::obj([
+                ("permission_id", Json::str("perm-1")),
+                ("decision", Json::str("ask")),
+                ("decider", Json::str("policy")),
+            ]),
+        ),
+        pending_row(2, "perm-1", "h1", "e1"),
+        env(
+            3,
+            "security.permission.decided",
+            Json::obj([
+                ("permission_id", Json::str("perm-1")),
+                ("decision", Json::str("allow")),
+                ("decider", Json::str("human")),
+                ("decider_ref", Json::str("human:principal")),
+                ("decision_scope", Json::str("once")),
+                ("requested_at", Json::Int(100)),
+                ("wait_ms", Json::Int(50)),
+            ]),
+        ),
+    ];
+    let st = ApprovalState::project(&events, u64::MAX);
+    assert!(
+        st.pending.is_empty(),
+        "the decided row resolved the pending"
+    );
+    assert_eq!(st.stats.requested, 1);
+    assert_eq!(st.stats.granted, 1);
+    assert_eq!(st.stats.human_wait_ms, 50);
+    let (pid, rec) = st
+        .decision_for_effect("e1")
+        .expect("the recorded decision covers the effect");
+    assert_eq!(pid, "perm-1");
+    assert!(matches!(rec.decision, Decision::Allow));
+}
+
+#[test]
+fn fold_exactly_one_decided_and_lease_lifecycle() {
+    let lease = ApprovalLease {
+        lease_id: "lease-1".into(),
+        key_hash: "lease-1".into(),
+        capability_ref: cap(),
+        args_canonical_hash: "h1".into(),
+        pattern: None,
+        pattern_args_hash: None,
+        scope: LeaseScope::Run,
+        scope_ref: "run-1".into(),
+        holder: "agent-1".into(),
+        basis: LeaseBasis::Human,
+        origin_permission_id: "perm-1".into(),
+        policy_fingerprint: "fp".into(),
+        risk_ceiling: hh_ontology::risk::RiskClass::UNKNOWN,
+        grant_authority: AuthorityClass::Principal,
+        max_uses: Some(3),
+        uses: 0,
+        granted_at: 150,
+        revoked_at: None,
+    };
+    let events = vec![
+        pending_row(1, "perm-1", "h1", "e1"),
+        // The lease row before the decided row — either order resolves the
+        // link (the fold back-fills `decisions[].lease_id`).
+        env(
+            2,
+            "security.permission.lease.granted",
+            lease_granted_payload(&lease),
+        ),
+        env(
+            3,
+            "security.permission.decided",
+            Json::obj([
+                ("permission_id", Json::str("perm-1")),
+                ("decision", Json::str("allow")),
+                ("decider", Json::str("human")),
+                ("decision_scope", Json::str("session")),
+            ]),
+        ),
+        // A second `decided` for the id never rewrites the record
+        // (the exactly-one gate — I-H7's fold half).
+        env(
+            4,
+            "security.permission.decided",
+            Json::obj([
+                ("permission_id", Json::str("perm-1")),
+                ("decision", Json::str("deny")),
+                ("decider", Json::str("human")),
+            ]),
+        ),
+        env(
+            5,
+            "security.permission.lease.used",
+            Json::obj([("lease_id", Json::str("lease-1")), ("uses", Json::Int(2))]),
+        ),
+        env(
+            6,
+            "security.permission.lease.revoked",
+            Json::obj([
+                ("lease_id", Json::str("lease-1")),
+                ("revoked_at", Json::Int(500)),
+            ]),
+        ),
+    ];
+    let st = ApprovalState::project(&events, u64::MAX);
+    let rec = st.decisions.get("perm-1").expect("recorded");
+    assert!(
+        matches!(rec.decision, Decision::Allow),
+        "the first row stands"
+    );
+    assert_eq!(rec.lease_id.as_deref(), Some("lease-1"));
+    let l = st.leases.get("lease-1").expect("the lease folded");
+    assert_eq!(l.uses, 2);
+    assert_eq!(l.revoked_at, Some(500));
+    assert_eq!(l.holder, "agent-1");
+    assert_eq!(l.policy_fingerprint, "fp");
+    assert!(st.lease_lookup("lease-1").is_none(), "revoked leases miss");
+}
+
+#[test]
+fn fold_deny_counts_repeated_denials() {
+    let events = vec![
+        pending_row(1, "perm-1", "h1", "e1"),
+        env(
+            2,
+            "security.permission.decided",
+            Json::obj([
+                ("permission_id", Json::str("perm-1")),
+                ("decision", Json::str("deny")),
+                ("decider", Json::str("human")),
+                ("reason", Json::str("PolicyDenied")),
+            ]),
+        ),
+        pending_row(3, "perm-2", "h1", "e2"),
+        env(
+            4,
+            "security.permission.decided",
+            Json::obj([
+                ("permission_id", Json::str("perm-2")),
+                ("decision", Json::str("deny")),
+                ("decider", Json::str("human")),
+                ("reason", Json::str("PolicyDenied")),
+            ]),
+        ),
+    ];
+    let st = ApprovalState::project(&events, u64::MAX);
+    // One (capability, args) key accumulated both denials.
+    assert_eq!(st.denial_counts.values().next(), Some(&2));
+    assert!(st.pending.is_empty());
+    assert!(st.decision_for_effect("e1").is_some());
 }

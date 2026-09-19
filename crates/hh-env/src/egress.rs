@@ -48,7 +48,6 @@ use hh_ledger::event::Event;
 use hh_ledger::manifest::EventRef;
 use hh_ledger::store::{Lease, Store};
 use hh_monitor::approval::{self, ApprovalRequest, ApprovalResponse, ResponseChoice};
-use hh_monitor::decision::DecisionScope;
 use hh_ontology::dimensions::DimensionId;
 use hh_provenance::{PersistenceScope, ProvenanceRecord};
 use hh_secrets::{CredentialBroker, MediationOutcome, Placeholder, RefusedCode, RequestDescriptor};
@@ -594,7 +593,9 @@ impl<'a> EgressMediator<'a> {
             explanation: approval::Explanation {
                 display: format!("egress to {}:{}", req.host_norm(), req.port),
                 rows: vec![],
+                model_justification: None,
             },
+            batch_id: None,
         };
         let asked_at = self.store.now_ms();
         self.emit(
@@ -685,16 +686,22 @@ impl<'a> EgressMediator<'a> {
             ResponseChoice::AllowOnce => {}
             ResponseChoice::AllowLease(spec) => {
                 // §5g.4 §2's bound — an approval hatch lives at
-                // `session | run`; at this stage a `session` lease *is* the
+                // `session | run`; at this stage a `run` lease *is* the
                 // run (`PersistenceScope::Session` would breach the `Run`
-                // ceiling — the lease's session is the run, not a
-                // cross-run surface). `persisted` asks beyond the run —
-                // under the default ceiling the `amend` refuses and the
-                // narrowing-only cache is the fallback (ADR-0266 D6).
+                // ceiling — the lease's run is the run, not a
+                // cross-run surface). `session` (and anything wider — the
+                // mint already bounds the lease at `≤ session`) asks beyond
+                // the run — under the default ceiling the `amend` refuses
+                // and the narrowing-only cache is the fallback (ADR-0266 D6).
                 let (persistence, cache_scope) = match spec.scope {
-                    DecisionScope::Once => (PersistenceScope::Turn, None),
-                    DecisionScope::Session => (PersistenceScope::Run, Some(CacheScope::Session)),
-                    DecisionScope::Persisted => (PersistenceScope::User, Some(CacheScope::Run)),
+                    approval::LeaseScope::Turn => (PersistenceScope::Turn, None),
+                    approval::LeaseScope::Run => (PersistenceScope::Run, Some(CacheScope::Session)),
+                    approval::LeaseScope::Session
+                    | approval::LeaseScope::User
+                    | approval::LeaseScope::Project
+                    | approval::LeaseScope::Definition => {
+                        (PersistenceScope::User, Some(CacheScope::Run))
+                    }
                 };
                 let host = req.host_norm();
                 let diff =

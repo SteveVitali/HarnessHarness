@@ -80,6 +80,7 @@ fn cap_record(seq: u64, effects: ToolEffects, scope: ScopeBindings) -> ToolCapab
         exposure_hint: Json::obj([("default", Json::str("direct"))]),
         postconditions: vec![],
         flow_contract: None,
+        action_patterns: Vec::new(),
     }
 }
 

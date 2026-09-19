@@ -86,6 +86,17 @@ pub(crate) struct PendingAsk {
     pub options: Vec<String>,
     pub proposal: String,
     pub effect_id: Option<String>,
+    /// When the pending was requested (the `wait_ms` member of `decided`).
+    pub requested_at: u64,
+    /// The pending's capability material — present when the row carries a
+    /// `request{capability_ref, args_canonical_hash}` (dispatch-side asks;
+    /// restored pendings). `allow_lease` mints the lease row only over this
+    /// material — never fabricated.
+    pub capability_ref: Option<(String, String)>,
+    /// The pending's canonical-args hash (the lease key leg).
+    pub args_canonical_hash: Option<String>,
+    /// The requesting subject (the lease/handle `holder`).
+    pub subject_ref: Option<String>,
 }
 
 /// A host-executor ask awaiting `report_host_effect`.
@@ -535,7 +546,12 @@ impl EmbedService {
     /// Mint a permission ask: durable `security.permission.pending` +
     /// ephemeral `security.permission.requested` + the
     /// `upcall.request_permission` notification when the host serves the
-    /// permission channel.
+    /// permission channel. `capability` carries the ask's
+    /// `request{subject_ref, capability_ref, args_canonical_hash}` material —
+    /// the legs an `allow_lease` response mints the lease over (never
+    /// fabricated — a capability-level ask records the declared capability
+    /// coordinate and the empty args hash).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn mint_permission_ask(
         &mut self,
         sess_id: &str,
@@ -543,8 +559,10 @@ impl EmbedService {
         effect_id: Option<String>,
         options: Vec<String>,
         rendering: Json,
+        capability: Option<&HostCap>,
     ) -> Result<String, EmbedError> {
         let permission_id = self.alloc("perm");
+        let holder = self.holder.clone();
         let (run_id, lease) = {
             let s = self.session(sess_id)?;
             (
@@ -554,6 +572,22 @@ impl EmbedService {
                 })?,
             )
         };
+        let request = capability
+            .map(|c| {
+                Json::obj([
+                    ("subject_ref", Json::str(holder.clone())),
+                    (
+                        "capability_ref",
+                        Json::obj([
+                            ("semantic_id", Json::str(c.capability_id.clone())),
+                            ("version_id", Json::str(c.capability_id.clone())),
+                        ]),
+                    ),
+                    ("args_canonical_hash", Json::str("")),
+                    ("reason", Json::str(proposal.to_string())),
+                ])
+            })
+            .unwrap_or(Json::Null);
         let now = self.store.now_ms();
         self.mint(
             &run_id,
@@ -565,6 +599,7 @@ impl EmbedService {
                     "effect_ids",
                     Json::Arr(effect_id.iter().map(|e| Json::str(e.clone())).collect()),
                 ),
+                ("request", request),
                 ("requested_at", Json::Int(now as i64)),
                 ("mode", Json::str("sync")),
             ]),
@@ -585,6 +620,11 @@ impl EmbedService {
                 options: options.clone(),
                 proposal: proposal.to_string(),
                 effect_id: effect_id.clone(),
+                requested_at: now,
+                capability_ref: capability
+                    .map(|c| (c.capability_id.clone(), c.capability_id.clone())),
+                args_canonical_hash: capability.map(|_| String::new()),
+                subject_ref: capability.map(|_| holder.clone()),
             },
         );
         if self.client_caps.serves_permission_channel {
@@ -749,6 +789,7 @@ impl EmbedService {
             Option<String>,
             Option<String>,
             Option<String>,
+            Option<Json>,
         );
         let events: Vec<ScanRow> = match self.store.events(&run_id) {
             Ok(evs) => evs
@@ -761,6 +802,16 @@ impl EmbedService {
                         e.scope.effect_id.clone(),
                         e.scope.model_call_id.clone(),
                         e.scope.turn_id.clone(),
+                        // The permission rows ride the payload — the scan
+                        // folds them into the owed-decision table so
+                        // `respond_permission` stays answerable for asks the
+                        // kernel minted mid-drive (a `permission_request`
+                        // effect, a batch attach).
+                        if e.class.starts_with("security.permission.") {
+                            Some(e.payload.clone())
+                        } else {
+                            None
+                        },
                     )
                 })
                 .collect(),
@@ -771,7 +822,7 @@ impl EmbedService {
         for (ef, attempt, intent) in asks {
             asks_by_effect.insert(ef, (attempt, intent));
         }
-        for (_seq, class, _hash, effect_id, model_call, turn_id) in
+        for (_seq, class, _hash, effect_id, model_call, turn_id, payload) in
             events.iter().filter(|(seq, ..)| *seq > watermark)
         {
             let class = class.as_str();
@@ -825,6 +876,74 @@ impl EmbedService {
                                 }
                                 .to_json(),
                             );
+                        }
+                    }
+                }
+                "security.permission.pending" => {
+                    // A kernel-minted owed-decision row (a `permission_request`
+                    // effect's ask, a coalesced attach) — the surface table
+                    // learns it so `respond_permission` answers it.
+                    if let (Some(s), Some(p)) = (self.sessions.get_mut(sess_id), payload) {
+                        if let Some(pid) = p.get("permission_id").and_then(Json::as_str) {
+                            let pid = pid.to_string();
+                            if !s.pendings.contains_key(&pid) && !s.decided.contains_key(&pid) {
+                                let req = p.get("request").cloned().unwrap_or(Json::Null);
+                                s.pendings.insert(
+                                    pid,
+                                    PendingAsk {
+                                        options: vec![
+                                            "allow_once".to_string(),
+                                            "allow_lease".to_string(),
+                                            "deny".to_string(),
+                                            "more_info".to_string(),
+                                        ],
+                                        proposal: req
+                                            .get("reason")
+                                            .and_then(Json::as_str)
+                                            .unwrap_or("permission request")
+                                            .to_string(),
+                                        effect_id: p
+                                            .get("effect_id")
+                                            .and_then(Json::as_str)
+                                            .map(str::to_string),
+                                        requested_at: p
+                                            .get("requested_at")
+                                            .and_then(Json::as_int)
+                                            .map(|n| n.max(0) as u64)
+                                            .unwrap_or(0),
+                                        capability_ref: req.get("capability_ref").and_then(|c| {
+                                            let s = c.get("semantic_id")?.as_str()?;
+                                            let v = c.get("version_id")?.as_str()?;
+                                            Some((s.to_string(), v.to_string()))
+                                        }),
+                                        args_canonical_hash: req
+                                            .get("args_canonical_hash")
+                                            .and_then(Json::as_str)
+                                            .map(str::to_string),
+                                        subject_ref: req
+                                            .get("subject_ref")
+                                            .and_then(Json::as_str)
+                                            .map(str::to_string),
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+                "security.permission.decided" => {
+                    // A final decision (never the non-final `ask` verdict)
+                    // resolves the surface pending — e.g. a `permission_decided`
+                    // wakeup's row or a co-writer's respond.
+                    if let (Some(s), Some(p)) = (self.sessions.get_mut(sess_id), payload) {
+                        let final_row = matches!(
+                            p.get("decision").and_then(Json::as_str),
+                            Some(d) if d != "ask"
+                        );
+                        if final_row {
+                            if let Some(pid) = p.get("permission_id").and_then(Json::as_str) {
+                                s.pendings.remove(pid);
+                                s.decided.insert(pid.to_string(), p.clone());
+                            }
                         }
                     }
                 }

@@ -35,6 +35,10 @@ pub enum MintError {
         /// The permission's semantic id.
         permission_id: String,
     },
+    /// A `session`-lifetime approval handle without a declared
+    /// `ActionPattern` (I-H6's Stage-2 admission leg — the member is admitted
+    /// only through a declared pattern).
+    SessionScopeRequiresPattern,
 }
 
 /// One resolved `authority_cap` — the `subject{of?, ceiling}` record of an
@@ -177,6 +181,176 @@ pub fn mint_root_handles(
         event_ids.push(event_id);
     }
     Ok((handles, event_ids))
+}
+
+/// `ApprovalMint` — the `respond`-path mint input (§5g.1 §3 + R-2.8.7 §5):
+/// a legitimate `allow`/`allow_lease` decision confers an `approval`-basis
+/// `AuthorityHandle` on the proposer over the pending's capability. The basis
+/// is the *decision record* (`basis_ref = permission_id`), never the response
+/// text — I-H1.
+#[derive(Debug, Clone)]
+pub struct ApprovalMint {
+    /// The resolved pending (the basis coordinate).
+    pub permission_id: String,
+    /// The proposer the handle issues to (`Ref<AgentProcess>`).
+    pub holder: Ref,
+    /// The endorser's provenance — `human{authority: principal}` or a live
+    /// `ApproverGrant` (legitimacy ran at `respond`; mint records it).
+    pub issuer: ProvenanceRecord,
+    /// The granted effects (the pending capability's grant shape).
+    pub grants: Vec<hh_hir::records::Grant>,
+    /// The ceiling — the grant's recorded ceiling, never above the pending's
+    /// decided risk ceiling (raise-only).
+    pub ceiling: AuthorityClass,
+    /// The response's decision scope (`once | session | persisted`).
+    pub scope: crate::decision::DecisionScope,
+    /// The `allow_lease` lease scope (`None` for `allow_once`).
+    pub lease_scope: Option<crate::approval::LeaseScope>,
+    /// The `ActionPattern` a pattern lease declared (I-H6 — a `session`
+    /// lifetime is admitted only through a declared pattern).
+    pub lease_pattern: Option<crate::approval::ActionPattern>,
+    /// The live coordinates the expiry members name.
+    pub effect_id: String,
+    /// The live turn.
+    pub turn_id: String,
+    /// The live run.
+    pub run_id: String,
+    /// The live session ref (empty when none).
+    pub session_ref: String,
+    /// The budget node the handle's effects charge, when declared.
+    pub budget_ref: Option<String>,
+}
+
+/// `mint_approval_handle(m, alloc) → (handle, granted_event_id)` — the C1
+/// `approval`-basis mint. `expires_at` follows the response scope: `once` →
+/// `effect`, a lease's `turn`/`run`/`session` → the same member;
+/// `persisted` bounds to `session` in force — a persisted widening requires
+/// the human-origin `lifecycle.definition.changed` (ADR-0066 D5), which this
+/// mint never fabricates. A `session` expiry without a declared
+/// `ActionPattern` refuses (`SessionScopeRequiresPattern` — I-H6's Stage-2
+/// admission leg).
+pub fn mint_approval_handle(
+    m: &ApprovalMint,
+    alloc: &mut dyn FnMut(&str) -> String,
+) -> Result<(AuthorityHandle, String), MintError> {
+    use crate::approval::LeaseScope;
+    let expires = match m.scope {
+        crate::decision::DecisionScope::Once => HandleExpiry::Effect(m.effect_id.clone()),
+        crate::decision::DecisionScope::Session => match m.lease_scope {
+            Some(LeaseScope::Turn) => HandleExpiry::Turn(m.turn_id.clone()),
+            Some(LeaseScope::Session) => {
+                if m.lease_pattern.is_none() {
+                    return Err(MintError::SessionScopeRequiresPattern);
+                }
+                HandleExpiry::Session(m.session_ref.clone())
+            }
+            // `allow_lease{scope = run}` and a `session` decision without a
+            // lease both bound to the run.
+            _ => HandleExpiry::Run(m.run_id.clone()),
+        },
+        crate::decision::DecisionScope::Persisted => {
+            if m.session_ref.is_empty() {
+                return Err(MintError::SessionScopeRequiresPattern);
+            }
+            HandleExpiry::Session(m.session_ref.clone())
+        }
+    };
+    let handle_id = alloc("hnd");
+    let event_id = alloc("evt");
+    Ok((
+        AuthorityHandle {
+            handle_id: HandleId(handle_id),
+            permission_ref: PinnedRef {
+                semantic_id: m.permission_id.clone(),
+                version_id: m.permission_id.clone(),
+            },
+            holder: m.holder.clone(),
+            issuer: m.issuer.clone(),
+            grants: m.grants.clone(),
+            ceiling: m.ceiling,
+            validity: HandleValidity {
+                issued_at: event_id.clone(),
+                expires_at: Some(expires),
+                revoked_by: None,
+            },
+            parent_handle: None,
+            delegable: false,
+            origin_basis: OriginBasis::Approval,
+            basis_ref: m.permission_id.clone(),
+            budget_ref: m.budget_ref.clone(),
+            scope: m.scope,
+        },
+        event_id,
+    ))
+}
+
+/// `mint_preauthorization_handles(sealed, holder, run_id, alloc)` — the
+/// `pre_authorize` half of ADR-0053 D5: every `HarnessRule` whose action is
+/// `pre_authorize{grants, scope?}` mints a `policy_rule`-basis handle over the
+/// declared grants at seal. The handle confers `pre_authorized` at `authorize`
+/// (the unattended-`ask` exception) and serves the reviewer chain's
+/// `policy_rule` stage. Reviewers may narrow or withdraw — never widen
+/// (raise-only admission).
+///
+/// The `grants` member decodes through the canonical grant codec; a malformed
+/// row skips the rule (the sealed definition validated it — mint never
+/// guesses). `expires_at = run` — a pre-authorization never outlives the run.
+pub fn mint_preauthorization_handles(
+    sealed: &SealedDefinition,
+    holder: &Ref,
+    issuer: &ProvenanceRecord,
+    run_id: &str,
+    alloc: &mut dyn FnMut(&str) -> String,
+) -> Vec<(AuthorityHandle, String)> {
+    let mut out = Vec::new();
+    for node in &sealed.document.nodes {
+        let KindRecord::HarnessRule(rule) = &node.semantic else {
+            continue;
+        };
+        let hh_hir::records::RuleAction::PreAuthorize(spec) = &rule.action else {
+            continue;
+        };
+        let grants: Vec<hh_hir::records::Grant> = match spec.get("grants") {
+            Some(Json::Arr(rows)) => rows
+                .iter()
+                .enumerate()
+                .map(|(i, g)| hh_hir::grant_from_json(g, &format!("grants[{i}]")).ok())
+                .collect::<Option<Vec<_>>>()
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        if grants.is_empty() {
+            continue;
+        }
+        let handle_id = alloc("hnd");
+        let event_id = alloc("evt");
+        out.push((
+            AuthorityHandle {
+                handle_id: HandleId(handle_id),
+                permission_ref: PinnedRef {
+                    semantic_id: rule.rule_id.clone(),
+                    version_id: node.version_id(),
+                },
+                holder: holder.clone(),
+                issuer: issuer.clone(),
+                grants,
+                ceiling: AuthorityClass::Delegate,
+                validity: HandleValidity {
+                    issued_at: event_id.clone(),
+                    expires_at: Some(HandleExpiry::Run(run_id.to_string())),
+                    revoked_by: None,
+                },
+                parent_handle: None,
+                delegable: false,
+                origin_basis: OriginBasis::PolicyRule,
+                basis_ref: rule.rule_id.clone(),
+                budget_ref: None,
+                scope: crate::decision::DecisionScope::Session,
+            },
+            event_id,
+        ));
+    }
+    out
 }
 
 /// Whether `domain` is in the mandatory `environment`-mint exclusion set

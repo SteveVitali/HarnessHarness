@@ -498,7 +498,7 @@ impl EmbedService {
                         ("permission_id", Json::str(permission_id.clone())),
                         ("effect_ids", Json::Arr(vec![])),
                         ("requested_at", Json::Int(now as i64)),
-                        ("mode", Json::str("policy")),
+                        ("mode", Json::str("sync")),
                     ]),
                 )?;
                 self.mint(
@@ -508,7 +508,7 @@ impl EmbedService {
                     Json::obj([
                         ("permission_id", Json::str(permission_id)),
                         ("proposal", Json::str(proposal)),
-                        ("decision", Json::str("deny_once")),
+                        ("decision", Json::str("deny")),
                         ("decider", Json::str("policy")),
                         ("reason", Json::str("unattended")),
                     ]),
@@ -547,7 +547,7 @@ impl EmbedService {
                         ]),
                     ),
                 ]);
-                self.mint_permission_ask(&session_id, &proposal, None, opts, rendering)?;
+                self.mint_permission_ask(&session_id, &proposal, None, opts, rendering, Some(cap))?;
             }
         }
 
@@ -844,7 +844,12 @@ impl EmbedService {
                             pendings.insert(
                                 pid.clone(),
                                 PendingAsk {
-                                    options: vec!["allow".to_string(), "deny".to_string()],
+                                    options: vec![
+                                        "allow_once".to_string(),
+                                        "allow_lease".to_string(),
+                                        "deny".to_string(),
+                                        "more_info".to_string(),
+                                    ],
                                     proposal: req
                                         .get("reason")
                                         .and_then(Json::as_str)
@@ -853,6 +858,25 @@ impl EmbedService {
                                     effect_id: e
                                         .payload
                                         .get("effect_id")
+                                        .and_then(Json::as_str)
+                                        .map(str::to_string),
+                                    requested_at: e
+                                        .payload
+                                        .get("requested_at")
+                                        .and_then(Json::as_int)
+                                        .map(|n| n.max(0) as u64)
+                                        .unwrap_or(0),
+                                    capability_ref: req.get("capability_ref").and_then(|c| {
+                                        let s = c.get("semantic_id")?.as_str()?;
+                                        let v = c.get("version_id")?.as_str()?;
+                                        Some((s.to_string(), v.to_string()))
+                                    }),
+                                    args_canonical_hash: req
+                                        .get("args_canonical_hash")
+                                        .and_then(Json::as_str)
+                                        .map(str::to_string),
+                                    subject_ref: req
+                                        .get("subject_ref")
                                         .and_then(Json::as_str)
                                         .map(str::to_string),
                                 },
