@@ -466,6 +466,66 @@ const CONTAINMENT_FIELDS: &[AuditField] = &[
 ];
 const CONTAINMENT_REFS: &[&str] = &["lowering_loss_ref", "probes_ref", "evidence_ref"];
 
+/// `security.egress.requested` — the `decision_request` record (§5g.4 §2):
+/// content-free coordinates + the token *hash* (the capability itself is
+/// never a member — ADR-0266 D3). No `headers`/`body` members exist on the
+/// class — a request's content never reaches the audit row.
+const EGRESS_REQUESTED_FIELDS: &[AuditField] = &[
+    af("request_ref"),
+    af("token_hash"),
+    af("effect_id"),
+    af("tool_call_id"),
+    af("env_handle"),
+    af("protocol"),
+    af("host_raw"),
+    af("host_norm"),
+    af("resolved_addrs"),
+    af("port"),
+    af("method"),
+    af("path"),
+    af("sentinel_refs"),
+];
+
+/// `security.egress.decided` — the normative decision record (§5g.4 §6):
+/// verdict + source + the closed `reason`/`rule_ref`/`checked_addrs`
+/// members, `credential_binding_applied` (binding ids, never values).
+const EGRESS_DECIDED_FIELDS: &[AuditField] = &[
+    af("request_ref"),
+    af("token_hash"),
+    af("effect_id"),
+    af("tool_call_id"),
+    af("env_handle"),
+    af("protocol"),
+    af("host_raw"),
+    af("host_norm"),
+    af("port"),
+    af("method"),
+    af("policy_version_id"),
+    af("decision"),
+    af("source"),
+    af("decided_by"),
+    af("rule_ref"),
+    af("reason"),
+    af("checked_addrs"),
+    af("credential_binding_applied"),
+    af("latency_ms"),
+];
+
+/// `security.containment.amended` — the §5g.4 `amend` audit row (ADR-0062
+/// (e); ADR-0266 D6): `{policy_version_id, from_version_id, to_version_id,
+/// diff, basis, endorser, scope, effect_id?}` — the diff is a canonical
+/// closed-sum member, never free text.
+const CONTAINMENT_AMENDED_FIELDS: &[AuditField] = &[
+    af("policy_version_id"),
+    af("from_version_id"),
+    af("to_version_id"),
+    af("diff"),
+    af("basis"),
+    af("endorser"),
+    af("scope"),
+    af("effect_id"),
+];
+
 /// `security.credential.*` — refs, revisions, modes, destinations, the closed
 /// `code`, `provided: yes/no` — never a secret value (SV-2; ADR-0058 D4/D6).
 const CREDENTIAL_FIELDS: &[AuditField] = &[
@@ -830,8 +890,8 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // `security.egress.{requested,decided}` — one `decided` per request with
     // `source` (§5g.4 §6; CF-482's spelling). Audit-grade; the egress mediator is
     // a kernel component.
-    row_audit("security.egress.requested",    O::Events, false, OPEN_AUDIT, &[], None, None),
-    row_audit("security.egress.decided",      O::Events, false, OPEN_AUDIT, &[], None, None),
+    row_audit("security.egress.requested",    O::Events, false, EGRESS_REQUESTED_FIELDS, &[], None, None),
+    row_audit("security.egress.decided",      O::Events, false, EGRESS_DECIDED_FIELDS, &[], None, None),
     // The `security.extension.*` family (§5g.5 §6; ADR-0064 D7; S1.23) —
     // audit-grade, provenance-mandatory. `loaded` is the pin attestation the
     // Rule-O producer obligation resolves against; `resolved`/`sealed` are the
@@ -860,6 +920,7 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("security.containment.applied",    O::Events, true, CONTAINMENT_FIELDS, CONTAINMENT_REFS, None, None),
     row_audit("security.containment.violated",   O::Events, true, CONTAINMENT_FIELDS, CONTAINMENT_REFS, None, None),
     row_audit("security.containment.unverified", O::Events, true, CONTAINMENT_FIELDS, &[], None, None),
+    row_audit("security.containment.amended",    O::Events, true, CONTAINMENT_AMENDED_FIELDS, &[], None, None),
     // The credential/secret rows (§5g.3 §3 events; ADR-0058 D4/D6) — audit-grade,
     // kernel-origin, provenance-mandatory. Payloads are content-free by contract:
     // refs, revisions, modes, destinations, the closed `code`, `provided: yes/no` —

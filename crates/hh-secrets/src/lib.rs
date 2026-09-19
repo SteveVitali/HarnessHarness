@@ -36,14 +36,27 @@
 //!   (`mh_secret:v1:…:<idp/1-framed nonce>`); a copied placeholder resolves
 //!   nothing (best-effort at Stage 1).
 //!
-//! # The Stage-1 cut
+//! # The Stage-2 additions (S2.4; ADR-0266)
 //!
-//! Per ADR-0058 §e and the §5g.3 §9 stage map, the egress mediator's *wire*
-//! half (`mediate`'s actual request rewriting), `mint`ed delivery,
-//! snapshot/fork virtualisation and destination-path binding are Stage-2 rows
-//! (DF-S1.12-1 → S2.4; the rows this ticket opens are in
-//! `docs/tickets/DEFERRALS.md`). `leak_scan` is a **test battery** — a static/
-//! contract verifier, never a live-path interceptor (ADR-0059 D2).
+//! - **`mint`** — the `minted_scoped` verb: a kernel-keyed
+//!   `mh_mint:v1:<binding>:<exp>:<mac>` token carrying no secret material,
+//!   verified by [`CredentialBroker::verify_minted`] (audience + expiry +
+//!   binding-liveness — LT-05). `used` is durable before the token is visible.
+//! - **`mediate_sentinel` / `drain_claim`** — the mediator-side path: a
+//!   `mh_secret:` spelling resolves to its binding (foreign ⇒ `out_of_scope`),
+//!   `mediate` runs the refusal order, and `drain_claim` drains the staged
+//!   value consume-once onto the wire.
+//! - **`RequestDescriptor.env_handle`** — the anti-laundering check (a
+//!   sentinel is bound to one env; ADR-0266 D3).
+//! - **`DestinationBinding.revocation_path` + `RevokeOutcome.intents`** —
+//!   destination-side revocation dispatch (LT-05's wrapped half).
+//! - **`virtualize_for_fork`** — LT-09: a fork's snapshot gets fresh
+//!   placeholders bound to fresh bindings on the fork's env handle.
+//! - The **mask set** covers minted spellings too (a dead token on a durable
+//!   surface is still a leak).
+//!
+//! `leak_scan` is a **test battery** — a static/contract verifier, never a
+//! live-path interceptor (ADR-0059 D2).
 
 pub mod broker;
 pub mod channel;
@@ -61,9 +74,9 @@ pub mod types;
 
 pub use broker::{
     coord_key, path_is_ambiguous, BindRequest, CompositeResolver, CredentialBinding,
-    CredentialBroker, Delivery, DenyAllResolver, LaunchEnvResolver, MediationOutcome,
-    RequestDescriptor, RevokeOutcome, RevokeTarget, SecretSourceResolver, SourceError, StaticVault,
-    COMPONENT,
+    CredentialBroker, Delivery, DenyAllResolver, ForkVirtualization, LaunchEnvResolver,
+    MediationOutcome, MintedToken, MintedVerdict, RequestDescriptor, RevokeIntent, RevokeOutcome,
+    RevokeTarget, SecretSourceResolver, SourceError, StaticVault, COMPONENT,
 };
 pub use channel::{
     AuthCarrier, CredentialKind, DestinationBinding, SecretChannel, SecretChannelSpec,

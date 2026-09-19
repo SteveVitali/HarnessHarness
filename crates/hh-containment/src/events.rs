@@ -145,3 +145,197 @@ pub fn unverified_payload(field_group: &str, reason: &str) -> Json {
         ("reason", Json::str(reason)),
     ])
 }
+
+// ── the egress rows (S2.4; ADR-0266) ───────────────────────────────────────
+
+use crate::admit::ContainmentDiff;
+use crate::amend::diff_json;
+use crate::amend::AmendOutcome;
+use crate::egress::{token_hash, EgressDecision, EgressRequest};
+use crate::policy::AmendmentBasis;
+use hh_provenance::{PersistenceScope, ProvenanceRecord};
+
+/// The `decision_request`'s content address — `request_ref` is resolvable to
+/// the exact record the mediator decided on (CC3).
+pub fn request_ref(req: &EgressRequest) -> String {
+    blob_ref(&req.to_json())
+}
+
+/// The `security.egress.requested` payload — content-free: the request's id
+/// and destination spellings, the token's *hash*, and the sentinel refs
+/// (channel coordinates, never material). No header values, no body.
+pub fn egress_requested_payload(req: &EgressRequest, sentinel_refs: &[String]) -> Json {
+    let mut m = Json::obj([
+        ("request_ref", Json::str(request_ref(req))),
+        ("token_hash", Json::str(token_hash(&req.token))),
+        ("tool_call_id", Json::str(req.tool_call_id.clone())),
+        ("env_handle", Json::str(req.env_handle.clone())),
+        ("protocol", Json::str(req.protocol.as_str())),
+        ("host_raw", Json::str(req.host_raw.clone())),
+        ("host_norm", Json::str(req.host_norm())),
+        ("port", Json::Int(req.port as i64)),
+        (
+            "resolved_addrs",
+            Json::Arr(
+                req.resolved_addrs
+                    .iter()
+                    .map(|a| Json::str(a.clone()))
+                    .collect(),
+            ),
+        ),
+        (
+            "sentinel_refs",
+            Json::Arr(sentinel_refs.iter().map(|s| Json::str(s.clone())).collect()),
+        ),
+    ]);
+    if let (Json::Obj(ref mut map), Some(e)) = (&mut m, &req.effect_id) {
+        map.insert("effect_id".to_string(), Json::str(e.clone()));
+    }
+    if let (Json::Obj(ref mut map), Some(mth)) = (&mut m, &req.method) {
+        map.insert("method".to_string(), Json::str(mth.clone()));
+    }
+    if let (Json::Obj(ref mut map), Some(p)) = (&mut m, &req.path) {
+        map.insert("path".to_string(), Json::str(p.clone()));
+    }
+    m
+}
+
+/// `decided_by` — how the final verdict was reached (the decided row's
+/// `decided_by` member): `policy` (the rule grammar decided),
+/// `approval_cache`, `monitor` (an endorsement resolved an ask), or
+/// `default` (`default_unmatched` deny).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecidedBy {
+    /// A policy rule decided.
+    Policy,
+    /// The approval cache hit.
+    ApprovalCache,
+    /// The monitor's endorsement resolved an ask.
+    Monitor,
+    /// `default_unmatched` denied.
+    Default,
+}
+
+impl DecidedBy {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DecidedBy::Policy => "policy",
+            DecidedBy::ApprovalCache => "approval_cache",
+            DecidedBy::Monitor => "monitor",
+            DecidedBy::Default => "default",
+        }
+    }
+}
+
+/// The `security.egress.decided` payload — one per request (§5g.4 §6);
+/// `checked_addrs` are the addresses the mediator itself resolved and
+/// re-checked (the consume-once answer), `credential_binding_applied` the
+/// bindings actually substituted (the rule's declared candidates filtered
+/// by destination coverage — ADR-0266 D2).
+#[allow(clippy::too_many_arguments)] // a table row is a row — the arity is the payload's.
+pub fn egress_decided_payload(
+    req: &EgressRequest,
+    policy_version_id: &str,
+    decision: &EgressDecision,
+    decided_by: DecidedBy,
+    checked_addrs: &[String],
+    credential_binding_applied: &[String],
+    effect_id: &str,
+    latency_ms: u64,
+) -> Json {
+    let mut m = Json::obj([
+        ("request_ref", Json::str(request_ref(req))),
+        ("token_hash", Json::str(token_hash(&req.token))),
+        ("effect_id", Json::str(effect_id)),
+        ("tool_call_id", Json::str(req.tool_call_id.clone())),
+        ("env_handle", Json::str(req.env_handle.clone())),
+        ("protocol", Json::str(req.protocol.as_str())),
+        ("host_raw", Json::str(req.host_raw.clone())),
+        ("host_norm", Json::str(req.host_norm())),
+        ("port", Json::Int(req.port as i64)),
+        ("policy_version_id", Json::str(policy_version_id)),
+        ("decision", Json::str(decision.decision.as_str())),
+        ("source", Json::str(decision.source.as_str())),
+        ("decided_by", Json::str(decided_by.as_str())),
+        (
+            "checked_addrs",
+            Json::Arr(checked_addrs.iter().map(|a| Json::str(a.clone())).collect()),
+        ),
+        (
+            "credential_binding_applied",
+            Json::Arr(
+                credential_binding_applied
+                    .iter()
+                    .map(|s| Json::str(s.clone()))
+                    .collect(),
+            ),
+        ),
+        ("latency_ms", Json::Int(latency_ms as i64)),
+    ]);
+    if let (Json::Obj(ref mut map), Some(r)) = (&mut m, &decision.rule_ref) {
+        map.insert("rule_ref".to_string(), Json::str(r.clone()));
+    }
+    if let (Json::Obj(ref mut map), Some(r)) = (&mut m, &decision.reason) {
+        map.insert("reason".to_string(), Json::str(r.as_str()));
+    }
+    if let (Json::Obj(ref mut map), Some(mth)) = (&mut m, &req.method) {
+        map.insert("method".to_string(), Json::str(mth.clone()));
+    }
+    m
+}
+
+/// The `endorser` member's canonical tag — `<origin-tag>:<coordinate>
+/// @<authority>` (an identity coordinate spelling, never record content).
+pub fn endorser_tag(p: &ProvenanceRecord) -> String {
+    let coord = match &p.origin {
+        hh_provenance::Origin::Human { author_ref, .. } => format!("human:{author_ref}"),
+        hh_provenance::Origin::Kernel { component_ref } => format!("kernel:{component_ref}"),
+        hh_provenance::Origin::Model { model_ref, .. } => format!("model:{model_ref}"),
+        hh_provenance::Origin::Tool { capability, .. } => format!("tool:{capability}"),
+        hh_provenance::Origin::Evolution { candidate_id, .. } => {
+            format!("evolution:{candidate_id}")
+        }
+        hh_provenance::Origin::Import { source_system, .. } => format!("import:{source_system}"),
+        hh_provenance::Origin::Migration { from_dialect } => format!("migration:{from_dialect}"),
+        hh_provenance::Origin::Participant {
+            participant_ref, ..
+        } => {
+            format!("participant:{participant_ref}")
+        }
+    };
+    format!("{coord}@{}", p.authority.as_str())
+}
+
+/// `security.containment.amended{policy_version_id, from_version_id,
+/// to_version_id, diff, basis, endorser, scope, effect_id?}` — the `amend`
+/// verb's row (success only; a refused amend surfaces through the ask's
+/// permission rows).
+pub fn amended_payload(
+    outcome: &AmendOutcome,
+    diff: &ContainmentDiff,
+    basis: AmendmentBasis,
+    endorser: &ProvenanceRecord,
+    scope: PersistenceScope,
+    effect_id: Option<&str>,
+) -> Json {
+    let mut m = Json::obj([
+        (
+            "policy_version_id",
+            Json::str(outcome.to_version_id.clone()),
+        ),
+        (
+            "from_version_id",
+            Json::str(outcome.from_version_id.clone()),
+        ),
+        ("to_version_id", Json::str(outcome.to_version_id.clone())),
+        ("diff", diff_json(diff)),
+        ("basis", Json::str(basis.as_str())),
+        ("endorser", Json::str(endorser_tag(endorser))),
+        ("scope", Json::str(scope.as_str())),
+    ]);
+    if let (Json::Obj(ref mut map), Some(e)) = (&mut m, effect_id) {
+        map.insert("effect_id".to_string(), Json::str(e));
+    }
+    m
+}
