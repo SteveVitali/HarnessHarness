@@ -102,6 +102,16 @@ impl EmbedService {
                 out_of_space = true;
             }
         }
+        // AC-R-2.2.4-12 — the speculation-policy floor (§5a.4; ADR-0134
+        // §5): wherever a `speculation_policy` member appears in the
+        // patched document it must be a narrowing of the sealed
+        // document's policy at the same path (the §5a.4 default when the
+        // parent declares none). The check is over the policy pair, not
+        // the vehicle — a layer, an `authority_cap` or a diff all meet
+        // the same floor (CC1). A widening — or a removal — is refused
+        // before the layer materialises.
+        gate_speculation_floor(&sealed.document.to_json(), &doc_json)?;
+
         let patched_bytes = doc_json.to_canonical_string().into_bytes();
         let patched = hh_hir::document::parse_document(&patched_bytes).map_err(|e| {
             EmbedError::InvalidDefinition {
@@ -161,8 +171,16 @@ impl EmbedService {
             ),
             ("fragment", fragment),
         ]);
+        let layer_bytes = layer.to_canonical_string().into_bytes();
         self.sealed_defs
-            .insert(layer_id.clone(), layer.to_canonical_string().into_bytes());
+            .insert(layer_id.clone(), layer_bytes.clone());
+        // DF-S1.25-3 (S2.3): the layer record lands in the blob pool too —
+        // `layer_id` is a blob-domain content address (`idp/1`), so
+        // `get_artifact(layer_id)` resolves through `get_blob` after a
+        // service restart.
+        self.store
+            .put_blob(&layer_bytes, "application/json")
+            .map_err(crate::service::ledger_err)?;
         Ok(Some(layer_id))
     }
 }
@@ -300,6 +318,77 @@ impl JsonGetMut for Json {
             _ => None,
         }
     }
+}
+
+// ── the speculation-policy floor (AC-R-2.2.4-12) ─────────────────────────────
+
+/// Every `speculation_policy` member in a document's JSON, keyed by its
+/// RFC-6901 pointer path (the check is over the policy pair, not the
+/// vehicle — wherever the member lands, the floor applies).
+fn speculation_members(doc: &Json) -> std::collections::BTreeMap<String, Json> {
+    fn walk(j: &Json, path: &str, out: &mut std::collections::BTreeMap<String, Json>) {
+        match j {
+            Json::Obj(m) => {
+                for (k, v) in m {
+                    let esc = k.replace('~', "~0").replace('/', "~1");
+                    let p = format!("{path}/{esc}");
+                    if k == "speculation_policy" {
+                        out.insert(p.clone(), v.clone());
+                    }
+                    walk(v, &p, out);
+                }
+            }
+            Json::Arr(a) => {
+                for (i, v) in a.iter().enumerate() {
+                    walk(v, &format!("{path}/{i}"), out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = std::collections::BTreeMap::new();
+    walk(doc, "", &mut out);
+    out
+}
+
+/// `SpeculationPolicy::check_override` over every `speculation_policy`
+/// member of the `(sealed, patched)` pair — widening or removal is
+/// `AuthorityViolation`; an unparsable member is `InvalidDefinition`.
+fn gate_speculation_floor(before: &Json, after: &Json) -> Result<(), EmbedError> {
+    use hh_hir::speculation::SpeculationPolicy;
+    let old = speculation_members(before);
+    let new = speculation_members(after);
+    let parse = |path: &str, j: &Json| -> Result<SpeculationPolicy, EmbedError> {
+        SpeculationPolicy::from_json(j).map_err(|e| EmbedError::InvalidDefinition {
+            diagnostics: vec![format!("speculation_policy at {path}: {e}")],
+        })
+    };
+    for (path, pj) in &new {
+        let parent = match old.get(path) {
+            Some(oj) => parse(path, oj)?,
+            // The parent declared none — the §5a.4 default is the floor
+            // the write narrows from.
+            None => SpeculationPolicy::default_policy(),
+        };
+        let proposed = parse(path, pj)?;
+        SpeculationPolicy::check_override(&parent, &proposed, None, false).map_err(|e| {
+            EmbedError::AuthorityViolation {
+                layer: "override".to_string(),
+                detail: format!("speculation_policy at {path}: {e}"),
+            }
+        })?;
+    }
+    for path in old.keys() {
+        if !new.contains_key(path) {
+            return Err(EmbedError::AuthorityViolation {
+                layer: "override".to_string(),
+                detail: format!(
+                    "speculation_policy at {path} removed — the floor admits narrowing only"
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

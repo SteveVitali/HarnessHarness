@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:a768bcfe4919fe183dd1bd4d0d5fa4d1d871d66d99b96b5bd16e48f4e261e8fc";
+    "sha256:5325e46fb4e18198a7590729a8739cc22c88dd9d01897357234352a61f5f560b";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -2620,6 +2620,7 @@ pub enum OpenSpec {
         run_id: String,
         mode: ResumeMode,
         from_seq: Option<i64>,
+        definition: Option<DefinitionInput>,
     },
     Attach {
         run_id: String,
@@ -2670,12 +2671,16 @@ impl OpenSpec {
                 run_id,
                 mode,
                 from_seq,
+                definition,
             } => {
                 pairs.push(("kind", Json::str("resume")));
                 pairs.push(("run_id", Json::str(run_id.clone())));
                 pairs.push(("mode", mode.to_json()));
                 if let Some(v) = from_seq {
                     pairs.push(("from_seq", Json::Int(v.clone())));
+                }
+                if let Some(v) = definition {
+                    pairs.push(("definition", v.to_json()));
                 }
             }
             OpenSpec::Attach { run_id, read_only } => {
@@ -2768,6 +2773,10 @@ impl OpenSpec {
                 },
                 from_seq: match v.get("from_seq") {
                     Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                    None => None,
+                },
+                definition: match v.get("definition") {
+                    Some(f) => Some(DefinitionInput::from_json(f).map_err(|e| e)?),
                     None => None,
                 },
             }),

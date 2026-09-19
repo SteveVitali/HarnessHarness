@@ -545,9 +545,11 @@ impl EmbedService {
             detached: None,
             pendings: Default::default(),
             decided: Default::default(),
+            delivered_wokens: Default::default(),
             host_asks: Default::default(),
             idem: Default::default(),
             budget_ceiling: Default::default(),
+            leaf_arm: crate::open::LeafArm::default(),
             scan_seq: head.seq,
             next_invoke: None,
             next_completion: String::new(),
@@ -945,12 +947,26 @@ impl EmbedService {
         let bytes = match self.store.get_blob(&addr) {
             Ok(b) => b,
             Err(hh_ledger::errors::LedgerError::Missing { .. }) => {
-                self.sealed_defs.get(&p.address).cloned().ok_or_else(|| {
-                    ledger_err(hh_ledger::errors::LedgerError::Missing {
-                        address: p.address.clone(),
-                        reason: hh_ledger::errors::MissingReason::Gc,
-                    })
-                })?
+                match self.sealed_defs.get(&p.address).cloned() {
+                    Some(b) => b,
+                    None => {
+                        // The durable artifact pool (DF-S1.25-3; S2.3) —
+                        // `artifacts/<address>` redirects to the blob id
+                        // the bytes were deposited under; `get_blob`
+                        // verifies the content hash (CC3 — bytes that
+                        // don't hash back are `BlobCorrupt`, never
+                        // silently served).
+                        match self.artifact_bytes(&p.address) {
+                            Ok(b) => b,
+                            Err(_) => {
+                                return Err(ledger_err(hh_ledger::errors::LedgerError::Missing {
+                                    address: p.address.clone(),
+                                    reason: hh_ledger::errors::MissingReason::Gc,
+                                }))
+                            }
+                        }
+                    }
+                }
             }
             Err(e) => return Err(ledger_err(e)),
         };

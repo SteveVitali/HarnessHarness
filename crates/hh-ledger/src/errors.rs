@@ -72,12 +72,16 @@ pub enum LedgerError {
         head: u64,
     },
     /// The lineage link's `head_hash` does not equal the source run's hash at
-    /// `at_seq`.
+    /// `at_seq` — or `check_fork_point` found the cut incoherent, in which case
+    /// `open_scopes` names the scopes blocking it (AC-R-2.2.4-1).
     ForkPointNotCoherent {
         /// The source run.
         run_id: String,
         /// The anchor seq.
         at_seq: u64,
+        /// The scopes open at `at_seq` that block the cut — empty when the
+        /// refusal is a hash mismatch (the anchor binds a different history).
+        open_scopes: Vec<String>,
     },
 
     // ── writer lease ─────────────────────────────────────────────────────
@@ -261,6 +265,56 @@ pub enum LedgerError {
     RunFinished {
         /// The run.
         run_id: String,
+    },
+
+    // ── durable execution (§5a.3; ADR-0131 — S2.3) ───────────────────────
+    /// `suspend` while an effect is `prepared`/`deferred`/`committed` — S-1's
+    /// refusal.
+    OpenCommittedEffects {
+        /// The open effect ids.
+        effect_ids: Vec<String>,
+    },
+    /// `subscribe` beyond the run's live-subscription bound.
+    SubscriptionLimit {
+        /// The run.
+        run_id: String,
+        /// The live count.
+        count: usize,
+    },
+    /// `subscribe` with a trigger the stage does not admit (the Stage-4
+    /// triggers parse but refuse — never silently dropped).
+    TriggerUnsupported {
+        /// The trigger spelling.
+        trigger: String,
+        /// The stage that owns it.
+        stage: u8,
+    },
+    /// A `WakeupPolicy` member the stage does not admit (`steer` delivery —
+    /// the OQ-316 ratified default is `follow_up` only).
+    WakeupPolicyUnsupported {
+        /// Why.
+        detail: String,
+    },
+    /// An op named a subscription the fold does not hold.
+    UnknownSubscription {
+        /// The subscription id.
+        subscription_id: String,
+    },
+    /// `fire`/`cancel` named an occurrence the subscription has no `occurred`
+    /// row for.
+    UnknownOccurrence {
+        /// The subscription.
+        subscription_id: String,
+        /// The occurrence key.
+        occurrence_key: String,
+    },
+    /// A `tier-c1` op invoked on a build without the tier — the typed
+    /// removability refusal (CC6; the tier is absent, never silently skipped).
+    UnsupportedTier {
+        /// The absent tier.
+        tier: &'static str,
+        /// The refused op.
+        op: &'static str,
     },
 
     // ── read / subscribe / project ───────────────────────────────────────

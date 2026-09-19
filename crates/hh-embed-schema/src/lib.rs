@@ -474,6 +474,7 @@ fn types_schema() -> Json {
                     ("run_id", "string", true),
                     ("mode", "ResumeMode", true),
                     ("from_seq", "integer", false),
+                    ("definition", "DefinitionInput", false),
                 ],
             ),
             (

@@ -120,7 +120,10 @@ struct RestoreOut {
     observed_effects: Vec<String>,
 }
 
-fn kernel_ev(
+/// Mint a kernel-authored `Event` (unstaged — `store.append` stamps it). Shared
+/// by the recovery/lease/suspend/wakeup/saga emitters (one kernel producer —
+/// CC1).
+pub(crate) fn kernel_ev(
     store: &Store,
     run_id: &str,
     class: &str,
@@ -235,9 +238,38 @@ impl Store {
         holder: &str,
         ttl_ms: u64,
     ) -> Result<RestoreReport, LedgerError> {
+        self.restore_caused(run_id, holder, ttl_ms, "crash")
+    }
+
+    /// `restore` with the §5a.3 `cause ∈ {crash, takeover, wakeup, operator,
+    /// continuation}` — the `lifecycle.run.resumed{recovery_decision{…, cause}}`
+    /// member the cue reports (S2.3).
+    pub fn restore_caused(
+        &mut self,
+        run_id: &str,
+        holder: &str,
+        ttl_ms: u64,
+        cause: &str,
+    ) -> Result<RestoreReport, LedgerError> {
         let lease = self.acquire_writer(holder, run_id, ttl_ms)?;
         let now = self.now_ms();
         let gen = lease.generation;
+        // `last_durable_phase` — the head's class before any recovery row
+        // (the `recovery_decision` member the spec names).
+        let (last_durable_phase, from_seq) = {
+            let st = self.run(run_id)?;
+            match st.head.as_ref() {
+                Some(h) => (
+                    st.events
+                        .get(h.seq as usize)
+                        .map(|e| e.class.clone())
+                        .unwrap_or_else(|| "lifecycle.run.created".to_string()),
+                    h.seq,
+                ),
+                None => ("lifecycle.run.created".to_string(), 0),
+            }
+        };
+        let was_suspended = self.run(run_id)?.suspended;
         let fenced_lease_id = {
             // The takeover row names the stale lease; recover it from the audit.
             let st = self.run(run_id)?;
@@ -483,15 +515,36 @@ impl Store {
         }
 
         // ── the audited resume row ──────────────────────────────────────
+        // `recovery_decision{last_durable_phase, action, cause}` — the §5a.3
+        // `Cue.resumed` payload: `action ∈ {continue, resolve_unknowns,
+        // suspend, stop{reason}}` — `resolve_unknowns` when the table fenced
+        // effects to `unknown`/kept probes, `continue` otherwise. A suspended
+        // run resumed here reports `continue` (the suspension's end IS this
+        // restore — the `resumed` row clears the `suspended` fold).
+        let action = if !out.unknowned.is_empty() || !out.failed_model_calls.is_empty() {
+            "resolve_unknowns"
+        } else {
+            "continue"
+        };
         let ev = kernel_ev(
             self,
             run_id,
             "lifecycle.run.resumed",
             Scope::default(),
             Json::obj([
+                ("from_seq", Json::Int(from_seq as i64)),
                 ("holder", Json::str(holder)),
                 ("generation", Json::Int(gen as i64)),
                 ("actions", Json::Int(out.actions.len() as i64)),
+                (
+                    "recovery_decision",
+                    Json::obj([
+                        ("last_durable_phase", Json::str(&last_durable_phase)),
+                        ("action", Json::str(action)),
+                        ("cause", Json::str(cause)),
+                        ("was_suspended", Json::Bool(was_suspended)),
+                    ]),
+                ),
             ]),
         )?;
         let resumed_event_id = ev.event_id.clone();
