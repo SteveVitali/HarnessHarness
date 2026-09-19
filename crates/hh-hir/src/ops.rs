@@ -366,6 +366,24 @@ pub fn seal(doc: &HirDocument, sealed_at: u64) -> Result<SealedDefinition, Vec<H
     }
     validate::validate(doc)?;
 
+    // §5g.2 (R-2.8.2; AC-R-2.8.2-1): a gated `ToolCapability` — `world = open`
+    // on any declared effect, or a domain in `{net_egress, message_human,
+    // fs_read, memory_write}` — may not seal without a `flow_contract`. The
+    // contract's well-formedness is `validate_capability`'s check; this gate
+    // is the *absence* refusal, collected with every other violation.
+    for n in &doc.nodes {
+        if let KindRecord::ToolCapability(rec) = &n.semantic {
+            if crate::tools::capability_needs_flow_contract(rec) && rec.flow_contract.is_none() {
+                errs.push(HirError::ContributionUndeclared {
+                    capability: n.semantic_id(),
+                });
+            }
+        }
+    }
+    if !errs.is_empty() {
+        return Err(errs);
+    }
+
     let mut sealed = doc.clone();
 
     // Semantic ids are stable under sealing (provenance/version/ext are excluded). A member

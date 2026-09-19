@@ -741,7 +741,7 @@ fn decision_json(d: &Decision) -> Json {
             ),
             (
                 "remedies",
-                Json::Arr(remedies.iter().map(|r| Json::str(r.clone())).collect()),
+                Json::Arr(remedies.iter().map(|r| r.to_json()).collect()),
             ),
         ]),
         Decision::Deny { reason, remedies } => Json::obj([
@@ -749,7 +749,7 @@ fn decision_json(d: &Decision) -> Json {
             ("reason", Json::str(reason.as_str())),
             (
                 "remedies",
-                Json::Arr(remedies.iter().map(|r| Json::str(r.clone())).collect()),
+                Json::Arr(remedies.iter().map(|r| r.to_json()).collect()),
             ),
         ]),
     }
@@ -774,6 +774,9 @@ fn deny_reason_parse(s: &str) -> Result<DenyReason, String> {
         "ApprovalTimedOut" => DenyReason::ApprovalTimedOut,
         "ContainmentUnverified" => DenyReason::ContainmentUnverified,
         "containment" => DenyReason::Containment,
+        "RobustnessViolated" => DenyReason::RobustnessViolated,
+        "ReaderCoverage" => DenyReason::ReaderCoverage,
+        "EvaluationError" => DenyReason::EvaluationError,
         other => return Err(format!("deny reason unknown {other}")),
     })
 }
@@ -782,9 +785,15 @@ fn decision_from_json(j: &Json, path: &str) -> Result<Decision, String> {
     let remedies = match j.get("remedies") {
         Some(Json::Arr(items)) => items
             .iter()
-            .map(|i| i.as_str().map(String::from))
-            .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| format!("{path}.remedies members must be strings"))?,
+            .enumerate()
+            .map(|(i, r)| {
+                hh_provenance::flow::Remedy::from_json(r, &format!("{path}.remedies[{i}]"))
+                    .map_err(|e| format!("{path}.remedies[{i}]: {}", e.detail))
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        // A string member is the Stage-1 spelling — decode as the bare
+        // `kind` (the closed sum's members-only form keeps old rows
+        // readable; additive back-compat).
         _ => Vec::new(),
     };
     match req_str(j, "tag")
@@ -1129,8 +1138,103 @@ fn proposal_json(p: &Proposal) -> Json {
             ),
         ),
         ("containment", containment_json(&p.containment)),
+        (
+            "flow",
+            if p.flow == crate::monitor::FlowInputs::default() {
+                Json::Null
+            } else {
+                flow_inputs_json(&p.flow)
+            },
+        ),
         ("at", Json::Int(p.at as i64)),
     ])
+}
+
+/// The `Proposal.flow` member — `{param_labels{<canonical>: Label},
+/// shape_endorsed[], committed[], detectors{<vref:param>: bool}}` (§5g.2 §3).
+fn flow_inputs_json(f: &crate::monitor::FlowInputs) -> Json {
+    Json::obj([
+        (
+            "param_labels",
+            Json::Obj(
+                f.param_labels
+                    .iter()
+                    .map(|(k, l)| (k.clone(), label_json(l)))
+                    .collect(),
+            ),
+        ),
+        (
+            "shape_endorsed",
+            Json::Arr(
+                f.shape_endorsed
+                    .iter()
+                    .map(|s| Json::str(s.clone()))
+                    .collect(),
+            ),
+        ),
+        (
+            "committed",
+            Json::Arr(f.committed.iter().map(|e| e.to_json()).collect()),
+        ),
+        (
+            "detectors",
+            Json::Obj(
+                f.detectors
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Json::Bool(*v)))
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+fn flow_inputs_from_json(j: &Json, path: &str) -> Result<crate::monitor::FlowInputs, String> {
+    let mut out = crate::monitor::FlowInputs::default();
+    let Some(f) = j.get("flow") else {
+        return Ok(out);
+    };
+    if matches!(f, Json::Null) {
+        return Ok(out);
+    }
+    if let Some(Json::Obj(m)) = f.get("param_labels") {
+        for (k, v) in m {
+            out.param_labels.insert(
+                k.clone(),
+                Label::from_json(v)
+                    .map_err(|e| format!("{path}.param_labels.{k}: {}", e.detail))?,
+            );
+        }
+    }
+    if let Some(Json::Arr(items)) = f.get("shape_endorsed") {
+        for i in items {
+            out.shape_endorsed.insert(
+                i.as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| format!("{path}.shape_endorsed members must be strings"))?,
+            );
+        }
+    }
+    if let Some(Json::Arr(items)) = f.get("committed") {
+        for (i, e) in items.iter().enumerate() {
+            out.committed.push(
+                hh_provenance::flow::CommittedEffect::from_json(
+                    e,
+                    &format!("{path}.committed[{i}]"),
+                )
+                .map_err(|e| format!("{path}.committed[{i}]: {}", e.detail))?,
+            );
+        }
+    }
+    if let Some(Json::Obj(m)) = f.get("detectors") {
+        for (k, v) in m {
+            let b = match v {
+                Json::Bool(b) => *b,
+                _ => return Err(format!("{path}.detectors.{k} must be a bool")),
+            };
+            out.detectors.insert(k.clone(), b);
+        }
+    }
+    Ok(out)
 }
 
 fn proposal_from_json(j: &Json) -> Result<Proposal, String> {
@@ -1194,6 +1298,7 @@ fn proposal_from_json(j: &Json) -> Result<Proposal, String> {
                 .ok_or_else(|| "proposal.containment missing".to_string())?,
             "proposal.containment",
         )?,
+        flow: flow_inputs_from_json(j, "proposal")?,
         at: req_int(j, "at")?.max(0) as u64,
     })
 }

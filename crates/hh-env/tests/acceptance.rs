@@ -447,6 +447,7 @@ fn input<'a>(
         reserve: None,
         compensation_plan_id: None,
         baseline_ref: None,
+        flow: Default::default(),
     }
 }
 
@@ -1701,4 +1702,135 @@ fn ac_r_2_8_7_respond_allow_resumes_and_executes() {
         "the recorded allow opens the committed gate"
     );
     assert!(envs.iter().any(|e| e.class == "action.effect.observed"));
+}
+
+// ── R-2.8.2 — admission stamps the observed/recorded rows (§5g.2 §2) ─────────
+
+/// An open-world `flow_contract` capability's unannotated result admits
+/// `unverified`/`taint = {tool}` — recorded on `action.effect.observed` and
+/// on the `context.observation.recorded` row's `admission`/`label` members.
+/// The class is never read from the payload (AC-R-2.8.2-2's conservative
+/// default).
+#[test]
+fn ac_r_2_8_2_admission_stamps_observed_and_recorded() {
+    let (mut store, run, lease, _clock) = open("admit");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("admit");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let open_attrs = EffectAttributes {
+        mutability: Mutability::Additive,
+        repeat_safety: RepeatSafety::Idempotent,
+        world: World::Open,
+        reversibility: Reversibility::Reversible(Ref::selected("test:proc", "latest")),
+    };
+    let mut cap = capability(EffectDomain::FsWrite, open_attrs.clone(), scope_bindings());
+    cap.flow_contract = Some(Json::obj([(
+        "contribution",
+        Json::obj([("readers_from", Json::str("reads"))]),
+    )]));
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [7u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        Json::obj([
+            ("path", Json::str(format!("{}/a.txt", ws.display()))),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::FsWrite,
+            attributes: Some(open_attrs),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(matches!(out, DispatchOutcome::Observed(_)), "{out:?}");
+
+    let envs = read_all(disp.store_mut(), &run);
+    let observed = envs
+        .iter()
+        .find(|e| e.class == "action.effect.observed")
+        .expect("observed");
+    assert_eq!(
+        observed.payload.get("admission").and_then(Json::as_str),
+        Some("unverified"),
+        "open-world unannotated result admits unverified"
+    );
+    let recorded = envs
+        .iter()
+        .find(|e| {
+            e.class == "context.observation.recorded"
+                && e.payload.get("kind").and_then(Json::as_str) == Some("tool_observation")
+        })
+        .expect("recorded");
+    assert_eq!(
+        recorded.payload.get("admission").and_then(Json::as_str),
+        Some("unverified")
+    );
+    let label = recorded.payload.get("label").expect("label member");
+    assert_eq!(
+        label.get("authority").and_then(Json::as_str),
+        Some("unverified")
+    );
+    let taint = label.get("taint").expect("taint");
+    assert!(
+        taint.to_canonical_string().contains("test:write_file"),
+        "taint carries the tool tag: {taint:?}"
+    );
+    // The recorded row's own provenance stays kernel — the kernel's record of
+    // the admission, never the content's claim.
+    assert_eq!(
+        recorded.provenance.as_ref().unwrap().authority,
+        AuthorityClass::Kernel
+    );
+
+    // A contractless capability emits no `tool_observation` recorded row —
+    // `admit` never ran (the member is meaningful only under a contract).
+    let (mut store2, run2, lease2, _c2) = open("admit2");
+    open_scopes(&mut store2, &run2, &lease2, "turn-1", "mc-1");
+    let ws2 = workspace("admit2");
+    let mut driver2 = EnvDriver::new(&run2);
+    let env2 = ready_env(&mut store2, &lease2, &mut driver2, &ws2);
+    let cap2 = capability(EffectDomain::FsWrite, reversible_attrs(), scope_bindings());
+    let mon2 = test_monitor(&cap2);
+    let mut disp2 = Dispatcher::new(&mut store2, &mon2, &run2, [7u8; 32], DetectorSet::default());
+    let mut exec2 = MockExecutor::ok();
+    let inp2 = input(
+        &cap2,
+        &bind,
+        &sb,
+        &env2,
+        "tc-2",
+        Json::obj([
+            ("path", Json::str(format!("{}/a.txt", ws2.display()))),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::FsWrite,
+            attributes: Some(reversible_attrs()),
+        },
+    );
+    disp2
+        .dispatch(&mut driver2, &mut exec2, None, &inp2, &lease2)
+        .unwrap();
+    let envs2 = read_all(disp2.store_mut(), &run2);
+    assert!(
+        envs2
+            .iter()
+            .all(|e| e.class != "context.observation.recorded"),
+        "no recorded row without a contract"
+    );
+    let observed2 = envs2
+        .iter()
+        .find(|e| e.class == "action.effect.observed")
+        .unwrap();
+    assert!(observed2.payload.get("admission").is_none());
 }

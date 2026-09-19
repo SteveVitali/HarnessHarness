@@ -15,7 +15,7 @@ use hh_provenance::AuthorityClass;
 use hh_wire::json::Json;
 
 use crate::errors::HirError;
-use crate::kinds::{EffectDomain, ToolEffects};
+use crate::kinds::{EffectDomain, ToolEffects, World};
 use crate::leaves::Text;
 use crate::records::{Resources, ScopeBindings, ToolCapabilityRecord};
 
@@ -348,6 +348,35 @@ pub fn is_discovery_capability(rec: &ToolCapabilityRecord) -> bool {
     rec.exposure_hint.get("discovery") == Some(&Json::Bool(true))
 }
 
+/// Whether the capability's declared effects gate it at `seal` without a
+/// `flow_contract` (§5g.2 §3; AC-R-2.8.2-1): `world = open` on any declared
+/// effect, or a domain in `{net_egress, message_human, fs_read, memory_write}`.
+/// `pure` capabilities and closed-world effects outside the gated domains
+/// seal contractless — the gate covers the flows C2 must see (egress,
+/// human-directed messaging, untrusted reads, shared-memory writes).
+pub fn capability_needs_flow_contract(rec: &ToolCapabilityRecord) -> bool {
+    if let ToolEffects::Declared(set) = &rec.effects {
+        for e in set {
+            let gated_domain = matches!(
+                e.domain,
+                EffectDomain::NetEgress
+                    | EffectDomain::MessageHuman
+                    | EffectDomain::FsRead
+                    | EffectDomain::MemoryWrite
+            );
+            let open = e
+                .attributes
+                .as_ref()
+                .map(|a| a.world == World::Open)
+                .unwrap_or(false);
+            if gated_domain || open {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// The record-level V-E1 battery (§5d.1 §3; ADR-0087 D6) — checks 1, 3, 4, 7, 8
 /// (`authority` is the node's `provenance.authority` — conferred, never read
 /// from content). The document-level checks live in [`crate::validate`]: V-E1-2
@@ -424,6 +453,41 @@ pub fn validate_capability(rec: &ToolCapabilityRecord, authority: AuthorityClass
     // V-E1-3 resources shape sanity: `declared ⇒ keys` (tri-state honesty).
     if let Resources::Declared(keys) = &rec.resources {
         let _ = keys; // declared-with-keys is the honest form; no rule to add.
+    }
+
+    // R-2.8.2 (§5g.2 §3): a declared `flow_contract` must be a well-formed
+    // `FlowContract` — `hh_provenance::flow` owns the shape (CC7), so a
+    // malformed member is `SchemaViolation` here; and every parameter the
+    // contract names (`recipient_params`, `content_params`, rule-selector
+    // `params`, `forall_param` bounds) must resolve in `input_schema`
+    // (`UnmappedParameter` — the same V-E1-4 refusal).
+    if let Some(f) = &rec.flow_contract {
+        match hh_provenance::flow::FlowContract::from_json(f) {
+            Err(e) => errs.push(HirError::SchemaViolation {
+                detail: format!("flow_contract: {}", e.detail),
+            }),
+            Ok(contract) => {
+                let mut check_param = |p: &String| {
+                    if !param_path_exists(&rec.input_schema, p) {
+                        errs.push(HirError::UnmappedParameter {
+                            param_path: p.clone(),
+                        });
+                    }
+                };
+                for p in contract
+                    .recipient_params
+                    .iter()
+                    .chain(contract.content_params.iter())
+                {
+                    check_param(p);
+                }
+                for r in &contract.rules {
+                    for p in &r.selector.params {
+                        check_param(p);
+                    }
+                }
+            }
+        }
     }
 
     errs

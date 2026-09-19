@@ -325,6 +325,7 @@ fn proposal(cap_semantic: &str, args: Json) -> Proposal {
         },
         requested_grants: vec![],
         containment: ContainmentGate::Clear,
+        flow: Default::default(),
         at: 0,
     }
 }
@@ -1640,4 +1641,234 @@ fn decided_payload_carries_the_gate_members() {
         payload2.get("reason").and_then(Json::as_str),
         Some("NoCoveringGrant")
     );
+}
+
+// ── AC-R-2.8.2-3 — exfiltration: the flow stage on `message_human` ───────────
+//
+// An injected recipient (an endorsement-surface parameter whose label is
+// `≤ external` or tainted, unendorsed) is refused `RobustnessViolated` before
+// any `ask`; a principal-supplied recipient covered by the content's readers
+// allows; a principal-supplied *uncovered* recipient asks with
+// `{approval, sanitize}`.
+
+/// A `message_human` capability with the C2 `flow_contract` — `to` is the
+/// endorsement-surface (recipient) param, `body` the content param.
+fn mail_cap() -> CapabilityEntry {
+    let mut n = tool_node(
+        "test:sendmail",
+        &["to", "body"],
+        vec![EffectClass {
+            domain: EffectDomain::MessageHuman,
+            attributes: Some(EffectAttributes {
+                mutability: Mutability::Additive,
+                repeat_safety: RepeatSafety::Idempotent,
+                world: World::Open,
+                reversibility: Reversibility::Compensable,
+            }),
+        }],
+        5,
+    );
+    if let KindRecord::ToolCapability(t) = &mut n.semantic {
+        t.flow_contract = Some(Json::obj([
+            (
+                "contribution",
+                Json::obj([("readers_from", Json::str("reads"))]),
+            ),
+            ("recipient_params", Json::Arr(vec![Json::str("to")])),
+            ("content_params", Json::Arr(vec![Json::str("body")])),
+        ]));
+    }
+    cap_entry(&n)
+}
+
+fn mail_monitor() -> Monitor {
+    monitor(
+        Mode::Attended,
+        vec![mail_cap()],
+        vec![root_handle(
+            "hnd-mail",
+            vec![grant(EffectDomain::MessageHuman, "*", true)],
+            AuthorityClass::Definition,
+        )],
+    )
+}
+
+fn mail_proposal(to: &str, param_labels: BTreeMap<String, Label>) -> Proposal {
+    let mut p = proposal(
+        "test:sendmail",
+        Json::obj([
+            ("to", Json::str(to)),
+            ("body", Json::str("quarterly report")),
+        ]),
+    );
+    p.effect = EffectClass {
+        domain: EffectDomain::MessageHuman,
+        attributes: Some(EffectAttributes {
+            mutability: Mutability::Additive,
+            repeat_safety: RepeatSafety::Idempotent,
+            world: World::Open,
+            reversibility: Reversibility::Compensable,
+        }),
+    };
+    p.flow = hh_monitor::monitor::FlowInputs {
+        param_labels,
+        shape_endorsed: BTreeSet::new(),
+        committed: vec![],
+        detectors: BTreeMap::new(),
+    };
+    p
+}
+
+fn restricted(l: AuthorityClass, rs: &[&str]) -> Label {
+    let mut l = Label::at(l);
+    l.readers = hh_provenance::ReaderSet::Restricted(rs.iter().map(|s| s.to_string()).collect());
+    l
+}
+
+#[test]
+fn ac3_injected_recipient_denies_before_any_ask() {
+    let m = mail_monitor();
+    // `to` is injected — `external` authority, no shape endorsement.
+    let labels = BTreeMap::from([
+        ("to".to_string(), Label::at(AuthorityClass::External)),
+        ("body".to_string(), Label::at(AuthorityClass::Principal)),
+    ]);
+    let d = m.authorize(&mail_proposal("mallory@evil", labels)).unwrap();
+    assert!(
+        is_deny(&d.decision, DenyReason::RobustnessViolated),
+        "{d:?}"
+    );
+    // The deny offers the `substitute` remedy (re-supply at ≥ principal).
+    if let Decision::Deny { remedies, .. } = &d.decision {
+        assert!(remedies.iter().any(|r| matches!(
+            r,
+            hh_provenance::flow::Remedy::Substitute { param, .. } if param == "to"
+        )));
+    }
+    // A tainted recipient param fails identically.
+    let mut tainted = Label::at(AuthorityClass::External);
+    tainted.taint.insert(TaintTag::Tool {
+        capability: "test:web".into(),
+        inner_source: None,
+    });
+    let labels = BTreeMap::from([
+        ("to".to_string(), tainted),
+        ("body".to_string(), Label::at(AuthorityClass::Principal)),
+    ]);
+    let d = m.authorize(&mail_proposal("mallory@evil", labels)).unwrap();
+    assert!(
+        is_deny(&d.decision, DenyReason::RobustnessViolated),
+        "{d:?}"
+    );
+}
+
+#[test]
+fn ac3_principal_supplied_covered_recipient_allows() {
+    let m = mail_monitor();
+    let labels = BTreeMap::from([
+        ("to".to_string(), Label::at(AuthorityClass::Principal)),
+        (
+            "body".to_string(),
+            restricted(AuthorityClass::Principal, &["bob@corp"]),
+        ),
+    ]);
+    let d = m.authorize(&mail_proposal("bob@corp", labels)).unwrap();
+    assert!(matches!(d.decision, Decision::Allow), "{d:?}");
+}
+
+#[test]
+fn ac3_uncovered_principal_recipient_asks_with_remedies() {
+    let m = mail_monitor();
+    // The recipient is principal-supplied (D-ROBUST passes) but the content's
+    // readers do not cover it — check 3 (I-F4) asks, never silently widens.
+    let labels = BTreeMap::from([
+        ("to".to_string(), Label::at(AuthorityClass::Principal)),
+        (
+            "body".to_string(),
+            restricted(AuthorityClass::Principal, &["bob@corp"]),
+        ),
+    ]);
+    let d = m.authorize(&mail_proposal("mallory@evil", labels)).unwrap();
+    match &d.decision {
+        Decision::Ask { remedies, .. } => {
+            assert!(
+                remedies
+                    .iter()
+                    .any(|r| matches!(r, hh_provenance::flow::Remedy::Approval { .. })),
+                "approval remedy offered: {remedies:?}"
+            );
+            assert!(
+                remedies.iter().any(|r| matches!(
+                    r,
+                    hh_provenance::flow::Remedy::Sanitize { param, .. } if param == "body"
+                )),
+                "sanitize remedy offered: {remedies:?}"
+            );
+        }
+        other => panic!("expected Ask with remedies, got {other:?}"),
+    }
+}
+
+/// D-ROBUST runs before any `ask` — an injected recipient on an ask-leaning
+/// class still denies `RobustnessViolated`, never asks.
+#[test]
+fn ac3_d_robust_orders_before_ask() {
+    let m = mail_monitor();
+    let labels = BTreeMap::from([
+        ("to".to_string(), Label::at(AuthorityClass::External)),
+        // `body` readers do not cover the recipient — coverage would ask.
+        (
+            "body".to_string(),
+            restricted(AuthorityClass::Principal, &["bob@corp"]),
+        ),
+    ]);
+    let d = m.authorize(&mail_proposal("mallory@evil", labels)).unwrap();
+    assert!(
+        is_deny(&d.decision, DenyReason::RobustnessViolated),
+        "D-ROBUST precedes the coverage ask: {d:?}"
+    );
+}
+
+/// A declared-but-malformed `flow_contract` is `deny{EvaluationError}` —
+/// the closed grammar fails closed at the monitor too.
+#[test]
+fn malformed_flow_contract_denies_evaluation_error() {
+    let mut n = tool_node(
+        "test:badflow",
+        &["to"],
+        vec![EffectClass {
+            domain: EffectDomain::MessageHuman,
+            attributes: Some(EffectAttributes {
+                mutability: Mutability::Additive,
+                repeat_safety: RepeatSafety::Idempotent,
+                world: World::Open,
+                reversibility: Reversibility::Compensable,
+            }),
+        }],
+        5,
+    );
+    if let KindRecord::ToolCapability(t) = &mut n.semantic {
+        t.flow_contract = Some(Json::obj([("contribution", Json::Bool(true))]));
+    }
+    let m = monitor(
+        Mode::Attended,
+        vec![cap_entry(&n)],
+        vec![root_handle(
+            "hnd-bad",
+            vec![grant(EffectDomain::MessageHuman, "*", true)],
+            AuthorityClass::Definition,
+        )],
+    );
+    let mut p = proposal("test:badflow", Json::obj([("to", Json::str("bob"))]));
+    p.effect = EffectClass {
+        domain: EffectDomain::MessageHuman,
+        attributes: Some(EffectAttributes {
+            mutability: Mutability::Additive,
+            repeat_safety: RepeatSafety::Idempotent,
+            world: World::Open,
+            reversibility: Reversibility::Compensable,
+        }),
+    };
+    let d = m.authorize(&p).unwrap();
+    assert!(is_deny(&d.decision, DenyReason::EvaluationError), "{d:?}");
 }

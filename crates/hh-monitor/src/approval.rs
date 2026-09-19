@@ -2887,6 +2887,13 @@ pub fn request_from_payload(j: &Json, path: &str) -> Result<ApprovalRequest, Str
                     .and_then(Json::as_int)
                     .ok_or_else(|| format!("{path}.explanation.rows[{i}].step missing"))?;
                 Ok(crate::decision::CheckRecord {
+                    // Rows recorded before S2.7 carry no `enforcement`
+                    // member — they are the deterministic §5g.1 steps.
+                    enforcement: c
+                        .get("enforcement")
+                        .and_then(Json::as_str)
+                        .and_then(hh_provenance::flow::EnforcementClass::parse)
+                        .unwrap_or(hh_provenance::flow::EnforcementClass::Deterministic),
                     step: u8::try_from(step)
                         .map_err(|_| format!("{path}.explanation.rows[{i}].step overflow"))?,
                     outcome: match c.get("outcome").and_then(Json::as_str) {

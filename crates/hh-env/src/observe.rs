@@ -299,6 +299,11 @@ pub struct Observation {
     pub manifest_ref: String,
     /// The manifest's completeness.
     pub completeness: crate::capture::Completeness,
+    /// The C2 admission record (§5g.2 §2; ADR-0054 D1) — `Some` only when
+    /// the capability declared a `flow_contract`: `admit` ran and the
+    /// result's `L(r)` + kind are recorded here (never a class read from
+    /// the payload).
+    pub admission: Option<hh_provenance::flow::Admission>,
 }
 
 impl Observation {
@@ -326,7 +331,7 @@ impl Observation {
                 Json::obj([("error", c)])
             }
         };
-        Json::obj([
+        let mut pairs = vec![
             ("outcome", Json::str(self.outcome.as_str())),
             ("status", status),
             (
@@ -335,6 +340,12 @@ impl Observation {
             ),
             ("capture_manifest_ref", Json::str(self.manifest_ref.clone())),
             ("completeness", self.completeness.to_json()),
-        ])
+        ];
+        // The S2.7 member is *absent*, never nulled (CC8 — a Stage-1 row
+        // decodes identically).
+        if let Some(a) = &self.admission {
+            pairs.push(("admission", Json::str(a.kind.as_str())));
+        }
+        Json::obj(pairs)
     }
 }
