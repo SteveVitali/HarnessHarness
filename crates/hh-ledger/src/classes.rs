@@ -979,6 +979,14 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // thresholds (§8.2 E4; ADR-0040/0107): advice re-arms only after a
     // `status ∈ {applied, fallback_applied}` completion. Kernel-produced.
     row("context.compaction.completed",    Led, O::Events, false, true,  None, None),
+    // `context.compaction.started` — `{trigger, requirement, occupancy_before,
+    // target_reclaim, min_reclaim}` (§5c.2; R-2.4.2⁰): the kernel emits it
+    // once per `compact` run before the variant ladder walks. Kernel-produced.
+    row("context.compaction.started",      Led, O::Events, false, true,  None, None),
+    // `context.procedure.selected` — `{method, candidates[], delivered[]}`
+    // (§5c.5; R-2.4.5⁰): the `ProcedureSelector`'s per-selection row. The C0
+    // method is `index_all_under_budget` (OQ-198). Component-emitted.
+    row("context.procedure.selected",      Led, O::Events, false, false, None, None),
     // `context.assembled` — the context builder's per-call plan row (§5c.1;
     // ADR-0072 d5): `{model_call_id, plan_id, derived_from{…view_hash},
     // layout_ref, policy_ref, estimator_ref, reserved, occupancy_estimate,
