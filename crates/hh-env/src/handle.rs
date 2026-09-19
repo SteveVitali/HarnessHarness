@@ -234,14 +234,16 @@ pub struct EnvCapabilityDeclaration {
 }
 
 impl EnvCapabilityDeclaration {
-    /// The Stage-1 `local_sandboxed` declaration — `path_baseline` snapshots
-    /// supported, `fs_tree`/`fs_layer`/`memory`/`shell_state` unknown (never
-    /// coerced to unsupported); `suspend`/`restore_in_place` unknown; a
-    /// reattach window for the heal path; `error` overflow.
+    /// The `local_sandboxed`/`local_container` declaration — `path_baseline`
+    /// and (since S2.1) `fs_tree` snapshots supported; `fs_layer`/`memory`/
+    /// `shell_state` unknown (never coerced to unsupported);
+    /// `suspend`/`restore_in_place` unknown; a reattach window for the heal
+    /// path; `error` overflow.
     pub fn stage1_local_sandboxed() -> Self {
         let mut snapshot = BTreeMap::new();
         snapshot.insert("path_baseline".to_string(), Tri::Supported);
-        for k in ["fs_tree", "fs_layer", "memory", "shell_state"] {
+        snapshot.insert("fs_tree".to_string(), Tri::Supported);
+        for k in ["fs_layer", "memory", "shell_state"] {
             snapshot.insert(k.to_string(), Tri::Unknown);
         }
         EnvCapabilityDeclaration {

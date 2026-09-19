@@ -1,14 +1,11 @@
-//! The Stage-1 `tool_executor`s — `LocalExecutor` (the `local_host` in-process
-//! executor, `isolation_support = none`) and `LocalHelperExecutor` (the
-//! `local_sandboxed` out-of-process helper, `isolation_support =
-//! process_sandbox`). Both speak the `hh-helper/1` protocol shape
-//! ([`crate::protocol`]) — the helper executor frames the `Exec` request and
-//! hands it across a spawned-process boundary (the Stage-1 helper-binary seam;
-//! the dedicated helper *binary* is S2.1, but the boundary is out-of-process
-//! now — a `std::process::Command` child with a placeholder-only env).
+//! The `local_host` `tool_executor` — `LocalExecutor`, `isolation_support =
+//! none` (honest — nothing is enforced). The sandboxed/container classes'
+//! executor is [`crate::helper::HelperExecutor`]: since S2.1 the helper is
+//! the dedicated `hh-helper` binary behind the live `hh-helper/1` channel
+//! (the `sh`-framed Stage-1 stub is retired — the boundary is real now).
 //!
-//! Neither decides authorization or lifecycle — they run the canonical args
-//! and *report* capture items + a terminal report (I-3).
+//! `LocalExecutor` decides nothing — it runs the canonical args and
+//! *reports* capture items + a terminal report (I-3).
 
 use std::collections::BTreeSet;
 use std::io::Read;
@@ -26,7 +23,7 @@ use crate::executor::{
     ProbeVerdict, TerminalReport, TerminalStatus, ToolExecutor,
 };
 use crate::observe::ErrorClass;
-use crate::protocol::{HelperFrame, HelperRequest};
+use crate::protocol::HelperFrame;
 
 /// `LocalExecutor` — the `local_host` executor. `isolation_support = none`
 /// (honest — nothing is enforced); runs the command in a `std::process::
@@ -35,16 +32,6 @@ pub struct LocalExecutor {
     decl: ExecutorDeclaration,
     /// The projected env (placeholders only — the kernel computes it via
     /// `env_apply`; the executor never resolves a secret).
-    projected_env: Vec<(String, String)>,
-}
-
-/// `LocalHelperExecutor` — the `local_sandboxed` executor. Frames the
-/// `HelperRequest::Exec` and hands it across a spawned-process boundary
-/// (cleared env → placeholders only; the `process_sandbox` claim is the
-/// containment policy's, verified by the EP2 backend's probe battery — the
-/// executor honestly reports the isolation it runs under).
-pub struct LocalHelperExecutor {
-    decl: ExecutorDeclaration,
     projected_env: Vec<(String, String)>,
 }
 
@@ -87,56 +74,13 @@ impl LocalExecutor {
     }
 }
 
-impl LocalHelperExecutor {
-    /// A `local_sandboxed` executor — `isolation_support = process_sandbox`
-    /// (the helper is out-of-process; the containment policy's claims are
-    /// verified by the backend's battery, not the executor's word).
-    pub fn new(projected_env: Vec<(String, String)>) -> Self {
-        LocalHelperExecutor {
-            decl: ExecutorDeclaration {
-                executor_id: "hh-local-helper/1".to_string(),
-                isolation_support: IsolationClass::ProcessSandbox,
-                dedup_support: DedupSupport::BestEffort,
-                probe_support: ProbeSupport::Check,
-                interrupt: crate::executor::InterruptSupport::Supported,
-                error_classes: [
-                    "invalid_arguments",
-                    "not_found",
-                    "conflict",
-                    "executor_error",
-                    "timeout",
-                    "containment_denied",
-                    "signalled",
-                ]
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
-                streams: true,
-                domains: [
-                    EffectDomain::Exec,
-                    EffectDomain::SpawnProcess,
-                    EffectDomain::FsRead,
-                    EffectDomain::FsWrite,
-                ]
-                .iter()
-                .copied()
-                .collect(),
-            },
-            projected_env,
-        }
-    }
-}
-
-/// The shared command-runner — spawn the child, stream stdout/stderr chunks to
-/// the sink (ephemeral), enforce the deadline + retain cap, return the
-/// terminal report. `frames` emits the serialized `HelperFrame` stream the
-/// out-of-process executor produces (the in-process one runs the same logic
-/// minus the wire hop).
+/// The shared command-runner — spawn the child, stream stdout/stderr chunks
+/// to the sink (ephemeral), enforce the deadline + retain cap, return the
+/// terminal report.
 fn run_command(
     request: &ExecutionRequest,
     sink: &mut dyn FnMut(ExecutorSignal),
     env: &[(String, String)],
-    sandboxed: bool,
 ) -> Result<TerminalReport, EnvError> {
     // The command the capability's canonical args carry (`command` for a
     // shell tool; `argv` for an exec tool). Absent ⇒ `invalid_arguments`.
@@ -145,37 +89,8 @@ fn run_command(
         detail: "no command/argv member".to_string(),
     })?;
 
-    // The helper boundary: for `local_sandboxed` the request is *serialized*
-    // into the `hh-helper/1` frame and carried to the child (the boundary is
-    // out-of-process even though the helper stub is `sh`); for `local_host`
-    // the executor runs it directly.
-    let mut cmd = if sandboxed {
-        let req = HelperRequest::Exec {
-            execution_id: request.execution_id.clone(),
-            effect_id: request.effect_id.clone(),
-            attempt_no: request.attempt_no,
-            capability_ref: request.capability_ref.clone(),
-            args: request.args.clone(),
-            cwd: ".".to_string(),
-            env: env.to_vec(),
-            deadline_ms: request.deadline_ms,
-            retain_bytes_cap: request.retain_bytes_cap,
-            attribution_token: request.attribution_token.clone(),
-        };
-        // The helper stub is `sh -c` reading the framed request from the
-        // `HH_HELPER_REQUEST` env (the minimal hh-helper/1 boundary — the
-        // dedicated binary lands at S2.1). The child is a distinct process —
-        // the isolation claim (`process_sandbox`) is the *containment
-        // policy's* (EP2 probes verify it); the executor only reports it.
-        let mut c = Command::new(&argv[0]);
-        c.args(&argv[1..]);
-        c.env("HH_HELPER_REQUEST", req.to_json().to_canonical_string());
-        c
-    } else {
-        let mut c = Command::new(&argv[0]);
-        c.args(&argv[1..]);
-        c
-    };
+    let mut cmd = Command::new(&argv[0]);
+    cmd.args(&argv[1..]);
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -183,6 +98,9 @@ fn run_command(
     cmd.env_clear();
     for (k, v) in env {
         cmd.env(k, v);
+    }
+    if let Some(cwd) = request.args.get("cwd").and_then(Json::as_str) {
+        cmd.current_dir(cwd);
     }
 
     let mut child = cmd.spawn().map_err(|e| EnvError::Unsupported {
@@ -434,7 +352,7 @@ impl ToolExecutor for LocalExecutor {
         request: &ExecutionRequest,
         sink: &mut dyn FnMut(ExecutorSignal),
     ) -> Result<TerminalReport, EnvError> {
-        run_command(request, sink, &self.projected_env, false)
+        run_command(request, sink, &self.projected_env)
     }
 
     fn probe(&self, _effect_id: &str, _attempt_no: u64) -> Result<ProbeVerdict, EnvError> {
@@ -446,29 +364,12 @@ impl ToolExecutor for LocalExecutor {
     }
 }
 
-impl ToolExecutor for LocalHelperExecutor {
-    fn declaration(&self) -> &ExecutorDeclaration {
-        &self.decl
-    }
-
-    fn execute(
-        &mut self,
-        request: &ExecutionRequest,
-        sink: &mut dyn FnMut(ExecutorSignal),
-    ) -> Result<TerminalReport, EnvError> {
-        run_command(request, sink, &self.projected_env, true)
-    }
-
-    fn probe(&self, _effect_id: &str, _attempt_no: u64) -> Result<ProbeVerdict, EnvError> {
-        Ok(ProbeVerdict::Undeterminable)
-    }
-}
-
-/// Whether a serialized `HelperFrame` parse would succeed — the helper-side
-/// schema check (the boundary validates the version tag + op).
+/// `parse_helper_frame(j)` — the wire parse (the helper-side schema check:
+/// version tag + closed kind). S2.1: implemented for real — the helper's
+/// journaled frames come back over `read` and land in the capture sink via
+/// `HelperExecutor`'s translation.
 pub fn parse_helper_frame(j: &Json) -> Option<HelperFrame> {
-    let _ = j;
-    None // the wire parse lands with the S2.1 helper binary
+    HelperFrame::from_json(j).ok()
 }
 
 /// The `exec` request's env member — placeholder-only (`env_apply`'s output).

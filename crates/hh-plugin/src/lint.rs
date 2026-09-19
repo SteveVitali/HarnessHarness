@@ -205,10 +205,7 @@ pub fn lint_module_source(source: &str) -> Vec<LintViolation> {
             continue;
         }
         if let Some(rest) = strip_use(line) {
-            let root = rest
-                .split([':', ' ', '{'])
-                .next()
-                .unwrap_or("");
+            let root = rest.split([':', ' ', '{']).next().unwrap_or("");
             if !ALLOWED_ROOTS.contains(&root) && !ALLOWED_CRATES.contains(&root) {
                 out.push(LintViolation {
                     file: String::new(),
