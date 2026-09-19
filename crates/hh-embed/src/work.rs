@@ -208,10 +208,11 @@ impl EmbedService {
         };
         use hh_monitor::decision::{Decision, DecisionScope};
         use hh_provenance::authority::AuthorityClass;
+        use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
 
         inject::refuse_secrets(params)?;
         let p = RespondPermissionParams::from_json(params)?;
-        let (run_id, lease, pending, manifest_ref, policy_mode) = {
+        let (run_id, lease, pending, manifest_ref, policy_mode, active_turn, authority_caps) = {
             let s = self.writer_session(&p.session_id)?;
             if let Some(hit) = s.idem.get(&p.idempotency_key) {
                 return Ok(hit.clone());
@@ -243,6 +244,8 @@ impl EmbedService {
                 pending,
                 s.manifest_ref.clone(),
                 s.realized.policy_mode.clone(),
+                s.active_turn.clone(),
+                s.authority_caps.clone(),
             )
         };
         // Fold the durable prefix into the approval fold — the response's
@@ -419,10 +422,86 @@ impl EmbedService {
                     .map_err(ledger_err)?,
             );
         }
+        // The `approval`-basis handle (§5g.1 §9 — the approval mints
+        // `{issuer = principal, grants = requested ⊓ authority_cap,
+        // origin_basis = approval, delegable = false, lifetime}`; I-H6/H-7
+        // lifetimes inside `mint_approval_handle`). Minted only over the
+        // pending's *recorded* material — `subject_ref` (the holder),
+        // `capability_ref`, `requested_grants`; a pending without them (a
+        // capability-less host ask) carries no conferable material and the
+        // `decided` row stands alone — nothing is fabricated. The granted
+        // row's envelope id is the handle's `issued_at`/holder pin, so the
+        // ids are allocated with the handle (the fold re-pins
+        // `holder.version = Pinned(event_id)` on rebuild).
+        let allow = matches!(outcome.decision, Decision::Allow);
+        if allow && pending.subject_ref.is_some() && pending.capability_ref.is_some() {
+            let handle_id = self.store.alloc_id("hnd");
+            let granted_event_id = self.store.alloc_id("evt");
+            let mint_in = hh_monitor::mint::ApprovalMint {
+                permission_id: p.permission_id.clone(),
+                holder: hh_hir::refs::Ref {
+                    semantic_id: pending.subject_ref.clone().unwrap_or_default(),
+                    version: hh_hir::refs::RefVersion::Pinned(granted_event_id.clone()),
+                },
+                issuer: ProvenanceRecord::minted(
+                    Origin::human("human:principal", HumanRole::Principal),
+                    PersistenceScope::Run,
+                    now,
+                ),
+                grants: pending.requested_grants.clone(),
+                // `requested ⊓ authority_cap` — the definition's caps (the
+                // `of`-named and `*` global rows) only ever lower the minted
+                // ceiling below the responder's authority. The `of` member
+                // names the bounded *entity* (ADR-0240) — here the pending's
+                // capability semantic id, never the ephemeral request id
+                // (a cap cannot name a request minted at runtime).
+                ceiling: authority_caps
+                    .iter()
+                    .filter(|c| {
+                        c.of.as_deref().is_none_or(|of| {
+                            of == "*"
+                                || pending
+                                    .capability_ref
+                                    .as_ref()
+                                    .map(|(sid, _)| of == sid)
+                                    .unwrap_or(false)
+                        })
+                    })
+                    .fold(ctx.grant_authority, |c, cap| c.min(cap.ceiling)),
+                scope,
+                lease_scope: outcome.lease.as_ref().map(|l| l.scope),
+                lease_pattern: outcome.lease.as_ref().and_then(|l| l.pattern.clone()),
+                effect_id: pending.effect_id.clone().unwrap_or_default(),
+                turn_id: active_turn.clone(),
+                run_id: run_id.clone(),
+                session_ref: p.session_id.clone(),
+                budget_ref: None,
+            };
+            let minted = {
+                let store = &self.store;
+                let mut alloc = |kind: &str| match kind {
+                    "hnd" => handle_id.clone(),
+                    "evt" => granted_event_id.clone(),
+                    other => store.alloc_id(other),
+                };
+                hh_monitor::mint::mint_approval_handle(&mint_in, &mut alloc)
+            };
+            let (handle, evt_id) = minted.map_err(|e| EmbedError::Refused {
+                reason: format!("approval_mint: {e:?}"),
+            })?;
+            batch.push(
+                hh_env::events::EventMinter::new(&self.store, &run_id)
+                    .mint_with_id(
+                        "security.permission.granted",
+                        hh_monitor::events::granted_payload(&handle),
+                        evt_id,
+                    )
+                    .map_err(ledger_err)?,
+            );
+        }
         self.store
             .append(&run_id, &lease, batch)
             .map_err(ledger_err)?;
-        let allow = matches!(outcome.decision, Decision::Allow);
         {
             let s = self.session_mut(&p.session_id)?;
             s.decided.insert(
@@ -698,6 +777,16 @@ impl EmbedService {
             active_turn: "turn-1".to_string(),
             finished: false,
             detached: None,
+            authority_caps: {
+                let r = sess_manifest_ref(&child);
+                if r.is_empty() {
+                    Vec::new()
+                } else {
+                    self.persisted_definition(&r)
+                        .map(|d| hh_monitor::mint::cap_rows(&d.document))
+                        .unwrap_or_default()
+                }
+            },
             pendings: Default::default(),
             decided: Default::default(),
             delivered_wokens: Default::default(),

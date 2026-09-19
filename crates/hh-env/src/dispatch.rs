@@ -746,6 +746,23 @@ impl<'a> Dispatcher<'a> {
                         // surface's `respond` resolves it (never `unknown` —
                         // AC-R-2.8.7-6).
                         let asked_at = self.store.now_ms();
+                        // §5g.7 §5 batching (ADR-0070 D5): a batchable ask
+                        // joins the run's batch over `(effective_risk_class,
+                        // requested_of, scope)` — the deterministic key, so
+                        // every same-class ask to the human reviewer shares
+                        // one `batch_id` (one prompt may be rendered; each
+                        // `permission_id` still decides independently).
+                        // `irreversible` and `permission_request` asks carry
+                        // no batch (`EscalationInput.batchable` is the admit).
+                        let batch_id = if esc.batchable {
+                            Some(hh_monitor::approval::mint_batch_id(
+                                &esc.risk,
+                                "principal",
+                                &esc.scope_ref,
+                            ))
+                        } else {
+                            None
+                        };
                         let request = hh_monitor::approval::ApprovalRequest {
                             permission_id: pid.clone(),
                             request: hh_monitor::approval::PermissionRequest {
@@ -753,6 +770,11 @@ impl<'a> Dispatcher<'a> {
                                 capability_ref: input.capability_ref.clone(),
                                 args_canonical_hash: args_canonical_hash.clone(),
                                 reason: "pi ask".to_string(),
+                                // The `permission_request` proposal's
+                                // `requested` leg — the approval mint's
+                                // `requested ⊓ authority_cap` input; empty on
+                                // an ordinary effect ask.
+                                requested_grants: input.requested_grants.clone(),
                             },
                             options: options
                                 .iter()
@@ -776,7 +798,7 @@ impl<'a> Dispatcher<'a> {
                                 rows: decision.checks.clone(),
                                 model_justification: None,
                             },
-                            batch_id: None,
+                            batch_id,
                         };
                         let pending = self.minter_ev().mint_effect(
                             "security.permission.pending",

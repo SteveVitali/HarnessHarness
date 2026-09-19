@@ -156,4 +156,20 @@ pub mod wire {
     ) -> Result<hh_ontology::control::ControlBoundary, HirError> {
         crate::schema::boundary_from_json(j, path)
     }
+
+    /// The canonical JSON of one kind-tagged record (`KindRecord` — the
+    /// `record.<kind>` body the monitor's `authorize` input carries, CC7).
+    pub fn semantic_record_json(rec: &crate::records::KindRecord, semantic: bool) -> Json {
+        crate::schema::semantic_record_json(rec, semantic)
+    }
+
+    /// Parse one kind-tagged record (the codec's read direction — `kind` is the
+    /// caller's expectation; the body is checked against it).
+    pub fn semantic_record_from_json(
+        kind: crate::kinds::EntityKind,
+        j: &Json,
+        path: &str,
+    ) -> Result<crate::records::KindRecord, HirError> {
+        crate::schema::semantic_record_from_json(kind, j, path)
+    }
 }

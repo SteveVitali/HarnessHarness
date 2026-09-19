@@ -18,7 +18,7 @@
 
 use hh_compiler::plan::PinnedRef;
 use hh_hir::kinds::EffectDomain;
-use hh_hir::records::{Issuer, KindRecord, PermissionRecord};
+use hh_hir::records::{KindRecord, PermissionRecord};
 use hh_hir::refs::Ref;
 use hh_hir::{HirDocument, SealedDefinition};
 use hh_provenance::{AuthorityClass, Origin, ProvenanceRecord};
@@ -56,8 +56,10 @@ pub struct AuthorityCap {
 /// Read the `authority_cap` rows out of a sealed document's resolved
 /// `assembly.constraints` (the assembly section survives `seal` when resolved —
 /// §3.1.6). Malformed rows are skipped — `validate_assembly` already enforced
-/// the `subject.ceiling` spell at compose; mint never guesses.
-fn cap_rows(doc: &HirDocument) -> Vec<AuthorityCap> {
+/// the `subject.ceiling` spell at compose; mint never guesses. `pub` — the
+/// approval-mint call site reads the same caps the root mint applies
+/// (`requested ⊓ authority_cap`, §5g.1 §9).
+pub fn cap_rows(doc: &HirDocument) -> Vec<AuthorityCap> {
     let mut out = Vec::new();
     let Some(assembly) = &doc.assembly else {
         return out;
@@ -87,10 +89,14 @@ fn cap_rows(doc: &HirDocument) -> Vec<AuthorityCap> {
     out
 }
 
-/// `cap_ceiling(perm_id, issuer.authority, caps)` — `min` over the issuer's
+/// `cap_ceiling(perm_id, authority, caps)` — `min` over the issuer's
 /// declared authority and every applicable cap (entity-named and global).
-pub fn cap_ceiling(perm_id: &str, issuer: &Issuer, caps: &[AuthorityCap]) -> AuthorityClass {
-    let mut ceiling = issuer.authority;
+pub fn cap_ceiling(
+    perm_id: &str,
+    authority: AuthorityClass,
+    caps: &[AuthorityCap],
+) -> AuthorityClass {
+    let mut ceiling = authority;
     for c in caps {
         let applies = match &c.of {
             None => true,
@@ -147,7 +153,7 @@ pub fn mint_root_handles(
                 permission_id: perm_id,
             });
         }
-        let ceiling = cap_ceiling(&perm_id, &perm.issuer, &caps);
+        let ceiling = cap_ceiling(&perm_id, perm.issuer.authority, &caps);
         let handle_id = alloc("hnd");
         let event_id = alloc("evt");
         handles.push(AuthorityHandle {
@@ -302,6 +308,7 @@ pub fn mint_preauthorization_handles(
     run_id: &str,
     alloc: &mut dyn FnMut(&str) -> String,
 ) -> Vec<(AuthorityHandle, String)> {
+    let caps = cap_rows(&sealed.document);
     let mut out = Vec::new();
     for node in &sealed.document.nodes {
         let KindRecord::HarnessRule(rule) = &node.semantic else {
@@ -324,6 +331,17 @@ pub fn mint_preauthorization_handles(
         }
         let handle_id = alloc("hnd");
         let event_id = alloc("evt");
+        // `min(definition, issuer.authority, caps)` — §5g.1's pre-
+        // authorization row is "issued at `definition`; bounded by
+        // `authority_cap`" (ADR-0053 D5): the seal endorsement confers
+        // `definition` authority on the rule, the recorded issuer can only
+        // lower it, and caps only ever lower (the same clamp the root and
+        // approval mints apply).
+        let ceiling = cap_ceiling(
+            &rule.rule_id,
+            issuer.authority.min(AuthorityClass::Definition),
+            &caps,
+        );
         out.push((
             AuthorityHandle {
                 handle_id: HandleId(handle_id),
@@ -334,7 +352,7 @@ pub fn mint_preauthorization_handles(
                 holder: holder.clone(),
                 issuer: issuer.clone(),
                 grants,
-                ceiling: AuthorityClass::Delegate,
+                ceiling,
                 validity: HandleValidity {
                     issued_at: event_id.clone(),
                     expires_at: Some(HandleExpiry::Run(run_id.to_string())),

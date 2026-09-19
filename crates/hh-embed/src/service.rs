@@ -97,6 +97,25 @@ pub(crate) struct PendingAsk {
     pub args_canonical_hash: Option<String>,
     /// The requesting subject (the lease/handle `holder`).
     pub subject_ref: Option<String>,
+    /// The `permission_request` proposal's `requested: [Grant]` leg — the
+    /// approval mint's `requested ⊓ authority_cap` input (never fabricated;
+    /// empty on an ordinary ask).
+    pub requested_grants: Vec<hh_hir::records::Grant>,
+}
+
+/// Decode the `request.requested_grants` member of a durable `pending` row —
+/// absent/malformed decodes to `[]` (a row the fold can't read confers
+/// nothing; the mint never guesses).
+pub(crate) fn decode_requested_grants(req: &Json) -> Vec<hh_hir::records::Grant> {
+    match req.get("requested_grants") {
+        Some(Json::Arr(items)) => items
+            .iter()
+            .enumerate()
+            .map(|(i, g)| hh_hir::grant_from_json(g, &format!("requested_grants[{i}]")).ok())
+            .collect::<Option<Vec<_>>>()
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    }
 }
 
 /// A host-executor ask awaiting `report_host_effect`.
@@ -123,6 +142,10 @@ pub(crate) struct SessionState {
     pub active_turn: String,
     pub finished: bool,
     pub detached: Option<String>,
+    /// The sealed definition's `authority_cap` rows (ADR-0240) — the
+    /// approval mint's `requested ⊓ authority_cap` ceiling leg; computed at
+    /// `open` from the sealed document (never re-resolved at respond).
+    pub authority_caps: Vec<hh_monitor::mint::AuthorityCap>,
     pub pendings: BTreeMap<String, PendingAsk>,
     pub decided: BTreeMap<String, Json>,
     /// `(subscription_id, occurrence_key)` pairs already submitted as
@@ -625,6 +648,7 @@ impl EmbedService {
                     .map(|c| (c.capability_id.clone(), c.capability_id.clone())),
                 args_canonical_hash: capability.map(|_| String::new()),
                 subject_ref: capability.map(|_| holder.clone()),
+                requested_grants: Vec::new(),
             },
         );
         if self.client_caps.serves_permission_channel {
@@ -924,6 +948,7 @@ impl EmbedService {
                                             .get("subject_ref")
                                             .and_then(Json::as_str)
                                             .map(str::to_string),
+                                        requested_grants: decode_requested_grants(&req),
                                     },
                                 );
                             }

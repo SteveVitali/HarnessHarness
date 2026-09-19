@@ -573,6 +573,7 @@ impl<'a> EgressMediator<'a> {
                 capability_ref: cap,
                 args_canonical_hash: args_hash,
                 reason: format!("egress ask: {}", req.host_norm()),
+                requested_grants: Vec::new(),
             },
             options: vec![
                 approval::ApprovalOption {

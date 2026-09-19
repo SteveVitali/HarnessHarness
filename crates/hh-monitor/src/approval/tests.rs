@@ -18,6 +18,7 @@ fn request(args_hash: &str) -> ApprovalRequest {
             capability_ref: cap(),
             args_canonical_hash: args_hash.to_string(),
             reason: "needs write".to_string(),
+            requested_grants: Vec::new(),
         },
         options: vec![
             ApprovalOption {
@@ -130,6 +131,66 @@ fn ac_14_irreversible_never_coalesces() {
     // pending (never batched).
     assert_ne!(r1.permission_id, r2.permission_id);
     assert_eq!(st.pending.len(), 2);
+}
+
+/// §5g.7 §5 batching (ADR-0070 D5) — `mint_batch_id` is the deterministic
+/// key over `(effective_risk_class, requested_of, scope)`: same members share
+/// the batch (one prompt may render N pendings); any member's change splits
+/// it; the fold carries `batch_id` on the pending row (the `batchable` admit
+/// at `EscalationInput` — `irreversible`/`permission_request` — gates the
+/// mint upstream, so a batch id only ever attaches to a batchable ask).
+#[test]
+fn batch_id_groups_one_risk_class_reviewer_scope() {
+    use hh_ontology::risk::{RepeatSafety, RiskClass, RiskReversibility, RiskScope};
+    let a = RiskClass {
+        reversibility: RiskReversibility::Reversible,
+        repeat_safety: RepeatSafety::Idempotent,
+        scope: RiskScope::WorkspaceLocal,
+    };
+    let b = RiskClass {
+        reversibility: RiskReversibility::Irreversible,
+        repeat_safety: RepeatSafety::NonIdempotent,
+        scope: RiskScope::External,
+    };
+    // Deterministic: the same members mint the same batch.
+    assert_eq!(
+        mint_batch_id(&a, "principal", "run-1"),
+        mint_batch_id(&a, "principal", "run-1")
+    );
+    // Each member splits the batch — class, reviewer, scope.
+    assert_ne!(
+        mint_batch_id(&a, "principal", "run-1"),
+        mint_batch_id(&b, "principal", "run-1")
+    );
+    assert_ne!(
+        mint_batch_id(&a, "principal", "run-1"),
+        mint_batch_id(&a, "other-reviewer", "run-1")
+    );
+    assert_ne!(
+        mint_batch_id(&a, "principal", "run-1"),
+        mint_batch_id(&a, "principal", "run-2")
+    );
+
+    // The fold round-trips the batch member: a batched pending carries the
+    // id; the response still decides per `permission_id` (a batch allow is
+    // recorded as one endorsement per attached effect — AC-R-2.8.7-14).
+    let mut st = ApprovalState::default();
+    let mut r = request("h1");
+    r.batch_id = Some(mint_batch_id(&a, "principal", "run-1"));
+    let r1 = st
+        .request_approval(r.clone(), false, "e1", 1)
+        .expect("request");
+    let r2 = st.request_approval(r, false, "e2", 2).expect("request");
+    assert_eq!(r1.permission_id, r2.permission_id);
+    let row = &st.pending[&r1.permission_id];
+    assert_eq!(
+        row.request.batch_id,
+        Some(mint_batch_id(&a, "principal", "run-1"))
+    );
+    let out = st
+        .respond(&allow_once(&r1.permission_id), false, 5)
+        .expect("respond");
+    assert_eq!(out.endorsement_count, 2);
 }
 
 // ── respond ───────────────────────────────────────────────────────────────────
@@ -650,6 +711,48 @@ fn chain_hook_allow_never_endorses_without_rule() {
     }
 }
 
+/// R-2.8.5 attestation admission — a `HookReport` with no `attestation_ref`
+/// is never consulted: its `deny` cannot resolve the chain (the human stage
+/// gets the ask). The attested twin denies at the hook stage.
+#[test]
+fn chain_unattested_hook_report_never_admitted() {
+    let unattested = vec![HookReport {
+        hook_ref: "hook-unattested".to_string(),
+        attestation_ref: String::new(),
+        verdict: HookVerdict::Deny,
+    }];
+    let out = run_chain(
+        &input(Mode::Attended),
+        &BTreeMap::new(),
+        &unattested,
+        &[],
+        LeaseScope::Run,
+    );
+    assert!(
+        matches!(out.decision, ChainDecision::AskHuman { .. }),
+        "an unattested deny never resolves: {out:?}"
+    );
+    let attested = vec![HookReport {
+        hook_ref: "hook-attested".to_string(),
+        attestation_ref: "att-9".to_string(),
+        verdict: HookVerdict::Deny,
+    }];
+    let out = run_chain(
+        &input(Mode::Attended),
+        &BTreeMap::new(),
+        &attested,
+        &[],
+        LeaseScope::Run,
+    );
+    assert!(matches!(
+        out.decision,
+        ChainDecision::Deny {
+            stage: ReviewStage::Hook,
+            ..
+        }
+    ));
+}
+
 #[test]
 fn chain_never_auto_skips_nonhuman_stages() {
     // Π-8 — a `permission_request` effect is constitutionally never-auto: the
@@ -1026,4 +1129,177 @@ fn fold_deny_counts_repeated_denials() {
     assert_eq!(st.denial_counts.values().next(), Some(&2));
     assert!(st.pending.is_empty());
     assert!(st.decision_for_effect("e1").is_some());
+}
+
+// ── sealed-extraction (§5g.1 §9 — `auto_review_rules(sealed)` is the chain's
+// `auto_reviewer` leg; only sealed records confer) ─────────────────────────
+
+fn sealed_with_rule(action: hh_hir::records::RuleAction) -> hh_hir::SealedDefinition {
+    use hh_hir::document::{DefinitionVersionRef, HirDocument, Node};
+    use hh_hir::records::{HarnessRuleRecord, KindRecord};
+    use hh_hir::refs::Ref;
+    let mut n = Node::new(
+        hh_hir::kinds::EntityKind::HarnessRule,
+        KindRecord::HarnessRule(HarnessRuleRecord {
+            rule_id: "test:rule.auto".to_string(),
+            trigger: Json::Null,
+            action,
+            scope: Json::Null,
+            conditioned_on: None,
+            assumption_debt: None,
+        }),
+        hh_provenance::ProvenanceRecord::kernel("test", 0),
+    );
+    n.version.semantic_id = Some("test:rule.auto".to_string());
+    let mut doc = HirDocument::new(Ref::selected("test:agent", "latest"));
+    doc.nodes = vec![n];
+    hh_hir::SealedDefinition {
+        document: doc,
+        definition_ref: DefinitionVersionRef {
+            semantic_id: "test:agent".into(),
+            version_id: "sha256:def".into(),
+        },
+        closed_world_tools: Default::default(),
+    }
+}
+
+#[test]
+fn auto_review_rules_extracts_sealed_legs() {
+    let spec = Json::obj([
+        ("verdict", Json::str("allow")),
+        ("domains", Json::Arr(vec![Json::str("fs_write")])),
+        ("max_risk", hh_ontology::risk::RiskClass::UNKNOWN.to_json()),
+        ("eff_at_most", Json::str("delegate")),
+    ]);
+    let sealed = sealed_with_rule(hh_hir::records::RuleAction::AutoReview(spec));
+    let rules = auto_review_rules(&sealed);
+    assert_eq!(rules.len(), 1);
+    assert_eq!(rules[0].rule_ref, "test:rule.auto");
+    assert_eq!(rules[0].verdict, ReviewVerdictKind::Allow);
+    assert_eq!(rules[0].domains, vec![hh_hir::kinds::EffectDomain::FsWrite]);
+    assert_eq!(rules[0].eff_at_most, Some(AuthorityClass::Delegate));
+    // A malformed spec (unknown verdict) extracts nothing — the extractor
+    // never guesses.
+    let bad = sealed_with_rule(hh_hir::records::RuleAction::AutoReview(Json::obj([(
+        "verdict",
+        Json::str("widen"),
+    )])));
+    assert!(auto_review_rules(&bad).is_empty());
+}
+
+/// §5g.1 §9 cap clamp on the `pre_authorize` mint — `min(issuer.authority,
+/// caps)`: a global `authority_cap` lowers the minted ceiling; an `of`-named
+/// cap binds only its named entity (the rule's coordinate); the issuer's own
+/// authority bounds the mint even with no caps.
+#[test]
+fn pre_authorize_mint_clamps_to_caps_and_issuer() {
+    use hh_hir::document::{DefinitionVersionRef, HirDocument, Node};
+    use hh_hir::records::{HarnessRuleRecord, KindRecord, RuleAction};
+    use hh_hir::refs::Ref;
+    use hh_provenance::AuthorityClass;
+    let grant = hh_hir::records::Grant {
+        effect: hh_hir::kinds::EffectClass::domain_only(hh_hir::kinds::EffectDomain::FsRead),
+        scope: "workspace/**".to_string(),
+        constraints: hh_hir::records::GrantConstraints {
+            budget: None,
+            time: None,
+            count: None,
+        },
+        delegable: false,
+    };
+    let grants_json = Json::Arr(vec![hh_hir::grant_json(&grant, false)]);
+    let node = |rule_id: &str| {
+        let mut n = Node::new(
+            hh_hir::kinds::EntityKind::HarnessRule,
+            KindRecord::HarnessRule(HarnessRuleRecord {
+                rule_id: rule_id.to_string(),
+                trigger: Json::Null,
+                action: RuleAction::PreAuthorize(Json::obj([("grants", grants_json.clone())])),
+                scope: Json::Null,
+                conditioned_on: None,
+                assumption_debt: None,
+            }),
+            hh_provenance::ProvenanceRecord::kernel("test", 0),
+        );
+        n.version.semantic_id = Some(rule_id.to_string());
+        n
+    };
+    let cap = |of: &str, ceiling: &str| {
+        Json::obj([
+            ("kind", Json::str("authority_cap")),
+            (
+                "subject",
+                Json::obj([("of", Json::str(of)), ("ceiling", Json::str(ceiling))]),
+            ),
+        ])
+    };
+    let sealed = |nodes: Vec<Node>, constraints: Vec<Json>| hh_hir::SealedDefinition {
+        document: HirDocument {
+            nodes,
+            assembly: Some(Json::obj([("constraints", Json::Arr(constraints))])),
+            ..HirDocument::new(Ref::selected("test:agent", "latest"))
+        },
+        definition_ref: DefinitionVersionRef {
+            semantic_id: "test:agent".into(),
+            version_id: "sha256:def".into(),
+        },
+        closed_world_tools: Default::default(),
+    };
+    let holder = Ref::selected("agent-1", "latest");
+    let kernel = hh_provenance::ProvenanceRecord::kernel("test", 0);
+    let mut n = 0u64;
+    let mut alloc = move |k: &str| {
+        n += 1;
+        format!("{k}-{n}")
+    };
+
+    // A global cap (`of = "*"`) lowers the minted ceiling to `external`.
+    let doc = sealed(vec![node("test:rule.a")], vec![cap("*", "external")]);
+    let out =
+        crate::mint::mint_preauthorization_handles(&doc, &holder, &kernel, "run-1", &mut alloc);
+    assert_eq!(out.len(), 1);
+    assert_eq!(out[0].0.ceiling, AuthorityClass::External);
+
+    // An `of`-named cap binds only the named entity — a cap on `rule.b`
+    // never lowers `rule.a`'s mint; uncapped, the mint issues at the spec's
+    // `definition` class (§5g.1 — "issued at `definition`; bounded by
+    // `authority_cap`"), never the issuer's own `kernel`.
+    let doc = sealed(
+        vec![node("test:rule.a")],
+        vec![cap("test:rule.b", "unverified")],
+    );
+    let out =
+        crate::mint::mint_preauthorization_handles(&doc, &holder, &kernel, "run-1", &mut alloc);
+    assert_eq!(out[0].0.ceiling, AuthorityClass::Definition);
+
+    // The issuer's own authority bounds the mint with no caps at all.
+    let delegate = hh_provenance::ProvenanceRecord {
+        authority: AuthorityClass::Delegate,
+        ..hh_provenance::ProvenanceRecord::kernel("test", 0)
+    };
+    let doc = sealed(vec![node("test:rule.a")], vec![]);
+    let out =
+        crate::mint::mint_preauthorization_handles(&doc, &holder, &delegate, "run-1", &mut alloc);
+    assert_eq!(out[0].0.ceiling, AuthorityClass::Delegate);
+}
+
+#[test]
+fn pre_authorize_mint_skips_grantless_rules() {
+    use hh_hir::records::RuleAction;
+    // A `pre_authorize` rule with no decodable `grants` mints nothing.
+    let sealed = sealed_with_rule(RuleAction::PreAuthorize(Json::obj([(
+        "scope",
+        Json::str("run"),
+    )])));
+    let holder = hh_hir::refs::Ref::selected("agent-1", "latest");
+    let issuer = hh_provenance::ProvenanceRecord::kernel("test", 0);
+    let mut n = 0u64;
+    let mut alloc = move |k: &str| {
+        n += 1;
+        format!("{k}-{n}")
+    };
+    assert!(crate::mint::mint_preauthorization_handles(
+        &sealed, &holder, &issuer, "run-1", &mut alloc
+    )
+    .is_empty());
 }

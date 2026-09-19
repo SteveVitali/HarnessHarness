@@ -148,7 +148,10 @@ pub struct Explanation {
 }
 
 /// `PermissionRequest` (§5g.7 §3) — the proposer→monitor form:
-/// `{subject_ref, capability_ref, args_canonical_hash, reason}`.
+/// `{subject_ref, capability_ref, args_canonical_hash, reason}` plus the
+/// `requested: [Grant]` leg a `permission_request`-domain proposal carries —
+/// the approval mint's `requested ⊓ authority_cap` input (the mint never
+/// reconstructs grants; they are the recorded request's).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PermissionRequest {
     /// The proposer's identity coordinate (the `AgentProcess`/`human`).
@@ -161,6 +164,10 @@ pub struct PermissionRequest {
     /// The free-text reason the proposer attached (delegate-authority display
     /// data — never a decision input).
     pub reason: String,
+    /// The grants the proposer asked for (a `permission_request` proposal's
+    /// `requested` leg — empty for an ordinary effect ask; the approval-basis
+    /// mint intersects them with `authority_cap`, never widens).
+    pub requested_grants: Vec<hh_hir::records::Grant>,
 }
 
 /// `ApprovalRequest` (§5g.7 §3) — the monitor→surface form:
@@ -549,6 +556,30 @@ pub fn mint_permission_id(
         format!(
             "{}\x1f{}\x1f{}",
             capability_ref.version_id, args_canonical_hash, salt
+        )
+        .as_bytes(),
+    )
+}
+
+/// `batch_id` minting (§5g.7 §5 batching — ADR-0070 D5): the batch groups
+/// pending requests of one `effective_risk_class`, one `requested_of` and one
+/// scope — the deterministic key over those three members, so every batchable
+/// ask in a run lands under the same id (one prompt may be rendered; each
+/// `permission_id` still decides independently). An `irreversible` or
+/// non-batchable ask carries no batch (`EscalationInput.batchable` gates the
+/// call site). Deterministic.
+pub fn mint_batch_id(
+    risk: &hh_ontology::risk::RiskClass,
+    requested_of: &str,
+    scope_ref: &str,
+) -> String {
+    idp::idp_id(
+        "approval_batch",
+        format!(
+            "{}\x1f{}\x1f{}",
+            risk.to_json().to_canonical_string(),
+            requested_of,
+            scope_ref
         )
         .as_bytes(),
     )
@@ -1133,6 +1164,13 @@ pub fn run_chain(
         });
     } else {
         for h in hooks {
+            // Attested admission (R-2.8.5; ADR-0063…0065): a report without an
+            // `attestation_ref` is never consulted — the hook runner is
+            // outside the TCB and only an *admitted* report may move the
+            // decision (toward `deny`/`defer`; never toward `allow` alone).
+            if h.attestation_ref.is_empty() {
+                continue;
+            }
             match h.verdict {
                 HookVerdict::Deny => {
                     stages.push(StageOutput {
@@ -2044,6 +2082,20 @@ impl ApprovalState {
                         .and_then(Json::as_str)
                         .unwrap_or_default()
                         .to_string(),
+                    requested_grants: rq
+                        .get("requested_grants")
+                        .and_then(|g| match g {
+                            Json::Arr(items) => items
+                                .iter()
+                                .enumerate()
+                                .map(|(i, r)| {
+                                    hh_hir::grant_from_json(r, &format!("requested_grants[{i}]"))
+                                        .ok()
+                                })
+                                .collect::<Option<Vec<_>>>(),
+                            _ => None,
+                        })
+                        .unwrap_or_default(),
                 };
                 let mode = match p.get("mode").and_then(Json::as_str) {
                     Some(m) => match ApprovalMode::parse(m) {
@@ -2287,7 +2339,7 @@ fn deny_reason_fold(s: Option<&str>) -> DenyReason {
 /// `lease_from_granted` — decode a `security.permission.lease.granted`
 /// payload back into the lease record (the fold's half — a malformed row
 /// returns `None`; the durable form was validated at append).
-fn lease_from_granted(p: &Json) -> Option<ApprovalLease> {
+pub fn lease_from_granted(p: &Json) -> Option<ApprovalLease> {
     let lease_id = p.get("lease_id").and_then(Json::as_str)?.to_string();
     let key_hash = p
         .get("key_hash")
@@ -2546,7 +2598,10 @@ fn choice_from_json(j: &Json, path: &str) -> Result<ResponseChoice, String> {
     }
 }
 
-fn endorser_json(e: &EndorserRef) -> Json {
+/// The canonical `EndorserRef` spelling (`{human, authority}` |
+/// `{approver_grant}`) — the `decided_by` member's wire form (the
+/// out-of-process `authorize` codec encodes recorded decisions with it).
+pub fn endorser_json(e: &EndorserRef) -> Json {
     match e {
         EndorserRef::Human {
             subject_ref,
@@ -2608,6 +2663,16 @@ pub fn pending_payload(r: &ApprovalRequest, effect_id: &str, requested_at: u64) 
                     Json::str(r.request.args_canonical_hash.clone()),
                 ),
                 ("reason", Json::str(r.request.reason.clone())),
+                (
+                    "requested_grants",
+                    Json::Arr(
+                        r.request
+                            .requested_grants
+                            .iter()
+                            .map(|g| hh_hir::grant_json(g, false))
+                            .collect(),
+                    ),
+                ),
             ]),
         ),
         ("requested_at", Json::Int(requested_at as i64)),
@@ -2730,6 +2795,18 @@ pub fn request_payload(r: &ApprovalRequest) -> Json {
             Json::str(r.request.args_canonical_hash.clone()),
         ),
         ("reason", Json::str(r.request.reason.clone())),
+        // `requested_grants` is additive (CC8) — a pre-S2.6 row (no member)
+        // decodes identically (`[]`); a grant-free ask emits the empty array.
+        (
+            "requested_grants",
+            Json::Arr(
+                r.request
+                    .requested_grants
+                    .iter()
+                    .map(|g| hh_hir::grant_json(g, false))
+                    .collect(),
+            ),
+        ),
         (
             "options_presented",
             Json::Arr(
@@ -2769,9 +2846,135 @@ pub fn request_payload(r: &ApprovalRequest) -> Json {
                             .collect(),
                     ),
                 ),
+                (
+                    "model_justification",
+                    r.explanation
+                        .model_justification
+                        .as_ref()
+                        .map(|m| Json::str(m.text.clone()))
+                        .unwrap_or(Json::Null),
+                ),
             ]),
         ),
+        (
+            "batch_id",
+            r.batch_id
+                .as_ref()
+                .map(|b| Json::str(b.clone()))
+                .unwrap_or(Json::Null),
+        ),
     ])
+}
+
+/// Decode an [`ApprovalRequest`] from the [`request_payload`] record shape
+/// (the wire codec's read direction — one spelling, CC1). Missing optional
+/// members decode to their defaults (`timeout`/`batch_id`/`model_justification`
+/// = none).
+pub fn request_from_payload(j: &Json, path: &str) -> Result<ApprovalRequest, String> {
+    let cap = j
+        .get("capability_ref")
+        .ok_or_else(|| format!("{path}.capability_ref missing"))?;
+    let explanation = j
+        .get("explanation")
+        .ok_or_else(|| format!("{path}.explanation missing"))?;
+    let rows = match explanation.get("rows") {
+        Some(Json::Arr(items)) => items
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let step = c
+                    .get("step")
+                    .and_then(Json::as_int)
+                    .ok_or_else(|| format!("{path}.explanation.rows[{i}].step missing"))?;
+                Ok(crate::decision::CheckRecord {
+                    step: u8::try_from(step)
+                        .map_err(|_| format!("{path}.explanation.rows[{i}].step overflow"))?,
+                    outcome: match c.get("outcome").and_then(Json::as_str) {
+                        Some("pass") => "pass",
+                        Some("fail") => "fail",
+                        _ => "n/a",
+                    },
+                    detail: c
+                        .get("detail")
+                        .and_then(Json::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        _ => return Err(format!("{path}.explanation.rows must be an array")),
+    };
+    let options = match j.get("options_presented") {
+        Some(Json::Arr(items)) => items
+            .iter()
+            .enumerate()
+            .map(|(i, o)| {
+                let id = o
+                    .get("id")
+                    .and_then(Json::as_str)
+                    .and_then(ApprovalOptionId::parse)
+                    .ok_or_else(|| format!("{path}.options_presented[{i}].id unknown"))?;
+                Ok(ApprovalOption {
+                    id,
+                    label: o
+                        .get("label")
+                        .and_then(Json::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        _ => Vec::new(),
+    };
+    Ok(ApprovalRequest {
+        permission_id: req_str(j, "permission_id", path)?,
+        request: PermissionRequest {
+            subject_ref: req_str(j, "subject_ref", path)?,
+            capability_ref: PinnedRef {
+                semantic_id: req_str(cap, "semantic_id", &format!("{path}.capability_ref"))?,
+                version_id: req_str(cap, "version_id", &format!("{path}.capability_ref"))?,
+            },
+            args_canonical_hash: req_str(j, "args_canonical_hash", path)?,
+            reason: j
+                .get("reason")
+                .and_then(Json::as_str)
+                .unwrap_or("")
+                .to_string(),
+            requested_grants: match j.get("requested_grants") {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, g)| {
+                        hh_hir::grant_from_json(g, &format!("{path}.requested_grants[{i}]"))
+                            .map_err(|e| format!("{path}.requested_grants[{i}]: {e}"))
+                    })
+                    .collect::<Result<Vec<_>, String>>()?,
+                _ => Vec::new(),
+            },
+        },
+        options,
+        mode: ApprovalMode::parse(&req_str(j, "mode", path)?)
+            .ok_or_else(|| format!("{path}.mode unknown"))?,
+        timeout: j
+            .get("timeout")
+            .and_then(Json::as_int)
+            .map(|t| t.max(0) as u64),
+        explanation: Explanation {
+            display: explanation
+                .get("display")
+                .and_then(Json::as_str)
+                .unwrap_or("")
+                .to_string(),
+            rows,
+            model_justification: explanation
+                .get("model_justification")
+                .and_then(Json::as_str)
+                .map(|t| ModelJustification {
+                    text: t.to_string(),
+                }),
+        },
+        batch_id: j.get("batch_id").and_then(Json::as_str).map(String::from),
+    })
 }
 
 /// `ApprovalResponse` → the response record's payload members.
