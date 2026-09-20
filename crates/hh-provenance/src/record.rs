@@ -462,6 +462,9 @@ impl ProvenanceRecord {
                     ("hosting_mechanism", Json::str(hosting_mechanism.clone())),
                 ],
             ),
+            Origin::Cache { entry_ref } => {
+                ("cache", vec![("entry_ref", Json::str(entry_ref.clone()))])
+            }
         };
         let mut fields = fields;
         fields.insert(0, ("kind", Json::str(kind)));

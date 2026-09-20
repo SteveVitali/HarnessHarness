@@ -602,6 +602,10 @@ const BUDGET_AUDIT_FIELDS: &[AuditField] = &[
 /// triggered_by, reason: StopReason?}`; the Stage-0 driver members `{kind,
 /// budget_id?, dimension?, call_no?}` and `submission_ref?` complete the
 /// declared partition (`reason` is the `StopReason` record — bounded).
+/// `control.attendance.amended` / `control.approval_mode.amended` — the
+/// amend-policy rows: `{old, new, authority, attested}`.
+const AMEND_POLICY_FIELDS: &[AuditField] = &[af("old"), af("new"), af("authority"), af("attested")];
+
 const DECISION_FIELDS: &[AuditField] = &[
     af("kind"),
     afb("reason", AUDIT_FIELD_LIST_BYTES),
@@ -922,6 +926,9 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("action.environment.unreachable",          Led, O::Events, false, true, None, None),
     row("action.environment.reattached",           Led, O::Events, false, true, None, None),
     row("action.environment.snapshot",             Led, O::Events, false, true, None, None),
+    // `set_phase` (ADR-0142; §05a) — the sealed phase schedule's
+    // application; audit-grade like the rest of the env family.
+    row("action.environment.phase.changed",        Led, O::Events, false, true, None, None),
     row("action.environment.restored",             Led, O::Events, false, true, None, None),
     row("action.environment.derived",              Led, O::Events, false, true, None, None),
     row("action.environment.replaced",             Led, O::Events, false, true, None, None),
@@ -1083,6 +1090,12 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("control.budget.exceeded",   O::Events, true,  BUDGET_AUDIT_FIELDS, &[], None, None),
     row_audit("control.budget.amended",    O::Events, true,  BUDGET_AUDIT_FIELDS, &[], None, None),
     row_audit("control.decision",          O::Events, true,  DECISION_FIELDS, &[], None, None),
+    // `control.attendance.amended` / `control.approval_mode.amended` — the
+    // S2.10 `amend(attendance|approval_mode)` decision rows (§7.1; ADR-0168
+    // D1): `{old, new, authority, attested}` — bounded enum-ish members,
+    // audit-grade like `control.budget.amended`.
+    row_audit("control.attendance.amended",    O::Events, true,  AMEND_POLICY_FIELDS, &[], None, None),
+    row_audit("control.approval_mode.amended", O::Events, true,  AMEND_POLICY_FIELDS, &[], None, None),
     // `control.wakeup.fired` — the audit-grade wakeup record (§5g.6 §3); the
     // subscription/occurrence/skip/cancel rows stay ordinary-ledger (§5a.3;
     // S2.3 — kernel-origin, provenance-bearing).

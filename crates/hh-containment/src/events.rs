@@ -303,6 +303,7 @@ pub fn endorser_tag(p: &ProvenanceRecord) -> String {
         } => {
             format!("participant:{participant_ref}")
         }
+        hh_provenance::Origin::Cache { entry_ref } => format!("cache:{entry_ref}"),
     };
     format!("{coord}@{}", p.authority.as_str())
 }

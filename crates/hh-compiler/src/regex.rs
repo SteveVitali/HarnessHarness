@@ -112,7 +112,13 @@ fn digit_ranges() -> Vec<(char, char)> {
 }
 
 fn space_ranges() -> Vec<(char, char)> {
-    vec![(' ', ' '), ('\t', '\t'), ('\n', '\n'), ('\r', '\r'), (0x0b as char, 0x0c as char)]
+    vec![
+        (' ', ' '),
+        ('\t', '\t'),
+        ('\n', '\n'),
+        ('\r', '\r'),
+        (0x0b as char, 0x0c as char),
+    ]
 }
 
 /// The escape classes usable both bare and inside `[...]`.
@@ -361,9 +367,7 @@ impl Parser {
             Some('n') => Ok(Ast::Char('\n')),
             Some('t') => Ok(Ast::Char('\t')),
             Some('r') => Ok(Ast::Char('\r')),
-            Some(c) if escape_class(c).is_some() => {
-                Ok(Ast::Class(escape_class(c).unwrap()))
-            }
+            Some(c) if escape_class(c).is_some() => Ok(Ast::Class(escape_class(c).unwrap())),
             // Escaped metachars and punctuation are literals.
             Some(c) if !c.is_alphanumeric() => Ok(Ast::Char(c)),
             // `\b`, `\A`, back-references, `\p{...}` — unsupported.
@@ -658,12 +662,9 @@ impl Regex {
         let n = chars.len();
         let mut current: Vec<bool> = vec![false; self.states.len()];
         self.closure_into(&mut current, self.start, 0, n);
-        for pos in 0..=n {
+        for (pos, ch) in chars.iter().enumerate() {
             if current[self.accept] {
                 return true;
-            }
-            if pos == n {
-                break;
             }
             let mut stepped: Vec<bool> = vec![false; self.states.len()];
             for (s, on) in current.iter().enumerate() {
@@ -672,7 +673,7 @@ impl Regex {
                 }
                 for e in &self.states[s] {
                     if let Edge::Class(cls, t) = e {
-                        if cls.contains(chars[pos]) {
+                        if cls.contains(*ch) {
                             stepped[*t] = true;
                         }
                     }
@@ -688,12 +689,12 @@ impl Regex {
             self.closure_into(&mut next, self.start, pos + 1, n);
             current = next;
         }
-        false
+        current[self.accept]
     }
 
     /// ε-closure of `state` into `set`, evaluating `^`/`$` assertions at
     /// `pos` against a text of length `n` (chars). Iterative — no recursion.
-    fn closure_into(&self, set: &mut Vec<bool>, state: usize, pos: usize, n: usize) {
+    fn closure_into(&self, set: &mut [bool], state: usize, pos: usize, n: usize) {
         let mut stack = vec![state];
         while let Some(s) = stack.pop() {
             if set[s] {
@@ -722,7 +723,6 @@ impl Regex {
             }
         }
     }
-
 }
 
 #[cfg(test)]
@@ -786,15 +786,24 @@ mod tests {
         ));
         assert!(matches!(
             Regex::compile("a*?"),
-            Err(RegexError::Syntax { reason: "lazy_quantifier", .. })
+            Err(RegexError::Syntax {
+                reason: "lazy_quantifier",
+                ..
+            })
         ));
         assert!(matches!(
             Regex::compile("a{200}"),
-            Err(RegexError::Syntax { reason: "repeat_too_large", .. })
+            Err(RegexError::Syntax {
+                reason: "repeat_too_large",
+                ..
+            })
         ));
         assert!(matches!(
             Regex::compile("[z-a]"),
-            Err(RegexError::Syntax { reason: "range_inverted", .. })
+            Err(RegexError::Syntax {
+                reason: "range_inverted",
+                ..
+            })
         ));
     }
 

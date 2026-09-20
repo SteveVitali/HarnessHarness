@@ -24,10 +24,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use hh_compiler::exposure::{
     adopt, catalog_delta, catalog_id_of, check_callable, discover, evict, expire_reveals,
     index_query, index_ref, AdoptOutcome, Availability, CallProposal, CallRefusal, Catalog,
-    CatalogDriftError, CatalogEntry, CatalogIndex, CatalogSource, DiscoveryForm,
-    DiscoveryQuery, DiscoveryQueryInvalid, DriftPolicy, EvictCause, IndexForm, PermissionCoverage,
-    Retention, RevealBoundary, RevealCause, RevealedSet, SearchTextField, StructuredQuery,
-    SyncTrigger,
+    CatalogDriftError, CatalogEntry, CatalogIndex, CatalogSource, DiscoveryForm, DiscoveryQuery,
+    DiscoveryQueryInvalid, DriftPolicy, EvictCause, IndexForm, PermissionCoverage, Retention,
+    RevealBoundary, RevealCause, RevealedSet, SearchTextField, StructuredQuery, SyncTrigger,
 };
 use hh_compiler::retrieval::{retrieval_eval, LabelledQuery};
 use hh_hir::tools::ExposureMode;
@@ -254,7 +253,11 @@ fn bm25_ranks_relevant_first_and_carries_scores() {
     let res = index_query(
         &CatalogIndex::Bm25,
         &cat,
-        &q(DiscoveryForm::NaturalLanguage, "read a file from the workspace", None),
+        &q(
+            DiscoveryForm::NaturalLanguage,
+            "read a file from the workspace",
+            None,
+        ),
         8,
     )
     .expect("bm25");
@@ -387,8 +390,10 @@ fn discover_hits_only_indexed_or_deferred_plan_members() {
         .any(|h| h.surface_id == "surf:fs.read_workspace_file"));
 
     // Bound: max_reveal_per_search.
-    let mut params = hh_compiler::exposure::ExposurePolicyParams::default();
-    params.max_reveal_per_search = 3;
+    let params = hh_compiler::exposure::ExposurePolicyParams {
+        max_reveal_per_search: 3,
+        ..Default::default()
+    };
     let res = discover(
         &plan,
         &CatalogIndex::Hierarchical,
@@ -404,7 +409,13 @@ fn discover_hits_only_indexed_or_deferred_plan_members() {
 // ── catalog_delta + adopt (AC-R-2.5.3-8) ────────────────────────────────────
 
 fn mcp_listing_entry(sid: &str, name: &str) -> CatalogEntry {
-    let mut e = entry(sid, name, Some("mcp.src"), "mcp-listed", &[ExposureMode::Indexed]);
+    let mut e = entry(
+        sid,
+        name,
+        Some("mcp.src"),
+        "mcp-listed",
+        &[ExposureMode::Indexed],
+    );
     e.source = CatalogSource::Mcp("src".to_string());
     e
 }
@@ -413,7 +424,8 @@ fn mcp_listing_entry(sid: &str, name: &str) -> CatalogEntry {
 fn ac_e3_8_freeze_marks_removed_and_keeps_ids() {
     let mut cat = fixture_catalog();
     // One mcp-sourced entry to remove.
-    cat.entries.push(mcp_listing_entry("surf:mcp.old_tool", "old_tool"));
+    cat.entries
+        .push(mcp_listing_entry("surf:mcp.old_tool", "old_tool"));
     cat.entries.sort_by(|a, b| a.surface_id.cmp(&b.surface_id));
     cat.catalog_id = catalog_id_of(&cat.entries, 0, &cat.bundle_id);
     let prev_id = cat.catalog_id.clone();
@@ -425,7 +437,10 @@ fn ac_e3_8_freeze_marks_removed_and_keeps_ids() {
     assert!(delta.added.is_empty() && delta.changed.is_empty());
     // The delta is emitted as `action.tool.catalog.delta` (payload shape).
     let payload = delta.to_json();
-    assert_eq!(payload.get("cause").and_then(|c| c.as_str()), Some("list_changed"));
+    assert_eq!(
+        payload.get("cause").and_then(|c| c.as_str()),
+        Some("list_changed")
+    );
 
     let out = adopt(&cat, &delta, DriftPolicy::Freeze, "test").expect("freeze");
     let AdoptOutcome::Frozen { catalog } = out else {
@@ -475,7 +490,8 @@ fn ac_e3_8_freeze_marks_removed_and_keeps_ids() {
 #[test]
 fn ac_e3_8_adopt_new_epoch_and_unverified_authority() {
     let mut cat = fixture_catalog();
-    cat.entries.push(mcp_listing_entry("surf:mcp.old_tool", "old_tool"));
+    cat.entries
+        .push(mcp_listing_entry("surf:mcp.old_tool", "old_tool"));
     cat.entries.sort_by(|a, b| a.surface_id.cmp(&b.surface_id));
     cat.catalog_id = catalog_id_of(&cat.entries, 0, &cat.bundle_id);
     let prev_id = cat.catalog_id.clone();
@@ -504,15 +520,24 @@ fn ac_e3_8_adopt_new_epoch_and_unverified_authority() {
     };
     assert_eq!(added.len(), 2);
     for a in &added {
-        assert_eq!(a.get("authority").and_then(|x| x.as_str()), Some("unverified"));
+        assert_eq!(
+            a.get("authority").and_then(|x| x.as_str()),
+            Some("unverified")
+        );
         assert!(a
             .get("version_id")
             .and_then(|x| x.as_str())
             .is_some_and(|v| !v.is_empty()));
     }
     // The new entries are members; the removed one is gone.
-    assert!(catalog.entries.iter().any(|e| e.surface_id == "surf:mcp.new_tool"));
-    assert!(catalog.entries.iter().all(|e| e.surface_id != "surf:mcp.old_tool"));
+    assert!(catalog
+        .entries
+        .iter()
+        .any(|e| e.surface_id == "surf:mcp.new_tool"));
+    assert!(catalog
+        .entries
+        .iter()
+        .all(|e| e.surface_id != "surf:mcp.old_tool"));
 }
 
 #[test]
@@ -614,9 +639,21 @@ fn ac_e3_11_exact_name_floor_and_nl_report() {
     let cat = fixture_catalog();
     // exact_name baseline queries — the gated set.
     let baseline = vec![
-        labelled("read_workspace_file", DiscoveryForm::NaturalLanguage, &["surf:fs.read_workspace_file"]),
-        labelled("open_tcp_socket", DiscoveryForm::NaturalLanguage, &["surf:net.open_tcp_socket"]),
-        labelled("commit_changes", DiscoveryForm::NaturalLanguage, &["surf:git.commit_changes"]),
+        labelled(
+            "read_workspace_file",
+            DiscoveryForm::NaturalLanguage,
+            &["surf:fs.read_workspace_file"],
+        ),
+        labelled(
+            "open_tcp_socket",
+            DiscoveryForm::NaturalLanguage,
+            &["surf:net.open_tcp_socket"],
+        ),
+        labelled(
+            "commit_changes",
+            DiscoveryForm::NaturalLanguage,
+            &["surf:git.commit_changes"],
+        ),
     ];
     let report = retrieval_eval(&CatalogIndex::ExactName, &cat, &baseline, 8, 8);
     assert!(
@@ -656,9 +693,21 @@ fn ac_e3_11_exact_name_floor_and_nl_report() {
     assert!(report.per_query.iter().all(|m| m.error.is_none()));
 
     let nl_paths = vec![
-        labelled("fs.read_workspace", DiscoveryForm::NaturalLanguage, &["surf:fs.read_workspace_file"]),
-        labelled("net.open_tcp", DiscoveryForm::NaturalLanguage, &["surf:net.open_tcp_socket"]),
-        labelled("git.commit", DiscoveryForm::NaturalLanguage, &["surf:git.commit_changes"]),
+        labelled(
+            "fs.read_workspace",
+            DiscoveryForm::NaturalLanguage,
+            &["surf:fs.read_workspace_file"],
+        ),
+        labelled(
+            "net.open_tcp",
+            DiscoveryForm::NaturalLanguage,
+            &["surf:net.open_tcp_socket"],
+        ),
+        labelled(
+            "git.commit",
+            DiscoveryForm::NaturalLanguage,
+            &["surf:git.commit_changes"],
+        ),
     ];
     let report = retrieval_eval(&CatalogIndex::Hierarchical, &cat, &nl_paths, 8, 8);
     eprintln!(
@@ -670,8 +719,16 @@ fn ac_e3_11_exact_name_floor_and_nl_report() {
     assert!(report.per_query.iter().all(|m| m.error.is_none()));
     // lexical_regex serves `regex` queries — report over a regex set too.
     let rx = vec![
-        labelled("^read_workspace", DiscoveryForm::Regex, &["surf:fs.read_workspace_file"]),
-        labelled("^open_tcp", DiscoveryForm::Regex, &["surf:net.open_tcp_socket"]),
+        labelled(
+            "^read_workspace",
+            DiscoveryForm::Regex,
+            &["surf:fs.read_workspace_file"],
+        ),
+        labelled(
+            "^open_tcp",
+            DiscoveryForm::Regex,
+            &["surf:net.open_tcp_socket"],
+        ),
     ];
     let report = retrieval_eval(&CatalogIndex::LexicalRegex, &cat, &rx, 8, 8);
     eprintln!(
@@ -716,7 +773,11 @@ fn hidden_never_in_any_variant_result() {
         let res = index_query(
             &index,
             &cat,
-            &q(DiscoveryForm::NaturalLanguage, "probe secrets hidden", Some(32)),
+            &q(
+                DiscoveryForm::NaturalLanguage,
+                "probe secrets hidden",
+                Some(32),
+            ),
             32,
         )
         .unwrap_or_else(|_| {

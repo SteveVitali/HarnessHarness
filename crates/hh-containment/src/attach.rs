@@ -383,3 +383,31 @@ pub fn attach(input: &AttachInput) -> Result<AttachOutcome, AttachError> {
         warnings,
     })
 }
+
+/// `evidence_preview(backend, policy) → map<FieldGroup,
+/// EnforcementEvidence>` — the **pure** half of `attach`: `apply` +
+/// the probe battery + `group_evidence_at_attach` over the same inputs,
+/// minting nothing. A caller that needs the answer *before* a handle
+/// exists (the `BypassWithoutContainment` pre-open gate, ADR-0168 D3)
+/// runs this; the attach that follows re-derives the identical map —
+/// same inputs, same fold, never a second rule. `Err` is the `apply`
+/// refusal (`backend_unsupported`); the policy is assumed `validate`d.
+pub fn evidence_preview(
+    backend: &dyn ContainmentBackend,
+    policy: &ContainmentPolicy,
+) -> Result<BTreeMap<FieldGroup, EnforcementEvidence>, AttachError> {
+    backend.apply(policy).map_err(|u| AttachError::Unverified {
+        field_group: events::ATTACH_GROUP.to_string(),
+        reason: format!("backend_unsupported:{}", u.reason),
+        event: events::unverified_payload(
+            events::ATTACH_GROUP,
+            &format!("backend_unsupported:{}", u.reason),
+        ),
+    })?;
+    let probes_out = probes::run_battery(backend, policy);
+    let mut evidence = BTreeMap::new();
+    for g in FieldGroup::ALL {
+        evidence.insert(g, group_evidence_at_attach(g, backend, &probes_out));
+    }
+    Ok(evidence)
+}

@@ -803,14 +803,17 @@ fn bm25_rank<'e>(entries: &[&'e CatalogEntry], query_text: &str) -> Vec<(&'e Cat
         })
         .collect();
     scored.retain(|(_, s)| *s > 0);
-    scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.surface_id.cmp(&b.0.surface_id)));
+    scored.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| a.0.surface_id.cmp(&b.0.surface_id))
+    });
     scored
 }
 
 /// The path segments of a namespace/name string — split on `.`, `::`, `/`,
 /// `-`, `_`; lowercased.
 fn path_segments(s: &str) -> Vec<String> {
-    s.split(|c: char| matches!(c, '.' | ':' | '/' | '-' | '_' | ' '))
+    s.split(['.', ':', '/', '-', '_', ' '])
         .filter(|t| !t.is_empty())
         .map(|t| t.to_lowercase())
         .collect()
@@ -819,8 +822,8 @@ fn path_segments(s: &str) -> Vec<String> {
 /// `hierarchical` ranking — query segments descend the entry's
 /// `namespace ∥ name` path. Score (pre-scale) = `2 × matched_prefix_depth`
 /// + `1` when the last query segment prefix-matches the surface name; a hit
-/// requires ≥1 matched segment. Segments beyond the namespace compare
-/// against the name split.
+///   requires ≥1 matched segment. Segments beyond the namespace compare
+///   against the name split.
 fn hierarchical_rank<'e>(
     entries: &[&'e CatalogEntry],
     query_text: &str,
@@ -849,9 +852,11 @@ fn hierarchical_rank<'e>(
             }
             // A single-segment query also descends by name alone (the
             // segment matches any path segment or name-prefix).
-            let name_hit = q
-                .last()
-                .is_some_and(|last| path_segments(&e.name).iter().any(|n| n.starts_with(last.as_str())));
+            let name_hit = q.last().is_some_and(|last| {
+                path_segments(&e.name)
+                    .iter()
+                    .any(|n| n.starts_with(last.as_str()))
+            });
             if depth == 0 && !name_hit {
                 return None;
             }
@@ -862,7 +867,10 @@ fn hierarchical_rank<'e>(
             Some((*e, score * 1_000_000))
         })
         .collect();
-    scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.surface_id.cmp(&b.0.surface_id)));
+    scored.sort_by(|a, b| {
+        b.1.cmp(&a.1)
+            .then_with(|| a.0.surface_id.cmp(&b.0.surface_id))
+    });
     scored
 }
 
@@ -870,9 +878,9 @@ fn hierarchical_rank<'e>(
 /// caller's filtered set: non-hidden, plan-mode-restricted, structured
 /// filters already applied is the caller's choice — this layer applies
 /// `matches_structured` itself so every variant honours it uniformly).
-fn variant_hits<'e>(
+fn variant_hits(
     index: &CatalogIndex,
-    candidates: &[&'e CatalogEntry],
+    candidates: &[&CatalogEntry],
     query: &DiscoveryQuery,
     structured: Option<&StructuredQuery>,
 ) -> Result<Vec<Scored>, DiscoveryQueryInvalid> {
@@ -889,7 +897,9 @@ fn variant_hits<'e>(
             .collect()),
         CatalogIndex::StaticAllowlist(ids) => Ok(filtered
             .into_iter()
-            .filter(|e| ids.contains(&e.surface_id) && (structured.is_some() || e.name == query.text))
+            .filter(|e| {
+                ids.contains(&e.surface_id) && (structured.is_some() || e.name == query.text)
+            })
             .map(|e| (e.surface_id.clone(), None))
             .collect()),
         CatalogIndex::LexicalRegex => {
@@ -1145,7 +1155,7 @@ pub fn catalog_delta(
             Some(old) => {
                 let mut cmp = (*old).clone();
                 cmp.availability = e.availability.clone();
-                cmp.permission_coverage = e.permission_coverage.clone();
+                cmp.permission_coverage = e.permission_coverage;
                 if cmp != *e {
                     changed.push(e.clone());
                 }
@@ -2011,12 +2021,12 @@ pub fn expire_reveals(
         if pinned {
             return true;
         }
-        let keep = match (boundary, e.retention) {
-            (RevealBoundary::CallEnd, Retention::Call) => false,
-            (RevealBoundary::TurnEnd, Retention::Call | Retention::Turn) => false,
-            (RevealBoundary::RunEnd, _) => false,
-            _ => true,
-        };
+        let keep = !matches!(
+            (boundary, e.retention),
+            (RevealBoundary::CallEnd, Retention::Call)
+                | (RevealBoundary::TurnEnd, Retention::Call | Retention::Turn)
+                | (RevealBoundary::RunEnd, _)
+        );
         if !keep {
             expired.push(e.surface_id.clone());
         }

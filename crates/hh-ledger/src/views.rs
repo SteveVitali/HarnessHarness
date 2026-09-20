@@ -64,6 +64,12 @@ pub enum ViewKind {
     /// this run's fork record (when it is a child), its `rolled_back` rewind
     /// history, and its children. A pure WAL fold — rebuildable, never stored.
     BranchTree,
+    /// `compact` — the **declared-lossy** CLI projection (§7.1; R-2.5.3¹;
+    /// ADR-0169 D3): the durable prefix folded to `message`/`tool`/`effect`/
+    /// `approval`/`cost` items only, shipped with a `loss_report` enumerating
+    /// every dropped class. Optional and never the machine default — the
+    /// identity CLI projection is `cli_stream_view` (§5a.1 §4).
+    Compact,
 }
 
 impl ViewKind {
@@ -82,6 +88,7 @@ impl ViewKind {
             ViewKind::MemoryStaleIndex => "memory_stale_index",
             ViewKind::MemoryUsage => "memory_usage",
             ViewKind::BranchTree => "branch_tree",
+            ViewKind::Compact => "compact",
         }
     }
 
@@ -100,6 +107,7 @@ impl ViewKind {
             "memory_stale_index" => Some(ViewKind::MemoryStaleIndex),
             "memory_usage" => Some(ViewKind::MemoryUsage),
             "branch_tree" => Some(ViewKind::BranchTree),
+            "compact" => Some(ViewKind::Compact),
             _ => None,
         }
     }
@@ -629,4 +637,128 @@ pub fn branch_tree(
         ]),
     };
     View::build(run_id, ViewKind::BranchTree, watermark, payload)
+}
+
+/// The `compact` item-kind map — class (prefix) → CLI item kind. Every
+/// mapped class contributes one item per event; every other class is a
+/// declared loss (ADR-0169 D3 — the report is the contract, nothing
+/// vanishes silently).
+const COMPACT_MAP: &[(&str, &str)] = &[
+    ("model.call.requested", "message"),
+    ("model.call.completed", "message"),
+    ("model.call.failed", "message"),
+    ("action.tool.completed", "tool"),
+    ("action.tool.rejected", "tool"),
+    ("action.tool.call.refused", "tool"),
+    ("action.effect.", "effect"),
+    ("security.permission.", "approval"),
+    ("control.budget.", "cost"),
+    ("measurement.cost.attributed", "cost"),
+];
+
+/// The payload members the compact item copies verbatim (a bounded
+/// hand-picked set — the event's own summary fields, never the whole
+/// payload, which is the point of the lowering).
+const COMPACT_FIELDS: &[&str] = &[
+    "effect_id",
+    "tool_name",
+    "permission_id",
+    "decision",
+    "status",
+    "model",
+    "dimension",
+    "ceiling",
+    "turn",
+];
+
+/// `project(compact)` — the declared-lossy CLI view (§7.1; ADR-0169 D3;
+/// R-2.5.3¹). A pure fold like every other view: `items[]` carry
+/// `{seq, event_id, kind, class, summary}` for the mapped classes;
+/// `loss_report.dropped[]` enumerates every class the fold omits with
+/// its event count — AC-R-2.11.1: "the `compact` view ships a loss
+/// report enumerating dropped classes".
+pub fn compact(run_id: &str, events: &[EventEnvelope], until: Option<u64>) -> View {
+    let item_kind = |class: &str| -> Option<&'static str> {
+        COMPACT_MAP.iter().find_map(|(prefix, kind)| {
+            if prefix.ends_with('.') {
+                class.starts_with(prefix).then_some(*kind)
+            } else {
+                (class == *prefix).then_some(*kind)
+            }
+        })
+    };
+    let mut items = Vec::new();
+    let mut dropped: BTreeMap<String, u64> = BTreeMap::new();
+    let mut watermark = None;
+    for e in events {
+        if let Some(u) = until {
+            if e.seq > u {
+                continue;
+            }
+        }
+        watermark = Some(e.seq);
+        match item_kind(&e.class) {
+            Some(kind) => {
+                let mut summary = BTreeMap::new();
+                for f in COMPACT_FIELDS {
+                    if let Some(v) = e.payload.get(f) {
+                        summary.insert(f.to_string(), v.clone());
+                    }
+                }
+                items.push(Json::Obj(BTreeMap::from([
+                    ("seq".to_string(), Json::Int(e.seq as i64)),
+                    ("event_id".to_string(), Json::str(&e.event_id)),
+                    ("kind".to_string(), Json::str(kind)),
+                    ("class".to_string(), Json::str(&e.class)),
+                    ("summary".to_string(), Json::Obj(summary)),
+                ])));
+            }
+            None => *dropped.entry(e.class.clone()).or_insert(0) += 1,
+        }
+    }
+    let loss_report = Json::obj([
+        ("view", Json::str("compact")),
+        (
+            "mapped",
+            Json::Arr(
+                COMPACT_MAP
+                    .iter()
+                    .map(|(class, kind)| {
+                        Json::obj([
+                            ("class", Json::str(*class)),
+                            ("item_kind", Json::str(*kind)),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        (
+            "dropped",
+            Json::Arr(
+                dropped
+                    .iter()
+                    .map(|(class, count)| {
+                        Json::obj([
+                            ("class", Json::str(class.clone())),
+                            ("count", Json::Int(*count as i64)),
+                            (
+                                "reason",
+                                Json::str(
+                                    "no compact item kind — the class is outside \
+                                     message/tool/effect/approval/cost",
+                                ),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+    ]);
+    let payload = Json::Obj(BTreeMap::from([
+        ("kind".to_string(), Json::str("compact")),
+        ("item_count".to_string(), Json::Int(items.len() as i64)),
+        ("items".to_string(), Json::Arr(items)),
+        ("loss_report".to_string(), loss_report),
+    ]));
+    View::build(run_id, ViewKind::Compact, watermark, payload)
 }

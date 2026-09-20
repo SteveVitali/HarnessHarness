@@ -564,6 +564,9 @@ pub struct EnvHandle {
     pub image: ResolvedImage,
     /// The `security.containment.applied` event id `attach` produced.
     pub applied_event_ref: Option<String>,
+    /// The applied phase (`setup | agent | verify`) — `set_phase`
+    /// records it; absent ⇒ the provision-time phase (`agent`).
+    pub phase: Option<String>,
     /// Provisioning entry (ms).
     pub created_ms: u64,
 }

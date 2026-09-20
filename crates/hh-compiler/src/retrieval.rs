@@ -20,9 +20,7 @@
 
 use std::collections::BTreeSet;
 
-use crate::exposure::{
-    index_query, Catalog, CatalogIndex, DiscoveryQuery, DiscoveryQueryInvalid,
-};
+use crate::exposure::{index_query, Catalog, CatalogIndex, DiscoveryQuery, DiscoveryQueryInvalid};
 
 /// One labelled query — the ToolRet shape (`{query, required_surface_ids}`).
 #[derive(Debug, Clone, PartialEq)]

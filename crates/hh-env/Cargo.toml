@@ -38,6 +38,11 @@ hh-registry = { path = "../hh-registry" }
 # `attach`/`verify_report`/`floor_gate`/`PolicySlot`/`ContainmentReport` — the
 # DF-S1.12-3 handle seam lands here.
 hh-containment = { path = "../hh-containment" }
+# `K4Cache` — the K4 tool-result cache over `MemoryStore` (R-2.3.4¹; §5b.4;
+# S2.10): the dispatcher consults it post-`authorized`/pre-`prepare` and
+# deposits at `action.tool.completed`. hh-context sits below hh-env in the
+# DAG (no cycle).
+hh-context = { path = "../hh-context" }
 # `env_apply` (placeholders only) at attach + `redact` on the capture path
 # (ADR-0101 D5 — a hostile executor's output is masked before any visibility).
 hh-secrets = { path = "../hh-secrets" }

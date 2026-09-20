@@ -79,7 +79,10 @@ fn cli_capabilities() -> HostCapabilities {
         serves_host_executor: true,
         serves_hook_observer: false,
         serves_elicitation: false,
-        serves_measurement: false,
+        // `env *` lowers onto the Group M environment ops
+        // (env.snapshot/derive/set_phase — ADR-0177 D7) — the channel
+        // the CLI serves through the boundary.
+        serves_measurement: true,
         serves_principal_channel: false,
         accepts_ephemeral_frames: true,
         // The CLI holds at most one *live* session per invocation, but a
