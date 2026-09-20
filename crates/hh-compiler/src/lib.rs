@@ -41,6 +41,8 @@ pub mod lcd;
 pub mod link;
 pub mod plan;
 pub mod profile;
+pub mod regex;
+pub mod retrieval;
 pub mod schema;
 pub mod seal;
 pub mod surface;

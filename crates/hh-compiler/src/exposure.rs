@@ -138,6 +138,15 @@ pub struct IndexForm {
     pub tags: Vec<String>,
     /// The fields an index may read.
     pub search_text_fields: BTreeSet<SearchTextField>,
+    /// The materialized text of declared search fields whose content lives
+    /// behind a `Ref` (S2.10 — C1 indexes read text, not refs):
+    /// `description`, `param_names`, `param_descriptions`,
+    /// `namespace_description`, `examples` populate here when the catalog
+    /// builder/lowering supplies them. Absent ⇒ the field contributes no
+    /// text (a declared-but-absent field is honest `n/a`, never invented).
+    /// An index only reads a member when the field is also declared in
+    /// `search_text_fields` (I-NARROW — the declaration gates readability).
+    pub search_text: BTreeMap<SearchTextField, String>,
 }
 
 /// `permission_coverage ∈ {covered, ask, uncovered, unknown}` — a selection
@@ -523,7 +532,10 @@ pub struct DiscoveryQuery {
     pub limit: Option<u64>,
 }
 
-/// `DiscoveryQueryInvalid{too_long | empty | unsupported_form}`.
+/// `DiscoveryQueryInvalid{too_long | empty | unsupported_form}` —
+/// `invalid_pattern` is the S2.10 addition (a closed-sum extension — the
+/// `lexical_regex` variant refuses malformed patterns rather than coercing
+/// them; recorded in the S2.10 ADR).
 #[derive(Debug, Clone, PartialEq)]
 pub enum DiscoveryQueryInvalid {
     /// The text exceeded the bound (4096 chars).
@@ -532,6 +544,12 @@ pub enum DiscoveryQueryInvalid {
     Empty,
     /// The index variant cannot serve the form (C1+ indexes declare forms).
     UnsupportedForm,
+    /// The `regex` text failed the bounded engine's syntax/limits
+    /// (`lexical_regex` only; reason from [`crate::regex::RegexError`]).
+    InvalidPattern {
+        /// The closed reason tag.
+        reason: String,
+    },
 }
 
 /// A `DiscoveryResult.hits[]` member — `{surface_id, rank, score?}`.
@@ -559,9 +577,21 @@ pub struct DiscoveryResult {
     pub cost: Option<Json>,
 }
 
-/// The C0 `catalog_index` variants (ADR-0094 D4): `exact_name` and
-/// `static_allowlist`. `hidden` entries are never indexed (I-CLOSED ∩
+/// The `catalog_index` variants (ADR-0094 D4): **C0** `exact_name` and
+/// `static_allowlist`; **C1** (S2.10) `lexical_regex`, `bm25`,
+/// `hierarchical`. `hidden` entries are never indexed (I-CLOSED ∩
 /// AC-R-2.5.3-12).
+///
+/// Form admissibility (each C1 variant *declares* the forms it serves —
+/// anything else is `DiscoveryQueryInvalid::UnsupportedForm`):
+///
+/// | variant | `regex` | `natural_language` | `structured` |
+/// |---|---|---|---|
+/// | `exact_name` | verbatim `name` | verbatim `name` | filters + verbatim `name` |
+/// | `static_allowlist` | verbatim `name` | verbatim `name` | filters only |
+/// | `lexical_regex` | bounded regex over declared search text | refused | filters + regex over text |
+/// | `bm25` | refused | BM25 over declared search text | filters + BM25 |
+/// | `hierarchical` | refused | namespace-path descent | filters + descent |
 #[derive(Debug, Clone, PartialEq)]
 pub enum CatalogIndex {
     /// `exact_name` — the query text matches `IndexForm.name` literally.
@@ -569,6 +599,21 @@ pub enum CatalogIndex {
     /// `static_allowlist` — the declared surface-id set, filtered by the
     /// query's structured members.
     StaticAllowlist(BTreeSet<String>),
+    /// `lexical_regex` — the query text compiles to the bounded
+    /// [`crate::regex::Regex`] NFA and matches against the entry's declared
+    /// search text (any field matching is a hit; `hit.score = n/a` — regex
+    /// is a predicate, not a ranker, so hits order by `surface_id`).
+    LexicalRegex,
+    /// `bm25` — BM25 over the tokenized declared search text with field
+    /// weights (`name` 4.0, `name_split`/`namespace_name` 2.0,
+    /// `description` 1.5, others 1.0); `k1 = 1.2`, `b = 0.75`; `score` is the
+    /// BM25 value scaled ×10⁶ as an integer (canonical JSON carries no
+    /// float — the scale is declared here, not per-hit).
+    Bm25,
+    /// `hierarchical` — namespace-path descent: query segments (split on
+    /// `.`, `::`, `/`) descend the entry's `namespace ∥ name` path; score =
+    /// matched segment depth (×10⁶ int) with a terminal name-prefix bonus.
+    Hierarchical,
 }
 
 /// The content-addressed index ref (`charged instrument` — the ref is
@@ -583,17 +628,329 @@ pub fn index_ref(index: &CatalogIndex) -> String {
                 Json::Arr(ids.iter().map(|i| Json::str(i.clone())).collect()),
             ),
         ]),
+        CatalogIndex::LexicalRegex => Json::obj([("kind", Json::str("lexical_regex"))]),
+        CatalogIndex::Bm25 => Json::obj([("kind", Json::str("bm25"))]),
+        CatalogIndex::Hierarchical => Json::obj([("kind", Json::str("hierarchical"))]),
     };
     hh_identity::idp::idp_id("catalog_index", body.to_canonical_string().as_bytes())
 }
 
-/// `query(index, catalog, query, max_reveal)` — `hits ⊆ entries` with mode ∈
-/// `{indexed, deferred}` semantics is the plan's job; the index serves
-/// **name-level** hits over non-hidden entries (I-CLOSED). `|hits| ≤
-/// min(query.limit, max_reveal_per_search)`; an empty result is normal.
+/// The structured members of a query (empty for non-structured forms).
+fn structured_of(query: &DiscoveryQuery) -> Option<&StructuredQuery> {
+    match &query.form {
+        DiscoveryForm::Structured(s) => Some(s),
+        _ => None,
+    }
+}
+
+/// The structured filters — namespace, effect, tags, source — applied to
+/// every variant (a `structured` member narrows the candidate set; the
+/// variant decides how `text` matches).
+fn matches_structured(e: &CatalogEntry, s: &StructuredQuery) -> bool {
+    if let Some(ns) = &s.namespace {
+        if e.namespace.as_deref() != Some(ns.as_str()) {
+            return false;
+        }
+    }
+    if let Some(d) = &s.effect_filter {
+        if !e.effect_summary.iter().any(|x| x == d) {
+            return false;
+        }
+    }
+    if !s.tags.iter().all(|t| e.index_form.tags.contains(t)) {
+        return false;
+    }
+    if let Some(src) = &s.source {
+        if !e.source.as_str().starts_with(src.as_str()) {
+            return false;
+        }
+    }
+    true
+}
+
+/// The declared, readable search text of an entry — `(field, weight, text)`
+/// triples. A field contributes only when declared in `search_text_fields`
+/// AND its text is available: `name`, `name_split`, `namespace_name` and
+/// `effect_summary` are inline on the entry; the rest are read from
+/// `index_form.search_text` (the materialized form — absent means the field
+/// contributes nothing, never invented text).
+fn search_fields(e: &CatalogEntry) -> Vec<(SearchTextField, f64, String)> {
+    let mut out = Vec::new();
+    let declared = |f: SearchTextField| e.index_form.search_text_fields.contains(&f);
+    if declared(SearchTextField::Name) {
+        out.push((SearchTextField::Name, 4.0, e.index_form.name.clone()));
+    }
+    if declared(SearchTextField::NameSplit) {
+        out.push((SearchTextField::NameSplit, 2.0, name_split(&e.name)));
+    }
+    if declared(SearchTextField::NamespaceName) {
+        if let Some(ns) = &e.namespace {
+            out.push((SearchTextField::NamespaceName, 2.0, ns.clone()));
+        }
+    }
+    if declared(SearchTextField::EffectSummary) && !e.effect_summary.is_empty() {
+        out.push((
+            SearchTextField::EffectSummary,
+            1.0,
+            e.effect_summary.join(" "),
+        ));
+    }
+    for (field, weight) in [
+        (SearchTextField::Description, 1.5),
+        (SearchTextField::ParamNames, 1.0),
+        (SearchTextField::ParamDescriptions, 0.75),
+        (SearchTextField::NamespaceDescription, 1.0),
+        (SearchTextField::Examples, 1.0),
+    ] {
+        if declared(field) {
+            if let Some(text) = e.index_form.search_text.get(&field) {
+                if !text.is_empty() {
+                    out.push((field, weight, text.clone()));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `name_split` — split a surface name on separators and case boundaries:
+/// `fs.readFile` → `fs read file`. Deterministic, allocation-light.
+fn name_split(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 8);
+    let mut prev_lower_or_digit = false;
+    for c in name.chars() {
+        if c.is_alphanumeric() {
+            if prev_lower_or_digit && c.is_uppercase() {
+                out.push(' ');
+            }
+            out.push(c);
+            prev_lower_or_digit = c.is_lowercase() || c.is_ascii_digit();
+        } else {
+            out.push(' ');
+            prev_lower_or_digit = false;
+        }
+    }
+    out
+}
+
+/// The tokenizer shared by `bm25` and `hierarchical` — lowercase ASCII
+/// alphanumeric runs.
+fn tokenize(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(|t| t.to_lowercase())
+        .collect()
+}
+
+/// One scored hit — `(surface_id, score)` where `score` is the ×10⁶-scaled
+/// integer the result carries (`None` for predicate indexes).
+type Scored = (String, Option<i64>);
+
+/// `bm25` ranking — field-weighted term frequencies (see `search_fields`),
+/// `k1 = 1.2`, `b = 0.75`, Robertson–Zaragoza IDF `ln(1 + (N − n + .5)/(n +
+/// .5))`. Scores scale ×10⁶ into `i64` for canonical JSON.
+fn bm25_rank<'e>(entries: &[&'e CatalogEntry], query_text: &str) -> Vec<(&'e CatalogEntry, i64)> {
+    const K1: f64 = 1.2;
+    const B: f64 = 0.75;
+    let q_terms: Vec<String> = {
+        let mut t = tokenize(query_text);
+        t.sort();
+        t.dedup();
+        t
+    };
+    if q_terms.is_empty() {
+        return Vec::new();
+    }
+    // Per-entry weighted doc: term → weighted freq, plus weighted length.
+    let docs: Vec<(&CatalogEntry, BTreeMap<String, f64>, f64)> = entries
+        .iter()
+        .map(|e| {
+            let mut tf: BTreeMap<String, f64> = BTreeMap::new();
+            let mut len = 0.0;
+            for (_, w, text) in search_fields(e) {
+                for tok in tokenize(&text) {
+                    *tf.entry(tok).or_insert(0.0) += w;
+                    len += w;
+                }
+            }
+            (*e, tf, len)
+        })
+        .collect();
+    let n_docs = docs.len() as f64;
+    let avgdl = if n_docs > 0.0 {
+        docs.iter().map(|(_, _, l)| l).sum::<f64>() / n_docs
+    } else {
+        1.0
+    };
+    let avgdl = if avgdl > 0.0 { avgdl } else { 1.0 };
+    // Document frequency per query term.
+    let mut df: BTreeMap<&str, usize> = BTreeMap::new();
+    for t in &q_terms {
+        let d = docs.iter().filter(|(_, tf, _)| tf.contains_key(t)).count();
+        df.insert(t.as_str(), d);
+    }
+    let mut scored: Vec<(&CatalogEntry, i64)> = docs
+        .iter()
+        .map(|(e, tf, dl)| {
+            let mut s = 0.0;
+            for t in &q_terms {
+                let Some(f) = tf.get(t) else { continue };
+                let n = *df.get(t.as_str()).unwrap_or(&0) as f64;
+                let idf = (1.0 + (n_docs - n + 0.5) / (n + 0.5)).ln();
+                s += idf * (f * (K1 + 1.0)) / (f + K1 * (1.0 - B + B * dl / avgdl));
+            }
+            (*e, (s * 1_000_000.0).round() as i64)
+        })
+        .collect();
+    scored.retain(|(_, s)| *s > 0);
+    scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.surface_id.cmp(&b.0.surface_id)));
+    scored
+}
+
+/// The path segments of a namespace/name string — split on `.`, `::`, `/`,
+/// `-`, `_`; lowercased.
+fn path_segments(s: &str) -> Vec<String> {
+    s.split(|c: char| matches!(c, '.' | ':' | '/' | '-' | '_' | ' '))
+        .filter(|t| !t.is_empty())
+        .map(|t| t.to_lowercase())
+        .collect()
+}
+
+/// `hierarchical` ranking — query segments descend the entry's
+/// `namespace ∥ name` path. Score (pre-scale) = `2 × matched_prefix_depth`
+/// + `1` when the last query segment prefix-matches the surface name; a hit
+/// requires ≥1 matched segment. Segments beyond the namespace compare
+/// against the name split.
+fn hierarchical_rank<'e>(
+    entries: &[&'e CatalogEntry],
+    query_text: &str,
+) -> Vec<(&'e CatalogEntry, i64)> {
+    let q = path_segments(query_text);
+    if q.is_empty() {
+        return Vec::new();
+    }
+    let mut scored: Vec<(&CatalogEntry, i64)> = entries
+        .iter()
+        .filter_map(|e| {
+            let mut path: Vec<String> = e
+                .namespace
+                .as_deref()
+                .map(path_segments)
+                .unwrap_or_default();
+            path.extend(path_segments(&e.name));
+            // Longest common prefix length of query segments vs path.
+            let mut depth = 0usize;
+            for (qs, ps) in q.iter().zip(path.iter()) {
+                if qs == ps {
+                    depth += 1;
+                } else {
+                    break;
+                }
+            }
+            // A single-segment query also descends by name alone (the
+            // segment matches any path segment or name-prefix).
+            let name_hit = q
+                .last()
+                .is_some_and(|last| path_segments(&e.name).iter().any(|n| n.starts_with(last.as_str())));
+            if depth == 0 && !name_hit {
+                return None;
+            }
+            let mut score = (2 * depth) as i64;
+            if name_hit {
+                score += 1;
+            }
+            Some((*e, score * 1_000_000))
+        })
+        .collect();
+    scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.surface_id.cmp(&b.0.surface_id)));
+    scored
+}
+
+/// The per-variant matcher — returns scored hits over `candidates` (the
+/// caller's filtered set: non-hidden, plan-mode-restricted, structured
+/// filters already applied is the caller's choice — this layer applies
+/// `matches_structured` itself so every variant honours it uniformly).
+fn variant_hits<'e>(
+    index: &CatalogIndex,
+    candidates: &[&'e CatalogEntry],
+    query: &DiscoveryQuery,
+    structured: Option<&StructuredQuery>,
+) -> Result<Vec<Scored>, DiscoveryQueryInvalid> {
+    let filtered: Vec<&CatalogEntry> = candidates
+        .iter()
+        .copied()
+        .filter(|e| structured.is_none_or(|s| matches_structured(e, s)))
+        .collect();
+    match index {
+        CatalogIndex::ExactName => Ok(filtered
+            .into_iter()
+            .filter(|e| e.name == query.text)
+            .map(|e| (e.surface_id.clone(), None))
+            .collect()),
+        CatalogIndex::StaticAllowlist(ids) => Ok(filtered
+            .into_iter()
+            .filter(|e| ids.contains(&e.surface_id) && (structured.is_some() || e.name == query.text))
+            .map(|e| (e.surface_id.clone(), None))
+            .collect()),
+        CatalogIndex::LexicalRegex => {
+            if matches!(query.form, DiscoveryForm::NaturalLanguage) {
+                return Err(DiscoveryQueryInvalid::UnsupportedForm);
+            }
+            let re = crate::regex::Regex::compile(&query.text).map_err(|e| {
+                DiscoveryQueryInvalid::InvalidPattern {
+                    reason: e.to_string(),
+                }
+            })?;
+            Ok(filtered
+                .into_iter()
+                .filter(|e| {
+                    search_fields(e)
+                        .iter()
+                        .any(|(_, _, text)| re.is_match(text))
+                })
+                .map(|e| (e.surface_id.clone(), None))
+                .collect())
+        }
+        CatalogIndex::Bm25 => {
+            if matches!(query.form, DiscoveryForm::Regex) {
+                return Err(DiscoveryQueryInvalid::UnsupportedForm);
+            }
+            Ok(bm25_rank(&filtered, &query.text)
+                .into_iter()
+                .map(|(e, s)| (e.surface_id.clone(), Some(s)))
+                .collect())
+        }
+        CatalogIndex::Hierarchical => {
+            if matches!(query.form, DiscoveryForm::Regex) {
+                return Err(DiscoveryQueryInvalid::UnsupportedForm);
+            }
+            Ok(hierarchical_rank(&filtered, &query.text)
+                .into_iter()
+                .map(|(e, s)| (e.surface_id.clone(), Some(s)))
+                .collect())
+        }
+    }
+}
+
+/// `query(index, catalog, query, max_reveal)` — the C0/C1 index executor
+/// over the whole catalog's non-hidden entries (I-CLOSED). `|hits| ≤
+/// min(query.limit, max_reveal_per_search)` (ceiling 32); an empty result is
+/// normal. The plan-mode restriction (`hits ⊆ indexed|deferred` members)
+/// lives in [`discover`], the `discover_surfaces` lowering.
 pub fn index_query(
     index: &CatalogIndex,
     catalog: &Catalog,
+    query: &DiscoveryQuery,
+    max_reveal_per_search: u64,
+) -> Result<DiscoveryResult, DiscoveryQueryInvalid> {
+    let candidates: Vec<&CatalogEntry> = catalog.entries.iter().filter(|e| !e.hidden).collect();
+    query_over(index, &candidates, query, max_reveal_per_search)
+}
+
+/// The shared query executor — validate, dispatch per variant, bound, rank.
+fn query_over(
+    index: &CatalogIndex,
+    candidates: &[&CatalogEntry],
     query: &DiscoveryQuery,
     max_reveal_per_search: u64,
 ) -> Result<DiscoveryResult, DiscoveryQueryInvalid> {
@@ -608,67 +965,55 @@ pub fn index_query(
         .unwrap_or(u64::MAX)
         .min(max_reveal_per_search)
         .min(32);
-    let structured = match &query.form {
-        DiscoveryForm::Structured(s) => Some(s.clone()),
-        _ => None,
-    };
-    let matches_filter = |e: &CatalogEntry| -> bool {
-        if let Some(s) = &structured {
-            if let Some(ns) = &s.namespace {
-                if e.namespace.as_deref() != Some(ns.as_str()) {
-                    return false;
-                }
-            }
-            if let Some(d) = &s.effect_filter {
-                if !e.effect_summary.iter().any(|x| x == d) {
-                    return false;
-                }
-            }
-            if !s.tags.iter().all(|t| e.index_form.tags.contains(t)) {
-                return false;
-            }
-            if let Some(src) = &s.source {
-                if !e.source.as_str().starts_with(src.as_str()) {
-                    return false;
-                }
-            }
-        }
-        true
-    };
-    let mut hits: Vec<&CatalogEntry> = match index {
-        CatalogIndex::ExactName => catalog
-            .entries
-            .iter()
-            .filter(|e| !e.hidden && e.name == query.text && matches_filter(e))
-            .collect(),
-        CatalogIndex::StaticAllowlist(ids) => catalog
-            .entries
-            .iter()
-            .filter(|e| {
-                !e.hidden
-                    && ids.contains(&e.surface_id)
-                    && matches_filter(e)
-                    && (structured.is_some() || e.name == query.text)
-            })
-            .collect(),
-    };
-    hits.sort_by(|a, b| a.surface_id.cmp(&b.surface_id));
+    let structured = structured_of(query);
+    let mut hits = variant_hits(index, candidates, query, structured)?;
+    // Predicate indexes rank by surface_id; scoring indexes are already
+    // ordered by (score desc, surface_id asc).
+    if hits.iter().all(|(_, s)| s.is_none()) {
+        hits.sort_by(|a, b| a.0.cmp(&b.0));
+    }
     let truncated = hits.len() as u64 > bound;
     hits.truncate(bound as usize);
     Ok(DiscoveryResult {
         hits: hits
             .iter()
             .enumerate()
-            .map(|(i, e)| DiscoveryHit {
-                surface_id: e.surface_id.clone(),
+            .map(|(i, (sid, score))| DiscoveryHit {
+                surface_id: sid.clone(),
                 rank: i as u64 + 1,
-                score: None,
+                score: score.map(Json::Int),
             })
             .collect(),
         truncated,
         executed_by: "kernel".to_string(),
         cost: None,
     })
+}
+
+/// `discover(plan, index, catalog, query, params)` — the kernel lowering of
+/// the `discover_surfaces` capability (§5d.3 §2; ADR-0094 D1): the index
+/// answers over the plan members whose mode is `indexed` or `deferred`
+/// (`hits ⊆ indexed|deferred` — a `direct` or omitted surface is never a
+/// discovery hit; a hidden surface is never a candidate).
+pub fn discover(
+    plan: &ExposurePlan,
+    index: &CatalogIndex,
+    catalog: &Catalog,
+    query: &DiscoveryQuery,
+    params: &ExposurePolicyParams,
+) -> Result<DiscoveryResult, DiscoveryQueryInvalid> {
+    let discoverable: std::collections::BTreeSet<&str> = plan
+        .entries
+        .iter()
+        .filter(|(_, m)| matches!(m, ExposureMode::Indexed | ExposureMode::Deferred))
+        .map(|(s, _)| s.as_str())
+        .collect();
+    let candidates: Vec<&CatalogEntry> = catalog
+        .entries
+        .iter()
+        .filter(|e| !e.hidden && discoverable.contains(e.surface_id.as_str()))
+        .collect();
+    query_over(index, &candidates, query, params.max_reveal_per_search)
 }
 
 // ── Catalog deltas / epochs (schemas — ADR-0095 D1/D2) ───────────────────────
@@ -723,6 +1068,212 @@ pub struct CatalogEpoch {
     pub loss_report: Option<Json>,
     /// Who adopted it.
     pub adopted_by: String,
+}
+
+impl CatalogDelta {
+    /// The canonical payload form (the `action.tool.catalog.delta` body and
+    /// the `bundle_delta` member of `CatalogEpoch`): added/changed entries
+    /// are *surface descriptors*, never definitions, and carry the ADR-0021
+    /// lowering stamp `authority = unverified` (ADR-0095 D2 — adopted
+    /// surfaces are lifted, never coerced).
+    pub fn to_json(&self) -> Json {
+        let entry_json = |e: &CatalogEntry| {
+            Json::obj([
+                ("surface_id", Json::str(e.surface_id.clone())),
+                ("capability", Json::str(e.capability.clone())),
+                ("version_id", Json::str(e.version_id.clone())),
+                ("name", Json::str(e.name.clone())),
+                ("authority", Json::str("unverified")),
+            ])
+        };
+        Json::obj([
+            ("source_ref", Json::str(self.source_ref.clone())),
+            (
+                "cause",
+                Json::str(match self.cause {
+                    SyncTrigger::ListChanged => "list_changed",
+                    SyncTrigger::TtlExpired => "ttl_expired",
+                    SyncTrigger::Reconnect => "reconnect",
+                    SyncTrigger::ExtensionEnabled => "extension_enabled",
+                    SyncTrigger::ExtensionDisabled => "extension_disabled",
+                    SyncTrigger::AuthorizationChanged => "authorization_changed",
+                }),
+            ),
+            (
+                "added",
+                Json::Arr(self.added.iter().map(entry_json).collect()),
+            ),
+            (
+                "removed",
+                Json::Arr(self.removed.iter().map(|s| Json::str(s.clone())).collect()),
+            ),
+            (
+                "changed",
+                Json::Arr(self.changed.iter().map(entry_json).collect()),
+            ),
+        ])
+    }
+}
+
+/// `catalog_delta(catalog, source_ref, cause, listing)` — the catalog-local
+/// half of `sync_source` (§5d.3 §2; ADR-0095 D1): given a source's *new*
+/// listing (already-lifted entries — the MCP edge that produces the listing
+/// is R-2.5.4/S3.9), compute `{added, removed, changed}` against the
+/// catalog's current entries for `source_ref`. `changed` compares the
+/// lowered entry modulo `availability`/`permission_coverage` (run-state
+/// fields, not listing data). Every delta — including empty — is emitted as
+/// `action.tool.catalog.delta` by the caller.
+pub fn catalog_delta(
+    catalog: &Catalog,
+    source_ref: &str,
+    cause: SyncTrigger,
+    listing: &[CatalogEntry],
+) -> CatalogDelta {
+    let current: BTreeMap<&str, &CatalogEntry> = catalog
+        .entries
+        .iter()
+        .filter(|e| e.source.as_str() == source_ref)
+        .map(|e| (e.surface_id.as_str(), e))
+        .collect();
+    let mut added = Vec::new();
+    let mut changed = Vec::new();
+    let mut removed = Vec::new();
+    let new_ids: BTreeSet<&str> = listing.iter().map(|e| e.surface_id.as_str()).collect();
+    for e in listing {
+        match current.get(e.surface_id.as_str()) {
+            None => added.push(e.clone()),
+            Some(old) => {
+                let mut cmp = (*old).clone();
+                cmp.availability = e.availability.clone();
+                cmp.permission_coverage = e.permission_coverage.clone();
+                if cmp != *e {
+                    changed.push(e.clone());
+                }
+            }
+        }
+    }
+    for (sid, _) in current.iter() {
+        if !new_ids.contains(sid) {
+            removed.push(sid.to_string());
+        }
+    }
+    removed.sort();
+    CatalogDelta {
+        source_ref: source_ref.to_string(),
+        cause,
+        added,
+        removed,
+        changed,
+    }
+}
+
+/// `adopt`'s refusal — `CatalogDriftRefused` (§5d.3 §2). `ask` is the C2
+/// `permission_request` path (ADR-0095 D2); at C1 it is the typed refusal.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CatalogDriftError {
+    /// `drift_policy = ask` — a permission request is required (C2).
+    Refused,
+}
+
+impl std::fmt::Display for CatalogDriftError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CatalogDriftError::Refused => write!(f, "CatalogDriftRefused"),
+        }
+    }
+}
+
+impl std::error::Error for CatalogDriftError {}
+
+/// The `adopt` result (§5d.3 §2; ADR-0095 D2).
+#[derive(Debug, Clone, PartialEq)]
+pub enum AdoptOutcome {
+    /// `freeze` — `removed` entries become `availability =
+    /// unavailable(removed)`; `added`/`changed` are recorded on the delta
+    /// but are never entries; `catalog_id`, `epoch` and
+    /// `configuration_version_id` are unchanged (AC-R-2.5.3-8's freeze
+    /// half).
+    Frozen {
+        /// The catalog with `removed` marked `unavailable(removed)`.
+        catalog: Catalog,
+    },
+    /// `adopt` — the delta lowers into a new epoch: `removed` entries drop,
+    /// `added`/`changed` entries join as catalog members (their lowering
+    /// stamps `authority = unverified` on the `bundle_delta` descriptors),
+    /// `catalog_id` is recomputed and `epoch` increments.
+    Adopted {
+        /// The new-epoch catalog.
+        catalog: Catalog,
+        /// The `action.tool.catalog.epoch` record.
+        epoch: CatalogEpoch,
+    },
+}
+
+/// `adopt(catalog, delta, drift_policy, adopted_by)` (§5d.3 §2; ADR-0095
+/// D2). The `freeze` half is the S2.10 slice; `adopt`'s incremental
+/// lowering lands fully at Stage 4 — this implements the epoch mechanics
+/// (membership, id, delta record) with the `unverified` authority stamp
+/// carried on the `bundle_delta` descriptors.
+pub fn adopt(
+    catalog: &Catalog,
+    delta: &CatalogDelta,
+    drift_policy: DriftPolicy,
+    adopted_by: &str,
+) -> Result<AdoptOutcome, CatalogDriftError> {
+    match drift_policy {
+        DriftPolicy::Ask => Err(CatalogDriftError::Refused),
+        DriftPolicy::Freeze => {
+            let mut out = catalog.clone();
+            let removed: BTreeSet<&str> = delta.removed.iter().map(|s| s.as_str()).collect();
+            for e in out.entries.iter_mut() {
+                if removed.contains(e.surface_id.as_str()) {
+                    e.availability = Availability::Unavailable("removed".to_string());
+                }
+            }
+            // I-EPOCH: `catalog_id` is unchanged under freeze — the id is
+            // over the entry *set* (surface ids + epoch + bundle), not
+            // run-state fields.
+            debug_assert_eq!(out.catalog_id, catalog.catalog_id);
+            Ok(AdoptOutcome::Frozen { catalog: out })
+        }
+        DriftPolicy::Adopt => {
+            let removed: BTreeSet<&str> = delta.removed.iter().map(|s| s.as_str()).collect();
+            let mut entries: Vec<CatalogEntry> = catalog
+                .entries
+                .iter()
+                .filter(|e| !removed.contains(e.surface_id.as_str()))
+                .cloned()
+                .collect();
+            for e in delta.changed.iter().chain(delta.added.iter()) {
+                match entries.iter_mut().find(|x| x.surface_id == e.surface_id) {
+                    Some(slot) => *slot = e.clone(),
+                    None => entries.push(e.clone()),
+                }
+            }
+            entries.sort_by(|a, b| a.surface_id.cmp(&b.surface_id));
+            let new_epoch = catalog.epoch + 1;
+            let new_id = catalog_id_of(&entries, new_epoch, &catalog.bundle_id);
+            let epoch = CatalogEpoch {
+                epoch: new_epoch,
+                catalog_id_prev: catalog.catalog_id.clone(),
+                catalog_id: new_id.clone(),
+                bundle_delta: delta.to_json(),
+                loss_report: None,
+                adopted_by: adopted_by.to_string(),
+            };
+            Ok(AdoptOutcome::Adopted {
+                catalog: Catalog {
+                    catalog_id: new_id,
+                    epoch: new_epoch,
+                    bundle_id: catalog.bundle_id.clone(),
+                    sources: catalog.sources.clone(),
+                    entries,
+                    index_ref: None, // index rebuilt — `action.tool.catalog.built` is the caller's row
+                },
+                epoch,
+            })
+        }
+    }
 }
 
 // ── Errors (the spec's error column) ─────────────────────────────────────────
@@ -905,6 +1456,11 @@ fn entry_from_binding(
             search_text_fields: [SearchTextField::Name, SearchTextField::Description]
                 .into_iter()
                 .collect(),
+            // No field text is materialized at `build_catalog` — the
+            // capability's `purpose`/`Text` leaves live behind refs the
+            // compiler does not resolve (I-CLOSED). A lowering or adoption
+            // step that materializes them fills `search_text`.
+            search_text: BTreeMap::new(),
         },
         size_tokens: surface_size_tokens(binding),
         estimator_ref: "bytes_div_4".to_string(),
@@ -1415,4 +1971,56 @@ pub fn evict(
             .any(|c| c.surface_id == e.surface_id && c.pinned)
     });
     out
+}
+
+/// A reveal-retention boundary (§5d.3 §3 `retention`; ADR-0093 D6 — the
+/// S2.10 "RevealedSet retention" slice).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RevealBoundary {
+    /// The producing model call ended — `retention = call` entries expire.
+    CallEnd,
+    /// The producing turn ended — `call` and `turn` entries expire.
+    TurnEnd,
+    /// The run ended — every retention class expires (the run's revealed
+    /// set is run state; this is the terminal fold, used by projections,
+    /// not a delivery change).
+    RunEnd,
+}
+
+/// `expire_reveals(revealed, catalog, boundary)` — drop the entries whose
+/// `retention` ends at `boundary`; `run`/`until_evicted` survive call/turn
+/// boundaries (`RunEnd` ends all). Pinned surfaces never expire (the same
+/// kernel rule `evict` enforces — a pinned surface stays `direct`).
+///
+/// Returns `(revealed', expired[])` — `expired` is the surface-id list the
+/// caller emits as `action.tool.surface.evicted{cause: policy}` rows (the
+/// event is the caller's; this is the pure fold).
+pub fn expire_reveals(
+    revealed: &RevealedSet,
+    catalog: &Catalog,
+    boundary: RevealBoundary,
+) -> (RevealedSet, Vec<String>) {
+    let mut out = revealed.clone();
+    let mut expired = Vec::new();
+    out.entries.retain(|e| {
+        // Pinned surfaces never expire.
+        let pinned = catalog
+            .entries
+            .iter()
+            .any(|c| c.surface_id == e.surface_id && c.pinned);
+        if pinned {
+            return true;
+        }
+        let keep = match (boundary, e.retention) {
+            (RevealBoundary::CallEnd, Retention::Call) => false,
+            (RevealBoundary::TurnEnd, Retention::Call | Retention::Turn) => false,
+            (RevealBoundary::RunEnd, _) => false,
+            _ => true,
+        };
+        if !keep {
+            expired.push(e.surface_id.clone());
+        }
+        keep
+    });
+    (out, expired)
 }
