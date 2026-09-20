@@ -63,6 +63,8 @@ pub fn control_strategy_class() -> ClassRecord {
                     ("supports_escalation", Json::Null),
                     ("supports_fallback", Json::Null),
                     ("deterministic", Json::Null),
+                    ("steer_mode", Json::Null),
+                    ("concurrent_input", Json::Null),
                 ]),
             ),
             ("additionalProperties", Json::Bool(false)),

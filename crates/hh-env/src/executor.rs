@@ -236,6 +236,123 @@ pub fn bind(
     Ok(())
 }
 
+/// `EnvironmentRequirement` — one member of a capability's
+/// `execution_requirement.env_requires[]` (the spec's
+/// `env_requires(EnvironmentRequirement)` — §5d.1's `PreconditionDomain` arm
+/// checked at `bind`, AC-R-2.5.1-8). The member spellings are closed:
+/// `{kind: "binary", name}` (an executable resolvable in the environment),
+/// `{kind: "env", key}` (an environment variable the environment declares),
+/// `{kind: "path", path}` (a path that must exist inside the environment).
+/// Unknown kinds/members are refused, never coerced.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EnvironmentRequirement {
+    /// `binary` — an executable by name resolvable in the environment.
+    Binary {
+        /// The binary name.
+        name: String,
+    },
+    /// `env` — an environment variable key the environment declares.
+    Env {
+        /// The variable key.
+        key: String,
+    },
+    /// `path` — a path that must exist in the environment.
+    Path {
+        /// The path.
+        path: String,
+    },
+}
+
+impl EnvironmentRequirement {
+    /// The canonical spelling of one member (`kind:arg`).
+    pub fn display(&self) -> String {
+        match self {
+            EnvironmentRequirement::Binary { name } => format!("binary:{name}"),
+            EnvironmentRequirement::Env { key } => format!("env:{key}"),
+            EnvironmentRequirement::Path { path } => format!("path:{path}"),
+        }
+    }
+
+    /// Parse one `env_requires[]` member (`{kind, name|key|path}`).
+    pub fn from_json(j: &Json) -> Result<EnvironmentRequirement, BindError> {
+        let kind = j.get("kind").and_then(Json::as_str).ok_or_else(|| {
+            BindError::MalformedRequirement {
+                member: "env_requires member needs kind".into(),
+            }
+        })?;
+        let str_member = |k: &str| -> Result<String, BindError> {
+            j.get(k)
+                .and_then(Json::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| BindError::MalformedRequirement {
+                    member: format!("env_requires.{kind}.{k} missing"),
+                })
+        };
+        match kind {
+            "binary" => Ok(EnvironmentRequirement::Binary {
+                name: str_member("name")?,
+            }),
+            "env" => Ok(EnvironmentRequirement::Env {
+                key: str_member("key")?,
+            }),
+            "path" => Ok(EnvironmentRequirement::Path {
+                path: str_member("path")?,
+            }),
+            other => Err(BindError::MalformedRequirement {
+                member: format!("env_requires kind {other}"),
+            }),
+        }
+    }
+}
+
+/// `EnvironmentProbe` — the usability-probe surface a bound environment
+/// exposes to `bind` (§5d.1: `bind(version_id, environment, executors[])`;
+/// AC-R-2.5.1-8). Each answer is tri-state: `Some(bool)` decided,
+/// `None` the probe cannot decide (the fact class is undeclared for this
+/// environment — `bind` treats undecidable as unmet, never silently passes).
+pub trait EnvironmentProbe {
+    /// Whether `name` resolves to an executable in the environment.
+    fn binary_present(&self, name: &str) -> Option<bool>;
+    /// Whether `key` is declared in the environment's variable set.
+    fn env_key_present(&self, key: &str) -> Option<bool>;
+    /// Whether `path` exists inside the environment.
+    fn path_present(&self, path: &str) -> Option<bool>;
+
+    /// Evaluate one requirement — `Some(bool)` decided, `None` undecidable.
+    fn satisfied(&self, req: &EnvironmentRequirement) -> Option<bool> {
+        match req {
+            EnvironmentRequirement::Binary { name } => self.binary_present(name),
+            EnvironmentRequirement::Env { key } => self.env_key_present(key),
+            EnvironmentRequirement::Path { path } => self.path_present(path),
+        }
+    }
+}
+
+/// `LocalEnvProbe` — the probe for `local_host`/`local_sandboxed`
+/// environments: `binary` resolves against the process `PATH` (existence,
+/// never execution); `env` reads the process environment's declared keys;
+/// `path` is an existence check. Offline — no subprocess, no network.
+#[derive(Debug, Default)]
+pub struct LocalEnvProbe;
+
+impl EnvironmentProbe for LocalEnvProbe {
+    fn binary_present(&self, name: &str) -> Option<bool> {
+        let path_var = std::env::var_os("PATH")?;
+        Some(std::env::split_paths(&path_var).any(|dir| {
+            let candidate = dir.join(name);
+            candidate.is_file()
+        }))
+    }
+
+    fn env_key_present(&self, key: &str) -> Option<bool> {
+        Some(std::env::var_os(key).is_some())
+    }
+
+    fn path_present(&self, path: &str) -> Option<bool> {
+        Some(std::path::Path::new(path).exists())
+    }
+}
+
 /// `ExecutionRequirement` — the parsed members of a capability's
 /// `execution_requirement` the bind check reads (the capability's declared
 /// floor). Defaults are the honest minimum (no floor ⇒ nothing to check).
@@ -248,6 +365,13 @@ pub struct ExecutionRequirement {
     /// a capability that does not declare idempotency needs no executor store;
     /// the kernel's dedup still guards it).
     pub minimum_dedup: DedupSupport,
+    /// `env_requires[]` — the environment facts `bind` must satisfy
+    /// (S2.11 — the Stage-2 row; AC-R-2.5.1-8).
+    pub env_requires: Vec<EnvironmentRequirement>,
+    /// `capability_requires[]` — `Ref<ToolCapability>` members the link must
+    /// resolve in the same registry snapshot (E1 `capability_requires` —
+    /// §5d.1 check points: `capability_requires` at `link`).
+    pub capability_requires: Vec<hh_hir::refs::Ref>,
 }
 
 impl Default for ExecutionRequirement {
@@ -255,16 +379,18 @@ impl Default for ExecutionRequirement {
         ExecutionRequirement {
             minimum_isolation: IsolationClass::None,
             minimum_dedup: DedupSupport::None,
+            env_requires: Vec::new(),
+            capability_requires: Vec::new(),
         }
     }
 }
 
 impl ExecutionRequirement {
     /// Parse the members of a capability's `execution_requirement` the bind
-    /// check reads — `minimum_isolation`/`isolation` and
-    /// `minimum_dedup`/`dedup` spellings; absent members default to the honest
-    /// minimum (no floor ⇒ nothing to check). Unknown spellings are refused,
-    /// never coerced.
+    /// check reads — `minimum_isolation`/`isolation`, `minimum_dedup`/`dedup`,
+    /// `env_requires[]`, `capability_requires[]`; absent members default to
+    /// the honest minimum (no floor ⇒ nothing to check). Unknown spellings
+    /// are refused, never coerced.
     pub fn from_json(j: &Json) -> Result<ExecutionRequirement, BindError> {
         let iso = j
             .get("minimum_isolation")
@@ -288,9 +414,42 @@ impl ExecutionRequirement {
             })
             .transpose()?
             .unwrap_or(DedupSupport::None);
+        let env_requires = match j.get("env_requires") {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .map(EnvironmentRequirement::from_json)
+                .collect::<Result<Vec<_>, _>>()?,
+            Some(_) => {
+                return Err(BindError::MalformedRequirement {
+                    member: "env_requires must be an array".into(),
+                })
+            }
+            None => Vec::new(),
+        };
+        let capability_requires = match j.get("capability_requires") {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .enumerate()
+                .map(|(i, m)| {
+                    hh_hir::refs::Ref::from_json(m, &format!("capability_requires[{i}]")).map_err(
+                        |e| BindError::MalformedRequirement {
+                            member: format!("capability_requires[{i}]: {e}"),
+                        },
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            Some(_) => {
+                return Err(BindError::MalformedRequirement {
+                    member: "capability_requires must be an array".into(),
+                })
+            }
+            None => Vec::new(),
+        };
         Ok(ExecutionRequirement {
             minimum_isolation: iso,
             minimum_dedup: dedup,
+            env_requires,
+            capability_requires,
         })
     }
 }
@@ -515,16 +674,19 @@ impl std::fmt::Display for BindFailure {
 
 impl std::error::Error for BindFailure {}
 
-/// `bind(version_id, executors[])` — the §5d.1 registry verb (ADR-0088 D5).
-/// Reads the registered capability's `execution_requirement` and declared
-/// effect domains, runs [`bind`] against each [`ExecutorDeclaration`], and
-/// returns the first admissible [`ExecutorBinding`] (deterministic: executors
-/// are tried in declaration order). `env_requires` members are the Stage-2 row
-/// — declared but not yet matched (their presence is recorded on the binding
-/// path, never silently honoured).
+/// `bind(version_id, environment, executors[])` — the §5d.1 registry verb
+/// (ADR-0088 D5). Reads the registered capability's `execution_requirement`
+/// and declared effect domains, probes `env_requires`/`capability_requires`
+/// against `environment`/`store` (S2.11 — AC-R-2.5.1-8: an unmet
+/// `env_requires` is `env_requires_unmet`, never silently honoured; an
+/// undecidable probe answer is unmet — fail-closed), then runs [`bind`]
+/// against each [`ExecutorDeclaration`] and returns the first admissible
+/// [`ExecutorBinding`] (deterministic: executors are tried in declaration
+/// order).
 pub fn bind_capability(
     store: &hh_registry::store::RegistryStore,
     version_id: &str,
+    environment: &dyn EnvironmentProbe,
     executors: &[ExecutorDeclaration],
 ) -> Result<ExecutorBinding, BindFailure> {
     let (cap, _registrar) =
@@ -543,6 +705,57 @@ pub fn bind_capability(
             detail: format!("{e}"),
         }
     })?;
+    // `env_requires` at `bind` (E1 check point; AC-R-2.5.1-8) — an absent or
+    // undecidable fact is `env_requires_unmet`, never a silent pass.
+    for req in &requirement.env_requires {
+        match environment.satisfied(req) {
+            Some(true) => {}
+            Some(false) => {
+                return Err(BindFailure::EnvRequiresUnmet {
+                    requirement: req.display(),
+                })
+            }
+            None => {
+                return Err(BindFailure::EnvRequiresUnmet {
+                    requirement: format!("{} (probe: undecidable)", req.display()),
+                })
+            }
+        }
+    }
+    // `capability_requires` at `link` — each `Ref<ToolCapability>` must
+    // resolve to a capability record in the same registry snapshot (a
+    // `Selector` version is not bindable — the link names pinned records).
+    for dep in &requirement.capability_requires {
+        let vid = match &dep.version {
+            hh_hir::refs::RefVersion::Pinned(v) => v.clone(),
+            hh_hir::refs::RefVersion::Selector(s) => {
+                return Err(BindFailure::NotInstalled {
+                    detail: format!(
+                        "capability_requires unpinned selector {}@{s}",
+                        dep.semantic_id
+                    ),
+                })
+            }
+        };
+        match hh_registry::capability::capability_at(store, &vid) {
+            Ok((dep_cap, _)) => {
+                if dep_cap.node.semantic_id() != dep.semantic_id {
+                    return Err(BindFailure::NotInstalled {
+                        detail: format!(
+                            "capability_requires {vid} resolves {} not {}",
+                            dep_cap.node.semantic_id(),
+                            dep.semantic_id
+                        ),
+                    });
+                }
+            }
+            Err(e) => {
+                return Err(BindFailure::NotInstalled {
+                    detail: format!("capability_requires {} unmet: {e:?}", dep.semantic_id),
+                })
+            }
+        }
+    }
     let env_class = t
         .execution_requirement
         .get("environment_class")
@@ -615,4 +828,314 @@ pub fn bind_capability(
     Err(first_failure.unwrap_or(BindFailure::NotInstalled {
         detail: "no executors declared".into(),
     }))
+}
+
+/// `UsabilityReport` — the catalog view's per-environment usability probe
+/// result (AC-R-2.5.1-8/AC-E1-8): `usable` when `bind` succeeds;
+/// `unusable` carrying the typed [`BindFailure`] otherwise — an unbindable
+/// capability is reported, never silently dropped.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UsabilityReport {
+    /// `usable` | `unusable`.
+    pub usability: &'static str,
+    /// The bind failure that makes the view `unusable`.
+    pub failure: Option<BindFailure>,
+    /// The admissible binding when `usable`.
+    pub binding: Option<ExecutorBinding>,
+}
+
+/// `usability(version_id, environment, executors[])` — the per-environment
+/// probe the catalog view renders (§5d.1: "a record with no successful
+/// binding in an environment is `usability = unusable` in that environment's
+/// catalog view"). Deterministic: the same `(store snapshot, version_id,
+/// probe answers, executors)` yields the same report.
+pub fn usability(
+    store: &hh_registry::store::RegistryStore,
+    version_id: &str,
+    environment: &dyn EnvironmentProbe,
+    executors: &[ExecutorDeclaration],
+) -> UsabilityReport {
+    match bind_capability(store, version_id, environment, executors) {
+        Ok(b) => UsabilityReport {
+            usability: "usable",
+            failure: None,
+            binding: Some(b),
+        },
+        Err(f) => UsabilityReport {
+            usability: "unusable",
+            failure: Some(f),
+            binding: None,
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hh_containment::policy::IsolationClass;
+    use hh_hir::document::Node;
+    use hh_hir::kinds::{EntityKind, ToolEffects};
+    use hh_hir::leaves::Text;
+    use hh_hir::records::{KindRecord, Resources, ScopeBindings, ToolCapabilityRecord};
+    use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+    use hh_registry::records::{CapabilityRecord, RegistryRecord};
+    use hh_registry::store::RegistryStore;
+    use std::collections::BTreeSet;
+    use std::path::PathBuf;
+
+    fn dir(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("hh-exec-test-{}-{}", std::process::id(), tag));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    }
+
+    fn prov() -> ProvenanceRecord {
+        ProvenanceRecord::kernel("executor.test", 0)
+    }
+
+    fn text_prov(seq: u64) -> ProvenanceRecord {
+        ProvenanceRecord::minted(
+            Origin::human("tester", HumanRole::Author),
+            PersistenceScope::Definition,
+            seq,
+        )
+    }
+
+    /// A V-E1-clean capability with the given `execution_requirement`.
+    fn cap_record(exec_req: Json) -> ToolCapabilityRecord {
+        ToolCapabilityRecord {
+            purpose: Text::new("a test capability", "test", text_prov(1)),
+            input_schema: Json::obj([(
+                "properties",
+                Json::obj([("path", Json::obj([("type", Json::str("string"))]))]),
+            )]),
+            output_schema: None,
+            effects: ToolEffects::Pure,
+            preconditions: vec![],
+            scope_bindings: ScopeBindings::Unknown,
+            resources: Resources::NoneDeclared,
+            observation_contract: Json::obj([(
+                "error_classes",
+                Json::Arr(vec![Json::str("io_error")]),
+            )]),
+            cost_model: None,
+            execution_requirement: exec_req,
+            source: Json::obj([("kind", Json::str("native_variant"))]),
+            exposure_hint: Json::obj([("default", Json::str("direct"))]),
+            postconditions: vec![],
+            flow_contract: None,
+            action_patterns: Vec::new(),
+        }
+    }
+
+    fn register_cap(store: &mut RegistryStore, exec_req: Json) -> String {
+        let node = Node::new(
+            EntityKind::ToolCapability,
+            KindRecord::ToolCapability(cap_record(exec_req)),
+            text_prov(1),
+        );
+        store
+            .register(
+                RegistryRecord::Capability(CapabilityRecord { node }),
+                &prov(),
+                None,
+            )
+            .expect("register")
+            .version_id
+    }
+
+    fn executor() -> ExecutorDeclaration {
+        ExecutorDeclaration {
+            executor_id: "mock/1".to_string(),
+            isolation_support: IsolationClass::None,
+            dedup_support: DedupSupport::BestEffort,
+            probe_support: ProbeSupport::Check,
+            interrupt: InterruptSupport::Supported,
+            error_classes: BTreeSet::new(),
+            streams: true,
+            domains: BTreeSet::new(),
+        }
+    }
+
+    /// A scripted probe — each fact class answers from the named sets;
+    /// `None` members make that class undecidable.
+    struct StubProbe {
+        binaries: Option<BTreeSet<String>>,
+        env_keys: Option<BTreeSet<String>>,
+        paths: Option<BTreeSet<String>>,
+    }
+
+    impl StubProbe {
+        fn all() -> Self {
+            StubProbe {
+                binaries: Some(BTreeSet::new()),
+                env_keys: Some(BTreeSet::new()),
+                paths: Some(BTreeSet::new()),
+            }
+        }
+    }
+
+    impl EnvironmentProbe for StubProbe {
+        fn binary_present(&self, name: &str) -> Option<bool> {
+            self.binaries.as_ref().map(|s| s.contains(name))
+        }
+        fn env_key_present(&self, key: &str) -> Option<bool> {
+            self.env_keys.as_ref().map(|s| s.contains(key))
+        }
+        fn path_present(&self, path: &str) -> Option<bool> {
+            self.paths.as_ref().map(|s| s.contains(path))
+        }
+    }
+
+    // ── AC-R-2.5.1-8 — `env_requires`/`capability_requires` at `bind` ────────
+
+    #[test]
+    fn ac_r_2_5_1_8_env_requires_satisfied_binds_usable() {
+        let mut store = RegistryStore::open(dir("e251-8-sat"), &prov()).unwrap();
+        let vid = register_cap(
+            &mut store,
+            Json::obj([
+                ("environment_class", Json::str("local_host")),
+                (
+                    "env_requires",
+                    Json::Arr(vec![
+                        Json::obj([("kind", Json::str("binary")), ("name", Json::str("jq"))]),
+                        Json::obj([("kind", Json::str("env")), ("key", Json::str("HOME"))]),
+                    ]),
+                ),
+            ]),
+        );
+        let mut env = StubProbe::all();
+        env.binaries.as_mut().unwrap().insert("jq".into());
+        env.env_keys.as_mut().unwrap().insert("HOME".into());
+        let binding = bind_capability(&store, &vid, &env, &[executor()]).expect("bind");
+        assert_eq!(binding.usability, "usable");
+        assert_eq!(binding.environment_handle_class, "local_host");
+    }
+
+    #[test]
+    fn ac_r_2_5_1_8_env_requires_unmet_refuses_typed() {
+        let mut store = RegistryStore::open(dir("e251-8-unmet"), &prov()).unwrap();
+        let vid = register_cap(
+            &mut store,
+            Json::obj([(
+                "env_requires",
+                Json::Arr(vec![Json::obj([
+                    ("kind", Json::str("binary")),
+                    ("name", Json::str("missing-tool")),
+                ])]),
+            )]),
+        );
+        let env = StubProbe::all(); // decides, but the binary is absent
+        let err = bind_capability(&store, &vid, &env, &[executor()]).expect_err("unmet");
+        assert_eq!(
+            err,
+            BindFailure::EnvRequiresUnmet {
+                requirement: "binary:missing-tool".into()
+            }
+        );
+        // The catalog view reports `unusable` carrying the typed refusal.
+        let report = usability(&store, &vid, &env, &[executor()]);
+        assert_eq!(report.usability, "unusable");
+        assert!(matches!(
+            report.failure,
+            Some(BindFailure::EnvRequiresUnmet { .. })
+        ));
+    }
+
+    #[test]
+    fn ac_r_2_5_1_8_undecidable_probe_is_unmet_never_silent() {
+        let mut store = RegistryStore::open(dir("e251-8-undec"), &prov()).unwrap();
+        let vid = register_cap(
+            &mut store,
+            Json::obj([(
+                "env_requires",
+                Json::Arr(vec![Json::obj([
+                    ("kind", Json::str("path")),
+                    ("path", Json::str("/x")),
+                ])]),
+            )]),
+        );
+        let env = StubProbe {
+            binaries: None,
+            env_keys: None,
+            paths: None, // the probe cannot decide
+        };
+        let err = bind_capability(&store, &vid, &env, &[executor()]).expect_err("undecidable");
+        assert!(
+            matches!(err, BindFailure::EnvRequiresUnmet { ref requirement }
+                if requirement.contains("undecidable")),
+            "undecidable must be env_requires_unmet, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn ac_r_2_5_1_8_capability_requires_checked_at_link() {
+        let mut store = RegistryStore::open(dir("e251-8-capreq"), &prov()).unwrap();
+        let dep_vid = register_cap(&mut store, Json::obj([]));
+        let dep_semantic = hh_registry::capability::capability_at(&store, &dep_vid)
+            .unwrap()
+            .0
+            .node
+            .semantic_id();
+        // Satisfied: the dependency resolves to the pinned record.
+        let vid = register_cap(
+            &mut store,
+            Json::obj([(
+                "capability_requires",
+                Json::Arr(vec![Json::obj([
+                    ("semantic_id", Json::str(dep_semantic.as_str())),
+                    ("version_id", Json::str(dep_vid.as_str())),
+                ])]),
+            )]),
+        );
+        let env = StubProbe::all();
+        bind_capability(&store, &vid, &env, &[executor()]).expect("dep met");
+        // Unmet: a pinned ref to a version not in the snapshot.
+        let vid2 = register_cap(
+            &mut store,
+            Json::obj([(
+                "capability_requires",
+                Json::Arr(vec![Json::obj([
+                    ("semantic_id", Json::str("dep/absent")),
+                    ("version_id", Json::str("cap/9")),
+                ])]),
+            )]),
+        );
+        let err = bind_capability(&store, &vid2, &env, &[executor()]).expect_err("dep unmet");
+        assert!(matches!(err, BindFailure::NotInstalled { .. }));
+    }
+
+    #[test]
+    fn ac_r_2_5_1_8_executor_floors_still_typed() {
+        let mut store = RegistryStore::open(dir("e251-8-floors"), &prov()).unwrap();
+        let vid = register_cap(
+            &mut store,
+            Json::obj([("minimum_isolation", Json::str("process_sandbox"))]),
+        );
+        let env = StubProbe::all();
+        let err = bind_capability(&store, &vid, &env, &[executor()]).expect_err("weak iso");
+        assert!(matches!(
+            err,
+            BindFailure::IsolationInsufficient {
+                required: IsolationClass::ProcessSandbox,
+                declared: IsolationClass::None
+            }
+        ));
+    }
+
+    #[test]
+    fn ac_r_2_5_1_8_malformed_env_requires_refuses() {
+        let mut store = RegistryStore::open(dir("e251-8-bad"), &prov()).unwrap();
+        let vid = register_cap(
+            &mut store,
+            Json::obj([(
+                "env_requires",
+                Json::Arr(vec![Json::obj([("kind", Json::str("widget"))])]),
+            )]),
+        );
+        let err =
+            bind_capability(&store, &vid, &StubProbe::all(), &[executor()]).expect_err("malformed");
+        assert!(matches!(err, BindFailure::NotInstalled { .. }));
+    }
 }

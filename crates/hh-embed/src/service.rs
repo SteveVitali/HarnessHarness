@@ -9,8 +9,8 @@
 use crate::frames::FrameAdapter;
 use crate::runtime::{EmbedGate, EmbedModel, KernelAssembler, KernelSink};
 use hh_control::driver::{Driver, DriverError};
-use hh_control::react::ReactMinimal;
-use hh_control::vocab::{Cue, DeliveryMode, WokenTrigger};
+use hh_control::strategy::{ConcurrentInput, ControlStrategy, SteerMode};
+use hh_control::vocab::{Cue, DeliveryMode, HumanInput, WokenTrigger};
 use hh_embed_schema::errors::EmbedError;
 use hh_embed_schema::frames::StreamNotification;
 use hh_embed_schema::negotiate;
@@ -78,6 +78,9 @@ pub(crate) struct HostCap {
     pub surface_id: String,
     pub requires_approval: bool,
     pub options: Vec<String>,
+    /// The ask's declared timeout (ms — `supplies.host_capabilities[]`
+    /// `timeout` member); `None` = the ask never times out.
+    pub timeout_ms: Option<u64>,
 }
 
 /// A live permission ask (`security.permission.pending`).
@@ -101,6 +104,10 @@ pub(crate) struct PendingAsk {
     /// approval mint's `requested ⊓ authority_cap` input (never fabricated;
     /// empty on an ordinary ask).
     pub requested_grants: Vec<hh_hir::records::Grant>,
+    /// The ask's deadline (`requested_at + timeout` when the pending row
+    /// declared one; `None` = no deadline). Past it the sweep resolves the
+    /// ask `timed_out` — a refusal record, never `unknown` (§5g recovery).
+    pub deadline_ms: Option<u64>,
 }
 
 /// Decode the `request.requested_grants` member of a durable `pending` row —
@@ -134,7 +141,15 @@ pub(crate) struct SessionState {
     pub lease: Option<Lease>,
     pub manifest_ref: String,
     pub realized: RealizedSettings,
-    pub driver: Option<Driver<ReactMinimal>>,
+    pub driver: Option<Driver<Box<dyn ControlStrategy>>>,
+    /// The bound control strategy's declared `steer_mode`/`concurrent_input`
+    /// (`steer` honours it — `Unsupported{by: control_strategy}` only when
+    /// the declaration says so, AC-R-2.6.1-10).
+    pub steering: (SteerMode, ConcurrentInput),
+    /// A `steer` delivered under `queue_next_turn` — the artefact ref the
+    /// next `drive` submits as the `steer` cue (§5e: the delivery is a
+    /// ledgered cue, never a UI-side note).
+    pub pending_steer: Option<String>,
     pub env_json: Json,
     pub env_handle_id: Option<String>,
     pub host_caps: Vec<HostCap>,
@@ -266,9 +281,28 @@ impl EmbedService {
         use hh_registry::kinds::Placement;
         use hh_registry::records::{AppliesTo, Implementation, RegistryRecord, VariantRecord};
         let prov = ProvenanceRecord::kernel("hh-embed", 0);
-        for (class, name) in [
-            (hh_registry::suites::control_strategy_class(), "round_robin"),
-            (hh_registry::suites::context_policy_class(), "full_window"),
+        for (class, name, extra_decl) in [
+            (
+                hh_registry::suites::control_strategy_class(),
+                "round_robin",
+                BTreeMap::new(),
+            ),
+            (
+                hh_registry::suites::control_strategy_class(),
+                "react-steerable",
+                BTreeMap::from([
+                    (
+                        "steer_mode".to_string(),
+                        Json::str("interrupt_at_decision_point"),
+                    ),
+                    ("concurrent_input".to_string(), Json::str("steer")),
+                ]),
+            ),
+            (
+                hh_registry::suites::context_policy_class(),
+                "full_window",
+                BTreeMap::new(),
+            ),
         ] {
             let class_rec = RegistryRecord::Class(class);
             let class_vid = hh_registry::identity::version_id(&class_rec);
@@ -289,10 +323,11 @@ impl EmbedService {
                     placement: Placement::InProcess,
                     host_requirements: Json::Null,
                 },
-                capability_declaration: BTreeMap::from([(
-                    "deterministic".to_string(),
-                    Json::Bool(true),
-                )]),
+                capability_declaration: {
+                    let mut d = BTreeMap::from([("deterministic".to_string(), Json::Bool(true))]);
+                    d.extend(extra_decl);
+                    d
+                },
                 conditioned_rules: vec![],
                 applies_to: AppliesTo {
                     participant_classes: BTreeSet::from(["native".to_string()]),
@@ -624,6 +659,7 @@ impl EmbedService {
             })
             .unwrap_or(Json::Null);
         let now = self.store.now_ms();
+        let timeout = capability.and_then(|c| c.timeout_ms);
         self.mint(
             &run_id,
             &lease,
@@ -637,6 +673,10 @@ impl EmbedService {
                 ("request", request),
                 ("requested_at", Json::Int(now as i64)),
                 ("mode", Json::str("sync")),
+                (
+                    "timeout",
+                    timeout.map(|t| Json::Int(t as i64)).unwrap_or(Json::Null),
+                ),
             ]),
         )?;
         self.mint(
@@ -661,6 +701,7 @@ impl EmbedService {
                 args_canonical_hash: capability.map(|_| String::new()),
                 subject_ref: capability.map(|_| holder.clone()),
                 requested_grants: Vec::new(),
+                deadline_ms: timeout.map(|t| now.saturating_add(t)),
             },
         );
         if self.client_caps.serves_permission_channel {
@@ -683,6 +724,83 @@ impl EmbedService {
             );
         }
         Ok(permission_id)
+    }
+
+    /// The pending-timeout sweep (§5g recovery — a `permission pending`
+    /// past its declared `deadline` resolves `refused`, never `unknown`):
+    /// each expired ask mints `security.permission.decided{decision:
+    /// timed_out, decider: kernel}` and, when it covered an effect,
+    /// `action.effect.refused{reason: timed_out}` plus the `approval{deny}`
+    /// cue — the loop observes the denial at the next decision point,
+    /// exactly as a principal's `deny` would deliver it.
+    pub(crate) fn sweep_pending_timeouts(&mut self, sess_id: &str) -> Result<(), EmbedError> {
+        let (run_id, lease, expired) = {
+            let s = self.session(sess_id)?;
+            let lease = match &s.lease {
+                Some(l) => l.clone(),
+                None => return Ok(()), // attach session — read-only, never mints
+            };
+            if s.finished {
+                return Ok(());
+            }
+            let now = self.store.now_ms();
+            let expired: Vec<(String, Option<String>, u64)> = s
+                .pendings
+                .iter()
+                .filter(|(_, p)| p.deadline_ms.is_some_and(|d| now >= d))
+                .map(|(pid, p)| {
+                    (
+                        pid.clone(),
+                        p.effect_id.clone(),
+                        now.saturating_sub(p.requested_at),
+                    )
+                })
+                .collect();
+            (s.run_id.clone(), lease, expired)
+        };
+        for (permission_id, effect_id, wait_ms) in expired {
+            self.mint(
+                &run_id,
+                &lease,
+                "security.permission.decided",
+                Json::obj([
+                    ("permission_id", Json::str(permission_id.clone())),
+                    ("decision", Json::str("timed_out")),
+                    ("decider", Json::str("kernel")),
+                    ("wait_ms", Json::Int(wait_ms as i64)),
+                ]),
+            )?;
+            if let Some(ef) = &effect_id {
+                self.mint(
+                    &run_id,
+                    &lease,
+                    "action.effect.refused",
+                    Json::obj([
+                        ("effect_id", Json::str(ef.clone())),
+                        ("decider", Json::str("kernel")),
+                        ("reason", Json::str("timed_out")),
+                    ]),
+                )?;
+            }
+            let s = self.session_mut(sess_id)?;
+            s.decided.insert(
+                permission_id.clone(),
+                Json::obj([
+                    ("kind", Json::str("selected")),
+                    ("decision", Json::str("timed_out")),
+                ]),
+            );
+            s.pendings.remove(&permission_id);
+            if let Some(ef) = effect_id {
+                if let Some(d) = s.driver.as_mut() {
+                    d.submit(Cue::HumanInput(HumanInput::Approval {
+                        effect_id: ef,
+                        allow: false,
+                    }));
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Drive the session's control loop until it parks or finishes, then
@@ -722,6 +840,11 @@ impl EmbedService {
         // (W-3). Each undelivered `(subscription, occurrence)` pair becomes
         // one `Cue.woken` — the loop's only input (I7); while effects are
         // open, react parks the cue on `effects_settled` (I4).
+        // Sweep the live `pendings` first — a past-deadline ask resolves
+        // `timed_out` (the kind-fixed terminal refusal, §5g recovery:
+        // `refused`, never `unknown`) before the loop is driven, so the
+        // `approval{deny}` cue lands in this drain.
+        self.sweep_pending_timeouts(sess_id)?;
         let now = self.store.now_ms();
         self.store
             .deliver_wakeup(&run_id, &lease, now)
@@ -741,6 +864,11 @@ impl EmbedService {
             }
             driver.submit(woken_cue(&w));
             self.session_mut(sess_id)?.delivered_wokens.insert(key);
+        }
+        // `steer_mode = queue_next_turn` — the steer accepted earlier
+        // enters the inbox now (the next decision point of the new turn).
+        if let Some(payload_ref) = self.session_mut(sess_id)?.pending_steer.take() {
+            driver.submit(Cue::HumanInput(HumanInput::Steer { payload_ref }));
         }
         let mut sink = KernelSink {
             store: &mut self.store,
@@ -961,6 +1089,16 @@ impl EmbedService {
                                             .and_then(Json::as_str)
                                             .map(str::to_string),
                                         requested_grants: decode_requested_grants(&req),
+                                        deadline_ms: p.get("timeout").and_then(Json::as_int).map(
+                                            |t| {
+                                                (p.get("requested_at")
+                                                    .and_then(Json::as_int)
+                                                    .unwrap_or(0)
+                                                    .max(0)
+                                                    as u64)
+                                                    .saturating_add(t.max(0) as u64)
+                                            },
+                                        ),
                                     },
                                 );
                             }
