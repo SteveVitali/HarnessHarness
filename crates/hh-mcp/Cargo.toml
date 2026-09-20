@@ -1,0 +1,18 @@
+[package]
+name = "hh-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The Stage-3 fixture MCP surface (spec section 7.3, R-2.11.3^0; ticket S3.1; ADR-0097 D7/ADR-0173/0174). The hh-mcp-target/1 served-artifact record, the compiled-bundle -> canonical tool-catalogue lowering (byte-identical for every connection of one bundle), the stdio_launch CallerBinding record fixed to the test principal, and the newline-JSON-RPC serve loop the hh-mcp-serve binary wraps. A pure function of (artifact, binding): no ledger, no kernel link, no authority from caller _meta."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh-mcp-serve"
+path = "src/bin/hh-mcp-serve.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }

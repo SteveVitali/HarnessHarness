@@ -621,16 +621,26 @@ pub fn registry() -> Vec<OpSpec> {
             "Acknowledged",
         ),
         // ── Group M — measurement/kernel-direct (serves_measurement) ──
-        lab("measurement.emit_metric", "M", "json", "json"),
+        // S3.1 (R-2.11.4⁰ᵇ; ADR-0176): the Lab's measurement channel —
+        // `measurement.metric.emitted` rows the Lab appends are minted by
+        // the kernel and are indistinguishable from any client's
+        // (AC-R-2.11.4-10).
+        labi("measurement.emit_metric", "M", "json", "json"),
         lab("kernel.compose", "M", "json", "json"),
         lab("kernel.resolve", "M", "json", "json"),
         lab("kernel.validate_assembly", "M", "json", "json"),
         lab("kernel.seal", "M", "json", "json"),
         lab("kernel.space", "M", "json", "json"),
         lab("kernel.enumerate", "M", "json", "json"),
-        lab("kernel.bundle", "M", "json", "json"),
-        lab("kernel.check_completeness", "M", "json", "json"),
-        lab("kernel.reproduce", "M", "json", "json"),
+        // S3.1 (R-2.9.3⁰; ADR-0139/0140/0141): the run-bundle verbs —
+        // `bundle(kind = run)`, the staged `validate_bundle`/
+        // `check_completeness` report, `reproduce` (R0/R1/R3 native),
+        // and `import(ledger_native)` lifting a bundle back into the
+        // store with `origin = import` provenance.
+        labi("kernel.bundle", "M", "json", "json"),
+        labi("kernel.check_completeness", "M", "json", "json"),
+        labi("kernel.reproduce", "M", "json", "json"),
+        labi("kernel.import", "M", "json", "json"),
         // The Group M environment ops (ADR-0137/0138; ADR-0177 D7) —
         // implemented at S2.10: `env.snapshot` (fs_tree, `instrument`-
         // charged), `env.derive` (fresh_from_image/fork_snapshot/
@@ -712,7 +722,13 @@ pub fn registry() -> Vec<OpSpec> {
         lab("lab.hosting.describe", "L", "json", "json"),
         lab("lab.hosting.probe", "L", "json", "json"),
         lab("lab.hosting.attach", "L", "json", "json"),
-        lab("lab.serve", "L", "json", "json"),
+        // S3.1 (R-2.11.3⁰; ADR-0097 D7/ADR-0173): `serve(bundle)` — the
+        // Stage-3 fixture MCP server over stdio. The op decodes the
+        // bundle, extracts its compiled `target:mcp` member and returns
+        // the ServerHandle + the `stdio_launch` CallerBinding (fixed to
+        // the test principal); the caller (the CLI surface) spawns
+        // `hh-mcp-serve` and owns the stdio pair.
+        labi("lab.serve", "L", "json", "json"),
     ];
 
     // ── Group U — upcalls (kernel→host signatures) ────────────────────
