@@ -74,6 +74,33 @@ impl Store {
         lease: &Lease,
         dispatch: &mut dyn FnMut(&CompensationIntent) -> Result<Json, String>,
     ) -> Result<SagaReport, LedgerError> {
+        self.compensate_scoped(run_id, lease, None, dispatch)
+    }
+
+    /// `compensate_run_after(run, lease, at_seq, dispatch)` — the rollback-scoped
+    /// saga (§5a.1 `rollback`; ADR-0271): only effects whose latest `committed`
+    /// landed **after** `at_seq` are compensated — the shared prefix's effects
+    /// are never touched (the prefix is immutable by append-only construction
+    /// and the saga honours it by selection).
+    pub fn compensate_run_after(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        at_seq: u64,
+        dispatch: &mut dyn FnMut(&CompensationIntent) -> Result<Json, String>,
+    ) -> Result<SagaReport, LedgerError> {
+        self.compensate_scoped(run_id, lease, Some(at_seq), dispatch)
+    }
+
+    /// The shared body — `after_seq = None` ⇒ the whole run; `Some(at)` ⇒ only
+    /// effects committed after `at`.
+    fn compensate_scoped(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        after_seq: Option<u64>,
+        dispatch: &mut dyn FnMut(&CompensationIntent) -> Result<Json, String>,
+    ) -> Result<SagaReport, LedgerError> {
         self.tier_c1("compensate_run")?;
         let gen = lease.generation;
         // The saga targets: `observed{applied}` + `compensable`, reverse
@@ -91,6 +118,7 @@ impl Store {
                 let commit_seq = f.commits.values().map(|(_, s)| *s).max().unwrap_or(0);
                 (commit_seq, f.effect_id.clone())
             })
+            .filter(|(commit_seq, _)| after_seq.map(|at| *commit_seq > at).unwrap_or(true))
             .collect();
         targets.sort_by(|a, b| b.0.cmp(&a.0));
 

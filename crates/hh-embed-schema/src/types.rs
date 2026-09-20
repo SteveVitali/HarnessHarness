@@ -1832,6 +1832,24 @@ impl ForkPoint {
 pub struct ForkParams {
     pub session_id: String,
     pub at: ForkPoint,
+    /// The branch kind — `branch` | `counterfactual` | `shadow` (default
+    /// `branch`).
+    pub kind: Option<String>,
+    /// `env` — `snapshot` (default) | `trace_only` | `shared_live` (§5a.1 §5).
+    pub env: Option<String>,
+    /// `replay_mode` — `inherited` (default) | `exact` | `structural` |
+    /// `observational` | `none`.
+    pub replay_mode: Option<String>,
+    /// The branch policy ref (attenuated — never widened).
+    pub policy_ref: Option<String>,
+    /// The budget-slice ref (bounded by the parent).
+    pub budget_slice_ref: Option<String>,
+    /// `coerce_to_boundary` — an incoherent `at` coerces to the nearest
+    /// earlier coherent seq when true.
+    pub coerce_to_boundary: Option<bool>,
+    /// An optional snapshot override (`snapshot_ref` the caller asserts is
+    /// the env state at `at` — the chooser still verifies loadability).
+    pub snapshot_ref: Option<String>,
     pub manifest_delta: Option<Json>,
     pub idempotency_key: Option<String>,
     /// The surface's invocation audit — minted durable on the child run.
@@ -1842,6 +1860,13 @@ impl ForkParams {
         let mut s = StrictObj::new(v, "fork")?;
         let session_id = s.req_str("session_id")?;
         let at = ForkPoint::from_json(s.req("at")?, "fork/at")?;
+        let kind = s.opt_str("kind")?;
+        let env = s.opt_str("env")?;
+        let replay_mode = s.opt_str("replay_mode")?;
+        let policy_ref = s.opt_str("policy_ref")?;
+        let budget_slice_ref = s.opt_str("budget_slice_ref")?;
+        let coerce_to_boundary = s.opt_bool("coerce_to_boundary")?;
+        let snapshot_ref = s.opt_str("snapshot_ref")?;
         let manifest_delta = s.take("manifest_delta").cloned();
         let idempotency_key = s.opt_str("idempotency_key")?;
         let invocation = s
@@ -1852,9 +1877,129 @@ impl ForkParams {
         Ok(ForkParams {
             session_id,
             at,
+            kind,
+            env,
+            replay_mode,
+            policy_ref,
+            budget_slice_ref,
+            coerce_to_boundary,
+            snapshot_ref,
             manifest_delta,
             idempotency_key,
             invocation,
+        })
+    }
+}
+
+/// `NavigateTo` — `navigate`'s `to` coordinate (§5a.1): `{kind:"seq",seq}` |
+/// `{kind:"event_ref",event_id}` | `null` / `{kind:"root"}` (the run-start
+/// sentinel — the next append chains from genesis).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NavigateTo {
+    Seq(i64),
+    EventRef(String),
+    Root,
+}
+
+/// `navigate` params — `{session_id, to, reason?, idempotency_key?}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NavigateParams {
+    pub session_id: String,
+    pub to: NavigateTo,
+    pub reason: Option<String>,
+    pub idempotency_key: Option<String>,
+}
+impl NavigateParams {
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "navigate")?;
+        let session_id = s.req_str("session_id")?;
+        let to = match s.take("to") {
+            None | Some(Json::Null) => {
+                return Err(EmbedError::SchemaViolation {
+                    path: "navigate/to".to_string(),
+                    code: "required".to_string(),
+                })
+            }
+            Some(Json::Int(n)) => NavigateTo::Seq(*n),
+            Some(o) => {
+                let mut os = StrictObj::new(o, "navigate/to")?;
+                let kind = closed_str(
+                    os.req("kind")?,
+                    &["seq", "event_ref", "root"],
+                    "navigate/to/kind",
+                )?;
+                let t = match kind.as_str() {
+                    "seq" => NavigateTo::Seq(os.req_int("seq")?),
+                    "event_ref" => NavigateTo::EventRef(os.req_str("event_id")?),
+                    _ => NavigateTo::Root,
+                };
+                os.finish()?;
+                t
+            }
+        };
+        let reason = s.opt_str("reason")?;
+        let idempotency_key = s.opt_str("idempotency_key")?;
+        s.finish()?;
+        Ok(NavigateParams {
+            session_id,
+            to,
+            reason,
+            idempotency_key,
+        })
+    }
+}
+
+/// `coherent_fork_points` params — `{session_id, from_seq?, to_seq?}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoherentForkPointsParams {
+    pub session_id: String,
+    pub from_seq: Option<i64>,
+    pub to_seq: Option<i64>,
+}
+impl CoherentForkPointsParams {
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "coherent_fork_points")?;
+        let session_id = s.req_str("session_id")?;
+        let from_seq = s.opt_int("from_seq")?;
+        let to_seq = s.opt_int("to_seq")?;
+        s.finish()?;
+        Ok(CoherentForkPointsParams {
+            session_id,
+            from_seq,
+            to_seq,
+        })
+    }
+}
+
+/// `rollback` params — `{session_id, to_seq, reason?, restore_env?,
+/// idempotency_key?}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RollbackParams {
+    pub session_id: String,
+    pub to_seq: i64,
+    /// `reason_code` — `rollback` (default) | `policy_violation` |
+    /// `operator` | `recovery`.
+    pub reason: Option<String>,
+    /// `restore_env` (default `true`) — restore the `fs_tree` snapshot at
+    /// `to_seq` in place when one exists.
+    pub restore_env: Option<bool>,
+    pub idempotency_key: Option<String>,
+}
+impl RollbackParams {
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "rollback")?;
+        let session_id = s.req_str("session_id")?;
+        let to_seq = s.req_int("to_seq")?;
+        let reason = s.opt_str("reason")?;
+        let restore_env = s.opt_bool("restore_env")?;
+        let idempotency_key = s.opt_str("idempotency_key")?;
+        s.finish()?;
+        Ok(RollbackParams {
+            session_id,
+            to_seq,
+            reason,
+            restore_env,
+            idempotency_key,
         })
     }
 }

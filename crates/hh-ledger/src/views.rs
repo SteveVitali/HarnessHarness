@@ -60,6 +60,10 @@ pub enum ViewKind {
     /// `memory_usage` — `{version_id → {created_at, last_read_at,
     /// read_count}}` (§5c.3; S1.19). Folded by `hh-context`.
     MemoryUsage,
+    /// `branch_tree` — the derived branch index (§5a.1 §5; R-2.2.4; ADR-0271):
+    /// this run's fork record (when it is a child), its `rolled_back` rewind
+    /// history, and its children. A pure WAL fold — rebuildable, never stored.
+    BranchTree,
 }
 
 impl ViewKind {
@@ -77,6 +81,7 @@ impl ViewKind {
             ViewKind::LexicalIndex => "lexical_index",
             ViewKind::MemoryStaleIndex => "memory_stale_index",
             ViewKind::MemoryUsage => "memory_usage",
+            ViewKind::BranchTree => "branch_tree",
         }
     }
 
@@ -94,6 +99,7 @@ impl ViewKind {
             "lexical_index" => Some(ViewKind::LexicalIndex),
             "memory_stale_index" => Some(ViewKind::MemoryStaleIndex),
             "memory_usage" => Some(ViewKind::MemoryUsage),
+            "branch_tree" => Some(ViewKind::BranchTree),
             _ => None,
         }
     }
@@ -580,4 +586,47 @@ pub fn checkpoint(run_id: &str, events: &[EventEnvelope], until: Option<u64>) ->
         ),
     ]));
     View::build(run_id, ViewKind::Checkpoint, watermark, payload)
+}
+
+/// `branch_tree` — the per-run slice of the derived branch index (§5a.1 §5;
+/// ADR-0271): this run's `BranchRecord` (when it is a forked child), its
+/// `rolled_back` rewind history, and its children. Pure over the WALs —
+/// [`Store::branch_tree`](crate::store::Store::branch_tree) is the fold; the
+/// view is the stamped projection.
+pub fn branch_tree(
+    run_id: &str,
+    info: Option<&crate::branch::BranchInfo>,
+    until: Option<u64>,
+) -> View {
+    let watermark = until;
+    let payload = match info {
+        Some(i) => Json::obj([
+            ("kind", Json::str("branch_tree")),
+            ("run_id", Json::str(run_id)),
+            (
+                "branch",
+                i.record.as_ref().map(|r| r.to_json()).unwrap_or(Json::Null),
+            ),
+            (
+                "children",
+                Json::Arr(i.children.iter().map(Json::str).collect()),
+            ),
+            ("rolled_back", Json::Arr(i.rolled_back.clone())),
+            (
+                "head_seq",
+                i.head_seq
+                    .map(|s| Json::Int(s as i64))
+                    .unwrap_or(Json::Null),
+            ),
+        ]),
+        None => Json::obj([
+            ("kind", Json::str("branch_tree")),
+            ("run_id", Json::str(run_id)),
+            ("branch", Json::Null),
+            ("children", Json::Arr(vec![])),
+            ("rolled_back", Json::Arr(vec![])),
+            ("head_seq", Json::Null),
+        ]),
+    };
+    View::build(run_id, ViewKind::BranchTree, watermark, payload)
 }

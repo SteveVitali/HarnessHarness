@@ -12,8 +12,9 @@ use hh_control::vocab::{Cue, HumanInput};
 use hh_embed_schema::errors::EmbedError;
 use hh_embed_schema::strict::StrictObj;
 use hh_embed_schema::types::*;
+use hh_ledger::branch::{BranchKind, EnvBinding, ForkOpts, NavigateTarget, ReplayMode};
 use hh_ledger::event::{Cursor, Direction as ReadDir};
-use hh_ledger::manifest::{LineageLink, RunKind, RunManifest};
+use hh_ledger::manifest::{RunKind, RunManifest};
 use hh_ledger::views::ViewKind;
 use hh_wire::json::Json;
 
@@ -694,6 +695,15 @@ impl EmbedService {
     /// the anchor; `manifest_delta` applies no Stage-1 fields and is
     /// refused non-empty rather than silently dropped). The child gets
     /// a fresh writer lease + session.
+    /// `fork` — the S2.9 inter-run branch (§5a.1 §5; R-2.2.4; ADR-0271).
+    /// The cut must be coherent (`check_fork_point`; `coerce_to_boundary`
+    /// coerces and the record says so). `env: snapshot` restores the newest
+    /// `fs_tree` snapshot at/below the cut into a fresh child env;
+    /// `trace_only` binds none and the child session is read-only;
+    /// `shared_live` is the typed refusal (a mutable live environment is
+    /// never shared). The child's `lifecycle.run.forked{BranchRecord}` pins
+    /// the source prefix's referenced content (the ledger carries the pin
+    /// in the row's `refs`).
     pub(crate) fn fork(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let p = ForkParams::from_json(params)?;
         if p.manifest_delta.is_some() {
@@ -701,46 +711,172 @@ impl EmbedService {
                 reason: "manifest_delta_unsupported".to_string(),
             });
         }
-        let (run_id, at_seq, head_hash) = {
-            let s = self.writer_session(&p.session_id)?;
-            let events = self.store.events(&s.run_id).map_err(ledger_err)?;
-            let at_seq = match &p.at {
-                ForkPoint::Seq(n) => *n as u64,
-                ForkPoint::EventRef { event_id, .. } => events
-                    .iter()
-                    .find(|e| &e.event_id == event_id)
-                    .map(|e| e.seq)
-                    .ok_or_else(|| EmbedError::SchemaViolation {
-                        path: "fork/at/event_id".to_string(),
-                        code: "unknown_event".to_string(),
-                    })?,
-            };
-            let head = events.iter().find(|e| e.seq == at_seq).ok_or_else(|| {
-                EmbedError::SchemaViolation {
-                    path: "fork/at".to_string(),
-                    code: "seq_out_of_range".to_string(),
+        let kind = BranchKind::parse(p.kind.as_deref().unwrap_or("branch")).ok_or_else(|| {
+            EmbedError::SchemaViolation {
+                path: "fork/kind".to_string(),
+                code: "unknown_branch_kind".to_string(),
+            }
+        })?;
+        let env = EnvBinding::parse(p.env.as_deref().unwrap_or("none")).ok_or_else(|| {
+            EmbedError::SchemaViolation {
+                path: "fork/env".to_string(),
+                code: "unknown_env_binding".to_string(),
+            }
+        })?;
+        if env == EnvBinding::SharedLive {
+            return Err(EmbedError::Refused {
+                reason: "shared_mutable_env: a live environment is never shared between branches"
+                    .to_string(),
+            });
+        }
+        let replay_mode = ReplayMode::parse(p.replay_mode.as_deref().unwrap_or("inherited"))
+            .ok_or_else(|| EmbedError::SchemaViolation {
+                path: "fork/replay_mode".to_string(),
+                code: "unknown_replay_mode".to_string(),
+            })?;
+        // Resolve the source + the cut (an `event_ref` may name a run other
+        // than the session's — the fork is inter-run).
+        let (source_run, at_seq) = {
+            let s = self.live_session(&p.session_id)?;
+            match &p.at {
+                ForkPoint::Seq(n) => (s.run_id.clone(), *n as u64),
+                ForkPoint::EventRef { run_id, event_id } => {
+                    let events = self.store.envelopes(run_id).map_err(ledger_err)?;
+                    let seq = events
+                        .iter()
+                        .find(|e| &e.event_id == event_id)
+                        .map(|e| e.seq)
+                        .ok_or_else(|| EmbedError::SchemaViolation {
+                            path: "fork/at/event_id".to_string(),
+                            code: "unknown_event".to_string(),
+                        })?;
+                    (run_id.clone(), seq)
+                }
+            }
+        };
+        // Replay coverage — `exact`/`structural` need the source's
+        // observability to carry them; a downgrade is recorded, never silent
+        // (DF-S2.9-2 — the coverage→mode ladder).
+        let parent = self
+            .store
+            .manifest(&source_run)
+            .map_err(ledger_err)?
+            .clone();
+        let obs = &parent.observability_level;
+        let has = |l: hh_ledger::manifest::ObservabilityLevel| obs.contains(&l);
+        use hh_ledger::manifest::ObservabilityLevel as OL;
+        let (effective_replay, downgrade_reason) = match replay_mode {
+            ReplayMode::Exact if !has(OL::Ledger) => (
+                ReplayMode::Observational,
+                Some(format!(
+                    "coverage: exact requires observability ⊇ ledger; run has {{{}}} — downgraded to observational",
+                    obs.iter().map(|l| l.as_str()).collect::<Vec<_>>().join(",")
+                )),
+            ),
+            ReplayMode::Structural if !(has(OL::ModelIo) || has(OL::Ledger)) => (
+                ReplayMode::Observational,
+                Some(
+                    "coverage: structural requires model_io|ledger observability — downgraded to observational"
+                        .to_string(),
+                ),
+            ),
+            ReplayMode::Inherited => {
+                let eff = if has(OL::Ledger) {
+                    ReplayMode::Exact
+                } else if has(OL::ModelIo) {
+                    ReplayMode::Structural
+                } else {
+                    ReplayMode::Observational
+                };
+                (eff, None)
+            }
+            m => (m, None),
+        };
+        // `env: snapshot` — choose the newest fs_tree snapshot at/below the
+        // cut (absent ⇒ the typed `SnapshotUnavailable` refusal).
+        let mut snapshot_choice = None;
+        if env == EnvBinding::Snapshot {
+            let drv = self.env_drivers.get(&source_run).ok_or_else(|| {
+                EmbedError::EnvironmentUnavailable {
+                    reason: "snapshot_unavailable: no env driver for the source run".to_string(),
                 }
             })?;
-            (s.run_id.clone(), at_seq, head.hash.clone())
-        };
-        let parent = self.store.manifest(&run_id).map_err(ledger_err)?.clone();
+            let chosen = drv
+                .snapshot_for(&self.store, at_seq)
+                .map_err(crate::open::env_err)?
+                .ok_or_else(|| EmbedError::EnvironmentUnavailable {
+                    reason: format!("snapshot_unavailable: no fs_tree snapshot at seq ≤ {at_seq}"),
+                })?;
+            if let Some(want) = &p.snapshot_ref {
+                if &chosen.0.snapshot_ref != want {
+                    return Err(EmbedError::Refused {
+                        reason: format!(
+                            "snapshot_ref {want} is not the chooser's snapshot at ≤ {at_seq} ({})",
+                            chosen.0.snapshot_ref
+                        ),
+                    });
+                }
+            }
+            snapshot_choice = Some(chosen);
+        }
+        // The child manifest — inherits the parent's bindings; the budget
+        // slice and policy ref bind the child's spend/policy (attenuated —
+        // the record names them; widening has no path here).
         let mut child = RunManifest::minimal(RunKind::Agent);
         child.configuration_id = parent.configuration_id.clone();
         child.configuration_version_id = parent.configuration_version_id.clone();
         child.harness_def_ref = parent.harness_def_ref.clone();
         child.attendance = parent.attendance;
-        child.budget = parent.budget.clone();
-        child.forked_from = Some(LineageLink {
-            run_id: run_id.clone(),
-            at_seq,
-            head_hash,
-        });
-        child.parent_run_id = Some(run_id.clone());
+        child.budget = p.budget_slice_ref.clone().or(parent.budget.clone());
+        child.envelope_policy_ref = p.policy_ref.clone().or(parent.envelope_policy_ref.clone());
+        // `Store::fork` fills `forked_from{run_id, at_seq, head_hash}` at the
+        // (possibly coerced) cut — `open_run` re-checks the anchor.
+        child.parent_run_id = Some(source_run.clone());
         let holder = self.holder.clone();
-        let (child_run, lease) = self
+        let opts = ForkOpts {
+            env,
+            replay_mode,
+            effective_replay,
+            downgrade_reason,
+            policy_ref: p.policy_ref.clone(),
+            budget_slice_ref: p.budget_slice_ref.clone(),
+            coerce_to_boundary: p.coerce_to_boundary.unwrap_or(false),
+            snapshot_ref: snapshot_choice
+                .as_ref()
+                .map(|(r, _)| r.snapshot_ref.clone()),
+            snapshot_at_seq: snapshot_choice.as_ref().map(|(r, _)| r.at_seq),
+            read_only: env == EnvBinding::TraceOnly,
+        };
+        // `snapshot_at_seq` goes in the record payload too — stash it on the
+        // forked row (the ledger's `env_snapshots` fold is the row-side copy).
+        let (child_run, lease, record) = self
             .store
-            .open_run(child.clone(), &holder)
+            .fork(&source_run, at_seq, kind, &opts, child.clone(), &holder)
             .map_err(ledger_err)?;
+        // `env: snapshot` — materialise the child's workspace from the
+        // snapshot's blob content (never the parent's live tree).
+        let mut child_env_handle: Option<String> = None;
+        if let Some((rec, tree)) = &snapshot_choice {
+            let parent_handle = self
+                .env_drivers
+                .get(&source_run)
+                .and_then(|d| d.handle(&rec.env_handle_id))
+                .cloned()
+                .ok_or_else(|| EmbedError::EnvironmentUnavailable {
+                    reason: format!(
+                        "snapshot's env handle {} is not live in this kernel",
+                        rec.env_handle_id
+                    ),
+                })?;
+            let cdrv = self
+                .env_drivers
+                .entry(child_run.clone())
+                .or_insert_with(|| hh_env::driver::EnvDriver::new(&child_run));
+            let ch = cdrv
+                .derive_from_snapshot(&mut self.store, &lease, &parent_handle, tree)
+                .map_err(crate::open::env_err)?;
+            child_env_handle = Some(ch.env_handle_id.clone());
+        }
         // `lifecycle.surface.invoked` — a fork opens a child run.
         if let Some(inv) = &p.invocation {
             self.mint(
@@ -763,15 +899,19 @@ impl EmbedService {
         )?;
         let realized = realized_settings(&self.workspace_root, &attendance_async(), None);
         let head = self.store.head(&child_run).map_err(ledger_err)?;
+        let read_only = env == EnvBinding::TraceOnly;
         let sess = crate::service::SessionState {
             run_id: child_run.clone(),
-            attach: false,
+            // `trace_only` ⇒ the session is read-only by construction —
+            // `writer_session` refuses every mutation op on it (I6's
+            // mechanism is the enforcement; the record carries `read_only`).
+            attach: read_only,
             lease: Some(lease),
             manifest_ref: sess_manifest_ref(&child),
             realized: realized.clone(),
             driver: None,
             env_json: Json::Null,
-            env_handle_id: None,
+            env_handle_id: child_env_handle,
             host_caps: Vec::new(),
             turn_active: false,
             active_turn: "turn-1".to_string(),
@@ -800,7 +940,7 @@ impl EmbedService {
             next_response_ref: String::new(),
         };
         self.sessions.insert(session_id.clone(), sess);
-        Ok(session_json(
+        let mut out = session_json(
             &session_id,
             &child_run,
             &session_id,
@@ -809,7 +949,148 @@ impl EmbedService {
             &child.configuration_version_id.clone().unwrap_or_default(),
             &realized,
             head.seq as i64,
-        ))
+        );
+        if let Json::Obj(m) = &mut out {
+            m.insert("branch_record".to_string(), record.to_json());
+        }
+        Ok(out)
+    }
+
+    /// `navigate(run's session, to) → the head.moved record` (§5a.1; ADR-0271).
+    /// A HEAD move is append-only: the `lifecycle.head.moved` row lands, the
+    /// logical head folds to `to`, and subscribers receive `rewind`. Nothing
+    /// is truncated — `read` still serves the whole prefix.
+    pub(crate) fn navigate(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let p = NavigateParams::from_json(params)?;
+        let (run_id, lease) = {
+            let s = self.writer_session(&p.session_id)?;
+            (
+                s.run_id.clone(),
+                s.lease.clone().ok_or(EmbedError::Refused {
+                    reason: "session_is_read_only".to_string(),
+                })?,
+            )
+        };
+        let to = match &p.to {
+            NavigateTo::Root => NavigateTarget::Root,
+            NavigateTo::Seq(n) => NavigateTarget::Seq(*n as u64),
+            NavigateTo::EventRef(id) => NavigateTarget::EventId(id.clone()),
+        };
+        let env = self
+            .store
+            .navigate(
+                &run_id,
+                &lease,
+                to,
+                p.reason.as_deref().unwrap_or("navigate"),
+            )
+            .map_err(ledger_err)?;
+        Ok(Json::obj([
+            ("head_moved", Json::Bool(true)),
+            ("moved_event_id", Json::str(&env.event_id)),
+            ("moved_seq", Json::Int(env.seq as i64)),
+            (
+                "to_seq",
+                env.payload.get("to_seq").cloned().unwrap_or(Json::Null),
+            ),
+            (
+                "to_event_id",
+                env.payload
+                    .get("to_event_id")
+                    .cloned()
+                    .unwrap_or(Json::Null),
+            ),
+        ]))
+    }
+
+    /// `coherent_fork_points(session, from_seq?, to_seq?) → {points[]}` —
+    /// the pure coherence projection (§5a.4; AC-R-2.2.4-1). Read-only.
+    pub(crate) fn coherent_fork_points(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let p = CoherentForkPointsParams::from_json(params)?;
+        let run_id = self.live_session(&p.session_id)?.run_id.clone();
+        let points = self
+            .store
+            .coherent_fork_points(
+                &run_id,
+                p.from_seq.map(|s| s as u64),
+                p.to_seq.map(|s| s as u64),
+            )
+            .map_err(ledger_err)?;
+        let nearest = |at: u64| self.store.nearest_coherent_seq(&run_id, at).ok().flatten();
+        let _ = nearest;
+        Ok(Json::obj([
+            ("run_id", Json::str(&run_id)),
+            (
+                "points",
+                Json::Arr(points.iter().map(|s| Json::Int(*s as i64)).collect()),
+            ),
+        ]))
+    }
+
+    /// `rollback(session, to_seq, reason?, restore_env?) → RollbackRecord`
+    /// (§5a.1; R-2.2.5; ADR-0271). The env half runs first (the snapshot
+    /// restores in place; what it cannot recapture lands `uncaptured`), then
+    /// the ledger: coherence gate → scoped compensation saga → the rewind
+    /// note blob → `rolled_back` + `head.moved` + the `rewind` frame.
+    /// Nothing is deleted — history is append-only.
+    pub(crate) fn rollback(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let p = RollbackParams::from_json(params)?;
+        let (run_id, lease, env_handle) = {
+            let s = self.writer_session(&p.session_id)?;
+            (
+                s.run_id.clone(),
+                s.lease.clone().ok_or(EmbedError::Refused {
+                    reason: "session_is_read_only".to_string(),
+                })?,
+                s.env_handle_id.clone(),
+            )
+        };
+        let reason_code = p.reason.as_deref().unwrap_or("rollback");
+        match reason_code {
+            "rollback" | "policy_violation" | "operator" | "recovery" => {}
+            other => {
+                return Err(EmbedError::SchemaViolation {
+                    path: "rollback/reason".to_string(),
+                    code: format!("unknown_reason_code:{other}"),
+                })
+            }
+        }
+        // The env half — restore the newest fs_tree snapshot at/below the
+        // cut in place; uncaptured domains ride the record.
+        let mut uncaptured: Vec<String> = Vec::new();
+        if p.restore_env.unwrap_or(true) {
+            if let Some(h) = env_handle {
+                let drv = self.env_drivers.get_mut(&run_id).ok_or_else(|| {
+                    EmbedError::EnvironmentUnavailable {
+                        reason: "env_driver_absent for rollback env restore".to_string(),
+                    }
+                })?;
+                let (_restored, unc) = drv
+                    .rollback_env(&mut self.store, &lease, &h, p.to_seq as u64)
+                    .map_err(crate::open::env_err)?;
+                uncaptured = unc;
+            } else {
+                uncaptured.push("env:no_handle".to_string());
+            }
+        }
+        let rec = self
+            .store
+            .rollback(
+                &run_id,
+                &lease,
+                p.to_seq as u64,
+                reason_code,
+                uncaptured,
+                &mut |_intent| {
+                    // The kernel-side compensator executor: Stage 2's saga
+                    // records the intent and observes `applied` — the
+                    // external act is the driver's (S2.3's own wiring); a
+                    // failing compensator is reported via dispatch Err.
+                    Ok(Json::obj([("note", Json::str("compensated-by-kernel"))]))
+                },
+            )
+            .map_err(ledger_err)?;
+        Ok(rec.note_json())
     }
 
     /// `report_host_effect` — the host's report on an

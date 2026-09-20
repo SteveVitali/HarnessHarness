@@ -87,6 +87,17 @@ pub enum Frame {
         reason: String,
         detail: Option<String>,
     },
+    /// A `head.moved` rewind (§5a.1 `navigate`/`rollback`; ADR-0271) —
+    /// `{to_seq, to_event_id, reason}`: the durable `head.moved` row also
+    /// arrives as `durable`; this frame is the consumer's *rebase signal* —
+    /// every event with `seq > to_seq` is off the live branch (still durable
+    /// in the log — history never rewrites). `to_seq = -1` /
+    /// `to_event_id = "root"` is the run-start sentinel (`navigate(to:null)`).
+    Rewind {
+        to_seq: i64,
+        to_event_id: String,
+        reason: String,
+    },
 }
 
 /// `closed` reasons (closed sum; `slow_consumer` is the AC-R-2.11.4-6
@@ -207,6 +218,16 @@ impl Frame {
                     m.insert("detail".into(), Json::str(d.clone()));
                 }
             }
+            Frame::Rewind {
+                to_seq,
+                to_event_id,
+                reason,
+            } => {
+                m.insert("kind".into(), Json::str("rewind"));
+                m.insert("to_seq".into(), Json::Int(*to_seq));
+                m.insert("to_event_id".into(), Json::str(to_event_id.clone()));
+                m.insert("reason".into(), Json::str(reason.clone()));
+            }
         }
         m.insert("durability".into(), Json::str(self.durability()));
         Json::Obj(m)
@@ -226,6 +247,7 @@ impl Frame {
                 "item_aborted",
                 "lagged",
                 "closed",
+                "rewind",
             ],
             &format!("{path}/kind"),
         )?;
@@ -289,6 +311,11 @@ impl Frame {
                     resume_from_seq: s.req_int("resume_from_seq")?,
                 }
             }
+            "rewind" => Frame::Rewind {
+                to_seq: s.req_int("to_seq")?,
+                to_event_id: s.req_str("to_event_id")?,
+                reason: s.req_str("reason")?,
+            },
             _ => {
                 let reason =
                     closed_str(s.req("reason")?, CLOSED_REASONS, &format!("{path}/reason"))?;

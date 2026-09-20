@@ -1638,14 +1638,31 @@ fn w_experimental_ops_under_opt_in() {
         )),
         "Refused"
     );
-    // navigate is declared but not implemented → Refused{stage_pending}.
+    // navigate — S2.9 HEAD navigation: to "root" rewinds logical HEAD to the
+    // genesis sentinel (the WAL is untouched); a missing `to` is a schema
+    // violation, not a refusal.
     assert_eq!(
         err_kind(&call(
             &mut svc,
             "navigate",
             Json::obj(vec![("session_id", Json::str(child_id.clone()))]),
         )),
-        "Refused"
+        "SchemaViolation"
+    );
+    let n = ok(&call(
+        &mut svc,
+        "navigate",
+        Json::obj(vec![
+            ("session_id", Json::str(child_id.clone())),
+            ("to", Json::obj(vec![("kind", Json::str("root"))])),
+        ]),
+    ));
+    assert_eq!(
+        n.get("head_moved").and_then(|v| match v {
+            Json::Bool(b) => Some(*b),
+            _ => None,
+        }),
+        Some(true)
     );
     // list_leases → honestly empty at Stage 1.
     let r = call(
@@ -2046,4 +2063,209 @@ fn unused_warning_silencers() {
         }
     );
     let _ = HostCapabilities::default();
+}
+
+// ── S2.9 — the branch-model ops (R-2.2.4⁰ᵃ; ADR-0271) ───────────────────────
+
+#[test]
+fn s2_9_coherent_fork_points_and_shared_live_refusal() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("experimental", true)])),
+    );
+    assert!(r.get("result").is_some());
+    let s = open_new(&mut svc);
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    // coherent_fork_points — the projection over the live run.
+    let p = ok(&call(
+        &mut svc,
+        "coherent_fork_points",
+        Json::obj(vec![("session_id", Json::str(id.clone()))]),
+    ));
+    let points = p
+        .get("points")
+        .and_then(|v| match v {
+            Json::Arr(a) => Some(a),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no points: {p:?}"));
+    assert!(!points.is_empty(), "seq 0 is always coherent");
+    // `env: shared_live` — a mutable live env is never shared (typed refusal).
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "fork",
+            Json::obj(vec![
+                ("session_id", Json::str(id.clone())),
+                (
+                    "at",
+                    Json::obj(vec![("kind", Json::str("seq")), ("seq", Json::Int(0))]),
+                ),
+                ("env", Json::str("shared_live")),
+            ]),
+        )),
+        "Refused"
+    );
+}
+
+#[test]
+fn s2_9_trace_only_fork_is_read_only_by_construction() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("experimental", true)])),
+    );
+    assert!(r.get("result").is_some());
+    let s = open_new(&mut svc);
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let f = ok(&call(
+        &mut svc,
+        "fork",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            (
+                "at",
+                Json::obj(vec![("kind", Json::str("seq")), ("seq", Json::Int(0))]),
+            ),
+            ("env", Json::str("trace_only")),
+        ]),
+    ));
+    // The branch record rides the result — `env: trace_only`, read-only.
+    let rec = f.get("branch_record").unwrap();
+    assert_eq!(rec.get("env").and_then(Json::as_str), Some("trace_only"));
+    assert_eq!(
+        rec.get("read_only"),
+        Some(&Json::Bool(true)),
+        "trace_only forces read_only: {rec:?}"
+    );
+    // The child session is observation-only — a mutation op refuses.
+    let child_id = f
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "navigate",
+            Json::obj(vec![
+                ("session_id", Json::str(child_id.clone())),
+                ("to", Json::obj(vec![("kind", Json::str("root"))])),
+            ]),
+        )),
+        "Refused",
+        "navigate on a read-only session must refuse"
+    );
+}
+
+#[test]
+fn s2_9_navigate_streams_a_rewind_frame_and_rollback_appends() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[
+            ("experimental", true),
+            ("accepts_ephemeral_frames", true),
+        ])),
+    );
+    assert!(r.get("result").is_some());
+    let s = open_new(&mut svc);
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    // Subscribe first — the rewind frame must reach live subscribers.
+    let ticket = ok(&call(
+        &mut svc,
+        "stream_events",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("from", Json::obj(vec![("kind", Json::str("now"))])),
+        ]),
+    ));
+    let sub_id = ticket
+        .get("subscription_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let _ = svc.poll_frames(&sub_id); // drain the sync frame
+                                      // navigate to a durable seq — head.moved lands, Rewind streams.
+    let n = ok(&call(
+        &mut svc,
+        "navigate",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            (
+                "to",
+                Json::obj(vec![("kind", Json::str("seq")), ("seq", Json::Int(0))]),
+            ),
+            ("reason", Json::str("test rewind")),
+        ]),
+    ));
+    assert_eq!(n.get("head_moved"), Some(&Json::Bool(true)));
+    let frames = svc.poll_frames(&sub_id);
+    let mut saw_rewind = false;
+    for f in &frames {
+        // `stream.frame` notifications — the frame rides `params.frame`.
+        let fr = f.get("params").and_then(|p| p.get("frame")).unwrap_or(f);
+        if fr.get("kind").and_then(Json::as_str) == Some("rewind") {
+            assert_eq!(fr.get("to_seq").and_then(Json::as_int), Some(0));
+            assert_eq!(
+                fr.get("durability").and_then(Json::as_str),
+                Some("ephemeral")
+            );
+            saw_rewind = true;
+        }
+    }
+    assert!(saw_rewind, "no rewind frame: {frames:?}");
+    // Navigate back to the tip so `submit` can drive the run — then rollback
+    // lands `rolled_back` + `head.moved` and returns the rewind note.
+    let tip = svc.store().envelopes(&run_id).unwrap().last().unwrap().seq;
+    let _ = ok(&call(
+        &mut svc,
+        "navigate",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            (
+                "to",
+                Json::obj(vec![
+                    ("kind", Json::str("seq")),
+                    ("seq", Json::Int(tip as i64)),
+                ]),
+            ),
+        ]),
+    ));
+    let rb = ok(&call(
+        &mut svc,
+        "rollback",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("to_seq", Json::Int(0)),
+            ("reason", Json::str("operator")),
+        ]),
+    ));
+    assert_eq!(
+        rb.get("kind").and_then(Json::as_str),
+        Some("rollback.record"),
+        "the rewind note is the rollback result: {rb:?}"
+    );
+    assert_eq!(rb.get("head_seq").and_then(Json::as_int), Some(0));
+    // The audit pair is durable on the run.
+    let evs = svc.store().envelopes(&run_id).unwrap();
+    assert!(evs.iter().any(|e| e.class == "lifecycle.run.rolled_back"));
+    assert!(evs.iter().any(|e| e.class == "lifecycle.head.moved"));
 }
