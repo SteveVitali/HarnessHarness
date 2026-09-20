@@ -129,6 +129,14 @@ pub enum RecordKind {
     /// An `AnalysisRecord` (§6.4; S1.24, R-2.10.4⁰ᵃ) — `analysis_id` is the
     /// record's version id. Version-only.
     AnalysisRecord,
+    /// A `ModelSnapshotRecord` (§5b.4/WS-L4; S2.12, R-2.3.1 ADR-0120 d.4) —
+    /// `{provider, model_id, snapshot_id?, pinned, observed_fingerprint?}`
+    /// filled by the gateway from served-model/system-fingerprint fields.
+    /// Has a semantic projection: `semantic_id` names the `{provider,
+    /// model_id}` coordinate (the served snapshot/fingerprint are observed
+    /// facts on the version, never the coordinate — a provider-side snapshot
+    /// roll is a new *version* of the same model line).
+    ModelSnapshot,
 }
 
 impl RecordKind {
@@ -172,6 +180,7 @@ impl RecordKind {
             RecordKind::ExperimentSpec => "experiment",
             RecordKind::CellPlan => "cell_plan",
             RecordKind::AnalysisRecord => "analysis_record",
+            RecordKind::ModelSnapshot => "model_snapshot",
         }
     }
 
@@ -195,6 +204,7 @@ impl RecordKind {
                 | RecordKind::EnvironmentRecord
                 | RecordKind::Memory
                 | RecordKind::TaskRecord
+                | RecordKind::ModelSnapshot
         )
     }
 
@@ -282,6 +292,7 @@ mod tests {
             RecordKind::ExperimentSpec,
             RecordKind::CellPlan,
             RecordKind::AnalysisRecord,
+            RecordKind::ModelSnapshot,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for k in kinds {

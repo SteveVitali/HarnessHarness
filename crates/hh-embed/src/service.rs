@@ -69,6 +69,9 @@ pub struct EmbedService {
     pub(crate) next: u64,
     pub(crate) workspace_root: PathBuf,
     pub(crate) holder: String,
+    /// The kernel-internal ledger run carrying `lifecycle.registry.*` rows for
+    /// Group L ops (`registry_ops::ensure_registry_run` — created lazily).
+    pub(crate) registry_run: Option<(String, Lease)>,
 }
 
 /// A declared host-executor capability (`supplies.host_capabilities[]`).
@@ -81,6 +84,12 @@ pub(crate) struct HostCap {
     /// The ask's declared timeout (ms — `supplies.host_capabilities[]`
     /// `timeout` member); `None` = the ask never times out.
     pub timeout_ms: Option<u64>,
+    /// The declared `risk_class` (the `{reversibility, repeat_safety, scope}`
+    /// object — `supplies.host_capabilities[].risk_class`). `None`/unparseable
+    /// reads as `RiskClass::UNKNOWN` at the ask gate — undeclared is
+    /// never-auto (ADR-0031 §2), so `bypass` cannot silently skip it
+    /// (AC-R-2.11.1-7).
+    pub risk_class: Option<hh_ontology::risk::RiskClass>,
 }
 
 /// A live permission ask (`security.permission.pending`).
@@ -267,6 +276,7 @@ impl EmbedService {
             next: 0,
             workspace_root: config.workspace_root,
             holder: config.holder,
+            registry_run: None,
         })
     }
 
@@ -543,6 +553,26 @@ impl EmbedService {
             "verify" => self.verify(&req.params),
             "prove_inclusion" => self.prove_inclusion(&req.params),
             "prove_consistency" => self.prove_consistency(&req.params),
+            // ── Group L — the `lab.registry.*` boundary over the one
+            // `RegistryStore` (S2.12; records-in/records-out, CC5).
+            "lab.registry.register" => self.lab_registry_register(&req.params),
+            "lab.registry.publish" => self.lab_registry_publish(&req.params),
+            "lab.registry.resolve" => self.lab_registry_resolve(&req.params),
+            "lab.registry.query" => self.lab_registry_query(&req.params),
+            "lab.registry.catalog" => self.lab_registry_catalog(&req.params),
+            "lab.registry.slot_choices" => self.lab_registry_slot_choices(&req.params),
+            "lab.registry.substitutable" => self.lab_registry_substitutable(&req.params),
+            "lab.registry.snapshot" => self.lab_registry_snapshot(&req.params),
+            "lab.registry.record_conformance" => self.lab_registry_record_conformance(&req.params),
+            "lab.registry.deprecate" => self
+                .lab_registry_name_status(&req.params, hh_identity::names::NameStatus::Deprecated),
+            "lab.registry.yank" => {
+                self.lab_registry_name_status(&req.params, hh_identity::names::NameStatus::Yanked)
+            }
+            "lab.registry.revoke" => self.lab_registry_revoke(&req.params),
+            "lab.registry.lineage" => self.lab_registry_lineage(&req.params),
+            "lab.registry.sameness" => self.lab_registry_sameness(&req.params),
+            "lab.registry.verify" => self.lab_registry_verify(&req.params),
             _ => Err(EmbedError::SchemaViolation {
                 path: "/method".to_string(),
                 code: "unknown_method".to_string(),

@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:ab6c6502376385110ad020307d7254cb057a45af33f43cc21d271b2b85ba1426";
+    "sha256:c75d98e8e724df95a81f8c1571941696f9cf8ec723eb93a59daec960cb68ed33";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5452,6 +5452,96 @@ impl<R: BufRead, W: Write> Client<R, W> {
             self.hello_result = Some(r.clone());
             Ok(r)
         }
+    }
+
+    /// `lab.registry.catalog` → `json` (see the contract registry).
+    pub fn lab_registry_catalog(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.catalog", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.deprecate` → `json` (see the contract registry).
+    pub fn lab_registry_deprecate(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.deprecate", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.lineage` → `json` (see the contract registry).
+    pub fn lab_registry_lineage(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.lineage", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.publish` → `json` (see the contract registry).
+    pub fn lab_registry_publish(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.publish", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.query` → `json` (see the contract registry).
+    pub fn lab_registry_query(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.query", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.record_conformance` → `json` (see the contract registry).
+    pub fn lab_registry_record_conformance(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.record_conformance", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.register` → `json` (see the contract registry).
+    pub fn lab_registry_register(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.register", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.resolve` → `json` (see the contract registry).
+    pub fn lab_registry_resolve(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.resolve", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.revoke` → `json` (see the contract registry).
+    pub fn lab_registry_revoke(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.revoke", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.sameness` → `json` (see the contract registry).
+    pub fn lab_registry_sameness(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.sameness", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.slot_choices` → `json` (see the contract registry).
+    pub fn lab_registry_slot_choices(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.slot_choices", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.snapshot` → `json` (see the contract registry).
+    pub fn lab_registry_snapshot(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.snapshot", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.substitutable` → `json` (see the contract registry).
+    pub fn lab_registry_substitutable(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.substitutable", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.verify` → `json` (see the contract registry).
+    pub fn lab_registry_verify(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.verify", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.yank` → `json` (see the contract registry).
+    pub fn lab_registry_yank(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.yank", params.clone())?;
+        Ok(raw)
     }
 
     /// `lineage` → `Page` (see the contract registry).

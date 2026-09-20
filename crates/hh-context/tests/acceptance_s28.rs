@@ -1069,6 +1069,99 @@ fn trig_req(path: &str, at: u64) -> RetrievalRequest {
     }
 }
 
+/// S-106 regression (AC-R-2.4.4-1's ranking face): a *revoked* candidate may
+/// outrank its replacement under the deterministic ranker — the validity
+/// filter runs before the cut regardless of score, so the revoked row is
+/// withheld and the lower-ranked live replacement is what Execute serves.
+#[test]
+fn s106_revoked_outranking_candidate_withheld_replacement_served() {
+    let (mut store, v_old) = store_with_pointer();
+    // A second pointer on the same trigger glob, *newer* — the
+    // `deterministic_default` recency leg makes it outrank `v_old`
+    // pre-filtering.
+    let g = store.take_lease(PersistenceScope::Run, "agent");
+    let ctx = WriteContext {
+        context_label: Label::top(),
+        lease_generation: g,
+        at_seq: 2,
+        run_id: "run1".into(),
+    };
+    let d = MemoryDraft {
+        kind: MemoryKind::ProcedurePointer,
+        subject_key: None,
+        content: MemoryContent::Structured(Json::obj([
+            (
+                "triggers",
+                Json::Arr(vec![Json::obj([("path_glob", Json::str("src/**"))])]),
+            ),
+            ("procedure", Json::str("proc/deploy-v2")),
+        ])),
+        contract: Some(InvalidationContract {
+            dependencies: vec![],
+            cache_hint: hh_context::vocab::CacheHint::Cacheable,
+            validator_ref: Some("v/x".into()),
+            freshness: None,
+            invalidation_condition: None,
+            revalidation: hh_context::vocab::Revalidation::Never,
+        }),
+        scope: PersistenceScope::Run,
+        declared_inputs: vec![],
+        justifications: vec![],
+        supersedes: None,
+        validity: None,
+        provenance: Some(model_prov()),
+        semantic_id: None,
+        validator_endorsed: false,
+    };
+    let v_new = store.put(d, &ctx).unwrap().version.version_id;
+
+    // Pre-filtering the revoked candidate outranks the replacement.
+    let mut sink = CollectSink::default();
+    let (pre_items, _) = retrieve::retrieve(
+        &mut store,
+        &trig_req("src/main.rs", 2),
+        &mut sink,
+        None,
+        || 0,
+    )
+    .unwrap();
+    assert_eq!(pre_items.len(), 2, "{pre_items:?}");
+    assert_eq!(
+        pre_items[0].address, v_new,
+        "the newer candidate outranks pre-filtering"
+    );
+
+    // Revoke the outranking candidate with the older version as replacement.
+    lifecycle::revoke(
+        &mut store,
+        &v_new,
+        RevocationReason::Contradicted,
+        &kprov(),
+        Some(v_old.clone()),
+        3,
+    )
+    .unwrap();
+
+    // Under default validity (Execute + the default admitted set) the revoked
+    // row is never returned — the lower-ranked replacement is served.
+    let mut sink = CollectSink::default();
+    let (items, report) = retrieve::retrieve(
+        &mut store,
+        &trig_req("src/main.rs", 3),
+        &mut sink,
+        None,
+        || 0,
+    )
+    .unwrap();
+    assert_eq!(items.len(), 1, "{items:?}");
+    assert_eq!(items[0].address, v_old, "the replacement is served");
+    assert!(report.filtered_validity >= 1, "{report:?}");
+    assert!(
+        !items.iter().any(|i| i.address == v_new),
+        "a revoked memory is never returned under default validity"
+    );
+}
+
 #[test]
 fn ac_r_2_4_3_12_path_touched_hits_procedure_pointer_glob() {
     let (mut store, vid) = store_with_pointer();

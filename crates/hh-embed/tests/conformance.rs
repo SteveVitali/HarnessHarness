@@ -2014,6 +2014,17 @@ fn every_declared_call_op_routes() {
             continue;
         }
         let e = call(&mut svc, op.name, Json::Obj(BTreeMap::new()));
+        // A `result` is fine — an implemented op whose empty params are valid
+        // (e.g. `lab.registry.query`/`catalog`/`verify`, S2.12) proves routing
+        // by answering. Otherwise the error must not be `unknown_method`.
+        if e.get("error").is_none() {
+            assert!(
+                e.get("result").is_some(),
+                "op {} returned neither result nor error",
+                op.name
+            );
+            continue;
+        }
         let kind = err_kind(&e);
         assert_ne!(
             kind.as_str(),
@@ -2581,5 +2592,169 @@ fn w_permission_pending_times_out() {
             ]),
         )),
         "AlreadyDecided"
+    );
+}
+
+// ── Group L — `lab.registry.*` boundary round-trip (S2.12) ──────────────────
+
+/// A minimal `class` record body (canonical spelling via `body_json`).
+fn lab_class_body(class_id: &str) -> Json {
+    use hh_registry::kinds::Cardinality;
+    use hh_registry::records::{ClassRecord, ContractOperation, RegistryRecord};
+    use std::collections::BTreeSet;
+    hh_registry::schema::body_json(
+        &RegistryRecord::Class(ClassRecord {
+            class_id: class_id.to_string(),
+            contract: vec![ContractOperation {
+                name: "run".to_string(),
+                inputs: Json::Null,
+                outputs: Json::Null,
+                invariants: vec![],
+                failure_modes: vec![],
+            }],
+            cardinality: Cardinality::ExactlyOne,
+            required_inputs: BTreeSet::from([
+                "ModelProfile".to_string(),
+                "ResourceAccount".to_string(),
+            ]),
+            base_param_schema: BTreeMap::new(),
+            hot_path: false,
+            dialect_introduced: "registry/1".to_string(),
+            contract_version: "1.0".to_string(),
+            home: "kernel".to_string(),
+            declaration_schema: Json::obj([("additionalProperties", Json::Bool(false))]),
+            conformance_suite_ref: None,
+            decision_points: vec![],
+            metrics_declared: vec![],
+            slot_key: class_id.to_string(),
+            tier: "C0".to_string(),
+            depends_on: Vec::new(),
+        }),
+        false,
+    )
+}
+
+fn lab_hello(svc: &mut EmbedService) {
+    let r = call(
+        svc,
+        "hello",
+        hello_params(caps_json(&[
+            ("experimental", true),
+            ("serves_measurement", true),
+        ])),
+    );
+    assert!(r.get("result").is_some(), "hello refused: {r:?}");
+}
+
+fn registrar() -> Json {
+    ProvenanceRecord::kernel("hh-embed", 0).to_json()
+}
+
+#[test]
+fn lab_registry_register_publish_resolve_revoke_round_trip() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+
+    // register
+    let r = call(
+        &mut svc,
+        "lab.registry.register",
+        Json::obj([
+            ("kind", Json::str("class")),
+            ("body", lab_class_body("lab_class")),
+            ("registrar", registrar()),
+        ]),
+    );
+    let vref = ok(&r);
+    let version_id = vref
+        .get("version_id")
+        .and_then(Json::as_str)
+        .expect("register returns version_id")
+        .to_string();
+
+    // publish under a name
+    let r = call(
+        &mut svc,
+        "lab.registry.publish",
+        Json::obj([
+            ("namespace", Json::str("hh")),
+            ("name", Json::str("lab_class")),
+            ("version_id", Json::str(version_id.clone())),
+            ("registrar", registrar()),
+        ]),
+    );
+    ok(&r);
+
+    // resolve by name under execute
+    let r = call(
+        &mut svc,
+        "lab.registry.resolve",
+        Json::obj([
+            ("namespace", Json::str("hh")),
+            ("name", Json::str("lab_class")),
+        ]),
+    );
+    let resolved = ok(&r);
+    assert_eq!(
+        resolved
+            .get("versioned_ref")
+            .and_then(|v| v.get("version_id"))
+            .and_then(Json::as_str),
+        Some(version_id.as_str())
+    );
+
+    // revoke — subsequent execute-mode resolution must refuse
+    let r = call(
+        &mut svc,
+        "lab.registry.revoke",
+        Json::obj([
+            ("version_id", Json::str(version_id.clone())),
+            ("reason", Json::str("edit")),
+            ("registrar", registrar()),
+        ]),
+    );
+    ok(&r);
+    let e = call(
+        &mut svc,
+        "lab.registry.resolve",
+        Json::obj([("version_id", Json::str(version_id.clone()))]),
+    );
+    assert!(
+        e.get("error").is_some(),
+        "revoked record resolved under execute"
+    );
+
+    // lineage exposes the revocation row (append-only, never deleted)
+    let r = call(
+        &mut svc,
+        "lab.registry.lineage",
+        Json::obj([("version_id", Json::str(version_id.clone()))]),
+    );
+    let view = ok(&r);
+    assert_eq!(
+        view.get("revocations").and_then(|v| match v {
+            Json::Arr(l) => Some(l.len()),
+            _ => None,
+        }),
+        Some(1)
+    );
+}
+
+#[test]
+fn lab_registry_gates_still_hold() {
+    let mut svc = service();
+    // No hello yet — every Group L op refuses NotInitialized.
+    let e = call(&mut svc, "lab.registry.query", Json::Obj(BTreeMap::new()));
+    assert_eq!(err_kind(&e), "NotInitialized");
+    lab_hello(&mut svc);
+    // import/export remain stage-pending — declared, unrouted to a body.
+    let e = call(&mut svc, "lab.registry.import", Json::Obj(BTreeMap::new()));
+    assert_eq!(err_kind(&e), "Refused");
+    assert_eq!(
+        e.get("error")
+            .and_then(|x| x.get("data"))
+            .and_then(|d| d.get("reason"))
+            .and_then(Json::as_str),
+        Some("stage_pending")
     );
 }

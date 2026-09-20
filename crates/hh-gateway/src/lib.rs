@@ -30,6 +30,8 @@
 //!   `EventSink` ports.
 //! - [`router`] — the C0 `ModelRoleTable`/`RoutingPolicy` slice with the
 //!   closed `RoutingRefusal` sum.
+//! - [`snapshot`] — `ModelSnapshotRecord` (WS-L4), the fingerprint probe and
+//!   the `SnapshotClaim` drift signal (ADR-0120 d.4; ADR-0203 D5; S2.12).
 //! - [`cache`] — `CacheSemantics` as data, the affinity key, expected/
 //!   observed cache state, `place_markers`, `model.cache.resolved` vocabulary.
 //! - [`layout`] — the LC-1…LC-9 layout invariants.
@@ -49,6 +51,7 @@ pub mod layout;
 pub mod message;
 pub mod plan;
 pub mod router;
+pub mod snapshot;
 pub mod vocab;
 
 pub use attempts::{

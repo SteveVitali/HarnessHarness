@@ -151,6 +151,7 @@ impl RecordKind {
                 | RecordKind::Validator
                 | RecordKind::Extension
                 | RecordKind::EnvironmentFamily
+                | RecordKind::EnvironmentRecord
         )
     }
 
@@ -169,6 +170,11 @@ impl RecordKind {
             RecordKind::ModelProfile => IdentityKind::ModelProfile.domain_tag().to_string(),
             RecordKind::Validator => IdentityKind::Validator.domain_tag().to_string(),
             RecordKind::IdentityProfile => IdentityKind::IdentityProfile.domain_tag().to_string(),
+            // The environment plane's own identity tag (CC1 — the same canonical
+            // body mints the same `version_id` in `hh-env` and here).
+            RecordKind::EnvironmentRecord => {
+                IdentityKind::EnvironmentRecord.domain_tag().to_string()
+            }
             other => format!("registry.{}", other.as_str()),
         }
     }
@@ -183,6 +189,7 @@ impl RecordKind {
                 | RecordKind::Class
                 | RecordKind::SealedDefinition
                 | RecordKind::Capability
+                | RecordKind::EnvironmentRecord
         )
     }
 }
