@@ -148,10 +148,7 @@ impl MemberRef {
             detail: format!("MemberRef: {d}"),
         };
         let role = j.get("role").and_then(Json::as_str).ok_or(bad("role"))?;
-        let address = j
-            .get("ref")
-            .and_then(Json::as_str)
-            .ok_or(bad("ref"))?;
+        let address = j.get("ref").and_then(Json::as_str).ok_or(bad("ref"))?;
         let status = j
             .get("status")
             .and_then(Json::as_str)
@@ -199,12 +196,13 @@ impl Claim {
             detail: format!("Claim: {d}"),
         };
         Ok(Claim {
-            role: j.get("role").and_then(Json::as_str).ok_or(bad("role"))?.into(),
+            role: j
+                .get("role")
+                .and_then(Json::as_str)
+                .ok_or(bad("role"))?
+                .into(),
             value: j.get("value").cloned().unwrap_or(Json::Null),
-            provenance: j
-                .get("provenance")
-                .cloned()
-                .ok_or(bad("provenance"))?,
+            provenance: j.get("provenance").cloned().ok_or(bad("provenance"))?,
         })
     }
 }
@@ -238,7 +236,11 @@ impl Unpinned {
             detail: format!("Unpinned: {d}"),
         };
         Ok(Unpinned {
-            role: j.get("role").and_then(Json::as_str).ok_or(bad("role"))?.into(),
+            role: j
+                .get("role")
+                .and_then(Json::as_str)
+                .ok_or(bad("role"))?
+                .into(),
             reason: j
                 .get("reason")
                 .and_then(Json::as_str)
@@ -273,7 +275,12 @@ impl FetchEntry {
         }
         m.insert(
             "locations".into(),
-            Json::Arr(self.locations.iter().map(|l| Json::str(l.clone())).collect()),
+            Json::Arr(
+                self.locations
+                    .iter()
+                    .map(|l| Json::str(l.clone()))
+                    .collect(),
+            ),
         );
         if let Some(e) = &self.expires {
             m.insert("expires".into(), Json::str(e.clone()));
@@ -286,7 +293,10 @@ impl FetchEntry {
             detail: format!("FetchEntry: {d}"),
         };
         let locations = match j.get("locations") {
-            Some(Json::Arr(ls)) => ls.iter().filter_map(|l| l.as_str().map(String::from)).collect(),
+            Some(Json::Arr(ls)) => ls
+                .iter()
+                .filter_map(|l| l.as_str().map(String::from))
+                .collect(),
             _ => Vec::new(),
         };
         Ok(FetchEntry {
@@ -367,10 +377,7 @@ impl LedgerExport {
             Json::Arr(self.pages.iter().map(|p| Json::str(p.clone())).collect()),
         );
         m.insert("tree".into(), Json::str(self.tree.clone()));
-        m.insert(
-            "checkpoints".into(),
-            Json::Arr(self.checkpoints.clone()),
-        );
+        m.insert("checkpoints".into(), Json::Arr(self.checkpoints.clone()));
         m.insert(
             "blob_index".into(),
             Json::Arr(self.blob_index.iter().map(|b| b.to_json()).collect()),
@@ -388,18 +395,17 @@ impl LedgerExport {
             detail: format!("LedgerExport: {d}"),
         };
         let pages = match j.get("pages") {
-            Some(Json::Arr(ps)) => ps.iter().filter_map(|p| p.as_str().map(String::from)).collect(),
+            Some(Json::Arr(ps)) => ps
+                .iter()
+                .filter_map(|p| p.as_str().map(String::from))
+                .collect(),
             _ => return Err(bad("pages")),
         };
         let blob_index = match j.get("blob_index") {
             Some(Json::Arr(bs)) => bs
                 .iter()
                 .map(|b| BlobIndexEntry {
-                    address: b
-                        .get("address")
-                        .and_then(Json::as_str)
-                        .unwrap_or("")
-                        .into(),
+                    address: b.get("address").and_then(Json::as_str).unwrap_or("").into(),
                     status: b
                         .get("status")
                         .and_then(Json::as_str)
@@ -464,9 +470,7 @@ impl LevelBasis {
         let sat = match &self.satisfied_by {
             BasisSatisfaction::Member(a) => Json::obj([("member", Json::str(a.clone()))]),
             BasisSatisfaction::Unpinned(r) => Json::obj([("unpinned", Json::str(r.clone()))]),
-            BasisSatisfaction::NotApplicable(c) => {
-                Json::obj([("n/a", Json::str(c.clone()))])
-            }
+            BasisSatisfaction::NotApplicable(c) => Json::obj([("n/a", Json::str(c.clone()))]),
             BasisSatisfaction::Missing => Json::obj([("missing", Json::Bool(true))]),
         };
         Json::obj([
@@ -538,7 +542,10 @@ impl SubjectSection {
         };
         SubjectSection {
             run_ids: match j.get("run_ids") {
-                Some(Json::Arr(rs)) => rs.iter().filter_map(|r| r.as_str().map(String::from)).collect(),
+                Some(Json::Arr(rs)) => rs
+                    .iter()
+                    .filter_map(|r| r.as_str().map(String::from))
+                    .collect(),
                 _ => Vec::new(),
             },
             heads,
@@ -601,20 +608,19 @@ impl BundlePolicy {
         };
         if let Some(m) = j.get("materialize").and_then(Json::as_str) {
             match m {
-                "self_contained" | "detached" | "manifest_only" => {
-                    p.materialize = m.to_string()
-                }
+                "self_contained" | "detached" | "manifest_only" => p.materialize = m.to_string(),
                 other => return Err(bad(&format!("materialize {other}"))),
             }
         }
         if let Some(Json::Arr(rs)) = j.get("readers") {
-            p.readers = rs.iter().filter_map(|r| r.as_str().map(String::from)).collect();
+            p.readers = rs
+                .iter()
+                .filter_map(|r| r.as_str().map(String::from))
+                .collect();
         }
         p.redaction = j.get("redaction").and_then(Json::as_str).map(String::from);
-        p.include_interchange_export = matches!(
-            j.get("include_interchange_export"),
-            Some(Json::Bool(true))
-        );
+        p.include_interchange_export =
+            matches!(j.get("include_interchange_export"), Some(Json::Bool(true)));
         if let Some(Json::Arr(cs)) = j.get("claims") {
             p.claims = cs
                 .iter()
@@ -717,10 +723,7 @@ impl BundleManifest {
             "name_bindings".into(),
             Json::Arr(self.name_bindings.clone()),
         );
-        m.insert(
-            "fetch_policy".into(),
-            Json::str(self.fetch_policy.clone()),
-        );
+        m.insert("fetch_policy".into(), Json::str(self.fetch_policy.clone()));
         m.insert(
             "fetch".into(),
             Json::Arr(self.fetch.iter().map(|f| f.to_json()).collect()),
@@ -755,7 +758,12 @@ impl BundleManifest {
         );
         m.insert(
             "ext".into(),
-            Json::Obj(self.ext.iter().map(|(k, v)| (k.clone(), v.clone())).collect()),
+            Json::Obj(
+                self.ext
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect(),
+            ),
         );
         Json::Obj(m)
     }
@@ -827,7 +835,10 @@ impl BundleManifest {
             _ => BTreeMap::new(),
         };
         let observability_levels = match j.get("observability_levels") {
-            Some(Json::Arr(ls)) => ls.iter().filter_map(|l| l.as_str().map(String::from)).collect(),
+            Some(Json::Arr(ls)) => ls
+                .iter()
+                .filter_map(|l| l.as_str().map(String::from))
+                .collect(),
             _ => Vec::new(),
         };
         Ok(BundleManifest {
@@ -870,10 +881,7 @@ impl BundleManifest {
             instrument: j.get("instrument").cloned().unwrap_or(Json::Null),
             traces,
             results: j.get("results").cloned().unwrap_or(Json::Null),
-            reproducibility: j
-                .get("reproducibility")
-                .cloned()
-                .unwrap_or(Json::Null),
+            reproducibility: j.get("reproducibility").cloned().unwrap_or(Json::Null),
             members,
             unpinned,
             ext: match j.get("ext") {

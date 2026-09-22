@@ -217,7 +217,14 @@ fn credentialed(locator: &str) -> bool {
             return true;
         }
     }
-    for key in ["token=", "key=", "sig=", "signature=", "password=", "secret="] {
+    for key in [
+        "token=",
+        "key=",
+        "sig=",
+        "signature=",
+        "password=",
+        "secret=",
+    ] {
         if lower.contains(key) {
             return true;
         }
@@ -336,11 +343,7 @@ fn verify_export(
     // The export's head = the last event's coordinate.
     if let Some(last) = last {
         let head_seq = export.head.get("seq").and_then(Json::as_int).unwrap_or(-1);
-        let head_hash = export
-            .head
-            .get("hash")
-            .and_then(Json::as_str)
-            .unwrap_or("");
+        let head_hash = export.head.get("hash").and_then(Json::as_str).unwrap_or("");
         if last.seq as i64 != head_seq || last.hash != head_hash {
             checks.push(CheckRow::fail(
                 format!("traces.{run}.head"),
@@ -404,9 +407,7 @@ fn validate_stages(
     // Every subject run needs its ledger tree + at least one page ref.
     for run in &manifest.subject.run_ids {
         match manifest.traces.get(run) {
-            Some(t) if !t.pages.is_empty() => {
-                s1.push(CheckRow::pass(format!("traces:{run}")))
-            }
+            Some(t) if !t.pages.is_empty() => s1.push(CheckRow::pass(format!("traces:{run}"))),
             _ => s1.push(CheckRow::fail(
                 format!("traces:{run}"),
                 "absent_required_member",
@@ -480,7 +481,10 @@ fn validate_stages(
         s2.push(CheckRow::fail(
             "manifest.version_id",
             "version_id_mismatch",
-            format!("recomputed {recomputed_id} ≠ declared {}", manifest.version_id),
+            format!(
+                "recomputed {recomputed_id} ≠ declared {}",
+                manifest.version_id
+            ),
         ));
     } else {
         s2.push(CheckRow::pass("manifest.version_id"));
@@ -490,7 +494,11 @@ fn validate_stages(
     for export in manifest.traces.values() {
         verify_export(
             export,
-            events_by_run.get(&export.run_id).cloned().unwrap_or_default().as_slice(),
+            events_by_run
+                .get(&export.run_id)
+                .cloned()
+                .unwrap_or_default()
+                .as_slice(),
             members,
             &mut s2,
         );
@@ -560,9 +568,10 @@ fn validate_stages(
             "reproducibility.max_supported_level absent",
         )),
     }
-    if let (Some(claimed), Some(max)) =
-        (levels::declared_claimed(manifest), levels::declared_max(manifest))
-    {
+    if let (Some(claimed), Some(max)) = (
+        levels::declared_claimed(manifest),
+        levels::declared_max(manifest),
+    ) {
         if claimed > max {
             s4.push(CheckRow::fail(
                 "claimed_level",
@@ -747,7 +756,12 @@ fn validate_stages(
     }
 
     // ── fold ─────────────────────────────────────────────────────────
-    let completeness_names = ["completeness", "present_members_verify", "level_coherence", "hosting_boundary"];
+    let completeness_names = [
+        "completeness",
+        "present_members_verify",
+        "level_coherence",
+        "hosting_boundary",
+    ];
     let mut complete_except = Vec::new();
     for s in &stages {
         if completeness_names.contains(&s.name) && !s.ok() {

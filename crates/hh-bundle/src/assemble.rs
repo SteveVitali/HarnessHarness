@@ -13,8 +13,7 @@ use crate::error::BundleError;
 use crate::export::{add_member, build_ledger_export, MemberBytes};
 use crate::levels;
 use crate::manifest::{
-    BundleManifest, BundlePolicy, MemberRef, MemberStatus, SubjectSection,
-    Unpinned,
+    BundleManifest, BundlePolicy, MemberRef, MemberStatus, SubjectSection, Unpinned,
 };
 
 /// A compiled-bundle member the caller produced (`hh-compiler` output).
@@ -113,9 +112,11 @@ fn secret_scan(members: &MemberBytes) -> Result<(), BundleError> {
 pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
     let store = inputs.store;
     let run_id = inputs.run_id;
-    let rm = store.manifest(run_id).map_err(|_| BundleError::RunNotFound {
-        run_id: run_id.to_string(),
-    })?;
+    let rm = store
+        .manifest(run_id)
+        .map_err(|_| BundleError::RunNotFound {
+            run_id: run_id.to_string(),
+        })?;
 
     // ── Layer P: the LedgerExport + its page/tree members ────────────
     let mut members: MemberBytes = BTreeMap::new();
@@ -134,20 +135,18 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
     let status = if finished { "finished" } else { "open" }.to_string();
 
     // ── Section documents (each a member so basis rows can pin them) ─
-    let doc_member = |members: &mut MemberBytes,
-                      role: &str,
-                      doc: &Json,
-                      index: &mut Vec<MemberRef>| {
-        let bytes = doc.to_canonical_string().into_bytes();
-        let (addr, size) = add_member(members, bytes, "application/vnd.hh.bundle-doc+json");
-        index.push(MemberRef::present(
-            role,
-            addr.clone(),
-            "application/vnd.hh.bundle-doc+json",
-            size,
-        ));
-        addr
-    };
+    let doc_member =
+        |members: &mut MemberBytes, role: &str, doc: &Json, index: &mut Vec<MemberRef>| {
+            let bytes = doc.to_canonical_string().into_bytes();
+            let (addr, size) = add_member(members, bytes, "application/vnd.hh.bundle-doc+json");
+            index.push(MemberRef::present(
+                role,
+                addr.clone(),
+                "application/vnd.hh.bundle-doc+json",
+                size,
+            ));
+            addr
+        };
     let mut index: Vec<MemberRef> = Vec::new();
 
     // subject doc — the completeness anchor.
@@ -164,8 +163,8 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
         .ok_or_else(|| BundleError::MemberUnavailable {
             address: "harness_def_ref unset".into(),
         })?;
-    let def_bytes = (inputs.artifact_bytes)(&def_ref)
-        .ok_or_else(|| BundleError::MemberUnavailable {
+    let def_bytes =
+        (inputs.artifact_bytes)(&def_ref).ok_or_else(|| BundleError::MemberUnavailable {
             address: def_ref.clone(),
         })?;
     let (def_addr, def_size) =
@@ -216,10 +215,7 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
     });
 
     // model doc member.
-    let model_doc = Json::obj([(
-        "snapshots",
-        Json::Arr(inputs.model_snapshots.clone()),
-    )]);
+    let model_doc = Json::obj([("snapshots", Json::Arr(inputs.model_snapshots.clone()))]);
     let _model_doc_addr = doc_member(&mut members, "model", &model_doc, &mut index);
 
     // nondeterminism doc member — env + model + caller declarations.
@@ -509,10 +505,7 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
     }
     manifest.reproducibility = Json::obj([
         ("claimed_level", Json::str(claimed.name())),
-        (
-            "max_supported_level",
-            Json::str(max_supported.name()),
-        ),
+        ("max_supported_level", Json::str(max_supported.name())),
         (
             "basis",
             Json::Arr(basis.iter().map(|b| b.to_json()).collect()),
@@ -532,10 +525,7 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
     let report_rows = vec![Json::obj([
         ("kind", Json::str("bundle_assembled")),
         ("bundle_id", Json::str(manifest.version_id.clone())),
-        (
-            "max_supported_level",
-            Json::str(max_supported.name()),
-        ),
+        ("max_supported_level", Json::str(max_supported.name())),
     ])];
 
     Ok(Assembled {

@@ -55,11 +55,7 @@ pub struct ImportLift {
 /// D1: every lifted fact gets `authority = unverified` and
 /// `origin = import(...)`; D2: `MappingReport` is a mandatory,
 /// content-addressed row; D3: source bytes are never rewritten).
-pub fn lift(
-    decoded: &Decoded,
-    format: &str,
-    now_ms: u64,
-) -> Result<ImportLift, BundleError> {
+pub fn lift(decoded: &Decoded, format: &str, now_ms: u64) -> Result<ImportLift, BundleError> {
     if format != NATIVE_FORMAT {
         return Err(BundleError::FormatUnknown {
             detail: format!("{format} — only {NATIVE_FORMAT} lifts at this stage"),
@@ -68,7 +64,10 @@ pub fn lift(
     let manifest = &decoded.manifest;
     if manifest.bundle_kind != "run" {
         return Err(BundleError::FormatUnknown {
-            detail: format!("bundle_kind {} — only run bundles lift at this stage", manifest.bundle_kind),
+            detail: format!(
+                "bundle_kind {} — only run bundles lift at this stage",
+                manifest.bundle_kind
+            ),
         });
     }
 
@@ -113,13 +112,15 @@ pub fn lift(
         Json::obj([
             ("source_bundle", Json::str(manifest.version_id.clone())),
             ("format", Json::str(NATIVE_FORMAT)),
-            ("participant_class", Json::str(manifest.participant_class.clone())),
+            (
+                "participant_class",
+                Json::str(manifest.participant_class.clone()),
+            ),
         ]),
     );
 
     // ── Member bytes → blob-plane payloads ───────────────────────────
-    let blobs: Vec<(String, Vec<u8>)> =
-        decoded_members(decoded, manifest).collect();
+    let blobs: Vec<(String, Vec<u8>)> = decoded_members(decoded, manifest).collect();
 
     // ── Event rows ───────────────────────────────────────────────────
     // Provenance is stamped by the caller at append time; the payload
@@ -134,12 +135,7 @@ pub fn lift(
         .subject
         .heads
         .iter()
-        .map(|(run, head)| {
-            Json::obj([
-                ("run_id", Json::str(run.clone())),
-                ("head", head.clone()),
-            ])
-        })
+        .map(|(run, head)| Json::obj([("run_id", Json::str(run.clone())), ("head", head.clone())]))
         .collect();
     let mut receipt_refs: Vec<String> = Vec::new();
     if let Some(a) = manifest.definition.get("member").and_then(Json::as_str) {
@@ -148,10 +144,7 @@ pub fn lift(
     let events = vec![ImportEvent {
         class: "lifecycle.run.imported".into(),
         payload: Json::obj([
-            (
-                "source_bundle",
-                Json::str(manifest.version_id.clone()),
-            ),
+            ("source_bundle", Json::str(manifest.version_id.clone())),
             (
                 "source_run_ids",
                 Json::Arr(
@@ -215,10 +208,8 @@ pub fn lift(
         ),
         ("notes", Json::Arr(vec![])),
     ]);
-    let mapping_digest = hh_identity::idp_id(
-        "bundle.mapping",
-        mapping.to_canonical_string().as_bytes(),
-    );
+    let mapping_digest =
+        hh_identity::idp_id("bundle.mapping", mapping.to_canonical_string().as_bytes());
     let import_id = hh_identity::idp_id(
         "bundle.import",
         format!("{}:{}", manifest.version_id, now_ms).as_bytes(),
@@ -262,5 +253,10 @@ fn decoded_members<'a>(
         .members
         .iter()
         .filter(|m| m.status == MemberStatus::Present)
-        .filter_map(|m| decoded.members.get(&m.address).map(|b| (m.address.clone(), b.clone())))
+        .filter_map(|m| {
+            decoded
+                .members
+                .get(&m.address)
+                .map(|b| (m.address.clone(), b.clone()))
+        })
 }

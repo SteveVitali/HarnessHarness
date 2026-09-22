@@ -30,4 +30,6 @@ hh-ledger = { path = "../hh-ledger" }
 hh-assembly = { path = "../hh-assembly" }
 hh-hir = { path = "../hh-hir" }
 hh-ontology = { path = "../hh-ontology" }
+hh-bundle = { path = "../hh-bundle" }
+hh-mcp = { path = "../hh-mcp" }
 hh-provenance = { path = "../hh-provenance" }

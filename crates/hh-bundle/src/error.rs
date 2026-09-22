@@ -16,7 +16,10 @@ pub enum BundleError {
     /// Secret material or a credentialed locator in a member (S8; R-ID-7).
     SecretMaterialPresent { detail: String },
     /// `claimed_level` above the basis-derived maximum.
-    ReproClaimUnsupported { claimed: String, max_supported: String },
+    ReproClaimUnsupported {
+        claimed: String,
+        max_supported: String,
+    },
     /// A manifest reference resolves to nothing (no member, fetch or
     /// unpinned entry).
     ManifestReferenceUnresolved { reference: String },
@@ -27,7 +30,10 @@ pub enum BundleError {
     /// A present member's bytes do not hash back to its address.
     MemberMismatch { address: String },
     /// `reproduce` level above `max_supported_level` (or a class-n/a level).
-    LevelUnsupported { level: String, max_supported: String },
+    LevelUnsupported {
+        level: String,
+        max_supported: String,
+    },
     /// `reproduce` with unmatched `eval_budget` (T-LCD-14).
     UnmatchedBudget { detail: String },
     /// The environment the bundle pins cannot be provisioned here.
@@ -72,7 +78,10 @@ impl fmt::Display for BundleError {
             BundleError::LevelUnsupported {
                 level,
                 max_supported,
-            } => write!(f, "level_unsupported: {level} (max_supported {max_supported})"),
+            } => write!(
+                f,
+                "level_unsupported: {level} (max_supported {max_supported})"
+            ),
             BundleError::UnmatchedBudget { detail } => write!(f, "unmatched_budget: {detail}"),
             BundleError::EnvironmentUnavailable { detail } => {
                 write!(f, "environment_unavailable: {detail}")

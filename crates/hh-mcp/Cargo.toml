@@ -16,3 +16,6 @@ path = "src/bin/hh-mcp-serve.rs"
 [dependencies]
 hh-wire = { path = "../hh-wire" }
 hh-identity = { path = "../hh-identity" }
+# The binary decodes `hh-bundle/1` directories/containers (the lib's
+# lowering is over member bytes only — the dep serves `hh-mcp-serve`).
+hh-bundle = { path = "../hh-bundle" }

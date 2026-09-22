@@ -2753,3 +2753,463 @@ fn bypass_never_auto_denies_unattended() {
     assert_eq!(p.get("decider").and_then(Json::as_str), Some("policy"));
     assert_eq!(p.get("reason").and_then(Json::as_str), Some("unattended"));
 }
+
+// ── S3.1 — the Lab nouns + bundle/run import-export over the boundary ──
+//
+// Every verb is one named Group L/M/R op (K-2/N-3); the verbs whose
+// owning Lab service lands later (S3.4a–S3.5) surface the typed
+// `stage_pending` refusal verbatim — an honest answer, never a fake.
+
+/// A boundary wrapper recording every `(method, params)` — the dry-run
+/// parity evidence (which op a verb routes to).
+struct RecordingBoundary<'a> {
+    inner: &'a mut dyn Boundary,
+    calls: Vec<(String, Json)>,
+}
+
+impl Boundary for RecordingBoundary<'_> {
+    fn call(&mut self, method: &str, params: &Json) -> Result<Json, CliError> {
+        self.calls.push((method.to_string(), params.clone()));
+        self.inner.call(method, params)
+    }
+    fn poll_frame(&mut self) -> Result<Option<StreamNotification>, CliError> {
+        self.inner.poll_frame()
+    }
+    fn poll_upcall(&mut self) -> Result<Option<(String, Json)>, CliError> {
+        self.inner.poll_upcall()
+    }
+    fn hello_result(&self) -> Option<&HelloResult> {
+        self.inner.hello_result()
+    }
+}
+
+/// A definition file for the Lab verbs.
+fn write_lab_definition(tag: &str) -> String {
+    let dir = test_dir(&format!("def-{tag}"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("def.hir.json");
+    std::fs::write(&path, document_json().to_canonical_string()).unwrap();
+    path.to_string_lossy().to_string()
+}
+
+/// `run start` → finished run_id (the bundle subject).
+fn started_run(b: &mut dyn Boundary, tag: &str) -> String {
+    let def = write_definition(&format!("run-{tag}"));
+    let (class, out, _err) = hh(b, &["run", "start", &def, "hi"], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    result_run_id(&out)
+}
+
+#[test]
+fn s31_run_export_delivers_a_bundle_dir() {
+    let mut b = ServiceBoundary::new("s31-export");
+    let run_id = started_run(&mut b, "exp");
+    let out_dir = test_dir("s31-exported");
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "run",
+            "export",
+            &run_id,
+            "--out",
+            &out_dir.to_string_lossy(),
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    // The sink holds bundle.json + members/*.
+    assert!(out_dir.join("bundle.json").is_file(), "{out}");
+    assert!(out_dir.join("members").is_dir(), "{out}");
+    // The delivery row is on the ledger.
+    let classes = event_classes(&mut b, &run_id);
+    assert!(
+        classes.iter().any(|c| c == "measurement.export.delivered"),
+        "{classes:?}"
+    );
+    assert!(
+        classes
+            .iter()
+            .any(|c| c == "measurement.experiment.bundle_assembled"),
+        "{classes:?}"
+    );
+}
+
+#[test]
+fn s31_bundle_validate_show_reproduce_over_exported_dir() {
+    let mut b = ServiceBoundary::new("s31-bval");
+    let run_id = started_run(&mut b, "bval");
+    let out_dir = test_dir("s31-bval-out");
+    let (class, _, _) = hh(
+        &mut b,
+        &[
+            "run",
+            "export",
+            &run_id,
+            "--out",
+            &out_dir.to_string_lossy(),
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok);
+
+    // validate — the staged gate's report.
+    let (class, out, _) = hh(
+        &mut b,
+        &["bundle", "validate", &out_dir.to_string_lossy()],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("\"complete\":true"), "{out}");
+
+    // show — the manifest summary.
+    let (class, out, _) = hh(
+        &mut b,
+        &["bundle", "show", &out_dir.to_string_lossy()],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+
+    // reproduce R0 — the report names the achieved/refused outcome.
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "bundle",
+            "reproduce",
+            &out_dir.to_string_lossy(),
+            "--level",
+            "R0",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("\"requested_level\":\"R0\""), "{out}");
+}
+
+#[test]
+fn s31_run_import_round_trips_and_dry_run_does_not_lift() {
+    let mut b = ServiceBoundary::new("s31-import");
+    let run_id = started_run(&mut b, "imp");
+    let out_dir = test_dir("s31-import-src");
+    let (class, _, _) = hh(
+        &mut b,
+        &[
+            "run",
+            "export",
+            &run_id,
+            "--out",
+            &out_dir.to_string_lossy(),
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok);
+
+    // dry-run — validation only; no new run.
+    let mut rec = RecordingBoundary {
+        inner: &mut b,
+        calls: vec![],
+    };
+    let (class, out, _) = hh(
+        &mut rec,
+        &["run", "import", &out_dir.to_string_lossy(), "--dry-run"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("\"dry_run\":true"), "{out}");
+    assert!(
+        rec.calls
+            .iter()
+            .all(|(m, _)| m == "kernel.check_completeness"),
+        "dry-run must not lift: {:?}",
+        rec.calls
+    );
+
+    // The real import lifts to a new run.
+    let (class, out, _) = hh(
+        &mut b,
+        &["run", "import", &out_dir.to_string_lossy()],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let new_run = result_run_id(&out);
+    assert!(!new_run.is_empty(), "{out}");
+    assert_ne!(new_run, run_id);
+    let classes = event_classes(&mut b, &new_run);
+    assert!(
+        classes.iter().any(|c| c == "lifecycle.run.imported"),
+        "{classes:?}"
+    );
+}
+
+#[test]
+fn s31_bundle_create_reports_contract_identity() {
+    let mut b = ServiceBoundary::new("s31-bcreate");
+    let run_id = started_run(&mut b, "bc");
+    let (class, out, _) = hh(
+        &mut b,
+        &["bundle", "create", &run_id, "--format", "json"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let j = hh_wire::json::parse(out.trim()).unwrap();
+    let manifest = j
+        .get("payload")
+        .and_then(|p| p.get("manifest"))
+        .cloned()
+        .unwrap_or(Json::Null);
+    let cv = manifest
+        .get("instrument")
+        .and_then(|i| i.get("component_versions"))
+        .cloned()
+        .unwrap_or(Json::Null);
+    assert!(
+        cv.to_canonical_string().contains("schema_hash"),
+        "ContractIdentity rides in instrument.component_versions: {cv:?}"
+    );
+}
+
+#[test]
+fn s31_lab_nouns_route_to_group_l_and_dry_run_is_the_planning_half() {
+    let mut b = ServiceBoundary::new("s31-lab");
+    let def = write_lab_definition("route");
+    let mut rec = RecordingBoundary {
+        inner: &mut b,
+        calls: vec![],
+    };
+
+    // `definition plan` → lab.assembly.plan.
+    let _ = hh(&mut rec, &["definition", "plan", &def], NO_TTY, None, &[]);
+    // `definition apply --dry-run` → lab.assembly.plan (parity — ADR-0147 S-1).
+    let _ = hh(
+        &mut rec,
+        &["definition", "apply", &def, "--dry-run"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    // `definition apply` → lab.assembly.apply.
+    let _ = hh(&mut rec, &["definition", "apply", &def], NO_TTY, None, &[]);
+    // `experiment open --dry-run` → lab.experiment.expand (no open).
+    let _ = hh(
+        &mut rec,
+        &["experiment", "open", "exp-1", "--dry-run"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    let _ = hh(
+        &mut rec,
+        &["experiment", "open", "exp-1"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    // `registry catalog` → lab.registry.catalog (implemented — S2.12).
+    let (class, out, _) = hh(&mut rec, &["registry", "catalog"], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    // `compare report` → analyze then render(view=report).
+    let _ = hh(
+        &mut rec,
+        &["compare", "report", "a", "b"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    let _ = hh(&mut rec, &["results", "query"], NO_TTY, None, &[]);
+
+    let methods: Vec<&str> = rec.calls.iter().map(|(m, _)| m.as_str()).collect();
+    assert_eq!(methods[0], "lab.assembly.plan", "{methods:?}");
+    assert_eq!(
+        methods[1], "lab.assembly.plan",
+        "apply --dry-run must route to plan: {methods:?}"
+    );
+    assert_eq!(methods[2], "lab.assembly.apply", "{methods:?}");
+    assert_eq!(
+        methods[3], "lab.experiment.expand",
+        "open --dry-run must route to expand: {methods:?}"
+    );
+    assert_eq!(methods[4], "lab.experiment.open_experiment", "{methods:?}");
+    assert_eq!(methods[5], "lab.registry.catalog", "{methods:?}");
+    assert_eq!(methods[6], "lab.analysis.analyze", "{methods:?}");
+    // `analyze` is stage_pending at this stage → `compare report`
+    // stops after the first op (no fake `render` on an error — K-2).
+    assert_eq!(methods[7], "lab.results.query_rows", "{methods:?}");
+    assert_eq!(methods.len(), 8, "{methods:?}");
+}
+
+#[test]
+fn s31_pending_lab_ops_surface_typed_stage_pending() {
+    let mut b = ServiceBoundary::new("s31-pending");
+    let def = write_lab_definition("pend");
+    // The assembly service lands at S3.5 — `definition plan` forwards to
+    // the registered op and surfaces `Refused{stage_pending}` verbatim
+    // (the Lab noun adds no semantics — N-3).
+    let (class, out, _) = hh(
+        &mut b,
+        &["definition", "plan", &def, "--format", "json"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_ne!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("stage_pending"), "{out}");
+
+    // Verbs with no registered op refuse `invocation_error` stage_pending.
+    let (class, out, _) = hh(&mut b, &["definition", "space", &def], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::InvocationError, "{out}");
+    assert!(out.contains("stage_pending"), "{out}");
+    let (class, out, _) = hh(&mut b, &["bundle", "verify", "x"], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::InvocationError, "{out}");
+}
+
+#[test]
+fn s31_lab_serve_returns_stdio_launch_binding() {
+    let mut b = ServiceBoundary::new("s31-serve");
+    // A hand-authored bundle dir with a `target:mcp` member.
+    let dir = test_dir("s31-serve-bundle");
+    let member =
+        br#"{"schema":"hh-mcp-target/1","target":"mcp","tools":[{"name":"echo"}]}"#.to_vec();
+    let addr = hh_identity::idp_id("member", &member);
+    let doc = Json::obj([
+        ("schema", Json::str("hh-bundle/1")),
+        ("idp", Json::str("idp/1")),
+        ("bundle_kind", Json::str("run")),
+        ("producer", Json::obj([])),
+        (
+            "subject",
+            Json::obj([
+                ("run_ids", Json::Arr(vec![])),
+                ("status", Json::str("finished")),
+            ]),
+        ),
+        (
+            "members",
+            Json::Arr(vec![Json::obj([
+                ("role", Json::str("target:mcp")),
+                ("ref", Json::str(addr.clone())),
+                ("status", Json::str("present")),
+            ])]),
+        ),
+        ("version_id", Json::str("pending")),
+    ]);
+    let mut manifest = hh_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
+    manifest.version_id = manifest.compute_id();
+    let mut members = hh_bundle::export::MemberBytes::new();
+    members.insert(addr, member);
+    hh_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
+
+    let (class, out, _) = hh(
+        &mut b,
+        &["lab", "serve", &dir.to_string_lossy()],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("\"stdio_launch\""), "{out}");
+    assert!(out.contains("\"principal:test\""), "{out}");
+}
+
+/// AC-R-2.11.4-10 — the Lab runs entirely over Groups S/R/M/L in a
+/// *separate process*: drive the Lab nouns (`registry catalog`,
+/// `bundle create`, `run export`, `run import`, `lab serve`) through
+/// the spawned `hh-kernel serve` child (binding (b)), not the
+/// in-process service. Byte-parity with binding (a) is the bindings'
+/// own conformance property (AC-K4-2); this test is the process seam.
+#[test]
+fn s31_lab_ops_run_over_the_spawned_process() {
+    let kernel = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/debug/hh-kernel");
+    assert!(
+        kernel.exists(),
+        "build hh-kernel first (`cargo build -p hh-kernel`)"
+    );
+    let root = test_dir("s31-proc-kernel");
+    let env = vec![
+        (
+            "HH_STORE_ROOT".to_string(),
+            root.join("store").display().to_string(),
+        ),
+        (
+            "HH_WORKSPACE_ROOT".to_string(),
+            root.join("ws").display().to_string(),
+        ),
+    ];
+    let mut b = ProcessBoundary::spawn(&kernel.display().to_string(), &env).unwrap();
+
+    // Group L: registry catalog over the process boundary.
+    let (class, out, _) = hh(&mut b, &["registry", "catalog"], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("\"entries\""), "{out}");
+
+    // Group M: a run → bundle → validate → reproduce over the process.
+    let run_id = started_run(&mut b, "proc");
+    let (class, out, _) = hh(&mut b, &["bundle", "create", &run_id], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let out_dir = test_dir("s31-proc-export");
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "run",
+            "export",
+            &run_id,
+            "--out",
+            &out_dir.to_string_lossy(),
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let (class, out, _) = hh(
+        &mut b,
+        &["bundle", "validate", &out_dir.to_string_lossy()],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("\"complete\":true"), "{out}");
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "bundle",
+            "reproduce",
+            &out_dir.to_string_lossy(),
+            "--level",
+            "R0",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+
+    // The lift back — `run import` over the process boundary.
+    let (class, out, _) = hh(
+        &mut b,
+        &["run", "import", &out_dir.to_string_lossy()],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let new_run = result_run_id(&out);
+    assert_ne!(new_run, run_id, "{out}");
+}

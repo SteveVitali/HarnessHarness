@@ -125,11 +125,10 @@ pub fn decode_container(bytes: &[u8]) -> Result<Decoded, BundleError> {
     let doc = hh_wire::json::parse(text).map_err(|e| BundleError::Malformed {
         detail: format!("HHB1 body: {e}"),
     })?;
-    let manifest = BundleManifest::from_json(
-        doc.get("manifest").ok_or_else(|| BundleError::Malformed {
+    let manifest =
+        BundleManifest::from_json(doc.get("manifest").ok_or_else(|| BundleError::Malformed {
             detail: "HHB1 body has no manifest".into(),
-        })?,
-    )?;
+        })?)?;
     let unhex = |s: &str| -> Result<Vec<u8>, BundleError> {
         (0..s.len())
             .step_by(2)

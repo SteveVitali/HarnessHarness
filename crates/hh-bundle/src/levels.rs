@@ -56,21 +56,24 @@ fn member_addr(manifest: &BundleManifest, role: &str) -> Option<String> {
     manifest
         .members
         .iter()
-        .find(|m| {
-            m.role == role && !matches!(m.status, MemberStatus::Redacted | MemberStatus::Gc)
-        })
+        .find(|m| m.role == role && !matches!(m.status, MemberStatus::Redacted | MemberStatus::Gc))
         .map(|m| m.address.clone())
 }
 
-/// `traces` covers every subject run → the tree address of the first
-/// (kind = run → exactly one subject).
+/// `traces` covers every subject run → the *member address* of the
+/// first run's ledger-tree document (kind = run → exactly one subject).
+/// `satisfied_by` names a member (§5h.3 basis rule): the `tree`
+/// coordinate on `LedgerExport` is the `idp/1` over the page list — a
+/// different preimage than the `ledger_tree:<run>` member's address —
+/// so the member role is what a basis row may cite (S4's
+/// `manifest_reference_unresolved` check folds over `members[]`).
 fn traces_tree(manifest: &BundleManifest) -> Option<String> {
     manifest
         .subject
         .run_ids
         .first()
-        .and_then(|r| manifest.traces.get(r))
-        .map(|t| t.tree.clone())
+        .filter(|r| manifest.traces.contains_key(*r))
+        .and_then(|r| member_addr(manifest, &format!("{}{r}", roles::LEDGER_TREE)))
 }
 
 /// Every subject run has a `LedgerExport` with pages.
@@ -105,10 +108,7 @@ fn section_member(section: &Json) -> Option<String> {
 /// the declared-replay control rows (`control.decision`); the assembler
 /// knows this from the live store, `validate_bundle` derives it from the
 /// decoded pages.
-pub fn derive(
-    manifest: &BundleManifest,
-    replay_declared: bool,
-) -> (ReproLevel, Vec<LevelBasis>) {
+pub fn derive(manifest: &BundleManifest, replay_declared: bool) -> (ReproLevel, Vec<LevelBasis>) {
     let hosted = manifest.participant_class == "hosted";
     let dirty = manifest.instrument.get("dirty") == Some(&Json::Bool(true));
     let open = manifest.subject.status == "open";
@@ -127,11 +127,7 @@ pub fn derive(
 
     // ── R0 ───────────────────────────────────────────────────────────
     if traces_complete(manifest) {
-        push(
-            ReproLevel::R0,
-            "B-R0-traces",
-            member(traces_tree(manifest)),
-        );
+        push(ReproLevel::R0, "B-R0-traces", member(traces_tree(manifest)));
     } else {
         push(ReproLevel::R0, "B-R0-traces", BasisSatisfaction::Missing);
     }
@@ -166,11 +162,7 @@ pub fn derive(
             BasisSatisfaction::NotApplicable("hosted".into()),
         );
     } else if replay_declared {
-        push(
-            ReproLevel::R1,
-            "B-R1-replay",
-            member(traces_tree(manifest)),
-        );
+        push(ReproLevel::R1, "B-R1-replay", member(traces_tree(manifest)));
     } else {
         push(ReproLevel::R1, "B-R1-replay", BasisSatisfaction::Missing);
     }
@@ -191,10 +183,7 @@ pub fn derive(
         .filter(|r| !matches!(r, Json::Null))
         .and_then(Json::as_str)
         .is_some();
-    let seed_present = !matches!(
-        manifest.configuration.get("seed"),
-        None | Some(Json::Null)
-    );
+    let seed_present = !matches!(manifest.configuration.get("seed"), None | Some(Json::Null));
     let nd_present = manifest
         .reproducibility
         .get("nondeterminism")
@@ -229,11 +218,7 @@ pub fn derive(
         );
         // Hosted R2 exists only with `end_state` — the member is absent
         // at this stage.
-        push(
-            ReproLevel::R2,
-            "B-R2-end_state",
-            BasisSatisfaction::Missing,
-        );
+        push(ReproLevel::R2, "B-R2-end_state", BasisSatisfaction::Missing);
     } else {
         push(
             ReproLevel::R2,
@@ -289,9 +274,11 @@ pub fn derive(
     ) && manifest.configuration.get("budget")
         != Some(&Json::obj([("budgeted", Json::Bool(false))]));
     let all_fingerprinted = !snaps.is_empty()
-        && snaps
-            .iter()
-            .all(|s| s.get("observed_fingerprint").and_then(Json::as_str).is_some());
+        && snaps.iter().all(|s| {
+            s.get("observed_fingerprint")
+                .and_then(Json::as_str)
+                .is_some()
+        });
     push(
         ReproLevel::R3,
         "B-R3-budget",
@@ -441,10 +428,13 @@ mod tests {
                 ("registry_snapshot_id", Json::str("sha256:reg")),
                 ("member", Json::str("sha256:deps")),
             ]),
-            model: Json::obj([("snapshots", Json::Arr(vec![Json::obj([
-                ("pinned", Json::Bool(true)),
-                ("observed_fingerprint", Json::str("sha256:fp")),
-            ])]))]),
+            model: Json::obj([(
+                "snapshots",
+                Json::Arr(vec![Json::obj([
+                    ("pinned", Json::Bool(true)),
+                    ("observed_fingerprint", Json::str("sha256:fp")),
+                ])]),
+            )]),
             instrument: Json::obj([("dirty", Json::Bool(false))]),
             traces: {
                 let mut t = BTreeMap::new();
@@ -470,12 +460,7 @@ mod tests {
                 MemberRef::present(roles::INSTRUMENT, "sha256:inst".into(), "", 1),
                 MemberRef::present(roles::MODEL, "sha256:model".into(), "", 1),
                 MemberRef::present(roles::CONFIGURATION, "sha256:cfg".into(), "", 1),
-                MemberRef::present(
-                    roles::RESOLVED_DEPENDENCIES,
-                    "sha256:deps".into(),
-                    "",
-                    1,
-                ),
+                MemberRef::present(roles::RESOLVED_DEPENDENCIES, "sha256:deps".into(), "", 1),
                 MemberRef::present(roles::ENVIRONMENT, "sha256:env".into(), "", 1),
                 MemberRef::present(roles::NONDETERMINISM, "sha256:nd".into(), "", 1),
             ],

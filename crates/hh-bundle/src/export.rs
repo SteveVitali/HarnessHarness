@@ -23,11 +23,7 @@ pub const LEDGER_PAGE_SIZE: u64 = 64;
 pub type MemberBytes = BTreeMap<String, Vec<u8>>;
 
 /// Content-address `bytes` and record them in `members`.
-pub fn add_member(
-    members: &mut MemberBytes,
-    bytes: Vec<u8>,
-    media_type: &str,
-) -> (String, u64) {
+pub fn add_member(members: &mut MemberBytes, bytes: Vec<u8>, media_type: &str) -> (String, u64) {
     let addr = hh_identity::address(&bytes, media_type);
     let size = bytes.len() as u64;
     members.insert(addr.id(), bytes);
@@ -76,6 +72,11 @@ pub fn decode_page(bytes: &[u8]) -> Result<Vec<EventEnvelope>, BundleError> {
     }
 }
 
+/// A ledger member's manifest-index row: `(role, member_ref, size)` —
+/// the caller appends each as a `MemberRef` (`ledger_page:{run}:{i}`,
+/// `ledger_tree:{run}`).
+pub type LedgerMemberRow = (String, String, u64);
+
 /// Build the `LedgerExport` for `run_id` — appending the page members to
 /// `members` and returning the export record plus the page `MemberRef`
 /// roles (the caller adds them to the manifest's member index).
@@ -83,7 +84,7 @@ pub fn build_ledger_export(
     store: &Store,
     run_id: &str,
     members: &mut MemberBytes,
-) -> Result<(LedgerExport, Vec<(String, String, u64)>), BundleError> {
+) -> Result<(LedgerExport, Vec<LedgerMemberRow>), BundleError> {
     let events = store
         .envelopes(run_id)
         .map_err(|_| BundleError::RunNotFound {
@@ -112,7 +113,10 @@ pub fn build_ledger_export(
         tree_doc.to_canonical_string().into_bytes(),
         "application/vnd.hh.ledger-tree+json",
     );
-    debug_assert_eq!(tree_addr, tree);
+    // Note: `tree_addr` (the tree *document's* content address) and
+    // `tree` (the tree *coordinate* — `idp/1` over the bare
+    // page-address list, R-ID-3) are different preimages by design; the
+    // member index carries both spellings.
     roles.push((format!("ledger_tree:{run_id}"), tree_addr, tree_size));
 
     // Blob index — every `refs[]` address with its store status.

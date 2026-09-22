@@ -144,9 +144,7 @@ impl ReproReport {
 /// `eval_budget` documents match iff their canonical `limits` (the whole
 /// document when it has no `limits` member) are canonically equal.
 pub fn budget_limits_equal(declared: &Json, requested: &Json) -> bool {
-    let norm = |j: &Json| -> Json {
-        j.get("limits").cloned().unwrap_or_else(|| j.clone())
-    };
+    let norm = |j: &Json| -> Json { j.get("limits").cloned().unwrap_or_else(|| j.clone()) };
     norm(declared).to_canonical_string() == norm(requested).to_canonical_string()
 }
 
@@ -175,10 +173,7 @@ pub fn snapshot_fingerprint(snapshot: &Json) -> Option<String> {
                     snapshot.get("weights").cloned().unwrap_or(Json::Null),
                 ),
             ]);
-            if material
-                .to_canonical_string()
-                .contains("sha256:")
-            {
+            if material.to_canonical_string().contains("sha256:") {
                 Some(hh_identity::idp_id(
                     "model.fingerprint",
                     material.to_canonical_string().as_bytes(),
@@ -191,10 +186,7 @@ pub fn snapshot_fingerprint(snapshot: &Json) -> Option<String> {
 
 /// The drift rows between two fingerprint sets — `{model_ref, declared,
 /// observed}` per mismatch.
-pub fn fingerprint_drift(
-    declared: &BundleManifest,
-    observed: &[(String, String)],
-) -> Vec<Json> {
+pub fn fingerprint_drift(declared: &BundleManifest, observed: &[(String, String)]) -> Vec<Json> {
     let mut drift = Vec::new();
     if let Some(Json::Arr(snaps)) = declared.model.get("snapshots") {
         for (i, s) in snaps.iter().enumerate() {

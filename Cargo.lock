@@ -85,12 +85,14 @@ name = "hh-cli"
 version = "0.0.1"
 dependencies = [
  "hh-assembly",
+ "hh-bundle",
  "hh-embed",
  "hh-embed-client-generated",
  "hh-embed-schema",
  "hh-hir",
  "hh-identity",
  "hh-ledger",
+ "hh-mcp",
  "hh-ontology",
  "hh-provenance",
  "hh-wire",
@@ -175,6 +177,8 @@ name = "hh-embed"
 version = "0.0.1"
 dependencies = [
  "hh-assembly",
+ "hh-bundle",
+ "hh-compiler",
  "hh-containment",
  "hh-control",
  "hh-embed-schema",
@@ -183,6 +187,7 @@ dependencies = [
  "hh-hir",
  "hh-identity",
  "hh-ledger",
+ "hh-mcp",
  "hh-monitor",
  "hh-ontology",
  "hh-provenance",
@@ -299,6 +304,15 @@ dependencies = [
  "hh-identity",
  "hh-ontology",
  "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-mcp"
+version = "0.0.1"
+dependencies = [
+ "hh-bundle",
+ "hh-identity",
  "hh-wire",
 ]
 
