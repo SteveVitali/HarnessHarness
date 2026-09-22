@@ -1,0 +1,73 @@
+# WS-A2 — register additions sidecar
+
+**Temporary ids; synthesis renumbers and folds into `registers/*.md`. Do not edit shared registers directly.** Product name per ADR-0011: HarnessHarness. Companion: `registers/ontology-v1-proposal.md` (full replacement candidate for `ontology.md` §1–§4).
+
+## Sources
+
+| temp-id | title | kind | tier | syllabus | P/S | provisional? | url | feeds |
+|---|---|---|---|---|---|---|---|---|
+| S-167 | Box & Wilson (1951), "On the Experimental Attainment of Optimum Conditions" — response surface methodology (reference page: definition, first/second-order models, factorial and central-composite designs, interaction terms) | paper | A | 0 | P (reference page; original via JRSS-B) | no | https://en.wikipedia.org/wiki/Response_surface_methodology ; https://doi.org/10.1111/j.2517-6161.1951.tb00067.x | A2, J4, I2 |
+| S-168 | Sutton, Precup & Singh (1999), "Between MDPs and semi-MDPs: a framework for temporal abstraction in reinforcement learning", *Artificial Intelligence* 112 | paper | A | 0 | P (front matter; body not extracted) | no | https://doi.org/10.1016/S0004-3702(99)00052-1 | A2 (lineage only) |
+| S-169 | Banu (2026-05-12), "Harness Engineering as Categorical Architecture" — Architecture triple (G, Know, Φ); memory as coalgebraic state; skills as operads; compiler functors to five frameworks | paper | D | 4 | P (abstract) | yes (single-author preprint) | https://arxiv.org/abs/2605.12239 | A2 (competing formalism; disconfirming), A3 |
+
+**Existing S-ids opened directly by WS-A2 (promote S→P where still `S`):** **S-077** (was `S`; abstract + HTML opened 2026-09-09, abstract re-verified 2026-09-10). Re-confirmed `P` (opened): S-088 (abstract + HTML body; metric definitions verified 2026-09-10), S-062 (abstract), S-030 (abstract), S-031 (source @ 292d98f), S-118 (source @ 6a069da), S-110 (source @ 3fc7b22), S-132 (source @ 7d5285b), S-035 (schema + docs @ 9b00c27), S-045, S-056, S-130, S-131. Cited only via WS-A1/WS-L7 (not re-opened): S-047, S-049, S-072, S-083, S-096, S-135, S-147, S-148, S-153.
+
+**Row corrections proposed:** S-088 row `feeds` add `B1, G1, G3` (event chain and detectors); S-077 row `feeds` add `B1, I2`; S-088 note: metric names (SLR/HFR/LPR) are in the body, not the abstract.
+
+## Open questions
+
+| temp-id | question | resolver | due | blocking? |
+|---|---|---|---|---|
+| OQ-048 | **Model set as a factor coordinate.** A harness may bind several model snapshots (primary, router alternates, subagents, judges). Is the configuration's model coordinate a set with roles, and does a hosted participant that self-selects models still satisfy the class criterion (H opaque) when the Lab overrides one role via model-boundary interception? | WS-J3 / WS-C1 with WS-J6 | Phase 3 | no |
+| OQ-049 | **Which artifact kinds have deterministic activation/following detectors at Stage 3?** Skills/procedures (load), retrievals (injection), tool surfaces (call) have deterministic activation; instructions/rules inside a rendered system prompt do not. Which kinds get an executable `validates` edge so `followed` is deterministic, and which stay judged-only? | WS-B1 / WS-G1 / WS-D4 (with WS-G3 for judged) | Phase 2 | yes (T-LCD-13 at Stage 3) |
+| OQ-050 | **Model form and staleness policy for fitted-surface reports.** Factorial-effects model over categorical factors with curves only on budget-like axes? Minimum design per cell? Expiry condition (model snapshot retired, re-probe cadence per OQ-034)? | WS-J4 with WS-I6 | Phase 3 | no |
+| OQ-051 | **Representation of the control boundary β in HIR.** A first-class entity (`ControlBoundary{assignments, guards}`) or a derived view over per-decision-point `owner` fields on Procedure steps / control-strategy variants? Affects whether β is diffable as one object (WS-I5) and variable as one factor (WS-F1). | WS-A3 with WS-F1 / WS-F2 | Phase 1 synthesis (shape) / Phase 2 (F1) | yes (HIR/1 kernel) |
+| OQ-052 | **Procedure for adding a plane or boundary.** ADR + reclassification of every affected kind + re-run of the home-plane totality check; who may propose, and does the event `plane` enum (WS-B1) bump the ledger schema version? | Phase 1 synthesis / WS-B1 | Phase 1 | no |
+| OQ-053 | **Judge cost attribution and independence for judged detectors.** When `followed` is judged, are the judge's model calls charged to the harness under test or the instrument (extends OQ-059), and must the judge be a different model snapshot than the beneficiary to avoid correlated failure (doc 2 §8)? | WS-G3 with WS-I2, WS-L2 | Phase 2 | no |
+
+**Existing questions answered in part by this dossier (re-scope, do not close):** OQ-018 — compliance *can* be measured independently (event chain, §4e); the *prediction* of compliance remains open (WS-C3/I2). OQ-019 — the surface is a derived response surface over a mixed factor space; *learning profiles from it* remains open (WS-C3/J4).
+
+## Conflicts
+
+| temp-id | parties | contradiction | proposed resolution |
+|---|---|---|---|
+| CF-026 | doc 3 §2.3 "Model plane (C0/C1)" vs doc 2 §4 seven planes (no model plane) vs Ontology v0 §2 | Doc 3 introduces an eighth grouping that doc 2 and the register lack | The model is a **boundary** (M \| H), not a plane; gateway, router, Profile Compiler and cache are **boundary components** with `home = model_boundary`. Doc 3 §2.3 is read as a scope-catalogue grouping; plane count stays seven. |
+| CF-027 | ACP v2 `initialization.mdx` ("MUST treat all capabilities omitted … as UNSUPPORTED", S-035) vs T-LCD-07 ("undeclared = UNKNOWN, not unsupported") | Opposite defaults for an omitted capability | Both correct at their layer: the wire rule governs protocol negotiation; the Lab's analysis layer re-maps *omitted* to `unknown` when building the capability vector (Omnigent `None ⇒ UNKNOWN` precedent). WS-J6 must implement the re-mapping explicitly. |
+| CF-028 | Ontology v0 "Harness validity … deterministic at the protocol layer" vs artifacts with no protocol-layer check (prose memories, free-text rules) | v0 over-promises determinism | Validity is three-valued `{valid, invalid, unknown}`; deterministic exactly where a check exists (S-077); WS-D4 to *require* a validity check or interval on memory artifacts; WS-A3 `ValidityState` is the declared interval, `validity(α, at)` the check outcome. |
+| CF-029 | S-088 (Harness-Following Rate is LLM-judged) vs doc 2 §8 (judges correlate with the tested agent's failures) | A judged compliance number can masquerade as a fact | `activated`/`followed` events carry `detector ∈ {deterministic, judged}`, `detector_ref`, `confidence`; `MetricDeclaration.detector_classes_allowed` states whether judged detections may contribute; judged stages require `model_io` observability. |
+| CF-030 | WS-B1 event envelope `plane ∈ {lifecycle, context, model, action, control, verification, security, measurement}` vs Ontology v1 "seven planes + two boundaries" | Eight values, two of which are not planes | `model → model_boundary`; `lifecycle → run_lifecycle` (instrument-level run envelope); the other six → P1..P7 (P5 state events are stamped by their owning plane operator `persist`; B1 to confirm whether a `state` value is needed or `context`/`control` cover it). Identifiers kept; mapping registered. |
+| CF-031 | CF-059 (WS-B1): ontology `observability level` includes `ledger`; B1 treats it as implied by `native` | Whether `ledger` is declared or derived | **Settled:** `ledger ∈ observability_level ⇔ class = native`; never declarable by a hosted participant (a native-shaped export is still opaque H); B1 may derive the stamp from `participant_class`. |
+| CF-032 | Ontology v0 / doc 2 spelling *artifact* vs LCD battery T-LCD-13 and WS-B1 identifiers *artefact* | Two spellings of one term | Prose: *artifact*; registered identifiers (`context.artefact.*`, `artefact_id`) unchanged; the ADR-0008 rule-4 glossary check treats them as one term. |
+| CF-033 | Ontology v0 "Model (M): a *frozen* foundation model" vs S-047 (provider-side changes without version bump) and OQ-048 (model sets) | "Frozen" is an assumption the instrument cannot verify | Amend to **model snapshot** (provider, version identity, sampling parameters) with drift as a detectable fact; configuration names a model *set* with roles. |
+| (adopted) CF-034, CF-037 | WS-A3 → WS-A2 | Reword *surface vs semantic identity*; ban bare *capability* | Adopted verbatim into `ontology-v1-proposal.md` §4h items 2–3. |
+| (resolved) CF-020, CF-021 | Phase 0 → WS-A2 | declaration vs vector; `configuration` enum value | CF-020 confirmed distinct with `vector = reconcile(declaration, probes)`; CF-021 resolved by renaming the enum values `{component-level, configuration-level, product-level}`. |
+
+## Ontology terms
+
+| term | definition | notes |
+|---|---|---|
+| **object level** / **instrument level** | The two levels of the ontology: one harness (planes, entities, θ, π_system) vs the apparatus that compares harnesses (participants, configurations, arms, runs, metrics, surfaces, Hosting ABI). Every term belongs to exactly one. | WS-A2; structural. The comparison plane and run envelope are instrument-level. |
+| **home plane** (`home`) | The single plane (or boundary, or `run_lifecycle`) whose core question an entity kind, component class, plane operator or event family answers; declared, total over registered kinds; cross-plane relations are typed edges. | WS-A2; `typed-by: WS-A3` (entity kinds), WS-A5 (classes), WS-B1 (events). |
+| **model boundary** / **environment boundary** | The two first-class boundaries M \| H and H \| E; crossed by the plane operators `propose` and `execute`. | WS-A2; resolves CF-026. |
+| **boundary component** | A component whose `home` is a boundary rather than a plane: model gateway, router, Profile Compiler, cache, interposition (model boundary); environment/sandbox handle, effect capture, egress mediation (environment boundary). | WS-A2 / WS-C1 / WS-B5. |
+| **decision point** (Δ) | One of {next_action, continue_or_stop, retrieve_or_compact, delegate, authorize, verify, retry, escalate}; extensible by ADR. | WS-A2 / WS-F1. |
+| **control boundary** (β) | β : Δ → {code, model, human} with per-decision-point guards; an element of θ; a `component-level` factor; observable in trajectories (code-owned steps have no model call). The object named by v0's "moving boundary of control". | WS-A2; representation OQ-051 (`typed-by: WS-A3`). |
+| **plane operator** / **harness step** | The plane-owned operations `render, propose, interpret, authorize, execute, verify, persist, decide, observe`; one harness step is their composition around the model boundary; π_system is the closed loop they induce. | WS-A2; formal model. |
+| **model snapshot** / **model set** | Provider + version identity + sampling parameters (replaces v0 "frozen model"); the set of snapshots a run binds, with roles (primary, router alternate, subagent, judge). | WS-A2; CF-033; OQ-048. |
+| **harness effect** (Δ) | The paired difference J(θ) − J(θ₀) at matched budget; the only reportable effect quantity (T-LCD-14). | WS-A2 / WS-J4. |
+| **factor space** (F) | The mixed (mostly categorical) space of experimental factors: model snapshot, task distribution, environment image, budget vector, context window, tool-surface target, control boundary, component variant, profile. | WS-A2 / WS-J3 (T-LCD-09). |
+| **fitted-surface report** | The persisted, provenance-bearing estimate of a compatibility surface: design, levels, sample sizes, model form, interaction terms, CIs, configuration ids, expiry. The only stored form of a surface. | WS-A2 / WS-J4; OQ-050. |
+| **portability** / **conditionality** (of θ) | Sign-stability of Ψ_θ along the model axis; the region of F where Δ > 0 with stated confidence. | WS-A2. |
+| **harness artifact** (+ kinds) | Any identified, versioned, provenance-bearing thing delivered to a model: instruction, rule, memory, tool_surface, procedure, observation; carries `validity_check_ref?`, `activation_observable`. | WS-A2; `typed-by: WS-A3` (ContextItem payload + `delivery_id`), identity WS-L4. |
+| **artifact delivery / activation / following events** | `context.artefact.delivered` (P1), `.activated` (P1), `.followed` (P4) with `detector`, `detector_ref`, `confidence`; the T-LCD-13 chain. | WS-A2 (semantics) / WS-B1 (schema). |
+| **detector** (deterministic / judged) | The component emitting an activation/following event: deterministic (P1/P2 signal or executable validator) or judged (P4 judge configuration with provenance and cost attribution). | WS-A2 / WS-G1 / WS-G3; OQ-053. |
+| **validity (three-valued)** | `validity(α, at) ∈ {valid, invalid, unknown}`, model-free, identical across configurations for the same artifact version and check. | WS-A2; amends v0 row; CF-028. |
+| **compliance chain** / **realized-benefit decomposition** | delivered → activated → followed; E[Δ] ≈ P(valid)·P(activated \| delivered, valid)·P(followed \| activated)·E[Δ \| followed]. | WS-A2 / WS-I2. |
+| **participant descriptor** | `{class, hosting_mechanism, capability_declaration, version_identity, observability_level, model_binding}`; immutable per run; class declared. | WS-A2 / WS-J6 (extends WS-A1 §6.4). |
+| **class criterion (transparency of H)** | native ⇔ θ is a Harness Definition known to the Lab (H = compile(h, p)); hosted ⇔ H opaque (θ = product version + ABI-settable coordinates). Observability is orthogonal. | WS-A2; formalizes ADR-0001. |
+| **admissible granularities** | The set of comparison granularities a participant admits: native ⊇ all three; hosted ⊆ {configuration-level (SUPPORTED coordinates), product-level}; outside ⇒ `InadmissibleFactor`, `n/a`. | WS-A2 / WS-J4 (T-LCD-15). |
+| **ABI projection** (proj_ABI) | The total map from a native ledger to the minimum observable event set (ADR-0005 "act as a participant"); the reverse edge does not exist (T-LCD-06). | WS-A2 / WS-J6. |
+| **comparison granularity values** (rename) | `{component-level, configuration-level, product-level}`. | WS-A2; CF-021. |
+| **run envelope** (`run_lifecycle`) | The instrument-level lifecycle of a run (created, turn started/ended, forked, ended); the home of WS-B1's `lifecycle` events. | WS-A2 / WS-B1; CF-030. |
+| **first-class entity** vs **derived view** vs **report** | Stored-and-versioned vs recomputable-never-stored-as-truth vs computed-once-then-persisted-with-provenance; table in `ontology-v1-proposal.md` §4g. | WS-A2. |
+| **MetricDeclaration.detector_classes_allowed** | New field ⊆ {deterministic, judged} stating whether judged detections may contribute to a compliance metric. | WS-A2 / WS-I2 / WS-J4; CF-029. |

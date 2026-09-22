@@ -1,0 +1,184 @@
+{
+"phase": "3",
+"wave": 6,
+"workstreams": [
+{
+"id": "WS-J1",
+"title": "Harness assembly & declarative definition; validation against the IR",
+"scope": "Design the laboratory's assembly layer: a declarative harness definition (composition model from A5 instantiated over the component registry J2) that compiles (A4) to a runnable IR-native harness; validation against the IR (A3) and against the component contracts; assembly diffs as typed IR diffs; assembly as the sponsor's central 'meta' capability; assembly of hosted-external participants (ADR-0001) as opaque definitions with ABI capabilities.",
+"anchors": "doc 2 §11 (IR sketch; expose the harness as data an optimizer can edit), §5.8 (editable components; AHE S-061 provisional; MemoHarness six dimensions S-066 provisional), §7 (code vs config); A3/A4/A5 dossiers & ADRs; opencode/OpenHands/goose configuration-driven assembly (read source); AgentSquare modular search space (S-024)",
+"feeds": "Spec §6 (laboratory: assembly); WS-J2, J3, K1, K4",
+"tier": "C1",
+"reqs": "R-2.10.1",
+"upstream": [
+"WS-A3",
+"WS-A4",
+"WS-A5",
+"WS-L4"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: the harness-definition grammar (abstract) bound to the composition model; validation contract and error taxonomy; the assembly → IR → compiled-runtime pipeline; typed-diff semantics for assemblies; acceptance criteria (round-trip; invalid assemblies rejected with reasons); ADR."
+},
+{
+"id": "WS-J2",
+"title": "Component-variation registry: many implementations per component class; versioning and discovery",
+"scope": "Design the registry of component classes (compaction strategy, control strategy, context builder policy, validator, profile, tool compiler, memory layer, router, …) and their variants: contract conformance tests per class, versioned identity (L4), discovery/query, provenance and supply-chain trust of third-party variants (H5, L5), parameter-space declarations for sweeps (J3), and the C0 minimal registry vs the rich one.",
+"anchors": "doc 2 §7 (platform-ization; extension surfaces S-074), §11; A5 dossier (component classes), L4 identity, H5 trust; Phase 2 dossiers for the component classes (D2, F1, C3, E2, G1, D3); AFlow/ADAS operator libraries (S-015/S-023) as precedents of variant registries; goose/opencode plugin registries (read source)",
+"feeds": "Spec §6; WS-J1, J3, L5, K1",
+"tier": "C1",
+"reqs": "R-2.10.2",
+"upstream": [
+"WS-A5",
+"WS-L4",
+"WS-H5"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: registry data model (class, contract, variant, version, provenance, params, conformance evidence); operations (register/resolve/query/deprecate); conformance-test contract per class; acceptance criteria; ADR. Coordinate with WS-L5 (third-party contracts) by convention — you define registry semantics, L5 defines the plugin packaging/loading boundary."
+},
+{
+"id": "WS-J3",
+"title": "Experiment & sweep engine: model × harness × environment × params × seed factorials with budget control",
+"scope": "Design the experiment engine: experiment definition (factors, levels, design — full/fractional factorial, paired), scheduling over execution environments (B5) under budgets (L2) with matched-budget enforcement (I2), run identity and bundles (I3/L4), fault tolerance and resumability (B3), both participant classes as levels of the harness factor (ADR-0001), the canonical compaction (D2) and control-strategy (F1) experiments as built-in exemplars, adaptive validation (Task-CoEvolve S-082 provisional) as an optional strategy.",
+"anchors": "doc 2 §8 (minimum experimental design; matched budgets), §5.8 (Task-CoEvolve S-082; Rethinking S-083), §6; I2 dossier (scorecard, design contract); Harness-Bench methodology (S-062); SWE-agent/mini-SWE-agent batch runners (read source); Symphony work scheduling (S-108)",
+"feeds": "Spec §6; WS-J4, J5, I4, F4",
+"tier": "C1",
+"reqs": "R-2.10.3",
+"upstream": [
+"WS-I2",
+"WS-L2",
+"WS-B5",
+"WS-I3",
+"WS-B3"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: experiment definition data model; scheduler contract; budget/matching enforcement; run lifecycle and events (B1); resumability; the two canonical exemplar experiments fully specified; acceptance criteria; ADR."
+},
+{
+"id": "WS-J4",
+"title": "Comparison & analysis engine: scorecards, capability-cost Pareto frontiers, transfer metrics, interaction effects, significance; spans both participant classes",
+"scope": "Design the analysis engine over the results store (J5): scorecard aggregation (I2) with distributional reporting, Pareto frontiers (capability vs cost/latency), transfer metrics across models/tasks/environments, interaction effects (model × harness), significance/CI methods for heavy-tailed outcomes, search-time vs artifact benefit separation, class-aware analyses (component-level only for white-box), reporting artifacts consumed by K2.",
+"anchors": "doc 2 §8 (scorecard; distributions; transfer; interaction effects), §1 (compatibility surface), §6; I2 dossier; Harness-Bench (S-062), Same Model Different Harness (S-072), PRISM (S-093), Where-does-value-live (S-092 provisional), METR (S-128); statistics for paired/factorial agent evaluation (add sources)",
+"feeds": "Spec §6; WS-K2, J5, F4, I7",
+"tier": "C2",
+"reqs": "R-2.10.4",
+"upstream": [
+"WS-I2",
+"WS-J3",
+"WS-J5"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: analysis operation catalogue with inputs/outputs; statistical method choices with rationale and caveats; the compatibility-surface estimation as an analysis product (OQ-019); class-applicability matrix for every analysis; acceptance criteria (known-answer datasets); ADR."
+},
+{
+"id": "WS-J5",
+"title": "Results store, experiment ledger & leaderboard as inspectable scientific objects",
+"scope": "Design the results store: every run as an inspectable object (bundle I3 + traces B1 + scorecard I2 + provenance L3/L4), experiment ledger (immutable record of experiments and their analyses), leaderboard semantics (class-aware; always linked to bundles; no score without a reproducible object), retention, query API for J4/K2, materialized views over the event store (B1 ADR on authoritative vs derived).",
+"anchors": "doc 2 §8 (bundle turns a leaderboard row into an inspectable object), §11 (materialized views); B1, I3, L4, I2 dossiers; Harness-Bench release artifacts (S-062); public leaderboard practices (SWE-bench, Terminal-Bench — add sources)",
+"feeds": "Spec §6; WS-J4, K2, K3",
+"tier": "C1",
+"reqs": "R-2.10.5",
+"upstream": [
+"WS-B1",
+"WS-I3",
+"WS-L4",
+"WS-I2"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: results/ledger data model; write/read contracts and immutability rules; leaderboard rules; view derivation from the event store; acceptance criteria; ADR."
+},
+{
+"id": "WS-J6",
+"title": "External-harness hosting / thin observational ABI: wrap external harnesses as black-box participants",
+"scope": "Decide the depth of the thin observational ABI (OQ-004): the verbs (start/resume/cancel, stream events, supply context/tools/skills, request permission, account cost, inspect artifacts?), the event vocabulary hosted participants must emit (mapped onto B1 event classes and I1 traces), environment/permission/credential mediation for hosted participants (B5/H1/H3/H4), cost accounting (L2), what scorecard dimensions apply (I2), version/extension negotiation to avoid the LCD trap (LCD battery), ACP as the reference mapping (E4), adapters for at least three concrete external harnesses described abstractly; how hosting is strictly secondary (ADR-0001).",
+"anchors": "doc 2 §5.11 (meta-harnesses, hosting, prospective Harness ABI; LCD risk), §7 (Omnigent S-118 — read source; Cloudflare S-056/S-057; AWS S-058; Microsoft S-059; Databricks S-060), §3; ACP spec (S-035 — read schema); Codex App Server (S-055); Harness-of-Harness (S-079 provisional); ADR-0001; E4 dossier; LCD-trap battery",
+"feeds": "Spec §6 (hosting), §7; WS-K3, K4, J3, J4",
+"tier": "C2",
+"reqs": "R-2.10.6",
+"upstream": [
+"WS-A2",
+"WS-E4",
+"WS-I1",
+"WS-I2",
+"WS-B5",
+"WS-H1"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nRead Omnigent source and the ACP schema. Deliver: the ABI verb set with rationale per verb (and the verbs deliberately excluded); the hosted-participant event vocabulary and its mapping to B1/I1; mediation contracts; scorecard applicability; negotiation/extension mechanism; three abstract adapter sketches; acceptance criteria (a hosted participant joins an experiment and produces a class-labelled scorecard); ADR resolving OQ-004. Apply the LCD-trap battery and report."
+},
+{
+"id": "WS-K1",
+"title": "CLI design & command surface",
+"scope": "Design the CLI: command surface over the SDK (K4) for assembling harnesses (J1), running harnesses/sessions, launching experiments (J3), inspecting runs/traces/results (J5), managing registry/components (J2), approvals (H7), and hosting external participants (J6); interactive vs headless modes; output formats for humans and machines; safety defaults (permission modes).",
+"anchors": "mini-SWE-agent (S-115), goose CLI (S-112), opencode CLI (S-111), Codex CLI (S-107), gemini-cli (S-119), Claude Agent SDK (S-109) — read source for command structure and modes; doc 2 §7",
+"feeds": "Spec §7 (surfaces: CLI)",
+"tier": "C1",
+"reqs": "R-2.11.1",
+"upstream": [
+"WS-A5",
+"WS-J1",
+"WS-K4"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: command taxonomy (abstract; no shell-specific syntax commitments), mode model, I/O contracts, safety defaults, acceptance criteria; ADR."
+},
+{
+"id": "WS-K2",
+"title": "Web-based local dev-tooling: assembly UI, experiment launcher, trace/time-travel viewer, comparison dashboards, debugging",
+"scope": "Design the local web tooling as a client of the SDK/results store: assembly editor (J1/J2), experiment launcher (J3), trace/time-travel viewer over the event store and branches (B1/B4/I1), comparison dashboards (J4), approval inbox (H7), audit views (H6); security posture of a local web surface; what is C2 vs later.",
+"anchors": "doc 2 §8 (trace viewer), §11 (observability/evals); Harness-Bench/Shepherd trace visualization (S-062/S-078); opencode/gemini-cli/goose desktop or web surfaces (read source for how they consume runtime state); Cursor cloud-agent UI patterns (S-052)",
+"feeds": "Spec §7 (web tooling)",
+"tier": "C2",
+"reqs": "R-2.11.2",
+"upstream": [
+"WS-B1",
+"WS-I1",
+"WS-J4",
+"WS-K4"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: view catalogue with the data contracts each view consumes (event views, analysis outputs); the time-travel viewer's requirements on B1/B4; local security posture; acceptance criteria; ADR. Stay technology-neutral (no UI framework commitments)."
+},
+{
+"id": "WS-K3",
+"title": "MCP server exposing MetaHarness capabilities as tools to external agents",
+"scope": "Design the MCP server surface: which MetaHarness capabilities are exposed as tools/resources (run harness, launch experiment, query results, inspect traces, assemble/validate definitions), authorization of external callers (H1 capabilities; H5 trust), cost accounting for external use (L2), mapping to the compiler's protocol target (A4/E4).",
+"anchors": "MCP spec (S-033 — read), E4 dossier, Codex App Server (S-055), goose/gemini-cli MCP server implementations (read source)",
+"feeds": "Spec §7 (MCP server)",
+"tier": "C2",
+"reqs": "R-2.11.3",
+"upstream": [
+"WS-E4",
+"WS-H1",
+"WS-K4"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: exposed capability catalogue with schemas (abstract), authorization model, resource/tool mapping, acceptance criteria (conformance), ADR."
+},
+{
+"id": "WS-K4",
+"title": "SDK / embedding API & host-app integration boundary",
+"scope": "Design the SDK/embedding boundary: how a host application embeds the runtime (lifecycle, sessions, events subscription, tool/capability injection, approvals callbacks, environment provision), the public contract surface derived from the Core contracts (A3/A4/A5/B1/B2/E1/H1), stability/versioning of the API (L4), what the CLI/web/MCP surfaces are built on; embedding as a first-class use of the composition model.",
+"anchors": "OpenHands SDK (S-110 — read source: public API), Pi embedding surface (S-113 — read), Claude Agent SDK (S-109), Cloudflare Agents SDK harness/runtime split (S-056), Codex App Server (S-055); doc 2 §7",
+"feeds": "Spec §7 (SDK)",
+"tier": "C1",
+"reqs": "R-2.11.4",
+"upstream": [
+"WS-A4",
+"WS-A5",
+"WS-B1",
+"WS-E1",
+"WS-H1"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: the embedding contract (operations, event subscription model, injection points, error model), API stability/versioning policy, acceptance criteria, ADR. Language-neutral: describe as an abstract API, not bindings."
+},
+{
+"id": "WS-L5",
+"title": "Extensibility / plugin architecture & third-party component contracts",
+"scope": "Design the extensibility mechanism that makes 'modular/extensible' true: plugin packaging and loading boundary, third-party component contracts per component class (J2), isolation of plugin execution (H5/H4), contract conformance testing, versioning and compatibility (L4), the rule that no extension reaches another extension's internals except through Core-defined contracts (doc 3 §1.3), the C0/C1–C4 extension DAG as an enforceable structure.",
+"anchors": "doc 2 §7 (platform-ization; extension surfaces; S-074), §11; doc 3 §1.3; goose extensions, opencode plugins, Pi extensions, gemini-cli extensions (read source in at least three); Logos plugins as separate processes (S-073 provisional); H5 trust; J2 registry",
+"feeds": "Spec §8 (extensibility contract), §4 (extension DAG)",
+"tier": "C0",
+"reqs": "R-2.12.2",
+"upstream": [
+"WS-A5",
+"WS-J2",
+"WS-H5",
+"WS-L4"
+],
+"extra": "NAMING (ADR-0011, sponsor decision 2026-09-09): the product is **HarnessHarness**; use that name (never 'MetaHarness') except when quoting historical text. Before writing, read the synthesis memos research/synthesis/phase-0.md §5 and research/synthesis/phase-2.md 'settled' sections (binding), research/registers/lcd-test-battery.md, and research/synthesis/l1-inputs.md / the ratified WS-L1 language ADR if present (the language decision is ratified at end of Phase 1; after that, you may reference the chosen ecosystem only where the brief allows, and must still keep contracts described abstractly).\nDeliver: plugin contract model (manifest, capabilities requested, component classes implemented, versions), loading/isolation contract, conformance testing contract, the extension-DAG rule as invariants the build ladder must respect, acceptance criteria, ADR."
+}
+],
+"synthesisFocus": "NAMING: enforce 'HarnessHarness' (ADR-0011) across all artifacts; residual 'MetaHarness' outside historical quotes is a defect. Phase 3 builds the laboratory and surfaces on Phase 1–2 contracts. Focus: (1) OQ-004 — ratify WS-J6's ABI depth decision; verify the LCD-trap battery result and that hosting remains strictly secondary (ADR-0001); ensure the ABI verbs map cleanly onto E4's ACP mapping and onto B1/I1 events. (2) LAB CHAIN — J1 assembly ↔ J2 registry ↔ J3 experiments ↔ J5 results ↔ J4 analysis must compose; every experiment result is linked to a bundle (I3) and every score is class-labelled. (3) L5 plugin contract must be consistent with J2 registry semantics and H5 trust; the extension-DAG rule is stated as spec invariants. (4) SURFACES — K1/K2/K3 must all be clients of K4's embedding contract (no surface bypasses it); record any capability a surface needs that K4 lacks as a conflict and resolve. (5) Verify no surface or lab ADR commits to a language/UI technology. (6) Write research/synthesis/phase-3.md with 'settled for Phase 4' (the measurement + lab contracts that F3/F4/F5/I5–I8/L8 must use; the security kernel constraints from Phase 2 that the evolution service must respect).",
+"gateCriteria": "Phase 3 exit: all 11 workstreams done with ADRs dispositioned; OQ-004 resolved by a ratified ADR with LCD-battery result; lab chain composes end-to-end; L5 consistent with J2/H5; all surfaces build on K4; no technology commitments; conflicts dispositioned. If any criterion fails, set gate_pass=false with precise blockers."
+}
