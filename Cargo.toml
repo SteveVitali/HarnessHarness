@@ -11,6 +11,10 @@ members = [
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
+    # THROWAWAY Stage-0 baseline (doc 3 §11.0; ticket S0.2). A workspace member so its
+    # acceptance tests run under `cargo test --workspace`, but NOT a dependency of the kernel:
+    # deleting `crates/hh-baseline` at the Stage-0 boundary breaks nothing persistent.
+    "crates/hh-baseline",
 ]
 # Throwaway spike trees (ADR-0050 R1–R6; doc 3 §11.0) live outside the workspace: they build
 # against the persistent kernel but are never a build dependency of it.
