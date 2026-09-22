@@ -286,6 +286,11 @@ pub struct ExperimentBinding {
     pub match_spec_ref: Option<String>,
     /// `suite_manifest_ref` — the pinned suite manifest.
     pub suite_manifest_ref: Option<String>,
+    /// `registry_snapshot_id` — the one snapshot the `Design` resolved against
+    /// (§6.2 "one snapshot per `Design`"; §6.3 consumes it for
+    /// `DependsOnDriftedCapability`). Propagated onto subject runs' bindings so
+    /// the row's `experiment?` member carries it.
+    pub registry_snapshot_id: Option<String>,
     /// `leaderboard_targets[]` — the leaderboards the experiment feeds.
     pub leaderboard_targets: Vec<String>,
     /// `experiment_run_id` — the parent experiment run (subject runs).
@@ -584,6 +589,7 @@ impl RunManifest {
                 ("experiment.pre_registration_ref", &e.pre_registration_ref),
                 ("experiment.match_spec_ref", &e.match_spec_ref),
                 ("experiment.suite_manifest_ref", &e.suite_manifest_ref),
+                ("experiment.registry_snapshot_id", &e.registry_snapshot_id),
             ] {
                 if let Some(v) = value {
                     if !is_pinned_id(v) {
@@ -709,6 +715,7 @@ impl RunManifest {
                 ("pre_registration_ref", &e.pre_registration_ref),
                 ("match_spec_ref", &e.match_spec_ref),
                 ("suite_manifest_ref", &e.suite_manifest_ref),
+                ("registry_snapshot_id", &e.registry_snapshot_id),
                 ("experiment_run_id", &e.experiment_run_id),
                 ("arm_id", &e.arm_id),
                 ("cell_id", &e.cell_id),
@@ -890,6 +897,7 @@ impl RunManifest {
                     pre_registration_ref: e_str("pre_registration_ref"),
                     match_spec_ref: e_str("match_spec_ref"),
                     suite_manifest_ref: e_str("suite_manifest_ref"),
+                    registry_snapshot_id: e_str("registry_snapshot_id"),
                     leaderboard_targets: match e.get("leaderboard_targets") {
                         None | Some(Json::Null) => Vec::new(),
                         Some(Json::Arr(items)) => items

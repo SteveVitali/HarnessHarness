@@ -104,7 +104,11 @@ fn design() -> Design {
             min_n: 1,
             analysis_plan_ref: "plan-1".into(),
             task_split_hash: "sha256:split-1".into(),
+            interactions: vec![],
         },
+        registry_snapshot_id: None,
+        generators: None,
+        resolution: None,
     }
 }
 

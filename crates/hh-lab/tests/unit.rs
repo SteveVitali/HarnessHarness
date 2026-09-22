@@ -190,6 +190,7 @@ fn pre_registration() -> PreRegistration {
         min_n: 1,
         analysis_plan_ref: "analysis:plan".into(),
         task_split_hash: "sha256:cc33".into(),
+        interactions: vec![],
     }
 }
 
@@ -204,6 +205,9 @@ fn design() -> Design {
         seed_policy: seed_policy(),
         held_out_split_ref: None,
         pre_registration: pre_registration(),
+        registry_snapshot_id: None,
+        generators: None,
+        resolution: None,
     }
 }
 

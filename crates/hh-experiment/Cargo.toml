@@ -1,0 +1,19 @@
+[package]
+name = "hh-experiment"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-3 single-worker experiment engine (spec §6.3 §2.2–§2.5, R-2.10.3⁰ᵇ; ticket S3.4a): LabDocs document store, the measurement.experiment.* event payloads, the ExperimentView fold (S-1 rebuild equality), and the register/expand/open/next/claim/launch/settle/pause/resume/close/restore lifecycle over the experiment run's fenced writer (S-2 exactly-once, S-3 budget equality, S-4 pause/close gate, S-6 seed-reproducible order; ADR-0154/0155/0162)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-ledger = { path = "../hh-ledger" }
+hh-budget = { path = "../hh-budget" }
+hh-lab = { path = "../hh-lab" }

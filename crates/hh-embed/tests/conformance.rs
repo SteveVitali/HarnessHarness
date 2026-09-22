@@ -3262,7 +3262,11 @@ fn eval_compare_params() -> Json {
             min_n: 1,
             analysis_plan_ref: "plan-1".into(),
             task_split_hash: "sha256:split-1".into(),
+            interactions: vec![],
         },
+        registry_snapshot_id: None,
+        generators: None,
+        resolution: None,
     };
     let spec = hh_budget::matchspec::MatchSpec::matched_cap(&[DimensionId::ModelCalls]).to_json();
     let caps = Json::obj([(DimensionId::ModelCalls.as_str(), Json::Int(100))]);

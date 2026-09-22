@@ -1533,6 +1533,48 @@ impl DesignKind {
     }
 }
 
+/// `resolution ∈ {III, IV, V}` — the fractional-factorial resolution class
+/// (§6.3 §2.1; OQ-361's ratified default admits two-level `l^(k−p)` generators
+/// only). Resolution III admits main effects only (a pre-registered two-factor
+/// interaction under III is `ResolutionInsufficient`); IV admits 2FIs aliased
+/// with higher-order terms; V is mutually unconfounded 2FIs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FractionalResolution {
+    /// `III` — main effects only.
+    III,
+    /// `IV` — two-factor interactions estimable (aliased with ≥3-factor terms).
+    IV,
+    /// `V` — two-factor interactions mutually unconfounded.
+    V,
+}
+
+impl FractionalResolution {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            FractionalResolution::III => "III",
+            FractionalResolution::IV => "IV",
+            FractionalResolution::V => "V",
+        }
+    }
+
+    /// Parse; unknown spellings refuse.
+    pub fn parse(s: &str) -> Option<FractionalResolution> {
+        match s {
+            "III" => Some(FractionalResolution::III),
+            "IV" => Some(FractionalResolution::IV),
+            "V" => Some(FractionalResolution::V),
+            _ => None,
+        }
+    }
+
+    /// Whether the resolution estimates a two-factor interaction unconfounded
+    /// enough to satisfy a pre-registered 2FI (≥ IV per §6.3 §2.1).
+    pub fn admits_two_factor_interaction(self) -> bool {
+        self >= FractionalResolution::IV
+    }
+}
+
 /// `Pairing` — `pairing ∈ {by_task, by_task_and_replicate}` (ADR-0045 D2;
 /// pairing across arms is by task, by replicate only where all participants
 /// declare `seed_honoured` — CF-095).
@@ -1577,9 +1619,18 @@ pub struct SeedPolicy {
 }
 
 /// `PreRegistration{registered_at, hypothesis, primary_metrics[],
-/// equivalence_margin?, min_n, analysis_plan_ref, task_split_hash}` (spec
-/// §5h.2 §3; ADR-0045 D2) — first-class and immutable once the experiment's
-/// first run opens; the only source of margins for `reproduce`/`retirement`.
+/// equivalence_margin?, min_n, analysis_plan_ref, task_split_hash,
+/// interactions?[]}` (spec §5h.2 §3; ADR-0045 D2) — first-class and immutable
+/// once the experiment's first run opens; the only source of margins for
+/// `reproduce`/`retirement`.
+///
+/// `interactions[]` (S3.4a; additive) names the pre-registered effect terms a
+/// fractional design must estimate unconfounded — each entry is an effect
+/// spelling (`"factor_a:factor_b"` for a two-factor interaction). A
+/// `fractional_factorial` design whose declared `resolution` cannot estimate a
+/// named interaction unconfounded is refused `ResolutionInsufficient` at
+/// `register` (§6.3 §2.1 — any 2FI needs ≥ IV; mutually unconfounded 2FIs
+/// need V).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PreRegistration {
     /// The registration's logical time (the transaction `seq`, never a wall clock).
@@ -1597,12 +1648,22 @@ pub struct PreRegistration {
     pub analysis_plan_ref: String,
     /// The `sha256:` task-split hash — it must predate the search (ADR-0143 L3).
     pub task_split_hash: String,
+    /// The pre-registered interaction terms (`["a:b", …]`; S3.4a — the
+    /// `ResolutionInsufficient` check's input).
+    pub interactions: Vec<String>,
 }
 
 /// `Design{id, kind, factors[], blocking, replicates_per_cell, pairing,
-/// seed_policy, held_out_split_ref?, pre_registration}` (spec §5h.2 §3;
-/// ADR-0045 D2) — content-addressed, immutable once the experiment's first
-/// run opens.
+/// seed_policy, held_out_split_ref?, pre_registration, registry_snapshot_id?,
+/// generators?, resolution?}` (spec §5h.2 §3; ADR-0045 D2) —
+/// content-addressed, immutable once the experiment's first run opens.
+///
+/// S3.4a additions (additive, optional): `registry_snapshot_id` pins the one
+/// registry snapshot the design resolves levels against (§6.2 "one snapshot
+/// per `Design`"; §6.3 consumes it for `DependsOnDriftedCapability` and every
+/// bundle carries it); `generators[]` + `resolution` are the
+/// `fractional_factorial` parameters (mandatory for that kind —
+/// `ResolutionInsufficient`/`Schema` at `register` otherwise).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Design {
     /// The design id.
@@ -1623,6 +1684,14 @@ pub struct Design {
     pub held_out_split_ref: Option<String>,
     /// The mandatory pre-registration.
     pub pre_registration: PreRegistration,
+    /// The pinned registry snapshot the design resolves against (§6.2).
+    pub registry_snapshot_id: Option<String>,
+    /// The `fractional_factorial` generators (`["E=ABCD"]` — two-level
+    /// `l^(k−p)` spellings; mandatory on `fractional_factorial`).
+    pub generators: Option<Vec<String>>,
+    /// The declared `fractional_factorial` resolution (mandatory on
+    /// `fractional_factorial`; refused on other kinds).
+    pub resolution: Option<FractionalResolution>,
 }
 
 /// `Design`/`PreRegistration` schema failures (typed — never a warning).
@@ -1903,6 +1972,12 @@ impl PreRegistration {
             Json::str(&self.analysis_plan_ref),
         );
         m.insert("task_split_hash".into(), Json::str(&self.task_split_hash));
+        if !self.interactions.is_empty() {
+            m.insert(
+                "interactions".into(),
+                Json::Arr(self.interactions.iter().map(Json::str).collect()),
+            );
+        }
         Json::Obj(m)
     }
 
@@ -1920,6 +1995,7 @@ impl PreRegistration {
                 "min_n",
                 "analysis_plan_ref",
                 "task_split_hash",
+                "interactions",
             ],
             REC,
         )?;
@@ -1931,6 +2007,26 @@ impl PreRegistration {
             min_n: int_at(m, "min_n", REC)? as u32,
             analysis_plan_ref: str_at(m, "analysis_plan_ref", REC)?.to_string(),
             task_split_hash: str_at(m, "task_split_hash", REC)?.to_string(),
+            interactions: match m.get("interactions") {
+                None | Some(Json::Null) => Vec::new(),
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .map(|j| {
+                        j.as_str().map(str::to_string).ok_or_else(|| {
+                            EvalError::SchemaViolation {
+                                member: "interactions".into(),
+                                detail: "entries must be strings".into(),
+                            }
+                        })
+                    })
+                    .collect::<Result<Vec<String>, EvalError>>()?,
+                Some(_) => {
+                    return Err(EvalError::SchemaViolation {
+                        member: "interactions".into(),
+                        detail: "must be an array of effect spellings".into(),
+                    })
+                }
+            },
         })
     }
 }
@@ -1964,6 +2060,18 @@ impl Design {
             m.insert("held_out_split_ref".into(), Json::str(h));
         }
         m.insert("pre_registration".into(), self.pre_registration.to_json());
+        if let Some(s) = &self.registry_snapshot_id {
+            m.insert("registry_snapshot_id".into(), Json::str(s));
+        }
+        if let Some(g) = &self.generators {
+            m.insert(
+                "generators".into(),
+                Json::Arr(g.iter().map(Json::str).collect()),
+            );
+        }
+        if let Some(r) = &self.resolution {
+            m.insert("resolution".into(), Json::str(r.as_str()));
+        }
         Json::Obj(m)
     }
 
@@ -1983,6 +2091,9 @@ impl Design {
                 "seed_policy",
                 "held_out_split_ref",
                 "pre_registration",
+                "registry_snapshot_id",
+                "generators",
+                "resolution",
             ],
             REC,
         )?;
@@ -2020,6 +2131,38 @@ impl Design {
                     detail: "missing member".into(),
                 },
             )?)?,
+            registry_snapshot_id: opt_str_at(m, "registry_snapshot_id")?.map(str::to_string),
+            generators: match m.get("generators") {
+                None | Some(Json::Null) => None,
+                Some(Json::Arr(items)) => Some(
+                    items
+                        .iter()
+                        .map(|j| {
+                            j.as_str().map(str::to_string).ok_or_else(|| {
+                                EvalError::SchemaViolation {
+                                    member: "generators".into(),
+                                    detail: "entries must be strings".into(),
+                                }
+                            })
+                        })
+                        .collect::<Result<Vec<String>, EvalError>>()?,
+                ),
+                Some(_) => {
+                    return Err(EvalError::SchemaViolation {
+                        member: "generators".into(),
+                        detail: "must be an array of generator spellings".into(),
+                    })
+                }
+            },
+            resolution: match opt_str_at(m, "resolution")? {
+                None => None,
+                Some(s) => Some(FractionalResolution::parse(s).ok_or_else(|| {
+                    EvalError::SchemaViolation {
+                        member: "resolution".into(),
+                        detail: format!("unknown resolution `{s}`"),
+                    }
+                })?),
+            },
         })
     }
 }
