@@ -757,7 +757,7 @@ fn profile_binding_from_json(j: &Json) -> Result<ProfileBinding, String> {
     }
 }
 
-fn parameter_spec_json(p: &ParameterSpec) -> Json {
+pub(crate) fn parameter_spec_json(p: &ParameterSpec) -> Json {
     let mut m = BTreeMap::new();
     m.insert("type".into(), Json::str(p.param_type.as_str()));
     m.insert("required".into(), Json::str(p.required.as_str()));
@@ -779,7 +779,7 @@ fn parameter_spec_json(p: &ParameterSpec) -> Json {
     Json::Obj(m)
 }
 
-fn parameter_spec_from_json(j: &Json, path: &str) -> Result<ParameterSpec, String> {
+pub(crate) fn parameter_spec_from_json(j: &Json, path: &str) -> Result<ParameterSpec, String> {
     let m = match j {
         Json::Obj(m) => m,
         _ => return Err(format!("{path} must be an object")),

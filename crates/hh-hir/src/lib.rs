@@ -131,6 +131,12 @@ pub mod wire {
         crate::schema::node_to_json(n)
     }
 
+    /// The canonical JSON of a [`crate::document::Edge`] (consumed by the §3.1.7
+    /// `opacity` leaf walk — CC7: the schema source owns the encoding).
+    pub fn edge_to_json(e: &crate::document::Edge) -> Json {
+        crate::schema::edge_to_json(e)
+    }
+
     /// A node's canonical **semantic projection** (no surface/provenance/version —
     /// the `semantic_id` basis, §3.1.2).
     pub fn node_semantic_projection(n: &crate::document::Node) -> Json {

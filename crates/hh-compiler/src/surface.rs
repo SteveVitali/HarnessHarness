@@ -296,6 +296,16 @@ impl Distinguishability {
             Distinguishability::Failed => "failed",
         }
     }
+
+    /// Parse a canonical spelling.
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "verified" => Self::Verified,
+            "unchecked" => Self::Unchecked,
+            "failed" => Self::Failed,
+            _ => return None,
+        })
+    }
 }
 
 /// `ErrorFormatSpec{renderings: map<SurfaceFailure ∪ CapabilityFailureClass,

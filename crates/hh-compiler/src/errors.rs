@@ -103,8 +103,7 @@ pub enum CompileError {
         /// The narrowing observed.
         detail: String,
     },
-    /// `TargetError` — declared for stage 4; not emitted at Stage 1.
-    #[allow(dead_code)]
+    /// `TargetError` — a stage-4 lowering/lifting failure (§3.2.10).
     TargetError {
         /// What failed.
         detail: String,
