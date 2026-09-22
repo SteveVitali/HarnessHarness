@@ -33,6 +33,15 @@ members = [
     # canonical-bytes seam (hh-ir-op) for out-of-process execution. Sits above ontology /
     # identity / provenance / wire; no Hosting ABI dependency (AC-IR-04).
     "crates/hh-hir",
+    # The C0/Stage-1 event store / run ledger (spec §5a.1, R-2.2.1; ticket S1.5). A
+    # PERSISTENT workspace member: the sole authoritative run record — the typed
+    # append-only hash-chained event log (envelope + id model + the one declared
+    # persistence-policy table), the content-addressed blob store, the immutable run
+    # manifest, the single fenced writer, durable-before-visible commits, verify →
+    # Tampered, and the rebuildable context_view/run_summary projections. Sits above
+    # ontology/identity/provenance/wire; hashing through hh-identity (CC1), provenance
+    # through hh-provenance, home planes through hh-ontology (CC10).
+    "crates/hh-ledger",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

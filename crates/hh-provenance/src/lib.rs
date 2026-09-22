@@ -37,11 +37,14 @@
 //! - [`monitor`] — checks 1 (`operand ⊆ envelope`), 2 (monotonic label), 7 (delegate
 //!   attenuation).
 //! - [`lower`] — P7 `lower`/`lift` (lossy-explicit carriers) and RP `render_role`.
+//! - [`decode`] — the canonical `from_json` decoders (added for S1.5): the schema source
+//!   owns both directions (CC7), so a stored/endorsed record parses back byte-identically.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 pub mod authority;
+pub mod decode;
 pub mod derive;
 pub mod endorse;
 pub mod label;
@@ -52,6 +55,7 @@ pub mod origin;
 pub mod record;
 
 pub use authority::{AuthorityClass, OpacityReport, PersistenceScope, ReaderSet, TaintTag};
+pub use decode::DecodeError;
 pub use derive::{check_delegate_attenuation, derive, ingest_child_result, DerivationInput};
 pub use endorse::{
     apply_label, check_endorsement, declassify, endorse, seal, ContentKind, EndorsementBasis,
