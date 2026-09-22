@@ -4,8 +4,10 @@
 //! `local/`); the multi-namespace registry *service*, `exp/` and shared reverse-DNS namespaces
 //! are the C1 registry (S4.1 / §06).
 
+use hh_provenance::{AuthorityClass, ProvenanceRecord};
+
 use crate::kinds::RecordKind;
-use crate::refs::{Name, NameSelector, Provenance, VersionedRef};
+use crate::refs::{Name, NameSelector, VersionedRef};
 
 /// A namespace (Stage-1 subset). `hh/` is kernel-owned (publishing to it requires a kernel-origin
 /// provenance); `local/` is the working namespace.
@@ -54,7 +56,9 @@ pub struct NameHistoryEntry {
     pub label: Option<String>,
     pub status: NameStatus,
     pub supersedes_entry: Option<String>,
-    pub publisher: Provenance,
+    /// The publisher's canonical provenance record (§8.1; DF-S1.2-1 — `publish`'s rules
+    /// read its `AuthorityClass`).
+    pub publisher: ProvenanceRecord,
     /// The transaction-time sequence (ordering uses only this `seq`, never a wall clock — §8.3 #2).
     pub published_at_seq: u64,
 }
@@ -69,9 +73,10 @@ pub enum PublishError {
         expected: RecordKind,
         got: RecordKind,
     },
-    /// Publishing to a kernel-owned namespace without a kernel-origin provenance.
+    /// Publishing to a kernel-owned namespace without `kernel`-authority provenance.
     NamespaceForbidden { namespace: Namespace },
-    /// A widening/loosening successor without a human-attested provenance (§8.3 #6; ADR-0037 D5).
+    /// A widening/loosening successor without a `principal`-authority attested provenance
+    /// (§8.3 #6; ADR-0037 D5 — the §8.1 `AuthorityClass` + attestation rule).
     AuthorityWideningRequiresHuman,
 }
 
@@ -85,6 +90,10 @@ pub enum ResolveMode {
 }
 
 /// The outcome of `resolve` (§8.3 #2).
+// `Resolved` carries the full `VersionedRef` (whose canonical `ProvenanceRecord` is large);
+// boxing the variant would change the public enum's shape for no hot-path gain — the swap to
+// the canonical record is additive (CC8), so the lint is allowed here.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolveOutcome {
     Resolved(VersionedRef),
@@ -127,10 +136,12 @@ impl NameIndex {
         label: Option<String>,
         supersedes: Option<&NameHistoryEntry>,
         status: NameStatus,
-        publisher: Provenance,
+        publisher: ProvenanceRecord,
         widening: bool,
     ) -> Result<NameHistoryEntry, PublishError> {
-        if namespace == Namespace::Hh && publisher.origin != crate::refs::Origin::Kernel {
+        // `hh/` is kernel-owned: the publisher's *conferred authority* must be `kernel`
+        // (§8.1 — the class, not a self-declared origin string).
+        if namespace == Namespace::Hh && publisher.authority != AuthorityClass::Kernel {
             return Err(PublishError::NamespaceForbidden { namespace });
         }
         if let Some(l) = &label {
@@ -153,7 +164,13 @@ impl NameIndex {
                 });
             }
         }
-        if widening && !(publisher.origin == crate::refs::Origin::Human && publisher.attested) {
+        // Widening/loosening successor: `authority == principal` **and** an attestation
+        // (§8.3 #6 reads the canonical `AuthorityClass` — DF-S1.2-1). A human principal mints
+        // `principal`; the attestation is the verified fact, never a self-declared flag.
+        if widening
+            && !(publisher.authority == AuthorityClass::Principal
+                && publisher.attestation.is_some())
+        {
             return Err(PublishError::AuthorityWideningRequiresHuman);
         }
         let entry = NameHistoryEntry {
@@ -233,10 +250,35 @@ impl NameIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::refs::Origin;
+    use hh_provenance::{HumanRole, Origin, PersistenceScope};
+
+    /// A delegate-class (agent/model) publisher — the canonical record, `delegate` authority.
+    fn agent() -> ProvenanceRecord {
+        ProvenanceRecord::minted(
+            Origin::model("model:m", "run:r", "resp:1"),
+            PersistenceScope::Run,
+            0,
+        )
+    }
+
+    /// A `kernel`-authority publisher.
+    fn kernel() -> ProvenanceRecord {
+        ProvenanceRecord::kernel("kernel:identity", 0)
+    }
+
+    /// A `principal`-authority attested publisher (widening-successor provenance).
+    fn human_attested() -> ProvenanceRecord {
+        ProvenanceRecord::human_attested(
+            "alice",
+            HumanRole::Principal,
+            PersistenceScope::User,
+            0,
+            crate::refs::test_attestation(),
+        )
+    }
 
     fn vref(kind: RecordKind, vid: &str, sem: Option<&str>) -> VersionedRef {
-        let mut r = VersionedRef::pinned(kind, vid, Provenance::new(Origin::Agent));
+        let mut r = VersionedRef::pinned(kind, vid, agent());
         r.semantic_id = sem.map(|s| s.to_string());
         r
     }
@@ -253,7 +295,7 @@ mod tests {
                 Some("1.0.0".into()),
                 None,
                 NameStatus::Active,
-                Provenance::new(Origin::Agent),
+                agent(),
                 false,
             )
             .unwrap();
@@ -265,7 +307,7 @@ mod tests {
             Some("1.1.0".into()),
             Some(&e1),
             NameStatus::Active,
-            Provenance::new(Origin::Agent),
+            agent(),
             false,
         )
         .unwrap();
@@ -290,7 +332,7 @@ mod tests {
             Some("1.0.0".into()),
             None,
             NameStatus::Active,
-            Provenance::new(Origin::Agent),
+            agent(),
             false,
         )
         .unwrap();
@@ -303,7 +345,7 @@ mod tests {
                 Some("1.0.0".into()),
                 None,
                 NameStatus::Active,
-                Provenance::new(Origin::Agent),
+                agent(),
                 false
             ),
             Err(PublishError::LabelReused { .. })
@@ -322,7 +364,7 @@ mod tests {
                 None,
                 None,
                 NameStatus::Active,
-                Provenance::new(Origin::Agent),
+                agent(),
                 false
             ),
             Err(PublishError::NamespaceForbidden { .. })
@@ -335,7 +377,7 @@ mod tests {
                 None,
                 None,
                 NameStatus::Active,
-                Provenance::kernel(),
+                kernel(),
                 false
             )
             .is_ok());
@@ -353,7 +395,7 @@ mod tests {
                 None,
                 None,
                 NameStatus::Active,
-                Provenance::new(Origin::Agent),
+                agent(),
                 true
             ),
             Err(PublishError::AuthorityWideningRequiresHuman)
@@ -366,7 +408,7 @@ mod tests {
                 None,
                 None,
                 NameStatus::Active,
-                Provenance::human_attested(),
+                human_attested(),
                 true
             )
             .is_ok());
@@ -385,7 +427,7 @@ mod tests {
                 Some("1.0.0".into()),
                 None,
                 NameStatus::Active,
-                Provenance::new(Origin::Agent),
+                agent(),
                 false,
             )
             .unwrap();
@@ -397,7 +439,7 @@ mod tests {
             Some("1.1.0".into()),
             Some(&e1),
             NameStatus::Yanked,
-            Provenance::new(Origin::Agent),
+            agent(),
             false,
         )
         .unwrap();

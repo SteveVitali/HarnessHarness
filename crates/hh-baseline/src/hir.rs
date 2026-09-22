@@ -7,7 +7,7 @@
 //! runs. `react/minimal` is the mini-SWE-agent class and the T-LCD-03 anchor (R-2.6.1).
 
 use crate::gateway::ModelRoleTable;
-use crate::provenance::{AuthorityClass, ProvenanceRecord};
+use crate::provenance::{self, AuthorityClass, ProvenanceRecord};
 
 /// A hand-authored harness definition. There is exactly one class at Stage 0: `react/minimal`.
 #[derive(Debug, Clone)]
@@ -83,9 +83,9 @@ impl HarnessDefinition {
 pub fn baseline_definition(task: impl Into<String>) -> HarnessDefinition {
     HarnessDefinition {
         class: "react/minimal".into(),
-        principal: ProvenanceRecord::principal("operator:cli"),
-        definition: ProvenanceRecord::definition("react/minimal@baseline"),
-        external: ProvenanceRecord::external("lifted:tool+model"),
+        principal: provenance::principal("operator:cli"),
+        definition: provenance::definition("react/minimal@baseline"),
+        external: provenance::external("lifted:tool+model"),
         role_table: ModelRoleTable::single("driver", "stub/model-A"),
         task: task.into(),
     }
@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn wrong_hand_stamp_is_rejected() {
         let mut d = baseline_definition("t");
-        d.principal = ProvenanceRecord::external("bad");
+        d.principal = provenance::external("bad");
         assert_eq!(
             d.validate(),
             Err(ValidationError::WrongAuthority {

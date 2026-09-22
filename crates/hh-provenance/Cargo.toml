@@ -1,0 +1,13 @@
+[package]
+name = "hh-provenance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 provenance & authority model (spec §8.1, R-2.1.5; ADR-0033/0034/0035): one ProvenanceRecord carrying one Label in one product lattice (CC1/CC2 anchor here), the seven-class AuthorityClass total order, default_authority (the minting table, derived never declared), join/meet/leq, R-TEXT, ledger stamping on the mandatory classes, propagation P1/P6/P7 + RP, the seal basis and the closed EndorsementBasis list, and monitor checks 1/2/5/7 as record-only inputs to authorize."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }

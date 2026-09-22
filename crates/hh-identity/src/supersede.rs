@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 
 use crate::kinds::RecordKind;
-use crate::refs::Origin;
+use hh_provenance::{Origin, PersistenceScope, ProvenanceRecord};
 
 /// The closed set of supersession reasons (§8.3 #3; ADR-0037 D2 as amended — `fork` per ADR-0082,
 /// `consolidation` per ADR-0080). A new reason is a dialect bump, never an ad-hoc string (CC8).
@@ -44,8 +44,10 @@ pub struct RevocationRecord {
     /// The claimed valid-time end (`validity.until`); `None` = revoked immediately.
     pub validity_until: Option<u64>,
     pub replacement: Option<String>,
+    /// Who authorized the revocation — the canonical §8.1 `Origin`.
     pub authority: Origin,
-    pub provenance: Origin,
+    /// The revocation's canonical provenance record (minted from `authority` at `seq`).
+    pub provenance: ProvenanceRecord,
 }
 
 /// One stale-by-dependency entry (`StaleIndex[version_id] → [revoked member, reason, since]`).
@@ -137,8 +139,8 @@ impl Lineage {
             reason,
             validity_until: None,
             replacement: replacement.clone(),
-            authority,
-            provenance: authority,
+            authority: authority.clone(),
+            provenance: ProvenanceRecord::minted(authority, PersistenceScope::Run, seq),
         };
         self.revocations.push(rec.clone());
         // Every dependant of `old` becomes stale-by-dependency (never silently excluded — CC3).
@@ -215,7 +217,7 @@ mod tests {
             "sha256:v1",
             RecordKind::Validator,
             SupersedeReason::Revocation,
-            Origin::Human,
+            Origin::human("revoker", hh_provenance::HumanRole::Principal),
             Some("sha256:v2".into()),
         );
         assert_eq!(rec.revokes, "sha256:v1");
@@ -233,7 +235,7 @@ mod tests {
             "sha256:member",
             RecordKind::VariantRecord,
             SupersedeReason::Revocation,
-            Origin::Human,
+            Origin::human("revoker", hh_provenance::HumanRole::Principal),
             None,
         );
         assert!(lin.depends_on_revoked("sha256:run1"));

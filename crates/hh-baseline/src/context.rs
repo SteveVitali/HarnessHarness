@@ -106,7 +106,8 @@ impl ContextPolicy {
         tools_desc: &str,
     ) -> Result<Assembled, ContextWindowExceeded> {
         let mut prompt = String::new();
-        let mut label = AuthorityClass::Definition;
+        // Meet over the slots present; the fold identity is the canonical top (`kernel`).
+        let mut label = AuthorityClass::Kernel;
         let push = |slot: Slot, text: &str, prompt: &mut String, label: &mut AuthorityClass| {
             if text.is_empty() {
                 return;
@@ -161,11 +162,14 @@ mod tests {
 
     #[test]
     fn label_is_principal_join_without_lifted_content() {
-        // Only system(def), task(principal), tools(def): the join floor is definition < principal,
-        // so the lowest authority present is definition.
+        // Only system(def), task(principal), tools(def): under the **canonical** order
+        // `principal < definition` (ADR-0033 D2), so the meet floor is `principal` — the
+        // principal's task text caps the assembled context. (The retired Stage-0 subset
+        // ordered `definition < principal` and yielded `definition` here — the semantic
+        // correction is recorded in ADR-0230.)
         let p = ContextPolicy::default_policy(10_000);
         let a = p.assemble("sys", "task", "", &[], None, "tools").unwrap();
-        assert_eq!(a.context_label, AuthorityClass::Definition);
+        assert_eq!(a.context_label, AuthorityClass::Principal);
     }
 
     #[test]

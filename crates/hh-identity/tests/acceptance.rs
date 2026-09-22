@@ -6,8 +6,8 @@ use hh_wire::json::Json;
 use hh_identity::{
     address, configuration_id, configuration_version_id, identify, identify_text, parse_id,
     pools_by_configuration_id, sameness, verify_blob, IdError, IdentifyError, NameIndex,
-    NameSelector, NameStatus, Namespace, Provenance, Record, RecordKind, Reference, ResolveMode,
-    ResolveOutcome, SamenessLevel, VerifyOutcome,
+    NameSelector, NameStatus, Namespace, ProvenanceRecord, Record, RecordKind, Reference,
+    ResolveMode, ResolveOutcome, SamenessLevel, VerifyOutcome,
 };
 
 #[test]
@@ -64,7 +64,7 @@ fn ac_r_2_12_1_3_rename_stability_and_pooling() {
     let r_before = hh_identity::VersionedRef::pinned(
         RecordKind::VariantRecord,
         &before.version_id,
-        Provenance::kernel(),
+        ProvenanceRecord::kernel("kernel:test", 0),
     )
     .with_semantic(before.semantic_id.clone().unwrap());
     let e1 = idx
@@ -75,14 +75,14 @@ fn ac_r_2_12_1_3_rename_stability_and_pooling() {
             Some("1.0.0".into()),
             None,
             NameStatus::Active,
-            Provenance::kernel(),
+            ProvenanceRecord::kernel("kernel:test", 0),
             false,
         )
         .unwrap();
     let r_after = hh_identity::VersionedRef::pinned(
         RecordKind::VariantRecord,
         &after.version_id,
-        Provenance::kernel(),
+        ProvenanceRecord::kernel("kernel:test", 0),
     )
     .with_semantic(after.semantic_id.clone().unwrap());
     idx.publish(
@@ -92,7 +92,7 @@ fn ac_r_2_12_1_3_rename_stability_and_pooling() {
         Some("1.1.0".into()),
         Some(&e1),
         NameStatus::Active,
-        Provenance::kernel(),
+        ProvenanceRecord::kernel("kernel:test", 0),
         false,
     )
     .unwrap();
@@ -173,7 +173,7 @@ fn resolve_is_deterministic_and_execute_hides_yanked() {
     let v1 = hh_identity::VersionedRef::pinned(
         RecordKind::VariantRecord,
         format!("sha256:{}", "1".repeat(64)),
-        Provenance::kernel(),
+        ProvenanceRecord::kernel("kernel:test", 0),
     );
     let e1 = idx
         .publish(
@@ -183,14 +183,14 @@ fn resolve_is_deterministic_and_execute_hides_yanked() {
             Some("1.0.0".into()),
             None,
             NameStatus::Active,
-            Provenance::kernel(),
+            ProvenanceRecord::kernel("kernel:test", 0),
             false,
         )
         .unwrap();
     let v2 = hh_identity::VersionedRef::pinned(
         RecordKind::VariantRecord,
         format!("sha256:{}", "2".repeat(64)),
-        Provenance::kernel(),
+        ProvenanceRecord::kernel("kernel:test", 0),
     );
     idx.publish(
         Namespace::Local,
@@ -199,7 +199,7 @@ fn resolve_is_deterministic_and_execute_hides_yanked() {
         Some("1.1.0".into()),
         Some(&e1),
         NameStatus::Yanked,
-        Provenance::kernel(),
+        ProvenanceRecord::kernel("kernel:test", 0),
         false,
     )
     .unwrap();

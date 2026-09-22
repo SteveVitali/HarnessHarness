@@ -43,7 +43,7 @@ pub use names::{
     NameHistoryEntry, NameIndex, NameStatus, Namespace, PublishError, ResolveMode, ResolveOutcome,
 };
 pub use record::{identify, IdentifyError, Identity, Record, Reference};
-pub use refs::{Name, NameSelector, Origin, Provenance, VersionedRef};
+pub use refs::{Name, NameSelector, Origin, Provenance, ProvenanceRecord, VersionedRef};
 pub use repro::{
     check_claim, max_supported_level, InstrumentRecord, ReproClaimUnsupported, ReproLevel,
 };
