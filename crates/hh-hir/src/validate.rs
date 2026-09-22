@@ -650,6 +650,15 @@ fn check_kind_record(node: &Node, index: &BTreeMap<String, &Node>, errs: &mut Ve
         },
         KindRecord::Budget(b) => {
             for (d, bound) in &b.dimensions {
+                // DF-S1.4-1 (closed at S1.6): keys are the closed kernel registry plus
+                // the derived bound names — unknown spellings are refused, never carried.
+                if hh_ontology::dimensions::DimensionKey::parse(d).is_none() {
+                    errs.push(HirError::SchemaViolation {
+                        detail: format!(
+                            "budget dimension {d:?}: not in the kernel dimension registry (§8.2)"
+                        ),
+                    });
+                }
                 if let (Some(h), Some(s)) = (bound.hard, bound.soft) {
                     if s > h {
                         errs.push(HirError::SchemaViolation {

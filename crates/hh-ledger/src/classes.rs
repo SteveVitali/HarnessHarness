@@ -262,6 +262,33 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // (ADR-0029 §5 names it; the artefact/compaction/retrieval classes land with
     // the context builder, §05c).
     row("context.observation.recorded",    Led, O::Events, false, false, None, None),
+    // `context.compaction.completed` — the E4 re-arm signal for budget soft
+    // thresholds (§8.2 E4; ADR-0040/0107): advice re-arms only after a
+    // `status ∈ {applied, fallback_applied}` completion. Kernel-produced.
+    row("context.compaction.completed",    Led, O::Events, false, true,  None, None),
+
+    // ── control (P3) — the budget/accounting classes (§8.2; ADR-0039/0040/0041)
+    // and the audit-grade decision row. Every `control.*` row is kernel-origin +
+    // provenance-bearing; `control.decision` is "the audit-grade record" (§05h).
+    // Budget payloads carry ceilings/amounts — not content-free — so only
+    // `control.decision` takes the audit-grade (Rule P/C) flags.
+    row("control.budget.allocated",        Led, O::Events, false, true,  None, None),
+    row("control.budget.reserved",         Led, O::Events, false, true,  None, None),
+    row("control.budget.consumed",         Led, O::Events, false, true,  None, None),
+    row("control.budget.released",         Led, O::Events, false, true,  None, None),
+    row("control.budget.exceeded",         Led, O::Events, false, true,  None, None),
+    row("control.budget.amended",          Led, O::Events, false, true,  None, None),
+    row("control.decision",                Led, O::Events, true,  true,  None, None),
+
+    // ── measurement (P7) — the spend-attribution row (§8.2
+    // `measurement.cost.attributed{scope?, subject_ref, dimension, quantity|money?,
+    // provenance, basis}`; ADR-0043's measurement stamps ride the payload).
+    // Kernel-produced (the account derives it), provenance mandatory.
+    row("measurement.cost.attributed",     Led, O::Events, false, true,  None, None),
+
+    // ── verification (P4) — `verification.validator.invoked` is an accountable
+    // event class (R-ACC-2): every invocation is charged (to the instrument).
+    row("verification.validator.invoked",  Led, O::Events, false, false, None, None),
 ];
 
 const fn row(

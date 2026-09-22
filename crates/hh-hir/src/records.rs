@@ -642,9 +642,9 @@ impl CapabilityDeclarationRecord {
 }
 
 /// `Budget = {dimensions, scope, parent, accounting}` (§3.1.3; ADR-0039). Dimension keys
-/// are the kernel counter/gauge list — that closed registry lands at S1.6 (the §8.2 owner
-/// ticket; DF-S1.4-1), so HIR/1 carries `dimensions` as a keyed map whose keys are not yet
-/// checked against the kernel list.
+/// are the kernel counter/gauge list plus the derived bound names — the closed registry
+/// landed at S1.6 (`hh_ontology::dimensions`; DF-S1.4-1 closed there); `validate`
+/// refuses unknown keys (`SchemaViolation`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BudgetRecord {
     /// `dimension → {hard, soft}` bounds.

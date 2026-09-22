@@ -149,10 +149,11 @@ impl Trace {
             if e.event == "control.budget.consumed" {
                 let dim = e.payload.get("dimension").and_then(Json::as_str);
                 let amount = e.payload.get("amount").and_then(Json::as_int).unwrap_or(0);
-                for d in Dimension::all() {
-                    if dim == Some(d.as_str()) {
-                        *m.get_mut(&d).unwrap() += amount;
-                    }
+                // Charge events name canonical primary roles; the exclusive token
+                // roles sum into the `tokens.blended` derived bucket (CC3 — the
+                // trace totals equal the account's derived view by construction).
+                if let Some(d) = dim.and_then(crate::budget::bucket_of) {
+                    *m.get_mut(&d).unwrap() += amount;
                 }
             }
         }
@@ -242,16 +243,17 @@ mod tests {
     fn charged_totals_match_cost_view() {
         let mut b = BudgetNode::root(100, 5, 10_000);
         let mut t = Trace::open(tmp("cost")).unwrap();
-        b.charge(Dimension::TokensBlended, 15);
-        t.append(
-            "control.budget.consumed",
-            Scope::Control,
-            Json::obj([
-                ("dimension", Json::str("tokens.blended")),
-                ("amount", Json::Int(15)),
-            ]),
-        )
-        .unwrap();
+        // Charges post as the exclusive primary roles (§8.2); `tokens.blended`
+        // is the derived view both sides report.
+        b.charge_tokens(10, 5);
+        for (dim, amount) in [("tokens.input.uncached", 10), ("tokens.output.visible", 5)] {
+            t.append(
+                "control.budget.consumed",
+                Scope::Control,
+                Json::obj([("dimension", Json::str(dim)), ("amount", Json::Int(amount))]),
+            )
+            .unwrap();
+        }
         // CC3: what the trace charged equals what the cost_view reports.
         assert_eq!(
             t.charged_totals().get(&Dimension::TokensBlended),

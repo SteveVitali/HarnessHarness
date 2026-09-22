@@ -287,7 +287,7 @@ pub fn valid_doc() -> HirDocument {
     let mut doc = HirDocument::new(sel("test:agent"));
     doc.nodes.push(rule_node("test:rule", 1));
     doc.nodes
-        .push(budget_node("test:budget", &[("tokens.total", 1000)], 2));
+        .push(budget_node("test:budget", &[("tokens.blended", 1000)], 2));
     doc.nodes
         .push(perm_node("test:perm", "test:agent", vec![], 3));
     doc.nodes
@@ -300,7 +300,7 @@ pub fn hosted_doc() -> HirDocument {
     let mut doc = HirDocument::new(sel("test:agent"));
     doc.nodes.push(rule_node("test:rule", 1));
     doc.nodes
-        .push(budget_node("test:budget", &[("tokens.total", 1000)], 2));
+        .push(budget_node("test:budget", &[("tokens.blended", 1000)], 2));
     doc.nodes
         .push(perm_node("test:perm", "test:agent", vec![], 3));
     doc.nodes.push(hosted_agent_node(

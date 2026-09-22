@@ -270,6 +270,36 @@ impl Store {
         &self.root
     }
 
+    /// Allocate a fresh id of `kind` through the store's `IdSource` — the seam
+    /// ledger-bound consumers (the `hh-budget` account) use so event/budget/
+    /// reservation ids come from the one injected source (golden-corpus
+    /// determinism is preserved for `SeqIds`-backed stores).
+    pub fn alloc_id(&self, kind: &str) -> String {
+        self.ids.alloc(kind)
+    }
+
+    /// The store clock, wall-ms.
+    pub fn now_ms(&self) -> u64 {
+        self.clock.now_ms()
+    }
+
+    /// `rfc3339_ms(now_ms())` — the `ts` stamp for caller-built `Event`s.
+    pub fn ts_now(&self) -> String {
+        rfc3339_ms(self.clock.now_ms())
+    }
+
+    /// The run's head `event_id` — the `parent_event_id` for a new caller event
+    /// extending the branch head ([`crate::ids::ROOT_EVENT`] when the run is
+    /// still at genesis).
+    pub fn head_event_id(&self, run_id: &str) -> Result<String, LedgerError> {
+        let state = self.run(run_id)?;
+        Ok(state
+            .head
+            .as_ref()
+            .map(|h| h.event_id.clone())
+            .unwrap_or_else(|| ROOT_EVENT.to_string()))
+    }
+
     fn load_all(&mut self) -> Result<(), LedgerError> {
         let runs_dir = self.root.join("runs");
         let entries = fs::read_dir(&runs_dir).map_err(|e| LedgerError::Io {

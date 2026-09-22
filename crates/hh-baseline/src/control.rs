@@ -21,6 +21,7 @@ use crate::gateway::{Gateway, Model, StubOutcome};
 use crate::hir::HarnessDefinition;
 use crate::tools::{ToolExecutor, ToolResult};
 use crate::trace::{Scope, Trace};
+use hh_budget::DimensionId;
 
 /// Why the run stopped. The exit-class mapping ([`crate::driver::ExitClass::of`]) is total over
 /// this enum.
@@ -207,9 +208,10 @@ pub fn run<M: Model>(
                 ("policy_kind", Json::str(gateway.policy().kind())),
             ]),
         )?;
-        // Charge the model call (usage + one model_call) and account it.
+        // Charge the model call (usage + one model_call) and account it — the
+        // exclusive primary roles post; `tokens.blended` is the derived view.
         let blended = response.usage.blended();
-        budget.charge(Dimension::TokensBlended, blended);
+        budget.charge_tokens(response.usage.input_tokens, response.usage.output_tokens);
         budget.charge(Dimension::ModelCalls, 1);
         trace.append(
             "model.call.completed",
@@ -221,8 +223,17 @@ pub fn run<M: Model>(
                 ("blended", Json::Int(blended)),
             ]),
         )?;
-        charge_event(trace, Dimension::TokensBlended, blended)?;
-        charge_event(trace, Dimension::ModelCalls, 1)?;
+        charge_event(
+            trace,
+            DimensionId::TokensInputUncached.as_str(),
+            response.usage.input_tokens,
+        )?;
+        charge_event(
+            trace,
+            DimensionId::TokensOutputVisible.as_str(),
+            response.usage.output_tokens,
+        )?;
+        charge_event(trace, Dimension::ModelCalls.as_str(), 1)?;
         history.push(format!("assistant: {}", response.content));
 
         // If the model wants a tool, run it — but re-check the budget first so no tool intent
@@ -270,7 +281,11 @@ pub fn run<M: Model>(
                             ("executor_ms", Json::Int(result.executor_ms as i64)),
                         ]),
                     )?;
-                    charge_event(trace, Dimension::TimeWallMs, result.executor_ms as i64)?;
+                    charge_event(
+                        trace,
+                        Dimension::TimeWallMs.as_str(),
+                        result.executor_ms as i64,
+                    )?;
                     history.push(format!("observation: {}", result.output));
                     last_obs = Some(result);
                 }
@@ -311,14 +326,11 @@ pub fn run<M: Model>(
     )
 }
 
-fn charge_event(trace: &mut Trace, dim: Dimension, amount: i64) -> std::io::Result<()> {
+fn charge_event(trace: &mut Trace, dim: &str, amount: i64) -> std::io::Result<()> {
     trace.append(
         "control.budget.consumed",
         Scope::Control,
-        Json::obj([
-            ("dimension", Json::str(dim.as_str())),
-            ("amount", Json::Int(amount)),
-        ]),
+        Json::obj([("dimension", Json::str(dim)), ("amount", Json::Int(amount))]),
     )?;
     Ok(())
 }
