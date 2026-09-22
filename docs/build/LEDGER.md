@@ -12,7 +12,7 @@
 ```
 projectStatus:   IN_PROGRESS        # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
 nextTicket:      GATE-G1
-lastCompleted:   S0.3
+lastCompleted:   S0.3b
 blockedOn:       (nothing)          # REAL blocks only; a pending gate is a RETURN PASS row
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-s0.3
+chainTip:        svitali/harnessharness-s0.3b
 benchmarkSet:    PENDING_CREATE     # Stage-3 reference suite + exemplars; created when the chain reaches Stage 3
 autonomy:        manual
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -40,6 +40,7 @@ updatedAt:       2026-09-15
 | date | ticket | gate | item | answer | consequence |
 |---|---|---|---|---|---|
 | 2026-09-15 | S0.3 | Stage-0 spike budget (operator-gated live stage) | release spike budget | authorized — offline/hermetic only, no external spend | runs the S1/S2 measurement spikes (repeat-scored N≥3); discharges DF-S0.1-1, DF-S0.2-1; produces the measurement sheet feeding GATE-G1 |
+| 2026-09-15 | GATE-G1 | Stage-0 acceptance & ecosystem-decision revalidation | disposition | PENDING — authorize an ONLINE spike budget first | insert S0.3b to close the machine cells of DF-S0.3-1/-3 (online reference peers + E2/E3 candidate toolchains, no external model spend); gate stays STOPPED until S0.3b lands and the sheet is re-read; the R2 human cross-camp signature stays an operator residual |
 
 ## RETURN PASS
 
@@ -47,6 +48,10 @@ updatedAt:       2026-09-15
 |---|---|---|---|
 
 ## PHASE LOG
+
+- 2026-09-15 · S0.3b done — branch `svitali/harnessharness-s0.3b` · PR https://github.com/SteveVitali/MetaHarness/pull/5 · base `svitali/harnessharness-s0.3` (@6ca7edb). Ran the **online** cross-candidate / MCP-ACP measurement spike (operator released the online spike budget: network + E2/E3 toolchains + official MCP/ACP SDKs against LOCAL reference peers, no external model spend) to close the machine cells of DF-S0.3-1 and DF-S0.3-3. Throwaway spike `spikes/s0.3b-online-spike/` (outside the workspace): E1 emits the shared corpus + reference head; E2/E3 implement independent from-spec kernels with their OWN canonical serializers; official SDKs measure M-S1-7; E5b/E5c splits measure C12 transport + cross-ecosystem hash-equality. Repeat-scored **N=5**; extended sheet appended to `docs/build/reports/S0.3-measurement-sheet.md` (S0.3b §1–§5) and the ADR-0050 amendment log (candidate ids only, CC4). **Revalidation (feeds GATE-G1): the winning decision E5a HOLDS/re-confirmed; trigger 5 ARMS on the non-winning candidate E2** (C5 4→1, C7 2→5 outside ±1; E3 within band) — routed to GATE-G1's phase-synthesis for the steps-5–7 re-run, which does NOT move the winner (E2's kernel scores don't affect E5a where E1 is the kernel and E2 the per-run/IO-bound lab; ADR-0050 §4 kernel-family robustness 0.979). **Verify:** `test-gates.sh` exit 0 (G1 E1=E2=E3 head `f0b9620d…` byte-identical + live negative test; M-S1-7 MCP echo + ACP session verified E2/E3; M-S2-7 hash-equality 100% E5b/E5c); headline medians — G1 head identical, M-S1-7 MCP E2 0.71 ms/E3 0.15 ms, ACP E2 220 ms/E3 54 ms, E5b overhead 1.60%/E5c 4.46%; workspace 84 tests/16 suites green (spikes excluded), fmt clean. **Deferrals:** closed DF-S0.3-1; DF-S0.3-3 machine cells DONE with the **R2 human-signature residual OPEN**; DF-S0.3-2 (polyglot CI + cross-ecosystem serialization COST) NOT pulled forward (Stage 3). **Deviations:** single-executor (R1) with the objective G1 byte-identity gate as compensating control (ADR-0225); committed-but-throwaway trees (ADR-0225 extends ADR-0223/0220). No harness claim at Stage 0 (R5). chainTip → svitali/harnessharness-s0.3b · next → GATE-G1 (STOP gate: operator re-reads the extended sheet + verdict; owns the armed-trigger steps-5–7 re-run before Stage 1).
+
+- 2026-09-15 · **inserted** S0.3b (`003a_S0.3b__cross-candidate-online-spike.md`, row 3a) between S0.3 and GATE-G1 — operator dispositioned GATE-G1 as PENDING and authorized an ONLINE spike budget to close the machine cells of DF-S0.3-1 (MCP/ACP official-SDK round-trip + cross-candidate G1 byte-identity) and DF-S0.3-3 (E2/E3 cross-candidate scoring + E5b/E5c). Network egress + candidate toolchains (E2/E3) available; no external model spend. R2 human cross-camp signature stays an operator residual; DF-S0.3-2 (Stage-3 polyglot CI) not pulled forward. GATE-G1 readout `docs/build/readouts/GATE-G1.md` reading 1 written; gate STOPPED until S0.3b lands. nextTicket → S0.3b.
 
 - 2026-09-11 · Ledger created by decompose-spec from `spec/CANONICAL_SPEC.md` (v1.0-rc2, PASS 7/7); 100 implement-spec tickets + 3 milestone gates + 2 human prerequisites + GATE-ACCEPT (106 chain rows total); dispatch=subagent; plan is revisable at run time.
 - 2026-09-15 · SETUP done — worktree `MetaHarness-harnessharness` created off 85a3960 on branch `svitali/harnessharness` (operator-chosen prefix, not `whoami`); params resolved (dispatch=subagent, autonomy=manual, mergePolicy=OPERATOR); seed already committed at base (85a3960) so no separate first commit; baseline trivially green (no build system exists pre-S0.1); benchmarkSet left PENDING_CREATE (Stage-3 reference suite, not creatable at Stage 0); check-build-memory exit 0. nextTicket=001_S0.1__toolchain-codegen.md.

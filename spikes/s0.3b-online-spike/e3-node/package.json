@@ -1,0 +1,12 @@
+{
+  "name": "s03b-e3",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway S0.3b E3 kernel + official MCP/ACP SDK round-trip (ADR-0050 R1-R6).",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@zed-industries/agent-client-protocol": "^0.4.5",
+    "zod": "^4.6.5"
+  }
+}

@@ -14,3 +14,5 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0222](ADR-0222-s0.2-stage0-exit-class-mapping.md) | S0.2 Stage-0 exit-class mapping and interim exit-code numerals | S0.2 | Accepted |
 | [ADR-0223](ADR-0223-s0.3-spike-method-and-deviations.md) | S0.3 Stage-0 spike method — offline/hermetic scope, matched E1↔E1 crossing, CPU-vs-durable fan-out, and committed-throwaway trees | S0.3 | Accepted |
 | [ADR-0224](ADR-0224-s0.3-stage0-revalidation-verdict.md) | S0.3 Stage-0 revalidation verdict — the ADR-0009/ADR-0050 ecosystem decision holds; no trigger fires (feeds GATE-G1) | S0.3 | Accepted |
+| [ADR-0225](ADR-0225-s0.3b-online-spike-method-and-candidate-toolchain-bindings.md) | S0.3b online cross-candidate spike — method, matched-budget cross-candidate measurement, single-executor deviation, and the E2/E3 candidate→toolchain bindings (CC4) | S0.3b | Accepted |
+| [ADR-0226](ADR-0226-s0.3b-cross-candidate-revalidation-disposition.md) | S0.3b cross-candidate revalidation disposition — winning decision holds; trigger 5 ARMS on the non-winning candidate E2, routed to GATE-G1 (does not move the decision) | S0.3b | Accepted |

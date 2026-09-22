@@ -39,6 +39,7 @@ subsystem seam. Ordering follows the §4.4 topological order (`tier_violations=[
 | 1 | `001_S0.1__toolchain-codegen.md` | Stage 0 | ticket | Bind the E1 kernel/helper ecosystem and stand up the repository layout, CI, and the sche… | — |
 | 2 | `002_S0.2__hand-authored-baseline.md` | Stage 0 | ticket | A hand-authored `react/minimal` definition runs one headless coding task end-to-end thro… | — |
 | 3 | `003_S0.3__stage0-spikes.md` | Stage 0 | ticket | Run the S1/S2 measurement spikes — fan-out/footprint (C5/C7) and boundary-crossing cost… | — |
+| 3a | `003a_S0.3b__cross-candidate-online-spike.md` | Stage 0 | ticket | Cross-candidate / MCP-ACP **online** measurement spike — closes the machine cells of DF-S0.3-1/-3 (inserted 2026-09-15) | — |
 | 4 | `004_GATE-G1__stage0-ecosystem-revalidation.md` | Stage 0 | gate | Stage-0 acceptance & ecosystem-decision revalidation | STOP |
 | 5 | `005_S1.1__ontology-formal-model.md` | Stage 1 | ticket | Land the ontology and formal model: the seven-plane home-plane rule, the policy-stack fo… | — |
 | 6 | `006_S1.2__identity-versioning.md` | Stage 1 | ticket | Land the identity/versioning/artifact-identity schemas in the single schema source: `idp… | — |
@@ -328,3 +329,4 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
 
 ## Plan extensions
 (append-only: inserts `NNa_…`, splits `<ID>a`/`<ID>b` with the original marked superseded-by-split, rounds)
+- 2026-09-15 · **inserted** `003a_S0.3b__cross-candidate-online-spike.md` (id `S0.3b`, row `3a`) between S0.3 and GATE-G1. Reason: the operator's GATE-G1 disposition authorized an **online** spike budget to close the machine-achievable cells of DF-S0.3-1 (MCP/ACP official SDK round-trip + cross-candidate G1 byte-identity) and DF-S0.3-3 (E2/E3 cross-candidate scoring + E5b/E5c splits). The R2 human cross-camp reviewer signature and the Stage-3 polyglot CI (DF-S0.3-2) are explicitly NOT pulled into this ticket. GATE-G1 stays PENDING until S0.3b lands and the operator re-reads the extended sheet.

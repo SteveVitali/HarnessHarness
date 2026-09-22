@@ -1,0 +1,12 @@
+# Vendored SDKs / build artifacts / generated data — regenerable, not committed (throwaway spike).
+# The official MCP/ACP SDKs are re-installed per the README; the shared corpus is re-emitted by the
+# E1 reference binary; distributions.json is re-produced by run-sheet.py. The pinned reference.json
+# (E1 head + corpus sha) IS committed so any regeneration is verified.
+e2-python/.venv/
+e3-node/node_modules/
+e3-node/package-lock.json
+e1-ref/target/
+corpus/shared-corpus.json
+distributions.json
+__pycache__/
+*.pyc
