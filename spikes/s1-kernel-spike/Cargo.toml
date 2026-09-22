@@ -1,0 +1,30 @@
+# Throwaway S1 kernel-slice spike (ADR-0050 / §10.6 rules R1–R6; ticket S0.3). Standalone (its
+# own [workspace] so it is NOT a member of the E1 kernel workspace): it links only the pure-std
+# `hh-wire` transport primitives (canonical JSON, SHA-256, JSON-RPC framing) so the whole spike
+# runs offline/hermetic. Output is the measurement sheet (M-S1-1…9, gates G1–G4); the code is
+# committed-but-throwaway and deletable at the Stage-0 boundary (ADR-0223, extending ADR-0220).
+[package]
+name = "s1-kernel-spike"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "s1-kernel-spike"
+path = "src/main.rs"
+
+[[bin]]
+name = "s1-helper"
+path = "src/bin/s1-helper.rs"
+
+[lib]
+name = "s1_kernel_spike"
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../../crates/hh-wire" }
+
+[profile.release]
+opt-level = 3
+
+[workspace]

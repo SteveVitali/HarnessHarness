@@ -1,61 +1,144 @@
-//! S2 boundary-crossing spike — the S0.1 first measurement of AC-R-2.11.4-9.
+//! S2 boundary-slice spike (throwaway; ADR-0050 R1–R6; §10.6 S2 slice; `l1-spike-spec.md` §4).
 //!
-//! Drives `hh-kernel serve` over stdio (binding (b)) with the *generated* client and measures
-//! per-crossing overhead of the `hello` round trip, plus the codegen round-trip wall time
-//! (§10.6 M-S2-1 / M-S2-3). Durable-frame delivery latency (p50/p95) and ephemeral-drop rate
-//! are `n/a` at Stage 0 — there is no event stream yet (Groups R land at Stage 1); the S0.1
-//! DEFERRALS row tracks completing them.
-//!
-//! Args: <kernel-bin> <codegen-bin>. Env: SPIKE_N (crossings, default 200).
-//! Output: `key value` lines consumed by `scripts/spike-s2-boundary.sh`.
+//! Drives the persistent `hh-kernel serve` over stdio (binding (b), JSON-RPC 2.0) with the
+//! *generated* client and reports the C12 measurements M-S2-1…7 for the **winning split's
+//! crossing mechanism**. The split (`E5a`) is E1 kernel + E2 lab; offline/hermetic (operator
+//! gate) the E2 lab is not runnable, so the crossing is measured **matched E1↔E1** (both arms E1
+//! — CC9 matched-budget) which isolates the *transport* cost. The polyglot-specific components
+//! (M-S2-5 two-toolchain CI; the cross-ecosystem serialization multiplier) need the E2 lab and
+//! are DEFERRED (DF-S0.3-2). Args: `<kernel-bin> <codegen-bin>`. Env: `SPIKE_N` (crossings,
+//! default 200). Output: `key value` lines consumed by `scripts/spike-s0.3-measurement-sheet.sh`.
 
 use hh_embed_client_generated as client;
-use std::io::BufReader;
-use std::process::{Command, Stdio};
+use hh_wire::json::Json;
+use hh_wire::sha256_hex;
+use std::io::{BufRead, BufReader, Write};
+use std::process::{Child, Command, Stdio};
 use std::time::Instant;
+
+const K_PER_RUN: usize = 4; // admissible per-run pattern (ADR-0045 §9): handle + cursor + metric + append
+const N_RUNS: usize = 50;
+
+struct Serve {
+    child: Child,
+}
+
+impl Serve {
+    fn spawn(kernel: &str) -> Serve {
+        let child = Command::new(kernel)
+            .arg("serve")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn kernel serve");
+        Serve { child }
+    }
+    fn pipes(
+        &mut self,
+    ) -> (
+        BufReader<&mut std::process::ChildStdout>,
+        &mut std::process::ChildStdin,
+    ) {
+        // Safety: stdin/stdout were set to piped at spawn.
+        let stdout = self.child.stdout.as_mut().expect("stdout");
+        let stdin = self.child.stdin.as_mut().expect("stdin");
+        (BufReader::new(stdout), stdin)
+    }
+    fn kill(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let kernel = args.next().unwrap_or_else(|| "target/release/hh-kernel".to_string());
-    let codegen = args.next().unwrap_or_else(|| "target/release/hh-codegen".to_string());
+    let kernel = args
+        .next()
+        .unwrap_or_else(|| "target/release/hh-kernel".to_string());
+    let codegen = args
+        .next()
+        .unwrap_or_else(|| "target/release/hh-codegen".to_string());
     let n: usize = std::env::var("SPIKE_N")
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(200);
 
-    // One persistent serve process; N hello crossings over the same stdio pipe.
-    let mut child = Command::new(&kernel)
-        .arg("serve")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .expect("spawn kernel serve");
-    let mut stdin = child.stdin.take().unwrap();
-    let mut reader = BufReader::new(child.stdout.take().unwrap());
-
-    // Warm up (exclude first-call/spawn effects from the crossing measurement).
+    // ---- M-S2-2: per-sample crossing overhead (the *disallowed* hot path) --------------------
+    // Median round-trip of one crossing over the persistent serve process.
+    let mut serve = Serve::spawn(&kernel);
+    let (mut reader, mut stdin) = serve.pipes();
     let warm = client::negotiate(&mut reader, &mut stdin, "spike", "0").expect("warmup hello");
     assert_eq!(warm.schema_hash, client::EXPECTED_SCHEMA_HASH);
-
     let mut hash_ok = 0usize;
     let mut samples = Vec::with_capacity(n);
     for _ in 0..n {
         let t = Instant::now();
         let ci = client::negotiate(&mut reader, &mut stdin, "spike", "0").expect("hello crossing");
-        samples.push(t.elapsed().as_micros() as u64);
-        if ci.contract_major == client::CONTRACT_MAJOR && ci.schema_hash == client::EXPECTED_SCHEMA_HASH {
-            hash_ok += 1;
+        samples.push(t.elapsed().as_micros());
+        if ci.contract_major == client::CONTRACT_MAJOR
+            && ci.schema_hash == client::EXPECTED_SCHEMA_HASH
+        {
+            hash_ok += 1; // M-S2-7: every far-side identity re-verified
         }
     }
-    drop(stdin);
-    let _ = child.wait();
-
     samples.sort_unstable();
     let pct = |p: usize| samples[((n * p) / 100).min(n - 1)];
+    println!("m_s2_2_per_sample_overhead_us_min {}", samples[0]);
+    println!("m_s2_2_per_sample_overhead_us_median {}", pct(50));
+    println!("m_s2_2_per_sample_overhead_us_p95 {}", pct(95));
+    println!("m_s2_2_per_sample_overhead_us_max {}", samples[n - 1]);
 
-    // Codegen round-trip wall time (M-S2-3): one full export → codegen against a temp root.
-    let tmp = std::env::temp_dir().join(format!("hh-codegen-spike-{}", std::process::id()));
+    // ---- M-S2-1: per-run crossing overhead — split (over stdio) vs native (in-process) --------
+    // Matched E1↔E1: the split arm drives K_PER_RUN crossings/run over the pipe; the native arm
+    // does the identical serialize+parse work in-process (no subprocess). Overhead = the pure
+    // transport/subprocess crossing cost. Transport component only (polyglot penalty deferred).
+    let total_crossings = K_PER_RUN * N_RUNS;
+    let t = Instant::now();
+    for _ in 0..total_crossings {
+        let _ = client::negotiate(&mut reader, &mut stdin, "spike", "0").expect("split crossing");
+    }
+    let split_us = t.elapsed().as_micros();
+    drop(reader);
+    let native_us = native_roundtrips(total_crossings);
+    let overhead = split_us.saturating_sub(native_us);
+    println!("m_s2_1_split_wall_us {split_us}");
+    println!("m_s2_1_native_wall_us {native_us}");
+    println!("m_s2_1_per_run_overhead_us {}", overhead / N_RUNS as u128);
+    println!("m_s2_1_crossings_per_run {K_PER_RUN}");
+
+    // ---- M-S2-3: serialization + validation per event on the far side (16 KiB, 64 KiB) --------
+    println!(
+        "m_s2_3_serialize_validate_16k_us {:.3}",
+        serialize_validate_us(16 * 1024)
+    );
+    println!(
+        "m_s2_3_serialize_validate_64k_us {:.3}",
+        serialize_validate_us(64 * 1024)
+    );
+
+    // ---- M-S2-7: hash-equality of every far-side event (100 % required) -----------------------
+    println!("m_s2_7_hash_equality_pct {}", (hash_ok * 100) / n);
+
+    // Close the first serve process (stdin is a borrow; kill the throwaway peer to release it).
+    let _ = stdin;
+    serve.kill();
+
+    // ---- M-S2-6: version-mismatch refusal + resume after a killed peer (pass/fail) ------------
+    let refusal = version_mismatch_refused(&kernel);
+    let resume = resume_after_killed_peer(&kernel);
+    println!(
+        "m_s2_6_version_refusal {}",
+        if refusal { "pass" } else { "fail" }
+    );
+    println!(
+        "m_s2_6_resume_after_kill {}",
+        if resume { "pass" } else { "fail" }
+    );
+    println!("m_s2_6 {}", if refusal && resume { "pass" } else { "fail" });
+
+    // ---- M-S2-4: codegen round-trip (export → codegen against a temp root) --------------------
+    let tmp = std::env::temp_dir().join(format!("hh-codegen-s0.3-{}", std::process::id()));
     let _ = std::fs::create_dir_all(&tmp);
     let t = Instant::now();
     let status = Command::new(&codegen)
@@ -67,16 +150,155 @@ fn main() {
     let codegen_ms = t.elapsed().as_millis();
     let _ = std::fs::remove_dir_all(&tmp);
     assert!(status.success(), "codegen round trip failed");
+    println!("m_s2_4_codegen_round_trip_ms {codegen_ms}");
 
-    println!("crossings {n}");
-    println!("per_crossing_overhead_us_min {}", samples[0]);
-    println!("per_crossing_overhead_us_median {}", pct(50));
-    println!("per_crossing_overhead_us_p95 {}", pct(95));
-    println!("per_crossing_overhead_us_max {}", samples[n - 1]);
-    println!("codegen_round_trip_ms {codegen_ms}");
-    println!("hash_equality_pct {}", (hash_ok * 100) / n);
-    // Stage-0: no event stream yet.
-    println!("durable_frame_latency_p50_us n/a{{stage_0_no_stream}}");
-    println!("durable_frame_latency_p95_us n/a{{stage_0_no_stream}}");
-    println!("ephemeral_drop_rate n/a{{stage_0_no_stream}}");
+    // ---- M-S2-5: two-toolchain CI — offline only the E1 toolchain is present → deferred -------
+    println!("m_s2_5_two_toolchain_ci n/a{{offline_single_toolchain}}");
+
+    // ---- DF-S0.1-1 durable-frame / ephemeral columns: measured by the S1 spike's M-S1-9 -------
+    // (durable-frame delivery latency p50/p95 = the S1 subscribe tail lag; ephemeral-drop = 0).
+    println!("durable_frame_note see_s1_m_s1_9_and_ephemeral_drop_0");
+}
+
+/// The native (in-process) arm: `count` full serialize→parse round-trips of the `hello`
+/// request and a canned identity response, with NO subprocess. Both directions serialize +
+/// parse, so `split − native` is the pure crossing (subprocess + pipe + scheduling) cost.
+fn native_roundtrips(count: usize) -> u128 {
+    let params = client::HelloParams {
+        client_name: "spike".into(),
+        client_version: "0".into(),
+        asserted_contract_major: client::CONTRACT_MAJOR,
+        asserted_schema_hash: Some(client::EXPECTED_SCHEMA_HASH.to_string()),
+    };
+    let identity = client::ContractIdentity {
+        contract_major: client::CONTRACT_MAJOR,
+        schema_hash: client::EXPECTED_SCHEMA_HASH.to_string(),
+        kernel_version_id: "0.0.1".into(),
+    };
+    let resp = Json::obj([
+        ("jsonrpc", Json::str("2.0")),
+        ("id", Json::Int(1)),
+        (
+            "result",
+            Json::obj([("contract_identity", identity.to_json())]),
+        ),
+    ]);
+    let t = Instant::now();
+    let mut sink = 0usize;
+    for _ in 0..count {
+        // Client → kernel: build + canonicalize the request, parse it (far-side receive).
+        let req = Json::obj([
+            ("jsonrpc", Json::str("2.0")),
+            ("id", Json::Int(1)),
+            ("method", Json::str("hello")),
+            ("params", params.to_json()),
+        ]);
+        let req_line = req.to_canonical_string();
+        let parsed_req = hh_wire::parse(&req_line).unwrap();
+        sink += parsed_req
+            .get("method")
+            .and_then(Json::as_str)
+            .map(str::len)
+            .unwrap_or(0);
+        // Kernel → client: canonicalize the response, parse it, re-verify identity.
+        let resp_line = resp.to_canonical_string();
+        let parsed = hh_wire::parse(&resp_line).unwrap();
+        let ci = client::ContractIdentity::from_json(
+            parsed
+                .get("result")
+                .and_then(|r| r.get("contract_identity"))
+                .unwrap(),
+        )
+        .unwrap();
+        sink += (ci.schema_hash == client::EXPECTED_SCHEMA_HASH) as usize;
+    }
+    std::hint::black_box(sink);
+    t.elapsed().as_micros()
+}
+
+/// M-S2-3: cost (µs) of the far side receiving one ~`size`-byte event: canonical-form parse +
+/// hash verify (re-canonicalize + SHA-256, the I4/CF-058 check). Median of repeats.
+fn serialize_validate_us(size: usize) -> f64 {
+    let body = "x".repeat(size);
+    let event = Json::obj([
+        ("kind", Json::str("work.step")),
+        ("seq", Json::Int(1)),
+        ("body", Json::str(body)),
+    ]);
+    let line = event.to_canonical_string();
+    let reps = 1000u32;
+    let t = Instant::now();
+    let mut sink = 0usize;
+    for _ in 0..reps {
+        let parsed = hh_wire::parse(&line).unwrap();
+        let recanon = parsed.to_canonical_string();
+        let h = sha256_hex(recanon.as_bytes());
+        sink += h.len();
+    }
+    std::hint::black_box(sink);
+    t.elapsed().as_micros() as f64 / reps as f64
+}
+
+/// M-S2-6a: a `hello` asserting an unsupported `contract_major` is refused with a typed error
+/// (the closed error sum; ADR-0178 D2), never a silent fallback.
+fn version_mismatch_refused(kernel: &str) -> bool {
+    let mut serve = Serve::spawn(kernel);
+    let (mut reader, stdin) = serve.pipes();
+    // Raw hello with a wrong major.
+    let req = Json::obj([
+        ("jsonrpc", Json::str("2.0")),
+        ("id", Json::Int(1)),
+        ("method", Json::str("hello")),
+        (
+            "params",
+            Json::obj([
+                ("client_name", Json::str("spike")),
+                ("client_version", Json::str("0")),
+                ("asserted_contract_major", Json::Int(42)),
+            ]),
+        ),
+    ]);
+    stdin
+        .write_all(format!("{}\n", req.to_canonical_string()).as_bytes())
+        .unwrap();
+    stdin.flush().unwrap();
+    let mut line = String::new();
+    reader.read_line(&mut line).unwrap();
+    let resp = hh_wire::parse(line.trim()).unwrap();
+    let refused = resp
+        .get("error")
+        .and_then(|e| e.get("data"))
+        .and_then(|d| d.get("kind"))
+        .and_then(Json::as_str)
+        == Some("ContractMajorUnsupported");
+    drop(reader);
+    let _ = stdin;
+    serve.kill();
+    refused
+}
+
+/// M-S2-6b: after the peer is killed, a fresh peer re-handshakes successfully — the Stage-0 form
+/// of `open_session(resume=…)` after a killed peer (there is no session state at Stage 0; the
+/// full resume semantics land at Stage 1 — noted). The boundary recovers, never wedges.
+fn resume_after_killed_peer(kernel: &str) -> bool {
+    // First peer: hello ok, then kill it mid-connection.
+    let mut serve = Serve::spawn(kernel);
+    {
+        let (mut reader, mut stdin) = serve.pipes();
+        let ok = client::negotiate(&mut reader, &mut stdin, "spike", "0").is_ok();
+        if !ok {
+            serve.kill();
+            return false;
+        }
+    }
+    serve.kill(); // peer dies
+
+    // Fresh peer recovers the boundary: hello negotiates again.
+    let mut serve2 = Serve::spawn(kernel);
+    let recovered = {
+        let (mut reader, mut stdin) = serve2.pipes();
+        client::negotiate(&mut reader, &mut stdin, "spike", "0").is_ok()
+    };
+    serve2.kill();
+    recovered
 }
