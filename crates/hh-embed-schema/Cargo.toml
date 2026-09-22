@@ -11,3 +11,6 @@ path = "src/lib.rs"
 
 [dependencies]
 hh-wire = { path = "../hh-wire" }
+# The idp/1 identity model (S1.2). `schema_hash` is a ContentAddress over the canonical schema
+# export in idp/1 form (§7.4; ADR-0036) — the one content-addressing scheme (CC1); closes DF-S0.1-2.
+hh-identity = { path = "../hh-identity" }

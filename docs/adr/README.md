@@ -18,3 +18,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0226](ADR-0226-s0.3b-cross-candidate-revalidation-disposition.md) | S0.3b cross-candidate revalidation disposition — winning decision holds; trigger 5 ARMS on the non-winning candidate E2, routed to GATE-G1 (does not move the decision) | S0.3b | Accepted |
 | [ADR-0227](ADR-0227-s1.1-ontology-crate-and-executable-acceptance.md) | S1.1 lands the ontology and formal model as the persistent `hh-ontology` crate, with §2.9.2 acceptance made executable | S1.1 | Accepted |
 | [ADR-0228](ADR-0228-s1.1-per-kind-entity-classify-home-delegated-to-s1.4.md) | S1.1 delegates the per-kind IR-entity `classify_home` values to S1.4/§3.1.3 under the ADR-0216 interim ruling | S1.1 | Accepted |
+| [ADR-0229](ADR-0229-s1.2-schema-hash-idp1-content-address.md) | S1.2 migrates `ContractIdentity.schema_hash` to the one `idp/1` `ContentAddress` scheme (closes DF-S0.1-2) | S1.2 | Accepted |

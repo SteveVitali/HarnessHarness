@@ -13,6 +13,12 @@ members = [
     # symbol registry, κ + both configuration ids, participant classes, the compliance chain
     # schema, the compatibility-surface shape and the §2.9.2 acceptance checks.
     "crates/hh-ontology",
+    # The C0/Stage-1 identity/versioning/artifact-identity model (spec §8.3, R-2.12.1; ticket
+    # S1.2). A PERSISTENT workspace member: idp/1, ContentAddress, VersionedRef, the five
+    # identity kinds, address/identify/verify over the ONE canonicalizer (CC1 anchors here),
+    # configuration ids, single-namespace publish/resolve, supersede/revoke, StaleIndex, the
+    # sameness ladder and reproducibility levels. The single schema source for identity (CC7).
+    "crates/hh-identity",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

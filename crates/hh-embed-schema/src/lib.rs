@@ -13,7 +13,6 @@
 //! (ADR-0178 D3 / CC8); they are out of scope for S0.1.
 
 use hh_wire::json::Json;
-use hh_wire::sha256::sha256_hex;
 
 /// The contract major version. A `contract_major` bump is an ADR (ADR-0178 D3); additive
 /// evolution within a major never bumps it (CC8).
@@ -333,11 +332,17 @@ pub fn canonical_schema_bytes() -> String {
     export_schema().to_canonical_string()
 }
 
-/// The content address of the canonical schema export: `sha256:<hex>`. This is the
-/// `schema_hash` component of every [`ContractIdentity`]. (Stage-0 content address; migrates
-/// to `idp/1`/ADR-0036 at S1.2 — see the S0.1 DEFERRALS row.)
+/// The content address of the canonical schema export: an `idp/1` [`hh_identity::ContentAddress`]
+/// over the canonical schema bytes, rendered `sha256:<hex>` (§7.4; ADR-0036). This is the
+/// `schema_hash` component of every [`ContractIdentity`]. Since S1.2 (DF-S0.1-2 closed) it is
+/// derived from `idp/1` — the *one* content-addressing scheme in the tree (CC1); the Stage-0
+/// interim (raw `sha256` over the same bytes, ADR-0219) is superseded, not coexisting.
 pub fn schema_hash() -> String {
-    format!("sha256:{}", sha256_hex(canonical_schema_bytes().as_bytes()))
+    hh_identity::address(
+        canonical_schema_bytes().as_bytes(),
+        "application/schema+json",
+    )
+    .id()
 }
 
 /// Negotiate a client's assertion against the kernel identity. `Ok(())` when compatible;
@@ -373,15 +378,29 @@ mod tests {
     }
 
     #[test]
-    fn schema_hash_is_stable_and_content_addressed() {
-        // Deterministic: two calls agree, and the hash is over the canonical bytes.
+    fn schema_hash_is_the_idp1_content_address_of_the_schema() {
+        // Deterministic and content-addressed under idp/1 (CC1: one scheme). Two calls agree, the
+        // id is `<algorithm>:<hex>`, and it equals the idp/1 ContentAddress of the canonical bytes.
         assert_eq!(schema_hash(), schema_hash());
         assert!(schema_hash().starts_with("sha256:"));
-        let expect = format!(
+        let expect = hh_identity::address(
+            canonical_schema_bytes().as_bytes(),
+            "application/schema+json",
+        )
+        .id();
+        assert_eq!(schema_hash(), expect);
+        // Parses as a full, self-describing idp/1 id (N1/N2).
+        assert!(hh_identity::parse_id(&schema_hash()).is_ok());
+        // Superseded, not coexisting: the Stage-0 raw-sha256 form is a *different* value now.
+        let stage0 = format!(
             "sha256:{}",
             hh_wire::sha256_hex(canonical_schema_bytes().as_bytes())
         );
-        assert_eq!(schema_hash(), expect);
+        assert_ne!(
+            schema_hash(),
+            stage0,
+            "idp/1 domain-tagged address must differ from the raw sha256 interim"
+        );
     }
 
     #[test]

@@ -1,0 +1,13 @@
+[package]
+name = "hh-identity"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 identity, versioning & artifact-identity model (spec §8.3, R-2.12.1): the idp/1 identity profile, ContentAddress, VersionedRef and the five identity kinds, address/identify/verify over the single canonicalizer (CC1), configuration ids, single-namespace publish/resolve, supersede/revoke, RevocationRecord, StaleIndex, the sameness ladder L0-L4, reproducibility levels R0-R3, InstrumentRecord and the results/audit row keys."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
