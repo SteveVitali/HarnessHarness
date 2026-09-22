@@ -1,0 +1,6 @@
+# Pin the E1 toolchain for reproducible builds and a deterministic CI drift check (CC7).
+# Stage 0 uses only the standard library; the channel is pinned so schema exports and content
+# addresses are byte-stable across machines.
+[toolchain]
+channel = "1.94"
+components = ["rustfmt"]

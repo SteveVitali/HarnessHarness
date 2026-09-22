@@ -1,0 +1,10 @@
+[package]
+name = "hh-wire"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Transport primitives for the hh-embed/1 boundary: canonical JSON, SHA-256 content addressing, newline-delimited JSON-RPC 2.0 framing. No verbs or fields — a binding may add transport facts but never a verb (ADR-0179 D2)."
+
+[lib]
+path = "src/lib.rs"

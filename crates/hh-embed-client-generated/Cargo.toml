@@ -1,0 +1,16 @@
+[package]
+name = "hh-embed-client-generated"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The generated, drift-checked hh-embed/1 client (ADR-0179: a generated client, no runtime logic). src/generated.rs is emitted by hh-codegen from the single schema source; the CI drift check fails the build if it is stale."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+
+[dev-dependencies]
+hh-embed-schema = { path = "../hh-embed-schema" }

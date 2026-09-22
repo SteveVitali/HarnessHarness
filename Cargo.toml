@@ -1,0 +1,26 @@
+# HarnessHarness — E1 kernel/helper ecosystem workspace (bound at Stage 0 by ADR-0050 (e)).
+# CC4: the spec/contracts name no language; this workspace is the *build* binding of the E1
+# candidate (compiled, memory-safe systems ecosystem) and is the one place, alongside the
+# build ADRs, that names it concretely. Hermetic: pure standard library, no external crates,
+# so the toolchain, CI and the Stage-0 boundary spike run offline and reproducibly.
+[workspace]
+resolver = "2"
+members = [
+    "crates/hh-wire",
+    "crates/hh-embed-schema",
+    "crates/hh-kernel",
+    "crates/hh-codegen",
+    "crates/hh-embed-client-generated",
+]
+# Throwaway spike trees (ADR-0050 R1–R6; doc 3 §11.0) live outside the workspace: they build
+# against the persistent kernel but are never a build dependency of it.
+exclude = ["spikes"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.94"
+license = "Apache-2.0"
+
+[profile.release]
+opt-level = 3

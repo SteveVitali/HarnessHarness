@@ -1,0 +1,50 @@
+# HarnessHarness CI — the Stage-0 output that persists (ADR-0050 (e)).
+# Builds/tests the E1 workspace and enforces the schema-drift check (CC7: schema drift is a
+# build failure). The toolchain is pinned by rust-toolchain.toml; the workspace is pure
+# standard library, so no crates are fetched.
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-drift:
+    name: build · test · fmt · drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml pins the channel + rustfmt; this action honors it.
+      - name: Install pinned toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.94"
+          components: rustfmt
+
+      - name: Format check
+        run: cargo fmt --all --check
+
+      - name: Build
+        run: cargo build --workspace --all-targets
+
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Schema drift check (CC7)
+        run: bash scripts/check-drift.sh
+
+      - name: S2 boundary spike (AC-R-2.11.4-9 first measurement, non-gating)
+        run: bash scripts/spike-s2-boundary.sh
+
+      - name: Upload boundary measurement sheet
+        uses: actions/upload-artifact@v4
+        with:
+          name: s0.1-boundary-spike
+          path: docs/build/reports/S0.1-boundary-spike.md
+          if-no-files-found: warn
