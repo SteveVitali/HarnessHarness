@@ -28,6 +28,8 @@
 pub enum RecordKind {
     /// An HIR node (has a semantic projection).
     HirNode,
+    /// An HIR edge (has a semantic projection — `{kind, from, to, fields}`; S1.4).
+    HirEdge,
     /// An HIR `Text` leaf (distinct domain from a blob with equal bytes — AC-2).
     HirTextLeaf,
     /// A sealed Harness Definition (pinned form — N5; has a semantic projection).
@@ -76,6 +78,7 @@ impl RecordKind {
     pub fn domain_tag(self) -> &'static str {
         match self {
             RecordKind::HirNode => "hir.node",
+            RecordKind::HirEdge => "hir.edge",
             RecordKind::HirTextLeaf => "hir.text",
             RecordKind::SealedDefinition => "hir.definition",
             RecordKind::VariantRecord => "variant",
@@ -105,6 +108,7 @@ impl RecordKind {
         matches!(
             self,
             RecordKind::HirNode
+                | RecordKind::HirEdge
                 | RecordKind::HirTextLeaf
                 | RecordKind::SealedDefinition
                 | RecordKind::VariantRecord
@@ -169,6 +173,7 @@ mod tests {
         // N3: no two record kinds share a domain tag, so equal bytes never collide across kinds.
         let kinds = [
             RecordKind::HirNode,
+            RecordKind::HirEdge,
             RecordKind::HirTextLeaf,
             RecordKind::SealedDefinition,
             RecordKind::VariantRecord,

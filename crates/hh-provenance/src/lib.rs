@@ -24,8 +24,8 @@
 //! # Modules
 //!
 //! - [`authority`] — the seven classes, `PersistenceScope`, `TaintTag`, `ReaderSet`.
-//! - [`origin`] — `Origin`, `default_authority` (the minting table), `default_text_authority`
-//!   (R-TEXT).
+//! - [`origin`] — `Origin`, `default_authority`/`default_authority_in` (the minting table
+//!   with the sealed-definition [`origin::MintingContext`]), `default_text_authority` (R-TEXT).
 //! - [`label`] — `Label` join/meet/leq, P6 `check_label_transition`, `context_label` +
 //!   `effective_authority` (P3), the `HirDiff.authority_delta` gate (P6).
 //! - [`record`] — `ProvenanceRecord`, `Derivation`, `Attestation`, `verify_attestation`,
@@ -72,7 +72,10 @@ pub use monitor::{
     check_monotonic_label, check_no_delegate_above, check_operand_in_envelope, MonitorError,
     Operand, PermissionEnvelope,
 };
-pub use origin::{default_authority, default_text_authority, HumanRole, Origin};
+pub use origin::{
+    default_authority, default_authority_in, default_text_authority, HumanRole, MintingContext,
+    Origin,
+};
 pub use record::{
     require_provenance, verify_attestation, Attestation, AttestationAnchor, AttestationKind,
     Derivation, DerivationKind, ProvenanceError, ProvenanceRecord, TrustedAnchors,

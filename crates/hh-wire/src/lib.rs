@@ -6,6 +6,7 @@
 //! `hh-embed/1` verb, field or error variant — those live in `hh-embed-schema`, the single
 //! schema source (CC7).
 
+pub mod canonical;
 pub mod json;
 pub mod jsonrpc;
 pub mod sha256;
