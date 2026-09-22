@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::eval::OutcomeClass;
+use hh_ontology::control::OutcomeClass;
 use hh_wire::json::Json;
 
 use hh_lab::experiment::{CellPlan, ExperimentSpec, RunPlan};
@@ -26,10 +26,13 @@ pub mod class {
     pub const CLAIM_EXPIRED: &str = "measurement.experiment.claim_expired";
     /// `measurement.experiment.run_launched` — the engine's launch record.
     pub const RUN_LAUNCHED: &str = "measurement.experiment.run_launched";
+    /// `measurement.experiment.bound` — the subject run's own binding stamp
+    /// (`{experiment_id, arm_id, configuration_id, cell_id, replicate_index,
+    /// attempt_no, budget_id}`; §6.3 `launch` step 4 — its chain is the proof
+    /// the experiment run's `run_bound` mirror cites).
+    pub const BOUND: &str = "measurement.experiment.bound";
     /// `measurement.experiment.run_bound` — stamped on the experiment run
-    /// (the mirror, `{run_id, cell_id, …, subject_head}`) **and** on the
-    /// subject run (the full binding row `{experiment_id, arm_id,
-    /// configuration_id, cell_id, replicate_index, attempt_no, budget_id}`).
+    /// (the mirror, `{run_id, cell_id, …, subject_head}`).
     pub const RUN_BOUND: &str = "measurement.experiment.run_bound";
     /// `measurement.experiment.run_settled` — the outcome-class settlement.
     pub const RUN_SETTLED: &str = "measurement.experiment.run_settled";
@@ -115,17 +118,18 @@ pub mod exclude_reason {
 
 // ── Payload builders ────────────────────────────────────────────────────────
 
-/// `declared{experiment_id, plan_id, kind, spec, plan, design_ref?,
-/// pre_registration_ref?, match_spec_ref?, suite_manifest_ref,
-/// registry_snapshot_id, arms[], cells[], comparable}` — carries the full
-/// registered spec + plan so the fold needs no second store (S-1).
+/// `declared{experiment_id, plan_id, kind, comparable, suite_manifest_ref,
+/// registry_snapshot_id?, arms[], n_cells, n_run_plans}` — the declaration
+/// row. `experiment_id`/`plan_id` *are* the content addresses of the spec and
+/// `CellPlan` documents (LabDocs); the documents are not inlined — Rule C
+/// bounds audit members at 512 canonical bytes each / the class offload
+/// threshold in total, and a full `CellPlan` dwarfs that at scale. The fold
+/// keeps the refs; the engine reloads the documents from `LabDocs`.
 pub fn declared(spec: &ExperimentSpec, plan: &CellPlan) -> Json {
     let mut m = BTreeMap::new();
     m.insert("experiment_id".into(), Json::str(&spec.experiment_id));
     m.insert("plan_id".into(), Json::str(&plan.plan_id));
     m.insert("kind".into(), Json::str(spec.kind.name()));
-    m.insert("spec".into(), spec.to_json());
-    m.insert("plan".into(), plan.to_json());
     m.insert(
         "comparable".into(),
         Json::Bool(spec.kind.requires_match()),
@@ -141,9 +145,10 @@ pub fn declared(spec: &ExperimentSpec, plan: &CellPlan) -> Json {
         "arms".into(),
         Json::Arr(spec.arms.iter().map(|a| Json::str(&a.arm_id)).collect()),
     );
+    m.insert("n_cells".into(), Json::Int(plan.cells.len() as i64));
     m.insert(
-        "cells".into(),
-        Json::Arr(plan.cells.iter().map(|c| Json::str(&c.cell_id)).collect()),
+        "n_run_plans".into(),
+        Json::Int(plan.run_plans.len() as i64),
     );
     Json::Obj(m)
 }
@@ -291,13 +296,20 @@ pub fn run_excluded(
     Json::Obj(m)
 }
 
-/// `run_replanned{run_plan_id, superseded_run_id, attempt_no}` — the plan
-/// returns to eligible at `attempt_no`.
-pub fn run_replanned(run_plan_id: &str, superseded_run_id: &str, attempt_no: u32) -> Json {
+/// `run_replanned{run_plan_id, superseded_run_id, attempt_no, not_before_ms}`
+/// — the plan returns to eligible at `attempt_no`, no earlier than
+/// `not_before_ms` (the §2.3 re-attempt backoff, recorded as a ledger fact).
+pub fn run_replanned(
+    run_plan_id: &str,
+    superseded_run_id: &str,
+    attempt_no: u32,
+    not_before_ms: u64,
+) -> Json {
     Json::obj([
         ("run_plan_id", Json::str(run_plan_id)),
         ("superseded_run_id", Json::str(superseded_run_id)),
         ("attempt_no", Json::Int(attempt_no as i64)),
+        ("not_before_ms", Json::Int(not_before_ms as i64)),
     ])
 }
 

@@ -93,11 +93,17 @@ pub enum ExpandError {
 /// The *varied* factors — the axes the design varies. `task` and `replicate`
 /// are never varied factors (the suite supplies the task axis;
 /// `replicates_per_cell` the seed axis); `budget`/`model_snapshot`/`harness`/
-/// `environment` factors are.
+/// `environment` factors are. A factor declared with a single level is a
+/// *fixed* axis — `FactorSpec.levels` documents "≥ 2 for a varied factor" —
+/// so single-level declarations (the exemplars' pinned model/environment
+/// axes, ADR-0156 D1/D2) do not count toward a `paired` design's varied
+/// factor and contribute nothing to a product/fraction.
 pub fn varied_factors(spec: &ExperimentSpec) -> Vec<&FactorSpec> {
     spec.factors
         .iter()
-        .filter(|f| !matches!(f.kind, FactorKind::Task | FactorKind::Replicate))
+        .filter(|f| {
+            !matches!(f.kind, FactorKind::Task | FactorKind::Replicate) && f.levels.len() >= 2
+        })
         .collect()
 }
 
@@ -137,24 +143,39 @@ pub fn full_product(spec: &ExperimentSpec) -> Vec<BTreeMap<String, String>> {
     points
 }
 
-/// Whether the declared arms occupy exactly `points` — each point exactly
-/// once, no extras.
+/// Whether the declared arms cover `points` — every design point occupied by
+/// at least one arm, every arm on a declared point, and no point occupied
+/// twice *within one comparand group* (arms partition by `match_spec.mode`:
+/// ADR-0156 D2 / CF-334 admit a companion arm at an already-occupied point
+/// under a different match mode — the `iso_cost` arm of
+/// `lab/control-strategy-family-v1` shares a design point with a
+/// `matched_cap` arm, the OQ-363 run-sharing question; ADR-0213's interim
+/// rule duplicates the subject runs). At least one comparand group must
+/// cover every point exactly once — that group is the primary contrast.
+/// For a single-mode spec this reduces to "each point exactly once".
 pub fn arms_cover(spec: &ExperimentSpec, points: &[BTreeMap<String, String>]) -> bool {
-    if spec.arms.len() != points.len() {
-        return false;
-    }
     let want: BTreeSet<BTreeMap<String, String>> = points.iter().cloned().collect();
-    let have: BTreeSet<BTreeMap<String, String>> = spec
-        .arms
-        .iter()
-        .map(|a| {
-            arm_point(spec, a)
-                .into_iter()
-                .map(|(f, l)| (f.to_string(), l.to_string()))
-                .collect()
-        })
-        .collect();
-    want == have
+    let mut covered: BTreeSet<BTreeMap<String, String>> = BTreeSet::new();
+    let mut groups: BTreeMap<String, BTreeSet<BTreeMap<String, String>>> = BTreeMap::new();
+    for a in &spec.arms {
+        let p: BTreeMap<String, String> = arm_point(spec, a)
+            .into_iter()
+            .map(|(f, l)| (f.to_string(), l.to_string()))
+            .collect();
+        if !want.contains(&p) {
+            return false; // an arm sits off the declared design
+        }
+        covered.insert(p.clone());
+        let mode = a
+            .match_spec
+            .as_ref()
+            .map(|m| m.mode.as_str())
+            .unwrap_or("none");
+        if !groups.entry(mode.to_string()).or_default().insert(p) {
+            return false; // duplicate design point within one comparand group
+        }
+    }
+    covered == want && groups.values().any(|g| g.len() == want.len())
 }
 
 // ── Two-level fractional-factorial algebra (OQ-361 ratified default) ────────

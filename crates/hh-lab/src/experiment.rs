@@ -19,7 +19,7 @@ use std::collections::BTreeSet;
 
 use hh_budget::{
     validate_match, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, MatchError,
-    MatchRefusal, MatchSpec,
+    MatchMode, MatchRefusal, MatchSpec,
 };
 use hh_identity::idp::{identify_bytes, idp_id};
 use hh_identity::kinds::RecordKind;
@@ -1450,42 +1450,80 @@ impl ExperimentSpec {
         if !self.kind.requires_match() {
             return Ok(());
         }
-        let mut specs = Vec::with_capacity(self.arms.len());
+        // Per-arm gates on matched kinds (CC9 — matched-budget-or-refuse):
+        // `mode: none` is not a match spec on a matched kind, and an
+        // `iso_cost` arm needs its pinned pricing table even when it is its
+        // own comparand group (a singleton group skips `validate_match`'s
+        // pricing precondition — ADR-0156 D2).
+        for arm in &self.arms {
+            let ms = arm.match_spec.as_ref().expect("check_arms ran first");
+            if ms.mode == MatchMode::None {
+                return Err(ExperimentRefusal::MissingMatchSpec {
+                    arm: arm.arm_id.clone(),
+                });
+            }
+            if ms.mode == MatchMode::IsoCost && ms.pricing_table_ref.is_none() {
+                return Err(ExperimentRefusal::MissingPricingTable {
+                    detail: format!(
+                        "arm `{}` declares iso_cost with no pricing_table_ref",
+                        arm.arm_id
+                    ),
+                });
+            }
+        }
+        // Arms partition into comparand groups by match mode (ADR-0156 D2 /
+        // CF-334): `lab/control-strategy-family-v1` carries one `iso_cost`
+        // arm beside the `matched_cap` contrast — commensurability is a
+        // *within-group* precondition at register, and a cross-mode
+        // `compare` is refused `IncommensurableMatch` downstream, not here.
+        let mut groups: BTreeMap<MatchMode, Vec<(&ArmSpec, BudgetArmSpec)>> = BTreeMap::new();
         for arm in &self.arms {
             let eval = resolve(&arm.eval_budget);
             let search = arm.search_budget.as_deref().and_then(resolve);
-            specs.push(BudgetArmSpec {
-                search_budget: search,
-                eval_budget: eval,
-                inference_budget: None,
-                match_spec: arm.match_spec.clone(),
-                enforcement: BudgetEnforcement::native(),
-                spend_confidence: None,
-                coverage_ppm: None,
-            });
+            let mode = arm.match_spec.as_ref().expect("checked above").mode;
+            groups.entry(mode).or_default().push((
+                arm,
+                BudgetArmSpec {
+                    search_budget: search,
+                    eval_budget: eval,
+                    inference_budget: None,
+                    match_spec: arm.match_spec.clone(),
+                    enforcement: BudgetEnforcement::native(),
+                    spend_confidence: None,
+                    coverage_ppm: None,
+                },
+            ));
         }
-        validate_match(&specs).map_err(|e: MatchError| match e.refusal {
-            MatchRefusal::MissingMatchSpec => ExperimentRefusal::MissingMatchSpec {
-                arm: self
-                    .arms
-                    .get(e.arm.unwrap_or(0))
-                    .map(|a| a.arm_id.clone())
-                    .unwrap_or_default(),
-            },
-            MatchRefusal::UnbudgetedArm => ExperimentRefusal::UnbudgetedArm {
-                arm: self
-                    .arms
-                    .get(e.arm.unwrap_or(0))
-                    .map(|a| a.arm_id.clone())
-                    .unwrap_or_default(),
-            },
-            MatchRefusal::MissingPricingTable => ExperimentRefusal::MissingPricingTable {
-                detail: format!("{e:?}"),
-            },
-            MatchRefusal::IncommensurableMatch { .. } => ExperimentRefusal::IncommensurableMatch {
-                detail: format!("{:?}", e.refusal),
-            },
-        })
+        for (_mode, group) in &groups {
+            let specs: Vec<BudgetArmSpec> =
+                group.iter().map(|(_, s)| s.clone()).collect();
+            validate_match(&specs).map_err(|e: MatchError| {
+                let arm_id = |i: Option<usize>| {
+                    i.and_then(|i| group.get(i))
+                        .map(|(a, _)| a.arm_id.clone())
+                        .unwrap_or_default()
+                };
+                match e.refusal {
+                    MatchRefusal::MissingMatchSpec => ExperimentRefusal::MissingMatchSpec {
+                        arm: arm_id(e.arm),
+                    },
+                    MatchRefusal::UnbudgetedArm => ExperimentRefusal::UnbudgetedArm {
+                        arm: arm_id(e.arm),
+                    },
+                    MatchRefusal::MissingPricingTable => {
+                        ExperimentRefusal::MissingPricingTable {
+                            detail: format!("{e:?}"),
+                        }
+                    }
+                    MatchRefusal::IncommensurableMatch { .. } => {
+                        ExperimentRefusal::IncommensurableMatch {
+                            detail: format!("{:?}", e.refusal),
+                        }
+                    }
+                }
+            })?;
+        }
+        Ok(())
     }
 
     /// The canonical JSON (`hh-experiment/1`).

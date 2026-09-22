@@ -407,6 +407,14 @@ pub struct RunManifest {
     pub task_ref: Option<TaskRef>,
     /// The experiment binding (experiment + subject runs; §6.3/§6.5 row keys).
     pub experiment: Option<ExperimentBinding>,
+    /// `registry_snapshot_id` — the registry snapshot the run's definition
+    /// resolved against (§3.3.6 `resolved.registry_snapshot_id`; §6.2
+    /// "`registry_snapshot_id` in every bundle and `Design`"). Experiment
+    /// runs additionally pin it inside `experiment.registry_snapshot_id`
+    /// (the `Design`'s snapshot); the top-level member covers every other
+    /// `run_kind` so `kernel.bundle` never emits the field absent.
+    /// Optional: absent on manifests written before S3.4a.
+    pub registry_snapshot_id: Option<String>,
     /// The spec's trailing `…` — additional manifest facts preserved verbatim.
     pub extra: BTreeMap<String, Json>,
 }
@@ -449,6 +457,7 @@ impl RunManifest {
             grace_ms: 0,
             task_ref: None,
             experiment: None,
+            registry_snapshot_id: None,
             extra: BTreeMap::new(),
         }
     }
@@ -518,6 +527,7 @@ impl RunManifest {
             ("envelope_policy_ref", &self.envelope_policy_ref),
             ("healing_policy_ref", &self.healing_policy_ref),
             ("audit_policy_ref", &self.audit_policy_ref),
+            ("registry_snapshot_id", &self.registry_snapshot_id),
         ] {
             if let Some(v) = value {
                 if !is_pinned_id(v) {
@@ -681,6 +691,7 @@ impl RunManifest {
             ("envelope_policy_ref", &self.envelope_policy_ref),
             ("healing_policy_ref", &self.healing_policy_ref),
             ("audit_policy_ref", &self.audit_policy_ref),
+            ("registry_snapshot_id", &self.registry_snapshot_id),
         ] {
             if let Some(v) = v {
                 put(k, Json::str(v));
@@ -956,6 +967,7 @@ impl RunManifest {
             "overrides_layer_id",
             "parent_run_id",
             "participant_class",
+            "registry_snapshot_id",
             "run_kind",
             "seed",
             "signer_key_ids",
@@ -1006,6 +1018,7 @@ impl RunManifest {
             signer_key_ids,
             task_ref,
             experiment,
+            registry_snapshot_id: opt_str("registry_snapshot_id"),
             extra,
         })
     }

@@ -94,6 +94,10 @@ pub struct PlanState {
     /// The next admitted attempt ordinal (`run_replanned` bumps it; a launch
     /// consumes it).
     pub next_attempt_no: u32,
+    /// The re-attempt backoff deadline (`run_replanned.not_before_ms`; `0` =
+    /// eligible immediately). The plan is not eligible before it — the §2.3
+    /// backoff schedule is a ledger fact, not engine memory (S-1/S-6).
+    pub not_before_ms: u64,
     /// The plan's accepted run (at most one — S-2).
     pub accepted_run: Option<String>,
     /// The plan is terminally done without an accepted run (a final
@@ -109,12 +113,12 @@ impl PlanState {
 
     /// Whether the plan may be dispatched at `now_ms` (reconcile-before-
     /// dispatch: an expired claim reads as eligible, the observer appends
-    /// `claim_expired`).
+    /// `claim_expired`; a re-attempt inside its backoff window waits).
     pub fn eligible_at(&self, now_ms: u64) -> bool {
         if self.accepted_run.is_some() || self.finished_final {
             return false;
         }
-        if self.in_flight().is_some() {
+        if self.in_flight().is_some() || now_ms < self.not_before_ms {
             return false;
         }
         match &self.claim {
@@ -132,12 +136,15 @@ impl PlanState {
     }
 }
 
-/// The fold's `declared` record — the registered spec/plan as committed.
+/// The fold's `declared` record — the declaration row's committed members.
+/// `experiment_id`/`plan_id` are the content addresses of the spec/`CellPlan`
+/// documents (`LabDocs`); the documents themselves are not inlined (Rule C —
+/// audit members are bounded).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Declared {
-    /// The experiment's content address.
+    /// The experiment's content address (the spec document's id).
     pub experiment_id: String,
-    /// The `CellPlan` content address.
+    /// The `CellPlan` content address (the plan document's id).
     pub plan_id: String,
     /// The experiment kind.
     pub kind: String,
@@ -146,10 +153,10 @@ pub struct Declared {
     /// The pinned registry snapshot (`None` = unpinned — refused at register
     /// for matched kinds, so present on every declared matched spec).
     pub registry_snapshot_id: Option<String>,
-    /// The declared spec (verbatim).
-    pub spec: Json,
-    /// The declared plan (verbatim).
-    pub plan: Json,
+    /// The declared cell count (the plan document's `cells.len()`).
+    pub n_cells: u64,
+    /// The declared run-plan count.
+    pub n_run_plans: u64,
 }
 
 /// A drift bracket row (`opened`/`closed`).
@@ -220,8 +227,8 @@ impl ExperimentView {
                     kind: s(p, "kind").unwrap_or_default(),
                     comparable: b(p, "comparable").unwrap_or(true),
                     registry_snapshot_id: s(p, "registry_snapshot_id"),
-                    spec: p.get("spec").cloned().unwrap_or(Json::Null),
-                    plan: p.get("plan").cloned().unwrap_or(Json::Null),
+                    n_cells: i(p, "n_cells").unwrap_or(0) as u64,
+                    n_run_plans: i(p, "n_run_plans").unwrap_or(0) as u64,
                 });
             }
             c if c == class::RUN_PLANNED => {
@@ -242,6 +249,7 @@ impl ExperimentView {
                         claim: None,
                         attempts: Vec::new(),
                         next_attempt_no: 1,
+                        not_before_ms: 0,
                         accepted_run: None,
                         finished_final: false,
                     },
@@ -355,6 +363,7 @@ impl ExperimentView {
                 let Some(rpid) = s(p, "run_plan_id") else { return };
                 if let Some(ps) = self.plans.get_mut(&rpid) {
                     ps.next_attempt_no = i(p, "attempt_no").unwrap_or(2) as u32;
+                    ps.not_before_ms = i(p, "not_before_ms").unwrap_or(0) as u64;
                     ps.finished_final = false;
                 }
             }

@@ -934,6 +934,7 @@ fn plan_records_round_trip() {
         configuration_version_id: "sha256:cfg".into(),
         task_id: "task:1".into(),
         split_label: SplitLabel::Dev,
+        na_reason: None,
     };
     let rp = RunPlan {
         run_plan_id: run_plan_id("exp:1", "a", "sha256:cfg", "task:1", 0),

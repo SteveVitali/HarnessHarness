@@ -333,7 +333,16 @@ impl EmbedService {
             environment,
             compiled,
             model_snapshots: vec![],
-            registry_snapshot_id: None,
+            // §6.2's one-snapshot rule — the pinned registry snapshot on the
+            // run's experiment binding (subject/experiment runs) or the
+            // manifest's top-level pin (every other run kind — recorded at
+            // `kernel.open` from the sealed definition's `resolved` member)
+            // propagates onto every bundle.
+            registry_snapshot_id: run_manifest
+                .experiment
+                .as_ref()
+                .and_then(|b| b.registry_snapshot_id.clone())
+                .or_else(|| run_manifest.registry_snapshot_id.clone()),
             variants: vec![],
             budget,
             profile: Json::str("none"),

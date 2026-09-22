@@ -72,6 +72,10 @@ pub struct EmbedService {
     /// The kernel-internal ledger run carrying `lifecycle.registry.*` rows for
     /// Group L ops (`registry_ops::ensure_registry_run` — created lazily).
     pub(crate) registry_run: Option<(String, Lease)>,
+    /// Experiment-run writer leases held across `lab.experiment.*` calls
+    /// (`experiment_run_id → Lease`; the fence still lives in the ledger —
+    /// this map only avoids release/re-acquire churn per call).
+    pub(crate) experiment_engines: BTreeMap<String, Lease>,
 }
 
 /// A declared host-executor capability (`supplies.host_capabilities[]`).
@@ -277,6 +281,7 @@ impl EmbedService {
             workspace_root: config.workspace_root,
             holder: config.holder,
             registry_run: None,
+            experiment_engines: BTreeMap::new(),
         })
     }
 
@@ -588,6 +593,19 @@ impl EmbedService {
             "lab.eval.render_scorecard" => self.lab_eval_render_scorecard(&req.params),
             "lab.eval.equivalence_run" => self.lab_eval_equivalence_run(&req.params),
             "lab.eval.loss_report" => self.lab_eval_loss_report(&req.params),
+            // ── S3.4a: `lab.experiment.*` — the single-worker experiment
+            // engine (R-2.10.3⁰ᵇ; records-in resolvers, ledger+LabDocs
+            // durable state).
+            "lab.experiment.register" => self.lab_experiment_register(&req.params),
+            "lab.experiment.expand" => self.lab_experiment_expand(&req.params),
+            "lab.experiment.open_experiment" => self.lab_experiment_open(&req.params),
+            "lab.experiment.next" => self.lab_experiment_next(&req.params),
+            "lab.experiment.claim" => self.lab_experiment_claim(&req.params),
+            "lab.experiment.launch" => self.lab_experiment_launch(&req.params),
+            "lab.experiment.settle" => self.lab_experiment_settle(&req.params),
+            "lab.experiment.pause" => self.lab_experiment_pause(&req.params),
+            "lab.experiment.resume" => self.lab_experiment_resume(&req.params),
+            "lab.experiment.close" => self.lab_experiment_close(&req.params),
             _ => Err(EmbedError::SchemaViolation {
                 path: "/method".to_string(),
                 code: "unknown_method".to_string(),

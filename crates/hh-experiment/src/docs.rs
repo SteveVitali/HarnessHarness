@@ -27,6 +27,10 @@ pub mod kind {
     pub const SPEC: &str = "experiment";
     /// An expanded `CellPlan`.
     pub const PLAN: &str = "plan";
+    /// A pinned `BudgetSpec` body (the `eval_budget`/`search_budget`/
+    /// `budgets.experiment` refs resolve here when no richer resolver is
+    /// wired).
+    pub const BUDGET: &str = "budget";
 }
 
 /// The durable Lab document store rooted at `<store_root>/lab_docs`.
@@ -72,13 +76,31 @@ impl LabDocs {
         self.root.join(kind).join(file_name(id))
     }
 
-    /// `put(kind, body) → id` — content-addressed (`idp/1` under
-    /// `lab_doc.<kind>`), durable-before-return, idempotent.
+    /// The document id for `body` under `kind`. Registered kinds carry their
+    /// own identity rule (CC1 — one identity scheme per record kind): a spec
+    /// is addressed by `experiment_id = H(canonical(spec minus
+    /// experiment_id))` under `experiment`, a plan by `plan_id =
+    /// H(canonical(plan minus plan_id))` under `cell_plan`. Unknown kinds
+    /// fall back to the store's own `lab_doc.<kind>` address over the body.
+    fn doc_id(kind: &str, body: &Json) -> Result<String, ExperimentError> {
+        match kind {
+            k if k == kind::SPEC => Ok(ExperimentSpec::from_json(body)
+                .map_err(|e| err(format!("spec decode: {e:?}")))?
+                .experiment_id()),
+            k if k == kind::PLAN => Ok(CellPlan::from_json(body)
+                .map_err(|e| err(format!("plan decode: {e:?}")))?
+                .plan_id()),
+            _ => Ok(idp_id(
+                &format!("lab_doc.{kind}"),
+                body.to_canonical_string().as_bytes(),
+            )),
+        }
+    }
+
+    /// `put(kind, body) → id` — the kind's identity rule ([`LabDocs::doc_id`]),
+    /// durable-before-return, idempotent.
     pub fn put(&self, kind: &str, body: &Json) -> Result<String, ExperimentError> {
-        let id = idp_id(
-            &format!("lab_doc.{kind}"),
-            body.to_canonical_string().as_bytes(),
-        );
+        let id = Self::doc_id(kind, body)?;
         let dir = self.root.join(kind);
         fs::create_dir_all(&dir).map_err(|e| err(format!("create {kind}: {e}")))?;
         let path = dir.join(file_name(&id));
@@ -103,11 +125,7 @@ impl LabDocs {
         let bytes = fs::read(&path).map_err(|e| err(format!("read: {e}")))?;
         let text = String::from_utf8(bytes).map_err(|e| err(format!("utf8: {e}")))?;
         let body = parse_json(&text).map_err(|e| err(format!("parse: {e:?}")))?;
-        let actual = idp_id(
-            &format!("lab_doc.{kind}"),
-            body.to_canonical_string().as_bytes(),
-        );
-        if actual != id {
+        if Self::doc_id(kind, &body)? != id {
             return Err(err(format!("doc {id} failed its address check")));
         }
         Ok(Some(body))
@@ -183,6 +201,48 @@ impl LabDocs {
         let mut idx = self.read_index()?;
         idx.insert(experiment_id.to_string(), entry);
         self.write_index(&idx)
+    }
+
+    /// `put_named(kind, name, body)` — a *named* deposit under
+    /// `named/<kind>/<sanitized>` (the boundary's records-in resolver
+    /// surface: a `budgets{ref → body}` map keyed by the spec's ref
+    /// spelling). Named docs are not content addresses — no address check —
+    /// but they are durable and idempotent (same name + same body = the same
+    /// file; a *different* body under the same name is a conflict error,
+    /// never a silent overwrite).
+    pub fn put_named(&self, kind: &str, name: &str, body: &Json) -> Result<(), ExperimentError> {
+        let dir = self.root.join("named").join(kind);
+        fs::create_dir_all(&dir).map_err(|e| err(format!("create named/{kind}: {e}")))?;
+        let path = dir.join(file_name(name));
+        let row = Json::obj([
+            ("name", Json::str(name)),
+            ("body", body.clone()),
+        ]);
+        let bytes = row.to_canonical_string();
+        if path.exists() {
+            let existing = fs::read_to_string(&path).map_err(|e| err(format!("read: {e}")))?;
+            if existing != bytes {
+                return Err(err(format!(
+                    "named doc {kind}/{name} already exists with a different body"
+                )));
+            }
+            return Ok(());
+        }
+        let tmp = dir.join(format!(".{}.tmp", file_name(name)));
+        fs::write(&tmp, bytes.as_bytes()).map_err(|e| err(format!("write: {e}")))?;
+        fs::rename(&tmp, &path).map_err(|e| err(format!("rename: {e}")))?;
+        Ok(())
+    }
+
+    /// `get_named(kind, name)` — the body deposited under `name`.
+    pub fn get_named(&self, kind: &str, name: &str) -> Result<Option<Json>, ExperimentError> {
+        let path = self.root.join("named").join(kind).join(file_name(name));
+        if !path.exists() {
+            return Ok(None);
+        }
+        let text = fs::read_to_string(&path).map_err(|e| err(format!("read: {e}")))?;
+        let row = parse_json(&text).map_err(|e| err(format!("parse: {e:?}")))?;
+        Ok(row.get("body").cloned())
     }
 
     /// The experiment a run id belongs to (reverse index lookup).

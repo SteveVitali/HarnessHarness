@@ -3158,7 +3158,8 @@ fn s31_group_ml_capability_gate() {
 
     let mut svc = service();
     lab_hello(&mut svc);
-    let e = call(&mut svc, "lab.experiment.register", Json::obj([]));
+    // A still-pending Group L op answers `stage_pending`.
+    let e = call(&mut svc, "lab.results.query_rows", Json::obj([]));
     assert_eq!(err_kind(&e), "Refused");
     assert_eq!(
         e.get("error")
@@ -3167,6 +3168,10 @@ fn s31_group_ml_capability_gate() {
             .and_then(Json::as_str),
         Some("stage_pending")
     );
+    // `lab.experiment.register` is live at S3.4a — a missing `spec` member is
+    // a typed schema violation, and a refusal renders the closed E-1 code.
+    let e = call(&mut svc, "lab.experiment.register", Json::obj([]));
+    assert_eq!(err_kind(&e), "SchemaViolation", "{e:?}");
 }
 
 // ── S3.3 — `lab.eval.*` records-in/records-out (R-2.9.2/R-2.9.4⁰ᵇ) ─────────
