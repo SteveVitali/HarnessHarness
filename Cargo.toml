@@ -284,6 +284,29 @@ members = [
     # (AC-R-2.11.1-1); no kernel semantics live here (K-2) — every command is one typed
     # boundary operation sequence.
     "crates/hh-cli",
+    # The C0/Stage-3 evaluation-first slice (spec §5h.2, R-2.9.2; ticket S3.3). A
+    # PERSISTENT workspace member: the metric catalogue as distributions over the
+    # typed n/a{reason} lattice, the compliance-chain metrics, the loss-report
+    # export, matched-budget-or-refuse `compare` (hh-budget is the single matching
+    # source — CC1), the three benefit kinds, `equivalence_run`, deterministic
+    # `render_scorecard`, the deterministic-oracle boundary (in-process reference
+    # + the `hh-eval-oracle` out-of-process conformance binary), pass^k/pass@k,
+    # intervals (Wilson/CLT/clustered-CLT/bootstrap/bca/Bayesian-beta — no CLT on
+    # heavy-tailed units), tails, the veto ledger predicates, and the F-class
+    # fault/perturbation profiles as environment-factor levels.
+    "crates/hh-eval",
+    # The C0/Stage-3 benchmark/environment integration layer (spec §5h.4,
+    # R-2.9.4⁰ᵇ; ticket S3.3). A PERSISTENT workspace member: the
+    # `benchmark_adapter` contract (declaration/discovery/task-lift over
+    # hh-lab::bench records — CC7), out-of-process `materialize`/`expose`/
+    # `collect_submission`/`grade` (`hh-bench-adapter` — protocol bytes on
+    # stdout, diagnostics on stderr, no ledger/credential reach), separate
+    # verifier materialization, the infrastructure detector (infra ≠
+    # solution failure — never scored), typed rewards, held-out anti-leakage,
+    # L4 benchmark-egress containment + the `benchmark_egress` veto, parity
+    # reports, and the A/C/D/E adapter families with offline fixture suites
+    # (the live import path is DF-S3.3-1 — this stage is offline-only).
+    "crates/hh-bench",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired

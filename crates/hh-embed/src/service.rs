@@ -581,6 +581,13 @@ impl EmbedService {
             "kernel.reproduce" => self.kernel_reproduce(&req.params),
             "kernel.import" => self.kernel_import(&req.params),
             "lab.serve" => self.lab_serve(&req.params),
+            // ── S3.3: `lab.eval.*` — the eval kernel boundary
+            // (R-2.9.2/R-2.9.4⁰ᵇ; records-in/records-out).
+            "lab.eval.catalogue" => self.lab_eval_catalogue(&req.params),
+            "lab.eval.compare" => self.lab_eval_compare(&req.params),
+            "lab.eval.render_scorecard" => self.lab_eval_render_scorecard(&req.params),
+            "lab.eval.equivalence_run" => self.lab_eval_equivalence_run(&req.params),
+            "lab.eval.loss_report" => self.lab_eval_loss_report(&req.params),
             _ => Err(EmbedError::SchemaViolation {
                 path: "/method".to_string(),
                 code: "unknown_method".to_string(),

@@ -1,0 +1,25 @@
+[package]
+name = "hh-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The Stage-3 benchmark-adapter contract (R-2.9.4⁰ᵇ; ADR-0142/0143/0144): out-of-process adapters, materialize/expose/collect_submission/grade lifecycle, separate-verifier isolation, infrastructure-failure detection, typed reward parsing, parity reports. Integrates suites, never authors them."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh-bench-adapter"
+path = "src/bin/hh_bench_adapter.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-ontology = { path = "../hh-ontology" }
+hh-ledger = { path = "../hh-ledger" }
+hh-lab = { path = "../hh-lab" }
+hh-hir = { path = "../hh-hir" }
+hh-provenance = { path = "../hh-provenance" }
+hh-budget = { path = "../hh-budget" }
+hh-eval = { path = "../hh-eval" }

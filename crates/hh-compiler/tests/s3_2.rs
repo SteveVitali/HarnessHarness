@@ -585,8 +585,7 @@ fn identity_suite() -> Json {
 
 #[test]
 fn relower_retire_arm_and_artefact_determinism() {
-    let (store, sealed, _v) =
-        sealed_doc_with("relower2", reference_doc(unbound()), vec![], vec![]);
+    let (store, sealed, _v) = sealed_doc_with("relower2", reference_doc(unbound()), vec![], vec![]);
     let (patch, _) = minimal_profiles();
     let patch = with_suite(&patch, patch_suite());
     let old = compile_with(&sealed, &store, &patch, vec!["mcp"]);

@@ -3168,3 +3168,236 @@ fn s31_group_ml_capability_gate() {
         Some("stage_pending")
     );
 }
+
+// ── S3.3 — `lab.eval.*` records-in/records-out (R-2.9.2/R-2.9.4⁰ᵇ) ─────────
+//
+// The eval ops carry `eval_run/1` rows, `task_context`/`suite_context`
+// members, `Design`/`MatchSpec` records and catalogue metric names — the
+// service decodes through the record codecs, never a second schema.
+
+/// One eval_run/1 row (mirrors the hh-eval acceptance fixture).
+fn eval_run_json(arm: &str, task: &str, rep: u64, pass: bool) -> Json {
+    use hh_eval::runs::{CacheState, EvalRun};
+    use hh_ontology::compliance::Detector;
+    use hh_ontology::control::OutcomeClass;
+    use hh_ontology::eval::{MetricValue, MetricValueKind};
+    use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+    use hh_ontology::participant::{Observability, ParticipantClass};
+    use hh_ontology::DimensionId;
+    let r = EvalRun {
+        run_id: format!("r-{arm}-{task}-{rep}"),
+        arm_id: arm.into(),
+        cell_id: Some(format!("{arm}:{task}")),
+        configuration_id: format!("cfg-{arm}"),
+        participant_class: ParticipantClass::Native,
+        observability_level: [
+            Observability::Events,
+            Observability::ModelIo,
+            Observability::EndState,
+            Observability::Ledger,
+        ]
+        .into_iter()
+        .collect(),
+        mediation: Default::default(),
+        capability_vector: Default::default(),
+        task_id: task.into(),
+        suite_id: "suite-test".into(),
+        split_label: SplitLabel::HeldOut,
+        replicate_index: rep,
+        attempt_no: 1,
+        seed: Some(42 + rep),
+        seed_honoured: true,
+        cache_state: CacheState::ColdStart,
+        comparable: true,
+        outcome_class: OutcomeClass::Scored,
+        budget_consumed: [(DimensionId::ModelCalls, 5)].into_iter().collect(),
+        veto_tripped: vec![],
+        values: vec![MetricValue {
+            metric_ref: "task_success".into(),
+            value: MetricValueKind::Bool(pass),
+            applies_to: format!("r-{arm}-{task}-{rep}"),
+            oracle_ref: "oracle/executable".into(),
+            detector: Detector::Deterministic,
+            confidence: None,
+            evidence_ref: None,
+        }],
+        environment_version_id: Some("env-1".into()),
+        environment_family: EnvironmentFamily::CodingTerminal,
+        fault_profile: None,
+        perturbation_profile: None,
+        model_snapshots: [("default".to_string(), "snap-1".to_string())]
+            .into_iter()
+            .collect(),
+        stratum: ContaminationStratum::PrivateHeldOut,
+        eval_search_spend: 0,
+        split_hash: Some("sha256:split-1".into()),
+        facts: Default::default(),
+    };
+    r.to_json()
+}
+
+/// The shared compare params: two arms over tasks t1/t2, paired design,
+/// matched-cap budgets on `model_calls`.
+fn eval_compare_params() -> Json {
+    use hh_ontology::eval::{Design, DesignKind, Pairing, PreRegistration, SeedPolicy};
+    use hh_ontology::DimensionId;
+    let design = Design {
+        id: "design-1".into(),
+        kind: DesignKind::Paired,
+        factors: vec![],
+        blocking: vec!["task".into()],
+        replicates_per_cell: 2,
+        pairing: Pairing::ByTaskAndReplicate,
+        seed_policy: SeedPolicy {
+            harness_rng: true,
+            requested_sampling_seed: true,
+            seed_honoured_required: true,
+        },
+        held_out_split_ref: Some("split-1".into()),
+        pre_registration: PreRegistration {
+            registered_at: 1,
+            hypothesis: "A ≥ B".into(),
+            primary_metrics: vec!["task_success".into()],
+            equivalence_margin: None,
+            min_n: 1,
+            analysis_plan_ref: "plan-1".into(),
+            task_split_hash: "sha256:split-1".into(),
+        },
+    };
+    let spec = hh_budget::matchspec::MatchSpec::matched_cap(&[DimensionId::ModelCalls]).to_json();
+    let caps = Json::obj([(DimensionId::ModelCalls.as_str(), Json::Int(100))]);
+    let arm = Json::obj([
+        ("match_spec", spec),
+        ("caps", caps),
+        ("native", Json::Bool(true)),
+    ]);
+    let runs = Json::Arr(vec![
+        eval_run_json("A", "t1", 0, true),
+        eval_run_json("A", "t1", 1, true),
+        eval_run_json("A", "t2", 0, true),
+        eval_run_json("A", "t2", 1, false),
+        eval_run_json("B", "t1", 0, false),
+        eval_run_json("B", "t1", 1, true),
+        eval_run_json("B", "t2", 0, false),
+        eval_run_json("B", "t2", 1, false),
+    ]);
+    let tasks = Json::Arr(
+        ["t1", "t2"]
+            .iter()
+            .map(|t| {
+                Json::obj([
+                    ("task_id", Json::str(*t)),
+                    ("suite_id", Json::str("suite-test")),
+                    ("split_label", Json::str("held_out")),
+                    ("split_hash", Json::str("sha256:split-1")),
+                    ("stratum", Json::str("private_held_out")),
+                ])
+            })
+            .collect(),
+    );
+    Json::obj([
+        ("arm_a", Json::str("A")),
+        ("arm_b", Json::str("B")),
+        ("metrics", Json::Arr(vec![Json::str("task_success")])),
+        ("runs", runs),
+        ("tasks", tasks),
+        ("design", design.to_json()),
+        ("arm_specs", Json::Arr(vec![arm.clone(), arm])),
+    ])
+}
+
+#[test]
+fn lab_eval_catalogue_conformant() {
+    let mut svc = service();
+    // No hello — Group L gates hold for eval ops too.
+    let e = call(&mut svc, "lab.eval.catalogue", Json::obj([]));
+    assert_eq!(err_kind(&e), "NotInitialized");
+    lab_hello(&mut svc);
+    let r = ok(&call(&mut svc, "lab.eval.catalogue", Json::obj([])));
+    assert_eq!(
+        r.get("schema").and_then(Json::as_str),
+        Some("catalogue_report/1")
+    );
+    assert_eq!(r.get("conformant"), Some(&Json::Bool(true)));
+    assert!(r.get("metrics").and_then(Json::as_int).unwrap_or(0) > 0);
+}
+
+#[test]
+fn lab_eval_compare_produces_reports() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let r = ok(&call(&mut svc, "lab.eval.compare", eval_compare_params()));
+    let reports = match r.get("reports") {
+        Some(Json::Arr(rs)) => rs,
+        _ => panic!("compare returned no reports: {r:?}"),
+    };
+    assert_eq!(reports.len(), 1);
+    let rep = &reports[0];
+    assert_eq!(
+        rep.get("metric").and_then(Json::as_str),
+        Some("task_success")
+    );
+    assert_eq!(rep.get("arm_a").and_then(Json::as_str), Some("A"));
+    // Paired effects retained per task (per_task[metric][task]).
+    let per_task = match r.get("per_task") {
+        Some(Json::Arr(ts)) => ts,
+        _ => panic!("no per_task: {r:?}"),
+    };
+    assert_eq!(per_task.len(), 1);
+    match &per_task[0] {
+        Json::Arr(effects) => assert_eq!(effects.len(), 2),
+        _ => panic!("per_task[0] not a task table"),
+    }
+}
+
+#[test]
+fn lab_eval_compare_typed_refusals() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    // Unknown metric name — a typed schema violation, never a silent skip.
+    let mut p = eval_compare_params();
+    if let Json::Obj(m) = &mut p {
+        m.insert(
+            "metrics".into(),
+            Json::Arr(vec![Json::str("no_such_metric")]),
+        );
+    }
+    let e = call(&mut svc, "lab.eval.compare", p);
+    assert_eq!(err_kind(&e), "SchemaViolation");
+    // A non-comparable run refuses (AC-R-2.9.2-4 through the boundary).
+    let mut p = eval_compare_params();
+    if let Json::Obj(m) = &mut p {
+        if let Some(Json::Arr(runs)) = m.get_mut("runs") {
+            for r in runs.iter_mut() {
+                if let Json::Obj(rm) = r {
+                    rm.insert("comparable".into(), Json::Bool(false));
+                }
+            }
+        }
+    }
+    let e = call(&mut svc, "lab.eval.compare", p);
+    assert_eq!(err_kind(&e), "Refused");
+}
+
+#[test]
+fn lab_eval_render_scorecard_records_in() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let mut p = eval_compare_params();
+    if let Json::Obj(m) = &mut p {
+        m.insert(
+            "suites".into(),
+            Json::Arr(vec![Json::obj([
+                ("suite_id", Json::str("suite-test")),
+                ("retired_for_headline", Json::Bool(false)),
+                ("family", Json::str("coding_terminal")),
+            ])]),
+        );
+        m.insert("pool_strata".into(), Json::Bool(false));
+    }
+    let r = ok(&call(&mut svc, "lab.eval.render_scorecard", p));
+    assert_eq!(
+        r.get("schema").and_then(Json::as_str),
+        Some("scorecard_report/1")
+    );
+}

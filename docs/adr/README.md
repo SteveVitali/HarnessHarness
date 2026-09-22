@@ -66,3 +66,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0274](ADR-0274-s2.12-attended-cli-registry-enforcement-rulings.md) | S2.12 attended-CLI + registry-enforcement rulings | S2.12 (`043_S2.12__attended-cli-item-and-registry-enforcement.md`) | Accepted |
 | [ADR-0275](ADR-0275-s3.1-lab-boundary-and-bundle-rulings.md) | S3.1 lab-boundary and bundle rulings | S3.1 (`044_S3.1__lab-embed-groups-and-bundle.md`) | Accepted |
 | [ADR-0276](ADR-0276-s3.2-lowering-and-composition-rulings.md) | S3.2 lowering and composition rulings | S3.2 (`045_S3.2__compiler-full.md`) | Accepted |
+| [ADR-0277](ADR-0277-s3.3-eval-kernel-and-bench-adapter-rulings.md) | S3.3 eval-kernel and benchmark-adapter rulings | S3.3 (`046_S3.3__metric-catalogue-and-compare.md`) | Accepted |
