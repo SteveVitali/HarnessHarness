@@ -8,6 +8,11 @@ resolver = "2"
 members = [
     "crates/hh-wire",
     "crates/hh-embed-schema",
+    # The C0/Stage-1 ontology and formal model (spec §2, R-2.1.1; ticket S1.1). A PERSISTENT
+    # workspace member (not a throwaway like hh-baseline): the home table, the formal-model
+    # symbol registry, κ + both configuration ids, participant classes, the compliance chain
+    # schema, the compatibility-surface shape and the §2.9.2 acceptance checks.
+    "crates/hh-ontology",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

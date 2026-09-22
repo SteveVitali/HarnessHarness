@@ -43,5 +43,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-ontology"
+version = "0.0.1"
+dependencies = [
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-wire"
 version = "0.0.1"

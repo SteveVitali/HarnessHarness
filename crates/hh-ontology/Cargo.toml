@@ -1,0 +1,13 @@
+[package]
+name = "hh-ontology"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 ontology and formal model (spec §2, R-2.1.1): the seven-plane home-plane rule (CC10 originates here), the policy-stack formalism, validity vs compliance, the compatibility surface, the two participant classes, the home table, κ and both configuration ids, plus the executable §2.9.2 acceptance checks (classify_home totality, symbol resolution, the spec-DAG check, the glossary check)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
