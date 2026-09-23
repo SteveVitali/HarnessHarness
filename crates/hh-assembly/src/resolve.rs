@@ -42,6 +42,12 @@ pub struct ResolveEnv<'a> {
     pub registrar: ProvenanceRecord,
     /// The `resolved_at` stamp (ms).
     pub resolved_at: u64,
+    /// Optional sink for the *non-error* diagnostics the run produced (info /
+    /// warning notices such as `C-REF-5 DenyListNoop`). On `Err` the diags
+    /// are returned as before; on `Ok` they land here — a service that must
+    /// surface the complete picture (§6.1 V-3) sets the sink; callers that
+    /// don't leave it `None`.
+    pub notices: Option<&'a mut Vec<AssemblyDiagnostic>>,
 }
 
 /// `resolve(definition, registry_view, environment, mode) → SealedDefinition` — or the
@@ -176,6 +182,9 @@ pub fn resolve(
                 version_id: root_node.version_id(),
             }
         };
+        if let Some(n) = env.notices.as_deref_mut() {
+            n.append(&mut diags);
+        }
         return Ok(SealedDefinition {
             document: out,
             definition_ref,
@@ -183,7 +192,12 @@ pub fn resolve(
         });
     }
     match hh_hir::ops::seal(&out, env.resolved_at) {
-        Ok(sealed) => Ok(sealed),
+        Ok(sealed) => {
+            if let Some(n) = env.notices.as_deref_mut() {
+                n.append(&mut diags);
+            }
+            Ok(sealed)
+        }
         Err(errs) => {
             for e in errs {
                 diags.push(AssemblyDiagnostic {

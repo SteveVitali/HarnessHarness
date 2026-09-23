@@ -1498,6 +1498,7 @@ impl EmbedService {
             mode: ResolveMode::Execute,
             registrar: prov.clone(),
             resolved_at,
+            notices: None,
         };
         let sealed =
             resolve(&loaded.document, &mut env).map_err(|ds| EmbedError::InvalidDefinition {

@@ -10,3 +10,6 @@ hh-provenance = { path = "../hh-provenance" }
 hh-ontology = { path = "../hh-ontology" }
 hh-hir = { path = "../hh-hir" }
 hh-budget = { path = "../hh-budget" }
+hh-registry = { path = "../hh-registry" }
+hh-assembly = { path = "../hh-assembly" }
+hh-compiler = { path = "../hh-compiler" }

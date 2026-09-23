@@ -659,13 +659,20 @@ pub fn registry() -> Vec<OpSpec> {
             ..lab("env.set_phase", "M", "json", "json")
         },
         // ── Group L — Lab/design-time (ADR-0183; records-in/records-out)
-        lab("lab.assembly.assemble", "L", "json", "json"),
-        lab("lab.assembly.plan", "L", "json", "json"),
-        lab("lab.assembly.apply", "L", "json", "json"),
-        lab("lab.assembly.validate_batch", "L", "json", "json"),
-        lab("lab.assembly.explain", "L", "json", "json"),
-        lab("lab.assembly.diff", "L", "json", "json"),
-        lab("lab.assembly.identity", "L", "json", "json"),
+        // S3.5 (§6.1; R-2.10.1): the assembly service — `assemble`/`plan`/
+        // `apply`/`validate_batch`/`explain`/`diff`/`drift`/`adopt`/`identity`
+        // are live dispatch; `compile` stays `stage_pending` until the
+        // `CompileInputs`/`ModelProfile` wire codec lands (no D2 schema for
+        // profile binding exists yet — never fabricate one).
+        labi("lab.assembly.assemble", "L", "json", "json"),
+        labi("lab.assembly.plan", "L", "json", "json"),
+        labi("lab.assembly.apply", "L", "json", "json"),
+        labi("lab.assembly.validate_batch", "L", "json", "json"),
+        labi("lab.assembly.explain", "L", "json", "json"),
+        labi("lab.assembly.diff", "L", "json", "json"),
+        labi("lab.assembly.drift", "L", "json", "json"),
+        labi("lab.assembly.adopt", "L", "json", "json"),
+        labi("lab.assembly.identity", "L", "json", "json"),
         lab("lab.assembly.compile", "L", "json", "json"),
         labi("lab.registry.register", "L", "json", "json"),
         labi("lab.registry.publish", "L", "json", "json"),

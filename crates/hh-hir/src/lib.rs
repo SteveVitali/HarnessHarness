@@ -179,4 +179,20 @@ pub mod wire {
     ) -> Result<crate::records::KindRecord, HirError> {
         crate::schema::semantic_record_from_json(kind, j, path)
     }
+
+    /// The canonical JSON of a [`crate::document::SealedDefinition`] — the
+    /// `sealed_definition` registry record's body (§6.1/R-2.10.1 — the schema
+    /// source owns the encoding, CC7).
+    pub fn sealed_definition_json(s: &crate::document::SealedDefinition) -> Json {
+        crate::schema::sealed_definition_json(s)
+    }
+
+    /// Parse a `sealed_definition` body (the codec's read direction). Re-derives
+    /// `closed_world_tools` and the root identity — a member that does not
+    /// reproduce is a decode refusal (CC3).
+    pub fn sealed_definition_from_json(
+        j: &Json,
+    ) -> Result<crate::document::SealedDefinition, HirError> {
+        crate::schema::sealed_definition_from_json(j)
+    }
 }
