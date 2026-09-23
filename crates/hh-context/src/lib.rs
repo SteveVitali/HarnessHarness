@@ -48,11 +48,13 @@
 
 pub mod assemble;
 pub mod codec;
+pub mod compact;
 pub mod events;
 pub mod lifecycle;
 pub mod memory;
 pub mod plan;
 pub mod policy;
+pub mod procedure;
 pub mod retrieve;
 pub mod vocab;
 

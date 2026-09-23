@@ -304,8 +304,44 @@ pub fn validator_node(id: &str, seq: u64) -> Node {
     )
 }
 
-/// A `Procedure` node with the given steps.
+/// A `Procedure` node with the given steps. `allowed_capabilities` is
+/// populated from the steps' `Invoke` tools (the allowlist is the closed set
+/// an `Invoke` may reference — §5c.5) and `failure_handlers` covers every
+/// reachable failure class with `abort` (handlers are total over the
+/// declared ∪ derivable classes).
 pub fn procedure_node(id: &str, steps: Vec<ProcedureStep>, seq: u64) -> Node {
+    fn collect_caps(steps: &[ProcedureStep], out: &mut Vec<Ref>) {
+        for s in steps {
+            match s {
+                ProcedureStep::Invoke { tool, .. } => out.push(tool.clone()),
+                ProcedureStep::Branch {
+                    then_body,
+                    else_body,
+                    ..
+                } => {
+                    collect_caps(then_body, out);
+                    collect_caps(else_body, out);
+                }
+                ProcedureStep::Loop { body, .. } => collect_caps(body, out),
+                _ => {}
+            }
+        }
+    }
+    let mut caps = Vec::new();
+    collect_caps(&steps, &mut caps);
+    caps.sort_by(|a, b| a.semantic_id.cmp(&b.semantic_id));
+    caps.dedup_by(|a, b| a.semantic_id == b.semantic_id);
+    let abort = |on: Json| Json::obj([("on", on), ("then", Json::str("abort"))]);
+    let failure_handlers = Json::Arr(vec![
+        abort(Json::obj([("step_failed", Json::str("*"))])),
+        abort(Json::obj([("validator_failed", Json::str("*"))])),
+        abort(Json::str("permission_denied")),
+        abort(Json::str("delegate_failed")),
+        abort(Json::str("precondition_failed")),
+        abort(Json::str("budget_exhausted")),
+        abort(Json::str("effect_unknown")),
+        abort(Json::str("timeout")),
+    ]);
     sid(
         node(
             EntityKind::Procedure,
@@ -313,8 +349,8 @@ pub fn procedure_node(id: &str, steps: Vec<ProcedureStep>, seq: u64) -> Node {
                 preconditions: Json::Null,
                 steps,
                 expected_evidence: Json::Null,
-                allowed_capabilities: vec![],
-                failure_handlers: Json::Null,
+                allowed_capabilities: caps,
+                failure_handlers,
             }),
             seq,
         ),

@@ -49,6 +49,7 @@ pub mod identity;
 pub mod kinds;
 pub mod records;
 pub mod schema;
+pub mod skill;
 pub mod store;
 pub mod suites;
 

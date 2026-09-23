@@ -1411,6 +1411,14 @@ impl MemoryStore {
         self.ended_scopes.insert(scope);
     }
 
+    /// Whether `scope` has been marked ended — the scope lifetime is the
+    /// floor (§5c.4): a version whose persistence scope ended is
+    /// `expired{scope_ended}` whether or not its contract declares the
+    /// condition (a `run`-scoped memory never outlives its run).
+    pub(crate) fn scope_ended(&self, scope: PersistenceScope) -> bool {
+        self.ended_scopes.contains(&scope)
+    }
+
     /// `publish_replacement(name)` — `invalidation_condition:
     /// replacement_published{name}` fires.
     pub fn publish_replacement(&mut self, name: &str) {

@@ -198,9 +198,17 @@ fn state_inner(
             by: e.newer.clone(),
         };
     }
-    // expired — the declared window or a fired checkable member. A
-    // `condition`-carrying validity is unevaluatable at C0 → `unknown`
-    // (honest, never silently valid).
+    // expired — the scope lifetime is the floor: a version whose persistence
+    // scope was marked ended is `expired{scope_ended}` whether or not the
+    // contract declares `scope_ended` (§5c.4; AC-R-2.4.4-8 — a `run`-scoped
+    // memory is expired in the next run). Then the declared window / fired
+    // checkable member. A `condition`-carrying validity is unevaluatable at
+    // C0 → `unknown` (honest, never silently valid).
+    if store.scope_ended(v.scope) {
+        return LifecycleState::Expired {
+            reason: "scope_ended".to_string(),
+        };
+    }
     if let Some(vd) = &v.validity {
         if let Some(until) = vd.until {
             if at >= until {

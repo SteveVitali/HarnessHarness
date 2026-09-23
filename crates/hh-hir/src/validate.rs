@@ -63,6 +63,16 @@ pub fn validate(doc: &HirDocument) -> Result<ValidationReport, Vec<HirError>> {
 
     check_refs_and_endpoints(doc, &index, &mut errs);
     check_acyclic(doc, &mut errs);
+    // §5c.5 `validate_procedure` (R-2.4.5⁰): procedural coherence — render
+    // purity, closed `Predicate` kinds, `Invoke ∈ allowed_capabilities`,
+    // bounded `Loop`s, handlers total over `failure_classes`, declared
+    // parameters, acyclic `composition`, the risk floor.
+    let mut uncheckable = 0u64;
+    for node in &doc.nodes {
+        if let KindRecord::Procedure(p) = &node.semantic {
+            crate::procedure::validate_procedure(node, p, &index, &mut errs, &mut uncheckable);
+        }
+    }
     check_effect_coverage(doc, &index, &mut errs);
     check_capability_procedure_sources(doc, &index, &mut errs);
     check_discovery_capability(doc, &mut errs);
@@ -77,6 +87,7 @@ pub fn validate(doc: &HirDocument) -> Result<ValidationReport, Vec<HirError>> {
             checks_run: CHECKS.to_vec(),
             node_count: doc.nodes.len(),
             edge_count: doc.edges.len(),
+            uncheckable_preconditions: uncheckable,
         })
     } else {
         Err(errs)
@@ -109,6 +120,7 @@ const CHECKS: &[&str] = &[
     "capability_v_e1",
     "capability_procedure_source",
     "discovery_capability",
+    "procedure_coherence",
     "root",
 ];
 
@@ -1071,7 +1083,7 @@ fn scope_covers(pattern: &str, scope: &str) -> bool {
 /// The effects a procedure derives: invoked tools' declared effects, `Opaque` steps'
 /// declared-interface effects, and the grants a `Delegate` step hands down (recursively
 /// through `Branch`/`Loop` bodies).
-fn derived_effects<'a>(
+pub(crate) fn derived_effects<'a>(
     steps: &'a [ProcedureStep],
     index: &BTreeMap<String, &'a Node>,
     out: &mut Vec<EffectClass>,
