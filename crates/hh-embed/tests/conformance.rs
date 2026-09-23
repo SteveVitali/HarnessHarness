@@ -58,6 +58,13 @@ fn node(kind: EntityKind, rec: KindRecord, seq: u64) -> Node {
 }
 
 fn document_json() -> Json {
+    document_json_with("hh/round_robin")
+}
+
+/// The same fixture bound to a different `control_strategy` slot
+/// (`hh/react-steerable` — seeded into the embedded registry with the
+/// `steer_mode`/`concurrent_input` declarations; S2.11).
+fn document_json_with(control_variant: &str) -> Json {
     let rule = sid(
         node(
             EntityKind::HarnessRule,
@@ -137,7 +144,7 @@ fn document_json() -> Json {
         "control_strategy".into(),
         SlotBindings::One(SlotBinding::of(ComponentVariantRef::selected(
             "control_strategy",
-            "hh/round_robin",
+            control_variant,
             "latest",
         ))),
     );
@@ -2268,4 +2275,311 @@ fn s2_9_navigate_streams_a_rewind_frame_and_rollback_appends() {
     let evs = svc.store().envelopes(&run_id).unwrap();
     assert!(evs.iter().any(|e| e.class == "lifecycle.run.rolled_back"));
     assert!(evs.iter().any(|e| e.class == "lifecycle.head.moved"));
+}
+
+// ── S2.11 — steerable boundary + pending-timeout sweep ──────────────────────
+
+/// A spec fragment: `interactive` attendance + a `model_calls` ceiling of 1
+/// — the second model call exhausts the budget and, under `interactive`,
+/// escalates → the loop parks mid-turn (`turn_active`), which is exactly
+/// where `steer`/`concurrent_input` matter.
+fn interactive_spec_with_doc(doc: Json, supplies: Option<Json>) -> Json {
+    let mut spec = new_spec_with_doc(doc, supplies);
+    if let Json::Obj(m) = &mut spec {
+        m.insert(
+            "attendance".into(),
+            AttendanceDeclaration {
+                value: "interactive".into(),
+                source: "declared".into(),
+            }
+            .to_json(),
+        );
+        m.insert(
+            "budget".into(),
+            Json::obj(vec![
+                ("kind", Json::str("node")),
+                (
+                    "node",
+                    Json::obj(vec![(
+                        "dimensions",
+                        Json::obj(vec![(
+                            "model_calls",
+                            Json::obj(vec![("hard", Json::Int(1))]),
+                        )]),
+                    )]),
+                ),
+            ]),
+        );
+    }
+    spec
+}
+
+/// `open_session` on a definition binding `control_strategy →
+/// hh/react-steerable` arms `react/steerable` — `steer` is honoured at the
+/// declared `interrupt_at_decision_point` mode and ledgered (the artefact
+/// delivery row + the `propose{steer_ref}` decision), never a UI-side note
+/// (AC-R-2.6.1-10; CF-371).
+#[test]
+fn w_steerable_boundary_steers_and_ledgers() {
+    let mut svc = service();
+    hello(&mut svc);
+    let s = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            (
+                "spec",
+                interactive_spec_with_doc(document_json_with("hh/react-steerable"), None),
+            ),
+            ("idempotency_key", Json::str("open-steer")),
+        ]),
+    ));
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    // Park mid-turn: call 1 completes nothing (the parked invoke path) —
+    // actually the first call's `hh.submit` finishes the run at call 1, so
+    // steer must arrive *while the turn is still live*: submit an input
+    // whose staged call is NOT `hh.submit`. With `model_calls:1`, the
+    // second call exhausts → escalate → the loop parks mid-turn.
+    let r = call(
+        &mut svc,
+        "submit",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            (
+                "input",
+                Json::Arr(vec![Json::obj(vec![
+                    ("kind", Json::str("invoke")),
+                    ("capability", Json::str("host.exec.shell")),
+                ])]),
+            ),
+            ("idempotency_key", Json::str("invoke-1")),
+        ]),
+    );
+    assert!(
+        r.get("result").is_some(),
+        "invoke submit: {}",
+        r.to_canonical_string()
+    );
+
+    let decisions_before = svc
+        .store()
+        .envelopes(&run_id)
+        .unwrap()
+        .iter()
+        .filter(|e| e.class == "control.decision")
+        .count();
+    // `steer` under `interrupt_at_decision_point` → Accepted{queued_at}.
+    let st = call(
+        &mut svc,
+        "steer",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("input", Json::Arr(text_input("steer the loop"))),
+        ]),
+    );
+    let st = ok(&st);
+    assert_eq!(
+        st.get("queued_at").and_then(Json::as_str),
+        Some("decision_point"),
+        "steer result: {st:?}"
+    );
+
+    // Ledgered, not UI-side: the input artefact delivery lands, and the
+    // loop answers the steer cue at the decision point — under the
+    // exhausted budget the honest answer is the re-escalation, so a new
+    // `control.decision` row must exist beyond the pre-steer prefix.
+    let evs = svc.store().envelopes(&run_id).unwrap();
+    assert!(
+        evs.iter().any(|e| e.class == "context.artefact.delivered"),
+        "the steer input's delivery row"
+    );
+    let decisions_after = evs.iter().filter(|e| e.class == "control.decision").count();
+    assert!(
+        decisions_after > decisions_before,
+        "the loop answered the steer at a decision point ({decisions_before} → {decisions_after})"
+    );
+    // And the same boundary's `steer` is TurnMismatch-checked first.
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "steer",
+            Json::obj(vec![
+                ("session_id", Json::str(id.clone())),
+                ("expected_turn_id", Json::str("turn-99")),
+            ]),
+        )),
+        "TurnMismatch"
+    );
+}
+
+/// `submit` during an active turn under `concurrent_input = steer` is
+/// admitted as a `steer` cue — `TurnActive` is the `queue_only` answer
+/// only (AC-R-2.6.1-10).
+#[test]
+fn w_steerable_submit_mid_turn_admitted_as_steer() {
+    let mut svc = service();
+    hello(&mut svc);
+    let s = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            (
+                "spec",
+                interactive_spec_with_doc(document_json_with("hh/react-steerable"), None),
+            ),
+            ("idempotency_key", Json::str("open-midturn")),
+        ]),
+    ));
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    // Park mid-turn on the escalated budget exhaustion.
+    let r = call(
+        &mut svc,
+        "submit",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            (
+                "input",
+                Json::Arr(vec![Json::obj(vec![
+                    ("kind", Json::str("invoke")),
+                    ("capability", Json::str("host.exec.shell")),
+                ])]),
+            ),
+            ("idempotency_key", Json::str("invoke-1")),
+        ]),
+    );
+    assert!(
+        r.get("result").is_some(),
+        "invoke submit: {}",
+        r.to_canonical_string()
+    );
+    // `queue_only` would answer TurnActive; the `steer` declaration admits it.
+    let mid = call(
+        &mut svc,
+        "submit",
+        Json::obj(vec![
+            ("session_id", Json::str(id)),
+            ("input", Json::Arr(text_input("mid-turn input"))),
+            ("idempotency_key", Json::str("mid-1")),
+        ]),
+    );
+    assert!(
+        mid.get("result").is_some(),
+        "mid-turn submit under concurrent_input=steer: {}",
+        mid.to_canonical_string()
+    );
+}
+
+/// The pending-timeout sweep (§5g recovery): a `security.permission.pending`
+/// past its declared `timeout` resolves `decided{decision: timed_out,
+/// decider: kernel}` — the kind-fixed terminal refusal, never `unknown` —
+/// and a later `respond_permission` finds it already decided.
+#[test]
+fn w_permission_pending_times_out() {
+    let root = test_dir("timeout");
+    let clock = hh_ledger::ids::ManualClock::at(0);
+    let mut svc = EmbedService::open_with(
+        ServiceConfig {
+            store_root: root.join("store"),
+            kernel_version_id: "hh-kernel/0.1.0".into(),
+            workspace_root: root.join("ws"),
+            holder: "conformance".into(),
+        },
+        Box::new(clock.clone()),
+        None,
+    )
+    .unwrap();
+    hello(&mut svc);
+    let supplies = Json::obj(vec![(
+        "host_capabilities",
+        Json::Arr(vec![Json::obj(vec![
+            ("capability_id", Json::str("cap:shell")),
+            ("surface_id", Json::str("host.exec.shell")),
+            ("requires_approval", Json::Bool(true)),
+            ("timeout", Json::Int(5)),
+        ])]),
+    )]);
+    let s = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            ("spec", new_spec_with_doc(document_json(), Some(supplies))),
+            ("idempotency_key", Json::str("open-timeout")),
+        ]),
+    ));
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let permission_id = svc
+        .store()
+        .envelopes(&run_id)
+        .unwrap()
+        .iter()
+        .find(|e| e.class == "security.permission.pending")
+        .and_then(|e| e.payload.get("permission_id").and_then(Json::as_str))
+        .expect("the capability ask's pending row")
+        .to_string();
+
+    // Past the declared deadline, the next drive sweeps the ask.
+    clock.advance(10);
+    let r = call(
+        &mut svc,
+        "submit",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("input", Json::Arr(text_input("go"))),
+            ("idempotency_key", Json::str("s-1")),
+        ]),
+    );
+    assert!(r.get("result").is_some(), "{}", r.to_canonical_string());
+    let decided = svc
+        .store()
+        .envelopes(&run_id)
+        .unwrap()
+        .iter()
+        .find(|e| {
+            e.class == "security.permission.decided"
+                && e.payload.get("permission_id").and_then(Json::as_str)
+                    == Some(permission_id.as_str())
+        })
+        .expect("the timed-out decided row");
+    assert_eq!(
+        decided.payload.get("decision").and_then(Json::as_str),
+        Some("timed_out")
+    );
+    assert_eq!(
+        decided.payload.get("decider").and_then(Json::as_str),
+        Some("kernel")
+    );
+    // A late answer finds the ask already decided (idempotent terminal).
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "respond_permission",
+            Json::obj(vec![
+                ("session_id", Json::str(id)),
+                ("permission_id", Json::str(permission_id)),
+                (
+                    "outcome",
+                    Json::obj(vec![
+                        ("kind", Json::str("selected")),
+                        ("option_id", Json::str("allow_once")),
+                    ]),
+                ),
+                ("idempotency_key", Json::str("late")),
+            ]),
+        )),
+        "AlreadyDecided"
+    );
 }

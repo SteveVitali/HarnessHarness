@@ -621,6 +621,10 @@ const DECISION_FIELDS: &[AuditField] = &[
     afb("cursor", AUDIT_FIELD_LIST_BYTES),
     afb("verdict", AUDIT_FIELD_LIST_BYTES),
     af("submission_ref"),
+    // A `propose`'s `context_request` — the cue ref the step answered
+    // (`steer_ref`/`follow_up_ref`; the audit shows *which* input, never
+    // the bytes — I7). S2.11.
+    afb("context_request", AUDIT_FIELD_LIST_BYTES),
 ];
 
 /// `lifecycle.ledger.redacted` — the tombstone (`{targets[], reason_code,

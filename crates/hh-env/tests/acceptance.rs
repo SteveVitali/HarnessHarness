@@ -1219,6 +1219,7 @@ fn ac_r_2_5_5_12_bind_refuses_insufficient_declarations() {
     let req = ExecutionRequirement {
         minimum_isolation: IsolationClass::None,
         minimum_dedup: DedupSupport::Durable,
+        ..ExecutionRequirement::default()
     };
     assert!(matches!(
         bind(&decl, EffectDomain::FsWrite, &req),
@@ -1228,6 +1229,7 @@ fn ac_r_2_5_5_12_bind_refuses_insufficient_declarations() {
     let req2 = ExecutionRequirement {
         minimum_isolation: IsolationClass::ProcessSandbox,
         minimum_dedup: DedupSupport::None,
+        ..ExecutionRequirement::default()
     };
     assert!(matches!(
         bind(&decl, EffectDomain::FsWrite, &req2),
@@ -1298,12 +1300,14 @@ fn ac_r_2_5_5_14_one_call_through_the_process_boundary() {
 
 #[test]
 fn ac_r_2_7_1_1_local_verdicts_after_observed() {
-    // An `fs_write` dispatch settles `observed{applied}` — check (c)
-    // `patch_application` is the applicable built-in, so exactly one
+    // An `fs_write` dispatch settles `observed{applied}` — checks (c)
+    // `patch_application` and (d) `diff_sanity` (the S2.11 conditioned rule)
+    // are the applicable built-ins, so exactly two
     // `verification.validator.invoked` + `verification.validator.verdict`
-    // pair lands after the terminal row (`phase = local`, `detector =
-    // deterministic`, `charged_to = subject`, `inputs_digest` present);
-    // the observation itself is never touched (I-V3).
+    // pairs land after the terminal row (`phase = local`, `detector =
+    // deterministic`, `charged_to = subject`, `inputs_digest` present),
+    // `observed.postcondition_results[]` names both verdict ids, and the
+    // observation itself is never touched (I-V3).
     let (mut store, run, lease, _clock) = open("localverdicts");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let ws = workspace("localverdicts");
@@ -1348,10 +1352,20 @@ fn ac_r_2_7_1_1_local_verdicts_after_observed() {
         .iter()
         .filter(|e| e.class == "verification.validator.verdict")
         .collect();
-    // Exactly the applicable checks — check (c) only (no `output_schema`
+    // Exactly the applicable checks — (c) + (d) (no `output_schema`
     // declared ⇒ (a) inapplicable; `fs_write` ⇒ (b) inapplicable).
-    assert_eq!(invoked.len(), 1, "{invoked:?}");
-    assert_eq!(verdicts.len(), 1, "{verdicts:?}");
+    assert_eq!(invoked.len(), 2, "{invoked:?}");
+    assert_eq!(verdicts.len(), 2, "{verdicts:?}");
+    // `postcondition_results` on the terminal row names both verdict ids —
+    // the deterministic `verdict:<check>:<effect_id>` coordinates.
+    let Json::Arr(results) = observed
+        .payload
+        .get("postcondition_results")
+        .expect("postcondition_results member")
+    else {
+        panic!("postcondition_results must be an array");
+    };
+    assert_eq!(results.len(), 2, "{results:?}");
     let v = &verdicts[0];
     // AC: `phase = local`, `detector = deterministic`, `charged_to =
     // subject`, `inputs_digest` carried — and the verdict names the check.
@@ -1386,6 +1400,39 @@ fn ac_r_2_7_1_1_local_verdicts_after_observed() {
     // The verdict rows follow the terminal row they check.
     assert!(v.seq > observed.seq);
     assert!(invoked[0].seq > observed.seq);
+    // Check (d): `verdict:diff_sanity:<effect_id>` stamped
+    // `hir/kernel/diff_sanity@1` — the conditioned rule's ref (AC-R-2.7.1-12).
+    let d = &verdicts[1];
+    assert!(
+        d.payload
+            .get("verdict_id")
+            .and_then(Json::as_str)
+            .is_some_and(|id: &str| id.starts_with("verdict:diff_sanity:")),
+        "{:?}",
+        d.payload.get("verdict_id")
+    );
+    assert_eq!(
+        d.payload.get("validator_ref").and_then(Json::as_str),
+        Some("hir/kernel/diff_sanity@1")
+    );
+    assert_eq!(
+        d.payload
+            .get("value")
+            .and_then(Json::as_str)
+            .or_else(|| d.payload.get("verdict").and_then(Json::as_str)),
+        None,
+        "bool verdict value, not a string"
+    );
+    // `postcondition_results` carries both ids in check order.
+    assert!(
+        results[0]
+            .as_str()
+            .is_some_and(|id: &str| id.starts_with("verdict:patch_application:"))
+            && results[1]
+                .as_str()
+                .is_some_and(|id: &str| id.starts_with("verdict:diff_sanity:")),
+        "{results:?}"
+    );
     // `verification.validator.invoked` mirrors the digest + charge.
     assert_eq!(
         invoked[0].payload.get("inputs_digest"),
@@ -1402,6 +1449,156 @@ fn ac_r_2_7_1_1_local_verdicts_after_observed() {
     // fabric never mutates durable observations).
     assert!(observed.scope.effect_id.is_some());
     assert!(observed.payload.get("outcome").is_some() || observed.payload.get("status").is_some());
+}
+
+#[test]
+fn ac_r_2_7_1_diff_sanity_ablation_removes_check_d() {
+    // T-LCD-02 removability: `set_diff_sanity(None)` ablates the conditioned
+    // rule — the `fs_write` terminal emits only check (c)'s verdict and
+    // `postcondition_results` shrinks accordingly (never a silent `n/a`
+    // row — ablation removes the verdict).
+    let (mut store, run, lease, _clock) = open("diffablate");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("diffablate");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(EffectDomain::FsWrite, reversible_attrs(), scope_bindings());
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [5u8; 32], DetectorSet::default());
+    disp.set_diff_sanity(None); // ablate the conditioned rule
+    let mut exec = MockExecutor::ok();
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        Json::obj([
+            ("path", Json::str(format!("{}/a.txt", ws.display()))),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::FsWrite,
+            attributes: Some(reversible_attrs()),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(matches!(out, DispatchOutcome::Observed(_)), "{out:?}");
+    let envs = read_all(disp.store_mut(), &run);
+    let verdicts: Vec<_> = envs
+        .iter()
+        .filter(|e| e.class == "verification.validator.verdict")
+        .collect();
+    assert_eq!(verdicts.len(), 1, "{verdicts:?}");
+    assert!(verdicts[0]
+        .payload
+        .get("verdict_id")
+        .and_then(Json::as_str)
+        .is_some_and(|id| id.starts_with("verdict:patch_application:")));
+    // The over-bound/outside-scope failure path is a pure fold — covered by
+    // `hh-verification`'s `check_d_*` unit tests (the path baseline only
+    // scans workspace roots, so an out-of-scope write is invisible to the
+    // diff by construction; containment owns the prevention boundary).
+}
+
+// ── E1 `state_requires`/PreconditionDomain at `prepare` (S2.11) ─────────────
+
+#[test]
+fn ac_e1_state_precondition_violated_refuses_at_prepare() {
+    // A capability declaring `network` precondition on an offline
+    // environment is refused `PreconditionViolated{kind: network}` —
+    // `action.effect.refused` + `action.tool.rejected`, never a warning,
+    // and the executor never ran.
+    let (mut store, run, lease, _clock) = open("precond-net");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("precond-net");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let mut cap = capability(EffectDomain::FsRead, read_only_attrs(), scope_bindings());
+    cap.preconditions = vec![hh_hir::kinds::PreconditionDomain::Network];
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [9u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        Json::obj([("path", Json::str(format!("{}/a.txt", ws.display())))]),
+        EffectClass {
+            domain: EffectDomain::FsRead,
+            attributes: Some(read_only_attrs()),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(
+        matches!(out, DispatchOutcome::Refused { ref reason } if reason.contains("network")),
+        "{out:?}"
+    );
+    assert_eq!(exec.calls.get(), 0, "a refused effect never executes");
+    let envs = read_all(disp.store_mut(), &run);
+    let refused = envs
+        .iter()
+        .find(|e| e.class == "action.effect.refused")
+        .expect("refused row");
+    assert_eq!(
+        refused.payload.get("reason").and_then(Json::as_str),
+        Some("PreconditionViolated{kind: network}")
+    );
+    assert!(envs.iter().any(|e| e.class == "action.tool.rejected"));
+    // No `prepared`/`committed`/`observed` — the gate precedes them.
+    assert!(envs
+        .iter()
+        .all(|e| !e.class.starts_with("action.effect.prepared")
+            && e.class != "action.effect.committed"));
+}
+
+#[test]
+fn ac_e1_state_precondition_satisfied_proceeds() {
+    // `filesystem`+`temporal` on a live workspace with an unexpired ladder
+    // pass — the gate is not a blanket refusal.
+    let (mut store, run, lease, _clock) = open("precond-ok");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("precond-ok");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let mut cap = capability(EffectDomain::FsRead, read_only_attrs(), scope_bindings());
+    cap.preconditions = vec![
+        hh_hir::kinds::PreconditionDomain::Filesystem,
+        hh_hir::kinds::PreconditionDomain::Temporal,
+        hh_hir::kinds::PreconditionDomain::Environment,
+    ];
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [9u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        Json::obj([("path", Json::str(format!("{}/a.txt", ws.display())))]),
+        EffectClass {
+            domain: EffectDomain::FsRead,
+            attributes: Some(read_only_attrs()),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(matches!(out, DispatchOutcome::Observed(_)), "{out:?}");
+    assert_eq!(exec.calls.get(), 1);
 }
 
 // ── R-2.8.7 — the C1 ask trail (S2.6) ──────────────────────────────────────
@@ -1585,6 +1782,150 @@ fn ac_r_2_8_7_ask_emits_pending_then_suspends() {
         saw_requested,
         "ephemeral requested on subscribe: {frames:?}"
     );
+}
+
+#[test]
+fn ac_r_2_6_2_permission_timeout_expires_to_refusal() {
+    // `TimeoutPolicy[permission]` (§5e.2; ADR-0070 D3): a pending past
+    // `requested_at + timeout` resolves `decided{timed_out, decider: policy}`
+    // → `action.effect.refused` — a refusal, never `unknown`, and a second
+    // expiry is `AlreadyDecided` (the exactly-one gate).
+    let (mut store, run, lease, clock) = open("perm-timeout");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("perm-timeout");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(
+        EffectDomain::PermissionRequest,
+        attrs(Reversibility::Irreversible),
+        scope_bindings(),
+    );
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [7u8; 32], DetectorSet::default());
+    disp.set_permission_timeout(Some(5_000));
+    let mut exec = MockExecutor::ok();
+    exec.decl.domains.insert(EffectDomain::PermissionRequest);
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        Json::obj([
+            ("path", Json::str(ws.join("perm-req.txt").to_str().unwrap())),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::PermissionRequest,
+            attributes: Some(attrs(Reversibility::Irreversible)),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    let DispatchOutcome::Suspended { permission_id } = out else {
+        panic!("an ask suspends awaiting_approval, got {out:?}")
+    };
+    // The pending row carries the declared timeout.
+    let envs = read_all(disp.store_mut(), &run);
+    let pending = envs
+        .iter()
+        .find(|e| e.class == "security.permission.pending")
+        .expect("pending");
+    assert_eq!(
+        pending.payload.get("timeout").and_then(Json::as_int),
+        Some(5_000)
+    );
+    // Not yet elapsed ⇒ `NotElapsed` with the remaining window.
+    let out = disp.expire_permission(&permission_id, &lease).unwrap();
+    assert!(
+        matches!(out, hh_env::dispatch::PermissionExpiry::NotElapsed { .. }),
+        "{out:?}"
+    );
+    // Elapsed ⇒ `Expired`: `decided{timed_out, decider: policy}` + `refused`.
+    clock.advance(5_000);
+    let out = disp.expire_permission(&permission_id, &lease).unwrap();
+    assert_eq!(
+        out,
+        hh_env::dispatch::PermissionExpiry::Expired {
+            permission_id: permission_id.clone()
+        }
+    );
+    let envs = read_all(disp.store_mut(), &run);
+    let decided = envs
+        .iter()
+        .filter(|e| e.class == "security.permission.decided")
+        .find(|e| e.payload.get("decision").and_then(Json::as_str) == Some("timed_out"))
+        .expect("timed_out decided");
+    assert_eq!(
+        decided.payload.get("decider").and_then(Json::as_str),
+        Some("policy")
+    );
+    let refused = envs
+        .iter()
+        .find(|e| e.class == "action.effect.refused")
+        .expect("refused row");
+    assert_eq!(
+        refused.payload.get("reason").and_then(Json::as_str),
+        Some("permission_timed_out")
+    );
+    // Exactly-one: a second expiry reports the landed decision.
+    let out = disp.expire_permission(&permission_id, &lease).unwrap();
+    assert!(matches!(
+        out,
+        hh_env::dispatch::PermissionExpiry::AlreadyDecided { .. }
+    ));
+    // An unattended-attendance pending with `deadline none` reports
+    // `NoDeadline`, never silently expires.
+    let (mut store2, run2, lease2, _clock2) = open("perm-nodeadline");
+    open_scopes(&mut store2, &run2, &lease2, "turn-1", "mc-1");
+    let ws2 = workspace("perm-nodeadline");
+    let mut driver2 = EnvDriver::new(&run2);
+    let env2 = ready_env(&mut store2, &lease2, &mut driver2, &ws2);
+    let cap2 = capability(
+        EffectDomain::PermissionRequest,
+        attrs(Reversibility::Irreversible),
+        scope_bindings(),
+    );
+    let mon2 = test_monitor(&cap2);
+    let mut disp2 = Dispatcher::new(&mut store2, &mon2, &run2, [8u8; 32], DetectorSet::default());
+    let mut exec2 = MockExecutor::ok();
+    exec2.decl.domains.insert(EffectDomain::PermissionRequest);
+    let bind2 = binding();
+    let inp2 = input(
+        &cap2,
+        &bind2,
+        &sb,
+        &env2,
+        "tc-1",
+        Json::obj([
+            (
+                "path",
+                Json::str(ws2.join("perm-req.txt").to_str().unwrap()),
+            ),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::PermissionRequest,
+            attributes: Some(attrs(Reversibility::Irreversible)),
+        },
+    );
+    let out2 = disp2
+        .dispatch(&mut driver2, &mut exec2, None, &inp2, &lease2)
+        .unwrap();
+    let DispatchOutcome::Suspended {
+        permission_id: pid2,
+    } = out2
+    else {
+        panic!("expected suspended, got {out2:?}")
+    };
+    let out = disp2.expire_permission(&pid2, &lease2).unwrap();
+    assert!(matches!(
+        out,
+        hh_env::dispatch::PermissionExpiry::NoDeadline { .. }
+    ));
 }
 
 /// AC-R-2.8.7-9 resume half: the surface's `respond` mints

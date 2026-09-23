@@ -350,6 +350,38 @@ pub trait ControlStrategy {
         -> Result<ControlState, RestoreError>;
 }
 
+/// `Box<dyn ControlStrategy>` forwards every member — the session driver is
+/// variant-generic (`Driver<Box<dyn ControlStrategy>>` — S2.11's steerable
+/// half; the embed boundary picks the variant the sealed definition's
+/// `slots.control_strategy` names).
+impl ControlStrategy for Box<dyn ControlStrategy> {
+    fn capabilities(&self) -> &ControlCapabilities {
+        (**self).capabilities()
+    }
+    fn open(&mut self, ctx: &ControlContext) -> Result<ControlState, ControlError> {
+        (**self).open(ctx)
+    }
+    fn observe(&self, state: &mut ControlState, events: &[EventEnvelope]) {
+        (**self).observe(state, events)
+    }
+    fn decide(&self, state: &mut ControlState, cue: &Cue) -> ControlDecision {
+        (**self).decide(state, cue)
+    }
+    fn terminate(&self, state: &ControlState, reason: &StopReason) -> FinalReport {
+        (**self).terminate(state, reason)
+    }
+    fn checkpoint(&self, state: &ControlState) -> Vec<u8> {
+        (**self).checkpoint(state)
+    }
+    fn restore(
+        &mut self,
+        bytes: &[u8],
+        ctx: &ControlContext,
+    ) -> Result<ControlState, RestoreError> {
+        (**self).restore(bytes, ctx)
+    }
+}
+
 /// A helper for variants: stamp a decision with the boundary's effective
 /// owner for its point (`boundary_view` — the map `open` seeds from
 /// `ctx.boundary`).

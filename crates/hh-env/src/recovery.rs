@@ -527,7 +527,7 @@ impl EnvDriver {
                 };
                 // `attempt_no` binds the committed attempt — the terminal
                 // observes *that* attempt, never a phantom retry.
-                let mut p = events::observed_payload(f.attempt_no, gen, &obs);
+                let mut p = events::observed_payload(f.attempt_no, gen, &obs, &[]); // a terminated attempt ran no checks — no postcondition_results
                 if let Json::Obj(m) = &mut p {
                     m.insert("terminated".to_string(), Json::Bool(true));
                 }
