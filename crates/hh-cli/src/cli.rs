@@ -164,13 +164,68 @@ fn err_of(e: CliError) -> CliOutcome {
 }
 
 fn emit_result(io: &mut Io, out: &CliOutcome, format: Option<&OutputFormat>) {
+    // AC-R-2.11.1-16: the emitted record passes the reader-set gate — a
+    // `content`/`payload` member under a `readers` label the principal is not
+    // in is a typed `withheld` tombstone, never the bytes (all formats: the
+    // `human` summary prints the record too).
+    let shown = withhold_uncovered(&out.result, &io.principal);
     match format {
         Some(OutputFormat::Human) => {
-            let _ = writeln!(io.out, "result: {}", out.result.to_canonical_string());
+            let _ = writeln!(io.out, "result: {}", shown.to_canonical_string());
         }
         _ => {
-            let _ = writeln!(io.out, "{}", out.result.to_canonical_string());
+            let _ = writeln!(io.out, "{}", shown.to_canonical_string());
         }
+    }
+}
+
+/// The typed withholding tombstone — the item's metadata (seq, class,
+/// authority, readers) stays visible; only the covered-out content is
+/// replaced (AC-R-2.11.1-16's "withheld with a typed reason").
+fn withheld_tombstone() -> Json {
+    Json::obj([(
+        "withheld",
+        Json::obj([("reason", Json::str("reader_set_uncovered"))]),
+    )])
+}
+
+/// Is `readers` a restricted set that does *not* contain `principal`?
+/// `Public` (absent or `"public"`) covers every reader.
+fn readers_uncover(readers: Option<&Json>, principal: &str) -> bool {
+    match readers {
+        Some(Json::Arr(rs)) => !rs.iter().filter_map(Json::as_str).any(|r| r == principal),
+        _ => false,
+    }
+}
+
+/// AC-R-2.11.1-16 / DF-S2.10-2 — the reader-set gate over CLI output. The
+/// surface's reader set is `{io.principal}` — the one principal ref the
+/// `InvocationRecord` names. Two carrier shapes get their content withheld:
+/// a `context_view`-shaped item (`{…, readers: […], content}`) loses its
+/// `content`; an event-envelope-shaped object (`{…, provenance.readers:
+/// […], payload}`) loses its `payload`. Everything recurses, so nested
+/// `events[]`/`items[]` members are covered wherever they appear.
+fn withhold_uncovered(j: &Json, principal: &str) -> Json {
+    match j {
+        Json::Obj(m) => {
+            let item_uncovered = readers_uncover(m.get("readers"), principal);
+            let env_uncovered = m
+                .get("provenance")
+                .map(|p| readers_uncover(p.get("readers"), principal))
+                .unwrap_or(false);
+            let mut out = BTreeMap::new();
+            for (k, v) in m {
+                let v = if (item_uncovered && k == "content") || (env_uncovered && k == "payload") {
+                    withheld_tombstone()
+                } else {
+                    withhold_uncovered(v, principal)
+                };
+                out.insert(k.clone(), v);
+            }
+            Json::Obj(out)
+        }
+        Json::Arr(a) => Json::Arr(a.iter().map(|v| withhold_uncovered(v, principal)).collect()),
+        _ => j.clone(),
     }
 }
 
@@ -219,6 +274,7 @@ const VALUE_FLAGS: &[&str] = &[
     "kernel-cmd",
     "mode",
     "at-seq",
+    "until-seq",
     "at-event",
     "from-seq",
     "from",
@@ -518,7 +574,11 @@ fn read_new(
 fn render_event(io: &mut Io, format: &OutputFormat, event: &Json) {
     match format {
         OutputFormat::Jsonl => {
-            let _ = writeln!(io.out, "{}", event.to_canonical_string());
+            // AC-R-2.11.1-16: the same reader-set gate as `emit_result` —
+            // `run start --jsonl` and `run events` share this seam, so the
+            // O-1 byte-parity claim holds *with* the tombstones applied.
+            let shown = withhold_uncovered(event, &io.principal);
+            let _ = writeln!(io.out, "{}", shown.to_canonical_string());
         }
         OutputFormat::Human => {
             let seq = event.get("seq").and_then(Json::as_int).unwrap_or(0);
@@ -1811,13 +1871,27 @@ fn cmd_run_inspect(
         }
     };
     let sess = attach(b, &run_id, &r.invocation)?;
-    let v = b.call(
-        "project",
-        &Json::obj([
-            ("session_id", Json::str(sess.session_id.clone())),
-            ("view_kind", Json::str(kind)),
-        ]),
-    )?;
+    let mut params = Json::obj([
+        ("session_id", Json::str(sess.session_id.clone())),
+        ("view_kind", Json::str(kind)),
+    ]);
+    if let Json::Obj(m) = &mut params {
+        // `--until-seq` pins the projection's upper bound (`--at-seq` is the
+        // accepted alias — `run inspect ... --until-seq N` is the ticketed
+        // spelling; C1).
+        if let Some(seq) = p.flag("until-seq").or_else(|| p.flag("at-seq")) {
+            match seq.parse::<i64>() {
+                Ok(n) => {
+                    m.insert("until_seq".into(), Json::Int(n));
+                }
+                Err(_) => {
+                    close_session(b, &sess.session_id);
+                    return Err(inv("bad_flag_value", "--until-seq", "needs an integer seq"));
+                }
+            }
+        }
+    }
+    let v = b.call("project", &params)?;
     close_session(b, &sess.session_id);
     ok_outcome("run_inspect", v, r.format)
 }
@@ -2432,5 +2506,102 @@ mod tests {
             "{e}"
         );
         assert!(e.contains("options: allow_once | deny_once"), "{e}");
+    }
+
+    // ── AC-R-2.11.1-16 / DF-S2.10-2 — reader-set withholding ──────────────
+
+    /// A restricted `readers` set that does not contain the principal hides
+    /// the `content` member (context_view item shape) behind a typed
+    /// `withheld` tombstone; metadata stays.
+    #[test]
+    fn withholding_replaces_uncovered_content() {
+        let item = Json::obj([
+            ("seq", Json::Int(4)),
+            ("class", Json::str("context.item")),
+            ("authority", Json::str("principal")),
+            (
+                "readers",
+                Json::Arr(vec![Json::str("principal:someone-else")]),
+            ),
+            ("content", Json::str("the-secret-bytes")),
+        ]);
+        let shown = withhold_uncovered(&item, "principal:u");
+        let content = shown.get("content").unwrap();
+        assert_eq!(
+            content
+                .get("withheld")
+                .and_then(|w| w.get("reason"))
+                .and_then(Json::as_str),
+            Some("reader_set_uncovered")
+        );
+        assert!(!shown.to_canonical_string().contains("the-secret-bytes"));
+        // Metadata is *not* hidden — the row's existence stays visible.
+        assert_eq!(shown.get("seq"), Some(&Json::Int(4)));
+        // The covering principal sees the bytes.
+        let shown = withhold_uncovered(&item, "principal:someone-else");
+        assert_eq!(shown.get("content"), Some(&Json::str("the-secret-bytes")));
+    }
+
+    /// `public` readers cover every principal — nothing is withheld.
+    #[test]
+    fn public_readers_never_withhold() {
+        let item = Json::obj([
+            ("readers", Json::str("public")),
+            ("content", Json::str("visible")),
+        ]);
+        assert_eq!(withhold_uncovered(&item, "principal:u"), item);
+        let absent = Json::obj([("content", Json::str("visible"))]);
+        assert_eq!(withhold_uncovered(&absent, "principal:u"), absent);
+    }
+
+    /// The envelope shape (`provenance.readers` restricted) withholds
+    /// `payload`; nested arrays/objects recurse.
+    #[test]
+    fn withholding_recovers_envelope_payload_and_recurses() {
+        let event = Json::obj([
+            ("seq", Json::Int(7)),
+            (
+                "provenance",
+                Json::obj([("readers", Json::Arr(vec![Json::str("principal:other")]))]),
+            ),
+            ("payload", Json::str("hidden-payload")),
+        ]);
+        let doc = Json::obj([("events", Json::Arr(vec![event]))]);
+        let shown = withhold_uncovered(&doc, "principal:u");
+        let s = shown.to_canonical_string();
+        assert!(!s.contains("hidden-payload"), "{s}");
+        assert!(s.contains("reader_set_uncovered"), "{s}");
+    }
+
+    /// LT battery over the output path: no planted secret byte string
+    /// survives the gate in any covered-out position — the tombstone is all
+    /// the output carries. (The full LT-01…12 fixture battery over live
+    /// surfaces runs where secret *delivery* exists; the CLI half is the
+    /// output gate this exercises — AC-R-2.11.1-16.)
+    #[test]
+    fn lt_battery_no_secret_bytes_through_the_gate() {
+        let secrets = [
+            "sk-live-4f3a9c",              // LT-01/02 credential-shaped
+            "mh_secret:v1:ch:r0:nonce",    // a placeholder is *not* a leak
+            "-----BEGIN PRIVATE KEY-----", // LT-04 PEM body
+            "b3BlbiBzZXNhbWU=",            // LT-12 base64 form
+            "hunter2hunter2",              // free-text secret
+        ];
+        for (i, secret) in secrets.iter().enumerate() {
+            let doc = Json::obj([(
+                "items",
+                Json::Arr(vec![Json::obj([
+                    ("seq", Json::Int(i as i64)),
+                    ("readers", Json::Arr(vec![Json::str("principal:not-me")])),
+                    ("content", Json::str(*secret)),
+                ])]),
+            )]);
+            let shown = withhold_uncovered(&doc, "principal:u");
+            let s = shown.to_canonical_string();
+            assert!(
+                !s.contains(secret),
+                "secret {secret:?} leaked through the gate: {s}"
+            );
+        }
     }
 }

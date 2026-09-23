@@ -370,6 +370,16 @@ fn result_run_id(stdout: &str) -> String {
         .to_string()
 }
 
+/// `run events` as parsed envelopes — the durable rows, in order.
+fn events_json(b: &mut dyn Boundary, run_id: &str) -> Vec<Json> {
+    let (class, out, _) = hh(b, &["run", "events", run_id], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::Ok, "run events failed: {out}");
+    out.lines()
+        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .filter(|j| j.get("class").is_some())
+        .collect()
+}
+
 /// `run events` over a fresh attach — the durable classes, in order.
 fn event_classes(b: &mut dyn Boundary, run_id: &str) -> Vec<String> {
     let (class, out, _) = hh(b, &["run", "events", run_id], NO_TTY, None, &[]);
@@ -2306,6 +2316,42 @@ fn run_inspect_accepts_compact() {
     );
 }
 
+/// `--until-seq` is a declared flag (C1): it pins `project`'s upper bound —
+/// an unregistered spelling is an `invocation_error`, so this fails if the
+/// flag is dropped from `VALUE_FLAGS` or the wiring is removed.
+#[test]
+fn run_inspect_until_seq_bounds_the_projection() {
+    let mut b = ServiceBoundary::new("inspect-until");
+    let def = write_definition("inspect-until");
+    let (_c, out, _err) = hh(&mut b, &["run", "start", &def, "hi"], NO_TTY, None, &[]);
+    let run_id = result_run_id(&out);
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "run",
+            "inspect",
+            &run_id,
+            "--until-seq",
+            "0",
+            "--format",
+            "json",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    // A bad seq value is a typed invocation error, never a kernel call.
+    let (class, _out, _err) = hh(
+        &mut b,
+        &["run", "inspect", &run_id, "--until-seq", "not-a-number"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::InvocationError);
+}
+
 // ── config explain ──────────────────────────────────────────────
 
 #[test]
@@ -2596,4 +2642,114 @@ fn amend_approval_mode_widening_needs_a_human() {
         !classes.iter().any(|c| c == "control.approval_mode.amended"),
         "{classes:?}"
     );
+}
+
+// ── AC-R-2.11.1-7 — the bypass never-auto split (S2.12) ──────────────────
+
+/// A capability ask whose declared `risk_class` is outside never-auto
+/// auto-resolves under `--bypass` — `decided{decision: allow, decider:
+/// policy, reason: bypass}`, no prompt, at either attendance.
+#[test]
+fn bypass_auto_resolves_the_non_never_auto_ask() {
+    let mut b = ServiceBoundary::new("bypass-auto");
+    let def = write_definition("bypass-auto");
+    let cap = r#"{"capability_id":"cap:fs","surface_id":"surface:fs","requires_approval":true,"risk_class":{"reversibility":"reversible","repeat_safety":"non_idempotent","scope":"workspace_local"}}"#;
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "run",
+            "start",
+            &def,
+            "hi",
+            "--bypass",
+            "--no-input",
+            "--capability",
+            cap,
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let run_id = result_run_id(&out);
+    let decided = events_json(&mut b, &run_id)
+        .into_iter()
+        .filter(|e| e.get("class").and_then(Json::as_str) == Some("security.permission.decided"))
+        .collect::<Vec<_>>();
+    assert_eq!(decided.len(), 1, "one auto-resolved ask: {decided:?}");
+    let p = decided[0].get("payload").cloned().unwrap_or(Json::Null);
+    assert_eq!(p.get("decision").and_then(Json::as_str), Some("allow"));
+    assert_eq!(p.get("decider").and_then(Json::as_str), Some("policy"));
+    assert_eq!(p.get("reason").and_then(Json::as_str), Some("bypass"));
+}
+
+/// The never-auto half: under `--bypass` a request whose `risk_class` is
+/// irreversible (or undeclared ⇒ UNKNOWN) still reaches the human stage —
+/// the attended loop prompts and the principal's answer lands.
+#[test]
+fn bypass_never_auto_still_prompts_attended() {
+    let mut b = ServiceBoundary::new("bypass-never");
+    let def = write_definition("bypass-never");
+    let cap = r#"{"capability_id":"cap:exec","surface_id":"surface:exec","requires_approval":true,"options":["allow_once","deny_once"],"risk_class":{"reversibility":"irreversible","repeat_safety":"non_idempotent","scope":"external"}}"#;
+    let (class, out, err) = hh(
+        &mut b,
+        &["run", "start", &def, "hi", "--bypass", "--capability", cap],
+        ALL_TTY,
+        None,
+        &["allow_once"],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out} {err}");
+    // The ask reached the human stage — the prompt rendered.
+    assert!(err.contains("approval requested"), "{err}");
+    let run_id = result_run_id(&out);
+    let decided = events_json(&mut b, &run_id)
+        .into_iter()
+        .filter(|e| e.get("class").and_then(Json::as_str) == Some("security.permission.decided"))
+        .collect::<Vec<_>>();
+    // The human decided (`decider: human`), never a policy auto-resolve.
+    assert!(
+        decided.iter().any(|e| e
+            .get("payload")
+            .and_then(|p| p.get("decider"))
+            .and_then(Json::as_str)
+            == Some("human")),
+        "{decided:?}"
+    );
+}
+
+/// An undeclared `risk_class` reads UNKNOWN ⇒ never-auto ⇒ under
+/// `--bypass --no-input` the ask still denies (Π-12), never auto-allows.
+#[test]
+fn bypass_never_auto_denies_unattended() {
+    let mut b = ServiceBoundary::new("bypass-deny");
+    let def = write_definition("bypass-deny");
+    let cap =
+        r#"{"capability_id":"cap:exec","surface_id":"surface:exec","requires_approval":true}"#;
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "run",
+            "start",
+            &def,
+            "hi",
+            "--bypass",
+            "--no-input",
+            "--capability",
+            cap,
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let run_id = result_run_id(&out);
+    let decided = events_json(&mut b, &run_id)
+        .into_iter()
+        .filter(|e| e.get("class").and_then(Json::as_str) == Some("security.permission.decided"))
+        .collect::<Vec<_>>();
+    assert_eq!(decided.len(), 1, "{decided:?}");
+    let p = decided[0].get("payload").cloned().unwrap_or(Json::Null);
+    assert_eq!(p.get("decision").and_then(Json::as_str), Some("deny"));
+    assert_eq!(p.get("decider").and_then(Json::as_str), Some("policy"));
+    assert_eq!(p.get("reason").and_then(Json::as_str), Some("unattended"));
 }

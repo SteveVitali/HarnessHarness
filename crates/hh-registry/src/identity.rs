@@ -43,6 +43,17 @@ pub fn semantic_id(r: &RegistryRecord) -> Option<String> {
     if let RegistryRecord::Capability(c) = r {
         return Some(hh_hir::identity::semantic_id(&c.node));
     }
+    // The environment record's semantic coordinate mints under the
+    // `hh_identity::record` semantic domain (`"<tag>#semantic"`) — NOT this
+    // crate's `semantic.<kind>` tag: the same body must mint the same
+    // `semantic_id` wherever it is identified (CC1).
+    if let RegistryRecord::EnvironmentRecord(_) = r {
+        let proj = schema::semantic_projection_json(r)?;
+        return Some(mint_id(
+            "environment#semantic",
+            proj.to_canonical_string().as_bytes(),
+        ));
+    }
     let proj = schema::semantic_projection_json(r)?;
     let tag = format!("semantic.{}", r.kind().domain_tag());
     let digest = proj.to_canonical_string();

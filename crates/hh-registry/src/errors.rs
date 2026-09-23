@@ -176,6 +176,21 @@ pub enum RegistryError {
         /// The `version_id`.
         version_id: String,
     },
+    /// A `registry_ci`/`lab` conformance report naming a run the store does not
+    /// hold as durable (AC-R-2.12.1-9 — `record_conformance` refuses; a
+    /// `publisher_claim` never needs one).
+    RunNotDurable {
+        /// The run reference that failed the durability check.
+        run_ref: String,
+    },
+    /// A widening/loosening successor publish without the required MAJOR label
+    /// bump (§8.3 #6; AC-R-2.12.2-13).
+    LabelBumpRequired {
+        /// The name whose publish refused.
+        name: String,
+        /// The label that was required to bump.
+        detail: String,
+    },
 }
 
 impl RegistryError {
@@ -211,6 +226,8 @@ impl RegistryError {
             RegistryError::NotAncestorOrSibling => "NotAncestorOrSibling",
             RegistryError::CapabilityValidation { .. } => "CapabilityValidation",
             RegistryError::UnknownVersion { .. } => "UnknownVersion",
+            RegistryError::RunNotDurable { .. } => "RunNotDurable",
+            RegistryError::LabelBumpRequired { .. } => "LabelBumpRequired",
         }
     }
 }
@@ -257,6 +274,10 @@ impl std::fmt::Display for RegistryError {
                 write!(f, ": {newer} -> {older}")
             }
             RegistryError::UnknownVersion { version_id } => write!(f, ": {version_id}"),
+            RegistryError::RunNotDurable { run_ref } => write!(f, ": {run_ref}"),
+            RegistryError::LabelBumpRequired { name, detail } => {
+                write!(f, ": {name} ({detail})")
+            }
             _ => Ok(()),
         }
     }

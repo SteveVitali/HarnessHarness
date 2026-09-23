@@ -26,6 +26,7 @@ pub mod frames;
 pub mod inject;
 pub mod open;
 pub mod overrides;
+pub(crate) mod registry_ops;
 pub mod runtime;
 pub mod service;
 pub mod stdio;

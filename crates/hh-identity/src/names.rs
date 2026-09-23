@@ -61,6 +61,10 @@ pub struct NameHistoryEntry {
     pub publisher: ProvenanceRecord,
     /// The transaction-time sequence (ordering uses only this `seq`, never a wall clock — §8.3 #2).
     pub published_at_seq: u64,
+    /// The content id of the `supersedes` diff (`idp("registry.diff", H(ops))`) — the
+    /// §8.3 #3 `diff_ref` a successor publish mints over the superseded body. `None`
+    /// for a first publish or a status-only entry (deprecate/yank carry no diff).
+    pub diff_ref: Option<String>,
 }
 
 /// `publish` failure modes (§8.3 #2).
@@ -78,6 +82,16 @@ pub enum PublishError {
     /// A widening/loosening successor without a `principal`-authority attested provenance
     /// (§8.3 #6; ADR-0037 D5 — the §8.1 `AuthorityClass` + attestation rule).
     AuthorityWideningRequiresHuman,
+    /// A widening/loosening successor without the required **MAJOR label bump**
+    /// (§8.3 #6: widening produces a `diff_ref` *and* a MAJOR bump — the label
+    /// must parse `v?<major>[.<minor>[.<patch>]]` and its major must exceed the
+    /// superseded entry's).
+    LabelBumpRequired {
+        /// The name whose publish refused.
+        name: String,
+        /// The label that was required to bump (or `none`).
+        detail: String,
+    },
 }
 
 /// `resolve` mode (§8.3 #2). `execute` never returns yanked/revoked heads; `audit`/`reproduce`
@@ -126,7 +140,9 @@ impl NameIndex {
     }
 
     /// `publish(namespace, name, version_id, …) → NameHistoryEntry` (append-only). Enforces label
-    /// uniqueness, kind match with `supersedes`, namespace policy and the widening rule.
+    /// uniqueness, kind match with `supersedes`, namespace policy and the widening rule —
+    /// a widening/loosening successor requires `principal`+attested provenance **and** a MAJOR
+    /// label bump over the superseded entry (§8.3 #6; AC-R-2.12.2-13).
     #[allow(clippy::too_many_arguments)]
     pub fn publish(
         &mut self,
@@ -138,6 +154,7 @@ impl NameIndex {
         status: NameStatus,
         publisher: ProvenanceRecord,
         widening: bool,
+        diff_ref: Option<String>,
     ) -> Result<NameHistoryEntry, PublishError> {
         // `hh/` is kernel-owned: the publisher's *conferred authority* must be `kernel`
         // (§8.1 — the class, not a self-declared origin string).
@@ -173,6 +190,24 @@ impl NameIndex {
         {
             return Err(PublishError::AuthorityWideningRequiresHuman);
         }
+        if widening {
+            // §8.3 #6 / AC-R-2.12.2-13: a widening successor bumps the MAJOR
+            // label component. Both labels parse `v?<major>[.<minor>[.<patch>]]`;
+            // an absent or unparsable label can never evidence the bump.
+            let bump_ok = match (
+                label_major(label.as_deref()),
+                supersedes.and_then(|s| label_major(s.label.as_deref())),
+            ) {
+                (Some(new_major), Some(old_major)) => new_major > old_major,
+                _ => false,
+            };
+            if !bump_ok {
+                return Err(PublishError::LabelBumpRequired {
+                    name: name.to_string(),
+                    detail: label.clone().unwrap_or_else(|| "none".to_string()),
+                });
+            }
+        }
         let entry = NameHistoryEntry {
             namespace,
             name: name.to_string(),
@@ -184,6 +219,7 @@ impl NameIndex {
             supersedes_entry: supersedes.map(|e| e.version_id.clone()),
             publisher,
             published_at_seq: self.next_seq,
+            diff_ref,
         };
         self.next_seq += 1;
         self.entries.push(entry.clone());
@@ -259,6 +295,18 @@ impl NameIndex {
     }
 }
 
+/// The MAJOR component of a SemVer-class label (`v?MAJOR[.MINOR[.PATCH]]`).
+/// `None` for anything else — a label that cannot evidence a bump is not a
+/// label the widening gate accepts.
+fn label_major(label: Option<&str>) -> Option<u64> {
+    let l = label?.strip_prefix('v').unwrap_or(label?);
+    let major = l.split('.').next()?;
+    if major.is_empty() || !major.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    major.parse::<u64>().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,6 +357,7 @@ mod tests {
                 NameStatus::Active,
                 agent(),
                 false,
+                None,
             )
             .unwrap();
         let v2 = vref(RecordKind::VariantRecord, "sha256:v2", Some("sha256:s"));
@@ -321,6 +370,7 @@ mod tests {
             NameStatus::Active,
             agent(),
             false,
+            None,
         )
         .unwrap();
         assert_eq!(idx.history(Namespace::Local, "tool/grep").len(), 2);
@@ -346,6 +396,7 @@ mod tests {
             NameStatus::Active,
             agent(),
             false,
+            None,
         )
         .unwrap();
         let v2 = vref(RecordKind::VariantRecord, "sha256:v2", None);
@@ -358,7 +409,8 @@ mod tests {
                 None,
                 NameStatus::Active,
                 agent(),
-                false
+                false,
+                None
             ),
             Err(PublishError::LabelReused { .. })
         ));
@@ -377,7 +429,8 @@ mod tests {
                 None,
                 NameStatus::Active,
                 agent(),
-                false
+                false,
+                None
             ),
             Err(PublishError::NamespaceForbidden { .. })
         ));
@@ -390,7 +443,8 @@ mod tests {
                 None,
                 NameStatus::Active,
                 kernel(),
-                false
+                false,
+                None
             )
             .is_ok());
     }
@@ -408,12 +462,14 @@ mod tests {
                 None,
                 NameStatus::Active,
                 agent(),
-                true
+                true,
+                None
             ),
             Err(PublishError::AuthorityWideningRequiresHuman)
         ));
-        assert!(idx
-            .publish(
+        // Attested but no label bump evidence → LabelBumpRequired.
+        assert!(matches!(
+            idx.publish(
                 Namespace::Local,
                 "p",
                 &v,
@@ -421,7 +477,75 @@ mod tests {
                 None,
                 NameStatus::Active,
                 human_attested(),
-                true
+                true,
+                None
+            ),
+            Err(PublishError::LabelBumpRequired { .. })
+        ));
+    }
+
+    #[test]
+    fn widening_successor_requires_a_major_label_bump() {
+        // AC-R-2.12.2-13 (§8.3 #6): widening ⇒ principal+attestation AND a MAJOR bump.
+        let mut idx = NameIndex::new();
+        let v1 = vref(RecordKind::PermissionPolicy, "sha256:v1", None);
+        let e1 = idx
+            .publish(
+                Namespace::Local,
+                "p",
+                &v1,
+                Some("1.2.0".into()),
+                None,
+                NameStatus::Active,
+                human_attested(),
+                false,
+                None,
+            )
+            .unwrap();
+        let v2 = vref(RecordKind::PermissionPolicy, "sha256:v2", None);
+        // Attested, widening, but only a minor bump → LabelBumpRequired.
+        assert!(matches!(
+            idx.publish(
+                Namespace::Local,
+                "p",
+                &v2,
+                Some("1.3.0".into()),
+                Some(&e1),
+                NameStatus::Active,
+                human_attested(),
+                true,
+                None
+            ),
+            Err(PublishError::LabelBumpRequired { .. })
+        ));
+        // Attested + MAJOR bump → ok (the `diff_ref` rides the entry).
+        let e2 = idx
+            .publish(
+                Namespace::Local,
+                "p",
+                &v2,
+                Some("2.0.0".into()),
+                Some(&e1),
+                NameStatus::Active,
+                human_attested(),
+                true,
+                Some("sha256:diff".into()),
+            )
+            .unwrap();
+        assert_eq!(e2.diff_ref.as_deref(), Some("sha256:diff"));
+        // A non-widening successor never needs the bump.
+        let v3 = vref(RecordKind::PermissionPolicy, "sha256:v3", None);
+        assert!(idx
+            .publish(
+                Namespace::Local,
+                "p",
+                &v3,
+                Some("2.0.1".into()),
+                Some(&e2),
+                NameStatus::Active,
+                agent(),
+                false,
+                None,
             )
             .is_ok());
     }
@@ -441,6 +565,7 @@ mod tests {
                 NameStatus::Active,
                 agent(),
                 false,
+                None,
             )
             .unwrap();
         let v2 = vref(RecordKind::VariantRecord, "sha256:v2", None);
@@ -453,6 +578,7 @@ mod tests {
             NameStatus::Yanked,
             agent(),
             false,
+            None,
         )
         .unwrap();
         match idx.resolve(&NameSelector::new("local", "n"), ResolveMode::Execute) {
