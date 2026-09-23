@@ -1,0 +1,17 @@
+[package]
+name = "hh-compact-evict-oldest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The packaged first-party `compaction_strategy` variant — C0 `evict_oldest` (spec §5c R-2.4.2, §8.4; ADR-0075/0146; ticket S2.2). Deterministic, model-call-free, budget/cap-aware; the `{assess, propose, execute, declare}` contract over `{Evict, Offload, Summarize, Restructure}` — `evict_oldest` emits `Evict` only. Runs out of process under `plugin_abi/1` via the shared plugin-side runtime in hh-plugin-fixture; packaged at `plugins/hh-compact-evict-oldest`."
+
+[[bin]]
+name = "hh-compact-evict-oldest"
+path = "src/main.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+hh-plugin-fixture = { path = "../hh-plugin-fixture" }
+hh-varhost = { path = "../hh-varhost" }

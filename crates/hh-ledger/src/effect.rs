@@ -1492,6 +1492,7 @@ impl Store {
             tool_call_id: f.tool_call_id.clone(),
             effect_id: Some(effect_id.to_string()),
             child_run_id: None,
+            component_call_id: None,
             branch_id: None,
         };
         let ev = Event {

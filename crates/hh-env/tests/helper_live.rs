@@ -618,6 +618,7 @@ fn ac_s2_exec_without_commit_is_refused() {
                 commit_seq: 1,
             },
             idempotency_key: None,
+            env_clear: false,
         })
         .unwrap_err();
     match err {
@@ -659,6 +660,7 @@ fn ac_s2_token_echo_is_verbatim() {
             attribution_token: "att-token-xyz".into(),
             commit_proof: hh_helper::protocol::CommitProof::ReadOnly,
             idempotency_key: None,
+            env_clear: false,
         })
         .unwrap();
     assert_eq!(
@@ -742,6 +744,7 @@ fn ac_s2_executor_dedup_replays_the_recorded_verdict() {
         attribution_token: "tok-dedup".into(),
         commit_proof: hh_helper::protocol::CommitProof::ReadOnly,
         idempotency_key: Some("dedup-key-1".into()),
+        env_clear: false,
     };
     client.request(&mk_exec("exec-d1")).unwrap();
     // Drain to terminal — the verdict binds the key.
@@ -1111,6 +1114,7 @@ fn ac_s2_detached_child_is_detected() {
             attribution_token: "tok-det".into(),
             commit_proof: hh_helper::protocol::CommitProof::ReadOnly,
             idempotency_key: None,
+            env_clear: false,
         })
         .unwrap();
     let mut detached = Vec::new();
@@ -1316,6 +1320,7 @@ fn ac_s2_removability0_c1_halves_refuse_honestly() {
             attribution_token: "tok-r0".into(),
             commit_proof: hh_helper::protocol::CommitProof::ReadOnly,
             idempotency_key: None,
+            env_clear: false,
         })
         .unwrap();
     loop {

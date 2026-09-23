@@ -112,8 +112,11 @@ impl Producer {
 }
 
 /// `scope {turn_id?, model_call_id?, tool_call_id?, effect_id?, child_run_id?,
-/// branch_id?}` — the structural chain `run ⊃ turn ⊃ model_call ⊃ tool_call`
-/// (ADR-0027 §4); scope ids must refer to opened scopes.
+/// branch_id?, component_call_id?}` — the structural chain `run ⊃ turn ⊃
+/// model_call ⊃ tool_call` (ADR-0027 §4); scope ids must refer to opened
+/// scopes. `component_call_id` is the §8.4 variant-host invocation scope
+/// (S2.2 — additive optional member; absent members never serialise, so
+/// existing canonical bytes are unchanged).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Scope {
     /// The open turn.
@@ -128,6 +131,8 @@ pub struct Scope {
     pub child_run_id: Option<String>,
     /// A branch (no Stage-1 opener — `navigate` lands at Stage 2).
     pub branch_id: Option<String>,
+    /// A variant-host invocation (§8.4 `component_call`; S2.2).
+    pub component_call_id: Option<String>,
 }
 
 impl Scope {
@@ -141,6 +146,7 @@ impl Scope {
             Effect => self.effect_id.as_deref(),
             ChildRun => self.child_run_id.as_deref(),
             Branch => self.branch_id.as_deref(),
+            ComponentCall => self.component_call_id.as_deref(),
         }
     }
 
@@ -152,6 +158,7 @@ impl Scope {
             && self.effect_id.is_none()
             && self.child_run_id.is_none()
             && self.branch_id.is_none()
+            && self.component_call_id.is_none()
     }
 }
 

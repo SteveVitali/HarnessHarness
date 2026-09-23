@@ -22,3 +22,29 @@ cargo build -p hh-helper
 cargo test -p hh-env --test helper_live
 
 echo "check-removability: OK (tier-0 honest refusals verified; tier-1 suite green)"
+
+echo "== removability(extension): no base crate depends on the variant host =="
+# S2.2 (§8.4 removability tiers): hh-varhost, hh-plugin-fixture and
+# hh-compact-evict-oldest are the extension tier — removable without
+# breaking the base class contracts. The check: no *other* workspace crate
+# names them as a normal dependency (dev-dependency edges don't ship).
+EXT="hh-varhost hh-plugin-fixture hh-compact-evict-oldest"
+cargo metadata --format-version 1 --no-deps | python3 -c "
+import json,sys
+ext=set(sys.argv[1].split())
+meta=json.load(sys.stdin)
+bad=[]
+for pkg in meta['packages']:
+    if pkg['name'] in ext:
+        continue
+    for d in pkg['dependencies']:
+        if d['name'] in ext and d['kind'] == 'normal':
+            bad.append(pkg['name'] + ' -> ' + d['name'])
+if bad:
+    print('extension-tier edges into the base:')
+    for b in bad: print('  ' + b)
+    sys.exit(1)
+print('extension tier is edge-free into the base (removable)')
+" "$EXT"
+
+echo "check-removability: extension tier verified removable"

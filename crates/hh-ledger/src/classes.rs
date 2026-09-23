@@ -84,6 +84,11 @@ pub enum ScopeKind {
     ChildRun,
     /// `branch_id` — no Stage-1 opener (`lifecycle.branch.*`/navigate land at Stage 2).
     Branch,
+    /// `component_call_id` — the §8.4 variant-host invocation scope (S2.2;
+    /// single-row scope: `lifecycle.component.invoked` is the terminal row and
+    /// carries the id; the scope opens and closes on that one row's worth of
+    /// attribution, so no `opens_scope`/`closes_scope` wiring).
+    ComponentCall,
 }
 
 impl ScopeKind {
@@ -96,6 +101,7 @@ impl ScopeKind {
             ScopeKind::Effect => "effect_id",
             ScopeKind::ChildRun => "child_run_id",
             ScopeKind::Branch => "branch_id",
+            ScopeKind::ComponentCall => "component_call_id",
         }
     }
 }
@@ -832,6 +838,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("security.extension.install_requested", O::Events, false, OPEN_AUDIT, &[], None, None),
     row_audit("security.extension.install_completed", O::Events, false, OPEN_AUDIT, &[], None, None),
     row_audit("security.extension.revoked",           O::Events, false, OPEN_AUDIT, &[], None, None),
+    // `security.extension.violation{extension_id, kind ∈ {authority_crossing,
+    // reach, isolation}, refused_message_digest?}` — the V1–V6/X1/X3 refusal
+    // record (§8.4 §6; ADR-0181 D5). Audit-grade: ids/spellings/digest only.
+    row_audit("security.extension.violation",         O::Events, false, OPEN_AUDIT, &[], None, None),
     // `security.audit.checkpoint` — the signed-checkpoint row (emitter at
     // Stage 2); the enumerated §5g.6 §3 partition — nothing offloaded.
     row_audit("security.audit.checkpoint",    O::Events, true,  CHECKPOINT_FIELDS, &[], None, None),
@@ -956,6 +966,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // detected_at_guard}`) that precedes `stop{invariant_violation}` + the
     // quarantine checkpoint. Kernel-origin, provenance-bearing, `ledger` —
     // citable by `audit_ref` (ADR-0106/0108).
+    // `control.guard.fired{decision_point, guard_id, verdict, required}` —
+    // the ledgered spelling of a host-hook/GuardVerdict outcome (§5e.2;
+    // §8.4 §6 "control.guard.fired (host projection)"; S2.2). Ids and the
+    // closed verdict spelling only — audit-grade.
+    row_audit("control.guard.fired",         O::Events, false, OPEN_AUDIT, &[], None, None),
     row("control.loop.detected",           Led, O::Events, false, true,  None, None),
     row("control.output.rejected",         Led, O::Events, false, true,  None, None),
     row("control.invariant.violated",      Led, O::Events, false, true,  None, None),
