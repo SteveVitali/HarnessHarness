@@ -204,8 +204,13 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("action.effect.committed",         Led, O::Events, true,  false, None, None),
     row("action.effect.observed",          Led, O::Events, true,  false, None, Some(Effect)),
     row("action.effect.unknown",           Led, O::Events, true,  false, None, None),
-    row("action.effect.probed",            Led, O::Events, true,  false, None, None),
-    row("action.effect.compensated",       Led, O::Events, true,  false, None, None),
+    // `probed` and `compensated` close the effect scope **conditionally** —
+    // `probed{undeterminable}` stays open (returns to `unknown`), and
+    // `compensated`/`reverted` also admit the scope-free marker form
+    // (`payload.original_effect_id`) for post-terminal saga marks. The predicate is
+    // `effect::scope_close_fires` (§5a.2 states; ADR-0238).
+    row("action.effect.probed",            Led, O::Events, true,  false, None, Some(Effect)),
+    row("action.effect.compensated",       Led, O::Events, true,  false, None, Some(Effect)),
     row("action.effect.reverted",          Led, O::Events, true,  false, None, Some(Effect)),
     row("action.effect.abandoned",         Led, O::Events, true,  false, None, Some(Effect)),
     // The `action.tool.*` set — `proposed` opens the tool_call scope, the three
@@ -279,6 +284,15 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("control.budget.exceeded",         Led, O::Events, false, true,  None, None),
     row("control.budget.amended",          Led, O::Events, false, true,  None, None),
     row("control.decision",                Led, O::Events, true,  true,  None, None),
+    // The durable retry/timer rows of the `R-2.2.3⁰ᵃ` slice: `scheduled{scope_id,
+    // attempt_no, not_before}` IS the timer (process memory is never the only copy —
+    // ADR-0130 §5); `fired`/`skipped{reason}` consume a schedule so `retry_due` is a
+    // pure fold. `control.timeout.fired` records a deadline force-close (§5a.3
+    // recovery table "any scope past its deadline"; §5a.2 failure modes).
+    row("control.retry.scheduled",         Led, O::Events, false, true,  None, None),
+    row("control.retry.fired",             Led, O::Events, false, true,  None, None),
+    row("control.retry.skipped",           Led, O::Events, false, true,  None, None),
+    row("control.timeout.fired",           Led, O::Events, false, true,  None, None),
 
     // ── measurement (P7) — the spend-attribution row (§8.2
     // `measurement.cost.attributed{scope?, subject_ref, dimension, quantity|money?,

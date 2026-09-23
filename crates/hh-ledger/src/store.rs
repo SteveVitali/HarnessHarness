@@ -32,6 +32,7 @@ use hh_provenance::{ContentKind, Origin, ProvenanceRecord};
 use hh_wire::json::{self, Json};
 
 use crate::classes::{self, Durability, ScopeKind, AUDIT_PAYLOAD_MAX_BYTES};
+use crate::effect::{self, EffectCtx, EffectFold, EffectPhase};
 use crate::errors::{LedgerError, MissingReason, Tampered, TamperedKind};
 use crate::event::{
     Cursor, Direction, EphemeralRecord, Event, EventEnvelope, EventFrame, EventPlane, Head, Page,
@@ -55,6 +56,10 @@ pub const DEFAULT_BLOB_MAX_BYTES: usize = 1 << 30;
 /// The ledger's own component ref for system rows (`lifecycle.run.created`,
 /// `lifecycle.lease.*`).
 const KERNEL_LEDGER: &str = "kernel:ledger";
+
+/// The kernel component ref for effect-lifecycle rows the ledger itself writes
+/// (`commit_effect`, recovery `unknown`/`abandoned` — §5a.2; ADR-0030 §6).
+pub(crate) const KERNEL_EFFECT: &str = "kernel:effect";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Lease
@@ -149,16 +154,20 @@ struct Subscriber {
 
 /// Everything in `RunState` except `dir`/`subscribers`/`lease` is a rebuildable
 /// projection of the WAL — `rebuild` recomputes it from disk.
-struct RunState {
+pub(crate) struct RunState {
     dir: PathBuf,
     run_id: String,
     manifest: RunManifest,
-    events: Vec<EventEnvelope>,
+    pub(crate) events: Vec<EventEnvelope>,
     by_event_id: HashMap<String, u64>,
     ir_index: HashMap<String, Vec<u64>>,
-    open_scopes: BTreeMap<String, ScopeKind>,
+    pub(crate) open_scopes: BTreeMap<String, ScopeKind>,
+    /// The `action.effect.*` fold — `effect_id → EffectFold` (§5a.2; R-2.2.2). Fed
+    /// on the commit path and rebuilt from the WAL, so `Store::effect_fold` and
+    /// the I-1 write-ahead gate answer without a rescan.
+    pub(crate) effects: BTreeMap<String, EffectFold>,
     head: Option<Head>,
-    finished: bool,
+    pub(crate) finished: bool,
     subscribers: Vec<Subscriber>,
 }
 
@@ -300,6 +309,24 @@ impl Store {
             .unwrap_or_else(|| ROOT_EVENT.to_string()))
     }
 
+    /// The persisted writer-lease generation — the fencing token every
+    /// post-`prepared` `action.effect.*` row must carry (§5a.2 invariant 6) and
+    /// the `CommitToken`'s epoch check (ADR-0100 I-1).
+    pub fn current_lease_generation(&self, run_id: &str) -> Result<u64, LedgerError> {
+        if !self.runs.contains_key(run_id) {
+            return Err(LedgerError::UnknownRun {
+                run_id: run_id.to_string(),
+            });
+        }
+        let rec =
+            read_lease_file(&self.lease_path(run_id))?.ok_or_else(|| LedgerError::Fenced {
+                lease_generation: 0,
+                current_generation: 0,
+                detail: "no lease record".into(),
+            })?;
+        Ok(rec.generation)
+    }
+
     fn load_all(&mut self) -> Result<(), LedgerError> {
         let runs_dir = self.root.join("runs");
         let entries = fs::read_dir(&runs_dir).map_err(|e| LedgerError::Io {
@@ -347,6 +374,7 @@ impl Store {
             by_event_id: HashMap::new(),
             ir_index: HashMap::new(),
             open_scopes: BTreeMap::new(),
+            effects: BTreeMap::new(),
             head: None,
             finished: false,
             subscribers: Vec::new(),
@@ -363,18 +391,8 @@ impl Store {
                     .or_default()
                     .push(env.seq);
             }
-            if let Some(spec) = classes::lookup(&env.class) {
-                if let Some(kind) = spec.opens_scope {
-                    if let Some(id) = env.scope.get(kind) {
-                        state.open_scopes.insert(id.to_string(), kind);
-                    }
-                }
-                if let Some(kind) = spec.closes_scope {
-                    if let Some(id) = env.scope.get(kind) {
-                        state.open_scopes.remove(id);
-                    }
-                }
-            }
+            apply_scope_marks(&mut state.open_scopes, &state.effects, &env);
+            effect::fold_event(&mut state.effects, &env);
             if env.class == "lifecycle.run.finished" {
                 state.finished = true;
             }
@@ -388,7 +406,7 @@ impl Store {
         Ok(state)
     }
 
-    fn run(&self, run_id: &str) -> Result<&RunState, LedgerError> {
+    pub(crate) fn run(&self, run_id: &str) -> Result<&RunState, LedgerError> {
         self.runs
             .get(run_id)
             .ok_or_else(|| LedgerError::UnknownRun {
@@ -444,6 +462,7 @@ impl Store {
             by_event_id: HashMap::new(),
             ir_index: HashMap::new(),
             open_scopes: BTreeMap::new(),
+            effects: BTreeMap::new(),
             head: None,
             finished: false,
             subscribers: Vec::new(),
@@ -801,6 +820,9 @@ impl Store {
         // ── validate the whole batch (batch-local state) ────────────────
         let mut known_ids: HashSet<String> = state.by_event_id.keys().cloned().collect();
         let mut open: BTreeMap<String, ScopeKind> = state.open_scopes.clone();
+        // The §5a.2 effect fold, batch-local: each `action.effect.*` validates
+        // against committed ∪ earlier-in-batch state (one machine — CC1).
+        let mut effect_folds = state.effects.clone();
         let mut staged: Vec<Staged> = Vec::new();
         let mut next_seq = state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0);
         let mut prev_hash = state
@@ -840,8 +862,55 @@ impl Store {
                 });
             }
             known_ids.insert(ev.event_id.clone());
-            // Scope chain + open/close rules.
-            check_scopes(&ev, spec, &mut open)?;
+            // Scope chain + open/close rules (fold-aware effect-scope closes).
+            check_scopes(&ev, spec, &mut open, &effect_folds)?;
+            // §5a.2 effect lifecycle (R-2.2.2): phase transitions, raise-only
+            // risk, derived idempotency keys and the post-`prepared` fencing
+            // token — checked against the committed fold ∪ this batch.
+            {
+                let committed_class_of = |eid: &str| -> Option<String> {
+                    state
+                        .by_event_id
+                        .get(eid)
+                        .and_then(|s| state.events.get(*s as usize))
+                        .map(|e| e.class.clone())
+                };
+                let batch_class_of = |eid: &str| -> Option<String> {
+                    staged.iter().find_map(|s| match s {
+                        Staged::Durable(e) if e.event_id == eid => Some(e.class.clone()),
+                        _ => None,
+                    })
+                };
+                let ectx = EffectCtx {
+                    run_id,
+                    generation: rec.generation,
+                    committed_class_of: &committed_class_of,
+                    batch_class_of: &batch_class_of,
+                };
+                effect::validate_event(&ev, &mut effect_folds, &ectx)?;
+            }
+            // The I-1 write-ahead gate (AC-R-2.2.2-10; ADR-0100): a dispatch
+            // naming a non-`read_only` effect may land only while the durable
+            // `committed` record is the effect's live phase.
+            if ev.class == "action.tool.started" {
+                if let Some(eid) = ev.scope.effect_id.as_deref() {
+                    match effect_folds.get(eid) {
+                        Some(f)
+                            if f.risk_class.is_read_only() || f.phase == EffectPhase::Committed => {
+                        }
+                        Some(_) => {
+                            return Err(LedgerError::NotCommitted {
+                                effect_id: eid.to_string(),
+                            })
+                        }
+                        None => {
+                            return Err(LedgerError::UnknownEffect {
+                                effect_id: eid.to_string(),
+                            })
+                        }
+                    }
+                }
+            }
             // Producer rules.
             if (spec.audit_grade || spec.kernel_origin)
                 && ev.producer.component_class != crate::event::KERNEL_COMPONENT
@@ -1304,6 +1373,8 @@ impl Store {
         let state = self.run(run_id)?;
         Ok(match kind {
             ViewKind::ContextView => views::context_view(run_id, &state.events, until),
+            ViewKind::Checkpoint => views::checkpoint(run_id, &state.events, until),
+            ViewKind::EffectLedger => views::effect_ledger(run_id, &state.events, until),
             ViewKind::RunSummary => views::run_summary(
                 state.manifest.run_kind.as_str(),
                 state.manifest.participant_class.as_str(),
@@ -1575,18 +1646,8 @@ fn commit_envelopes(state: &mut RunState, staged: Vec<Staged>) -> Result<SeqRang
                         .or_default()
                         .push(env.seq);
                 }
-                if let Some(spec) = classes::lookup(&env.class) {
-                    if let Some(kind) = spec.opens_scope {
-                        if let Some(id) = env.scope.get(kind) {
-                            state.open_scopes.insert(id.to_string(), kind);
-                        }
-                    }
-                    if let Some(kind) = spec.closes_scope {
-                        if let Some(id) = env.scope.get(kind) {
-                            state.open_scopes.remove(id);
-                        }
-                    }
-                }
+                apply_scope_marks(&mut state.open_scopes, &state.effects, &env);
+                effect::fold_event(&mut state.effects, &env);
                 if env.class == "lifecycle.run.finished" {
                     state.finished = true;
                 }
@@ -1631,6 +1692,37 @@ fn commit_envelopes(state: &mut RunState, staged: Vec<Staged>) -> Result<SeqRang
 // Scope validation
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Apply one committed envelope's scope opens/closes — the single fold both
+/// `rebuild` (replay) and `commit_envelopes` (live) run so the two paths can
+/// never disagree (CC1). Honors `effect::scope_close_fires` — `observed{partial}`,
+/// `probed{undeterminable}` and a retryable `…{not_applied}` leave the effect
+/// scope open (ADR-0238 §1).
+fn apply_scope_marks(
+    open: &mut BTreeMap<String, ScopeKind>,
+    effects: &BTreeMap<String, effect::EffectFold>,
+    env: &EventEnvelope,
+) {
+    if let Some(spec) = classes::lookup(&env.class) {
+        if let Some(kind) = spec.opens_scope {
+            if let Some(id) = env.scope.get(kind) {
+                open.insert(id.to_string(), kind);
+            }
+        }
+        if let Some(kind) = spec.closes_scope {
+            if let Some(id) = env.scope.get(kind) {
+                let fold = if kind == ScopeKind::Effect {
+                    effects.get(id)
+                } else {
+                    None
+                };
+                if effect::scope_close_fires(&env.class, &env.payload, fold) {
+                    open.remove(id);
+                }
+            }
+        }
+    }
+}
+
 /// The scope rules (§5a.1 §3): the chain `run ⊃ turn ⊃ model_call ⊃ tool_call` is
 /// enforced (a scope id may only be set when its parent scope is set); every scope id
 /// must name an *opened* scope — except the class's own `opens_scope` field (it opens)
@@ -1639,6 +1731,7 @@ fn check_scopes(
     ev: &Event,
     spec: &classes::ClassSpec,
     open: &mut BTreeMap<String, ScopeKind>,
+    effects: &BTreeMap<String, effect::EffectFold>,
 ) -> Result<(), LedgerError> {
     let bad = |d: String| LedgerError::SchemaViolation { detail: d };
     // The chain: model_call ⇒ turn; tool_call ⇒ model_call.
@@ -1676,7 +1769,17 @@ fn check_scopes(
                     id: id.clone(),
                 });
             }
-            open.remove(id);
+            // §5a.2 conditional closers (`effect::scope_close_fires` is the one
+            // predicate — CC1): `observed{partial}`, `probed{undeterminable}`
+            // and a retryable `…{not_applied}` leave the scope open.
+            let fold = if kind == ScopeKind::Effect {
+                effects.get(id)
+            } else {
+                None
+            };
+            if effect::scope_close_fires(&ev.class, &ev.payload, fold) {
+                open.remove(id);
+            }
         } else if !open.contains_key(id) {
             return Err(LedgerError::ScopeNotOpen {
                 scope: kind.field(),

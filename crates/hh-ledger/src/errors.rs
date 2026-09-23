@@ -122,6 +122,36 @@ pub enum LedgerError {
         /// The offending id.
         id: String,
     },
+    /// An `action.effect.*` event names an effect the fold does not know (§5a.2 —
+    /// every effect id is minted by `action.effect.intended`).
+    UnknownEffect {
+        /// The offending effect id.
+        effect_id: String,
+    },
+    /// An `action.effect.*` phase event that the §5a.2 lifecycle does not admit from
+    /// the effect's current phase (ADR-0030 §1).
+    BadEffectTransition {
+        /// The effect.
+        effect_id: String,
+        /// The recorded phase.
+        from: String,
+        /// The attempted event class.
+        to: String,
+    },
+    /// `observe`/`commit` on an `(effect_id, attempt_no)` that already has an
+    /// `observed` record — exactly one per attempt (§5a.2 `observe` contract).
+    AlreadyObserved {
+        /// The effect.
+        effect_id: String,
+        /// The attempt.
+        attempt_no: u64,
+    },
+    /// A helper/executor presented no valid `CommitToken` for a non-`read_only`
+    /// effect — the write-ahead barrier (ADR-0100 I-1; AC-R-2.2.2-10).
+    NotCommitted {
+        /// The effect.
+        effect_id: String,
+    },
     /// The WAL write/flush failed — the batch is not visible; retry is safe.
     Durability {
         /// The io detail.
