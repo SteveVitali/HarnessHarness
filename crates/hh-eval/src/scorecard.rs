@@ -438,12 +438,13 @@ pub fn render_cell(
             stratum,
         };
     }
-    // Per-run applicability (class ∧ observability ∧ capabilities) — an
-    // inapplicable run contributes to `excluded`, never a 0.
+    // Per-run applicability (class ∧ observability ∧ capabilities ∧ mediation
+    // ∧ family — ADR-0165 D6; R-2.10.6⁰) — an inapplicable run contributes to
+    // `excluded`, never a 0.
     let mut excluded: BTreeMap<String, u64> = BTreeMap::new();
     let mut applicable: Vec<&EvalRun> = Vec::new();
     for r in runs {
-        match decl.applicability(&descriptor(r)) {
+        match decl.applicability_at(&descriptor(r), &r.mediation, Some(r.environment_family)) {
             Ok(()) => applicable.push(r),
             Err(reason) => {
                 *excluded
@@ -454,7 +455,11 @@ pub fn render_cell(
     }
     if applicable.is_empty() && !runs.is_empty() {
         let reason = decl
-            .applicability(&descriptor(runs[0]))
+            .applicability_at(
+                &descriptor(runs[0]),
+                &runs[0].mediation,
+                Some(runs[0].environment_family),
+            )
             .err()
             .unwrap_or(NaReason::Class);
         return MetricCell {

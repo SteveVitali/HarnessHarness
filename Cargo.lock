@@ -331,6 +331,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-hosting"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-telemetry",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-identity"
 version = "0.0.1"
 dependencies = [
