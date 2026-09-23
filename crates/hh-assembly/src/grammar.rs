@@ -915,7 +915,9 @@ fn constraint_from_json(j: &Json, path: &str) -> Result<Constraint, String> {
     })
 }
 
-fn layer_json(l: &LayerProvenance) -> Json {
+/// The canonical JSON of one `LayerProvenance` (`{source_kind, id, version,
+/// precedence}` — §3.3.3; exported for `hh-lab`'s `AssemblySource` codec — CC7).
+pub fn layer_json(l: &LayerProvenance) -> Json {
     Json::obj([
         ("source_kind", Json::str(l.source_kind.as_str())),
         ("id", Json::str(&l.id)),
@@ -924,7 +926,8 @@ fn layer_json(l: &LayerProvenance) -> Json {
     ])
 }
 
-fn layer_from_json(j: &Json, path: &str) -> Result<LayerProvenance, String> {
+/// Parse one `LayerProvenance` (the codec's read direction — strict member set).
+pub fn layer_from_json(j: &Json, path: &str) -> Result<LayerProvenance, String> {
     let m = match j {
         Json::Obj(m) => m,
         _ => return Err(format!("{path} must be an object")),

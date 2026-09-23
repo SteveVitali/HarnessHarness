@@ -871,3 +871,238 @@ impl ValidationReport {
         }
     }
 }
+
+// ── ValidationReport canonical form (§3.3.8; CC7 — the schema source owns the
+// encoding; consumed by `lab.assembly.*` op results — S3.5).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The canonical JSON of a `StageOutcome`: `{stage, ran, na?, errors, warnings, infos}`.
+pub fn stage_outcome_json(o: &StageOutcome) -> hh_wire::json::Json {
+    use hh_wire::json::Json;
+    let mut pairs = vec![
+        ("stage", Json::Int(o.stage as i64)),
+        ("ran", Json::Bool(o.ran)),
+    ];
+    if let Some(na) = &o.na {
+        pairs.push(("na", Json::str(na.as_str())));
+    }
+    pairs.push(("errors", Json::Int(o.errors as i64)));
+    pairs.push(("warnings", Json::Int(o.warnings as i64)));
+    pairs.push(("infos", Json::Int(o.infos as i64)));
+    Json::obj(pairs)
+}
+
+fn stage_outcome_from_json(j: &hh_wire::json::Json, path: &str) -> Result<StageOutcome, HirError> {
+    use hh_wire::json::Json;
+    let get = |k: &str| -> Result<&Json, HirError> {
+        j.get(k).ok_or_else(|| HirError::SchemaViolation {
+            detail: format!("{path}.{k} missing"),
+        })
+    };
+    let int_at = |k: &str| -> Result<i64, HirError> {
+        get(k)?
+            .as_int()
+            .ok_or_else(|| HirError::SchemaViolation {
+                detail: format!("{path}.{k} must be an int"),
+            })
+    };
+    let na = match j.get("na").and_then(Json::as_str) {
+        Some("not_run") => Some(NaReason::NotRun),
+        Some("class") => Some(NaReason::Class),
+        Some(other) => {
+            return Err(HirError::SchemaViolation {
+                detail: format!("{path}.na: {other}"),
+            })
+        }
+        None => None,
+    };
+    Ok(StageOutcome {
+        stage: int_at("stage")? as u8,
+        ran: match get("ran")? {
+            Json::Bool(b) => *b,
+            _ => {
+                return Err(HirError::SchemaViolation {
+                    detail: format!("{path}.ran must be a bool"),
+                })
+            }
+        },
+        na,
+        errors: int_at("errors")? as usize,
+        warnings: int_at("warnings")? as usize,
+        infos: int_at("infos")? as usize,
+    })
+}
+
+/// The canonical JSON of a `ValidationReport`:
+/// `{status, diagnostics[], derived{opacity?, identity_stability?, hosting_edges[],
+/// benchmark_conditioned_rules[]}, stages[]}`.
+pub fn report_json(r: &ValidationReport) -> hh_wire::json::Json {
+    use hh_wire::json::Json;
+    let status = match r.status {
+        ReportStatus::Pass => "pass",
+        ReportStatus::PassWithWarnings => "pass_with_warnings",
+        ReportStatus::Fail => "fail",
+    };
+    let mut derived = vec![];
+    if let Some(o) = &r.derived.opacity {
+        derived.push((
+            "opacity",
+            Json::obj([
+                (
+                    "by_class",
+                    Json::Obj(
+                        o.by_class
+                            .iter()
+                            .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                            .collect(),
+                    ),
+                ),
+                ("total", Json::Int(o.total as i64)),
+                ("opaque_ratio_num", Json::Int(o.opaque_ratio_num as i64)),
+            ]),
+        ));
+    }
+    if let Some(s) = r.derived.identity_stability {
+        derived.push(("identity_stability", Json::Bool(s)));
+    }
+    derived.push((
+        "hosting_edges",
+        Json::Arr(
+            r.derived
+                .hosting_edges
+                .iter()
+                .map(|e| Json::str(e.clone()))
+                .collect(),
+        ),
+    ));
+    derived.push((
+        "benchmark_conditioned_rules",
+        Json::Arr(
+            r.derived
+                .benchmark_conditioned_rules
+                .iter()
+                .map(|e| Json::str(e.clone()))
+                .collect(),
+        ),
+    ));
+    Json::obj([
+        ("status", Json::str(status)),
+        (
+            "diagnostics",
+            Json::Arr(r.diagnostics.iter().map(diagnostic_json).collect()),
+        ),
+        ("derived", Json::obj(derived)),
+        (
+            "stages",
+            Json::Arr(r.stages.iter().map(stage_outcome_json).collect()),
+        ),
+    ])
+}
+
+/// Parse a `ValidationReport` (the codec's read direction — complete reports
+/// round-trip; AC-R-2.10.1-2's diagnostic-serialisation property).
+pub fn report_from_json(j: &hh_wire::json::Json) -> Result<ValidationReport, HirError> {
+    use hh_wire::json::Json;
+    let get = |k: &str| -> Result<&Json, HirError> {
+        j.get(k).ok_or_else(|| HirError::SchemaViolation {
+            detail: format!("report.{k} missing"),
+        })
+    };
+    let status = match get("status")?.as_str().unwrap_or("") {
+        "pass" => ReportStatus::Pass,
+        "pass_with_warnings" => ReportStatus::PassWithWarnings,
+        "fail" => ReportStatus::Fail,
+        other => {
+            return Err(HirError::SchemaViolation {
+                detail: format!("report.status: {other}"),
+            })
+        }
+    };
+    let diagnostics = match get("diagnostics")? {
+        Json::Arr(items) => items
+            .iter()
+            .enumerate()
+            .map(|(i, d)| diagnostic_from_json(d, &format!("report.diagnostics[{i}]")))
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => {
+            return Err(HirError::SchemaViolation {
+                detail: "report.diagnostics must be an array".into(),
+            })
+        }
+    };
+    let str_list = |j: &Json, path: &str| -> Result<Vec<String>, HirError> {
+        match j {
+            Json::Arr(items) => items
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    v.as_str().map(str::to_string).ok_or_else(|| {
+                        HirError::SchemaViolation {
+                            detail: format!("{path}[{i}] must be a string"),
+                        }
+                    })
+                })
+                .collect(),
+            _ => Err(HirError::SchemaViolation {
+                detail: format!("{path} must be an array"),
+            }),
+        }
+    };
+    let mut derived = DerivedResults::default();
+    if let Json::Obj(_) = get("derived")? {
+        let d = get("derived")?;
+        if let Some(o) = d.get("opacity") {
+            let mut by_class = std::collections::BTreeMap::new();
+            if let Json::Obj(m) = o.get("by_class").cloned().unwrap_or(Json::Null) {
+                for (k, v) in &m {
+                    by_class.insert(
+                        k.clone(),
+                        v.as_int().unwrap_or(0) as usize,
+                    );
+                }
+            }
+            derived.opacity = Some(OpacitySummary {
+                by_class,
+                total: o
+                    .get("total")
+                    .and_then(Json::as_int)
+                    .unwrap_or(0) as usize,
+                opaque_ratio_num: o
+                    .get("opaque_ratio_num")
+                    .and_then(Json::as_int)
+                    .unwrap_or(0) as usize,
+            });
+        }
+        derived.identity_stability = match d.get("identity_stability") {
+            Some(Json::Bool(b)) => Some(*b),
+            _ => None,
+        };
+        derived.hosting_edges = str_list(
+            d.get("hosting_edges").unwrap_or(&Json::Arr(vec![])),
+            "report.derived.hosting_edges",
+        )?;
+        derived.benchmark_conditioned_rules = str_list(
+            d.get("benchmark_conditioned_rules")
+                .unwrap_or(&Json::Arr(vec![])),
+            "report.derived.benchmark_conditioned_rules",
+        )?;
+    }
+    let stages = match get("stages")? {
+        Json::Arr(items) => items
+            .iter()
+            .enumerate()
+            .map(|(i, s)| stage_outcome_from_json(s, &format!("report.stages[{i}]")))
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => {
+            return Err(HirError::SchemaViolation {
+                detail: "report.stages must be an array".into(),
+            })
+        }
+    };
+    Ok(ValidationReport {
+        status,
+        diagnostics,
+        derived,
+        stages,
+    })
+}

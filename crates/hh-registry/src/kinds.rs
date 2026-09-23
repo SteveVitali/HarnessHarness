@@ -157,6 +157,9 @@ impl RecordKind {
                 // verbatim (same layering as `EnvironmentRecord`).
                 | RecordKind::Participant
                 | RecordKind::Adapter
+                // The typed sealed-definition record (R-2.10.1/S3.5 — `hh-hir`
+                // owns the schema; `hh_hir::wire::sealed_*` is the one codec).
+                | RecordKind::SealedDefinition
         )
     }
 

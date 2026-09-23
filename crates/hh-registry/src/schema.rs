@@ -1347,6 +1347,10 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         // The opaque hosting bodies — `hh-hosting` owns the §6.6 schemas; the
         // registry stores the canonical Json verbatim (same layering).
         RegistryRecord::Participant(b) | RegistryRecord::Adapter(b) => b.clone(),
+        // The sealed-definition body — `hh-hir` owns the schema
+        // (`sealed_definition_json`; like `Capability`, the `semantic` flag is
+        // irrelevant: the document's own codec splits identity).
+        RegistryRecord::SealedDefinition(s) => hh_hir::wire::sealed_definition_json(s),
     }
 }
 
@@ -1363,6 +1367,13 @@ pub fn semantic_projection_json(r: &RegistryRecord) -> Option<Json> {
             Some(j)
         }
         RegistryRecord::Capability(c) => Some(hh_hir::wire::node_semantic_projection(&c.node)),
+        // The definition's semantic coordinate IS the root's — the registry
+        // re-projects it (never re-mints) so a `sealed_definition` shares the
+        // definition's lineage coordinate wherever it is pinned.
+        RegistryRecord::SealedDefinition(s) => Some(obj(vec![
+            ("kind", Json::str("hir.definition")),
+            ("semantic_id", Json::str(s.definition_ref.semantic_id.clone())),
+        ])),
         // The env record's semantic coordinate is the `Record::canonical_semantic()`
         // form `{kind, semantic}` — the same projection `hh-env`'s `identify` mints.
         RegistryRecord::EnvironmentRecord(b) => Some(obj(vec![
@@ -1497,6 +1508,18 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
                 RecordKind::Participant => Ok(RegistryRecord::Participant(j.clone())),
                 _ => Ok(RegistryRecord::Adapter(j.clone())),
             }
+        }
+        RecordKind::SealedDefinition => {
+            // Typed body — `hh-hir` owns the schema (`sealed_definition_from_json`
+            // re-derives `definition_ref`/`closed_world_tools` and refuses a body
+            // whose declared members do not reproduce — CC3).
+            let s = hh_hir::wire::sealed_definition_from_json(j).map_err(|e| {
+                RegistryError::SchemaViolation {
+                    path: path.to_string(),
+                    detail: format!("sealed_definition body: {e}"),
+                }
+            })?;
+            Ok(RegistryRecord::SealedDefinition(s))
         }
         other if !other.has_stage1_schema() => Err(RegistryError::SchemaViolation {
             path: "kind".to_string(),

@@ -647,6 +647,13 @@ pub enum RegistryRecord {
     /// layering as `Participant`: `hh-hosting` owns the schema; the registry
     /// stores the canonical body verbatim (`kind: "adapter"` tag gated).
     Adapter(Json),
+    /// A `sealed_definition` — a sealed `hir/1` document plus its own identity
+    /// (`R-2.10.1`; `hh-hir` owns the schema — `hh_hir::wire::sealed_*` is the
+    /// one codec, CC7). The record's `version_id`/`semantic_id` ARE the
+    /// definition's own `definition_ref` coordinates (the same treatment
+    /// `Capability` gives a `ToolCapability` node — one coordinate wherever the
+    /// definition is pinned).
+    SealedDefinition(hh_hir::SealedDefinition),
 }
 
 impl RegistryRecord {
@@ -668,6 +675,7 @@ impl RegistryRecord {
             RegistryRecord::EnvironmentRecord(_) => RecordKind::EnvironmentRecord,
             RegistryRecord::Participant(_) => RecordKind::Participant,
             RegistryRecord::Adapter(_) => RecordKind::Adapter,
+            RegistryRecord::SealedDefinition(_) => RecordKind::SealedDefinition,
         }
     }
 
@@ -731,7 +739,56 @@ impl RegistryRecord {
                     Vec::new()
                 }
             }
+            // A sealed definition's registry-level pins: the resolved slot-variant
+            // `version_id`s, the declared extension pins and the resolve snapshot —
+            // the closure a stale/revoked variant or a superseded snapshot must
+            // reach (R7; the snapshot row keeps `resolve`'s confinement auditable).
+            RegistryRecord::SealedDefinition(s) => {
+                let mut out: Vec<String> = Vec::new();
+                if let Some(Json::Obj(a)) = &s.document.assembly {
+                    // `slots` + `extensions` carry the only pins that can name
+                    // registry records (variant and extension `version_id`s);
+                    // `resolved.registry_snapshot_id` is the resolve's
+                    // confinement record. `entities`/`values` pins are
+                    // doc-internal coordinates — never registry members.
+                    for member in ["slots", "extensions"] {
+                        if let Some(v) = a.get(member) {
+                            collect_version_pins(v, &mut out);
+                        }
+                    }
+                    if let Some(v) = a
+                        .get("resolved")
+                        .and_then(|r| r.get("registry_snapshot_id"))
+                        .and_then(Json::as_str)
+                    {
+                        out.push(v.to_string());
+                    }
+                }
+                out
+            }
         }
+    }
+}
+
+/// Collect every `version_id` member under `j` (the pinned refs a sealed
+/// assembly section's `slots`/`extensions` members carry).
+fn collect_version_pins(j: &Json, out: &mut Vec<String>) {
+    match j {
+        Json::Obj(m) => {
+            for (k, v) in m {
+                if k == "version_id" && v.as_str().is_some() {
+                    out.push(v.as_str().unwrap_or_default().to_string());
+                } else {
+                    collect_version_pins(v, out);
+                }
+            }
+        }
+        Json::Arr(items) => {
+            for v in items {
+                collect_version_pins(v, out);
+            }
+        }
+        _ => {}
     }
 }
 

@@ -50,9 +50,9 @@ pub use boundary::{LadderRung, MUST_BE_CODE, MUST_BE_DATA, RUNG};
 pub use catalog::{ClassCatalog, RegistryCatalog, Stage1Catalog, STAGE1_CLASSES};
 pub use compose::{compose, Layer};
 pub use diagnostics::{
-    detail_text, diagnostic_from_json, diagnostic_json, kern_code, AssemblyDiagnostic, Code,
-    DerivedResults, NaReason, OpacitySummary, ReportStatus, Severity, Stage, StageOutcome,
-    ValidationReport,
+    detail_text, diagnostic_from_json, diagnostic_json, kern_code, report_from_json,
+    report_json, stage_outcome_json, AssemblyDiagnostic, Code, DerivedResults, NaReason,
+    OpacitySummary, ReportStatus, Severity, Stage, StageOutcome, ValidationReport,
 };
 pub use diff::diff;
 pub use events::{
@@ -60,9 +60,10 @@ pub use events::{
     DEFINITION_CHANGED,
 };
 pub use grammar::{
-    markers_in_json, Assembly, Constraint, ConstraintKind, EntityBinding, LayerProvenance,
-    LayerSourceKind, ParamRequirement, ParamType, ParameterSpec, ProfileBinding, ResolvedInfo,
-    ASSEMBLY_DIALECT, ENTITY_MARKER, PARAM_MARKER, SECRET_MARKER,
+    layer_from_json, layer_json, markers_in_json, Assembly, Constraint, ConstraintKind,
+    EntityBinding, LayerProvenance, LayerSourceKind, ParamRequirement, ParamType,
+    ParameterSpec, ProfileBinding, ResolvedInfo, ASSEMBLY_DIALECT, ENTITY_MARKER,
+    PARAM_MARKER, SECRET_MARKER,
 };
 pub use identity::{
     assembly_identity_view, configuration, identity, CompositionInputs, ConfigurationIds,
