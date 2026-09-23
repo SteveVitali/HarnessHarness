@@ -630,6 +630,59 @@ const REDACTED_FIELDS: &[AuditField] = &[
     afb("content_fingerprints", AUDIT_FIELD_LIST_BYTES),
 ];
 
+/// `lifecycle.run.forked` — the inter-run branch record (`R-2.2.4`; ADR-0271):
+/// `{branch_id, source_run_id, at_seq, at_event_id, kind, env, replay_mode,
+/// effective_replay, downgrade_reason?, policy_ref, budget_slice_ref?,
+/// read_only, coerce_to_boundary, created_event_id, head_event_id, head_seq}` +
+/// content refs `{snapshot_ref?, record_ref?}`. The child run's own row — its
+/// `refs` pin the source prefix's referenced content (§5a.1 §5, "the source
+/// prefix is pinned").
+const FORKED_FIELDS: &[AuditField] = &[
+    af("branch_id"),
+    af("source_run_id"),
+    af("at_seq"),
+    af("at_event_id"),
+    af("kind"),
+    af("env"),
+    af("replay_mode"),
+    af("effective_replay"),
+    af("downgrade_reason"),
+    af("policy_ref"),
+    af("budget_slice_ref"),
+    af("read_only"),
+    af("coerce_to_boundary"),
+    af("created_event_id"),
+    af("head_event_id"),
+    af("head_seq"),
+];
+
+/// `lifecycle.run.rolled_back` — the rewind record (`R-2.2.5`; §5a.1 `rollback`):
+/// `{to_seq, to_event_id, reason_code, rewound, rollback_event_id,
+/// head_event_id, head_seq}` + content ref `{record_ref}` — the rewind note blob
+/// (`rollback.record`/`intervention.note`) carrying the compensation list,
+/// failed/uncompensable effects and uncaptured set unbounded by the inline
+/// audit-field budget.
+const ROLLED_BACK_FIELDS: &[AuditField] = &[
+    af("to_seq"),
+    af("to_event_id"),
+    af("reason_code"),
+    af("rewound"),
+    af("rollback_event_id"),
+    af("head_event_id"),
+    af("head_seq"),
+];
+
+/// `lifecycle.head.moved` — the HEAD-move rewind (`navigate`; ADR-0027 §5):
+/// `{from_event_id, from_seq, to_event_id, to_seq, reason}`. `to_event_id` =
+/// `"root"` marks the run-start sentinel (`navigate(to: null)`).
+const HEAD_MOVED_FIELDS: &[AuditField] = &[
+    af("from_event_id"),
+    af("from_seq"),
+    af("to_event_id"),
+    af("to_seq"),
+    af("reason"),
+];
+
 /// `lifecycle.ledger.gc` — `{addresses[], policy_ref, tier, retained_until?}`.
 const GC_FIELDS: &[AuditField] = &[
     afb("addresses", AUDIT_FIELD_LIST_BYTES),
@@ -722,9 +775,9 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("lifecycle.run.resumed",     O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("lifecycle.run.suspended",   O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("lifecycle.run.finished",    O::Events, true,  OPEN_AUDIT, &[], None, None),
-    row_audit("lifecycle.run.forked",      O::Events, true,  OPEN_AUDIT, &[], None, None),
-    row_audit("lifecycle.run.rolled_back", O::Events, true,  OPEN_AUDIT, &[], None, None),
-    row_audit("lifecycle.head.moved",      O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("lifecycle.run.forked",      O::Events, true,  FORKED_FIELDS, &["snapshot_ref", "record_ref"], None, None),
+    row_audit("lifecycle.run.rolled_back", O::Events, true,  ROLLED_BACK_FIELDS, &["record_ref"], None, None),
+    row_audit("lifecycle.head.moved",      O::Events, true,  HEAD_MOVED_FIELDS, &[], None, None),
     row_audit("lifecycle.lease.acquired",  O::Events, true,  LEASE_FIELDS, &[], None, None),
     row_audit("lifecycle.lease.renewed",   O::Events, true,  LEASE_FIELDS, &[], None, None),
     row_audit("lifecycle.lease.released",  O::Events, true,  LEASE_FIELDS, &[], None, None),

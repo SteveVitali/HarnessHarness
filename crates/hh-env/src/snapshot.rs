@@ -145,11 +145,57 @@ impl SnapshotRecord {
         ])
     }
 
+    /// Decode the member form — the fork/rollback snapshot chooser reloads a
+    /// record from its `manifest_ref` blob (S2.9; the row itself carries only
+    /// `{env_handle, snapshot_ref, kind, at_seq, manifest_ref}`).
+    pub fn from_json(j: &Json) -> Option<SnapshotRecord> {
+        let kind = SnapshotKind::parse(j.get("kind")?.as_str()?)?;
+        let taken_by = match j.get("taken_by")?.as_str()? {
+            "subject" => TakenBy::Subject,
+            "instrument" => TakenBy::Instrument,
+            _ => return None,
+        };
+        let mut rec = SnapshotRecord {
+            snapshot_ref: String::new(),
+            env_handle_id: j.get("env_handle_id")?.as_str()?.to_string(),
+            at_seq: j.get("at_seq")?.as_int()? as u64,
+            kind,
+            base: j.get("base").and_then(Json::as_str).map(str::to_string),
+            content: j.get("content")?.clone(),
+            roots_covered: match j.get("roots_covered")? {
+                Json::Arr(a) => a
+                    .iter()
+                    .map(|r| r.as_str().map(String::from))
+                    .collect::<Option<_>>()?,
+                _ => return None,
+            },
+            quiesced: matches!(j.get("quiesced"), Some(Json::Bool(true))),
+            taken_by,
+            size_bytes: j.get("size_bytes")?.as_int()? as u64,
+            expires_at_ms: j
+                .get("expires_at_ms")
+                .and_then(Json::as_int)
+                .map(|t| t as u64),
+        };
+        // The ref is derived — never carried (the row's copy is the same
+        // derivation; a blob whose members disagree recomputes honestly).
+        rec.snapshot_ref = rec.compute_ref();
+        Some(rec)
+    }
+
     /// The `snapshot_ref` — `idp/1` under the `snapshot` domain over the
     /// canonical member form (excluding `snapshot_ref` itself — it *is* the
-    /// derived id).
+    /// derived id). `at_seq` is provenance — *where the observation landed*,
+    /// not what was observed — so it is excluded from the basis: two
+    /// snapshots of an unchanged workspace share one address
+    /// (AC-R-2.2.4-9's dedup; the `at_seq` still rides the member form and
+    /// the row, and the fork/rollback chooser reads it row-side).
     pub fn compute_ref(&self) -> String {
-        idp_id("snapshot", self.to_json().to_canonical_string().as_bytes())
+        let mut j = self.to_json();
+        if let Json::Obj(m) = &mut j {
+            m.remove("at_seq");
+        }
+        idp_id("snapshot", j.to_canonical_string().as_bytes())
     }
 }
 

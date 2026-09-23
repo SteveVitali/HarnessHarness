@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:499a809a59d884eb212c0e665139fe928bc43700c7b48efce874c0083832c32d";
+    "sha256:47c31736e25a077ce2c3574022d1a907699b958f3dcbbdcf72514950a5ba5b29";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -824,12 +824,20 @@ impl ClosedReason {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoherentForkPointsParams {
     pub session_id: String,
+    pub from_seq: Option<i64>,
+    pub to_seq: Option<i64>,
 }
 
 impl CoherentForkPointsParams {
     pub fn to_json(&self) -> Json {
         let mut pairs: Vec<(&'static str, Json)> = Vec::new();
         pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.from_seq {
+            pairs.push(("from_seq", Json::Int(v.clone())));
+        }
+        if let Some(v) = &self.to_seq {
+            pairs.push(("to_seq", Json::Int(v.clone())));
+        }
         Json::obj(pairs)
     }
 
@@ -842,6 +850,14 @@ impl CoherentForkPointsParams {
                 f.as_str()
                     .map(|s| s.to_string())
                     .ok_or_else(|| "expected string".to_string())?
+            },
+            from_seq: match v.get("from_seq") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+            to_seq: match v.get("to_seq") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
             },
         })
     }
@@ -1432,6 +1448,13 @@ impl EphemeralKind {
 pub struct ForkParams {
     pub session_id: String,
     pub at: ForkPoint,
+    pub kind: Option<String>,
+    pub env: Option<String>,
+    pub replay_mode: Option<String>,
+    pub policy_ref: Option<String>,
+    pub budget_slice_ref: Option<String>,
+    pub coerce_to_boundary: bool,
+    pub snapshot_ref: Option<String>,
     pub manifest_delta: Option<Json>,
     pub idempotency_key: Option<String>,
     pub invocation: Option<InvocationRecord>,
@@ -1442,6 +1465,25 @@ impl ForkParams {
         let mut pairs: Vec<(&'static str, Json)> = Vec::new();
         pairs.push(("session_id", Json::str(self.session_id.clone())));
         pairs.push(("at", self.at.to_json()));
+        if let Some(v) = &self.kind {
+            pairs.push(("kind", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.env {
+            pairs.push(("env", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.replay_mode {
+            pairs.push(("replay_mode", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.policy_ref {
+            pairs.push(("policy_ref", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.budget_slice_ref {
+            pairs.push(("budget_slice_ref", Json::str(v.clone())));
+        }
+        pairs.push(("coerce_to_boundary", Json::Bool(self.coerce_to_boundary)));
+        if let Some(v) = &self.snapshot_ref {
+            pairs.push(("snapshot_ref", Json::str(v.clone())));
+        }
         if let Some(v) = &self.manifest_delta {
             pairs.push(("manifest_delta", v.clone()));
         }
@@ -1467,6 +1509,58 @@ impl ForkParams {
             at: {
                 let f = v.get("at").ok_or_else(|| format!("missing '{}'", "at"))?;
                 ForkPoint::from_json(f).map_err(|e| e)?
+            },
+            kind: match v.get("kind") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            env: match v.get("env") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            replay_mode: match v.get("replay_mode") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            policy_ref: match v.get("policy_ref") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            budget_slice_ref: match v.get("budget_slice_ref") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            coerce_to_boundary: match v.get("coerce_to_boundary") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            snapshot_ref: match v.get("snapshot_ref") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
             },
             manifest_delta: match v.get("manifest_delta") {
                 Some(f) => Some(f.clone()),
@@ -2519,6 +2613,7 @@ impl ListLeasesResult {
 pub struct NavigateParams {
     pub session_id: String,
     pub to: Option<Json>,
+    pub reason: Option<String>,
     pub idempotency_key: Option<String>,
 }
 
@@ -2528,6 +2623,9 @@ impl NavigateParams {
         pairs.push(("session_id", Json::str(self.session_id.clone())));
         if let Some(v) = &self.to {
             pairs.push(("to", v.clone()));
+        }
+        if let Some(v) = &self.reason {
+            pairs.push(("reason", Json::str(v.clone())));
         }
         if let Some(v) = &self.idempotency_key {
             pairs.push(("idempotency_key", Json::str(v.clone())));
@@ -2547,6 +2645,14 @@ impl NavigateParams {
             },
             to: match v.get("to") {
                 Some(f) => Some(f.clone()),
+                None => None,
+            },
+            reason: match v.get("reason") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
                 None => None,
             },
             idempotency_key: match v.get("idempotency_key") {
@@ -3886,6 +3992,8 @@ impl RevokeLeaseParams {
 pub struct RollbackParams {
     pub session_id: String,
     pub to_seq: i64,
+    pub reason: Option<String>,
+    pub restore_env: bool,
     pub idempotency_key: Option<String>,
 }
 
@@ -3894,6 +4002,10 @@ impl RollbackParams {
         let mut pairs: Vec<(&'static str, Json)> = Vec::new();
         pairs.push(("session_id", Json::str(self.session_id.clone())));
         pairs.push(("to_seq", Json::Int(self.to_seq.clone())));
+        if let Some(v) = &self.reason {
+            pairs.push(("reason", Json::str(v.clone())));
+        }
+        pairs.push(("restore_env", Json::Bool(self.restore_env)));
         if let Some(v) = &self.idempotency_key {
             pairs.push(("idempotency_key", Json::str(v.clone())));
         }
@@ -3915,6 +4027,18 @@ impl RollbackParams {
                     .get("to_seq")
                     .ok_or_else(|| format!("missing '{}'", "to_seq"))?;
                 f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            reason: match v.get("reason") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            restore_env: match v.get("restore_env") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
             },
             idempotency_key: match v.get("idempotency_key") {
                 Some(f) => Some(
@@ -4609,6 +4733,12 @@ pub enum Frame {
         detail: Option<String>,
         durability: String,
     },
+    Rewind {
+        to_seq: i64,
+        to_event_id: String,
+        reason: String,
+        durability: String,
+    },
 }
 
 impl Frame {
@@ -4699,6 +4829,18 @@ impl Frame {
                 if let Some(v) = detail {
                     pairs.push(("detail", Json::str(v.clone())));
                 }
+                pairs.push(("durability", Json::str(durability.clone())));
+            }
+            Frame::Rewind {
+                to_seq,
+                to_event_id,
+                reason,
+                durability,
+            } => {
+                pairs.push(("kind", Json::str("rewind")));
+                pairs.push(("to_seq", Json::Int(to_seq.clone())));
+                pairs.push(("to_event_id", Json::str(to_event_id.clone())));
+                pairs.push(("reason", Json::str(reason.clone())));
                 pairs.push(("durability", Json::str(durability.clone())));
             }
         }
@@ -4907,6 +5049,38 @@ impl Frame {
                             .ok_or_else(|| "expected string".to_string())?,
                     ),
                     None => None,
+                },
+                durability: {
+                    let f = v
+                        .get("durability")
+                        .ok_or_else(|| format!("missing '{}'", "durability"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "rewind" => Ok(Frame::Rewind {
+                to_seq: {
+                    let f = v
+                        .get("to_seq")
+                        .ok_or_else(|| format!("missing '{}'", "to_seq"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                to_event_id: {
+                    let f = v
+                        .get("to_event_id")
+                        .ok_or_else(|| format!("missing '{}'", "to_event_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                reason: {
+                    let f = v
+                        .get("reason")
+                        .ok_or_else(|| format!("missing '{}'", "reason"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
                 },
                 durability: {
                     let f = v
@@ -5209,6 +5383,15 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Closed::from_json(&raw).map_err(ClientError::Transport)
     }
 
+    /// `coherent_fork_points` → `json` (see the contract registry).
+    pub fn coherent_fork_points(
+        &mut self,
+        params: &CoherentForkPointsParams,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("coherent_fork_points", params.to_json())?;
+        Ok(raw)
+    }
+
     /// `describe` → `DescribeResult` (see the contract registry).
     pub fn describe(&mut self, params: &DescribeParams) -> Result<DescribeResult, ClientError> {
         let raw = self.call("describe", params.to_json())?;
@@ -5266,6 +5449,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     ) -> Result<ListLeasesResult, ClientError> {
         let raw = self.call("list_leases", params.to_json())?;
         ListLeasesResult::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `navigate` → `json` (see the contract registry).
+    pub fn navigate(&mut self, params: &NavigateParams) -> Result<Json, ClientError> {
+        let raw = self.call("navigate", params.to_json())?;
+        Ok(raw)
     }
 
     /// `open_session` → `Session` (see the contract registry).
@@ -5326,6 +5515,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     ) -> Result<Recorded, ClientError> {
         let raw = self.call("respond_permission", params.to_json())?;
         Recorded::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `rollback` → `json` (see the contract registry).
+    pub fn rollback(&mut self, params: &RollbackParams) -> Result<Json, ClientError> {
+        let raw = self.call("rollback", params.to_json())?;
+        Ok(raw)
     }
 
     /// `steer` → `Accepted` (see the contract registry).

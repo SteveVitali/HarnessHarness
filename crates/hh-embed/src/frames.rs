@@ -17,8 +17,8 @@
 //!   accounting; durable rows are never dropped — the ledger replays
 //!   them).
 //! - `Closed{reason}` → `closed{run_ended|kernel_shutdown}`.
-//! - `Rewind` → dormant at Stage 1 (`navigate` lands Stage 2) — the
-//!   adapter drops it rather than inventing a frame.
+//! - `Rewind` → live at S2.9 (`navigate`/`rollback` land `head.moved`) —
+//!   the adapter emits the public `rewind` frame (§5a.1 §4).
 //!
 //! `model.call.requested` durable frames also synthesize an
 //! `item_started` frame *after* the durable one (anchor_seq = the
@@ -156,9 +156,20 @@ impl FrameAdapter {
                 },
                 detail: None,
             }],
-            // `Rewind` is dormant at Stage 1 (`navigate` lands Stage 2) —
-            // no frame shape exists for it and none is invented.
-            EventFrame::Rewind { .. } => Vec::new(),
+            // `Rewind` — the `head.moved` rebase signal (S2.9; §5a.1 §4 —
+            // "a `head.moved` is delivered as a `rewind`"). The durable row
+            // also streams; this frame is the consumer's cue to rebase to
+            // `to_seq` (events past it are off the live branch — durable in
+            // the log, never rewritten).
+            EventFrame::Rewind {
+                to_seq,
+                to_event_id,
+                reason,
+            } => vec![Frame::Rewind {
+                to_seq: to_seq as i64,
+                to_event_id,
+                reason,
+            }],
         }
     }
 

@@ -299,8 +299,11 @@ pub fn registry() -> Vec<OpSpec> {
             Tier::Stable,
             true,
         ),
-        // `fork` is implemented — `open_run` binds `forked_from` with the
-        // same anchor coherence the ledger enforces everywhere.
+        // `fork` is implemented — the S2.9 branch model: coherent cuts
+        // (`ForkPointNotCoherent`/`coerce_to_boundary`), `env ∈
+        // {snapshot, trace_only, none}` (`shared_live` is the typed
+        // refusal), `lifecycle.run.forked` + source-prefix pinning on the
+        // child (ADR-0271).
         OpSpec {
             tier: Tier::Experimental,
             ..call(
@@ -314,13 +317,34 @@ pub fn registry() -> Vec<OpSpec> {
                     "ExperimentalRequired",
                     "UnknownSession",
                     "UnknownRun",
+                    "EnvironmentUnavailable",
                     "Refused",
                 ],
                 Tier::Experimental,
                 true,
             )
         },
-        staged_exp("navigate", "W", "NavigateParams", "Accepted"),
+        // `navigate` is implemented (S2.9; ADR-0271) — the HEAD move lands
+        // `lifecycle.head.moved` and subscribers receive `rewind`.
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "navigate",
+                "W",
+                "NavigateParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownRun",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
         // `respond_elicitation` is implemented — no elicitation is open
         // at Stage 1 (the scripted model never elicits), so the honest
         // surface is `Refused{no_open_elicitation}`.
@@ -395,15 +419,52 @@ pub fn registry() -> Vec<OpSpec> {
             )
         },
         staged_exp("set_coordinate", "W", "SetCoordinateParams", "Recorded"),
-        staged_exp(
-            "coherent_fork_points",
-            "W",
-            "CoherentForkPointsParams",
-            "json",
-        ),
+        // `coherent_fork_points` is implemented (S2.9) — the pure
+        // coherence projection over the run's WAL (AC-R-2.2.4-1).
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "coherent_fork_points",
+                "R",
+                "CoherentForkPointsParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownRun",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
         staged_exp("discard", "W", "DiscardParams", "Acknowledged"),
         staged_exp("promote", "W", "PromoteParams", "Session"),
-        staged_exp("rollback", "W", "RollbackParams", "Session"),
+        // `rollback` is implemented (S2.9; ADR-0271) — coherence gate,
+        // scoped compensation saga, rewind-note blob, `rolled_back` +
+        // `head.moved` rows, `rewind` frame; returns the `RollbackRecord`.
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "rollback",
+                "W",
+                "RollbackParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownRun",
+                    "Refused",
+                    "EnvironmentUnavailable",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
         staged_exp("replay", "W", "ReplayParams", "Session"),
         staged_exp("counterfactual", "W", "CounterfactualParams", "Session"),
         staged_exp("archive", "S", "ArchiveParams", "Acknowledged"),

@@ -426,6 +426,35 @@ pub enum LedgerError {
         /// The io detail.
         detail: String,
     },
+    /// `fork{env: snapshot}`/`rollback{env_restore_ref}` named a snapshot that is
+    /// absent, unverifiable, or unrestorable — typed `SnapshotUnavailable`
+    /// (§5a.1 table; DF-S2.9-3).
+    SnapshotUnavailable {
+        /// The snapshot kind (`fs_tree`).
+        kind: String,
+        /// Why unavailable.
+        detail: String,
+    },
+    /// `fork`/`rollback` asked for something policy forbids — typed
+    /// `PolicyForbids` (§5a.1 table).
+    PolicyForbids {
+        /// The refused class/detail.
+        detail: String,
+    },
+    /// `fork`'s `manifest_delta`/budget slice would widen authority, budget, or
+    /// permissions beyond the parent's — `AuthorityWidening` (§5a.1; ADR-0052 D4).
+    AuthorityWidening {
+        /// What would widen.
+        detail: String,
+    },
+    /// `replay_mode: exact` was requested but the source prefix's observability
+    /// coverage cannot carry it — `CoverageInsufficient` (DF-S2.9-2).
+    CoverageInsufficient {
+        /// What is required.
+        required: String,
+        /// What the source provides.
+        available: String,
+    },
 }
 
 impl From<ProvenanceError> for LedgerError {

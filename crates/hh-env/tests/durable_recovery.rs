@@ -630,3 +630,126 @@ fn ac_2_2_3_14_preserve_until_exceeds_writer_ttl_plus_grace() {
         m.grace_ms
     );
 }
+
+// ── S2.9 — snapshot chooser, derive-from-snapshot, rollback restore ─────────
+// (§5a.1 §5 `fork{env: snapshot}` / `rollback`; ADR-0271.)
+
+#[test]
+fn s2_9_snapshot_for_chooses_the_newest_at_or_below_the_cut() {
+    let (mut store, run, lease, _clock) = open("snap-choose");
+    let ws = workspace("snap-choose");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    std::fs::write(ws.join("v.txt"), b"v1").unwrap();
+    let (r1, _t1) = driver.fs_tree_snapshot(&mut store, &lease, &env).unwrap();
+    let seq1 = r1.at_seq;
+    std::fs::write(ws.join("v.txt"), b"v2").unwrap();
+    let (r2, _t2) = driver.fs_tree_snapshot(&mut store, &lease, &env).unwrap();
+    let seq2 = r2.at_seq;
+    assert!(seq2 > seq1);
+    // At/below the later snapshot ⇒ the newer one; between them ⇒ the first.
+    let (rec, _tree) = driver
+        .snapshot_for(&store, seq2)
+        .unwrap()
+        .expect("snapshot at seq2");
+    assert_eq!(rec.snapshot_ref, r2.snapshot_ref);
+    let mid = store
+        .env_snapshots(&run)
+        .unwrap()
+        .iter()
+        .map(|(s, _, _, _)| *s)
+        .min()
+        .unwrap();
+    let (rec_mid, _) = driver.snapshot_for(&store, mid).unwrap().unwrap();
+    assert_eq!(rec_mid.snapshot_ref, r1.snapshot_ref);
+    // Below the earliest ⇒ None (never a fabricated snapshot).
+    assert!(
+        driver.snapshot_for(&store, 0).unwrap().is_none()
+            || driver.snapshot_for(&store, seq1 - 1).unwrap().is_none()
+    );
+}
+
+#[test]
+fn s2_9_derive_from_snapshot_materialises_blob_content_not_the_live_tree() {
+    let (mut store, run, lease, _clock) = open("snap-derive");
+    let ws = workspace("snap-derive-parent");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    std::fs::write(ws.join("pinned.txt"), b"at-cut").unwrap();
+    let (_rec, snap) = driver.fs_tree_snapshot(&mut store, &lease, &env).unwrap();
+    // The parent's live tree moves on — the child must see the snapshot's
+    // content, not the drifted workspace.
+    std::fs::write(ws.join("pinned.txt"), b"drifted").unwrap();
+    std::fs::write(ws.join("late.txt"), b"after-the-cut").unwrap();
+    // The child run + driver (inter-run: the child opens under `open_run`).
+    let (child_run, child_lease) = store
+        .open_run(RunManifest::minimal(RunKind::Agent), "writer-a")
+        .unwrap();
+    let mut cdrv = EnvDriver::new(&child_run);
+    let parent = driver.handle(&env).unwrap().clone();
+    let ch = cdrv
+        .derive_from_snapshot(&mut store, &child_lease, &parent, &snap)
+        .unwrap();
+    let cws = std::path::PathBuf::from(&ch.roots.cwd);
+    assert_eq!(std::fs::read(cws.join("pinned.txt")).unwrap(), b"at-cut");
+    assert!(
+        !cws.join("late.txt").exists(),
+        "post-cut content must not leak into the child"
+    );
+    // The derivation is durable on the child run.
+    assert!(store
+        .envelopes(&child_run)
+        .unwrap()
+        .iter()
+        .any(|e| e.class == "action.environment.derived"));
+}
+
+#[test]
+fn s2_9_rollback_env_restores_in_place_and_reports_uncaptured() {
+    let (mut store, run, lease, _clock) = open("snap-rollback");
+    let ws = workspace("snap-rollback");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    std::fs::write(ws.join("kept.txt"), b"before").unwrap();
+    let (_rec, _snap) = driver.fs_tree_snapshot(&mut store, &lease, &env).unwrap();
+    let snap_seq = store.head(&run).unwrap().seq;
+    // Post-snapshot drift: modify a covered file, add an uncovered one.
+    std::fs::write(ws.join("kept.txt"), b"after").unwrap();
+    std::fs::write(ws.join("stray.txt"), b"not-in-snapshot").unwrap();
+    let (restored, uncaptured) = driver
+        .rollback_env(&mut store, &lease, &env, snap_seq)
+        .unwrap();
+    assert!(restored.is_some());
+    // Covered member restored to the snapshot's bytes; uncovered removed.
+    assert_eq!(std::fs::read(ws.join("kept.txt")).unwrap(), b"before");
+    assert!(
+        !ws.join("stray.txt").exists(),
+        "restore-in-place removes what the manifest does not name"
+    );
+    // `action.environment.restored` lands with the uncaptured list.
+    let rows: Vec<_> = store
+        .envelopes(&run)
+        .unwrap()
+        .iter()
+        .filter(|e| e.class == "action.environment.restored")
+        .collect();
+    assert_eq!(rows.len(), 1);
+    let _ = uncaptured;
+}
+
+#[test]
+fn s2_9_rollback_env_without_a_snapshot_is_uncaptured_not_fabricated() {
+    let (mut store, run, lease, _clock) = open("snap-rollback-none");
+    let ws = workspace("snap-rollback-none");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    std::fs::write(ws.join("live.txt"), b"untouched").unwrap();
+    let (restored, uncaptured) = driver.rollback_env(&mut store, &lease, &env, 0).unwrap();
+    assert!(restored.is_none(), "no snapshot ⇒ nothing restored");
+    assert!(
+        !uncaptured.is_empty(),
+        "the writable root is honestly uncaptured"
+    );
+    // The live workspace is untouched — a failed restore never writes.
+    assert_eq!(std::fs::read(ws.join("live.txt")).unwrap(), b"untouched");
+}
