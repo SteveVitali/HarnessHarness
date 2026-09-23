@@ -25,3 +25,6 @@ hh-containment = { path = "../hh-containment" }
 hh-secrets = { path = "../hh-secrets" }
 hh-monitor = { path = "../hh-monitor" }
 hh-gateway = { path = "../hh-gateway" }
+hh-compiler = { path = "../hh-compiler" }
+hh-bundle = { path = "../hh-bundle" }
+hh-mcp = { path = "../hh-mcp" }

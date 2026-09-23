@@ -229,6 +229,24 @@ members = [
     # `ComparisonReport`, `RenderSpec`); and the debt views (`DebtIndexRow`,
     # `DebtReport`, `DebtNotice`). Engines/samplers land at Stage 3.
     "crates/hh-lab",
+    # The C0/Stage-3 reproducible-bundle plane (spec section 5h.3, R-2.9.3; ticket S3.1;
+    # ADR-0139/0140/0141). A PERSISTENT workspace member: the hh-bundle/1 BundleManifest
+    # (tree-rule identity: idp/1 over canonical(manifest minus version_id)), MemberRef /
+    # Claim / Unpinned / FetchEntry / BundlePolicy, the chunked LedgerExport (layer P),
+    # encode/decode over directory + HHB1 container transports (layer A), the staged
+    # validate_bundle / check_completeness (S1-S8, no fail-fast), the shared closed
+    # B-R* basis evaluator, and the import lift (authority = unverified, MappingReport +
+    # ImportRecord). Reads hh-ledger/hh-secrets/hh-lab records; owns no store.
+    "crates/hh-bundle",
+    # The Stage-3 fixture MCP plane (spec section 7.3, R-2.11.3^0; ticket S3.1;
+    # ADR-0097 D7/ADR-0173/0174). A PERSISTENT workspace member: the
+    # `hh-mcp-target/1` served-artifact record + the compiled-bundle -> MCP
+    # catalogue lowering, the `stdio_launch` CallerBinding record (fixed
+    # test principal at Stage 3), the newline-JSON-RPC `serve` loop the
+    # `hh-mcp-serve` binary wraps, and that fixture binary. Tools are
+    # served only from a bundle's compiled target member - the server is
+    # a pure function of (artifact, binding) with no ledger access.
+    "crates/hh-mcp",
     # The hh-embed/1 embedding boundary (spec §7.4, R-2.11.4⁰ᵇ; ticket S1.25) — EmbedService
     # (binding a) + the stdio loop (binding b) over Store/EnvDriver/Driver; the kernel binary
     # delegates to it. A PERSISTENT workspace member.

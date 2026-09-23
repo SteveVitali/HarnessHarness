@@ -1,0 +1,22 @@
+[package]
+name = "hh-bundle"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-3 reproducible harness bundle — the content-addressed run-bundle plane (spec §5h.3, R-2.9.3⁰; ticket S3.1; ADR-0139/0140/0141). The hh-bundle/1 BundleManifest (header + ADR-0038 sections + the reproducibility block), MemberRef/Claim/Unpinned/FetchEntry, the chunked LedgerExport tree, encode/decode (directory + tar — identity is the tree rule, never archive bytes), staged validate_bundle (S1–S7 plus the S8 secret/locator scan), the basis-derived max_supported_level, and the ReproReport/ImportRecord records. Pure over store reads + member bytes; the reproduce driver and boundary ops live in hh-embed."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-ledger = { path = "../hh-ledger" }
+hh-secrets = { path = "../hh-secrets" }
+# ComparisonReport/BudgetMatch (the R3 reproduce report's `distributions`
+# member) are §6.4 records — the lab schema plane is the one schema
+# source (CC7); hh-bundle carries the record, never redefines it.
+hh-lab = { path = "../hh-lab" }

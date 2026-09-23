@@ -557,6 +557,18 @@ pub trait ProfileView {
     fn profile(&self, coordinate: &str) -> Option<ModelProfile>;
 }
 
+/// A `ProfileView` that admits nothing — the S3.1 bundle-compile path's
+/// view (`kernel.bundle` compiles the run's sealed definition for the
+/// `compiled_bundle` member; a definition that *pins* a profile gets the
+/// loud refusal, never a silent substitute).
+pub struct NoProfiles;
+
+impl ProfileView for NoProfiles {
+    fn profile(&self, _coordinate: &str) -> Option<ModelProfile> {
+        None
+    }
+}
+
 /// Coordinate for a profile — `profile_id@version`.
 pub fn profile_coordinate(profile: &ModelProfile) -> String {
     format!("{}@{}", profile.profile_id, profile.version)

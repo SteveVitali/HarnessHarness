@@ -813,6 +813,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("lifecycle.session.attached",      Led, O::Events, false, true,  None, None),
     row("lifecycle.session.detached",      Led, O::Events, false, true,  None, None),
     row("lifecycle.contract.deprecated_use", Led, O::Events, false, true, None, None),
+    // `lifecycle.run.imported` — the S3.1 import receipt (§5h.3 §2 `import`;
+    // R-2.9.3⁰; ADR-0141 D1): kernel-minted, refs/coordinates only — lifted
+    // facts stay `authority = unverified` on the members the row names.
+    row("lifecycle.run.imported",          Led, O::Events, false, true,  None, None),
     // The registry-store audit rows (ADR-0151 (e)/0152 (e)/0153 (e); S1.8): kernel
     // component `registry`, content-free payloads (ids/spellings only) — audit-grade.
     row_audit("lifecycle.registry.registered",        O::Events, true,  REGISTRY_FIELDS, &[], None, None),
