@@ -119,9 +119,12 @@ pub enum Code {
     // ── class conformance (validate:2) ───────────────────────────────────────────
     /// `C-CLASS-1 UnknownClass` — a slot key no catalog class owns.
     ClassUnknown,
-    /// `C-CLASS-2 VariantClassMismatch` — the bound variant's `class_ref` ≠ the slot's
-    /// class.
-    ClassVariantMismatch,
+    /// `C-CLASS-2 SlotUnbound` — a mandatory (`exactly-one`) slot carries no
+    /// binding (the spec-pinned spelling: §6.1 V-7 names `C-CLASS-2
+    /// SlotUnbound`; AC-R-2.10.1-4). `VariantClassMismatch` moved to
+    /// `C-CLASS-8` — the family's interior numbering is this crate's
+    /// (ADR-0240); the spec pins only `C-CLASS-2`/`C-CLASS-6` by number.
+    ClassSlotUnbound,
     /// `C-CLASS-3 CardinalityViolation` — the slot's binding count breaks the class's
     /// `cardinality`.
     ClassCardinality,
@@ -137,6 +140,11 @@ pub enum Code {
     /// `C-CLASS-7 DialectIncompatible` — the class/variant record's dialect range
     /// excludes the document dialect.
     ClassDialectIncompatible,
+    /// `C-CLASS-8 VariantClassMismatch` — the bound variant's `class_ref` ≠ the
+    /// slot's class (renumbered from `C-CLASS-2` at S3.5 — the spec pins
+    /// `C-CLASS-2` to `SlotUnbound`, §6.1 V-7; interior numbering is this
+    /// crate's assignment, ADR-0240).
+    ClassVariantMismatch,
     // ── parameter space (validate:3; stage-2's unknown-param lands here too) ──────
     /// `C-PARAM-1 UnknownParameter` — a `values` key, a `$param:` target or a slot-param
     /// name no declared schema covers.
@@ -268,12 +276,13 @@ impl Code {
             RefDenyListNoop => "C-REF-5".into(),
             RefSnapshotDrift => "C-REF-6".into(),
             ClassUnknown => "C-CLASS-1".into(),
-            ClassVariantMismatch => "C-CLASS-2".into(),
+            ClassSlotUnbound => "C-CLASS-2".into(),
             ClassCardinality => "C-CLASS-3".into(),
             ClassContractMalformed => "C-CLASS-4".into(),
             ClassRequiredInputs => "C-CLASS-5".into(),
             ClassSlotsOnHosted => "C-CLASS-6".into(),
             ClassDialectIncompatible => "C-CLASS-7".into(),
+            ClassVariantMismatch => "C-CLASS-8".into(),
             ParamUnknown => "C-PARAM-1".into(),
             ParamMissingDomain => "C-PARAM-2".into(),
             ParamUndeclaredRef => "C-PARAM-3".into(),
@@ -331,12 +340,13 @@ impl Code {
             RefDenyListNoop => "DenyListNoop",
             RefSnapshotDrift => "SnapshotDrift",
             ClassUnknown => "UnknownClass",
-            ClassVariantMismatch => "VariantClassMismatch",
+            ClassSlotUnbound => "SlotUnbound",
             ClassCardinality => "CardinalityViolation",
             ClassContractMalformed => "ContractMalformed",
             ClassRequiredInputs => "RequiredInputsMissing",
             ClassSlotsOnHosted => "SlotsOnHosted",
             ClassDialectIncompatible => "DialectIncompatible",
+            ClassVariantMismatch => "VariantClassMismatch",
             ParamUnknown => "UnknownParameter",
             ParamMissingDomain => "MissingDomain",
             ParamUndeclaredRef => "UndeclaredParamRef",
@@ -574,12 +584,13 @@ impl Code {
             "C-REF-5" => RefDenyListNoop,
             "C-REF-6" => RefSnapshotDrift,
             "C-CLASS-1" => ClassUnknown,
-            "C-CLASS-2" => ClassVariantMismatch,
+            "C-CLASS-2" => ClassSlotUnbound,
             "C-CLASS-3" => ClassCardinality,
             "C-CLASS-4" => ClassContractMalformed,
             "C-CLASS-5" => ClassRequiredInputs,
             "C-CLASS-6" => ClassSlotsOnHosted,
             "C-CLASS-7" => ClassDialectIncompatible,
+            "C-CLASS-8" => ClassVariantMismatch,
             "C-PARAM-1" => ParamUnknown,
             "C-PARAM-2" => ParamMissingDomain,
             "C-PARAM-3" => ParamUndeclaredRef,
@@ -900,11 +911,9 @@ fn stage_outcome_from_json(j: &hh_wire::json::Json, path: &str) -> Result<StageO
         })
     };
     let int_at = |k: &str| -> Result<i64, HirError> {
-        get(k)?
-            .as_int()
-            .ok_or_else(|| HirError::SchemaViolation {
-                detail: format!("{path}.{k} must be an int"),
-            })
+        get(k)?.as_int().ok_or_else(|| HirError::SchemaViolation {
+            detail: format!("{path}.{k} must be an int"),
+        })
     };
     let na = match j.get("na").and_then(Json::as_str) {
         Some("not_run") => Some(NaReason::NotRun),
@@ -1036,11 +1045,11 @@ pub fn report_from_json(j: &hh_wire::json::Json) -> Result<ValidationReport, Hir
                 .iter()
                 .enumerate()
                 .map(|(i, v)| {
-                    v.as_str().map(str::to_string).ok_or_else(|| {
-                        HirError::SchemaViolation {
+                    v.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| HirError::SchemaViolation {
                             detail: format!("{path}[{i}] must be a string"),
-                        }
-                    })
+                        })
                 })
                 .collect(),
             _ => Err(HirError::SchemaViolation {
@@ -1055,18 +1064,12 @@ pub fn report_from_json(j: &hh_wire::json::Json) -> Result<ValidationReport, Hir
             let mut by_class = std::collections::BTreeMap::new();
             if let Json::Obj(m) = o.get("by_class").cloned().unwrap_or(Json::Null) {
                 for (k, v) in &m {
-                    by_class.insert(
-                        k.clone(),
-                        v.as_int().unwrap_or(0) as usize,
-                    );
+                    by_class.insert(k.clone(), v.as_int().unwrap_or(0) as usize);
                 }
             }
             derived.opacity = Some(OpacitySummary {
                 by_class,
-                total: o
-                    .get("total")
-                    .and_then(Json::as_int)
-                    .unwrap_or(0) as usize,
+                total: o.get("total").and_then(Json::as_int).unwrap_or(0) as usize,
                 opaque_ratio_num: o
                     .get("opaque_ratio_num")
                     .and_then(Json::as_int)

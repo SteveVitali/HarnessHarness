@@ -779,7 +779,7 @@ pub(crate) fn parameter_spec_json(p: &ParameterSpec) -> Json {
     Json::Obj(m)
 }
 
-pub(crate) fn parameter_spec_from_json(j: &Json, path: &str) -> Result<ParameterSpec, String> {
+pub fn parameter_spec_from_json(j: &Json, path: &str) -> Result<ParameterSpec, String> {
     let m = match j {
         Json::Obj(m) => m,
         _ => return Err(format!("{path} must be an object")),
@@ -856,7 +856,7 @@ fn entity_binding_json(e: &EntityBinding) -> Json {
     }
 }
 
-fn entity_binding_from_json(j: &Json, path: &str) -> Result<EntityBinding, String> {
+pub fn entity_binding_from_json(j: &Json, path: &str) -> Result<EntityBinding, String> {
     if let Json::Obj(m) = j {
         if m.contains_key("semantic_id") {
             return Ref::from_json(j, path)
@@ -883,7 +883,7 @@ fn constraint_json(c: &Constraint) -> Json {
     Json::Obj(m)
 }
 
-fn constraint_from_json(j: &Json, path: &str) -> Result<Constraint, String> {
+pub fn constraint_from_json(j: &Json, path: &str) -> Result<Constraint, String> {
     let m = match j {
         Json::Obj(m) => m,
         _ => return Err(format!("{path} must be an object")),

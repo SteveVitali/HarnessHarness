@@ -40,6 +40,7 @@
 //! Lab-facing records.
 
 pub mod analysis;
+pub mod assembly;
 pub mod bench;
 pub mod debt;
 pub mod exemplars;

@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:9bf22fa7dd6a222d4c61403b3538b466783f9901ca0f7d2dec808bdea8843744";
+    "sha256:e8980920c4c586ea9e0a138c797dad5ad8333efd3697731957c4929ec37b2d41";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5481,6 +5481,60 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.analysis.analyze` → `json` (see the contract registry).
     pub fn lab_analysis_analyze(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.analysis.analyze", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.assembly.adopt` → `json` (see the contract registry).
+    pub fn lab_assembly_adopt(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.adopt", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.assembly.apply` → `json` (see the contract registry).
+    pub fn lab_assembly_apply(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.apply", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.assembly.assemble` → `json` (see the contract registry).
+    pub fn lab_assembly_assemble(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.assemble", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.assembly.diff` → `json` (see the contract registry).
+    pub fn lab_assembly_diff(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.diff", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.assembly.drift` → `json` (see the contract registry).
+    pub fn lab_assembly_drift(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.drift", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.assembly.explain` → `json` (see the contract registry).
+    pub fn lab_assembly_explain(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.explain", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.assembly.identity` → `json` (see the contract registry).
+    pub fn lab_assembly_identity(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.identity", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.assembly.plan` → `json` (see the contract registry).
+    pub fn lab_assembly_plan(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.plan", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.assembly.validate_batch` → `json` (see the contract registry).
+    pub fn lab_assembly_validate_batch(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.validate_batch", params.clone())?;
         Ok(raw)
     }
 

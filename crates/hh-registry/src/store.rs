@@ -891,9 +891,7 @@ impl RegistryStore {
                 // (the codec's read-direction check, run on the typed arm so
                 // a program-built record faces the same gate as the wire).
                 let body = hh_hir::wire::sealed_definition_json(s);
-                if let Err(e) =
-                    hh_hir::wire::sealed_definition_from_json(&body)
-                {
+                if let Err(e) = hh_hir::wire::sealed_definition_from_json(&body) {
                     bail!(RegistryError::SchemaViolation {
                         path: "record".to_string(),
                         detail: format!("sealed_definition body: {e}"),
@@ -906,8 +904,7 @@ impl RegistryStore {
                     if a.to_canonical_string().contains("version_selector") {
                         bail!(RegistryError::SchemaViolation {
                             path: "record.document.assembly".to_string(),
-                            detail: "a registered sealed_definition carries a selector"
-                                .to_string(),
+                            detail: "a registered sealed_definition carries a selector".to_string(),
                         });
                     }
                 }
@@ -2768,8 +2765,7 @@ impl RegistryStore {
                 let cb = hh_hir::diff::classify_pair(&sb.document, &sa.document);
                 Some(DiffClassification {
                     semantic_ops_nonempty: ca.semantic_ops > 0 || cb.semantic_ops > 0,
-                    authority_delta: if ca.authority_delta
-                        == hh_hir::diff::AuthorityDelta::Widening
+                    authority_delta: if ca.authority_delta == hh_hir::diff::AuthorityDelta::Widening
                         || cb.authority_delta == hh_hir::diff::AuthorityDelta::Widening
                     {
                         Delta::Widening

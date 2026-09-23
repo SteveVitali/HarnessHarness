@@ -1372,7 +1372,10 @@ pub fn semantic_projection_json(r: &RegistryRecord) -> Option<Json> {
         // definition's lineage coordinate wherever it is pinned.
         RegistryRecord::SealedDefinition(s) => Some(obj(vec![
             ("kind", Json::str("hir.definition")),
-            ("semantic_id", Json::str(s.definition_ref.semantic_id.clone())),
+            (
+                "semantic_id",
+                Json::str(s.definition_ref.semantic_id.clone()),
+            ),
         ])),
         // The env record's semantic coordinate is the `Record::canonical_semantic()`
         // form `{kind, semantic}` — the same projection `hh-env`'s `identify` mints.

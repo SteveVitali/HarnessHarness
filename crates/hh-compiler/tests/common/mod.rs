@@ -550,6 +550,7 @@ pub fn resolve_env<'a>(
         mode,
         registrar: kernel(),
         resolved_at: 7,
+        notices: None,
     }
 }
 

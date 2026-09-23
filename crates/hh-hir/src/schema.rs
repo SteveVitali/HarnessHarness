@@ -2615,7 +2615,7 @@ fn tag_from_json(j: &Json, path: &str) -> Result<crate::diff::DiffOpTag, HirErro
 
 /// The canonical JSON of a [`crate::diff::DiffOp`] — `{op, tag{plane?, entity_kind,
 /// semantic}, …op fields}`.
-pub(crate) fn diff_op_json(op: &crate::diff::DiffOp) -> Json {
+pub fn diff_op_json(op: &crate::diff::DiffOp) -> Json {
     use crate::diff::DiffOp::*;
     let (name, fields): (&'static str, Vec<(&'static str, Json)>) = match op {
         AddNode { node, .. } => ("add_node", vec![("node", node.clone())]),
@@ -2995,7 +2995,10 @@ pub(crate) fn sealed_definition_json(s: &crate::document::SealedDefinition) -> J
         (
             "definition_ref",
             Json::obj([
-                ("semantic_id", Json::str(s.definition_ref.semantic_id.clone())),
+                (
+                    "semantic_id",
+                    Json::str(s.definition_ref.semantic_id.clone()),
+                ),
                 ("version_id", Json::str(s.definition_ref.version_id.clone())),
             ]),
         ),
@@ -3025,11 +3028,12 @@ pub(crate) fn sealed_definition_from_json(
         });
     }
     let document = document_from_json(req(j, "document", "$")?)?;
-    let root = document
-        .node(&document.root.semantic_id)
-        .ok_or_else(|| HirError::SchemaViolation {
-            detail: "$.document.root names no node".into(),
-        })?;
+    let root =
+        document
+            .node(&document.root.semantic_id)
+            .ok_or_else(|| HirError::SchemaViolation {
+                detail: "$.document.root names no node".into(),
+            })?;
     let dr = req(j, "definition_ref", "$")?;
     let semantic_id = req_str(dr, "semantic_id", "$.definition_ref")?;
     let version_id = req_str(dr, "version_id", "$.definition_ref")?;
@@ -3038,28 +3042,25 @@ pub(crate) fn sealed_definition_from_json(
             detail: "$.definition_ref does not match the document's root identity".into(),
         });
     }
-    let declared_tools: std::collections::BTreeSet<String> = match req(
-        j,
-        "closed_world_tools",
-        "$",
-    )? {
-        Json::Arr(items) => items
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                t.as_str().map(str::to_string).ok_or_else(|| {
-                    HirError::SchemaViolation {
-                        detail: format!("$.closed_world_tools[{i}] must be a string"),
-                    }
+    let declared_tools: std::collections::BTreeSet<String> =
+        match req(j, "closed_world_tools", "$")? {
+            Json::Arr(items) => items
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    t.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| HirError::SchemaViolation {
+                            detail: format!("$.closed_world_tools[{i}] must be a string"),
+                        })
                 })
-            })
-            .collect::<Result<_, _>>()?,
-        _ => {
-            return Err(HirError::SchemaViolation {
-                detail: "$.closed_world_tools must be an array".into(),
-            })
-        }
-    };
+                .collect::<Result<_, _>>()?,
+            _ => {
+                return Err(HirError::SchemaViolation {
+                    detail: "$.closed_world_tools must be an array".into(),
+                })
+            }
+        };
     let computed = crate::ops::closed_world_tools(&document);
     if declared_tools != computed {
         return Err(HirError::SchemaViolation {
