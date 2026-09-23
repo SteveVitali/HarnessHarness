@@ -260,6 +260,7 @@ impl Origin {
                 s("participant_ref")?,
                 s("hosting_mechanism")?,
             )),
+            "cache" => Ok(Origin::cache(s("entry_ref")?)),
             other => Err(DecodeError::new(format!("origin.kind {other} unknown"))),
         }
     }

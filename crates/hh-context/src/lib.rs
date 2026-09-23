@@ -50,6 +50,7 @@ pub mod assemble;
 pub mod codec;
 pub mod compact;
 pub mod events;
+pub mod k4;
 pub mod lifecycle;
 pub mod memory;
 pub mod plan;
@@ -64,6 +65,11 @@ pub use assemble::{
 };
 pub use codec::CodecError;
 pub use events::{CollectSink, EventSink};
+pub use k4::{
+    capability_dep_ref, declared_cacheable, epoch_dep_ref, K4Cache, K4Entry, K4EntryView, K4Error,
+    K4Key, K4Resolution, K4Write, NotCacheable, K4_CACHE_KIND, K4_KEY_IDP, K4_SCHEMA_REF,
+    MUTATION_DOMAINS,
+};
 pub use lifecycle::{
     check_contract, check_revoke_authority, check_supersede_authority, dependants, filter_for_slot,
     item_lifecycle_state, lifecycle_state, memory_usage, promote, resolve_conflict, revalidate,

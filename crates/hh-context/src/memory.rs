@@ -1392,6 +1392,12 @@ impl MemoryStore {
         self.stamps.get(&dep.ref_).cloned()
     }
 
+    /// `stamp_of(dep_ref)` — the raw stamp read by ref spelling (K4's epoch/
+    /// capability pins read and maintain their stamps through this port).
+    pub fn stamp_of(&self, dep_ref: &str) -> Option<String> {
+        self.stamps.get(dep_ref).cloned()
+    }
+
     /// `set_validator_verdict(version_id, validator_ref, ok)` — the
     /// validator port (the last verdict `check_contract` reads).
     pub fn set_validator_verdict(&mut self, version_id: &str, validator_ref: &str, ok: bool) {
@@ -1531,6 +1537,7 @@ pub fn render_origin(o: &Origin) -> String {
         Origin::Participant {
             participant_ref, ..
         } => participant_ref.clone(),
+        Origin::Cache { entry_ref } => entry_ref.clone(),
     };
     format!("{}({})", o.tag(), detail)
 }

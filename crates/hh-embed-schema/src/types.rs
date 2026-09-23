@@ -586,6 +586,68 @@ impl Supplies {
     }
 }
 
+/// `NarrowingLeaf{domain, disposition, scope?}` — one Π narrowing
+/// declaration a `SurfacePreset` lowers onto `open_session{new}`
+/// (§7.1 §2.4/§3; ADR-0168 D3). `domain` is an `EffectDomain`
+/// spelling; `disposition ∈ {deny, ask, allow_lease}`; `scope` is the
+/// qualifier (`workspace_local`). Narrowing-only: a leaf may lower a
+/// Π verdict, never raise one; its id is the `policy_fingerprint`
+/// narrowing-leaf leg, so a preset change revokes leases by key
+/// construction (ADR-0071 D1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NarrowingLeaf {
+    /// The effect domain the leaf narrows.
+    pub domain: String,
+    /// `deny` | `ask` | `allow_lease`.
+    pub disposition: String,
+    /// The scope qualifier, when the leaf binds one.
+    pub scope: Option<String>,
+}
+
+impl NarrowingLeaf {
+    /// The canonical spellings the wire admits.
+    pub const DISPOSITIONS: &[&str] = &["deny", "ask", "allow_lease"];
+
+    /// The wire form — `{domain, disposition, scope?}`.
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("domain".into(), Json::str(self.domain.clone()));
+        m.insert("disposition".into(), Json::str(self.disposition.clone()));
+        if let Some(sc) = &self.scope {
+            m.insert("scope".into(), Json::str(sc.clone()));
+        }
+        Json::Obj(m)
+    }
+
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let domain = s.req_str("domain")?;
+        let disposition = closed_str(
+            s.req("disposition")?,
+            Self::DISPOSITIONS,
+            &format!("{path}/disposition"),
+        )?;
+        let scope = s.opt_str("scope")?;
+        s.finish()?;
+        Ok(NarrowingLeaf {
+            domain,
+            disposition,
+            scope,
+        })
+    }
+
+    /// `leaf_id` — `H("narrowing_leaf" ∥ canonical(leaf))`; the member
+    /// the kernel folds into `policy_fingerprint`'s narrowing-leaf leg.
+    /// The surface's table and this record derive the same id from the
+    /// same canonical bytes (CC1).
+    pub fn leaf_id(&self) -> String {
+        hh_identity::idp::idp_id(
+            "narrowing_leaf",
+            self.to_json().to_canonical_string().as_bytes(),
+        )
+    }
+}
+
 /// The `OpenSpec` sum (§7.4 §2.4). `attach` is always read-only
 /// (I6: the read-only kind cannot mutate — enforced at `submit`,
 /// `respond_permission`, `cancel`). The `new` arm is large by
@@ -608,6 +670,13 @@ pub enum OpenSpec {
         attendance: AttendanceDeclaration,
         /// `sync` | `out_of_process` (OQ-435) — absent ⇒ policy default.
         approval_mode: Option<String>,
+        /// `workspace_trust ∈ {trusted, untrusted, unknown}` — the
+        /// claim the CLI read from the H5 trust store, carried verbatim
+        /// onto the manifest (ADR-0168 D7); absent ⇒ `unknown` (OQ-387).
+        workspace_trust: Option<String>,
+        /// The preset's Π narrowing leaves (ADR-0168 D3) — folded into
+        /// `policy_fingerprint` at every lease touch; empty ⇒ none.
+        narrowing_leaves: Vec<NarrowingLeaf>,
     },
     /// `{kind:"resume", run_id, mode, from_seq?, definition?}` — `mode` ∈
     /// {continue (WouldBlock while the writer lives), takeover
@@ -639,6 +708,8 @@ impl OpenSpec {
                 supplies,
                 attendance,
                 approval_mode,
+                workspace_trust,
+                narrowing_leaves,
             } => {
                 let mut m = BTreeMap::new();
                 m.insert("kind".into(), Json::str("new"));
@@ -663,6 +734,15 @@ impl OpenSpec {
                 m.insert("attendance".into(), attendance.to_json());
                 if let Some(am) = approval_mode {
                     m.insert("approval_mode".into(), Json::str(am.clone()));
+                }
+                if let Some(wt) = workspace_trust {
+                    m.insert("workspace_trust".into(), Json::str(wt.clone()));
+                }
+                if !narrowing_leaves.is_empty() {
+                    m.insert(
+                        "narrowing_leaves".into(),
+                        Json::Arr(narrowing_leaves.iter().map(|l| l.to_json()).collect()),
+                    );
                 }
                 Json::Obj(m)
             }
@@ -734,6 +814,28 @@ impl OpenSpec {
                     &format!("{path}/attendance"),
                 )?;
                 let approval_mode = s.opt_str("approval_mode")?;
+                let workspace_trust = s
+                    .opt_str("workspace_trust")?
+                    .map(|wt| {
+                        closed_str(
+                            &Json::str(wt),
+                            &["trusted", "untrusted", "unknown"],
+                            &format!("{path}/workspace_trust"),
+                        )
+                    })
+                    .transpose()?;
+                let narrowing_leaves = s
+                    .opt_arr("narrowing_leaves")?
+                    .map(|a| {
+                        a.iter()
+                            .enumerate()
+                            .map(|(i, l)| {
+                                NarrowingLeaf::from_json(l, &format!("{path}/narrowing_leaves/{i}"))
+                            })
+                            .collect::<Result<Vec<_>, _>>()
+                    })
+                    .transpose()?
+                    .unwrap_or_default();
                 OpenSpec::New {
                     definition,
                     overrides,
@@ -744,6 +846,8 @@ impl OpenSpec {
                     supplies,
                     attendance,
                     approval_mode,
+                    workspace_trust,
+                    narrowing_leaves,
                 }
             }
             "resume" => {
@@ -1535,7 +1639,7 @@ pub struct ProjectParams {
     pub until_seq: Option<i64>,
 }
 
-pub const PROJECT_VIEW_KINDS: &[&str] = &["context_view", "run_summary", "checkpoint"];
+pub const PROJECT_VIEW_KINDS: &[&str] = &["context_view", "run_summary", "checkpoint", "compact"];
 
 impl ProjectParams {
     pub fn to_json(&self) -> Json {

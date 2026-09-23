@@ -23,6 +23,8 @@ use std::collections::BTreeSet;
 use hh_compiler::equiv::SurfaceBinding;
 use hh_compiler::plan::PinnedRef;
 use hh_containment::admit::{admit_input, floor_gate, workspace_scope};
+use hh_context::k4::{self, K4Cache, K4Entry, K4Key, K4Resolution};
+use hh_context::memory::WriteContext;
 use hh_hir::kinds::{EffectClass, EffectDomain};
 use hh_hir::records::{Grant, ScopeBindings, ToolCapabilityRecord};
 use hh_hir::risk::project_risk;
@@ -36,7 +38,8 @@ use hh_monitor::events::decided_payload;
 use hh_monitor::monitor::{FlowInputs, Monitor, Proposal};
 use hh_ontology::risk::{RiskClass, RiskReversibility};
 use hh_provenance::flow;
-use hh_provenance::{Label, ProvenanceRecord};
+use hh_provenance::origin::Origin;
+use hh_provenance::{Label, PersistenceScope, ProvenanceRecord};
 use hh_secrets::redact::{redact, DetectorSet};
 use hh_wire::json::Json;
 
@@ -191,6 +194,29 @@ pub enum DispatchOutcome {
         /// The owed permission (the durable `pending` row).
         permission_id: String,
     },
+    /// `observed` — served from the K4 tool-result cache (§5b.4; R-2.3.4¹):
+    /// no executor ran, `action.tool.started`/`committed` are absent by
+    /// construction, and the ledger carries `model.cache.resolved{hit}` plus
+    /// the ordinary `prepared`/`observed`/`completed` terminals. The served
+    /// provenance is `origin = cache(entry_ref)` at the entry's label —
+    /// never raised (I-NOAUTH's cache face).
+    ObservedCached {
+        /// The observation rebuilt from the entry's recorded value.
+        observation: Box<Observation>,
+        /// The `Memory{kind: tool_result}` version served.
+        entry_ref: String,
+        /// `origin = cache(entry_ref)`, `derived_from = [entry_ref]`,
+        /// authority/taint/readers copied from the entry's label.
+        provenance: Box<ProvenanceRecord>,
+        /// The entry's `recorded_usage` — the `avoided` report's input.
+        avoided: Option<Json>,
+    },
+}
+
+/// The `environment_ref` coordinate spelling K4 keys and epoch stamps use —
+/// `"{semantic_id}:{version_id}"` of the bound environment record.
+fn env_ref_str(handle: &crate::handle::EnvHandle) -> String {
+    format!("{}:{}", handle.environment_ref.0, handle.environment_ref.1)
 }
 
 /// `Dispatcher` — the seven-stage pipeline over `store` + `driver` +
@@ -205,6 +231,10 @@ pub struct Dispatcher<'a> {
     dedup: DedupStore,
     /// The redaction detectors (the capture path's mask set).
     detectors: DetectorSet,
+    /// The K4 tool-result cache (`Memory{kind: tool_result}` over the run's
+    /// `MemoryStore` — S2.10). `None` ⇒ no lookup, no write, no epoch
+    /// tracking — the pre-S2.10 pipeline verbatim.
+    cache: Option<K4Cache>,
 }
 
 impl<'a> Dispatcher<'a> {
@@ -224,7 +254,25 @@ impl<'a> Dispatcher<'a> {
             minter: TokenMinter::new(seed),
             dedup: DedupStore::default(),
             detectors,
+            cache: None,
         }
+    }
+
+    /// Attach the run's K4 cache (`set_cache` before the first dispatch —
+    /// the epoch pins are the run's, never cross-run).
+    pub fn set_cache(&mut self, cache: K4Cache) {
+        self.cache = Some(cache);
+    }
+
+    /// The attached K4 cache, if any.
+    pub fn cache(&self) -> Option<&K4Cache> {
+        self.cache.as_ref()
+    }
+
+    /// Detach and return the cache (the caller unwraps the `MemoryStore`
+    /// back out at run end).
+    pub fn take_cache(&mut self) -> Option<K4Cache> {
+        self.cache.take()
     }
 
     /// The token resolver (the helper/executor's read view).
@@ -899,6 +947,25 @@ impl<'a> Dispatcher<'a> {
         )?;
         self.store.append(&self.run_id, lease, vec![authorized])?;
 
+        // ── 2b K4 lookup (§5b.4; R-2.3.4¹; ADR-0129 d.1) ──────────────────
+        // The cache is consulted only *after* the monitor's allow is durable
+        // — a hit never bypasses authorization, and it rides the ordinary
+        // lifecycle (`prepared`/`observed`/`completed` still land; `started`
+        // and `committed` are absent by construction — no executor ran).
+        // A non-admissible call is a `bypass` row; `miss`/`stale_withheld`/
+        // `refused` fall through to the executor path.
+        if let Some(outcome) = self.k4_lookup(
+            input,
+            &handle,
+            &args_canonical_hash,
+            &risk,
+            &key,
+            &effect_id,
+            lease,
+        )? {
+            return Ok(outcome);
+        }
+
         // ── 3 prepare ──────────────────────────────────────────────────────
         let token = self.minter.mint(&effect_id, 1, &input.env_handle_id);
         // `reserve` — reserve-before-spend (the reservation is `hh-budget`'s
@@ -958,6 +1025,14 @@ impl<'a> Dispatcher<'a> {
         } else {
             crate::helper::CommitEvidence::ReadOnly
         };
+        // IR-3 — a committed effect in a mutating domain
+        // (`fs_write | exec | net_egress | spawn_process`) bumps
+        // `mutation_epoch(environment_ref)`; every K4 entry pinned to the
+        // earlier epoch is `stale_withheld` on its next lookup (nothing is
+        // cleared — the stamp mismatch is the withholding mechanism).
+        if let Some(c) = self.cache.as_mut() {
+            c.note_committed(&env_ref_str(&handle), input.declared.domain);
+        }
         let execution_id = self.store.alloc_id("exec");
         let started = self.minter_ev().mint_effect(
             "action.tool.started",
@@ -1287,6 +1362,19 @@ impl<'a> Dispatcher<'a> {
         }
         batch.push(completed);
         self.store.append(&self.run_id, lease, batch)?;
+        // K4 deposit — "written by the kernel at `action.tool.completed`
+        // when admissible" (§5b.4): only a successful (`ok`), admissible,
+        // admission-free observation is written; a refused deposit leaves
+        // the next lookup a plain `miss` (fail-safe — never a stale serve).
+        self.k4_write(
+            input,
+            &handle,
+            &risk,
+            &effect_id,
+            &args_canonical_hash,
+            &obs,
+            lease,
+        )?;
         self.emit_unattributed(&unattributed, lease)?;
         // ── verification: the kernel local checks (a)–(c) ride every
         // `observed` terminal (S1.21 — ADR-0111 D1/(e); AC-R-2.7.1-1:
@@ -1307,6 +1395,281 @@ impl<'a> Dispatcher<'a> {
         )?;
         self.minter.expire(&effect_id, attempt_no);
         Ok(DispatchOutcome::Observed(Box::new(obs)))
+    }
+
+    /// The K4 lookup (§5b.4; R-2.3.4¹; ADR-0129 d.1) — called between
+    /// `authorized` and `prepare`. Returns `Some(outcome)` when a hit served
+    /// the call; `None` when the pipeline continues (`bypass`/`miss`/
+    /// `stale_withheld`/`refused` all emit their `model.cache.resolved` row
+    /// here — exactly one per lookup, ADR-0128 d.3).
+    #[allow(clippy::too_many_arguments)]
+    fn k4_lookup(
+        &mut self,
+        input: &DispatchInput,
+        handle: &crate::handle::EnvHandle,
+        args_canonical_hash: &str,
+        risk: &RiskClass,
+        idem_key: &str,
+        effect_id: &str,
+        lease: &Lease,
+    ) -> Result<Option<DispatchOutcome>, EnvError> {
+        let k4key = K4Key {
+            capability_semantic_id: input.capability_ref.semantic_id.clone(),
+            capability_version_id: input.capability_ref.version_id.clone(),
+            canonical_args_hash: args_canonical_hash.to_string(),
+            environment_ref: env_ref_str(handle),
+            readers: input.context_label.readers.clone(),
+        };
+        let cacheable = k4::declared_cacheable(&input.capability.observation_contract);
+        // Resolve under a scoped immutable borrow — the store consultation
+        // ends before any mutable self call (the hit path mints + appends).
+        let (scope, not_cacheable, resolution) = match self.cache.as_ref() {
+            None => return Ok(None),
+            Some(c) => (
+                c.scope(),
+                K4Cache::admissible(risk, cacheable).err(),
+                if K4Cache::admissible(risk, cacheable).is_ok() {
+                    Some(c.resolve(&k4key, c.scope()))
+                } else {
+                    None
+                },
+            ),
+        };
+        if let Some(nc) = not_cacheable {
+            let reason = nc.reason();
+            self.emit_cache_resolved(
+                input, effect_id, &k4key, scope, "bypass", &reason, None, None, lease,
+            )?;
+            return Ok(None);
+        }
+        match resolution.expect("admissible ⇒ resolved") {
+            K4Resolution::Hit { version, .. } => {
+                let entry_view = K4Cache::hit_entry(&version);
+                let obs = entry_view
+                    .as_ref()
+                    .and_then(|v| Observation::from_json(&v.value));
+                let (entry_view, obs) = match (entry_view, obs) {
+                    (Some(v), Some(o)) => (v, o),
+                    _ => {
+                        // A head that cannot rebuild an ordinary Observation
+                        // is a refusal, never a partial serve.
+                        self.emit_cache_resolved(
+                            input,
+                            effect_id,
+                            &k4key,
+                            scope,
+                            "refused",
+                            "malformed_entry",
+                            Some(&version.version_id),
+                            None,
+                            lease,
+                        )?;
+                        return Ok(None);
+                    }
+                };
+                self.emit_cache_resolved(
+                    input,
+                    effect_id,
+                    &k4key,
+                    scope,
+                    "hit",
+                    "ok",
+                    Some(&version.version_id),
+                    entry_view.recorded_usage.clone(),
+                    lease,
+                )?;
+                // `prepared` binds the idempotency key (the hit rides the
+                // ordinary lifecycle — intended → authorized → prepared →
+                // observed; the read_only class needs no commit).
+                let token = self.minter.mint(effect_id, 1, &input.env_handle_id);
+                let prepared = self.minter_ev().mint_effect(
+                    "action.effect.prepared",
+                    events::prepared_payload(
+                        idem_key,
+                        None,
+                        None,
+                        &token.hash,
+                        input.ladder.effective(),
+                        &input.output_policy.policy_ref(),
+                    ),
+                    effect_id,
+                    &input.chain,
+                )?;
+                let observed = self.minter_ev().mint_effect(
+                    "action.effect.observed",
+                    events::observed_payload(1, lease.generation, &obs),
+                    effect_id,
+                    &input.chain,
+                )?;
+                let mut completed = self.minter_ev().mint(
+                    "action.tool.completed",
+                    events::tool_completed_payload("ok", None),
+                )?;
+                completed.scope = hh_ledger::event::Scope {
+                    turn_id: Some(input.chain.turn_id.clone()),
+                    model_call_id: Some(input.chain.model_call_id.clone()),
+                    tool_call_id: Some(input.chain.tool_call_id.clone()),
+                    ..Default::default()
+                };
+                self.store
+                    .append(&self.run_id, lease, vec![prepared, observed, completed])?;
+                self.dedup.record(idem_key, effect_id);
+                self.minter.expire(effect_id, 1);
+                let provenance = K4Cache::served_provenance(&version, self.store.now_ms());
+                Ok(Some(DispatchOutcome::ObservedCached {
+                    observation: Box::new(obs),
+                    entry_ref: version.version_id,
+                    provenance: Box::new(provenance),
+                    avoided: entry_view.recorded_usage,
+                }))
+            }
+            K4Resolution::Miss { .. } => {
+                self.emit_cache_resolved(
+                    input, effect_id, &k4key, scope, "miss", "no_entry", None, None, lease,
+                )?;
+                Ok(None)
+            }
+            K4Resolution::StaleWithheld {
+                version_id, reason, ..
+            } => {
+                self.emit_cache_resolved(
+                    input,
+                    effect_id,
+                    &k4key,
+                    scope,
+                    "stale_withheld",
+                    &reason,
+                    Some(&version_id),
+                    None,
+                    lease,
+                )?;
+                Ok(None)
+            }
+            K4Resolution::Refused { reason, .. } => {
+                self.emit_cache_resolved(
+                    input, effect_id, &k4key, scope, "refused", &reason, None, None, lease,
+                )?;
+                Ok(None)
+            }
+        }
+    }
+
+    /// The K4 deposit at `action.tool.completed` (§5b.4 — "written by the
+    /// kernel … when admissible"). Only a successful (`ObservedStatus::Ok`),
+    /// admissible, admission-free observation is deposited — an `admission`
+    /// member is not rebuildable by `Observation::from_json`, so the entry
+    /// is never written rather than written lossy. A refused deposit is not
+    /// a dispatch failure: the observation already landed and the next
+    /// lookup simply misses (fail-safe — never a stale serve).
+    #[allow(clippy::too_many_arguments)]
+    fn k4_write(
+        &mut self,
+        input: &DispatchInput,
+        handle: &crate::handle::EnvHandle,
+        risk: &RiskClass,
+        effect_id: &str,
+        args_canonical_hash: &str,
+        obs: &Observation,
+        lease: &Lease,
+    ) -> Result<(), EnvError> {
+        if self.cache.is_none()
+            || !matches!(obs.status, ObservedStatus::Ok)
+            || obs.admission.is_some()
+        {
+            return Ok(());
+        }
+        let cacheable = k4::declared_cacheable(&input.capability.observation_contract);
+        if K4Cache::admissible(risk, cacheable).is_err() {
+            return Ok(());
+        }
+        let k4key = K4Key {
+            capability_semantic_id: input.capability_ref.semantic_id.clone(),
+            capability_version_id: input.capability_ref.version_id.clone(),
+            canonical_args_hash: args_canonical_hash.to_string(),
+            environment_ref: env_ref_str(handle),
+            readers: input.context_label.readers.clone(),
+        };
+        let scope = self.cache.as_ref().expect("checked is_none above").scope();
+        let entry = K4Entry {
+            value_ref: obs.manifest_ref.clone(),
+            value: obs.to_json(),
+            // The write's provenance is the producing call's `tool` origin —
+            // a served hit re-origins to `cache(entry_ref)` (I-NOAUTH: the
+            // served record carries the entry's label, never widened).
+            provenance: ProvenanceRecord::minted(
+                Origin::tool(
+                    input.capability_ref.version_id.clone(),
+                    effect_id.to_string(),
+                ),
+                scope,
+                self.store.now_ms(),
+            ),
+            recorded_usage: None,
+            external_dep: None,
+            valid_until: None,
+        };
+        let written = {
+            let cache = self.cache.as_mut().expect("checked is_none above");
+            let lease_generation = cache.store_mut().lease(scope);
+            let ctx = WriteContext {
+                context_label: input.context_label.clone(),
+                lease_generation,
+                at_seq: cache.store().applied_seq() + 1,
+                run_id: self.run_id.clone(),
+            };
+            cache.write(&k4key, &entry, scope, &ctx)
+        };
+        // A refused deposit (`NotCacheable`, `CapabilityVersionDrift`, a
+        // store refusal) is swallowed by design — the observation is
+        // durable, the miss cost is next call's. A successful deposit lands
+        // its `context.memory.written` row scoped to the still-open
+        // turn/model_call chain (the `effect`/`tool_call` scopes closed with
+        // `observed`/`completed`).
+        if let Ok(w) = written {
+            let (class, payload) = w.memory_event;
+            let mut ev = self.minter_ev().mint(&class, payload)?;
+            ev.scope = hh_ledger::event::Scope {
+                turn_id: Some(input.chain.turn_id.clone()),
+                model_call_id: Some(input.chain.model_call_id.clone()),
+                ..Default::default()
+            };
+            self.store.append(&self.run_id, lease, vec![ev])?;
+        }
+        Ok(())
+    }
+
+    /// `model.cache.resolved` — the one-row-per-lookup record (ADR-0128 d.3).
+    /// Effect-scoped: the lookup is a fact inside this effect's trail
+    /// (minted while the effect scope is open, post-`authorized`).
+    #[allow(clippy::too_many_arguments)]
+    fn emit_cache_resolved(
+        &mut self,
+        input: &DispatchInput,
+        effect_id: &str,
+        key: &K4Key,
+        scope: PersistenceScope,
+        outcome: &str,
+        reason: &str,
+        entry_ref: Option<&str>,
+        avoided: Option<Json>,
+        lease: &Lease,
+    ) -> Result<(), EnvError> {
+        let ev = self.minter_ev().mint_effect(
+            "model.cache.resolved",
+            K4Cache::resolved_payload(
+                key,
+                scope,
+                outcome,
+                reason,
+                entry_ref,
+                avoided,
+                Json::str(input.chain.tool_call_id.clone()),
+            ),
+            effect_id,
+            &input.chain,
+        )?;
+        self.store.append(&self.run_id, lease, vec![ev])?;
+        Ok(())
     }
 
     /// The S1.21 local-check emission: run the kernel's built-in checks
