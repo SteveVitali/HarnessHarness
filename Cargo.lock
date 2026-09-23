@@ -425,6 +425,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-results"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-bundle",
+ "hh-eval",
+ "hh-experiment",
+ "hh-identity",
+ "hh-lab",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-secrets"
 version = "0.0.1"
 dependencies = [

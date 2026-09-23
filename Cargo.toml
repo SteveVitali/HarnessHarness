@@ -317,6 +317,19 @@ members = [
     # exactly-once). Reads hh-lab records + hh-ledger/hh-budget primitives;
     # registry facts arrive through the context (plane separation — CC10).
     "crates/hh-experiment",
+    # The C0/Stage-3 results store (spec §6.5, R-2.10.5⁰; ticket S3.4b;
+    # ADR-0161/0162/0163). A PERSISTENT workspace member: `ResultsRow/1` +
+    # `project_row`, immutable row versions under the fixed key with head
+    # resolution + `rescore`, `build_cells`/`CellTable` + `distribution`,
+    # `get_row`/`row_history`/`query_rows` reads at a `watermark_set`, the
+    # header-only bundle catalogue + `bundle_refs`, `verify_row`/
+    # `verify_citation`, the rebuildable annotation index, and the
+    # lab-internal `leaderboard()` with L1–L5 (no publication — ADR-0163).
+    # A projection layer, never a store of record: everything it holds is
+    # project()-pure at a recorded watermark set, view-hashed, and rebuilds
+    # to equal bytes. Reads hh-ledger/hh-experiment/hh-eval/hh-bundle
+    # records; owns no authoritative state.
+    "crates/hh-results",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired
