@@ -670,6 +670,7 @@ fn ac_s2_token_echo_is_verbatim() {
     );
     // Drain the journal — every frame echoes `att-token-xyz`.
     let mut saw_chunk = false;
+    let mut polls_after_exit = 0;
     loop {
         let r = client
             .request(&hh_helper::protocol::HelperRequest::Read {
@@ -696,7 +697,16 @@ fn ac_s2_token_echo_is_verbatim() {
             }
         }
         if matches!(r.get("exited"), Some(Json::Bool(true))) {
-            break;
+            // The stdout chunk can be journaled just after the process is
+            // reaped, so `exited` may lead the last `Chunk` frame. Keep
+            // draining (after_seq:0 re-reads every frame) until it lands or a
+            // bounded budget elapses — the assertion below still requires a
+            // real chunk, this only removes the exit/journal race (flaky on
+            // fast Linux runners).
+            if saw_chunk || polls_after_exit >= 25 {
+                break;
+            }
+            polls_after_exit += 1;
         }
     }
     assert!(saw_chunk, "the echo check ran on real frames");
