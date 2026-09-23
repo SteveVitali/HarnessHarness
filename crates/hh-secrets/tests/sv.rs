@@ -160,6 +160,7 @@ fn github_spec() -> SecretChannelSpec {
             host_pattern: "api.github.com".into(),
             port: None,
             path_prefix: None,
+            revocation_path: None,
             auth_carrier: AuthCarrier::Header {
                 name: "Authorization".into(),
                 prefix: Some("Bearer ".into()),
@@ -225,6 +226,7 @@ fn bound_binding(
 
 fn req(effect: &str, dest: &str, path: Option<&str>) -> RequestDescriptor {
     RequestDescriptor {
+        env_handle: "env-1".into(),
         effect_id: effect.into(),
         destination: dest.into(),
         method: Some("GET".into()),
@@ -749,13 +751,11 @@ fn sv9_mode_isolation_gates_and_typed_deferral() {
         Ok(_) => panic!("wrapped_long_lived under no isolation must refuse"),
     }
 
-    // mint — the failure-typed Stage-2 SPI.
-    match broker.mint("bnd-x", "aud", 60_000) {
-        Err(BrokerError::Deferred { verb, stage }) => {
-            assert_eq!(verb, "mint");
-            assert_eq!(stage, 2);
-        }
-        _ => panic!("mint must be a typed deferral"),
+    // mint — now real (S2.4): an unknown binding refuses `Revoked`; a live
+    // binding mints a verifiable token that fails after expiry (LT-05).
+    match broker.mint(&mut store, &run_id, &lease, "bnd-x", "aud", 60_000) {
+        Err(BrokerError::Refused(r)) => assert_eq!(r.code, RefusedCode::Revoked),
+        _ => panic!("mint on an unknown binding must refuse"),
     }
 }
 

@@ -43,6 +43,14 @@ use crate::types::{
 /// The kernel component tag for this crate's audit rows.
 pub const COMPONENT: &str = "hh-secrets";
 
+/// The `mh_mint:` token MAC — `idp_digest("secret.minted", secret_key ∥
+/// binding_id ∥ audience ∥ expires_ms)` truncated to 32 hex (kernel-keyed —
+/// unforgeable off-broker; the token carries no secret material).
+fn minted_mac(secret_key: &str, binding_id: &str, audience: &str, expires_at_ms: u64) -> String {
+    let material = format!("{secret_key}\u{1f}{binding_id}\u{1f}{audience}\u{1f}{expires_at_ms}");
+    hh_identity::idp::idp_digest("secret.minted", material.as_bytes())[..32].to_string()
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The secret-source SPI — the vault boundary (kernel-side only)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -275,6 +283,11 @@ pub struct RequestDescriptor {
     /// The `action.effect.*` scope the use is charged to (SV-5 — credential
     /// use rides the `net_egress` effect it decorates).
     pub effect_id: String,
+    /// The environment handle the request arrived on — checked against the
+    /// binding's `env_handle` (S2.4 anti-laundering, ADR-0266 D3: a sentinel
+    /// is bound to *one* env; a placeholder copied to another environment's
+    /// wire is `out_of_scope`, never honoured).
+    pub env_handle: String,
     /// The destination host (matched against the binding's `destinations` by
     /// the interim `ResourcePattern` rules).
     pub destination: String,
@@ -335,13 +348,112 @@ pub struct Delivery {
     pub claim_id: String,
 }
 
-/// The `revoke` outcome — the bindings the revoke dropped.
+/// The `revoke` outcome — the bindings the revoke dropped plus the
+/// destination-side revocation intents the mediator must dispatch (LT-05's
+/// "wrapped values are revoked at the destination" — S2.4, ADR-0266 D4).
 #[derive(Debug, Clone, PartialEq)]
 pub struct RevokeOutcome {
     /// The binding ids revoked (empty + `already` when idempotent).
     pub revoked: Vec<String>,
     /// Whether the target was already dead (no event emitted — idempotent).
     pub already: bool,
+    /// The destination-side revocation intents (one per dropped binding ×
+    /// channel `DestinationBinding` declaring `revocation_path`). The
+    /// mediator dispatches a POST to each; the intent is content-free (the
+    /// binding coordinate, never the value).
+    pub intents: Vec<RevokeIntent>,
+}
+
+/// One destination-side revocation intent — `POST revocation_path` on the
+/// destination carrying the binding coordinate (never the credential).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RevokeIntent {
+    /// The dropped binding.
+    pub binding_id: String,
+    /// The channel.
+    pub channel_id: String,
+    /// The destination's host pattern (the POST's destination coordinate).
+    pub host_pattern: String,
+    /// The destination's declared port, when constrained (`None` = the
+    /// scheme default — the dispatcher resolves the concrete port).
+    pub port: Option<u16>,
+    /// The revocation path on that destination.
+    pub revocation_path: String,
+}
+
+/// `mint`/`minted_scoped` — a scoped token the broker mints for one audience
+/// and one TTL (S2.4; §5g.3 `minted_scoped`). The token is a kernel-keyed
+/// capability: `mh_mint:v1:<binding_id>:<expires_ms>:<mac>` where `mac =
+/// idp_digest("secret.minted", secret_key ∥ binding_id ∥ audience ∥
+/// expires_ms)` — kernel-keyed, unforgeable off-broker, and carrying **no
+/// secret material** (the value never enters the token). `verify_minted`
+/// re-derives the MAC, checks the audience, the expiry (LT-05's "minted
+/// tokens fail after expiry") and the binding's liveness (a revoked binding
+/// revokes its tokens).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MintedToken {
+    /// The token spelling (the carrier value the mediator injects).
+    pub token: String,
+    /// The binding it was minted under.
+    pub binding_id: String,
+    /// The audience it is scoped to.
+    pub audience: String,
+    /// Expiry (run ms — a `Store::now_ms` coordinate, never wall-clock).
+    pub expires_at_ms: u64,
+    /// The durable `security.credential.used` row minting produced (SV-5 —
+    /// durable before the token is visible).
+    pub used_event_id: String,
+}
+
+/// `verify_minted`'s closed verdict sum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MintedVerdict {
+    /// The token verifies — carries the channel_id it is scoped to.
+    Valid,
+    /// Past `expires_at_ms`.
+    Expired,
+    /// The backing binding is dead (revoked/expired/rotated).
+    Revoked,
+    /// Unknown spelling, MAC mismatch, or audience mismatch.
+    Invalid,
+}
+
+impl MintedVerdict {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MintedVerdict::Valid => "valid",
+            MintedVerdict::Expired => "expired",
+            MintedVerdict::Revoked => "revoked",
+            MintedVerdict::Invalid => "invalid",
+        }
+    }
+}
+
+/// The kernel-held minted record (in-memory; the token itself is the
+/// capability — the record is the liveness/audience check's table).
+#[derive(Debug, Clone)]
+pub struct MintedRecord {
+    /// The binding the token was minted under.
+    pub binding_id: String,
+    /// The channel (the verify verdict's scope).
+    pub channel_id: String,
+    /// The audience the token is scoped to.
+    pub audience: String,
+    /// Expiry (run ms).
+    pub expires_at_ms: u64,
+}
+
+/// `virtualize_for_fork`'s result (LT-09) — the old→new placeholder spelling
+/// map the snapshot rewriter applies plus the freshly-bound binding ids.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ForkVirtualization {
+    /// `old placeholder spelling → new placeholder spelling` (the fork's
+    /// snapshot rewrites each old spelling to the fresh one — a fork never
+    /// inherits the parent's nonce).
+    pub rewrites: std::collections::BTreeMap<String, String>,
+    /// The newly-minted binding ids on the fork's env handle.
+    pub bindings: Vec<String>,
 }
 
 /// `revoke`'s target — a channel (drops all live bindings) or one binding.
@@ -383,6 +495,10 @@ pub struct CredentialBroker {
     /// is recorded so `revoke`/rotation drop a dead binding's claims too (SV-6
     /// — a revoked binding's staged delivery is undeliverable).
     pending: BTreeMap<String, (String, String)>,
+    /// Kernel-held minted-scoped records (`token spelling → record`) — the
+    /// `verify_minted` liveness/audience table (S2.4). In-memory; a dead
+    /// binding's records are dropped on revoke/rotate/run-terminal.
+    minted: BTreeMap<String, MintedRecord>,
     /// The binding/claim counters.
     seq: u64,
 }
@@ -400,6 +516,7 @@ impl CredentialBroker {
             secret_key: secret_key.into(),
             rotated: BTreeMap::new(),
             pending: BTreeMap::new(),
+            minted: BTreeMap::new(),
             seq: 0,
         }
     }
@@ -809,6 +926,21 @@ impl CredentialBroker {
                 format!("binding {binding_id} expired at {}", binding.expires_at),
             );
         }
+        // Env-handle check (S2.4, ADR-0266 D3) — a sentinel is bound to one
+        // environment; presenting it on another env's wire is out_of_scope
+        // (non-transferable placeholders — LT-02's laundering half).
+        if binding.env_handle != request.env_handle {
+            return deny(
+                self,
+                store,
+                lease,
+                RefusedCode::OutOfScope,
+                format!(
+                    "binding {binding_id} is bound to env {} — not {}",
+                    binding.env_handle, request.env_handle
+                ),
+            );
+        }
         if !binding.destinations.contains(&request.destination) {
             return deny(
                 self,
@@ -945,20 +1077,276 @@ impl CredentialBroker {
         }))
     }
 
-    // ── mint (Stage-2 SPI) ───────────────────────────────────────────────
+    // ── mint (S2.4 — minted_scoped) ──────────────────────────────────────
 
-    /// `mint(binding_id, audience, ttl)` — the failure-typed SPI: minted
-    /// delivery is Stage 2 (the minted-scoped Π rows are already in the
-    /// monitor; the minter is not). A typed `Deferred`, never a panic.
+    /// `mint(binding_id, audience, ttl_ms)` — the `minted_scoped` verb
+    /// (S2.4; ADR-0266 D4). The minted token is a kernel-keyed capability —
+    /// `mh_mint:v1:<binding_id>:<expires_ms>:<mac>` — carrying **no secret
+    /// material**; `verify_minted` re-derives the MAC and checks
+    /// audience/expiry/binding-liveness (LT-05: expired ⇒ `Expired`,
+    /// revoked binding ⇒ `Revoked`). A `security.credential.used` row is
+    /// durable before the token is returned (SV-5 — minting *is* the use).
+    ///
+    /// A `sender_constraint = dpop` channel still refuses
+    /// `SenderConstraintUnmet` (proof-of-possession machinery is not this
+    /// ticket's); `audience`/`none` admit — the token *is* the audience
+    /// binding.
     pub fn mint(
         &mut self,
-        _binding_id: &str,
-        _audience: &str,
-        _ttl_ms: u64,
-    ) -> Result<Json, BrokerError> {
-        Err(BrokerError::Deferred {
-            verb: "mint",
-            stage: 2,
+        store: &mut Store,
+        run_id: &str,
+        lease: &Lease,
+        binding_id: &str,
+        audience: &str,
+        ttl_ms: u64,
+    ) -> Result<MintedToken, BrokerError> {
+        let Some(binding) = self.bindings.get(binding_id).cloned() else {
+            return Err(BrokerError::Refused(Refused::new(
+                RefusedCode::Revoked,
+                format!("no binding {binding_id}"),
+            )));
+        };
+        if !binding.is_live() || self.revoked_channels.contains(&binding.channel_id) {
+            return Err(BrokerError::Refused(Refused::new(
+                RefusedCode::Revoked,
+                format!("binding {binding_id} is revoked"),
+            )));
+        }
+        let ch = self
+            .channels
+            .get(&binding.channel_id)
+            .ok_or_else(|| BrokerError::UnknownChannel {
+                channel_id: binding.channel_id.clone(),
+            })?
+            .clone();
+        if ch.spec.sender_constraint == SenderConstraint::Dpop {
+            return Err(BrokerError::Refused(Refused::new(
+                RefusedCode::SenderConstraintUnmet,
+                "dpop proof-of-possession is not verifiable at this stage".to_string(),
+            )));
+        }
+        if ch.spec.canary {
+            let leak = Leak::at_mediation(
+                format!("mint:{}", binding.channel_id),
+                DetectorKind::Canary,
+                Some(binding.channel_id.clone()),
+            );
+            self.append_security(
+                store,
+                run_id,
+                lease,
+                "security.secret.leak_detected",
+                events::leak_detected_payload(&leak),
+            )
+            .map_err(|e| BrokerError::Ledger {
+                detail: format!("leak_detected row not durable: {e}"),
+            })?;
+            return Err(BrokerError::Refused(Refused::new(
+                RefusedCode::Canary,
+                format!("channel {} is a canary — never minted", binding.channel_id),
+            )));
+        }
+        let expires_at_ms = store.now_ms().saturating_add(ttl_ms);
+        let mac = minted_mac(&self.secret_key, binding_id, audience, expires_at_ms);
+        let token = format!("mh_mint:v1:{binding_id}:{expires_at_ms}:{mac}");
+        // The `used` row is durable before the token is visible.
+        let used_event_id = store.alloc_id("evt");
+        self.append_security_with_id(
+            store,
+            run_id,
+            lease,
+            &used_event_id,
+            "security.credential.used",
+            events::used_payload(
+                binding_id,
+                &binding.channel_id,
+                binding.channel_revision,
+                audience,
+                &binding.effect_id,
+                "allow",
+                Some(&binding.decision_ref),
+                ProvidedSecret { provided: true },
+            ),
+        )
+        .map_err(|e| BrokerError::Ledger {
+            detail: format!("used row not durable: {e}"),
+        })?;
+        self.minted.insert(
+            token.clone(),
+            MintedRecord {
+                binding_id: binding_id.to_string(),
+                channel_id: binding.channel_id.clone(),
+                audience: audience.to_string(),
+                expires_at_ms,
+            },
+        );
+        Ok(MintedToken {
+            token,
+            binding_id: binding_id.to_string(),
+            audience: audience.to_string(),
+            expires_at_ms,
+            used_event_id,
+        })
+    }
+
+    /// `verify_minted(token, audience, now_ms)` — the destination-side (or
+    /// test-side) check: re-derive the MAC, confirm the audience, the
+    /// expiry (LT-05) and the backing binding's liveness.
+    pub fn verify_minted(&self, token: &str, audience: &str, now_ms: u64) -> MintedVerdict {
+        let Some(rec) = self.minted.get(token) else {
+            return MintedVerdict::Invalid;
+        };
+        let expected = minted_mac(
+            &self.secret_key,
+            &rec.binding_id,
+            &rec.audience,
+            rec.expires_at_ms,
+        );
+        if token
+            != format!(
+                "mh_mint:v1:{}:{}:{}",
+                rec.binding_id, rec.expires_at_ms, expected
+            )
+        {
+            return MintedVerdict::Invalid;
+        }
+        if rec.audience != audience {
+            return MintedVerdict::Invalid;
+        }
+        if now_ms > rec.expires_at_ms {
+            return MintedVerdict::Expired;
+        }
+        let live = self
+            .bindings
+            .get(&rec.binding_id)
+            .is_some_and(|b| b.is_live())
+            && !self.revoked_channels.contains(&rec.channel_id);
+        if !live {
+            return MintedVerdict::Revoked;
+        }
+        MintedVerdict::Valid
+    }
+
+    // ── the Stage-2 claim path ───────────────────────────────────────────
+
+    /// `drain_claim(claim_id)` — the mediator's consume-once drain of a
+    /// staged `Delivery`'s kernel-held value (S2.4). Returns `(binding_id,
+    /// value)` on the first drain; `None` thereafter and for any unknown
+    /// claim (a claim is drained exactly once — the value crosses the wire
+    /// in exactly one request).
+    pub fn drain_claim(&mut self, claim_id: &str) -> Option<(String, String)> {
+        self.pending.remove(claim_id)
+    }
+
+    /// Peek at a claim's binding without draining (the mediator's
+    /// pre-substitution check).
+    pub fn claim_binding(&self, claim_id: &str) -> Option<&str> {
+        self.pending.get(claim_id).map(|(b, _)| b.as_str())
+    }
+
+    /// `mediate_sentinel(sentinel, request)` — the mediator-side entry:
+    /// resolve a placeholder spelling to its binding, then run the
+    /// `mediate` pipeline (revoked → expired → env-handle → out_of_scope →
+    /// ambiguous_path → canary → decision → resolve → used → stage). A
+    /// sentinel that names no live binding on this env is `out_of_scope`
+    /// (non-transferable — SV-10's Stage-2 half; ADR-0266 D3) — and the
+    /// refusal is audited with the denied row *before* it is visible.
+    pub fn mediate_sentinel(
+        &mut self,
+        store: &mut Store,
+        run_id: &str,
+        lease: &Lease,
+        sentinel: &str,
+        request: &RequestDescriptor,
+    ) -> Result<MediationOutcome, BrokerError> {
+        let binding_id = self
+            .placeholders
+            .iter()
+            .find(|(_, p)| p.spelling == sentinel)
+            .map(|(b, _)| b.clone());
+        let Some(binding_id) = binding_id else {
+            // The sentinel names nothing — a forged/foreign/stale
+            // placeholder is denied, durably, with no binding coordinate.
+            let payload = events::denied_payload(
+                None,
+                &request.destination,
+                RefusedCode::OutOfScope,
+                None,
+                Some(&request.effect_id),
+            );
+            self.append_security(store, run_id, lease, "security.credential.denied", payload)
+                .map_err(|e| BrokerError::Ledger {
+                    detail: format!("denied row not durable: {e}"),
+                })?;
+            return Ok(MediationOutcome::Refused(Refused::new(
+                RefusedCode::OutOfScope,
+                "sentinel resolves to no live binding".to_string(),
+            )));
+        };
+        self.mediate(store, run_id, lease, &binding_id, request)
+    }
+
+    /// `virtualize_for_fork(src_env, dst_env)` — LT-09: a forked
+    /// environment's snapshot may carry the parent's placeholder spellings;
+    /// the fork gets **fresh** placeholders bound to fresh bindings on
+    /// `dst_env` (the parent's nonce never transfers). Returns the
+    /// old→new spelling map the snapshot rewriter applies, plus the new
+    /// binding ids (each gets a `security.credential.bound` row — the
+    /// fork's bindings are their own lifecycle).
+    pub fn virtualize_for_fork(
+        &mut self,
+        store: &mut Store,
+        run_id: &str,
+        lease: &Lease,
+        src_env: &str,
+        dst_env: &str,
+    ) -> Result<ForkVirtualization, BrokerError> {
+        let src_bindings: Vec<CredentialBinding> = self
+            .bindings
+            .values()
+            .filter(|b| b.is_live() && b.env_handle == src_env)
+            .cloned()
+            .collect();
+        let mut rewrites = std::collections::BTreeMap::new();
+        let mut new_ids = Vec::new();
+        for src in src_bindings {
+            let new_id = self.alloc("bnd");
+            let mut nb = src.clone();
+            nb.binding_id = new_id.clone();
+            nb.env_handle = dst_env.to_string();
+            nb.state = BindingState::Bound;
+            nb.issued_at = store.ts_now();
+            // The fork's binding keeps the parent's expiry ceiling
+            // (never *extends* it — SV-6's floor holds for the fork too).
+            let payload = events::bound_payload(
+                &new_id,
+                &nb.channel_id,
+                nb.channel_revision,
+                &nb.holder,
+                dst_env,
+                nb.mode.as_str(),
+                &nb.decision_ref,
+                &nb.expires_at,
+            );
+            self.append_security(store, run_id, lease, "security.credential.bound", payload)
+                .map_err(|e| BrokerError::Ledger {
+                    detail: format!("bound row not durable: {e}"),
+                })?;
+            let old_spell = self
+                .placeholders
+                .get(&src.binding_id)
+                .map(|p| p.spelling.clone());
+            let ph = Placeholder::mint(run_id, &nb);
+            if let Some(old) = old_spell {
+                rewrites.insert(old, ph.spelling.clone());
+            }
+            self.placeholders.insert(new_id.clone(), ph);
+            self.bindings.insert(new_id.clone(), nb);
+            new_ids.push(new_id);
+        }
+        Ok(ForkVirtualization {
+            rewrites,
+            bindings: new_ids,
         })
     }
 
@@ -984,6 +1372,7 @@ impl CredentialBroker {
                         return Ok(RevokeOutcome {
                             revoked: Vec::new(),
                             already: true,
+                            intents: Vec::new(),
                         });
                     }
                     let dropped: Vec<String> = self
@@ -1003,6 +1392,7 @@ impl CredentialBroker {
                         return Ok(RevokeOutcome {
                             revoked: Vec::new(),
                             already: true,
+                            intents: Vec::new(),
                         });
                     }
                     (None, Some(bid.clone()), vec![bid.clone()])
@@ -1019,12 +1409,12 @@ impl CredentialBroker {
         .map_err(|e| BrokerError::Ledger {
             detail: format!("revoked row not durable: {e}"),
         })?;
+        let intents = self.revoke_intents(&dropped);
         for bid in &dropped {
             if let Some(b) = self.bindings.get_mut(bid) {
                 b.state = BindingState::Revoked;
             }
-            // A revoked binding's staged claims are undeliverable — drop them.
-            self.pending.retain(|_, (b, _)| b != bid);
+            self.drop_dead(bid);
         }
         if let Some(cid) = channel_id {
             self.revoked_channels.insert(cid);
@@ -1032,6 +1422,7 @@ impl CredentialBroker {
         Ok(RevokeOutcome {
             revoked: dropped,
             already: false,
+            intents,
         })
     }
 
@@ -1163,9 +1554,46 @@ impl CredentialBroker {
             if let Some(b) = self.bindings.get_mut(bid) {
                 b.state = BindingState::Revoked;
             }
-            self.pending.retain(|_, (b, _)| b != bid);
+            self.drop_dead(bid);
         }
         Ok(new_revision)
+    }
+
+    /// Drop a dead binding's staged claims — a revoked binding's staged
+    /// delivery is undeliverable (SV-6). The minted records are **retained**:
+    /// `verify_minted` consults binding liveness (a dead binding's token is
+    /// `Revoked`, not `Invalid` — the difference is an audit fact), and the
+    /// mask set covers every minted spelling, live or dead (a dead token on
+    /// a durable surface is still a leak — LT-04/LT-05).
+    fn drop_dead(&mut self, binding_id: &str) {
+        self.pending.retain(|_, (b, _)| b != binding_id);
+    }
+
+    /// The destination-side revocation intents for a dropped set — one per
+    /// binding × channel `DestinationBinding` declaring `revocation_path`
+    /// (LT-05's "wrapped values are revoked at the destination").
+    fn revoke_intents(&self, dropped: &[String]) -> Vec<RevokeIntent> {
+        let mut out = Vec::new();
+        for bid in dropped {
+            let Some(b) = self.bindings.get(bid) else {
+                continue;
+            };
+            let Some(ch) = self.channels.get(&b.channel_id) else {
+                continue;
+            };
+            for d in &ch.spec.destinations {
+                if let Some(p) = &d.revocation_path {
+                    out.push(RevokeIntent {
+                        binding_id: bid.clone(),
+                        channel_id: b.channel_id.clone(),
+                        host_pattern: d.host_pattern.clone(),
+                        port: d.port,
+                        revocation_path: p.clone(),
+                    });
+                }
+            }
+        }
+        out
     }
 
     // ── kernel_use ───────────────────────────────────────────────────────
@@ -1327,6 +1755,26 @@ impl CredentialBroker {
                     live: false,
                     placeholder: None,
                 });
+            }
+            // Minted-scoped tokens issued for this channel's bindings are
+            // credential material too — mask them (live or dead: a dead
+            // token on a durable surface is still a leak — LT-04/LT-05).
+            for (spell, rec) in &self.minted {
+                if rec.channel_id == *cid {
+                    let rev = self
+                        .bindings
+                        .get(&rec.binding_id)
+                        .map(|b| b.channel_revision)
+                        .unwrap_or(0);
+                    ms.insert(MaskEntry {
+                        channel_id: cid.clone(),
+                        revision: rev,
+                        value: spell.clone(),
+                        fingerprint: self.fingerprint(spell, cid, rev),
+                        live: false,
+                        placeholder: None,
+                    });
+                }
             }
         }
         Ok(ms)
