@@ -42,6 +42,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-analysis"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-eval",
+ "hh-experiment",
+ "hh-identity",
+ "hh-lab",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-results",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-assembly"
 version = "0.0.1"
 dependencies = [
@@ -192,6 +207,7 @@ dependencies = [
 name = "hh-embed"
 version = "0.0.1"
 dependencies = [
+ "hh-analysis",
  "hh-assembly",
  "hh-budget",
  "hh-bundle",
@@ -212,6 +228,7 @@ dependencies = [
  "hh-ontology",
  "hh-provenance",
  "hh-registry",
+ "hh-results",
  "hh-secrets",
  "hh-wire",
 ]

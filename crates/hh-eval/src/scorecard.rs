@@ -43,7 +43,10 @@ use crate::stats;
 /// `n ≥ T_CLT` non-`n/a` per-task values; `bootstrap_paired{bca}` requires
 /// `n ≥ T_BCA`. A floor violation substitutes the first admissible fallback
 /// and records it in `EstimatorSelection.substituted`.
-pub const T_CLT: u64 = 30;
+///
+/// `T_CLT` is the ADR-0158/OQ-367 Stage-3 placeholder **100** (S3.3 landed an
+/// interim `30`; corrected at S3.4c — ADR-0280).
+pub const T_CLT: u64 = 100;
 /// The BCa floor (ADR-0158).
 pub const T_BCA: u64 = 30;
 
@@ -101,7 +104,9 @@ pub struct ScorecardInput<'a> {
 }
 
 /// A run → `ParticipantDescriptor` for `MetricDeclaration::applicability`.
-fn descriptor(run: &EvalRun) -> ParticipantDescriptor {
+/// Public for the §6.4 kernel (`hh-analysis`) — one applicability
+/// reconstruction, never two (CC1).
+pub fn descriptor(run: &EvalRun) -> ParticipantDescriptor {
     // A run's descriptor is already validated at bind time; reconstruct it
     // field-wise (the observability/class invariant is the ledger's, not the
     // renderer's, to re-derive).
@@ -120,8 +125,9 @@ fn descriptor(run: &EvalRun) -> ParticipantDescriptor {
 }
 
 /// The per-run numeric value under the declaration's outcome policy — `None`
-/// for `n/a`/excluded/non-numeric (never coerced).
-fn run_numeric(decl: &MetricDeclaration, run: &EvalRun) -> Option<i64> {
+/// for `n/a`/excluded/non-numeric (never coerced). Public for the §6.4
+/// kernel (`hh-analysis`) — the same denominator rule drives A1.
+pub fn run_numeric(decl: &MetricDeclaration, run: &EvalRun) -> Option<i64> {
     if !decl.outcome_class_policy.in_denominator(run.outcome_class) {
         return None;
     }
@@ -156,8 +162,9 @@ fn run_numeric(decl: &MetricDeclaration, run: &EvalRun) -> Option<i64> {
 }
 
 /// The interval for one cell under the declaration's `interval_method`,
-/// applying the ADR-0158 floors (with `substituted` recorded).
-fn cell_interval(
+/// applying the ADR-0158 floors (with `substituted` recorded). Public for
+/// the §6.4 kernel (`hh-analysis`) — the selection rule has one home.
+pub fn cell_interval(
     decl: &MetricDeclaration,
     task_values: &[(String, i64)],
     per_task: &[(u64, u64)],
@@ -399,8 +406,10 @@ pub fn render_scorecard(input: &ScorecardInput) -> Result<ScorecardReport, Score
     Ok(report)
 }
 
-/// Render one `(configuration, stratum, metric)` cell.
-fn render_cell(
+/// Render one `(configuration, stratum, metric)` cell — the scorecard's A1
+/// primitive, reused by `hh-analysis` (`summarize`) so the cell estimator
+/// has exactly one implementation (CC1; ADR-0158).
+pub fn render_cell(
     decl: &MetricDeclaration,
     runs: &[&EvalRun],
     stratum: Option<String>,

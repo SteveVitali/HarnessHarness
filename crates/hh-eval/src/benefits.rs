@@ -409,6 +409,29 @@ pub fn equivalence_run(
     input: &CompareInput,
     caller_margins: Option<&[RegisteredMargin]>,
 ) -> Result<EquivalenceReport, BenefitError> {
+    equivalence_run_full(
+        reference,
+        candidate,
+        suite_ref,
+        prereg,
+        input,
+        caller_margins,
+    )
+    .map(|(report, _)| report)
+}
+
+/// `equivalence_run_full` — [`equivalence_run`] plus the underlying
+/// `CompareOutcome` (the `comparison_refs` on the report hash exactly these
+/// reports — the §6.4 A8 kernel needs them in the report body, never
+/// recomputed; additive at S3.4c).
+pub fn equivalence_run_full(
+    reference: &str,
+    candidate: &str,
+    suite_ref: &str,
+    prereg: &PreRegistration,
+    input: &CompareInput,
+    caller_margins: Option<&[RegisteredMargin]>,
+) -> Result<(EquivalenceReport, CompareOutcome), BenefitError> {
     if caller_margins.is_some() {
         return Err(BenefitError::MarginNotPreRegistered);
     }
@@ -460,24 +483,27 @@ pub fn equivalence_run(
             verdict,
         });
     }
-    Ok(EquivalenceReport {
-        reference: reference.into(),
-        candidate: candidate.into(),
-        suite_ref: suite_ref.into(),
-        per_dimension: dims,
-        verdict: overall,
-        comparison_refs: out
-            .reports
-            .iter()
-            .map(|r| {
-                hh_identity::idp_id(
-                    "eval.comparison_report",
-                    r.to_json().to_canonical_string().as_bytes(),
-                )
-            })
-            .collect(),
-        pre_registration_ref: prereg.analysis_plan_ref.clone(),
-    })
+    Ok((
+        EquivalenceReport {
+            reference: reference.into(),
+            candidate: candidate.into(),
+            suite_ref: suite_ref.into(),
+            per_dimension: dims,
+            verdict: overall,
+            comparison_refs: out
+                .reports
+                .iter()
+                .map(|r| {
+                    hh_identity::idp_id(
+                        "eval.comparison_report",
+                        r.to_json().to_canonical_string().as_bytes(),
+                    )
+                })
+                .collect(),
+            pre_registration_ref: prereg.analysis_plan_ref.clone(),
+        },
+        out,
+    ))
 }
 
 impl EquivalenceReport {

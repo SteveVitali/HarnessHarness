@@ -3410,3 +3410,488 @@ fn lab_eval_render_scorecard_records_in() {
         Some("scorecard_report/1")
     );
 }
+
+// ── S3.4c — `lab.analysis.analyze` (R-2.10.4⁰ᵇ) ────────────────────────────
+//
+// The estimator kernel is records-in/records-out through the same boundary
+// discipline as `lab.eval.*`: the caller supplies the `AnalysisSpec`, the
+// row selectors and the task/suite contexts; `spec_ref` binds the
+// registered experiment spec's design/arms/pre-registration. Rows resolve
+// through `ResultsStore` at `<store_root>/results`; each row's
+// `RunManifest` + `LedgerFacts` project from the run's durable ledger
+// prefix. The runs are seeded BEFORE the service opens its store —
+// `Store::open` loads the run index once.
+
+/// The arm row — `limits_enforced: "full"` maps to the native enforcement
+/// view inside the boundary's match-spec binding.
+fn s34c_arm(id: &str, level: &str, eval: &str) -> hh_lab::experiment::ArmSpec {
+    hh_lab::experiment::ArmSpec {
+        arm_id: id.into(),
+        hypothesis: format!("{id} does better"),
+        level_assignment: BTreeMap::from([("model".to_string(), level.to_string())]),
+        eval_budget: eval.into(),
+        // Comparative arms carry a search budget too — `UnbudgetedArm`
+        // refuses the matched kinds without one.
+        search_budget: Some("budget:search".into()),
+        match_spec: Some(hh_budget::MatchSpec::matched_cap(&[
+            hh_budget::DimensionId::ModelCalls,
+        ])),
+        artifact_ref: hh_ontology::config::Ref::new("artifact:x", "sha256:ee55"),
+        limits_enforced: "full".into(),
+        model_role_table_ref: None,
+    }
+}
+
+/// A registered-experiment fixture — the hh-lab member-level shape with a
+/// `Paired` design and a `task_success` primary metric.
+fn s34c_spec() -> hh_lab::experiment::ExperimentSpec {
+    use hh_lab::experiment::*;
+    use hh_ontology::eval::{Design, DesignKind, Pairing, PreRegistration, SeedPolicy};
+    use hh_ontology::lab::SplitLabel;
+    use hh_ontology::participant::ParticipantClass;
+    let seed = || SeedPolicy {
+        harness_rng: true,
+        requested_sampling_seed: true,
+        seed_honoured_required: true,
+    };
+    let prereg = || PreRegistration {
+        registered_at: 1,
+        hypothesis: "arm B beats arm A".into(),
+        primary_metrics: vec!["task_success".into()],
+        equivalence_margin: None,
+        min_n: 1,
+        analysis_plan_ref: "analysis:plan".into(),
+        task_split_hash: "sha256:cc33".into(),
+        interactions: vec![],
+    };
+    let mut s = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "design:1".into(),
+            kind: DesignKind::Paired,
+            factors: vec![],
+            blocking: vec!["task".into()],
+            replicates_per_cell: 4,
+            pairing: Pairing::ByTask,
+            seed_policy: seed(),
+            held_out_split_ref: None,
+            pre_registration: prereg(),
+            registry_snapshot_id: None,
+            generators: None,
+            resolution: None,
+        },
+        pre_registration: Some(prereg()),
+        factors: vec![FactorSpec {
+            name: "model".into(),
+            kind: hh_ontology::eval::FactorKind::ModelSnapshot,
+            granularity: None,
+            role: None,
+            levels: vec![
+                LevelSpec {
+                    level_id: "l1".into(),
+                    ref_: "sha256:dd44".into(),
+                    overrides: None,
+                    label: "l1".into(),
+                    class: ParticipantClass::Native,
+                    non_portable: false,
+                },
+                LevelSpec {
+                    level_id: "l2".into(),
+                    ref_: "sha256:dd55".into(),
+                    overrides: None,
+                    label: "l2".into(),
+                    class: ParticipantClass::Native,
+                    non_portable: false,
+                },
+            ],
+        }],
+        arms: vec![
+            s34c_arm("arm-A", "l1", "eval:a"),
+            s34c_arm("arm-B", "l2", "eval:b"),
+        ],
+        suite: SuiteBinding {
+            suite_ref: "suite:test".into(),
+            split_labels_used: vec![SplitLabel::Dev],
+            split_assignment_ref: Some("split:1".into()),
+        },
+        replicates_per_cell: 4,
+        seed_policy: seed(),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: SchedulingPolicy {
+            max_concurrent_runs: 4,
+            pools: vec![],
+            order: OrderKind::RandomPermuted,
+            permutation_seed: "seed:1".into(),
+            start_stagger_ms: 0,
+            deadline: None,
+            priority: None,
+        },
+        reattempt: ReattemptPolicy {
+            max_per_plan: 2,
+            max_fraction_of_plans_ppm: 100_000,
+            backoff: Backoff {
+                min_ms: 100,
+                multiplier_ppm: 2_000_000,
+                max_ms: 10_000,
+            },
+            error_classes_included: None,
+            on_cancel: CancelPolicy::Replan,
+        },
+        budgets: ExperimentBudgets {
+            experiment: "budget:exp".into(),
+            instrument: "budget:inst".into(),
+        },
+        bundle_policy: BundlePolicy::Adhoc {
+            salt: "salt:1".into(),
+        },
+        ext: BTreeMap::new(),
+    };
+    s.experiment_id = s.experiment_id();
+    s
+}
+
+/// The arm-level + experiment-level budget bodies `register{budgets{}}`
+/// deposits (identical hard caps — `matched_cap` binds).
+fn s34c_budgets() -> Json {
+    let caps = || {
+        hh_budget::spec::BudgetSpec::hard_caps(
+            hh_budget::spec::BudgetMode::Pool,
+            &[(
+                hh_budget::DimensionKey::Primary(hh_budget::DimensionId::ModelCalls),
+                100,
+            )],
+        )
+    };
+    Json::obj([
+        ("eval:a", caps().to_json()),
+        ("eval:b", caps().to_json()),
+        ("budget:search", caps().to_json()),
+        ("budget:exp", caps().to_json()),
+        ("budget:inst", caps().to_json()),
+    ])
+}
+
+/// A landed projection row for `run_id` (the `ResultsRow` record — the
+/// `project_row` derivation is S3.4b's seam).
+fn s34c_row(
+    run_id: &str,
+    arm: &str,
+    task: &str,
+    rep: u64,
+    pass: bool,
+) -> hh_results::row::ResultsRow {
+    use hh_ontology::eval::MetricValueKind;
+    use hh_results::audit::AuditRef;
+    use hh_results::row::{
+        AuditSection, Cell, ConsumptionSection, Coordinates, DerivedFrom, OutcomeSection,
+        ResultsRow, RowKey,
+    };
+    use hh_results::scoring::ScoringContext;
+    use hh_results::watermark::WatermarkSet;
+    let mut watermark = WatermarkSet::new();
+    watermark.pin(run_id, 7);
+    ResultsRow {
+        key: RowKey {
+            configuration_version_id: format!("cv-{arm}"),
+            run_id: run_id.to_string(),
+        },
+        coordinates: Coordinates {
+            configuration_id: Some(format!("cfg-{arm}")),
+            configuration_version_id: format!("cv-{arm}"),
+            model_snapshots: BTreeMap::from([("default".to_string(), "snap-1".to_string())]),
+            harness_def_ref: None,
+            model_profile_ref: None,
+            environment_ref: None,
+            environment_version_id: Some("env-1".into()),
+            task: Some(Json::obj([
+                ("task_id", Json::str(task)),
+                ("suite_id", Json::str("suite-test")),
+                ("split_label", Json::str("held_out")),
+            ])),
+            budget: Json::obj([]),
+            replicate: Json::obj([("seed", Json::Int(42 + rep as i64))]),
+            participant_class: "native".into(),
+            observability_level: vec!["ledger".into()],
+            hosting_mechanism: None,
+            capability_vector_ref: None,
+            registry_snapshot_id: None,
+        },
+        experiment: Some(Json::obj([
+            ("experiment_run_id", Json::str("exp-run-1")),
+            ("arm_id", Json::str(arm)),
+            ("cell_id", Json::str(format!("{arm}:{task}"))),
+            ("replicate_index", Json::Int(rep as i64)),
+            ("attempt_no", Json::Int(1)),
+            ("comparable", Json::Bool(true)),
+        ])),
+        outcome: OutcomeSection {
+            status: "finished".into(),
+            outcome_class: Some("scored".into()),
+            stop_reason: Some("completed".into()),
+            veto_tripped: vec![],
+            finished_at: Some("2026-01-01T00:00:00.000Z".into()),
+            wall_ms: Some(100),
+            activation_no: 1,
+        },
+        cells: vec![Cell {
+            metric_ref: "task_success".into(),
+            value: MetricValueKind::Bool(pass),
+            detector: Some("deterministic".into()),
+            oracle_ref: Some("oracle/executable".into()),
+            confidence: None,
+            evidence: vec![AuditRef {
+                run_id: run_id.to_string(),
+                seq: 6,
+                hash: "idp:cell".into(),
+                checkpoint_ref: None,
+                content_refs: vec![],
+            }],
+            computed_from: vec!["6".into()],
+        }],
+        consumption: ConsumptionSection {
+            dimensions: BTreeMap::from([("model_calls".to_string(), 5i64)]),
+            utilization: None,
+            spend: None,
+            instrument_spend: None,
+        },
+        cache: Json::obj([("policy", Json::str("cold_start"))]),
+        lineage: Json::obj([]),
+        annotations_from_ledger: Json::obj([]),
+        audit: AuditSection {
+            head: AuditRef {
+                run_id: run_id.to_string(),
+                seq: 7,
+                hash: "idp:head".into(),
+                checkpoint_ref: None,
+                content_refs: vec![],
+            },
+            checkpoint_ref: None,
+        },
+        scoring: ScoringContext {
+            validator_set: vec![],
+            overlay_runs: vec![],
+            metric_registry_version: "test-registry".into(),
+            pricing_ref: None,
+            view_policy_version: "test-view".into(),
+        },
+        derived_from: DerivedFrom {
+            run_id: run_id.to_string(),
+            seq: 7,
+            overlay_watermarks: BTreeMap::new(),
+        },
+        watermark_set: watermark,
+        view_hash: "test-view-hash".into(),
+        version_id: format!("v-{run_id}-{rep}"),
+    }
+}
+
+/// `lab.analysis.analyze` end-to-end: register → rows → analyze → durable
+// `{record, report}`; a repeat call serves the same `report_id` (KA-12 —
+// deterministic identity over an identical input tuple, no recomputation).
+#[test]
+fn lab_analysis_analyze_round_trip() {
+    let root = test_dir("s34c-analyze");
+    // Seed the ledger + the derived-state store before the service opens.
+    let (ra, rb);
+    {
+        let mut store = hh_ledger::store::Store::open(root.join("store")).unwrap();
+        let manifest = || {
+            let mut m =
+                hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Experiment);
+            m.configuration_id = None;
+            m.configuration_version_id = None;
+            m
+        };
+        ra = store.open_run(manifest(), "s34c").unwrap().0;
+        rb = store.open_run(manifest(), "s34c").unwrap().0;
+    }
+    let mut keys = Vec::new();
+    {
+        let rs = hh_results::store::ResultsStore::open(root.join("store").join("results")).unwrap();
+        let mut rec = |run_id: &str, arm: &str, rep: u64, pass: bool| {
+            let row = s34c_row(run_id, arm, "t1", rep, pass);
+            keys.push(row.key.key_id());
+            rs.record(&row, hh_results::version::DerivedReason::Initial)
+                .unwrap();
+        };
+        // A: 4/4 pass; B: 1/4 — a known positive delta.
+        for rep in 0..4 {
+            rec(&ra.clone(), "arm-A", rep, true);
+        }
+        for rep in 0..4 {
+            rec(&rb.clone(), "arm-B", rep, rep == 0);
+        }
+    }
+    let mut svc = service_in(&root);
+    lab_hello(&mut svc);
+    let r = ok(&call(
+        &mut svc,
+        "lab.experiment.register",
+        Json::obj([("spec", s34c_spec().to_json()), ("budgets", s34c_budgets())]),
+    ));
+    let eid = r
+        .get("experiment_id")
+        .and_then(Json::as_str)
+        .expect("experiment_id")
+        .to_string();
+
+    let analyze = |spec_ref: &str| {
+        let mut s = hh_lab::analysis::AnalysisSpec {
+            spec_id: String::new(),
+            kind: "compare".into(),
+            query: hh_lab::analysis::QuerySpec {
+                metrics: vec!["task_success".into()],
+                filters: Some(Json::obj([
+                    ("arm_a", Json::str("arm-A")),
+                    ("arm_b", Json::str("arm-B")),
+                ])),
+                grain: None,
+            },
+            spec_ref: Some(spec_ref.to_string()),
+            label: None,
+            estimator_selection: hh_ontology::eval::EstimatorSelection {
+                method: hh_ontology::eval::IntervalMethod::ClusteredClt,
+                selection_rule: "adr-0158.clt_floor".into(),
+                floors: BTreeMap::new(),
+                fallback_chain: vec![],
+                substituted: None,
+            },
+            resample: None,
+            outputs: vec!["report".into()],
+        };
+        s.spec_id = s.spec_id();
+        Json::obj([
+            ("spec", s.to_json()),
+            (
+                "rows",
+                Json::Arr(keys.iter().map(|k| Json::str(k.as_str())).collect()),
+            ),
+            (
+                "tasks",
+                Json::Arr(vec![Json::obj([
+                    ("task_id", Json::str("t1")),
+                    ("suite_id", Json::str("suite-test")),
+                    ("split_label", Json::str("held_out")),
+                    ("split_hash", Json::str("sha256:split-1")),
+                    ("stratum", Json::str("private_held_out")),
+                ])]),
+            ),
+            (
+                "suites",
+                Json::Arr(vec![Json::obj([
+                    ("suite_id", Json::str("suite-test")),
+                    ("retired_for_headline", Json::Bool(false)),
+                    ("family", Json::str("coding_terminal")),
+                ])]),
+            ),
+            ("seed", Json::Int(11)),
+        ])
+    };
+
+    let r = ok(&call(&mut svc, "lab.analysis.analyze", analyze(&eid)));
+    // `{record, report, body}` — the envelopes plus the
+    // `analysis_report_body/1` payload.
+    let body = r.get("body").expect("body");
+    assert_eq!(
+        body.get("schema").and_then(Json::as_str),
+        Some("analysis_report_body/1")
+    );
+    assert_eq!(body.get("kind").and_then(Json::as_str), Some("compare"));
+    let report_id = body
+        .get("report_id")
+        .and_then(Json::as_str)
+        .expect("report_id")
+        .to_string();
+    // The comparison landed with a positive paired effect and the A12
+    // multiplicity record attached.
+    let comparisons = match body.get("comparisons") {
+        Some(Json::Arr(cs)) => cs,
+        _ => panic!("no comparisons: {body:?}"),
+    };
+    assert_eq!(comparisons.len(), 1);
+    assert!(comparisons[0].get("multiplicity").is_some());
+    // The envelopes carry the report's identity: the AnalysisReport's
+    // `report_id`, and the record's `outputs[]`.
+    assert_eq!(
+        r.get("report")
+            .and_then(|p| p.get("report_id"))
+            .and_then(Json::as_str),
+        Some(report_id.as_str())
+    );
+    match r.get("record").and_then(|c| c.get("outputs")) {
+        Some(Json::Arr(outs)) => {
+            assert!(outs.iter().any(|o| o.as_str() == Some(&report_id)))
+        }
+        _ => panic!("record.outputs absent: {r:?}"),
+    }
+    // KA-12 — an identical re-call serves the same report body id.
+    let r2 = ok(&call(&mut svc, "lab.analysis.analyze", analyze(&eid)));
+    assert_eq!(
+        r2.get("body")
+            .and_then(|r| r.get("report_id"))
+            .and_then(Json::as_str),
+        Some(report_id.as_str())
+    );
+}
+
+/// The boundary's typed refusals: an unresolvable `spec_ref` and an
+// unknown row selector refuse — never a silent skip or a fabricated run.
+#[test]
+fn lab_analysis_analyze_refusals() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let spec = |spec_ref: &str| {
+        let mut s = hh_lab::analysis::AnalysisSpec {
+            spec_id: String::new(),
+            kind: "summarize".into(),
+            query: hh_lab::analysis::QuerySpec {
+                metrics: vec!["task_success".into()],
+                filters: None,
+                grain: None,
+            },
+            spec_ref: Some(spec_ref.to_string()),
+            label: None,
+            estimator_selection: hh_ontology::eval::EstimatorSelection {
+                method: hh_ontology::eval::IntervalMethod::ClusteredClt,
+                selection_rule: "adr-0158.clt_floor".into(),
+                floors: BTreeMap::new(),
+                fallback_chain: vec![],
+                substituted: None,
+            },
+            resample: None,
+            outputs: vec!["report".into()],
+        };
+        s.spec_id = s.spec_id();
+        s
+    };
+    let params = |spec: hh_lab::analysis::AnalysisSpec| {
+        Json::obj([
+            ("spec", spec.to_json()),
+            ("rows", Json::Arr(vec![Json::str("no-such-row")])),
+            (
+                "tasks",
+                Json::Arr(vec![Json::obj([
+                    ("task_id", Json::str("t1")),
+                    ("suite_id", Json::str("suite-test")),
+                    ("split_label", Json::str("held_out")),
+                    ("split_hash", Json::str("sha256:split-1")),
+                    ("stratum", Json::str("private_held_out")),
+                ])]),
+            ),
+        ])
+    };
+    // `spec_ref` pointing nowhere — a typed schema violation on the spec.
+    let e = call(
+        &mut svc,
+        "lab.analysis.analyze",
+        params(spec("no-such-exp")),
+    );
+    assert_eq!(err_kind(&e), "SchemaViolation", "{e:?}");
+    // A design-free spec with an unknown row selector — the store refuses.
+    let mut s = spec("x");
+    s.spec_ref = None;
+    s.spec_id = s.spec_id();
+    let e = call(&mut svc, "lab.analysis.analyze", params(s));
+    assert_eq!(err_kind(&e), "Refused", "{e:?}");
+}

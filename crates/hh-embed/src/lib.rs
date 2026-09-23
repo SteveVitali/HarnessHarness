@@ -21,6 +21,7 @@
 //! [`Driver`](hh_control::driver::Driver) (`ReactMinimal`) with kernel
 //! ports implemented in this crate ([`runtime`]).
 
+pub(crate) mod analysis_ops;
 pub(crate) mod bundle_ops;
 pub mod envops;
 pub(crate) mod eval_ops;
