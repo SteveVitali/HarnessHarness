@@ -47,6 +47,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-compiler"
+version = "0.0.1"
+dependencies = [
+ "hh-assembly",
+ "hh-hir",
+ "hh-identity",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-registry",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-embed-client-generated"
 version = "0.0.1"
 dependencies = [
