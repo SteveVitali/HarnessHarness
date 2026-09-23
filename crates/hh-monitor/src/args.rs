@@ -167,6 +167,16 @@ pub fn eval(
     })
 }
 
+/// `canonical_args_hash(c)` — `H("canonical_args" ∥ canonical(params))` — the
+/// lease key's exact-args leg and the `permission_id` mint input (§5g.7 I-P6;
+/// one derivation, CC1 — the dispatcher and the monitor share it).
+pub fn canonical_args_hash(c: &CanonicalArgs) -> String {
+    hh_identity::idp::idp_id(
+        "canonical_args",
+        Json::Obj(c.params.clone()).to_canonical_string().as_bytes(),
+    )
+}
+
 /// `scope_covers(grant_scope, canonical_scope)` — the interim `ResourcePattern`
 /// matcher (ADR-0212/OQ-132: the closed grammar is open; the ratified interim
 /// is literal equality, trailing-`/*` prefix containment, and `*` covering

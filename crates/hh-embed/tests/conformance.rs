@@ -253,6 +253,59 @@ fn hello(svc: &mut EmbedService) -> Json {
     ok(&r)
 }
 
+/// The base document plus a `HarnessRule{pre_authorize{grants}}` — the
+/// sealed rule `open_session` mints `policy_rule`-basis handles over
+/// (§5g.1 §9 Stage-2).
+fn document_json_preauth() -> Json {
+    let mut doc = document_json();
+    // The document fixture's nodes are `vec![rule, budget, perm, agent]` —
+    // append a pre-authorize rule granting `fs_read` at `workspace/**`.
+    if let Json::Obj(m) = &mut doc {
+        if let Some(Json::Arr(nodes)) = m.get_mut("nodes") {
+            let grant = hh_hir::grant_json(
+                &hh_hir::records::Grant {
+                    effect: hh_hir::EffectClass::domain_only(hh_hir::kinds::EffectDomain::FsRead),
+                    scope: "workspace/**".to_string(),
+                    constraints: hh_hir::records::GrantConstraints::default(),
+                    delegable: false,
+                },
+                false,
+            );
+            let rule = sid(
+                node(
+                    EntityKind::HarnessRule,
+                    KindRecord::HarnessRule(HarnessRuleRecord {
+                        rule_id: "test:rule.preauth".into(),
+                        trigger: Json::Null,
+                        action: RuleAction::PreAuthorize(Json::obj(vec![
+                            ("grants", Json::Arr(vec![grant])),
+                            ("scope", Json::str("run")),
+                        ])),
+                        scope: Json::Null,
+                        conditioned_on: None,
+                        assumption_debt: None,
+                    }),
+                    9,
+                ),
+                "test:rule.preauth",
+            );
+            nodes.push(hh_hir::wire::node_to_json(&rule));
+        }
+    }
+    doc
+}
+
+fn new_spec_with_doc(doc: Json, supplies: Option<Json>) -> Json {
+    let mut spec = new_spec(supplies);
+    if let Json::Obj(m) = &mut spec {
+        m.insert(
+            "definition".to_string(),
+            Json::obj(vec![("kind", Json::str("document")), ("document", doc)]),
+        );
+    }
+    spec
+}
+
 fn new_spec(supplies: Option<Json>) -> Json {
     let mut m = vec![
         ("kind", Json::str("new")),
@@ -1104,6 +1157,318 @@ fn w_permission_flow_pending_decided_already_decided() {
             ]),
         )),
         "UnknownPermission"
+    );
+}
+
+#[test]
+fn w_permission_allow_lease_mints_lease_row() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("serves_permission_channel", true)])),
+    );
+    assert!(r.get("result").is_some());
+    // A capability asking approval and offering the canonical lease option —
+    // the pending carries `request{capability_ref, args_canonical_hash,
+    // subject_ref}`, the material `allow_lease` mints the lease over.
+    let supplies = Json::obj(vec![(
+        "host_capabilities",
+        Json::Arr(vec![Json::obj(vec![
+            ("capability_id", Json::str("cap:shell")),
+            ("surface", Json::str("host.exec.shell")),
+            ("requires_approval", Json::Bool(true)),
+            (
+                "options",
+                Json::Arr(vec![
+                    Json::str("allow_once"),
+                    Json::str("allow_lease"),
+                    Json::str("deny"),
+                ]),
+            ),
+        ])]),
+    )]);
+    let s = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            ("spec", new_spec(Some(supplies))),
+            ("idempotency_key", Json::str("k")),
+        ]),
+    ));
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let pid = svc
+        .store()
+        .events(&run_id)
+        .unwrap()
+        .iter()
+        .find(|e| e.class == "security.permission.pending")
+        .and_then(|e| e.payload.get("permission_id").and_then(Json::as_str))
+        .map(String::from)
+        .expect("the declared capability ask landed durable");
+    let r = call(
+        &mut svc,
+        "respond_permission",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("permission_id", Json::str(pid.clone())),
+            (
+                "outcome",
+                Json::obj(vec![
+                    ("kind", Json::str("selected")),
+                    ("option_id", Json::str("allow_lease")),
+                ]),
+            ),
+            ("idempotency_key", Json::str("r-lease")),
+        ]),
+    );
+    assert!(r.get("result").is_some(), "{}", r.to_canonical_string());
+    let evs = svc.store().events(&run_id).unwrap();
+    let decided = evs
+        .iter()
+        .find(|e| {
+            e.class == "security.permission.decided"
+                && e.payload.get("permission_id").and_then(Json::as_str) == Some(pid.as_str())
+        })
+        .expect("the final decided row");
+    assert_eq!(
+        decided.payload.get("decision").and_then(Json::as_str),
+        Some("allow")
+    );
+    assert_eq!(
+        decided.payload.get("decider").and_then(Json::as_str),
+        Some("human")
+    );
+    assert_eq!(
+        decided.payload.get("decision_scope").and_then(Json::as_str),
+        Some("session")
+    );
+    let lease = evs
+        .iter()
+        .find(|e| e.class == "security.permission.lease.granted")
+        .expect("allow_lease minted the lease row");
+    assert_eq!(
+        lease.payload.get("permission_id").and_then(Json::as_str),
+        Some(pid.as_str())
+    );
+    assert_eq!(
+        lease
+            .payload
+            .get("capability_ref")
+            .and_then(|c| c.get("semantic_id"))
+            .and_then(Json::as_str),
+        Some("cap:shell")
+    );
+    assert_eq!(
+        lease.payload.get("scope").and_then(Json::as_str),
+        Some("run")
+    );
+    // The fold reads the row back — the lease is live for the run.
+    let st = hh_monitor::approval::ApprovalState::project(evs, u64::MAX);
+    assert!(!st.leases.is_empty(), "the lease folded live");
+    let (rpid, rec) = st
+        .decisions
+        .iter()
+        .next()
+        .expect("the decided record folded");
+    assert_eq!(rpid, &pid);
+    assert!(matches!(
+        rec.decision,
+        hh_monitor::decision::Decision::Allow
+    ));
+    assert!(rec.lease_id.is_some(), "the decided↔lease link folded");
+    // The `approval`-basis handle — `granted` landed in the same batch as
+    // `decided` + `lease.granted` (the decision's authority record, §5g.1
+    // §9): `origin_basis = approval`, `basis_ref = permission_id`,
+    // `delegable = false`, the run-scoped expiry the `allow_lease{run}`
+    // response conferred.
+    let granted = evs
+        .iter()
+        .find(|e| e.class == "security.permission.granted")
+        .expect("the approval minted a granted row");
+    assert_eq!(
+        granted.payload.get("origin_basis").and_then(Json::as_str),
+        Some("approval")
+    );
+    assert_eq!(
+        granted.payload.get("basis_ref").and_then(Json::as_str),
+        Some(pid.as_str())
+    );
+    assert_eq!(granted.payload.get("delegable"), Some(&Json::Bool(false)));
+    assert_eq!(
+        granted
+            .payload
+            .get("validity")
+            .and_then(|v| v.get("expires_at"))
+            .and_then(|e| e.get("run_id"))
+            .and_then(Json::as_str),
+        Some(run_id.as_str())
+    );
+    // The fold's decode side re-pins the holder to the row's event id and
+    // the handle lands in the table.
+    let handle =
+        hh_monitor::events::handle_from_granted_payload(&granted.payload, &granted.event_id)
+            .expect("the granted row decodes");
+    assert_eq!(handle.holder.semantic_id, "conformance");
+    assert_eq!(
+        handle.validity.issued_at, granted.event_id,
+        "issued_at is the granted event's own id"
+    );
+    let mut table = hh_monitor::table::HandleTable::default();
+    table.handles.insert(handle.handle_id.clone(), handle);
+    assert_eq!(table.handles.len(), 1);
+}
+
+/// `allow_once` mints the `approval`-basis handle too — `scope = once`,
+/// effect-scoped expiry (H-7: the single `effect_id` the ask covered; a
+/// capability-level host ask has no effect — the `effect` member is the
+/// empty coordinate and the handle confers nothing past the record).
+#[test]
+fn w_permission_allow_once_mints_approval_handle() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("serves_permission_channel", true)])),
+    );
+    assert!(r.get("result").is_some());
+    let supplies = Json::obj(vec![(
+        "host_capabilities",
+        Json::Arr(vec![Json::obj(vec![
+            ("capability_id", Json::str("cap:shell")),
+            ("surface", Json::str("host.exec.shell")),
+            ("requires_approval", Json::Bool(true)),
+        ])]),
+    )]);
+    let s = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            ("spec", new_spec(Some(supplies))),
+            ("idempotency_key", Json::str("k")),
+        ]),
+    ));
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let pid = svc
+        .store()
+        .events(&run_id)
+        .unwrap()
+        .iter()
+        .find(|e| e.class == "security.permission.pending")
+        .and_then(|e| e.payload.get("permission_id").and_then(Json::as_str))
+        .map(String::from)
+        .expect("the declared capability ask landed durable");
+    let r = call(
+        &mut svc,
+        "respond_permission",
+        Json::obj(vec![
+            ("session_id", Json::str(id)),
+            ("permission_id", Json::str(pid.clone())),
+            (
+                "outcome",
+                Json::obj(vec![
+                    ("kind", Json::str("selected")),
+                    ("option_id", Json::str("allow_once")),
+                ]),
+            ),
+            ("idempotency_key", Json::str("r-once")),
+        ]),
+    );
+    assert!(r.get("result").is_some(), "{}", r.to_canonical_string());
+    let evs = svc.store().events(&run_id).unwrap();
+    let granted = evs
+        .iter()
+        .find(|e| e.class == "security.permission.granted")
+        .expect("allow_once minted the approval-basis handle row");
+    assert_eq!(
+        granted.payload.get("origin_basis").and_then(Json::as_str),
+        Some("approval")
+    );
+    assert_eq!(
+        granted.payload.get("scope").and_then(Json::as_str),
+        Some("once")
+    );
+    assert_eq!(
+        granted.payload.get("basis_ref").and_then(Json::as_str),
+        Some(pid.as_str())
+    );
+    // The batch ordering — `decided` precedes `granted` (the decision's
+    // artifact) and no `lease.granted` exists for `allow_once`.
+    let decided_seq = evs
+        .iter()
+        .find(|e| e.class == "security.permission.decided")
+        .map(|e| e.seq)
+        .unwrap();
+    assert!(granted.seq > decided_seq);
+    assert!(
+        !evs.iter()
+            .any(|e| e.class == "security.permission.lease.granted"),
+        "allow_once mints no lease"
+    );
+}
+
+/// `open_session` mints `policy_rule`-basis handles for every sealed
+/// `pre_authorize` HarnessRule — the `security.permission.granted` rows the
+/// `pre_authorized` leg and the chain's `policy_rule` stage read.
+#[test]
+fn w_open_session_mints_preauthorization_handles() {
+    let mut svc = service();
+    hello(&mut svc);
+    let s = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            ("spec", new_spec_with_doc(document_json_preauth(), None)),
+            ("idempotency_key", Json::str("k-preauth")),
+        ]),
+    ));
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let evs = svc.store().events(&run_id).unwrap();
+    let rows: Vec<_> = evs
+        .iter()
+        .filter(|e| e.class == "security.permission.granted")
+        .collect();
+    assert_eq!(rows.len(), 1, "one pre_authorize rule → one granted row");
+    let p = &rows[0].payload;
+    assert_eq!(
+        p.get("origin_basis").and_then(Json::as_str),
+        Some("policy_rule")
+    );
+    assert_eq!(
+        p.get("basis_ref").and_then(Json::as_str),
+        Some("test:rule.preauth")
+    );
+    assert_eq!(p.get("delegable"), Some(&Json::Bool(false)));
+    assert_eq!(
+        p.get("ceiling").and_then(Json::as_str),
+        Some("definition"),
+        "a pre-authorization mints at `definition` — §5g.1's row reads \"issued at `definition`; bounded by `authority_cap`\" (ADR-0053 D5)"
+    );
+    assert_eq!(
+        p.get("validity")
+            .and_then(|v| v.get("expires_at"))
+            .and_then(|e| e.get("run_id"))
+            .and_then(Json::as_str),
+        Some(run_id.as_str()),
+        "a pre-authorization never outlives the run"
+    );
+    // The grant material round-trips through the canonical codec.
+    let handle = hh_monitor::events::handle_from_granted_payload(p, &rows[0].event_id)
+        .expect("the granted row decodes");
+    assert_eq!(handle.grants.len(), 1);
+    assert_eq!(
+        handle.grants[0].effect.domain,
+        hh_hir::kinds::EffectDomain::FsRead
     );
 }
 

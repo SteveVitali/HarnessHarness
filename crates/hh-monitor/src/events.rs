@@ -114,7 +114,14 @@ pub fn decided_payload(d: &KernelDecision, attempt_no: u64, proposal_ref: &str) 
 /// `AuthorityHandle` — the fold's half of the projection (a malformed row is
 /// skipped: the durable form was validated at append; `project` never guesses).
 pub fn handle_from_granted(env: &EventEnvelope) -> Option<AuthorityHandle> {
-    let p = &env.payload;
+    handle_from_granted_payload(&env.payload, &env.event_id)
+}
+
+/// Decode a `security.permission.granted` **payload** (no envelope) back into
+/// an `AuthorityHandle` — `granted_event_id` supplies the holder's pin
+/// (the `RefVersion::Pinned` the envelope's `event_id` carried). The
+/// out-of-process `authorize` codec's read direction (AC-R-2.8.1-16).
+pub fn handle_from_granted_payload(p: &Json, granted_event_id: &str) -> Option<AuthorityHandle> {
     let handle_id = HandleId::parse(str_at(p, "handle_id")?)?;
     let pref = p.get("permission_ref")?;
     let permission_ref = PinnedRef {
@@ -123,7 +130,7 @@ pub fn handle_from_granted(env: &EventEnvelope) -> Option<AuthorityHandle> {
     };
     let holder = Ref {
         semantic_id: str_at(p, "holder")?.to_string(),
-        version: RefVersion::Pinned(env.event_id.clone()),
+        version: RefVersion::Pinned(granted_event_id.to_string()),
     };
     let issuer = ProvenanceRecord::from_json(p.get("issuer")?).ok()?;
     let grants = match p.get("grants")? {

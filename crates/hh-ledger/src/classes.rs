@@ -348,7 +348,9 @@ const DECIDED_FIELDS: &[AuditField] = &[
     afb("decider_provenance", AUDIT_FIELD_LIST_BYTES),
     af("decision"),
     af("decision_scope"),
-    af("originating_permission_id"),
+    af("origin_permission_id"),
+    af("cache_key"),
+    af("assessment_inputs_ref"),
     af("wait_ms"),
     af("attempt_no"),
     afb("taint", AUDIT_FIELD_LIST_BYTES),
@@ -376,6 +378,7 @@ const PENDING_FIELDS: &[AuditField] = &[
     af("args_canonical_hash"),
     af("mode"),
     af("timeout"),
+    af("batch_id"),
 ];
 
 /// `security.permission.escalated` — the chain-hop row (§5g.7 §4):
@@ -403,6 +406,18 @@ const LEASE_APPROVAL_FIELDS: &[AuditField] = &[
     af("granted_at"),
     af("revoked_at"),
     af("permission_id"),
+    // The S2.6 lease-record members (ADR-0071 D1) — the projected-pattern
+    // legs, the scope coordinate, the holder, and the policy-fingerprint /
+    // risk-ceiling / grant-authority pins the fold reads back.
+    afb("pattern", AUDIT_FIELD_LIST_BYTES),
+    af("pattern_args_hash"),
+    af("scope_ref"),
+    af("holder"),
+    af("policy_fingerprint"),
+    afb("risk_ceiling", AUDIT_FIELD_LIST_BYTES),
+    af("grant_authority"),
+    af("rule_ref"),
+    af("verdict"),
 ];
 
 /// `security.permission.granted` / `revoked` — the dossier partition

@@ -194,6 +194,7 @@ pub fn tool_node(id: &str, seq: u64) -> Node {
                 exposure_hint: Json::Null,
                 postconditions: vec![],
                 flow_contract: None,
+                action_patterns: Vec::new(),
             }),
             seq,
         ),

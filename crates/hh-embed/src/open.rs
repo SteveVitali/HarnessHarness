@@ -401,6 +401,46 @@ impl EmbedService {
             .open_run(manifest.clone(), &holder)
             .map_err(ledger_err)?;
 
+        // ── pre-authorization handles (§5g.1 §9 Stage-2; ADR-0053 D5) ──
+        // Every sealed `HarnessRule{pre_authorize}` mints a `policy_rule`-
+        // basis `AuthorityHandle` over the rule's declared grants at open —
+        // the durable `security.permission.granted` rows are what
+        // `authorize`'s `pre_authorized` leg and the reviewer chain's
+        // `policy_rule` stage read on rebuild (raise-only admission: the
+        // handles narrow-or-satisfy, never widen). A rule whose `grants`
+        // don't decode skips (the sealed definition validated them — mint
+        // never guesses).
+        {
+            let issuer = hh_provenance::ProvenanceRecord::kernel(
+                "hh-embed/open_session",
+                self.store.now_ms(),
+            );
+            let holder_ref = hh_hir::refs::Ref::selected(holder.clone(), "latest");
+            let minted = {
+                let store = &self.store;
+                let mut alloc = |kind: &str| store.alloc_id(kind);
+                hh_monitor::mint::mint_preauthorization_handles(
+                    &sealed,
+                    &holder_ref,
+                    &issuer,
+                    &run_id,
+                    &mut alloc,
+                )
+            };
+            for (handle, granted_event_id) in minted {
+                let ev = hh_env::events::EventMinter::new(&self.store, &run_id)
+                    .mint_with_id(
+                        "security.permission.granted",
+                        hh_monitor::events::granted_payload(&handle),
+                        granted_event_id,
+                    )
+                    .map_err(ledger_err)?;
+                self.store
+                    .append(&run_id, &lease, vec![ev])
+                    .map_err(ledger_err)?;
+            }
+        }
+
         // `lifecycle.surface.invoked` — the durable invocation record
         // minted when the invocation opens a run (§7.1; the record's
         // `overrides_layer_id` is the boundary-computed layer identity,
@@ -448,6 +488,7 @@ impl EmbedService {
             active_turn: "turn-1".to_string(),
             finished: false,
             detached: None,
+            authority_caps: hh_monitor::mint::cap_rows(&sealed.document),
             pendings: BTreeMap::new(),
             decided: BTreeMap::new(),
             delivered_wokens: BTreeSet::new(),
@@ -498,7 +539,7 @@ impl EmbedService {
                         ("permission_id", Json::str(permission_id.clone())),
                         ("effect_ids", Json::Arr(vec![])),
                         ("requested_at", Json::Int(now as i64)),
-                        ("mode", Json::str("policy")),
+                        ("mode", Json::str("sync")),
                     ]),
                 )?;
                 self.mint(
@@ -508,7 +549,7 @@ impl EmbedService {
                     Json::obj([
                         ("permission_id", Json::str(permission_id)),
                         ("proposal", Json::str(proposal)),
-                        ("decision", Json::str("deny_once")),
+                        ("decision", Json::str("deny")),
                         ("decider", Json::str("policy")),
                         ("reason", Json::str("unattended")),
                     ]),
@@ -547,7 +588,7 @@ impl EmbedService {
                         ]),
                     ),
                 ]);
-                self.mint_permission_ask(&session_id, &proposal, None, opts, rendering)?;
+                self.mint_permission_ask(&session_id, &proposal, None, opts, rendering, Some(cap))?;
             }
         }
 
@@ -844,7 +885,12 @@ impl EmbedService {
                             pendings.insert(
                                 pid.clone(),
                                 PendingAsk {
-                                    options: vec!["allow".to_string(), "deny".to_string()],
+                                    options: vec![
+                                        "allow_once".to_string(),
+                                        "allow_lease".to_string(),
+                                        "deny".to_string(),
+                                        "more_info".to_string(),
+                                    ],
                                     proposal: req
                                         .get("reason")
                                         .and_then(Json::as_str)
@@ -855,6 +901,26 @@ impl EmbedService {
                                         .get("effect_id")
                                         .and_then(Json::as_str)
                                         .map(str::to_string),
+                                    requested_at: e
+                                        .payload
+                                        .get("requested_at")
+                                        .and_then(Json::as_int)
+                                        .map(|n| n.max(0) as u64)
+                                        .unwrap_or(0),
+                                    capability_ref: req.get("capability_ref").and_then(|c| {
+                                        let s = c.get("semantic_id")?.as_str()?;
+                                        let v = c.get("version_id")?.as_str()?;
+                                        Some((s.to_string(), v.to_string()))
+                                    }),
+                                    args_canonical_hash: req
+                                        .get("args_canonical_hash")
+                                        .and_then(Json::as_str)
+                                        .map(str::to_string),
+                                    subject_ref: req
+                                        .get("subject_ref")
+                                        .and_then(Json::as_str)
+                                        .map(str::to_string),
+                                    requested_grants: crate::service::decode_requested_grants(&req),
                                 },
                             );
                         }
@@ -936,6 +1002,16 @@ impl EmbedService {
             active_turn: rt.active_turn,
             finished: false,
             detached: None,
+            // The caps re-derive from the persisted sealed definition — the
+            // manifest pins `harness_def_ref`; a missing artifact fails
+            // closed to `[]` (uncapped at the response's own authority —
+            // the mint's grants are still only the recorded `requested`).
+            authority_caps: manifest
+                .harness_def_ref
+                .as_deref()
+                .and_then(|r| self.persisted_definition(r).ok())
+                .map(|d| hh_monitor::mint::cap_rows(&d.document))
+                .unwrap_or_default(),
             pendings: rt.pendings,
             decided: rt.decided,
             delivered_wokens: rt.delivered_wokens,
@@ -998,6 +1074,7 @@ impl EmbedService {
             active_turn: "turn-1".to_string(),
             finished: false,
             detached: None,
+            authority_caps: Vec::new(),
             pendings: BTreeMap::new(),
             decided: BTreeMap::new(),
             delivered_wokens: BTreeSet::new(),
@@ -1108,7 +1185,7 @@ impl EmbedService {
     /// definition survives a service restart. The read verifies the blob
     /// hash (CC3), then the document's own pinned root `version_id`
     /// against the requested address.
-    fn persisted_definition(
+    pub(crate) fn persisted_definition(
         &self,
         version_id: &str,
     ) -> Result<hh_hir::document::SealedDefinition, EmbedError> {

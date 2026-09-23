@@ -9,6 +9,10 @@ description = "The C0/Stage-1 reference monitor — the security kernel & capabi
 [lib]
 path = "src/lib.rs"
 
+[[bin]]
+name = "hh-authorize"
+path = "src/bin/hh-authorize.rs"
+
 [dependencies]
 hh-wire = { path = "../hh-wire" }
 hh-identity = { path = "../hh-identity" }
