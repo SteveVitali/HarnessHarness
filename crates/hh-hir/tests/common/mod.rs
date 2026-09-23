@@ -180,11 +180,11 @@ pub fn agent_node(id: &str, budget: &str, perm: &str, seq: u64) -> Node {
     for name in ["control_strategy", "context_policy"] {
         slots.insert(
             name.to_string(),
-            SlotBindings::One(SlotBinding {
-                variant: ComponentVariantRef {
-                    variant: format!("variant:{name}"),
-                },
-            }),
+            SlotBindings::One(SlotBinding::of(ComponentVariantRef::pinned(
+                name,
+                format!("hh/{name}/test"),
+                format!("sha256:variant-{name}"),
+            ))),
         );
     }
     sid(

@@ -61,6 +61,14 @@ members = [
     # (hh-identity, CC1) and appends through the run's single fenced writer
     # (hh-ledger). The C1 registry *service* is S4.1 — never this crate.
     "crates/hh-registry",
+    # The C0/Stage-1 configuration & composition model (spec §3.3, R-2.1.4; ticket S1.9).
+    # A PERSISTENT workspace member: the assembly grammar in the HIR/1 schema, the class
+    # catalog for the two Stage-1 classes over the registry's ClassRecord/VariantRecord,
+    # load / validate_assembly (stages 1–5, 7 — complete reports) / resolve (the ONE
+    # resolver feeding hh-hir's seal — CF-056) / identity / diff-via-HirDiff / in-process
+    # instantiate / verify_resume, and the closed AssemblyDiagnostic taxonomy. Sits above
+    # hh-hir, hh-registry and hh-ledger; compose/space/enumerate are Stage 3.
+    "crates/hh-assembly",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

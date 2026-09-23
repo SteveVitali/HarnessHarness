@@ -341,16 +341,21 @@ fn each_edge_ref_mut(e: &mut EdgeRecord, f: &mut dyn FnMut(&mut Ref)) {
 }
 
 /// `seal(doc, sealed_at) → SealedDefinition` (§3.1.6/§3.1.7). `UnresolvedRef` when a ref's
-/// `semantic_id` doesn't resolve, or a document carrying `assembly`; every validation error
-/// collected.
+/// `semantic_id` doesn't resolve, or a document carrying an **unresolved** assembly section
+/// (§3.1.3: only resolved documents are sealable — a resolved section carries no
+/// `version_selector` and no `$param:`/`$entity:` binding form anywhere; the §3.3 `resolve`
+/// produces it, S1.9); every validation error collected.
 pub fn seal(doc: &HirDocument, sealed_at: u64) -> Result<SealedDefinition, Vec<HirError>> {
     let mut errs = Vec::new();
-    if doc.assembly.is_some() {
-        errs.push(HirError::UnresolvedRef {
-            detail: "a document carrying an assembly section is not sealable (resolve first)"
-                .into(),
-        });
-        return Err(errs);
+    if let Some(a) = &doc.assembly {
+        if let Some(what) = unresolved_in_assembly(a, "assembly") {
+            errs.push(HirError::UnresolvedRef {
+                detail: format!(
+                    "a document carrying an unresolved assembly section is not sealable (resolve first): {what}"
+                ),
+            });
+            return Err(errs);
+        }
     }
     validate::validate(doc)?;
 
@@ -518,11 +523,41 @@ pub fn seal(doc: &HirDocument, sealed_at: u64) -> Result<SealedDefinition, Vec<H
     })
 }
 
-/// A `ProfileRef` must be pinned inside a sealed form (N5). Returns false if any selector
-/// remains.
+/// The grammar-neutral "is this assembly section resolved?" walk (§3.1.3): any object
+/// carrying a `version_selector` member, or any string in the `$param:`/`$entity:` binding
+/// forms, is unresolved. Returns the first offending path.
+fn unresolved_in_assembly(j: &hh_wire::json::Json, path: &str) -> Option<String> {
+    use hh_wire::json::Json;
+    match j {
+        Json::Obj(m) => {
+            if m.contains_key("version_selector") {
+                return Some(format!("{path}: version_selector"));
+            }
+            for (k, v) in m {
+                if let Some(p) = unresolved_in_assembly(v, &format!("{path}/{k}")) {
+                    return Some(p);
+                }
+            }
+            None
+        }
+        Json::Arr(items) => items
+            .iter()
+            .enumerate()
+            .find_map(|(i, v)| unresolved_in_assembly(v, &format!("{path}/{i}"))),
+        Json::Str(s) if s.starts_with("$param:") || s.starts_with("$entity:") => {
+            Some(format!("{path}: {s}"))
+        }
+        _ => None,
+    }
+}
+
+/// A `ProfileRef` must be pinned inside a sealed form (N5) — except the `unbound` sentinel
+/// on `native.profile` (§3.3.2: the profile is a configuration coordinate `link` binds;
+/// T-LCD-04). Returns false if any selector remains.
 fn check_profile_pins(rec: &KindRecord, errs: &mut Vec<HirError>) {
     let check = |p: &crate::refs::ProfileRef, what: &str, errs: &mut Vec<HirError>| {
-        if !p.pinned {
+        let unbound_root_profile = what == "native.profile" && p.is_unbound();
+        if !p.pinned && !unbound_root_profile {
             errs.push(HirError::UnresolvedRef {
                 detail: format!("{what}: unpinned ProfileRef in a sealed form"),
             });

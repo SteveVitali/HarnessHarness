@@ -3,6 +3,20 @@
 version = 4
 
 [[package]]
+name = "hh-assembly"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-registry",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-baseline"
 version = "0.0.1"
 dependencies = [

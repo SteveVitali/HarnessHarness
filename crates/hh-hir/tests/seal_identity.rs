@@ -54,6 +54,7 @@ fn semantic_json_has_no_selectors(n: &hh_hir::document::Node) -> bool {
     !has_selector(&n.to_json())
 }
 
+use hh_hir::refs::ProfileRef;
 use hh_wire::json::Json;
 
 #[test]
@@ -64,13 +65,87 @@ fn seal_is_deterministic() {
 }
 
 #[test]
-fn seal_refuses_assembly_section() {
+fn seal_refuses_an_unresolved_assembly_section() {
+    // §3.1.3: only resolved documents are sealable — a selector or a `$param:` binding form
+    // anywhere in the assembly section is unresolved (S1.9 refines the S1.4 blanket refusal).
+    for unresolved in [
+        Json::obj([(
+            "slots",
+            Json::obj([(
+                "control_strategy",
+                Json::obj([(
+                    "variant",
+                    Json::obj([("version_selector", Json::str("latest"))]),
+                )]),
+            )]),
+        )]),
+        Json::obj([(
+            "values",
+            Json::obj([("k", Json::str("$param:keep_recent_tokens"))]),
+        )]),
+        Json::obj([("entities", Json::Arr(vec![Json::str("$entity:goal")]))]),
+    ] {
+        let mut doc = valid_doc();
+        doc.assembly = Some(unresolved);
+        let es = seal(&doc, 1).expect_err("unresolved assembly doc is not sealable");
+        assert!(es
+            .iter()
+            .any(|e| matches!(e, HirError::UnresolvedRef { .. })));
+    }
+}
+
+#[test]
+fn seal_accepts_a_resolved_assembly_section_and_keeps_it() {
     let mut doc = valid_doc();
-    doc.assembly = Some(Json::Null);
-    let es = seal(&doc, 1).expect_err("assembly doc is not sealable");
+    let resolved = Json::obj([
+        ("dialect", Json::str("HIR/1")),
+        (
+            "values",
+            Json::obj([("keep_recent_tokens", Json::Int(20_000))]),
+        ),
+        (
+            "resolved",
+            Json::obj([("registry_snapshot_id", Json::str("sha256:snap"))]),
+        ),
+    ]);
+    doc.assembly = Some(resolved.clone());
+    let sealed = seal(&doc, 1).expect("resolved assembly doc seals");
+    assert_eq!(sealed.document.assembly, Some(resolved));
+}
+
+#[test]
+fn seal_admits_the_unbound_root_profile_and_refuses_other_selectors() {
+    // §3.3.2 / T-LCD-04: the profile is a configuration coordinate; `unbound` is the one
+    // unpinned profile form a sealed root may carry (link binds it — §3.2 stage 1).
+    let mut doc = valid_doc();
+    let agent = doc.nodes.len() - 1;
+    if let KindRecord::AgentProcess(a) = &mut doc.nodes[agent].semantic {
+        if let AgentProcessBody::Native(n) = &mut a.body {
+            n.profile = ProfileRef::unbound();
+        }
+    }
+    let sealed = seal(&doc, 1).expect("unbound profile seals");
+    let root = sealed
+        .document
+        .node(&sealed.document.root.semantic_id)
+        .unwrap();
+    if let KindRecord::AgentProcess(a) = &root.semantic {
+        if let AgentProcessBody::Native(n) = &a.body {
+            assert!(n.profile.is_unbound());
+        }
+    }
+    if let KindRecord::AgentProcess(a) = &mut doc.nodes[agent].semantic {
+        if let AgentProcessBody::Native(n) = &mut a.body {
+            n.profile = ProfileRef {
+                profile: "profile:latest".into(),
+                pinned: false,
+            };
+        }
+    }
+    let es = seal(&doc, 1).expect_err("a real selector is still refused");
     assert!(es
         .iter()
-        .any(|e| matches!(e, HirError::UnresolvedRef { .. })));
+        .any(|e| matches!(e, HirError::UnresolvedRef { detail } if detail.contains("ProfileRef"))));
 }
 
 #[test]
