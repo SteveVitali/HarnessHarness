@@ -26,5 +26,8 @@ hh-secrets = { path = "../hh-secrets" }
 hh-monitor = { path = "../hh-monitor" }
 hh-gateway = { path = "../hh-gateway" }
 hh-compiler = { path = "../hh-compiler" }
+hh-eval = { path = "../hh-eval" }
+hh-budget = { path = "../hh-budget" }
+hh-lab = { path = "../hh-lab" }
 hh-bundle = { path = "../hh-bundle" }
 hh-mcp = { path = "../hh-mcp" }

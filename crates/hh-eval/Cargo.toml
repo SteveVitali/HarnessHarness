@@ -1,0 +1,23 @@
+[package]
+name = "hh-eval"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-3 evaluation-first slice (spec §5h.2, R-2.9.2): metric catalogue as distributions over the typed n/a lattice, compliance-chain metrics, loss-report export, matched-budget-or-refuse compare, the three benefit kinds, equivalence_run, render_scorecard, deterministic oracles (in-process reference + the hh-eval-oracle out-of-process conformance binary), pass^k/pass@k, intervals/tails, veto predicates, fault/perturbation profiles."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh-eval-oracle"
+path = "src/bin/hh_eval_oracle.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-budget = { path = "../hh-budget" }
+hh-compiler = { path = "../hh-compiler" }
+hh-lab = { path = "../hh-lab" }

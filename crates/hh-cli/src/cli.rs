@@ -1052,6 +1052,10 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         ("results", "export") => go(crate::lab::cmd_results_export(b, io, p)),
         ("compare", "report") => go(crate::lab::cmd_compare_report(b, io, p)),
         ("compare", "scorecard") => go(crate::lab::cmd_compare_scorecard(b, io, p)),
+        ("eval", "catalogue") => go(crate::lab::cmd_eval_catalogue(b, io, p)),
+        ("eval", verb @ ("compare" | "scorecard" | "equivalence" | "loss-report")) => {
+            go(crate::lab::cmd_eval_op(b, io, p, verb))
+        }
         ("bundle", "create") => go(crate::lab::cmd_bundle_create(b, io, p)),
         ("bundle", "validate") => go(crate::lab::cmd_bundle_validate(b, io, p)),
         ("bundle", "reproduce") => go(crate::lab::cmd_bundle_reproduce(b, io, p)),
