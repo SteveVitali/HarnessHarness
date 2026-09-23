@@ -438,8 +438,7 @@ fn stub_per_class_binds_out_of_process() {
             vec!["--class".into(), class_id.into()],
             vec![],
         );
-        let (mut session, _l) = spawn(&s)
-            .unwrap_or_else(|e| panic!("{class_id} spawn: {e:?}"));
+        let (mut session, _l) = spawn(&s).unwrap_or_else(|e| panic!("{class_id} spawn: {e:?}"));
         let mut host: VariantHost<RecordingPorts, VecEvents> =
             VariantHost::new(RecordingPorts::default(), VecEvents::default());
         let b = host
