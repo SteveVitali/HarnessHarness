@@ -1,0 +1,18 @@
+[package]
+name = "hh-registry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 component-variation registry store (spec §6.2, R-2.10.2⁰): the closed registry/1 record kinds, the one RegistryEnvelope with its three status axes, the hh/ + local/ namespaces, register/publish/resolve/snapshot/verify/lineage plus the deterministic query/slot_choices/substitutable projections, the ClassRecord/ConformanceSuite records for the two Stage-1 classes, and the lifecycle.registry.* audit events appended through the run's single fenced writer. Reuses the one idp/1 identity/namespace scheme (hh-identity, CC1), the canonical ProvenanceRecord (hh-provenance, CC2), and the ledger event store (hh-ledger). The C1 multi-namespace service is S4.1 — NOT this crate."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }

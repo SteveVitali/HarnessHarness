@@ -178,6 +178,16 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("lifecycle.session.attached",      Led, O::Events, false, true,  None, None),
     row("lifecycle.session.detached",      Led, O::Events, false, true,  None, None),
     row("lifecycle.contract.deprecated_use", Led, O::Events, false, true, None, None),
+    // The registry-store audit rows (ADR-0151 (e)/0152 (e)/0153 (e); S1.8): kernel
+    // component `registry`, content-free payloads (ids/spellings only) — audit-grade.
+    row("lifecycle.registry.registered",        Led, O::Events, true,  true,  None, None),
+    row("lifecycle.registry.admission_refused", Led, O::Events, true,  true,  None, None),
+    row("lifecycle.registry.published",         Led, O::Events, true,  true,  None, None),
+    row("lifecycle.registry.name_deprecated",   Led, O::Events, true,  true,  None, None),
+    row("lifecycle.registry.name_yanked",       Led, O::Events, true,  true,  None, None),
+    row("lifecycle.registry.version_revoked",   Led, O::Events, true,  true,  None, None),
+    row("lifecycle.registry.snapshotted",       Led, O::Events, true,  true,  None, None),
+    row("lifecycle.registry.conformance_recorded", Led, O::Events, true, true, None, None),
 
     // ── model boundary ───────────────────────────────────────────────────
     // `model.call.{requested,completed,failed}` are audit-grade (§05b.1); attempt

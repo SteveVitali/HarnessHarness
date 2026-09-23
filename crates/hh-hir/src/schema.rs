@@ -470,7 +470,9 @@ fn observation_source_parse(s: &str) -> Result<ObservationSource, HirError> {
     }
 }
 
-fn debt_json(d: &AssumptionDebtRecord, semantic: bool) -> Json {
+/// The canonical `AssumptionDebtRecord` encoding (CC7 — the schema source owns
+/// both directions; `hh-registry` reuses it for `VariantRecord.conditioned_rules`).
+pub fn debt_json(d: &AssumptionDebtRecord, semantic: bool) -> Json {
     Json::obj([
         ("rule_id", Json::str(d.rule_id.clone())),
         ("hypothesis", text_json(&d.hypothesis, semantic)),
@@ -490,7 +492,8 @@ fn debt_json(d: &AssumptionDebtRecord, semantic: bool) -> Json {
     ])
 }
 
-fn debt_from_json(j: &Json, path: &str) -> Result<AssumptionDebtRecord, HirError> {
+/// Decode a canonical `AssumptionDebtRecord` (the [`debt_json`] direction).
+pub fn debt_from_json(j: &Json, path: &str) -> Result<AssumptionDebtRecord, HirError> {
     let status = match req_str(j, "status", path)?.as_str() {
         "open" => DebtStatus::Open,
         "discharged" => DebtStatus::Discharged,

@@ -179,6 +179,17 @@ impl Lineage {
         !self.stale_for(dependant).is_empty()
     }
 
+    /// All `supersedes` edges, in append order (read-only — the registry store persists and
+    /// replays them; additive accessor, CC8).
+    pub fn edges(&self) -> &[SupersedesEdge] {
+        &self.edges
+    }
+
+    /// All `RevocationRecord`s, in append order (read-only — same consumer as `edges`).
+    pub fn revocations(&self) -> &[RevocationRecord] {
+        &self.revocations
+    }
+
     fn would_cycle(&self, newer: &str, older: &str) -> bool {
         // Edges point `newer → older` (toward ancestors). Adding `newer → older` closes a cycle
         // iff `older` can already reach `newer` following those edges (older → … → newer). Walk

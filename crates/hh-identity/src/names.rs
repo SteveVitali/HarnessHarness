@@ -219,8 +219,20 @@ impl NameIndex {
         let head = *hist.last().unwrap();
         match (mode, head.status) {
             (ResolveMode::Execute, NameStatus::Yanked) => {
-                // Execute never returns a yanked head; fall back to the latest non-yanked.
-                match hist.iter().rev().find(|e| e.status != NameStatus::Yanked) {
+                // Execute never returns a yanked head — and a yank poisons the
+                // *version* it binds, not just the entry's position (S1.8 /
+                // ADR-0239: otherwise re-binding the same version under the name
+                // would resurrect a pulled version — `deprecate`/`yank` must have
+                // observable effect). Fall back to the latest entry binding a
+                // version no yanked entry names.
+                let poisoned: std::collections::BTreeSet<&str> = hist
+                    .iter()
+                    .filter(|e| e.status == NameStatus::Yanked)
+                    .map(|e| e.version_id.as_str())
+                    .collect();
+                match hist.iter().rev().find(|e| {
+                    e.status != NameStatus::Yanked && !poisoned.contains(e.version_id.as_str())
+                }) {
                     Some(e) => ResolveOutcome::Resolved(self.to_ref(e, selector)),
                     None => ResolveOutcome::Unresolved,
                 }

@@ -51,6 +51,16 @@ members = [
     # `DimensionId` registry itself lives in hh-ontology (the vocabulary crate) so hh-hir
     # can check bound keys — this crate is the accounting layer over it (CC7).
     "crates/hh-budget",
+    # The C0/Stage-1 component-variation registry *store* (spec §6.2, R-2.10.2⁰;
+    # ticket S1.8). A PERSISTENT workspace member: the closed registry/1 record
+    # kinds + the one RegistryEnvelope (three status axes), the hh/ + local/
+    # namespaces, register/publish/resolve/snapshot/verify/lineage (+ the
+    # deterministic query/slot_choices/substitutable projections AC-1 names), the
+    # two Stage-1 ClassRecords + ConformanceSuites, and the lifecycle.registry.*
+    # event classes. The store reuses the ONE identity/namespace scheme
+    # (hh-identity, CC1) and appends through the run's single fenced writer
+    # (hh-ledger). The C1 registry *service* is S4.1 — never this crate.
+    "crates/hh-registry",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
