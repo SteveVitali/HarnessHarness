@@ -137,7 +137,10 @@ impl CachePolicy {
 
 /// `MatchSpec{dimensions, mode, tolerance, pricing_table_ref?, model_scope,
 /// cache_policy}` (§8.2 §3 verbatim; `tolerance` is ppm of 1.0 — canonical JSON
-/// carries integers only).
+/// carries integers only). `utilization_floor` is the S3.4a additive member
+/// (CC8): the declared utilisation floor (ppm of the matched cap) under which
+/// an arm's median is annotated `under_utilised` at the E-3/E-4 gates
+/// (§6.3 §2.4; ADR-0041 M1 — "an under-utilising arm is not cheaper").
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchSpec {
     /// The matched dimensions.
@@ -152,6 +155,9 @@ pub struct MatchSpec {
     pub model_scope: ModelScope,
     /// `cold_start` | `natural` | `primed{prime_ref}` — uniform across arms.
     pub cache_policy: CachePolicy,
+    /// The declared utilisation floor (ppm of cap) for the `under_utilised`
+    /// annotation — `None` declares no floor (no annotation).
+    pub utilization_floor_ppm: Option<i64>,
 }
 
 impl MatchSpec {
@@ -164,6 +170,7 @@ impl MatchSpec {
             pricing_table_ref: None,
             model_scope: ModelScope::SameSnapshot,
             cache_policy: CachePolicy::ColdStart,
+            utilization_floor_ppm: None,
         }
     }
 
@@ -188,6 +195,9 @@ impl MatchSpec {
             Json::str(self.model_scope.as_str()),
         );
         m.insert("cache_policy".to_string(), self.cache_policy.to_json());
+        if let Some(f) = self.utilization_floor_ppm {
+            m.insert("utilization_floor".to_string(), Json::Int(f));
+        }
         Json::Obj(m)
     }
 
@@ -208,6 +218,7 @@ impl MatchSpec {
                 .and_then(PricingTableRef::from_json),
             model_scope: ModelScope::parse(j.get("model_scope")?.as_str()?)?,
             cache_policy: CachePolicy::from_json(j.get("cache_policy")?)?,
+            utilization_floor_ppm: j.get("utilization_floor").and_then(Json::as_int),
         })
     }
 }
@@ -919,6 +930,7 @@ mod tests {
             }),
             model_scope: ModelScope::CrossModel,
             cache_policy: CachePolicy::Primed("sha256:seed".into()),
+            utilization_floor_ppm: None,
         };
         assert_eq!(MatchSpec::from_json(&s.to_json()), Some(s));
     }

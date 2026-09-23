@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:9fc2817bb2d817434d6c6bffc087d8823440f7685f73895916edbd7e32639a23";
+    "sha256:915bcd8b269f2dc68917676bbf3e3d8734861fd1d41351c23805280274b557fd";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5505,6 +5505,66 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.eval.render_scorecard` → `json` (see the contract registry).
     pub fn lab_eval_render_scorecard(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.eval.render_scorecard", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.claim` → `json` (see the contract registry).
+    pub fn lab_experiment_claim(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.claim", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.close` → `json` (see the contract registry).
+    pub fn lab_experiment_close(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.close", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.expand` → `json` (see the contract registry).
+    pub fn lab_experiment_expand(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.expand", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.launch` → `json` (see the contract registry).
+    pub fn lab_experiment_launch(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.launch", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.next` → `json` (see the contract registry).
+    pub fn lab_experiment_next(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.next", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.open_experiment` → `json` (see the contract registry).
+    pub fn lab_experiment_open_experiment(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.open_experiment", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.pause` → `json` (see the contract registry).
+    pub fn lab_experiment_pause(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.pause", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.register` → `json` (see the contract registry).
+    pub fn lab_experiment_register(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.register", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.resume` → `json` (see the contract registry).
+    pub fn lab_experiment_resume(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.resume", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.experiment.settle` → `json` (see the contract registry).
+    pub fn lab_experiment_settle(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.experiment.settle", params.clone())?;
         Ok(raw)
     }
 

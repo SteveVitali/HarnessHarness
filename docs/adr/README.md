@@ -67,3 +67,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0275](ADR-0275-s3.1-lab-boundary-and-bundle-rulings.md) | S3.1 lab-boundary and bundle rulings | S3.1 (`044_S3.1__lab-embed-groups-and-bundle.md`) | Accepted |
 | [ADR-0276](ADR-0276-s3.2-lowering-and-composition-rulings.md) | S3.2 lowering and composition rulings | S3.2 (`045_S3.2__compiler-full.md`) | Accepted |
 | [ADR-0277](ADR-0277-s3.3-eval-kernel-and-bench-adapter-rulings.md) | S3.3 eval-kernel and benchmark-adapter rulings | S3.3 (`046_S3.3__metric-catalogue-and-compare.md`) | Accepted |
+| [ADR-0278](ADR-0278-s3.4a-experiment-engine-rulings.md) | S3.4a experiment-engine rulings | S3.4a (`047_S3.4a__experiment-engine.md`) | Accepted |

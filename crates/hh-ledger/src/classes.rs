@@ -1210,6 +1210,9 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_prov("measurement.experiment.run_claimed",      Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.claim_expired",    Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.run_launched",     Led, O::Events, false, false, true,  None, None),
+    // `bound` is the *subject* run's own binding stamp (§6.3 `launch` step
+    // 4); `run_bound` is the experiment run's mirror of it (§6.5 `bind`).
+    row_prov("measurement.experiment.bound",            Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.run_bound",        Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.run_settled",      Led, O::Events, false, false, true,  None, None),
     row_audit("measurement.experiment.run_excluded",    O::Events, true, OPEN_AUDIT, &[], None, None),
@@ -1519,6 +1522,7 @@ mod tests {
             "measurement.experiment.run_claimed",
             "measurement.experiment.claim_expired",
             "measurement.experiment.run_launched",
+            "measurement.experiment.bound",
             "measurement.experiment.run_bound",
             "measurement.experiment.run_settled",
             "measurement.experiment.run_excluded",

@@ -18,12 +18,13 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use hh_budget::{
-    validate_match, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, MatchError,
+    validate_match, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, MatchError, MatchMode,
     MatchRefusal, MatchSpec,
 };
 use hh_identity::idp::{identify_bytes, idp_id};
 use hh_identity::kinds::RecordKind;
 use hh_ontology::config::Ref;
+use hh_ontology::dimensions::DimensionId;
 use hh_ontology::eval::{Design, DesignKind, PreRegistration, SeedPolicy};
 use hh_ontology::lab::SplitLabel;
 use hh_ontology::participant::{Granularity, ParticipantClass};
@@ -940,9 +941,39 @@ pub struct SpecContext<'a> {
     pub retirement_diff: Option<bool>,
     /// Whether a level ref's capability has drifted.
     pub capability_drifted: Option<&'a dyn Fn(&str) -> bool>,
+    /// The arm's per-dimension `budget_enforcement` view (ADR-0165 D3) —
+    /// the E-1 `matched_cap` rule needs `enforced` on every matched
+    /// dimension. `None` = every arm resolves `native` (trivially
+    /// `enforced`; hosted arms supply their adapter-derived map).
+    pub budget_enforcement: Option<&'a dyn Fn(&ArmSpec) -> BudgetEnforcement>,
+    /// The level ref's `budget_relevant` parameter bindings — `param →
+    /// {value, affects[]}` (`affects` names the dimensions the parameter
+    /// drives). `None` = cannot resolve (the AC-R-2.10.2-12 coverage check
+    /// is deferred to a context that can).
+    pub budget_relevant_params: Option<&'a BudgetRelevantResolver<'a>>,
     /// The `replicates_per_cell` policy floor (default 1).
     pub min_replicates: u32,
 }
+
+/// A `budget_relevant` parameter's bound value and the dimensions it drives
+/// (the `param_schema` `affects[]` projection — ADR-0151 D5). The
+/// AC-R-2.10.2-12 coverage check refuses an arm whose `MatchSpec` omits a
+/// `budget_relevant` parameter that differs across arms (T-LCD-14).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BudgetRelevantParam {
+    /// The parameter's bound value at the level (the variant's declared
+    /// point; a `LevelSpec.overrides` member rebinds it).
+    pub value: Json,
+    /// The dimensions the parameter drives (`affects[]`).
+    pub affects: Vec<DimensionId>,
+}
+
+/// The `budget_relevant` resolver — `level ref → {param → {value, affects[]}}`.
+pub type BudgetRelevantResolver<'a> = dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + 'a;
+
+/// A level's bound `budget_relevant` parameters — `{param → (value,
+/// affects)}` (the check_match working map).
+type BoundParams = BTreeMap<String, (Json, BTreeSet<DimensionId>)>;
 
 impl SpecContext<'_> {
     /// The member-level-only context — every resolver absent (the checks
@@ -953,6 +984,8 @@ impl SpecContext<'_> {
             artifact_sealed: None,
             retirement_diff: None,
             capability_drifted: None,
+            budget_enforcement: None,
+            budget_relevant_params: None,
             min_replicates: 1,
         }
     }
@@ -1003,6 +1036,9 @@ impl ExperimentSpec {
         }
         // 3. Factor-level admissibility (ADR-0154 D5 + the kind table).
         self.check_factors()?;
+        // 3.5. The design shape (resolution/generators, kind-table coverage,
+        //      named-interaction estimability) and the scheduling pools.
+        self.check_design()?;
         // 4. The adaptive strategy confinement (ADR-0156/0190).
         self.check_validation_strategy()?;
         // 5. The suite/split binding.
@@ -1066,6 +1102,229 @@ impl ExperimentSpec {
             }
         }
         Ok(())
+    }
+
+    /// The design-shape checks (§6.3 §2.1's `ResolutionInsufficient` row plus
+    /// the design kinds' fixed semantics — ADR-0154 D2) and the scheduling
+    /// pool bound (`pool.limit ≤ max_concurrent_runs`; AC-R-2.10.3-10's
+    /// register half).
+    fn check_design(&self) -> Result<(), ExperimentRefusal> {
+        use crate::expand::*;
+        // A pool limit above the global cap is refused at `register`.
+        for p in &self.scheduling.pools {
+            if p.limit > self.scheduling.max_concurrent_runs {
+                return Err(ExperimentRefusal::Schema(SchemaError::v(
+                    "scheduling.pools",
+                    format!(
+                        "pool `{}` limit {} exceeds max_concurrent_runs {}",
+                        p.key, p.limit, self.scheduling.max_concurrent_runs
+                    ),
+                )));
+            }
+        }
+        let varied = varied_factors(self);
+        match self.design.kind {
+            DesignKind::FractionalFactorial => {
+                // `generators[]` and `resolution` are mandatory members.
+                let (Some(gen_spellings), Some(declared)) =
+                    (&self.design.generators, self.design.resolution)
+                else {
+                    return Err(ExperimentRefusal::ResolutionInsufficient {
+                        detail:
+                            "fractional_factorial requires generators[] and resolution ∈ {III, IV, V}"
+                                .to_string(),
+                    });
+                };
+                if gen_spellings.is_empty() {
+                    return Err(ExperimentRefusal::ResolutionInsufficient {
+                        detail: "fractional_factorial requires ≥ 1 generator".to_string(),
+                    });
+                }
+                // Two-level factors only (the OQ-361 ratified default).
+                for f in &varied {
+                    if f.levels.len() != 2 {
+                        return Err(ExperimentRefusal::InadmissibleFactor {
+                            factor: f.name.clone(),
+                            reason:
+                                "fractional_factorial admits two-level factors only (OQ-361 default)"
+                                    .to_string(),
+                        });
+                    }
+                }
+                // The generators must parse, name declared factors, generate
+                // each factor at most once, and not generate a free factor's
+                // word member.
+                let names: BTreeSet<&str> = varied.iter().map(|f| f.name.as_str()).collect();
+                let mut generated = BTreeSet::new();
+                let mut gens = Vec::with_capacity(gen_spellings.len());
+                for g in gen_spellings {
+                    let gen = parse_generator(g).ok_or_else(|| {
+                        ExperimentRefusal::Schema(SchemaError::v(
+                            "design.generators",
+                            format!("malformed generator `{g}` (expected `F = A:B:…`)"),
+                        ))
+                    })?;
+                    for member in gen.defining_word() {
+                        if !names.contains(member.as_str()) {
+                            return Err(ExperimentRefusal::InadmissibleFactor {
+                                factor: member.clone(),
+                                reason: format!(
+                                    "generator `{g}` names an undeclared varied factor"
+                                ),
+                            });
+                        }
+                    }
+                    if !generated.insert(gen.factor.clone()) {
+                        return Err(ExperimentRefusal::InadmissibleFactor {
+                            factor: gen.factor.clone(),
+                            reason: format!("factor generated twice (`{g}`)"),
+                        });
+                    }
+                    gens.push(gen);
+                }
+                // The declared resolution must equal what the defining
+                // subgroup computes.
+                let subgroup = defining_subgroup(&gens);
+                let computed = resolution_of(&subgroup);
+                let declared_n = match declared {
+                    hh_ontology::eval::FractionalResolution::III => 3,
+                    hh_ontology::eval::FractionalResolution::IV => 4,
+                    hh_ontology::eval::FractionalResolution::V => 5,
+                };
+                if computed != declared_n {
+                    return Err(ExperimentRefusal::ResolutionInsufficient {
+                        detail: format!(
+                            "declared resolution {} but the generators define {}",
+                            declared.as_str(),
+                            match computed {
+                                3 => "III",
+                                4 => "IV",
+                                5 => "V",
+                                n =>
+                                    return Err(ExperimentRefusal::ResolutionInsufficient {
+                                        detail: format!("generators define resolution {n}"),
+                                    }),
+                            }
+                        ),
+                    });
+                }
+                // The declared arms must be exactly the fraction's points.
+                if !arms_cover(self, &fraction_points(self, &gens)) {
+                    return Err(ExperimentRefusal::InadmissibleFactor {
+                        factor: "<design>".to_string(),
+                        reason: "arms do not cover the declared fraction's design points exactly"
+                            .to_string(),
+                    });
+                }
+                // Pre-registered two-factor interactions must be estimable:
+                // any 2FI needs ≥ IV; two named 2FIs in one alias class need
+                // V (mutually unconfounded).
+                let named = self.named_interactions();
+                if !declared.admits_two_factor_interaction() && !named.is_empty() {
+                    return Err(ExperimentRefusal::ResolutionInsufficient {
+                        detail: format!(
+                            "pre-registered two-factor interaction(s) {} under resolution III",
+                            named.join(", ")
+                        ),
+                    });
+                }
+                if declared < hh_ontology::eval::FractionalResolution::V {
+                    // Two named 2FIs aliased to each other are confounded.
+                    for (i, a) in named.iter().enumerate() {
+                        for b in &named[i + 1..] {
+                            let (Some(ea), Some(eb)) = (parse_effect(a), parse_effect(b)) else {
+                                continue;
+                            };
+                            if ea.len() == 2
+                                && eb.len() == 2
+                                && alias_class(&ea, &subgroup).contains(&eb)
+                            {
+                                return Err(ExperimentRefusal::ResolutionInsufficient {
+                                    detail: format!(
+                                        "pre-registered interactions `{a}` and `{b}` are mutually aliased; resolution V required"
+                                    ),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            DesignKind::Paired => {
+                // `paired` = one varied factor, pairing by task.
+                if varied.len() != 1 {
+                    return Err(ExperimentRefusal::InadmissibleFactor {
+                        factor: "<design>".to_string(),
+                        reason: format!(
+                            "paired design declares {} varied factors (exactly one)",
+                            varied.len()
+                        ),
+                    });
+                }
+            }
+            DesignKind::FullFactorial => {
+                // `full_factorial` = the Cartesian product — the arms must be
+                // exactly the product's points.
+                if !arms_cover(self, &full_product(self)) {
+                    return Err(ExperimentRefusal::InadmissibleFactor {
+                        factor: "<design>".to_string(),
+                        reason: "arms do not cover the full factor product exactly".to_string(),
+                    });
+                }
+            }
+            DesignKind::OneFactorAtATime => {
+                // `one_factor_at_a_time` = the base point (each varied
+                // factor's first declared level) plus the single-level
+                // perturbations.
+                let mut base = BTreeMap::new();
+                for f in &varied {
+                    if let Some(l) = f.levels.first() {
+                        base.insert(f.name.clone(), l.level_id.clone());
+                    }
+                }
+                let mut points = vec![base.clone()];
+                for f in &varied {
+                    for l in f.levels.iter().skip(1) {
+                        let mut p = base.clone();
+                        p.insert(f.name.clone(), l.level_id.clone());
+                        points.push(p);
+                    }
+                }
+                if !arms_cover(self, &points) {
+                    return Err(ExperimentRefusal::InadmissibleFactor {
+                        factor: "<design>".to_string(),
+                        reason: "arms are not the base point plus its single-level perturbations"
+                            .to_string(),
+                    });
+                }
+            }
+            DesignKind::AdaptiveSearch => {}
+        }
+        // `generators`/`resolution` are fractional-factorial members; declared
+        // on another kind they are refused (the design's resolution claims
+        // are incoherent, not merely inert).
+        if self.design.kind != DesignKind::FractionalFactorial
+            && (self.design.generators.is_some() || self.design.resolution.is_some())
+        {
+            return Err(ExperimentRefusal::ResolutionInsufficient {
+                detail: format!(
+                    "generators/resolution declared on design.kind = {}",
+                    self.design.kind.as_str()
+                ),
+            });
+        }
+        Ok(())
+    }
+
+    /// The pre-registered interaction terms — the union of the spec-level
+    /// `pre_registration.interactions` and the design-level record's
+    /// (deterministic sorted order).
+    fn named_interactions(&self) -> Vec<String> {
+        let mut named: BTreeSet<String> = BTreeSet::new();
+        if let Some(p) = &self.pre_registration {
+            named.extend(p.interactions.iter().cloned());
+        }
+        named.extend(self.design.pre_registration.interactions.iter().cloned());
+        named.into_iter().collect()
     }
 
     fn check_validation_strategy(&self) -> Result<(), ExperimentRefusal> {
@@ -1221,42 +1480,155 @@ impl ExperimentSpec {
         if !self.kind.requires_match() {
             return Ok(());
         }
-        let mut specs = Vec::with_capacity(self.arms.len());
+        // Per-arm gates on matched kinds (CC9 — matched-budget-or-refuse):
+        // `mode: none` is not a match spec on a matched kind, and an
+        // `iso_cost` arm needs its pinned pricing table even when it is its
+        // own comparand group (a singleton group skips `validate_match`'s
+        // pricing precondition — ADR-0156 D2).
+        for arm in &self.arms {
+            let ms = arm.match_spec.as_ref().expect("check_arms ran first");
+            if ms.mode == MatchMode::None {
+                return Err(ExperimentRefusal::MissingMatchSpec {
+                    arm: arm.arm_id.clone(),
+                });
+            }
+            if ms.mode == MatchMode::IsoCost && ms.pricing_table_ref.is_none() {
+                return Err(ExperimentRefusal::MissingPricingTable {
+                    detail: format!(
+                        "arm `{}` declares iso_cost with no pricing_table_ref",
+                        arm.arm_id
+                    ),
+                });
+            }
+        }
+        // Arms partition into comparand groups by match mode (ADR-0156 D2 /
+        // CF-334): `lab/control-strategy-family-v1` carries one `iso_cost`
+        // arm beside the `matched_cap` contrast — commensurability is a
+        // *within-group* precondition at register, and a cross-mode
+        // `compare` is refused `IncommensurableMatch` downstream, not here.
+        let mut groups: BTreeMap<MatchMode, Vec<(&ArmSpec, BudgetArmSpec)>> = BTreeMap::new();
         for arm in &self.arms {
             let eval = resolve(&arm.eval_budget);
             let search = arm.search_budget.as_deref().and_then(resolve);
-            specs.push(BudgetArmSpec {
-                search_budget: search,
-                eval_budget: eval,
-                inference_budget: None,
-                match_spec: arm.match_spec.clone(),
-                enforcement: BudgetEnforcement::native(),
-                spend_confidence: None,
-                coverage_ppm: None,
-            });
+            let mode = arm.match_spec.as_ref().expect("checked above").mode;
+            let enforcement = ctx
+                .budget_enforcement
+                .map(|f| f(arm))
+                .unwrap_or_else(BudgetEnforcement::native);
+            groups.entry(mode).or_default().push((
+                arm,
+                BudgetArmSpec {
+                    search_budget: search,
+                    eval_budget: eval,
+                    inference_budget: None,
+                    match_spec: arm.match_spec.clone(),
+                    enforcement,
+                    spend_confidence: None,
+                    coverage_ppm: None,
+                },
+            ));
         }
-        validate_match(&specs).map_err(|e: MatchError| match e.refusal {
-            MatchRefusal::MissingMatchSpec => ExperimentRefusal::MissingMatchSpec {
-                arm: self
-                    .arms
-                    .get(e.arm.unwrap_or(0))
-                    .map(|a| a.arm_id.clone())
-                    .unwrap_or_default(),
-            },
-            MatchRefusal::UnbudgetedArm => ExperimentRefusal::UnbudgetedArm {
-                arm: self
-                    .arms
-                    .get(e.arm.unwrap_or(0))
-                    .map(|a| a.arm_id.clone())
-                    .unwrap_or_default(),
-            },
-            MatchRefusal::MissingPricingTable => ExperimentRefusal::MissingPricingTable {
-                detail: format!("{e:?}"),
-            },
-            MatchRefusal::IncommensurableMatch { .. } => ExperimentRefusal::IncommensurableMatch {
-                detail: format!("{:?}", e.refusal),
-            },
-        })
+        for group in groups.values() {
+            let specs: Vec<BudgetArmSpec> = group.iter().map(|(_, s)| s.clone()).collect();
+            validate_match(&specs).map_err(|e: MatchError| {
+                let arm_id = |i: Option<usize>| {
+                    i.and_then(|i| group.get(i))
+                        .map(|(a, _)| a.arm_id.clone())
+                        .unwrap_or_default()
+                };
+                match e.refusal {
+                    MatchRefusal::MissingMatchSpec => {
+                        ExperimentRefusal::MissingMatchSpec { arm: arm_id(e.arm) }
+                    }
+                    MatchRefusal::UnbudgetedArm => {
+                        ExperimentRefusal::UnbudgetedArm { arm: arm_id(e.arm) }
+                    }
+                    MatchRefusal::MissingPricingTable => ExperimentRefusal::MissingPricingTable {
+                        detail: format!("{e:?}"),
+                    },
+                    MatchRefusal::IncommensurableMatch { .. } => {
+                        ExperimentRefusal::IncommensurableMatch {
+                            detail: format!("{:?}", e.refusal),
+                        }
+                    }
+                }
+            })?;
+        }
+        // AC-R-2.10.2-12 — a `budget_relevant` parameter whose bound value
+        // differs across a comparand group's arms (or binds on some arms
+        // only) must be covered by the arm's `MatchSpec`: every `affects`
+        // dimension it drives is a matched dimension (T-LCD-14; refusal
+        // `UnmatchedBudget`, never a warning).
+        if let Some(resolve_params) = ctx.budget_relevant_params {
+            let level_of = |level_id: &str| -> Option<&LevelSpec> {
+                self.factors
+                    .iter()
+                    .flat_map(|f| f.levels.iter())
+                    .find(|l| l.level_id == level_id)
+            };
+            for group in groups.values() {
+                let mut per_arm: Vec<(&ArmSpec, BoundParams)> = Vec::new();
+                for (arm, _) in group {
+                    let mut bound: BoundParams = BTreeMap::new();
+                    for level_id in arm.level_assignment.values() {
+                        let Some(level) = level_of(level_id) else {
+                            continue;
+                        };
+                        for (name, param) in resolve_params(&level.ref_) {
+                            // A `LevelSpec.overrides` member rebinds the
+                            // declared value at this level.
+                            let value = level
+                                .overrides
+                                .as_ref()
+                                .and_then(|o| o.get(&name).cloned())
+                                .unwrap_or(param.value);
+                            let entry = bound
+                                .entry(name)
+                                .or_insert_with(|| (value.clone(), BTreeSet::new()));
+                            entry.1.extend(param.affects);
+                        }
+                    }
+                    per_arm.push((*arm, bound));
+                }
+                let names: BTreeSet<String> = per_arm
+                    .iter()
+                    .flat_map(|(_, p)| p.keys().cloned())
+                    .collect();
+                for name in names {
+                    // The parameter "differs across arms" when the bound
+                    // values disagree — or it binds on some arms only.
+                    let distinct: BTreeSet<String> = per_arm
+                        .iter()
+                        .map(|(_, p)| {
+                            p.get(&name)
+                                .map(|(v, _)| v.to_canonical_string())
+                                .unwrap_or_else(|| "(absent)".to_string())
+                        })
+                        .collect();
+                    if distinct.len() <= 1 {
+                        continue;
+                    }
+                    for (arm, params) in &per_arm {
+                        let Some((_, affects)) = params.get(&name) else {
+                            continue;
+                        };
+                        let ms = arm.match_spec.as_ref().expect("checked above");
+                        for d in affects {
+                            if !ms.dimensions.contains(d) {
+                                return Err(ExperimentRefusal::UnmatchedBudget {
+                                    detail: format!(
+                                        "arm `{}` MatchSpec omits budget_relevant parameter `{name}` (drives dimension `{}`) that differs across arms",
+                                        arm.arm_id,
+                                        d.as_str()
+                                    ),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// The canonical JSON (`hh-experiment/1`).
@@ -1585,7 +1957,13 @@ pub fn run_plan_id(
 }
 
 /// `Cell{cell_id, arm_id, configuration_id, configuration_version_id,
-/// task_id, split_label}` — one planned cell (§6.3 `expand`).
+/// task_id, split_label, na_reason?}` — one planned cell (§6.3 `expand`).
+/// `na_reason` carries the typed `n/a{reason}` (`hh_ontology::compliance::
+/// NaReason`) for a cell the plan knows is ineligible before any run opens —
+/// e.g. `capability` for a cell whose level requires a capability the pinned
+/// `registry_snapshot_id` does not supply (§6.3's `slot_choices`-floor check;
+/// T-LCD-15 — a typed `n/a`, never a skipped row). A `na_reason` cell is
+/// planned but never scheduled.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlanCell {
     /// The cell id (plan-local).
@@ -1600,6 +1978,8 @@ pub struct PlanCell {
     pub task_id: String,
     /// The task's split label.
     pub split_label: SplitLabel,
+    /// The typed `n/a{reason}` for a planned-but-ineligible cell.
+    pub na_reason: Option<hh_ontology::compliance::NaReason>,
 }
 
 /// `environment_derivation` — how the run's environment derives (§6.3:
@@ -1703,17 +2083,24 @@ impl CellPlan {
                 self.cells
                     .iter()
                     .map(|c| {
-                        Json::obj([
-                            ("cell_id", Json::str(&c.cell_id)),
-                            ("arm_id", Json::str(&c.arm_id)),
-                            ("configuration_id", Json::str(&c.configuration_id)),
+                        let mut cm = BTreeMap::from([
+                            ("cell_id".to_string(), Json::str(&c.cell_id)),
+                            ("arm_id".to_string(), Json::str(&c.arm_id)),
                             (
-                                "configuration_version_id",
+                                "configuration_id".to_string(),
+                                Json::str(&c.configuration_id),
+                            ),
+                            (
+                                "configuration_version_id".to_string(),
                                 Json::str(&c.configuration_version_id),
                             ),
-                            ("task_id", Json::str(&c.task_id)),
-                            ("split_label", Json::str(c.split_label.name())),
-                        ])
+                            ("task_id".to_string(), Json::str(&c.task_id)),
+                            ("split_label".to_string(), Json::str(c.split_label.name())),
+                        ]);
+                        if let Some(r) = c.na_reason {
+                            cm.insert("na_reason".to_string(), Json::str(r.as_str()));
+                        }
+                        Json::Obj(cm)
                     })
                     .collect(),
             ),
@@ -1790,6 +2177,7 @@ impl CellPlan {
                         "configuration_version_id",
                         "task_id",
                         "split_label",
+                        "na_reason",
                     ],
                     "PlanCell",
                 )?;
@@ -1802,6 +2190,13 @@ impl CellPlan {
                     task_id: str_at(cm, "task_id", "PlanCell")?.to_string(),
                     split_label: SplitLabel::parse(str_at(cm, "split_label", "PlanCell")?)
                         .ok_or_else(|| SchemaError::v("split_label", "unknown split label"))?,
+                    na_reason: opt_str_at(cm, "na_reason")?
+                        .map(|s| {
+                            hh_ontology::compliance::NaReason::parse(s).ok_or_else(|| {
+                                SchemaError::v("na_reason", format!("unknown `n/a` reason `{s}`"))
+                            })
+                        })
+                        .transpose()?,
                 })
             })
             .collect::<Result<Vec<PlanCell>, SchemaError>>()?;
