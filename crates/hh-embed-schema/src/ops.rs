@@ -136,16 +136,6 @@ const fn staged_exp(
     }
 }
 
-const fn staged_stable(
-    name: &'static str,
-    group: &'static str,
-    params: &'static str,
-    result: &'static str,
-    errors: &'static [&'static str],
-) -> OpSpec {
-    call(name, group, params, result, errors, Tier::Stable, false)
-}
-
 const fn lab(
     name: &'static str,
     group: &'static str,
@@ -504,7 +494,10 @@ pub fn registry() -> Vec<OpSpec> {
             Tier::Stable,
             true,
         ),
-        staged_stable(
+        // S2.5 (R-2.8.6): the audit surface is live — `audit_view` reads
+        // the ledger (no second store), `verify` returns the `Tampered`
+        // taxonomy, `prove_*` return RFC 6962-style proofs.
+        call(
             "audit_view",
             "R",
             "AuditViewParams",
@@ -516,9 +509,36 @@ pub fn registry() -> Vec<OpSpec> {
                 "AuthorityViolation",
                 "Refused",
             ],
+            Tier::Stable,
+            true,
         ),
-        staged_stable("verify", "R", "VerifyParams", "json", SESS),
-        staged_stable("prove_inclusion", "R", "ProveInclusionParams", "json", SESS),
+        call(
+            "verify",
+            "R",
+            "VerifyParams",
+            "json",
+            SESS,
+            Tier::Stable,
+            true,
+        ),
+        call(
+            "prove_inclusion",
+            "R",
+            "ProveInclusionParams",
+            "json",
+            SESS,
+            Tier::Stable,
+            true,
+        ),
+        call(
+            "prove_consistency",
+            "R",
+            "ProveConsistencyParams",
+            "json",
+            SESS,
+            Tier::Stable,
+            true,
+        ),
         staged_exp(
             "request_redaction",
             "R",

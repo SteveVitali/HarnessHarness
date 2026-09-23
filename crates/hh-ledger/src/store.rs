@@ -31,6 +31,9 @@ use hh_identity::idp::ContentAddress;
 use hh_provenance::{ContentKind, Origin, ProvenanceRecord};
 use hh_wire::json::{self, Json};
 
+use crate::audit::{
+    AuditFault, AuditKeyResolver, AuditSigner, Auditor, BlobStatus, CheckpointKind, CHECKPOINT_ALG,
+};
 use crate::classes::{self, Durability, ScopeKind};
 use crate::effect::{self, EffectCtx, EffectFold, EffectPhase};
 use crate::errors::{LedgerError, MissingReason, Tampered, TamperedKind};
@@ -39,8 +42,8 @@ use crate::event::{
     Producer, ReadFilter, Scope, SeqRange,
 };
 use crate::ids::{
-    effect_id as derive_effect_id, valid_ts, Clock, IdSource, SeqIds, SystemClock, TimeIds,
-    GENESIS_HASH, ROOT_EVENT,
+    effect_id as derive_effect_id, is_pinned_id, valid_ts, Clock, IdSource, SeqIds, SystemClock,
+    TimeIds, GENESIS_HASH, ROOT_EVENT,
 };
 use crate::manifest::{EventRef, LineageLink, ObservabilityLevel, ParticipantClass, RunManifest};
 use crate::schema::SCHEMA_VERSION;
@@ -79,6 +82,23 @@ pub struct Lease {
     pub generation: u64,
     /// Expiry (wall ms — the stale-holder detection mechanism, never a ledger fact).
     pub expires_at_ms: u64,
+}
+
+/// A `redact` target (R-2.8.6 §5g.6): either a blob address directly, or a
+/// declared `content_refs` member of one event. `audit_fields` members answer
+/// `NotRedactable` — structural audit data is never erasable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RedactTarget {
+    /// A blob address (`idp/1` id).
+    Address(String),
+    /// `<event_id>.<field>` — the member must be a declared `content_refs`
+    /// field of the event's class.
+    Field {
+        /// The event carrying the member.
+        event_id: String,
+        /// The payload member.
+        field: String,
+    },
 }
 
 /// The persisted lease record (`lease.json`).
@@ -188,6 +208,10 @@ pub(crate) struct RunState {
     pub(crate) hlc_node: Option<String>,
     /// The last stamped HLC (the tick base; rebuilt from the events' `hlc`).
     pub(crate) hlc_last: Option<crate::hlc::Hlc>,
+    /// The compact-range audit-tree frontier over the committed leaf hashes —
+    /// pushed on commit and rebuilt on replay like every other fold (CC1;
+    /// derived, never load-bearing — `tree::mth` over `events` recomputes it).
+    pub(crate) tree: crate::tree::CompactRange,
     subscribers: Vec<Subscriber>,
 }
 
@@ -203,6 +227,17 @@ pub struct Store {
     clock: Box<dyn Clock>,
     blob_max_bytes: usize,
     runs: BTreeMap<String, RunState>,
+    /// Blob tombstones — `<alg>:<digest>` → the reason bytes are gone, folded
+    /// from every run's `lifecycle.ledger.redacted`/`lifecycle.ledger.gc` rows
+    /// (rebuilt on open, updated on op). `get_blob`'s missing-file path and
+    /// `audit_view`'s accounting both consult it — a deleted blob is a
+    /// recorded fact, never an unexplained hole (ADR-0068 R3).
+    tombstones: BTreeMap<String, MissingReason>,
+    /// The audit-signature key resolver — the seam custody hangs off
+    /// (R-2.8.3 `kernel_use` answers a `FixedSigner`; a broker-backed
+    /// resolver can replace it without touching the ledger). `None` ⇒
+    /// signatures verify shape-only (`unverified`), never fabricated ok.
+    audit_keys: Option<Box<dyn AuditKeyResolver>>,
 }
 
 /// A live tail — `Stream<EventFrame>`. The replayed `durable` frames + `sync` ride in
@@ -289,9 +324,24 @@ impl Store {
             clock,
             blob_max_bytes,
             runs: BTreeMap::new(),
+            tombstones: BTreeMap::new(),
+            audit_keys: None,
         };
         store.load_all()?;
         Ok(store)
+    }
+
+    /// Install the audit-signature key resolver (R-2.8.6 Stage 2) — the seam
+    /// `verify_run`/`audit_view` resolve checkpoint `key_id`s through. The
+    /// embed layer wires a `kernel_use`-resolved signer here; tests use
+    /// `FixedSigner`/`KeyTable` directly.
+    pub fn set_audit_key_resolver(&mut self, resolver: Box<dyn AuditKeyResolver>) {
+        self.audit_keys = Some(resolver);
+    }
+
+    /// The installed resolver, if any.
+    pub fn audit_key_resolver(&self) -> Option<&dyn AuditKeyResolver> {
+        self.audit_keys.as_deref()
     }
 
     /// The store root.
@@ -379,6 +429,22 @@ impl Store {
             let state = self.rebuild(&run_id)?;
             self.runs.insert(run_id, state);
         }
+        // Fold the tombstone map — `lifecycle.ledger.{redacted,gc}` rows are
+        // durable facts, so their targets survive restart (ADR-0068 R3).
+        for state in self.runs.values() {
+            for env in &state.events {
+                let (member, reason) = match env.class.as_str() {
+                    "lifecycle.ledger.redacted" => ("targets", MissingReason::Redacted),
+                    "lifecycle.ledger.gc" => ("addresses", MissingReason::Gc),
+                    _ => continue,
+                };
+                if let Some(Json::Arr(items)) = env.payload.get(member) {
+                    for a in items.iter().filter_map(Json::as_str) {
+                        self.tombstones.insert(a.to_string(), reason);
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -419,6 +485,7 @@ impl Store {
             wakeups: BTreeMap::new(),
             hlc_node: None,
             hlc_last: None,
+            tree: crate::tree::CompactRange::default(),
             subscribers: Vec::new(),
         };
         for env in committed {
@@ -458,6 +525,7 @@ impl Store {
                 event_id: env.event_id.clone(),
                 hash: env.hash.clone(),
             });
+            state.tree.push(env.hash.clone());
             state.events.push(env);
         }
         Ok(state)
@@ -530,6 +598,7 @@ impl Store {
             // causally above the lineage anchor's own stamp (ADR-0131 §5).
             hlc_node: manifest_has_lineage(&manifest).then(|| run_id.clone()),
             hlc_last: None,
+            tree: crate::tree::CompactRange::default(),
             subscribers: Vec::new(),
         };
         // Seed the continuation clock from the lineage source's stamp — the
@@ -863,32 +932,13 @@ impl Store {
         Ok(new_rec)
     }
 
-    // ── append ───────────────────────────────────────────────────────────
-
-    /// `append(run, lease, events) → SeqRange` — an atomic multi-event unit:
-    /// everything validates before anything is written; the batch's WAL lines are
-    /// synced, the commit marker is synced, and only then do the events become
-    /// visible (durable-before-visible; no partial batch).
-    pub fn append(
-        &mut self,
-        run_id: &str,
-        lease: &Lease,
-        events: Vec<Event>,
-    ) -> Result<SeqRange, LedgerError> {
-        if !self.runs.contains_key(run_id) {
-            return Err(LedgerError::UnknownRun {
-                run_id: run_id.to_string(),
-            });
-        }
-        // Cross-run references resolve against committed events only (immutable
-        // borrow, before the run state is taken mutably).
-        for ev in &events {
-            for r in &ev.causes {
-                self.resolve_event_ref(r)?;
-            }
-        }
-        // The lease fence — re-read the persisted record so a cross-process takeover
-        // fences this holder even though our in-memory copy is stale.
+    /// The shared lease fence — re-reads the persisted record so a
+    /// cross-process takeover fences this holder even though our in-memory
+    /// copy is stale, emits `lifecycle.lease.fenced` on a stale token, and
+    /// returns the active record (its `generation` stamps the op's rows).
+    /// `append` and the kernel audit ops (`checkpoint`/`gc`/`redact`) share
+    /// it — one fence, never two spellings (CC1).
+    fn active_lease(&mut self, run_id: &str, lease: &Lease) -> Result<LeaseRecord, LedgerError> {
         let rec =
             read_lease_file(&self.lease_path(run_id))?.ok_or_else(|| LedgerError::Fenced {
                 lease_generation: lease.generation,
@@ -929,6 +979,36 @@ impl Store {
                 detail: reason.into(),
             });
         }
+        Ok(rec)
+    }
+
+    // ── append ───────────────────────────────────────────────────────────
+
+    /// `append(run, lease, events) → SeqRange` — an atomic multi-event unit:
+    /// everything validates before anything is written; the batch's WAL lines are
+    /// synced, the commit marker is synced, and only then do the events become
+    /// visible (durable-before-visible; no partial batch).
+    pub fn append(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        events: Vec<Event>,
+    ) -> Result<SeqRange, LedgerError> {
+        if !self.runs.contains_key(run_id) {
+            return Err(LedgerError::UnknownRun {
+                run_id: run_id.to_string(),
+            });
+        }
+        // Cross-run references resolve against committed events only (immutable
+        // borrow, before the run state is taken mutably).
+        for ev in &events {
+            for r in &ev.causes {
+                self.resolve_event_ref(r)?;
+            }
+        }
+        // The lease fence — re-read the persisted record so a cross-process takeover
+        // fences this holder even though our in-memory copy is stale.
+        let rec = self.active_lease(run_id, lease)?;
         let state = self.runs.get_mut(run_id).unwrap();
         if state.finished {
             return Err(LedgerError::RunFinished {
@@ -1448,10 +1528,18 @@ impl Store {
         let bytes = match fs::read(&path) {
             Ok(b) => b,
             Err(_) => {
+                // The tombstone fold names the recorded reason when one
+                // exists; an unaccounted absence reports `gc` (the default
+                // "bytes retired" reason) — never a fabricated presence.
+                let reason = self
+                    .tombstones
+                    .get(&id)
+                    .copied()
+                    .unwrap_or(MissingReason::Gc);
                 return Err(LedgerError::Missing {
                     address: id,
-                    reason: MissingReason::Gc,
-                })
+                    reason,
+                });
             }
         };
         if hh_identity::idp::idp_digest("blob", &bytes) != address.digest {
@@ -1462,19 +1550,50 @@ impl Store {
 
     // ── verify / project / lineage ───────────────────────────────────────
 
-    /// `verify(run, from?, to?) → ok | Tampered{at_seq, kind}` — re-reads the WAL
-    /// from disk (the durable truth), replays the committed prefix and checks it
-    /// **byte-exact**: every stored line must re-render to its canonical bytes
-    /// (`NonCanonicalBytes` — a rewritten line, even a semantically equal one),
-    /// every hash recomputes (`ContentModified`), `prev_hash` chains
-    /// (`ChainBroken`), seqs are dense and ordered (`SeqGap`/`Reordered`/
-    /// `DuplicateSeq`/`DuplicateEventId`), parents resolve (`DanglingParent`),
-    /// and audit-grade rows carry a producer from the class's declared set with
-    /// `authority = kernel` provenance (`Producer` — §5g.6's `producer` kind).
-    /// Tail-truncation detection is the signed-checkpoint half (Stage 2,
-    /// `security.audit.checkpoint`); within the committed prefix every byte
-    /// change is caught.
+    /// `verify(run) → ok | Tampered{at_seq, kind}` — the unbounded verify:
+    /// the byte-exact chain check plus the checkpoint/anchor recomputation
+    /// pass, with signature values checked through the installed resolver
+    /// when one is held (`set_audit_key_resolver`). See [`Store::verify_run`]
+    /// for the bounded/keyed form.
     pub fn verify(&self, run_id: &str) -> Result<(), LedgerError> {
+        self.verify_run(run_id, None, None, self.audit_keys.as_deref())
+    }
+
+    /// `verify(run, from?, to?, keys?) → ok | Tampered{at_seq, kind}` —
+    /// re-reads the WAL from disk (the durable truth), replays the committed
+    /// prefix and checks it **byte-exact**: every stored line must re-render
+    /// to its canonical bytes (`NonCanonicalBytes`), every hash recomputes
+    /// (`ContentModified`), `prev_hash` chains (`ChainBroken`), seqs are dense
+    /// and ordered (`SeqGap`/`Reordered`/`DuplicateSeq`/`DuplicateEventId`),
+    /// parents resolve (`DanglingParent`), and audit-grade rows carry a
+    /// producer from the class's declared set with `authority = kernel`
+    /// provenance (`Producer`).
+    ///
+    /// The Stage-2 half (R-2.8.6; ADR-0067 §5(b)) then folds the checkpoint
+    /// layer: `from`/`to` are caller watermarks — a committed prefix shorter
+    /// than either bound is `Truncate{at_seq: head+1}` (absent-with-later-
+    /// head). Every `security.audit.checkpoint` row is re-read as a claim and
+    /// recomputed: `tree_size == seq`, `tree_head` is the covered range's own
+    /// Merkle head (`ForkEquivocation` on disagreement — a signed head the
+    /// log cannot substantiate), `chain_hash` the covered tip, `idp`
+    /// re-derives over the unsigned claim, `prev_checkpoint` links the prior
+    /// claim (`CheckpointInvalid` on a break), signatures carry a declared
+    /// `key_id` + the C0 `hmac-sha256` construction (`SigMissing` when empty,
+    /// `BadSignature` on a malformed/unregistered/mismatching entry — the
+    /// HMAC value itself is checked when `keys` resolves it), and every
+    /// `cross_run_anchors` member is recomputed against the named run's
+    /// durable prefix (`ForkEquivocation` on a contradiction; a run this
+    /// store does not hold is `unresolvable` — surfaced by `audit_view`, not
+    /// asserted here). A `final` checkpoint must close the stream; a
+    /// `finished` run that declared `signer_key_ids` with no final checkpoint
+    /// is `Truncate` — the terminal signed head is absent-with-later-head.
+    pub fn verify_run(
+        &self,
+        run_id: &str,
+        from: Option<u64>,
+        to: Option<u64>,
+        keys: Option<&dyn AuditKeyResolver>,
+    ) -> Result<(), LedgerError> {
         if !self.runs.contains_key(run_id) {
             return Err(LedgerError::UnknownRun {
                 run_id: run_id.to_string(),
@@ -1551,9 +1670,864 @@ impl Store {
         if let Some(at) = replay.noncanonical_at {
             return Err(tampered(at as u64, TamperedKind::NonCanonicalBytes));
         }
+
+        // ── caller watermarks — absent-with-later-head truncation ──────
+        let covered = committed.len() as u64;
+        for bound in [to, from].into_iter().flatten() {
+            if bound >= covered {
+                return Err(tampered(covered, TamperedKind::Truncate));
+            }
+        }
+
+        // ── the checkpoint layer ────────────────────────────────────────
+        let manifest = &self.runs[run_id].manifest;
+        let leaf_hashes: Vec<String> = committed.iter().map(|(_, e)| e.hash.clone()).collect();
+        let mut prev_claim: Option<(&EventEnvelope, crate::tree::CheckpointClaim)> = None;
+        let mut final_seq: Option<u64> = None;
+        let mut finished_seq: Option<u64> = None;
+        for (_, env) in committed.iter() {
+            if env.class == "lifecycle.run.finished" {
+                finished_seq = Some(env.seq);
+            }
+            if env.class != "security.audit.checkpoint" {
+                continue;
+            }
+            let claim = crate::tree::parse_checkpoint(&env.payload)
+                .ok_or_else(|| tampered(env.seq, TamperedKind::CheckpointInvalid))?;
+            // `tree_size == seq`: a checkpoint covers the durable prefix that
+            // ends just before itself.
+            if claim.tree_size != Some(env.seq) {
+                return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
+            }
+            // The signed head must be the covered range's own MTH — a head
+            // the log cannot substantiate is a split view.
+            if claim.tree_head.as_deref()
+                != Some(crate::tree::mth_prefix(&leaf_hashes, env.seq as usize).as_str())
+            {
+                return Err(tampered(env.seq, TamperedKind::ForkEquivocation));
+            }
+            // `chain_hash` — the event-hash chain tip at coverage.
+            let expect_chain = if env.seq == 0 {
+                return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
+            } else {
+                leaf_hashes[(env.seq - 1) as usize].as_str()
+            };
+            if claim.chain_hash.as_deref() != Some(expect_chain) {
+                return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
+            }
+            // `idp` re-derives over the unsigned claim bytes.
+            if claim.idp.as_deref() != Some(crate::tree::checkpoint_idp(&env.payload).as_str()) {
+                return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
+            }
+            // `prev_checkpoint` links the prior claim — the first carries
+            // none (or `null`); every later one names the held claim's
+            // `{event_id, tree_size, tree_head}`.
+            match &prev_claim {
+                None => {
+                    if let Some(p) = &claim.prev_checkpoint {
+                        if *p != Json::Null {
+                            return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
+                        }
+                    }
+                }
+                Some((pev, pc)) => {
+                    let ok = match claim.prev_checkpoint.as_ref() {
+                        Some(Json::Obj(link)) => {
+                            link.get("event_id").and_then(Json::as_str) == Some(&pev.event_id)
+                                && link
+                                    .get("tree_size")
+                                    .and_then(Json::as_int)
+                                    .map(|v| v as u64)
+                                    == pc.tree_size
+                                && link.get("tree_head").and_then(Json::as_str)
+                                    == pc.tree_head.as_deref()
+                        }
+                        _ => false,
+                    };
+                    if !ok {
+                        return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
+                    }
+                }
+            }
+            // Signatures — a checkpoint with none is a stripped claim; each
+            // entry must name a declared key and the C0 construction, and
+            // (with a resolver) the HMAC must match the unsigned claim.
+            if claim.signatures.is_empty() {
+                return Err(tampered(env.seq, TamperedKind::SigMissing));
+            }
+            let preimage = crate::tree::checkpoint_sig_preimage(&env.payload);
+            for s in &claim.signatures {
+                let bad_sig = || tampered(env.seq, TamperedKind::BadSignature);
+                let kid = s.get("key_id").and_then(Json::as_str).ok_or_else(bad_sig)?;
+                if s.get("alg_ref").and_then(Json::as_str) != Some(CHECKPOINT_ALG) {
+                    return Err(bad_sig());
+                }
+                if !manifest.signer_key_ids.iter().any(|k| k == kid) {
+                    return Err(bad_sig());
+                }
+                let sig = crate::audit::parse_sig(
+                    s.get("sig").and_then(Json::as_str).ok_or_else(bad_sig)?,
+                )
+                .ok_or_else(bad_sig)?;
+                if let Some(resolver) = keys {
+                    let key = resolver.verify_key(kid).ok_or_else(|| {
+                        LedgerError::SignerUnavailable {
+                            run_id: run_id.to_string(),
+                            detail: format!(
+                                "signer_key_ids member {kid} does not resolve through                                  the supplied key resolver"
+                            ),
+                        }
+                    })?;
+                    if hh_wire::sha256::hmac_sha256(&key, &preimage).to_vec() != sig {
+                        return Err(bad_sig());
+                    }
+                }
+            }
+            // Cross-run anchors — each claim recomputes against the named
+            // run's durable prefix. A contradiction is `fork_equivocation`;
+            // a run this store does not hold is unresolvable — surfaced by
+            // `audit_view`, never asserted absent here.
+            for a in &claim.cross_run_anchors {
+                let other_run = a
+                    .get("other_run")
+                    .and_then(Json::as_str)
+                    .ok_or_else(|| tampered(env.seq, TamperedKind::CheckpointInvalid))?;
+                let (size, head) = a
+                    .get("other_head")
+                    .and_then(|oh| {
+                        Some((
+                            oh.get("tree_size")?.as_int()? as u64,
+                            oh.get("tree_head")?.as_str()?,
+                        ))
+                    })
+                    .ok_or_else(|| tampered(env.seq, TamperedKind::CheckpointInvalid))?;
+                if let Some(other) = self.runs.get(other_run) {
+                    let other_leaves: Vec<String> =
+                        other.events.iter().map(|e| e.hash.clone()).collect();
+                    if other_leaves.len() < size as usize
+                        || crate::tree::mth_prefix(&other_leaves, size as usize) != head
+                    {
+                        return Err(tampered(env.seq, TamperedKind::ForkEquivocation));
+                    }
+                }
+            }
+            if claim.kind == CheckpointKind::Final.as_str() {
+                final_seq = Some(env.seq);
+            }
+            prev_claim = Some((env, claim));
+        }
+        // A `final` checkpoint closes the signed stream — rows after it are
+        // checkpoint-invalid by construction.
+        if let Some(fs) = final_seq {
+            if fs != covered - 1 {
+                return Err(tampered(fs, TamperedKind::CheckpointInvalid));
+            }
+        }
+        // A finished run that declared signers owes the terminal signed head.
+        if let Some(fin) = finished_seq {
+            if !manifest.signer_key_ids.is_empty() {
+                match final_seq {
+                    None => return Err(tampered(fin, TamperedKind::Truncate)),
+                    Some(fs) if fs <= fin => {
+                        return Err(tampered(fs, TamperedKind::CheckpointInvalid))
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // Manifest lineage anchors re-verified — the same check `open_run`
+        // ran, replayed as an audit fact (a moved/rewritten source prefix
+        // shows here).
+        for link in [&manifest.forked_from, &manifest.continued_from]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(src) = self.runs.get(&link.run_id) {
+                let ok = src
+                    .events
+                    .get(link.at_seq as usize)
+                    .map(|e| e.hash == link.head_hash)
+                    .unwrap_or(false);
+                if !ok {
+                    return Err(tampered(0, TamperedKind::ForkEquivocation));
+                }
+            }
+        }
         Ok(())
     }
 
+    // ── audit checkpoints / proofs / GC (R-2.8.6 Stage 2) ────────────────
+
+    /// `checkpoint(run, lease, kind, signer)` — the §5g.6 signed audit
+    /// checkpoint. Builds the claim over the current compact-range head
+    /// (`tree_size` = the next seq — the checkpoint covers the durable prefix
+    /// that ends just before itself), links `prev_checkpoint`, lists the
+    /// cross-run anchors observed in range, signs the canonical unsigned
+    /// claim through `signer` (custody resolved outside — R-2.8.3
+    /// `kernel_use`), and appends the `security.audit.checkpoint` row.
+    ///
+    /// Kernel audit write: rides the writer fence but only `kind = final` may
+    /// land after `lifecycle.run.finished` (the terminal checkpoint covers
+    /// it by design); `final` is idempotent — a second call returns the
+    /// landed row. Refusals: `SignerUnavailable` when the run declares no
+    /// `signer_key_ids` or the signer's `key_id` is not among them;
+    /// `InconsistentHead` when the new head is not a consistency-verified
+    /// extension of the held previous claim — the kernel never signs a head
+    /// it cannot substantiate.
+    pub fn checkpoint(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        kind: CheckpointKind,
+        signer: &mut dyn AuditSigner,
+    ) -> Result<EventEnvelope, LedgerError> {
+        let rec = self.active_lease(run_id, lease)?;
+        let state = self.run(run_id)?;
+        let manifest = &state.manifest;
+        if manifest.signer_key_ids.is_empty() {
+            return Err(LedgerError::SignerUnavailable {
+                run_id: run_id.to_string(),
+                detail: "the run manifest declares no signer_key_ids".into(),
+            });
+        }
+        if !manifest.signer_key_ids.iter().any(|k| k == signer.key_id()) {
+            return Err(LedgerError::SignerUnavailable {
+                run_id: run_id.to_string(),
+                detail: format!(
+                    "signer key_id {} is not a manifest signer_key_ids member",
+                    signer.key_id()
+                ),
+            });
+        }
+        if state.finished && kind != CheckpointKind::Final {
+            return Err(LedgerError::RunFinished {
+                run_id: run_id.to_string(),
+            });
+        }
+        if kind == CheckpointKind::Final && !state.finished {
+            return Err(LedgerError::SchemaViolation {
+                detail: "kind=final requires lifecycle.run.finished committed".into(),
+            });
+        }
+        let prev_checkpoint_ev = state
+            .events
+            .iter()
+            .rev()
+            .find(|e| e.class == "security.audit.checkpoint");
+        if let Some(existing) = prev_checkpoint_ev {
+            if kind == CheckpointKind::Final
+                && existing.payload.get("kind").and_then(Json::as_str) == Some("final")
+            {
+                return Ok(existing.clone());
+            }
+        }
+        let leaf_hashes: Vec<String> = state.events.iter().map(|e| e.hash.clone()).collect();
+        let tree_size = leaf_hashes.len() as u64;
+        let tree_head = crate::tree::mth(&leaf_hashes);
+        let chain_hash = state
+            .head
+            .as_ref()
+            .map(|h| h.hash.clone())
+            .unwrap_or_else(|| GENESIS_HASH.to_string());
+        // The consistency-verified-extension gate: recompute the previous
+        // claim's head over the current leaves, then verify the new head as
+        // an append-only extension of it. A divergence means the log under
+        // the signed head changed — refuse to sign.
+        let (since_seq, prev_link) = match prev_checkpoint_ev {
+            Some(prev_ev) => {
+                let prev_claim =
+                    crate::tree::parse_checkpoint(&prev_ev.payload).ok_or_else(|| {
+                        LedgerError::InconsistentHead {
+                            run_id: run_id.to_string(),
+                            detail: "the previous checkpoint row does not parse".into(),
+                        }
+                    })?;
+                let prev_size =
+                    prev_claim
+                        .tree_size
+                        .ok_or_else(|| LedgerError::InconsistentHead {
+                            run_id: run_id.to_string(),
+                            detail: "the previous checkpoint lacks tree_size".into(),
+                        })? as usize;
+                let prev_head_now = crate::tree::mth_prefix(&leaf_hashes, prev_size);
+                if Some(prev_head_now.as_str()) != prev_claim.tree_head.as_deref() {
+                    return Err(LedgerError::InconsistentHead {
+                        run_id: run_id.to_string(),
+                        detail: format!(
+                            "the prefix under the last signed head changed \
+                             (signed {}, recomputed {prev_head_now})",
+                            prev_claim.tree_head.as_deref().unwrap_or("?")
+                        ),
+                    });
+                }
+                let proof =
+                    crate::tree::prove_consistency(&leaf_hashes, prev_size, leaf_hashes.len())
+                        .ok_or_else(|| LedgerError::InconsistentHead {
+                            run_id: run_id.to_string(),
+                            detail: "no consistency proof exists from the held head".into(),
+                        })?;
+                if !crate::tree::verify_consistency(
+                    &proof,
+                    prev_claim.tree_head.as_deref().unwrap_or_default(),
+                    &tree_head,
+                ) {
+                    return Err(LedgerError::InconsistentHead {
+                        run_id: run_id.to_string(),
+                        detail: "the new head is not a consistent extension".into(),
+                    });
+                }
+                let link = Json::obj([
+                    ("event_id", Json::str(&prev_ev.event_id)),
+                    (
+                        "tree_size",
+                        Json::Int(prev_claim.tree_size.unwrap_or(0) as i64),
+                    ),
+                    (
+                        "tree_head",
+                        prev_claim
+                            .tree_head
+                            .clone()
+                            .map(Json::str)
+                            .unwrap_or(Json::Null),
+                    ),
+                ]);
+                (prev_ev.seq + 1, link)
+            }
+            None => (0, Json::Null),
+        };
+        // Cross-run anchors observed in range — manifest lineage links (first
+        // checkpoint only) plus `lifecycle.run.forked`/`control.subagent.
+        // spawned` rows carrying `scope.child_run_id` since the last claim.
+        let mut anchors: Vec<Json> = Vec::new();
+        if since_seq == 0 {
+            for (link, relation) in [
+                (manifest.forked_from.as_ref(), "forked_from"),
+                (manifest.continued_from.as_ref(), "continued_from"),
+            ]
+            .into_iter()
+            {
+                if let Some(link) = link {
+                    if let Some(src) = self.runs.get(&link.run_id) {
+                        let src_leaves: Vec<String> =
+                            src.events.iter().map(|e| e.hash.clone()).collect();
+                        let size = (link.at_seq + 1) as usize;
+                        anchors.push(Json::obj([
+                            ("other_run", Json::str(&link.run_id)),
+                            (
+                                "other_head",
+                                Json::obj([
+                                    ("tree_size", Json::Int(size as i64)),
+                                    (
+                                        "tree_head",
+                                        Json::str(crate::tree::mth_prefix(&src_leaves, size)),
+                                    ),
+                                ]),
+                            ),
+                            ("relation", Json::str(relation)),
+                        ]));
+                    }
+                }
+            }
+            if let Some(parent) = &manifest.parent_run_id {
+                if let Some(src) = self.runs.get(parent) {
+                    let src_leaves: Vec<String> =
+                        src.events.iter().map(|e| e.hash.clone()).collect();
+                    anchors.push(Json::obj([
+                        ("other_run", Json::str(parent)),
+                        (
+                            "other_head",
+                            Json::obj([
+                                ("tree_size", Json::Int(src_leaves.len() as i64)),
+                                ("tree_head", Json::str(crate::tree::mth(&src_leaves))),
+                            ]),
+                        ),
+                        ("relation", Json::str("parent")),
+                    ]));
+                }
+            }
+        }
+        for e in state.events.iter().filter(|e| e.seq >= since_seq) {
+            let relation = match e.class.as_str() {
+                "lifecycle.run.forked" => Some("fork"),
+                "control.subagent.spawned" => Some("subagent"),
+                _ => None,
+            };
+            let Some(relation) = relation else { continue };
+            let Some(child) = e.scope.child_run_id.as_deref() else {
+                continue;
+            };
+            if let Some(src) = self.runs.get(child) {
+                let src_leaves: Vec<String> = src.events.iter().map(|e| e.hash.clone()).collect();
+                anchors.push(Json::obj([
+                    ("other_run", Json::str(child)),
+                    (
+                        "other_head",
+                        Json::obj([
+                            ("tree_size", Json::Int(src_leaves.len() as i64)),
+                            ("tree_head", Json::str(crate::tree::mth(&src_leaves))),
+                        ]),
+                    ),
+                    ("relation", Json::str(relation)),
+                ]));
+            }
+        }
+        // Build the unsigned claim, then the signature, then the idp.
+        let mut members = BTreeMap::new();
+        members.insert("kind".to_string(), Json::str(kind.as_str()));
+        members.insert("origin".to_string(), Json::str(KERNEL_LEDGER));
+        members.insert("tree_size".to_string(), Json::Int(tree_size as i64));
+        members.insert("tree_head".to_string(), Json::str(&tree_head));
+        members.insert("chain_hash".to_string(), Json::str(&chain_hash));
+        members.insert("prev_checkpoint".to_string(), prev_link);
+        members.insert("cross_run_anchors".to_string(), Json::Arr(anchors));
+        if let Some(apr) = &manifest.audit_policy_ref {
+            members.insert("audit_policy_ref".to_string(), Json::str(apr));
+        }
+        let unsigned = Json::Obj(members);
+        let preimage = crate::tree::checkpoint_sig_preimage(&unsigned);
+        let sig_bytes = signer
+            .sign(&preimage)
+            .map_err(|e| LedgerError::SignerUnavailable {
+                run_id: run_id.to_string(),
+                detail: format!("signer {}: {e}", signer.key_id()),
+            })?;
+        let mut members = match unsigned {
+            Json::Obj(m) => m,
+            _ => BTreeMap::new(),
+        };
+        members.insert(
+            "signatures".to_string(),
+            Json::Arr(vec![Json::obj([
+                ("key_id", Json::str(signer.key_id())),
+                ("alg_ref", Json::str(CHECKPOINT_ALG)),
+                ("sig", Json::str(crate::audit::render_sig(&sig_bytes))),
+            ])]),
+        );
+        let idp = crate::tree::checkpoint_idp(&Json::Obj(members.clone()));
+        members.insert("idp".to_string(), Json::str(idp));
+        let payload = Json::Obj(members);
+        let state = self.runs.get_mut(run_id).unwrap();
+        let seq = state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0);
+        let prev_hash = state
+            .head
+            .as_ref()
+            .map(|h| h.hash.clone())
+            .unwrap_or_else(|| GENESIS_HASH.to_string());
+        let env = system_event(
+            &*self.ids,
+            &*self.clock,
+            state,
+            seq,
+            "security.audit.checkpoint",
+            payload,
+            &prev_hash,
+            rec.generation,
+        );
+        commit_envelopes(
+            state,
+            vec![Staged::Durable(env.clone())],
+            self.clock.now_ms(),
+        )?;
+        Ok(env)
+    }
+
+    /// `prove_inclusion(run, seq, at?)` — the Merkle audit path for the event
+    /// at `seq` under the tree of size `at` (default: current head).
+    pub fn prove_inclusion(
+        &self,
+        run_id: &str,
+        seq: u64,
+        at: Option<u64>,
+    ) -> Result<crate::tree::InclusionProof, LedgerError> {
+        let state = self.run(run_id)?;
+        let leaves: Vec<String> = state.events.iter().map(|e| e.hash.clone()).collect();
+        let size = at.unwrap_or(leaves.len() as u64) as usize;
+        crate::tree::prove_inclusion(&leaves, seq as usize, size).ok_or_else(|| {
+            LedgerError::UnknownCursor {
+                detail: format!(
+                    "prove_inclusion: seq {seq} not in tree of size {size} \
+                     (head {})",
+                    leaves.len()
+                ),
+            }
+        })
+    }
+
+    /// `prove_consistency(run, from_size, to_size)` — the append-only
+    /// consistency proof between two tree sizes of this run.
+    pub fn prove_consistency(
+        &self,
+        run_id: &str,
+        from_size: u64,
+        to_size: u64,
+    ) -> Result<crate::tree::ConsistencyProof, LedgerError> {
+        let state = self.run(run_id)?;
+        let leaves: Vec<String> = state.events.iter().map(|e| e.hash.clone()).collect();
+        crate::tree::prove_consistency(&leaves, from_size as usize, to_size as usize).ok_or_else(
+            || LedgerError::UnknownCursor {
+                detail: format!(
+                    "prove_consistency: no proof from {from_size} to {to_size} \
+                     (head {})",
+                    leaves.len()
+                ),
+            },
+        )
+    }
+
+    /// `audit_with(run, auditor, keys?)` — replay the durable prefix through
+    /// an [`Auditor`]'s own record (the independent-head-holder check). The
+    /// first `AuditFault` aborts; `Ok` means every frame — and every signed
+    /// claim — agreed with the auditor's fold.
+    pub fn audit_with(
+        &self,
+        run_id: &str,
+        auditor: &mut Auditor,
+        keys: Option<&dyn AuditKeyResolver>,
+    ) -> Result<(), AuditFault> {
+        let state = match self.runs.get(run_id) {
+            Some(s) => s,
+            None => {
+                return Err(AuditFault::Malformed {
+                    at_seq: 0,
+                    detail: format!("unknown run {run_id}"),
+                })
+            }
+        };
+        for e in &state.events {
+            auditor.observe(
+                &EventFrame::Durable {
+                    seq: e.seq,
+                    hash: e.hash.clone(),
+                    event: Box::new(e.clone()),
+                },
+                keys,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// The tombstone-aware blob lookup `audit_view` consumes — present /
+    /// tombstoned-with-reason / missing-with-no-audit-row.
+    fn blob_status(&self, address: &str) -> BlobStatus {
+        let Ok(addr) = hh_identity::idp::parse_id(address) else {
+            return BlobStatus::Missing;
+        };
+        if self.root.join("blobs").join(&addr.digest_hex).exists() {
+            return BlobStatus::Present;
+        }
+        match self.tombstones.get(address) {
+            Some(r) => BlobStatus::Tombstoned(*r),
+            None => BlobStatus::Missing,
+        }
+    }
+
+    /// Why an address is pinned against `gc`/`redact`, or `None` — the pin
+    /// set (§5g.6 GC contract): another run's `refs`/`content_refs` still
+    /// names it (a live fork prefix member), or it sits in an `audit_fields`
+    /// member (structural audit data is never collectable). Own-run
+    /// `content_refs` are the very thing `redact`/`gc` retire — not a pin.
+    fn pin_reason(&self, address: &str, excluding_run: &str) -> Option<String> {
+        for (rid, state) in &self.runs {
+            if rid == excluding_run {
+                continue;
+            }
+            for env in &state.events {
+                if env
+                    .refs
+                    .iter()
+                    .any(|r| format!("{}:{}", r.algorithm, r.digest) == address)
+                {
+                    return Some(format!("referenced_by_run:{rid}"));
+                }
+                if let Some(spec) = classes::lookup(&env.class) {
+                    if let Json::Obj(m) = &env.payload {
+                        for (name, v) in m {
+                            let is_af = spec
+                                .audit_fields
+                                .iter()
+                                .any(|f| f.name == "*" || f.name == name.as_str());
+                            let is_cr = spec.content_refs.contains(&name.as_str());
+                            if !is_af && !is_cr {
+                                continue;
+                            }
+                            let hit = match v {
+                                Json::Str(s) => s == address,
+                                Json::Arr(items) => {
+                                    items.iter().filter_map(Json::as_str).any(|s| s == address)
+                                }
+                                _ => false,
+                            };
+                            if hit {
+                                return Some(if is_af {
+                                    format!("audit_field:{}.{name}", env.class)
+                                } else {
+                                    format!("referenced_by_run:{rid}")
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// `gc(run, lease, addresses, policy_ref, tier, retained_until?)` — the
+    /// retention op (§5g.6 GC contract). **Durable before delete**: the
+    /// `lifecycle.ledger.gc` row commits (WAL synced) before any byte leaves
+    /// the blob pool, so a crash between the two still leaves the audit fact.
+    /// Refusals are typed: non-`idp/1` addresses → `SchemaViolation`; a
+    /// pinned address → `Pinned{reason}` (the whole op is atomic). GC never
+    /// targets events — only blob bytes.
+    pub fn gc(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        addresses: Vec<String>,
+        policy_ref: &str,
+        tier: &str,
+        retained_until: Option<u64>,
+    ) -> Result<EventEnvelope, LedgerError> {
+        let rec = self.active_lease(run_id, lease)?;
+        for a in &addresses {
+            if !is_pinned_id(a) {
+                return Err(LedgerError::SchemaViolation {
+                    detail: format!("gc address {a} is not an idp/1 id"),
+                });
+            }
+            if let Some(reason) = self.pin_reason(a, run_id) {
+                return Err(LedgerError::Pinned {
+                    address: a.clone(),
+                    reason,
+                });
+            }
+        }
+        // The durable record first.
+        let state = self.runs.get_mut(run_id).unwrap();
+        let seq = state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0);
+        let prev_hash = state
+            .head
+            .as_ref()
+            .map(|h| h.hash.clone())
+            .unwrap_or_else(|| GENESIS_HASH.to_string());
+        let mut members = BTreeMap::new();
+        members.insert(
+            "addresses".to_string(),
+            Json::Arr(addresses.iter().map(Json::str).collect()),
+        );
+        members.insert("policy_ref".to_string(), Json::str(policy_ref));
+        members.insert("tier".to_string(), Json::str(tier));
+        if let Some(t) = retained_until {
+            members.insert("retained_until".to_string(), Json::Int(t as i64));
+        }
+        let env = system_event(
+            &*self.ids,
+            &*self.clock,
+            state,
+            seq,
+            "lifecycle.ledger.gc",
+            Json::Obj(members),
+            &prev_hash,
+            rec.generation,
+        );
+        commit_envelopes(
+            state,
+            vec![Staged::Durable(env.clone())],
+            self.clock.now_ms(),
+        )?;
+        // Only now delete bytes — the audit fact is durable.
+        for a in &addresses {
+            if let Ok(addr) = hh_identity::idp::parse_id(a) {
+                let path = self.root.join("blobs").join(&addr.digest_hex);
+                if path.exists() {
+                    fs::remove_file(&path).map_err(|e| LedgerError::Io {
+                        detail: format!("gc delete {a}: {e}"),
+                    })?;
+                    sync_dir(&self.root.join("blobs")).map_err(io_err)?;
+                }
+            }
+            self.tombstones.insert(a.clone(), MissingReason::Gc);
+        }
+        Ok(env)
+    }
+
+    /// `redact(run, lease, targets, reason_code, endorser, basis)` — the
+    /// endorsement-gated tombstone op (§5g.6 redaction). `basis ∈
+    /// {approval, policy_rule}` — `approval` requires an endorser at
+    /// `principal` or above; `policy_rule` is the kernel scanner's own
+    /// channel (authority `kernel`). Anything else is an
+    /// `IllegitimateEndorsement`. Targets: `Address(a)` tombstones the blob;
+    /// `Field{event_id, field}` names a *declared `content_refs` member* —
+    /// an `audit_fields` member answers `NotRedactable` (AC-R-2.8.6-2: audit
+    /// fields are never redactable).
+    pub fn redact(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        targets: Vec<RedactTarget>,
+        reason_code: &str,
+        endorser: &ProvenanceRecord,
+        basis: &str,
+    ) -> Result<EventEnvelope, LedgerError> {
+        let rec = self.active_lease(run_id, lease)?;
+        match basis {
+            "approval" => {
+                if endorser.authority < hh_provenance::AuthorityClass::Principal {
+                    return Err(LedgerError::IllegitimateEndorsement {
+                        detail: format!(
+                            "redaction basis approval requires principal-or-above \
+                             endorser, got {:?}",
+                            endorser.authority
+                        ),
+                    });
+                }
+            }
+            "policy_rule" => {
+                if endorser.authority != hh_provenance::AuthorityClass::Kernel {
+                    return Err(LedgerError::IllegitimateEndorsement {
+                        detail: format!(
+                            "redaction basis policy_rule is the kernel scanner's \
+                             channel, got {:?}",
+                            endorser.authority
+                        ),
+                    });
+                }
+            }
+            other => {
+                return Err(LedgerError::IllegitimateEndorsement {
+                    detail: format!("redaction basis {other} is not {{approval, policy_rule}}"),
+                })
+            }
+        }
+        // Resolve every target to its addresses before touching anything —
+        // the op is atomic.
+        let mut resolved: Vec<String> = Vec::new();
+        let mut rendered: Vec<String> = Vec::new();
+        for t in &targets {
+            match t {
+                RedactTarget::Address(a) => {
+                    if !is_pinned_id(a) {
+                        return Err(LedgerError::SchemaViolation {
+                            detail: format!("redact target {a} is not an idp/1 id"),
+                        });
+                    }
+                    if let Some(reason) = self.pin_reason(a, run_id) {
+                        return Err(LedgerError::Pinned {
+                            address: a.clone(),
+                            reason,
+                        });
+                    }
+                    rendered.push(a.clone());
+                    resolved.push(a.clone());
+                }
+                RedactTarget::Field { event_id, field } => {
+                    let state = self.run(run_id)?;
+                    let env = state
+                        .events
+                        .iter()
+                        .find(|e| &e.event_id == event_id)
+                        .ok_or_else(|| LedgerError::NotRedactable {
+                            target: format!("{event_id}.{field}"),
+                            reason: "event_id not committed in this run".into(),
+                        })?;
+                    let spec =
+                        classes::lookup(&env.class).ok_or_else(|| LedgerError::NotRedactable {
+                            target: format!("{event_id}.{field}"),
+                            reason: format!("class {} unknown", env.class),
+                        })?;
+                    if spec
+                        .audit_fields
+                        .iter()
+                        .any(|f| f.name == "*" || f.name == field.as_str())
+                    {
+                        return Err(LedgerError::NotRedactable {
+                            target: format!("{event_id}.{field}"),
+                            reason: format!(
+                                "{}.{field} is an audit_fields member — structural \
+                                 audit data is never redactable",
+                                env.class
+                            ),
+                        });
+                    }
+                    if !spec.content_refs.contains(&field.as_str()) {
+                        return Err(LedgerError::NotRedactable {
+                            target: format!("{event_id}.{field}"),
+                            reason: format!(
+                                "{}.{field} is not a declared content_refs member",
+                                env.class
+                            ),
+                        });
+                    }
+                    let mut addrs: Vec<String> = match env.payload.get(field) {
+                        Some(Json::Str(s)) => vec![s.clone()],
+                        Some(Json::Arr(items)) => items
+                            .iter()
+                            .filter_map(Json::as_str)
+                            .map(str::to_string)
+                            .collect(),
+                        _ => Vec::new(),
+                    };
+                    for a in &addrs {
+                        if let Some(reason) = self.pin_reason(a, run_id) {
+                            return Err(LedgerError::Pinned {
+                                address: a.clone(),
+                                reason,
+                            });
+                        }
+                    }
+                    rendered.push(format!("{event_id}.{field}"));
+                    resolved.append(&mut addrs);
+                }
+            }
+        }
+        // The durable tombstone row — committed before any byte leaves.
+        let state = self.runs.get_mut(run_id).unwrap();
+        let seq = state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0);
+        let prev_hash = state
+            .head
+            .as_ref()
+            .map(|h| h.hash.clone())
+            .unwrap_or_else(|| GENESIS_HASH.to_string());
+        let mut members = BTreeMap::new();
+        members.insert(
+            "targets".to_string(),
+            Json::Arr(rendered.iter().map(Json::str).collect()),
+        );
+        members.insert("reason_code".to_string(), Json::str(reason_code));
+        members.insert("endorser".to_string(), endorser.to_json());
+        members.insert("basis".to_string(), Json::str(basis));
+        // OQ-151's content fingerprints are not yet specified — the member is
+        // declared but lands empty until its scheme ratifies (never fabricated).
+        members.insert("content_fingerprints".to_string(), Json::Arr(vec![]));
+        let env = system_event(
+            &*self.ids,
+            &*self.clock,
+            state,
+            seq,
+            "lifecycle.ledger.redacted",
+            Json::Obj(members),
+            &prev_hash,
+            rec.generation,
+        );
+        commit_envelopes(
+            state,
+            vec![Staged::Durable(env.clone())],
+            self.clock.now_ms(),
+        )?;
+        for a in &resolved {
+            if let Ok(addr) = hh_identity::idp::parse_id(a) {
+                let path = self.root.join("blobs").join(&addr.digest_hex);
+                if path.exists() {
+                    fs::remove_file(&path).map_err(|e| LedgerError::Io {
+                        detail: format!("redact delete {a}: {e}"),
+                    })?;
+                    sync_dir(&self.root.join("blobs")).map_err(io_err)?;
+                }
+            }
+            self.tombstones.insert(a.clone(), MissingReason::Redacted);
+        }
+        Ok(env)
+    }
     /// `project(run, view_kind, until?)` — a pure fold over the durable prefix,
     /// stamped `(run_id, seq)` watermark + `view_policy_version` + `view_hash`.
     pub fn project(
@@ -1569,13 +2543,24 @@ impl Store {
             ViewKind::EffectLedger => views::effect_ledger(run_id, &state.events, until),
             // `audit_view` is folded by the ledger itself — the audit trail *is*
             // the run ledger (ADR-0066 D1: no second store, no audit-only path).
+            // The cross-run lookup recomputes the named run's head at the
+            // claimed size — a held-but-shorter run contradicts the claim
+            // (`failed`); an absent run is `unresolvable`.
             ViewKind::AuditView => crate::audit::audit_view(
                 run_id,
                 &state.events,
                 &state.open_scopes,
                 state.finished,
-                |addr| self.blob_present(addr),
+                |addr| self.blob_status(addr),
                 until,
+                &state.manifest,
+                |other, size| {
+                    self.runs.get(other).map(|s| {
+                        let leaves: Vec<String> = s.events.iter().map(|e| e.hash.clone()).collect();
+                        (size, crate::tree::mth_prefix(&leaves, size as usize))
+                    })
+                },
+                self.audit_keys.as_deref(),
             ),
             ViewKind::RunSummary => views::run_summary(
                 state.manifest.run_kind.as_str(),
@@ -2023,6 +3008,7 @@ fn commit_envelopes(
                     event_id: env.event_id.clone(),
                     hash: env.hash.clone(),
                 });
+                state.tree.push(env.hash.clone());
                 if range.count == 0 {
                     range.first = env.seq;
                 }
