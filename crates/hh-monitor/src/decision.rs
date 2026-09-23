@@ -7,11 +7,13 @@
 use std::collections::BTreeSet;
 
 use hh_ontology::risk::RiskClass;
+use hh_provenance::flow::{EnforcementClass, Remedy};
 use hh_provenance::{AuthorityClass, TaintTag};
 use hh_wire::json::Json;
 
 /// `decision ∈ {allow, ask{options, remedies[]}, deny{reason, remedies[]}}`
-/// (ADR-0052 D1).
+/// (ADR-0052 D1). `remedies` carries the closed `Remedy` sum (§5g.2 §3;
+/// ADR-0055 D5) — the bounded, deterministic set C2 enumerates.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Decision {
     /// The effect may commit.
@@ -21,16 +23,16 @@ pub enum Decision {
         /// The `ApprovalOption.kind` subset offered (ADR-0070 D1 sum; CF-480 —
         /// the ACP-lowered spellings never appear here).
         options: Vec<String>,
-        /// Remedy refs (ADR-0055 D5 — C2 renders them; Stage 1 carries the
-        /// closed reason only).
-        remedies: Vec<String>,
+        /// The closed `Remedy` set offered (ADR-0055 D5 — R1–R5 bounded,
+        /// narrowing-or-endorsed only).
+        remedies: Vec<Remedy>,
     },
     /// Refused — carries the closed `DenyReason`.
     Deny {
         /// The typed reason.
         reason: DenyReason,
-        /// Remedy refs.
-        remedies: Vec<String>,
+        /// The closed `Remedy` set offered.
+        remedies: Vec<Remedy>,
     },
 }
 
@@ -84,6 +86,20 @@ pub enum DenyReason {
     ContainmentUnverified,
     /// The `containment` catch-all member of the closed sum (CF-193).
     Containment,
+    /// D-ROBUST (I-F2; §5g.2): an endorsement/declassification decision's
+    /// input (a `recipient_params` value, a sanitizer selector argument, an
+    /// approval `subject_ref`) carries `authority ≤ external` or `taint ≠ ∅`
+    /// and was not itself shape-endorsed — refused before any `ask`.
+    RobustnessViolated,
+    /// Check 3 (I-F4; §5g.2): `recipients(p) ⊄ readers(x)` for a
+    /// `content_param` — the egress's declared readers do not cover the
+    /// resolved recipients.
+    ReaderCoverage,
+    /// A flow-condition atom could not produce a definite verdict (an
+    /// unbound `arg`, a missing recorded detector verdict, a malformed
+    /// `flow_contract` on the registered capability) — the closed grammar's
+    /// totality makes the failure a `deny` (§5g.2 §5).
+    EvaluationError,
 }
 
 impl DenyReason {
@@ -107,6 +123,9 @@ impl DenyReason {
             DenyReason::ApprovalTimedOut => "ApprovalTimedOut",
             DenyReason::ContainmentUnverified => "ContainmentUnverified",
             DenyReason::Containment => "containment",
+            DenyReason::RobustnessViolated => "RobustnessViolated",
+            DenyReason::ReaderCoverage => "ReaderCoverage",
+            DenyReason::EvaluationError => "EvaluationError",
         }
     }
 }
@@ -192,6 +211,10 @@ pub struct CheckRecord {
     /// The closed detail tag (never prose — a `DenyReason` spelling or a row id
     /// like `pi_7`; refusal text is profile-rendered from this, ADR-0052 D3).
     pub detail: String,
+    /// The check's `EnforcementClass` (I-F1 — every check carries it;
+    /// `deterministic` for the §5g.1 steps, the contract's own class for the
+    /// flow stage).
+    pub enforcement: EnforcementClass,
 }
 
 /// `KernelDecision` — `{effect_id, decision, effective_authority, taint,
@@ -233,6 +256,10 @@ pub struct KernelDecision {
     /// `AssessmentInputs` canonical hash — the reason is reconstructible,
     /// ADR-0066 D5).
     pub assessment_inputs_ref: Option<String>,
+    /// `remedy_taken` — the `Remedy` a prior decision stage consumed on this
+    /// `effect_id` (`Some` only when a recorded remedy was applied — the
+    /// dispatcher stamps it; §5g.2 §3 `decided{remedy_taken?}`).
+    pub remedy_taken: Option<Remedy>,
 }
 
 impl KernelDecision {
@@ -269,6 +296,7 @@ impl KernelDecision {
                                 ("step", Json::Int(c.step as i64)),
                                 ("outcome", Json::str(c.outcome)),
                                 ("detail", Json::str(c.detail.clone())),
+                                ("enforcement", Json::str(c.enforcement.as_str())),
                             ])
                         })
                         .collect(),
@@ -286,6 +314,9 @@ impl KernelDecision {
         if let Some(k) = &self.assessment_inputs_ref {
             m.push(("assessment_inputs_ref", Json::str(k.clone())));
         }
+        if let Some(r) = &self.remedy_taken {
+            m.push(("remedy_taken", r.to_json()));
+        }
         match &self.decision {
             Decision::Ask { options, remedies } => {
                 m.push((
@@ -294,14 +325,14 @@ impl KernelDecision {
                 ));
                 m.push((
                     "remedies",
-                    Json::Arr(remedies.iter().map(|r| Json::str(r.clone())).collect()),
+                    Json::Arr(remedies.iter().map(|r| r.to_json()).collect()),
                 ));
             }
             Decision::Deny { reason, remedies } => {
                 m.push(("reason", Json::str(reason.as_str())));
                 m.push((
                     "remedies",
-                    Json::Arr(remedies.iter().map(|r| Json::str(r.clone())).collect()),
+                    Json::Arr(remedies.iter().map(|r| r.to_json()).collect()),
                 ));
             }
             Decision::Allow => {}

@@ -287,6 +287,12 @@ fn closed_world_tools_mint_environment() {
         });
         set.insert(e);
         t.effects = hh_hir::kinds::ToolEffects::Declared(set);
+        // R-2.8.2: `fs_read` is a gated domain — the capability carries a
+        // minimal declared contribution to seal.
+        t.flow_contract = Some(Json::obj([(
+            "contribution",
+            Json::obj([("readers_from", Json::str("reads"))]),
+        )]));
     }
     // The reversibility ref must resolve — add a procedure node.
     doc.nodes.push(sid(
@@ -355,4 +361,165 @@ fn opaque_process_fields_round_trip() {
     } else {
         panic!("agent node expected");
     }
+}
+
+// ── R-2.8.2 (§5g.2 §3; AC-R-2.8.2-1) — the flow-contract seal gate ────────────
+
+/// A gated capability — `world = open` on any declared effect, or a domain in
+/// `{net_egress, message_human, fs_read, memory_write}` — may not seal without
+/// a `flow_contract` (`ContributionUndeclared`).
+#[test]
+fn gated_capability_without_a_flow_contract_refuses_to_seal() {
+    for (domain, world) in [
+        // A gated domain — even a closed-world `net_egress` is gated.
+        (
+            hh_hir::kinds::EffectDomain::NetEgress,
+            hh_hir::kinds::World::Closed,
+        ),
+        // Any open-world effect — even outside the gated domains.
+        (
+            hh_hir::kinds::EffectDomain::FsWrite,
+            hh_hir::kinds::World::Open,
+        ),
+    ] {
+        let mut doc = valid_doc();
+        doc.nodes.push(tool_node("test:gated", 9));
+        let idx = doc.nodes.len() - 1;
+        if let KindRecord::ToolCapability(t) = &mut doc.nodes[idx].semantic {
+            let mut e = hh_hir::kinds::EffectClass::domain_only(domain);
+            e.attributes = Some(hh_hir::kinds::EffectAttributes {
+                mutability: hh_hir::kinds::Mutability::Additive,
+                repeat_safety: hh_hir::kinds::RepeatSafety::Idempotent,
+                world,
+                reversibility: hh_hir::kinds::Reversibility::Reversible(sel("test:proc")),
+            });
+            t.effects = hh_hir::kinds::ToolEffects::Declared(vec![e].into_iter().collect());
+        }
+        // The reversibility ref must resolve.
+        doc.nodes.push(sid(
+            node(
+                EntityKind::Procedure,
+                KindRecord::Procedure(ProcedureRecord {
+                    preconditions: Json::Null,
+                    steps: vec![],
+                    expected_evidence: Json::Null,
+                    allowed_capabilities: vec![],
+                    failure_handlers: Json::Null,
+                }),
+                10,
+            ),
+            "test:proc",
+        ));
+        let errs = seal(&doc, 5).expect_err("contractless gated capability must not seal");
+        assert!(
+            errs.iter().any(|e| matches!(
+                e,
+                HirError::ContributionUndeclared { capability } if capability == "test:gated"
+            )),
+            "ContributionUndeclared for {domain:?}/{world:?}: {errs:?}"
+        );
+    }
+}
+
+/// A pure / closed-world-unlisted capability still seals contractless — the
+/// gate covers only the flows C2 must see.
+#[test]
+fn pure_capability_seals_without_a_contract() {
+    let mut doc = valid_doc();
+    doc.nodes.push(tool_node("test:pure", 9));
+    seal(&doc, 5).expect("pure capability seals contractless");
+}
+
+/// A malformed `flow_contract` is `SchemaViolation` at validation (the closed
+/// grammar fails closed), and a contract naming an undeclared parameter is
+/// `UnmappedParameter` — both surface through `seal`.
+#[test]
+fn malformed_flow_contracts_refuse() {
+    // Unknown member — the closed grammar refuses.
+    let mut doc = valid_doc();
+    doc.nodes.push(tool_node("test:bad", 9));
+    let idx = doc.nodes.len() - 1;
+    if let KindRecord::ToolCapability(t) = &mut doc.nodes[idx].semantic {
+        t.flow_contract = Some(Json::obj([
+            (
+                "contribution",
+                Json::obj([("readers_from", Json::str("public"))]),
+            ),
+            ("bogus", Json::Bool(true)),
+        ]));
+    }
+    let errs = seal(&doc, 5).expect_err("malformed contract");
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, HirError::SchemaViolation { .. })),
+        "{errs:?}"
+    );
+
+    // A contract param path not in `input_schema` is `UnmappedParameter`.
+    let mut doc = valid_doc();
+    doc.nodes.push(tool_node("test:unmapped", 9));
+    let idx = doc.nodes.len() - 1;
+    if let KindRecord::ToolCapability(t) = &mut doc.nodes[idx].semantic {
+        t.input_schema = Json::obj([
+            ("type", Json::str("object")),
+            ("additionalProperties", Json::Bool(false)),
+            (
+                "properties",
+                Json::obj([("path", Json::obj([("type", Json::str("string"))]))]),
+            ),
+        ]);
+        t.flow_contract = Some(Json::obj([
+            (
+                "contribution",
+                Json::obj([("readers_from", Json::str("public"))]),
+            ),
+            ("recipient_params", Json::Arr(vec![Json::str("to")])),
+        ]));
+    }
+    let errs = seal(&doc, 5).expect_err("unmapped contract param");
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, HirError::UnmappedParameter { .. })),
+        "{errs:?}"
+    );
+
+    // A well-formed contract over a declared param seals.
+    let mut doc = valid_doc();
+    doc.nodes.push(tool_node("test:ok", 9));
+    let idx = doc.nodes.len() - 1;
+    if let KindRecord::ToolCapability(t) = &mut doc.nodes[idx].semantic {
+        let mut e = hh_hir::kinds::EffectClass::domain_only(hh_hir::kinds::EffectDomain::NetEgress);
+        e.attributes = Some(hh_hir::kinds::EffectAttributes {
+            mutability: hh_hir::kinds::Mutability::Additive,
+            repeat_safety: hh_hir::kinds::RepeatSafety::Idempotent,
+            world: hh_hir::kinds::World::Open,
+            reversibility: hh_hir::kinds::Reversibility::Reversible(sel("test:proc")),
+        });
+        t.effects = hh_hir::kinds::ToolEffects::Declared(vec![e].into_iter().collect());
+        t.flow_contract = Some(Json::obj([
+            (
+                "contribution",
+                Json::obj([
+                    ("taint_tags", Json::Arr(vec![Json::str("self")])),
+                    ("readers_from", Json::str("reads")),
+                ]),
+            ),
+            ("content_params", Json::Arr(vec![Json::str("path")])),
+        ]));
+    }
+    doc.nodes.push(sid(
+        node(
+            EntityKind::Procedure,
+            KindRecord::Procedure(ProcedureRecord {
+                preconditions: Json::Null,
+                steps: vec![],
+                expected_evidence: Json::Null,
+                allowed_capabilities: vec![],
+                failure_handlers: Json::Null,
+            }),
+            10,
+        ),
+        "test:proc",
+    ));
+    seal(&doc, 5).expect("a well-formed contract on a gated capability seals");
 }

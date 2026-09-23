@@ -1463,3 +1463,106 @@ fn filter_for_slot_is_the_attested_order() {
     assert_eq!(out.withheld.len(), 1);
     assert_eq!(out.withheld[0].reason, "validity");
 }
+
+// ── AC-R-2.8.2-5 — quarantine handles never render inline (HandleLeaked) ─────
+
+fn offload_handle(id: &str) -> OffloadHandle {
+    OffloadHandle {
+        content_address: format!("sha256:blob-{id}"),
+        media_type: "text/plain".into(),
+        size: 4096,
+        label: Label::at(AuthorityClass::External),
+        excerpt_report: ExcerptReport {
+            truncated_by: Some("bytes".into()),
+            total_lines: 40,
+            total_bytes: 4096,
+            retained_range: (0, 256),
+        },
+        read_capability: "test:read_surface".into(),
+    }
+}
+
+/// A handle-carrying candidate delivered *inline* — not `handle_only`, not
+/// `by_reference` — would render the offloaded blob into model-facing text:
+/// `HandleLeaked`, a typed refusal with no plan (AC-R-2.8.2-5).
+#[test]
+fn ac_r_2_8_2_5_handle_content_inline_is_handle_leaked() {
+    let mut h = cand(
+        "h",
+        CandidateKind::ArtifactExcerpt,
+        AuthorityClass::External,
+        10,
+        Retention::Optional(PriorityClass::Memory),
+        1,
+    );
+    h.handle = Some(offload_handle("h"));
+    let mut s = sink();
+    let err = asm(
+        &req(
+            vec![
+                cand(
+                    "k",
+                    CandidateKind::KernelNotice,
+                    AuthorityClass::Kernel,
+                    5,
+                    Retention::Required,
+                    0,
+                ),
+                h,
+            ],
+            10_000,
+        ),
+        &DefaultPolicy::default(),
+        &mut s,
+    )
+    .expect_err("a handle inlined is a leak");
+    assert!(
+        matches!(&err, AssemblyError::HandleLeaked { candidate_id } if candidate_id == "h"),
+        "{err:?}"
+    );
+}
+
+/// The quarantined form — `handle_only` — assembles fine, contributes nothing
+/// to the context-label join, and the next call's `context_label` is
+/// unchanged by the handle's own label (AC-R-2.8.2-5: "a quarantine handle
+/// passed to a tool joins that argument's label but does not join the
+/// context label").
+#[test]
+fn ac_r_2_8_2_5_handle_only_never_leaks_and_never_joins_context() {
+    let mut h = cand(
+        "h",
+        CandidateKind::ArtifactExcerpt,
+        AuthorityClass::Unverified,
+        10,
+        Retention::Optional(PriorityClass::Memory),
+        1,
+    );
+    h.state = CandidateState::HandleOnly;
+    h.label = Label::at(AuthorityClass::Unverified);
+    h.handle = Some(offload_handle("h"));
+    let mut s = sink();
+    let out = asm(
+        &req(
+            vec![
+                cand(
+                    "k",
+                    CandidateKind::KernelNotice,
+                    AuthorityClass::Kernel,
+                    5,
+                    Retention::Required,
+                    0,
+                ),
+                h,
+            ],
+            10_000,
+        ),
+        &DefaultPolicy::default(),
+        &mut s,
+    )
+    .expect("handle_only delivery is legal");
+    assert_eq!(
+        out.plan.context_label.authority,
+        AuthorityClass::Kernel,
+        "the handle's label does not join the context fold"
+    );
+}

@@ -521,6 +521,9 @@ impl EnvDriver {
                     exit_status: None,
                     manifest_ref: String::new(),
                     completeness: crate::capture::Completeness::Unknown,
+                    // The reconciliation path carries no admission — the
+                    // terminated attempt's result never ran.
+                    admission: None,
                 };
                 // `attempt_no` binds the committed attempt — the terminal
                 // observes *that* attempt, never a phantom retry.
