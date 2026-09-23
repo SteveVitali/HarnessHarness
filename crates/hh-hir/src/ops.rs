@@ -557,6 +557,164 @@ pub fn closed_world_tools(
         .collect()
 }
 
+/// The opacity report over a document's leaves — `opacity(sealed, profile)` (§3.1.7;
+/// T-02). The single producer (CC1; CF-050): `validate_assembly` stage 7-O and the
+/// bundle's `opacity_ratio` both consume this, never recompute.
+///
+/// `profile` is the coordinate the report was computed under — informational only; which
+/// leaves are *visible* to a profile is decided at `select_surfaces` (§5d), never here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HirOpacity {
+    /// Per-authority-class leaf counts (`Text` + `CompiledPayload` leaves, semantic and
+    /// surface records alike).
+    pub by_class: hh_provenance::OpacityReport,
+    /// Leaves whose body the compiler cannot inspect — `CompiledPayload` leaves carrying
+    /// no `declared_interface` (`Opaque` steps included: their payload is inline).
+    pub opaque_without_interface: usize,
+    /// The profile coordinate under which the report was computed.
+    pub profile: Option<String>,
+}
+
+/// `opacity(doc, profile)` — count every leaf by authority class and every opaque body.
+/// Walks the canonical JSON projection of each node and edge (a `Text` leaf is a
+/// `{content_hash, authority}` object; a `CompiledPayload` is `{bytes_hash, provenance}`),
+/// so any new leaf-bearing member is counted without the walker changing (CC7).
+pub fn opacity(doc: &HirDocument, profile: Option<&str>) -> HirOpacity {
+    let mut classes: Vec<AuthorityClass> = Vec::new();
+    let mut without_interface = 0usize;
+    for n in &doc.nodes {
+        let j = crate::wire::node_to_json(n);
+        collect_leaf_authorities(&j, &mut classes, &mut without_interface);
+    }
+    for e in &doc.edges {
+        let j = crate::wire::edge_to_json(e);
+        collect_leaf_authorities(&j, &mut classes, &mut without_interface);
+    }
+    HirOpacity {
+        by_class: hh_provenance::OpacityReport::over(classes),
+        opaque_without_interface: without_interface,
+        profile: profile.map(str::to_string),
+    }
+}
+
+/// Collect leaf authority classes from a canonical-record JSON — a `Text` leaf carries
+/// `content_hash` + `authority`; a `CompiledPayload` carries `bytes_hash` + `provenance`
+/// (whose `authority` is the leaf's class) and is *opaque without interface* when no
+/// `declared_interface` member is present. Objects matching neither shape are walked.
+fn collect_leaf_authorities(
+    j: &hh_wire::json::Json,
+    out: &mut Vec<AuthorityClass>,
+    without_interface: &mut usize,
+) {
+    use hh_wire::json::Json;
+    match j {
+        Json::Obj(m) => {
+            if m.contains_key("content_hash") {
+                if let Some(a) = m
+                    .get("authority")
+                    .and_then(Json::as_str)
+                    .and_then(AuthorityClass::parse)
+                {
+                    out.push(a);
+                }
+                return;
+            }
+            if m.contains_key("bytes_hash") {
+                let auth = m
+                    .get("provenance")
+                    .and_then(|p| p.get("authority"))
+                    .and_then(Json::as_str)
+                    .and_then(AuthorityClass::parse);
+                if let Some(a) = auth {
+                    out.push(a);
+                }
+                if m.get("interface").is_none() && m.get("declared_interface").is_none() {
+                    *without_interface += 1;
+                }
+                return;
+            }
+            for v in m.values() {
+                collect_leaf_authorities(v, out, without_interface);
+            }
+        }
+        Json::Arr(items) => {
+            for v in items {
+                collect_leaf_authorities(v, out, without_interface);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// `ablate(sealed, target)` (§3.1.7) — produce the sealed definition with `target`
+/// removed, for counterfactual/ablation arms:
+///
+/// - `target` = a node `semantic_id` → the node and every incident edge are removed and a
+///   `derived-from{hypothesis: "ablation:<target>", candidate_id: <target>}` self-edge is
+///   appended to the root (the lineage record, §3.1.6).
+/// - `target` = a `Text` leaf's `content_hash` → every leaf with that hash is replaced by
+///   a kernel-authored placeholder of matched content length (the byte-length proxy keeps
+///   layout/budget estimates honest; the placeholder is `Text`, never a bare string —
+///   T-LCD-02).
+///
+/// The result is re-sealed (`seal` re-mints identities over the changed graph), so the
+/// ablated definition is an ordinary sealed input downstream. `UnresolvedRef` when
+/// `target` names neither a node nor a leaf.
+pub fn ablate(
+    sealed: &SealedDefinition,
+    target: &str,
+    sealed_at: u64,
+) -> Result<SealedDefinition, Vec<HirError>> {
+    let mut doc = sealed.document.clone();
+    let kernel_prov = ProvenanceRecord::kernel("hh-hir:ablate", sealed_at);
+
+    if doc.node(target).is_some() {
+        // Node ablation — drop the node and every incident edge, stamp the lineage edge.
+        doc.nodes.retain(|n| n.semantic_id() != target);
+        doc.edges.retain(|e| e.from != target && e.to != target);
+        let root = doc.root.semantic_id.clone();
+        let hypothesis = Text::new(format!("ablation:{target}"), "hh-hir", kernel_prov.clone());
+        doc.edges.push(Edge::new(
+            crate::kinds::EdgeKind::DerivedFrom,
+            root.clone(),
+            root,
+            EdgeRecord::DerivedFrom {
+                hypothesis: Box::new(hypothesis),
+                trajectories: Vec::new(),
+                candidate_id: Some(target.to_string()),
+            },
+            kernel_prov,
+        ));
+        return seal(&doc, sealed_at);
+    }
+
+    // Leaf ablation — replace every `Text` leaf carrying `target` as its content_hash.
+    let mut replaced = 0usize;
+    for leaf in doc.text_leaves_mut() {
+        if leaf.content_hash == target {
+            let len = leaf.content.as_deref().map(str::len).unwrap_or(0);
+            let marker = format!("[ablated:{}]", &target[..target.len().min(16)]);
+            let content = if len <= marker.len() {
+                marker
+            } else {
+                let mut c = marker;
+                c.push_str(&".".repeat(len - c.len()));
+                c
+            };
+            *leaf = Text::new(content, leaf.owner.clone(), kernel_prov.clone());
+            replaced += 1;
+        }
+    }
+    if replaced == 0 {
+        return Err(vec![HirError::UnresolvedRef {
+            detail: format!(
+                "ablate: `{target}` is neither a node semantic_id nor a Text leaf content_hash"
+            ),
+        }]);
+    }
+    seal(&doc, sealed_at)
+}
+
 /// The grammar-neutral "is this assembly section resolved?" walk (§3.1.3): any object
 /// carrying a `version_selector` member, or any string in the `$param:`/`$entity:` binding
 /// forms, is unresolved. Returns the first offending path.

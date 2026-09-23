@@ -1,7 +1,8 @@
 //! `compile(inputs) → bundle` (§3.2.2): the pure pipeline — stage 0 `accept` (calls
 //! `validate_assembly`, re-asserts the canonical-form hash against the recorded
-//! `version_id`), stage 1 `link`, stage 2 `lower_native`, stage 5 `seal_outputs`. No
-//! clock, no env, no I/O — identical inputs produce byte-identical bundles (AC-CP-01).
+//! `version_id`), stage 1 `link`, stage 2 `lower_native`, stage 3 `lower_profile`,
+//! stage 4 `lower_target` (per bound target), stage 5 `seal_outputs`. No clock, no
+//! env, no I/O — identical inputs produce byte-identical bundles (AC-CP-01).
 
 use hh_assembly::{ClassCatalog, Severity, Subject, ValidationReport};
 use hh_hir::{refs::RefVersion, SealedDefinition};
@@ -131,7 +132,10 @@ pub fn accept_bytes(
     Ok((sealed, outcome))
 }
 
-/// `compile(inputs) → CompiledBundle` — stages 0 → 1 → 2 → 5, in that order.
+/// `compile(inputs) → CompiledBundle` — stages 0 → 1 → 2 → 3 → 4 → 5, in that order
+/// (§3.2.2). Stage 3 `lower_profile` produces the `ModelSurface`; stage 4
+/// `lower_target` runs once per bound target producing `(artefact, loss_report)`;
+/// stage 5 `seal_outputs` computes the equivalence evidence and mints the ids.
 pub fn compile(
     inputs: &CompileInputs,
     profiles: &dyn ProfileView,
@@ -151,7 +155,26 @@ pub fn compile(
         inputs.compile_for_expired,
     )?;
     let plan: RuntimePlan = lower_native(&linked)?;
-    seal_outputs(&linked, &plan, &accepted.report)
+    // Stage 3 — `lower_profile`.
+    let (surface, lower_diags) = crate::lower::lower_profile(&linked, &plan, kernel)?;
+    // Stage 4 — `lower_target` per bound target.
+    let mut artefacts = std::collections::BTreeMap::new();
+    let mut losses = Vec::new();
+    for spec in &linked.targets {
+        let (artefact, loss) = crate::target::lower_target(&linked, &plan, &surface, spec)?;
+        artefacts.insert(spec.target_id.clone(), artefact);
+        losses.push(loss);
+    }
+    // Stage 5 — `seal_outputs`.
+    seal_outputs(
+        &linked,
+        &plan,
+        &accepted.report,
+        surface,
+        lower_diags,
+        artefacts,
+        losses,
+    )
 }
 
 /// Check whether a `Ref` anywhere in the document still carries a selector — exposed

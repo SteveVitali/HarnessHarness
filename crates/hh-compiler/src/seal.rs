@@ -31,13 +31,25 @@ pub enum ModelSurfaceState {
     Lowered(ModelSurface),
 }
 
-/// `ModelSurface` — the profile-lowered surface record (§3.2.5; produced by stage 3).
+/// `ModelSurface{layout, tools, interaction_mode, params, transcript_renderer}`
+/// (§3.2.8; produced by stage 3 `lower_profile`). `tools` carries
+/// `ToolSurface{surface_name, hir_node_id, dialect, schema, description,
+/// error_format, result_render, arg_map, equivalence}` — the `SurfaceBinding`
+/// member holds the arg map and identity (ADR-0090's one atomic record).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModelSurface {
     /// The profile coordinate this surface was lowered under.
     pub profile: String,
-    /// The surfaces, by capability semantic id.
-    pub surfaces: BTreeMap<String, equiv::SurfaceBinding>,
+    /// The compiled layout sections (profile-declared order).
+    pub layout: Vec<crate::lower::CompiledSection>,
+    /// The compiled tool surfaces.
+    pub tools: Vec<crate::lower::CompiledToolSurface>,
+    /// The interaction mode (`native_fc` at C0).
+    pub interaction_mode: String,
+    /// `{sampling, caching, compaction_reminder}` — the verbatim rule params.
+    pub params: Json,
+    /// The transcript renderer spec (`{stale_signature, …}` — OQ-067).
+    pub transcript_renderer: Json,
     /// `dialects: map<ModelRole, dialect>` (§3.2.5 — `schema_dialect` default
     /// `json-schema-2020-12` on every role, ADR-0212 OQ-219).
     pub dialects: BTreeMap<String, String>,
@@ -74,52 +86,90 @@ pub struct CompiledBundle {
     pub profile_chain: Vec<String>,
 }
 
-/// `seal_outputs(linked, plan, validation) → CompiledBundle` — stage 5. Computes
-/// the trace map, the per-surface `EquivalenceEvidence` (E1–E3/E7 static; E4 `n/a`), the
-/// `lcd_report`, and the two `idp/1` addresses.
+/// `seal_outputs(linked, plan, validation, surface, lower_diags, artefacts, losses)
+/// → CompiledBundle` — stage 5. Computes the trace map, the per-surface
+/// `EquivalenceEvidence` (E1–E3/E7 static; **E4 executable** over the profile's
+/// declared `tests.e4_suites[]`; E5/E6 over the compiled specs), stamps each
+/// surface's `equivalence`, composes the `lcd_report` (the loss reports ride in —
+/// CF-050 composition), and mints the two `idp/1` addresses.
+#[allow(clippy::too_many_arguments)] // the arity is the §3.2 pipeline's stage-5 input set.
 pub fn seal_outputs(
     linked: &LinkedGraph,
     plan: &RuntimePlan,
     validation: &ValidationReport,
+    mut surface: ModelSurface,
+    lower_diags: Vec<AssemblyDiagnostic>,
+    artefacts: BTreeMap<String, Json>,
+    losses: Vec<LoweringLossReport>,
 ) -> Result<CompiledBundle, CompileError> {
-    // Per-surface equivalence evidence (the static half; §3.2.5).
+    // The profile's declared E4 suites (`tests.e4_suites[]`, merged across the chain).
+    let mut suites: Vec<crate::e4::E4SuiteSpec> = Vec::new();
+    for p in &linked.profile.chain {
+        suites.extend(crate::e4::suites_from_profile(
+            &p.tests,
+            &format!("profile {}", crate::profile::profile_coordinate(p)),
+        )?);
+    }
+
+    // Per-surface equivalence evidence (§3.2.6) — over the *lowered* surface.
     let mut evidence: Vec<EquivalenceEvidence> = Vec::new();
-    for binding in &plan.tools {
-        if let Some(surface) = &binding.surface {
-            let node = linked
-                .sealed
-                .document
-                .node(&binding.capability.semantic_id)
-                .expect("plan tools are document nodes");
-            let e = equiv::check_equivalence(surface, node, None)?;
-            // An E1/E2/E3/E7 `fail` is a compile refusal — the surface does not bind
-            // (§3.2.5: evidence of failure is a fail verdict; a failing static check is
-            // an error, not a warning).
-            for (name, v) in [
-                ("E1", &e.e1_effect_equality),
-                ("E2", &e.e2_authority),
-                ("E3", &e.e3_precondition_domain),
-                ("E7", &e.e7_accounting_identity),
-            ] {
-                if let equiv::EvidenceVerdict::Fail { reason } = v {
-                    return Err(CompileError::UnexpressibleSurface {
-                        entity: binding.capability.semantic_id.clone(),
-                        profile: linked
-                            .profile
-                            .chain
-                            .last()
-                            .map(crate::profile::profile_coordinate)
-                            .unwrap_or_default(),
-                        reason: format!("{name} failed on {}: {reason}", surface.surface_name),
-                    });
-                }
+    for tool in &mut surface.tools {
+        let binding = &tool.binding;
+        let node = linked
+            .sealed
+            .document
+            .node(&binding.hir_node_id)
+            .expect("surface tools are document nodes");
+        let suite = suites.iter().find(|s| {
+            s.capability == binding.hir_node_id
+                || s.capability
+                    == binding
+                        .hir_node_id
+                        .rsplit([':', '/'])
+                        .next()
+                        .unwrap_or_default()
+        });
+        let validators_bound = plan.validators.iter().any(|v| {
+            v.inputs
+                .iter()
+                .any(|i| i.semantic_id == binding.hir_node_id)
+        });
+        let e = equiv::check_equivalence(
+            binding,
+            node,
+            suite,
+            tool.error_format.as_ref(),
+            tool.result_render.as_ref(),
+            validators_bound,
+        )?;
+        // A `fail` on any obligation is a compile refusal — the surface does not bind
+        // (§3.2.5: evidence of failure is a fail verdict; a failing check is an error,
+        // not a warning; §3.2.6 rule i: C0 admits a surface only with E1–E3 and E7
+        // `pass`, E4 `pass` for the named closed-world primitives).
+        for (name, v) in [
+            ("E1", &e.e1_effect_equality),
+            ("E2", &e.e2_authority),
+            ("E3", &e.e3_precondition_domain),
+            ("E4", &e.e4_differential),
+            ("E5", &e.e5_error_surjectivity),
+            ("E6", &e.e6_result_observation),
+            ("E7", &e.e7_accounting_identity),
+        ] {
+            if let equiv::EvidenceVerdict::Fail { reason } = v {
+                return Err(CompileError::UnexpressibleSurface {
+                    entity: binding.hir_node_id.clone(),
+                    profile: surface.profile.clone(),
+                    reason: format!("{name} failed on {}: {reason}", binding.surface_name),
+                });
             }
-            evidence.push(e);
         }
+        tool.equivalence = Some(e.clone());
+        tool.binding.evidence_ref = Some(tool.binding.surface_id.clone());
+        evidence.push(e);
     }
 
     let trace_map = trace::build_trace_map(plan);
-    let report = lcd::lcd_report(validation, linked);
+    let report = lcd::lcd_report(validation, linked, &losses);
     let opacity = validation.derived.opacity.clone();
 
     // derivation_key = idp/1 over canonical inputs {definition version_id, bound variant
@@ -177,16 +227,17 @@ pub fn seal_outputs(
         bundle_id: String::new(),
         derivation_key,
         runtime_plan: plan.clone(),
-        model_surface: ModelSurfaceState::Deferred,
-        target_artefacts: BTreeMap::new(),
+        model_surface: ModelSurfaceState::Lowered(surface),
+        target_artefacts: artefacts,
         trace_map,
         lcd_report: report,
-        loss_reports: Vec::new(),
+        loss_reports: losses,
         opacity_report: opacity,
         equivalence_evidence: evidence,
         diagnostics: {
             let mut d = validation.diagnostics.clone();
             d.extend(linked.diagnostics.clone());
+            d.extend(lower_diags);
             d
         },
         profile_chain: linked
