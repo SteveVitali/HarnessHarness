@@ -351,13 +351,11 @@ fn artifact_benefit_gates() {
         }
     ));
     // Registered before the proposal — admissible.
-    assert!(
-        artifact_benefit(
-            &input(&runs4, &ts, &d, &arms, &decls, std::slice::from_ref(&name)),
-            4,
-        )
-        .is_ok()
-    );
+    assert!(artifact_benefit(
+        &input(&runs4, &ts, &d, &arms, &decls, std::slice::from_ref(&name)),
+        4,
+    )
+    .is_ok());
 }
 
 #[test]
