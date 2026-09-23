@@ -969,8 +969,7 @@ pub struct BudgetRelevantParam {
 }
 
 /// The `budget_relevant` resolver — `level ref → {param → {value, affects[]}}`.
-pub type BudgetRelevantResolver<'a> =
-    dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + 'a;
+pub type BudgetRelevantResolver<'a> = dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + 'a;
 
 /// A level's bound `budget_relevant` parameters — `{param → (value,
 /// affects)}` (the check_match working map).

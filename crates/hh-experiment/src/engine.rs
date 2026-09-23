@@ -88,8 +88,7 @@ pub type FlagResolver<'a> = dyn Fn(&str) -> bool + 'a;
 /// `spec → suite task axis` resolver (the `ExpandTask` rows).
 pub type SuiteTaskResolver<'a> = dyn Fn(&ExperimentSpec) -> Option<Vec<ExpandTask>> + 'a;
 /// `arm → {configuration_id, configuration_version_id}` resolver.
-pub type ArmConfigResolver<'a> =
-    dyn Fn(&ArmSpec) -> Result<ArmConfiguration, ExpandError> + 'a;
+pub type ArmConfigResolver<'a> = dyn Fn(&ArmSpec) -> Result<ArmConfiguration, ExpandError> + 'a;
 /// `level ref → n/a{reason}` resolver (T-LCD-15).
 pub type NaResolver<'a> = dyn Fn(&str) -> Option<NaReason> + 'a;
 /// `level ref → fingerprint` resolver (the drift-bracket probe).
@@ -97,8 +96,7 @@ pub type FingerprintResolver<'a> = dyn Fn(&str) -> Option<String> + 'a;
 /// `arm → budget_enforcement` resolver (ADR-0165 D3).
 pub type EnforcementResolver<'a> = dyn Fn(&ArmSpec) -> BudgetEnforcement + 'a;
 /// `level ref → budget_relevant param bindings` resolver (AC-R-2.10.2-12).
-pub type BudgetRelevantResolver<'a> =
-    dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + 'a;
+pub type BudgetRelevantResolver<'a> = dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + 'a;
 
 #[derive(Default)]
 pub struct EngineContext<'a> {
@@ -1652,12 +1650,7 @@ impl<'a> ExperimentEngine<'a> {
                 ("detail", Json::Obj(detail)),
             ]));
         }
-        Ok((
-            under_utilised,
-            budget_match,
-            na_cells,
-            utilization,
-        ))
+        Ok((under_utilised, budget_match, na_cells, utilization))
     }
 
     fn spec(&self, experiment_id: &str) -> Result<ExperimentSpec, ExperimentError> {
