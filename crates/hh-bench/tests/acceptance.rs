@@ -539,6 +539,9 @@ fn parity_report_requires_artifact_benefit() {
         multiplicity: Multiplicity {
             family_size: 1,
             adjusted: "holm".into(),
+            raw_ppm: None,
+            adjusted_ppm: None,
+            label: None,
         },
         label: ReportLabelKind::Headlined,
         estimator_selection: EstimatorSelection {

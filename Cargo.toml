@@ -330,6 +330,24 @@ members = [
     # to equal bytes. Reads hh-ledger/hh-experiment/hh-eval/hh-bundle
     # records; owns no authoritative state.
     "crates/hh-results",
+    # The C0/Stage-3 §6.4 estimator kernel (R-2.10.4⁰ᵇ; ticket S3.4c;
+    # ADR-0157/0158/0159/0160). A PERSISTENT workspace member: the pure,
+    # versioned, class-aware `analyze(spec, rows @ watermark_set)` over
+    # results rows — A1 `summarize`, A2 `compare` (paired Δ, selection rule,
+    # permutation test, tail effects, outcome bounds, multiplicity), A3
+    # `contrast`, A8 `equivalence`, A12 `multiplicity` (Holm + BH), transfer
+    # rows (`benefit_kind = transfer` + `transfer_ratio`); the
+    # `ResultsRow + RunManifest + LedgerFacts → EvalRun` projection; and the
+    # `AnalysisRecord`/`analysis_report_body/1` LabDocs persistence (a report
+    # is recorded, never silently recomputed). The task is the cluster,
+    # pairing key and resampling unit throughout; every interval carries an
+    # `EstimatorSelection` with labelled substitutions (T_clt = 100,
+    # T_bca = 30, draws 2000/200 — ADR-0158 placeholders). Reuses
+    # `hh-eval`'s compare/stats/benefits machinery (one implementation —
+    # CC1) and `hh-results`' rows/reads; owns no store, no scheduler, no
+    # oracle. The C1 surfaces (A4/A5-full/A6/A7/A9/A10/A11/A13/A14/A15/A16)
+    # land at S4.3+.
+    "crates/hh-analysis",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired

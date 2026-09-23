@@ -1,0 +1,21 @@
+[package]
+name = "hh-analysis"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-3 §6.4 estimator kernel (R-2.10.4⁰ᵇ; ticket S3.4c; ADR-0157/0158/0159/0160): the pure, versioned, class-aware analyze(spec, rows @ watermark_set) over results rows — A1 summarize, A2 compare (paired Δ, selection rule, permutation test, tail effects, outcome bounds, multiplicity), A3 contrast, A8 equivalence, A12 multiplicity (Holm + BH), transfer rows; the ResultsRow+RunManifest+LedgerFacts→EvalRun projection; AnalysisRecord/analysis_report_body/1 LabDocs persistence (recorded, never recomputed). Reuses hh-eval's compare/stats/benefits machinery (CC1); owns no store, no scheduler, no oracle."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-ontology = { path = "../hh-ontology" }
+hh-ledger = { path = "../hh-ledger" }
+hh-budget = { path = "../hh-budget" }
+hh-eval = { path = "../hh-eval" }
+hh-lab = { path = "../hh-lab" }
+hh-results = { path = "../hh-results" }
+hh-experiment = { path = "../hh-experiment" }

@@ -31,4 +31,6 @@ hh-budget = { path = "../hh-budget" }
 hh-lab = { path = "../hh-lab" }
 hh-bundle = { path = "../hh-bundle" }
 hh-experiment = { path = "../hh-experiment" }
+hh-analysis = { path = "../hh-analysis" }
+hh-results = { path = "../hh-results" }
 hh-mcp = { path = "../hh-mcp" }

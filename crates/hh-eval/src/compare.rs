@@ -689,6 +689,9 @@ pub fn compare(input: &CompareInput) -> Result<CompareOutcome, CompareError> {
             multiplicity: Multiplicity {
                 family_size: family,
                 adjusted: "holm".into(),
+                raw_ppm: None,
+                adjusted_ppm: None,
+                label: None,
             },
             label,
             estimator_selection: EstimatorSelection {
