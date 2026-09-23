@@ -147,6 +147,11 @@ pub struct Coordinates {
     pub hosting_mechanism: Option<String>,
     /// The capability vector ref (hosted rows).
     pub capability_vector_ref: Option<String>,
+    /// The mediation channels the run's surface covered (§6.6 — the
+    /// `MediationChannel` spellings the arm's hosting declaration admits;
+    /// absent/empty = none). Additive member — never authored for the hosted
+    /// side beyond what the declaration claims (T-LCD-07).
+    pub mediation: Vec<String>,
     /// The pinned registry snapshot (`§6.2`'s one-snapshot rule).
     pub registry_snapshot_id: Option<String>,
 }
@@ -204,6 +209,12 @@ impl Coordinates {
         if let Some(c) = &self.capability_vector_ref {
             m.insert("capability_vector_ref".into(), Json::str(c));
         }
+        if !self.mediation.is_empty() {
+            m.insert(
+                "mediation".into(),
+                Json::Arr(self.mediation.iter().map(Json::str).collect()),
+            );
+        }
         if let Some(r) = &self.registry_snapshot_id {
             m.insert("registry_snapshot_id".into(), Json::str(r));
         }
@@ -247,6 +258,13 @@ impl Coordinates {
             },
             hosting_mechanism: opt_str(m, "hosting_mechanism"),
             capability_vector_ref: opt_str(m, "capability_vector_ref"),
+            mediation: match m.get("mediation") {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .filter_map(|i| i.as_str().map(String::from))
+                    .collect(),
+                _ => Vec::new(),
+            },
             registry_snapshot_id: opt_str(m, "registry_snapshot_id"),
         })
     }

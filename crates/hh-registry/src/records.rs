@@ -238,6 +238,131 @@ pub struct ReportResult {
     pub evidence_ref: Option<String>,
 }
 
+/// Where a hosted conformance entry was observed (§6.6 `observed_in`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ObservedIn {
+    /// The adapter's probe surface (a probe run, not a run ledger).
+    Probe,
+    /// A ledgered hosted run.
+    Run,
+}
+
+impl ObservedIn {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ObservedIn::Probe => "probe",
+            ObservedIn::Run => "run",
+        }
+    }
+
+    /// Parse a canonical spelling.
+    pub fn parse(s: &str) -> Option<ObservedIn> {
+        Some(match s {
+            "probe" => ObservedIn::Probe,
+            "run" => ObservedIn::Run,
+            _ => return None,
+        })
+    }
+}
+
+/// A hosted `ConformanceRecord` — one dimension of a hosted participant's
+/// capability declaration compared against what the Lab observed (§6.6;
+/// R-2.10.6⁰). Lives on [`ConformanceReport::hosted_entries`] — legal only on a
+/// `subject_kind = participant` report.
+///
+/// `verdict = drift` iff `declared` and `observed` are both *concrete* and
+/// differ ([`ConformanceRecord::derive_verdict`] computes it); `unknown`/
+/// `skipped` values are never coerced into a verdict (T-LCD-07).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConformanceRecord {
+    /// The participant's `version_identity` (string coordinate — the same
+    /// spelling the participant record carries).
+    pub participant_version_identity: String,
+    /// The adapter's `version_id` pin.
+    pub adapter_version_id: String,
+    /// The capability dimension this entry covers.
+    pub dimension: String,
+    /// The declared capability state (a `CapabilityVerdict` spelling or a
+    /// structured value — `unknown`/`skipped`/`null` are non-concrete).
+    pub declared: Json,
+    /// The observed capability state (same value space).
+    pub observed: Json,
+    /// The verdict — `derive_verdict(declared, observed)` at construction.
+    pub verdict: ConformanceVerdict,
+    /// Where the observation came from.
+    pub observed_in: ObservedIn,
+    /// The pinned evidence (ledger event / blob address) when there is one.
+    pub evidence_ref: Option<String>,
+    /// The observation seq (transaction-time, never a wall clock).
+    pub at: u64,
+}
+
+impl ConformanceRecord {
+    /// `true` for a *concrete* capability-state value — anything but `null`,
+    /// `"unknown"` or `"skipped"`.
+    fn concrete(j: &Json) -> bool {
+        !matches!(j, Json::Null)
+            && j.as_str()
+                .map(|s| s != "unknown" && s != "skipped")
+                .unwrap_or(true)
+    }
+
+    /// The §6.6 verdict rule: `drift` iff `declared` and `observed` are both
+    /// concrete and differ; `supported` when they agree; otherwise the observed
+    /// state projects (`unknown`/`skipped` → that verdict; a non-concrete
+    /// declared with a concrete observed is the observed verdict).
+    pub fn derive_verdict(declared: &Json, observed: &Json) -> ConformanceVerdict {
+        let observed_verdict = match observed.as_str().and_then(ConformanceVerdict::parse) {
+            Some(v) => v,
+            None if Self::concrete(observed) => ConformanceVerdict::Supported,
+            None => ConformanceVerdict::Unknown,
+        };
+        if Self::concrete(declared) && Self::concrete(observed) {
+            if declared == observed {
+                ConformanceVerdict::Supported
+            } else {
+                ConformanceVerdict::Drift
+            }
+        } else {
+            observed_verdict
+        }
+    }
+
+    /// Build an entry with the verdict derived (the only honest constructor —
+    /// an authored `verdict` that disagrees with `derive_verdict` is a lie).
+    #[allow(clippy::too_many_arguments)] // the arity is the §6.6 record's.
+    pub fn observed_entry(
+        participant_version_identity: &str,
+        adapter_version_id: &str,
+        dimension: &str,
+        declared: Json,
+        observed: Json,
+        observed_in: ObservedIn,
+        evidence_ref: Option<String>,
+        at: u64,
+    ) -> ConformanceRecord {
+        ConformanceRecord {
+            participant_version_identity: participant_version_identity.to_string(),
+            adapter_version_id: adapter_version_id.to_string(),
+            dimension: dimension.to_string(),
+            verdict: Self::derive_verdict(&declared, &observed),
+            declared,
+            observed,
+            observed_in,
+            evidence_ref,
+            at,
+        }
+    }
+
+    /// Stale check — `true` when `current` names a different
+    /// `participant_version_identity` (§6.6: records pin the version they
+    /// observed; a version change re-derives conformance, never inherits it).
+    pub fn is_stale(&self, current_version_identity: &str) -> bool {
+        self.participant_version_identity != current_version_identity
+    }
+}
+
 /// The host a report ran on (`{placement, isolation, instrument}` — ADR-0152 D3).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReportHost {
@@ -276,6 +401,10 @@ pub struct ConformanceReport {
     /// `true` when the report's suite is not the head suite of the class's current
     /// `contract_version` — stale reports satisfy no floor.
     pub stale: bool,
+    /// The hosted conformance entries (§6.6 `ConformanceRecord`s — R-2.10.6⁰).
+    /// Legal only on a `subject_kind = participant` report; `report_from_json`
+    /// refuses them anywhere else.
+    pub hosted_entries: Vec<ConformanceRecord>,
 }
 
 /// The `NamespaceRecord` (ADR-0153 D2) — layered per ADR-0024 (`authority_cap`
@@ -509,6 +638,15 @@ pub enum RegistryRecord {
     /// `semantic.containment_policy.version_id` into the dependency/stale
     /// index and snapshot closure — everything else is opaque.
     EnvironmentRecord(Json),
+    /// A `participant` record — the §6.6 `ParticipantRecord` (R-2.10.6⁰). The
+    /// schema owner is `hh-hosting` (above this crate — same layering as
+    /// `EnvironmentRecord`): the registry stores the canonical body verbatim and
+    /// gates only on the `kind: "participant"` tag (`record_from_json`).
+    Participant(Json),
+    /// An `adapter` record — the §6.6 `AdapterRecord` (R-2.10.6⁰). Same opaque
+    /// layering as `Participant`: `hh-hosting` owns the schema; the registry
+    /// stores the canonical body verbatim (`kind: "adapter"` tag gated).
+    Adapter(Json),
 }
 
 impl RegistryRecord {
@@ -528,6 +666,8 @@ impl RegistryRecord {
             RegistryRecord::Extension(_) => RecordKind::Extension,
             RegistryRecord::EnvironmentFamily(_) => RecordKind::EnvironmentFamily,
             RegistryRecord::EnvironmentRecord(_) => RecordKind::EnvironmentRecord,
+            RegistryRecord::Participant(_) => RecordKind::Participant,
+            RegistryRecord::Adapter(_) => RecordKind::Adapter,
         }
     }
 
@@ -542,6 +682,10 @@ impl RegistryRecord {
                 vec![r.subject_ref.clone(), r.suite_ref.clone()]
             }
             RegistryRecord::Namespace(_) | RegistryRecord::ForeignImport(_) => Vec::new(),
+            // The opaque participant/adapter bodies carry no registry-level
+            // pins (C0 — their internal refs live inside the body; hh-hosting
+            // owns any projection that reads them).
+            RegistryRecord::Participant(_) | RegistryRecord::Adapter(_) => Vec::new(),
             // `applies_to_families` scopes by family *name* (the same treatment
             // `VariantRecord.applies_to.families` gets) — names are never pins.
             RegistryRecord::MetricDeclaration(_) => Vec::new(),

@@ -32,10 +32,10 @@ use crate::kinds::{
     PublishRule, RecordKind, RequireConformance, SubjectKind, TestDriver, TestKind,
 };
 use crate::records::{
-    AppliesTo, CapabilityRecord, ClassRecord, ConformanceReport, ConformanceSuite,
-    ContractOperation, ForeignImport, Implementation, NamespaceRecord, ParamDecl,
-    RegistryDiagnostic, RegistryEnvelope, RegistryPolicy, RegistryRecord, RegistrySnapshot,
-    ReportHost, ReportResult, SuiteTest, VariantRecord, REGISTRY_DIALECT,
+    AppliesTo, CapabilityRecord, ClassRecord, ConformanceRecord, ConformanceReport,
+    ConformanceSuite, ContractOperation, ForeignImport, Implementation, NamespaceRecord,
+    ObservedIn, ParamDecl, RegistryDiagnostic, RegistryEnvelope, RegistryPolicy, RegistryRecord,
+    RegistrySnapshot, ReportHost, ReportResult, SuiteTest, VariantRecord, REGISTRY_DIALECT,
 };
 
 fn obj(pairs: Vec<(&str, Json)>) -> Json {
@@ -698,9 +698,69 @@ fn report_result_json(r: &ReportResult) -> Json {
     ])
 }
 
+fn hosted_entry_json(e: &ConformanceRecord) -> Json {
+    obj(vec![
+        (
+            "adapter_version_id",
+            Json::str(e.adapter_version_id.clone()),
+        ),
+        ("at", Json::Int(e.at as i64)),
+        ("declared", e.declared.clone()),
+        ("dimension", Json::str(e.dimension.clone())),
+        (
+            "evidence_ref",
+            e.evidence_ref.clone().map_or(Json::Null, Json::Str),
+        ),
+        ("observed", e.observed.clone()),
+        ("observed_in", Json::str(e.observed_in.as_str())),
+        (
+            "participant_version_identity",
+            Json::str(e.participant_version_identity.clone()),
+        ),
+        ("verdict", Json::str(e.verdict.as_str())),
+    ])
+}
+
+fn hosted_entry_from_json(j: &Json, path: &str) -> Result<ConformanceRecord, RegistryError> {
+    let declared = j.get("declared").cloned().unwrap_or(Json::Null);
+    let observed = j.get("observed").cloned().unwrap_or(Json::Null);
+    let verdict = ConformanceVerdict::parse(&req_str(j, "verdict", path)?).ok_or_else(|| {
+        RegistryError::SchemaViolation {
+            path: format!("{path}.verdict"),
+            detail: "closed vocabulary".to_string(),
+        }
+    })?;
+    if verdict != ConformanceRecord::derive_verdict(&declared, &observed) {
+        return Err(RegistryError::SchemaViolation {
+            path: format!("{path}.verdict"),
+            detail: "verdict must equal derive_verdict(declared, observed)".to_string(),
+        });
+    }
+    Ok(ConformanceRecord {
+        participant_version_identity: req_str(j, "participant_version_identity", path)?,
+        adapter_version_id: req_str(j, "adapter_version_id", path)?,
+        dimension: req_str(j, "dimension", path)?,
+        declared,
+        observed,
+        verdict,
+        observed_in: ObservedIn::parse(&req_str(j, "observed_in", path)?).ok_or_else(|| {
+            RegistryError::SchemaViolation {
+                path: format!("{path}.observed_in"),
+                detail: "closed vocabulary".to_string(),
+            }
+        })?,
+        evidence_ref: opt_str(j, "evidence_ref"),
+        at: req_u64(j, "at", path)?,
+    })
+}
+
 fn report_body_json(r: &ConformanceReport) -> Json {
     obj(vec![
         ("host", report_host_json(&r.host)),
+        (
+            "hosted_entries",
+            Json::Arr(r.hosted_entries.iter().map(hosted_entry_json).collect()),
+        ),
         (
             "probed_declaration",
             obj(r
@@ -758,16 +818,44 @@ fn report_from_json(j: &Json, path: &str) -> Result<ConformanceReport, RegistryE
             }
         }
     }
+    let mut hosted_entries = Vec::new();
+    if let Some(member) = j.get("hosted_entries") {
+        let arr = match member {
+            Json::Arr(a) => a,
+            _ => {
+                return Err(RegistryError::SchemaViolation {
+                    path: format!("{path}.hosted_entries"),
+                    detail: "expected array".to_string(),
+                })
+            }
+        };
+        for (i, e) in arr.iter().enumerate() {
+            hosted_entries.push(hosted_entry_from_json(
+                e,
+                &format!("{path}.hosted_entries[{i}]"),
+            )?);
+        }
+    }
+    let subject_kind = SubjectKind::parse(&req_str(j, "subject_kind", path)?).ok_or_else(|| {
+        RegistryError::SchemaViolation {
+            path: format!("{path}.subject_kind"),
+            detail: "closed vocabulary".to_string(),
+        }
+    })?;
+    // §6.6: hosted conformance entries are legal only on a participant-subject
+    // report (the participant record is the only subject a ConformanceRecord
+    // may pin).
+    if !hosted_entries.is_empty() && subject_kind != SubjectKind::Participant {
+        return Err(RegistryError::SchemaViolation {
+            path: format!("{path}.hosted_entries"),
+            detail: "hosted conformance entries require subject_kind = participant".to_string(),
+        });
+    }
     let hp = format!("{path}.host");
     let host = req(j, "host", path)?;
     Ok(ConformanceReport {
         report_id: req_str(j, "report_id", path)?,
-        subject_kind: SubjectKind::parse(&req_str(j, "subject_kind", path)?).ok_or_else(|| {
-            RegistryError::SchemaViolation {
-                path: format!("{path}.subject_kind"),
-                detail: "closed vocabulary".to_string(),
-            }
-        })?,
+        subject_kind,
         subject_ref: req_str(j, "subject_ref", path)?,
         suite_ref: req_str(j, "suite_ref", path)?,
         host: ReportHost {
@@ -793,6 +881,7 @@ fn report_from_json(j: &Json, path: &str) -> Result<ConformanceReport, RegistryE
         probed_declaration: probed,
         run_id: req_str(j, "run_id", path)?,
         stale: req_bool(j, "stale", path)?,
+        hosted_entries,
     })
 }
 
@@ -1255,6 +1344,9 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         // form `hh-env` minted — CC7 says the schema owner encodes, the
         // registry stores).
         RegistryRecord::EnvironmentRecord(b) => b.clone(),
+        // The opaque hosting bodies — `hh-hosting` owns the §6.6 schemas; the
+        // registry stores the canonical Json verbatim (same layering).
+        RegistryRecord::Participant(b) | RegistryRecord::Adapter(b) => b.clone(),
     }
 }
 
@@ -1379,6 +1471,32 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
                 }
             }
             Ok(RegistryRecord::EnvironmentRecord(j.clone()))
+        }
+        RecordKind::Participant | RecordKind::Adapter => {
+            // Opaque body, structural gate only — `hh-hosting` owns the §6.6
+            // schema (same layering as `EnvironmentRecord`). The registry
+            // requires the body's `kind` tag to match the record kind so a
+            // mistagged body can never register under the wrong kind.
+            let want = kind.as_str();
+            match j.get("kind").and_then(|k| k.as_str()) {
+                Some(t) if t == want => {}
+                Some(t) => {
+                    return Err(RegistryError::SchemaViolation {
+                        path: "record.kind".to_string(),
+                        detail: format!("{want} body carries kind tag {t}"),
+                    })
+                }
+                None => {
+                    return Err(RegistryError::SchemaViolation {
+                        path: "record.kind".to_string(),
+                        detail: format!("{want} body must carry kind: \"{want}\""),
+                    })
+                }
+            }
+            match kind {
+                RecordKind::Participant => Ok(RegistryRecord::Participant(j.clone())),
+                _ => Ok(RegistryRecord::Adapter(j.clone())),
+            }
         }
         other if !other.has_stage1_schema() => Err(RegistryError::SchemaViolation {
             path: "kind".to_string(),

@@ -178,6 +178,7 @@ fn report(subject: &str, suite_ref: &str, by: ProducedBy, run_id: &str) -> Confo
         )]),
         run_id: run_id.to_string(),
         stale: false,
+        hosted_entries: Vec::new(),
     }
 }
 

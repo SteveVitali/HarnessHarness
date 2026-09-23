@@ -490,6 +490,7 @@ fn revoke_refuses_execute_resolves_audit_and_marks_dependants_stale() {
         probed_declaration: BTreeMap::new(),
         run_id: "run1".to_string(),
         stale: false,
+        hosted_entries: Vec::new(),
     };
     let rv = s
         .register(RegistryRecord::Report(report), &kernel(), None)
@@ -979,6 +980,7 @@ fn probed_floor_reads_only_admissible_non_stale_reports() {
         )]),
         run_id: "run".to_string(),
         stale,
+        hosted_entries: Vec::new(),
     };
     s.register(
         RegistryRecord::Report(report(ProducedBy::PublisherClaim, false)),
@@ -1249,4 +1251,169 @@ fn environment_family_registers_and_a_family_scoped_metric_resolves() {
     assert_eq!(body, Json::Arr(vec![Json::str("coding_terminal")]));
     let back = MetricDeclaration::from_json(&j).unwrap();
     assert_eq!(back.applies_to_families, metric.applies_to_families);
+}
+
+// ── S3.4d — participant/adapter opaque kinds + hosted conformance (§6.6) ────
+
+use hh_registry::kinds::RecordKind;
+use hh_registry::records::{ConformanceRecord, ObservedIn};
+use hh_registry::schema::record_from_json;
+
+fn participant_body(id: &str) -> Json {
+    Json::obj([
+        ("kind", Json::str("participant")),
+        ("participant_id", Json::str(id)),
+        ("participant_version", Json::str("1.0.0")),
+        ("version_identity", Json::str("idp:test")),
+        (
+            "descriptor",
+            Json::obj([
+                ("class", Json::str("hosted")),
+                ("hosting_mechanism", Json::str("session_abi")),
+                (
+                    "observability_level",
+                    Json::Arr(vec![Json::str("events"), Json::str("end_state")]),
+                ),
+                ("capability_vector", Json::obj([])),
+            ]),
+        ),
+        ("capability_declaration", Json::obj([])),
+        ("ext", Json::obj([])),
+    ])
+}
+
+#[test]
+fn participant_and_adapter_bodies_register_opaque() {
+    // The structural gate: the body's `kind` tag must match the record kind;
+    // the body itself is opaque (hh-hosting owns the schema — CC7 layering).
+    let p = record_from_json(RecordKind::Participant, &participant_body("hh.reference"))
+        .expect("participant body");
+    assert!(matches!(p, RegistryRecord::Participant(_)));
+    // A mistagged body refuses — a participant body can never register as an
+    // adapter (and vice versa).
+    let mistagged = Json::obj([
+        ("kind", Json::str("adapter")),
+        ("participant_id", Json::str("x")),
+    ]);
+    assert!(matches!(
+        record_from_json(RecordKind::Participant, &mistagged),
+        Err(RegistryError::SchemaViolation { .. })
+    ));
+    // …and an absent tag refuses.
+    let untagged = Json::obj([("participant_id", Json::str("x"))]);
+    assert!(matches!(
+        record_from_json(RecordKind::Adapter, &untagged),
+        Err(RegistryError::SchemaViolation { .. })
+    ));
+    // The kinds admit no deeper structural schema at the registry layer.
+    assert!(RecordKind::Participant.has_stage1_schema());
+    assert!(RecordKind::Adapter.has_stage1_schema());
+
+    // Store admission — a participant body registers and resolves.
+    let d = dir("hosted-kinds");
+    let mut s = RegistryStore::open(&d, &kernel()).unwrap();
+    let pv = s
+        .register(
+            RegistryRecord::Participant(participant_body("hh.reference")),
+            &kernel(),
+            None,
+        )
+        .unwrap();
+    assert!(!pv.version_id.is_empty());
+}
+
+fn hosted_entry(subject: &str) -> ConformanceRecord {
+    ConformanceRecord::observed_entry(
+        subject,
+        "adapter-zero/1",
+        "streaming",
+        Json::str("supported"),
+        Json::str("supported"),
+        ObservedIn::Probe,
+        Some("ev:1".to_string()),
+        7,
+    )
+}
+
+#[test]
+fn hosted_conformance_entries_gate_on_participant_subject() {
+    // The §6.6 verdict is derived, never authored: `supported` when declared
+    // and observed agree, `drift` when both concrete and they differ, and
+    // non-concrete values never coerce into a verdict (T-LCD-07).
+    let e = hosted_entry("p1");
+    assert_eq!(e.verdict, ConformanceVerdict::Supported);
+    let drift = ConformanceRecord::observed_entry(
+        "p1",
+        "a1",
+        "streaming",
+        Json::str("supported"),
+        Json::str("unsupported"),
+        ObservedIn::Run,
+        None,
+        0,
+    );
+    assert_eq!(drift.verdict, ConformanceVerdict::Drift);
+    let unk = ConformanceRecord::observed_entry(
+        "p1",
+        "a1",
+        "streaming",
+        Json::str("supported"),
+        Json::str("unknown"),
+        ObservedIn::Run,
+        None,
+        0,
+    );
+    assert_eq!(unk.verdict, ConformanceVerdict::Unknown);
+    // Staleness pins the observed version (§6.6).
+    assert!(e.is_stale("other-version"));
+    assert!(!e.is_stale("p1"));
+
+    // A report carrying hosted entries on a non-participant subject refuses
+    // at the codec (hosted entries pin a participant record only).
+    let d = dir("hosted-conf");
+    let mut s = RegistryStore::open(&d, &kernel()).unwrap();
+    let c = register_class(&mut s, "c1");
+    let v = s
+        .register(
+            RegistryRecord::Variant(variant(&c, "v1", Placement::SubprocessConfined)),
+            &kernel(),
+            None,
+        )
+        .unwrap();
+    let sv = s
+        .register(
+            RegistryRecord::Suite(ConformanceSuite {
+                suite_id: "sv1".to_string(),
+                class_ref: c.clone(),
+                contract_version: "1.0".to_string(),
+                tests: vec![],
+                required_for_status: BTreeSet::new(),
+            }),
+            &kernel(),
+            None,
+        )
+        .unwrap();
+    let report = ConformanceReport {
+        report_id: "rep-hosted".to_string(),
+        subject_kind: SubjectKind::Variant,
+        subject_ref: v.version_id.clone(),
+        suite_ref: sv.version_id.clone(),
+        host: ReportHost {
+            placement: Placement::SubprocessConfined,
+            isolation: "x".to_string(),
+            instrument: hh_identity::repro::InstrumentRecord::new("1", "abc", false),
+        },
+        produced_by: ProducedBy::RegistryCi,
+        results: vec![],
+        probed_declaration: BTreeMap::new(),
+        run_id: "run1".to_string(),
+        stale: false,
+        hosted_entries: vec![hosted_entry("p1")],
+    };
+    // …refused at admission (the codec gate is structural; the store gate
+    // additionally requires the subject pin to resolve to a participant).
+    assert!(matches!(
+        s.register(RegistryRecord::Report(report), &kernel(), None),
+        Err(RegistryError::SchemaViolation { .. })
+    ));
 }
