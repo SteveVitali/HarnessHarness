@@ -68,8 +68,11 @@ pub struct ExpandContext<'a> {
     /// `level ref → n/a{reason}` when the level is ineligible under the pinned
     /// snapshot (`slot_choices` floor / absent capability). `None` = no
     /// capability view at this layer — no cell is marked.
-    pub level_ineligible: Option<&'a dyn Fn(&str) -> Option<NaReason>>,
+    pub level_ineligible: Option<&'a LevelEligibility<'a>>,
 }
+
+/// `level ref → n/a{reason}` — the eligibility resolver type (T-LCD-15).
+pub type LevelEligibility<'a> = dyn Fn(&str) -> Option<NaReason> + 'a;
 
 /// `expand`'s failure sum — a register-class refusal, or a per-cell assembly
 /// diagnostic (§6.3 `expand`'s failure column).
@@ -109,10 +112,7 @@ pub fn varied_factors(spec: &ExperimentSpec) -> Vec<&FactorSpec> {
 
 /// The factor/level point an arm occupies, restricted to the varied factors —
 /// the design-space coordinate.
-pub fn arm_point<'a>(
-    spec: &'a ExperimentSpec,
-    arm: &'a ArmSpec,
-) -> BTreeMap<&'a str, &'a str> {
+pub fn arm_point<'a>(spec: &'a ExperimentSpec, arm: &'a ArmSpec) -> BTreeMap<&'a str, &'a str> {
     let varied: BTreeSet<&str> = varied_factors(spec)
         .iter()
         .map(|f| f.name.as_str())
@@ -215,10 +215,7 @@ pub fn parse_generator(s: &str) -> Option<Generator> {
     if factor.is_empty() {
         return None;
     }
-    let mut word: Vec<String> = rhs
-        .split(':')
-        .map(|w| w.trim().to_string())
-        .collect();
+    let mut word: Vec<String> = rhs.split(':').map(|w| w.trim().to_string()).collect();
     if word.iter().any(|w| w.is_empty()) {
         return None;
     }
@@ -248,7 +245,7 @@ pub fn defining_subgroup(generators: &[Generator]) -> Vec<BTreeSet<String>> {
         subgroup.extend(additions);
     }
     let mut v: Vec<BTreeSet<String>> = subgroup.into_iter().collect();
-    v.sort_by(|a, b| (a.len(), effect_spelling(a)).cmp(&(b.len(), effect_spelling(b))));
+    v.sort_by_key(|a| (a.len(), effect_spelling(a)));
     v
 }
 
@@ -284,7 +281,10 @@ pub fn parse_effect(s: &str) -> Option<BTreeSet<String>> {
 
 /// `effect`'s alias class — `{effect Δ w : w ∈ subgroup}` (the effect is its
 /// own alias under `w = ∅`).
-pub fn alias_class(effect: &BTreeSet<String>, subgroup: &[BTreeSet<String>]) -> BTreeSet<BTreeSet<String>> {
+pub fn alias_class(
+    effect: &BTreeSet<String>,
+    subgroup: &[BTreeSet<String>],
+) -> BTreeSet<BTreeSet<String>> {
     subgroup
         .iter()
         .map(|w| effect.symmetric_difference(w).cloned().collect())
@@ -295,10 +295,7 @@ pub fn alias_class(effect: &BTreeSet<String>, subgroup: &[BTreeSet<String>]) -> 
 /// `{"defining_words": […], "aliases": {"<effect>": ["<aliased>", …]}}` over
 /// every main effect and two-factor interaction of the varied factors
 /// (deterministic: `BTreeMap`/sorted members throughout).
-pub fn aliasing_table(
-    factors: &[&FactorSpec],
-    subgroup: &[BTreeSet<String>],
-) -> Json {
+pub fn aliasing_table(factors: &[&FactorSpec], subgroup: &[BTreeSet<String>]) -> Json {
     let names: Vec<String> = factors.iter().map(|f| f.name.clone()).collect();
     let mut effects: BTreeSet<BTreeSet<String>> = BTreeSet::new();
     for n in &names {
@@ -340,7 +337,10 @@ pub fn aliasing_table(
 /// combination over the *free* (non-generated) factors, with each generated
 /// factor's level fixed by the ±1 product convention (level index =
 /// XOR of the word's level indices).
-pub fn fraction_points(spec: &ExperimentSpec, generators: &[Generator]) -> Vec<BTreeMap<String, String>> {
+pub fn fraction_points(
+    spec: &ExperimentSpec,
+    generators: &[Generator],
+) -> Vec<BTreeMap<String, String>> {
     let varied = varied_factors(spec);
     let generated: BTreeSet<&str> = generators.iter().map(|g| g.factor.as_str()).collect();
     let free: Vec<&&FactorSpec> = varied
@@ -367,10 +367,9 @@ pub fn fraction_points(spec: &ExperimentSpec, generators: &[Generator]) -> Vec<B
             };
             let mut parity = 0usize;
             for w in &g.word {
-                if let (Some(wf), Some(lid)) = (
-                    varied.iter().find(|f| &f.name == w),
-                    p.get(w.as_str()),
-                ) {
+                if let (Some(wf), Some(lid)) =
+                    (varied.iter().find(|f| &f.name == w), p.get(w.as_str()))
+                {
                     parity ^= wf
                         .levels
                         .iter()
@@ -402,18 +401,39 @@ pub fn block_of(order: &OrderPlan, kind: OrderKind, rp: &RunPlan) -> u32 {
 }
 
 /// The deterministic order key — `(block, position)`: `serial` runs in
-/// declaration order (`decl_index`); the interleaved orders position by
+/// declaration order (`decl_index`); `random_permuted` positions by
 /// `H(permutation_seed ∥ run_plan_id)` so the order is reproducible from the
-/// recorded seed alone (S-6).
+/// recorded seed alone (S-6); the `interleaved` orders produce the
+/// **task-blocked, arm-interleaved** sequence (AC-R-2.10.3-4): within a
+/// block, tasks group by a seeded task rank, then each replicate round
+/// rotates the arms by a seeded arm rank — `(task_rank, replicate,
+/// arm_rank)`, all derived under the `experiment.order.*` domains from
+/// `permutation_seed`.
 pub fn order_key(
     order: &OrderPlan,
     kind: OrderKind,
     rp: &RunPlan,
     decl_index: u32,
+    task_id: &str,
+    arm_id: &str,
 ) -> (u32, String) {
     let block = block_of(order, kind, rp);
     match kind {
         OrderKind::Serial => (block, format!("{decl_index:012}")),
+        OrderKind::Interleaved | OrderKind::InterleavedBlocked => {
+            let task_rank = derive_u64(
+                "experiment.order.task",
+                &format!("{}:{}", order.permutation_seed, task_id),
+            );
+            let arm_rank = derive_u64(
+                "experiment.order.arm",
+                &format!("{}:{}:{}", order.permutation_seed, task_id, arm_id),
+            );
+            (
+                block,
+                format!("{task_rank:016x}:{:08}:{arm_rank:016x}", rp.replicate_index),
+            )
+        }
         _ => (
             block,
             idp_digest(

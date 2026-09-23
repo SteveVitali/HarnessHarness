@@ -63,6 +63,10 @@ pub struct Attempt {
     pub veto_tripped: Vec<String>,
     /// The settle-time budget utilisation record.
     pub budget_utilization: Option<Json>,
+    /// `oracle_failure` settlements record `regrade = true` — the plan is
+    /// final and a regrade overlay is pending; the subject is never re-run
+    /// (AC-R-2.10.3-6; ADR-0155 D5).
+    pub regrade_pending: bool,
 }
 
 /// The scheduler's per-plan state.
@@ -108,7 +112,10 @@ pub struct PlanState {
 impl PlanState {
     /// The in-flight attempt (launched, not settled), if any.
     pub fn in_flight(&self) -> Option<&Attempt> {
-        self.attempts.iter().rev().find(|a| a.outcome.is_none() && !a.superseded)
+        self.attempts
+            .iter()
+            .rev()
+            .find(|a| a.outcome.is_none() && !a.superseded)
     }
 
     /// Whether the plan may be dispatched at `now_ms` (reconcile-before-
@@ -232,7 +239,9 @@ impl ExperimentView {
                 });
             }
             c if c == class::RUN_PLANNED => {
-                let Some(rpid) = s(p, "run_plan_id") else { return };
+                let Some(rpid) = s(p, "run_plan_id") else {
+                    return;
+                };
                 self.plans.insert(
                     rpid.clone(),
                     PlanState {
@@ -256,7 +265,9 @@ impl ExperimentView {
                 );
             }
             c if c == class::RUN_CLAIMED => {
-                let Some(rpid) = s(p, "run_plan_id") else { return };
+                let Some(rpid) = s(p, "run_plan_id") else {
+                    return;
+                };
                 if let Some(ps) = self.plans.get_mut(&rpid) {
                     ps.claim = Some(ClaimState {
                         lease_id: s(p, "lease_id").unwrap_or_default(),
@@ -266,7 +277,9 @@ impl ExperimentView {
                 }
             }
             c if c == class::CLAIM_EXPIRED => {
-                let Some(rpid) = s(p, "run_plan_id") else { return };
+                let Some(rpid) = s(p, "run_plan_id") else {
+                    return;
+                };
                 let lease = s(p, "lease_id");
                 if let Some(ps) = self.plans.get_mut(&rpid) {
                     if ps.claim.as_ref().map(|c| &c.lease_id) == lease.as_ref() {
@@ -275,7 +288,9 @@ impl ExperimentView {
                 }
             }
             c if c == class::RUN_LAUNCHED => {
-                let Some(rpid) = s(p, "run_plan_id") else { return };
+                let Some(rpid) = s(p, "run_plan_id") else {
+                    return;
+                };
                 let Some(run_id) = s(p, "run_id") else { return };
                 if let Some(ps) = self.plans.get_mut(&rpid) {
                     ps.claim = None; // the claim consumed into the launch
@@ -290,6 +305,7 @@ impl ExperimentView {
                         excluded: None,
                         veto_tripped: Vec::new(),
                         budget_utilization: None,
+                        regrade_pending: false,
                     });
                 }
             }
@@ -307,14 +323,19 @@ impl ExperimentView {
                 }
             }
             c if c == class::RUN_SETTLED => {
-                let Some(rpid) = s(p, "run_plan_id") else { return };
+                let Some(rpid) = s(p, "run_plan_id") else {
+                    return;
+                };
                 let Some(run_id) = s(p, "run_id") else { return };
                 let outcome = s(p, "outcome_class").and_then(|o| OutcomeClass::parse(&o));
                 let accepted = b(p, "accepted").unwrap_or(false);
                 let superseded = b(p, "superseded").unwrap_or(false);
                 let plan_final = b(p, "plan_final").unwrap_or(false);
                 if let Some(oc) = &outcome {
-                    *self.outcome_counts.entry(oc.as_str().to_string()).or_insert(0) += 1;
+                    *self
+                        .outcome_counts
+                        .entry(oc.as_str().to_string())
+                        .or_insert(0) += 1;
                 }
                 if let Some(ps) = self.plans.get_mut(&rpid) {
                     if let Some(a) = ps.attempts.iter_mut().find(|a| a.run_id == run_id) {
@@ -322,11 +343,16 @@ impl ExperimentView {
                         a.accepted = accepted;
                         a.superseded = superseded;
                         a.budget_utilization = p.get("budget_utilization").cloned();
+                        a.regrade_pending = b(p, "regrade").unwrap_or(false);
                         a.veto_tripped = p
                             .get("veto_tripped")
                             .and_then(|v| match v {
                                 Json::Arr(items) => Some(
-                                    items.iter().filter_map(Json::as_str).map(str::to_string).collect(),
+                                    items
+                                        .iter()
+                                        .filter_map(Json::as_str)
+                                        .map(str::to_string)
+                                        .collect(),
                                 ),
                                 _ => None,
                             })
@@ -352,7 +378,8 @@ impl ExperimentView {
                     return;
                 };
                 let reason = s(p, "reason").unwrap_or_default();
-                self.exclusions.push((rpid.clone(), run_id.clone(), reason.clone()));
+                self.exclusions
+                    .push((rpid.clone(), run_id.clone(), reason.clone()));
                 if let Some(ps) = self.plans.get_mut(&rpid) {
                     if let Some(a) = ps.attempts.iter_mut().find(|a| a.run_id == run_id) {
                         a.excluded = Some(reason);
@@ -360,7 +387,9 @@ impl ExperimentView {
                 }
             }
             c if c == class::RUN_REPLANNED => {
-                let Some(rpid) = s(p, "run_plan_id") else { return };
+                let Some(rpid) = s(p, "run_plan_id") else {
+                    return;
+                };
                 if let Some(ps) = self.plans.get_mut(&rpid) {
                     ps.next_attempt_no = i(p, "attempt_no").unwrap_or(2) as u32;
                     ps.not_before_ms = i(p, "not_before_ms").unwrap_or(0) as u64;
@@ -439,12 +468,18 @@ impl ExperimentView {
 
     /// The count of in-flight (launched-unsettled) runs.
     pub fn in_flight_count(&self) -> usize {
-        self.plans.values().filter(|p| p.in_flight().is_some()).count()
+        self.plans
+            .values()
+            .filter(|p| p.in_flight().is_some())
+            .count()
     }
 
     /// The accepted-run count.
     pub fn accepted_count(&self) -> usize {
-        self.plans.values().filter(|p| p.accepted_run.is_some()).count()
+        self.plans
+            .values()
+            .filter(|p| p.accepted_run.is_some())
+            .count()
     }
 
     /// The distinct cells the plan covers.

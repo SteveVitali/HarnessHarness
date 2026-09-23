@@ -26,9 +26,7 @@ use hh_ledger::event::{Event, Producer, Scope};
 use hh_ledger::ids::ManualClock;
 use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
 use hh_ontology::config::Ref;
-use hh_ontology::control::{
-    CancelledBy, InfraError, InfraErrorFamily, OutcomeClass, StopReason,
-};
+use hh_ontology::control::{CancelledBy, InfraError, InfraErrorFamily, OutcomeClass, StopReason};
 use hh_ontology::eval::{
     Design, DesignKind, FactorDeclaration, FactorLevel, Pairing, PreRegistration, SeedPolicy,
 };
@@ -41,11 +39,7 @@ use hh_wire::json::Json;
 // ── fixture plumbing ────────────────────────────────────────────────────────
 
 fn tmp(tag: &str) -> PathBuf {
-    let p = std::env::temp_dir().join(format!(
-        "hh-experiment-test-{}-{}",
-        tag,
-        std::process::id()
-    ));
+    let p = std::env::temp_dir().join(format!("hh-experiment-test-{}-{}", tag, std::process::id()));
     let _ = std::fs::remove_dir_all(&p);
     std::fs::create_dir_all(&p).unwrap();
     p
@@ -66,13 +60,8 @@ struct Rig {
 fn rig(tag: &str, now_ms: u64) -> Rig {
     let root = tmp(tag);
     let clock = ManualClock::at(now_ms);
-    let store = Store::open_with(
-        &root,
-        Box::new(clock.clone()),
-        None,
-        DEFAULT_BLOB_MAX_BYTES,
-    )
-    .unwrap();
+    let store =
+        Store::open_with(&root, Box::new(clock.clone()), None, DEFAULT_BLOB_MAX_BYTES).unwrap();
     let docs = LabDocs::open(&root).unwrap();
     Rig {
         root,
@@ -105,10 +94,7 @@ fn arm(arm_id: &str, level: &str, eval: &str, search: Option<&str>) -> ArmSpec {
     ArmSpec {
         arm_id: arm_id.to_string(),
         hypothesis: format!("{arm_id} does better"),
-        level_assignment: BTreeMap::from([(
-            "compaction_strategy".to_string(),
-            level.to_string(),
-        )]),
+        level_assignment: BTreeMap::from([("compaction_strategy".to_string(), level.to_string())]),
         eval_budget: eval.to_string(),
         search_budget: search.map(str::to_string),
         match_spec: Some(MatchSpec::matched_cap(&[DimensionId::ModelCalls])),
@@ -334,10 +320,7 @@ fn finish_subject(
         "lifecycle.run.finished",
         Json::obj([
             ("stop_reason", stop.to_json()),
-            (
-                "outcome_class",
-                Json::str(stop.outcome_class().as_str()),
-            ),
+            ("outcome_class", Json::str(stop.outcome_class().as_str())),
         ]),
     ));
     // Chain the parents (the append's batch-local known_ids rule).
@@ -350,7 +333,11 @@ fn finish_subject(
 }
 
 /// Run the whole lifecycle to close: next → claim → launch → drive → settle.
-fn run_to_close(rig: &mut Rig, eid: &str, consumed: i64) -> hh_experiment::events::ExperimentReport {
+fn run_to_close(
+    rig: &mut Rig,
+    eid: &str,
+    consumed: i64,
+) -> hh_experiment::events::ExperimentReport {
     loop {
         let mut eng = ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx());
         eng.attach(eid).unwrap();
@@ -420,10 +407,7 @@ fn register_refusal_corpus() {
     let mut s = base.clone();
     s.pre_registration = None;
     s.experiment_id = s.experiment_id();
-    assert_eq!(
-        register_err(&mut r, &s, ctx()),
-        "MissingPreRegistration"
-    );
+    assert_eq!(register_err(&mut r, &s, ctx()), "MissingPreRegistration");
 
     // InsufficientReplicates — the context floor is 5, the spec declares 2.
     assert_eq!(
@@ -469,20 +453,14 @@ fn register_refusal_corpus() {
         .level_assignment
         .insert("compaction_strategy".to_string(), "nope".to_string());
     s.experiment_id = s.experiment_id();
-    assert_eq!(
-        register_err(&mut r, &s, ctx()),
-        "InadmissibleFactor"
-    );
+    assert_eq!(register_err(&mut r, &s, ctx()), "InadmissibleFactor");
 
     // ResolutionInsufficient — generators/resolution on a non-fractional kind.
     let mut s = base.clone();
     s.design.generators = Some(vec!["a=b".to_string()]);
     s.design.resolution = Some(hh_ontology::eval::FractionalResolution::III);
     s.experiment_id = s.experiment_id();
-    assert_eq!(
-        register_err(&mut r, &s, ctx()),
-        "ResolutionInsufficient"
-    );
+    assert_eq!(register_err(&mut r, &s, ctx()), "ResolutionInsufficient");
 
     // DependsOnDriftedCapability — the context's drift view trips.
     let drift = pinned("level.evict");
@@ -515,10 +493,7 @@ fn register_refusal_corpus() {
             ..ctx()
         },
     );
-    assert!(
-        e == "IncommensurableMatch" || e == "UnmatchedBudget",
-        "{e}"
-    );
+    assert!(e == "IncommensurableMatch" || e == "UnmatchedBudget", "{e}");
 }
 
 #[test]
@@ -536,7 +511,9 @@ fn refusal_codes_cover_the_closed_set() {
             reason: "r".into(),
         },
         hh_lab::experiment::ExperimentRefusal::MissingPreRegistration,
-        hh_lab::experiment::ExperimentRefusal::SplitUnassigned { suite_ref: "s".into() },
+        hh_lab::experiment::ExperimentRefusal::SplitUnassigned {
+            suite_ref: "s".into(),
+        },
         hh_lab::experiment::ExperimentRefusal::LeakedSplit { detail: "d".into() },
         hh_lab::experiment::ExperimentRefusal::UnsealedArtifact {
             artifact_ref: "a".into(),
@@ -602,11 +579,7 @@ fn expand_marks_ineligible_cells_na() {
     let plan = r.docs.plan(&pid).unwrap().unwrap();
     // The `clear_tool_results` cell is planned-with-`n/a{capability}` and
     // yields no run plans (T-LCD-15 — typed, never dropped).
-    let na_cell = plan
-        .cells
-        .iter()
-        .find(|c| c.arm_id == "arm:b")
-        .unwrap();
+    let na_cell = plan.cells.iter().find(|c| c.arm_id == "arm:b").unwrap();
     assert!(na_cell.na_reason.is_some());
     assert_eq!(plan.run_plans.len(), 2);
     assert!(plan.run_plans.iter().all(|p| {
@@ -656,10 +629,7 @@ fn open_commits_declared_planned_and_bracket() {
     let view = ExperimentView::fold(r.store.events(&run_id).unwrap());
     assert_eq!(view.declared.as_ref().unwrap().experiment_id, eid);
     assert_eq!(view.plans.len(), 4);
-    assert!(view
-        .drift_brackets
-        .iter()
-        .any(|b| b.phase == "opened"));
+    assert!(view.drift_brackets.iter().any(|b| b.phase == "opened"));
     // Rebuild equality — the fold is deterministic over the same stream.
     assert_eq!(view, ExperimentView::fold(r.store.events(&run_id).unwrap()));
     // A second open on the same experiment refuses AlreadyOpen.
@@ -701,8 +671,7 @@ fn claim_blocks_second_claimant_until_expiry() {
     let mut r = rig("claim-expiry", 1_000);
     let s = spec(ExperimentKind::Comparative);
     let (eid, _run_id) = open(&mut r, &s);
-    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx())
-        .with_ttls(60_000, 100);
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx()).with_ttls(60_000, 100);
     eng.attach(&eid).unwrap();
     let rpid = match eng.next().unwrap() {
         NextVerdict::Plan { run_plan_id } => run_plan_id,
@@ -715,9 +684,8 @@ fn claim_blocks_second_claimant_until_expiry() {
         ExperimentError::WouldBlock { .. }
     ));
     // The claim is still inside its TTL — `next` holds the plan back.
-    match eng.next().unwrap() {
-        NextVerdict::Plan { run_plan_id } => assert_ne!(run_plan_id, rpid),
-        _ => {}
+    if let NextVerdict::Plan { run_plan_id } = eng.next().unwrap() {
+        assert_ne!(run_plan_id, rpid);
     }
     // Advance past the claim TTL — reconcile appends `claim_expired` and the
     // plan returns to eligible.
@@ -770,10 +738,14 @@ fn launch_requires_a_live_claim() {
     assert_eq!(out.attempt_no, 1);
     let exp_run_id = eng.run_id().map(str::to_string);
     drop(eng);
-    // The subject run carries the complete row-key binding.
+    // The subject run carries the complete row-key binding — the arm is
+    // whichever plan the seeded order dispatches first.
+    let expected_arm = ExperimentView::fold(r.store.events(&_run_id).unwrap()).plans[&rpid]
+        .arm_id
+        .clone();
     let m = r.store.manifest(&out.run_id).unwrap();
     let binding = m.experiment.as_ref().unwrap();
-    assert_eq!(binding.arm_id.as_deref(), Some("arm:a"));
+    assert_eq!(binding.arm_id.as_deref(), Some(expected_arm.as_str()));
     assert_eq!(binding.attempt_no, Some(1));
     assert_eq!(binding.comparable, Some(true));
     assert_eq!(
@@ -958,7 +930,10 @@ fn pause_gates_next_claim_launch_but_not_settle() {
     eng.attach(&eid).unwrap();
     assert!(eng.settle(&rpid).unwrap().accepted);
     eng.resume().unwrap();
-    assert!(matches!(eng.next().unwrap(), NextVerdict::Plan { .. } | NextVerdict::Done));
+    assert!(matches!(
+        eng.next().unwrap(),
+        NextVerdict::Plan { .. } | NextVerdict::Done
+    ));
 }
 
 #[test]
@@ -984,10 +959,7 @@ fn close_blocks_while_plans_are_open() {
     ));
     // `partial = true` closes with the honest coverage row.
     let report = eng.close(true).unwrap();
-    assert_eq!(
-        report.status,
-        hh_experiment::events::CloseStatus::Partial
-    );
+    assert_eq!(report.status, hh_experiment::events::CloseStatus::Partial);
     // Post-close gates (S-4): no next/claim/launch/settle.
     assert!(matches!(
         eng.next().unwrap_err(),
@@ -1102,9 +1074,7 @@ fn launch_refuses_insufficient_budget_and_stays_replannable() {
         &mut r.store,
         r.docs.clone(),
         EngineContext {
-            resolve_budget: Some(Box::new(move |r: &str| {
-                budgets().get(r).cloned()
-            })),
+            resolve_budget: Some(Box::new(move |r: &str| budgets().get(r).cloned())),
             ..ctx()
         },
     );
@@ -1140,7 +1110,10 @@ fn launch_refuses_insufficient_budget_and_stays_replannable() {
     // `InsufficientBudget`; the claim is not consumed (re-plannable).
     let e = eng.launch(&t1, "subject").unwrap_err();
     assert!(
-        matches!(e, ExperimentError::Budget(_) | ExperimentError::InsufficientBudget { .. }),
+        matches!(
+            e,
+            ExperimentError::Budget(_) | ExperimentError::InsufficientBudget { .. }
+        ),
         "{e:?}"
     );
     // After the claim lapses, `next` emits `paused{budget_exhausted}` and
@@ -1268,7 +1241,8 @@ fn ctx_exemplar(tag: &str, n_tasks: usize) -> EngineContext<'static> {
 }
 
 fn open_with(rig: &mut Rig, spec: &ExperimentSpec, tag: &str, n_tasks: usize) -> (String, String) {
-    let mut eng = ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx_exemplar(tag, n_tasks));
+    let mut eng =
+        ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx_exemplar(tag, n_tasks));
     let eid = eng.register(spec).unwrap();
     eng.expand(&eid).unwrap();
     let run_id = eng.open_experiment(&eid).unwrap();
@@ -1385,4 +1359,359 @@ fn exemplar_control_strategy_executes_with_iso_companion() {
     let v1 = ExperimentView::fold(r.store.events(&run_id).unwrap());
     let v2 = ExperimentView::fold(r.store.events(&run_id).unwrap());
     assert_eq!(v1, v2);
+}
+
+// ── S3.4a self-review fixes: outcome-class semantics, order, E-3/E-4 ───────
+
+/// AC-R-2.10.3-6 — `oracle_failure` marks the cell regrade-only. It must never
+/// re-run the plan: no `run_replanned` event, no second dispatch, and the
+/// settlement row carries the regrade markers.
+#[test]
+fn oracle_failure_marks_regrade_never_reruns() {
+    let mut r = rig("oracle-regrade", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let (rpid, l) = launch_one(&mut r, &eid);
+    // The subject finished cleanly but the oracle row reports a fault —
+    // the experiment's own settlement sees `oracle_failure`.
+    let consumed = mint(
+        &r.store,
+        &l.run_id,
+        "control.budget.consumed",
+        Json::obj([
+            ("dimension", Json::str("model_calls")),
+            ("amount", Json::Int(10)),
+        ]),
+    );
+    let ev = mint(
+        &r.store,
+        &l.run_id,
+        "lifecycle.run.finished",
+        Json::obj([
+            ("stop_reason", Json::obj([("kind", Json::str("completed"))])),
+            ("outcome_class", Json::str("oracle_failure")),
+            ("regrade_reason", Json::str("oracle_timeout")),
+        ]),
+    );
+    r.store
+        .append(&l.run_id, &l.subject_writer, vec![consumed, ev])
+        .unwrap();
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let out = eng.settle(&rpid).unwrap();
+    assert_eq!(out.outcome_class, OutcomeClass::OracleFailure);
+    assert!(out.plan_final);
+    assert!(!out.replanned);
+    assert!(!out.superseded);
+    assert!(out.regrade_pending);
+    drop(eng);
+    // No re-run: the ledger carries no `run_replanned` naming this plan.
+    let evs = r.store.events(&run_id).unwrap().to_vec();
+    assert!(!evs.iter().any(|e| {
+        e.class == "measurement.experiment.run_replanned"
+            && e.payload.get("run_plan_id").and_then(Json::as_str) == Some(rpid.as_str())
+    }));
+    // The settled row carries the regrade members.
+    let settled = evs
+        .iter()
+        .find(|e| {
+            e.class == "measurement.experiment.run_settled"
+                && e.payload.get("run_plan_id").and_then(Json::as_str) == Some(rpid.as_str())
+        })
+        .unwrap();
+    assert_eq!(settled.payload.get("regrade"), Some(&Json::Bool(true)));
+    // And `next` never re-dispatches the plan.
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    if let NextVerdict::Plan { run_plan_id: next } = eng.next().unwrap() {
+        assert_ne!(next, rpid);
+    }
+    // Idempotent replay.
+    let out2 = eng.settle(&rpid).unwrap();
+    assert_eq!(out2.outcome_class, OutcomeClass::OracleFailure);
+    assert!(out2.regrade_pending);
+}
+
+/// §2.3 cancellation table — `cancelled{principal}` and `cancelled{parent}`
+/// are final regardless of the declared `on_cancel`; `cancelled{operator}`
+/// follows the declared policy.
+#[test]
+fn cancelled_by_principal_is_final_under_replan_policy() {
+    let mut r = rig("cancel-principal", 0);
+    let mut s = spec(ExperimentKind::Comparative);
+    s.reattempt.on_cancel = CancelPolicy::Replan;
+    s.experiment_id = s.experiment_id();
+    let (eid, _run_id) = open(&mut r, &s);
+    let (rpid, l) = launch_one(&mut r, &eid);
+    finish_subject(
+        &mut r.store,
+        &l.run_id,
+        &l.subject_writer,
+        StopReason::Cancelled {
+            by: CancelledBy::Principal,
+        },
+        &[],
+    );
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let out = eng.settle(&rpid).unwrap();
+    assert!(out.plan_final);
+    assert!(!out.replanned);
+    assert!(!eng
+        .project()
+        .unwrap()
+        .plans
+        .get(&rpid)
+        .unwrap()
+        .eligible_at(0));
+    drop(eng);
+
+    // `operator` cancellation under the same spec re-plans.
+    let (rpid2, l2) = launch_one(&mut r, &eid);
+    finish_subject(
+        &mut r.store,
+        &l2.run_id,
+        &l2.subject_writer,
+        StopReason::Cancelled {
+            by: CancelledBy::Operator,
+        },
+        &[],
+    );
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let out2 = eng.settle(&rpid2).unwrap();
+    assert!(out2.replanned);
+}
+
+/// §2.2 — the recorded `run_planned` order under `interleaved` is
+/// task-blocked, arm-interleaved: every task's plans are contiguous and each
+/// replicate round within a block carries every arm.
+#[test]
+fn interleaved_order_is_task_blocked_arm_interleaved() {
+    let mut r = rig("order-blocks", 0);
+    let mut s = spec(ExperimentKind::Comparative);
+    s.scheduling.order = OrderKind::Interleaved;
+    s.experiment_id = s.experiment_id();
+    let c = EngineContext {
+        suite_tasks: Some(Box::new(|_| {
+            Some(vec![
+                ExpandTask {
+                    task_id: "task:1".to_string(),
+                    split_label: SplitLabel::Dev,
+                },
+                ExpandTask {
+                    task_id: "task:2".to_string(),
+                    split_label: SplitLabel::Dev,
+                },
+            ])
+        })),
+        ..ctx()
+    };
+    let (eid, run_id) = {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), c);
+        let eid = eng.register(&s).unwrap();
+        eng.expand(&eid).unwrap();
+        let run_id = eng.open_experiment(&eid).unwrap();
+        (eid, run_id)
+    };
+    let _ = eid;
+    let evs = r.store.events(&run_id).unwrap().to_vec();
+    let planned: Vec<(String, String, i64)> = evs
+        .iter()
+        .filter(|e| e.class == "measurement.experiment.run_planned")
+        .map(|e| {
+            (
+                e.payload
+                    .get("task_id")
+                    .and_then(Json::as_str)
+                    .unwrap()
+                    .to_string(),
+                e.payload
+                    .get("arm_id")
+                    .and_then(Json::as_str)
+                    .unwrap()
+                    .to_string(),
+                e.payload
+                    .get("replicate_index")
+                    .and_then(Json::as_int)
+                    .unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(planned.len(), 8); // 2 arms × 2 tasks × 2 replicates
+                                  // Task-blocked: task membership changes at most once.
+    let mut task_runs: Vec<String> = Vec::new();
+    for (task, _, _) in &planned {
+        if task_runs.last() != Some(task) {
+            task_runs.push(task.clone());
+        }
+    }
+    assert_eq!(task_runs.len(), 2, "planned order must be task-blocked");
+    // Within each task block: rep-major, and every replicate round covers
+    // both arms (arm-interleaved).
+    let mut i = 0;
+    while i < planned.len() {
+        let task = planned[i].0.clone();
+        let mut j = i;
+        let mut block = Vec::new();
+        while j < planned.len() && planned[j].0 == task {
+            block.push(planned[j].clone());
+            j += 1;
+        }
+        assert_eq!(block.len(), 4, "task {task}: 2 arms × 2 reps");
+        let reps: Vec<i64> = block.iter().map(|r| r.2).collect();
+        let mut sorted = reps.clone();
+        sorted.sort_unstable();
+        assert_eq!(reps, sorted, "task {task}: replicate rounds are rep-major");
+        for rep in [0i64, 1] {
+            let arms: std::collections::BTreeSet<&str> = block
+                .iter()
+                .filter(|r| r.2 == rep)
+                .map(|r| r.1.as_str())
+                .collect();
+            assert_eq!(
+                arms.len(),
+                2,
+                "task {task} rep {rep} must interleave both arms"
+            );
+        }
+        i = j;
+    }
+    // The deterministic order is stable: `permutation_seed` rotates arm ranks
+    // but never breaks task blocks.
+}
+
+/// E-3 — `utilization_floor_ppm` arms the under-utilisation annotation; a
+/// matched pair whose realized consumption crosses the tolerance flips
+/// `budget_match.status` to `imbalanced` at close.
+#[test]
+fn under_utilised_and_budget_match_recheck_at_close() {
+    let mut r = rig("e3-e4", 0);
+    let mut s = spec(ExperimentKind::Comparative);
+    for arm in &mut s.arms {
+        arm.match_spec.as_mut().unwrap().utilization_floor_ppm = Some(500_000);
+    }
+    s.experiment_id = s.experiment_id();
+    let (eid, run_id) = open(&mut r, &s);
+    // Drive the sweep manually so arm:a consumes near the cap and arm:b sips.
+    loop {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => {
+                let ticket = eng.claim(&run_plan_id, "driver").unwrap();
+                let launched = eng.launch(&ticket, "subject").unwrap();
+                drop(eng);
+                let view = ExperimentView::fold(r.store.events(&run_id).unwrap());
+                let arm = view.plans[&run_plan_id].arm_id.clone();
+                let consumed = if arm == "arm:a" { 100 } else { 10 };
+                finish_subject(
+                    &mut r.store,
+                    &launched.run_id,
+                    &launched.subject_writer,
+                    StopReason::Completed,
+                    &[(DimensionId::ModelCalls, consumed)],
+                );
+                let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+                eng.attach(&eid).unwrap();
+                assert!(eng.settle(&run_plan_id).unwrap().accepted);
+            }
+            NextVerdict::Done => break,
+            other => panic!("unexpected next: {other:?}"),
+        }
+    }
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let report = eng.close(false).unwrap();
+    assert_eq!(report.status, hh_experiment::events::CloseStatus::Completed);
+    drop(eng);
+    // arm:b medians at 10% of cap → under the 50% floor; arm:a at the cap.
+    assert_eq!(report.under_utilised, vec!["arm:b".to_string()]);
+    // arm:a medians 100 vs arm:b medians 10 — tolerance 0 → imbalanced.
+    assert_eq!(report.budget_match.len(), 1);
+    let rec = &report.budget_match[0];
+    assert_eq!(rec.get("status").and_then(Json::as_str), Some("imbalanced"));
+    let arms = rec.get("arms").and_then(|a| match a {
+        Json::Arr(v) => Some(v.len()),
+        _ => None,
+    });
+    assert_eq!(arms, Some(2));
+    // The closed row carries the additive re-check members.
+    let evs = r.store.events(&run_id).unwrap().to_vec();
+    let closed = evs
+        .iter()
+        .find(|e| e.class == "measurement.experiment.closed")
+        .unwrap();
+    assert!(closed.payload.get("budget_match").is_some());
+    // E-3's distribution record — per arm per dim `{median, samples}`.
+    let util = closed.payload.get("utilization").unwrap();
+    let arm_b = util
+        .get("arm:b")
+        .and_then(|a| a.get("model_calls"))
+        .unwrap();
+    assert_eq!(arm_b.get("median").and_then(Json::as_int), Some(100_000));
+    assert_eq!(
+        closed.payload.get("under_utilised").and_then(|u| match u {
+            Json::Arr(v) => Some(v.len()),
+            _ => None,
+        }),
+        Some(1)
+    );
+}
+
+/// E-4 — a partial close renders insufficient-replicate cells as
+/// `n/a{not_run}`; a completed close leaves `na_cells` empty.
+#[test]
+fn partial_close_reports_not_run_cells() {
+    let mut r = rig("partial-close", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _run_id) = open(&mut r, &s);
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let report = eng.close(true).unwrap();
+    assert_eq!(report.status, hh_experiment::events::CloseStatus::Partial);
+    assert!(!report.na_cells.is_empty());
+    assert!(report
+        .na_cells
+        .iter()
+        .all(|c| c.get("reason").and_then(Json::as_str) == Some("not_run")));
+}
+
+/// Ordering inside the ledger — `settled` lands before `excluded`, which
+/// lands before `replanned`, on every retry path (§2.3).
+#[test]
+fn infra_retry_lands_settled_excluded_replanned_in_order() {
+    let mut r = rig("retry-order", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let (rpid, l) = launch_one(&mut r, &eid);
+    finish_subject(
+        &mut r.store,
+        &l.run_id,
+        &l.subject_writer,
+        StopReason::InfrastructureFailure {
+            error_class: InfraError {
+                family: InfraErrorFamily::Env,
+                class: "image_pull_failed".to_string(),
+            },
+        },
+        &[],
+    );
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    assert!(eng.settle(&rpid).unwrap().replanned);
+    drop(eng);
+    let evs = r.store.events(&run_id).unwrap().to_vec();
+    let pos = |class: &str| {
+        evs.iter()
+            .position(|e| {
+                e.class == class
+                    && e.payload.get("run_plan_id").and_then(Json::as_str) == Some(rpid.as_str())
+            })
+            .unwrap_or(usize::MAX)
+    };
+    let settled = pos("measurement.experiment.run_settled");
+    let excluded = pos("measurement.experiment.run_excluded");
+    let replanned = pos("measurement.experiment.run_replanned");
+    assert!(settled < excluded && excluded < replanned);
 }

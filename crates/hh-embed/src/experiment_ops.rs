@@ -20,14 +20,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use hh_budget::spec::BudgetSpec;
+use hh_budget::{BudgetEnforcement, DimensionId, EnforcementLevel};
 use hh_experiment::docs::{kind as doc_kind, LabDocs};
-use hh_experiment::engine::{
-    ClaimTicket, EngineContext, ExperimentEngine, NextVerdict,
-};
+use hh_experiment::engine::{ClaimTicket, EngineContext, ExperimentEngine, NextVerdict};
 use hh_experiment::errors::ExperimentError;
 use hh_experiment::events::PauseReason;
 use hh_lab::expand::{ArmConfiguration, ExpandError, ExpandTask};
-use hh_lab::experiment::{ArmSpec, ExperimentSpec};
+use hh_lab::experiment::{ArmSpec, BudgetRelevantParam, ExperimentSpec};
 use hh_ledger::store::{Lease, Store};
 use hh_ontology::compliance::NaReason;
 use hh_ontology::lab::SplitLabel;
@@ -87,6 +86,13 @@ struct Bag {
     sealed: Option<BTreeSet<String>>,
     retirement_diff: Option<bool>,
     min_replicates: u32,
+    /// `arm_id → BudgetEnforcement` — the E-1 `matched_cap` enforcement
+    /// check's per-dimension view (`{arm → {dimension → level}}`; absent
+    /// member = the check defers, per the engine's resolver contract).
+    enforcement: Option<BTreeMap<String, BudgetEnforcement>>,
+    /// `level_ref → {param → {value, affects[]}}` — the AC-R-2.10.2-12
+    /// `budget_relevant` coverage check's variant projection.
+    budget_params: Option<BTreeMap<String, BTreeMap<String, BudgetRelevantParam>>>,
 }
 
 impl Bag {
@@ -196,6 +202,90 @@ impl Bag {
             .and_then(Json::as_int)
             .map(|v| v.max(1) as u32)
             .unwrap_or(1);
+        // `{arm_id → {dimension → enforced|advisory|unenforceable}}` — the
+        // E-1 matched-dimension enforcement map (ADR-0165 D3).
+        let mut enforcement = None;
+        if let Some(v) = p.get("budget_enforcement") {
+            let Json::Obj(m) = v else {
+                return Err(bad("/budget_enforcement", "type_mismatch"));
+            };
+            let mut out = BTreeMap::new();
+            for (arm, levels) in m {
+                let Json::Obj(lm) = levels else {
+                    return Err(bad(&format!("/budget_enforcement/{arm}"), "type_mismatch"));
+                };
+                let mut pairs = Vec::new();
+                for (d, l) in lm {
+                    let dim = DimensionId::parse(d).ok_or_else(|| {
+                        bad(&format!("/budget_enforcement/{arm}/{d}"), "type_mismatch")
+                    })?;
+                    let level = match l.as_str() {
+                        Some("enforced") => EnforcementLevel::Enforced,
+                        Some("advisory") => EnforcementLevel::Advisory,
+                        Some("unenforceable") => EnforcementLevel::Unenforceable,
+                        _ => {
+                            return Err(bad(
+                                &format!("/budget_enforcement/{arm}/{d}"),
+                                "type_mismatch",
+                            ))
+                        }
+                    };
+                    pairs.push((dim, level));
+                }
+                out.insert(arm.clone(), BudgetEnforcement::hosted(&pairs));
+            }
+            enforcement = Some(out);
+        }
+        // `{level_ref → {param → {value, affects[]}}}` — the variants'
+        // `budget_relevant` projections (AC-R-2.10.2-12).
+        let mut budget_params = None;
+        if let Some(v) = p.get("budget_relevant_params") {
+            let Json::Obj(m) = v else {
+                return Err(bad("/budget_relevant_params", "type_mismatch"));
+            };
+            let mut out = BTreeMap::new();
+            for (lref, params) in m {
+                let Json::Obj(pm) = params else {
+                    return Err(bad(
+                        &format!("/budget_relevant_params/{lref}"),
+                        "type_mismatch",
+                    ));
+                };
+                let mut pmap = BTreeMap::new();
+                for (name, pv) in pm {
+                    let value = pv.get("value").cloned().unwrap_or(Json::Null);
+                    let affects = match pv.get("affects") {
+                        Some(Json::Arr(items)) => {
+                            let mut ds = Vec::new();
+                            for d in items {
+                                let s = d.as_str().ok_or_else(|| {
+                                    bad(
+                                        &format!("/budget_relevant_params/{lref}/{name}/affects"),
+                                        "type_mismatch",
+                                    )
+                                })?;
+                                ds.push(DimensionId::parse(s).ok_or_else(|| {
+                                    bad(
+                                        &format!("/budget_relevant_params/{lref}/{name}/affects"),
+                                        "type_mismatch",
+                                    )
+                                })?);
+                            }
+                            ds
+                        }
+                        _ => {
+                            return Err(bad(
+                                &format!("/budget_relevant_params/{lref}/{name}/affects"),
+                                "type_mismatch",
+                            ))
+                        }
+                    };
+                    pmap.insert(name.clone(), BudgetRelevantParam { value, affects });
+                }
+                out.insert(lref.clone(), pmap);
+            }
+            budget_params = Some(out);
+        }
         Ok(Bag {
             budgets,
             suite_tasks,
@@ -206,6 +296,8 @@ impl Bag {
             sealed,
             retirement_diff,
             min_replicates,
+            enforcement,
+            budget_params,
         })
     }
 
@@ -214,23 +306,22 @@ impl Bag {
     fn ctx(&self) -> EngineContext<'_> {
         EngineContext {
             resolve_budget: Some(Box::new(move |r: &str| self.budgets.get(r).cloned())),
-            artifact_sealed: self
-                .sealed
-                .is_some()
-                .then(|| {
-                    Box::new(move |r: &str| {
-                        self.sealed.as_ref().map(|s| s.contains(r)).unwrap_or(true)
-                    }) as Box<dyn Fn(&str) -> bool + '_>
-                }),
+            artifact_sealed: self.sealed.is_some().then(|| {
+                Box::new(move |r: &str| self.sealed.as_ref().map(|s| s.contains(r)).unwrap_or(true))
+                    as Box<dyn Fn(&str) -> bool + '_>
+            }),
             capability_drifted: Some(Box::new(move |r: &str| self.drifted.contains(r))),
             retirement_diff: self.retirement_diff,
             min_replicates: self.min_replicates,
             suite_tasks: Some(Box::new(move |_: &ExperimentSpec| self.suite_tasks.clone())),
             arm_config: Some(Box::new(move |a: &ArmSpec| match &self.arm_configs {
-                Some(m) => m.get(&a.arm_id).cloned().ok_or_else(|| ExpandError::Assembly {
-                    arm: a.arm_id.clone(),
-                    detail: "no arm_configs member for this arm".to_string(),
-                }),
+                Some(m) => m
+                    .get(&a.arm_id)
+                    .cloned()
+                    .ok_or_else(|| ExpandError::Assembly {
+                        arm: a.arm_id.clone(),
+                        detail: "no arm_configs member for this arm".to_string(),
+                    }),
                 None => Err(ExpandError::Assembly {
                     arm: a.arm_id.clone(),
                     detail: "arm_configs absent — the sealed configuration is \
@@ -240,6 +331,25 @@ impl Bag {
             })),
             level_ineligible: Some(Box::new(move |r: &str| self.ineligible.get(r).copied())),
             fingerprint: Some(Box::new(move |r: &str| self.fingerprints.get(r).cloned())),
+            budget_enforcement: self.enforcement.is_some().then(|| {
+                Box::new(move |a: &ArmSpec| {
+                    self.enforcement
+                        .as_ref()
+                        .and_then(|m| m.get(&a.arm_id))
+                        .cloned()
+                        .unwrap_or_else(BudgetEnforcement::native)
+                }) as Box<dyn Fn(&ArmSpec) -> BudgetEnforcement + '_>
+            }),
+            budget_relevant_params: self.budget_params.is_some().then(|| {
+                Box::new(move |r: &str| {
+                    self.budget_params
+                        .as_ref()
+                        .and_then(|m| m.get(r))
+                        .cloned()
+                        .unwrap_or_default()
+                })
+                    as Box<dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + '_>
+            }),
         }
     }
 }
@@ -304,10 +414,7 @@ impl EmbedService {
 
     /// `lab.experiment.register{spec, budgets?, …resolvers, dry_run?}` — the
     /// E-1 gate + the durable spec deposit. `dry_run` runs admission only.
-    pub(crate) fn lab_experiment_register(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_register(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let mut spec = ExperimentSpec::from_json(req(params, "spec")?)
             .map_err(|e| bad("/spec", &format!("{e:?}")))?;
         if spec.experiment_id.is_empty() {
@@ -342,10 +449,7 @@ impl EmbedService {
 
     /// `lab.experiment.expand{experiment_id, suite_tasks?, arm_configs?, …}` —
     /// the pure expansion + the `CellPlan` preview.
-    pub(crate) fn lab_experiment_expand(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_expand(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let eid = req_str(params, "experiment_id")?.to_string();
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
@@ -368,19 +472,13 @@ impl EmbedService {
     /// `lab.experiment.open_experiment{experiment_id}` — mint the
     /// `run_kind = experiment` run, allocate the pool, commit `declared` +
     /// `run_planned` + the `opened` drift bracket.
-    pub(crate) fn lab_experiment_open(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_open(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let eid = req_str(params, "experiment_id")?.to_string();
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let mut eng = ExperimentEngine::new(&mut self.store, docs, bag.ctx());
         let opened = eng.open_experiment(&eid).map_err(xerr);
-        let run_id = match opened {
-            Ok(r) => r,
-            Err(e) => return Err(e),
-        };
+        let run_id = opened?;
         park(&mut self.experiment_engines, eng);
         Ok(Json::obj([
             ("experiment_id", Json::str(eid)),
@@ -389,14 +487,17 @@ impl EmbedService {
     }
 
     /// `lab.experiment.next{experiment_id|experiment_run_id}` → the verdict.
-    pub(crate) fn lab_experiment_next(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_next(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
-        let mut eng = engine_for(&mut self.store, &mut self.experiment_engines, docs, &bag, &run_id)?;
+        let mut eng = engine_for(
+            &mut self.store,
+            &mut self.experiment_engines,
+            docs,
+            &bag,
+            &run_id,
+        )?;
         let verdict = eng.next();
         park(&mut self.experiment_engines, eng);
         match verdict.map_err(xerr)? {
@@ -417,16 +518,19 @@ impl EmbedService {
     }
 
     /// `lab.experiment.claim{experiment_id, run_plan_id, holder?}` → ticket.
-    pub(crate) fn lab_experiment_claim(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_claim(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
         let rpid = req_str(params, "run_plan_id")?.to_string();
         let holder = opt_str(params, "holder").unwrap_or_else(|| self.holder.clone());
-        let mut eng = engine_for(&mut self.store, &mut self.experiment_engines, docs, &bag, &run_id)?;
+        let mut eng = engine_for(
+            &mut self.store,
+            &mut self.experiment_engines,
+            docs,
+            &bag,
+            &run_id,
+        )?;
         let t = eng.claim(&rpid, &holder);
         park(&mut self.experiment_engines, eng);
         let t: ClaimTicket = t.map_err(xerr)?;
@@ -441,10 +545,7 @@ impl EmbedService {
     /// `lab.experiment.launch{experiment_id, run_plan_id, lease_id, holder?}`
     /// → the opened subject run + its writer lease (the driver writes with
     /// it).
-    pub(crate) fn lab_experiment_launch(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_launch(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
@@ -456,7 +557,13 @@ impl EmbedService {
         };
         let subject_holder =
             opt_str(params, "subject_holder").unwrap_or_else(|| "experiment-subject".to_string());
-        let mut eng = engine_for(&mut self.store, &mut self.experiment_engines, docs, &bag, &run_id)?;
+        let mut eng = engine_for(
+            &mut self.store,
+            &mut self.experiment_engines,
+            docs,
+            &bag,
+            &run_id,
+        )?;
         let out = eng.launch(&ticket, &subject_holder);
         park(&mut self.experiment_engines, eng);
         let out = out.map_err(xerr)?;
@@ -479,15 +586,18 @@ impl EmbedService {
     }
 
     /// `lab.experiment.settle{experiment_id, run_plan_id}` → `RunOutcome`.
-    pub(crate) fn lab_experiment_settle(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_settle(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
         let rpid = req_str(params, "run_plan_id")?.to_string();
-        let mut eng = engine_for(&mut self.store, &mut self.experiment_engines, docs, &bag, &run_id)?;
+        let mut eng = engine_for(
+            &mut self.store,
+            &mut self.experiment_engines,
+            docs,
+            &bag,
+            &run_id,
+        )?;
         let out = eng.settle(&rpid);
         park(&mut self.experiment_engines, eng);
         let o = out.map_err(xerr)?;
@@ -512,17 +622,20 @@ impl EmbedService {
     }
 
     /// `lab.experiment.pause{experiment_id, reason?}` — the closed reason set.
-    pub(crate) fn lab_experiment_pause(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_pause(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let reason = opt_str(params, "reason").unwrap_or_else(|| "operator".to_string());
         let reason =
             PauseReason::parse(&reason).ok_or_else(|| bad("/reason", "unknown_pause_reason"))?;
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
-        let mut eng = engine_for(&mut self.store, &mut self.experiment_engines, docs, &bag, &run_id)?;
+        let mut eng = engine_for(
+            &mut self.store,
+            &mut self.experiment_engines,
+            docs,
+            &bag,
+            &run_id,
+        )?;
         let r = eng.pause(reason);
         park(&mut self.experiment_engines, eng);
         r.map_err(xerr)?;
@@ -530,14 +643,17 @@ impl EmbedService {
     }
 
     /// `lab.experiment.resume{experiment_id}`.
-    pub(crate) fn lab_experiment_resume(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_resume(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
-        let mut eng = engine_for(&mut self.store, &mut self.experiment_engines, docs, &bag, &run_id)?;
+        let mut eng = engine_for(
+            &mut self.store,
+            &mut self.experiment_engines,
+            docs,
+            &bag,
+            &run_id,
+        )?;
         let r = eng.resume();
         park(&mut self.experiment_engines, eng);
         r.map_err(xerr)?;
@@ -545,15 +661,18 @@ impl EmbedService {
     }
 
     /// `lab.experiment.close{experiment_id, partial?}` → `ExperimentReport`.
-    pub(crate) fn lab_experiment_close(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_experiment_close(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let partial = matches!(params.get("partial"), Some(Json::Bool(true)));
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
-        let mut eng = engine_for(&mut self.store, &mut self.experiment_engines, docs, &bag, &run_id)?;
+        let mut eng = engine_for(
+            &mut self.store,
+            &mut self.experiment_engines,
+            docs,
+            &bag,
+            &run_id,
+        )?;
         let r = eng.close(partial);
         park(&mut self.experiment_engines, eng);
         let report = r.map_err(xerr)?;

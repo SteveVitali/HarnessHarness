@@ -1136,3 +1136,151 @@ fn environment_family_record_round_trips() {
     none_family.submission_kind = SubmissionKind::None;
     none_family.validate().unwrap();
 }
+
+// ── AC-R-2.10.2-12: budget_relevant coverage + E-1 enforcement ──────────────
+
+#[test]
+fn register_refuses_match_spec_omitting_differing_budget_relevant_param() {
+    use hh_ontology::dimensions::DimensionId;
+    // The arms' levels bind `max_output_tokens` to different values and the
+    // parameter drives `tokens.output.visible` — a `budget_relevant`
+    // parameter differing across arms must be covered by every arm's
+    // `MatchSpec` (T-LCD-14).
+    let mut s = spec();
+    s.factors[0].levels[0].ref_ = "sha256:l1".into();
+    s.factors[0].levels[1].ref_ = "sha256:l2".into();
+    for a in s.arms.iter_mut() {
+        a.match_spec = Some(MatchSpec::matched_cap(&[DimensionId::ModelCalls]));
+    }
+    s.experiment_id = s.experiment_id();
+    let params = |lref: &str| -> BTreeMap<String, BudgetRelevantParam> {
+        let value = if lref == "sha256:l1" {
+            Json::Int(1_000)
+        } else {
+            Json::Int(4_000)
+        };
+        BTreeMap::from([(
+            "max_output_tokens".to_string(),
+            BudgetRelevantParam {
+                value,
+                affects: vec![DimensionId::TokensOutputVisible],
+            },
+        )])
+    };
+    let budgets: BTreeMap<String, hh_budget::BudgetSpec> = BTreeMap::from([
+        (
+            "budget:eval".to_string(),
+            hh_budget::BudgetSpec::hard_caps(
+                hh_budget::BudgetMode::Pool,
+                &[(
+                    hh_budget::DimensionKey::Primary(DimensionId::ModelCalls),
+                    100,
+                )],
+            ),
+        ),
+        (
+            "budget:search".to_string(),
+            hh_budget::BudgetSpec::hard_caps(
+                hh_budget::BudgetMode::Pool,
+                &[(
+                    hh_budget::DimensionKey::Primary(DimensionId::ModelCalls),
+                    10,
+                )],
+            ),
+        ),
+    ]);
+    let resolve_budget = |r: &str| budgets.get(r).cloned();
+    let ctx = SpecContext {
+        resolve_budget: Some(&resolve_budget),
+        budget_relevant_params: Some(&params),
+        ..SpecContext::member_level()
+    };
+    assert!(matches!(
+        s.register(&ctx),
+        Err(ExperimentRefusal::UnmatchedBudget { .. })
+    ));
+
+    // Covering the driven dimension registers.
+    let mut covered = s.clone();
+    for a in covered.arms.iter_mut() {
+        a.match_spec = Some(MatchSpec::matched_cap(&[
+            DimensionId::ModelCalls,
+            DimensionId::TokensOutputVisible,
+        ]));
+    }
+    covered.experiment_id = covered.experiment_id();
+    covered.register(&ctx).unwrap();
+
+    // An identical binding is not "differing across arms" — registers
+    // without the coverage.
+    let same = |_: &str| -> BTreeMap<String, BudgetRelevantParam> {
+        BTreeMap::from([(
+            "max_output_tokens".to_string(),
+            BudgetRelevantParam {
+                value: Json::Int(1_000),
+                affects: vec![DimensionId::TokensOutputVisible],
+            },
+        )])
+    };
+    let ctx_same = SpecContext {
+        resolve_budget: Some(&resolve_budget),
+        budget_relevant_params: Some(&same),
+        ..SpecContext::member_level()
+    };
+    s.register(&ctx_same).unwrap();
+}
+
+#[test]
+fn register_refuses_matched_cap_dim_not_enforced_on_every_arm() {
+    use hh_ontology::dimensions::DimensionId;
+    // E-1 (§6.3 §2.4): a `matched_cap` dimension not `enforced` on every arm
+    // is `IncommensurableMatch` — surfaced through the SpecContext's
+    // `budget_enforcement` resolver (ADR-0165 D3; CF-350).
+    let mut s = spec();
+    for a in s.arms.iter_mut() {
+        a.match_spec = Some(MatchSpec::matched_cap(&[DimensionId::ModelCalls]));
+    }
+    s.experiment_id = s.experiment_id();
+    let enforce = |a: &ArmSpec| -> hh_budget::BudgetEnforcement {
+        if a.arm_id == "b" {
+            hh_budget::BudgetEnforcement::hosted(&[(
+                DimensionId::ModelCalls,
+                hh_budget::EnforcementLevel::Advisory,
+            )])
+        } else {
+            hh_budget::BudgetEnforcement::native()
+        }
+    };
+    let budgets: BTreeMap<String, hh_budget::BudgetSpec> = BTreeMap::from([
+        (
+            "budget:eval".to_string(),
+            hh_budget::BudgetSpec::hard_caps(
+                hh_budget::BudgetMode::Pool,
+                &[(
+                    hh_budget::DimensionKey::Primary(DimensionId::ModelCalls),
+                    100,
+                )],
+            ),
+        ),
+        (
+            "budget:search".to_string(),
+            hh_budget::BudgetSpec::hard_caps(
+                hh_budget::BudgetMode::Pool,
+                &[(
+                    hh_budget::DimensionKey::Primary(DimensionId::ModelCalls),
+                    10,
+                )],
+            ),
+        ),
+    ]);
+    let resolve_budget = |r: &str| budgets.get(r).cloned();
+    let ctx = SpecContext {
+        resolve_budget: Some(&resolve_budget),
+        budget_enforcement: Some(&enforce),
+        ..SpecContext::member_level()
+    };
+    assert!(matches!(
+        s.register(&ctx),
+        Err(ExperimentRefusal::IncommensurableMatch { .. })
+    ));
+}

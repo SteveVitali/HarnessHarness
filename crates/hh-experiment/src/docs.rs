@@ -151,9 +151,8 @@ impl LabDocs {
     pub fn spec(&self, experiment_id: &str) -> Result<Option<ExperimentSpec>, ExperimentError> {
         match self.get(kind::SPEC, experiment_id)? {
             Some(j) => {
-                let spec = ExperimentSpec::from_json(&j).map_err(|e| {
-                    err(format!("spec {experiment_id} decode: {e:?}"))
-                })?;
+                let spec = ExperimentSpec::from_json(&j)
+                    .map_err(|e| err(format!("spec {experiment_id} decode: {e:?}")))?;
                 Ok(Some(spec))
             }
             None => Ok(None),
@@ -176,9 +175,11 @@ impl LabDocs {
     /// A stored plan.
     pub fn plan(&self, plan_id: &str) -> Result<Option<CellPlan>, ExperimentError> {
         match self.get(kind::PLAN, plan_id)? {
-            Some(j) => Ok(Some(CellPlan::from_json(&j).map_err(|e| {
-                err(format!("plan {plan_id} decode: {e:?}"))
-            })?)),
+            Some(j) => {
+                Ok(Some(CellPlan::from_json(&j).map_err(|e| {
+                    err(format!("plan {plan_id} decode: {e:?}"))
+                })?))
+            }
             None => Ok(None),
         }
     }
@@ -214,10 +215,7 @@ impl LabDocs {
         let dir = self.root.join("named").join(kind);
         fs::create_dir_all(&dir).map_err(|e| err(format!("create named/{kind}: {e}")))?;
         let path = dir.join(file_name(name));
-        let row = Json::obj([
-            ("name", Json::str(name)),
-            ("body", body.clone()),
-        ]);
+        let row = Json::obj([("name", Json::str(name)), ("body", body.clone())]);
         let bytes = row.to_canonical_string();
         if path.exists() {
             let existing = fs::read_to_string(&path).map_err(|e| err(format!("read: {e}")))?;
@@ -271,10 +269,7 @@ impl LabDocs {
         let mut out = BTreeMap::new();
         if let Json::Obj(m) = j {
             for (eid, v) in m {
-                let plan_id = v
-                    .get("plan_id")
-                    .and_then(Json::as_str)
-                    .map(str::to_string);
+                let plan_id = v.get("plan_id").and_then(Json::as_str).map(str::to_string);
                 let run_id = v.get("run_id").and_then(Json::as_str).map(str::to_string);
                 out.insert(eid, ExperimentIndexEntry { plan_id, run_id });
             }

@@ -2012,12 +2012,12 @@ impl PreRegistration {
                 Some(Json::Arr(items)) => items
                     .iter()
                     .map(|j| {
-                        j.as_str().map(str::to_string).ok_or_else(|| {
-                            EvalError::SchemaViolation {
+                        j.as_str()
+                            .map(str::to_string)
+                            .ok_or_else(|| EvalError::SchemaViolation {
                                 member: "interactions".into(),
                                 detail: "entries must be strings".into(),
-                            }
-                        })
+                            })
                     })
                     .collect::<Result<Vec<String>, EvalError>>()?,
                 Some(_) => {

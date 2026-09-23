@@ -18,12 +18,13 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use hh_budget::{
-    validate_match, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, MatchError,
-    MatchMode, MatchRefusal, MatchSpec,
+    validate_match, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, MatchError, MatchMode,
+    MatchRefusal, MatchSpec,
 };
 use hh_identity::idp::{identify_bytes, idp_id};
 use hh_identity::kinds::RecordKind;
 use hh_ontology::config::Ref;
+use hh_ontology::dimensions::DimensionId;
 use hh_ontology::eval::{Design, DesignKind, PreRegistration, SeedPolicy};
 use hh_ontology::lab::SplitLabel;
 use hh_ontology::participant::{Granularity, ParticipantClass};
@@ -940,9 +941,40 @@ pub struct SpecContext<'a> {
     pub retirement_diff: Option<bool>,
     /// Whether a level ref's capability has drifted.
     pub capability_drifted: Option<&'a dyn Fn(&str) -> bool>,
+    /// The arm's per-dimension `budget_enforcement` view (ADR-0165 D3) —
+    /// the E-1 `matched_cap` rule needs `enforced` on every matched
+    /// dimension. `None` = every arm resolves `native` (trivially
+    /// `enforced`; hosted arms supply their adapter-derived map).
+    pub budget_enforcement: Option<&'a dyn Fn(&ArmSpec) -> BudgetEnforcement>,
+    /// The level ref's `budget_relevant` parameter bindings — `param →
+    /// {value, affects[]}` (`affects` names the dimensions the parameter
+    /// drives). `None` = cannot resolve (the AC-R-2.10.2-12 coverage check
+    /// is deferred to a context that can).
+    pub budget_relevant_params: Option<&'a BudgetRelevantResolver<'a>>,
     /// The `replicates_per_cell` policy floor (default 1).
     pub min_replicates: u32,
 }
+
+/// A `budget_relevant` parameter's bound value and the dimensions it drives
+/// (the `param_schema` `affects[]` projection — ADR-0151 D5). The
+/// AC-R-2.10.2-12 coverage check refuses an arm whose `MatchSpec` omits a
+/// `budget_relevant` parameter that differs across arms (T-LCD-14).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BudgetRelevantParam {
+    /// The parameter's bound value at the level (the variant's declared
+    /// point; a `LevelSpec.overrides` member rebinds it).
+    pub value: Json,
+    /// The dimensions the parameter drives (`affects[]`).
+    pub affects: Vec<DimensionId>,
+}
+
+/// The `budget_relevant` resolver — `level ref → {param → {value, affects[]}}`.
+pub type BudgetRelevantResolver<'a> =
+    dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + 'a;
+
+/// A level's bound `budget_relevant` parameters — `{param → (value,
+/// affects)}` (the check_match working map).
+type BoundParams = BTreeMap<String, (Json, BTreeSet<DimensionId>)>;
 
 impl SpecContext<'_> {
     /// The member-level-only context — every resolver absent (the checks
@@ -953,6 +985,8 @@ impl SpecContext<'_> {
             artifact_sealed: None,
             retirement_diff: None,
             capability_drifted: None,
+            budget_enforcement: None,
+            budget_relevant_params: None,
             min_replicates: 1,
         }
     }
@@ -1121,8 +1155,7 @@ impl ExperimentSpec {
                 // The generators must parse, name declared factors, generate
                 // each factor at most once, and not generate a free factor's
                 // word member.
-                let names: BTreeSet<&str> =
-                    varied.iter().map(|f| f.name.as_str()).collect();
+                let names: BTreeSet<&str> = varied.iter().map(|f| f.name.as_str()).collect();
                 let mut generated = BTreeSet::new();
                 let mut gens = Vec::with_capacity(gen_spellings.len());
                 for g in gen_spellings {
@@ -1168,9 +1201,10 @@ impl ExperimentSpec {
                                 3 => "III",
                                 4 => "IV",
                                 5 => "V",
-                                n => return Err(ExperimentRefusal::ResolutionInsufficient {
-                                    detail: format!("generators define resolution {n}"),
-                                }),
+                                n =>
+                                    return Err(ExperimentRefusal::ResolutionInsufficient {
+                                        detail: format!("generators define resolution {n}"),
+                                    }),
                             }
                         ),
                     });
@@ -1179,9 +1213,8 @@ impl ExperimentSpec {
                 if !arms_cover(self, &fraction_points(self, &gens)) {
                     return Err(ExperimentRefusal::InadmissibleFactor {
                         factor: "<design>".to_string(),
-                        reason:
-                            "arms do not cover the declared fraction's design points exactly"
-                                .to_string(),
+                        reason: "arms do not cover the declared fraction's design points exactly"
+                            .to_string(),
                     });
                 }
                 // Pre-registered two-factor interactions must be estimable:
@@ -1200,8 +1233,7 @@ impl ExperimentSpec {
                     // Two named 2FIs aliased to each other are confounded.
                     for (i, a) in named.iter().enumerate() {
                         for b in &named[i + 1..] {
-                            let (Some(ea), Some(eb)) = (parse_effect(a), parse_effect(b))
-                            else {
+                            let (Some(ea), Some(eb)) = (parse_effect(a), parse_effect(b)) else {
                                 continue;
                             };
                             if ea.len() == 2
@@ -1261,9 +1293,8 @@ impl ExperimentSpec {
                 if !arms_cover(self, &points) {
                     return Err(ExperimentRefusal::InadmissibleFactor {
                         factor: "<design>".to_string(),
-                        reason:
-                            "arms are not the base point plus its single-level perturbations"
-                                .to_string(),
+                        reason: "arms are not the base point plus its single-level perturbations"
+                            .to_string(),
                     });
                 }
             }
@@ -1481,6 +1512,10 @@ impl ExperimentSpec {
             let eval = resolve(&arm.eval_budget);
             let search = arm.search_budget.as_deref().and_then(resolve);
             let mode = arm.match_spec.as_ref().expect("checked above").mode;
+            let enforcement = ctx
+                .budget_enforcement
+                .map(|f| f(arm))
+                .unwrap_or_else(BudgetEnforcement::native);
             groups.entry(mode).or_default().push((
                 arm,
                 BudgetArmSpec {
@@ -1488,15 +1523,14 @@ impl ExperimentSpec {
                     eval_budget: eval,
                     inference_budget: None,
                     match_spec: arm.match_spec.clone(),
-                    enforcement: BudgetEnforcement::native(),
+                    enforcement,
                     spend_confidence: None,
                     coverage_ppm: None,
                 },
             ));
         }
-        for (_mode, group) in &groups {
-            let specs: Vec<BudgetArmSpec> =
-                group.iter().map(|(_, s)| s.clone()).collect();
+        for group in groups.values() {
+            let specs: Vec<BudgetArmSpec> = group.iter().map(|(_, s)| s.clone()).collect();
             validate_match(&specs).map_err(|e: MatchError| {
                 let arm_id = |i: Option<usize>| {
                     i.and_then(|i| group.get(i))
@@ -1504,17 +1538,15 @@ impl ExperimentSpec {
                         .unwrap_or_default()
                 };
                 match e.refusal {
-                    MatchRefusal::MissingMatchSpec => ExperimentRefusal::MissingMatchSpec {
-                        arm: arm_id(e.arm),
-                    },
-                    MatchRefusal::UnbudgetedArm => ExperimentRefusal::UnbudgetedArm {
-                        arm: arm_id(e.arm),
-                    },
-                    MatchRefusal::MissingPricingTable => {
-                        ExperimentRefusal::MissingPricingTable {
-                            detail: format!("{e:?}"),
-                        }
+                    MatchRefusal::MissingMatchSpec => {
+                        ExperimentRefusal::MissingMatchSpec { arm: arm_id(e.arm) }
                     }
+                    MatchRefusal::UnbudgetedArm => {
+                        ExperimentRefusal::UnbudgetedArm { arm: arm_id(e.arm) }
+                    }
+                    MatchRefusal::MissingPricingTable => ExperimentRefusal::MissingPricingTable {
+                        detail: format!("{e:?}"),
+                    },
                     MatchRefusal::IncommensurableMatch { .. } => {
                         ExperimentRefusal::IncommensurableMatch {
                             detail: format!("{:?}", e.refusal),
@@ -1522,6 +1554,80 @@ impl ExperimentSpec {
                     }
                 }
             })?;
+        }
+        // AC-R-2.10.2-12 — a `budget_relevant` parameter whose bound value
+        // differs across a comparand group's arms (or binds on some arms
+        // only) must be covered by the arm's `MatchSpec`: every `affects`
+        // dimension it drives is a matched dimension (T-LCD-14; refusal
+        // `UnmatchedBudget`, never a warning).
+        if let Some(resolve_params) = ctx.budget_relevant_params {
+            let level_of = |level_id: &str| -> Option<&LevelSpec> {
+                self.factors
+                    .iter()
+                    .flat_map(|f| f.levels.iter())
+                    .find(|l| l.level_id == level_id)
+            };
+            for group in groups.values() {
+                let mut per_arm: Vec<(&ArmSpec, BoundParams)> = Vec::new();
+                for (arm, _) in group {
+                    let mut bound: BoundParams = BTreeMap::new();
+                    for level_id in arm.level_assignment.values() {
+                        let Some(level) = level_of(level_id) else {
+                            continue;
+                        };
+                        for (name, param) in resolve_params(&level.ref_) {
+                            // A `LevelSpec.overrides` member rebinds the
+                            // declared value at this level.
+                            let value = level
+                                .overrides
+                                .as_ref()
+                                .and_then(|o| o.get(&name).cloned())
+                                .unwrap_or(param.value);
+                            let entry = bound
+                                .entry(name)
+                                .or_insert_with(|| (value.clone(), BTreeSet::new()));
+                            entry.1.extend(param.affects);
+                        }
+                    }
+                    per_arm.push((*arm, bound));
+                }
+                let names: BTreeSet<String> = per_arm
+                    .iter()
+                    .flat_map(|(_, p)| p.keys().cloned())
+                    .collect();
+                for name in names {
+                    // The parameter "differs across arms" when the bound
+                    // values disagree — or it binds on some arms only.
+                    let distinct: BTreeSet<String> = per_arm
+                        .iter()
+                        .map(|(_, p)| {
+                            p.get(&name)
+                                .map(|(v, _)| v.to_canonical_string())
+                                .unwrap_or_else(|| "(absent)".to_string())
+                        })
+                        .collect();
+                    if distinct.len() <= 1 {
+                        continue;
+                    }
+                    for (arm, params) in &per_arm {
+                        let Some((_, affects)) = params.get(&name) else {
+                            continue;
+                        };
+                        let ms = arm.match_spec.as_ref().expect("checked above");
+                        for d in affects {
+                            if !ms.dimensions.contains(d) {
+                                return Err(ExperimentRefusal::UnmatchedBudget {
+                                    detail: format!(
+                                        "arm `{}` MatchSpec omits budget_relevant parameter `{name}` (drives dimension `{}`) that differs across arms",
+                                        arm.arm_id,
+                                        d.as_str()
+                                    ),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -1990,16 +2096,10 @@ impl CellPlan {
                                 Json::str(&c.configuration_version_id),
                             ),
                             ("task_id".to_string(), Json::str(&c.task_id)),
-                            (
-                                "split_label".to_string(),
-                                Json::str(c.split_label.name()),
-                            ),
+                            ("split_label".to_string(), Json::str(c.split_label.name())),
                         ]);
                         if let Some(r) = c.na_reason {
-                            cm.insert(
-                                "na_reason".to_string(),
-                                Json::str(r.as_str()),
-                            );
+                            cm.insert("na_reason".to_string(), Json::str(r.as_str()));
                         }
                         Json::Obj(cm)
                     })

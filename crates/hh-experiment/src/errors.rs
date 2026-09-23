@@ -3,8 +3,8 @@
 //! the closed register set verbatim — the boundary renders it, never remaps it.
 
 use hh_budget::errors::BudgetError;
-use hh_lab::experiment::ExperimentRefusal;
 use hh_lab::expand::ExpandError;
+use hh_lab::experiment::ExperimentRefusal;
 use hh_ledger::errors::LedgerError;
 
 /// The engine's failure sum.
@@ -147,9 +147,7 @@ pub fn refusal_code(r: &ExperimentRefusal) -> &'static str {
         ExperimentRefusal::UnsealedArtifact { .. } => "UnsealedArtifact",
         ExperimentRefusal::InsufficientReplicates { .. } => "InsufficientReplicates",
         ExperimentRefusal::ResolutionInsufficient { .. } => "ResolutionInsufficient",
-        ExperimentRefusal::ProfilePinnedAcrossProfiles { .. } => {
-            "ProfilePinnedAcrossProfiles"
-        }
+        ExperimentRefusal::ProfilePinnedAcrossProfiles { .. } => "ProfilePinnedAcrossProfiles",
         ExperimentRefusal::DependsOnDriftedCapability { .. } => "DependsOnDriftedCapability",
         ExperimentRefusal::NotARetirementDiff { .. } => "NotARetirementDiff",
         ExperimentRefusal::AdaptiveOutsideSearch { .. } => "AdaptiveOutsideSearch",
@@ -182,7 +180,10 @@ impl std::fmt::Display for ExperimentError {
             ExperimentError::UnknownRunPlan { run_plan_id } => {
                 write!(f, "unknown run plan {run_plan_id}")
             }
-            ExperimentError::BadPlanState { run_plan_id, detail } => {
+            ExperimentError::BadPlanState {
+                run_plan_id,
+                detail,
+            } => {
                 write!(f, "run plan {run_plan_id}: {detail}")
             }
             ExperimentError::WouldBlock { holder } => {

@@ -130,10 +130,7 @@ pub fn declared(spec: &ExperimentSpec, plan: &CellPlan) -> Json {
     m.insert("experiment_id".into(), Json::str(&spec.experiment_id));
     m.insert("plan_id".into(), Json::str(&plan.plan_id));
     m.insert("kind".into(), Json::str(spec.kind.name()));
-    m.insert(
-        "comparable".into(),
-        Json::Bool(spec.kind.requires_match()),
-    );
+    m.insert("comparable".into(), Json::Bool(spec.kind.requires_match()));
     m.insert(
         "suite_manifest_ref".into(),
         Json::str(&spec.suite.suite_ref),
@@ -146,10 +143,7 @@ pub fn declared(spec: &ExperimentSpec, plan: &CellPlan) -> Json {
         Json::Arr(spec.arms.iter().map(|a| Json::str(&a.arm_id)).collect()),
     );
     m.insert("n_cells".into(), Json::Int(plan.cells.len() as i64));
-    m.insert(
-        "n_run_plans".into(),
-        Json::Int(plan.run_plans.len() as i64),
-    );
+    m.insert("n_run_plans".into(), Json::Int(plan.run_plans.len() as i64));
     Json::Obj(m)
 }
 
@@ -212,6 +206,7 @@ pub fn run_launched(run_plan_id: &str, run_id: &str, attempt_no: u32, budget_id:
 /// The subject run's binding row — `run_bound{experiment_id, arm_id,
 /// configuration_id, configuration_version_id, cell_id, replicate_index,
 /// attempt_no, budget_id}` (§6.3; stamped on the subject run).
+#[allow(clippy::too_many_arguments)]
 pub fn subject_bound(
     experiment_id: &str,
     arm_id: &str,
@@ -259,7 +254,10 @@ pub fn run_bound_mirror(
 }
 
 /// `run_settled{run_plan_id, run_id, outcome_class, accepted, superseded,
-/// attempt_no, budget_utilization, veto_tripped[]}` — the §2.3 record.
+/// attempt_no, budget_utilization, veto_tripped[], regrade}` — the §2.3
+/// record. `regrade = true` marks an `oracle_failure` settlement: the row is
+/// final for the plan but awaits a regrade overlay — the subject is never
+/// re-run (AC-R-2.10.3-6; ADR-0155 D5).
 pub fn run_settled(outcome: &RunOutcome) -> Json {
     Json::obj([
         ("run_plan_id", Json::str(&outcome.run_plan_id)),
@@ -274,6 +272,7 @@ pub fn run_settled(outcome: &RunOutcome) -> Json {
             "veto_tripped",
             Json::Arr(outcome.veto_tripped.iter().map(Json::str).collect()),
         ),
+        ("regrade", Json::Bool(outcome.regrade_pending)),
     ])
 }
 
@@ -362,7 +361,9 @@ pub fn drift_bracket(
     ])
 }
 
-/// `closed{status, coverage, outcome_counts, watermark_set, summary_ref?}`.
+/// `closed{status, coverage, outcome_counts, watermark_set, summary_ref?,
+/// under_utilised[], budget_match[], na_cells[]}` — the E-4 re-check lands
+/// on the closed row (§6.3 §2.4; additive members, CC8).
 pub fn closed(report: &ExperimentReport) -> Json {
     let mut m = BTreeMap::new();
     m.insert("status".into(), Json::str(report.status.as_str()));
@@ -381,6 +382,16 @@ pub fn closed(report: &ExperimentReport) -> Json {
     if let Some(s) = &report.summary_ref {
         m.insert("summary_ref".into(), Json::str(s));
     }
+    m.insert(
+        "under_utilised".into(),
+        Json::Arr(report.under_utilised.iter().map(Json::str).collect()),
+    );
+    m.insert(
+        "budget_match".into(),
+        Json::Arr(report.budget_match.clone()),
+    );
+    m.insert("na_cells".into(), Json::Arr(report.na_cells.clone()));
+    m.insert("utilization".into(), report.utilization.clone());
     Json::Obj(m)
 }
 
@@ -431,6 +442,10 @@ pub struct RunOutcome {
     pub replanned: bool,
     /// Whether the experiment paused as a side effect.
     pub paused: Option<String>,
+    /// `oracle_failure` rows carry `regrade_pending = true` — the settlement
+    /// is final for the plan and a regrade overlay follows; the subject is
+    /// never re-run (AC-R-2.10.3-6; ADR-0155 D5).
+    pub regrade_pending: bool,
 }
 
 /// The `close` result — `ExperimentReport{status, coverage, outcome_counts,
@@ -451,6 +466,22 @@ pub struct ExperimentReport {
     pub watermark_set: Json,
     /// A summary ref (audit surface).
     pub summary_ref: Option<String>,
+    /// E-3/E-4: arms whose median utilisation on a matched dimension fell
+    /// below the declared `utilization_floor` — annotated `under_utilised`
+    /// (ADR-0041 M1; §6.3 §2.4). Additive member.
+    pub under_utilised: Vec<String>,
+    /// E-4: the comparand-group budget re-check over realised runs —
+    /// `[{arms, status ∈ {matched, imbalanced, unmatched}, tolerance_ppm,
+    /// detail}]` (OQ-124 tolerance; §6.3 §2.4). Additive member.
+    pub budget_match: Vec<Json>,
+    /// E-4: cells rendering a typed `n/a{reason}` —
+    /// `{cell_id, reason ∈ {level_ineligible, not_run}}` (`not_run` =
+    /// `InsufficientReplicates` over realised runs). Additive member.
+    pub na_cells: Vec<Json>,
+    /// E-3: the realised utilisation distributions —
+    /// `{arm_id → {dim → {median, min, max, n}}}` in ppm of the slice cap
+    /// over counted runs (ADR-0041 M1). Additive member.
+    pub utilization: Json,
 }
 
 /// `closed.status ∈ {completed, partial, aborted}`.

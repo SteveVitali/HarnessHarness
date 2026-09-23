@@ -1124,6 +1124,107 @@ fn stage7_lcd(
             Stage::Validate(7),
         ));
     }
+
+    // 7-R6 — the registry is never model-facing: a `ToolCapability` bound to
+    // a registry operation fails `validate_assembly` (ADR-0151 R6;
+    // AC-R-2.10.2-6; the model-facing registry is the tool catalog,
+    // ADR-0094).
+    for n in &doc.nodes {
+        if let KindRecord::ToolCapability(t) = &n.semantic {
+            if let Some(op) = registry_op_in_source(&t.source) {
+                diags.push(diag(
+                    Code::LcdRegistryOperationBound,
+                    "/entities",
+                    &n.semantic_id(),
+                    &format!(
+                        "a `ToolCapability` bound to the registry operation `{op}` — the registry is never model-facing (ADR-0151 R6)"
+                    ),
+                    "bind the capability to a catalog-listed tool, never a registry operation",
+                    kernel,
+                    Stage::Validate(7),
+                ));
+            }
+        }
+    }
+    if let Some(a) = assembly {
+        for (id, e) in &a.entities {
+            let EntityBinding::Inline { kind, record } = e else {
+                continue;
+            };
+            if kind != "ToolCapability" {
+                continue;
+            }
+            if let Some(op) = registry_op_binding(record) {
+                diags.push(diag(
+                    Code::LcdRegistryOperationBound,
+                    "/assembly/entities",
+                    id,
+                    &format!(
+                        "entity `{id}` binds a `ToolCapability` to the registry operation `{op}` — the registry is never model-facing (ADR-0151 R6)"
+                    ),
+                    "bind the capability to a catalog-listed tool, never a registry operation",
+                    kernel,
+                    Stage::Validate(7),
+                ));
+            }
+        }
+    }
+}
+
+/// The closed `lab.registry.*` operation verbs (Group L; ADR-0151 D7) — none
+/// may be bound as a `ToolCapability` (R6; AC-R-2.10.2-6).
+pub const REGISTRY_OPS: &[&str] = &[
+    "register",
+    "publish",
+    "resolve",
+    "query",
+    "catalog",
+    "slot_choices",
+    "substitutable",
+    "snapshot",
+    "verify",
+    "lineage",
+    "deprecate",
+    "yank",
+    "revoke",
+    "import",
+    "export",
+    "record_conformance",
+    "sameness",
+];
+
+/// Whether a `ToolCapability`'s `source` record binds a registry operation —
+/// `source.kind` naming the registry (the registry isn't a capability
+/// source; ADR-0151 R6). Returns the offending verb.
+fn registry_op_in_source(source: &Json) -> Option<String> {
+    let k = source.get("kind").and_then(Json::as_str)?;
+    if !matches!(k, "registry" | "registry_operation" | "lab_registry") {
+        return None;
+    }
+    let op = ["operation", "op", "name"]
+        .iter()
+        .find_map(|key| source.get(key).and_then(Json::as_str))
+        .unwrap_or("(unspecified)");
+    Some(op.strip_prefix("lab.registry.").unwrap_or(op).to_string())
+}
+
+/// Whether a `ToolCapability` payload binds a registry operation — the
+/// `source` check plus an `operation`/`binds`-style member carrying a
+/// registry verb (bare or `lab.registry.`-prefixed). Returns the offending
+/// verb.
+fn registry_op_binding(record: &Json) -> Option<String> {
+    if let Some(op) = record.get("source").and_then(registry_op_in_source) {
+        return Some(op);
+    }
+    for key in ["operation", "registry_operation", "op", "binds"] {
+        if let Some(v) = record.get(key).and_then(Json::as_str) {
+            let bare = v.strip_prefix("lab.registry.").unwrap_or(v);
+            if REGISTRY_OPS.contains(&bare) {
+                return Some(bare.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Whether `j` contains an object member named one of `keys` (recursive).

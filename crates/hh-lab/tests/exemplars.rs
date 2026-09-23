@@ -114,7 +114,9 @@ fn tasks(n: usize) -> Vec<ExpandTask> {
         .collect()
 }
 
-fn arm_cfg(a: &hh_lab::experiment::ArmSpec) -> Result<ArmConfiguration, hh_lab::expand::ExpandError> {
+fn arm_cfg(
+    a: &hh_lab::experiment::ArmSpec,
+) -> Result<ArmConfiguration, hh_lab::expand::ExpandError> {
     Ok(ArmConfiguration {
         configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
         configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),
@@ -170,10 +172,16 @@ fn control_strategy_family_v1_registers_with_iso_companion_arm() {
         .map(|a| a.match_spec.as_ref().unwrap().mode)
         .collect();
     assert_eq!(
-        modes.iter().filter(|m| **m == MatchMode::MatchedCap).count(),
+        modes
+            .iter()
+            .filter(|m| **m == MatchMode::MatchedCap)
+            .count(),
         4
     );
-    assert_eq!(modes.iter().filter(|m| **m == MatchMode::IsoCost).count(), 1);
+    assert_eq!(
+        modes.iter().filter(|m| **m == MatchMode::IsoCost).count(),
+        1
+    );
     // Register admits the mixed-mode arm set — commensurability is a
     // within-group precondition (CF-334); cross-mode `compare` refuses
     // downstream.
@@ -251,8 +259,7 @@ fn exemplar_shape_guards_hold() {
     bad2.arms[0].match_spec = Some(MatchSpec {
         mode: MatchMode::IsoCost,
         pricing_table_ref: None,
-        ..control_strategy_family_v1(&p, &control_pins(), 1)
-            .arms[4]
+        ..control_strategy_family_v1(&p, &control_pins(), 1).arms[4]
             .match_spec
             .clone()
             .unwrap()

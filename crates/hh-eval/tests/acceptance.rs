@@ -355,13 +355,11 @@ fn artifact_benefit_gates() {
         }
     ));
     // Registered before the proposal — admissible.
-    assert!(
-        artifact_benefit(
-            &input(&runs4, &ts, &d, &arms, &decls, std::slice::from_ref(&name)),
-            4,
-        )
-        .is_ok()
-    );
+    assert!(artifact_benefit(
+        &input(&runs4, &ts, &d, &arms, &decls, std::slice::from_ref(&name)),
+        4,
+    )
+    .is_ok());
 }
 
 #[test]
@@ -820,4 +818,35 @@ fn stratum_c_renders_labelled_and_retired() {
         hh_lab::analysis::ReportLabelKind::Guarded,
         "a retired suite guards the report"
     );
+}
+
+#[test]
+fn compare_refuses_cross_mode_match() {
+    // CF-334 / OQ-363 — a `matched_cap` arm vs an `iso_cost` arm is
+    // `IncommensurableMatch`, never compared (AC-R-2.10.3-4/E-4).
+    let name = "task_success".to_string();
+    let decls = vec![metric("task_success")];
+    let runs = vec![run("A", "t1", 0, 1, &name), run("B", "t1", 0, 1, &name)];
+    let ts = tasks();
+    let d = design();
+    let mut iso = arm_spec(DimensionId::ModelCalls);
+    iso.match_spec.as_mut().unwrap().mode = MatchMode::IsoCost;
+    iso.match_spec.as_mut().unwrap().pricing_table_ref =
+        Some(hh_budget::pricing::PricingTableRef {
+            table_id: "pricing:t".to_string(),
+            version: "1".to_string(),
+            pin: Some("sha256:p".to_string()),
+        });
+    let arms = vec![arm_spec(DimensionId::ModelCalls), iso];
+    let err = compare(&input(&runs, &ts, &d, &arms, &decls, &[name])).unwrap_err();
+    match err {
+        CompareError::Match(e) => assert!(matches!(
+            e.refusal,
+            hh_budget::MatchRefusal::IncommensurableMatch {
+                reason: hh_budget::RefusalReason::MixedMatchModes,
+                ..
+            }
+        )),
+        other => panic!("expected Match refusal, got {other}"),
+    }
 }

@@ -217,6 +217,7 @@ fn compaction_match() -> MatchSpec {
         pricing_table_ref: None,
         model_scope: ModelScope::SameSnapshot,
         cache_policy: CachePolicy::ColdStart,
+        utilization_floor_ppm: None,
     }
 }
 
@@ -274,7 +275,11 @@ pub fn compaction_family_v1(
                     name: "model_snapshot".to_string(),
                     kind: FactorKind::ModelSnapshot,
                     granularity: None,
-                    levels: vec![decl_level("model:fixed", &own.model_level_ref, "fixed model")],
+                    levels: vec![decl_level(
+                        "model:fixed",
+                        &own.model_level_ref,
+                        "fixed model",
+                    )],
                     role: None,
                 },
                 FactorDeclaration {
@@ -408,6 +413,7 @@ fn control_matched_cap() -> MatchSpec {
         pricing_table_ref: None,
         model_scope: ModelScope::SameSnapshot,
         cache_policy: CachePolicy::ColdStart,
+        utilization_floor_ppm: None,
     }
 }
 
@@ -510,7 +516,11 @@ pub fn control_strategy_family_v1(
                 role: Some("primary".to_string()),
                 levels: vec![
                     level("react/minimal", &own.react_minimal_ref, "react · minimal"),
-                    level("react/steerable", &own.react_steerable_ref, "react · steerable"),
+                    level(
+                        "react/steerable",
+                        &own.react_steerable_ref,
+                        "react · steerable",
+                    ),
                 ],
             },
             FactorSpec {
@@ -557,7 +567,10 @@ pub fn control_strategy_family_v1(
                 "arm:steerable-a-iso",
                 "react/steerable on family A at equal realized cost (iso_cost companion — \
                  no cross-mode compare; OQ-363 interim duplicates runs)",
-                &[("control_strategy", "react/steerable"), ("model_snapshot", "family-a")],
+                &[
+                    ("control_strategy", "react/steerable"),
+                    ("model_snapshot", "family-a"),
+                ],
                 iso,
                 &own.iso_artifact,
                 pins,

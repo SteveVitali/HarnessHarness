@@ -50,18 +50,18 @@ use hh_budget::account::{Account, ChargeRequest};
 use hh_budget::attribution::Attribution;
 use hh_budget::quantity::ResourceQuantity;
 use hh_budget::spec::{BudgetMode, BudgetScope, BudgetScopeKind, BudgetSpec};
-use hh_lab::expand::{
-    order_key, ArmConfiguration, ExpandContext, ExpandError, ExpandTask,
-};
+use hh_budget::{BudgetEnforcement, MatchMode, MatchSpec};
+use hh_lab::expand::{order_key, ArmConfiguration, ExpandContext, ExpandError, ExpandTask};
 use hh_lab::experiment::{
-    ArmSpec, CancelPolicy, CellPlan, ExperimentRefusal, ExperimentSpec, SpecContext,
+    ArmSpec, BudgetRelevantParam, CancelPolicy, CellPlan, ExperimentRefusal, ExperimentSpec,
+    SpecContext,
 };
 use hh_ledger::event::{Event, Producer, Scope};
 use hh_ledger::leases::LeaseScope;
 use hh_ledger::manifest::{EventRef, ExperimentBinding, RunKind, RunManifest, TaskRef};
 use hh_ledger::store::{Lease, Store};
 use hh_ontology::compliance::NaReason;
-use hh_ontology::control::{OutcomeClass, StopReason};
+use hh_ontology::control::{CancelledBy, OutcomeClass, StopReason};
 use hh_ontology::dimensions::{DimensionId, DimensionKey};
 use hh_provenance::ProvenanceRecord;
 use hh_wire::json::Json;
@@ -69,7 +69,7 @@ use hh_wire::json::Json;
 use crate::docs::{kind as doc_kind, LabDocs};
 use crate::errors::ExperimentError;
 use crate::events::{self as ev, class, CloseStatus, ExperimentReport, PauseReason, RunOutcome};
-use crate::view::{ExperimentView, PlanState};
+use crate::view::{Declared, ExperimentView, PlanState};
 
 /// The kernel component spelling on this crate's ledger rows.
 pub const COMPONENT: &str = "hh-experiment/1";
@@ -81,35 +81,61 @@ pub const COMPONENT: &str = "hh-experiment/1";
 /// same views (the boundary wires registry/doc-store lookups; tests wire
 /// fixtures). `None` = the fact cannot be resolved — the dependent check
 /// refuses `Unresolvable`/skips, never guesses.
+/// `budget_ref → BudgetSpec` — the §8.2 budget body resolver.
+pub type BudgetResolver<'a> = dyn Fn(&str) -> Option<BudgetSpec> + 'a;
+/// `ref → bool` — sealed/drifted predicates.
+pub type FlagResolver<'a> = dyn Fn(&str) -> bool + 'a;
+/// `spec → suite task axis` resolver (the `ExpandTask` rows).
+pub type SuiteTaskResolver<'a> = dyn Fn(&ExperimentSpec) -> Option<Vec<ExpandTask>> + 'a;
+/// `arm → {configuration_id, configuration_version_id}` resolver.
+pub type ArmConfigResolver<'a> =
+    dyn Fn(&ArmSpec) -> Result<ArmConfiguration, ExpandError> + 'a;
+/// `level ref → n/a{reason}` resolver (T-LCD-15).
+pub type NaResolver<'a> = dyn Fn(&str) -> Option<NaReason> + 'a;
+/// `level ref → fingerprint` resolver (the drift-bracket probe).
+pub type FingerprintResolver<'a> = dyn Fn(&str) -> Option<String> + 'a;
+/// `arm → budget_enforcement` resolver (ADR-0165 D3).
+pub type EnforcementResolver<'a> = dyn Fn(&ArmSpec) -> BudgetEnforcement + 'a;
+/// `level ref → budget_relevant param bindings` resolver (AC-R-2.10.2-12).
+pub type BudgetRelevantResolver<'a> =
+    dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + 'a;
+
 #[derive(Default)]
 pub struct EngineContext<'a> {
     /// `budget_ref → BudgetSpec` — the §8.2 budget body behind an
     /// `eval_budget`/`search_budget`/`budgets.experiment` ref.
-    pub resolve_budget: Option<Box<dyn Fn(&str) -> Option<BudgetSpec> + 'a>>,
+    pub resolve_budget: Option<Box<BudgetResolver<'a>>>,
     /// Whether an artifact ref is sealed (register's `UnsealedArtifact`).
-    pub artifact_sealed: Option<Box<dyn Fn(&str) -> bool + 'a>>,
+    pub artifact_sealed: Option<Box<FlagResolver<'a>>>,
     /// Whether a level ref's capability has drifted under the pinned snapshot
     /// (register `DependsOnDriftedCapability`; launch's drift gate).
-    pub capability_drifted: Option<Box<dyn Fn(&str) -> bool + 'a>>,
+    pub capability_drifted: Option<Box<FlagResolver<'a>>>,
     /// `kind = retirement` diff result (`Some(false)` ⇒ `NotARetirementDiff`).
     pub retirement_diff: Option<bool>,
     /// The `replicates_per_cell` policy floor (register `InsufficientReplicates`).
     pub min_replicates: u32,
     /// `spec → suite task axis` (the `ExpandTask` rows the plan multiplies
     /// over). Mandatory at `expand`.
-    pub suite_tasks:
-        Option<Box<dyn Fn(&ExperimentSpec) -> Option<Vec<ExpandTask>> + 'a>>,
+    pub suite_tasks: Option<Box<SuiteTaskResolver<'a>>>,
     /// `arm → {configuration_id, configuration_version_id}` — the sealed
     /// configuration the assembly chain produced. Mandatory at `expand`.
-    pub arm_config:
-        Option<Box<dyn Fn(&ArmSpec) -> Result<ArmConfiguration, ExpandError> + 'a>>,
+    pub arm_config: Option<Box<ArmConfigResolver<'a>>>,
     /// `level ref → n/a{reason}` when the level is ineligible under the pinned
     /// `registry_snapshot_id` (T-LCD-15: typed `n/a`, never a dropped row).
-    pub level_ineligible: Option<Box<dyn Fn(&str) -> Option<NaReason> + 'a>>,
+    pub level_ineligible: Option<Box<NaResolver<'a>>>,
     /// `level ref → fingerprint` — the drift-bracket probe (`opened`/`closed`
     /// brackets; a moved fingerprint at launch pauses `drift_detected` and
     /// replans the plan).
-    pub fingerprint: Option<Box<dyn Fn(&str) -> Option<String> + 'a>>,
+    pub fingerprint: Option<Box<FingerprintResolver<'a>>>,
+    /// `arm → budget_enforcement` — the per-dimension enforcement view the
+    /// E-1 `matched_cap` check needs (`enforced` on every matched
+    /// dimension). `None` = every arm resolves `native` (trivially
+    /// `enforced`; ADR-0165 D3).
+    pub budget_enforcement: Option<Box<EnforcementResolver<'a>>>,
+    /// `level ref → budget_relevant param bindings` (`{param → {value,
+    /// affects[]}}` — the variant's `param_schema` projection) for the
+    /// AC-R-2.10.2-12 coverage check at `register`.
+    pub budget_relevant_params: Option<Box<BudgetRelevantResolver<'a>>>,
 }
 
 impl EngineContext<'_> {
@@ -119,6 +145,14 @@ impl EngineContext<'_> {
             artifact_sealed: self.artifact_sealed.as_deref(),
             retirement_diff: self.retirement_diff,
             capability_drifted: self.capability_drifted.as_deref(),
+            budget_enforcement: self
+                .budget_enforcement
+                .as_ref()
+                .map(|f| f as &dyn Fn(&ArmSpec) -> BudgetEnforcement),
+            budget_relevant_params: self
+                .budget_relevant_params
+                .as_ref()
+                .map(|f| f as &dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam>),
             min_replicates: self.min_replicates.max(1),
         }
     }
@@ -206,6 +240,10 @@ pub struct ExperimentEngine<'a> {
     release_on_drop: bool,
 }
 
+/// The `close` re-check record: `(under_utilised, budget_match, na_cells,
+/// utilization)` — E-3/E-4 (§6.3 §2.4; ADR-0155 D4).
+type CloseRecheck = (Vec<String>, Vec<Json>, Vec<Json>, Json);
+
 impl<'a> ExperimentEngine<'a> {
     /// A fresh engine (unbound — `register`/`expand`/`open_experiment` first).
     pub fn new(store: &'a mut Store, docs: LabDocs, ctx: EngineContext<'a>) -> Self {
@@ -258,7 +296,8 @@ impl<'a> ExperimentEngine<'a> {
     /// `validate(spec)` — the E-1 gate alone (the boundary's `dry_run` —
     /// admission without a durable write).
     pub fn validate(&self, spec: &ExperimentSpec) -> Result<(), ExperimentError> {
-        spec.register(&self.ctx.spec_ctx()).map_err(ExperimentError::Refusal)
+        spec.register(&self.ctx.spec_ctx())
+            .map_err(ExperimentError::Refusal)
     }
 
     /// Set the writer-lease holder label.
@@ -310,13 +349,13 @@ impl<'a> ExperimentEngine<'a> {
             .ok_or_else(|| ExperimentError::Unresolvable {
                 detail: format!("suite {} tasks unresolvable", spec.suite.suite_ref),
             })?;
-        let arm_config = self
-            .ctx
-            .arm_config
-            .as_deref()
-            .ok_or_else(|| ExperimentError::Unresolvable {
-                detail: "arm_config resolver absent".to_string(),
-            })?;
+        let arm_config =
+            self.ctx
+                .arm_config
+                .as_deref()
+                .ok_or_else(|| ExperimentError::Unresolvable {
+                    detail: "arm_config resolver absent".to_string(),
+                })?;
         let plan = hh_lab::expand::expand(
             &spec,
             &tasks,
@@ -386,12 +425,26 @@ impl<'a> ExperimentEngine<'a> {
             .iter()
             .enumerate()
             .map(|(i, rp)| {
-                (
-                    order_key(&plan.order, spec.scheduling.order, rp, i as u32),
+                let cell = plan
+                    .cells
+                    .iter()
+                    .find(|c| c.cell_id == rp.cell_id)
+                    .ok_or_else(|| ExperimentError::Store {
+                        detail: format!("plan cell {} missing", rp.cell_id),
+                    })?;
+                Ok((
+                    order_key(
+                        &plan.order,
+                        spec.scheduling.order,
+                        rp,
+                        i as u32,
+                        &cell.task_id,
+                        &cell.arm_id,
+                    ),
                     rp,
-                )
+                ))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, ExperimentError>>()?;
         let mut ordered = order;
         ordered.sort_by(|a, b| a.0.cmp(&b.0));
         for (pos, (_, rp)) in ordered.iter().enumerate() {
@@ -435,17 +488,17 @@ impl<'a> ExperimentEngine<'a> {
     /// (takeover when the stale holder is dead/expired) and re-projects.
     /// `WouldBlock` when a live writer still holds the fence.
     pub fn attach(&mut self, experiment_id: &str) -> Result<String, ExperimentError> {
-        let entry = self
-            .docs
-            .index_entry(experiment_id)?
-            .ok_or_else(|| ExperimentError::UnknownExperiment {
-                experiment_id: experiment_id.to_string(),
-            })?;
-        let run_id = entry.run_id.clone().ok_or_else(|| {
-            ExperimentError::PlanNotFound {
+        let entry = self.docs.index_entry(experiment_id)?.ok_or_else(|| {
+            ExperimentError::UnknownExperiment {
                 experiment_id: experiment_id.to_string(),
             }
         })?;
+        let run_id = entry
+            .run_id
+            .clone()
+            .ok_or_else(|| ExperimentError::PlanNotFound {
+                experiment_id: experiment_id.to_string(),
+            })?;
         self.attach_run(&run_id)
     }
 
@@ -494,6 +547,8 @@ impl<'a> ExperimentEngine<'a> {
     /// `next() → NextVerdict` — reconcile expired claims, then the eligible
     /// plan in recorded schedule order. `BudgetExhausted` appends the
     /// `paused{budget_exhausted}` row — the pause is a ledger fact.
+    /// `next` is the §6.3 verb name — not `Iterator::next`.
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<NextVerdict, ExperimentError> {
         let (run_id, lease) = self.bound()?;
         let now = self.store.now_ms();
@@ -514,9 +569,7 @@ impl<'a> ExperimentEngine<'a> {
                 .filter(|t| *t > now)
                 .min();
             return Ok(match backoff {
-                Some(t) => NextVerdict::Backoff {
-                    not_before_ms: t,
-                },
+                Some(t) => NextVerdict::Backoff { not_before_ms: t },
                 None => NextVerdict::Wait,
             });
         }
@@ -533,7 +586,10 @@ impl<'a> ExperimentEngine<'a> {
                             vec![self.mint(
                                 &run_id,
                                 class::PAUSED,
-                                ev::paused(PauseReason::BudgetExhausted, self.root_budget(&run_id).ok().as_deref()),
+                                ev::paused(
+                                    PauseReason::BudgetExhausted,
+                                    self.root_budget(&run_id).ok().as_deref(),
+                                ),
                             )?],
                         )?;
                     }
@@ -657,22 +713,23 @@ impl<'a> ExperimentEngine<'a> {
                 detail: "an attempt is already in flight".to_string(),
             });
         }
-        let declared = view.declared.clone().ok_or_else(|| {
-            ExperimentError::NotAnExperimentRun {
-                run_id: run_id.clone(),
-            }
-        })?;
+        let declared =
+            view.declared
+                .clone()
+                .ok_or_else(|| ExperimentError::NotAnExperimentRun {
+                    run_id: run_id.clone(),
+                })?;
         let spec = self
             .spec(&declared.experiment_id)
             .map_err(|_| ExperimentError::Store {
                 detail: format!("declared spec {} unreadable", declared.experiment_id),
             })?;
-        let plan = self
-            .docs
-            .plan(&declared.plan_id)?
-            .ok_or_else(|| ExperimentError::PlanNotFound {
-                experiment_id: declared.experiment_id.clone(),
-            })?;
+        let plan =
+            self.docs
+                .plan(&declared.plan_id)?
+                .ok_or_else(|| ExperimentError::PlanNotFound {
+                    experiment_id: declared.experiment_id.clone(),
+                })?;
         let cell = plan
             .cells
             .iter()
@@ -720,11 +777,7 @@ impl<'a> ExperimentEngine<'a> {
                     }
                 }
                 if let Some(probe) = self.ctx.fingerprint.as_deref() {
-                    if let Some(opened) = view
-                        .drift_brackets
-                        .iter()
-                        .find(|b| b.phase == "opened")
-                    {
+                    if let Some(opened) = view.drift_brackets.iter().find(|b| b.phase == "opened") {
                         if let (Some(base), Some(now_fp)) =
                             (opened.fingerprints.get(&level.ref_), probe(&level.ref_))
                         {
@@ -923,13 +976,11 @@ impl<'a> ExperimentEngine<'a> {
                 superseded: attempt.superseded,
                 plan_final: ps.finished_final,
                 attempt_no: attempt.attempt_no,
-                budget_utilization: attempt
-                    .budget_utilization
-                    .clone()
-                    .unwrap_or(Json::obj([])),
+                budget_utilization: attempt.budget_utilization.clone().unwrap_or(Json::obj([])),
                 veto_tripped: attempt.veto_tripped.clone(),
                 replanned: false,
                 paused: view.paused.clone(),
+                regrade_pending: attempt.regrade_pending,
             });
         }
 
@@ -989,11 +1040,12 @@ impl<'a> ExperimentEngine<'a> {
         }
 
         // The outcome policy.
-        let declared = view.declared.clone().ok_or_else(|| {
-            ExperimentError::NotAnExperimentRun {
-                run_id: run_id.clone(),
-            }
-        })?;
+        let declared =
+            view.declared
+                .clone()
+                .ok_or_else(|| ExperimentError::NotAnExperimentRun {
+                    run_id: run_id.clone(),
+                })?;
         let spec = self.spec(&declared.experiment_id)?;
         let reattempt = &spec.reattempt;
         let max_per_plan = reattempt.max_per_plan;
@@ -1006,20 +1058,37 @@ impl<'a> ExperimentEngine<'a> {
         let mut superseded = false;
         let mut plan_final = false;
         let mut replanned = false;
+        let mut regrade_pending = false;
         let mut paused: Option<String> = None;
         let mut extra: Vec<Event> = Vec::new();
         match outcome_class {
             OutcomeClass::Scored => {}
             OutcomeClass::Cancelled => {
-                match on_cancel {
-                    CancelPolicy::Replan => {
+                // §2.3: `on_cancel` governs `operator`/`hosting`
+                // cancellations; `principal`/`parent` are final regardless
+                // (the run's own authority ended it).
+                let replannable = match &stop {
+                    StopReason::Cancelled { by } => {
+                        matches!(by, CancelledBy::Operator | CancelledBy::Hosting)
+                    }
+                    _ => true,
+                };
+                match (replannable, on_cancel) {
+                    (true, CancelPolicy::Replan) => {
                         replanned = true;
                         superseded = true;
                     }
-                    CancelPolicy::Final => plan_final = true,
+                    _ => plan_final = true,
                 }
             }
-            OutcomeClass::InfrastructureFailure | OutcomeClass::OracleFailure => {
+            OutcomeClass::OracleFailure => {
+                // An oracle failure triggers a regrade overlay, never a
+                // re-run of the subject (AC-R-2.10.3-6; ADR-0155 D5). The
+                // plan is final; the row is annotated `regrade`.
+                plan_final = true;
+                regrade_pending = true;
+            }
+            OutcomeClass::InfrastructureFailure => {
                 let class_ok = error_classes
                     .as_ref()
                     .map(|cs| cs.iter().any(|c| c == outcome_class.as_str()))
@@ -1065,10 +1134,7 @@ impl<'a> ExperimentEngine<'a> {
                 .unwrap_or_default();
             let mut m = BTreeMap::new();
             for (dim, amount) in &consumed {
-                let cap = caps
-                    .get(dim.as_str())
-                    .copied()
-                    .unwrap_or(0);
+                let cap = caps.get(dim.as_str()).copied().unwrap_or(0);
                 let ppm = if cap > 0 {
                     (amount.saturating_mul(1_000_000)) / cap
                 } else {
@@ -1091,10 +1157,26 @@ impl<'a> ExperimentEngine<'a> {
             veto_tripped: veto_trips(&subject_events),
             replanned,
             paused: paused.clone(),
+            regrade_pending,
         };
-        let mut batch = vec![
-            self.mint(&run_id, class::RUN_SETTLED, ev::run_settled(&outcome))?,
-        ];
+        let mut batch = vec![self.mint(&run_id, class::RUN_SETTLED, ev::run_settled(&outcome))?];
+        if superseded && outcome_class == OutcomeClass::InfrastructureFailure {
+            // §2.3: `run_settled` and `run_excluded{infrastructure_retry}`
+            // land **before** `run_replanned`. A cancelled supersede carries
+            // no exclusion row (the closed reason set has no `cancelled`
+            // spelling) — its `run_settled{superseded: true}` is the record.
+            batch.push(self.mint(
+                &run_id,
+                class::RUN_EXCLUDED,
+                ev::run_excluded(
+                    run_plan_id,
+                    &attempt.run_id,
+                    ev::exclude_reason::INFRASTRUCTURE_RETRY,
+                    None,
+                    &self.holder,
+                ),
+            )?);
+        }
         if replanned {
             let not_before = now + backoff_min;
             batch.push(self.mint(
@@ -1105,19 +1187,6 @@ impl<'a> ExperimentEngine<'a> {
                     &attempt.run_id,
                     attempt.attempt_no + 1,
                     not_before,
-                ),
-            )?);
-        }
-        if superseded {
-            batch.push(self.mint(
-                &run_id,
-                class::RUN_EXCLUDED,
-                ev::run_excluded(
-                    run_plan_id,
-                    &attempt.run_id,
-                    ev::exclude_reason::INFRASTRUCTURE_RETRY,
-                    None,
-                    &self.holder,
                 ),
             )?);
         }
@@ -1272,19 +1341,19 @@ impl<'a> ExperimentEngine<'a> {
                 run_id: run_id.clone(),
             });
         }
-        let declared = view.declared.clone().ok_or_else(|| {
-            ExperimentError::NotAnExperimentRun {
-                run_id: run_id.clone(),
-            }
-        })?;
+        let declared =
+            view.declared
+                .clone()
+                .ok_or_else(|| ExperimentError::NotAnExperimentRun {
+                    run_id: run_id.clone(),
+                })?;
         let spec = self.spec(&declared.experiment_id)?;
 
         // The `ExperimentReadyToLaunch` holds — eligible / claimed-live /
         // in-flight plans block a non-partial close.
         let open = view.open_plans(now);
         if !open.is_empty() && !partial {
-            let outstanding: Vec<String> =
-                open.iter().map(|p| p.run_plan_id.clone()).collect();
+            let outstanding: Vec<String> = open.iter().map(|p| p.run_plan_id.clone()).collect();
             return Err(ExperimentError::CloseBlocked {
                 detail: format!(
                     "outstanding_runs={:?} holds=[ExperimentReadyToLaunch]",
@@ -1310,6 +1379,14 @@ impl<'a> ExperimentEngine<'a> {
         } else {
             CloseStatus::Partial
         };
+        // E-3/E-4 — the matched-budget re-check over realised runs (§6.3
+        // §2.4): per-arm matched-dim utilisation medians against the
+        // declared floor (`under_utilised`), the per-comparand-group
+        // `budget_match` status at the declared tolerance, and the typed
+        // `n/a{not_run}` cells (`InsufficientReplicates` over realised
+        // runs).
+        let (under_utilised, budget_match, na_cells, utilization) =
+            self.close_recheck(&spec, &view, &declared)?;
         let accepted = view.accepted_count();
         let planned = view.plans.len();
         let cells_total = view.cells().len();
@@ -1330,6 +1407,10 @@ impl<'a> ExperimentEngine<'a> {
                 Json::Int(view.watermark as i64),
             )])),
             summary_ref: None,
+            under_utilised,
+            budget_match,
+            na_cells,
+            utilization,
         };
         self.append_chained(
             &run_id,
@@ -1347,6 +1428,237 @@ impl<'a> ExperimentEngine<'a> {
     }
 
     // ── internals ────────────────────────────────────────────────────────
+
+    /// E-3/E-4 (§6.3 §2.4; ADR-0155 D4) — the matched-budget re-check over
+    /// realised runs at `close`:
+    /// * `under_utilised[]` — an arm whose median `budget_utilization` on a
+    ///   matched dimension falls below its `MatchSpec.utilization_floor`
+    ///   is annotated (ADR-0041 M1 — "an under-utilising arm is not
+    ///   cheaper"); no floor ⇒ no annotation.
+    /// * `utilization` — per arm, per matched dimension, the realised
+    ///   `budget_utilization` ppm distribution `{median, samples[]}` over
+    ///   counted runs (E-3's distributions).
+    /// * `budget_match[]` — per comparand group, consumption-medians at the
+    ///   declared `tolerance` (OQ-124): `matched` | `imbalanced` (a matched
+    ///   dim with no consumption evidence is `imbalanced`).
+    /// * `na_cells[]` — cells rendering a typed `n/a{reason}`:
+    ///   `level_ineligible` cells from the plan doc plus `not_run` cells
+    ///   (`InsufficientReplicates` — accepted < `pre_registration.min_n`).
+    fn close_recheck(
+        &self,
+        spec: &ExperimentSpec,
+        view: &ExperimentView,
+        declared: &Declared,
+    ) -> Result<CloseRecheck, ExperimentError> {
+        // Per-arm matched-dim utilisation ppm over the counted runs —
+        // settled, non-superseded attempts (superseded consumption is waste,
+        // never evidence).
+        let mut arm_util: BTreeMap<String, BTreeMap<String, Vec<i64>>> = BTreeMap::new();
+        let mut cell_accepted: BTreeMap<String, u64> = BTreeMap::new();
+        for p in view.plans.values() {
+            if p.accepted_run.is_some() {
+                *cell_accepted.entry(p.cell_id.clone()).or_default() += 1;
+            }
+            for a in &p.attempts {
+                if a.outcome.is_none() || a.superseded {
+                    continue;
+                }
+                if let Some(Json::Obj(u)) = &a.budget_utilization {
+                    for (d, v) in u {
+                        if let Some(ppm) = v.as_int() {
+                            arm_util
+                                .entry(p.arm_id.clone())
+                                .or_default()
+                                .entry(d.clone())
+                                .or_default()
+                                .push(ppm);
+                        }
+                    }
+                }
+            }
+        }
+
+        // `n/a{not_run}` — a cell below the pre-registered replicate floor
+        // renders `not_run` (E-4's `InsufficientReplicates` rule); the
+        // `level_ineligible` cells come from the plan doc itself.
+        let mut na_cells: Vec<Json> = Vec::new();
+        if let Ok(Some(plan)) = self.docs.plan(&declared.plan_id) {
+            for cell in &plan.cells {
+                if let Some(r) = cell.na_reason {
+                    na_cells.push(Json::obj([
+                        ("cell_id", Json::str(&cell.cell_id)),
+                        ("reason", Json::str(r.as_str())),
+                    ]));
+                }
+            }
+        }
+        let min_n = spec
+            .pre_registration
+            .as_ref()
+            .map(|p| p.min_n)
+            .unwrap_or(1)
+            .max(1) as u64;
+        let mut cells_seen: BTreeMap<String, u64> = BTreeMap::new();
+        for p in view.plans.values() {
+            *cells_seen.entry(p.cell_id.clone()).or_default() += 1;
+        }
+        for cid in cells_seen.keys() {
+            let acc = cell_accepted.get(cid).copied().unwrap_or(0);
+            if acc < min_n {
+                na_cells.push(Json::obj([
+                    ("cell_id", Json::str(cid)),
+                    ("reason", Json::str("not_run")),
+                ]));
+            }
+        }
+
+        // `under_utilised` — per matched dim, the arm's median utilisation
+        // below the declared floor.
+        let mut under_utilised: Vec<String> = Vec::new();
+        for arm in &spec.arms {
+            let Some(ms) = &arm.match_spec else {
+                continue;
+            };
+            let Some(floor) = ms.utilization_floor_ppm else {
+                continue;
+            };
+            let utils = arm_util.get(&arm.arm_id);
+            let mut below = false;
+            for d in &ms.dimensions {
+                let med = utils
+                    .and_then(|u| u.get(d.as_str()))
+                    .and_then(|v| median_i64(v));
+                if let Some(m) = med {
+                    if m < floor {
+                        below = true;
+                    }
+                }
+            }
+            if below {
+                under_utilised.push(arm.arm_id.clone());
+            }
+        }
+
+        // `utilization` — the E-3 distribution record: `{arm → {dim →
+        // {median, samples[]}}}` over the counted runs.
+        let mut utilization = BTreeMap::new();
+        for (arm_id, dims) in &arm_util {
+            let mut dmap = BTreeMap::new();
+            for (dim, samples) in dims {
+                let mut s = samples.clone();
+                s.sort_unstable();
+                let med = median_i64(&s).unwrap_or(0);
+                // `{median, min, max, n}` — the 512-byte audit-field cap
+                // keeps the full sample vector out of the event row; the
+                // per-run ppm stays on each `run_settled`.
+                dmap.insert(
+                    dim.clone(),
+                    Json::obj([
+                        ("median", Json::Int(med)),
+                        ("min", Json::Int(*s.first().unwrap_or(&0))),
+                        ("max", Json::Int(*s.last().unwrap_or(&0))),
+                        ("n", Json::Int(s.len() as i64)),
+                    ]),
+                );
+            }
+            utilization.insert(arm_id.clone(), Json::Obj(dmap));
+        }
+        let utilization = Json::Obj(utilization);
+
+        // `budget_match` — per comparand group, pairwise consumption-medians
+        // vs the declared tolerance (the same medians `compare` computes;
+        // identical caps within a group make utilisation ppm proportional
+        // to realised consumption).
+        let mut groups: BTreeMap<String, Vec<(&ArmSpec, &MatchSpec)>> = BTreeMap::new();
+        for arm in &spec.arms {
+            let Some(ms) = &arm.match_spec else { continue };
+            if ms.mode == MatchMode::None {
+                continue;
+            }
+            let mut dims: Vec<String> = ms
+                .dimensions
+                .iter()
+                .map(|d| d.as_str().to_string())
+                .collect();
+            dims.sort();
+            let key = format!(
+                "{}|{}|{}|{:?}|{:?}",
+                ms.mode.as_str(),
+                dims.join(","),
+                ms.model_scope.as_str(),
+                ms.cache_policy,
+                ms.pricing_table_ref,
+            );
+            groups.entry(key).or_default().push((arm, ms));
+        }
+        let mut budget_match: Vec<Json> = Vec::new();
+        for group in groups.values() {
+            if group.len() < 2 {
+                continue;
+            }
+            let ms = group[0].1;
+            let tolerance = ms.tolerance_ppm.max(0) as u64;
+            let mut status = "matched";
+            let mut detail = BTreeMap::new();
+            for d in &ms.dimensions {
+                let dim = d.as_str();
+                let medians: Vec<Option<i64>> = group
+                    .iter()
+                    .map(|(arm, _)| {
+                        arm_util
+                            .get(&arm.arm_id)
+                            .and_then(|u| u.get(dim))
+                            .and_then(|v| median_i64(v))
+                    })
+                    .collect();
+                if medians.iter().any(|m| m.is_none()) {
+                    // The closed set is {matched, imbalanced}: a matched dim
+                    // with no consumption evidence cannot be shown matched.
+                    status = "imbalanced";
+                    detail.insert(dim.to_string(), Json::str("unmeasured"));
+                    continue;
+                }
+                let flat: Vec<i64> = medians.iter().flatten().copied().collect();
+                let mut worst = 0u64;
+                for i in 0..flat.len() {
+                    for j in (i + 1)..flat.len() {
+                        let (a, b) = (flat[i], flat[j]);
+                        let denom = (a.max(b)).max(1) as i128;
+                        let diff = ((a - b).abs() as i128 * 1_000_000i128 / denom) as u64;
+                        worst = worst.max(diff);
+                    }
+                }
+                detail.insert(
+                    dim.to_string(),
+                    Json::obj([
+                        (
+                            "medians",
+                            Json::Arr(flat.iter().map(|m| Json::Int(*m)).collect()),
+                        ),
+                        ("imbalance_ppm", Json::Int(worst as i64)),
+                    ]),
+                );
+                if worst > tolerance && status == "matched" {
+                    status = "imbalanced";
+                }
+            }
+            budget_match.push(Json::obj([
+                (
+                    "arms",
+                    Json::Arr(group.iter().map(|(a, _)| Json::str(&a.arm_id)).collect()),
+                ),
+                ("status", Json::str(status)),
+                ("tolerance_ppm", Json::Int(tolerance as i64)),
+                ("detail", Json::Obj(detail)),
+            ]));
+        }
+        Ok((
+            under_utilised,
+            budget_match,
+            na_cells,
+            utilization,
+        ))
+    }
 
     fn spec(&self, experiment_id: &str) -> Result<ExperimentSpec, ExperimentError> {
         self.docs
@@ -1366,11 +1678,12 @@ impl<'a> ExperimentEngine<'a> {
 
     fn bound(&mut self) -> Result<(String, Lease), ExperimentError> {
         let run_id = self.bound_run()?.to_string();
-        let mut lease = self.lease.clone().ok_or_else(|| {
-            ExperimentError::NotAnExperimentRun {
+        let mut lease = self
+            .lease
+            .clone()
+            .ok_or_else(|| ExperimentError::NotAnExperimentRun {
                 run_id: run_id.clone(),
-            }
-        })?;
+            })?;
         // Opportunistic renew — a long-lived engine renews inside the back
         // half of the TTL rather than fencing itself on the next append. An
         // expired lease is re-acquired (the takeover is audited); a live
@@ -1420,12 +1733,7 @@ impl<'a> ExperimentEngine<'a> {
 
     /// Reconcile-before-dispatch — append `claim_expired` for every recorded
     /// claim whose expiry passed.
-    fn reconcile(
-        &mut self,
-        run_id: &str,
-        lease: &Lease,
-        now: u64,
-    ) -> Result<(), ExperimentError> {
+    fn reconcile(&mut self, run_id: &str, lease: &Lease, now: u64) -> Result<(), ExperimentError> {
         let view = self.project()?;
         let expired: Vec<(&str, &str)> = view
             .plans
@@ -1442,14 +1750,23 @@ impl<'a> ExperimentEngine<'a> {
         }
         let mut batch = Vec::new();
         for (rpid, lease_id) in expired {
-            batch.push(self.mint(run_id, class::CLAIM_EXPIRED, ev::claim_expired(rpid, lease_id))?);
+            batch.push(self.mint(
+                run_id,
+                class::CLAIM_EXPIRED,
+                ev::claim_expired(rpid, lease_id),
+            )?);
         }
         self.append_chained(run_id, lease, batch)
     }
 
     /// Mint a caller-supplied event (kernel producer + provenance; the store
     /// stamps seq/hash/lease generation).
-    fn mint(&self, run_id: &str, class_name: &str, payload: Json) -> Result<Event, ExperimentError> {
+    fn mint(
+        &self,
+        run_id: &str,
+        class_name: &str,
+        payload: Json,
+    ) -> Result<Event, ExperimentError> {
         Ok(Event {
             event_id: self.store.alloc_id("evt"),
             class: class_name.to_string(),
@@ -1586,15 +1903,12 @@ impl<'a> ExperimentEngine<'a> {
                     ..Default::default()
                 };
                 for (k, v) in eval.hard_caps_map() {
-                    let key = DimensionKey::parse(&k).ok_or_else(|| {
-                        ExperimentError::Unresolvable {
+                    let key =
+                        DimensionKey::parse(&k).ok_or_else(|| ExperimentError::Unresolvable {
                             detail: format!("eval budget key {k} unknown"),
-                        }
-                    })?;
-                    s.dimensions.insert(
-                        key,
-                        hh_budget::spec::DimensionRule::hard(v, key),
-                    );
+                        })?;
+                    s.dimensions
+                        .insert(key, hh_budget::spec::DimensionRule::hard(v, key));
                 }
                 Ok(s)
             }
@@ -1614,12 +1928,12 @@ impl<'a> ExperimentEngine<'a> {
         view: &ExperimentView,
         ps: &PlanState,
     ) -> Result<(), ExperimentError> {
-        let declared = view
-            .declared
-            .as_ref()
-            .ok_or_else(|| ExperimentError::NotAnExperimentRun {
-                run_id: run_id.to_string(),
-            })?;
+        let declared =
+            view.declared
+                .as_ref()
+                .ok_or_else(|| ExperimentError::NotAnExperimentRun {
+                    run_id: run_id.to_string(),
+                })?;
         let spec = self.spec(&declared.experiment_id)?;
         let arm = spec
             .arms
@@ -1641,9 +1955,7 @@ impl<'a> ExperimentEngine<'a> {
             if let Some(rem) = acct.remaining(&root, key) {
                 if rem < need {
                     return Err(ExperimentError::InsufficientBudget {
-                        detail: format!(
-                            "dimension {k}: need {need}, pool remaining {rem}"
-                        ),
+                        detail: format!("dimension {k}: need {need}, pool remaining {rem}"),
                     });
                 }
             }
@@ -1680,6 +1992,17 @@ impl Drop for ExperimentEngine<'_> {
         }
         self.run_id = None;
     }
+}
+
+/// The median of a sample (upper median on even counts — deterministic, no
+/// averaging of the middle pair).
+fn median_i64(v: &[i64]) -> Option<i64> {
+    if v.is_empty() {
+        return None;
+    }
+    let mut s = v.to_vec();
+    s.sort_unstable();
+    Some(s[(s.len() - 1) / 2])
 }
 
 // ── Subject-run projections (settle's inputs) ───────────────────────────────
