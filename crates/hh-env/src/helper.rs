@@ -654,7 +654,9 @@ impl ToolExecutor for HelperExecutor {
         // (resume) over a fresh channel — `probe` takes `&self`.
         let mut client = HelperClient::connect(&self.client.socket)?;
         client.hello(
-            OnKernelLoss::PreserveUntil { ttl_ms: 86_400_000 },
+            OnKernelLoss::PreserveUntil {
+                ttl_ms: crate::driver::PRESERVE_UNTIL_TTL_MS,
+            },
             &self.client.session_nonce,
             None,
             None,

@@ -119,6 +119,15 @@ impl SeqIds {
             next: AtomicU64::new(1),
         }
     }
+
+    /// Start at `n` — a reopened test store's counter must not re-mint ids
+    /// the WAL already holds (production's `TimeIds` is collision-free by
+    /// clock+tag; `SeqIds` is deterministic-only).
+    pub fn starting_at(n: u64) -> SeqIds {
+        SeqIds {
+            next: AtomicU64::new(n),
+        }
+    }
 }
 
 impl Default for SeqIds {

@@ -325,6 +325,52 @@ impl<S: ControlStrategy> Driver<S> {
         })
     }
 
+    /// **Resume-by-leaf constructor** (§5a.3; ADR-0130; S2.3) — the durable
+    /// counterpart of `open`: builds the driver WITHOUT the `turn-1`/`e-0`
+    /// opener (a resume never re-mints the opener — DuplicateEventId),
+    /// restores `strategy` from the persisted leaf `checkpoint`, observes
+    /// the durable tail past `last_cue_seq`, and re-arms the envelope over
+    /// the committed prefix (G-RESUME). The inbox's first cue is
+    /// `Cue.resumed{last_durable, recovery_decision}`.
+    pub fn resume_from(
+        mut strategy: S,
+        ctx: &ControlContext,
+        policy: EnvelopePolicy,
+        checkpoint: &[u8],
+        sink: &mut dyn LedgerSink,
+        config: DriverConfig,
+    ) -> Result<Driver<S>, DriverError> {
+        // A placeholder state — `resume` overwrites it from the checkpoint.
+        let state = strategy.open(ctx).map_err(DriverError::Open)?;
+        let (envelope, envelope_state) = Envelope::arm(policy.clone(), sink.prefix())
+            .map_err(|e| DriverError::Arm(e.to_string()))?;
+        let mut driver = Driver {
+            envelope,
+            envelope_state,
+            strategy,
+            state,
+            inbox: std::collections::VecDeque::new(),
+            now_ms: 0,
+            next_id: 0,
+            decision_events: vec![],
+            last_decision_ref: None,
+            submission: None,
+            config,
+            stop_pending: None,
+            deadlines: std::collections::BTreeMap::new(),
+            run_id: ctx.process_ref.clone(),
+            last_model_call_id: None,
+            model_ref: ctx
+                .profile
+                .get("model_ref")
+                .and_then(Json::as_str)
+                .unwrap_or("model/subject")
+                .to_string(),
+        };
+        driver.resume(ctx, checkpoint, sink)?;
+        Ok(driver)
+    }
+
     /// `submit(cue)` — enqueue a cue (the wakeup/ingress path; delivery is
     /// ledger-ordered — I7: cues are the strategy's only input).
     pub fn submit(&mut self, cue: Cue) {
@@ -1322,6 +1368,19 @@ impl Driver<ReactMinimal> {
         config: DriverConfig,
     ) -> Result<Driver<ReactMinimal>, DriverError> {
         Driver::open(ReactMinimal::new(), ctx, policy, sink, config)
+    }
+
+    /// `resume_from` for the `ReactMinimal` strategy — the boundary's
+    /// durable-resume entry (hh-embed `open_session{resume}` past a service
+    /// restart; DF-S1.25-2 closed at S2.3).
+    pub fn resume_react(
+        ctx: &ControlContext,
+        policy: EnvelopePolicy,
+        checkpoint: &[u8],
+        sink: &mut dyn LedgerSink,
+        config: DriverConfig,
+    ) -> Result<Driver<ReactMinimal>, DriverError> {
+        Driver::resume_from(ReactMinimal::new(), ctx, policy, checkpoint, sink, config)
     }
 }
 

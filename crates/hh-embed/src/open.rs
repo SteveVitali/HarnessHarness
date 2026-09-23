@@ -14,7 +14,7 @@ use hh_assembly::validate::{validate_assembly, Subject};
 use hh_containment::attach::{AttachMode, PolicySlot};
 use hh_containment::policy::ResourceLimits;
 use hh_control::driver::{Driver, DriverConfig};
-use hh_control::output::SurfaceSpec;
+use hh_control::output::{ParamKind, ParamSpec, SurfaceSpec};
 use hh_control::policy::EnvelopePolicy;
 use hh_control::react::ReactMinimal;
 use hh_control::strategy::{ConcurrentInput, ControlContext, SteerMode, StrategyParams};
@@ -46,6 +46,155 @@ struct CarriedRuntime {
     host_asks: BTreeMap<String, HostAsk>,
     idem: BTreeMap<String, Json>,
     budget_ceiling: BTreeMap<String, i64>,
+    /// The woken-delivery dedup set — an in-process takeover keeps it
+    /// (no re-delivery); a durable resume starts empty (at-least-once
+    /// into the new writer's inbox is the intended crash semantics).
+    delivered_wokens: BTreeSet<String>,
+    /// The resume-by-leaf arm record — carried across an in-process
+    /// takeover, re-read from `leaf.arm` on a durable resume.
+    leaf_arm: LeafArm,
+}
+
+/// The `leaf.arm` record (S2.3) — the arm-time driver config a durable
+/// resume re-reads (`leaf.checkpoint` restores the leaf *state*; `leaf.arm`
+/// restores the leaf *config*: surfaces + the arm-time budget maps the
+/// checkpoint doesn't carry).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LeafArm {
+    pub surfaces: Vec<SurfaceSpec>,
+    pub budget_ceiling: BTreeMap<String, i64>,
+    pub remaining: BTreeMap<String, i64>,
+}
+
+impl LeafArm {
+    fn to_json(&self) -> Json {
+        Json::obj([
+            (
+                "surfaces",
+                Json::Arr(self.surfaces.iter().map(surface_json).collect()),
+            ),
+            (
+                "budget_ceiling",
+                Json::Obj(
+                    self.budget_ceiling
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Int(*v)))
+                        .collect(),
+                ),
+            ),
+            (
+                "remaining",
+                Json::Obj(
+                    self.remaining
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Int(*v)))
+                        .collect(),
+                ),
+            ),
+        ])
+    }
+
+    fn from_json(j: &Json) -> Option<LeafArm> {
+        let int_map = |key: &str| -> BTreeMap<String, i64> {
+            match j.get(key) {
+                Some(Json::Obj(m)) => m
+                    .iter()
+                    .filter_map(|(k, v)| v.as_int().map(|n| (k.clone(), n)))
+                    .collect(),
+                _ => BTreeMap::new(),
+            }
+        };
+        let surfaces = match j.get("surfaces") {
+            Some(Json::Arr(a)) => a.iter().filter_map(surface_from_json).collect(),
+            _ => Vec::new(),
+        };
+        Some(LeafArm {
+            surfaces,
+            budget_ceiling: int_map("budget_ceiling"),
+            remaining: int_map("remaining"),
+        })
+    }
+}
+
+fn surface_json(s: &SurfaceSpec) -> Json {
+    Json::obj([
+        ("surface_id", Json::str(s.surface_id.clone())),
+        ("semantic_id", Json::str(s.semantic_id.clone())),
+        (
+            "params",
+            Json::Obj(
+                s.params
+                    .iter()
+                    .map(|(k, v)| (k.clone(), param_json(v)))
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+fn param_json(p: &ParamSpec) -> Json {
+    Json::obj([
+        ("required", Json::Bool(p.required)),
+        ("kind", Json::str(param_kind_str(p.kind).to_string())),
+        ("enum_values", Json::Arr(p.enum_values.clone())),
+        ("domain", Json::Arr(p.domain.clone())),
+    ])
+}
+
+fn param_kind_str(k: ParamKind) -> &'static str {
+    match k {
+        ParamKind::Any => "any",
+        ParamKind::Str => "string",
+        ParamKind::Int => "int",
+        ParamKind::Bool => "bool",
+        ParamKind::Arr => "arr",
+        ParamKind::Obj => "obj",
+    }
+}
+
+fn param_kind_from(s: &str) -> ParamKind {
+    match s {
+        "string" => ParamKind::Str,
+        "int" => ParamKind::Int,
+        "bool" => ParamKind::Bool,
+        "arr" => ParamKind::Arr,
+        "obj" => ParamKind::Obj,
+        _ => ParamKind::Any,
+    }
+}
+
+fn surface_from_json(j: &Json) -> Option<SurfaceSpec> {
+    let surface_id = j.get("surface_id").and_then(Json::as_str)?.to_string();
+    let semantic_id = j
+        .get("semantic_id")
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let mut params = BTreeMap::new();
+    if let Some(Json::Obj(m)) = j.get("params") {
+        for (k, v) in m {
+            params.insert(
+                k.clone(),
+                ParamSpec {
+                    required: matches!(v.get("required"), Some(Json::Bool(true))),
+                    kind: param_kind_from(v.get("kind").and_then(Json::as_str).unwrap_or("any")),
+                    enum_values: match v.get("enum_values") {
+                        Some(Json::Arr(a)) => a.clone(),
+                        _ => Vec::new(),
+                    },
+                    domain: match v.get("domain") {
+                        Some(Json::Arr(a)) => a.clone(),
+                        _ => Vec::new(),
+                    },
+                },
+            );
+        }
+    }
+    Some(SurfaceSpec {
+        surface_id,
+        semantic_id,
+        params,
+    })
 }
 
 impl EmbedService {
@@ -120,9 +269,12 @@ impl EmbedService {
                 approval_mode.as_deref(),
                 p.invocation.as_ref(),
             )?,
-            OpenSpec::Resume { run_id, mode, .. } => {
-                self.open_resume(run_id, mode, p.invocation.as_ref())?
-            }
+            OpenSpec::Resume {
+                run_id,
+                mode,
+                definition,
+                ..
+            } => self.open_resume(run_id, mode, definition.as_ref(), p.invocation.as_ref())?,
             OpenSpec::Attach { run_id } => self.open_attach(run_id)?,
         };
         self.open_idem
@@ -298,15 +450,24 @@ impl EmbedService {
             detached: None,
             pendings: BTreeMap::new(),
             decided: BTreeMap::new(),
+            delivered_wokens: BTreeSet::new(),
             host_asks: BTreeMap::new(),
             idem: BTreeMap::new(),
             budget_ceiling: budget_dimensions(budget).0,
+            leaf_arm: LeafArm {
+                surfaces: surfaces.clone(),
+                budget_ceiling: budget_dimensions(budget).0,
+                remaining: budget_dimensions(budget).1,
+            },
             scan_seq: head.seq,
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
         };
         self.sessions.insert(session_id.clone(), sess);
+        // Persist the resume-by-leaf pair (S2.3) — a resume right
+        // after open restores the leaf exactly where `open` left it.
+        self.persist_leaf(&session_id);
 
         // Permission asks declared on the supplies — durable pending +
         // ephemeral requested + the upcall when the channel is served.
@@ -403,11 +564,17 @@ impl EmbedService {
     }
 
     /// `open_session{kind:"resume"}` — `continue` (WouldBlock while the
-    /// writer lives) | `takeover` (fence the stale writer).
+    /// writer lives) | `takeover` (fence the stale writer). A supplied
+    /// `definition` is the resume-time re-presentation (AC-R-2.2.3-11;
+    /// §3.3.4 `verify_resume`): identical ⇒ continue; add-only ⇒
+    /// `lifecycle.definition.changed` + continue; otherwise
+    /// `DefinitionChanged` — checked *before* any takeover, so a refusal
+    /// leaves the ledger untouched.
     fn open_resume(
         &mut self,
         run_id: &str,
         mode: &str,
+        definition: Option<&DefinitionInput>,
         invocation: Option<&InvocationRecord>,
     ) -> Result<Json, EmbedError> {
         // Live sessions bound the cap; the target run's own writers are
@@ -425,6 +592,83 @@ impl EmbedService {
         let events = self.store.events(run_id).map_err(ledger_err)?;
         if events.iter().any(|e| e.class == "lifecycle.run.finished") {
             return Err(EmbedError::Draining);
+        }
+        // ── verify_resume (AC-R-2.2.3-11; ADR-0025) ──────────────────
+        // A re-presented definition is verified against the persisted
+        // sealed definition *before* the takeover path touches anything:
+        // identical ⇒ nothing minted; add-only ⇒ the `Compatible` diff is
+        // recorded as `lifecycle.definition.changed` once the lease lands;
+        // incompatible ⇒ `DefinitionChanged` with the full reason set.
+        let mut definition_changed: Option<(String, String, String)> = None;
+        let mut resume_prov: Option<hh_provenance::ProvenanceRecord> = None;
+        if let Some(d) = definition {
+            let current = self.resolve_definition(d)?;
+            let manifest = self.store.manifest(run_id).map_err(ledger_err)?.clone();
+            let Some(persisted_ref) = manifest.harness_def_ref.clone() else {
+                return Err(EmbedError::DefinitionChanged {
+                    reasons: vec!["no persisted definition ref to verify against".to_string()],
+                });
+            };
+            if current.definition_ref.version_id != persisted_ref {
+                let persisted = self.persisted_definition(&persisted_ref)?;
+                let view = hh_assembly::LedgerView {
+                    events: self.store.events(run_id).map_err(ledger_err)?,
+                    // Mid-run budget decreases need the accounting gate —
+                    // no admission path exists at this seam, so the gate
+                    // is `DenyAll` (a decrease is `Incompatible`).
+                    budget_gate: &hh_assembly::DenyAll,
+                };
+                // The re-presented edit is the operator's — human-origin
+                // (`verify_resume`'s diff gates read the origin; the
+                // recorded `definition.changed` row carries it too).
+                let prov = hh_provenance::ProvenanceRecord::minted(
+                    hh_provenance::Origin::human(
+                        "operator:resume",
+                        hh_provenance::HumanRole::Author,
+                    ),
+                    hh_provenance::PersistenceScope::Definition,
+                    self.store.now_ms(),
+                );
+                match hh_assembly::verify_resume(
+                    &persisted,
+                    &current,
+                    &view,
+                    prov.clone(),
+                    hh_hir::diff::DiffDerivation::default(),
+                ) {
+                    Ok(hh_assembly::ResumeVerdict::Compatible { diff, diff_ref }) => {
+                        // The `diff_ref` the row names must resolve —
+                        // deposit the canonical diff into the blob pool
+                        // (CC3; `diff_ref` is a blob-domain address).
+                        let dj = hh_hir::wire::diff_to_json(&diff);
+                        self.store
+                            .put_blob(
+                                dj.to_canonical_string().as_bytes(),
+                                "application/x-hir-diff",
+                            )
+                            .map_err(ledger_err)?;
+                        definition_changed = Some((
+                            current.definition_ref.semantic_id.clone(),
+                            current.definition_ref.version_id.clone(),
+                            diff_ref,
+                        ));
+                        resume_prov = Some(prov);
+                    }
+                    Ok(hh_assembly::ResumeVerdict::Incompatible { reasons }) => {
+                        return Err(EmbedError::DefinitionChanged {
+                            reasons: reasons
+                                .iter()
+                                .map(|r| format!("{}: {} ({})", r.rule.as_str(), r.path, r.detail))
+                                .collect(),
+                        });
+                    }
+                    Err(diags) => {
+                        return Err(EmbedError::InvalidDefinition {
+                            diagnostics: diags.iter().map(diag_line).collect(),
+                        })
+                    }
+                }
+            }
         }
         let holder = self.holder.clone();
         // The control leaf lives in the driver — a resume carries the
@@ -448,6 +692,8 @@ impl EmbedService {
                     host_asks: std::mem::take(&mut s.host_asks),
                     idem: std::mem::take(&mut s.idem),
                     budget_ceiling: std::mem::take(&mut s.budget_ceiling),
+                    delivered_wokens: std::mem::take(&mut s.delivered_wokens),
+                    leaf_arm: std::mem::take(&mut s.leaf_arm),
                 });
             }
         };
@@ -470,10 +716,41 @@ impl EmbedService {
                 }
             }
         }
-        let lease = self
-            .store
-            .acquire_writer(&holder, run_id, LEASE_TTL_MS)
-            .map_err(ledger_err)?;
+        // Durable resume (S2.3; DF-S1.25-2) — no live driver in the table:
+        // `restore` performs the takeover itself (generation-fences any
+        // stale writer, writes the recovery rows + the audited
+        // `lifecycle.run.resumed{recovery_decision}`) and returns the
+        // session's writer lease. Refuse *before* the takeover when no
+        // persisted leaf checkpoint exists — a resume without one can't be
+        // armed, and the refusal leaves the ledger untouched.
+        let needs_durable_resume = carried.is_none();
+        if needs_durable_resume {
+            let ckpt = self
+                .store
+                .root()
+                .join("runs")
+                .join(run_id)
+                .join("leaf.checkpoint");
+            if !ckpt.exists() {
+                return Err(EmbedError::Refused {
+                    reason: "resume_checkpoint_unavailable".to_string(),
+                });
+            }
+        }
+        let (lease, restore_report) = if needs_durable_resume {
+            let report = self
+                .store
+                .restore_caused(run_id, &holder, LEASE_TTL_MS, "operator")
+                .map_err(ledger_err)?;
+            (report.lease.clone(), Some(report))
+        } else {
+            (
+                self.store
+                    .acquire_writer(&holder, run_id, LEASE_TTL_MS)
+                    .map_err(ledger_err)?,
+                None,
+            )
+        };
         // A successful acquire fences the previous writer — detach it and
         // carry its runtime (a `continue` past an expired lease resumes
         // the same live leaf).
@@ -498,6 +775,29 @@ impl EmbedService {
                 ("attachment_id", Json::str(session_id.clone())),
             ]),
         )?;
+        // The accepted resume change's durable record (AC-R-2.2.3-11) —
+        // `lifecycle.definition.changed{definition_ref, diff_ref, reasons[]}`
+        // under the operator's human origin (ADR-0066's provenance rule).
+        if let Some((semantic_id, version_id, diff_ref)) = definition_changed {
+            // The class is kernel-origin-gated — the *row's* provenance
+            // is the kernel's; the human origin lives on the diff record
+            // (`diff.provenance`) the `diff_ref` resolves to.
+            let prov = self.kernel_prov.clone();
+            let _ = resume_prov;
+            hh_assembly::emit(
+                &mut self.store,
+                run_id,
+                &lease,
+                &prov,
+                vec![hh_assembly::events::definition_changed(
+                    &semantic_id,
+                    &version_id,
+                    &diff_ref,
+                    &[],
+                )],
+            )
+            .map_err(ledger_err)?;
+        }
         let manifest = self.store.manifest(run_id).map_err(ledger_err)?.clone();
         // `lifecycle.surface.invoked` — a resume writes to the run, so a
         // surface invocation mints its durable record here too.
@@ -507,13 +807,114 @@ impl EmbedService {
         let rt = match carried {
             Some(rt) => rt,
             // The run carries driver rows but no live driver is in the
-            // table — the leaf checkpoint isn't persisted at Stage 1, so
-            // a cross-process resume can't be armed (DF-S1.25-2). Refuse
-            // honestly rather than re-minting `turn-1` (DuplicateEventId).
+            // table (service restart / cross-process resume) — resume-by-leaf:
+            // `restore` already landed; re-arm the leaf from the persisted
+            // checkpoint and observe the durable tail (DF-S1.25-2 → S2.3).
             None => {
-                return Err(EmbedError::Refused {
+                let ckpt = self
+                    .store
+                    .root()
+                    .join("runs")
+                    .join(run_id)
+                    .join("leaf.checkpoint");
+                let bytes = std::fs::read(&ckpt).map_err(|_| EmbedError::Refused {
                     reason: "resume_checkpoint_unavailable".to_string(),
-                })
+                })?;
+                let (driver, leaf_arm) =
+                    self.arm_resume_driver(run_id, &lease, &bytes, &manifest)?;
+                // The owed-permission table rebuilds from the durable
+                // `security.permission.pending` rows the restore surfaced —
+                // `respond` stays answerable across the restart (§5g.7 §5).
+                let mut pendings = BTreeMap::new();
+                if let Some(rep) = &restore_report {
+                    for pid in &rep.pending_permissions {
+                        let row = self
+                            .store
+                            .events(run_id)
+                            .map_err(ledger_err)?
+                            .iter()
+                            .rev()
+                            .find(|e| {
+                                e.class == "security.permission.pending"
+                                    && e.payload.get("permission_id").and_then(Json::as_str)
+                                        == Some(pid.as_str())
+                            });
+                        if let Some(e) = row {
+                            let req = e.payload.get("request").cloned().unwrap_or(Json::Null);
+                            pendings.insert(
+                                pid.clone(),
+                                PendingAsk {
+                                    options: vec!["allow".to_string(), "deny".to_string()],
+                                    proposal: req
+                                        .get("reason")
+                                        .and_then(Json::as_str)
+                                        .unwrap_or("permission request")
+                                        .to_string(),
+                                    effect_id: e
+                                        .payload
+                                        .get("effect_id")
+                                        .and_then(Json::as_str)
+                                        .map(str::to_string),
+                                },
+                            );
+                        }
+                    }
+                }
+                // `verify_environment` on resume (§5a.3 C0 — every handle in
+                // the checkpoint view is re-verified; the verdict is the
+                // `action.environment.verified` row, never the stale handle).
+                if let Some(drv) = self.env_drivers.get_mut(run_id) {
+                    let ids: Vec<String> = drv.handle_ids();
+                    for h in ids {
+                        let _ = drv.verify_environment_verdict(&mut self.store, &lease, &h);
+                    }
+                }
+                // The active turn — the durable prefix's last un-finished
+                // `turn.started` (the boundary's `active_turn` check reads
+                // the fold, never a guess).
+                let (mut active, mut finished_turns) = (String::new(), BTreeSet::new());
+                for e in self.store.events(run_id).map_err(ledger_err)? {
+                    match e.class.as_str() {
+                        "lifecycle.turn.started" => {
+                            active = e
+                                .payload
+                                .get("turn_id")
+                                .and_then(Json::as_str)
+                                .unwrap_or_default()
+                                .to_string();
+                        }
+                        "lifecycle.turn.finished" => {
+                            if let Some(t) = e
+                                .payload
+                                .get("turn_id")
+                                .and_then(Json::as_str)
+                                .map(str::to_string)
+                            {
+                                finished_turns.insert(t);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                CarriedRuntime {
+                    driver,
+                    env_json: Json::Null,
+                    env_handle_id: None,
+                    host_caps: Vec::new(),
+                    turn_active: !active.is_empty() && !finished_turns.contains(&active),
+                    active_turn: if active.is_empty() {
+                        "turn-1".to_string()
+                    } else {
+                        active
+                    },
+                    pendings,
+                    decided: BTreeMap::new(),
+                    delivered_wokens: BTreeSet::new(),
+                    host_asks: BTreeMap::new(),
+                    idem: BTreeMap::new(),
+                    budget_ceiling: BTreeMap::new(),
+                    leaf_arm,
+                }
             }
         };
         let realized = realized_settings(self.workspace_root(), &attendance_async(), None);
@@ -537,9 +938,11 @@ impl EmbedService {
             detached: None,
             pendings: rt.pendings,
             decided: rt.decided,
+            delivered_wokens: rt.delivered_wokens,
             host_asks: rt.host_asks,
             idem: rt.idem,
             budget_ceiling: rt.budget_ceiling,
+            leaf_arm: rt.leaf_arm,
             scan_seq: head.seq,
             next_invoke: None,
             next_completion: String::new(),
@@ -597,9 +1000,11 @@ impl EmbedService {
             detached: None,
             pendings: BTreeMap::new(),
             decided: BTreeMap::new(),
+            delivered_wokens: BTreeSet::new(),
             host_asks: BTreeMap::new(),
             idem: BTreeMap::new(),
             budget_ceiling: BTreeMap::new(),
+            leaf_arm: LeafArm::default(),
             scan_seq: head.seq,
             next_invoke: None,
             next_completion: String::new(),
@@ -697,6 +1102,71 @@ impl EmbedService {
     /// `hh-assembly` pipeline (a `document` parses + resolves inside the
     /// embedded registry's snapshot; a `ref` has no publish path at the
     /// embed boundary at Stage 1 → `UnresolvedRef`, DF-S1.25-1).
+    /// The run's persisted sealed definition (DF-S1.25-3; S2.3). Open
+    /// deposits `artifacts/<version_id>` — a redirect to the blob-pool
+    /// address of the sealed document's canonical bytes — so the
+    /// definition survives a service restart. The read verifies the blob
+    /// hash (CC3), then the document's own pinned root `version_id`
+    /// against the requested address.
+    fn persisted_definition(
+        &self,
+        version_id: &str,
+    ) -> Result<hh_hir::document::SealedDefinition, EmbedError> {
+        let bytes = self.artifact_bytes(version_id)?;
+        let document = hh_hir::document::parse_document(&bytes).map_err(|e| {
+            EmbedError::InvalidDefinition {
+                diagnostics: vec![format!("persisted definition unreadable: {e}")],
+            }
+        })?;
+        let root =
+            document
+                .node(&document.root.semantic_id)
+                .ok_or_else(|| EmbedError::Refused {
+                    reason: "persisted_definition_root_missing".to_string(),
+                })?;
+        if root.version_id() != version_id {
+            return Err(EmbedError::Refused {
+                reason: "persisted_definition_corrupt".to_string(),
+            });
+        }
+        Ok(hh_hir::document::SealedDefinition {
+            definition_ref: hh_hir::document::DefinitionVersionRef {
+                semantic_id: root.semantic_id(),
+                version_id: root.version_id(),
+            },
+            closed_world_tools: hh_hir::closed_world_tools(&document),
+            document,
+        })
+    }
+
+    /// The durable artifact read — `artifacts/<address>` holds the
+    /// blob-pool id the bytes were deposited under; `get_blob` verifies
+    /// the content hash (CC3). `None` when the artifact was never
+    /// deposited (or was collected).
+    pub(crate) fn artifact_bytes(&self, address: &str) -> Result<Vec<u8>, EmbedError> {
+        let redirect = self.store.root().join("artifacts").join(address);
+        let blob_id = std::fs::read_to_string(&redirect).map_err(|_| EmbedError::Refused {
+            reason: "artifact_unavailable".to_string(),
+        })?;
+        let parsed =
+            hh_identity::idp::parse_id(blob_id.trim()).map_err(|_| EmbedError::Refused {
+                reason: "artifact_corrupt".to_string(),
+            })?;
+        let addr = hh_identity::idp::ContentAddress {
+            idp: "idp/1",
+            algorithm: "sha256",
+            digest: parsed.digest_hex,
+            media_type: String::new(),
+            size: 0,
+        };
+        self.store.get_blob(&addr).map_err(|e| match e {
+            hh_ledger::errors::LedgerError::Missing { .. } => EmbedError::Refused {
+                reason: "artifact_unavailable".to_string(),
+            },
+            other => ledger_err(other),
+        })
+    }
+
     pub(crate) fn resolve_definition(
         &mut self,
         definition: &DefinitionInput,
@@ -759,6 +1229,29 @@ impl EmbedService {
             sealed.definition_ref.version_id.clone(),
             sealed.canonical_bytes(),
         );
+        // DF-S1.25-3 (S2.3): the sealed bytes land in the blob pool and
+        // `artifacts/<version_id>` records the blob id — `get_artifact`
+        // and resume's `verify_resume` survive a service restart (the
+        // in-memory table is a cache, never the store). A failure refuses
+        // the open (CC3 — the durable half is the point).
+        let blob_addr = self
+            .store
+            .put_blob(&sealed.canonical_bytes(), "application/x-hir-sealed")
+            .map_err(ledger_err)?;
+        let dir = self.store.root().join("artifacts");
+        std::fs::create_dir_all(&dir).map_err(|e| EmbedError::Refused {
+            reason: format!("artifact_store_unavailable: {e}"),
+        })?;
+        let dst = dir.join(&sealed.definition_ref.version_id);
+        if !dst.exists() {
+            let tmp = dir.join(format!("{}.tmp", sealed.definition_ref.version_id));
+            std::fs::write(&tmp, blob_addr.id()).map_err(|e| EmbedError::Refused {
+                reason: format!("artifact_store_unavailable: {e}"),
+            })?;
+            std::fs::rename(&tmp, &dst).map_err(|e| EmbedError::Refused {
+                reason: format!("artifact_store_unavailable: {e}"),
+            })?;
+        }
         Ok(sealed)
     }
 
@@ -936,6 +1429,120 @@ impl EmbedService {
         .map_err(|e| EmbedError::Refused {
             reason: format!("driver_open: {e:?}"),
         })
+    }
+
+    /// Arm the resumed leaf (S2.3; DF-S1.25-2) — the same `ctx`/`policy`/
+    /// `config` `arm_driver` builds, but sourced from the persisted
+    /// `leaf.arm` record (no `budget` param survives a service restart)
+    /// and through `Driver::resume_react` — the durable tail is observed
+    /// past `last_cue_seq`, never re-minted. Returns the driver plus the
+    /// arm record (the session carries it as `leaf_arm`).
+    fn arm_resume_driver(
+        &mut self,
+        run_id: &str,
+        lease: &hh_ledger::store::Lease,
+        checkpoint: &[u8],
+        manifest: &RunManifest,
+    ) -> Result<(Driver<ReactMinimal>, LeafArm), EmbedError> {
+        let arm_path = self.store.root().join("runs").join(run_id).join("leaf.arm");
+        let arm = std::fs::read_to_string(&arm_path)
+            .ok()
+            .and_then(|s| hh_wire::json::parse(&s).ok())
+            .and_then(|j| LeafArm::from_json(&j))
+            .ok_or_else(|| EmbedError::Refused {
+                reason: "resume_arm_record_unavailable".to_string(),
+            })?;
+        let ctx = ControlContext {
+            process_ref: format!("hh-embed/{}", manifest.run_kind.as_str()),
+            plan: vec![],
+            boundary: hh_control::react::react_preset(),
+            profile: Json::Null,
+            account_ref: manifest
+                .budget
+                .clone()
+                .unwrap_or_else(|| "acct:unbudgeted".to_string()),
+            budget_ref: manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
+            envelope_ref: "env-1".to_string(),
+            parameters: StrategyParams::default(),
+            capabilities_available: arm.surfaces.iter().map(|s| s.surface_id.clone()).collect(),
+            steering: (SteerMode::Unsupported, ConcurrentInput::QueueOnly),
+        };
+        let interactive = manifest.attendance.0 == AttendanceValue::Interactive;
+        let mut policy = EnvelopePolicy::stage1_default(
+            &manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
+        );
+        if interactive {
+            for dim in arm.budget_ceiling.keys().chain(arm.remaining.keys()) {
+                if hh_ontology::dimensions::DimensionId::parse(dim).is_some() {
+                    policy.exhaustion.rules.insert(
+                        dim.clone(),
+                        hh_control::policy::ExhaustionRule {
+                            on_exhaustion: hh_control::policy::ExhaustionAction::Escalate,
+                            grace_calls: 0,
+                        },
+                    );
+                }
+            }
+        }
+        let policy = policy.seal().map_err(|e| EmbedError::Refused {
+            reason: format!("envelope_policy: {e:?}"),
+        })?;
+        let mut sink = crate::runtime::KernelSink {
+            store: &mut self.store,
+            run_id: run_id.to_string(),
+            lease: lease.clone(),
+        };
+        let mut ceiling = arm.budget_ceiling.clone();
+        let mut remaining = arm.remaining.clone();
+        let driver = Driver::resume_react(
+            &ctx,
+            policy,
+            checkpoint,
+            &mut sink,
+            DriverConfig {
+                surfaces: arm.surfaces.clone(),
+                budget_ceiling: std::mem::take(&mut ceiling),
+                remaining: std::mem::take(&mut remaining),
+                interactive_attendance: interactive,
+                ..DriverConfig::default()
+            },
+        )
+        .map_err(|e| EmbedError::Refused {
+            reason: format!("driver_resume: {e:?}"),
+        })?;
+        Ok((driver, arm))
+    }
+
+    /// Persist the resume-by-leaf pair (S2.3) — `leaf.checkpoint` (the
+    /// canonical strategy bytes) + `leaf.arm` (the arm-time config) under
+    /// `runs/<run_id>/`. Atomic tmp+rename per file: a crash mid-write
+    /// leaves the previous generation intact — a torn checkpoint never
+    /// reads as a valid one.
+    pub(crate) fn persist_leaf(&mut self, sess_id: &str) {
+        let (run_id, ckpt, arm) = {
+            let s = match self.sessions.get(sess_id) {
+                Some(s) => s,
+                None => return,
+            };
+            let d = match s.driver.as_ref() {
+                Some(d) => d,
+                None => return,
+            };
+            (s.run_id.clone(), d.checkpoint(), s.leaf_arm.clone())
+        };
+        let dir = self.store.root().join("runs").join(&run_id);
+        if std::fs::create_dir_all(&dir).is_err() {
+            return;
+        }
+        let write_atomic = |name: &str, bytes: &[u8]| {
+            let tmp = dir.join(format!("{name}.tmp"));
+            let dst = dir.join(name);
+            if std::fs::write(&tmp, bytes).is_ok() {
+                let _ = std::fs::rename(&tmp, &dst);
+            }
+        };
+        write_atomic("leaf.checkpoint", &ckpt);
+        write_atomic("leaf.arm", arm.to_json().to_canonical_string().as_bytes());
     }
 
     fn alloc_session_id(&mut self) -> String {

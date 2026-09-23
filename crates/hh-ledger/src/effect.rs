@@ -286,6 +286,11 @@ pub struct EffectFold {
     pub branch_id: Option<String>,
     /// The seq of the terminal marker, when terminal.
     pub terminal_seq: Option<u64>,
+    /// `observed{terminated: true}` — the detached reconciliation's terminal
+    /// marker (S2.3, R-2.2.3 §AC-14): the writer has proven the child is gone
+    /// past `preserve_until`; retry is impossible, so the fold closes
+    /// unconditionally.
+    pub terminated: bool,
 }
 
 impl EffectFold {
@@ -311,6 +316,7 @@ impl EffectFold {
             idempotency_key: None,
             branch_id: None,
             terminal_seq: None,
+            terminated: false,
         }
     }
 
@@ -326,17 +332,23 @@ impl EffectFold {
     /// Is the fold in an *effect*-terminal state? `observed{applied}` always;
     /// `observed{not_applied}` only when the class forecloses retry
     /// ([`EffectFold::retryable`]); `observed{partial}` never (ADR-0238 §1).
+    /// `observed{terminated}` (the detached reconciliation's reaped-child
+    /// marker) is unconditionally terminal — the writer proved the executor
+    /// is gone; no retry can ever dispatch (S2.3, R-2.2.3).
     pub fn is_terminal(&self) -> bool {
         match self.phase {
             EffectPhase::Refused
             | EffectPhase::Compensated
             | EffectPhase::Reverted
             | EffectPhase::Abandoned => true,
-            EffectPhase::Observed => match self.outcome {
-                Some(ObservedOutcome::Applied) => true,
-                Some(ObservedOutcome::NotApplied) => !self.retryable(),
-                _ => false,
-            },
+            EffectPhase::Observed => {
+                self.terminated
+                    || match self.outcome {
+                        Some(ObservedOutcome::Applied) => true,
+                        Some(ObservedOutcome::NotApplied) => !self.retryable(),
+                        _ => false,
+                    }
+            }
             _ => false,
         }
     }
@@ -513,6 +525,7 @@ fn apply_event_fields(
                 .get("outcome")
                 .and_then(Json::as_str)
                 .and_then(ObservedOutcome::parse);
+            f.terminated = payload.get("terminated") == Some(&Json::Bool(true));
             f.phase = EffectPhase::Observed;
             if f.is_terminal() {
                 f.terminal_seq = Some(seq);

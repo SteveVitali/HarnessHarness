@@ -63,10 +63,13 @@ impl<'a> EventMinter<'a> {
         chain: &ScopeChain,
     ) -> Result<Event, LedgerError> {
         let mut ev = self.mint(class, payload)?;
+        // An empty member is `None`, never `Some("")` — `""` is not a scope
+        // id (a detached child's fold may legitimately lack a tool_call).
+        let nonempty = |s: &str| (!s.is_empty()).then(|| s.to_string());
         ev.scope = Scope {
-            turn_id: Some(chain.turn_id.clone()),
-            model_call_id: Some(chain.model_call_id.clone()),
-            tool_call_id: Some(chain.tool_call_id.clone()),
+            turn_id: nonempty(&chain.turn_id),
+            model_call_id: nonempty(&chain.model_call_id),
+            tool_call_id: nonempty(&chain.tool_call_id),
             effect_id: Some(effect_id.to_string()),
             ..Scope::default()
         };

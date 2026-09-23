@@ -28,6 +28,7 @@ pub mod records;
 pub mod refs;
 pub mod risk;
 pub(crate) mod schema;
+pub mod speculation;
 pub mod tools;
 
 // The canonical `AssumptionDebtRecord` codec is re-exported for `hh-registry`
@@ -60,6 +61,7 @@ pub use ops::{
 };
 pub use records::*;
 pub use refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref, RefVersion, RunRef};
+pub use speculation::{SpeculationPolicy, SpeculativeClass};
 pub use validate::validate;
 
 /// The canonical-codec entry points the out-of-process seam needs (`hh-ir-op`; AC-IR-10) —

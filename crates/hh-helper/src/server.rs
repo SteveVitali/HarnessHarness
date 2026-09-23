@@ -386,6 +386,9 @@ fn dispatch(
                         out.push(Json::obj([
                             ("process_ref", Json::str(d.process_ref.clone())),
                             ("execution_id", Json::str(d.execution_id.clone())),
+                            // The effect the execution serves — the resuming
+                            // writer's reconciliation join (§5a.3; CC8).
+                            ("effect_id", Json::str(e.effect_id.clone())),
                         ]));
                     }
                 }

@@ -95,6 +95,23 @@ pub enum EnvError {
     },
     /// A content-addressed blob the store could not serve.
     Blob(String),
+    /// `restore` of a snapshot whose content was GC'd — `SnapshotMissing`
+    /// carries the snapshot ref (the verifiable hash the caller can check
+    /// the tombstone against; AC-R-2.2.4-9).
+    SnapshotMissing {
+        /// The snapshot ref (or tree address) that failed to resolve.
+        snapshot_ref: String,
+    },
+    /// `heal_no > max_heals` — the `HealingPolicy` bound (ADR-0132 §2); the
+    /// caller stops the run `infrastructure_failure{environment_lost}`.
+    MaxHealsExceeded {
+        /// The handle.
+        env_handle_id: String,
+        /// The ledger-counted heal number.
+        heal_no: u32,
+        /// The policy bound.
+        max_heals: u32,
+    },
     /// An idp/1 identity failure.
     Identity(String),
     /// The helper channel failed (send/recv/decode — transport plane; the
@@ -163,6 +180,17 @@ impl std::fmt::Display for EnvError {
             EnvError::Ledger(e) => write!(f, "ledger: {e}"),
             EnvError::BudgetRefused { detail } => write!(f, "BudgetRefused: {detail}"),
             EnvError::Blob(d) => write!(f, "blob: {d}"),
+            EnvError::SnapshotMissing { snapshot_ref } => {
+                write!(f, "SnapshotMissing: {snapshot_ref}")
+            }
+            EnvError::MaxHealsExceeded {
+                env_handle_id,
+                heal_no,
+                max_heals,
+            } => write!(
+                f,
+                "MaxHealsExceeded: {env_handle_id} at heal {heal_no} of {max_heals}"
+            ),
             EnvError::Identity(d) => write!(f, "identity: {d}"),
             EnvError::Transport { detail } => write!(f, "transport: {detail}"),
             EnvError::HelperRefused { class, detail } => {
