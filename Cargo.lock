@@ -113,6 +113,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-monitor"
+version = "0.0.1"
+dependencies = [
+ "hh-assembly",
+ "hh-compiler",
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-ontology"
 version = "0.0.1"
 dependencies = [

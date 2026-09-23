@@ -79,6 +79,16 @@ members = [
     # out-of-process seam (AC-CP-11). Stages 3/4 (lower_profile/lower_target/lift/relower)
     # are S3.2 — not this crate yet.
     "crates/hh-compiler",
+    # The C0/Stage-1 reference monitor — the security kernel & capability model
+    # (spec §5g.1, R-2.8.1; ticket S1.11). A PERSISTENT workspace member: the
+    # kernel-owned AuthorityHandle table projection over
+    # security.permission.granted/revoked, root minting ∩ authority_cap, the
+    # SurfaceArgMap evaluator, deterministic risk assessment (raise-only),
+    # the Π interpreter + default table in both modes, `authorize` steps 0–3
+    # and 6, delegation attenuation + revocation cascade, the kernel
+    # context_label stamp, the HandleLeak checks, the no-Text/no-model-call
+    # static + runtime protections. MUST-code (the TCB); never model-facing.
+    "crates/hh-monitor",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

@@ -1,0 +1,20 @@
+[package]
+name = "hh-monitor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 reference monitor — the security kernel & capability model (spec §5g.1, R-2.8.1; ticket S1.11): the kernel-owned AuthorityHandle table projection over security.permission.granted/revoked, root minting ∩ authority_cap, the SurfaceArgMap evaluator, deterministic raise-only risk assessment, the Π interpreter + default table in both modes, `authorize` steps 0–3 and 6, delegation attenuation + revocation cascade, the kernel context_label stamp, the HandleLeak checks, and the no-Text/no-model-call static + runtime protections. MUST-code (the §5g.1 §2.6 TCB); never model-facing; no `Text` leaf and no model call on any path."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-assembly = { path = "../hh-assembly" }
+hh-compiler = { path = "../hh-compiler" }
+hh-ledger = { path = "../hh-ledger" }

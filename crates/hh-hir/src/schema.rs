@@ -690,7 +690,11 @@ fn resources_from_json(j: &Json, path: &str) -> Result<Resources, HirError> {
     }
 }
 
-fn grant_json(g: &Grant, semantic: bool) -> Json {
+/// The canonical `Grant` JSON (`semantic = true` projects refs inside
+/// `reversibility` by semantic_id only — the semantic-projection form).
+/// Exposed for the monitor's `security.permission.granted` payloads (S1.11 —
+/// the grant record is the one vocabulary; CC1).
+pub fn grant_json(g: &Grant, semantic: bool) -> Json {
     let mut c = vec![];
     if let Some(b) = &g.constraints.budget {
         c.push(("budget", b.clone()));
@@ -709,7 +713,9 @@ fn grant_json(g: &Grant, semantic: bool) -> Json {
     ])
 }
 
-fn grant_from_json(j: &Json, path: &str) -> Result<Grant, HirError> {
+/// Parse a canonical `Grant` — `path` prefixes `SchemaViolation` details.
+/// Exposed for the monitor's `granted`-event fold (S1.11).
+pub fn grant_from_json(j: &Json, path: &str) -> Result<Grant, HirError> {
     let cj = req(j, "constraints", path)?;
     Ok(Grant {
         effect: EffectClass::from_json(req(j, "effect", path)?, &format!("{path}.effect"))?,

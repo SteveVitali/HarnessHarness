@@ -1229,6 +1229,44 @@ fn check_equivalence_e2_fails_on_an_arg_outside_the_schema() {
 }
 
 #[test]
+fn check_equivalence_e2_fails_when_a_surface_field_lacks_a_map_entry() {
+    // AC-R-2.8.1-10 (compile half): a surface field declared in
+    // `argument_order` but absent from `SurfaceArgMap` fails compilation — an
+    // unmapped surface field could otherwise smuggle an argument past the
+    // monitor's canonical-parameter resolution (§5g.1 I-H5).
+    let mut n = surfaced_tool_node("test:tool", "tool_a", &["path", "mode"], 5);
+    // Declare `mode` in `input_schema` too, so the map is otherwise sound and
+    // the only defect is the missing entry.
+    if let KindRecord::ToolCapability(t) = &mut n.semantic {
+        if let Json::Obj(root) = &mut t.input_schema {
+            if let Json::Obj(props) = root.get_mut("properties").expect("properties") {
+                props.insert(
+                    "mode".to_string(),
+                    Json::obj([("type", Json::str("string"))]),
+                );
+            }
+        }
+    }
+    let ts = match n.surface.as_ref().unwrap() {
+        SurfaceRecord::Tool(t) => t.as_ref(),
+        _ => unreachable!(),
+    };
+    let cap = match &n.semantic {
+        KindRecord::ToolCapability(t) => t,
+        _ => unreachable!(),
+    };
+    let mut binding = hh_compiler::equiv::bind_surface(&n, ts, &cap.input_schema);
+    binding.arg_map.remove("mode");
+    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None).expect("evidence");
+    match &e.e2_authority {
+        hh_compiler::equiv::EvidenceVerdict::Fail { reason } => {
+            assert!(reason.contains("mode"), "{reason}");
+        }
+        other => panic!("expected E2 fail for unmapped surface field, got {other:?}"),
+    }
+}
+
+#[test]
 fn check_equivalence_e4_is_na_open_world_for_open_world_capabilities() {
     let mut n = tool_node("test:tool", 5);
     if let KindRecord::ToolCapability(tc) = &mut n.semantic {

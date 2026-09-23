@@ -79,6 +79,22 @@ fn effect_ev(
     e
 }
 
+/// A `security.permission.decided{allow}` row — the complete-mediation
+/// pre-record (ADR-0052 D6; §5g.1 I-H7) every `committed` must be preceded by.
+fn decided_allow(id: &str, effect_id: &str, attempt: i64) -> Event {
+    effect_ev(
+        id,
+        "security.permission.decided",
+        effect_id,
+        hh_wire::json::Json::obj([
+            ("effect_id", hh_wire::json::Json::str(effect_id)),
+            ("attempt_no", hh_wire::json::Json::Int(attempt)),
+            ("decision", hh_wire::json::Json::str("allow")),
+        ]),
+        0,
+    )
+}
+
 /// A `{reversibility, repeat_safety, scope}` risk-class payload member.
 fn risk_class(rev: &str, rs: &str, scope: &str) -> hh_wire::json::Json {
     hh_wire::json::Json::obj([
@@ -459,6 +475,7 @@ fn e1_exhaust_refuses_while_an_effect_is_open_then_succeeds() {
                 )]),
                 0,
             ),
+            decided_allow("eff-d", "eff-1", 1),
             effect_ev(
                 "eff-c",
                 "action.effect.committed",
@@ -643,6 +660,7 @@ fn df_s1_6_1_mixed_open_effects_still_block() {
                 )]),
                 0,
             ),
+            decided_allow("rk-d", "eff-risky", 1),
             effect_ev(
                 "rk-c",
                 "action.effect.committed",

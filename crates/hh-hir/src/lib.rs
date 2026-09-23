@@ -31,7 +31,7 @@ pub(crate) mod schema;
 // The canonical `AssumptionDebtRecord` codec is re-exported for `hh-registry`
 // (`VariantRecord.conditioned_rules` — CC7: the schema source owns both
 // directions; additive — CC8).
-pub use schema::{debt_from_json, debt_json};
+pub use schema::{debt_from_json, debt_json, grant_from_json, grant_json};
 pub mod validate;
 
 /// The one dialect this crate implements (`HIR/1` — CC8: growth is an additive bump).
