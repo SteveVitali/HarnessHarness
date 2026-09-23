@@ -322,6 +322,15 @@ pub struct ExecutionRequest {
     pub ladder: DeadlineLadder,
     /// The retained-bytes cap (the output policy's).
     pub retain_bytes_cap: u64,
+    /// The `idempotency_key` the prepare stage derived — the executor-side
+    /// dedup store keys on it (R-2.5.5¹; the kernel's dedup remains the
+    /// authoritative guard — an executor hit is a *recorded-verdict
+    /// replay*, never a fresh decision).
+    pub idempotency_key: String,
+    /// The `commit` stage's write-ahead evidence — the helper recomputes
+    /// the `commit_proof` over its session nonce and refuses `NotCommitted`
+    /// when the members don't match (S2.1; §5d.5 §4 commit_token).
+    pub commit_evidence: crate::helper::CommitEvidence,
 }
 
 /// `TerminalReport` — the executor's terminal report (the `terminal` capture

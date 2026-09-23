@@ -1,0 +1,39 @@
+# `hh-helper` — the out-of-process helper binary + the `hh-helper/1` wire
+# codec (S2.1; §5d.5 §4 helper row; ADR-0050 helper layer; R-2.5.5, R-2.2.5).
+#
+# A PERSISTENT workspace member: the helper is the executor-side half of the
+# kernel↔helper boundary — it launches contained processes (process-sandbox
+# via seatbelt on macOS; namespaces via podman `local_container`), holds the
+# exec journal (the durable store `read`/`probe`/`dedup` consult), enforces
+# the deadline *itself* (term → kill; kernel death ≠ environment death), and
+# never mints tokens, never decides authorization or lifecycle (I-3).
+#
+# `tier-c1` carries the C1 halves of R-2.5.5¹ (the durable executor-side
+# dedup store + `preserve_until(ttl)` on kernel loss — removability(0)
+# builds it absent).
+[package]
+name = "hh-helper"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The out-of-process sandbox helper binary + the hh-helper/1 wire codec (S2.1; R-2.5.5/R-2.2.5; ADR-0050 helper layer). Unix-socket session channel with hello/resume; exec/read/probe/cancel/terminate/detach/list_detached/env_apply/fs.*/snapshot/diff/probe_boundary verbs; helper-enforced deadlines (term→kill), pgrp-leader children + detached-child detection, executor-side dedup + preserve_until (tier-c1), token echo (never mints), commit-token admission, seatbelt (macOS) + podman container backends, concrete probe battery over the wire."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh-helper"
+path = "src/bin/hh_helper.rs"
+
+[features]
+default = ["tier-c1"]
+# The C1 halves of R-2.5.5¹ — the durable executor-side dedup store
+# (`dedup_window`) and `preserve_until(ttl)` on kernel loss (B3). Off ⇒ the
+# helper answers `dedup_window`-bearing sessions `unsupported`, honestly.
+tier-c1 = []
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-containment = { path = "../hh-containment" }

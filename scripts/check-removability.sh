@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# check-removability.sh — the CC6 removability gate for the helper boundary
+# (S2.1; R-2.5.5¹; ticket 032's "removability(0…3)" row).
+#
+# Tiers map to cargo features: `tier-c1` is the only tiered feature at S2.1
+# (durable executor-side dedup + preserve_until). removability(0) = the
+# workspace with tier-c1 absent still builds, refuses the C1 halves honestly
+# (`unsupported`, never silent degrade), and passes the tier-0 acceptance
+# surface unchanged. Tiers 1–3 have no feature surface yet — the check is
+# the honest gate: each absent tier is rebuilt+refusal-verified the moment
+# its feature lands.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "== removability(0): hh-helper without tier-c1 =="
+cargo build -p hh-helper --no-default-features
+HH_REM0=1 HH_HELPER_BIN="$PWD/target/debug/hh-helper" \
+    cargo test -p hh-env --test helper_live ac_s2_removability0 -- --nocapture
+
+echo "== tier-c1 restore + the unchanged tier-1 suite =="
+cargo build -p hh-helper
+cargo test -p hh-env --test helper_live
+
+echo "check-removability: OK (tier-0 honest refusals verified; tier-1 suite green)"

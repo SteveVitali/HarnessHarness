@@ -149,6 +149,20 @@ members = [
     # retryability. The integration layer above hh-hir/hh-containment/
     # hh-monitor/hh-ledger/hh-secrets/hh-budget — the cycle-safe seam (CC7).
     "crates/hh-env",
+    # The Stage-2 out-of-process helper binary + the `hh-helper/1` wire
+    # codec (spec §5d.5 §4 helper row; ticket S2.1; ADR-0050 helper layer;
+    # R-2.5.5/R-2.2.5). A PERSISTENT workspace member: the single schema
+    # source for the kernel↔helper protocol (CC7 — hh-env consumes it, never
+    # redefines), the exec journal `read`/`probe`/`dedup` consult, helper-
+    # enforced deadlines (term→kill on the process group), pgrp-leader
+    # spawn + detached-group detection, the fs.* gate over the attached
+    # ContainmentPolicy (reusing the admit classifiers — CC1), token echo
+    # (never mints — I-3), commit_proof admission, `fs_tree` snapshot/diff,
+    # the seatbelt (macOS `process_sandbox`) and podman (`local_container`)
+    # backends, and the concrete probe battery. `tier-c1` carries the C1
+    # halves of R-2.5.5¹ (durable dedup store + `preserve_until`) —
+    # removability(0) builds it absent with honest `unsupported` refusals.
+    "crates/hh-helper",
     # The C0/Stage-1 model adapter / gateway + C0 model-plane slices (spec
     # §5b.1–§5b.4, R-2.3.1, the R-2.3.2 C0 static slice, R-2.3.3⁰, R-2.3.4⁰;
     # ticket S1.18; ADR-0118…0128). A PERSISTENT workspace member: the
