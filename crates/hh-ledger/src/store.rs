@@ -2299,8 +2299,10 @@ impl Store {
     }
 
     /// The tombstone-aware blob lookup `audit_view` consumes — present /
-    /// tombstoned-with-reason / missing-with-no-audit-row.
-    fn blob_status(&self, address: &str) -> BlobStatus {
+    /// tombstoned-with-reason / missing-with-no-audit-row. Public since
+    /// S3.4b: the results store's `verify_citation` resolves blob evidence
+    /// through it (`Missing{redacted}` after a tombstone — §6.5 AC-12).
+    pub fn blob_status(&self, address: &str) -> BlobStatus {
         let Ok(addr) = hh_identity::idp::parse_id(address) else {
             return BlobStatus::Missing;
         };
@@ -2754,6 +2756,13 @@ impl Store {
             .collect())
     }
 
+    /// Every run id the store holds — the `runs/` enumeration rebuild and
+    /// scanning consumers (the results store's `catalogue_refresh(all)`,
+    /// rebuild equality) work over. Derived, never authoritative.
+    pub fn run_ids(&self) -> Vec<String> {
+        self.runs.keys().cloned().collect()
+    }
+
     /// Whether a blob exists at the address — `audit_view`'s `content_refs`
     /// presence accounting (a missing blob is `missing`, never `tampered` —
     /// ADR-0068 R3).
@@ -2761,6 +2770,22 @@ impl Store {
         hh_identity::idp::parse_id(address)
             .map(|p| self.root.join("blobs").join(&p.digest_hex).exists())
             .unwrap_or(false)
+    }
+
+    /// The blob pool's stored digests, sorted (`blobs/<digest>` names).
+    /// Derived indexes — the results store's bundle catalogue — resolve
+    /// non-`blob`-domain ids (a bundle's `version_id`) by recomputation
+    /// over the pool (§6.5 §2.1; public since S3.4b).
+    pub fn blob_digests(&self) -> Vec<String> {
+        let mut out: Vec<String> = fs::read_dir(self.root.join("blobs"))
+            .map(|it| {
+                it.flatten()
+                    .filter_map(|e| e.file_name().to_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        out.sort();
+        out
     }
 
     /// Every `(effect_id, fold)` in id order — the reconciliation sweep's
@@ -3034,6 +3059,24 @@ fn commit_envelopes(
                 env.hlc = Some(h.render());
                 env.hash = env.recompute_hash();
                 state.hlc_last = Some(h);
+            }
+        }
+        // The HLC stamp changed every durable hash — re-chain the
+        // *intra-batch* `prev_hash` links so the committed links bind the
+        // stamped hashes (found by S3.4b's `verify_run` on subject runs:
+        // without the re-chain, every batch's second+ event stored the
+        // pre-HLC hash of its predecessor → `Tampered{chain_broken}`). The
+        // first durable event's `prev_hash` stays as the caller set it —
+        // the WAL tip, or a fork/continuation's explicit source-head
+        // anchor (§5a lineage).
+        let mut prev: Option<String> = None;
+        for s in staged.iter_mut() {
+            if let Staged::Durable(env) = s {
+                if let Some(p) = prev.take() {
+                    env.prev_hash = p;
+                    env.hash = env.recompute_hash();
+                }
+                prev = Some(env.hash.clone());
             }
         }
     }

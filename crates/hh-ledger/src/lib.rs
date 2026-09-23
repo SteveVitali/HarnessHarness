@@ -44,7 +44,9 @@ pub mod tree;
 pub mod views;
 pub mod wakeup;
 
-pub use audit::{AuditObligation, ObligationQuantifier, Unmet, DEFERRED_OBLIGATIONS, OBLIGATIONS};
+pub use audit::{
+    AuditObligation, BlobStatus, ObligationQuantifier, Unmet, DEFERRED_OBLIGATIONS, OBLIGATIONS,
+};
 pub use branch::{
     BranchInfo, BranchKind, BranchRecord, CompensationEntry, EnvBinding, ForkOpts, NavigateTarget,
     ReplayMode, RollbackRecord,
