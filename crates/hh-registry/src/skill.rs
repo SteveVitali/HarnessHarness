@@ -387,3 +387,154 @@ pub fn lift_skill(
         loss,
     })
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// export_skill — the export direction (§5c.5 row 7; AC-R-2.4.5-7)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The `export_skill` output — the written tree plus the declared loss.
+#[derive(Debug)]
+pub struct SkillExport {
+    /// The skill tree the caller writes (`SKILL.md` + bundled dirs — CC5: the
+    /// registry never performs I/O).
+    pub tree: SkillTree,
+    /// The loss report — `lift(export(P)) ∪ loss_report = P`: every member the
+    /// skill format cannot carry is a `lost` row, never silently dropped.
+    pub loss: LoweringLossReport,
+}
+
+/// `export_skill` failures.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExportError {
+    /// The node is not a `Procedure`.
+    NotAProcedure {
+        /// The node's actual kind.
+        kind: String,
+    },
+}
+
+impl std::fmt::Display for ExportError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExportError::NotAProcedure { kind } => {
+                write!(f, "ExportError::NotAProcedure: {kind}")
+            }
+        }
+    }
+}
+impl std::error::Error for ExportError {}
+
+/// `export_skill(P, resolve_blob)` — ADR-0086's export direction
+/// (AC-R-2.4.5-7). The mapping is the inverse of [`lift_skill`]:
+///
+/// - `semantic_id` → `name`; the first `index.tags` member → `description`;
+/// - `Instruction` steps → the `body` member (multiple bodies fold with a
+///   blank line — `notes` records the fold, the skill format has one body);
+/// - `Opaque` payloads → `scripts/*` (`bytes` resolved through the caller's
+///   blob resolver — the payload carries `bytes_hash`, never bytes; an
+///   unresolvable hash is a `lost` row, never a silent omission);
+/// - every member the skill format has no slot for is a `lost` row with
+///   reason `no_slot`: `preconditions`, `expected_evidence`, `tests`,
+///   `failure_handlers`, `outputs` (the AC's mandated minimum), plus each
+///   non-`Instruction`/`Opaque` step as `steps[i]:<kind>`.
+pub fn export_skill(
+    procedure: &Node,
+    resolve_blob: &dyn Fn(&str) -> Option<Vec<u8>>,
+) -> Result<SkillExport, ExportError> {
+    let KindRecord::Procedure(rec) = &procedure.semantic else {
+        return Err(ExportError::NotAProcedure {
+            kind: procedure.kind.name().to_string(),
+        });
+    };
+    let mut tree = SkillTree {
+        name: procedure.semantic_id(),
+        ..SkillTree::default()
+    };
+    let mut loss = LoweringLossReport::default();
+
+    // Profile-derived members (the lift's `index`/`source` back-references).
+    if let Ok(Some(profile)) = hh_hir::procedure::ProcedureProfile::from_node(procedure) {
+        if let Some(tag) = profile.index_tags.first() {
+            tree.description = tag.clone();
+        }
+        if let Some(src) = &profile.source_extension_ref {
+            tree.metadata
+                .insert("extension_ref".to_string(), src.clone());
+        }
+        loss.mapped.push("index.tags[0] → description".into());
+        loss.mapped
+            .push("source.extension_ref → metadata.extension_ref".into());
+    }
+
+    // Steps — Instruction → body; Opaque → scripts; everything else no_slot.
+    let mut bodies: Vec<String> = Vec::new();
+    for (i, step) in rec.steps.iter().enumerate() {
+        match step {
+            ProcedureStep::Instruction(t) => bodies.push(t.content.clone().unwrap_or_default()),
+            ProcedureStep::Opaque(payload) => match resolve_blob(&payload.bytes_hash) {
+                Some(bytes) => {
+                    let ext = match payload.format_tag.as_str() {
+                        "script" => "sh",
+                        other => other,
+                    };
+                    tree.scripts.push(SkillFile {
+                        path: format!("scripts/step-{i}.{ext}"),
+                        bytes,
+                        media_type: "application/octet-stream".into(),
+                    });
+                }
+                None => loss.lost.push((
+                    format!("steps[{i}]:opaque"),
+                    format!("bytes for {} not resolvable", payload.bytes_hash),
+                )),
+            },
+            other => loss.lost.push((
+                format!("steps[{i}]:{}", step_kind_name(other)),
+                "no_slot".to_string(),
+            )),
+        }
+    }
+    if bodies.len() > 1 {
+        loss.notes.push(format!(
+            "{} Instruction steps folded into the single body member",
+            bodies.len()
+        ));
+    }
+    tree.body = bodies.join(
+        "
+
+",
+    );
+    if !tree.body.is_empty() {
+        loss.mapped.push("Instruction steps → body".into());
+    }
+    if !tree.scripts.is_empty() {
+        loss.mapped
+            .push("Opaque payloads → scripts/* (content-addressed)".into());
+    }
+
+    // The mandated `no_slot` rows (AC-R-2.4.5-7): the skill format has no
+    // slot for the typed members — declared, never dropped.
+    for member in [
+        "preconditions",
+        "expected_evidence",
+        "tests",
+        "failure_handlers",
+        "outputs",
+    ] {
+        loss.lost.push((member.to_string(), "no_slot".to_string()));
+    }
+    Ok(SkillExport { tree, loss })
+}
+
+fn step_kind_name(step: &ProcedureStep) -> &'static str {
+    match step {
+        ProcedureStep::Instruction(_) => "instruction",
+        ProcedureStep::Invoke { .. } => "invoke",
+        ProcedureStep::Delegate { .. } => "delegate",
+        ProcedureStep::Branch { .. } => "branch",
+        ProcedureStep::Loop { .. } => "loop",
+        ProcedureStep::Verify { .. } => "verify",
+        ProcedureStep::Opaque(_) => "opaque",
+    }
+}

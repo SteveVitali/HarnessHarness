@@ -671,6 +671,148 @@ pub fn evict_oldest_propose(
     ))
 }
 
+/// `hh/clear-tool-results@1` — the variant tag for [`ClearToolResults`].
+pub const CLEAR_TOOL_RESULTS_REF: &str = "hh/clear-tool-results@1";
+
+/// `clear_tool_results{capabilities, older_than}` (§5c.2) — the registered
+/// Stage-3 variant that targets completed tool results for eviction.
+///
+/// A flattened item is targeted iff its candidate's provenance origin is
+/// `Origin::Tool{capability ∈ capabilities, invocation_ref}` **and** the
+/// invocation's `action.tool.completed{seq}` is `≤ older_than`. The target
+/// set is expanded to whole indivisible groups (I-PAIR/I-ATOM: an evicted
+/// item drags its `paired_with`/`batch_id` siblings — a sibling that is
+/// `required` or kernel-authored stops the whole group), each contiguous
+/// forgotten range emits one `evict{placeholder: kernel_omission}` op, and
+/// every run boundary must sit on `legal_cut_points` (I-CUT — a run that
+/// cannot open or close legally is skipped, never cut).
+///
+/// The proposal is pure: the caller joins `action.tool.completed` into
+/// `completed_invocations` (`invocation_ref → completion seq`) before
+/// dispatch — the variant never reads the ledger itself.
+pub struct ClearToolResults {
+    /// The capability set the variant clears (`capabilities`).
+    pub capabilities: BTreeSet<String>,
+    /// Only invocations completed at `seq ≤ older_than` are targeted.
+    pub older_than: u64,
+    /// `invocation_ref → completion seq` joined from `action.tool.completed`.
+    pub completed_invocations: BTreeMap<String, u64>,
+}
+
+impl CompactionStrategy for ClearToolResults {
+    fn variant_ref(&self) -> &str {
+        CLEAR_TOOL_RESULTS_REF
+    }
+
+    fn propose(
+        &self,
+        input: &CompactInput,
+        _assessment: &Assessment,
+    ) -> Result<CompactionProposal, CompactError> {
+        let flat = input.flattened();
+        // The indivisible-group expansion — the same closure evict_oldest
+        // uses (I-PAIR/I-ATOM are enforced again at check_proposal; the
+        // variant must still *name* every sibling it drags).
+        let group_of = |i: usize| -> BTreeSet<usize> {
+            let mut g = BTreeSet::new();
+            let Some(c) = &flat[i].candidate else {
+                return g;
+            };
+            g.insert(i);
+            for (j, f) in flat.iter().enumerate() {
+                if j == i {
+                    continue;
+                }
+                let Some(oc) = &f.candidate else { continue };
+                let paired = c
+                    .paired_with
+                    .as_ref()
+                    .is_some_and(|p| *p == oc.candidate_id)
+                    || oc
+                        .paired_with
+                        .as_ref()
+                        .is_some_and(|p| *p == c.candidate_id);
+                let batched = matches!((&c.batch_id, &oc.batch_id), (Some(a), Some(b)) if a == b);
+                if paired || batched {
+                    g.insert(j);
+                }
+            }
+            g
+        };
+
+        // Targeted: a tool-sourced item whose capability is named and whose
+        // invocation completed at seq ≤ older_than.
+        let targeted = |i: usize| -> bool {
+            let Some(c) = &flat[i].candidate else {
+                return false;
+            };
+            if matches!(c.retention, Retention::Required) {
+                return false;
+            }
+            match &c.provenance.origin {
+                Origin::Tool {
+                    capability,
+                    invocation_ref,
+                    ..
+                } => {
+                    self.capabilities.contains(capability)
+                        && self
+                            .completed_invocations
+                            .get(invocation_ref)
+                            .is_some_and(|seq| *seq <= self.older_than)
+                }
+                _ => false,
+            }
+        };
+
+        let mut evicted: BTreeSet<usize> = BTreeSet::new();
+        for i in 0..flat.len() {
+            if !targeted(i) || evicted.contains(&i) {
+                continue;
+            }
+            let group = group_of(i);
+            if group.iter().any(|j| {
+                evicted.contains(j)
+                    || flat[*j].candidate.is_none()
+                    || matches!(
+                        flat[*j].candidate.as_ref().unwrap().retention,
+                        Retention::Required
+                    )
+            }) {
+                // The group drags a required/kernel item — it cannot move.
+                continue;
+            }
+            let tentative: BTreeSet<usize> = evicted.union(&group).cloned().collect();
+            if runs_legal(input, &flat, &tentative) {
+                evicted = tentative;
+            }
+        }
+
+        // One `evict` op per contiguous forgotten range (each range's
+        // boundaries already verified legal).
+        let mut ops = Vec::new();
+        let mut freed = 0u64;
+        for (start, end) in contiguous_runs(&evicted) {
+            ops.push(CompactionOp::Evict {
+                item_ids: (start..=end)
+                    .map(|i| flat[i].item.context_item_id.clone())
+                    .collect(),
+                placeholder: Placeholder::KernelOmission,
+            });
+            for it in flat.iter().take(end + 1).skip(start) {
+                freed += it.item.tokens;
+            }
+            freed = freed.saturating_sub(OMISSION_ITEM_TOKENS);
+        }
+        Ok(CompactionProposal::mint(
+            CLEAR_TOOL_RESULTS_REF,
+            ops,
+            None,
+            freed,
+        ))
+    }
+}
+
 /// I-CUT for a proposed evicted set: split it into contiguous flattened runs;
 /// each run must start and end on a legal boundary.
 fn runs_legal(input: &CompactInput, flat: &[FlatItem], evicted: &BTreeSet<usize>) -> bool {

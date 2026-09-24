@@ -110,6 +110,100 @@ pub struct ArtefactRow {
     /// `predicate_ref`/`followed_predicate_ref` — the predicate the followed
     /// verdict evaluated (the per-rule join key on followed rows).
     pub predicate_ref: Option<String>,
+    /// `kind` — the artefact kind a `delivered` row names (`procedure_index`,
+    /// `memory`, `memory_index`, `tool_surface`, `artifact_excerpt` …; the
+    /// memory-compliance chain's per-kind join — AC-R-2.4.3-9).
+    pub kind: Option<String>,
+    /// `by_reference` — the handle-only delivery mark (delivered rows).
+    pub by_reference: Option<bool>,
+    /// `signal` — the activation signal an `activated` row carries
+    /// (`loaded | cited | tool_used` — AC-R-2.4.3-9's spelling).
+    pub signal: Option<String>,
+    /// `evidence_ref` — the followed row's evidence pointer.
+    pub evidence_ref: Option<String>,
+}
+
+/// One `context.memory.written` row projection (§5c.3 — the
+/// `memory.promoted`/manifest-chain input).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MemoryWriteRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// The version id.
+    pub version_id: String,
+    /// The semantic id (`memory_id`).
+    pub semantic_id: Option<String>,
+    /// The memory kind spelling.
+    pub kind: Option<String>,
+    /// The label's authority spelling (`promoted_endorsed` ⇒ promotion-
+    /// endorsed for `memory.promoted`).
+    pub authority: Option<String>,
+}
+
+/// One `context.memory.read` row projection (the delivered/withheld lists —
+/// `memory.over_invalidation` and the reacquisition oracle's inputs).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MemoryReadRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// The delivered version/address ids.
+    pub delivered: Vec<String>,
+    /// The withheld version ids.
+    pub withheld: Vec<String>,
+}
+
+/// One `context.retrieval.completed` row projection.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RetrievalRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `query_kind`.
+    pub query_kind: Option<String>,
+    /// `report.ranker_ref`.
+    pub ranker_ref: Option<String>,
+    /// `report.deterministic`.
+    pub deterministic: Option<bool>,
+    /// `report.cost.index_ms.value`.
+    pub index_ms: Option<i64>,
+    /// `report.cost.embedder_calls`.
+    pub embedder_calls: Option<i64>,
+    /// `report.cost.tokens_estimated`.
+    pub tokens_estimated: Option<i64>,
+}
+
+/// One `action.tool.completed` row projection (the `clear_tool_results`
+/// join + the `repeated_action` oracle's `(capability, args)` key).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolCompletedRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `invocation_ref` (the tool-call identity `Origin::Tool` names).
+    pub invocation_ref: Option<String>,
+    /// The capability/tool name.
+    pub capability: Option<String>,
+    /// The canonical-args digest (canonical JSON of `args`/`arguments`,
+    /// when the row carries them).
+    pub args_canonical: Option<String>,
+}
+
+/// One `context.compaction.started`/`completed` row projection.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompactionRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `completed` — `context.compaction.completed` vs `started`.
+    pub completed: bool,
+    /// `variant_ref` (completed rows).
+    pub variant_ref: Option<String>,
+    /// `status` (completed rows).
+    pub status: Option<String>,
+    /// `tokens_freed`/`reclaimed`.
+    pub tokens_freed: Option<i64>,
+    /// `accounting.model_calls` (the summariser-call count — 0 at C0).
+    pub model_calls: Option<i64>,
+    /// `forgotten[]` — the context_item_ids the compaction dropped (the
+    /// `reacquisition`/`recall_probe` oracle input).
+    pub forgotten: Vec<String>,
 }
 
 /// One `model.call.requested` row — the request-side cache members and the
@@ -379,6 +473,23 @@ pub struct LedgerFacts {
     /// join reads `source_event.event_id` through it. Empty under
     /// `from_events` (envelope ids are not carried there).
     pub event_calls: BTreeMap<String, String>,
+    /// `context.memory.written` rows (S3.8 — the memory-compliance and
+    /// `memory.promoted` inputs).
+    pub memory_writes: Vec<MemoryWriteRow>,
+    /// `context.memory.read` rows (delivered/withheld lists).
+    pub memory_reads: Vec<MemoryReadRow>,
+    /// `context.retrieval.completed` rows (the retrieval-cost and
+    /// `reacquisition`/`recall_probe` inputs).
+    pub retrievals: Vec<RetrievalRow>,
+    /// `action.tool.completed` rows (the `clear_tool_results` and
+    /// `repeated_action` inputs).
+    pub tool_completions: Vec<ToolCompletedRow>,
+    /// `context.compaction.started`/`completed` rows (the
+    /// `harness_overhead.compaction` and forgotten-set inputs).
+    pub compactions: Vec<CompactionRow>,
+    /// `context.memory.invalidated` version ids + superseded predecessors —
+    /// the `memory.over_invalidation` justification set.
+    pub invalidated_ids: BTreeSet<String>,
 }
 
 fn s(j: &Json, member: &str) -> Option<String> {
@@ -408,6 +519,20 @@ fn artefact_row(j: &Json) -> ArtefactRow {
         detector: s(j, "detector"),
         rule_id: s(j, "rule_id"),
         predicate_ref: s(j, "predicate_ref").or_else(|| s(j, "followed_predicate_ref")),
+        kind: s(j, "kind"),
+        by_reference: b(j, "by_reference"),
+        signal: s(j, "signal"),
+        evidence_ref: s(j, "evidence_ref"),
+    }
+}
+
+fn str_list(j: &Json, member: &str) -> Vec<String> {
+    match j.get(member) {
+        Some(Json::Arr(v)) => v
+            .iter()
+            .filter_map(|x| x.as_str().map(str::to_string))
+            .collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -739,6 +864,109 @@ impl LedgerFacts {
                         source_event_id: src,
                     });
                 }
+                "context.memory.written" => {
+                    let auth = p
+                        .get("label")
+                        .and_then(|l| l.get("authority"))
+                        .and_then(Json::as_str)
+                        .map(str::to_string);
+                    f.memory_writes.push(MemoryWriteRow {
+                        seq,
+                        version_id: s(p, "version_id").unwrap_or_default(),
+                        semantic_id: s(p, "memory_id"),
+                        kind: s(p, "kind"),
+                        authority: auth,
+                    });
+                    if let Some(prev) = p
+                        .get("supersedes")
+                        .and_then(|x| x.get("version_id"))
+                        .and_then(Json::as_str)
+                    {
+                        f.invalidated_ids.insert(prev.to_string());
+                    }
+                }
+                "context.memory.invalidated" => {
+                    if let Some(v) = s(p, "version_id") {
+                        f.invalidated_ids.insert(v);
+                    }
+                }
+                "context.memory.read" => {
+                    f.memory_reads.push(MemoryReadRow {
+                        seq,
+                        delivered: str_list(p, "delivered"),
+                        withheld: match p.get("withheld") {
+                            Some(Json::Arr(ws)) => ws
+                                .iter()
+                                .filter_map(|w| {
+                                    w.as_str().map(str::to_string).or_else(|| {
+                                        w.get("version_id")
+                                            .or_else(|| w.get("item_id"))
+                                            .or_else(|| w.get("candidate_id"))
+                                            .and_then(Json::as_str)
+                                            .map(str::to_string)
+                                    })
+                                })
+                                .collect(),
+                            _ => Vec::new(),
+                        },
+                    });
+                }
+                "context.retrieval.completed" => {
+                    let report = p.get("report").cloned().unwrap_or(Json::Null);
+                    f.retrievals.push(RetrievalRow {
+                        seq,
+                        query_kind: s(p, "query_kind"),
+                        ranker_ref: s(&report, "ranker_ref"),
+                        deterministic: b(&report, "deterministic"),
+                        index_ms: report
+                            .get("cost")
+                            .and_then(|c| c.get("index_ms"))
+                            .and_then(|m| m.get("value"))
+                            .and_then(Json::as_int),
+                        embedder_calls: report
+                            .get("cost")
+                            .and_then(|c| c.get("embedder_calls"))
+                            .and_then(Json::as_int),
+                        tokens_estimated: report
+                            .get("cost")
+                            .and_then(|c| c.get("tokens_estimated"))
+                            .and_then(Json::as_int),
+                    });
+                }
+                "action.tool.completed" => {
+                    let args = p
+                        .get("args")
+                        .or_else(|| p.get("arguments"))
+                        .map(|a| a.to_canonical_string());
+                    f.tool_completions.push(ToolCompletedRow {
+                        seq,
+                        invocation_ref: s(p, "invocation_ref")
+                            .or_else(|| s(p, "tool_call_id"))
+                            .or_else(|| s(p, "call_id")),
+                        capability: s(p, "capability")
+                            .or_else(|| s(p, "tool_name"))
+                            .or_else(|| s(p, "tool")),
+                        args_canonical: args,
+                    });
+                }
+                "context.compaction.started" | "context.compaction.completed" => {
+                    let completed = class == "context.compaction.completed";
+                    f.compactions.push(CompactionRow {
+                        seq,
+                        completed,
+                        variant_ref: s(p, "variant_ref"),
+                        status: s(p, "status"),
+                        tokens_freed: p
+                            .get("tokens_freed")
+                            .or_else(|| p.get("reclaimed"))
+                            .and_then(Json::as_int),
+                        model_calls: p
+                            .get("accounting")
+                            .and_then(|a| a.get("model_calls"))
+                            .and_then(Json::as_int),
+                        forgotten: str_list(p, "forgotten"),
+                    });
+                }
                 "measurement.evolution.candidate.transitioned" => {
                     if s(p, "to").as_deref() == Some("proposed") {
                         f.first_proposed_at = Some(f.first_proposed_at.map_or(seq, |e| e.min(seq)));
@@ -797,6 +1025,14 @@ impl LedgerFacts {
                 &mut m,
                 "predicate_ref",
                 a.predicate_ref.as_deref().map(Json::str),
+            );
+            insert_opt(&mut m, "kind", a.kind.as_deref().map(Json::str));
+            insert_opt(&mut m, "by_reference", a.by_reference.map(Json::Bool));
+            insert_opt(&mut m, "signal", a.signal.as_deref().map(Json::str));
+            insert_opt(
+                &mut m,
+                "evidence_ref",
+                a.evidence_ref.as_deref().map(Json::str),
             );
             Json::Obj(m)
         };
@@ -1217,6 +1453,10 @@ impl LedgerFacts {
             detector: s(a, "detector"),
             rule_id: s(a, "rule_id"),
             predicate_ref: s(a, "predicate_ref"),
+            kind: s(a, "kind"),
+            by_reference: b(a, "by_reference"),
+            signal: s(a, "signal"),
+            evidence_ref: s(a, "evidence_ref"),
         };
         if let Some(Json::Arr(es)) = m.get("effects_intended") {
             f.effects_intended = es.iter().map(effect).collect();

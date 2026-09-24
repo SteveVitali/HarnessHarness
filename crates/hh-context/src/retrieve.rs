@@ -4,10 +4,12 @@
 //! `RetrievalReport`. Every retrieval is ledgered: `context.retrieval.completed`
 //! + `context.memory.read` payloads into the caller's `EventSink`.
 //!
-//! The C0 executable views are `lexical_index` (a fold over the store —
-//! [`lexical_index`]) and the store's own scan; `structural` is declared C1
-//! (`IndexUnavailable{structural_index}` — OQ-203) and `similarity` is C2
-//! (`EmbedderUnpinned` — `deterministic = false` by construction).
+//! The executable views are `lexical_index` (a fold over the store —
+//! [`lexical_index`]), the Stage-3 `structural_index`
+//! ([`structural_index`]; OQ-203's Stage-3 scope — anchors and
+//! identifier-shapes, not an AST index) and the store's own scan;
+//! `similarity` is C2 (`EmbedderUnpinned` — `deterministic = false` by
+//! construction).
 //!
 //! Read-your-writes (R4): `at ≤ applied_seq`; a request ahead of the store is
 //! `StaleStore` — never a partial answer. `execute` mode never serves
@@ -33,6 +35,10 @@ use crate::vocab::{
 
 /// The kernel's C0 ranker ref (§5c.3 "ranker_ref = deterministic_default").
 pub const DETERMINISTIC_DEFAULT: &str = "deterministic_default";
+
+/// `structural_pagerank` — the Stage-3 structural ranker ref (§5c.3; the
+/// deterministic PageRank over the `structural_index` anchor graph).
+pub const STRUCTURAL_PAGERANK: &str = "structural_pagerank";
 
 /// `request_hash` domain — `retrieval_request/1`.
 pub const REQUEST_IDP: &str = "retrieval_request.1";
@@ -267,8 +273,9 @@ pub enum RetrievalError {
         /// The hit.
         version_id: String,
     },
-    /// `IndexUnavailable` — the needed view is not materialized (`structural`
-    /// at C0; `lexical_index` when the caller demands a stamped view).
+    /// `IndexUnavailable` — the needed view is not materialized
+    /// (`lexical_index`/`structural_index` when the caller demands a
+    /// stamped view the store does not carry).
     IndexUnavailable {
         /// The view kind.
         view_kind: String,
@@ -387,6 +394,214 @@ pub fn lexical_index(store: &MemoryStore, until_seq: u64) -> LexicalIndex {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// structural_index (the Stage-3 materialized view)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `StructuralIndex` — the Stage-3 structural view (§5c.3 `structural{
+/// anchors, mentioned_idents}`; OQ-203's Stage-3 scope — anchors are the
+/// path-like tokens an item's `index_text` declares, `mentioned_idents` are
+/// the identifier-like tokens (`snake_case`, `camelCase`, `a::b` shapes);
+/// an AST-derived code index remains OQ-203's open question, not this
+/// stage's). `mentions[version_id]` is the item's full structural surface
+/// (anchors ∪ idents) — the edge source `structural_pagerank` walks.
+/// Stamped through `View` (`ViewKind::StructuralIndex`), rebuild-equal under
+/// the same fold.
+#[derive(Debug, Clone)]
+pub struct StructuralIndex {
+    /// `anchor → sorted version_ids` (path-like tokens, incl. artifact paths).
+    pub anchors: BTreeMap<String, Vec<String>>,
+    /// `ident → sorted version_ids`.
+    pub idents: BTreeMap<String, Vec<String>>,
+    /// `version_id → its declared structural surface` (anchors ∪ idents).
+    pub mentions: BTreeMap<String, BTreeSet<String>>,
+    /// The stamped view.
+    pub view: View,
+}
+
+/// The identifier-shape predicate (OQ-203's Stage-3 extraction): a token is
+/// an `ident` when it carries an explicit identifier boundary — `_`, `::`,
+/// or an internal camel-case transition — and is at least 4 chars (a bare
+/// lowercase word stays lexical).
+pub fn is_ident(tok: &str) -> bool {
+    if tok.len() < 4 {
+        return false;
+    }
+    if tok.contains('_') || tok.contains("::") {
+        return true;
+    }
+    tok.chars()
+        .zip(tok.chars().skip(1))
+        .any(|(a, b)| a.is_lowercase() && b.is_uppercase())
+}
+
+/// The anchor-shape predicate: a token is an anchor when it is path-like
+/// (`/` separator or a dotted file name).
+pub fn is_anchor(tok: &str) -> bool {
+    tok.contains('/') || (tok.contains('.') && !tok.contains(':'))
+}
+
+/// `structural_index(store, until_seq)` — the fold + `View` stamp (the same
+/// materialization shape `lexical_index` carries).
+pub fn structural_index(store: &MemoryStore, until_seq: u64) -> StructuralIndex {
+    let mut anchors: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut idents: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut mentions: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut fold_item = |id: &str, text: &str, extra_anchor: Option<&str>| {
+        let mut surf = BTreeSet::new();
+        for tok in text.split(|c: char| c.is_whitespace() || c == '(' || c == ')' || c == ',') {
+            let tok = tok.trim_matches(|c: char| {
+                !(c.is_alphanumeric() || c == '_' || c == '/' || c == '.' || c == ':')
+            });
+            if tok.is_empty() {
+                continue;
+            }
+            if is_anchor(tok) {
+                anchors
+                    .entry(tok.to_string())
+                    .or_default()
+                    .insert(id.to_string());
+                surf.insert(tok.to_string());
+            } else if is_ident(tok) {
+                idents
+                    .entry(tok.to_string())
+                    .or_default()
+                    .insert(id.to_string());
+                surf.insert(tok.to_string());
+            }
+        }
+        if let Some(a) = extra_anchor {
+            anchors
+                .entry(a.to_string())
+                .or_default()
+                .insert(id.to_string());
+            surf.insert(a.to_string());
+        }
+        mentions.insert(id.to_string(), surf);
+    };
+    for vid in store.version_order() {
+        let v = &store.versions()[vid];
+        if v.created_at > until_seq {
+            continue;
+        }
+        fold_item(vid, &v.content.index_text(), None);
+    }
+    for (aid, a) in store.artifacts() {
+        if a.created_at > until_seq {
+            continue;
+        }
+        fold_item(aid, &a.index_text, Some(a.path.as_str()));
+    }
+    let to_sorted = |m: BTreeMap<String, BTreeSet<String>>| -> BTreeMap<String, Vec<String>> {
+        m.into_iter()
+            .map(|(k, v)| (k, v.into_iter().collect()))
+            .collect()
+    };
+    let anchors_s = to_sorted(anchors);
+    let idents_s = to_sorted(idents);
+    let payload = Json::obj([
+        (
+            "anchors",
+            Json::Arr(
+                anchors_s
+                    .iter()
+                    .map(|(a, ids)| {
+                        Json::obj([
+                            ("anchor", Json::str(a.clone())),
+                            (
+                                "version_ids",
+                                Json::Arr(ids.iter().map(|i| Json::str(i.clone())).collect()),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        (
+            "idents",
+            Json::Arr(
+                idents_s
+                    .iter()
+                    .map(|(a, ids)| {
+                        Json::obj([
+                            ("ident", Json::str(a.clone())),
+                            (
+                                "version_ids",
+                                Json::Arr(ids.iter().map(|i| Json::str(i.clone())).collect()),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+    ]);
+    let view = View::stamped(
+        &store.store_id,
+        hh_ledger::views::ViewKind::StructuralIndex,
+        Some(until_seq),
+        payload,
+    );
+    StructuralIndex {
+        anchors: anchors_s,
+        idents: idents_s,
+        mentions,
+        view,
+    }
+}
+
+/// `structural_pagerank` — the deterministic anchor-graph ranker (§5c.3):
+/// items link `u → v` when `mentions(u) ∩ anchors(v) ≠ ∅` (u names a path v
+/// declares); PageRank runs 20 fixed-point iterations at 1e9 scale with
+/// damping 0.85 — integer math only, the same scores on every host.
+pub fn structural_pagerank(idx: &StructuralIndex, ids: &BTreeSet<String>) -> BTreeMap<String, u64> {
+    let n = ids.len().max(1) as u64;
+    const SCALE: u64 = 1_000_000_000;
+    const DAMPING: u64 = 850_000_000; // 0.85 × SCALE
+                                      // out-links: u → {v : anchors(v) ∩ mentions(u) ≠ ∅}.
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for u in ids {
+        let mut targets = Vec::new();
+        if let Some(surf) = idx.mentions.get(u) {
+            for a in surf {
+                if let Some(vs) = idx.anchors.get(a) {
+                    for v in vs {
+                        if v != u && ids.contains(v) && !targets.contains(v) {
+                            targets.push(v.clone());
+                        }
+                    }
+                }
+            }
+        }
+        targets.sort();
+        out.insert(u.clone(), targets);
+    }
+    let mut pr: BTreeMap<String, u64> = ids.iter().map(|i| (i.clone(), SCALE / n)).collect();
+    for _ in 0..20 {
+        let mut next: BTreeMap<String, u64> = ids
+            .iter()
+            .map(|i| (i.clone(), (SCALE - DAMPING) / n))
+            .collect();
+        // Dangling mass redistributes uniformly.
+        let mut dangling: u64 = 0;
+        for u in ids {
+            let outs = &out[u];
+            if outs.is_empty() {
+                dangling += pr[u] / n;
+            } else {
+                let share = (pr[u] * DAMPING / SCALE) / outs.len() as u64;
+                for v in outs {
+                    *next.get_mut(v).unwrap() += share;
+                }
+            }
+        }
+        for v in ids {
+            *next.get_mut(v).unwrap() += dangling * DAMPING / SCALE;
+        }
+        pr = next;
+    }
+    pr
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // deterministic_default ranker
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -412,16 +627,47 @@ pub fn rank_score(hit_count: u64, exact: bool, glob_match: bool, created_at: u64
 // the pipeline
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// The materialized views `retrieve` may serve from (`lexical_index` and the
+/// Stage-3 `structural_index` — §5c.3; each is a stamped `View`, never a
+/// second store).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct RetrievalIndexes<'a> {
+    /// The lexical view (computed on the fly when absent).
+    pub lexical: Option<&'a LexicalIndex>,
+    /// The structural view (computed on the fly when absent).
+    pub structural: Option<&'a StructuralIndex>,
+}
+
 /// `retrieve(store, request, sink)` → `(items, report)` — the one pipeline
 /// (§5c.3). The `sink` receives `context.retrieval.completed` +
 /// `context.memory.read` payloads (the caller appends — I-PROV).
 /// `index_ms` is measured by the caller-supplied clock in `elapsed_ms`.
-#[allow(clippy::too_many_arguments)]
 pub fn retrieve(
     store: &mut MemoryStore,
     req: &RetrievalRequest,
     sink: &mut dyn EventSink,
     index: Option<&LexicalIndex>,
+    elapsed_ms: impl Fn() -> u64,
+) -> Result<(Vec<RetrievedItem>, RetrievalReport), RetrievalError> {
+    retrieve_indexed(
+        store,
+        req,
+        sink,
+        &RetrievalIndexes {
+            lexical: index,
+            structural: None,
+        },
+        elapsed_ms,
+    )
+}
+
+/// `retrieve_indexed` — `retrieve` with both Stage-3 materialized views
+/// (`RetrievalIndexes`); the signature the structural arm carries.
+pub fn retrieve_indexed(
+    store: &mut MemoryStore,
+    req: &RetrievalRequest,
+    sink: &mut dyn EventSink,
+    indexes: &RetrievalIndexes<'_>,
     elapsed_ms: impl Fn() -> u64,
 ) -> Result<(Vec<RetrievedItem>, RetrievalReport), RetrievalError> {
     // R3: the request reads a watermark — refuse when it is ahead of the
@@ -448,7 +694,7 @@ pub fn retrieve(
         }
     }
     // Query narrowing — the enumerate half each kind drives.
-    let (hits, features) = enumerate_query(store, req, &raw, index)?;
+    let (hits, features) = enumerate_query(store, req, &raw, indexes)?;
     let enumerated = hits.len() as u64;
     let mut _features = features;
     // (2) filter — validity → authority → readers (E2; the attested order).
@@ -492,12 +738,23 @@ pub fn retrieve(
     let f_validity = withheld.iter().filter(|w| w.reason == "validity").count() as u64;
     let f_authority = withheld.iter().filter(|w| w.reason == "authority").count() as u64;
     let f_readers = withheld.iter().filter(|w| w.reason == "readers").count() as u64;
-    // (3) rank — `deterministic_default`.
+    // (3) rank — `deterministic_default`, or the Stage-3
+    // `structural_pagerank` over the anchor graph.
+    let admitted_ids: BTreeSet<String> = filtered.admitted.iter().cloned().collect();
+    let pr_scores: Option<BTreeMap<String, u64>> = if req.ranker == STRUCTURAL_PAGERANK {
+        let sidx = match indexes.structural {
+            Some(i) => i.clone(),
+            None => structural_index(store, req.at.1),
+        };
+        Some(structural_pagerank(&sidx, &admitted_ids))
+    } else {
+        None
+    };
     let mut scored: Vec<(String, String, u64)> = filtered
         .admitted
         .iter()
         .map(|id| {
-            let (score, created) = score_of(store, id, req, index);
+            let (score, created) = score_of(store, id, req, indexes, pr_scores.as_ref());
             (id.clone(), score, created)
         })
         .collect();
@@ -581,7 +838,8 @@ pub fn retrieve(
         omitted_by_budget: omitted,
         no_authoritative_items: no_auth,
         ranker_ref: req.ranker.clone(),
-        deterministic: req.query.deterministic() && req.ranker == DETERMINISTIC_DEFAULT,
+        deterministic: req.query.deterministic()
+            && (req.ranker == DETERMINISTIC_DEFAULT || req.ranker == STRUCTURAL_PAGERANK),
         cost: RetrievalCost {
             tokens_estimated: tokens_used,
             index_ms: elapsed_ms(),
@@ -655,7 +913,7 @@ fn enumerate_query(
     store: &MemoryStore,
     req: &RetrievalRequest,
     raw: &[(String, Layer)],
-    index: Option<&LexicalIndex>,
+    indexes: &RetrievalIndexes<'_>,
 ) -> Result<EnumeratedHits, RetrievalError> {
     let ids: BTreeSet<String> = raw.iter().map(|(id, _)| id.clone()).collect();
     let layer_of_id: BTreeMap<&str, Layer> = raw.iter().map(|(id, l)| (id.as_str(), *l)).collect();
@@ -730,7 +988,7 @@ fn enumerate_query(
             normalized,
             ..
         } => {
-            let idx = match index {
+            let idx = match indexes.lexical {
                 Some(i) => i.clone(),
                 None => lexical_index(store, req.at.1),
             };
@@ -864,9 +1122,37 @@ fn enumerate_query(
                 vec![],
             ))
         }
-        RetrievalQuery::Structural { .. } => Err(RetrievalError::IndexUnavailable {
-            view_kind: "structural_index".to_string(),
-        }),
+        RetrievalQuery::Structural {
+            anchors,
+            mentioned_idents,
+        } => {
+            // §5c.3 `structural` (Stage 3; OQ-203's Stage-3 scope): an item is
+            // a hit when a query anchor matches a member of its anchor set or
+            // a query ident a member of its ident set — served from the
+            // `structural_index` view (materialized or folded on demand, the
+            // same shape `lexical` uses).
+            let idx = match indexes.structural {
+                Some(i) => i.clone(),
+                None => structural_index(store, req.at.1),
+            };
+            let mut hits = Vec::new();
+            for (id, l) in raw {
+                let anchored = anchors.iter().any(|a| {
+                    idx.anchors
+                        .get(a)
+                        .is_some_and(|vs| vs.iter().any(|v| v == id))
+                });
+                let identified = mentioned_idents.iter().any(|m| {
+                    idx.idents
+                        .get(m)
+                        .is_some_and(|vs| vs.iter().any(|v| v == id))
+                });
+                if anchored || identified {
+                    hits.push((id.clone(), *l));
+                }
+            }
+            Ok((hits, vec!["structural_hit".to_string()]))
+        }
         RetrievalQuery::Similarity { .. } => Err(RetrievalError::EmbedderUnpinned),
     }
 }
@@ -935,13 +1221,20 @@ fn score_of(
     store: &MemoryStore,
     id: &str,
     req: &RetrievalRequest,
-    index: Option<&LexicalIndex>,
+    indexes: &RetrievalIndexes<'_>,
+    pr_scores: Option<&BTreeMap<String, u64>>,
 ) -> (String, u64) {
     let created = store
         .version(id)
         .map(|v| v.created_at)
         .or_else(|| store.artifacts().get(id).map(|a| a.created_at))
         .unwrap_or(0);
+    // `structural_pagerank` — the precomputed fixed-point score (total, the
+    // same on every host; ties still break on `version_id` ascending).
+    if req.ranker == STRUCTURAL_PAGERANK {
+        let pr = pr_scores.and_then(|m| m.get(id)).copied().unwrap_or(0);
+        return (format!("1.{pr:012}"), created);
+    }
     let (exact, glob, hits) = match &req.query {
         RetrievalQuery::ByAddress { address } => (id == address, false, 1),
         RetrievalQuery::ByName { name, .. } => {
@@ -960,7 +1253,7 @@ fn score_of(
             (false, is_glob_hit, if is_glob_hit { 1 } else { 0 })
         }
         RetrievalQuery::Lexical { terms, .. } => {
-            let hits = match index {
+            let hits = match indexes.lexical {
                 Some(idx) => terms
                     .iter()
                     .filter(|t| {
@@ -1026,6 +1319,312 @@ pub fn as_candidate(
         },
         handle: item.handle.clone(),
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// retrieve_naive — the V-DET second implementation (§5c.3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `retrieve_naive(store, req)` — the **independent second implementation**
+/// the Stage-3 determinism acceptance compares against (§5c.3: "the V-DET
+/// equivalence runs across two implementations of retrieval" —
+/// AC-R-2.4.3-7). It shares no code with `retrieve`'s enumerate/rank path:
+/// enumeration is a direct store scan per query kind, filtering reapplies
+/// the lifecycle/authority/readers rules from the stored records, ranking is
+/// a per-item fold, and the cut walks the sorted hits. It emits no ledger
+/// rows — it is an oracle witness, never a serving path.
+///
+/// Returns the ordered `(address, score)` delivered list; equality with the
+/// production path is on `(address, score)` pairs in order.
+pub fn retrieve_naive(
+    store: &MemoryStore,
+    req: &RetrievalRequest,
+) -> Result<Vec<(String, String)>, RetrievalError> {
+    if req.at.1 > store.applied_seq() {
+        return Err(RetrievalError::StaleStore {
+            applied_seq: store.applied_seq(),
+            requested: req.at.1,
+        });
+    }
+    // Enumerate — the independent per-kind scan (not `enumerate_query`).
+    let mut hits: Vec<String> = Vec::new();
+    let in_layers = |id: &str| -> bool {
+        let layer = if store.artifacts().contains_key(id) {
+            Layer::Artifact
+        } else if let Some(v) = store.version(id) {
+            layer_of(v)
+        } else {
+            return false;
+        };
+        req.layers.contains(&layer)
+    };
+    match &req.query {
+        RetrievalQuery::ByAddress { address } => {
+            if in_layers(address) {
+                hits.push(address.clone());
+            }
+        }
+        RetrievalQuery::ByName { scope, name } => {
+            if let Some(id) = store.name_lookup(*scope, name) {
+                if in_layers(id) {
+                    hits.push(id.to_string());
+                }
+            }
+        }
+        RetrievalQuery::ByPathGlob { pattern } => {
+            let re = glob_match(pattern);
+            for (id, a) in store.artifacts() {
+                if a.created_at <= req.at.1 && in_layers(id) && re(&a.path) {
+                    hits.push(id.clone());
+                }
+            }
+        }
+        RetrievalQuery::Lexical {
+            terms,
+            case_sensitive,
+            normalized,
+            ..
+        } => {
+            let terms_norm: Vec<String> = terms
+                .iter()
+                .map(|t| {
+                    if *normalized || !*case_sensitive {
+                        t.to_lowercase()
+                    } else {
+                        t.clone()
+                    }
+                })
+                .collect();
+            for (id, v) in store.versions() {
+                if v.created_at > req.at.1 || !in_layers(id) {
+                    continue;
+                }
+                let text = v.content.index_text();
+                let toks: BTreeSet<String> = tokenize(&text).into_iter().collect();
+                if terms_norm.iter().any(|t| toks.contains(t)) {
+                    hits.push(id.clone());
+                }
+            }
+            for (id, a) in store.artifacts() {
+                if a.created_at > req.at.1 || !in_layers(id) {
+                    continue;
+                }
+                let toks: BTreeSet<String> = tokenize(&a.index_text).into_iter().collect();
+                if terms_norm.iter().any(|t| toks.contains(t)) {
+                    hits.push(id.clone());
+                }
+            }
+        }
+        RetrievalQuery::Structural {
+            anchors,
+            mentioned_idents,
+        } => {
+            let idx = structural_index(store, req.at.1);
+            let mut set: BTreeSet<String> = BTreeSet::new();
+            for a in anchors {
+                if let Some(vs) = idx.anchors.get(a) {
+                    set.extend(vs.iter().cloned());
+                }
+            }
+            for m in mentioned_idents {
+                if let Some(vs) = idx.idents.get(m) {
+                    set.extend(vs.iter().cloned());
+                }
+            }
+            hits.extend(set.into_iter().filter(|id| in_layers(id)));
+        }
+        RetrievalQuery::ByRun {
+            run_id,
+            seq_range,
+            classes,
+        } => {
+            for (id, v) in store.versions() {
+                if v.created_at > req.at.1 || !in_layers(id) {
+                    continue;
+                }
+                let _ = (run_id, classes);
+                if seq_range.is_none_or(|(lo, hi)| v.created_at >= lo && v.created_at <= hi) {
+                    hits.push(id.clone());
+                }
+            }
+            for (id, a) in store.artifacts() {
+                if a.created_at > req.at.1 || !in_layers(id) {
+                    continue;
+                }
+                if &a.run_id == run_id
+                    && seq_range.is_none_or(|(lo, hi)| a.created_at >= lo && a.created_at <= hi)
+                    && (classes.is_empty() || a.classes.iter().any(|c| classes.contains(c)))
+                {
+                    hits.push(id.clone());
+                }
+            }
+        }
+        RetrievalQuery::Discover { filenames, .. } => {
+            for (id, a) in store.artifacts() {
+                if a.created_at > req.at.1 || !in_layers(id) {
+                    continue;
+                }
+                let tail = a.path.rsplit('/').next().unwrap_or(&a.path);
+                if filenames.iter().any(|f| f == tail) {
+                    hits.push(id.clone());
+                }
+            }
+        }
+        RetrievalQuery::Trigger { kind } => {
+            let probe = match kind {
+                TriggerKind::Message(m) => m.clone(),
+                TriggerKind::PathTouched(p) => p.clone(),
+                TriggerKind::Explicit(e) => e.clone(),
+            };
+            let toks: BTreeSet<String> = tokenize(&probe).into_iter().collect();
+            for (id, v) in store.versions() {
+                if v.created_at > req.at.1 || !in_layers(id) {
+                    continue;
+                }
+                if let TriggerKind::PathTouched(path) = kind {
+                    if v.kind == MemoryKind::ProcedurePointer {
+                        let globs = procedure_path_globs(&v.content);
+                        if !globs.is_empty() && globs.iter().any(|g| glob_match(g)(path)) {
+                            hits.push(id.clone());
+                            continue;
+                        }
+                    }
+                }
+                let item_toks: BTreeSet<String> =
+                    tokenize(&v.content.index_text()).into_iter().collect();
+                if toks.iter().any(|t| item_toks.contains(t)) {
+                    hits.push(id.clone());
+                }
+            }
+            for (id, a) in store.artifacts() {
+                if a.created_at > req.at.1 || !in_layers(id) {
+                    continue;
+                }
+                let item_toks: BTreeSet<String> = tokenize(&a.index_text).into_iter().collect();
+                if toks.iter().any(|t| item_toks.contains(t)) {
+                    hits.push(id.clone());
+                }
+            }
+        }
+        RetrievalQuery::Similarity { .. } => return Err(RetrievalError::EmbedderUnpinned),
+    }
+    // Filter — the independent reapplication (validity → authority →
+    // readers; audit mode admits invalid states annotated).
+    hits.sort();
+    hits.dedup();
+    let mut admitted = Vec::new();
+    for id in &hits {
+        let (authority, readers, state): (AuthorityClass, ReaderSet, LifecycleStateKind) =
+            if let Some(v) = store.version(id) {
+                (
+                    v.label.authority,
+                    v.label.readers.clone(),
+                    lifecycle::lifecycle_state(store, id, req.at.1).kind(),
+                )
+            } else if let Some(a) = store.artifacts().get(id) {
+                (
+                    a.label.authority,
+                    a.label.readers.clone(),
+                    LifecycleStateKind::Valid,
+                )
+            } else {
+                continue;
+            };
+        let valid_state = req
+            .constraints
+            .validity_policy
+            .admitted_states
+            .contains(&state)
+            || req.mode != ResolveMode::Execute;
+        if !valid_state || authority < req.constraints.slot_min_authority {
+            continue;
+        }
+        if let Some(rs) = &req.constraints.readers_required {
+            let _ = rs; // reader narrowing is label-side; `readers` admits below
+        }
+        if !readers.admits(&req.reader) {
+            continue;
+        }
+        admitted.push(id.clone());
+    }
+    // Rank — per-item fold (the same `rank_score` spelling; an
+    // implementation shares the score *format*, not the pipeline).
+    let pr_scores: Option<BTreeMap<String, u64>> = if req.ranker == STRUCTURAL_PAGERANK {
+        let sidx = structural_index(store, req.at.1);
+        Some(structural_pagerank(
+            &sidx,
+            &admitted.iter().cloned().collect(),
+        ))
+    } else {
+        None
+    };
+    let mut scored: Vec<(String, String)> = admitted
+        .iter()
+        .map(|id| {
+            if let Some(pr) = &pr_scores {
+                let s = format!("1.{:012}", pr.get(id).copied().unwrap_or(0));
+                return (id.clone(), s);
+            }
+            let created = store
+                .version(id)
+                .map(|v| v.created_at)
+                .or_else(|| store.artifacts().get(id).map(|a| a.created_at))
+                .unwrap_or(0);
+            let (exact, glob, hc) = match &req.query {
+                RetrievalQuery::ByAddress { address } => (id == address, false, 1),
+                RetrievalQuery::ByName { name, .. } => {
+                    let named = store
+                        .version(id)
+                        .map(|v| v.semantic_id == *name)
+                        .unwrap_or(false);
+                    (named, false, if named { 1 } else { 0 })
+                }
+                RetrievalQuery::ByPathGlob { pattern } => {
+                    let g = store
+                        .artifacts()
+                        .get(id)
+                        .map(|a| glob_match(pattern)(&a.path))
+                        .unwrap_or(false);
+                    (false, g, if g { 1 } else { 0 })
+                }
+                RetrievalQuery::Lexical { terms, .. } => {
+                    let text = store
+                        .version(id)
+                        .map(|v| v.content.index_text())
+                        .or_else(|| store.artifacts().get(id).map(|a| a.index_text.clone()))
+                        .unwrap_or_default();
+                    let toks: BTreeSet<String> = tokenize(&text).into_iter().collect();
+                    (
+                        false,
+                        false,
+                        terms
+                            .iter()
+                            .filter(|t| toks.contains(&t.to_lowercase()))
+                            .count() as u64,
+                    )
+                }
+                _ => (false, false, 1),
+            };
+            (id.clone(), rank_score(hc, exact, glob, created))
+        })
+        .collect();
+    scored.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    // Cut — whole items under {tokens, k}.
+    let mut out = Vec::new();
+    let mut used = 0u64;
+    for (id, score) in scored {
+        let tokens = store
+            .version(&id)
+            .map(estimate_tokens)
+            .or_else(|| store.artifacts().get(&id).map(|a| a.tokens))
+            .unwrap_or(0);
+        if out.len() as u64 >= req.budget.k || used.saturating_add(tokens) > req.budget.tokens {
+            continue;
+        }
+        used = used.saturating_add(tokens);
+        out.push((id, score));
+    }
+    Ok(out)
 }
 
 /// The artifact surface a `Retrieve` projects (kept for callers that build

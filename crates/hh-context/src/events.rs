@@ -437,6 +437,10 @@ pub fn compaction_completed(record: &crate::compact::CompactionRecord) -> Json {
             ),
         ),
         ("tokens_freed", Json::Int(record.tokens_freed as i64)),
+        // §5c.2 `context.compaction.completed{…, label_after, reclaimed}` —
+        // the post-compaction join (I-LABEL) is part of the durable record.
+        ("label_after", label_json(&record.context_label_after)),
+        ("reclaimed", Json::Int(record.tokens_freed as i64)),
         (
             "derived_from",
             Json::Arr(

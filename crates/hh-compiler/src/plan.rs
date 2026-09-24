@@ -665,6 +665,99 @@ pub fn lower_native(linked: &LinkedGraph) -> Result<RuntimePlan, CompileError> {
     })
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// lower_procedure — the per-target procedure product (§5c.5 row; AC-R-2.4.5-4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The `lower_procedure(P, target, profile)` product (§5c.5): `instruction`
+/// renders the body as text (the `procedure_body` context artefact);
+/// `workflow_node` lowers the steps onto the closed `RuntimePlan/1` node set;
+/// `subagent_task` is refused `DelegationUnavailable` before Stage 4 (the
+/// refusal is `select_target`'s — this function only accepts an admitted
+/// target).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProcedureProduct {
+    /// `instruction` — the rendered body text (a `Text` leaf's content).
+    Instruction {
+        /// The rendered body.
+        body: String,
+    },
+    /// `workflow_node` — the lowered plan nodes (`step`, `branch-on-
+    /// validator`, `loop`, `delegate`, `stop-rule`).
+    WorkflowNode {
+        /// The control nodes the body lowers to.
+        nodes: Vec<PlanNode>,
+    },
+}
+
+/// `lower_procedure(P, target, profile)` (§5c.5 row; AC-R-2.4.5-4). The
+/// target is a `select_target` verdict — `SubagentTask` refuses
+/// `PlanError{unsupported_construct}` (never a silent instruction
+/// fallback). `instruction` renders through the profile's
+/// `procedure_render` member (`render_prefix`, profile-owned — the only
+/// field the AC allows to differ across profiles).
+pub fn lower_procedure(
+    doc: &HirDocument,
+    proc: &Node,
+    target: hh_hir::procedure::CompilationTarget,
+    procedure_render_prefix: Option<&str>,
+) -> Result<ProcedureProduct, CompileError> {
+    let KindRecord::Procedure(rec) = &proc.semantic else {
+        return Err(CompileError::PlanError {
+            node: proc.semantic_id(),
+            detail: "lower_procedure: node is not a Procedure".into(),
+        });
+    };
+    match target {
+        hh_hir::procedure::CompilationTarget::Instruction => {
+            // The deterministic typed step listing — `step[i] <kind>` lines
+            // plus each Instruction step's text. The profile-owned
+            // `procedure_render` prefix is the only profile-dependent byte.
+            let mut out = String::new();
+            if let Some(prefix) = procedure_render_prefix {
+                out.push_str(prefix);
+                out.push('\n');
+            }
+            for (i, step) in rec.steps.iter().enumerate() {
+                let kind = match step {
+                    ProcedureStep::Instruction(_) => "instruction",
+                    ProcedureStep::Invoke { .. } => "invoke",
+                    ProcedureStep::Delegate { .. } => "delegate",
+                    ProcedureStep::Branch { .. } => "branch",
+                    ProcedureStep::Loop { .. } => "loop",
+                    ProcedureStep::Verify { .. } => "verify",
+                    ProcedureStep::Opaque(_) => "opaque",
+                };
+                out.push_str(&format!("step[{i}] {kind}\n"));
+                if let ProcedureStep::Instruction(t) = step {
+                    if let Some(c) = &t.content {
+                        out.push_str(c);
+                        out.push('\n');
+                    }
+                }
+            }
+            Ok(ProcedureProduct::Instruction { body: out })
+        }
+        hh_hir::procedure::CompilationTarget::WorkflowNode => {
+            let mut lw = Lowering {
+                doc: doc.clone(),
+                next: 0,
+                required_by: BTreeMap::new(),
+            };
+            Ok(ProcedureProduct::WorkflowNode {
+                nodes: lw.lower_steps(&rec.steps, proc)?,
+            })
+        }
+        hh_hir::procedure::CompilationTarget::SubagentTask => {
+            Err(CompileError::PlanError {
+                node: proc.semantic_id(),
+                detail: "subagent_task is DelegationUnavailable before Stage 4                          — select_target refused it; lower_procedure never falls back"
+                    .into(),
+            })
+        }
+    }
+}
+
 fn lower_native_process(
     lw: &mut Lowering,
     node: &Node,
