@@ -730,7 +730,11 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.registry.revoke", "L", "json", "json"),
         labi("lab.registry.lineage", "L", "json", "json"),
         labi("lab.registry.sameness", "L", "json", "json"),
-        lab("lab.registry.import", "L", "json", "json"),
+        // S3.9 (§5d.1 §2; R-2.5.4⁰): `import`/`refresh` over
+        // `hh-mcp-listing/1` documents are live dispatch; `export` stays
+        // `stage_pending`.
+        labi("lab.registry.import", "L", "json", "json"),
+        labi("lab.registry.refresh", "L", "json", "json"),
         lab("lab.registry.export", "L", "json", "json"),
         labi("lab.registry.verify", "L", "json", "json"),
         // S3.3: the `lab.eval.*` eval-kernel boundary (R-2.9.2/R-2.9.4⁰ᵇ;

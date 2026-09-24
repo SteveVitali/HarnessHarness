@@ -563,6 +563,8 @@ impl EmbedService {
             // ── Group L — the `lab.registry.*` boundary over the one
             // `RegistryStore` (S2.12; records-in/records-out, CC5).
             "lab.registry.register" => self.lab_registry_register(&req.params),
+            "lab.registry.import" => self.lab_registry_import(&req.params),
+            "lab.registry.refresh" => self.lab_registry_refresh(&req.params),
             "lab.registry.publish" => self.lab_registry_publish(&req.params),
             "lab.registry.resolve" => self.lab_registry_resolve(&req.params),
             "lab.registry.query" => self.lab_registry_query(&req.params),

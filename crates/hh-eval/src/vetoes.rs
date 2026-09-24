@@ -229,16 +229,38 @@ pub fn evaluate_vetoes(f: &LedgerFacts, ctx: &VetoContext) -> Vec<VetoTrip> {
     false_completion(f, &mut trips);
 
     // ── attribution_completeness ─────────────────────────────────────────
+    // Two gap classes under the one veto id (AC-E5-01; ADR-0277 D7):
+    // (a) a completed model call with no `measurement.cost.attributed`
+    //     coverage — the S3.3-landed arm;
+    // (b) an `action.effect.unattributed` marker — a capture-path signal
+    //     (`security.egress.decided`, `fs_change`, `process.spawned`, …)
+    //     that resolved to no `effect_id` — the §5d.5 arm (S3.9). The
+    //     kernel emits the marker on `token_resolve_miss`; the veto reads
+    //     the record, never re-derives resolution.
     {
         let missing: Vec<&String> = f
             .model_calls_completed
             .iter()
             .filter(|c| !f.cost_attributed_calls.contains(*c))
             .collect();
-        if !missing.is_empty() {
+        let signals: Vec<&str> = f
+            .unattributed_signals
+            .iter()
+            .map(|u| u.evidence_ref.as_deref().unwrap_or("unattributed"))
+            .collect();
+        if !missing.is_empty() || !signals.is_empty() {
             trips.push(trip(
                 veto_id::ATTRIBUTION_COMPLETENESS,
-                Json::Arr(missing.iter().map(|c| Json::str(*c)).collect()),
+                Json::obj([
+                    (
+                        "unattributed_model_calls",
+                        Json::Arr(missing.iter().map(|c| Json::str(*c)).collect()),
+                    ),
+                    (
+                        "unattributed_signals",
+                        Json::Arr(signals.iter().map(|e| Json::str(*e)).collect()),
+                    ),
+                ]),
             ));
         }
     }
@@ -378,6 +400,19 @@ pub fn evaluate_vetoes(f: &LedgerFacts, ctx: &VetoContext) -> Vec<VetoTrip> {
 
     trips.sort_by(|a, b| a.veto_id.cmp(&b.veto_id));
     trips
+}
+
+/// The suite-verdict wiring (ADR-0045 D6; S3.9): the ordered veto-id list a
+/// run record's `veto_tripped` member carries. The ids are the closed
+/// [`veto_id`] spellings; the per-trip evidence stays in the evaluation
+/// report — the run row carries the id set the scorecard's
+/// `vetoed_successes` reads (a tripped veto yields *success-with-veto*:
+/// excluded from headline cells, counted beside them).
+pub fn tripped_veto_ids(f: &LedgerFacts, ctx: &VetoContext) -> Vec<String> {
+    evaluate_vetoes(f, ctx)
+        .into_iter()
+        .map(|t| t.veto_id)
+        .collect()
 }
 
 #[cfg(test)]

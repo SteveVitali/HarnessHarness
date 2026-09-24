@@ -1,13 +1,24 @@
 //! `hh-mcp-target/1` → `hh-mcp-artifact/1` — the compiled-bundle →
-//! canonical MCP tool-catalogue lowering (§7.3 R-2.11.3⁰; ADR-0097 D7).
+//! canonical MCP tool-catalogue lowering (§7.3 R-2.11.3⁰; ADR-0097 D7;
+//! extended at S3.9 for R-2.5.4⁰).
 //!
 //! The catalogue is a **pure function of the bundle member bytes** —
 //! `tools/list` and `server/discover` are byte-identical for every
 //! connection serving one bundle (AC-R-2.11.3-1), ordered by
 //! `(semantic_id, name)` (§3.2.5's canonical-order rule). A tool's
-//! `_meta` carries `dev.cognition/hir` (`{semantic_id, bundle_id}` — the
-//! §3.2.5 minimum carried set) and every unknown member `_meta` key is
-//! preserved verbatim (AC-R-2.11.3-6's extension rule).
+//! `_meta` carries `dev.cognition/hir` — the member's whole HIR block
+//! verbatim plus the serve-time `bundle_id` stamp (§3.2.5's minimum
+//! carried set `{semantic_id, bundle_id, effects, permission class,
+//! provenance pointer, budget ref}` survives the serve boundary —
+//! AC-R-2.5.1-5) — and every unknown member `_meta` key is preserved
+//! verbatim (AC-R-2.11.3-6's extension rule; N4).
+//!
+//! `annotations` and `outputSchema` ride through verbatim — claims,
+//! never read for a decision (T2). A member tool whose `_meta` carries
+//! `dev.cognition/input_required` declares the fixture's paused-effect
+//! shape: `tools/call` answers `resultType: "input_required"` with the
+//! declared `inputRequests` and an opaque `requestState`; a call
+//! carrying `requestState` answers the `resumed` echo (ADR-0097 D3).
 //!
 //! `<hh-prefix>` is unallocated upstream (OQ-068; ADR-0210) — the
 //! fixture freezes `dev.cognition/hir` and the ADR-0275 ruling records
@@ -28,11 +39,17 @@ pub const MCP_TARGET_SCHEMA: &str = "hh-mcp-target/1";
 /// `protocolVersion` echo — the fixture serves exactly one).
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
 
-/// The `_meta` key carrying the HIR semantic identity
-/// (`{semantic_id, bundle_id}` — §3.2.5's minimum carried set; the
-/// `<hh-prefix>` slot is OQ-068-unallocated — this is the fixture's
-/// frozen spelling).
+/// The `_meta` key carrying the HIR block (`{semantic_id, bundle_id,
+/// effects, permission_class, provenance, budget_ref, …}` — §3.2.5's
+/// minimum carried set; the `<hh-prefix>` slot is OQ-068-unallocated —
+/// this is the fixture's frozen spelling).
 pub const HH_META_KEY: &str = "dev.cognition/hir";
+
+/// The `_meta` key a member tool uses to declare the fixture's
+/// paused-effect shape — `{"inputRequests": [...]}` under it means
+/// `tools/call` answers `resultType: "input_required"` (ADR-0097 D3;
+/// AC-R-2.5.4-12's fixture half).
+pub const INPUT_REQUIRED_META_KEY: &str = "dev.cognition/input_required";
 
 /// The typed refusal/error sum the artifact + call path produce.
 #[derive(Debug, Clone, PartialEq)]
@@ -78,7 +95,8 @@ impl McpError {
 }
 
 /// One catalogue entry — an MCP `Tool` descriptor (`{name,
-/// description?, inputSchema, _meta}`) with the HIR block pinned.
+/// description?, inputSchema, outputSchema?, annotations?, _meta}`)
+/// with the HIR block pinned.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArtifactTool {
     /// The surface name.
@@ -87,37 +105,63 @@ pub struct ArtifactTool {
     pub description: Option<String>,
     /// The JSON-schema input shape (`{}` when undeclared).
     pub input_schema: Json,
+    /// The declared output schema, when the member carries one
+    /// (`outputSchema` — verbatim, claims never read).
+    pub output_schema: Option<Json>,
+    /// The declared `ToolAnnotations` verbatim (`readOnlyHint` et al —
+    /// claims only; the served surface never reads them and the lift
+    /// raises them to `declared_claims`, T2/D5).
+    pub annotations: Option<Json>,
     /// The HIR semantic id (the `_meta[dev.cognition/hir].semantic_id`
     /// member — stable across renames; AC-R-2.11.3-1).
     pub semantic_id: String,
+    /// The member's `dev.cognition/hir` block verbatim minus
+    /// `semantic_id`/`bundle_id` (`effects`, `permission_class`,
+    /// `provenance`, `budget_ref` … — the rest of the minimum carried
+    /// set survives the serve boundary).
+    pub hir_meta: Json,
     /// The member's `_meta` verbatim minus the HIR block — unknown keys
     /// preserved, never interpreted.
     pub ext_meta: Json,
+    /// The fixture's `input_required` declaration
+    /// (`_meta[dev.cognition/input_required]` — `{inputRequests:[…]}`),
+    /// when the member carries it.
+    pub input_requests: Option<Json>,
 }
 
 impl ArtifactTool {
-    /// The MCP `Tool` JSON — `{name, description?, inputSchema, _meta}`.
-    /// `_meta` = `ext_meta` ∪ `{dev.cognition/hir: {semantic_id,
-    /// bundle_id}}` — the HIR block is always present and the member's
-    /// own unknown `_meta` keys survive untouched.
+    /// The MCP `Tool` JSON — `{name, description?, inputSchema,
+    /// outputSchema?, annotations?, _meta}`. `_meta` = `ext_meta` ∪
+    /// `{dev.cognition/hir: hir_meta ∪ {semantic_id, bundle_id}}` — the
+    /// whole carried set is always present and the member's own unknown
+    /// `_meta` keys survive untouched.
     pub fn to_mcp_json(&self, bundle_id: &str) -> Json {
         let mut meta = match &self.ext_meta {
             Json::Obj(m) => m.clone(),
             _ => std::collections::BTreeMap::new(),
         };
-        meta.insert(
-            HH_META_KEY.to_string(),
-            Json::obj([
-                ("semantic_id", Json::str(self.semantic_id.clone())),
-                ("bundle_id", Json::str(bundle_id.to_string())),
-            ]),
+        let mut hir = match &self.hir_meta {
+            Json::Obj(m) => m.clone(),
+            _ => std::collections::BTreeMap::new(),
+        };
+        hir.insert(
+            "semantic_id".to_string(),
+            Json::str(self.semantic_id.clone()),
         );
+        hir.insert("bundle_id".to_string(), Json::str(bundle_id.to_string()));
+        meta.insert(HH_META_KEY.to_string(), Json::Obj(hir));
         let mut t = std::collections::BTreeMap::new();
         t.insert("name".to_string(), Json::str(self.name.clone()));
         if let Some(d) = &self.description {
             t.insert("description".to_string(), Json::str(d.clone()));
         }
         t.insert("inputSchema".to_string(), self.input_schema.clone());
+        if let Some(o) = &self.output_schema {
+            t.insert("outputSchema".to_string(), o.clone());
+        }
+        if let Some(a) = &self.annotations {
+            t.insert("annotations".to_string(), a.clone());
+        }
         t.insert("_meta".to_string(), Json::Obj(meta));
         Json::Obj(t)
     }
@@ -137,6 +181,9 @@ pub struct ServedArtifact {
     /// `idp/1` over the canonical `tools[]` projection — the
     /// listChanged/diff coordinate.
     pub catalogue_hash: String,
+    /// The `ttlMs` freshness hint the member declares (`ttl_ms` — 0
+    /// when undeclared; "0 when selection is per call", ADR-0095 D5).
+    pub ttl_ms: u64,
 }
 
 impl ServedArtifact {
@@ -161,14 +208,16 @@ impl ServedArtifact {
                 ),
             ),
             ("catalogue_hash", Json::str(self.catalogue_hash.clone())),
+            ("ttl_ms", Json::Int(self.ttl_ms as i64)),
         ])
     }
 }
 
 /// `lower(target:mcp member bytes, bundle_id, version_id) →
 /// ServedArtifact` — the pure lowering. The member document is
-/// `{schema: "hh-mcp-target/1", target?: "mcp", tools: [{name,
-/// description?, inputSchema?, _meta?}]}`; anything else is `Malformed`.
+/// `{schema: "hh-mcp-target/1", target?: "mcp", ttl_ms?, tools: [{name,
+/// description?, inputSchema?, outputSchema?, annotations?, _meta?}]}`;
+/// anything else is `Malformed`.
 pub fn lower_mcp_target(
     member_bytes: &[u8],
     bundle_id: &str,
@@ -198,6 +247,11 @@ pub fn lower_mcp_target(
             });
         }
     }
+    let ttl_ms = doc
+        .get("ttl_ms")
+        .and_then(Json::as_int)
+        .map(|v| v.max(0) as u64)
+        .unwrap_or(0);
     let tools_json = match doc.get("tools") {
         Some(Json::Arr(t)) => t.clone(),
         _ => {
@@ -223,8 +277,10 @@ pub fn lower_mcp_target(
             .get("inputSchema")
             .cloned()
             .unwrap_or_else(|| Json::obj([]));
+        let output_schema = t.get("outputSchema").cloned();
+        let annotations = t.get("annotations").cloned();
         let meta = t.get("_meta").cloned().unwrap_or_else(|| Json::obj([]));
-        let (semantic_id, ext_meta) = match &meta {
+        let (semantic_id, hir_meta, ext_meta) = match &meta {
             Json::Obj(m) => {
                 let hir = m.get(HH_META_KEY);
                 let sid = hir
@@ -232,18 +288,36 @@ pub fn lower_mcp_target(
                     .and_then(Json::as_str)
                     .map(String::from)
                     .unwrap_or_else(|| name.clone());
+                // The member's whole HIR block survives (minus the
+                // serve-time members — `bundle_id` is stamped by the
+                // caller at render, `semantic_id` by the field).
+                let mut carried = match hir {
+                    Some(Json::Obj(h)) => h.clone(),
+                    _ => std::collections::BTreeMap::new(),
+                };
+                carried.remove("semantic_id");
+                carried.remove("bundle_id");
                 let mut ext = m.clone();
                 ext.remove(HH_META_KEY);
-                (sid, Json::Obj(ext))
+                (sid, Json::Obj(carried), Json::Obj(ext))
             }
-            _ => (name.clone(), Json::obj([])),
+            _ => (name.clone(), Json::obj([]), Json::obj([])),
         };
+        // The fixture's paused-effect declaration (its own `dev.cognition`
+        // extension key — served verbatim and read only here).
+        let input_requests = meta
+            .get(INPUT_REQUIRED_META_KEY)
+            .and_then(|m| m.get("inputRequests").cloned());
         tools.push(ArtifactTool {
             name,
             description,
             input_schema,
+            output_schema,
+            annotations,
             semantic_id,
+            hir_meta,
             ext_meta,
+            input_requests,
         });
     }
     // Canonical order — `(semantic_id, name)` (§3.2.5's catalogue rule;
@@ -261,6 +335,7 @@ pub fn lower_mcp_target(
         bundle_version: bundle_version.to_string(),
         tools,
         catalogue_hash,
+        ttl_ms,
     })
 }
 
@@ -305,32 +380,81 @@ fn scan_handles(j: &Json, path: &str, now_ms: u64) -> Option<(String, bool)> {
     }
 }
 
-/// `tools/call` — the Stage-3 refusal path (R-2.11.3⁰: the fixture
-/// serves the catalogue; execution is not a Stage-3 verb — every call
-/// is a typed `isError`, never a protocol error).
+/// `tools/call` — the Stage-3 refusal path plus the fixture's
+/// paused-effect shape (R-2.11.3⁰: the fixture serves the catalogue;
+/// execution is not a Stage-3 verb — every ordinary call is a typed
+/// `isError`, never a protocol error).
 ///
 /// Decision order (never `_meta`-influenced — caller `_meta` is parsed
-/// and dropped): unknown tool → `InvalidParams`-shaped refusal; a
-/// handle-bearing argument → `HandleExpired` then `NoCoveringGrant`
-/// (the fixed test principal holds no covering grant for any presented
-/// handle — R-4); otherwise `stage_pending`.
+/// and dropped):
+/// 1. unknown tool → `unknown_tool` refusal;
+/// 2. `params.requestState` present → the resumed answer —
+///    `{resultType: "observed", requestState: <echoed byte-for-byte>}`
+///    (ADR-0097 D3: the retry echoes the opaque blob unmodified);
+/// 3. a handle-bearing argument → `HandleExpired` then
+///    `NoCoveringGrant` (R-4);
+/// 4. a tool declaring `dev.cognition/input_required` →
+///    `{resultType: "input_required", inputRequests, requestState}` —
+///    a *paused* call, never terminal;
+/// 5. otherwise `stage_pending`.
 ///
-/// Returns the `CallToolResult` JSON — `{isError: true, content:
-/// [{type:"text", text}], structuredContent: {refusal, detail}}`; no
-/// `HandleId` string ever appears in it (I-H1).
+/// Refusals return `{isError: true, content, structuredContent}`; no
+/// `HandleId` string ever appears in them (I-H1).
 pub fn tools_call(artifact: &ServedArtifact, params: &Json, now_ms: u64) -> Json {
     let name = params.get("name").and_then(Json::as_str).unwrap_or("");
-    let refusal = if !artifact.tools.iter().any(|t| t.name == name) {
-        McpError::UnknownTool {
+    let tool = artifact.tools.iter().find(|t| t.name == name);
+    let refusal = match tool {
+        None => Some(McpError::UnknownTool {
             name: name.to_string(),
+        }),
+        Some(t) => {
+            if let Some(rs) = params.get("requestState") {
+                // The resumed answer — `requestState` echoes unmodified.
+                return Json::obj([
+                    ("resultType", Json::str("observed")),
+                    ("isError", Json::Bool(false)),
+                    (
+                        "content",
+                        Json::Arr(vec![Json::obj([
+                            ("type", Json::str("text")),
+                            ("text", Json::str("resumed")),
+                        ])]),
+                    ),
+                    ("requestState", rs.clone()),
+                ]);
+            }
+            let args = params.get("arguments").cloned().unwrap_or(Json::Null);
+            match scan_handles(&args, "/arguments", now_ms) {
+                Some((at, true)) => Some(McpError::HandleExpired { at }),
+                Some((at, false)) => Some(McpError::NoCoveringGrant { at }),
+                None => match &t.input_requests {
+                    // The paused call — an opaque `requestState` the
+                    // retry echoes (content-addressed over the ask).
+                    Some(input_requests) => {
+                        let state = hh_identity::idp_id(
+                            "mcp.request_state",
+                            Json::obj([
+                                ("tool", Json::str(t.name.clone())),
+                                ("inputRequests", input_requests.clone()),
+                            ])
+                            .to_canonical_string()
+                            .as_bytes(),
+                        );
+                        return Json::obj([
+                            ("resultType", Json::str("input_required")),
+                            ("isError", Json::Bool(false)),
+                            ("inputRequests", input_requests.clone()),
+                            ("requestState", Json::str(state)),
+                        ]);
+                    }
+                    None => Some(McpError::StagePending),
+                },
+            }
         }
-    } else {
-        let args = params.get("arguments").cloned().unwrap_or(Json::Null);
-        match scan_handles(&args, "/arguments", now_ms) {
-            Some((at, true)) => McpError::HandleExpired { at },
-            Some((at, false)) => McpError::NoCoveringGrant { at },
-            None => McpError::StagePending,
-        }
+    };
+    let refusal = match refusal {
+        Some(r) => r,
+        None => McpError::StagePending,
     };
     let detail = match &refusal {
         McpError::Malformed { detail } => detail.clone(),

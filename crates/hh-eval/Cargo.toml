@@ -21,3 +21,6 @@ hh-ontology = { path = "../hh-ontology" }
 hh-budget = { path = "../hh-budget" }
 hh-compiler = { path = "../hh-compiler" }
 hh-lab = { path = "../hh-lab" }
+
+[dev-dependencies]
+hh-telemetry = { path = "../hh-telemetry" }

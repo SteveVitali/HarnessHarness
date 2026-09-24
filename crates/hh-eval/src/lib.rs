@@ -60,4 +60,4 @@ pub use opacity::{is_typed_kind, opacity_dynamic, per_call_opacity};
 pub use oracle::{run_oracle, OracleFailure, OracleRequest, OracleVerdict};
 pub use runs::{EvalRun, SuiteContext, TaskContext};
 pub use scorecard::{render_scorecard, ScorecardError, ScorecardInput, T_BCA, T_CLT};
-pub use vetoes::{evaluate_vetoes, veto_id, VetoContext, VetoTrip};
+pub use vetoes::{evaluate_vetoes, tripped_veto_ids, veto_id, VetoContext, VetoTrip};
