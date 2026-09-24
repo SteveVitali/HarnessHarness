@@ -271,6 +271,13 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_prov("security.label.endorsed",      Led, O::Events, false, false, true,  None, None),
     row_prov("security.label.declassified",  Led, O::Events, false, false, true,  None, None),
     row("security.policy.evaluated",       Led, O::Events, false, false, None, None),
+    // The containment rows (§5g.4 §3; ADR-0061 D5) — audit-grade, kernel-origin,
+    // provenance-mandatory, content-free payloads (`lowering_loss_ref`/`probes_ref`
+    // are blob refs; `subject` is a path/host spelling). `security.containment.
+    // amended` lands with `amend()` at Stage 2 (R-2.8.4 stage map; ADR-0062 (e)).
+    row_prov("security.containment.applied",    Led, O::Events, true,  true,  true,  None, None),
+    row_prov("security.containment.violated",   Led, O::Events, true,  true,  true,  None, None),
+    row_prov("security.containment.unverified", Led, O::Events, true,  true,  true,  None, None),
 
     // ── context (P1) ─────────────────────────────────────────────────────
     // The one context-plane row this slice needs so `context_view` is non-vacuous

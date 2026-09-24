@@ -36,7 +36,7 @@ use hh_monitor::delegate::{self, ChildSpec, DelegateError, LiveCoords};
 use hh_monitor::events as mev;
 use hh_monitor::handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};
 use hh_monitor::mint::{self, MintError};
-use hh_monitor::monitor::{CapabilityEntry, Monitor, Proposal};
+use hh_monitor::monitor::{CapabilityEntry, ContainmentGate, Monitor, Proposal};
 use hh_monitor::policy::{default_table, Cond, Mode, PiContext, PiVerdict, PolicyRow, PolicyTable};
 use hh_monitor::table::HandleTable;
 use hh_monitor::{guard, leak, tcb};
@@ -322,6 +322,7 @@ fn proposal(cap_semantic: &str, args: Json) -> Proposal {
             ..AssessmentInputs::default()
         },
         requested_grants: vec![],
+        containment: ContainmentGate::Clear,
         at: 0,
     }
 }

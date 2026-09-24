@@ -1,0 +1,23 @@
+[package]
+name = "hh-containment"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 containment floor — ContainmentPolicy/1, KERNEL_PROTECTED, the authority-ordered layered meet, admits(), ContainmentReport, the EP2 model backend + probe battery, and fail-closed attach (spec §5g.4, R-2.8.4; ticket S1.12; ADR-0060/0061/0062)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-hir = { path = "../hh-hir" }
+# The spec's own edge direction (R-2.8.4 → R-2.8.1): the crate produces the
+# recorded `ContainmentGate` precondition `authorize` consumes and reads the
+# canonical-args record the SurfaceArgMap evaluator resolved.
+hh-monitor = { path = "../hh-monitor" }
+
+[dev-dependencies]
+hh-compiler = { path = "../hh-compiler" }

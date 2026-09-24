@@ -68,6 +68,11 @@ pub enum RecordKind {
     /// A configuration's **exact-bytes** coordinate (seed included — the
     /// `configuration_version_id` body).
     ConfigurationVersion,
+    /// A `ContainmentPolicy/1` record (§5g.4) — the typed, provenance-bearing,
+    /// content-addressed sandbox floor attached to the environment handle; has a
+    /// semantic projection (`policy_id` — normalised policy members only;
+    /// provenance, ext and ids excluded — ADR-0060 D1).
+    ContainmentPolicy,
 }
 
 impl RecordKind {
@@ -97,6 +102,7 @@ impl RecordKind {
             RecordKind::RevocationRecord => "revocation",
             RecordKind::Configuration => "configuration",
             RecordKind::ConfigurationVersion => "configuration_version",
+            RecordKind::ContainmentPolicy => "containment_policy",
         }
     }
 
@@ -116,6 +122,7 @@ impl RecordKind {
                 | RecordKind::CapabilityDeclaration
                 | RecordKind::Budget
                 | RecordKind::Configuration
+                | RecordKind::ContainmentPolicy
         )
     }
 
@@ -192,6 +199,7 @@ mod tests {
             RecordKind::RevocationRecord,
             RecordKind::Configuration,
             RecordKind::ConfigurationVersion,
+            RecordKind::ContainmentPolicy,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for k in kinds {
