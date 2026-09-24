@@ -1,0 +1,35 @@
+[package]
+name = "hh-env"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 execution-environment abstraction + sandboxed tool execution — EnvironmentRecord (idp/1), EnvHandle + the declared→ready→torn_down state machine, fail-closed attach via hh-containment, env_apply, the fs.*/upload/download/path_baseline effect surface under R-NOSIDE/R-NONET, the three kernel-clock counters, the seven-stage execution contract (resolve→authorize→prepare→commit→execute→capture→observe), ExecutorDeclaration/bind, the ToolExecutor seam + in-process LocalExecutor, CaptureItem + content-addressed EffectCaptureManifest, AttributionToken mint/resolve/hash, the closed ErrorClass sum with the three-origin rule and kernel-derived retryability (spec §5a.5/§5d.5, R-2.2.5/R-2.5.5; ticket S1.16; ADR-0136/0137/0138 + ADR-0100/0101/0102)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+# `authorize` is the monitor's — the dispatcher consumes `KernelDecision` and
+# emits `decided_payload`; executors never decide (ADR-0100 I-3).
+hh-monitor = { path = "../hh-monitor" }
+# `PinnedRef`/`SurfaceBinding`/`ArgTransform` — the resolved-capability +
+# surface-binding types the `resolve` stage consumes (the tool plane produces
+# `CanonicalArgs` via `args::eval`; `Proposal.capability_ref` is the pinned
+# pair). hh-compiler sits below hh-env in the DAG (no cycle).
+hh-compiler = { path = "../hh-compiler" }
+# `attach`/`verify_report`/`floor_gate`/`PolicySlot`/`ContainmentReport` — the
+# DF-S1.12-3 handle seam lands here.
+hh-containment = { path = "../hh-containment" }
+# `env_apply` (placeholders only) at attach + `redact` on the capture path
+# (ADR-0101 D5 — a hostile executor's output is masked before any visibility).
+hh-secrets = { path = "../hh-secrets" }
+# `prepare`'s `reserve` (ADR-0040 D3 — reserve-before-spend) binds through the
+# `ReservationSource` seam implemented on `budget::Account`.
+hh-budget = { path = "../hh-budget" }

@@ -87,6 +87,13 @@ pub enum RecordKind {
     /// policy describes a sink, never carries content). Version-only (the
     /// `sink_id` is the comparison coordinate).
     SinkPolicy,
+    /// An `EnvironmentRecord` (§5a.5 §3 — the *definition* identity layer):
+    /// `{class, image, build_context?, platform, provisioning,
+    /// containment_policy, limits, nondeterminism[], capabilities_expected,
+    /// ext}` versioned under `idp/1`; `environment_ref = semantic_id` in
+    /// `configuration_id`, `version_id` in `configuration_version_id` and the
+    /// run manifest. Has a semantic projection (S1.16, R-2.2.5).
+    EnvironmentRecord,
 }
 
 impl RecordKind {
@@ -120,6 +127,7 @@ impl RecordKind {
             RecordKind::SecretChannel => "secret.channel",
             RecordKind::CredentialBinding => "credential.binding",
             RecordKind::SinkPolicy => "sink_policy",
+            RecordKind::EnvironmentRecord => "environment",
         }
     }
 
@@ -140,6 +148,7 @@ impl RecordKind {
                 | RecordKind::Budget
                 | RecordKind::Configuration
                 | RecordKind::ContainmentPolicy
+                | RecordKind::EnvironmentRecord
         )
     }
 
@@ -220,6 +229,7 @@ mod tests {
             RecordKind::SecretChannel,
             RecordKind::CredentialBinding,
             RecordKind::SinkPolicy,
+            RecordKind::EnvironmentRecord,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for k in kinds {

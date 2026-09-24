@@ -123,6 +123,21 @@ members = [
     # the `measurement.export.delivered`/`measurement.metric.emitted` payload
     # builders. Views stamp through `hh-ledger`'s `View` (one shape, CC7).
     "crates/hh-telemetry",
+    # The C0/Stage-1 execution-environment abstraction + sandboxed tool
+    # execution (spec §5a.5/§5d.5, R-2.2.5/R-2.5.5; ticket S1.16). A PERSISTENT
+    # workspace member: `EnvironmentRecord` under idp/1 (pinned image digest /
+    # foreign_digest / UnresolvedRef on tags), the `EnvHandle` declared→ready→
+    # torn_down machine, fail-closed `attach` through hh-containment (the
+    # DF-S1.12-3 seam), `env_apply` placeholders, the fs.*/upload/download/
+    # path_baseline effect surface under R-NOSIDE/R-NONET, the three kernel-
+    # clock counters, the seven-stage dispatcher (resolve→authorize→prepare→
+    # commit→execute→capture→observe), ExecutorDeclaration/bind, the
+    # in-process LocalExecutor + helper-protocol schema, CaptureItem +
+    # content-addressed manifest, AttributionToken mint/resolve/hash, the
+    # closed ErrorClass sum with the three-origin rule + kernel-derived
+    # retryability. The integration layer above hh-hir/hh-containment/
+    # hh-monitor/hh-ledger/hh-secrets/hh-budget — the cycle-safe seam (CC7).
+    "crates/hh-env",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

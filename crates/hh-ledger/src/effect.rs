@@ -420,6 +420,11 @@ fn apply_event_fields(
     event_id: &str,
     seq: u64,
 ) {
+    // `unattributed` names no subject — non-attribution is the recorded fact;
+    // it must never open a phantom fold entry.
+    if class == "action.effect.unattributed" {
+        return;
+    }
     // The marker form names its subject in `payload.original_effect_id`.
     let subject = scope
         .effect_id
@@ -967,6 +972,15 @@ fn validate_marker(
     ctx: &EffectCtx,
 ) -> Result<(), LedgerError> {
     let class = ev.class.as_str();
+    // `action.effect.unattributed` (ADR-0101 D4; S1.16) is the scope-free
+    // marker for a capture-path signal that resolved to no effect — it mutates
+    // no fold and carries `{signal_kind, evidence_ref, detection}` only.
+    if class == "action.effect.unattributed" {
+        if str_field(&ev.payload, "signal_kind").is_none() {
+            return Err(bad("unattributed carries signal_kind"));
+        }
+        return Ok(());
+    }
     if class != "action.effect.compensated" && class != "action.effect.reverted" {
         return Err(bad(format!(
             "{class} requires scope.effect_id (or original_effect_id for the \
