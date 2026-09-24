@@ -416,6 +416,10 @@ pub struct VerdictRow {
     /// Who the verdict is charged to (`subject | instrument` …) — the
     /// headline rule's subject-suite filter (AC-R-2.7.1-8).
     pub charged_to: Option<String>,
+    /// The effect the verdict judges, when the row names one — the join key
+    /// `taint_precision` uses to bind a semantic-taint judge verdict to a
+    /// denied effect (AC-R-2.8.2-11).
+    pub effect_id: Option<String>,
 }
 
 /// The bench-grading evidence a `measurement.bench.graded`-style row or a
@@ -456,6 +460,17 @@ pub struct LedgerFacts {
     pub effects_committed: Vec<EffectRow>,
     /// The `effect_id`s `security.permission.decided` denied.
     pub permission_denials: BTreeSet<String>,
+    /// Remedies `security.permission.decided` rows offered
+    /// (`Σ |decided.remedies[]|` — §5g.2 process metrics; ADR-0055 D5).
+    pub remedies_offered: u64,
+    /// Decided rows carrying a non-null `remedy_taken`.
+    pub remedies_taken: u64,
+    /// Decided rows with `decision = "ask"` — the `approvals.requested` the
+    /// run consumed.
+    pub approvals_requested: u64,
+    /// `remedy_taken{kind: "approval"}` rows — the share of
+    /// `approvals.requested` the remedies consumed.
+    pub approvals_consumed: u64,
     /// `context.artefact.delivered` rows.
     pub artefacts_delivered: Vec<ArtefactRow>,
     /// `context.artefact.activated` rows.
@@ -728,9 +743,24 @@ impl LedgerFacts {
                     });
                 }
                 "security.permission.decided" => {
-                    if s(p, "decision").as_deref() == Some("deny") {
-                        if let Some(e) = s(p, "effect_id") {
-                            f.permission_denials.insert(e);
+                    match s(p, "decision").as_deref() {
+                        Some("deny") => {
+                            if let Some(e) = s(p, "effect_id") {
+                                f.permission_denials.insert(e);
+                            }
+                        }
+                        Some("ask") => f.approvals_requested += 1,
+                        _ => {}
+                    }
+                    if let Some(Json::Arr(rs)) = p.get("remedies") {
+                        f.remedies_offered += rs.len() as u64;
+                    }
+                    if let Some(t) = p.get("remedy_taken") {
+                        if !matches!(t, Json::Null) {
+                            f.remedies_taken += 1;
+                            if s(t, "kind").as_deref() == Some("approval") {
+                                f.approvals_consumed += 1;
+                            }
                         }
                     }
                 }
@@ -788,6 +818,7 @@ impl LedgerFacts {
                             criterion_ref: s(p, "criterion_ref"),
                             visibility: s(p, "visibility"),
                             charged_to: s(p, "charged_to"),
+                            effect_id: s(p, "effect_id"),
                         });
                         // A verifier verdict doubles as grading evidence when
                         // it carries the bench members.
@@ -863,13 +894,10 @@ impl LedgerFacts {
                             let raw = c.get("args_raw").and_then(Json::as_str);
                             if let Some(raw) = raw {
                                 if let Ok(a) = hh_wire::json::parse(raw) {
-                                    for m in [
-                                        "path", "resource", "uri", "target", "file",
-                                        "file_path",
-                                    ] {
-                                        if let Some(v) =
-                                            a.get(m).and_then(Json::as_str)
-                                        {
+                                    for m in
+                                        ["path", "resource", "uri", "target", "file", "file_path"]
+                                    {
+                                        if let Some(v) = a.get(m).and_then(Json::as_str) {
                                             f.metadata_accesses.push(v.to_string());
                                         }
                                     }
@@ -1148,6 +1176,22 @@ impl LedgerFacts {
             Json::Arr(self.permission_denials.iter().map(Json::str).collect()),
         );
         m.insert(
+            "remedies_offered".into(),
+            Json::Int(self.remedies_offered as i64),
+        );
+        m.insert(
+            "remedies_taken".into(),
+            Json::Int(self.remedies_taken as i64),
+        );
+        m.insert(
+            "approvals_requested".into(),
+            Json::Int(self.approvals_requested as i64),
+        );
+        m.insert(
+            "approvals_consumed".into(),
+            Json::Int(self.approvals_consumed as i64),
+        );
+        m.insert(
             "artefacts_delivered".into(),
             Json::Arr(self.artefacts_delivered.iter().map(artefact).collect()),
         );
@@ -1231,6 +1275,7 @@ impl LedgerFacts {
                             "charged_to",
                             v.charged_to.as_deref().map(Json::str),
                         );
+                        insert_opt(&mut vm, "effect_id", v.effect_id.as_deref().map(Json::str));
                         Json::Obj(vm)
                     })
                     .collect(),
@@ -1515,6 +1560,10 @@ impl LedgerFacts {
                 "effects_intended",
                 "effects_committed",
                 "permission_denials",
+                "remedies_offered",
+                "remedies_taken",
+                "approvals_requested",
+                "approvals_consumed",
                 "artefacts_delivered",
                 "artefacts_activated",
                 "artefacts_followed",
@@ -1589,6 +1638,10 @@ impl LedgerFacts {
         if let Some(Json::Arr(es)) = m.get("effects_committed") {
             f.effects_committed = es.iter().map(effect).collect();
         }
+        f.remedies_offered = opt_int_at(m, "remedies_offered")?.unwrap_or(0) as u64;
+        f.remedies_taken = opt_int_at(m, "remedies_taken")?.unwrap_or(0) as u64;
+        f.approvals_requested = opt_int_at(m, "approvals_requested")?.unwrap_or(0) as u64;
+        f.approvals_consumed = opt_int_at(m, "approvals_consumed")?.unwrap_or(0) as u64;
         if let Some(Json::Arr(ds)) = m.get("permission_denials") {
             f.permission_denials = ds
                 .iter()
@@ -1640,6 +1693,7 @@ impl LedgerFacts {
                     criterion_ref: s(v, "criterion_ref"),
                     visibility: s(v, "visibility"),
                     charged_to: s(v, "charged_to"),
+                    effect_id: s(v, "effect_id"),
                 });
             }
         }

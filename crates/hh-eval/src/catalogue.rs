@@ -507,6 +507,62 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
                 ..base()
             }
         },
+        // ── §5g.2 IFC process metrics (S3.11a — ledger-derived rows;
+        //    `taint_precision` is advisory: reported, never enforced —
+        //    AC-R-2.8.2-11, I-F1) ────────────────────────────────────────
+        MetricDeclaration {
+            name: names::REMEDIES_OFFERED.into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: names::REMEDIES_TAKEN.into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: names::APPROVALS_REQUESTED.into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: names::APPROVALS_CONSUMED.into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: names::TAINT_PRECISION.into(),
+            dimension: Dimension::Security,
+            unit: "ppm".into(),
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                // Advisory only — a `Validator{kind: judge}` produces the
+                // verdicts; the row never feeds enforcement (I-F1).
+                oracle_classes_allowed: [OracleClass::Judge].into_iter().collect(),
+                ..base()
+            }
+        },
         // ── security (AgentDojo — §5h.4 process metric) ──────────────────
         MetricDeclaration {
             name: "injection_delivered_rate".into(),

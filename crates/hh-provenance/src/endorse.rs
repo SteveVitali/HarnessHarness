@@ -211,6 +211,21 @@ pub enum EndorsementError {
     NoLabelIncrease,
     /// A `pin` endorsement without a verified attestation on the subject.
     PinRequiresVerifiedAttestation,
+    /// A bounded sanitizer's realized output violated its declared
+    /// `SanitizerBounds` — the `policy_rule (b)` endorsement is never emitted
+    /// (`SanitizerBoundExceeded`; §5g.2 §5 failure row).
+    SanitizerBoundExceeded {
+        /// What exceeded the bound.
+        detail: String,
+    },
+    /// A shape endorsement on a schema whose `capacity_bits` exceeds the
+    /// definition's `cap_max` (§5g.2 §3).
+    ShapeCapacityExceeded {
+        /// The measured capacity.
+        capacity_bits: u64,
+        /// The declared ceiling.
+        cap_max: u64,
+    },
 }
 
 /// `endorse(subject, to, endorser, basis, basis_ref) → security.label.endorsed` (§8.1 #2):
@@ -480,6 +495,159 @@ pub fn apply_label(
         label,
         applied_by: applied_by.clone(),
     }
+}
+
+/// `shape_endorse(subject, subject_ref, schema, cap_max, validator,
+/// basis_ref, robustness_inputs) → security.label.endorsed` — the
+/// `validator` basis's C2 form (§5g.2 §2.2; the `shape_endorse` remedy's
+/// consumption-side emitter): a deterministic kernel `Validator` raises an
+/// `external` value to `environment` (`taint → ∅`) iff the declared output
+/// `schema` is capacity-bounded with `capacity_bits ≤ cap_max` (the kernel
+/// computes the capacity, never the validator — OQ-145's ratified default;
+/// an unbounded string is `BasisNotAllowed`, AC-R-2.8.2-6c).
+///
+/// The emitted event carries `capacity_bits` and the `robustness_inputs`
+/// (the parameter paths the endorsement discharges for D-ROBUST — the
+/// payload extension §5g.2 §3 declares).
+pub fn shape_endorse(
+    subject: &ProvenanceRecord,
+    subject_ref: impl Into<String>,
+    schema: &Json,
+    cap_max: u64,
+    validator: &ProvenanceRecord,
+    basis_ref: Option<String>,
+    robustness_inputs: Vec<String>,
+) -> Result<LabelEndorsed, EndorsementError> {
+    let bits = match crate::flow::capacity_bits(schema) {
+        Some(b) if b <= cap_max => b,
+        Some(b) => {
+            return Err(EndorsementError::ShapeCapacityExceeded {
+                capacity_bits: b,
+                cap_max,
+            })
+        }
+        None => {
+            return Err(EndorsementError::BasisNotAllowed {
+                basis: EndorsementBasis::Validator,
+                kind: "schema not capacity-bounded (free text never endorses)",
+            })
+        }
+    };
+    let mut to = subject.label();
+    to.authority = AuthorityClass::Environment;
+    to.taint.clear();
+    let mut event = endorse(
+        subject,
+        subject_ref,
+        &to,
+        validator,
+        EndorsementBasis::Validator,
+        basis_ref,
+        ContentKind::ClosedSchemaValue,
+    )?;
+    event.capacity_bits = Some(bits);
+    event.robustness_inputs = robustness_inputs;
+    Ok(event)
+}
+
+/// `sanitize_endorse(source, source_ref, subject_ref, bounds, realized,
+/// sanitizer_ref, capability, endorser, scope, at) → (security.label.endorsed,
+/// projected_record)` — the bounded sanitizer's `policy_rule (b)`
+/// endorsement (§5g.2 §2.2; ADR-0055 D1; AC-R-2.8.2-7).
+///
+/// The sanitizer's output is a deterministic projection of the source — the
+/// returned record is `derive(Projection, [source], kernel)` with
+/// `derived_from` pointing at the source, its label then endorsed at
+/// `bounds.to` *in the same append* (the lowering is the endorsement, never
+/// the bare projection — P1 as amended). Refusals:
+///
+/// - `SanitizerBoundExceeded` — the *realized* output label violates the
+///   declared bound (a removed taint pattern survived, `bounds.to` claims
+///   an authority the output lacks, or `bounds.to.taint` adds tags) —
+///   measured by [`crate::flow::apply_sanitizer_bounds`];
+/// - `BasisNotAllowed`/`PolicyRuleTouchesNonReaders` (via
+///   [`crate::flow::check_sanitizer_effect`]) — the endorsement delta would
+///   touch authority, drop taint the bound never declared, or land off
+///   `bounds.to`;
+/// - `NoLabelIncrease` — nothing rises (a sanitizer that endorses nothing
+///   emits nothing);
+/// - `IllegitimateEndorsement` — `policy_rule` is executed by the kernel; a
+///   non-kernel endorser never emits it.
+#[allow(clippy::too_many_arguments)] // the emitter's operands are the append's legs — the arity is the event's.
+pub fn sanitize_endorse(
+    source: &ProvenanceRecord,
+    source_ref: impl Into<String>,
+    subject_ref: impl Into<String>,
+    bounds: &crate::flow::SanitizerBounds,
+    realized: &crate::label::Label,
+    sanitizer_ref: &str,
+    capability: &str,
+    endorser: &ProvenanceRecord,
+    scope: crate::authority::PersistenceScope,
+    at: u64,
+) -> Result<(LabelEndorsed, ProvenanceRecord), EndorsementError> {
+    // The realized output must satisfy the declared bound.
+    let to = crate::flow::apply_sanitizer_bounds(bounds, realized, capability).map_err(|e| {
+        let detail = match &e {
+            crate::flow::FlowError::SanitizerBoundExceeded { detail } => detail.clone(),
+            other => format!("{other:?}"),
+        };
+        EndorsementError::SanitizerBoundExceeded { detail }
+    })?;
+    if !matches!(endorser.origin, Origin::Kernel { .. }) {
+        return Err(EndorsementError::IllegitimateEndorsement {
+            detail: "policy_rule endorsement is executed by the kernel".to_string(),
+        });
+    }
+    if endorser.authority < to.authority {
+        return Err(EndorsementError::EndorserBelowTarget {
+            endorser: endorser.authority,
+            target: to.authority,
+        });
+    }
+    // The projection record — a deterministic kernel derivation with
+    // `derived_from` → the source (its inherited label is the `from`).
+    let source_ref = source_ref.into();
+    let mut projected = crate::derive::derive(
+        crate::record::DerivationKind::Projection,
+        &[crate::derive::DerivationInput {
+            input_ref: source_ref.clone(),
+            record: source.clone(),
+        }],
+        endorser.origin.clone(),
+        true,
+        scope,
+        at,
+    )
+    .map_err(|e| EndorsementError::IllegitimateEndorsement {
+        detail: format!("sanitizer projection failed: {e:?}"),
+    })?;
+    let from = projected.label();
+    // The endorsement delta must stay inside the declared bound.
+    crate::flow::check_sanitizer_effect(bounds, &from, &to, capability).map_err(|e| {
+        crate::flow::basis_effect_endorsement_error(EndorsementBasis::PolicyRule, &e)
+    })?;
+    match classify_label_delta(&from, &to) {
+        LabelDelta::None | LabelDelta::Narrowing => {
+            return Err(EndorsementError::NoLabelIncrease);
+        }
+        LabelDelta::Widening | LabelDelta::MixedWidening => {}
+    }
+    projected.authority = to.authority;
+    projected.taint = to.taint.clone();
+    projected.readers = to.readers.clone();
+    let event = LabelEndorsed {
+        subject_ref: subject_ref.into(),
+        from,
+        to,
+        endorser: endorser.clone(),
+        basis: EndorsementBasis::PolicyRule,
+        basis_ref: Some(sanitizer_ref.to_string()),
+        capacity_bits: None,
+        sanitizer_ref: Some(sanitizer_ref.to_string()),
+        robustness_inputs: Vec::new(),
+    };
+    Ok((event, projected))
 }
 
 /// Monitor check 5 — endorsement legitimacy **at append** (§8.1 #2 monitor table; ADR-0035

@@ -77,6 +77,9 @@ pub struct AuthorizeInput {
     pub capabilities: Vec<(String, CapabilityEntry)>,
     /// The sealed `auto_review` rule set (`auto_review_rules(sealed)`).
     pub auto_review_rules: Vec<AutoReviewRule>,
+    /// The definition's `FlowPolicy` set (`Monitor.flow_policies` — §5g.2
+    /// §2.3 `check_flow`'s `policies` input).
+    pub flow_policies: Vec<hh_provenance::flow_policy::FlowPolicy>,
     /// The sealed repeated-denial policy.
     pub denial_policy: Option<DenialPolicy>,
     /// The approval fold (pending/decided/leases/counters).
@@ -114,6 +117,7 @@ impl AuthorizeInput {
         m.run_id = self.run_id.clone();
         m.session = self.session.clone();
         m.auto_review_rules = self.auto_review_rules.clone();
+        m.flow_policies = self.flow_policies.clone();
         m.denial_policy = self.denial_policy;
         m.approvals = self.approvals.clone();
         m.approvals_max = self.approvals_max;
@@ -156,6 +160,7 @@ impl AuthorizeInput {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             auto_review_rules: m.auto_review_rules.clone(),
+            flow_policies: m.flow_policies.clone(),
             denial_policy: m.denial_policy,
             approvals: m.approvals.clone(),
             proposal: proposal.clone(),
@@ -264,6 +269,10 @@ impl AuthorizeInput {
                         .map(review_rule_json)
                         .collect(),
                 ),
+            ),
+            (
+                "flow_policies",
+                Json::Arr(self.flow_policies.iter().map(|p| p.to_json()).collect()),
             ),
             (
                 "denial_policy",
@@ -398,6 +407,18 @@ impl AuthorizeInput {
             proposers,
             capabilities,
             auto_review_rules,
+            flow_policies: match j.get("flow_policies") {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| {
+                        hh_provenance::flow_policy::FlowPolicy::from_json(p)
+                            .map_err(|e| format!("flow_policies[{i}]: {}", e.detail))
+                    })
+                    .collect::<Result<Vec<_>, String>>()?,
+                Some(Json::Null) | None => Vec::new(),
+                _ => return Err("flow_policies must be an array".to_string()),
+            },
             denial_policy: match j.get("denial_policy") {
                 Some(Json::Null) | None => None,
                 Some(d) => Some(denial_policy_from_json(d)?),
@@ -1146,6 +1167,13 @@ fn proposal_json(p: &Proposal) -> Json {
                 flow_inputs_json(&p.flow)
             },
         ),
+        (
+            "remedy_taken",
+            p.remedy_taken
+                .as_ref()
+                .map(|r| r.to_json())
+                .unwrap_or(Json::Null),
+        ),
         ("at", Json::Int(p.at as i64)),
     ])
 }
@@ -1299,6 +1327,13 @@ fn proposal_from_json(j: &Json) -> Result<Proposal, String> {
             "proposal.containment",
         )?,
         flow: flow_inputs_from_json(j, "proposal")?,
+        remedy_taken: match j.get("remedy_taken") {
+            Some(Json::Null) | None => None,
+            Some(r) => Some(
+                hh_provenance::flow::Remedy::from_json(r, "proposal.remedy_taken")
+                    .map_err(|e| format!("proposal.remedy_taken: {}", e.detail))?,
+            ),
+        },
         at: req_int(j, "at")?.max(0) as u64,
     })
 }

@@ -80,6 +80,12 @@ pub struct Proposal {
     /// stage still runs on a declared `flow_contract` (its checks degrade
     /// to `EvaluationError` where a required label is unrecorded).
     pub flow: FlowInputs,
+    /// The `Remedy` a prior decision stage consumed on this re-dispatch
+    /// (I-F6 R3 — a consumed remedy is a ledger event conferring nothing
+    /// beyond the one proposal; the dispatcher stamps it on the re-issued
+    /// `Proposal` and `authorize` carries it to the decided record,
+    /// §5g.2 §3 `decided{remedy_taken?}`).
+    pub remedy_taken: Option<hh_provenance::flow::Remedy>,
     /// The decision's logical time (`at` — the seq the `time` constraint's
     /// bound compares against).
     pub at: u64,
@@ -192,6 +198,15 @@ pub struct Monitor {
     /// `auto_reviewer` stage runs (`auto_review_rules(sealed)` extracted at
     /// monitor setup — I-P2's endorser). Empty = no rule can match.
     pub auto_review_rules: Vec<crate::approval::AutoReviewRule>,
+    /// The definition's `FlowPolicy` set (§5g.2 §2.3 `check_flow`'s
+    /// `policies` input — the `HarnessRule{action: flow_policy}` rules
+    /// issued at `authority ≥ definition`, validated by
+    /// [`hh_provenance::validate_flow_policy`] at monitor setup). Their
+    /// rules evaluate in the flow stage **after** the capability's
+    /// `FlowContract.rules` in the same tier order (all `deny` →
+    /// `allow`/`declassify`/`sanitize` → fallthrough to Π). Empty = the
+    /// contract's rules alone decide.
+    pub flow_policies: Vec<hh_provenance::flow_policy::FlowPolicy>,
     /// The sealed repeated-denial policy (`None` = no ceiling — a denial
     /// never auto-fires a fallback).
     pub denial_policy: Option<crate::approval::DenialPolicy>,
@@ -237,6 +252,7 @@ impl Monitor {
             session: String::new(),
             decision_open: false,
             auto_review_rules: Vec::new(),
+            flow_policies: Vec::new(),
             denial_policy: None,
             approvals: ApprovalState::default(),
             approvals_max: None,
@@ -557,7 +573,7 @@ impl Monitor {
             decision_scope: DecisionScope::Once,
             cache_key: None,
             origin_permission_id: None,
-            remedy_taken: None,
+            remedy_taken: p.remedy_taken.clone(),
             assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
         };
         let deny_rem = |mut checks: Vec<CheckRecord>,
@@ -587,7 +603,7 @@ impl Monitor {
                 cache_key: None,
                 origin_permission_id: None,
                 assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
-                remedy_taken: None,
+                remedy_taken: p.remedy_taken.clone(),
             }
         };
         // The containment precondition (ADR-0062 D3; R-2.8.4) — BEFORE any
@@ -854,8 +870,18 @@ impl Monitor {
             // D-ROBUST (I-F2) — before any `ask`: the endorsement-surface
             // params (`recipient_params` ∪ sanitize-decision params) must be
             // `> external` and untainted or shape-endorsed.
+            // The definition's `FlowPolicy` rules join the contract's — the
+            // §5g.2 §2.3 `policies` input. One evaluator, one tier order:
+            // deny tier sees every rule before any allow/declassify/
+            // sanitize applies; within a tier first match wins, so the
+            // contract's (narrower-scope) rules take precedence over the
+            // definition-wide policies appended after them.
+            let mut combined_rules: Vec<flow::FlowRule> = contract.rules.clone();
+            for pol in &self.flow_policies {
+                combined_rules.extend(pol.rules.iter().cloned());
+            }
             let mut robust_params = contract.recipient_params.clone();
-            for r in &contract.rules {
+            for r in &combined_rules {
                 if let flow::FlowDecision::Sanitize { param, .. } = &r.decision {
                     if !robust_params.contains(param) {
                         robust_params.push(param.clone());
@@ -950,7 +976,7 @@ impl Monitor {
                 capability: &p.capability_ref.semantic_id,
             };
             let mut declassified_readers: Option<hh_provenance::ReaderSet> = None;
-            match flow::check_flow(&contract.rules, &finput) {
+            match flow::check_flow(&combined_rules, &finput) {
                 Err(e) => {
                     checks.push(CheckRecord {
                         step: 4,
@@ -1157,7 +1183,7 @@ impl Monitor {
                 decision_scope: DecisionScope::Once,
                 cache_key: None,
                 origin_permission_id: None,
-                remedy_taken: None,
+                remedy_taken: p.remedy_taken.clone(),
                 assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
             });
         }
@@ -1190,7 +1216,7 @@ impl Monitor {
                 decision_scope: DecisionScope::Once,
                 cache_key: None,
                 origin_permission_id: None,
-                remedy_taken: None,
+                remedy_taken: p.remedy_taken.clone(),
                 assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
             });
         }
@@ -1239,7 +1265,7 @@ impl Monitor {
                         decision_scope: DecisionScope::Once,
                         cache_key: None,
                         origin_permission_id: None,
-                        remedy_taken: None,
+                        remedy_taken: p.remedy_taken.clone(),
                         assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                     });
                 }
@@ -1295,7 +1321,7 @@ impl Monitor {
                             decision_scope: DecisionScope::Once,
                             cache_key: None,
                             origin_permission_id: Some(pid.clone()),
-                            remedy_taken: None,
+                            remedy_taken: p.remedy_taken.clone(),
                             assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                         });
                     }
@@ -1323,7 +1349,7 @@ impl Monitor {
                             decision_scope: DecisionScope::Once,
                             cache_key: None,
                             origin_permission_id: Some(pid.clone()),
-                            remedy_taken: None,
+                            remedy_taken: p.remedy_taken.clone(),
                             assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                         });
                     }
@@ -1374,7 +1400,7 @@ impl Monitor {
                         decision_scope: DecisionScope::Once,
                         cache_key: None,
                         origin_permission_id: None,
-                        remedy_taken: None,
+                        remedy_taken: p.remedy_taken.clone(),
                         assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                     });
                 }
@@ -1408,7 +1434,7 @@ impl Monitor {
                     decision_scope: DecisionScope::Once,
                     cache_key: None,
                     origin_permission_id: None,
-                    remedy_taken: None,
+                    remedy_taken: p.remedy_taken.clone(),
                     assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                 });
             }
@@ -1450,7 +1476,7 @@ impl Monitor {
                     },
                     cache_key: Some(key),
                     origin_permission_id: Some(lease.origin_permission_id.clone()),
-                    remedy_taken: None,
+                    remedy_taken: p.remedy_taken.clone(),
                     assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                 });
             }
@@ -1476,7 +1502,7 @@ impl Monitor {
                 decision_scope: DecisionScope::Once,
                 cache_key: None,
                 origin_permission_id: None,
-                remedy_taken: None,
+                remedy_taken: p.remedy_taken.clone(),
                 assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
             });
         }
@@ -1494,7 +1520,7 @@ impl Monitor {
             decision_scope: DecisionScope::Once,
             cache_key: None,
             origin_permission_id: None,
-            remedy_taken: None,
+            remedy_taken: p.remedy_taken.clone(),
             assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
         })
     }

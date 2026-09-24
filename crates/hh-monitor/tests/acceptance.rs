@@ -326,6 +326,7 @@ fn proposal(cap_semantic: &str, args: Json) -> Proposal {
         requested_grants: vec![],
         containment: ContainmentGate::Clear,
         flow: Default::default(),
+        remedy_taken: None,
         at: 0,
     }
 }
