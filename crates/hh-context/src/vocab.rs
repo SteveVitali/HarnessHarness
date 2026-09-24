@@ -588,6 +588,9 @@ pub enum DependencyKind {
     EnvironmentEpoch,
     /// A model snapshot (`authority = external` claim).
     ModelSnapshot,
+    /// A profile version (the `profile_version` K5 contract member,
+    /// §5b.4 K5 entry — ADR-0129 d.2).
+    ProfileVersion,
     /// Another memory version.
     MemoryVersion,
     /// An artifact (content address).
@@ -607,6 +610,7 @@ impl DependencyKind {
             DependencyKind::EnvironmentImage => "environment_image",
             DependencyKind::EnvironmentEpoch => "environment_epoch",
             DependencyKind::ModelSnapshot => "model_snapshot",
+            DependencyKind::ProfileVersion => "profile_version",
             DependencyKind::MemoryVersion => "memory_version",
             DependencyKind::Artifact => "artifact",
             DependencyKind::ExternalResource => "external_resource",
@@ -623,6 +627,7 @@ impl DependencyKind {
             DependencyKind::EnvironmentImage,
             DependencyKind::EnvironmentEpoch,
             DependencyKind::ModelSnapshot,
+            DependencyKind::ProfileVersion,
             DependencyKind::MemoryVersion,
             DependencyKind::Artifact,
             DependencyKind::ExternalResource,

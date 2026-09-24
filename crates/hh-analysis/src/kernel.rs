@@ -640,6 +640,8 @@ fn run_transfer(
     let mut merged = CompareOutcome {
         reports: Vec::new(),
         per_task: Vec::new(),
+        deviation: hh_eval::compare::DeviationReport::default(),
+        outcome_counts: Default::default(),
     };
     let mut levels = Vec::new();
     let mut unknown_levels: Vec<String> = Vec::new();
@@ -713,6 +715,27 @@ fn run_transfer(
         }
         merged.reports.extend(out.reports.iter().cloned());
         merged.per_task.extend(out.per_task.iter().cloned());
+        // CC3 — the per-level deviation/outcome accounting aggregates up;
+        // nothing is silently dropped in the merge.
+        merged
+            .deviation
+            .excluded_runs
+            .extend(out.deviation.excluded_runs.iter().cloned());
+        for (arm, (d, t)) in &out.deviation.arm_counts {
+            let e = merged
+                .deviation
+                .arm_counts
+                .entry(arm.clone())
+                .or_insert((0, 0));
+            e.0 += d;
+            e.1 += t;
+        }
+        for (arm, counts) in &out.outcome_counts {
+            let e = merged.outcome_counts.entry(arm.clone()).or_default();
+            for (class, n) in counts {
+                *e.entry(class.clone()).or_insert(0) += n;
+            }
+        }
         if level_agrees {
             agreeing += 1;
             agreeing_levels.push(level.clone());

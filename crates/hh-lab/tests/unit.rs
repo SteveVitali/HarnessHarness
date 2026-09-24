@@ -13,7 +13,7 @@ use hh_ontology::config::Ref;
 use hh_ontology::debt::ExpiryCondition;
 use hh_ontology::eval::{
     Design, DesignKind, EstimatorSelection, FactorKind, IntervalMethod, Pairing, PreRegistration,
-    SeedPolicy,
+    RoutingPolicy, SeedPolicy,
 };
 use hh_ontology::lab::{
     BenchmarkNetworkMode, ContaminationStratum, EnvironmentFamily, EnvironmentFamilyRecord,
@@ -208,6 +208,9 @@ fn design() -> Design {
         registry_snapshot_id: None,
         generators: None,
         resolution: None,
+        routing_policy: RoutingPolicy::FailFast,
+        deviation_policy: None,
+        cache_na_stratified: false,
     }
 }
 
@@ -245,6 +248,7 @@ fn arm(id: &str, lid: &str) -> ArmSpec {
         artifact_ref: Ref::new("def:x", "sha256:ee55"),
         limits_enforced: "limits:declared".into(),
         model_role_table_ref: None,
+        response_cache: None,
     }
 }
 
@@ -1288,5 +1292,135 @@ fn register_refuses_matched_cap_dim_not_enforced_on_every_arm() {
     assert!(matches!(
         s.register(&ctx),
         Err(ExperimentRefusal::IncommensurableMatch { .. })
+    ));
+}
+
+// ── S3.7 — cache-policy register refusals (AC-R-2.3.4-10/11; AC-R-2.3.3-8) ──
+
+#[test]
+fn arm_response_cache_decl_codec_round_trips_and_refuses_unknown() {
+    use hh_lab::experiment::ResponseCacheDecl;
+    let mut a = arm("a", "l1");
+    a.response_cache = Some(ResponseCacheDecl::K5);
+    let j = a.to_json();
+    assert_eq!(j.get("response_cache"), Some(&Json::str("k5")));
+    let back = ArmSpec::from_json(&j).expect("decodes");
+    assert_eq!(back.response_cache, Some(ResponseCacheDecl::K5));
+    // The absent member decodes to None; an unknown spelling refuses.
+    let a = arm("a", "l1");
+    assert!(a.to_json().get("response_cache").is_none());
+    assert_eq!(
+        ArmSpec::from_json(&a.to_json()).unwrap().response_cache,
+        None
+    );
+    let mut j = a.to_json();
+    if let Json::Obj(ref mut m) = j {
+        m.insert("response_cache".into(), Json::str("redis"));
+    }
+    assert!(ArmSpec::from_json(&j).is_err());
+}
+
+#[test]
+fn register_natural_cache_requires_visibility_or_na_stratification() {
+    use hh_budget::matchspec::CachePolicy;
+    let mut s = spec();
+    for a in &mut s.arms {
+        a.match_spec.as_mut().unwrap().cache_policy = CachePolicy::Natural;
+    }
+    s.experiment_id = s.experiment_id();
+
+    // No resolver → the check defers to a context that can see the dialect.
+    s.register(&SpecContext::member_level())
+        .expect("unresolvable visibility defers, never refuses");
+
+    // The dialect exposes cache state → registers.
+    let visible = SpecContext {
+        cache_state_visible: Some(&|_| Some(true)),
+        ..SpecContext::member_level()
+    };
+    s.register(&visible).expect("visible dialect registers");
+
+    // `cache_state_visible = unsupported` without the design's declared n/a
+    // stratification → refused (a warm cache may never silently contaminate).
+    let invisible = SpecContext {
+        cache_state_visible: Some(&|_| Some(false)),
+        ..SpecContext::member_level()
+    };
+    assert!(matches!(
+        s.register(&invisible),
+        Err(ExperimentRefusal::IncommensurableMatch { .. })
+    ));
+
+    // The declared `cache_na_stratified` stratification admits it.
+    s.design.cache_na_stratified = true;
+    s.register(&invisible)
+        .expect("cache_na_stratified admits the natural arm");
+}
+
+#[test]
+fn register_k5_arm_requires_declared_cache_factor() {
+    use hh_lab::experiment::ResponseCacheDecl;
+    let mut s = spec();
+    s.arms[0].response_cache = Some(ResponseCacheDecl::K5);
+    s.experiment_id = s.experiment_id();
+    // No `cache` factor in the pre-registered design → refused.
+    assert!(matches!(
+        s.register(&SpecContext::member_level()),
+        Err(ExperimentRefusal::PreRegistrationInvalid { .. })
+    ));
+
+    // `cache` declared as a factor (and bound on every arm) admits the arm.
+    // A single level keeps the factor non-varied — the `paired` design's
+    // one-varied-factor rule is untouched.
+    s.factors.push(FactorSpec {
+        name: "cache".into(),
+        kind: FactorKind::Harness,
+        granularity: None,
+        role: None,
+        levels: vec![level("c1")],
+    });
+    for a in &mut s.arms {
+        a.level_assignment.insert("cache".into(), "c1".into());
+    }
+    s.experiment_id = s.experiment_id();
+    s.register(&SpecContext::member_level())
+        .expect("declared cache factor admits the K5 arm");
+}
+
+#[test]
+fn register_retirement_requires_match_shape_and_removal_diff() {
+    use hh_budget::matchspec::CachePolicy;
+    let mut s = spec();
+    s.kind = ExperimentKind::Retirement;
+    s.experiment_id = s.experiment_id();
+
+    // The fixture's `matched_cap`/`cold_start` arms pass the match shape;
+    // an unresolved diff view defers.
+    s.register(&SpecContext::member_level())
+        .expect("retirement shape defers the diff check");
+
+    // A non-single-rule-removal arm pair is refused.
+    let not_diff = SpecContext {
+        retirement_diff: Some(false),
+        ..SpecContext::member_level()
+    };
+    assert!(matches!(
+        s.register(&not_diff),
+        Err(ExperimentRefusal::NotARetirementDiff { .. })
+    ));
+    let is_diff = SpecContext {
+        retirement_diff: Some(true),
+        ..SpecContext::member_level()
+    };
+    s.register(&is_diff).expect("single-rule diff registers");
+
+    // A `natural` cache arm is not the removal test's match shape.
+    let mut s = spec();
+    s.kind = ExperimentKind::Retirement;
+    s.arms[0].match_spec.as_mut().unwrap().cache_policy = CachePolicy::Natural;
+    s.experiment_id = s.experiment_id();
+    assert!(matches!(
+        s.register(&is_diff),
+        Err(ExperimentRefusal::NotARetirementMatch { .. })
     ));
 }

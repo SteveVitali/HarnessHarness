@@ -758,12 +758,19 @@ pub struct CacheCallFact {
 }
 
 /// `expect_cache_state(run-facts, key, static_hash, request_sent_at, est_tokens,
-/// semantics, margin_ms)` — a pure projection (CK-3): `warm` iff a prior
-/// completed same-`(key, static_hash)` call exists whose
+/// semantics, margin_ms, invalidations)` — a pure projection (CK-3): `warm` iff
+/// a prior completed same-`(key, static_hash)` call exists whose
 /// `request_sent + nominal_ms − margin_ms > now` (the lease rule — the earlier
 /// clock wins; TTL runs from request start); `cold{concurrent_sibling}` if a
 /// same-key call opened but has not completed; `uncacheable` below
 /// `min_cacheable_tokens`; `unknown` when semantics/retention are undeclared.
+///
+/// `invalidations` carries the run's committed invalidation events (AC-R-2.3.4-7 —
+/// relower, context edit, compaction, profile/definition version change,
+/// tool-set change, marker-policy change, dialect change): any recorded
+/// invalidation makes the next call's expected state `cold` with the most
+/// recent reason recorded (an invalidation never produces `warm`).
+#[allow(clippy::too_many_arguments)] // the arity is the §5b.4 expectation record's
 pub fn expect_cache_state(
     facts: &[CacheCallFact],
     key: &str,
@@ -772,6 +779,7 @@ pub fn expect_cache_state(
     est_tokens: Option<u64>,
     semantics: &CacheSemantics,
     margin_ms: u64,
+    invalidations: &[MissReason],
 ) -> ExpectedCacheState {
     let unknown = |basis: ExpectedBasis| ExpectedCacheState {
         expected: ExpectedState::Unknown,
@@ -801,6 +809,17 @@ pub fn expect_cache_state(
     ) || retention.is_empty()
     {
         return unknown(empty_basis);
+    }
+    // A committed invalidation dominates the lease arithmetic — the next call
+    // is cold and the reason is recorded (AC-R-2.3.4-7).
+    if let Some(reason) = invalidations.last() {
+        return ExpectedCacheState {
+            expected: ExpectedState::Cold,
+            basis: ExpectedBasis {
+                cold_reason: Some(*reason),
+                ..empty_basis
+            },
+        };
     }
     // The conservative retention bound: the shortest nominal class.
     let nominal_ms = retention.iter().map(|r| r.nominal_ms).min().unwrap_or(0);

@@ -32,7 +32,7 @@ use hh_ontology::control::OutcomeClass;
 use hh_ontology::dimensions::{DimensionId, DimensionKey};
 use hh_ontology::eval::{
     Design, DesignKind, EstimatorSelection, IntervalMethod, MetricValueKind, Pairing,
-    PreRegistration, SeedPolicy,
+    PreRegistration, RoutingPolicy, SeedPolicy,
 };
 use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
 use hh_ontology::participant::ParticipantClass;
@@ -113,6 +113,9 @@ fn design() -> Design {
         registry_snapshot_id: None,
         generators: None,
         resolution: None,
+        routing_policy: RoutingPolicy::FailFast,
+        deviation_policy: None,
+        cache_na_stratified: false,
     }
 }
 
@@ -479,6 +482,8 @@ fn outcome_from_deltas(metric: &str, a: &str, b: &str, deltas: &[(String, i64)])
                 counts: ((0, 0), (0, 0)),
             })
             .collect()],
+        deviation: hh_eval::compare::DeviationReport::default(),
+        outcome_counts: Default::default(),
     }
 }
 

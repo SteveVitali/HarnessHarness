@@ -28,7 +28,8 @@ use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
 use hh_ontology::config::Ref;
 use hh_ontology::control::{CancelledBy, InfraError, InfraErrorFamily, OutcomeClass, StopReason};
 use hh_ontology::eval::{
-    Design, DesignKind, FactorDeclaration, FactorLevel, Pairing, PreRegistration, SeedPolicy,
+    Design, DesignKind, FactorDeclaration, FactorLevel, Pairing, PreRegistration, RoutingPolicy,
+    SeedPolicy,
 };
 use hh_ontology::lab::SplitLabel;
 use hh_ontology::participant::ParticipantClass;
@@ -101,6 +102,7 @@ fn arm(arm_id: &str, level: &str, eval: &str, search: Option<&str>) -> ArmSpec {
         artifact_ref: Ref::new("artifact:x", pinned("artifact.x")),
         limits_enforced: "full".to_string(),
         model_role_table_ref: None,
+        response_cache: None,
     }
 }
 
@@ -152,6 +154,9 @@ fn design() -> Design {
         registry_snapshot_id: Some(pinned("registry.snap")),
         generators: None,
         resolution: None,
+        routing_policy: RoutingPolicy::FailFast,
+        deviation_policy: None,
+        cache_na_stratified: false,
     }
 }
 

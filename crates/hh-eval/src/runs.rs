@@ -133,6 +133,21 @@ pub struct EvalRun {
     /// The task-split hash the run's task belongs to (the
     /// `SplitAssignmentRecord` hash — paired against the pre-registration).
     pub split_hash: Option<String>,
+    /// `routing.deviation` — the run routed off its pre-registered plan (a
+    /// fallback chain fired; ADR-0122 d.5; the report generator never pools
+    /// deviated and clean rows without the design's declared policy —
+    /// AC-R-2.3.2-8).
+    pub routing_deviation: bool,
+    /// `replayed_trajectory` — the run's rows were scored by replaying
+    /// logged trajectories under a substituted model; `compare` refuses
+    /// (`replayed_trajectory`; AC-R-2.3.2-13).
+    pub replayed_trajectory: bool,
+    /// `served_from_cache_count` — the calls a K4/K5 response cache served
+    /// (`served_from_cache` terminals; AC-R-2.3.4-10/-11).
+    pub served_from_cache_count: u64,
+    /// `cache.prefix_hit_ratio` (ppm) — `None` renders `n/a` (unmeasured,
+    /// e.g. `cache_state_visible = unsupported` or hosted usage roles).
+    pub cache_prefix_hit_ratio: Option<i64>,
     /// The projected ledger facts the veto/compliance predicates read.
     pub facts: LedgerFacts,
 }
@@ -261,6 +276,19 @@ impl EvalRun {
         if let Some(h) = &self.split_hash {
             m.insert("split_hash".into(), Json::str(h));
         }
+        if self.routing_deviation {
+            m.insert("routing_deviation".into(), Json::Bool(true));
+        }
+        if self.replayed_trajectory {
+            m.insert("replayed_trajectory".into(), Json::Bool(true));
+        }
+        m.insert(
+            "served_from_cache_count".into(),
+            Json::Int(self.served_from_cache_count as i64),
+        );
+        if let Some(r) = self.cache_prefix_hit_ratio {
+            m.insert("cache_prefix_hit_ratio".into(), Json::Int(r));
+        }
         m.insert("facts".into(), self.facts.to_json());
         Json::Obj(m)
     }
@@ -302,6 +330,10 @@ impl EvalRun {
                 "stratum",
                 "eval_search_spend",
                 "split_hash",
+                "routing_deviation",
+                "replayed_trajectory",
+                "served_from_cache_count",
+                "cache_prefix_hit_ratio",
                 "facts",
             ],
             REC,
@@ -399,6 +431,16 @@ impl EvalRun {
                 .ok_or_else(|| SchemaError::v("stratum", "unknown stratum"))?,
             eval_search_spend: int_at(m, "eval_search_spend", REC)? as u64,
             split_hash: opt_str_at(m, "split_hash")?.map(str::to_string),
+            routing_deviation: match m.get("routing_deviation") {
+                Some(Json::Bool(v)) => *v,
+                _ => false,
+            },
+            replayed_trajectory: match m.get("replayed_trajectory") {
+                Some(Json::Bool(v)) => *v,
+                _ => false,
+            },
+            served_from_cache_count: opt_int_at(m, "served_from_cache_count")?.unwrap_or(0) as u64,
+            cache_prefix_hit_ratio: opt_int_at(m, "cache_prefix_hit_ratio")?,
             facts: LedgerFacts::from_json(member_at(m, "facts", REC)?)?,
         })
     }

@@ -320,6 +320,8 @@ fn request_fixture(endpoint: &str, reservation: Option<&str>) -> InferenceReques
         request_class: RequestClass::Interactive,
         deferred_deadline_ms: None,
         stream: true,
+        substitution_allowed: None,
+        participant_class: None,
         identity: None,
     }
 }
@@ -1378,17 +1380,36 @@ fn expect_cache_state_projection() {
         Some(500),
         &semantics,
         1_000,
+        &[],
     );
     assert_eq!(e.expected, ExpectedState::Warm);
     assert_eq!(e.basis.last_call.as_deref(), Some("mc-0"));
     // Past the window: cold.
-    let e = expect_cache_state(&[prior], "k", "h", 120_000, Some(500), &semantics, 1_000);
+    let e = expect_cache_state(
+        &[prior],
+        "k",
+        "h",
+        120_000,
+        Some(500),
+        &semantics,
+        1_000,
+        &[],
+    );
     assert_eq!(e.expected, ExpectedState::Cold);
     // Below `min_cacheable_tokens`: uncacheable.
-    let e = expect_cache_state(&[], "k", "h", 0, Some(10), &semantics, 1_000);
+    let e = expect_cache_state(&[], "k", "h", 0, Some(10), &semantics, 1_000, &[]);
     assert_eq!(e.expected, ExpectedState::Uncacheable);
     // `uncached` semantics: unknown.
-    let e = expect_cache_state(&[], "k", "h", 0, Some(500), &CacheSemantics::Uncached, 0);
+    let e = expect_cache_state(
+        &[],
+        "k",
+        "h",
+        0,
+        Some(500),
+        &CacheSemantics::Uncached,
+        0,
+        &[],
+    );
     assert_eq!(e.expected, ExpectedState::Unknown);
     // A same-key sibling still open: `cold{concurrent_sibling}`.
     let open = CacheCallFact {
@@ -1401,7 +1422,7 @@ fn expect_cache_state_projection() {
             model_call_id: "mc-open".into(),
         }
     };
-    let e = expect_cache_state(&[open], "k", "h", 5_000, Some(500), &semantics, 1_000);
+    let e = expect_cache_state(&[open], "k", "h", 5_000, Some(500), &semantics, 1_000, &[]);
     assert_eq!(e.expected, ExpectedState::Cold);
     assert_eq!(e.basis.cold_reason, Some(MissReason::ConcurrentSibling));
 }

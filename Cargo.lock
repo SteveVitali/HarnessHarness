@@ -306,6 +306,7 @@ dependencies = [
  "hh-identity",
  "hh-ledger",
  "hh-provenance",
+ "hh-registry",
  "hh-secrets",
  "hh-telemetry",
  "hh-wire",

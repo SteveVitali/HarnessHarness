@@ -84,6 +84,15 @@ pub struct CompiledBundle {
     pub diagnostics: Vec<AssemblyDiagnostic>,
     /// The bound profile chain coordinates (derivation input, recorded for the reader).
     pub profile_chain: Vec<String>,
+    /// `diagnostics.profile_test_report_ref` — the bound leaf profile's
+    /// `ProfileTestReport` ref, present whenever the link gate admitted a
+    /// tested profile (AC-R-2.3.3-13; `None` only under the kernel null
+    /// profile, whose validity is the compiler's own suite — AC-R-2.3.3-14).
+    pub profile_test_report_ref: Option<String>,
+    /// `profile_binding.fallback_used` — `true` when the bound chain came in
+    /// through the explicit `fallback_profile` escape (AC-R-2.3.3-2 records
+    /// `fallback_used`; ADR-0124 §5).
+    pub fallback_used: bool,
 }
 
 /// `seal_outputs(linked, plan, validation, surface, lower_diags, artefacts, losses)
@@ -246,6 +255,8 @@ pub fn seal_outputs(
             .iter()
             .map(crate::profile::profile_coordinate)
             .collect(),
+        profile_test_report_ref: linked.profile.test_report_ref.clone(),
+        fallback_used: linked.profile.is_fallback,
     };
 
     // bundle_id = idp/1 over canonical outputs (the bundle minus `bundle_id`).

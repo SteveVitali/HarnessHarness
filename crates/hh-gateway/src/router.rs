@@ -1031,3 +1031,128 @@ pub fn error_action(policy: &RoutingPolicy, class: &ModelErrorClass) -> ErrorAct
         .cloned()
         .unwrap_or(ErrorAction::GiveUp)
 }
+
+/// `RerouteOrderError` — the AC-R-2.3.2-4 ordering violation (typed, never a
+/// warning).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RerouteOrderError {
+    /// A `model.rerouted` has no preceding `model.call.attempt.failed` for
+    /// the call.
+    NoFailedAttempt {
+        /// The call.
+        model_call_id: String,
+    },
+    /// A cross-profile reroute (`relowered = true`) has no
+    /// `model.surface.relowered` between the failure and the reroute.
+    MissingRelower {
+        /// The call.
+        model_call_id: String,
+    },
+    /// A same-profile reroute (`relowered = false`) is preceded by a
+    /// `model.surface.relowered` — a relower without a profile boundary
+    /// crossing is a lie.
+    UnexpectedRelower {
+        /// The call.
+        model_call_id: String,
+    },
+    /// No `model.call.attempt.started` follows the `model.rerouted` row.
+    MissingRestart {
+        /// The call.
+        model_call_id: String,
+    },
+    /// The `model.surface.relowered` row lacks the derivation members
+    /// (`old_profile_ref`/`new_profile_ref`/`reason`).
+    MissingDerivation {
+        /// The call.
+        model_call_id: String,
+    },
+}
+
+impl std::fmt::Display for RerouteOrderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RerouteOrderError::NoFailedAttempt { model_call_id } => {
+                write!(f, "NoFailedAttempt: {model_call_id}")
+            }
+            RerouteOrderError::MissingRelower { model_call_id } => {
+                write!(f, "MissingRelower: {model_call_id}")
+            }
+            RerouteOrderError::UnexpectedRelower { model_call_id } => {
+                write!(f, "UnexpectedRelower: {model_call_id}")
+            }
+            RerouteOrderError::MissingRestart { model_call_id } => {
+                write!(f, "MissingRestart: {model_call_id}")
+            }
+            RerouteOrderError::MissingDerivation { model_call_id } => {
+                write!(f, "MissingDerivation: {model_call_id}")
+            }
+        }
+    }
+}
+impl std::error::Error for RerouteOrderError {}
+
+/// `check_reroute_order(events, model_call_id)` — the AC-R-2.3.2-4 ordering
+/// oracle over emitted `(seq, class, payload)` rows: for every
+/// `model.rerouted` of the call the sequence must read
+/// `model.call.attempt.failed` → (optional `context.compaction.*` under the
+/// old profile) → `model.surface.relowered{old_profile_ref, new_profile_ref,
+/// reason}` → `model.rerouted{relowered = true}` → `model.call.attempt.started`
+/// in `seq` order; a same-profile reroute (`relowered = false`) carries no
+/// relower event. Returns the first violation.
+pub fn check_reroute_order(
+    events: &[(u64, String, Json)],
+    model_call_id: &str,
+) -> Result<(), RerouteOrderError> {
+    let rows: Vec<(u64, &str, &Json)> = events
+        .iter()
+        .filter(|(_, _, p)| p.get("model_call_id").and_then(Json::as_str) == Some(model_call_id))
+        .map(|(seq, class, p)| (*seq, class.as_str(), p))
+        .collect();
+    for (seq, class, p) in &rows {
+        if *class != "model.rerouted" {
+            continue;
+        }
+        let relowered = matches!(p.get("relowered"), Some(Json::Bool(true)));
+        let prior: Vec<&(u64, &str, &Json)> = rows.iter().take_while(|(s, _, _)| s < seq).collect();
+        let failed_at = prior
+            .iter()
+            .rposition(|(_, c, _)| *c == "model.call.attempt.failed")
+            .ok_or_else(|| RerouteOrderError::NoFailedAttempt {
+                model_call_id: model_call_id.to_string(),
+            })?;
+        let relower = prior[failed_at + 1..]
+            .iter()
+            .find(|(_, c, _)| *c == "model.surface.relowered");
+        match (relowered, relower) {
+            (true, None) => {
+                return Err(RerouteOrderError::MissingRelower {
+                    model_call_id: model_call_id.to_string(),
+                });
+            }
+            (false, Some(_)) => {
+                return Err(RerouteOrderError::UnexpectedRelower {
+                    model_call_id: model_call_id.to_string(),
+                });
+            }
+            (true, Some((_, _, rp))) => {
+                for member in ["old_profile_ref", "new_profile_ref", "reason"] {
+                    if rp.get(member).is_none() {
+                        return Err(RerouteOrderError::MissingDerivation {
+                            model_call_id: model_call_id.to_string(),
+                        });
+                    }
+                }
+            }
+            (false, None) => {}
+        }
+        if !rows
+            .iter()
+            .any(|(s, c, _)| s > seq && *c == "model.call.attempt.started")
+        {
+            return Err(RerouteOrderError::MissingRestart {
+                model_call_id: model_call_id.to_string(),
+            });
+        }
+    }
+    Ok(())
+}

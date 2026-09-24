@@ -11,14 +11,29 @@ use hh_compiler::{CompileError, CompileInputs};
 use hh_wire::json::Json;
 
 /// The in-binary `ProfileView` over the carried profile records.
-struct CarriedProfiles(std::collections::BTreeMap<String, hh_compiler::profile::ModelProfile>);
+struct CarriedProfiles {
+    profiles: std::collections::BTreeMap<String, hh_compiler::profile::ModelProfile>,
+    reports: std::collections::BTreeMap<String, hh_compiler::profile_test::ProfileTestReport>,
+}
 
 impl ProfileView for CarriedProfiles {
     fn profile(&self, coordinate: &str) -> Option<hh_compiler::profile::ModelProfile> {
-        self.0.get(coordinate).cloned().or_else(|| {
-            self.0
+        self.profiles.get(coordinate).cloned().or_else(|| {
+            self.profiles
                 .values()
                 .find(|p| p.content_hash == coordinate)
+                .cloned()
+        })
+    }
+
+    fn test_report(
+        &self,
+        coordinate: &str,
+    ) -> Option<hh_compiler::profile_test::ProfileTestReport> {
+        self.reports.get(coordinate).cloned().or_else(|| {
+            self.reports
+                .values()
+                .find(|r| r.profile_hash == coordinate)
                 .cloned()
         })
     }
@@ -70,6 +85,9 @@ fn error_json(e: &CompileError) -> Json {
                 hh_compiler::LinkErrorKind::VersionConflict => "LinkError{version_conflict}",
                 hh_compiler::LinkErrorKind::MissingDebtRecord => "LinkError{missing_debt_record}",
                 hh_compiler::LinkErrorKind::UnknownTarget => "LinkError{unknown_target}",
+                hh_compiler::LinkErrorKind::ProfileUntested => "LinkError{profile_untested}",
+                hh_compiler::LinkErrorKind::ProfileInvalid => "LinkError{profile_invalid}",
+                hh_compiler::LinkErrorKind::CapabilityDrift => "LinkError{capability_drift}",
             },
             detail.clone(),
             diagnostics.clone(),
@@ -149,13 +167,22 @@ fn run() -> Result<Json, CompileError> {
         document: doc,
     };
 
-    let profiles = CarriedProfiles(
-        inputs
+    let mut report_map: std::collections::BTreeMap<
+        String,
+        hh_compiler::profile_test::ProfileTestReport,
+    > = std::collections::BTreeMap::new();
+    for r in &inputs.test_reports {
+        report_map.insert(r.profile_ref.clone(), r.clone());
+        report_map.insert(r.profile_hash.clone(), r.clone());
+    }
+    let profiles = CarriedProfiles {
+        reports: report_map,
+        profiles: inputs
             .profiles
             .iter()
             .map(|p| (hh_compiler::profile::profile_coordinate(p), p.clone()))
             .collect(),
-    );
+    };
     let variants = CarriedVariants(inputs.variants.iter().cloned().collect());
     let catalog = PinnedCatalog(hh_assembly::Stage1Catalog::stage1());
     let kernel = kernel_provenance();
