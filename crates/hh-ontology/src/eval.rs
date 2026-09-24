@@ -1692,6 +1692,102 @@ pub struct Design {
     /// The declared `fractional_factorial` resolution (mandatory on
     /// `fractional_factorial`; refused on other kinds).
     pub resolution: Option<FractionalResolution>,
+    /// `routing_policy` — `fail_fast` (the pre-registered default: every
+    /// role's `fallback_chain = []`, so a provider failure yields
+    /// `outcome_class = infrastructure_failure` rather than a silent model
+    /// change — AC-R-2.3.2-9; ADR-0122 d.5) or `route{policy_ref}` naming
+    /// the routing policy whose fallback chains the arms bind.
+    pub routing_policy: RoutingPolicy,
+    /// `deviation_policy ∈ {exclude_deviated, stratify, pool_with_flag}` —
+    /// the pre-registered pooling policy for `routing.deviation` rows
+    /// (AC-R-2.3.2-8; ADR-0122 d.5); `None` = no declared policy, and the
+    /// report generator refuses to pool deviated and non-deviated rows.
+    pub deviation_policy: Option<DeviationPolicy>,
+    /// `cache_na_stratified` — the design declares that cache metrics
+    /// stratify `n/a` rows (admits a `natural` arm on a dialect with
+    /// `cache_state_visible = unsupported`; AC-R-2.3.4-10; ADR-0128 d.5).
+    pub cache_na_stratified: bool,
+}
+
+/// `routing_policy` — the design's declared routing posture (§5h.2;
+/// ADR-0122 d.5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoutingPolicy {
+    /// `fail_fast` — every role's `fallback_chain = []`; a provider failure
+    /// surfaces as `outcome_class = infrastructure_failure`, never a silent
+    /// model change. The pre-registered default.
+    FailFast,
+    /// `route{policy_ref}` — the design binds a named routing policy (its
+    /// fallback chains may produce `routing.deviation` rows).
+    Route(String),
+}
+
+impl RoutingPolicy {
+    /// The canonical JSON form.
+    pub fn to_json(&self) -> Json {
+        match self {
+            RoutingPolicy::FailFast => Json::str("fail_fast"),
+            RoutingPolicy::Route(r) => Json::obj([("route", Json::str(r))]),
+        }
+    }
+
+    /// Strict decode; `None` member input decodes the `fail_fast` default.
+    pub fn from_json(j: Option<&Json>) -> Result<RoutingPolicy, EvalError> {
+        match j {
+            None | Some(Json::Null) => Ok(RoutingPolicy::FailFast),
+            Some(Json::Str(s)) if s == "fail_fast" => Ok(RoutingPolicy::FailFast),
+            Some(Json::Obj(m)) if m.len() == 1 => {
+                if let Some(Json::Str(r)) = m.get("route") {
+                    Ok(RoutingPolicy::Route(r.clone()))
+                } else {
+                    Err(EvalError::SchemaViolation {
+                        member: "routing_policy".into(),
+                        detail: "expected `route{policy_ref}`".into(),
+                    })
+                }
+            }
+            Some(_) => Err(EvalError::SchemaViolation {
+                member: "routing_policy".into(),
+                detail: "expected `fail_fast` or `route{policy_ref}`".into(),
+            }),
+        }
+    }
+}
+
+/// `deviation_policy ∈ {exclude_deviated, stratify, pool_with_flag}` — the
+/// pre-registered pooling policy for `routing.deviation` rows (ADR-0122 d.5;
+/// AC-R-2.3.2-8). Absent = the report generator refuses to pool.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviationPolicy {
+    /// Deviated runs are excluded from the pooled estimate (counted beside —
+    /// never silently dropped).
+    ExcludeDeviated,
+    /// The comparison stratifies: one estimate per deviation stratum, no
+    /// pooled estimate.
+    Stratify,
+    /// Deviated and non-deviated rows pool under an explicit flag.
+    PoolWithFlag,
+}
+
+impl DeviationPolicy {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DeviationPolicy::ExcludeDeviated => "exclude_deviated",
+            DeviationPolicy::Stratify => "stratify",
+            DeviationPolicy::PoolWithFlag => "pool_with_flag",
+        }
+    }
+
+    /// Parse a canonical spelling; `None` on any other input.
+    pub fn parse(s: &str) -> Option<DeviationPolicy> {
+        match s {
+            "exclude_deviated" => Some(DeviationPolicy::ExcludeDeviated),
+            "stratify" => Some(DeviationPolicy::Stratify),
+            "pool_with_flag" => Some(DeviationPolicy::PoolWithFlag),
+            _ => None,
+        }
+    }
 }
 
 /// `Design`/`PreRegistration` schema failures (typed — never a warning).
@@ -2072,6 +2168,13 @@ impl Design {
         if let Some(r) = &self.resolution {
             m.insert("resolution".into(), Json::str(r.as_str()));
         }
+        m.insert("routing_policy".into(), self.routing_policy.to_json());
+        if let Some(d) = &self.deviation_policy {
+            m.insert("deviation_policy".into(), Json::str(d.as_str()));
+        }
+        if self.cache_na_stratified {
+            m.insert("cache_na_stratified".into(), Json::Bool(true));
+        }
         Json::Obj(m)
     }
 
@@ -2094,6 +2197,9 @@ impl Design {
                 "registry_snapshot_id",
                 "generators",
                 "resolution",
+                "routing_policy",
+                "deviation_policy",
+                "cache_na_stratified",
             ],
             REC,
         )?;
@@ -2162,6 +2268,28 @@ impl Design {
                         detail: format!("unknown resolution `{s}`"),
                     }
                 })?),
+            },
+            routing_policy: RoutingPolicy::from_json(m.get("routing_policy"))?,
+            deviation_policy: match opt_str_at(m, "deviation_policy")? {
+                None => None,
+                Some(s) => {
+                    Some(
+                        DeviationPolicy::parse(s).ok_or_else(|| EvalError::SchemaViolation {
+                            member: "deviation_policy".into(),
+                            detail: format!("unknown deviation policy `{s}`"),
+                        })?,
+                    )
+                }
+            },
+            cache_na_stratified: match m.get("cache_na_stratified") {
+                None | Some(Json::Null) => false,
+                Some(Json::Bool(b)) => *b,
+                Some(_) => {
+                    return Err(EvalError::SchemaViolation {
+                        member: "cache_na_stratified".into(),
+                        detail: "must be a bool".into(),
+                    })
+                }
             },
         })
     }

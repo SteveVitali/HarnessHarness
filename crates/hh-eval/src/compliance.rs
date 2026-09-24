@@ -24,6 +24,11 @@
 
 use std::collections::BTreeSet;
 
+use hh_budget::attribution::ChargedTo;
+use hh_ontology::compliance::{Detector, NaReason};
+use hh_ontology::eval::MetricValueKind;
+use hh_ontology::participant::ParticipantClass;
+
 use crate::facts::LedgerFacts;
 use crate::stats::PPM;
 
@@ -43,6 +48,9 @@ pub mod names {
     pub const INTERVENTION_RATE: &str = "intervention_rate";
     /// `opacity_dynamic`.
     pub const OPACITY_DYNAMIC: &str = "opacity_dynamic";
+    /// `profile.rule.followed_rate` (per-rule — keyed on the rule id;
+    /// AC-R-2.3.3-6).
+    pub const PROFILE_RULE_FOLLOWED_RATE: &str = "profile.rule.followed_rate";
 }
 
 /// A `(numerator, denominator)` pair — the raw material every rate reports
@@ -160,6 +168,124 @@ pub fn intervention_rate(f: &LedgerFacts) -> RateParts {
     }
 }
 
+/// One declared profile-rule detector: the per-rule denominator's
+/// `n/a{no_detector}`/`n/a{class}` disposition (AC-R-2.3.3-6). Mirrors the
+/// compiler's `ComplianceDetector` at the projection boundary — hh-eval does
+/// not depend on hh-compiler.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuleDetector {
+    /// The rule the detector follows (the join key).
+    pub rule_id: String,
+    /// The detector class (`None` when the rule declares no detector — the
+    /// rate renders `n/a{no_detector}`).
+    pub detector: Option<Detector>,
+    /// The participant class the detector runs under (`Hosted` rows render
+    /// `n/a{class}` — `ParticipantClass::hosted`-gated observability).
+    pub participant_class: Option<ParticipantClass>,
+    /// The predicate the followed verdict evaluates (the artefact↔rule join
+    /// on `context.artefact.followed` rows).
+    pub followed_predicate_ref: String,
+    /// The judge calibration record ref; required for a `Judged` detector —
+    /// an uncalibrated judge renders `n/a{no_detector}`.
+    pub calibration_ref: Option<String>,
+}
+
+/// The per-rule rate row: the value plus the charge/attribution the spec
+/// attaches to `profile.rule.followed_rate` (instrument charge; a `Judged`
+/// detector additionally records its calibration ref).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileRuleRate {
+    /// The rule id.
+    pub rule_id: String,
+    /// The metric value — `Int(ppm)` or `na{...}`, never a bare 0.
+    pub value: MetricValueKind,
+    /// The declared detector class that produced the rate (`None` under
+    /// `n/a{no_detector}`).
+    pub detector: Option<Detector>,
+    /// The charge class — `Instrument` whenever a rate is produced
+    /// (`profile.rule.followed_rate` is `charged_to = instrument`).
+    pub charged_to: Option<ChargedTo>,
+    /// The judge calibration ref (echoed for `Judged` rates).
+    pub calibration_ref: Option<String>,
+    /// The raw `(followed, delivered)` pair the ppm came from.
+    pub parts: RateParts,
+}
+
+/// `profile.rule.followed_rate` — the per-rule compliance rate over the
+/// `delivered → activated → verification.artefact.followed` chain:
+/// `|delivered ∩ activated ∩ followed| / |delivered|` keyed on `rule_id`
+/// (`followed_predicate_ref` joins the followed rows). `n/a{no_detector}`
+/// for rules without a detector (or an uncalibrated judge);
+/// `n/a{class}` when the declared participant class is `Hosted`;
+/// `n/a{estimator_undefined}` on a 0/0 denominator — never 0.
+pub fn profile_rule_followed_rates(
+    f: &LedgerFacts,
+    detectors: &[RuleDetector],
+) -> Vec<ProfileRuleRate> {
+    detectors
+        .iter()
+        .map(|d| {
+            let na = |reason: NaReason| ProfileRuleRate {
+                rule_id: d.rule_id.clone(),
+                value: MetricValueKind::Na(reason),
+                detector: d.detector,
+                charged_to: None,
+                calibration_ref: d.calibration_ref.clone(),
+                parts: RateParts { num: 0, den: 0 },
+            };
+            let Some(detector) = d.detector else {
+                return na(NaReason::NoDetector);
+            };
+            if detector == Detector::Judged && d.calibration_ref.is_none() {
+                return na(NaReason::NoDetector);
+            }
+            if d.participant_class == Some(ParticipantClass::Hosted) {
+                return na(NaReason::Class);
+            }
+            let in_rule = |a: &crate::facts::ArtefactRow| {
+                a.rule_id.as_deref() == Some(d.rule_id.as_str())
+                    || a.predicate_ref.as_deref() == Some(d.followed_predicate_ref.as_str())
+            };
+            let delivered: BTreeSet<&str> = f
+                .artefacts_delivered
+                .iter()
+                .filter(|a| in_rule(a))
+                .map(|a| a.artefact_id.as_str())
+                .collect();
+            let activated: BTreeSet<&str> = f
+                .artefacts_activated
+                .iter()
+                .map(|a| a.artefact_id.as_str())
+                .collect();
+            let followed: BTreeSet<&str> = f
+                .artefacts_followed
+                .iter()
+                .filter(|a| in_rule(a))
+                .map(|a| a.artefact_id.as_str())
+                .collect();
+            let parts = RateParts {
+                num: delivered
+                    .iter()
+                    .filter(|id| activated.contains(*id) && followed.contains(*id))
+                    .count() as u64,
+                den: delivered.len() as u64,
+            };
+            let value = match parts.ppm() {
+                Some(ppm) => MetricValueKind::Decimal(ppm),
+                None => MetricValueKind::Na(NaReason::EstimatorUndefined),
+            };
+            ProfileRuleRate {
+                rule_id: d.rule_id.clone(),
+                value,
+                detector: Some(detector),
+                charged_to: Some(ChargedTo::Instrument),
+                calibration_ref: d.calibration_ref.clone(),
+                parts,
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,6 +296,15 @@ mod tests {
             artefact_id: id.into(),
             delivery_id: None,
             detector: None,
+            rule_id: None,
+            predicate_ref: None,
+        }
+    }
+
+    fn ruled_art(id: &str, rule: &str) -> ArtefactRow {
+        ArtefactRow {
+            rule_id: Some(rule.into()),
+            ..art(id)
         }
     }
 
@@ -213,5 +348,73 @@ mod tests {
         ];
         f.permission_denials = ["e2".to_string()].into_iter().collect();
         assert_eq!(intervention_rate(&f).ppm(), Some(500_000));
+    }
+
+    #[test]
+    fn profile_rule_followed_rate_semantics() {
+        let f = LedgerFacts {
+            artefacts_delivered: vec![
+                ruled_art("a1", "R1"),
+                ruled_art("a2", "R1"),
+                ruled_art("b1", "R2"),
+                art("unruled"),
+            ],
+            artefacts_activated: vec![ruled_art("a1", "R1"), ruled_art("a2", "R1")],
+            artefacts_followed: vec![ruled_art("a1", "R1")],
+            ..LedgerFacts::default()
+        };
+        let detectors = vec![
+            RuleDetector {
+                rule_id: "R1".into(),
+                detector: Some(Detector::Deterministic),
+                participant_class: None,
+                followed_predicate_ref: "P".into(),
+                calibration_ref: None,
+            },
+            RuleDetector {
+                rule_id: "R2".into(),
+                detector: Some(Detector::Deterministic),
+                participant_class: Some(ParticipantClass::Hosted),
+                followed_predicate_ref: "P".into(),
+                calibration_ref: None,
+            },
+            RuleDetector {
+                rule_id: "R3".into(),
+                detector: None,
+                participant_class: None,
+                followed_predicate_ref: "P".into(),
+                calibration_ref: None,
+            },
+            RuleDetector {
+                rule_id: "R4".into(),
+                detector: Some(Detector::Judged),
+                participant_class: None,
+                followed_predicate_ref: "P".into(),
+                calibration_ref: None,
+            },
+        ];
+        let rates = profile_rule_followed_rates(&f, &detectors);
+        // R1: 1 of 2 delivered followed → 500_000 ppm, instrument charge.
+        assert_eq!(rates[0].value, MetricValueKind::Decimal(500_000));
+        assert_eq!(rates[0].charged_to, Some(ChargedTo::Instrument));
+        assert_eq!(rates[0].parts, RateParts { num: 1, den: 2 });
+        // R2: hosted class → n/a{class}.
+        assert_eq!(rates[1].value, MetricValueKind::Na(NaReason::Class));
+        // R3: no detector → n/a{no_detector}.
+        assert_eq!(rates[2].value, MetricValueKind::Na(NaReason::NoDetector));
+        // R4: uncalibrated judge → n/a{no_detector}.
+        assert_eq!(rates[3].value, MetricValueKind::Na(NaReason::NoDetector));
+        // Predicate-ref join: a followed row naming only the predicate counts.
+        let f2 = LedgerFacts {
+            artefacts_delivered: vec![ruled_art("a1", "R1")],
+            artefacts_activated: vec![art("a1")],
+            artefacts_followed: vec![ArtefactRow {
+                predicate_ref: Some("P".into()),
+                ..art("a1")
+            }],
+            ..LedgerFacts::default()
+        };
+        let rates2 = profile_rule_followed_rates(&f2, &detectors[..1]);
+        assert_eq!(rates2[0].value, MetricValueKind::Decimal(1_000_000));
     }
 }

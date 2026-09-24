@@ -3235,6 +3235,10 @@ fn eval_run_json(arm: &str, task: &str, rep: u64, pass: bool) -> Json {
             .collect(),
         stratum: ContaminationStratum::PrivateHeldOut,
         eval_search_spend: 0,
+        routing_deviation: false,
+        replayed_trajectory: false,
+        served_from_cache_count: 0,
+        cache_prefix_hit_ratio: None,
         split_hash: Some("sha256:split-1".into()),
         facts: Default::default(),
     };
@@ -3244,7 +3248,9 @@ fn eval_run_json(arm: &str, task: &str, rep: u64, pass: bool) -> Json {
 /// The shared compare params: two arms over tasks t1/t2, paired design,
 /// matched-cap budgets on `model_calls`.
 fn eval_compare_params() -> Json {
-    use hh_ontology::eval::{Design, DesignKind, Pairing, PreRegistration, SeedPolicy};
+    use hh_ontology::eval::{
+        Design, DesignKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
+    };
     use hh_ontology::DimensionId;
     let design = Design {
         id: "design-1".into(),
@@ -3272,6 +3278,9 @@ fn eval_compare_params() -> Json {
         registry_snapshot_id: None,
         generators: None,
         resolution: None,
+        routing_policy: RoutingPolicy::FailFast,
+        deviation_policy: None,
+        cache_na_stratified: false,
     };
     let spec = hh_budget::matchspec::MatchSpec::matched_cap(&[DimensionId::ModelCalls]).to_json();
     let caps = Json::obj([(DimensionId::ModelCalls.as_str(), Json::Int(100))]);
@@ -3439,6 +3448,7 @@ fn s34c_arm(id: &str, level: &str, eval: &str) -> hh_lab::experiment::ArmSpec {
         artifact_ref: hh_ontology::config::Ref::new("artifact:x", "sha256:ee55"),
         limits_enforced: "full".into(),
         model_role_table_ref: None,
+        response_cache: None,
     }
 }
 
@@ -3446,7 +3456,9 @@ fn s34c_arm(id: &str, level: &str, eval: &str) -> hh_lab::experiment::ArmSpec {
 /// `Paired` design and a `task_success` primary metric.
 fn s34c_spec() -> hh_lab::experiment::ExperimentSpec {
     use hh_lab::experiment::*;
-    use hh_ontology::eval::{Design, DesignKind, Pairing, PreRegistration, SeedPolicy};
+    use hh_ontology::eval::{
+        Design, DesignKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
+    };
     use hh_ontology::lab::SplitLabel;
     use hh_ontology::participant::ParticipantClass;
     let seed = || SeedPolicy {
@@ -3480,6 +3492,9 @@ fn s34c_spec() -> hh_lab::experiment::ExperimentSpec {
             registry_snapshot_id: None,
             generators: None,
             resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
         },
         pre_registration: Some(prereg()),
         factors: vec![FactorSpec {

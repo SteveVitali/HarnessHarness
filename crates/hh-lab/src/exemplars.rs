@@ -23,7 +23,8 @@ use hh_budget::pricing::PricingTableRef;
 use hh_budget::MatchMode;
 use hh_ontology::config::Ref;
 use hh_ontology::eval::{
-    Design, DesignKind, FactorDeclaration, FactorLevel, Pairing, PreRegistration, SeedPolicy,
+    Design, DesignKind, FactorDeclaration, FactorLevel, Pairing, PreRegistration, RoutingPolicy,
+    SeedPolicy,
 };
 use hh_ontology::lab::SplitLabel;
 use hh_ontology::participant::{Granularity, ParticipantClass};
@@ -174,6 +175,7 @@ fn arm(
         artifact_ref: artifact.clone(),
         limits_enforced: "full".to_string(),
         model_role_table_ref: None,
+        response_cache: None,
     }
 }
 
@@ -303,6 +305,9 @@ pub fn compaction_family_v1(
             registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
             generators: None,
             resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
         },
         pre_registration: Some(prereg),
         factors: vec![
@@ -506,6 +511,9 @@ pub fn control_strategy_family_v1(
             registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
             generators: None,
             resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
         },
         pre_registration: Some(prereg),
         factors: vec![

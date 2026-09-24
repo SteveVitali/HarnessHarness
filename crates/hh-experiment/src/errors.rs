@@ -150,6 +150,8 @@ pub fn refusal_code(r: &ExperimentRefusal) -> &'static str {
         ExperimentRefusal::ProfilePinnedAcrossProfiles { .. } => "ProfilePinnedAcrossProfiles",
         ExperimentRefusal::DependsOnDriftedCapability { .. } => "DependsOnDriftedCapability",
         ExperimentRefusal::NotARetirementDiff { .. } => "NotARetirementDiff",
+        ExperimentRefusal::NotARetirementMatch { .. } => "NotARetirementMatch",
+        ExperimentRefusal::PreRegistrationInvalid { .. } => "PreRegistrationInvalid",
         ExperimentRefusal::AdaptiveOutsideSearch { .. } => "AdaptiveOutsideSearch",
         ExperimentRefusal::Schema(_) => "SchemaViolation",
     }

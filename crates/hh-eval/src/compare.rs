@@ -33,8 +33,8 @@ use hh_budget::matchspec::{ArmSpec, MatchMode};
 use hh_ontology::compliance::{MetricDeclaration, NaReason};
 use hh_ontology::control::OutcomeClass;
 use hh_ontology::eval::{
-    BootstrapPairedMethod, Design, EstimatorSelection, IntervalMethod, LatticeValue,
-    MetricValueKind, Pairing, ReplicateReducer,
+    BootstrapPairedMethod, Design, DeviationPolicy, Direction, EstimatorSelection, IntervalMethod,
+    LatticeValue, MetricValueKind, Pairing, ReplicateReducer, RoutingPolicy,
 };
 use hh_ontology::lab::{ContaminationStratum, SplitLabel};
 use hh_wire::Json;
@@ -93,6 +93,24 @@ pub enum CompareError {
         /// The detail.
         detail: String,
     },
+    /// A compared run was scored by replaying logged trajectories under a
+    /// substituted model — `ComparisonReport` refuses (`replayed_trajectory`;
+    /// AC-R-2.3.2-13).
+    ReplayedTrajectory {
+        /// The offending run.
+        run_id: String,
+    },
+    /// A `routing.deviation` run under `design.routing_policy = fail_fast` —
+    /// the design forbids reroutes (every role's `fallback_chain = []`), so a
+    /// deviated row contradicts the pre-registration (AC-R-2.3.2-9).
+    DeviationUnderFailFast {
+        /// The offending run.
+        run_id: String,
+    },
+    /// The compared runs mix `routing.deviation = true`/`false` and the
+    /// design declares no `deviation_policy` — pooling is refused, never
+    /// silent (AC-R-2.3.2-8).
+    UnstratifiedDeviation,
 }
 
 impl std::fmt::Display for CompareError {
@@ -113,6 +131,18 @@ impl std::fmt::Display for CompareError {
             CompareError::ContrastUndefined { detail } => {
                 write!(f, "contrast undefined: {detail}")
             }
+            CompareError::ReplayedTrajectory { run_id } => write!(
+                f,
+                "replayed_trajectory: run {run_id} scored under a substituted model"
+            ),
+            CompareError::DeviationUnderFailFast { run_id } => write!(
+                f,
+                "routing.deviation on run {run_id} under routing_policy = fail_fast"
+            ),
+            CompareError::UnstratifiedDeviation => write!(
+                f,
+                "deviated and clean rows pooled with no declared deviation_policy"
+            ),
         }
     }
 }
@@ -216,10 +246,50 @@ impl TaskEffect {
 /// tables' content addresses are the reports' `per_task_effects_ref`).
 #[derive(Debug, Clone)]
 pub struct CompareOutcome {
-    /// One `ComparisonReport` per metric (every claim is labelled).
+    /// One `ComparisonReport` per metric (every claim is labelled). Empty
+    /// under `deviation_policy = stratify` — the stratified estimates ride
+    /// `deviation.strata` and no pooled estimate exists.
     pub reports: Vec<ComparisonReport>,
     /// The per-task effect tables, one per metric (parallel to `reports`).
     pub per_task: Vec<Vec<TaskEffect>>,
+    /// The `routing.deviation` accounting (AC-R-2.3.2-8) — the declared
+    /// policy, the excluded run ids, and the per-stratum outcomes under
+    /// `stratify`.
+    pub deviation: DeviationReport,
+    /// `arm → outcome_class → count` — the stratified outcome counts
+    /// (the `infrastructure_failure` rows are the outage counts a
+    /// `fail_fast` design's report shows — AC-R-2.3.2-9).
+    pub outcome_counts: BTreeMap<String, BTreeMap<String, u64>>,
+}
+
+/// The `routing.deviation` report half of a [`CompareOutcome`].
+#[derive(Debug, Clone, Default)]
+pub struct DeviationReport {
+    /// The design's declared `deviation_policy` (absent = the comparison
+    /// refused pooling — `compare` returns `UnstratifiedDeviation` before
+    /// an outcome exists, so this is always `Some` when deviations mixed).
+    pub policy: Option<DeviationPolicy>,
+    /// `arm → (deviated, total)` run counts — always populated.
+    pub arm_counts: BTreeMap<String, (u64, u64)>,
+    /// The deviated run ids excluded under `exclude_deviated` (counted
+    /// beside — never silently dropped).
+    pub excluded_runs: Vec<String>,
+    /// `true` when deviated and clean rows pooled under `pool_with_flag`.
+    pub pooled_with_flag: bool,
+    /// The per-stratum outcomes under `stratify` — one per deviation value
+    /// present; `outcome = None` on a stratum one arm contributes no rows
+    /// to (unpaired — the stratum is recorded, never dropped).
+    pub strata: Vec<StratumOutcome>,
+}
+
+/// One deviation stratum under `deviation_policy = stratify`.
+#[derive(Debug, Clone)]
+pub struct StratumOutcome {
+    /// The stratum's deviation value.
+    pub deviated: bool,
+    /// The stratum's comparison — `None` when an arm has no rows in the
+    /// stratum (unpaired; recorded, not dropped).
+    pub outcome: Option<Box<CompareOutcome>>,
 }
 
 /// A `MetricValueKind` → numeric projection for paired deltas: `bool` and
@@ -364,6 +434,110 @@ pub fn compare(input: &CompareInput) -> Result<CompareOutcome, CompareError> {
             return Err(CompareError::ExploratoryRun {
                 run_id: r.run_id.clone(),
             });
+        }
+        // AC-R-2.3.2-13 — a run scored by replaying logged trajectories
+        // under a substituted model never enters a `ComparisonReport`.
+        if r.replayed_trajectory {
+            return Err(CompareError::ReplayedTrajectory {
+                run_id: r.run_id.clone(),
+            });
+        }
+        // AC-R-2.3.2-9 — `fail_fast` forbids reroutes; a deviated run under
+        // it contradicts the pre-registered design.
+        if input.design.routing_policy == RoutingPolicy::FailFast && r.routing_deviation {
+            return Err(CompareError::DeviationUnderFailFast {
+                run_id: r.run_id.clone(),
+            });
+        }
+    }
+
+    // ── 2b. `routing.deviation` handling (AC-R-2.3.2-8) ────────────────
+    let mut deviation = DeviationReport {
+        policy: input.design.deviation_policy,
+        ..DeviationReport::default()
+    };
+    for (arm, runs) in [
+        (input.arm_a.to_string(), &runs_a),
+        (input.arm_b.to_string(), &runs_b),
+    ] {
+        deviation.arm_counts.insert(
+            arm,
+            (
+                runs.iter().filter(|r| r.routing_deviation).count() as u64,
+                runs.len() as u64,
+            ),
+        );
+    }
+    let deviated = runs_a
+        .iter()
+        .chain(runs_b.iter())
+        .filter(|r| r.routing_deviation)
+        .count();
+    let clean = runs_a.len() + runs_b.len() - deviated;
+    let mut runs_a = runs_a;
+    let mut runs_b = runs_b;
+    if deviated > 0 && clean > 0 {
+        match input.design.deviation_policy {
+            None => return Err(CompareError::UnstratifiedDeviation),
+            Some(DeviationPolicy::ExcludeDeviated) => {
+                for r in runs_a
+                    .iter()
+                    .chain(runs_b.iter())
+                    .filter(|r| r.routing_deviation)
+                {
+                    deviation.excluded_runs.push(r.run_id.clone());
+                }
+                runs_a.retain(|r| !r.routing_deviation);
+                runs_b.retain(|r| !r.routing_deviation);
+                if runs_a.is_empty() {
+                    return Err(CompareError::NoRuns {
+                        arm_id: input.arm_a.into(),
+                    });
+                }
+                if runs_b.is_empty() {
+                    return Err(CompareError::NoRuns {
+                        arm_id: input.arm_b.into(),
+                    });
+                }
+            }
+            Some(DeviationPolicy::PoolWithFlag) => {
+                deviation.pooled_with_flag = true;
+            }
+            Some(DeviationPolicy::Stratify) => {
+                // No pooled estimate — one outcome per deviation stratum.
+                for d in [false, true] {
+                    let in_stratum: Vec<EvalRun> = input
+                        .runs
+                        .iter()
+                        .filter(|r| r.routing_deviation == d)
+                        .cloned()
+                        .collect();
+                    if in_stratum.is_empty() {
+                        continue;
+                    }
+                    let has_a = in_stratum.iter().any(|r| r.arm_id == input.arm_a);
+                    let has_b = in_stratum.iter().any(|r| r.arm_id == input.arm_b);
+                    let outcome = if has_a && has_b {
+                        let sub = CompareInput {
+                            runs: &in_stratum,
+                            ..input.clone()
+                        };
+                        Some(Box::new(compare(&sub)?))
+                    } else {
+                        None
+                    };
+                    deviation.strata.push(StratumOutcome {
+                        deviated: d,
+                        outcome,
+                    });
+                }
+                return Ok(CompareOutcome {
+                    reports: vec![],
+                    per_task: vec![],
+                    outcome_counts: outcome_counts(&runs_a, &runs_b),
+                    deviation,
+                });
+            }
         }
     }
 
@@ -712,7 +886,159 @@ pub fn compare(input: &CompareInput) -> Result<CompareOutcome, CompareError> {
     Ok(CompareOutcome {
         reports,
         per_task: per_task_tables,
+        deviation,
+        outcome_counts: outcome_counts(&runs_a, &runs_b),
     })
+}
+
+/// `arm → outcome_class → n` — the stratified outcome counts (the
+/// `infrastructure_failure` rows are a `fail_fast` design's outage counts —
+/// AC-R-2.3.2-9).
+fn outcome_counts(
+    runs_a: &[&EvalRun],
+    runs_b: &[&EvalRun],
+) -> BTreeMap<String, BTreeMap<String, u64>> {
+    let mut m: BTreeMap<String, BTreeMap<String, u64>> = BTreeMap::new();
+    for r in runs_a.iter().chain(runs_b.iter()) {
+        *m.entry(r.arm_id.clone())
+            .or_default()
+            .entry(r.outcome_class.as_str().to_string())
+            .or_insert(0) += 1;
+    }
+    m
+}
+
+// ── the retirement verdict (AC-R-2.3.3-8; ADR-0126 D5) ────────────────────
+
+/// `verdict ∈ {pass, fail, inconclusive{reason}}` — the removal test's
+/// outcome sum (spec §5b.8/§5h.6 `RemovalVerdict.verdict`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemovalOutcome {
+    /// `P − R` is non-inferior within the margin on every compared metric
+    /// and the reliably-regressed task share is within the bound.
+    Pass,
+    /// A reliable-subset regression or a non-inferiority breach — the mean
+    /// improving never rescues a reliably regressed subset.
+    Fail,
+    /// The evidence is insufficient (a metric's interval is undefined —
+    /// never coerced to pass).
+    Inconclusive {
+        /// The reason.
+        reason: String,
+    },
+}
+
+/// The eval-side `RemovalVerdict` — over a `retirement` comparison's
+/// `CompareOutcome` (arm A = `P`, arm B = `P − R`; `delta = a − b`, so a
+/// positive delta means the *retired* arm reads lower on a `higher`-is-better
+/// metric).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemovalVerdict {
+    /// The rule under removal.
+    pub rule_id: String,
+    /// The verdict.
+    pub verdict: RemovalOutcome,
+    /// The tasks reliably regressed by removal (delta beyond the margin).
+    pub regressed_tasks: Vec<String>,
+    /// The reliably-regressed share (ppm of tasks).
+    pub regressed_share_ppm: i64,
+}
+
+/// `removal_verdict` — the ADR-0126 D5 verdict: non-inferiority on every
+/// compared metric within the pre-registered margin (the paired interval's
+/// regression-side bound within `margin_ppm` — the two one-sided reading)
+/// **and** the share of reliably-regressed tasks ≤ `regressed_share_bound_ppm`
+/// (OQ-301: the margin and the bound are pre-registered per `Design`).
+///
+/// A task is *reliably regressed* when its paired delta exceeds the margin
+/// in the regression direction (`delta > margin` for `higher`-is-better,
+/// `delta < −margin` for `lower`). `Inconclusive` when any metric lacks the
+/// point or the interval — an undefined estimator never passes.
+pub fn removal_verdict(
+    rule_id: &str,
+    outcome: &CompareOutcome,
+    declarations: &[MetricDeclaration],
+    margin_ppm: i64,
+    regressed_share_bound_ppm: i64,
+) -> RemovalVerdict {
+    let mut regressed: Vec<String> = Vec::new();
+    let mut all_tasks: BTreeSet<String> = BTreeSet::new();
+    let mut fail_reasons: Vec<String> = Vec::new();
+    let mut inconclusive: Option<String> = None;
+    for (report, table) in outcome.reports.iter().zip(outcome.per_task.iter()) {
+        let direction = declarations
+            .iter()
+            .find(|d| d.name == report.metric)
+            .map(|d| d.direction)
+            .unwrap_or(Direction::Higher);
+        // The non-inferiority half — the regression-side interval bound
+        // must stay within the margin.
+        let regressed_side = |d: i64| match direction {
+            Direction::Higher => d > margin_ppm,
+            Direction::Lower => d < -margin_ppm,
+        };
+        let interval_breach = report
+            .paired_effect
+            .interval
+            .as_ref()
+            .map(|i| match direction {
+                Direction::Higher => {
+                    regressed_side(i.get("hi").and_then(Json::as_int).unwrap_or(i64::MAX))
+                }
+                Direction::Lower => {
+                    regressed_side(i.get("lo").and_then(Json::as_int).unwrap_or(i64::MIN))
+                }
+            });
+        match (report.paired_effect.point.as_ref(), interval_breach) {
+            (Some(_), Some(breach)) => {
+                if breach {
+                    fail_reasons.push(format!(
+                        "metric `{}` interval crosses the non-inferiority margin",
+                        report.metric
+                    ));
+                }
+            }
+            _ => {
+                inconclusive = Some(format!(
+                    "metric `{}` has no defined paired interval",
+                    report.metric
+                ));
+            }
+        }
+        for e in table {
+            if let Some(d) = e.delta {
+                all_tasks.insert(e.task_id.clone());
+                if regressed_side(d) {
+                    regressed.push(e.task_id.clone());
+                }
+            }
+        }
+    }
+    regressed.sort();
+    regressed.dedup();
+    let share = if all_tasks.is_empty() {
+        0
+    } else {
+        (regressed.len() as i64 * stats::PPM) / all_tasks.len() as i64
+    };
+    if share > regressed_share_bound_ppm {
+        fail_reasons.push(format!(
+            "reliably-regressed share {share}ppm exceeds bound {regressed_share_bound_ppm}ppm"
+        ));
+    }
+    let verdict = if !fail_reasons.is_empty() {
+        RemovalOutcome::Fail
+    } else if let Some(reason) = inconclusive {
+        RemovalOutcome::Inconclusive { reason }
+    } else {
+        RemovalOutcome::Pass
+    };
+    RemovalVerdict {
+        rule_id: rule_id.to_string(),
+        verdict,
+        regressed_tasks: regressed,
+        regressed_share_ppm: share,
+    }
 }
 
 /// `ContrastEstimate` — the AC-R-2.9.2-1 interaction estimate ("does

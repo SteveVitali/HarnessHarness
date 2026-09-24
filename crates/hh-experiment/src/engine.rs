@@ -97,6 +97,10 @@ pub type FingerprintResolver<'a> = dyn Fn(&str) -> Option<String> + 'a;
 pub type EnforcementResolver<'a> = dyn Fn(&ArmSpec) -> BudgetEnforcement + 'a;
 /// `level ref → budget_relevant param bindings` resolver (AC-R-2.10.2-12).
 pub type BudgetRelevantResolver<'a> = dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + 'a;
+/// `arm → dialect cache_state_visible` resolver (AC-R-2.3.4-10; `None` =
+/// the arm's dialect is not resolvable at this validation point — the check
+/// defers, it never guesses).
+pub type CacheVisibilityResolver<'a> = dyn Fn(&ArmSpec) -> Option<bool> + 'a;
 
 #[derive(Default)]
 pub struct EngineContext<'a> {
@@ -134,6 +138,10 @@ pub struct EngineContext<'a> {
     /// affects[]}}` — the variant's `param_schema` projection) for the
     /// AC-R-2.10.2-12 coverage check at `register`.
     pub budget_relevant_params: Option<Box<BudgetRelevantResolver<'a>>>,
+    /// `arm → its bound dialect's cache_state_visible` (AC-R-2.3.4-10 — a
+    /// `natural` arm on a cache-invisible dialect is refused without the
+    /// design's `cache_na_stratified` declaration).
+    pub cache_state_visible: Option<Box<CacheVisibilityResolver<'a>>>,
 }
 
 impl EngineContext<'_> {
@@ -152,6 +160,10 @@ impl EngineContext<'_> {
                 .as_ref()
                 .map(|f| f as &dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam>),
             min_replicates: self.min_replicates.max(1),
+            cache_state_visible: self
+                .cache_state_visible
+                .as_ref()
+                .map(|f| f as &dyn Fn(&ArmSpec) -> Option<bool>),
         }
     }
 }

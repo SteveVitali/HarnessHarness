@@ -93,6 +93,9 @@ struct Bag {
     /// `level_ref → {param → {value, affects[]}}` — the AC-R-2.10.2-12
     /// `budget_relevant` coverage check's variant projection.
     budget_params: Option<BTreeMap<String, BTreeMap<String, BudgetRelevantParam>>>,
+    /// `arm_id → cache_state_visible` — the arm's bound dialect visibility
+    /// (AC-R-2.3.4-10; absent member = the check defers).
+    cache_visibility: Option<BTreeMap<String, bool>>,
 }
 
 impl Bag {
@@ -286,6 +289,22 @@ impl Bag {
             }
             budget_params = Some(out);
         }
+        // `{arm_id → cache_state_visible}` — each arm's bound dialect's
+        // visibility bit (AC-R-2.3.4-10).
+        let mut cache_visibility = None;
+        if let Some(v) = p.get("cache_visibility") {
+            let Json::Obj(m) = v else {
+                return Err(bad("/cache_visibility", "type_mismatch"));
+            };
+            let mut out = BTreeMap::new();
+            for (arm, vis) in m {
+                let Json::Bool(b) = vis else {
+                    return Err(bad(&format!("/cache_visibility/{arm}"), "type_mismatch"));
+                };
+                out.insert(arm.clone(), *b);
+            }
+            cache_visibility = Some(out);
+        }
         Ok(Bag {
             budgets,
             suite_tasks,
@@ -298,6 +317,7 @@ impl Bag {
             min_replicates,
             enforcement,
             budget_params,
+            cache_visibility,
         })
     }
 
@@ -349,6 +369,13 @@ impl Bag {
                         .unwrap_or_default()
                 })
                     as Box<dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + '_>
+            }),
+            cache_state_visible: self.cache_visibility.is_some().then(|| {
+                Box::new(move |a: &ArmSpec| {
+                    self.cache_visibility
+                        .as_ref()
+                        .and_then(|m| m.get(&a.arm_id).copied())
+                }) as Box<dyn Fn(&ArmSpec) -> Option<bool> + '_>
             }),
         }
     }

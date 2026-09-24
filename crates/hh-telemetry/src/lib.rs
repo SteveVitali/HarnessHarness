@@ -35,6 +35,7 @@ pub mod clocks;
 pub mod errors;
 pub mod events;
 pub mod export;
+pub mod genai;
 pub mod propagation;
 pub mod scope;
 pub mod sinks;

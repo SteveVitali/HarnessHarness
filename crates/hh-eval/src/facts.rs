@@ -103,6 +103,176 @@ pub struct ArtefactRow {
     pub delivery_id: Option<String>,
     /// The detector class that produced the row (followed rows).
     pub detector: Option<String>,
+    /// `rule_id` — the profile rule the artefact belongs to, when the row
+    /// names one (the `profile.rule.followed_rate` denominator key —
+    /// AC-R-2.3.3-6).
+    pub rule_id: Option<String>,
+    /// `predicate_ref`/`followed_predicate_ref` — the predicate the followed
+    /// verdict evaluated (the per-rule join key on followed rows).
+    pub predicate_ref: Option<String>,
+}
+
+/// One `model.call.requested` row — the request-side cache members and the
+/// call's `purpose` (the instrument/subject charging input — AC-R-2.3.1-10).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallRequest {
+    /// The ledger seq.
+    pub seq: u64,
+    /// The call id.
+    pub model_call_id: String,
+    /// `cache.purpose` (`main | compaction | probe | judge | subagent(id)` …).
+    pub purpose: Option<String>,
+    /// `cache.expected_state` — the declared expectation (`warm | cold{…}`).
+    pub expected_state: Option<String>,
+    /// `cache.affinity_key` — the kernel-derived prefix affinity key.
+    pub affinity_key: Option<String>,
+}
+
+/// The attempt lifecycle phase a `model.call.attempt.*` row records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttemptPhase {
+    /// `model.call.attempt.started`.
+    Started,
+    /// `model.call.attempt.completed`.
+    Completed,
+    /// `model.call.attempt.failed`.
+    Failed,
+}
+
+impl AttemptPhase {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AttemptPhase::Started => "started",
+            AttemptPhase::Completed => "completed",
+            AttemptPhase::Failed => "failed",
+        }
+    }
+}
+
+/// One `model.call.attempt.*` row — the span view (one span per attempt,
+/// AC-R-2.3.1-10).
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttemptRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// The call id.
+    pub model_call_id: String,
+    /// `attempt_no`.
+    pub attempt_no: Option<u64>,
+    /// The lifecycle phase.
+    pub phase: AttemptPhase,
+}
+
+/// One `model.call.completed` / `model.call.failed` terminal row.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallTerminal {
+    /// The ledger seq.
+    pub seq: u64,
+    /// The call id.
+    pub model_call_id: String,
+    /// `failed` — the row is `model.call.failed`.
+    pub failed: bool,
+    /// `served_from_cache` present — a K4/K5 entry served the call
+    /// (`timing = n/a{not_run}` beside; never a live attempt).
+    pub served_from_cache: bool,
+    /// `timing` is the `n/a{…}` string form (the K5-served stamp —
+    /// AC-R-2.3.4-11: a cache hit never reports a live latency).
+    pub timing_na: bool,
+    /// `served_model` — the provider's served-model stamp (drift evidence).
+    pub served_model: Option<String>,
+    /// `cache_observation.cache_read` (canonical `view` tokens) — the K1
+    /// observation a prefix-hit ratio reads.
+    pub cache_read: Option<i64>,
+    /// `usage.record.view.input_total` — the inclusive input total.
+    pub input_total: Option<i64>,
+}
+
+/// One `model.route.decided` / `model.rerouted` row — the routing lineage a
+/// charge must agree with (AC-R-2.3.2-3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RouteRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// The call id.
+    pub model_call_id: String,
+    /// `true` on `model.rerouted` (`to`), `false` on `model.route.decided`
+    /// (`selected` — the full `ModelRef` object).
+    pub rerouted: bool,
+    /// `selected` (`decided` — the `ModelRef` JSON) — absent on reroutes.
+    pub selected: Option<Json>,
+    /// `to` (`rerouted` — the provider model id) — absent on decisions.
+    pub to: Option<String>,
+    /// `deviation` — the decision's own flag.
+    pub deviation: bool,
+}
+
+/// One `model.cache.resolved` row (one per K2–K6 lookup — hits and misses).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CacheResolution {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `cache_kind` (`k1` … `k6` spellings as emitted).
+    pub cache_kind: String,
+    /// The lookup key (a content address).
+    pub key: Option<String>,
+    /// `outcome` (`hit | miss | withheld | stale_withheld` …).
+    pub outcome: Option<String>,
+    /// `reason` — the miss reason (`None` on a hit).
+    pub reason: Option<String>,
+    /// `avoided{…}` — the avoided-cost estimate, when the row carries one.
+    pub avoided: Option<Json>,
+    /// `attribution` (`subject | instrument` — instrument for probes).
+    pub attribution: Option<String>,
+    /// `purpose` — the purpose the lookup served.
+    pub purpose: Option<String>,
+    /// `served_by` — the call the resolution served, when the row names one.
+    pub served_by: Option<String>,
+}
+
+/// One `control.budget.consumed` row — the charge view (AC-R-2.3.1-10,
+/// AC-R-2.3.4-6).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChargeRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `dimension`.
+    pub dimension: String,
+    /// `amount`.
+    pub amount: i64,
+    /// `attribution.charged_to` (`subject | instrument`).
+    pub charged_to: Option<String>,
+    /// `attribution.cache.hit` — a zero-amount cache-hit charge.
+    pub cache_hit: bool,
+    /// `attribution.model_ref` — the model the charge prices (the
+    /// `charge equals decision` check's left side; AC-R-2.3.2-3).
+    pub model_ref: Option<Json>,
+    /// `source_event.event_id` — the producing event.
+    pub source_event_id: Option<String>,
+    /// The `model_call_id` the charge joins to (resolved through
+    /// `source_event.event_id → event_calls`; `None` when the projection
+    /// cannot join — envelope ids are `from_envelopes`-only).
+    pub model_call_id: Option<String>,
+}
+
+/// One `measurement.cost.attributed` row — the spend view.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SpendRowFact {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `subject_ref` / `model_call_id` when the payload names one.
+    pub subject_ref: Option<String>,
+    /// `model_ref` — the priced model.
+    pub model_ref: Option<Json>,
+    /// `attribution.charged_to`.
+    pub charged_to: Option<String>,
+    /// `provenance` (`measured | estimated_from_pricing | …`).
+    pub provenance: Option<String>,
+    /// `money.micro_units`.
+    pub micro_units: Option<i64>,
+    /// The `model_call_id` the row joins to (payload member or
+    /// `source_event` join).
+    pub model_call_id: Option<String>,
 }
 
 /// One `verification.validator.verdict` row projection.
@@ -188,6 +358,27 @@ pub struct LedgerFacts {
     /// The bench grading evidence (a verifier-side row the adapter emits —
     /// `measurement.bench.graded` or the `verdict` members it folds into).
     pub grading: GradingEvidence,
+    /// `model.call.requested` rows keyed by `model_call_id` (S3.7 — the
+    /// request-side `purpose`/cache members the accounting checks read).
+    pub call_requests: BTreeMap<String, CallRequest>,
+    /// `model.call.completed`/`model.call.failed` terminal rows.
+    pub call_terminals: Vec<CallTerminal>,
+    /// `model.call.attempt.*` rows — the attempt-span view.
+    pub attempts: Vec<AttemptRow>,
+    /// `model.route.decided`/`model.rerouted` rows (seq order).
+    pub routes: Vec<RouteRow>,
+    /// `model.cache.resolved` rows (one per lookup — hits and misses).
+    pub cache_resolutions: Vec<CacheResolution>,
+    /// `control.budget.consumed` rows — the charge view.
+    pub charges: Vec<ChargeRow>,
+    /// `measurement.cost.attributed` rows — the spend view (the
+    /// `cost_attributed_calls` set above stays the coarse summary).
+    pub spend_rows: Vec<SpendRowFact>,
+    /// `event_id → model_call_id` for every `model.call.*`/`attempt` row —
+    /// populated only under [`LedgerFacts::from_rows`]; the charge/spend
+    /// join reads `source_event.event_id` through it. Empty under
+    /// `from_events` (envelope ids are not carried there).
+    pub event_calls: BTreeMap<String, String>,
 }
 
 fn s(j: &Json, member: &str) -> Option<String> {
@@ -215,7 +406,56 @@ fn artefact_row(j: &Json) -> ArtefactRow {
         artefact_id: s(j, "artefact_id").unwrap_or_default(),
         delivery_id: s(j, "delivery_id"),
         detector: s(j, "detector"),
+        rule_id: s(j, "rule_id"),
+        predicate_ref: s(j, "predicate_ref").or_else(|| s(j, "followed_predicate_ref")),
     }
+}
+
+/// One ledger row the projection reads — `(seq, event_id, class, payload)`.
+/// `event_id` is `None` on the `from_events` path (the legacy tuple has no
+/// envelope ids; charge/spend rows then join only through payload members).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FactRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// The envelope event id, when the caller carries it.
+    pub event_id: Option<String>,
+    /// The event class.
+    pub class: String,
+    /// The payload.
+    pub payload: Json,
+}
+
+/// `p.member.sub` as an int.
+fn si(j: &Json, member: &str, sub: &str) -> Option<i64> {
+    j.get(member)
+        .and_then(|o| o.get(sub))
+        .and_then(Json::as_int)
+}
+
+/// `p.attribution` decoded to `(charged_to, cache_hit, model_ref)`.
+fn attribution_parts(p: &Json) -> (Option<String>, bool, Option<Json>) {
+    match p.get("attribution") {
+        Some(a @ Json::Obj(_)) => (
+            a.get("charged_to")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            matches!(
+                a.get("cache").and_then(|c| c.get("hit")),
+                Some(Json::Bool(true))
+            ),
+            a.get("model_ref").cloned(),
+        ),
+        _ => (None, false, None),
+    }
+}
+
+/// `source_event.event_id`.
+fn source_event_id(p: &Json) -> Option<String> {
+    p.get("source_event")
+        .and_then(|e| e.get("event_id"))
+        .and_then(Json::as_str)
+        .map(str::to_string)
 }
 
 impl LedgerFacts {
@@ -223,12 +463,55 @@ impl LedgerFacts {
     /// Unknown classes are skipped — the projection reads what it owns
     /// (unknown classes are refused at *append* by the store, not here).
     pub fn from_events(events: &[(u64, String, Json)]) -> LedgerFacts {
+        LedgerFacts::from_rows(
+            &events
+                .iter()
+                .map(|(seq, class, p)| FactRow {
+                    seq: *seq,
+                    event_id: None,
+                    class: class.clone(),
+                    payload: p.clone(),
+                })
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Project `(seq, event_id, class, payload)` envelope rows — the
+    /// charge/spend → call join (`control.budget.consumed.source_event` and
+    /// `measurement.cost.attributed.source_event` name the *event* that
+    /// produced the spend, not the call id) is live on this path.
+    pub fn from_envelopes(events: &[(u64, String, String, Json)]) -> LedgerFacts {
+        LedgerFacts::from_rows(
+            &events
+                .iter()
+                .map(|(seq, id, class, p)| FactRow {
+                    seq: *seq,
+                    event_id: Some(id.clone()),
+                    class: class.clone(),
+                    payload: p.clone(),
+                })
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// The core projection (all paths funnel here).
+    pub fn from_rows(events: &[FactRow]) -> LedgerFacts {
         let mut f = LedgerFacts::default();
+        // Pass 0 — `event_id → model_call_id` for every model.call.* row
+        // (the charge/spend join key).
+        for r in events {
+            if r.class.starts_with("model.call.") {
+                if let (Some(id), Some(c)) = (&r.event_id, s(&r.payload, "model_call_id")) {
+                    f.event_calls.insert(id.clone(), c);
+                }
+            }
+        }
         // First pass — the phase timeline (egress rows join against it).
-        for (seq, class, p) in events {
+        for r in events {
+            let (seq, class, p) = (r.seq, r.class.as_str(), &r.payload);
             if class == "action.environment.phase.changed" {
                 f.phases.push(PhaseChange {
-                    seq: *seq,
+                    seq,
                     env_handle: s(p, "env_handle").or_else(|| s(p, "env_handle_id")),
                     to: s(p, "to").or_else(|| s(p, "phase")).unwrap_or_default(),
                 });
@@ -243,7 +526,8 @@ impl LedgerFacts {
         };
         // Second pass — everything else.
         let mut decided: BTreeMap<String, (bool, Option<String>, u64)> = BTreeMap::new();
-        for (_, class, p) in events {
+        for r in events {
+            let (class, p) = (r.class.as_str(), &r.payload);
             if class == "security.egress.decided" {
                 let decision = s(p, "decision").map(|d| d == "allow" || d == "allowed");
                 if let (Some(r), Some(d)) = (s(p, "request_ref"), decision) {
@@ -251,8 +535,9 @@ impl LedgerFacts {
                 }
             }
         }
-        for (seq, class, p) in events {
-            match class.as_str() {
+        for r in events {
+            let (seq, class, p) = (r.seq, r.class.as_str(), &r.payload);
+            match class {
                 "lifecycle.run.created" => f.run_created = true,
                 "lifecycle.run.finished" => f.finished = Some(p.clone()),
                 "security.egress.requested" => {
@@ -260,11 +545,11 @@ impl LedgerFacts {
                     let env_handle = s(p, "env_handle");
                     let d = decided.get(&request_ref);
                     f.egress.push(EgressRow {
-                        seq: *seq,
+                        seq,
                         request_ref,
                         env_handle: env_handle.clone(),
                         host_norm: s(p, "host_norm"),
-                        phase: phase_at(*seq, &env_handle),
+                        phase: phase_at(seq, &env_handle),
                         decision: d.map(|(v, _, _)| *v),
                         rule_ref: d.and_then(|(_, r, _)| r.clone()),
                     });
@@ -334,19 +619,129 @@ impl LedgerFacts {
                 }
                 "measurement.metric.emitted" => f.metrics_emitted += 1,
                 "measurement.cost.attributed" => {
-                    if let Some(id) = s(p, "subject_ref").or_else(|| s(p, "model_call_id")) {
-                        f.cost_attributed_calls.insert(id);
+                    let call = s(p, "subject_ref")
+                        .or_else(|| s(p, "model_call_id"))
+                        .or_else(|| {
+                            source_event_id(p).and_then(|id| f.event_calls.get(&id).cloned())
+                        });
+                    if let Some(id) = &call {
+                        f.cost_attributed_calls.insert(id.clone());
                     }
+                    let (charged_to, _, _) = attribution_parts(p);
+                    f.spend_rows.push(SpendRowFact {
+                        seq,
+                        subject_ref: s(p, "subject_ref"),
+                        model_ref: p.get("model_ref").cloned(),
+                        charged_to,
+                        provenance: s(p, "provenance"),
+                        micro_units: si(p, "money", "micro_units"),
+                        model_call_id: call,
+                    });
                 }
                 "model.call.attempt.completed" => {
                     if let Some(id) = s(p, "model_call_id").or_else(|| s(p, "call_id")) {
-                        f.model_calls_completed.insert(id);
+                        f.model_calls_completed.insert(id.clone());
                     }
+                    f.attempts.push(AttemptRow {
+                        seq,
+                        model_call_id: s(p, "model_call_id").unwrap_or_default(),
+                        attempt_no: p.get("attempt_no").and_then(Json::as_int).map(|v| v as u64),
+                        phase: AttemptPhase::Completed,
+                    });
+                }
+                "model.call.attempt.started" | "model.call.attempt.failed" => {
+                    f.attempts.push(AttemptRow {
+                        seq,
+                        model_call_id: s(p, "model_call_id").unwrap_or_default(),
+                        attempt_no: p.get("attempt_no").and_then(Json::as_int).map(|v| v as u64),
+                        phase: if class == "model.call.attempt.started" {
+                            AttemptPhase::Started
+                        } else {
+                            AttemptPhase::Failed
+                        },
+                    });
+                }
+                "model.call.requested" => {
+                    if let Some(id) = s(p, "model_call_id") {
+                        let cache = p.get("cache").cloned().unwrap_or(Json::Null);
+                        f.call_requests.insert(
+                            id.clone(),
+                            CallRequest {
+                                seq,
+                                model_call_id: id,
+                                purpose: s(&cache, "purpose").or_else(|| s(p, "purpose")),
+                                expected_state: s(&cache, "expected_state"),
+                                affinity_key: s(&cache, "affinity_key"),
+                            },
+                        );
+                    }
+                }
+                "model.call.completed" | "model.call.failed" => {
+                    f.call_terminals.push(CallTerminal {
+                        seq,
+                        model_call_id: s(p, "model_call_id").unwrap_or_default(),
+                        failed: class == "model.call.failed",
+                        served_from_cache: p.get("served_from_cache").is_some(),
+                        timing_na: matches!(
+                            p.get("timing"),
+                            Some(Json::Str(t)) if t.starts_with("n/a{")
+                        ),
+                        served_model: s(p, "served_model"),
+                        cache_read: si(p, "cache_observation", "cache_read"),
+                        input_total: p
+                            .get("usage")
+                            .and_then(|u| u.get("record"))
+                            .and_then(|r| r.get("view"))
+                            .and_then(|v| v.get("input_total"))
+                            .and_then(Json::as_int),
+                    });
+                }
+                "model.route.decided" | "model.rerouted" => {
+                    f.routes.push(RouteRow {
+                        seq,
+                        model_call_id: s(p, "model_call_id").unwrap_or_default(),
+                        rerouted: class == "model.rerouted",
+                        selected: p.get("selected").cloned(),
+                        to: s(p, "to"),
+                        deviation: b(p, "deviation").unwrap_or(false),
+                    });
+                }
+                "model.cache.resolved" => {
+                    f.cache_resolutions.push(CacheResolution {
+                        seq,
+                        cache_kind: s(p, "cache_kind").unwrap_or_default(),
+                        key: s(p, "key"),
+                        outcome: s(p, "outcome"),
+                        reason: s(p, "reason"),
+                        avoided: p
+                            .get("avoided")
+                            .cloned()
+                            .filter(|a| !matches!(a, Json::Null)),
+                        attribution: s(p, "attribution"),
+                        purpose: s(p, "purpose"),
+                        served_by: s(p, "served_by"),
+                    });
+                }
+                "control.budget.consumed" => {
+                    let (charged_to, cache_hit, model_ref) = attribution_parts(p);
+                    let src = source_event_id(p);
+                    f.charges.push(ChargeRow {
+                        seq,
+                        dimension: s(p, "dimension").unwrap_or_default(),
+                        amount: p.get("amount").and_then(Json::as_int).unwrap_or(0),
+                        charged_to,
+                        cache_hit,
+                        model_ref,
+                        model_call_id: src
+                            .as_ref()
+                            .and_then(|id| f.event_calls.get(id).cloned())
+                            .or_else(|| s(p, "model_call_id")),
+                        source_event_id: src,
+                    });
                 }
                 "measurement.evolution.candidate.transitioned" => {
                     if s(p, "to").as_deref() == Some("proposed") {
-                        f.first_proposed_at =
-                            Some(f.first_proposed_at.map_or(*seq, |e| e.min(*seq)));
+                        f.first_proposed_at = Some(f.first_proposed_at.map_or(seq, |e| e.min(seq)));
                     }
                 }
                 _ => {}
@@ -397,6 +792,12 @@ impl LedgerFacts {
                 a.delivery_id.as_deref().map(Json::str),
             );
             insert_opt(&mut m, "detector", a.detector.as_deref().map(Json::str));
+            insert_opt(&mut m, "rule_id", a.rule_id.as_deref().map(Json::str));
+            insert_opt(
+                &mut m,
+                "predicate_ref",
+                a.predicate_ref.as_deref().map(Json::str),
+            );
             Json::Obj(m)
         };
         let mut m = BTreeMap::new();
@@ -521,6 +922,196 @@ impl LedgerFacts {
             "model_calls_completed".into(),
             Json::Arr(self.model_calls_completed.iter().map(Json::str).collect()),
         );
+        // ── S3.7 model-plane members ────────────────────────────────────
+        m.insert(
+            "call_requests".into(),
+            Json::Obj(
+                self.call_requests
+                    .iter()
+                    .map(|(id, r)| {
+                        let mut rm = BTreeMap::new();
+                        rm.insert("seq".into(), Json::Int(r.seq as i64));
+                        insert_opt(&mut rm, "purpose", r.purpose.as_deref().map(Json::str));
+                        insert_opt(
+                            &mut rm,
+                            "expected_state",
+                            r.expected_state.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut rm,
+                            "affinity_key",
+                            r.affinity_key.as_deref().map(Json::str),
+                        );
+                        (id.clone(), Json::Obj(rm))
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "call_terminals".into(),
+            Json::Arr(
+                self.call_terminals
+                    .iter()
+                    .map(|t| {
+                        let mut tm = BTreeMap::new();
+                        tm.insert("seq".into(), Json::Int(t.seq as i64));
+                        tm.insert("model_call_id".into(), Json::str(&t.model_call_id));
+                        tm.insert("failed".into(), Json::Bool(t.failed));
+                        tm.insert("served_from_cache".into(), Json::Bool(t.served_from_cache));
+                        tm.insert("timing_na".into(), Json::Bool(t.timing_na));
+                        insert_opt(
+                            &mut tm,
+                            "served_model",
+                            t.served_model.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut tm, "cache_read", t.cache_read.map(Json::Int));
+                        insert_opt(&mut tm, "input_total", t.input_total.map(Json::Int));
+                        Json::Obj(tm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "attempts".into(),
+            Json::Arr(
+                self.attempts
+                    .iter()
+                    .map(|a| {
+                        let mut am = BTreeMap::new();
+                        am.insert("seq".into(), Json::Int(a.seq as i64));
+                        am.insert("model_call_id".into(), Json::str(&a.model_call_id));
+                        insert_opt(
+                            &mut am,
+                            "attempt_no",
+                            a.attempt_no.map(|n| Json::Int(n as i64)),
+                        );
+                        am.insert("phase".into(), Json::str(a.phase.as_str()));
+                        Json::Obj(am)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "routes".into(),
+            Json::Arr(
+                self.routes
+                    .iter()
+                    .map(|r| {
+                        let mut rm = BTreeMap::new();
+                        rm.insert("seq".into(), Json::Int(r.seq as i64));
+                        rm.insert("model_call_id".into(), Json::str(&r.model_call_id));
+                        rm.insert("rerouted".into(), Json::Bool(r.rerouted));
+                        insert_opt(&mut rm, "selected", r.selected.clone());
+                        insert_opt(&mut rm, "to", r.to.as_deref().map(Json::str));
+                        rm.insert("deviation".into(), Json::Bool(r.deviation));
+                        Json::Obj(rm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "cache_resolutions".into(),
+            Json::Arr(
+                self.cache_resolutions
+                    .iter()
+                    .map(|r| {
+                        let mut rm = BTreeMap::new();
+                        rm.insert("seq".into(), Json::Int(r.seq as i64));
+                        rm.insert("cache_kind".into(), Json::str(&r.cache_kind));
+                        insert_opt(&mut rm, "key", r.key.as_deref().map(Json::str));
+                        insert_opt(&mut rm, "outcome", r.outcome.as_deref().map(Json::str));
+                        insert_opt(&mut rm, "reason", r.reason.as_deref().map(Json::str));
+                        insert_opt(&mut rm, "avoided", r.avoided.clone());
+                        insert_opt(
+                            &mut rm,
+                            "attribution",
+                            r.attribution.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut rm, "purpose", r.purpose.as_deref().map(Json::str));
+                        insert_opt(&mut rm, "served_by", r.served_by.as_deref().map(Json::str));
+                        Json::Obj(rm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "charges".into(),
+            Json::Arr(
+                self.charges
+                    .iter()
+                    .map(|c| {
+                        let mut cm = BTreeMap::new();
+                        cm.insert("seq".into(), Json::Int(c.seq as i64));
+                        cm.insert("dimension".into(), Json::str(&c.dimension));
+                        cm.insert("amount".into(), Json::Int(c.amount));
+                        insert_opt(
+                            &mut cm,
+                            "charged_to",
+                            c.charged_to.as_deref().map(Json::str),
+                        );
+                        cm.insert("cache_hit".into(), Json::Bool(c.cache_hit));
+                        insert_opt(&mut cm, "model_ref", c.model_ref.clone());
+                        insert_opt(
+                            &mut cm,
+                            "source_event_id",
+                            c.source_event_id.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut cm,
+                            "model_call_id",
+                            c.model_call_id.as_deref().map(Json::str),
+                        );
+                        Json::Obj(cm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "spend_rows".into(),
+            Json::Arr(
+                self.spend_rows
+                    .iter()
+                    .map(|r| {
+                        let mut rm = BTreeMap::new();
+                        rm.insert("seq".into(), Json::Int(r.seq as i64));
+                        insert_opt(
+                            &mut rm,
+                            "subject_ref",
+                            r.subject_ref.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut rm, "model_ref", r.model_ref.clone());
+                        insert_opt(
+                            &mut rm,
+                            "charged_to",
+                            r.charged_to.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut rm,
+                            "provenance",
+                            r.provenance.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut rm, "micro_units", r.micro_units.map(Json::Int));
+                        insert_opt(
+                            &mut rm,
+                            "model_call_id",
+                            r.model_call_id.as_deref().map(Json::str),
+                        );
+                        Json::Obj(rm)
+                    })
+                    .collect(),
+            ),
+        );
+        if !self.event_calls.is_empty() {
+            m.insert(
+                "event_calls".into(),
+                Json::Obj(
+                    self.event_calls
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::str(v)))
+                        .collect(),
+                ),
+            );
+        }
         insert_opt(
             &mut m,
             "first_proposed_at",
@@ -576,6 +1167,14 @@ impl LedgerFacts {
                 "model_calls_completed",
                 "first_proposed_at",
                 "grading",
+                "call_requests",
+                "call_terminals",
+                "attempts",
+                "routes",
+                "cache_resolutions",
+                "charges",
+                "spend_rows",
+                "event_calls",
             ],
             REC,
         )?;
@@ -616,6 +1215,8 @@ impl LedgerFacts {
             artefact_id: s(a, "artefact_id").unwrap_or_default(),
             delivery_id: s(a, "delivery_id"),
             detector: s(a, "detector"),
+            rule_id: s(a, "rule_id"),
+            predicate_ref: s(a, "predicate_ref"),
         };
         if let Some(Json::Arr(es)) = m.get("effects_intended") {
             f.effects_intended = es.iter().map(effect).collect();
@@ -688,6 +1289,110 @@ impl LedgerFacts {
                 .collect();
         }
         f.first_proposed_at = opt_int_at(m, "first_proposed_at")?.map(|x| x as u64);
+        // ── S3.7 model-plane members ────────────────────────────────────
+        if let Some(Json::Obj(rs)) = m.get("call_requests") {
+            for (id, r) in rs {
+                f.call_requests.insert(
+                    id.clone(),
+                    CallRequest {
+                        seq: r.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                        model_call_id: id.clone(),
+                        purpose: s(r, "purpose"),
+                        expected_state: s(r, "expected_state"),
+                        affinity_key: s(r, "affinity_key"),
+                    },
+                );
+            }
+        }
+        if let Some(Json::Arr(ts)) = m.get("call_terminals") {
+            for t in ts {
+                f.call_terminals.push(CallTerminal {
+                    seq: t.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    model_call_id: s(t, "model_call_id").unwrap_or_default(),
+                    failed: b(t, "failed").unwrap_or(false),
+                    served_from_cache: b(t, "served_from_cache").unwrap_or(false),
+                    timing_na: b(t, "timing_na").unwrap_or(false),
+                    served_model: s(t, "served_model"),
+                    cache_read: t.get("cache_read").and_then(Json::as_int),
+                    input_total: t.get("input_total").and_then(Json::as_int),
+                });
+            }
+        }
+        if let Some(Json::Arr(as_)) = m.get("attempts") {
+            for a in as_ {
+                f.attempts.push(AttemptRow {
+                    seq: a.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    model_call_id: s(a, "model_call_id").unwrap_or_default(),
+                    attempt_no: a.get("attempt_no").and_then(Json::as_int).map(|v| v as u64),
+                    phase: match s(a, "phase").as_deref() {
+                        Some("started") => AttemptPhase::Started,
+                        Some("failed") => AttemptPhase::Failed,
+                        _ => AttemptPhase::Completed,
+                    },
+                });
+            }
+        }
+        if let Some(Json::Arr(rs)) = m.get("routes") {
+            for r in rs {
+                f.routes.push(RouteRow {
+                    seq: r.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    model_call_id: s(r, "model_call_id").unwrap_or_default(),
+                    rerouted: b(r, "rerouted").unwrap_or(false),
+                    selected: r.get("selected").cloned(),
+                    to: s(r, "to"),
+                    deviation: b(r, "deviation").unwrap_or(false),
+                });
+            }
+        }
+        if let Some(Json::Arr(rs)) = m.get("cache_resolutions") {
+            for r in rs {
+                f.cache_resolutions.push(CacheResolution {
+                    seq: r.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    cache_kind: s(r, "cache_kind").unwrap_or_default(),
+                    key: s(r, "key"),
+                    outcome: s(r, "outcome"),
+                    reason: s(r, "reason"),
+                    avoided: r.get("avoided").cloned(),
+                    attribution: s(r, "attribution"),
+                    purpose: s(r, "purpose"),
+                    served_by: s(r, "served_by"),
+                });
+            }
+        }
+        if let Some(Json::Arr(cs)) = m.get("charges") {
+            for c in cs {
+                f.charges.push(ChargeRow {
+                    seq: c.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    dimension: s(c, "dimension").unwrap_or_default(),
+                    amount: c.get("amount").and_then(Json::as_int).unwrap_or(0),
+                    charged_to: s(c, "charged_to"),
+                    cache_hit: b(c, "cache_hit").unwrap_or(false),
+                    model_ref: c.get("model_ref").cloned(),
+                    source_event_id: s(c, "source_event_id"),
+                    model_call_id: s(c, "model_call_id"),
+                });
+            }
+        }
+        if let Some(Json::Arr(rs)) = m.get("spend_rows") {
+            for r in rs {
+                f.spend_rows.push(SpendRowFact {
+                    seq: r.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    subject_ref: s(r, "subject_ref"),
+                    model_ref: r.get("model_ref").cloned(),
+                    charged_to: s(r, "charged_to"),
+                    provenance: s(r, "provenance"),
+                    micro_units: r.get("micro_units").and_then(Json::as_int),
+                    model_call_id: s(r, "model_call_id"),
+                });
+            }
+        }
+        if let Some(Json::Obj(ec)) = m.get("event_calls") {
+            for (k, v) in ec {
+                if let Some(id) = v.as_str() {
+                    f.event_calls.insert(k.clone(), id.to_string());
+                }
+            }
+        }
         if let Some(g) = m.get("grading") {
             f.grading = GradingEvidence {
                 exit_code: g.get("exit_code").and_then(Json::as_int),

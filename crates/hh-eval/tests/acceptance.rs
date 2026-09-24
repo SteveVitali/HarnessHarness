@@ -17,7 +17,7 @@ use hh_ontology::control::OutcomeClass;
 use hh_ontology::dimensions::{DimensionId, DimensionKey};
 use hh_ontology::eval::{
     Design, DesignKind, MediationChannel, MetricValue, MetricValueKind, Pairing, PreRegistration,
-    SeedPolicy,
+    RoutingPolicy, SeedPolicy,
 };
 use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
 use hh_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
@@ -76,6 +76,10 @@ fn run(arm: &str, task: &str, rep: u64, value: i64, metric_name: &str) -> EvalRu
             .collect(),
         stratum: ContaminationStratum::PrivateHeldOut,
         eval_search_spend: 0,
+        routing_deviation: false,
+        replayed_trajectory: false,
+        served_from_cache_count: 0,
+        cache_prefix_hit_ratio: None,
         split_hash: Some("sha256:split-1".into()),
         facts: Default::default(),
     };
@@ -110,6 +114,9 @@ fn design() -> Design {
         registry_snapshot_id: None,
         generators: None,
         resolution: None,
+        routing_policy: RoutingPolicy::FailFast,
+        deviation_policy: None,
+        cache_na_stratified: false,
     }
 }
 
@@ -930,4 +937,534 @@ fn hosted_applicability_mediation_and_capability_na() {
         "cfg-h",
     );
     assert_ne!(cell.point, MetricValueKind::Na(NaReason::Capability));
+}
+
+// ── AC-R-2.3.1-10 / AC-R-2.3.2-3 / AC-R-2.3.4-6 — model-plane fact
+// projection (`from_envelopes`) and `model_accounting` (S3.7) ──────────────
+
+use hh_eval::accounting::{model_accounting, AccountingViolation};
+use hh_eval::facts::LedgerFacts;
+
+fn ev(seq: u64, id: &str, class: &str, payload: Json) -> (u64, String, String, Json) {
+    (seq, id.to_string(), class.to_string(), payload)
+}
+
+fn model_ref(provider: &str) -> Json {
+    Json::obj([
+        ("profile_ref", Json::str("p@1")),
+        ("provider_model_id", Json::str(provider)),
+        ("serving_route", Json::str("route-1")),
+    ])
+}
+
+/// A clean one-call run: requested → decided → attempt span → completed →
+/// charge → spend (the §5b.1/§5b.4 accounting shape).
+fn model_plane_run() -> Vec<(u64, String, String, Json)> {
+    vec![
+        ev(
+            1,
+            "e1",
+            "model.call.requested",
+            Json::obj([
+                ("model_call_id", Json::str("c1")),
+                ("purpose", Json::str("main")),
+            ]),
+        ),
+        ev(
+            2,
+            "e2",
+            "model.route.decided",
+            Json::obj([
+                ("model_call_id", Json::str("c1")),
+                ("selected", model_ref("m-a")),
+                ("deviation", Json::Bool(false)),
+            ]),
+        ),
+        ev(
+            3,
+            "e3",
+            "model.call.attempt.started",
+            Json::obj([
+                ("model_call_id", Json::str("c1")),
+                ("attempt_no", Json::Int(1)),
+            ]),
+        ),
+        ev(
+            4,
+            "e4",
+            "model.call.attempt.completed",
+            Json::obj([
+                ("model_call_id", Json::str("c1")),
+                ("attempt_no", Json::Int(1)),
+            ]),
+        ),
+        ev(
+            5,
+            "e5",
+            "model.call.completed",
+            Json::obj([
+                ("model_call_id", Json::str("c1")),
+                ("served_model", Json::str("m-a")),
+                ("timing", Json::obj([("latency_ms", Json::Int(10))])),
+                (
+                    "cache_observation",
+                    Json::obj([("cache_read", Json::Int(120))]),
+                ),
+                (
+                    "usage",
+                    Json::obj([(
+                        "record",
+                        Json::obj([("view", Json::obj([("input_total", Json::Int(200))]))]),
+                    )]),
+                ),
+            ]),
+        ),
+        ev(
+            6,
+            "e6",
+            "control.budget.consumed",
+            Json::obj([
+                ("dimension", Json::str("model_calls")),
+                ("amount", Json::Int(1)),
+                (
+                    "attribution",
+                    Json::obj([
+                        ("charged_to", Json::str("subject")),
+                        ("model_ref", model_ref("m-a")),
+                    ]),
+                ),
+                ("source_event", Json::obj([("event_id", Json::str("e5"))])),
+            ]),
+        ),
+        ev(
+            7,
+            "e7",
+            "measurement.cost.attributed",
+            Json::obj([
+                ("subject_ref", Json::str("c1")),
+                ("model_ref", model_ref("m-a")),
+                (
+                    "attribution",
+                    Json::obj([("charged_to", Json::str("subject"))]),
+                ),
+                ("provenance", Json::str("measured")),
+                ("money", Json::obj([("micro_units", Json::Int(5))])),
+            ]),
+        ),
+    ]
+}
+
+#[test]
+fn model_plane_facts_project_and_account_clean() {
+    let f = LedgerFacts::from_envelopes(&model_plane_run());
+    assert_eq!(f.attempts.len(), 2);
+    assert_eq!(f.call_terminals.len(), 1);
+    assert_eq!(f.call_terminals[0].cache_read, Some(120));
+    assert_eq!(f.call_terminals[0].input_total, Some(200));
+    assert_eq!(f.call_terminals[0].served_model.as_deref(), Some("m-a"));
+    assert_eq!(f.routes.len(), 1);
+    assert!(!f.routes[0].deviation);
+    assert_eq!(f.charges.len(), 1);
+    // The charge joined its call through `source_event.event_id → e5 → c1`.
+    assert_eq!(f.charges[0].model_call_id.as_deref(), Some("c1"));
+    assert_eq!(f.spend_rows.len(), 1);
+    assert_eq!(f.spend_rows[0].micro_units, Some(5));
+    assert!(f.cost_attributed_calls.contains("c1"));
+    assert!(f.model_calls_completed.contains("c1"));
+    // The clean run is the green state — no violations.
+    assert_eq!(model_accounting(&f), Vec::<AccountingViolation>::new());
+}
+
+#[test]
+fn model_accounting_flags_every_violation_kind() {
+    // A missing charge → CallChargeCount{0}.
+    let mut run = model_plane_run();
+    run.retain(|(_, _, c, _)| c != "control.budget.consumed");
+    let f = LedgerFacts::from_envelopes(&run);
+    assert!(model_accounting(&f)
+        .iter()
+        .any(|v| matches!(v, AccountingViolation::CallChargeCount { charges: 0, .. })));
+
+    // A probe call charged to the subject → InstrumentCharge.
+    let mut run = model_plane_run();
+    run[0].3 = Json::obj([
+        ("model_call_id", Json::str("c1")),
+        ("purpose", Json::str("probe")),
+    ]);
+    let f = LedgerFacts::from_envelopes(&run);
+    assert!(model_accounting(&f)
+        .iter()
+        .any(|v| matches!(v, AccountingViolation::InstrumentCharge { .. })));
+
+    // A charge priced at a different model than the route decision →
+    // ChargeRouteMismatch (charge ≠ decision).
+    let mut run = model_plane_run();
+    run[5].3 = Json::obj([
+        ("dimension", Json::str("model_calls")),
+        ("amount", Json::Int(1)),
+        (
+            "attribution",
+            Json::obj([
+                ("charged_to", Json::str("subject")),
+                ("model_ref", model_ref("m-b")),
+            ]),
+        ),
+        ("source_event", Json::obj([("event_id", Json::str("e5"))])),
+    ]);
+    let f = LedgerFacts::from_envelopes(&run);
+    assert!(model_accounting(&f)
+        .iter()
+        .any(|v| matches!(v, AccountingViolation::ChargeRouteMismatch { .. })));
+
+    // A charge with no charged_to → ChargedToMissing; a model-priced charge
+    // whose source_event joins no call → ChargeSourceUnresolved.
+    let mut run = model_plane_run();
+    run[5].3 = Json::obj([
+        ("dimension", Json::str("model_calls")),
+        ("amount", Json::Int(1)),
+        ("attribution", Json::obj([("model_ref", model_ref("m-a"))])),
+        (
+            "source_event",
+            Json::obj([("event_id", Json::str("e-ghost"))]),
+        ),
+    ]);
+    let f = LedgerFacts::from_envelopes(&run);
+    let vs = model_accounting(&f);
+    assert!(vs.iter().any(|v| matches!(
+        v,
+        AccountingViolation::ChargedToMissing {
+            class: "charge",
+            ..
+        }
+    )));
+    assert!(vs
+        .iter()
+        .any(|v| matches!(v, AccountingViolation::ChargeSourceUnresolved { .. })));
+
+    // A `served_from_cache` terminal without the resolved row / the
+    // zero-amount cache_hit charge / the n/a timing → CacheServeUnaccounted.
+    let mut run = model_plane_run();
+    run[4].3 = Json::obj([
+        ("model_call_id", Json::str("c1")),
+        ("served_from_cache", Json::str("entry:k5-1")),
+        ("timing", Json::str("n/a{not_run}")),
+    ]);
+    let f = LedgerFacts::from_envelopes(&run);
+    assert!(model_accounting(&f)
+        .iter()
+        .any(|v| matches!(v, AccountingViolation::CacheServeUnaccounted { .. })));
+
+    // The fully-accounted K5 serve passes: resolved row naming the call,
+    // zero-amount cache_hit charge, `timing = n/a{not_run}`.
+    let mut run = model_plane_run();
+    run[4].3 = Json::obj([
+        ("model_call_id", Json::str("c1")),
+        ("served_from_cache", Json::str("entry:k5-1")),
+        ("timing", Json::str("n/a{not_run}")),
+    ]);
+    run.insert(
+        5,
+        ev(
+            50,
+            "e50",
+            "model.cache.resolved",
+            Json::obj([
+                ("cache_kind", Json::str("k5")),
+                ("key", Json::str("sha256:k5key")),
+                ("outcome", Json::str("hit")),
+                ("served_by", Json::str("c1")),
+                ("attribution", Json::str("subject")),
+                ("purpose", Json::str("main")),
+                (
+                    "avoided",
+                    Json::obj([
+                        ("spend", Json::obj([("micro_units", Json::Int(5))])),
+                        ("provenance", Json::str("estimated_from_pricing")),
+                    ]),
+                ),
+            ]),
+        ),
+    );
+    run[6].3 = Json::obj([
+        ("dimension", Json::str("model_calls")),
+        ("amount", Json::Int(0)),
+        (
+            "attribution",
+            Json::obj([
+                ("charged_to", Json::str("subject")),
+                ("model_ref", model_ref("m-a")),
+                ("cache", Json::obj([("hit", Json::Bool(true))])),
+            ]),
+        ),
+        ("source_event", Json::obj([("event_id", Json::str("e5"))])),
+    ]);
+    let f = LedgerFacts::from_envelopes(&run);
+    assert_eq!(f.cache_resolutions.len(), 1);
+    assert_eq!(model_accounting(&f), Vec::<AccountingViolation>::new());
+
+    // An `avoided` estimate without estimated_from_pricing → AvoidedProvenance.
+    let mut run = model_plane_run();
+    run.insert(
+        5,
+        ev(
+            50,
+            "e50",
+            "model.cache.resolved",
+            Json::obj([
+                ("cache_kind", Json::str("k4")),
+                ("key", Json::str("sha256:k4key")),
+                ("outcome", Json::str("hit")),
+                ("attribution", Json::str("subject")),
+                ("purpose", Json::str("main")),
+                ("avoided", Json::obj([("spend", Json::obj([]))])),
+            ]),
+        ),
+    );
+    let f = LedgerFacts::from_envelopes(&run);
+    assert!(model_accounting(&f)
+        .iter()
+        .any(|v| matches!(v, AccountingViolation::AvoidedProvenance { .. })));
+
+    // A malformed attempt span (two terminals, no started) → AttemptSpan.
+    let mut run = model_plane_run();
+    run.retain(|(_, _, c, _)| c != "model.call.attempt.started");
+    let f = LedgerFacts::from_envelopes(&run);
+    assert!(model_accounting(&f)
+        .iter()
+        .any(|v| matches!(v, AccountingViolation::AttemptSpan { .. })));
+}
+
+// ── AC-R-2.3.2-{8,9} — deviation pooling, replay refusal, outage counts ────
+
+#[test]
+fn deviation_policy_gates_pooling() {
+    use hh_eval::compare::RemovalOutcome;
+    use hh_ontology::eval::DeviationPolicy;
+    let name = "task_success".to_string();
+    let decls = vec![metric("task_success")];
+    let ts = tasks();
+    let arms = vec![
+        arm_spec(DimensionId::ModelCalls),
+        arm_spec(DimensionId::ModelCalls),
+    ];
+    let mut runs = Vec::new();
+    for rep in 0..2 {
+        for task in ["t1", "t2"] {
+            runs.push(run("A", task, rep, 1, &name));
+            runs.push(run("B", task, rep, 1, &name));
+        }
+    }
+    // One B run carries routing.deviation.
+    runs.iter_mut()
+        .find(|r| r.arm_id == "B" && r.task_id == "t1" && r.replicate_index == 0)
+        .unwrap()
+        .routing_deviation = true;
+
+    // fail_fast forbids deviation outright.
+    let d = design();
+    assert!(matches!(
+        compare(&input(
+            &runs,
+            &ts,
+            &d,
+            &arms,
+            &decls,
+            std::slice::from_ref(&name)
+        )),
+        Err(CompareError::DeviationUnderFailFast { .. })
+    ));
+
+    let mut d = design();
+    d.routing_policy = RoutingPolicy::Route("policy-x".into());
+    // No declared policy → pooling refused.
+    assert!(matches!(
+        compare(&input(
+            &runs,
+            &ts,
+            &d,
+            &arms,
+            &decls,
+            std::slice::from_ref(&name)
+        )),
+        Err(CompareError::UnstratifiedDeviation)
+    ));
+    // exclude_deviated → the deviated row is excluded and counted beside.
+    d.deviation_policy = Some(DeviationPolicy::ExcludeDeviated);
+    let out = compare(&input(
+        &runs,
+        &ts,
+        &d,
+        &arms,
+        &decls,
+        std::slice::from_ref(&name),
+    ))
+    .expect("exclude_deviated compares");
+    assert_eq!(out.deviation.excluded_runs.len(), 1);
+    assert_eq!(out.deviation.arm_counts.get("B"), Some(&(1, 4)));
+    // pool_with_flag → pooled estimate carries the flag.
+    d.deviation_policy = Some(DeviationPolicy::PoolWithFlag);
+    let out = compare(&input(
+        &runs,
+        &ts,
+        &d,
+        &arms,
+        &decls,
+        std::slice::from_ref(&name),
+    ))
+    .expect("pool_with_flag compares");
+    assert!(out.deviation.pooled_with_flag);
+    assert_eq!(out.reports.len(), 1);
+    // stratify → one outcome per stratum, no pooled estimate; the deviated
+    // stratum has only B rows → unpaired (recorded, never dropped).
+    d.deviation_policy = Some(DeviationPolicy::Stratify);
+    let out = compare(&input(
+        &runs,
+        &ts,
+        &d,
+        &arms,
+        &decls,
+        std::slice::from_ref(&name),
+    ))
+    .expect("stratify returns strata");
+    assert!(out.reports.is_empty());
+    assert_eq!(out.deviation.strata.len(), 2);
+    let dev_stratum = out
+        .deviation
+        .strata
+        .iter()
+        .find(|s| s.deviated)
+        .expect("deviated stratum recorded");
+    assert!(dev_stratum.outcome.is_none(), "one-arm stratum is unpaired");
+    let clean = out.deviation.strata.iter().find(|s| !s.deviated).unwrap();
+    assert!(clean.outcome.is_some());
+
+    // A replayed trajectory is a hard refusal (AC-R-2.3.2-9's replay arm).
+    let mut runs = vec![run("A", "t1", 0, 1, &name), run("B", "t1", 0, 1, &name)];
+    runs[1].replayed_trajectory = true;
+    let d = design();
+    assert!(matches!(
+        compare(&input(
+            &runs,
+            &ts,
+            &d,
+            &arms,
+            &decls,
+            std::slice::from_ref(&name)
+        )),
+        Err(CompareError::ReplayedTrajectory { .. })
+    ));
+
+    // Outage counts: an infrastructure_failure under fail_fast counts in
+    // `outcome_counts` beside the headline (AC-R-2.3.2-9).
+    let mut runs = Vec::new();
+    for rep in 0..2 {
+        for task in ["t1", "t2"] {
+            runs.push(run("A", task, rep, 1, &name));
+            runs.push(run("B", task, rep, 1, &name));
+        }
+    }
+    runs.iter_mut()
+        .find(|r| r.arm_id == "B" && r.task_id == "t1" && r.replicate_index == 0)
+        .unwrap()
+        .outcome_class = OutcomeClass::InfrastructureFailure;
+    let d = design();
+    let out = compare(&input(
+        &runs,
+        &ts,
+        &d,
+        &arms,
+        &decls,
+        std::slice::from_ref(&name),
+    ))
+    .expect("compares");
+    assert_eq!(
+        out.outcome_counts
+            .get("B")
+            .and_then(|m| m.get("infrastructure_failure")),
+        Some(&1)
+    );
+    let _ = RemovalOutcome::Pass; // referenced in the removal test below
+}
+
+// ── AC-R-2.3.3-8 — the removal verdict over a retirement comparison ────────
+
+#[test]
+fn removal_verdict_pass_fail_inconclusive() {
+    use hh_eval::compare::{removal_verdict, RemovalOutcome};
+    let name = "task_success".to_string();
+    let decls = vec![metric("task_success")];
+    let ts = tasks();
+    let arms = vec![
+        arm_spec(DimensionId::ModelCalls),
+        arm_spec(DimensionId::ModelCalls),
+    ];
+    let d = design();
+
+    // P − R non-inferior: identical runs → pass.
+    let mut runs = Vec::new();
+    for rep in 0..2 {
+        for task in ["t1", "t2"] {
+            runs.push(run("A", task, rep, 1, &name));
+            runs.push(run("B", task, rep, 1, &name));
+        }
+    }
+    let out = compare(&input(
+        &runs,
+        &ts,
+        &d,
+        &arms,
+        &decls,
+        std::slice::from_ref(&name),
+    ))
+    .expect("compares");
+    let v = removal_verdict("R1", &out, &decls, 100_000, 100_000);
+    assert_eq!(v.verdict, RemovalOutcome::Pass);
+    assert!(v.regressed_tasks.is_empty());
+
+    // A reliable subset regresses (B fails t2 on every replicate) while the
+    // mean improves nowhere — fail; the mean never rescues the subset.
+    let mut runs = Vec::new();
+    for rep in 0..2 {
+        for task in ["t1", "t2"] {
+            runs.push(run("A", task, rep, 1, &name));
+            runs.push(run("B", task, rep, if task == "t2" { 0 } else { 1 }, &name));
+        }
+    }
+    let out = compare(&input(
+        &runs,
+        &ts,
+        &d,
+        &arms,
+        &decls,
+        std::slice::from_ref(&name),
+    ))
+    .expect("compares");
+    let v = removal_verdict("R1", &out, &decls, 100_000, 100_000);
+    assert_eq!(v.verdict, RemovalOutcome::Fail);
+    assert_eq!(v.regressed_tasks, vec!["t2".to_string()]);
+    // The share counts unique tasks, not task-metric cells (1 of 2).
+    assert_eq!(v.regressed_share_ppm, 500_000);
+
+    // An undefined estimate never coerces to pass — inconclusive (use the
+    // non-regressed equal-runs outcome so no per-task delta is defined).
+    let mut runs = Vec::new();
+    for rep in 0..2 {
+        for task in ["t1", "t2"] {
+            runs.push(run("A", task, rep, 1, &name));
+            runs.push(run("B", task, rep, 1, &name));
+        }
+    }
+    let mut out = compare(&input(
+        &runs,
+        &ts,
+        &d,
+        &arms,
+        &decls,
+        std::slice::from_ref(&name),
+    ))
+    .expect("compares");
+    out.reports[0].paired_effect.point = None;
+    out.reports[0].paired_effect.interval = None;
+    let v = removal_verdict("R1", &out, &decls, 100_000, 100_000);
+    assert!(matches!(v.verdict, RemovalOutcome::Inconclusive { .. }));
 }
