@@ -1,0 +1,26 @@
+[package]
+name = "hh-secrets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 credential broker — SecretRef/SecretChannel, the kernel-side CredentialBroker (register/grant/bind/mediate/mint/revoke/rotate/kernel_use/fingerprint), the deny-by-default EnvSpec projection, source redaction + the known-value mask set, the four secret_* veto metric declarations, and the security.credential.*/security.secret.* payload builders (spec §5g.3, R-2.8.3; ticket S1.13; ADR-0057/0058/0059)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+# The spec's own edge direction (R-2.8.3 consumes the R-2.8.1 records): `bind`
+# reads the `security.permission.{decided,granted,revoked}` projections the
+# monitor's schema owns — the PDP/CDP split is the monitor decides, the broker
+# delivers (ADR-0058).
+hh-monitor = { path = "../hh-monitor" }
+# The `wrapped_long_lived` isolation floor reuses the containment vocabulary's
+# `IsolationClass` (CC7 — `process_sandbox` is its spelling).
+hh-containment = { path = "../hh-containment" }

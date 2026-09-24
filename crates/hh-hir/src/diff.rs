@@ -306,6 +306,20 @@ pub struct HirDiff {
     pub derivation: DiffDerivation,
 }
 
+impl HirDiff {
+    /// The canonical JSON of the diff record (the codec is `schema::diff_to_json` —
+    /// CC7). The form the boundary checks read — e.g. R-2.8.3's
+    /// `SecretValueInDefinition` sweep over a diff in an evolution context (S1.13).
+    pub fn to_json(&self) -> Json {
+        crate::schema::diff_to_json(self)
+    }
+
+    /// The canonical bytes.
+    pub fn canonical_bytes(&self) -> Vec<u8> {
+        self.to_json().to_canonical_string().into_bytes()
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // diff
 // ─────────────────────────────────────────────────────────────────────────────

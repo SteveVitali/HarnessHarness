@@ -166,5 +166,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-secrets"
+version = "0.0.1"
+dependencies = [
+ "hh-containment",
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-monitor",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-wire"
 version = "0.0.1"
