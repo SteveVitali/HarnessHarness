@@ -258,6 +258,34 @@ const REGISTRY_FIELDS: &[AuditField] = &[
     af("produced_by"),
 ];
 
+/// `lifecycle.capability.registered` — REGISTRY_FIELDS + `source_kind`
+/// (ADR-0088 D8's kind-specific member; S3.9 — the field was emitted but
+/// never declared, so every capability registration failed the Rule-C
+/// partition at append).
+const CAPABILITY_REGISTERED_FIELDS: &[AuditField] = &[
+    af("kind"),
+    af("version_id"),
+    af("semantic_id"),
+    af("admission"),
+    af("registrar_origin"),
+    af("operation"),
+    af("reason"),
+    af("subject"),
+    af("namespace"),
+    af("name"),
+    af("label"),
+    af("supersedes"),
+    af("revoker_origin"),
+    af("snapshot_id"),
+    af("member_count"),
+    af("seq"),
+    af("report_id"),
+    af("subject_ref"),
+    af("suite_ref"),
+    af("produced_by"),
+    af("source_kind"),
+];
+
 /// `action.effect.*` — the shared effect-phase partition (§5g.6 §3 dossier:
 /// `effect_id, tool_call_id, attempt_no, capability semantic_id,
 /// args_canonical_hash, declared EffectClass, effective_risk_class,
@@ -1223,7 +1251,7 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // `lifecycle.capability.registered` — a typed `ToolCapability` record (the
     // registry body is a `hir.node` semantic id + pinned `version_id`) passed
     // V-E1 and entered the store (ADR-0147 (d); §5d.1; S1.17).
-    row_audit("lifecycle.capability.registered",      O::Events, true,  REGISTRY_FIELDS, &[], None, None),
+    row_audit("lifecycle.capability.registered",      O::Events, true,  CAPABILITY_REGISTERED_FIELDS, &[], None, None),
 
     // ── model boundary ───────────────────────────────────────────────────
     // `model.call.{requested,completed,failed}` are audit-grade (§05b.1; §5g.6 §3

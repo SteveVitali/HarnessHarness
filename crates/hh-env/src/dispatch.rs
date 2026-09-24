@@ -443,10 +443,14 @@ impl<'a> Dispatcher<'a> {
         };
 
         // The arg-map eval — `UnmappedArgument`/`UnscopedParameter` is a
-        // `resolve`-stage refusal (`action.tool.rejected{source: args}`). No
-        // effect scope exists yet (the effect coordinate is derived from the
-        // canonical args), so the `rejected` row carries the `turn ⊃
-        // model_call ⊃ tool_call` chain only.
+        // `SurfaceFailure` detected before dispatch: no executor runs, no
+        // `Effect` exists, and the row is `action.tool.surface_rejected` with
+        // the typed `failure_class` (§5d.2; ADR-0092 D5; AC-R-2.5.2-7's run
+        // half — S3.9). No effect scope exists yet (the effect coordinate is
+        // derived from the canonical args), so the row carries the
+        // `turn ⊃ model_call ⊃ tool_call` chain only; the call bytes are
+        // content-addressed by `raw_call_hash`, never ledgered (ADR-0066
+        // Rule C).
         let canonical = match hh_monitor::args::eval(
             input.binding,
             input.scope_bindings,
@@ -454,9 +458,26 @@ impl<'a> Dispatcher<'a> {
         ) {
             Ok(c) => c,
             Err(e) => {
+                // `UnscopedParameter` — a scope-bearing parameter outside the
+                // declared bindings — is `domain_violation` (ADR-0286 D3).
+                let failure_class = match &e {
+                    hh_monitor::args::ArgError::UnmappedArgument { .. } => "unmapped_argument",
+                    hh_monitor::args::ArgError::UnscopedParameter { .. } => "domain_violation",
+                };
+                let raw_call_hash = hh_identity::idp::idp_id(
+                    "raw_call",
+                    input.surface_args.to_canonical_string().as_bytes(),
+                );
                 let mut rejected = self.minter_ev().mint(
-                    "action.tool.rejected",
-                    events::tool_rejected_payload("args", &format!("{e:?}")),
+                    "action.tool.surface_rejected",
+                    events::surface_rejected_payload(
+                        &input.binding.surface_id,
+                        &input.binding.surface_id,
+                        failure_class,
+                        &raw_call_hash,
+                        &input.chain.model_call_id,
+                        None,
+                    ),
                 )?;
                 rejected.scope = hh_ledger::event::Scope {
                     turn_id: Some(input.chain.turn_id.clone()),
@@ -1172,6 +1193,9 @@ impl<'a> Dispatcher<'a> {
             c.note_committed(&env_ref_str(&handle), input.declared.domain);
         }
         let execution_id = self.store.alloc_id("exec");
+        // The M-point around `exec`/`read` (AC-R-2.5.5-11) — `action.tool.
+        // completed` reports `execution_ms` against this stamp.
+        let exec_started_ms = self.store.now_ms();
         let started = self.minter_ev().mint_effect(
             "action.tool.started",
             events::tool_started_payload(&execution_id, &token.hash),
@@ -1476,6 +1500,25 @@ impl<'a> Dispatcher<'a> {
         )?;
         // `completed` closes the `tool_call` scope — it must not carry
         // `effect_id` (`observed` closes that scope earlier in this batch).
+        // The `harness_overhead.execution_ms` M-point rides the executed
+        // path's terminal (AC-R-2.5.5-11): the `started → completed` window
+        // stratified on the capability's declared `(executor_class,
+        // isolation_class)` — the record's own declaration, never the
+        // executor's self-report.
+        let req = &input.capability.execution_requirement;
+        let overhead = events::ExecutionOverhead {
+            execution_ms: self.store.now_ms().saturating_sub(exec_started_ms) as i64,
+            executor_class: req
+                .get("environment_class")
+                .and_then(Json::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
+            isolation_class: req
+                .get("isolation_min")
+                .and_then(Json::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
+        };
         let mut completed = self.minter_ev().mint(
             "action.tool.completed",
             events::tool_completed_payload(
@@ -1484,6 +1527,7 @@ impl<'a> Dispatcher<'a> {
                     TerminalStatus::ToolError { .. } => "error",
                 },
                 None,
+                Some(&overhead),
             ),
         )?;
         completed.scope = hh_ledger::event::Scope {
@@ -1659,9 +1703,12 @@ impl<'a> Dispatcher<'a> {
                     effect_id,
                     &input.chain,
                 )?;
+                // A cache-served completion runs no `exec`/`read` — it
+                // carries no overhead M-point (never 0: unmeasured is
+                // absent, not a zero sample in the distribution).
                 let mut completed = self.minter_ev().mint(
                     "action.tool.completed",
-                    events::tool_completed_payload("ok", None),
+                    events::tool_completed_payload("ok", None, None),
                 )?;
                 completed.scope = hh_ledger::event::Scope {
                     turn_id: Some(input.chain.turn_id.clone()),

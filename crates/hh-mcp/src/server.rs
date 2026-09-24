@@ -3,30 +3,58 @@
 //! the same framing `hh-embed`'s stdio binding uses, so the conformance
 //! driver speaks one dialect).
 //!
-//! Served surface (Stage 3; R-2.11.3⁰):
-//! - `initialize` → `{protocolVersion, capabilities{tools}, serverInfo}`.
-//! - `server/discover` → `{artifact, binding, protocol_version, ttlMs,
-//!   cacheScope}` — byte-identical per bundle (AC-R-2.11.3-1).
-//! - `tools/list` → `{tools[], nextCursor}` — the canonical catalogue.
-//! - `tools/call` → typed `isError` refusals only (`NoCoveringGrant`,
-//!   `HandleExpired`, `unknown_tool`, `stage_pending`) — execution is
-//!   not a Stage-3 verb.
+//! Served surface (Stage 3; R-2.11.3⁰ + the R-2.5.4⁰ edge slice, S3.9):
+//! - `initialize` → `{protocolVersion, capabilities{tools{listChanged}},
+//!   serverInfo}` — the negotiated echo is the client's requested
+//!   version when pinned, else the server's preferred pin.
+//! - `server/discover` → `{artifact, binding, protocol_version,
+//!   supportedVersions, capabilities, ttlMs, cacheScope}` — byte-
+//!   identical per bundle (AC-R-2.11.3-1). **Modern era only** — a
+//!   legacy-era peer answers `-32601` (the client's compatibility probe
+//!   detects it, ADR-0099 N1).
+//! - `tools/list` → `{tools[], nextCursor, ttlMs, cacheScope: "private",
+//!   resultType: "complete"}` — the canonical catalogue; the legacy
+//!   projection drops `resultType`/`ttlMs`/`cacheScope` (the D2 loss
+//!   class `narrowed`).
+//! - `tools/call` → typed `isError` refusals (`NoCoveringGrant`,
+//!   `HandleExpired`, `unknown_tool`, `stage_pending`), the fixture's
+//!   `input_required` paused shape and the `requestState` resume echo
+//!   (ADR-0097 D3) — execution is not a Stage-3 verb.
 //! - `ping` → `{}`. `notifications/*` → no response.
 //! - unknown method → `-32601`; a line that is not a request → `-32700`.
 //!
 //! `_meta` on any request is parsed and *dropped* — claims never
 //! decide (AC-R-2.11.3-6: the scripted-call property is byte-identical
 //! under arbitrary caller `_meta`).
+//!
+//! [`serve_dynamic`] re-lowers the artifact per iteration through the
+//! caller's loader; a `catalogue_hash` change emits
+//! `notifications/tools/list_changed` **before** the next answer —
+//! `listChanged` only on bundle change (AC-R-2.5.4-2).
 
 use std::io::{BufRead, Write};
 
 use hh_wire::json::Json;
 
-use crate::artifact::{tools_call, ServedArtifact, PROTOCOL_VERSION};
+use crate::artifact::{tools_call, ServedArtifact};
+use crate::protocol::{PINNED_MODERN, PINNED_VERSIONS};
 
 /// The server's reported name/version.
 const SERVER_NAME: &str = "hh-mcp-serve";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The served era — `Modern` answers `server/discover` and the full
+/// `tools/list` freshness/type metadata; `Legacy` is the compatibility
+/// profile (`initialize`-only handshake, bare list shape — the loss
+/// class `narrowed`, §5d.4's legacy-era projection).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServeMode {
+    /// The pinned modern revision.
+    Modern,
+    /// The pinned legacy revision — `server/discover` is not a legacy
+    /// method; `initialize` echoes the legacy pin.
+    Legacy,
+}
 
 /// A serve-loop failure (transport only — request-level failures are
 /// JSON-RPC errors on the wire, never a loop abort).
@@ -67,28 +95,68 @@ fn result_frame(id: Json, result: Json) -> Json {
     ])
 }
 
+/// One notification frame (no `id`).
+fn notification(method: &str) -> Json {
+    Json::obj([
+        ("jsonrpc", Json::str("2.0")),
+        ("method", Json::str(method.to_string())),
+        ("params", Json::obj([])),
+    ])
+}
+
 /// `server/discover` — the discovery document: the served artifact
-/// verbatim, the `stdio_launch` binding (test principal), the protocol
-/// revision and the cache declaration. Byte-identical per bundle —
-/// every member is derived from `(artifact, binding)` only.
-fn discover(artifact: &ServedArtifact) -> Json {
+/// verbatim, the `stdio_launch` binding (test principal), the pinned
+/// `supportedVersions`, the capability declaration and the cache
+/// hints. Byte-identical per bundle — every member is derived from
+/// `(artifact, mode)` only.
+fn discover(artifact: &ServedArtifact, list_changed: bool) -> Json {
     Json::obj([
         ("schema", Json::str("hh-mcp-discover/1")),
         ("artifact", artifact.to_json()),
         ("binding", crate::binding::stdio_launch_binding()),
-        ("protocol_version", Json::str(PROTOCOL_VERSION)),
-        ("ttlMs", Json::Int(0)),
-        ("cacheScope", Json::str("bundle")),
+        ("protocol_version", Json::str(PINNED_MODERN)),
+        (
+            "supportedVersions",
+            Json::Arr(
+                PINNED_VERSIONS
+                    .iter()
+                    .map(|v| Json::str(v.to_string()))
+                    .collect(),
+            ),
+        ),
+        (
+            "capabilities",
+            Json::obj([(
+                "tools",
+                Json::obj([("listChanged", Json::Bool(list_changed))]),
+            )]),
+        ),
+        ("ttlMs", Json::Int(artifact.ttl_ms as i64)),
+        ("cacheScope", Json::str("private")),
     ])
 }
 
-/// `initialize` result — the MCP handshake record.
-fn initialize() -> Json {
+/// `initialize` result — the MCP handshake record. `requested` is the
+/// client's offered `protocolVersion`: echoed when it is a member of
+/// the pinned set; otherwise the server's preferred pin is answered
+/// truthfully (the *client* owns the N2 refusal — a server never
+/// guesses a version it does not speak).
+fn initialize(requested: Option<&str>, mode: ServeMode, list_changed: bool) -> Json {
+    let version = match mode {
+        ServeMode::Legacy => crate::artifact::PROTOCOL_VERSION,
+        ServeMode::Modern => match requested {
+            Some(v) if PINNED_VERSIONS.contains(&v) => v,
+            _ => PINNED_MODERN,
+        },
+    };
     Json::obj([
-        ("protocolVersion", Json::str(PROTOCOL_VERSION)),
+        ("protocolVersion", Json::str(version)),
         (
             "capabilities",
-            Json::obj([("tools", Json::obj([("listChanged", Json::Bool(false))]))]),
+            Json::obj([(
+                "tools",
+                Json::obj([("listChanged", Json::Bool(list_changed))]),
+            )]),
         ),
         (
             "serverInfo",
@@ -100,10 +168,14 @@ fn initialize() -> Json {
     ])
 }
 
-/// `tools/list` — `{tools[], nextCursor}`; `nextCursor` is null (the
-/// catalogue is always whole — a fixture never paginates).
-fn tools_list(artifact: &ServedArtifact) -> Json {
-    Json::obj([
+/// `tools/list` — `{tools[], nextCursor}` plus, in the modern era, the
+/// freshness/type members (`ttlMs`, `cacheScope: "private"`,
+/// `resultType: "complete"`). `nextCursor` is null (the catalogue is
+/// always whole — a fixture never paginates). The legacy projection
+/// drops the freshness/type members — `narrowed`, reported by the
+/// binding's loss record.
+fn tools_list(artifact: &ServedArtifact, mode: ServeMode) -> Json {
+    let mut result = vec![
         (
             "tools",
             Json::Arr(
@@ -115,18 +187,46 @@ fn tools_list(artifact: &ServedArtifact) -> Json {
             ),
         ),
         ("nextCursor", Json::Null),
-    ])
+    ];
+    if mode == ServeMode::Modern {
+        result.push(("ttlMs", Json::Int(artifact.ttl_ms as i64)));
+        result.push(("cacheScope", Json::str("private")));
+        result.push(("resultType", Json::str("complete")));
+    }
+    Json::Obj(
+        result
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect(),
+    )
 }
 
 /// Dispatch one request. Caller `_meta` (on `params` or the request
 /// envelope) is *not read* — the two arms that could observe it
 /// (`tools/call` params, the request object) never consult it, which is
 /// the AC-R-2.11.3-6 property by construction.
-fn dispatch(artifact: &ServedArtifact, method: &str, params: &Json, id: Json) -> Json {
+fn dispatch(
+    artifact: &ServedArtifact,
+    mode: ServeMode,
+    list_changed: bool,
+    method: &str,
+    params: &Json,
+    id: Json,
+) -> Json {
     match method {
-        "initialize" => result_frame(id, initialize()),
-        "server/discover" | "discover" => result_frame(id, discover(artifact)),
-        "tools/list" => result_frame(id, tools_list(artifact)),
+        "initialize" => result_frame(
+            id,
+            initialize(
+                params.get("protocolVersion").and_then(Json::as_str),
+                mode,
+                list_changed,
+            ),
+        ),
+        "server/discover" | "discover" => match mode {
+            ServeMode::Modern => result_frame(id, discover(artifact, list_changed)),
+            ServeMode::Legacy => error_frame(id, -32601, "method_not_found: server/discover"),
+        },
+        "tools/list" => result_frame(id, tools_list(artifact, mode)),
         "tools/call" => result_frame(id, tools_call(artifact, params, now_ms())),
         "ping" => result_frame(id, Json::obj([])),
         _ => error_frame(id, -32601, &format!("method_not_found: {method}")),
@@ -146,14 +246,54 @@ fn now_ms() -> u64 {
 /// newline-delimited JSON-RPC message per line, answer requests,
 /// ignore notifications (`id` absent or `notifications/*`), EOF ends
 /// the session. The loop is a pure function of `(artifact, lines)` —
-/// no ledger, no kernel link, no environment reads.
+/// no ledger, no kernel link, no environment reads. Modern era, fixed
+/// artifact (`listChanged` is never emitted — the served bundle cannot
+/// change under a static artifact).
 pub fn serve(
     artifact: &ServedArtifact,
     reader: &mut impl BufRead,
     writer: &mut impl Write,
 ) -> Result<(), ServeError> {
+    let owned = artifact.clone();
+    serve_dynamic(
+        &mut move || owned.clone(),
+        ServeMode::Modern,
+        reader,
+        writer,
+    )
+}
+
+/// `serve_dynamic(load, mode, reader, writer)` — the reloadable loop:
+/// `load()` re-lowers the served artifact at the top of every
+/// iteration; a `catalogue_hash` change writes
+/// `notifications/tools/list_changed` before the next answer (the
+/// `list_changed`-only-on-bundle-change rule, AC-R-2.5.4-2 — the
+/// notification is a pure function of the artifact sequence, never of
+/// requests). `load` returning the same artifact is the `serve` case.
+///
+/// The advertised `tools.listChanged` capability is `true` exactly when
+/// the loader can produce a different artifact — the caller declares
+/// it via `mode` (a fixed-artifact server still answers `true`: the
+/// *method* is supported; the bundle simply never changes under it —
+/// the served capability is honest either way).
+pub fn serve_dynamic(
+    load: &mut dyn FnMut() -> ServedArtifact,
+    mode: ServeMode,
+    reader: &mut impl BufRead,
+    writer: &mut impl Write,
+) -> Result<(), ServeError> {
+    let mut artifact = load();
     let mut line = String::new();
     loop {
+        // A changed catalogue fires `listChanged` before anything else
+        // this iteration writes (AC-R-2.5.4-2).
+        let next = load();
+        if next.catalogue_hash != artifact.catalogue_hash {
+            let n = notification("notifications/tools/list_changed");
+            writeln!(writer, "{}", n.to_canonical_string()).map_err(ServeError::Io)?;
+            writer.flush().map_err(ServeError::Io)?;
+            artifact = next;
+        }
         line.clear();
         let n = reader.read_line(&mut line).map_err(ServeError::Io)?;
         if n == 0 {
@@ -182,7 +322,7 @@ pub fn serve(
             continue;
         }
         let params = msg.get("params").cloned().unwrap_or(Json::Null);
-        let frame = dispatch(artifact, method, &params, id);
+        let frame = dispatch(&artifact, mode, true, method, &params, id);
         writeln!(writer, "{}", frame.to_canonical_string()).map_err(ServeError::Io)?;
         writer.flush().map_err(ServeError::Io)?;
     }

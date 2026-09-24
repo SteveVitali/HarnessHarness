@@ -82,6 +82,23 @@ pub struct EffectRow {
     pub reverts: Option<String>,
 }
 
+/// One `action.effect.unattributed` row — a capture-path signal
+/// (`security.egress.decided`, `security.credential.used`,
+/// `security.containment.violated`, `fs_change`, `process.spawned`, an
+/// executor signal…) that resolved to no `effect_id` — the AC-E5-01
+/// `attribution_completeness` veto's signal-side input (S3.9).
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnattributedSignal {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `signal_kind` — which signal class failed to resolve.
+    pub signal_kind: Option<String>,
+    /// `evidence_ref` — the unattributed signal's reference.
+    pub evidence_ref: Option<String>,
+    /// `detection` — how the miss was detected (`token_resolve_miss`, …).
+    pub detection: Option<String>,
+}
+
 /// One `context.assembled` item — `{kind, artefact_id?, tokens}`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssembledItem {
@@ -490,6 +507,9 @@ pub struct LedgerFacts {
     /// `context.memory.invalidated` version ids + superseded predecessors —
     /// the `memory.over_invalidation` justification set.
     pub invalidated_ids: BTreeSet<String>,
+    /// `action.effect.unattributed` markers — capture-path signals that
+    /// resolved to no `effect_id` (S3.9; the AC-E5-01 veto input).
+    pub unattributed_signals: Vec<UnattributedSignal>,
 }
 
 fn s(j: &Json, member: &str) -> Option<String> {
@@ -681,6 +701,14 @@ impl LedgerFacts {
                 }
                 "action.effect.intended" => f.effects_intended.push(effect_row(p)),
                 "action.effect.committed" => f.effects_committed.push(effect_row(p)),
+                "action.effect.unattributed" => {
+                    f.unattributed_signals.push(UnattributedSignal {
+                        seq,
+                        signal_kind: s(p, "signal_kind"),
+                        evidence_ref: s(p, "evidence_ref"),
+                        detection: s(p, "detection"),
+                    });
+                }
                 "security.permission.decided" => {
                     if s(p, "decision").as_deref() == Some("deny") {
                         if let Some(e) = s(p, "effect_id") {
@@ -1158,6 +1186,30 @@ impl LedgerFacts {
             "model_calls_completed".into(),
             Json::Arr(self.model_calls_completed.iter().map(Json::str).collect()),
         );
+        m.insert(
+            "unattributed_signals".into(),
+            Json::Arr(
+                self.unattributed_signals
+                    .iter()
+                    .map(|u| {
+                        let mut um = BTreeMap::new();
+                        um.insert("seq".into(), Json::Int(u.seq as i64));
+                        insert_opt(
+                            &mut um,
+                            "signal_kind",
+                            u.signal_kind.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut um,
+                            "evidence_ref",
+                            u.evidence_ref.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut um, "detection", u.detection.as_deref().map(Json::str));
+                        Json::Obj(um)
+                    })
+                    .collect(),
+            ),
+        );
         // ── S3.7 model-plane members ────────────────────────────────────
         m.insert(
             "call_requests".into(),
@@ -1401,6 +1453,7 @@ impl LedgerFacts {
                 "metrics_emitted",
                 "cost_attributed_calls",
                 "model_calls_completed",
+                "unattributed_signals",
                 "first_proposed_at",
                 "grading",
                 "call_requests",
@@ -1527,6 +1580,17 @@ impl LedgerFacts {
                 .iter()
                 .filter_map(|c| c.as_str().map(str::to_string))
                 .collect();
+        }
+        if let Some(Json::Arr(us)) = m.get("unattributed_signals") {
+            for u in us {
+                let um = expect_obj(u, REC)?;
+                f.unattributed_signals.push(UnattributedSignal {
+                    seq: opt_int_at(um, "seq")?.unwrap_or(0) as u64,
+                    signal_kind: opt_str_at(um, "signal_kind")?.map(str::to_string),
+                    evidence_ref: opt_str_at(um, "evidence_ref")?.map(str::to_string),
+                    detection: opt_str_at(um, "detection")?.map(str::to_string),
+                });
+            }
         }
         f.first_proposed_at = opt_int_at(m, "first_proposed_at")?.map(|x| x as u64);
         // ── S3.7 model-plane members ────────────────────────────────────

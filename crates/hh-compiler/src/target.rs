@@ -252,15 +252,16 @@ fn lower_mcp(
             .document
             .node(&t.binding.hir_node_id)
             .expect("checked");
-        let effects: Vec<Json> = match &cap.effects {
-            ToolEffects::Pure => Vec::new(),
-            ToolEffects::Declared(set) => set.iter().map(|e| Json::str(e.domain.name())).collect(),
-        };
         let resources_declared = matches!(&cap.resources, hh_hir::records::Resources::Declared(_));
         let effect_set: Vec<hh_hir::EffectClass> = match &cap.effects {
             ToolEffects::Pure => Vec::new(),
             ToolEffects::Declared(s) => s.iter().cloned().collect(),
         };
+        // The carried `effects` is the full `EffectClass` JSON — the
+        // attribute vector rides the boundary so `import_listing`
+        // recovers the declared set (AC-R-2.5.1-5's loss list is exact;
+        // the *annotation* projection stays in `annotations`).
+        let effects: Vec<Json> = effect_set.iter().map(|e| e.to_json()).collect();
         let hints = mcp_hints(&effect_set, resources_declared);
         let mut meta = vec![
             ("budget_ref", Json::str(budget_ref(plan))),

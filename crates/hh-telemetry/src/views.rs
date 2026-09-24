@@ -715,6 +715,18 @@ fn na(r: NaReason) -> Json {
     Json::obj([("na", Json::str(na_str(r)))])
 }
 
+/// The `q_ppm`-quantile of a **sorted** sample (nearest-rank — the result is
+/// always a realised value, never interpolated; deterministic). The one
+/// rounding rule mirrors `hh-eval::stats::quantile` (hh-telemetry does not
+/// depend on hh-eval — the rule is duplicated, not shared).
+fn nearest_rank(sorted: &[i64], q_ppm: i64) -> i64 {
+    let ppm = hh_budget::quantity::PPM_SCALE;
+    let n = sorted.len() as i64;
+    let rank = ((q_ppm.clamp(0, ppm) as i128 * n as i128 + ppm as i128 - 1) / ppm as i128)
+        .clamp(1, n as i128) as usize;
+    sorted[rank - 1]
+}
+
 /// `metric_view` — the §3 metric projection over the catalogue (ADR-0044 D5).
 /// `declared` is the run's stamped observability set; a metric whose
 /// `requires_observability` the run doesn't meet renders `n/a{observability}`
@@ -1213,6 +1225,47 @@ fn compute_metric(name: &str, ev: &[&EventEnvelope]) -> Json {
                 .filter(|e| SpendRow::from_json(&e.payload).is_some())
                 .count() as i64;
             Json::Int(attributed * ppm / rows)
+        }
+        // `harness_overhead.execution_ms` — the helper-overhead distribution
+        // (AC-R-2.5.5-11; S3.9): each executed call's `execution_ms` M-point
+        // grouped on `(executor_class, isolation_class)` — the capability's
+        // own declared classes, never the executor's self-report. Cache-served
+        // completions carry no M-point and contribute no sample (absent ≠ 0);
+        // a prefix with no measured call is `n/a{estimator_undefined}`.
+        "harness_overhead.execution_ms" => {
+            let mut by_stratum: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+            for e in ev.iter().filter(|e| e.class == "action.tool.completed") {
+                if let Some(ms) = e.payload.get("execution_ms").and_then(Json::as_int) {
+                    let key = format!(
+                        "{}/{}",
+                        payload_str(e, "executor_class").unwrap_or("unknown"),
+                        payload_str(e, "isolation_class").unwrap_or("unknown")
+                    );
+                    by_stratum.entry(key).or_default().push(ms);
+                }
+            }
+            if by_stratum.is_empty() {
+                return na(NaReason::EstimatorUndefined);
+            }
+            Json::Obj(
+                by_stratum
+                    .iter()
+                    .map(|(k, xs)| {
+                        let mut s = xs.clone();
+                        s.sort_unstable();
+                        (
+                            k.clone(),
+                            Json::obj([
+                                ("n", Json::Int(s.len() as i64)),
+                                ("min", Json::Int(s[0])),
+                                ("p50", Json::Int(nearest_rank(&s, 500_000))),
+                                ("p95", Json::Int(nearest_rank(&s, 950_000))),
+                                ("max", Json::Int(s[s.len() - 1])),
+                            ]),
+                        )
+                    })
+                    .collect(),
+            )
         }
         "boundary_overhead_ms" => Json::Int(
             ev.iter()

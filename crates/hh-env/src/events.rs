@@ -489,12 +489,43 @@ pub fn tool_started_payload(execution_id: &str, attribution_token_hash: &str) ->
     ])
 }
 
+/// The `harness_overhead.execution_ms` M-point members `action.tool.completed`
+/// carries on the *executed* path (AC-R-2.5.5-11; S3.9): the
+/// `started → completed` execution window plus the `(executor_class,
+/// isolation_class)` the per-effect overhead distribution stratifies on. A
+/// cache-served completion runs no `exec`/`read` — it carries none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionOverhead {
+    /// `completed.now_ms − started.now_ms` (the execute+capture window).
+    pub execution_ms: i64,
+    /// `execution_requirement.environment_class` (`kernel_internal`,
+    /// `sandbox_helper`, …).
+    pub executor_class: String,
+    /// `execution_requirement.isolation_min` (H4's enum).
+    pub isolation_class: String,
+}
+
 /// `action.tool.completed{status}` — the tool's terminal (`ok|error`).
-pub fn tool_completed_payload(status: &str, detail: Option<&str>) -> Json {
+pub fn tool_completed_payload(
+    status: &str,
+    detail: Option<&str>,
+    overhead: Option<&ExecutionOverhead>,
+) -> Json {
     let mut m = BTreeMap::new();
     m.insert("status".to_string(), Json::str(status));
     if let Some(d) = detail {
         m.insert("detail".to_string(), Json::str(d));
+    }
+    if let Some(o) = overhead {
+        m.insert("execution_ms".to_string(), Json::Int(o.execution_ms));
+        m.insert(
+            "executor_class".to_string(),
+            Json::str(o.executor_class.clone()),
+        );
+        m.insert(
+            "isolation_class".to_string(),
+            Json::str(o.isolation_class.clone()),
+        );
     }
     Json::Obj(m)
 }
@@ -502,6 +533,33 @@ pub fn tool_completed_payload(status: &str, detail: Option<&str>) -> Json {
 /// `action.tool.rejected{source}` — a protocol/validation refusal.
 pub fn tool_rejected_payload(source: &str, reason: &str) -> Json {
     Json::obj([("source", Json::str(source)), ("reason", Json::str(reason))])
+}
+
+/// `action.tool.surface_rejected{surface_id, binding_ref, failure_class,
+/// raw_call_hash, model_call_id, rendering_ref?}` — a `SurfaceFailure`
+/// detected by the parser or the reference monitor before dispatch (§5d.2;
+/// ADR-0092 D5): no executor runs, no `Effect` exists. The call itself is
+/// content-addressed by `raw_call_hash` — never the bytes (ADR-0066 Rule
+/// C).
+pub fn surface_rejected_payload(
+    surface_id: &str,
+    binding_ref: &str,
+    failure_class: &str,
+    raw_call_hash: &str,
+    model_call_id: &str,
+    rendering_ref: Option<&str>,
+) -> Json {
+    let mut m = BTreeMap::from([
+        ("surface_id".to_string(), Json::str(surface_id)),
+        ("binding_ref".to_string(), Json::str(binding_ref)),
+        ("failure_class".to_string(), Json::str(failure_class)),
+        ("raw_call_hash".to_string(), Json::str(raw_call_hash)),
+        ("model_call_id".to_string(), Json::str(model_call_id)),
+    ]);
+    if let Some(r) = rendering_ref {
+        m.insert("rendering_ref".to_string(), Json::str(r));
+    }
+    Json::Obj(m)
 }
 
 /// The `security.containment.applied` ref the `attached` event's
