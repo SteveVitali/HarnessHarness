@@ -626,6 +626,12 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("model.call.attempt.failed",       Led, O::ModelIo, false, false, None, None),
     row("model.stream.delta",              Eph, O::ModelIo, false, false, None, None),
     row("model.route.decided",             Led, O::ModelIo, false, false, None, None),
+    // `model.rerouted` — the ADR-0122 d.3 reroute record (model_io: the
+    // payload is route facts, never message content).
+    row("model.rerouted",                  Led, O::ModelIo, false, false, None, None),
+    // `model.profile.expired_used` — an `expired` profile bound under a
+    // recorded `intent_ref` (G-1's only admissible expired path; §5b.3).
+    row("model.profile.expired_used",      Led, O::ModelIo, false, false, None, None),
     row("model.cache.resolved",            Led, O::ModelIo, false, false, None, None),
     row("model.surface.relowered",         Led, O::Events, false, false, None, None),
 

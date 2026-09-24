@@ -106,6 +106,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-gateway"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-compiler",
+ "hh-containment",
+ "hh-identity",
+ "hh-ledger",
+ "hh-provenance",
+ "hh-secrets",
+ "hh-telemetry",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-hir"
 version = "0.0.1"
 dependencies = [

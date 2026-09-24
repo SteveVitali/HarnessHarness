@@ -138,6 +138,22 @@ members = [
     # retryability. The integration layer above hh-hir/hh-containment/
     # hh-monitor/hh-ledger/hh-secrets/hh-budget — the cycle-safe seam (CC7).
     "crates/hh-env",
+    # The C0/Stage-1 model adapter / gateway + C0 model-plane slices (spec
+    # §5b.1–§5b.4, R-2.3.1, the R-2.3.2 C0 static slice, R-2.3.3⁰, R-2.3.4⁰;
+    # ticket S1.18; ADR-0118…0128). A PERSISTENT workspace member: the
+    # model-blind, dialect-parameterised gateway — WireDialect/1 descriptors
+    # (debt-recorded rules), the normalized ModelEvent grammar (G1–G7) +
+    # ModelMessage (T1–T7), closed StopReason/ModelErrorClass with kernel
+    # retry_class defaults, AttemptPolicy as data + R-RT-1…6, usage on
+    # model.call.completed through hh-telemetry's TokenVector, kernel-held
+    # credentials (provided: yes/no only), the H4 endpoint allow-list refusal;
+    # the C0 static router slice (ModelRoleTable, RoutingPolicy{static,
+    # role_table}, guards G-1/G-2/G-4, the closed RoutingRefusal sum,
+    # model.route.decided); the §5b.4⁰ slice — CacheSemantics as data,
+    # LC-1…LC-9 layout invariants, the affinity key, expected/observed state,
+    # model.cache.resolved. Consumes hh-compiler's ModelProfile/1 (CC1 — never
+    # a duplicate record) and appends through the run's fenced writer.
+    "crates/hh-gateway",
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",

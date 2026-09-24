@@ -407,15 +407,25 @@ impl Default for ProfileCapabilities {
     }
 }
 
-/// `version_pattern ∈ {exact | prefix | range | any}` (§3.2.3).
+/// `version_pattern ∈ {exact | prefix | range | any}` (§3.2.3) — the closed
+/// `Pattern` grammar: `exact(id) | prefix(id) | range(family, lo?, hi?) | any`.
+/// Never a regex or a substring test outside this grammar (AC-R-2.3.3-2).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VersionPattern {
     /// An exact model version.
     Exact(String),
     /// A version prefix.
     Prefix(String),
-    /// A half-open range `{lo, hi}`.
-    Range(String, String),
+    /// `range(family, lo?, hi?)` — a half-open `[lo, hi)` version window over
+    /// the named family; an absent bound is unbounded.
+    Range {
+        /// The family the range scopes (empty = the selector's `model_family`).
+        family: String,
+        /// Inclusive lower bound (`None` = unbounded below).
+        lo: Option<String>,
+        /// Exclusive upper bound (`None` = unbounded above).
+        hi: Option<String>,
+    },
     /// Any version.
     Any,
 }
@@ -425,7 +435,7 @@ impl VersionPattern {
     pub fn specificity(&self) -> u8 {
         match self {
             VersionPattern::Exact(_) => 3,
-            VersionPattern::Range(..) => 2,
+            VersionPattern::Range { .. } => 2,
             VersionPattern::Prefix(_) => 1,
             VersionPattern::Any => 0,
         }
@@ -776,4 +786,357 @@ pub fn resolve_chain(
         });
     }
     Ok(chain)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Selector matching, `resolve_profile`, the null profile, and the expiry state
+// machine (§5b.3; ADR-0124 d.4/d.5; ADR-0126 d.2) — the R-2.3.3⁰ C0 slice.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `ModelCoordinate{provider_api_family, model_family, model_version}` — the
+/// selector-match view of a `model_ref` (`resolve_profile`'s first argument is
+/// the coordinate, never a bare model id — AC-R-2.3.3-1's no-model-literal
+/// rule reads this type, not strings).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelCoordinate {
+    /// The provider API family (also the `WireDialect` selector key).
+    pub provider_api_family: String,
+    /// The model family.
+    pub model_family: String,
+    /// The model version.
+    pub model_version: String,
+}
+
+/// `selector_matches(selector, coordinate)` — declarative matching under the
+/// closed `Pattern` grammar: `provider_api_family` and `model_family` are
+/// equality tests; `version_pattern` is `exact` equality, `prefix`
+/// `starts_with`, `range(family, lo?, hi?)` a half-open lexicographic window
+/// (the pattern's `family` overrides the selector's `model_family` when set —
+/// the spec's `range` carries its own family), `any` admits every version.
+/// Resolution never uses a substring test outside this grammar.
+pub fn selector_matches(sel: &ProfileSelector, coord: &ModelCoordinate) -> bool {
+    if !sel.provider_api_family.is_empty() && sel.provider_api_family != coord.provider_api_family {
+        return false;
+    }
+    let family_matches = |family: &str| family.is_empty() || family == coord.model_family;
+    match &sel.version_pattern {
+        VersionPattern::Exact(v) => family_matches(&sel.model_family) && coord.model_version == *v,
+        VersionPattern::Prefix(p) => {
+            family_matches(&sel.model_family) && coord.model_version.starts_with(p.as_str())
+        }
+        VersionPattern::Range { family, lo, hi } => {
+            let fam = if family.is_empty() {
+                sel.model_family.as_str()
+            } else {
+                family.as_str()
+            };
+            if !family_matches(fam) {
+                return false;
+            }
+            if let Some(lo) = lo {
+                if coord.model_version.as_str() < lo.as_str() {
+                    return false;
+                }
+            }
+            if let Some(hi) = hi {
+                if coord.model_version.as_str() >= hi.as_str() {
+                    return false;
+                }
+            }
+            true
+        }
+        VersionPattern::Any => family_matches(&sel.model_family),
+    }
+}
+
+/// The registry-enumeration seam `resolve_profile` reads (§5b.3:
+/// `resolve_profile(model_ref, registry_view, binding_policy)` — selector
+/// matching is declarative over *every registered profile*, so the view must
+/// enumerate, not just point-lookup).
+pub trait SelectorView: ProfileView {
+    /// Every registered `ModelProfile` record.
+    fn registered(&self) -> Vec<ModelProfile>;
+}
+
+/// `resolve_profile`'s closed refusal sum (§5b.3):
+/// `NoProfile{model_ref}`, `AmbiguousSelector{candidates[]}`,
+/// `RetiredProfile{profile_ref, successor_ref?}` — `NoProfile` is never
+/// converted into a default.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProfileResolveError {
+    /// No selector matched.
+    NoProfile {
+        /// The coordinate that matched nothing.
+        model_ref: String,
+    },
+    /// A tie at equal `(precedence, specificity)` — resolution never guesses.
+    AmbiguousSelector {
+        /// The tied coordinates.
+        candidates: Vec<String>,
+    },
+    /// The resolved profile is `retired` (G-1: `retired` never binds).
+    RetiredProfile {
+        /// The retired coordinate.
+        profile_ref: String,
+        /// The declared successor, when the selector names one.
+        successor_ref: Option<String>,
+    },
+}
+
+impl std::fmt::Display for ProfileResolveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProfileResolveError::NoProfile { model_ref } => {
+                write!(f, "NoProfile: {model_ref}")
+            }
+            ProfileResolveError::AmbiguousSelector { candidates } => {
+                write!(f, "AmbiguousSelector: {}", candidates.join(", "))
+            }
+            ProfileResolveError::RetiredProfile {
+                profile_ref,
+                successor_ref,
+            } => write!(
+                f,
+                "RetiredProfile: {profile_ref} (successor: {})",
+                successor_ref.as_deref().unwrap_or("none")
+            ),
+        }
+    }
+}
+impl std::error::Error for ProfileResolveError {}
+
+/// `ProfileChain{profiles[base…leaf], leaf_hash, selector_trace}` — the
+/// `resolve_profile` result (ADR-0124 d.4): the `extends` path ordered
+/// base → leaf.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileChain {
+    /// The chain, base first.
+    pub profiles: Vec<ModelProfile>,
+    /// `leaf_hash` — the leaf's `content_hash`.
+    pub leaf_hash: String,
+    /// `selector_trace` — the matched selectors in resolution order
+    /// (canonical spellings for the `model.route.decided` / link record).
+    pub selector_trace: Vec<String>,
+}
+
+/// `profile_status(profile)` — the profile's effective expiry status: the
+/// worst of its own `expiry.status` and every rule's `debt.status`
+/// (ADR-0126 d.2: "profile status = worst of its rules'").
+pub fn profile_status(profile: &ModelProfile) -> DebtStatus {
+    fn rank(s: DebtStatus) -> u8 {
+        match s {
+            DebtStatus::Active => 0,
+            DebtStatus::Expiring => 1,
+            DebtStatus::Expired => 2,
+            DebtStatus::Retired => 3,
+        }
+    }
+    profile
+        .rules
+        .iter()
+        .map(|r| r.debt.status)
+        .chain(std::iter::once(profile.expiry.status))
+        .max_by_key(|s| rank(*s))
+        .unwrap_or(profile.expiry.status)
+}
+
+/// `resolve_profile(coord, view)` — declarative selector matching over every
+/// registered profile (§5b.3; ADR-0124 d.4/d.5): matches are ordered by
+/// `(precedence, specificity)` with `exact > range > prefix > any`; exactly
+/// one leaf resolves; ties refuse `AmbiguousSelector`; a `retired` leaf
+/// refuses `RetiredProfile` with its `successor_ref`; the chain is the
+/// `extends` path leaf → base (`resolve_chain` orders it base → leaf and
+/// applies the C0 two-level bound).
+pub fn resolve_profile(
+    coord: &ModelCoordinate,
+    view: &dyn SelectorView,
+) -> Result<ProfileChain, ProfileResolveError> {
+    let model_ref = format!(
+        "{}/{}/{}",
+        coord.provider_api_family, coord.model_family, coord.model_version
+    );
+    let mut matches: Vec<ModelProfile> = view
+        .registered()
+        .into_iter()
+        .filter(|p| selector_matches(&p.selector, coord))
+        .collect();
+    if matches.is_empty() {
+        return Err(ProfileResolveError::NoProfile { model_ref });
+    }
+    matches.sort_by(|a, b| {
+        let ka = (
+            a.selector.precedence,
+            a.selector.version_pattern.specificity(),
+        );
+        let kb = (
+            b.selector.precedence,
+            b.selector.version_pattern.specificity(),
+        );
+        kb.cmp(&ka)
+            .then_with(|| profile_coordinate(a).cmp(&profile_coordinate(b)))
+    });
+    let top = (
+        matches[0].selector.precedence,
+        matches[0].selector.version_pattern.specificity(),
+    );
+    let tied: Vec<String> = matches
+        .iter()
+        .take_while(|p| {
+            (
+                p.selector.precedence,
+                p.selector.version_pattern.specificity(),
+            ) == top
+        })
+        .map(profile_coordinate)
+        .collect();
+    if tied.len() > 1 {
+        return Err(ProfileResolveError::AmbiguousSelector { candidates: tied });
+    }
+    let leaf = matches.remove(0);
+    if profile_status(&leaf) == DebtStatus::Retired {
+        return Err(ProfileResolveError::RetiredProfile {
+            profile_ref: profile_coordinate(&leaf),
+            successor_ref: leaf.selector.successor_ref.clone(),
+        });
+    }
+    let leaf_coord = profile_coordinate(&leaf);
+    let chain = resolve_chain(std::slice::from_ref(&leaf_coord), view).map_err(|e| {
+        ProfileResolveError::NoProfile {
+            model_ref: format!("{model_ref} (chain resolution: {e})"),
+        }
+    })?;
+    let leaf_hash = chain
+        .last()
+        .map(|p| p.content_hash.clone())
+        .unwrap_or_else(|| leaf.content_hash.clone());
+    Ok(ProfileChain {
+        profiles: chain,
+        leaf_hash,
+        selector_trace: vec![format!(
+            "selector{{provider_api_family={}, model_family={}, precedence={}, pattern={:?}}}",
+            leaf.selector.provider_api_family,
+            leaf.selector.model_family,
+            leaf.selector.precedence,
+            leaf.selector.version_pattern
+        )],
+    })
+}
+
+/// The canonical **null profile** — the `test_profile`/`null_profile_compile`
+/// baseline (§5b.3; ADR-0124): selector `any` at the lowest precedence, no
+/// rules, every capability `unknown`, a dated `expiry` debt record so the
+/// record itself is complete. It is a *fixture*, never a silent default —
+/// binding it still goes through `resolve_profile`/`fallback_profile`.
+pub fn null_profile() -> ModelProfile {
+    ModelProfile {
+        profile_id: "null".to_string(),
+        version: "0".to_string(),
+        content_hash: String::new(),
+        selector: ProfileSelector {
+            provider_api_family: String::new(),
+            model_family: String::new(),
+            version_pattern: VersionPattern::Any,
+            precedence: i64::MIN,
+            successor_ref: None,
+            retirement_at: None,
+            roles_admitted: vec![
+                ModelRole::Primary,
+                ModelRole::Utility,
+                ModelRole::Compaction,
+                ModelRole::Subagent,
+                ModelRole::Judge,
+                ModelRole::RouterPredictor,
+            ],
+        },
+        extends: None,
+        capabilities: ProfileCapabilities::default(),
+        rules: Vec::new(),
+        ext: BTreeMap::new(),
+        expiry: ProfileDebtRecord {
+            rule_id: "null-profile".to_string(),
+            hypothesis: "the null profile declares nothing; it exists so the \
+                         machinery has a floor, never as a silent default"
+                .to_string(),
+            evidence_refs: Vec::new(),
+            owner: "kernel".to_string(),
+            expiry_condition: ExpiryCondition {
+                kind: ExpiryKind::Date,
+                value: Some("9999-12-31".to_string()),
+            },
+            removal_test_ref: "null_profile_compile".to_string(),
+            status: DebtStatus::Active,
+        },
+        compatibility: ProfileCompatibility {
+            inventory_version: "1".to_string(),
+            min_compiler_version: "0".to_string(),
+        },
+        tests: Json::obj([]),
+    }
+}
+
+impl ProfileCapabilities {
+    /// `capabilities[name]` — the tri-state axis read the router's G-2 makes
+    /// (`declared`/`probed` satisfy a requirement; `unknown` and an
+    /// unrecognised axis name both read `None` — the caller records
+    /// `capability_unknown`, never coerces).
+    pub fn capability_state(&self, name: &str) -> Option<CapabilityState> {
+        Some(match name {
+            "native_function_calling" => self.native_function_calling,
+            "parallel_tool_calls" => self.parallel_tool_calls,
+            "strict_schema_dialect" => self.strict_schema_dialect,
+            "structured_output" => self.structured_output,
+            "grammar_tools" => self.grammar_tools,
+            "reasoning_replay" => self.reasoning_replay.opaque,
+            "interleaved_reasoning" => self.interleaved_reasoning,
+            "image_input" => self.image_input,
+            "developer_role" => self.developer_role,
+            "cache_control_convention" => self.cache_control_convention,
+            "tool_result_name_required" => self.tool_result_name_required,
+            "assistant_required_after_tool_result" => self.assistant_required_after_tool_result,
+            "temperature_supported" => self.temperature_supported,
+            "deferred_tools" => self.deferred_tools,
+            "tool_search" => self.tool_search,
+            "seed_honoured" => self.seed_honoured,
+            "substitution_allowed" => self.substitution_allowed,
+            _ => return None,
+        })
+    }
+}
+
+/// The ADR-0126 d.2 expiry triggers — observables, never version strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpiryTrigger {
+    /// Any expiry observable fired (`model_version_change`, `date`,
+    /// `evidence_refresh_due`, `experiment_ref`) — `active → expiring`.
+    ExpiryObservable,
+    /// `revalidated{evidence_ref}` — `expiring → active`.
+    Revalidated,
+    /// A dependency `probe_failure` — `active | expiring → expired`.
+    DependencyProbeFailure,
+    /// `resolve_profile` found no listed model beyond `grace_period` —
+    /// `active | expiring → expired`.
+    GraceExceeded,
+    /// `retirement_at` passed — `active | expiring → expired`.
+    RetirementAtPassed,
+    /// A fresh evidence refresh **and** a probe pass — `expired → active`.
+    EvidenceRefreshAndProbePass,
+    /// `retire(…)` with a passed removal test — `expired → retired` (the only
+    /// path; a human-sealed `RetirementRecord`, ADR-0126 P4).
+    RetirePassed,
+}
+
+/// `expiry_transition(from, trigger) → to` — the ADR-0126 d.2 state machine,
+/// one pure step. `None` = the transition does not exist (an illegal
+/// transition is a no-op the caller records, never a silent jump).
+pub fn expiry_transition(from: DebtStatus, trigger: ExpiryTrigger) -> Option<DebtStatus> {
+    use DebtStatus::*;
+    use ExpiryTrigger::*;
+    Some(match (from, trigger) {
+        (Active, ExpiryObservable) => Expiring,
+        (Expiring, Revalidated) => Active,
+        (Active | Expiring, DependencyProbeFailure | GraceExceeded | RetirementAtPassed) => Expired,
+        (Expired, EvidenceRefreshAndProbePass) => Active,
+        (Expired, RetirePassed) => Retired,
+        _ => return None,
+    })
 }
