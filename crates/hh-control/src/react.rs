@@ -1069,38 +1069,6 @@ impl ControlStrategy for StagedVariant {
 /// points, never a fifth variant). Stage-1 registers all four with their
 /// presets; `decide` lands per stage.
 pub fn registry() -> Vec<Box<dyn ControlStrategy>> {
-    let plan_execute = {
-        let mut b = ControlBoundary::default();
-        for (p, o) in [
-            (DecisionPoint::Plan, Owner::Model),
-            (DecisionPoint::Act, Owner::Code),
-            (DecisionPoint::Retrieve, Owner::Code),
-            (DecisionPoint::Compact, Owner::Code),
-            (DecisionPoint::Verify, Owner::Code),
-            (DecisionPoint::Delegate, Owner::Model),
-            (DecisionPoint::Authorize, Owner::Code),
-            (DecisionPoint::Retry, Owner::Code),
-            (DecisionPoint::Stop, Owner::Code),
-            (DecisionPoint::Escalate, Owner::Human),
-        ] {
-            b.assignments.insert(p, o);
-        }
-        ControlCapabilities {
-            deterministic_replay: true,
-            steering: false,
-            follow_up: true,
-            parallel_effects: false,
-            delegation: true,
-            model_emitted_plan: true,
-            resumable_mid_effect: true,
-            decision_points_owned: vec![DecisionPoint::Plan, DecisionPoint::Delegate],
-            boundary_preset: b,
-            requires: VariantRequires {
-                goal: true,
-                procedure: true,
-            },
-        }
-    };
     let workflow = {
         let mut b = ControlBoundary::default();
         for p in DecisionPoint::ALL {
@@ -1148,7 +1116,7 @@ pub fn registry() -> Vec<Box<dyn ControlStrategy>> {
     vec![
         Box::new(ReactMinimal::new()),
         Box::new(ReactSteerable::new()),
-        Box::new(StagedVariant::new("hh/plan-execute@1", plan_execute)),
+        Box::new(crate::plan_exec::PlanExecute::new()),
         Box::new(StagedVariant::new("hh/workflow@1", workflow)),
         Box::new(StagedVariant::new("hh/program@1", program)),
     ]

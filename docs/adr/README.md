@@ -76,3 +76,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0284](ADR-0284-s3.7-model-plane-eval-rulings.md) | S3.7 model-plane evaluation rulings | S3.7 (`053_S3.7__model-plane-eval.md`) | Accepted |
 | [ADR-0285](ADR-0285-s3.8-context-memory-eval-rulings.md) | S3.8 context/memory evaluation rulings | S3.8 (`054_S3.8__context-memory-eval.md`) | Accepted |
 | [ADR-0286](ADR-0286-s3.9-protocol-edge-rulings.md) | S3.9 protocol-edge rulings | S3.9 (`055_S3.9__tool-protocol-edges.md`) | Accepted |
+| [ADR-0287](ADR-0287-s3.10-control-verification-eval-rulings.md) | S3.10 control/verification/eval rulings | S3.10 (`056_S3.10__control-verification-eval.md`) | Accepted |

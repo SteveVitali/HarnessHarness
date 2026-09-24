@@ -701,6 +701,192 @@ pub fn criterion_refs(criteria: &[GateCriterion]) -> BTreeSet<String> {
     criteria.iter().map(|c| c.criterion_ref.clone()).collect()
 }
 
+// ── TaskContract projection (§5f.2 §3; S3.10 — the seal-time half) ────────
+
+/// The default `ValidatesRecord` a `success_criteria` member projects with
+/// (ADR-0109 D2's ratified default: `acceptance`, `completion` phase,
+/// `required`, `visible` — a criterion's non-default fields ride the
+/// `validates` *record* on the projection input, not the HIR edge).
+pub fn default_validates_record() -> ValidatesRecord {
+    ValidatesRecord {
+        role: CriterionRole::Acceptance,
+        phase: VerdictPhase::Completion,
+        required: true,
+        visibility: Visibility::Visible,
+        veto: false,
+        evidence_requirements: vec![],
+        window: None,
+        weight_ppm: None,
+    }
+}
+
+/// `project_contract` failures — the projection never invents members.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProjectError {
+    /// The named node is absent or not a `Goal`.
+    NoGoal {
+        /// The ref that failed.
+        goal_ref: String,
+    },
+    /// A `success_criteria` member resolves to a kind that cannot validate
+    /// (only `Validator`/`Procedure` refs project).
+    BadCriterionKind {
+        /// The offending ref.
+        criterion_ref: String,
+        /// The resolved kind spelling.
+        kind: String,
+    },
+    /// A criterion ref resolves to nothing in the document.
+    MissingCriterion {
+        /// The unresolved ref.
+        criterion_ref: String,
+    },
+}
+
+impl std::fmt::Display for ProjectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProjectError::NoGoal { goal_ref } => write!(f, "no_goal{{{goal_ref}}}"),
+            ProjectError::BadCriterionKind { criterion_ref, kind } => {
+                write!(f, "bad_criterion_kind{{{criterion_ref}:{kind}}}")
+            }
+            ProjectError::MissingCriterion { criterion_ref } => {
+                write!(f, "missing_criterion{{{criterion_ref}}}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProjectError {}
+
+/// `project_contract` — the `TaskContract` projection over a sealed
+/// document's `Goal` (spec §5f.2 §3; ADR-0109 D1: a typed projection, never
+/// an HIR entity, computed at `seal`/`open`, never edited during a run).
+/// Each `success_criteria` ref must resolve to a `Validator` or `Procedure`
+/// node (a `Procedure` criterion's validator_ref names the procedure — its
+/// postcondition rows are the detector); `unverifiable_reason` projects the
+/// `unverifiable` completion policy (such a run ends
+/// `succeeded_unverified`, never `succeeded`). `held_out` visibility comes
+/// from `criterion_visibility` — the caller supplies the sealed
+/// `visibility` map (`{criterion_semantic_id → held_out}`) read from the
+/// goal's `ext`/`delivers` declarations; absent ⇒ `visible`.
+pub fn project_contract(
+    doc: &hh_hir::document::HirDocument,
+    goal_semantic_id: &str,
+    criterion_visibility: &BTreeMap<String, Visibility>,
+) -> Result<TaskContract, ProjectError> {
+    use hh_hir::records::KindRecord;
+
+    let node = doc
+        .node(goal_semantic_id)
+        .ok_or_else(|| ProjectError::NoGoal {
+            goal_ref: goal_semantic_id.to_string(),
+        })?;
+    let KindRecord::Goal(goal) = &node.semantic else {
+        return Err(ProjectError::NoGoal {
+            goal_ref: goal_semantic_id.to_string(),
+        });
+    };
+    let mut criteria = Vec::new();
+    for r in &goal.success_criteria {
+        let target = doc
+            .node(&r.semantic_id)
+            .ok_or_else(|| ProjectError::MissingCriterion {
+                criterion_ref: r.semantic_id.clone(),
+            })?;
+        let kind_ok = matches!(
+            target.semantic,
+            KindRecord::Validator(_) | KindRecord::Procedure(_)
+        );
+        if !kind_ok {
+            return Err(ProjectError::BadCriterionKind {
+                criterion_ref: r.semantic_id.clone(),
+                kind: target.kind.name().to_string(),
+            });
+        }
+        let pinned = r.to_json();
+        let mut record = default_validates_record();
+        if criterion_visibility
+            .get(&r.semantic_id)
+            .is_some_and(|v| *v == Visibility::HeldOut)
+        {
+            record.visibility = Visibility::HeldOut;
+        }
+        criteria.push(AcceptanceCriterion {
+            criterion_id: r.semantic_id.clone(),
+            validator_ref: match &pinned {
+                Json::Obj(_) => pinned.to_canonical_string(),
+                _ => r.semantic_id.clone(),
+            },
+            record,
+        });
+    }
+    let policy = match &goal.unverifiable_reason {
+        Some(t) => CompletionPolicy::Unverifiable(
+            t.content
+                .clone()
+                .unwrap_or_else(|| t.content_hash.clone()),
+        ),
+        None => CompletionPolicy::AllRequired,
+    };
+    let contract_id = TaskContract::compute_contract_id(goal_semantic_id, &criteria);
+    Ok(TaskContract {
+        contract_id,
+        goal_ref: goal_semantic_id.to_string(),
+        criteria,
+        invariants: vec![],
+        completion_policy: policy,
+        evidence_kinds_required: vec![],
+        budget_ref: goal.budget.semantic_id.clone(),
+        sealed: node.version.sealed,
+    })
+}
+
+/// `summarize` — the `VerificationSummary` the `completion.decided` payload
+/// renders (ADR-0110 D7): the measured pass/fail/inconclusive/not_run
+/// counts over the contract's *required* criteria, the tripped invariants,
+/// the evidence head, and the held-out status (`deferred_to_instrument`
+/// when held-out criteria exist — the scorer boundary owns them, the run
+/// never sees them).
+pub fn summarize(
+    contract: &TaskContract,
+    criterion_states: &BTreeMap<String, CriterionState>,
+    tripped_invariants: Vec<String>,
+    evidence_head_seq: u64,
+) -> VerificationSummary {
+    let mut pass = 0u64;
+    let mut fail = 0u64;
+    let mut inconclusive = 0u64;
+    let mut not_run = 0u64;
+    for c in contract.required_criteria() {
+        match criterion_states.get(&c.criterion_id) {
+            Some(CriterionState::Met) => pass += 1,
+            Some(CriterionState::Unmet) => fail += 1,
+            Some(CriterionState::Unverifiable) => inconclusive += 1,
+            Some(CriterionState::Unrun) | None => not_run += 1,
+        }
+    }
+    VerificationSummary {
+        contract_id: contract.contract_id.clone(),
+        required_pass: pass,
+        required_fail: fail,
+        required_inconclusive: inconclusive,
+        required_not_run: not_run,
+        invariants_tripped: tripped_invariants,
+        evidence_head_seq,
+        freshness_ok: true,
+        held_out_status: if contract
+            .criteria
+            .iter()
+            .any(|c| c.record.visibility == Visibility::HeldOut)
+        {
+            HeldOutStatus::DeferredToInstrument
+        } else {
+            HeldOutStatus::Run
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

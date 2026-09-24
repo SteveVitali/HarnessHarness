@@ -110,15 +110,26 @@ pub struct ConservationRow {
     pub evidence_ref: String,
 }
 
-/// The seq of the first `control.decision{kind: stop}` (the INV-3 barrier).
+/// The seq of the standing `control.decision{kind: stop}` (the INV-3
+/// barrier). S3.10: a `verification.gate.evaluated{verdict: hold}` after a
+/// stop decision releases the barrier — the completion gate refused the
+/// completion, so the hold→repair→re-propose loop may open new model calls
+/// and effects until the next admitted `stop` re-engages it
+/// ([`crate::stop::barrier_engaged`] shares the rule).
 fn stop_barrier_seq(events: &[EventEnvelope]) -> Option<u64> {
-    events
-        .iter()
-        .find(|e| {
-            e.class == "control.decision"
-                && e.payload.get("kind").and_then(Json::as_str) == Some("stop")
-        })
-        .map(|e| e.seq)
+    let mut barrier: Option<u64> = None;
+    for e in events {
+        if e.class == "control.decision"
+            && e.payload.get("kind").and_then(Json::as_str) == Some("stop")
+        {
+            barrier = Some(e.seq);
+        } else if e.class == "verification.gate.evaluated"
+            && e.payload.get("verdict").and_then(Json::as_str) == Some("hold")
+        {
+            barrier = None;
+        }
+    }
+    barrier
 }
 
 /// INV-1 — an opened scope still open with `now > deadline` is a violation

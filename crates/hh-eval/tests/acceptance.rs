@@ -1468,3 +1468,133 @@ fn removal_verdict_pass_fail_inconclusive() {
     let v = removal_verdict("R1", &out, &decls, 100_000, 100_000);
     assert!(matches!(v.verdict, RemovalOutcome::Inconclusive { .. }));
 }
+
+// ---------------------------------------------------------------------------
+// AC-R-2.7.3-9 — `critic_experiment` runs `{on, off}` under a MatchSpec and
+// reports the five deltas; the placement's removal_test points at it.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn critic_experiment_reports_five_deltas_under_matchspec() {
+    use hh_eval::critic_experiment::{
+        critic_experiment, CriticExperimentInput, CRITIC_EXPERIMENT_METRICS, ARM_OFF, ARM_ON,
+    };
+    let decls: Vec<MetricDeclaration> = CRITIC_EXPERIMENT_METRICS
+        .iter()
+        .map(|m| metric(m))
+        .collect();
+    // Runs: {off, on} × {t1, t2} × 2 replicates × 5 metrics. The on-arm
+    // succeeds on t2 (task_success up), spends more verification (overhead
+    // and evaluator_calls up), and reads lower on the error rates.
+    let mut runs = Vec::new();
+    for m in CRITIC_EXPERIMENT_METRICS {
+        for rep in 0..2u64 {
+            for task in ["t1", "t2"] {
+                for arm in [ARM_OFF, ARM_ON] {
+                    let mut r = run(arm, task, rep, 1, m);
+                    r.run_id = format!("r-{arm}-{task}-{rep}-{m}");
+                    r.values[0].value = match m {
+                        "task_success" => {
+                            MetricValueKind::Bool(!(arm == ARM_OFF && task == "t2"))
+                        }
+                        "harness_overhead.verification" => {
+                            MetricValueKind::Decimal(if arm == ARM_ON { 120_000 } else { 100_000 })
+                        }
+                        "evaluator_calls" => {
+                            MetricValueKind::Decimal(if arm == ARM_ON { 3 } else { 1 })
+                        }
+                        "false_stop_rate" => {
+                            MetricValueKind::Decimal(if arm == ARM_ON { 0 } else { 200_000 })
+                        }
+                        _ => MetricValueKind::Decimal(if arm == ARM_ON { 50_000 } else { 300_000 }),
+                    };
+                    runs.push(r);
+                }
+            }
+        }
+    }
+    let arms = vec![
+        arm_spec(DimensionId::ModelCalls),
+        arm_spec(DimensionId::ModelCalls),
+    ];
+    let ts = tasks();
+    let d = design();
+    let out = critic_experiment(&CriticExperimentInput {
+        critic_ref: "deterministic:reconciliation@1",
+        placement: "completion_gate",
+        design: &d,
+        arm_specs: &arms,
+        runs: &runs,
+        tasks: &ts,
+        declarations: &decls,
+        confidence_ppm: 950_000,
+        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        held_out: true,
+    })
+    .unwrap();
+    // Five reports, in pinned order.
+    assert_eq!(out.reports.len(), 5);
+    let names: Vec<&str> = out.reports.iter().map(|r| r.metric.as_str()).collect();
+    assert_eq!(names, CRITIC_EXPERIMENT_METRICS);
+    // Δtask_success = on − off = +500_000 ppm (t2 recovered).
+    assert_eq!(
+        out.reports[0]
+            .paired_effect
+            .point
+            .as_ref()
+            .and_then(Json::as_int),
+        Some(500_000)
+    );
+    // The overhead deltas are positive (the critic costs more
+    // verification/evaluator calls); the error-rate deltas are negative.
+    for (i, sign) in [(1usize, 1i64), (2, 1), (3, -1), (4, -1)] {
+        let d_i = out.reports[i]
+            .paired_effect
+            .point
+            .as_ref()
+            .and_then(Json::as_int)
+            .unwrap();
+        assert_eq!(
+            d_i.signum(),
+            sign,
+            "metric {} delta {d_i} sign",
+            CRITIC_EXPERIMENT_METRICS[i]
+        );
+    }
+    // The placement's removal_test names this experiment — removing the
+    // critic while keeping the placement leaves a dangling handle.
+    assert_eq!(
+        out.removal_test,
+        "critic_experiment:deterministic:reconciliation@1:completion_gate"
+    );
+    // Deterministic: identical inputs → identical reports.
+    let out2 = critic_experiment(&CriticExperimentInput {
+        critic_ref: "deterministic:reconciliation@1",
+        placement: "completion_gate",
+        design: &d,
+        arm_specs: &arms,
+        runs: &runs,
+        tasks: &ts,
+        declarations: &decls,
+        confidence_ppm: 950_000,
+        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        held_out: true,
+    })
+    .unwrap();
+    assert_eq!(out.reports, out2.reports);
+    // A declaration gap refuses — never silently drops a required metric.
+    let err = critic_experiment(&CriticExperimentInput {
+        critic_ref: "deterministic:reconciliation@1",
+        placement: "completion_gate",
+        design: &d,
+        arm_specs: &arms,
+        runs: &runs,
+        tasks: &ts,
+        declarations: &decls[..3],
+        confidence_ppm: 950_000,
+        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        held_out: true,
+    })
+    .unwrap_err();
+    assert!(matches!(err, CompareError::UnknownMetric { .. }));
+}

@@ -244,6 +244,43 @@ impl std::fmt::Display for DriverError {
 
 impl std::error::Error for DriverError {}
 
+/// What `finish` resolved to — `Done` is the terminal `RunResult`; `Held`
+/// means the completion gate queued a `completion_refused` cue and the
+/// strategy loop continues (S3.10; §5f.2).
+#[derive(Debug)]
+enum FinishOutcome {
+    /// The run finished.
+    Done(RunResult),
+    /// The completion gate held — the strategy is re-invoked.
+    Held,
+}
+
+/// The completion gate's disposition (S3.10).
+enum CompletionFlow {
+    /// `gate.evaluated{hold}` within the cap — feedback queued.
+    Held,
+    /// A terminal `completion.decided` was emitted.
+    Decided(CompletionGateDecision),
+}
+
+/// The gate's decided half — the `CompletionDecision` plus the
+/// `StopReason` override the finish path applies (`budget_exhausted`
+/// on holds-cap exhaustion).
+struct CompletionGateDecision {
+    /// The emitted decision record.
+    decision: hh_verification::gate::CompletionDecision,
+    /// The finish-path stop reason override (holds exhaustion).
+    stop_reason: Option<StopReason>,
+}
+
+impl CompletionGateDecision {
+    /// Attach the finish-path stop reason (cap exhaustion).
+    fn with_stop(mut self, reason: StopReason) -> Self {
+        self.stop_reason = Some(reason);
+        self
+    }
+}
+
 /// `RunResult` — what `run()` returns (the terminal `FinalReport` plus the
 /// `DrainReport` the stop protocol produced).
 #[derive(Debug, Clone, PartialEq)]
@@ -287,6 +324,23 @@ pub struct DriverConfig {
     /// denominator (I-BUDGET's cap; §5c.1). `0` ⇒ unfurnished: the occupancy
     /// gauge reads 0 and the `compaction_required` cap never fires.
     pub window_cap_tokens: u64,
+    /// The `TaskContract` the completion gate reads (§5f.2; S3.10) —
+    /// projected at `seal`/`open` and stamped `manifest.task_contract_id`.
+    /// `None` ⇒ the gate reads open effects + the claim's own divergences
+    /// only (no contract criteria — the T-LCD-03 anchor shape).
+    pub task_contract: Option<hh_verification::gate::TaskContract>,
+    /// The `reconciliation.holds` cap (F4; ADR-0113 D4 — default
+    /// [`hh_verification::gate::DEFAULT_HOLDS_CAP`]; per-suite override
+    /// OQ-279).
+    pub holds_cap: u64,
+    /// The model-emitted-plan surface (`plan_execute`'s `hh.plan` — S3.10):
+    /// a validated call on this surface emits `control.plan.emitted` (the
+    /// plan is schema-validated + closed-world-checked, never dispatched
+    /// as an effect). `None` ⇒ no plan surface is declared.
+    pub plan_surface_id: Option<String>,
+    /// The plan-schema validator ref (`control.plan.emitted`'s
+    /// `schema_validator_ref` member).
+    pub plan_schema_ref: String,
 }
 
 impl Default for DriverConfig {
@@ -304,6 +358,10 @@ impl Default for DriverConfig {
             interactive_attendance: false,
             profile_max_output_bound: 8_192,
             window_cap_tokens: 0,
+            task_contract: None,
+            holds_cap: hh_verification::gate::DEFAULT_HOLDS_CAP,
+            plan_surface_id: None,
+            plan_schema_ref: crate::plan_exec::PLAN_SCHEMA_REF.to_string(),
         }
     }
 }
@@ -370,6 +428,9 @@ pub struct Driver<S: ControlStrategy> {
     /// prefix at resume/replay (a recorded draw reproduces; a fresh draw
     /// never collides with a pre-crash one).
     random_draws: u64,
+    /// The completion claims `emit_completion_claims` recorded on this
+    /// `stop{completed}` (the gate reconciles them — S3.10).
+    completion_claims: Vec<hh_verification::claims::Claim>,
 }
 
 impl<S: ControlStrategy> Driver<S> {
@@ -433,6 +494,7 @@ impl<S: ControlStrategy> Driver<S> {
                 .to_string(),
             kill_point: None,
             random_draws: 0,
+            completion_claims: vec![],
         })
     }
 
@@ -486,6 +548,7 @@ impl<S: ControlStrategy> Driver<S> {
                 .iter()
                 .filter(|e| e.class == "control.random.read")
                 .count() as u64,
+            completion_claims: vec![],
         };
         driver.resume(ctx, checkpoint, sink)?;
         Ok(driver)
@@ -581,6 +644,7 @@ impl<S: ControlStrategy> Driver<S> {
                 .to_string(),
             kill_point: None,
             random_draws: 0,
+            completion_claims: vec![],
         })
     }
 
@@ -909,12 +973,20 @@ impl<S: ControlStrategy> Driver<S> {
                         proposed_reason, ..
                     } = &decision.kind
                     {
-                        return self.finish(sink, gate, proposed_reason.clone());
+                        if let FinishOutcome::Done(r) =
+                            self.finish(sink, gate, proposed_reason.clone())?
+                        {
+                            return Ok(r);
+                        }
+                        continue;
                     }
                     self.execute(sink, model, gate, assembler, decision)?;
                     if let Some(r) = self.stop_pending.take() {
                         self.append_envelope_stop(sink, &r)?;
-                        return self.finish(sink, gate, r);
+                        if let FinishOutcome::Done(res) = self.finish(sink, gate, r)? {
+                            return Ok(res);
+                        }
+                        continue;
                     }
                 }
                 CheckVerdict::Refused { reason, events } => {
@@ -941,7 +1013,10 @@ impl<S: ControlStrategy> Driver<S> {
                         // envelope owns the stop (decider: envelope).
                         let sr = kernel_stop_reason(stop_kind, &self.envelope.policy);
                         self.append_envelope_stop(sink, &sr)?;
-                        return self.finish(sink, gate, sr);
+                        if let FinishOutcome::Done(res) = self.finish(sink, gate, sr)? {
+                            return Ok(res);
+                        }
+                        continue;
                     }
                     self.inbox
                         .push_back(Cue::EnvelopeSignal(EnvelopeSignal::Refused {
@@ -1194,6 +1269,43 @@ impl<S: ControlStrategy> Driver<S> {
                 &outcome.calls,
             ) {
                 for c in calls {
+                    // A call on the declared plan surface is a
+                    // model-emitted *plan*, not an effect intent — the
+                    // driver schema-validates it and ledgers
+                    // `control.plan.emitted` (the closed-world check is the
+                    // codec's, never the strategy's — S3.10).
+                    if self
+                        .config
+                        .plan_surface_id
+                        .as_deref()
+                        .is_some_and(|p| p == c.surface_id.as_str())
+                    {
+                        let plan_ref = format!(
+                            "sha256:{}",
+                            hh_wire::sha256::sha256_hex(c.args.to_canonical_string().as_bytes())
+                        );
+                        let (valid, steps, reason) =
+                            match crate::plan_exec::plan_validate(
+                                &c.args.to_canonical_string(),
+                                &self.config.surfaces,
+                            ) {
+                                Ok(steps) => (true, steps, None),
+                                Err(r) => (false, vec![], Some(r)),
+                            };
+                        self.append(
+                            sink,
+                            "control.plan.emitted",
+                            crate::plan_exec::plan_emitted_payload(
+                                &plan_ref,
+                                &self.config.plan_schema_ref,
+                                valid,
+                                &steps,
+                                reason,
+                            ),
+                            Some(&mc),
+                        )?;
+                        continue;
+                    }
                     self.append(
                         sink,
                         "action.tool.proposed",
@@ -1203,6 +1315,17 @@ impl<S: ControlStrategy> Driver<S> {
                             ("loop_key", Json::str(&c.loop_key)),
                         ]),
                         Some(&mc),
+                    )?;
+                    // AC-R-2.7.1-9 — the deterministic `followed` pass: a
+                    // validated call on a delivered `tool_surface` / an
+                    // activated typed `procedure` emits
+                    // `verification.artefact.followed{detector:
+                    // deterministic}` (§02's detector table).
+                    self.maybe_emit_artefact_followed(
+                        sink,
+                        &mc,
+                        &c.surface_id,
+                        &c.tool_call_id,
                     )?;
                     proposed_tool_calls.push(c.tool_call_id);
                 }
@@ -1332,14 +1455,22 @@ impl<S: ControlStrategy> Driver<S> {
     /// One `act` round (sequential): `action.effect.intended` (causes ∋
     /// the `control.decision` — I1) → G-PRE-DISPATCH → the gate's
     /// dispatch → the settled terminal → the `effects_settled` cue.
+    ///
+    /// The strategy's `act{intents}` name `tool_call_id`s only (I2 — never
+    /// the arg bytes); the gate needs the routed surface (its
+    /// `stop_rule = submit` detection reads `intent.surface_id`), so the
+    /// dispatch intent is resolved from the durable prefix
+    /// (`action.tool.proposed` → `surface_id`, `model.call.completed` →
+    /// `args_raw`) — the ledgered intent stays minimal (S3.10).
     fn act_round(
         &mut self,
         sink: &mut dyn LedgerSink,
         gate: &mut dyn EffectGate,
         intents: &[Json],
     ) -> Result<(), DriverError> {
+        let resolved = resolve_intents(sink.prefix(), intents);
         let mut settled: Vec<EffectOutcome> = vec![];
-        for intent in intents {
+        for (intent, dispatch_intent) in intents.iter().zip(resolved.iter()) {
             let ef = self.alloc("ef");
             self.derive_deadline(ScopeKind::ToolAttempt, &ef);
             // `action.effect.intended` — `causes ∋ control.decision` (I1).
@@ -1374,12 +1505,12 @@ impl<S: ControlStrategy> Driver<S> {
                 &GuardInput::PreDispatch {
                     effect_id: ef.clone(),
                     attempt_no: 1,
-                    effect_class: intent
+                    effect_class: dispatch_intent
                         .get("effect_class")
                         .and_then(Json::as_str)
                         .unwrap_or("reversible")
                         .to_string(),
-                    read_only: intent
+                    read_only: dispatch_intent
                         .get("read_only")
                         .map(|b| matches!(b, Json::Bool(true)))
                         .unwrap_or(false),
@@ -1389,17 +1520,30 @@ impl<S: ControlStrategy> Driver<S> {
                 &self.guard_ctx(sink.prefix()),
             );
             if matches!(pre, GuardVerdict::Pass { .. }) {
-                let out = gate.dispatch(&ef, 1, intent);
+                let out = gate.dispatch(&ef, 1, dispatch_intent);
                 let terminal_class = match &out.outcome {
                     SettledOutcome::Observed { .. } => "action.effect.observed",
                     SettledOutcome::Refused => "action.effect.refused",
                     SettledOutcome::Unknown { .. } => "action.effect.unknown",
                     SettledOutcome::Abandoned => "action.effect.abandoned",
                 };
+                // The `stop_rule = submit` detection is ledgered where it
+                // happened (CC3 — the terminal row carries the ref so a
+                // deterministic replay re-serves the *recorded* value,
+                // never a re-minted one — ADR-0135 §2).
+                let mut terminal_payload = crate::events::settled_outcome_json(&out.outcome);
+                if let Some(s) = &out.submission_ref {
+                    if let Json::Obj(m) = &mut terminal_payload {
+                        m.insert(
+                            "submission_ref".to_string(),
+                            Json::str(s.clone()),
+                        );
+                    }
+                }
                 self.append(
                     sink,
                     terminal_class,
-                    crate::events::settled_outcome_json(&out.outcome),
+                    terminal_payload,
                     Some(&ef),
                 )?;
                 if let Some(s) = &out.submission_ref {
@@ -1736,6 +1880,179 @@ impl<S: ControlStrategy> Driver<S> {
         })
     }
 
+    /// The deterministic `followed` detector pass (AC-R-2.7.1-9; §02
+    /// "Detectors per kind"). A validated `action.tool.proposed` is the
+    /// args-conform evidence for a delivered `tool_surface`; a delivered +
+    /// activated typed `procedure` is followed when the invoked surface is
+    /// in the procedure's `allowed_capabilities` (carried on the
+    /// `activated` row) and the index `delivery_id` rode the call's
+    /// context — `context.assembled{model_call_id}.items[]` is the call's
+    /// cause set (hh-context `detect_followed`'s rule, adapted to the
+    /// driver plane: the assembled context *is* what caused the call).
+    /// Prose kinds carry no deterministic detector — the run emits no row
+    /// and the eval plane renders `n/a{no_detector}` (never a proxy).
+    fn maybe_emit_artefact_followed(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        model_call_id: &str,
+        surface_id: &str,
+        tool_call_id: &str,
+    ) -> Result<(), DriverError> {
+        // Delivered artefacts + activated procedures + this call's cause
+        // set, folded from the durable prefix (ledger-only — CC3).
+        struct Del {
+            artefact_id: String,
+            delivery_id: String,
+            kind: String,
+        }
+        let mut delivered: Vec<Del> = Vec::new();
+        let mut activated: Vec<(String, Option<std::collections::BTreeSet<String>>)> = Vec::new();
+        let mut causes: Vec<String> = Vec::new();
+        for e in sink.prefix() {
+            match e.class.as_str() {
+                "context.artefact.delivered" => delivered.push(Del {
+                    artefact_id: e
+                        .payload
+                        .get("artefact_id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    delivery_id: e
+                        .payload
+                        .get("delivery_id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    kind: e
+                        .payload
+                        .get("kind")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                }),
+                "context.artefact.activated" => {
+                    let delivery_id = e
+                        .payload
+                        .get("delivery_id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    let caps = e.payload.get("allowed_capabilities").map(|c| match c {
+                        Json::Arr(a) => a
+                            .iter()
+                            .filter_map(|x| x.as_str().map(str::to_string))
+                            .collect(),
+                        _ => std::collections::BTreeSet::new(),
+                    });
+                    activated.push((delivery_id, caps));
+                }
+                "context.assembled" => {
+                    // The assembled row feeding this call is the most
+                    // recent `context.assembled` in the prefix (the driver
+                    // appends it immediately before `model_round`) —
+                    // `payload.model_call_id` names it when the builder
+                    // stamps the member; position is the fallback.
+                    let matches = e
+                        .payload
+                        .get("model_call_id")
+                        .and_then(Json::as_str)
+                        .map(|id| id == model_call_id)
+                        .unwrap_or(true);
+                    if matches {
+                        causes.clear();
+                        if let Some(Json::Arr(items)) = e.payload.get("items") {
+                            for it in items {
+                                if let Some(d) =
+                                    it.get("delivery_id").and_then(Json::as_str)
+                                {
+                                    causes.push(d.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        let emit = |this: &mut Self,
+                    sink: &mut dyn LedgerSink,
+                    artefact_id: &str,
+                    delivery_id: &str,
+                    detector_ref: &str,
+                    evidence_ref: &str,
+                    kind: &str|
+         -> Result<(), DriverError> {
+            let prov = ProvenanceRecord::minted(
+                Origin::kernel("hh-control/followed"),
+                PersistenceScope::Run,
+                this.now_ms,
+            );
+            this.append_prov(
+                sink,
+                "verification.artefact.followed",
+                hh_verification::followed::followed_payload(
+                    artefact_id,
+                    delivery_id,
+                    detector_ref,
+                    true,
+                    evidence_ref,
+                    kind,
+                ),
+                None,
+                prov,
+            )
+        };
+        // tool_surface — the validated call IS the args-conform evidence.
+        for d in &delivered {
+            if d.kind == "tool_surface"
+                && d.artefact_id == surface_id
+                && !delivered_is_followed(sink.prefix(), &d.delivery_id)
+            {
+                emit(
+                    self,
+                    sink,
+                    &d.artefact_id,
+                    &d.delivery_id,
+                    hh_verification::followed::detector::ARGS_CONFORM,
+                    tool_call_id,
+                    "tool_surface",
+                )?;
+            }
+        }
+        // Typed procedure — `detect_followed`: capability allowed ∧ index
+        // delivery in the call's causes.
+        for d in &delivered {
+            if !matches!(d.kind.as_str(), "procedure" | "procedure_index") {
+                continue;
+            }
+            let caps = activated
+                .iter()
+                .find(|(delivery_id, _)| *delivery_id == d.delivery_id)
+                .and_then(|(_, caps)| caps.clone());
+            let Some(caps) = caps else { continue };
+            if let Some(ev) = hh_context::procedure::detect_followed(
+                &d.delivery_id,
+                surface_id,
+                &caps,
+                &causes,
+            ) {
+                if delivered_is_followed(sink.prefix(), &d.delivery_id) {
+                    continue;
+                }
+                emit(
+                    self,
+                    sink,
+                    &d.artefact_id,
+                    &d.delivery_id,
+                    hh_verification::followed::detector::PROCEDURE_INVOKED,
+                    &ev,
+                    "procedure",
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     /// `verification.artefact.followed` — the pending nudge's `followed`
     /// verdict: the strategy's admitted decision row is the evidence
     /// (deterministic detector, `verdict: true` — the loop continued under
@@ -1772,12 +2089,17 @@ impl<S: ControlStrategy> Driver<S> {
     /// `finish` — the stop protocol: `control.decision{stop}` was already
     /// appended by the caller; the drain assessment decides the terminal
     /// reason, then `lifecycle.turn.finished` + `lifecycle.run.finished`.
+    /// On `stop{completed}` the completion gate runs between the drain and
+    /// `terminate` (§5f.2; S3.10): claims → `claim.reconciled` →
+    /// `gate.evaluated` → `completion.decided`; a `hold` queues the
+    /// `completion_refused` cue and returns [`FinishOutcome::Held`] — the
+    /// strategy is re-invoked, never silently passed.
     fn finish(
         &mut self,
         sink: &mut dyn LedgerSink,
         gate: &mut dyn EffectGate,
         reason: StopReason,
-    ) -> Result<RunResult, DriverError> {
+    ) -> Result<FinishOutcome, DriverError> {
         self.tick(1);
         // S1.21 — the claim-ledger obligation on `stop{completed}`: emit
         // `verification.completion.proposed` + `verification.claim.recorded`
@@ -1785,7 +2107,8 @@ impl<S: ControlStrategy> Driver<S> {
         // {achieved, unachievable}, criteria_status aligned, delegate
         // provenance). A missing/malformed finish surface still records the
         // completion claim itself — nothing silently lost (CC3).
-        if matches!(reason, StopReason::Completed) {
+        let is_completion = matches!(reason, StopReason::Completed);
+        if is_completion {
             self.emit_completion_claims(sink, gate)?;
         }
         let drain = crate::stop::assess_drain(
@@ -1805,7 +2128,37 @@ impl<S: ControlStrategy> Driver<S> {
                 Some(ef),
             )?;
         }
-        let report = self.strategy.terminate(&self.state, &drain.final_reason);
+        // S3.10 — the completion gate (§5f.2's `proposed → reconciled →
+        // gate.evaluated → decided → finished` chain). The gate reads the
+        // post-drain prefix so `drain_timeout`'s `unknown` rows are the
+        // D6 facts.
+        let mut run_status = "finished".to_string();
+        let mut summary_ref: Option<String> = None;
+        let mut final_reason = drain.final_reason.clone();
+        if is_completion {
+            match self.completion_gate(sink)? {
+                CompletionFlow::Held => {
+                    // The refused completion returns to β as a
+                    // `guard_fired{completion_refused}` cue — the strategy
+                    // owns the next decision (verify/act/stop again); the
+                    // hold is durable so re-entry loops consume the
+                    // `reconciliation.holds` budget (F4).
+                    self.inbox.push_back(Cue::GuardFired {
+                        decision_point: DecisionPoint::Stop,
+                        guard_id: "completion_refused".into(),
+                    });
+                    return Ok(FinishOutcome::Held);
+                }
+                CompletionFlow::Decided(d) => {
+                    run_status = d.decision.status.clone();
+                    summary_ref = Some(d.decision.gate_ref.clone());
+                    if let Some(r) = d.stop_reason {
+                        final_reason = r;
+                    }
+                }
+            }
+        }
+        let report = self.strategy.terminate(&self.state, &final_reason);
         let drain_ref = format!(
             "sha256:{}",
             hh_wire::sha256::sha256_hex(drain.to_json().to_canonical_string().as_bytes())
@@ -1813,24 +2166,412 @@ impl<S: ControlStrategy> Driver<S> {
         self.append(
             sink,
             "lifecycle.turn.finished",
-            crate::events::turn_finished_payload(&drain.final_reason),
+            crate::events::turn_finished_payload(&final_reason),
             None,
         )?;
-        self.append(
-            sink,
-            "lifecycle.run.finished",
-            crate::events::run_finished_payload(
-                "finished",
-                &drain.final_reason,
-                &report.unresolved_effects,
-                &drain_ref,
-            ),
-            None,
-        )?;
-        Ok(RunResult {
+        // AC-F2-03 — an `invariant_violation` stop quarantines: the
+        // `security.audit.checkpoint{kind: quarantine}` row lands durable
+        // before `run.finished`, naming the violated invariant + the
+        // detection evidence (the run is `infrastructure_failure`, never
+        // scored — ADR-0108 D3).
+        if let StopReason::InvariantViolation { invariant_id } = &final_reason {
+            let evidence: Vec<String> = sink
+                .prefix()
+                .iter()
+                .filter(|e| e.class == "control.invariant.violated")
+                .map(|e| e.event_id.clone())
+                .collect();
+            self.append(
+                sink,
+                "security.audit.checkpoint",
+                crate::events::quarantine_payload(invariant_id, &evidence),
+                None,
+            )?;
+        }
+        let mut finished = crate::events::run_finished_payload(
+            &run_status,
+            &final_reason,
+            &report.unresolved_effects,
+            &drain_ref,
+        );
+        if let Some(r) = &summary_ref {
+            if let Json::Obj(m) = &mut finished {
+                m.insert(
+                    "verification_summary_ref".to_string(),
+                    Json::str(r.clone()),
+                );
+            }
+        }
+        self.append(sink, "lifecycle.run.finished", finished, None)?;
+        Ok(FinishOutcome::Done(RunResult {
             report,
             drain,
             decision_events: self.decision_events.clone(),
+        }))
+    }
+
+    /// The completion gate call site (§5f.2 §3; DF-S1.21-1's emitter half —
+    /// S3.10): bind + reconcile the completion claims, evaluate the gate
+    /// over the durable prefix, ledger the rows. `Hold` within the
+    /// `reconciliation.holds` cap emits the `completion_refused`
+    /// `control.guard.fired` audit row and returns [`CompletionFlow::Held`];
+    /// exhaustion (the cap consumed and the run still divergent) decides
+    /// `budget_exhausted{reconciliation.holds}` without a further
+    /// `gate.evaluated` row (the ledger fact `hold_count == cap` plus the
+    /// decision row are the audit — AC-R-2.7.2a-5).
+    fn completion_gate(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+    ) -> Result<CompletionFlow, DriverError> {
+        use hh_verification::bind::{bind_claim, fold_effect_states, fold_verdicts};
+        use hh_verification::claims::reconcile_ledger_only;
+        use hh_verification::gate::{
+            decision_stratum, evaluate_gate, GateCriterion, GateFacts, OpenEffect,
+        };
+        use hh_verification::claims::CriterionState;
+        use hh_verification::vocab::{Agreement, ClaimKind, CompletionPolicy, GateVerdict};
+
+        // Phase 1 — the pure fold over the durable prefix (the immutable
+        // borrow ends before the first append; every fact is owned).
+        let kernel_prov = ProvenanceRecord::kernel("hh-control/reconcile", self.now_ms);
+        let claims = std::mem::take(&mut self.completion_claims);
+        let (
+            records,
+            completion_claim_ref,
+            facts,
+        ): (
+            Vec<hh_verification::claims::ReconciliationRecord>,
+            String,
+            GateFacts,
+        ) = {
+            // The row projection — authority from the row's provenance (CC2:
+            // conferred, never read from content); a row without provenance
+            // binds nothing (Unverified).
+            let rows: Vec<hh_verification::bind::RowView> = sink
+                .prefix()
+                .iter()
+                .map(|e| hh_verification::bind::RowView {
+                    seq: e.seq,
+                    class: e.class.as_str(),
+                    payload: &e.payload,
+                    authority: e
+                        .provenance
+                        .as_ref()
+                        .map(|p| p.authority)
+                        .unwrap_or(hh_provenance::authority::AuthorityClass::Unverified),
+                    scope_effect_id: e.scope.effect_id.as_deref(),
+                })
+                .collect();
+            let head_seq = sink.prefix().last().map(|e| e.seq).unwrap_or(0);
+
+            // Reconcile every recorded claim (kernel provenance — the
+            // `claim.reconciled` rows land in phase 2).
+            let mut records = Vec::new();
+            let mut completion_idx: Option<usize> = None;
+            let mut completion_claim_ref = String::new();
+            let mut completion_kind = ClaimKind::Achieved;
+            let mut completion_evidence: Vec<String> = vec![];
+            for claim in &claims {
+                let handles = bind_claim(&rows, claim, self.config.task_contract.as_ref());
+                let rec = reconcile_ledger_only(
+                    claim,
+                    &handles,
+                    "hir/kernel/reconcile:1",
+                    head_seq,
+                    kernel_prov.clone(),
+                );
+                if completion_idx.is_none()
+                    && matches!(claim.kind, ClaimKind::Achieved | ClaimKind::Unachievable)
+                {
+                    completion_kind = claim.kind;
+                    completion_evidence = claim.evidence_refs.clone();
+                    completion_claim_ref = claim.claim_id.clone();
+                    completion_idx = Some(records.len());
+                }
+                records.push(rec);
+            }
+
+            // The gate facts (deterministic-only by construction — the
+            // binder never binds a `judged`/`delegate` row, F7).
+            let effects = fold_effect_states(&rows);
+            let verdicts = fold_verdicts(&rows);
+            let open_effects: Vec<OpenEffect> = effects
+                .values()
+                .filter(|e| !e.terminal)
+                .map(|e| OpenEffect {
+                    effect_id: e.effect_id.clone(),
+                    state: e.outcome.clone(),
+                    detachable: false,
+                })
+                .collect();
+            let abandoned: Vec<String> = effects
+                .values()
+                .filter(|e| e.terminal && e.outcome == "abandoned")
+                .map(|e| e.effect_id.clone())
+                .collect();
+            let mut required: Vec<GateCriterion> = vec![];
+            if let Some(contract) = &self.config.task_contract {
+                for c in contract.required_criteria() {
+                    let state = verdicts
+                        .iter()
+                        .filter(|v| v.criterion_ref.as_deref() == Some(c.criterion_id.as_str()))
+                        .max_by_key(|v| v.seq)
+                        .map(|v| {
+                            if v.status == "decided" {
+                                if v.affirmative {
+                                    CriterionState::Met
+                                } else {
+                                    CriterionState::Unmet
+                                }
+                            } else {
+                                CriterionState::Unverifiable
+                            }
+                        })
+                        .unwrap_or(CriterionState::Unrun);
+                    required.push(GateCriterion {
+                        criterion_ref: c.criterion_id.clone(),
+                        state,
+                        bound_validators: vec![c.validator_ref.clone()],
+                        unverifiable_reason: matches!(
+                            contract.completion_policy,
+                            CompletionPolicy::Unverifiable(_)
+                        ),
+                    });
+                }
+            }
+            let holds_consumed = sink
+                .prefix()
+                .iter()
+                .filter(|e| {
+                    e.class == "verification.gate.evaluated"
+                        && e.payload.get("verdict").and_then(Json::as_str) == Some("hold")
+                })
+                .count() as u64;
+            let mut evidence_divergences = vec![];
+            let mut completion_agreement = Agreement::Unverifiable;
+            if let Some(rec) = completion_idx.and_then(|i| records.get(i)) {
+                completion_agreement = rec.agreement;
+                if let Agreement::Diverge(class) = rec.agreement {
+                    // `contract_gap` is already F3's own verdict — the
+                    // gate's `required_criteria` table decides it with
+                    // `unverifiable_reason` awareness; re-adding the
+                    // reconciler's class would hold a criterion the
+                    // contract declared unverifiable (S3.10).
+                    if class != hh_verification::vocab::DivergenceClass::ContractGap {
+                        evidence_divergences.push(class);
+                    }
+                }
+            }
+            (
+                records,
+                completion_claim_ref,
+                GateFacts {
+                    completion_claim_kind: completion_kind,
+                    completion_claim_agreement: completion_agreement,
+                    claim_evidence_refs: completion_evidence,
+                    open_effects,
+                    abandoned_effects: abandoned,
+                    required_criteria: required,
+                    claim_evidence_divergences: evidence_divergences,
+                    holds_consumed,
+                    holds_cap: self.config.holds_cap,
+                },
+            )
+        };
+        // Phase 2 — the durable rows.
+        for rec in &records {
+            self.append_prov(
+                sink,
+                "verification.claim.reconciled",
+                hh_verification::events::claim_reconciled(rec),
+                None,
+                kernel_prov.clone(),
+            )?;
+        }
+        let result = evaluate_gate(&facts);
+
+        match &result.verdict {
+            GateVerdict::Hold { .. } if result.holds_exhausted => {
+                // F4 — the cap is consumed and the run still diverges:
+                // `budget_exhausted{reconciliation.holds}` (stratum
+                // `unreconciled_claims`). No fourth `gate.evaluated{hold}`
+                // row — the consumed-cap ledger fact plus the decision row
+                // carry the audit (AC-R-2.7.2a-5).
+                let decided = self.emit_completion_decided(
+                    sink,
+                    "budget_exhausted",
+                    Some(hh_verification::vocab::STRATUM_UNRECONCILED_CLAIMS),
+                    &facts,
+                    "gate:exhausted",
+                )?;
+                Ok(CompletionFlow::Decided(decided.with_stop(
+                    StopReason::BudgetExhausted {
+                        // The contract's budget ref first, else the run's
+                        // bound budget (the cursor's `bound_ref` — the
+                        // `reconciliation.holds` dimension charges against
+                        // the run's own budget identity, never a literal).
+                        budget_id: self
+                            .config
+                            .task_contract
+                            .as_ref()
+                            .map(|c| c.budget_ref.clone())
+                            .unwrap_or_else(|| self.state.cursor.bound_ref.clone()),
+                        dimension: hh_ontology::dimensions::DimensionId::ReconciliationHolds,
+                    },
+                )))
+            }
+            GateVerdict::Hold {
+                divergences,
+                required_actions,
+            } => {
+                // Ledger `gate.evaluated{hold}` then the refused-completion
+                // audit row — the strategy reads `required_actions` through
+                // `observe` (the cue carries only the guard id).
+                self.append(
+                    sink,
+                    "verification.gate.evaluated",
+                    hh_verification::events::gate_evaluated(
+                        &result,
+                        &completion_claim_ref,
+                        self.config
+                            .task_contract
+                            .as_ref()
+                            .map(|c| c.budget_ref.as_str())
+                            .unwrap_or("budget"),
+                    ),
+                    None,
+                )?;
+                let prov = ProvenanceRecord::kernel("hh-control/gate", self.now_ms);
+                self.append_prov(
+                    sink,
+                    "control.guard.fired",
+                    Json::obj([
+                        ("decision_point", Json::str("stop")),
+                        ("guard_id", Json::str("completion_refused")),
+                        ("verdict", Json::str("hold")),
+                        (
+                            "divergences",
+                            Json::Arr(divergences.iter().map(|d| Json::str(d.as_str())).collect()),
+                        ),
+                        (
+                            "required_actions",
+                            Json::Arr(required_actions.iter().map(Json::str).collect()),
+                        ),
+                    ]),
+                    None,
+                    prov,
+                )?;
+                Ok(CompletionFlow::Held)
+            }
+            GateVerdict::Pass | GateVerdict::Veto { .. } => {
+                let gate_ev = self.alloc("e");
+                self.append_with_id(
+                    sink,
+                    &gate_ev,
+                    "verification.gate.evaluated",
+                    hh_verification::events::gate_evaluated(
+                        &result,
+                        &completion_claim_ref,
+                        self.config
+                            .task_contract
+                            .as_ref()
+                            .map(|c| c.budget_ref.as_str())
+                            .unwrap_or("budget"),
+                    ),
+                    None,
+                )?;
+                // The status mapping (the C0 rule — §5f.2 §3): honest
+                // failure ⇒ `failed_honest`; `veto`/`abandoned` ⇒
+                // `succeeded_with_veto`; the `unverifiable` policy ⇒
+                // `succeeded_unverified` (never `succeeded`).
+                let unverifiable = self
+                    .config
+                    .task_contract
+                    .as_ref()
+                    .is_some_and(|c| matches!(c.completion_policy, CompletionPolicy::Unverifiable(_)));
+                let (status, stratum) = if result.honest_failure {
+                    ("failed_honest", decision_stratum(&result).map(str::to_string))
+                } else if result.success_with_veto.is_some()
+                    || matches!(result.verdict, GateVerdict::Veto { .. })
+                {
+                    ("succeeded_with_veto", None)
+                } else if unverifiable {
+                    ("succeeded_unverified", None)
+                } else {
+                    ("succeeded", None)
+                };
+                let decided = self.emit_completion_decided(
+                    sink,
+                    status,
+                    stratum.as_deref(),
+                    &facts,
+                    &gate_ev,
+                )?;
+                Ok(CompletionFlow::Decided(decided))
+            }
+        }
+    }
+
+    /// `verification.completion.decided` — the decision row with the
+    /// `VerificationSummary` the gate's facts measured.
+    fn emit_completion_decided(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        status: &str,
+        stratum: Option<&str>,
+        facts: &hh_verification::gate::GateFacts,
+        gate_ref: &str,
+    ) -> Result<CompletionGateDecision, DriverError> {
+        use hh_verification::claims::CriterionState;
+        use hh_verification::gate::{summarize, TaskContract};
+
+        let empty_contract;
+        let contract = match &self.config.task_contract {
+            Some(c) => c,
+            None => {
+                empty_contract = TaskContract {
+                    contract_id: "contract:none".into(),
+                    goal_ref: String::new(),
+                    criteria: vec![],
+                    invariants: vec![],
+                    completion_policy:
+                        hh_verification::vocab::CompletionPolicy::AllRequired,
+                    evidence_kinds_required: vec![],
+                    budget_ref: "budget".into(),
+                    sealed: true,
+                };
+                &empty_contract
+            }
+        };
+        let states: std::collections::BTreeMap<String, CriterionState> = facts
+            .required_criteria
+            .iter()
+            .map(|c| (c.criterion_ref.clone(), c.state))
+            .collect();
+        let summary = summarize(
+            contract,
+            &states,
+            vec![],
+            sink.prefix().last().map(|e| e.seq).unwrap_or(0),
+        );
+        let decision = hh_verification::gate::CompletionDecision {
+            run_id: self.run_id.clone(),
+            status: status.to_string(),
+            stratum: stratum.map(str::to_string),
+            gate_ref: gate_ref.to_string(),
+            summary,
+        };
+        let ev = self.alloc("e");
+        self.append_with_id(
+            sink,
+            &ev,
+            "verification.completion.decided",
+            hh_verification::events::completion_decided(&decision),
+            None,
+        )?;
+        Ok(CompletionGateDecision {
+            decision,
+            stop_reason: None,
         })
     }
 
@@ -1920,6 +2661,7 @@ impl<S: ControlStrategy> Driver<S> {
                 claim.provenance.clone(),
             )?;
         }
+        self.completion_claims = claims;
         Ok(())
     }
 
@@ -1948,6 +2690,57 @@ impl<S: ControlStrategy> Driver<S> {
             payload,
         );
         ev.provenance = Some(provenance);
+        sink.append(vec![ev]).map_err(DriverError::Append)?;
+        let tail: Vec<EventEnvelope> = sink
+            .prefix()
+            .iter()
+            .filter(|e| e.seq > self.state.last_cue_seq)
+            .cloned()
+            .collect();
+        self.strategy.observe(&mut self.state, &tail);
+        Ok(())
+    }
+
+    /// `append` with a caller-allocated event id (the gate needs the
+    /// `gate.evaluated` ref on the `completion.decided` row).
+    fn append_with_id(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        ev_id: &str,
+        class: &str,
+        payload: Json,
+        scope_id: Option<&str>,
+    ) -> Result<(), DriverError> {
+        let ev = crate::events::kernel_event(
+            ev_id.into(),
+            class,
+            self.ts(),
+            Scope {
+                turn_id: if class.starts_with("lifecycle.run.") {
+                    None
+                } else {
+                    Some("turn-1".into())
+                },
+                effect_id: scope_id
+                    .filter(|_| class.starts_with("action.effect."))
+                    .map(String::from),
+                model_call_id: scope_id
+                    .filter(|_| class.starts_with("model.") || class == "action.tool.proposed")
+                    .map(String::from),
+                tool_call_id: if class == "action.tool.proposed" {
+                    payload
+                        .get("tool_call_id")
+                        .and_then(Json::as_str)
+                        .map(String::from)
+                } else {
+                    None
+                },
+                ..scope_empty()
+            },
+            self.parent_id(sink),
+            vec![],
+            payload,
+        );
         sink.append(vec![ev]).map_err(DriverError::Append)?;
         let tail: Vec<EventEnvelope> = sink
             .prefix()
@@ -2073,6 +2866,71 @@ fn scope_empty() -> Scope {
     }
 }
 
+/// Resolve `act{intents}` into gate dispatch intents (S3.10): the strategy
+/// names `tool_call_id`s only (I2 — the ledgered intent never carries the
+/// arg bytes), but the gate's dispatch routes on `intent.surface_id`
+/// (`stop_rule = submit` detection, host-capability routing). The surface
+/// comes from the `action.tool.proposed` row; the args from the
+/// `model.call.completed` calls entry — both read back from the durable
+/// prefix, never from strategy state. An intent already carrying
+/// `surface`/`surface_id` (`plan_execute`'s validated plan steps) passes
+/// through unchanged.
+fn resolve_intents(prefix: &[EventEnvelope], intents: &[Json]) -> Vec<Json> {
+    let mut surfaces: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
+    let mut args: std::collections::BTreeMap<String, Json> =
+        std::collections::BTreeMap::new();
+    for e in prefix {
+        match e.class.as_str() {
+            "action.tool.proposed" => {
+                if let (Some(tc), Some(s)) = (
+                    e.payload.get("tool_call_id").and_then(Json::as_str),
+                    e.payload.get("surface_id").and_then(Json::as_str),
+                ) {
+                    surfaces.insert(tc.to_string(), s.to_string());
+                }
+            }
+            "model.call.completed" => {
+                if let Some(Json::Arr(calls)) = e.payload.get("calls") {
+                    for c in calls {
+                        if let (Some(tc), Some(raw)) = (
+                            c.get("tool_call_id").and_then(Json::as_str),
+                            c.get("args_raw").and_then(Json::as_str),
+                        ) {
+                            if let Ok(a) = hh_wire::json::parse(raw) {
+                                args.insert(tc.to_string(), a);
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    intents
+        .iter()
+        .map(|intent| {
+            if intent.get("surface_id").is_some() || intent.get("surface").is_some() {
+                return intent.clone();
+            }
+            let Some(tc) = intent.get("tool_call_id").and_then(Json::as_str) else {
+                return intent.clone();
+            };
+            let mut m = match intent {
+                Json::Obj(m) => m.clone(),
+                _ => std::collections::BTreeMap::new(),
+            };
+            if let Some(s) = surfaces.get(tc) {
+                m.insert("surface_id".into(), Json::str(s.clone()));
+            }
+            if let Some(a) = args.get(tc) {
+                m.insert("args".into(), a.clone());
+            }
+            Json::Obj(m)
+        })
+        .collect()
+}
+
 /// Map a kernel stop-rule payload to a `StopReason` (the `check` path's
 /// `stop{<canonical StopReason json>}` spellings — the fired members
 /// (`budget_exhausted`'s dimension, `cancelled`'s `by`,
@@ -2150,6 +3008,16 @@ fn kernel_stop_reason(kind: &str, policy: &EnvelopePolicy) -> StopReason {
             },
         },
     }
+}
+
+/// Whether a `verification.artefact.followed` row already names the
+/// delivery (the detector fires once per delivery — the first conforming
+/// call is the evidence).
+fn delivered_is_followed(prefix: &[EventEnvelope], delivery_id: &str) -> bool {
+    prefix.iter().any(|e| {
+        e.class == "verification.artefact.followed"
+            && e.payload.get("delivery_id").and_then(Json::as_str) == Some(delivery_id)
+    })
 }
 
 #[cfg(test)]

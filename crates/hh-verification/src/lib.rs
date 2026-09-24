@@ -20,6 +20,8 @@
 //! - [`claims`] — `Claim`, `AuthoritativeHandle`, `ReconciliationRecord`,
 //!   `SeverityRecord`, `ReconciliationNotice`, the `bind` kind table and the
 //!   pure `ledger_only` reconcile fold.
+//! - [`followed`] — the deterministic `followed` detector table
+//!   (`delivered → activated → followed`; `n/a{no_detector}` for prose).
 //! - [`gate`] — `ValidatesRecord`, `AcceptanceCriterion`, `TaskContract`,
 //!   `VerificationSummary`, `GateResult`, Γ with the kernel floors F2–F7 as
 //!   constants, `validate_gamma`, `evaluate_gate`.
@@ -43,10 +45,13 @@
 //! evaluation, judged validators/critics and the `probe`/`resume` halves are
 //! spec-staged to Stage 2/3/4 — tracked as DF-S1.21-* rows.
 
+pub mod bind;
 pub mod claims;
 pub mod critics;
+pub mod evalfold;
 pub mod events;
 pub mod evidence;
+pub mod followed;
 pub mod gate;
 pub mod metrics;
 pub mod validators;
