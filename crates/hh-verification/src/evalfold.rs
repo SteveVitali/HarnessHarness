@@ -18,6 +18,7 @@
 //!   verdicts survive.
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use hh_wire::Json;
 
@@ -146,6 +147,64 @@ pub fn compute(rows: &[RowView]) -> Vec<MetricRow> {
             _ => {}
         }
     }
+
+    // deterministic_detector_share (AC-R-2.7.1-9 / AC-G1-9) — per profile
+    // key (`rule_id` on the delivered row, else the artefact `kind`), the
+    // share of deliveries whose `verification.artefact.followed` verdict
+    // is `detector = deterministic`. Prose deliveries count in the
+    // denominator — their followed evaluation renders `n/a{no_detector}`
+    // (the detector table, [`crate::followed`]), never a proxy.
+    let mut delivered: Vec<(String, String)> = Vec::new(); // (delivery_id, profile key)
+    let mut deterministic_followed: BTreeSet<String> = BTreeSet::new(); // delivery_ids
+    for r in rows {
+        match r.class {
+            "context.artefact.delivered" => {
+                let delivery_id = r
+                    .payload
+                    .get("delivery_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let key = r
+                    .payload
+                    .get("rule_id")
+                    .or_else(|| r.payload.get("profile_ref"))
+                    .and_then(Json::as_str)
+                    .or_else(|| r.payload.get("kind").and_then(Json::as_str))
+                    .unwrap_or("unknown")
+                    .to_string();
+                delivered.push((delivery_id, key));
+            }
+            "verification.artefact.followed" => {
+                if r.payload.get("detector").and_then(Json::as_str) == Some("deterministic") {
+                    if let Some(d) = r.payload.get("delivery_id").and_then(Json::as_str) {
+                        deterministic_followed.insert(d.to_string());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut share_num: BTreeMap<String, u64> = BTreeMap::new();
+    let mut share_den: BTreeMap<String, u64> = BTreeMap::new();
+    for (delivery_id, key) in &delivered {
+        *share_den.entry(key.clone()).or_default() += 1;
+        if deterministic_followed.contains(delivery_id) {
+            *share_num.entry(key.clone()).or_default() += 1;
+        }
+    }
+    let detector_share = MetricValue::Profile(
+        share_den
+            .iter()
+            .map(|(k, den)| {
+                (
+                    k.clone(),
+                    (share_num.get(k).copied().unwrap_or(0) as i64) * 1_000_000
+                        / (*den as i64),
+                )
+            })
+            .collect(),
+    );
 
     let decision_is = |s: &str| decision.as_deref() == Some(s);
 
@@ -286,6 +345,11 @@ pub fn compute(rows: &[RowView]) -> Vec<MetricRow> {
             name: "visible_pass_rate".into(),
             veto: false,
             value: visible_pass_rate,
+        },
+        MetricRow {
+            name: "deterministic_detector_share".into(),
+            veto: false,
+            value: detector_share,
         },
     ]
 }

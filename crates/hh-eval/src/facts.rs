@@ -402,10 +402,20 @@ pub struct VerdictRow {
     /// The verdict's declared verifier isolation, when carried.
     pub isolation: Option<String>,
     /// The verdict's `inputs_digest` (the evidence-binding the
-    /// replayed-verification check recomputes).
+    /// replayed-verification check recomputes — and the `evidence_tampered`
+    /// veto's observed digest — AC-R-2.7.1-2/4).
     pub inputs_digest: Option<String>,
     /// The phase the verdict targets.
     pub phase: Option<String>,
+    /// The criterion the verdict judges (`criterion_ref`) — the
+    /// `verification_skipped` join key (AC-R-2.7.1-5).
+    pub criterion_ref: Option<String>,
+    /// The criterion's visibility when the row carries it
+    /// (`visible | held_out`).
+    pub visibility: Option<String>,
+    /// Who the verdict is charged to (`subject | instrument` …) — the
+    /// headline rule's subject-suite filter (AC-R-2.7.1-8).
+    pub charged_to: Option<String>,
 }
 
 /// The bench-grading evidence a `measurement.bench.graded`-style row or a
@@ -510,6 +520,14 @@ pub struct LedgerFacts {
     /// `action.effect.unattributed` markers — capture-path signals that
     /// resolved to no `effect_id` (S3.9; the AC-E5-01 veto input).
     pub unattributed_signals: Vec<UnattributedSignal>,
+    /// Criterion refs any `verification.validator.invoked` row named —
+    /// the `verification_skipped` veto's invocation set (AC-R-2.7.1-5).
+    pub invoked_criteria: BTreeSet<String>,
+    /// Resource spellings extracted from `model.call.completed`
+    /// `calls[].args_raw` (`path`/`resource`/`uri`/`target`/`file`/
+    /// `file_path` members) — the `metadata_shortcut` veto's access view
+    /// (AC-R-2.7.1-6).
+    pub metadata_accesses: Vec<String>,
 }
 
 fn s(j: &Json, member: &str) -> Option<String> {
@@ -735,6 +753,11 @@ impl LedgerFacts {
                     }
                     f.assembled.push((call, items));
                 }
+                "verification.validator.invoked" => {
+                    if let Some(cr) = s(p, "criterion_ref") {
+                        f.invoked_criteria.insert(cr);
+                    }
+                }
                 "verification.validator.verdict" | "measurement.bench.graded" => {
                     if class == "measurement.bench.graded" {
                         f.grading.exit_code = p.get("exit_code").and_then(Json::as_int);
@@ -762,6 +785,9 @@ impl LedgerFacts {
                             isolation: s(p, "isolation"),
                             inputs_digest: s(p, "inputs_digest"),
                             phase: s(p, "phase"),
+                            criterion_ref: s(p, "criterion_ref"),
+                            visibility: s(p, "visibility"),
+                            charged_to: s(p, "charged_to"),
                         });
                         // A verifier verdict doubles as grading evidence when
                         // it carries the bench members.
@@ -830,6 +856,27 @@ impl LedgerFacts {
                     }
                 }
                 "model.call.completed" | "model.call.failed" => {
+                    // metadata_shortcut's access view — the resource members
+                    // the recorded call args named (AC-R-2.7.1-6).
+                    if let Some(Json::Arr(calls)) = p.get("calls") {
+                        for c in calls {
+                            let raw = c.get("args_raw").and_then(Json::as_str);
+                            if let Some(raw) = raw {
+                                if let Ok(a) = hh_wire::json::parse(raw) {
+                                    for m in [
+                                        "path", "resource", "uri", "target", "file",
+                                        "file_path",
+                                    ] {
+                                        if let Some(v) =
+                                            a.get(m).and_then(Json::as_str)
+                                        {
+                                            f.metadata_accesses.push(v.to_string());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                     f.call_terminals.push(CallTerminal {
                         seq,
                         model_call_id: s(p, "model_call_id").unwrap_or_default(),
@@ -1169,10 +1216,33 @@ impl LedgerFacts {
                             v.inputs_digest.as_deref().map(Json::str),
                         );
                         insert_opt(&mut vm, "phase", v.phase.as_deref().map(Json::str));
+                        insert_opt(
+                            &mut vm,
+                            "criterion_ref",
+                            v.criterion_ref.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut vm,
+                            "visibility",
+                            v.visibility.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut vm,
+                            "charged_to",
+                            v.charged_to.as_deref().map(Json::str),
+                        );
                         Json::Obj(vm)
                     })
                     .collect(),
             ),
+        );
+        m.insert(
+            "invoked_criteria".into(),
+            Json::Arr(self.invoked_criteria.iter().map(Json::str).collect()),
+        );
+        m.insert(
+            "metadata_accesses".into(),
+            Json::Arr(self.metadata_accesses.iter().map(Json::str).collect()),
         );
         m.insert(
             "metrics_emitted".into(),
@@ -1450,6 +1520,8 @@ impl LedgerFacts {
                 "artefacts_followed",
                 "assembled",
                 "verdicts",
+                "invoked_criteria",
+                "metadata_accesses",
                 "metrics_emitted",
                 "cost_attributed_calls",
                 "model_calls_completed",
@@ -1565,6 +1637,9 @@ impl LedgerFacts {
                     isolation: s(v, "isolation"),
                     inputs_digest: s(v, "inputs_digest"),
                     phase: s(v, "phase"),
+                    criterion_ref: s(v, "criterion_ref"),
+                    visibility: s(v, "visibility"),
+                    charged_to: s(v, "charged_to"),
                 });
             }
         }
@@ -1591,6 +1666,18 @@ impl LedgerFacts {
                     detection: opt_str_at(um, "detection")?.map(str::to_string),
                 });
             }
+        }
+        if let Some(Json::Arr(cs)) = m.get("invoked_criteria") {
+            f.invoked_criteria = cs
+                .iter()
+                .filter_map(|c| c.as_str().map(str::to_string))
+                .collect();
+        }
+        if let Some(Json::Arr(rs)) = m.get("metadata_accesses") {
+            f.metadata_accesses = rs
+                .iter()
+                .filter_map(|c| c.as_str().map(str::to_string))
+                .collect();
         }
         f.first_proposed_at = opt_int_at(m, "first_proposed_at")?.map(|x| x as u64);
         // ── S3.7 model-plane members ────────────────────────────────────

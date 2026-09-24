@@ -1316,6 +1316,17 @@ impl<S: ControlStrategy> Driver<S> {
                         ]),
                         Some(&mc),
                     )?;
+                    // AC-R-2.7.1-9 — the deterministic `followed` pass: a
+                    // validated call on a delivered `tool_surface` / an
+                    // activated typed `procedure` emits
+                    // `verification.artefact.followed{detector:
+                    // deterministic}` (§02's detector table).
+                    self.maybe_emit_artefact_followed(
+                        sink,
+                        &mc,
+                        &c.surface_id,
+                        &c.tool_call_id,
+                    )?;
                     proposed_tool_calls.push(c.tool_call_id);
                 }
             }
@@ -1516,10 +1527,23 @@ impl<S: ControlStrategy> Driver<S> {
                     SettledOutcome::Unknown { .. } => "action.effect.unknown",
                     SettledOutcome::Abandoned => "action.effect.abandoned",
                 };
+                // The `stop_rule = submit` detection is ledgered where it
+                // happened (CC3 — the terminal row carries the ref so a
+                // deterministic replay re-serves the *recorded* value,
+                // never a re-minted one — ADR-0135 §2).
+                let mut terminal_payload = crate::events::settled_outcome_json(&out.outcome);
+                if let Some(s) = &out.submission_ref {
+                    if let Json::Obj(m) = &mut terminal_payload {
+                        m.insert(
+                            "submission_ref".to_string(),
+                            Json::str(s.clone()),
+                        );
+                    }
+                }
                 self.append(
                     sink,
                     terminal_class,
-                    crate::events::settled_outcome_json(&out.outcome),
+                    terminal_payload,
                     Some(&ef),
                 )?;
                 if let Some(s) = &out.submission_ref {
@@ -1856,6 +1880,179 @@ impl<S: ControlStrategy> Driver<S> {
         })
     }
 
+    /// The deterministic `followed` detector pass (AC-R-2.7.1-9; §02
+    /// "Detectors per kind"). A validated `action.tool.proposed` is the
+    /// args-conform evidence for a delivered `tool_surface`; a delivered +
+    /// activated typed `procedure` is followed when the invoked surface is
+    /// in the procedure's `allowed_capabilities` (carried on the
+    /// `activated` row) and the index `delivery_id` rode the call's
+    /// context — `context.assembled{model_call_id}.items[]` is the call's
+    /// cause set (hh-context `detect_followed`'s rule, adapted to the
+    /// driver plane: the assembled context *is* what caused the call).
+    /// Prose kinds carry no deterministic detector — the run emits no row
+    /// and the eval plane renders `n/a{no_detector}` (never a proxy).
+    fn maybe_emit_artefact_followed(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        model_call_id: &str,
+        surface_id: &str,
+        tool_call_id: &str,
+    ) -> Result<(), DriverError> {
+        // Delivered artefacts + activated procedures + this call's cause
+        // set, folded from the durable prefix (ledger-only — CC3).
+        struct Del {
+            artefact_id: String,
+            delivery_id: String,
+            kind: String,
+        }
+        let mut delivered: Vec<Del> = Vec::new();
+        let mut activated: Vec<(String, Option<std::collections::BTreeSet<String>>)> = Vec::new();
+        let mut causes: Vec<String> = Vec::new();
+        for e in sink.prefix() {
+            match e.class.as_str() {
+                "context.artefact.delivered" => delivered.push(Del {
+                    artefact_id: e
+                        .payload
+                        .get("artefact_id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    delivery_id: e
+                        .payload
+                        .get("delivery_id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                    kind: e
+                        .payload
+                        .get("kind")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string(),
+                }),
+                "context.artefact.activated" => {
+                    let delivery_id = e
+                        .payload
+                        .get("delivery_id")
+                        .and_then(Json::as_str)
+                        .unwrap_or_default()
+                        .to_string();
+                    let caps = e.payload.get("allowed_capabilities").map(|c| match c {
+                        Json::Arr(a) => a
+                            .iter()
+                            .filter_map(|x| x.as_str().map(str::to_string))
+                            .collect(),
+                        _ => std::collections::BTreeSet::new(),
+                    });
+                    activated.push((delivery_id, caps));
+                }
+                "context.assembled" => {
+                    // The assembled row feeding this call is the most
+                    // recent `context.assembled` in the prefix (the driver
+                    // appends it immediately before `model_round`) —
+                    // `payload.model_call_id` names it when the builder
+                    // stamps the member; position is the fallback.
+                    let matches = e
+                        .payload
+                        .get("model_call_id")
+                        .and_then(Json::as_str)
+                        .map(|id| id == model_call_id)
+                        .unwrap_or(true);
+                    if matches {
+                        causes.clear();
+                        if let Some(Json::Arr(items)) = e.payload.get("items") {
+                            for it in items {
+                                if let Some(d) =
+                                    it.get("delivery_id").and_then(Json::as_str)
+                                {
+                                    causes.push(d.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        let emit = |this: &mut Self,
+                    sink: &mut dyn LedgerSink,
+                    artefact_id: &str,
+                    delivery_id: &str,
+                    detector_ref: &str,
+                    evidence_ref: &str,
+                    kind: &str|
+         -> Result<(), DriverError> {
+            let prov = ProvenanceRecord::minted(
+                Origin::kernel("hh-control/followed"),
+                PersistenceScope::Run,
+                this.now_ms,
+            );
+            this.append_prov(
+                sink,
+                "verification.artefact.followed",
+                hh_verification::followed::followed_payload(
+                    artefact_id,
+                    delivery_id,
+                    detector_ref,
+                    true,
+                    evidence_ref,
+                    kind,
+                ),
+                None,
+                prov,
+            )
+        };
+        // tool_surface — the validated call IS the args-conform evidence.
+        for d in &delivered {
+            if d.kind == "tool_surface"
+                && d.artefact_id == surface_id
+                && !delivered_is_followed(sink.prefix(), &d.delivery_id)
+            {
+                emit(
+                    self,
+                    sink,
+                    &d.artefact_id,
+                    &d.delivery_id,
+                    hh_verification::followed::detector::ARGS_CONFORM,
+                    tool_call_id,
+                    "tool_surface",
+                )?;
+            }
+        }
+        // Typed procedure — `detect_followed`: capability allowed ∧ index
+        // delivery in the call's causes.
+        for d in &delivered {
+            if !matches!(d.kind.as_str(), "procedure" | "procedure_index") {
+                continue;
+            }
+            let caps = activated
+                .iter()
+                .find(|(delivery_id, _)| *delivery_id == d.delivery_id)
+                .and_then(|(_, caps)| caps.clone());
+            let Some(caps) = caps else { continue };
+            if let Some(ev) = hh_context::procedure::detect_followed(
+                &d.delivery_id,
+                surface_id,
+                &caps,
+                &causes,
+            ) {
+                if delivered_is_followed(sink.prefix(), &d.delivery_id) {
+                    continue;
+                }
+                emit(
+                    self,
+                    sink,
+                    &d.artefact_id,
+                    &d.delivery_id,
+                    hh_verification::followed::detector::PROCEDURE_INVOKED,
+                    &ev,
+                    "procedure",
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     /// `verification.artefact.followed` — the pending nudge's `followed`
     /// verdict: the strategy's admitted decision row is the evidence
     /// (deterministic detector, `verdict: true` — the loop continued under
@@ -1972,6 +2169,25 @@ impl<S: ControlStrategy> Driver<S> {
             crate::events::turn_finished_payload(&final_reason),
             None,
         )?;
+        // AC-F2-03 — an `invariant_violation` stop quarantines: the
+        // `security.audit.checkpoint{kind: quarantine}` row lands durable
+        // before `run.finished`, naming the violated invariant + the
+        // detection evidence (the run is `infrastructure_failure`, never
+        // scored — ADR-0108 D3).
+        if let StopReason::InvariantViolation { invariant_id } = &final_reason {
+            let evidence: Vec<String> = sink
+                .prefix()
+                .iter()
+                .filter(|e| e.class == "control.invariant.violated")
+                .map(|e| e.event_id.clone())
+                .collect();
+            self.append(
+                sink,
+                "security.audit.checkpoint",
+                crate::events::quarantine_payload(invariant_id, &evidence),
+                None,
+            )?;
+        }
         let mut finished = crate::events::run_finished_payload(
             &run_status,
             &final_reason,
@@ -2190,12 +2406,16 @@ impl<S: ControlStrategy> Driver<S> {
                 )?;
                 Ok(CompletionFlow::Decided(decided.with_stop(
                     StopReason::BudgetExhausted {
+                        // The contract's budget ref first, else the run's
+                        // bound budget (the cursor's `bound_ref` — the
+                        // `reconciliation.holds` dimension charges against
+                        // the run's own budget identity, never a literal).
                         budget_id: self
                             .config
                             .task_contract
                             .as_ref()
                             .map(|c| c.budget_ref.clone())
-                            .unwrap_or_else(|| "budget".into()),
+                            .unwrap_or_else(|| self.state.cursor.bound_ref.clone()),
                         dimension: hh_ontology::dimensions::DimensionId::ReconciliationHolds,
                     },
                 )))
@@ -2788,6 +3008,16 @@ fn kernel_stop_reason(kind: &str, policy: &EnvelopePolicy) -> StopReason {
             },
         },
     }
+}
+
+/// Whether a `verification.artefact.followed` row already names the
+/// delivery (the detector fires once per delivery — the first conforming
+/// call is the evidence).
+fn delivered_is_followed(prefix: &[EventEnvelope], delivery_id: &str) -> bool {
+    prefix.iter().any(|e| {
+        e.class == "verification.artefact.followed"
+            && e.payload.get("delivery_id").and_then(Json::as_str) == Some(delivery_id)
+    })
 }
 
 #[cfg(test)]

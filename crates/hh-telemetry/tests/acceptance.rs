@@ -1038,3 +1038,121 @@ fn genai_lowering_failed_call_and_empty_run() {
     assert_eq!(empty.seq_range, (0, 0));
     assert!(empty.loss_report_ref().is_none());
 }
+
+// ---------------------------------------------------------------------------
+// AC-R-2.7.3-10 — `gen_ai.evaluation.result` round-trips name/score/label/
+// explanation/response id; the loss report names judge identity, evidence,
+// calibration, independence and cost.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn genai_verdict_lowering_roundtrips_and_names_loss_classes() {
+    use hh_telemetry::genai::lower_verdict;
+    let verdict = Json::obj([
+        ("verdict_id", Json::str("v-9")),
+        ("validator_ref", Json::str("critic:reconciliation@1")),
+        ("detector", Json::str("deterministic")),
+        ("oracle_class", Json::str("deterministic")),
+        ("target", Json::str("task:cap-1")),
+        ("criterion_ref", Json::str("crit:loop-guard")),
+        ("contract_id", Json::str("contract:t1")),
+        ("phase", Json::str("post_completion")),
+        ("role", Json::str("independent")),
+        (
+            "value",
+            Json::obj([("kind", Json::str("bool")), ("value", Json::Bool(true))]),
+        ),
+        ("status", Json::str("decided")),
+        (
+            "evidence_refs",
+            Json::Arr(vec![Json::str("sha256:ev-1"), Json::str("sha256:ev-2")]),
+        ),
+        ("inputs_digest", Json::str("sha256:in-1")),
+        ("evidence_head_seq", Json::Int(41)),
+        ("freshness_ok", Json::Bool(true)),
+        (
+            "findings",
+            Json::Arr(vec![Json::obj([
+                ("code", Json::str("loop_guard_passed")),
+                ("severity", Json::str("info")),
+                ("location", Json::Null),
+                ("evidence_ref", Json::Null),
+            ])]),
+        ),
+        ("cost_ppm", Json::Int(3_000)),
+        ("charged_to", Json::str("instrument")),
+        ("calibration_ref", Json::str("cal:t1")),
+        ("independence_vector", Json::str("separate-model")),
+        ("response_ref", Json::str("resp-77")),
+    ]);
+    let (event, loss) = lower_verdict(9, &verdict);
+    assert_eq!(event.get("name").unwrap().as_str().unwrap(), "gen_ai.evaluation.result");
+    let attrs = event.get("attributes").unwrap();
+    assert_eq!(
+        attrs.get("gen_ai.evaluation.name").unwrap().as_str().unwrap(),
+        "crit:loop-guard"
+    );
+    assert_eq!(
+        attrs
+            .get("gen_ai.evaluation.score.label")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "pass"
+    );
+    assert_eq!(
+        attrs
+            .get("gen_ai.evaluation.explanation")
+            .unwrap()
+            .as_str()
+            .unwrap(),
+        "loop_guard_passed"
+    );
+    assert_eq!(
+        attrs.get("gen_ai.evaluation.status").unwrap().as_str().unwrap(),
+        "decided"
+    );
+    assert_eq!(
+        attrs.get("gen_ai.response.id").unwrap().as_str().unwrap(),
+        "resp-77"
+    );
+    // The five named loss classes are all named on the loss report.
+    let details: Vec<String> = loss.iter().map(|l| l.detail.clone()).collect();
+    for named in [
+        "validator_ref",         // judge identity
+        "evidence_refs",         // evidence
+        "calibration_ref",       // calibration
+        "independence_vector",   // independence
+        "cost_ppm",              // cost
+    ] {
+        assert!(
+            details
+                .iter()
+                .any(|d| d == &format!("verification.validator.verdict.{named}")),
+            "loss must name {named}: {details:?}"
+        );
+    }
+    // Determinism: identical input → identical output.
+    assert_eq!((event.clone(), loss.clone()), lower_verdict(9, &verdict));
+    // A numeric score lowers to score.value.
+    let v2 = Json::obj([
+        ("verdict_id", Json::str("v-10")),
+        ("target", Json::str("task:cap-2")),
+        (
+            "value",
+            Json::obj([("kind", Json::str("int")), ("value", Json::Int(85))]),
+        ),
+        ("status", Json::str("decided")),
+    ]);
+    let (e2, _) = lower_verdict(10, &v2);
+    let a2 = e2.get("attributes").unwrap();
+    assert_eq!(a2.get("gen_ai.evaluation.score.value").unwrap().as_int(), Some(85));
+    assert_eq!(
+        a2.get("gen_ai.evaluation.name").unwrap().as_str().unwrap(),
+        "task:cap-2"
+    );
+    assert_eq!(
+        a2.get("gen_ai.response.id").unwrap().as_str().unwrap(),
+        "v-10"
+    );
+}

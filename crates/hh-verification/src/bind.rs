@@ -651,4 +651,146 @@ mod tests {
             Agreement::Diverge(DivergenceClass::ContractGap)
         );
     }
+
+    /// AC-R-2.7.2a-8 — a 500-event corpus folds → binds → reconciles to the
+    /// identical records on a rebuild (`view_hash` equality), and the
+    /// reconciled row reports the per-claim check as an instrument cost.
+    #[test]
+    fn ledger_only_reconcile_rebuilds_identically_over_500_events() {
+        let mut payloads: Vec<Json> = Vec::new();
+        // 200 effect lifecycles (intended + committed + observed = 600…
+        // trim to 450) + 50 verdict rows = 500.
+        for i in 0..150u64 {
+            payloads.push(Json::obj([
+                ("effect_id", Json::str(format!("e-{i}"))),
+                ("attempt_no", Json::Int(1)),
+            ])); // intended
+        }
+        for i in 0..150u64 {
+            payloads.push(Json::obj([
+                ("effect_id", Json::str(format!("e-{i}"))),
+                ("attempt_no", Json::Int(1)),
+            ])); // committed
+        }
+        for i in 0..150u64 {
+            payloads.push(Json::obj([
+                ("effect_id", Json::str(format!("e-{i}"))),
+                ("outcome", Json::str("applied")),
+            ])); // observed
+        }
+        for i in 0..50u64 {
+            payloads.push(Json::obj([
+                ("verdict_id", Json::str(format!("v-{i}"))),
+                ("criterion_ref", Json::str(format!("crit:{}", i % 5))),
+                ("status", Json::str("decided")),
+                ("value", Json::Bool(true)),
+                ("detector", Json::str("deterministic")),
+                ("phase", Json::str("completion")),
+            ]));
+        }
+        assert_eq!(payloads.len(), 500);
+        let rows: Vec<RowView> = payloads
+            .iter()
+            .enumerate()
+            .map(|(i, p)| RowView {
+                seq: (i + 1) as u64,
+                class: if i < 150 {
+                    "action.effect.intended"
+                } else if i < 300 {
+                    "action.effect.committed"
+                } else if i < 450 {
+                    "action.effect.observed"
+                } else {
+                    "verification.validator.verdict"
+                },
+                payload: p,
+                authority: AuthorityClass::Kernel,
+                scope_effect_id: None,
+            })
+            .collect();
+        let c = contract(&["crit:0", "crit:1", "crit:2", "crit:3", "crit:4"]);
+        let cl = claim(ClaimKind::Achieved, vec![]);
+        // The rebuild — two independent folds produce identical handles and
+        // identical reconciliation records (view_hash equality).
+        let h1 = bind_claim(&rows, &cl, Some(&c));
+        let h2 = bind_claim(&rows, &cl, Some(&c));
+        assert_eq!(h1, h2);
+        let r1 = reconcile_ledger_only(&cl, &h1, "hir/kernel/reconcile:0", 600, kprov());
+        let r2 = reconcile_ledger_only(&cl, &h2, "hir/kernel/reconcile:0", 600, kprov());
+        assert_eq!(r1, r2);
+        let j1 = crate::events::claim_reconciled(&r1).to_canonical_string();
+        let j2 = crate::events::claim_reconciled(&r2).to_canonical_string();
+        assert_eq!(j1, j2, "rebuild equality — the reconciled bytes");
+        // All criteria met, all effects applied → `agree` (the clean arm).
+        assert_eq!(r1.agreement, Agreement::Agree);
+        // The per-claim deterministic check reports as instrument cost.
+        let payload = crate::events::claim_reconciled(&r1);
+        assert_eq!(
+            payload.get("charged_to").and_then(Json::as_str),
+            Some("instrument")
+        );
+    }
+
+    /// AC-R-2.7.2a-3 + AC-R-2.7.2a-6 — the negative corpus: honest claims,
+    /// `assumption` claims, retried-then-applied effects and judged-only
+    /// contradiction records produce zero `diverge` (0 false positives;
+    /// F7 — a judged/parsed record alone never causes a hold or diverge).
+    #[test]
+    fn negative_corpus_yields_zero_divergence() {
+        let applied = |id: &str| {
+            Json::obj([
+                ("effect_id", Json::str(id.to_string())),
+                ("outcome", Json::str("applied")),
+            ])
+        };
+        // (a) honest `effected` claim — the effect applied.
+        let applied_row = applied("e-ok");
+        let rows = [RowView {
+            seq: 1,
+            class: "action.effect.observed",
+            payload: &applied_row,
+            authority: AuthorityClass::Kernel,
+            scope_effect_id: None,
+        }];
+        let cl = {
+            let mut c = claim(ClaimKind::Effected, vec!["e-ok".into()]);
+            c.subject = SubjectRef::Effect("e-ok".into());
+            c
+        };
+        let h = bind_claim(&rows, &cl, None);
+        let r = reconcile_ledger_only(&cl, &h, "hir/kernel/reconcile:0", 20, kprov());
+        assert_ne!(
+            r.agreement,
+            Agreement::Diverge(crate::vocab::DivergenceClass::PhantomEffect)
+        );
+        // (b) `assumption` claim — unbindable ⇒ unverifiable, never diverge.
+        let c = claim(ClaimKind::Assumption, vec![]);
+        let r = reconcile_ledger_only(&c, &bind_claim(&rows, &c, None), "hir/kernel/reconcile:0", 20, kprov());
+        assert_eq!(r.agreement, Agreement::Unverifiable);
+        // (c) honest `unachievable` — no contradiction ⇒ not diverge.
+        let c = claim(ClaimKind::Unachievable, vec![]);
+        let h = bind_claim(&rows, &c, None);
+        let r = reconcile_ledger_only(&c, &h, "hir/kernel/reconcile:0", 20, kprov());
+        assert!(!matches!(r.agreement, Agreement::Diverge(_)));
+        // (d) a judged verdict contradicting the claim never binds (F7) —
+        // the fold is `unverifiable`, never `diverge`.
+        let jv = Json::obj([
+            ("verdict_id", Json::str("v-j")),
+            ("status", Json::str("decided")),
+            ("value", Json::Bool(false)),
+            ("detector", Json::str("judged")),
+        ]);
+        let jrows = [RowView {
+            seq: 1,
+            class: "verification.validator.verdict",
+            payload: &jv,
+            authority: AuthorityClass::Kernel,
+            scope_effect_id: None,
+        }];
+        let c = claim(ClaimKind::Verified, vec!["v-j".into()]);
+        let h = bind_claim(&jrows, &c, None);
+        let r = reconcile_ledger_only(&c, &h, "hir/kernel/reconcile:0", 20, kprov());
+        assert_eq!(r.agreement, Agreement::Unverifiable);
+        assert!(!matches!(r.agreement, Agreement::Diverge(_)));
+    }
 }

@@ -420,7 +420,11 @@ impl ControlStrategy for PlanExecute {
                             .unwrap_or(Json::Arr(vec![]));
                         Self::set_ext(state, ext::STEPS, steps);
                         Self::set_ext(state, ext::IDX, Json::Int(0));
-                        Self::set_ext(state, ext::PHASE, Json::str("executing"));
+                        // `plan_landed`, not `executing`: the model call
+                        // that carried the plan completes next — its
+                        // `model_completed` cue dispatches step 0 (an
+                        // `executing`-phase `advance` would skip it).
+                        Self::set_ext(state, ext::PHASE, Json::str("plan_landed"));
                         if let Some(r) = ev.payload.get("plan_ref").and_then(Json::as_str) {
                             Self::set_ext(state, ext::PLAN_REF, Json::str(r));
                         }
@@ -529,6 +533,7 @@ impl ControlStrategy for PlanExecute {
                     Some("awaiting_plan") => {
                         if !Self::steps(state).is_empty() {
                             // A valid plan landed — step 0 decides.
+                            Self::set_ext(state, ext::PHASE, Json::str("executing"));
                             self.step_decision(state)
                         } else {
                             // Invalid/missing plan — bounded re-plan (AC-7:
@@ -541,6 +546,13 @@ impl ControlStrategy for PlanExecute {
                                 self.plan_propose(state)
                             }
                         }
+                    }
+                    Some("plan_landed") => {
+                        // The plan-carrying call completed — dispatch step
+                        // 0 (`advance` would skip it; the step index still
+                        // points at the undispatched head).
+                        Self::set_ext(state, ext::PHASE, Json::str("executing"));
+                        self.step_decision(state)
                     }
                     Some("executing") => {
                         // A `propose` step completed — pending intents act

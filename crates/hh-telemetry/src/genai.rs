@@ -48,6 +48,16 @@ pub mod attr {
     pub const CACHE_WRITE: &str = "gen_ai.usage.cache_write.input_tokens";
     /// `gen_ai.error.type`.
     pub const ERROR_TYPE: &str = "gen_ai.error.type";
+    /// `gen_ai.evaluation.name` — the evaluated criterion/target.
+    pub const EVAL_NAME: &str = "gen_ai.evaluation.name";
+    /// `gen_ai.evaluation.score.value` — the numeric score.
+    pub const EVAL_SCORE_VALUE: &str = "gen_ai.evaluation.score.value";
+    /// `gen_ai.evaluation.score.label` — the categorical score.
+    pub const EVAL_SCORE_LABEL: &str = "gen_ai.evaluation.score.label";
+    /// `gen_ai.evaluation.explanation` — the verdict's explanation string.
+    pub const EVAL_EXPLANATION: &str = "gen_ai.evaluation.explanation";
+    /// `gen_ai.evaluation.status` — decided/inconclusive/oracle_failure.
+    pub const EVAL_STATUS: &str = "gen_ai.evaluation.status";
 }
 
 /// The `model.call.completed` members the span carries — everything else on
@@ -297,6 +307,151 @@ pub fn lower_call_failed(seq: u64, payload: &Json) -> (Json, Vec<LossEntry>) {
     }
     span.insert("attributes".into(), Json::Obj(attrs));
     (Json::Obj(span), loss)
+}
+
+/// `lower_verdict(seq, payload)` — one `verification.validator.verdict`
+/// payload → a `gen_ai.evaluation.result` event (OTel eval-event
+/// conventions; AC-R-2.7.3-10). The carried members round-trip:
+///
+/// - `gen_ai.evaluation.name` ← `criterion_ref` (else `target`)
+/// - `gen_ai.evaluation.score.value` ← `value.value` numeric
+/// - `gen_ai.evaluation.score.label` ← `value.value` categorical/boolean
+/// - `gen_ai.evaluation.explanation` ← `findings[].code` + `status_detail`
+/// - `gen_ai.evaluation.status` ← `status`
+/// - `gen_ai.response.id` ← `response_ref` (else the `verdict_id`)
+///
+/// Every other member is a named loss — the AC's five named classes ride
+/// the loss report: `validator_ref`/`detector`/`detector_ref`/
+/// `oracle_class` (judge identity), `evidence_refs`/`inputs_digest`/
+/// `evidence_head_seq`/`freshness_ok` (evidence), `calibration`/
+/// `calibration_ref`/`calibration_id` (calibration), `independence`/
+/// `independence_vector` (independence), `cost_ppm`/`charged_to` (cost) —
+/// plus the enumeration sweep for anything else.
+pub fn lower_verdict(seq: u64, payload: &Json) -> (Json, Vec<LossEntry>) {
+    let mut loss = Vec::new();
+    let mut attrs = BTreeMap::new();
+    let mut event = BTreeMap::new();
+    event.insert("name".into(), Json::str("gen_ai.evaluation.result"));
+    event.insert("seq".into(), Json::Int(seq as i64));
+    let mut consumed: BTreeSet<&str> = BTreeSet::new();
+
+    // name ← criterion_ref | target.
+    if let Some(n) = payload
+        .get("criterion_ref")
+        .and_then(Json::as_str)
+        .or_else(|| payload.get("target").and_then(Json::as_str))
+    {
+        attrs.insert(attr::EVAL_NAME.into(), Json::str(n));
+        consumed.insert("criterion_ref");
+        consumed.insert("target");
+    }
+    // score ← value{kind,value} — ints/floats to score.value, bools and
+    // strings to score.label.
+    if let Some(v) = payload.get("value") {
+        consumed.insert("value");
+        let inner = v.get("value").unwrap_or(v);
+        match inner {
+            Json::Int(i) => {
+                attrs.insert(attr::EVAL_SCORE_VALUE.into(), Json::Int(*i));
+            }
+            Json::Bool(bv) => {
+                attrs.insert(
+                    attr::EVAL_SCORE_LABEL.into(),
+                    Json::str(if *bv { "pass" } else { "fail" }),
+                );
+            }
+            Json::Str(sv) => {
+                attrs.insert(attr::EVAL_SCORE_LABEL.into(), Json::str(sv));
+            }
+            _ => {
+                member_loss(&mut loss, "verification.validator.verdict.value.value");
+            }
+        }
+    }
+    // status + explanation.
+    if let Some(s) = payload.get("status").and_then(Json::as_str) {
+        attrs.insert(attr::EVAL_STATUS.into(), Json::str(s));
+        consumed.insert("status");
+    }
+    let mut explanation: Vec<String> = Vec::new();
+    if let Some(d) = payload.get("status_detail").and_then(Json::as_str) {
+        explanation.push(d.to_string());
+        consumed.insert("status_detail");
+    }
+    if let Some(Json::Arr(fs)) = payload.get("findings") {
+        consumed.insert("findings");
+        for f in fs {
+            if let Some(c) = f.get("code").and_then(Json::as_str) {
+                explanation.push(c.to_string());
+            }
+            if let Json::Obj(fm) = f {
+                for k in fm.keys() {
+                    if k != "code" {
+                        member_loss(
+                            &mut loss,
+                            &format!("verification.validator.verdict.findings.{k}"),
+                        );
+                    }
+                }
+            }
+        }
+    }
+    if !explanation.is_empty() {
+        attrs.insert(
+            attr::EVAL_EXPLANATION.into(),
+            Json::str(explanation.join(";")),
+        );
+    }
+    // response.id ← response_ref | verdict_id.
+    if let Some(r) = payload
+        .get("response_ref")
+        .and_then(Json::as_str)
+        .or_else(|| payload.get("verdict_id").and_then(Json::as_str))
+    {
+        attrs.insert(attr::RESPONSE_ID.into(), Json::str(r));
+        consumed.insert("response_ref");
+        consumed.insert("verdict_id");
+    }
+    // The named-loss classes (AC-R-2.7.3-10): judge identity, evidence,
+    // calibration, independence, cost — each an explicit member_loss so the
+    // loss report names the class even when the sweep would spell it.
+    for m in [
+        "validator_ref",
+        "detector",
+        "detector_ref",
+        "oracle_class",
+        "evidence_refs",
+        "inputs_digest",
+        "evidence_head_seq",
+        "freshness_ok",
+        "calibration",
+        "calibration_ref",
+        "calibration_id",
+        "independence",
+        "independence_vector",
+        "cost_ppm",
+        "charged_to",
+    ] {
+        if payload.get(m).is_some() && !consumed.contains(m) {
+            member_loss(
+                &mut loss,
+                &format!("verification.validator.verdict.{m}"),
+            );
+            consumed.insert(m);
+        }
+    }
+    if let Json::Obj(m) = payload {
+        for k in m.keys() {
+            if !consumed.contains(k.as_str()) {
+                member_loss(
+                    &mut loss,
+                    &format!("verification.validator.verdict.{k}"),
+                );
+            }
+        }
+    }
+    event.insert("attributes".into(), Json::Obj(attrs));
+    (Json::Obj(event), loss)
 }
 
 /// `lower_run(envelopes)` — fold a run's model-plane prefix. `model.call.*`
