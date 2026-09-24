@@ -636,13 +636,16 @@ fn scope_chain_and_open_close_rules_are_enforced() {
     let mut t = k_ev("t1", "lifecycle.turn.started", Json::Null);
     t.scope.turn_id = Some("turn-1".into());
     s.append(&run, &lease, vec![t]).unwrap();
-    // model.call.requested opens a model_call inside the turn.
-    let mut m = k_ev("m1", "model.call.requested", Json::Null);
+    // model.call.requested opens a model_call inside the turn. It is
+    // audit-grade (§5g.6 §3) — kernel producer + kernel provenance and a
+    // Rule-C partitioned object payload.
+    let mut m = k_ev("m1", "model.call.requested", Json::obj([]));
     m.scope.turn_id = Some("turn-1".into());
     m.scope.model_call_id = Some("mc-1".into());
     s.append(&run, &lease, vec![m]).unwrap();
-    // tool_call inside model_call inside turn.
-    let mut tc = ev("tc1", "action.tool.proposed", Json::Null);
+    // tool_call inside model_call inside turn (`action.tool.proposed` is
+    // audit-grade — kernel producer, object payload).
+    let mut tc = k_ev("tc1", "action.tool.proposed", Json::obj([]));
     tc.scope.turn_id = Some("turn-1".into());
     tc.scope.model_call_id = Some("mc-1".into());
     tc.scope.tool_call_id = Some("tc-1".into());
@@ -668,16 +671,18 @@ fn scope_chain_and_open_close_rules_are_enforced() {
 fn provenance_rules_are_enforced_at_append() {
     let (mut s, run, lease) = open("prov");
     // A provenance-mandatory class without a record → MissingProvenance.
+    // (`security.permission.pending` is audit-grade — kernel producer and a
+    // partitioned object payload get past Rules P/C to the provenance check.)
+    let mut p0 = k_ev("p0", "security.permission.pending", Json::obj([]));
+    p0.provenance = None;
     assert!(matches!(
-        s.append(
-            &run,
-            &lease,
-            vec![ev("p0", "security.permission.pending", Json::Null)]
-        ),
+        s.append(&run, &lease, vec![p0]),
         Err(LedgerError::MissingProvenance { .. })
     ));
-    // taint ≠ ∅ with authority > external → TaintedAboveExternal.
-    let mut e = ev("p1", "security.permission.pending", Json::Null);
+    // taint ≠ ∅ with authority > external → TaintedAboveExternal. (A non-audit
+    // class — an audit-grade row would refuse the non-kernel provenance
+    // earlier as AuditProducerInvalid.)
+    let mut e = ev("p1", "context.observation.recorded", Json::str("obs"));
     let mut rec = ProvenanceRecord::minted(
         Origin::model("m1", &run, "resp-1"),
         PersistenceScope::Run,
@@ -760,8 +765,7 @@ fn illegitimate_endorsement_is_refused_at_append() {
         ),
         ("basis", Json::str("promotion")),
     ]);
-    let mut e = ev("end1", "security.label.endorsed", payload);
-    e.provenance = Some(ProvenanceRecord::kernel("kernel:mon", 2));
+    let e = k_ev("end1", "security.label.endorsed", payload);
     match s.append(&run, &lease, vec![e]) {
         Err(LedgerError::IllegitimateEndorsement { .. }) => {}
         other => panic!("expected IllegitimateEndorsement, got {other:?}"),
@@ -1064,5 +1068,436 @@ fn ac8_newer_schema_versions_refuse_at_decode() {
             found,
             known_max
         }) if found == SCHEMA_VERSION + 1 && known_max == SCHEMA_VERSION
+    ));
+}
+
+// ── R-2.8.6: the audit trail (S1.15 — Rules C/P, verify, audit_view) ─────────
+
+fn open_dir(tag: &str) -> (PathBuf, Store, String, Lease) {
+    let d = dir(tag);
+    let mut s = Store::open_test(&d, 1_000).unwrap();
+    let (run, lease) = s.open_run(manifest(), "writer-a").unwrap();
+    (d, s, run, lease)
+}
+
+/// A `security.permission.decided` audit row within the declared partition.
+fn decided_audit(id: &str, effect_id: &str) -> Event {
+    k_ev(
+        id,
+        "security.permission.decided",
+        Json::obj([
+            ("effect_id", Json::str(effect_id)),
+            ("attempt_no", Json::Int(1)),
+            ("decision", Json::str("allow")),
+            ("decision_scope", Json::str("once")),
+        ]),
+    )
+}
+
+#[test]
+fn rule_c_partitions_audit_payloads() {
+    let (mut s, run, lease) = open("rulec");
+    // A declared partition passes.
+    s.append(&run, &lease, vec![decided_audit("d1", "e1")])
+        .unwrap();
+    // An undeclared member is a schema error — never an offload.
+    let e = decided_audit("d2", "e2");
+    let mut p = match e.payload {
+        Json::Obj(m) => m,
+        _ => unreachable!(),
+    };
+    p.insert("surprise".into(), Json::str("x"));
+    let mut e2 = decided_audit("d2", "e2");
+    e2.payload = Json::Obj(p);
+    assert!(matches!(
+        s.append(&run, &lease, vec![e2]),
+        Err(LedgerError::SchemaViolation { .. })
+    ));
+    // A `content_refs` member must carry a pinned content address.
+    let bad_ref = k_ev(
+        "c1",
+        "security.containment.applied",
+        Json::obj([("lowering_loss_ref", Json::str("not-a-pinned-id"))]),
+    );
+    assert!(matches!(
+        s.append(&run, &lease, vec![bad_ref]),
+        Err(LedgerError::SchemaViolation { .. })
+    ));
+    let ok_ref = k_ev(
+        "c2",
+        "security.containment.applied",
+        Json::obj([(
+            "lowering_loss_ref",
+            Json::str(format!("sha256:{}", "a".repeat(64))),
+        )]),
+    );
+    s.append(&run, &lease, vec![ok_ref]).unwrap();
+    // A `Text` leaf has no place in audit_fields — `content_kind = free_text`
+    // on an audit-grade row is refused.
+    let mut text = decided_audit("d3", "e3");
+    text.content_kind = Some(ContentKind::FreeText);
+    assert!(matches!(
+        s.append(&run, &lease, vec![text]),
+        Err(LedgerError::SchemaViolation { .. })
+    ));
+    // The payload itself must be an object.
+    let nonobj = k_ev("d4", "security.permission.decided", Json::Null);
+    assert!(matches!(
+        s.append(&run, &lease, vec![nonobj]),
+        Err(LedgerError::SchemaViolation { .. })
+    ));
+}
+
+#[test]
+fn ac_r_2_8_6_12_audit_fields_over_the_threshold_are_a_schema_error() {
+    let (mut s, run, lease) = open("ac12");
+    // A member past its declared per-field bound → AuditFieldsTooLarge.
+    let mut big = decided_audit("d1", "e1");
+    if let Json::Obj(m) = &mut big.payload {
+        m.insert("reason".into(), Json::str("x".repeat(600)));
+    }
+    assert!(matches!(
+        s.append(&run, &lease, vec![big]),
+        Err(LedgerError::AuditFieldsTooLarge { .. })
+    ));
+    // The partition total past the class's offload threshold →
+    // AuditFieldsTooLarge (AC-R-2.8.6-12 — an `escalation.raised` row whose
+    // `audit_fields` would exceed the bound).
+    let members: BTreeMap<String, Json> = (0..200)
+        .map(|i| (format!("k{i}"), Json::str("x".repeat(400))))
+        .collect();
+    let over = k_ev("e1", "lifecycle.escalation.raised", Json::Obj(members));
+    assert!(matches!(
+        s.append(&run, &lease, vec![over]),
+        Err(LedgerError::AuditFieldsTooLarge { .. })
+    ));
+}
+
+#[test]
+fn no_audit_grade_class_is_ephemeral() {
+    // AC-R-2.8.6-12, second half — the catalogue-level invariant.
+    for spec in hh_ledger::classes::CLASS_TABLE {
+        if spec.audit_grade {
+            assert_eq!(
+                spec.durability,
+                hh_ledger::classes::Durability::Ledger,
+                "{}",
+                spec.class
+            );
+            assert!(spec.ephemeral_fields.is_empty(), "{}", spec.class);
+            assert!(spec.requires_provenance, "{}", spec.class);
+            assert!(!spec.producers.is_empty(), "{}", spec.class);
+            assert!(
+                spec.producers
+                    .iter()
+                    .all(|p| *p == hh_ledger::event::KERNEL_COMPONENT),
+                "{}",
+                spec.class
+            );
+        }
+    }
+    // The §5g.6 §3 class list is closed and declared.
+    for class in [
+        "lifecycle.run.created",
+        "lifecycle.run.resumed",
+        "lifecycle.run.suspended",
+        "lifecycle.run.finished",
+        "lifecycle.run.forked",
+        "lifecycle.run.rolled_back",
+        "lifecycle.head.moved",
+        "lifecycle.lease.acquired",
+        "lifecycle.lease.renewed",
+        "lifecycle.lease.released",
+        "lifecycle.lease.fenced",
+        "lifecycle.ledger.redacted",
+        "lifecycle.ledger.gc",
+        "lifecycle.escalation.raised",
+        "lifecycle.escalation.resolved",
+        "lifecycle.hosted.native_record",
+        "lifecycle.registry.registered",
+        "lifecycle.registry.admission_refused",
+        "lifecycle.registry.published",
+        "lifecycle.registry.name_deprecated",
+        "lifecycle.registry.name_yanked",
+        "lifecycle.registry.version_revoked",
+        "lifecycle.registry.snapshotted",
+        "lifecycle.registry.conformance_recorded",
+        "model.call.requested",
+        "model.call.completed",
+        "model.call.failed",
+        "action.effect.intended",
+        "action.effect.authorized",
+        "action.effect.refused",
+        "action.effect.prepared",
+        "action.effect.deferred",
+        "action.effect.committed",
+        "action.effect.observed",
+        "action.effect.unknown",
+        "action.effect.probed",
+        "action.effect.compensated",
+        "action.effect.reverted",
+        "action.effect.abandoned",
+        "action.tool.proposed",
+        "action.tool.started",
+        "action.environment.healed",
+        "security.permission.pending",
+        "security.permission.decided",
+        "security.permission.granted",
+        "security.permission.revoked",
+        "security.label.applied",
+        "security.label.endorsed",
+        "security.label.declassified",
+        "security.policy.evaluated",
+        "security.egress.requested",
+        "security.egress.decided",
+        "security.extension.loaded",
+        "security.audit.checkpoint",
+        "security.containment.applied",
+        "security.containment.violated",
+        "security.containment.unverified",
+        "security.credential.bound",
+        "security.credential.used",
+        "security.credential.denied",
+        "security.credential.revoked",
+        "security.credential.rotated",
+        "security.secret.redacted",
+        "security.secret.leak_detected",
+        "context.memory.written",
+        "context.memory.invalidated",
+        "context.memory.read",
+        "control.budget.exceeded",
+        "control.budget.amended",
+        "control.decision",
+        "control.wakeup.fired",
+        "control.subagent.spawned",
+        "control.subagent.result",
+        "control.subagent.cancelled",
+        "control.subagent.detached",
+        "control.merge.resolved",
+        "control.ownership.transferred",
+        "control.work_item.dispatched",
+        "control.work_item.stopped",
+        "control.work_item.blocked",
+        "control.work_item.handoff",
+        "control.work_item.owner_changed",
+        "control.work_item.owner_acknowledged",
+        "control.work_item.cancelled",
+        "measurement.export.delivered",
+        "measurement.evolution.candidate.transitioned",
+        "measurement.harness_edit.applied",
+        "verification.gate.evaluated",
+        "verification.completion.decided",
+    ] {
+        let spec = hh_ledger::classes::lookup(class)
+            .unwrap_or_else(|| panic!("{class} missing from the class table"));
+        assert!(spec.audit_grade, "{class} must be audit-grade");
+    }
+}
+
+#[test]
+fn rule_p_requires_kernel_producer_and_kernel_authority() {
+    let (mut s, run, lease) = open("rulep");
+    // A non-kernel producer is refused — deciders/proposers are payload
+    // fields, never producers (I-A2).
+    let mut e = decided_audit("d1", "e1");
+    e.producer = Producer {
+        component_class: "executor".into(),
+        component_variant_ref: "none".into(),
+        participant_ref: "none".into(),
+    };
+    assert!(matches!(
+        s.append(&run, &lease, vec![e]),
+        Err(LedgerError::AuditProducerInvalid { .. })
+    ));
+    // A kernel producer without provenance → MissingProvenance.
+    let mut e = decided_audit("d2", "e2");
+    e.provenance = None;
+    assert!(matches!(
+        s.append(&run, &lease, vec![e]),
+        Err(LedgerError::MissingProvenance { .. })
+    ));
+    // A kernel producer with sub-kernel authority → AuditProducerInvalid
+    // (provenance.authority = kernel is the second half of Rule P).
+    let mut e = decided_audit("d3", "e3");
+    e.provenance = Some(ProvenanceRecord::minted(
+        Origin::model("m1", &run, "resp"),
+        PersistenceScope::Run,
+        1,
+    ));
+    assert!(matches!(
+        s.append(&run, &lease, vec![e]),
+        Err(LedgerError::AuditProducerInvalid { .. })
+    ));
+    // Kernel producer + kernel provenance passes.
+    s.append(&run, &lease, vec![decided_audit("d4", "e4")])
+        .unwrap();
+}
+
+#[test]
+fn verify_is_byte_exact_over_the_committed_prefix() {
+    let (d, mut s, run, lease) = open_dir("tamper");
+    s.append(&run, &lease, vec![decided_audit("d1", "e1")])
+        .unwrap();
+    s.append(&run, &lease, vec![decided_audit("d2", "e2")])
+        .unwrap();
+    s.verify(&run).unwrap();
+    let wal_path = d.join("runs").join(&run).join("events.wal");
+    let wal = std::fs::read_to_string(&wal_path).unwrap();
+
+    // (a) A byte-level rewrite of a committed line that stays parseable but
+    // is not the canonical rendering (a space inside the record) →
+    // NonCanonicalBytes.
+    let edited = wal.replacen("{\"k\":\"e\"", "{\"k\": \"e\"", 1);
+    std::fs::write(&wal_path, &edited).unwrap();
+    assert!(matches!(
+        s.verify(&run),
+        Err(LedgerError::Tampered(t)) if t.kind == TamperedKind::NonCanonicalBytes
+    ));
+
+    // (b) A canonically-rewritten forgery — the line IS canonical but the
+    // recorded hash does not recompute → ContentModified.
+    let mut lines: Vec<String> = wal.lines().map(str::to_string).collect();
+    let pos = lines
+        .iter()
+        .position(|l| l.contains("\"k\":\"e\"") && l.contains("security.permission.decided"))
+        .unwrap();
+    let mut j = hh_wire::json::parse(&lines[pos]).unwrap();
+    if let Json::Obj(m) = &mut j {
+        if let Some(Json::Obj(v)) = m.get_mut("v") {
+            v.insert(
+                "hash".to_string(),
+                Json::str(format!("sha256:{}", "0".repeat(64))),
+            );
+        }
+    }
+    lines[pos] = j.to_canonical_string();
+    std::fs::write(&wal_path, lines.join("\n") + "\n").unwrap();
+    assert!(matches!(
+        s.verify(&run),
+        Err(LedgerError::Tampered(t)) if t.kind == TamperedKind::ContentModified
+    ));
+
+    // (c) Unparseable bytes mid-file — never a torn tail → NonCanonicalBytes.
+    let mut lines: Vec<String> = wal.lines().map(str::to_string).collect();
+    lines.insert(2, "not-json{{".to_string());
+    std::fs::write(&wal_path, lines.join("\n") + "\n").unwrap();
+    assert!(matches!(
+        s.verify(&run),
+        Err(LedgerError::Tampered(t)) if t.kind == TamperedKind::NonCanonicalBytes
+    ));
+
+    // (d) A torn tail — trailing bytes that never committed — is ordinary
+    // recovery, not tamper evidence (the committed prefix is intact).
+    std::fs::write(&wal_path, &wal).unwrap();
+    let mut torn = wal.clone();
+    torn.push_str("{\"k\":\"e\",\"v\":{\"partial\"");
+    std::fs::write(&wal_path, &torn).unwrap();
+    s.verify(&run).unwrap();
+
+    // (e) A dropped committed line breaks seq density → SeqGap-family error.
+    let mut lines: Vec<String> = wal.lines().map(str::to_string).collect();
+    let pos = lines
+        .iter()
+        .position(|l| l.contains("\"k\":\"e\"") && l.contains("security.permission.decided"))
+        .unwrap();
+    lines.remove(pos);
+    std::fs::write(&wal_path, lines.join("\n") + "\n").unwrap();
+    assert!(matches!(
+        s.verify(&run),
+        Err(LedgerError::Tampered(t)) if matches!(
+            t.kind,
+            TamperedKind::SeqGap
+                | TamperedKind::Reordered
+                | TamperedKind::ChainBroken
+                | TamperedKind::NonCanonicalBytes
+        )
+    ));
+}
+
+#[test]
+fn audit_view_folds_the_durable_prefix() {
+    let (mut s, run, lease) = open("auditview");
+    s.append(&run, &lease, vec![decided_audit("d1", "e1")])
+        .unwrap();
+    let v = s.project(&run, ViewKind::AuditView, None).unwrap();
+    assert_eq!(v.kind, ViewKind::AuditView);
+    let p = &v.payload;
+    assert_eq!(p.get("kind").and_then(Json::as_str), Some("audit_view"));
+    // The view folds exactly the durable prefix (run.created + the lease row
+    // + the decided row).
+    assert_eq!(
+        p.get("events_seen"),
+        Some(&Json::Int(s.events(&run).unwrap().len() as i64))
+    );
+    assert_eq!(p.get("chain_ok"), Some(&Json::Bool(true)));
+    assert_eq!(p.get("producer_violations"), Some(&Json::Arr(vec![])),);
+    let cov = p.get("coverage").expect("coverage");
+    let checked = match cov.get("obligations_checked") {
+        Some(Json::Arr(a)) => a.len(),
+        _ => 0,
+    };
+    assert!(checked > 0);
+    assert_eq!(
+        cov.get("unmet"),
+        Some(&Json::Arr(vec![])),
+        "a clean run has no unmet obligations"
+    );
+    let comp = p.get("completeness").expect("completeness");
+    assert_eq!(comp.get("headline"), Some(&Json::Bool(true)));
+    // The Stage-2 halves report `n/a`, never `false`-by-absence.
+    assert!(comp.get("checkpoints_ok").unwrap().get("n/a").is_some());
+    assert!(comp.get("cross_run_ok").unwrap().get("n/a").is_some());
+}
+
+#[test]
+fn audit_view_reports_unmet_obligations() {
+    let (mut s, run, lease) = open("auditunmet");
+    // `security.credential.used` references an effect that never intended —
+    // the `credential_use` obligation is unmet.
+    let used = k_ev(
+        "u1",
+        "security.credential.used",
+        Json::obj([
+            ("binding_id", Json::str("bnd-1")),
+            ("destination", Json::str("api.example.com")),
+            ("effect_id", Json::str("eff-ghost")),
+            ("decision", Json::str("allow")),
+        ]),
+    );
+    s.append(&run, &lease, vec![used]).unwrap();
+    let v = s.project(&run, ViewKind::AuditView, None).unwrap();
+    let unmet: Vec<Json> = match v.payload.get("coverage").and_then(|c| c.get("unmet")) {
+        Some(Json::Arr(a)) => a.clone(),
+        _ => vec![],
+    };
+    assert!(
+        unmet
+            .iter()
+            .any(|u| { u.get("obligation_id").and_then(Json::as_str) == Some("credential_use") }),
+        "credential_use must be unmet, got {unmet:?}"
+    );
+    assert_eq!(
+        v.payload
+            .get("completeness")
+            .and_then(|c| c.get("coverage_ok")),
+        Some(&Json::Bool(false))
+    );
+}
+
+#[test]
+fn manifest_carries_audit_policy_ref_and_signer_key_ids() {
+    let mut m = manifest();
+    m.audit_policy_ref = Some(format!("sha256:{}", "c".repeat(64)));
+    m.signer_key_ids = vec!["key-kernel-1".into()];
+    m.validate().unwrap();
+    let j = m.to_json();
+    let back = RunManifest::from_json(&j).unwrap();
+    assert_eq!(back.audit_policy_ref, m.audit_policy_ref);
+    assert_eq!(back.signer_key_ids, m.signer_key_ids);
+    // A non-pinned `audit_policy_ref` refuses (CC3 — nothing unpinned).
+    m.audit_policy_ref = Some("audit-policy:latest".into());
+    assert!(matches!(
+        m.validate(),
+        Err(LedgerError::UnresolvedRef { .. })
     ));
 }

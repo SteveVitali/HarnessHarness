@@ -206,6 +206,8 @@ fn probed(id: &str, effect_id: &str, verdict: &str, fencing: u64) -> Event {
 }
 
 fn tool_started(id: &str, effect_id: &str) -> Event {
+    // `action.tool.started` is audit-grade (§5g.6 §3) — the kernel writes it
+    // (Rule P); the executor's dispatch only *causes* it.
     let mut e = eff(
         id,
         "action.tool.started",
@@ -213,12 +215,6 @@ fn tool_started(id: &str, effect_id: &str) -> Event {
         Json::obj([("tool_call_id", Json::str("tc-1"))]),
         0,
     );
-    e.producer = Producer {
-        component_class: "executor".into(),
-        component_variant_ref: "none".into(),
-        participant_ref: "none".into(),
-    };
-    e.provenance = None;
     e.scope.effect_id = Some(effect_id.to_string());
     e
 }

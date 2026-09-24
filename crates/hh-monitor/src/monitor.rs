@@ -25,7 +25,7 @@ use hh_wire::json::Json;
 
 use crate::args::{self, ArgError, CanonicalArgs};
 use crate::assess::{self, AssessmentInputs};
-use crate::decision::{CheckRecord, Decider, Decision, DenyReason, KernelDecision};
+use crate::decision::{CheckRecord, Decider, Decision, DecisionScope, DenyReason, KernelDecision};
 use crate::handle::HandleId;
 use crate::policy::{Mode, PiContext, PiVerdict, PolicyTable};
 use crate::table::HandleTable;
@@ -235,6 +235,7 @@ impl Monitor {
                 c
             },
             decider: Decider::Policy,
+            decision_scope: DecisionScope::Once,
         };
         // The containment precondition (ADR-0062 D3; R-2.8.4) — BEFORE any
         // check: a required field group's `unknown` evidence ⇒
@@ -515,6 +516,7 @@ impl Monitor {
                     policy_ref: self.policy.version_id.clone(),
                     checks: c,
                     decider: Decider::Policy,
+                    decision_scope: DecisionScope::Once,
                 });
             }
             PiVerdict::Ask => {
@@ -531,6 +533,7 @@ impl Monitor {
                     policy_ref: self.policy.version_id.clone(),
                     checks,
                     decider: Decider::Policy,
+                    decision_scope: DecisionScope::Once,
                 });
             }
             PiVerdict::Allow => {}
@@ -570,6 +573,7 @@ impl Monitor {
                         policy_ref: self.policy.version_id.clone(),
                         checks: c,
                         decider: Decider::Policy,
+                        decision_scope: DecisionScope::Once,
                     });
                 }
             }
@@ -590,6 +594,7 @@ impl Monitor {
             policy_ref: self.policy.version_id.clone(),
             checks,
             decider: Decider::Policy,
+            decision_scope: DecisionScope::Once,
         })
     }
 }

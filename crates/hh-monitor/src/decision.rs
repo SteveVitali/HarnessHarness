@@ -111,6 +111,45 @@ impl DenyReason {
     }
 }
 
+/// `decision_scope ∈ {once, session, persisted}` — the §5g.6 §6.1 dossier's
+/// closed sum on `security.permission.decided`/`granted`. `once` is a
+/// single-attempt decision; `session` is in force for the run (the root-handle
+/// lifetime, `HandleExpiry::Run`); `persisted` is a widening that survives the
+/// run and so requires the human-origin `lifecycle.definition.changed` rule
+/// change (ADR-0066 D5 `persisted_widening`). Only `once` is *produced* by
+/// `authorize` at Stage 1 — the other members exist so the recorded sum is
+/// complete and a later stage never renames the tag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecisionScope {
+    /// One attempt cycle.
+    Once,
+    /// In force for the run.
+    Session,
+    /// In force beyond the run — a rule change.
+    Persisted,
+}
+
+impl DecisionScope {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DecisionScope::Once => "once",
+            DecisionScope::Session => "session",
+            DecisionScope::Persisted => "persisted",
+        }
+    }
+
+    /// Parse the canonical spelling.
+    pub fn parse(s: &str) -> Option<DecisionScope> {
+        match s {
+            "once" => Some(DecisionScope::Once),
+            "session" => Some(DecisionScope::Session),
+            "persisted" => Some(DecisionScope::Persisted),
+            _ => None,
+        }
+    }
+}
+
 /// `decider ∈ {policy, cache, hook, auto_reviewer, human}` — the one closed sum
 /// (CF-153/CF-312; `pre_authorization` is retired). Only `policy` is *produced*
 /// at Stage 1 — the other members exist so the recorded sum is complete and a
@@ -180,6 +219,10 @@ pub struct KernelDecision {
     pub checks: Vec<CheckRecord>,
     /// Who decided — `policy` for every Stage-1 decision.
     pub decider: Decider,
+    /// `decision_scope` — `once` for every Stage-1 `authorize` decision (the
+    /// `session`/`persisted` grant machinery lands with approvals); declared so
+    /// the audit row carries the closed sum, never an implicit default.
+    pub decision_scope: DecisionScope,
 }
 
 impl KernelDecision {
@@ -205,11 +248,27 @@ impl KernelDecision {
             ),
             ("policy_ref", Json::str(self.policy_ref.clone())),
             ("decider", Json::str(self.decider.as_str())),
+            ("decision_scope", Json::str(self.decision_scope.as_str())),
+            (
+                "checks",
+                Json::Arr(
+                    self.checks
+                        .iter()
+                        .map(|c| {
+                            Json::obj([
+                                ("step", Json::Int(c.step as i64)),
+                                ("outcome", Json::str(c.outcome)),
+                                ("detail", Json::str(c.detail.clone())),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
         ];
         match &self.decision {
             Decision::Ask { options, remedies } => {
                 m.push((
-                    "options",
+                    "options_presented",
                     Json::Arr(options.iter().map(|o| Json::str(o.clone())).collect()),
                 ));
                 m.push((

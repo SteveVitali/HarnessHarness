@@ -169,6 +169,10 @@ pub fn mint_root_handles(
                 sealed.definition_ref.semantic_id, sealed.definition_ref.version_id
             ),
             budget_ref: None,
+            // Seal-minted roots are in force for the run (`HandleExpiry::Run`)
+            // — `session` scope, never `persisted` (a persisted widening needs
+            // the human-origin `lifecycle.definition.changed`, ADR-0066 D5).
+            scope: crate::decision::DecisionScope::Session,
         });
         event_ids.push(event_id);
     }

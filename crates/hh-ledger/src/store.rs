@@ -31,7 +31,7 @@ use hh_identity::idp::ContentAddress;
 use hh_provenance::{ContentKind, Origin, ProvenanceRecord};
 use hh_wire::json::{self, Json};
 
-use crate::classes::{self, Durability, ScopeKind, AUDIT_PAYLOAD_MAX_BYTES};
+use crate::classes::{self, Durability, ScopeKind};
 use crate::effect::{self, EffectCtx, EffectFold, EffectPhase};
 use crate::errors::{LedgerError, MissingReason, Tampered, TamperedKind};
 use crate::event::{
@@ -926,24 +926,42 @@ impl Store {
                     }
                 }
             }
-            // Producer rules.
-            if (spec.audit_grade || spec.kernel_origin)
-                && ev.producer.component_class != crate::event::KERNEL_COMPONENT
-            {
+            // Rule P (§5g.6 §2; ADR-0066 D4): an audit-grade row is accepted only
+            // if `producer.component_class ∈ class.producers` — kernel-only. The
+            // kernel-origin rule (§5a.1 §5) is the same component check for the
+            // lifecycle/environment/registry rows.
+            let producer_ok = if spec.audit_grade {
+                spec.producers
+                    .iter()
+                    .any(|p| *p == ev.producer.component_class)
+            } else if spec.kernel_origin {
+                ev.producer.component_class == crate::event::KERNEL_COMPONENT
+            } else {
+                true
+            };
+            if !producer_ok {
                 return Err(LedgerError::AuditProducerInvalid {
                     class: ev.class.clone(),
                     producer: ev.producer.component_class.clone(),
+                    detail: "component_class ∉ class.producers".into(),
                 });
             }
+            // Rule C (§5g.6 I-A1): the audit_fields/content_refs partition —
+            // checked here, before the provenance fold, so a malformed audit row
+            // is refused as a schema error. A `Text` leaf has no place in
+            // `audit_fields` — an audit-grade event declaring `free_text`
+            // content is refused outright.
             if spec.audit_grade {
-                let bytes = ev.payload.to_canonical_string().len();
-                if bytes > AUDIT_PAYLOAD_MAX_BYTES {
-                    return Err(LedgerError::AuditFieldsTooLarge {
-                        class: ev.class.clone(),
-                        bytes,
-                        max: AUDIT_PAYLOAD_MAX_BYTES,
+                if ev.content_kind == Some(ContentKind::FreeText) {
+                    return Err(LedgerError::SchemaViolation {
+                        detail: format!(
+                            "audit-grade {} carries a Text leaf (content_kind = \
+                             free_text) — audit_fields are ids/hashes/enums/ints/refs only",
+                            ev.class
+                        ),
                     });
                 }
+                check_audit_partition(&ev.class, &ev.payload, spec)?;
             }
             // Provenance rules (ADR-0033 §7; mandatory table; kernel origin; R-TEXT;
             // scope ceilings).
@@ -963,6 +981,16 @@ impl Store {
                 if spec.kernel_origin && !matches!(p.origin, Origin::Kernel { .. }) {
                     return Err(LedgerError::KernelOriginRequired {
                         class: ev.class.clone(),
+                    });
+                }
+                // Rule P, second half (§5g.6 §2): an audit-grade row carries
+                // `provenance.authority = kernel` — anything less claims a kernel
+                // fact it is not.
+                if spec.audit_grade && p.authority != hh_provenance::AuthorityClass::Kernel {
+                    return Err(LedgerError::AuditProducerInvalid {
+                        class: ev.class.clone(),
+                        producer: ev.producer.component_class.clone(),
+                        detail: format!("provenance.authority = {} ≠ kernel", p.authority.as_str()),
                     });
                 }
                 if ev.content_kind == Some(ContentKind::FreeText)
@@ -1323,10 +1351,17 @@ impl Store {
     // ── verify / project / lineage ───────────────────────────────────────
 
     /// `verify(run, from?, to?) → ok | Tampered{at_seq, kind}` — re-reads the WAL
-    /// from disk (the durable truth), replays the committed prefix and recomputes
-    /// every hash + chain + density + parent link. Tail-truncation detection is the
-    /// signed-checkpoint half (Stage 2, `security.audit.checkpoint`); within the
-    /// committed prefix every byte change is caught.
+    /// from disk (the durable truth), replays the committed prefix and checks it
+    /// **byte-exact**: every stored line must re-render to its canonical bytes
+    /// (`NonCanonicalBytes` — a rewritten line, even a semantically equal one),
+    /// every hash recomputes (`ContentModified`), `prev_hash` chains
+    /// (`ChainBroken`), seqs are dense and ordered (`SeqGap`/`Reordered`/
+    /// `DuplicateSeq`/`DuplicateEventId`), parents resolve (`DanglingParent`),
+    /// and audit-grade rows carry a producer from the class's declared set with
+    /// `authority = kernel` provenance (`Producer` — §5g.6's `producer` kind).
+    /// Tail-truncation detection is the signed-checkpoint half (Stage 2,
+    /// `security.audit.checkpoint`); within the committed prefix every byte
+    /// change is caught.
     pub fn verify(&self, run_id: &str) -> Result<(), LedgerError> {
         if !self.runs.contains_key(run_id) {
             return Err(LedgerError::UnknownRun {
@@ -1334,18 +1369,19 @@ impl Store {
             });
         }
         let wal = self.wal_path(run_id);
-        let committed = replay_committed(&wal).map_err(|e| LedgerError::Io {
+        let replay = replay_committed_raw(&wal).map_err(|e| LedgerError::Io {
             detail: format!("replay WAL for verify: {e}"),
         })?;
         let tampered =
             |at_seq: u64, kind: TamperedKind| LedgerError::Tampered(Tampered { at_seq, kind });
+        let committed = &replay.committed;
         let mut ids: HashSet<&str> = HashSet::new();
         let mut seqs: HashSet<u64> = HashSet::new();
         let mut prev_hash = committed
             .first()
-            .map(|e| e.prev_hash.clone())
+            .map(|(_, e)| e.prev_hash.clone())
             .unwrap_or_else(|| GENESIS_HASH.to_string());
-        for (i, env) in committed.iter().enumerate() {
+        for (i, (line, env)) in committed.iter().enumerate() {
             let expect_seq = i as u64;
             if env.seq != expect_seq {
                 return Err(tampered(
@@ -1363,6 +1399,14 @@ impl Store {
             if !ids.insert(env.event_id.as_str()) {
                 return Err(tampered(env.seq, TamperedKind::DuplicateEventId));
             }
+            // Byte-exact before the semantic checks: the stored line must be the
+            // canonical re-rendering of the decoded envelope.
+            let mut expected = b"{\"k\":\"e\",\"v\":".to_vec();
+            expected.extend_from_slice(&env.canonical_bytes());
+            expected.push(b'}');
+            if *line != expected {
+                return Err(tampered(env.seq, TamperedKind::NonCanonicalBytes));
+            }
             if env.recompute_hash() != env.hash {
                 return Err(tampered(env.seq, TamperedKind::ContentModified));
             }
@@ -1372,7 +1416,28 @@ impl Store {
             if env.parent_event_id != ROOT_EVENT && !ids.contains(env.parent_event_id.as_str()) {
                 return Err(tampered(env.seq, TamperedKind::DanglingParent));
             }
+            // §5g.6 `producer`: an audit-grade row in the committed prefix must
+            // satisfy Rule P (producer set membership + kernel authority).
+            if let Some(spec) = classes::lookup(&env.class) {
+                if spec.audit_grade {
+                    let producer_ok = spec
+                        .producers
+                        .iter()
+                        .any(|p| *p == env.producer.component_class);
+                    let authority_ok = env
+                        .provenance
+                        .as_ref()
+                        .map(|p| p.authority == hh_provenance::AuthorityClass::Kernel)
+                        .unwrap_or(false);
+                    if !producer_ok || !authority_ok {
+                        return Err(tampered(env.seq, TamperedKind::Producer));
+                    }
+                }
+            }
             prev_hash = env.hash.clone();
+        }
+        if let Some(at) = replay.noncanonical_at {
+            return Err(tampered(at as u64, TamperedKind::NonCanonicalBytes));
         }
         Ok(())
     }
@@ -1390,6 +1455,16 @@ impl Store {
             ViewKind::ContextView => views::context_view(run_id, &state.events, until),
             ViewKind::Checkpoint => views::checkpoint(run_id, &state.events, until),
             ViewKind::EffectLedger => views::effect_ledger(run_id, &state.events, until),
+            // `audit_view` is folded by the ledger itself — the audit trail *is*
+            // the run ledger (ADR-0066 D1: no second store, no audit-only path).
+            ViewKind::AuditView => crate::audit::audit_view(
+                run_id,
+                &state.events,
+                &state.open_scopes,
+                state.finished,
+                |addr| self.blob_present(addr),
+                until,
+            ),
             ViewKind::RunSummary => views::run_summary(
                 state.manifest.run_kind.as_str(),
                 state.manifest.participant_class.as_str(),
@@ -1463,6 +1538,32 @@ impl Store {
         Ok(&self.run(run_id)?.events)
     }
 
+    /// The run's manifest — the immutable seq-0 record (§5g.6's
+    /// `audit_policy_ref`/`signer_key_ids` live here).
+    pub fn manifest(&self, run_id: &str) -> Result<&RunManifest, LedgerError> {
+        Ok(&self.run(run_id)?.manifest)
+    }
+
+    /// The run's currently-open scopes (`id → kind`) — `audit_view`'s
+    /// `scopes_unclosed` read.
+    pub fn open_scopes(&self, run_id: &str) -> Result<Vec<(String, ScopeKind)>, LedgerError> {
+        Ok(self
+            .run(run_id)?
+            .open_scopes
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect())
+    }
+
+    /// Whether a blob exists at the address — `audit_view`'s `content_refs`
+    /// presence accounting (a missing blob is `missing`, never `tampered` —
+    /// ADR-0068 R3).
+    pub fn blob_present(&self, address: &str) -> bool {
+        hh_identity::idp::parse_id(address)
+            .map(|p| self.root.join("blobs").join(&p.digest_hex).exists())
+            .unwrap_or(false)
+    }
+
     /// `effect_id = f(run_id, model_call_id, tool_call_id, ordinal)` — the derived
     /// id (ADR-0027 §2).
     pub fn effect_id(
@@ -1490,6 +1591,89 @@ impl Store {
 // System rows + commit — free functions so `state` (a `&mut` borrow of
 // `self.runs[..]`) can be held across them alongside disjoint `self` fields.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Rule C (§5g.6 I-A1; ADR-0066 D3): an audit-grade payload is an object whose
+/// every member is either a declared `audit_fields` member — inline, canonical,
+/// hashed, never offloaded, never redactable, bounded — or a declared
+/// `content_refs` member naming content addresses. Any violation is a schema
+/// error, never an offload opportunity (AC-R-2.8.6-12).
+fn check_audit_partition(
+    class: &str,
+    payload: &Json,
+    spec: &classes::ClassSpec,
+) -> Result<(), LedgerError> {
+    let members = match payload {
+        Json::Obj(m) => m,
+        _ => {
+            return Err(LedgerError::SchemaViolation {
+                detail: format!(
+                    "audit-grade {class} payload must be an object — every member \
+                     partitions into audit_fields | content_refs"
+                ),
+            })
+        }
+    };
+    let open = spec.audit_fields.iter().any(|f| f.name == "*");
+    let mut audit_bytes = 0usize;
+    for (name, value) in members {
+        if spec.content_refs.contains(&name.as_str()) {
+            // A content ref is a ContentAddress — a string (or array of strings)
+            // pinned under `idp/1`. Free text here is a schema error, not an
+            // offload.
+            let ok = match value {
+                Json::Null => true,
+                Json::Str(s) => crate::ids::is_pinned_id(s),
+                Json::Arr(items) => items
+                    .iter()
+                    .all(|i| i.as_str().map(crate::ids::is_pinned_id).unwrap_or(false)),
+                _ => false,
+            };
+            if !ok {
+                return Err(LedgerError::SchemaViolation {
+                    detail: format!(
+                        "audit-grade {class}.{name} is a content_refs member but \
+                         is not a content address"
+                    ),
+                });
+            }
+            continue;
+        }
+        let bound = if open {
+            classes::AUDIT_FIELD_MAX_BYTES
+        } else {
+            match spec.audit_fields.iter().find(|f| f.name == name.as_str()) {
+                Some(f) => f.max_bytes,
+                None => {
+                    return Err(LedgerError::SchemaViolation {
+                        detail: format!(
+                            "audit-grade {class}.{name} is not a declared \
+                             audit_fields or content_refs member"
+                        ),
+                    })
+                }
+            }
+        };
+        let bytes = value.to_canonical_string().len();
+        audit_bytes += bytes;
+        if bytes > bound {
+            return Err(LedgerError::AuditFieldsTooLarge {
+                class: class.to_string(),
+                bytes,
+                max: bound,
+            });
+        }
+    }
+    // AC-R-2.8.6-12: the partition's bound *is* the class's offload threshold —
+    // audit fields past it are a schema error, never an offload opportunity.
+    if audit_bytes > spec.offload_threshold {
+        return Err(LedgerError::AuditFieldsTooLarge {
+            class: class.to_string(),
+            bytes: audit_bytes,
+            max: spec.offload_threshold,
+        });
+    }
+    Ok(())
+}
 
 /// Append one `lifecycle.lease.*` row as the ledger's own audit fact — written under
 /// the *current* generation, never through the client-lease path.
@@ -1875,51 +2059,102 @@ fn sync_dir(dir: &Path) -> std::io::Result<()> {
     fs::File::open(dir)?.sync_all()
 }
 
+/// The committed-prefix replay, with the raw line bytes retained — `verify`
+/// diffs each line against its canonical re-rendering (byte-exact, ADR-0067 D5).
+/// `tail_corrupt` reports an unparseable line that is **not** the last
+/// non-empty line: a torn tail is a crash (legit — the uncommitted suffix is
+/// dropped); unparseable bytes *inside* the file are an edit.
+struct WalReplay {
+    /// The committed envelopes and their stored line bytes, in commit order.
+    committed: Vec<(Vec<u8>, EventEnvelope)>,
+    /// A parseable line whose bytes differ from its canonical form, or an
+    /// unparseable line followed by more content — mid-file corruption, never a
+    /// torn tail. Carries the count of committed events collected so far.
+    noncanonical_at: Option<usize>,
+}
+
 /// Replay a WAL: only envelopes covered by a subsequent commit marker are durable;
 /// a trailing run of event lines without a marker is the torn tail — dropped,
 /// never surfaced.
 fn replay_committed(wal: &Path) -> std::io::Result<Vec<EventEnvelope>> {
+    Ok(replay_committed_raw(wal)?
+        .committed
+        .into_iter()
+        .map(|(_, e)| e)
+        .collect())
+}
+
+fn replay_committed_raw(wal: &Path) -> std::io::Result<WalReplay> {
     let text = match fs::read_to_string(wal) {
         Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(WalReplay {
+                committed: Vec::new(),
+                noncanonical_at: None,
+            })
+        }
         Err(e) => return Err(e),
     };
-    let mut committed: Vec<EventEnvelope> = Vec::new();
-    let mut pending: Vec<EventEnvelope> = Vec::new();
-    for line in text.lines() {
-        let line = line.trim();
+    let mut committed: Vec<(Vec<u8>, EventEnvelope)> = Vec::new();
+    let mut pending: Vec<(Vec<u8>, EventEnvelope)> = Vec::new();
+    let mut noncanonical_at = None;
+    let lines: Vec<&str> = text.lines().collect();
+    let mut first_bad: Option<usize> = None;
+    for (i, raw) in lines.iter().enumerate() {
+        let line = raw.trim();
         if line.is_empty() {
             continue;
         }
         let Ok(j) = json::parse(line) else {
             // An unparseable line mid-file is a torn write — the rest of the file is
-            // not durable.
+            // not durable. If non-empty content follows it, the file was edited.
+            first_bad = Some(i);
             break;
         };
+        // Byte-exactness: a parseable line must re-render to its stored bytes
+        // (untrimmed — a whitespace edit is a rewrite).
+        if noncanonical_at.is_none() && j.to_canonical_string().as_bytes() != raw.as_bytes() {
+            noncanonical_at = Some(committed.len() + pending.len());
+        }
         match j.get("k").and_then(Json::as_str) {
             Some("e") => {
-                let Some(v) = j.get("v") else { break };
-                let Ok(env) = EventEnvelope::from_json(v) else {
+                let Some(v) = j.get("v") else {
+                    first_bad = Some(i);
                     break;
                 };
-                pending.push(env);
+                let Ok(env) = EventEnvelope::from_json(v) else {
+                    first_bad = Some(i);
+                    break;
+                };
+                pending.push((raw.as_bytes().to_vec(), env));
             }
             Some("c") => {
                 let Some(n) = j.get("n").and_then(Json::as_int) else {
+                    first_bad = Some(i);
                     break;
                 };
                 let n = n as u64;
                 // Commit everything pending with seq ≤ n, in file order.
-                for env in pending.drain(..) {
+                for (raw, env) in pending.drain(..) {
                     if env.seq <= n {
-                        committed.push(env);
+                        committed.push((raw, env));
                     }
                 }
             }
             _ => {}
         }
     }
-    Ok(committed)
+    // Content after the first unparseable line is mid-file corruption — a torn
+    // tail is always the last line.
+    if let Some(i) = first_bad {
+        if lines[i + 1..].iter().any(|l| !l.trim().is_empty()) {
+            noncanonical_at = Some(committed.len() + pending.len());
+        }
+    }
+    Ok(WalReplay {
+        committed,
+        noncanonical_at,
+    })
 }
 
 fn read_lease_file(path: &Path) -> Result<Option<LeaseRecord>, LedgerError> {
