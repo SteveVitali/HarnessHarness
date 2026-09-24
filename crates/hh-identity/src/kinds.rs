@@ -99,6 +99,16 @@ pub enum RecordKind {
     /// R-2.5.2). Version-only: a rename is a profile edit and mints a new
     /// `surface_id` (T-LCD-10).
     ToolSurface,
+    /// A `Memory` version — an immutable write under
+    /// `{kind, subject_key, content, contract, scope, declared_inputs[],
+    /// justifications[], created_at, created_by, supersedes_claim?}` (§5c.3;
+    /// S1.19, `R-2.4.3⁰`). Has a semantic projection: `semantic_id` names the
+    /// version's supersession line (its name-history chain).
+    Memory,
+    /// A `MemoryManifest` — the name-history binding `manifest(scope, at)`
+    /// folds (§5c.3; S1.19). Version-only (surface — no semantic id, like
+    /// `NameBindingRecord`).
+    MemoryManifest,
 }
 
 impl RecordKind {
@@ -134,6 +144,8 @@ impl RecordKind {
             RecordKind::SinkPolicy => "sink_policy",
             RecordKind::EnvironmentRecord => "environment",
             RecordKind::ToolSurface => "tool_surface",
+            RecordKind::Memory => "memory",
+            RecordKind::MemoryManifest => "memory_manifest",
         }
     }
 
@@ -155,6 +167,7 @@ impl RecordKind {
                 | RecordKind::Configuration
                 | RecordKind::ContainmentPolicy
                 | RecordKind::EnvironmentRecord
+                | RecordKind::Memory
         )
     }
 

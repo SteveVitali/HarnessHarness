@@ -1,0 +1,20 @@
+[package]
+name = "hh-context"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 context builder / policy engine and C0 memory slices (spec §5c.1/§5c.3/§5c.4, R-2.4.1, R-2.4.3⁰, R-2.4.4⁰; ticket S1.19; ADR-0072…0083). The content-addressed ContextPlan and its candidate/slot/budget schemas, the six kernel-reserved slots and floors with InvalidLayout/VolatileInStaticTier at link, the default policy + the no-widen policy seam (PolicyViolation), the fixed kernel step order with ContextWindowExceeded → CompactionRequired handled as stop at Stage 0/1, context.assembled emission; the C0 MemoryStore over immutable memory versions with scope-lease fencing, lexical_index + memory_stale_index materialized views stamped through hh-ledger's View, deterministic retrieve under the fixed validity→authority→readers→rank order; the R-2.4.4⁰ lifecycle pure functions E1–E4, deterministic conflict sets, promote/revalidate."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+# `MeasuredAt::Runtime` stamps `assembly_ms{measured_at}` — the declared
+# measurement vocabulary is reused, never re-spelled (CC7; DF-S1.14-1).
+hh-telemetry = { path = "../hh-telemetry" }

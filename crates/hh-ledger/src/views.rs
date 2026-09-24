@@ -50,6 +50,16 @@ pub enum ViewKind {
     /// vector). Folded by `hh-ledger` itself — the audit trail *is* the ledger
     /// (ADR-0066 D1: no second store).
     AuditView,
+    /// `lexical_index` — the `R-2.4.3⁰` lexical index over the `MemoryStore`
+    /// (§5c.3; S1.19). Folded by `hh-context`; `lexical` queries serve from it
+    /// (`IndexUnavailable` until materialized).
+    LexicalIndex,
+    /// `memory_stale_index` — `MemoryStaleIndex[version_id] →
+    /// [stale_member_ids]` (§5c.4; S1.19). Folded by `hh-context`.
+    MemoryStaleIndex,
+    /// `memory_usage` — `{version_id → {created_at, last_read_at,
+    /// read_count}}` (§5c.3; S1.19). Folded by `hh-context`.
+    MemoryUsage,
 }
 
 impl ViewKind {
@@ -64,6 +74,9 @@ impl ViewKind {
             ViewKind::CostView => "cost_view",
             ViewKind::MetricView => "metric_view",
             ViewKind::AuditView => "audit_view",
+            ViewKind::LexicalIndex => "lexical_index",
+            ViewKind::MemoryStaleIndex => "memory_stale_index",
+            ViewKind::MemoryUsage => "memory_usage",
         }
     }
 
@@ -78,6 +91,9 @@ impl ViewKind {
             "cost_view" => Some(ViewKind::CostView),
             "metric_view" => Some(ViewKind::MetricView),
             "audit_view" => Some(ViewKind::AuditView),
+            "lexical_index" => Some(ViewKind::LexicalIndex),
+            "memory_stale_index" => Some(ViewKind::MemoryStaleIndex),
+            "memory_usage" => Some(ViewKind::MemoryUsage),
             _ => None,
         }
     }

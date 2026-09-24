@@ -1477,7 +1477,15 @@ impl Store {
             // `trace_view`/`cost_view`/`metric_view` fold in the owning crate
             // (`hh-telemetry`) over `read` output — the ledger cannot depend
             // on its consumer (ADR-0042 D2).
-            ViewKind::TraceView | ViewKind::CostView | ViewKind::MetricView => {
+            // `lexical_index`/`memory_stale_index`/`memory_usage` fold in
+            // `hh-context` over the `MemoryStore` (§5c.3 — the store, not
+            // the run log, is their input; same owner-projection rule).
+            ViewKind::TraceView
+            | ViewKind::CostView
+            | ViewKind::MetricView
+            | ViewKind::LexicalIndex
+            | ViewKind::MemoryStaleIndex
+            | ViewKind::MemoryUsage => {
                 return Err(LedgerError::OwnerProjected {
                     kind: kind.as_str(),
                 });
