@@ -338,6 +338,17 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // provenance, basis}`; ADR-0043's measurement stamps ride the payload).
     // Kernel-produced (the account derives it), provenance mandatory.
     row("measurement.cost.attributed",     Led, O::Events, false, true,  None, None),
+    // `measurement.export.delivered{sink_id, view_kind, seq_range,
+    // content_classes, loss_report_ref}` (§5h.1 §2.2/§6 — "the only ledger append
+    // an exporter may make", a kernel-appended fact with mandatory provenance
+    // per ADR-0035's table). The payload is ids/ranges/class spellings only —
+    // content-free ⇒ audit-grade (ADR-0066 Rule P/C).
+    row("measurement.export.delivered",    Led, O::Events, true,  true,  None, None),
+    // `measurement.metric.emitted{subject, metric_ref, value, unit,
+    // detector_ref}` (§5h.1 §2.2 — restricted to observations *not derivable*
+    // from other events; producers are oracles/judges over the scorer boundary,
+    // not the kernel). Provenance mandatory per the same table.
+    row_prov("measurement.metric.emitted", Led, O::Events, false, false, true,  None, None),
 
     // ── verification (P4) — `verification.validator.invoked` is an accountable
     // event class (R-ACC-2): every invocation is charged (to the instrument).

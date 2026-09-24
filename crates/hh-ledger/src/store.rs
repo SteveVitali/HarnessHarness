@@ -1399,6 +1399,14 @@ impl Store {
                 run_id,
                 until,
             ),
+            // `trace_view`/`cost_view`/`metric_view` fold in the owning crate
+            // (`hh-telemetry`) over `read` output — the ledger cannot depend
+            // on its consumer (ADR-0042 D2).
+            ViewKind::TraceView | ViewKind::CostView | ViewKind::MetricView => {
+                return Err(LedgerError::OwnerProjected {
+                    kind: kind.as_str(),
+                });
+            }
         })
     }
 

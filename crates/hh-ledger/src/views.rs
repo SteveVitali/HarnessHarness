@@ -36,6 +36,15 @@ pub enum ViewKind {
     Checkpoint,
     /// `effect_ledger` — the per-effect fold in full (§5a.2's effect ledger).
     EffectLedger,
+    /// `trace_view` — the measurement plane's span projection (§5h.1 §2.1;
+    /// ADR-0042 D1/D2). Folded by `hh-telemetry` (the owner).
+    TraceView,
+    /// `cost_view` — the per-scope/per-attribution spend projection (§5h.1 §2.1;
+    /// ADR-0043 D4/D6). Folded by `hh-telemetry`.
+    CostView,
+    /// `metric_view` — declared metrics folded to `MetricValue`s (§5h.1 §2.1;
+    /// ADR-0044 D5). Folded by `hh-telemetry`.
+    MetricView,
 }
 
 impl ViewKind {
@@ -46,6 +55,9 @@ impl ViewKind {
             ViewKind::RunSummary => "run_summary",
             ViewKind::Checkpoint => "checkpoint",
             ViewKind::EffectLedger => "effect_ledger",
+            ViewKind::TraceView => "trace_view",
+            ViewKind::CostView => "cost_view",
+            ViewKind::MetricView => "metric_view",
         }
     }
 
@@ -56,6 +68,9 @@ impl ViewKind {
             "run_summary" => Some(ViewKind::RunSummary),
             "checkpoint" => Some(ViewKind::Checkpoint),
             "effect_ledger" => Some(ViewKind::EffectLedger),
+            "trace_view" => Some(ViewKind::TraceView),
+            "cost_view" => Some(ViewKind::CostView),
+            "metric_view" => Some(ViewKind::MetricView),
             _ => None,
         }
     }
@@ -102,6 +117,15 @@ impl View {
             view_hash: idp_id(VIEW_HASH_DOMAIN, preimage.to_canonical_string().as_bytes()),
             payload,
         }
+    }
+
+    /// Stamp a view folded by an owning crate (`hh-telemetry`'s
+    /// `trace_view`/`cost_view`/`metric_view`) — the identical `derived_from`
+    /// watermark + `view_policy_version` + `idp/1` `view_hash` discipline, so a
+    /// projection is a `View` no matter which crate folds it (CC7 — one view
+    /// shape, one hashing domain).
+    pub fn stamped(run_id: &str, kind: ViewKind, watermark: Option<u64>, payload: Json) -> View {
+        View::build(run_id, kind, watermark, payload)
     }
 }
 

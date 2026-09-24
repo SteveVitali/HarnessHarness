@@ -81,6 +81,12 @@ pub enum RecordKind {
     /// `{binding_id, channel_id, channel_revision, holder, env_handle_ref, mode, …}`;
     /// value-free by construction. Version-only.
     CredentialBinding,
+    /// A `SinkPolicy` record (§5h.1 §3) —
+    /// `{sink_id, content_classes, redaction, sampling, rate_limit?,
+    /// max_field_bytes, requires_consent}`; content-free by construction (the
+    /// policy describes a sink, never carries content). Version-only (the
+    /// `sink_id` is the comparison coordinate).
+    SinkPolicy,
 }
 
 impl RecordKind {
@@ -113,6 +119,7 @@ impl RecordKind {
             RecordKind::ContainmentPolicy => "containment_policy",
             RecordKind::SecretChannel => "secret.channel",
             RecordKind::CredentialBinding => "credential.binding",
+            RecordKind::SinkPolicy => "sink_policy",
         }
     }
 
@@ -212,6 +219,7 @@ mod tests {
             RecordKind::ContainmentPolicy,
             RecordKind::SecretChannel,
             RecordKind::CredentialBinding,
+            RecordKind::SinkPolicy,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for k in kinds {

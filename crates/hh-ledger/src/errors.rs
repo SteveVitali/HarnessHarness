@@ -273,6 +273,14 @@ pub enum LedgerError {
         /// The requested kind.
         kind: String,
     },
+    /// The view kind is registered but folded by its owning crate —
+    /// `Store::project` only projects the ledger's own kinds; `trace_view`,
+    /// `cost_view` and `metric_view` fold in `hh-telemetry` over `read` output
+    /// (ADR-0042 D2 — the owning crate owns the projection).
+    OwnerProjected {
+        /// The requested kind.
+        kind: &'static str,
+    },
 
     // ── blobs ────────────────────────────────────────────────────────────
     /// `put_blob` over the store's declared blob-size ceiling.
