@@ -481,6 +481,15 @@ impl EmbedService {
                 ),
             );
         }
+        // S3.10 — the `TaskContract` projection stamp (§5f.2): the sealed
+        // `Goal` projects at open; `manifest.extra["task_contract_id"]`
+        // carries the `contract_id` (the gate's pass-table identity).
+        if let Some(contract) = project_task_contract(&sealed.document) {
+            manifest.extra.insert(
+                "task_contract_id".to_string(),
+                Json::str(contract.contract_id.clone()),
+            );
+        }
         manifest.extra.insert(
             "control_variant".to_string(),
             Json::str(
@@ -592,6 +601,7 @@ impl EmbedService {
             &manifest,
             budget,
             &control_variant,
+            Some(&sealed.document),
         )?;
         let realized = realized_settings(self.workspace_root(), attendance, approval_mode);
         let head = self.store.head(&run_id).map_err(ledger_err)?;
@@ -1609,11 +1619,47 @@ impl EmbedService {
         manifest: &RunManifest,
         budget: Option<&BudgetInput>,
         control_variant: &str,
+        doc: Option<&hh_hir::document::HirDocument>,
     ) -> Result<Driver<Box<dyn ControlStrategy>>, EmbedError> {
+        // S3.10 — the `TaskContract` projection (§5f.2; ADR-0109 D1): the
+        // sealed doc's `Goal` projects to the gate's pass table; the
+        // `contract_id` is stamped `manifest.extra["task_contract_id"]` at
+        // `open_run`.
+        let task_contract = doc.and_then(project_task_contract);
+        // `plan_execute` arms the `hh.plan` surface + the model-emitted
+        // switch (S3.10); other variants keep the react preset params.
+        let is_plan_execute = control_variant.trim_end_matches("@1") == "hh/plan-execute";
+        let mut surfaces = surfaces.to_vec();
+        if is_plan_execute
+            && !surfaces
+                .iter()
+                .any(|s| s.surface_id == hh_control::plan_exec::PLAN_SURFACE_ID)
+        {
+            surfaces.push(SurfaceSpec {
+                surface_id: hh_control::plan_exec::PLAN_SURFACE_ID.to_string(),
+                semantic_id: "hh/plan-execute/plan-surface".to_string(),
+                params: BTreeMap::new(),
+            });
+        }
+        let mut parameters = StrategyParams::default();
+        if is_plan_execute {
+            parameters.plan_provenance = hh_control::strategy::PlanProvenance::ModelEmitted;
+            parameters.max_continue_nudges = 1;
+        }
+        // The boundary is the *variant's* preset (S3.10) — `plan_execute`
+        // assigns `plan`/`delegate` to the model; react keeps its own.
+        let boundary = if is_plan_execute {
+            hh_control::plan_exec::PlanExecute::new()
+                .capabilities()
+                .boundary_preset
+                .clone()
+        } else {
+            hh_control::react::react_preset()
+        };
         let ctx = ControlContext {
             process_ref: format!("hh-embed/{}", manifest.run_kind.as_str()),
             plan: vec![],
-            boundary: hh_control::react::react_preset(),
+            boundary,
             profile: Json::Null,
             account_ref: manifest
                 .budget
@@ -1621,7 +1667,7 @@ impl EmbedService {
                 .unwrap_or_else(|| "acct:unbudgeted".to_string()),
             budget_ref: manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
             envelope_ref: "env-1".to_string(),
-            parameters: StrategyParams::default(),
+            parameters,
             capabilities_available: surfaces.iter().map(|s| s.surface_id.clone()).collect(),
             steering: steering_for(control_variant),
         };
@@ -1659,10 +1705,13 @@ impl EmbedService {
             policy,
             &mut sink,
             DriverConfig {
-                surfaces: surfaces.to_vec(),
+                surfaces,
                 budget_ceiling: std::mem::take(&mut budget_ceiling),
                 remaining: std::mem::take(&mut remaining),
                 interactive_attendance: interactive,
+                task_contract,
+                plan_surface_id: is_plan_execute
+                    .then(|| hh_control::plan_exec::PLAN_SURFACE_ID.to_string()),
                 ..DriverConfig::default()
             },
         )
@@ -1692,10 +1741,34 @@ impl EmbedService {
             .ok_or_else(|| EmbedError::Refused {
                 reason: "resume_arm_record_unavailable".to_string(),
             })?;
+        // The resumed leaf re-arms the *variant's* preset + parameters +
+        // plan surface (S3.10 — `plan_execute` resumes `model_emitted`);
+        // the `TaskContract` re-projects from the persisted sealed
+        // definition (`manifest.harness_def_ref`), never from a side file.
+        let is_plan_execute =
+            arm.control_variant.trim_end_matches("@1") == "hh/plan-execute";
+        let boundary = if is_plan_execute {
+            hh_control::plan_exec::PlanExecute::new()
+                .capabilities()
+                .boundary_preset
+                .clone()
+        } else {
+            hh_control::react::react_preset()
+        };
+        let mut parameters = StrategyParams::default();
+        if is_plan_execute {
+            parameters.plan_provenance = hh_control::strategy::PlanProvenance::ModelEmitted;
+            parameters.max_continue_nudges = 1;
+        }
+        let task_contract = manifest
+            .harness_def_ref
+            .as_deref()
+            .and_then(|r| self.persisted_definition(r).ok())
+            .and_then(|sealed| project_task_contract(&sealed.document));
         let ctx = ControlContext {
             process_ref: format!("hh-embed/{}", manifest.run_kind.as_str()),
             plan: vec![],
-            boundary: hh_control::react::react_preset(),
+            boundary,
             profile: Json::Null,
             account_ref: manifest
                 .budget
@@ -1703,7 +1776,7 @@ impl EmbedService {
                 .unwrap_or_else(|| "acct:unbudgeted".to_string()),
             budget_ref: manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
             envelope_ref: "env-1".to_string(),
-            parameters: StrategyParams::default(),
+            parameters,
             capabilities_available: arm.surfaces.iter().map(|s| s.surface_id.clone()).collect(),
             steering: steering_for(&arm.control_variant),
         };
@@ -1745,6 +1818,9 @@ impl EmbedService {
                 budget_ceiling: std::mem::take(&mut ceiling),
                 remaining: std::mem::take(&mut remaining),
                 interactive_attendance: interactive,
+                task_contract,
+                plan_surface_id: is_plan_execute
+                    .then(|| hh_control::plan_exec::PLAN_SURFACE_ID.to_string()),
                 ..DriverConfig::default()
             },
         )
@@ -1938,13 +2014,48 @@ fn control_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
 
 /// The strategy instance the bound `control_strategy` variant selects —
 /// `hh/react-steerable` arms `react/steerable` (R-2.6.1¹); every other
+/// `project_task_contract` — the §5f.2 `TaskContract` projection over the
+/// sealed document's `Goal` node (S3.10): `success_criteria` + `validates`
+/// records with `held_out` visibility read off the criterion node's
+/// `ext["visibility"]` member. `None` when the definition carries no
+/// `Goal` or the projection refuses (the run then gates on the claim's
+/// own divergences only — the T-LCD-03 anchor shape).
+pub(crate) fn project_task_contract(
+    doc: &hh_hir::document::HirDocument,
+) -> Option<hh_verification::gate::TaskContract> {
+    doc.nodes.iter().find_map(|n| {
+        if let hh_hir::records::KindRecord::Goal(_) = &n.semantic {
+            let goal_id = n.version.semantic_id.clone().unwrap_or_default();
+            let mut visibility = std::collections::BTreeMap::new();
+            for c in &doc.nodes {
+                if let (Some(sid), Some(v)) = (
+                    c.version.semantic_id.as_ref(),
+                    c.ext.get("visibility").and_then(Json::as_str),
+                ) {
+                    visibility.insert(
+                        sid.clone(),
+                        if v == "held_out" {
+                            hh_verification::vocab::Visibility::HeldOut
+                        } else {
+                            hh_verification::vocab::Visibility::Visible
+                        },
+                    );
+                }
+            }
+            hh_verification::gate::project_contract(doc, &goal_id, &visibility).ok()
+        } else {
+            None
+        }
+    })
+}
+
 /// registered binding resolves to the canonical `react/minimal`
 /// interpreter (the family is one loop under presets — ADR-0103 D6).
 pub(crate) fn strategy_for(variant_id: &str) -> Box<dyn ControlStrategy> {
-    if variant_id.trim_end_matches("@1") == "hh/react-steerable" {
-        Box::new(hh_control::react::ReactSteerable::new())
-    } else {
-        Box::new(ReactMinimal::new())
+    match variant_id.trim_end_matches("@1") {
+        "hh/react-steerable" => Box::new(hh_control::react::ReactSteerable::new()),
+        "hh/plan-execute" => Box::new(hh_control::plan_exec::PlanExecute::new()),
+        _ => Box::new(ReactMinimal::new()),
     }
 }
 

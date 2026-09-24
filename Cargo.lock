@@ -230,6 +230,7 @@ dependencies = [
  "hh-registry",
  "hh-results",
  "hh-secrets",
+ "hh-verification",
  "hh-wire",
 ]
 

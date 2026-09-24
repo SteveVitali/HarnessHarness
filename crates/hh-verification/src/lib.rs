@@ -43,8 +43,10 @@
 //! evaluation, judged validators/critics and the `probe`/`resume` halves are
 //! spec-staged to Stage 2/3/4 — tracked as DF-S1.21-* rows.
 
+pub mod bind;
 pub mod claims;
 pub mod critics;
+pub mod evalfold;
 pub mod events;
 pub mod evidence;
 pub mod gate;
