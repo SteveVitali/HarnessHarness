@@ -1477,7 +1477,7 @@ fn removal_verdict_pass_fail_inconclusive() {
 #[test]
 fn critic_experiment_reports_five_deltas_under_matchspec() {
     use hh_eval::critic_experiment::{
-        critic_experiment, CriticExperimentInput, CRITIC_EXPERIMENT_METRICS, ARM_OFF, ARM_ON,
+        critic_experiment, CriticExperimentInput, ARM_OFF, ARM_ON, CRITIC_EXPERIMENT_METRICS,
     };
     let decls: Vec<MetricDeclaration> = CRITIC_EXPERIMENT_METRICS
         .iter()
@@ -1494,9 +1494,7 @@ fn critic_experiment_reports_five_deltas_under_matchspec() {
                     let mut r = run(arm, task, rep, 1, m);
                     r.run_id = format!("r-{arm}-{task}-{rep}-{m}");
                     r.values[0].value = match m {
-                        "task_success" => {
-                            MetricValueKind::Bool(!(arm == ARM_OFF && task == "t2"))
-                        }
+                        "task_success" => MetricValueKind::Bool(!(arm == ARM_OFF && task == "t2")),
                         "harness_overhead.verification" => {
                             MetricValueKind::Decimal(if arm == ARM_ON { 120_000 } else { 100_000 })
                         }

@@ -14,6 +14,10 @@
 //! occupy `user`; `external` may occupy `tool`. A request to place a low-authority record in a
 //! high slot is a typed refusal — never a silent re-slot, never a warning.
 
+use std::collections::BTreeSet;
+
+use hh_wire::json::Json;
+
 use crate::authority::{AuthorityClass, PersistenceScope, ReaderSet, TaintTag};
 use crate::origin::Origin;
 use crate::record::{Derivation, DerivationKind, ProvenanceRecord};
@@ -254,6 +258,242 @@ pub fn render_role(
         });
     }
     Ok(slot)
+}
+
+// ── `hir/provenance` in `_meta` (§8.1 P7 — MCP/A2A/ACP/provider tool APIs) ────
+
+/// The typed-extension-slot key carrying the provenance projection —
+/// `_meta["hir/provenance"]` on MCP (§8.1 P7: `{origin_ref, authority, scope,
+/// taint_tags}`; `readers` rides the same member at C2 — AC-R-2.8.2-13).
+pub const META_PROVENANCE_KEY: &str = "hir/provenance";
+
+/// `lower_provenance(record) → _meta member` — the compact projection a
+/// foreign target carries in its typed extension slot: `{origin_ref,
+/// authority, scope, taint_tags[], readers[]}` (readers `[]` = `Public` —
+/// the same spelling `label_json_full` uses). This is the *carrier* form —
+/// the record itself never crosses; a target that cannot carry the member
+/// records the loss through [`lift_provenance_meta`]'s report.
+pub fn lower_provenance_meta(record: &ProvenanceRecord) -> Json {
+    Json::obj([
+        ("origin_ref", Json::str(record.origin.tag().to_string())),
+        ("authority", Json::str(record.authority.as_str())),
+        ("scope", Json::str(record.scope.as_str())),
+        (
+            "taint_tags",
+            Json::Arr(
+                record
+                    .taint
+                    .iter()
+                    .map(|t| Json::str(t.as_string()))
+                    .collect(),
+            ),
+        ),
+        (
+            "readers",
+            match &record.readers {
+                ReaderSet::Public => Json::Arr(vec![]),
+                ReaderSet::Restricted(rs) => {
+                    Json::Arr(rs.iter().map(|r| Json::str(r.clone())).collect())
+                }
+            },
+        ),
+    ])
+}
+
+/// Where a lifted payload came from — fixes the minted authority (the
+/// lift's *cap*; a class is never read from the payload itself).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MetaLiftSource {
+    /// A server outside the sealed definition — `origin = import`,
+    /// `authority = unverified`.
+    ExternalServer,
+    /// An open-world tool present in the sealed definition — `origin =
+    /// tool(capability)`, `authority = external` (the open-world row of the
+    /// minting table).
+    DeclaredOpenWorldTool {
+        /// The capability's identity coordinate.
+        capability: String,
+        /// The invocation coordinate the result answers.
+        invocation_ref: String,
+    },
+    /// A hosted participant's content the Hosting ABI cannot vouch for —
+    /// `origin = participant`, `authority = unverified` (T-LCD-07).
+    Participant {
+        /// The participant's identity coordinate.
+        participant_ref: String,
+        /// The hosting mechanism (`hh.hosting/1` binding id).
+        hosting_mechanism: String,
+    },
+}
+
+/// The lift result — the reconstituted record plus the explicit
+/// carried/lost lists (§8.1 P6/P7: the loss report the lowering owes; a
+/// target that could not carry `hir/provenance` is *named*, not silent).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MetaLift {
+    /// The lifted record — authority fixed by the source class
+    /// (`unverified`/`external`), taint stamped with the lift, `derived_from`
+    /// recording the projection.
+    pub record: ProvenanceRecord,
+    /// The members the slot carried and the lift honoured (`taint_tags`,
+    /// `readers` — restrictions are safe to carry: they never raise
+    /// authority).
+    pub carried: Vec<&'static str>,
+    /// The explicit loss list — members the payload claimed that could not
+    /// survive (`authority`/`scope`/`origin_ref` mismatches against the
+    /// minted cap), or the whole member when the target could not carry it.
+    pub lost: Vec<String>,
+}
+
+/// `lift_provenance(meta, source, scope, at)` — reconstitute a
+/// `ProvenanceRecord` from an `_meta` payload (§8.1 P7). **A class is never
+/// read from the lifted payload**: the record's authority is what the
+/// minting table assigns the source's origin — `unverified` for
+/// `import`/`participant`, `external` for a declared open-world `tool`.
+/// Carried `taint_tags` are re-stamped as `import` markers plus a
+/// `lift:mcp` tag (the loss is stamped, not erased); carried `readers`
+/// restore verbatim (a restriction claim can only narrow where the value
+/// flows). Every member that could not survive lands in `lost`.
+pub fn lift_provenance_meta(
+    meta: Option<&Json>,
+    source: &MetaLiftSource,
+    scope: PersistenceScope,
+    at: u64,
+) -> MetaLift {
+    let (origin, cap) = match source {
+        MetaLiftSource::ExternalServer => (
+            Origin::import("lifted:mcp", "lowered:mcp-meta"),
+            AuthorityClass::Unverified,
+        ),
+        MetaLiftSource::DeclaredOpenWorldTool {
+            capability,
+            invocation_ref,
+        } => (
+            Origin::tool(capability.clone(), invocation_ref.clone()),
+            AuthorityClass::External,
+        ),
+        MetaLiftSource::Participant {
+            participant_ref,
+            hosting_mechanism,
+        } => (
+            Origin::participant(participant_ref.clone(), hosting_mechanism.clone()),
+            AuthorityClass::Unverified,
+        ),
+    };
+    let mut record = ProvenanceRecord::minted(origin, scope, at);
+    record.authority = cap;
+    let mut carried: Vec<&'static str> = Vec::new();
+    let mut lost: Vec<String> = Vec::new();
+    let mut taint: BTreeSet<TaintTag> = BTreeSet::new();
+    match meta {
+        None => {
+            // A target that cannot carry `hir/provenance` — the loss report
+            // names the whole member (T-LCD-11).
+            lost.push(format!("{META_PROVENANCE_KEY} (target cannot carry it)"));
+        }
+        Some(m) => {
+            // `authority`/`scope`/`origin_ref` are descriptive only — the
+            // minted cap decides. A payload claiming a *different* class
+            // than the cap is named in the loss report (never believed).
+            if let Some(a) = m.get("authority").and_then(Json::as_str) {
+                if a != cap.as_str() {
+                    lost.push(format!("authority (claimed {a}, minted {})", cap.as_str()));
+                }
+            }
+            if let Some(s) = m.get("scope").and_then(Json::as_str) {
+                if s != scope.as_str() {
+                    lost.push(format!("scope (claimed {s}, minted {})", scope.as_str()));
+                }
+            }
+            if let Some(o) = m.get("origin_ref").and_then(Json::as_str) {
+                if o != record.origin.tag() {
+                    lost.push(format!(
+                        "origin_ref (claimed {o}, minted {})",
+                        record.origin.tag()
+                    ));
+                }
+            }
+            match m.get("taint_tags") {
+                Some(Json::Arr(items)) => {
+                    for t in items {
+                        if let Some(ts) = t.as_str() {
+                            taint.insert(TaintTag::Import {
+                                source_system: format!("carried:{ts}"),
+                            });
+                        }
+                    }
+                    carried.push("taint_tags");
+                }
+                Some(_) => lost.push("taint_tags (malformed)".to_string()),
+                None => {}
+            }
+            match m.get("readers") {
+                Some(Json::Arr(items)) => {
+                    let set: BTreeSet<String> = items
+                        .iter()
+                        .filter_map(|i| i.as_str().map(String::from))
+                        .collect();
+                    record.readers = if set.is_empty() {
+                        ReaderSet::Public
+                    } else {
+                        ReaderSet::Restricted(set)
+                    };
+                    carried.push("readers");
+                }
+                Some(_) => lost.push("readers (malformed)".to_string()),
+                None => {}
+            }
+        }
+    }
+    taint.insert(TaintTag::Import {
+        source_system: "lift:mcp".to_string(),
+    });
+    record.taint = taint;
+    record.derived_from = vec![Derivation {
+        kind: DerivationKind::Projection,
+        inputs: vec!["lowered:mcp-meta".to_string()],
+        deriver: Origin::kernel("kernel:lift"),
+        deterministic: true,
+    }];
+    MetaLift {
+        record,
+        carried,
+        lost,
+    }
+}
+
+// ── `role_map` collapse (§8.1 RP — targets with fewer roles) ────────────────
+
+/// One collapsed group: the provider role several `AuthorityClass`es share —
+/// the classes whose distinction the target's `role_map` cannot express.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoleCollapse {
+    /// The provider-role spelling the classes collapse into.
+    pub role: String,
+    /// The classes sharing it (sorted by lattice order).
+    pub classes: Vec<AuthorityClass>,
+}
+
+/// `role_map_collapse(role_map)` — the loss a reduced-role target declares
+/// (§8.1 RP: "targets with fewer roles collapse classes and the lowering
+/// loss report says so"). Groups the profile's `AuthorityClass →
+/// ProviderRole` map by role; every role serving more than one class is a
+/// collapse the loss report names — e.g. a two-role target collapses
+/// `{kernel, definition, …}` into its privileged role and the rest into its
+/// unprivileged one.
+pub fn role_map_collapse(
+    role_map: &std::collections::BTreeMap<AuthorityClass, String>,
+) -> Vec<RoleCollapse> {
+    let mut by_role: std::collections::BTreeMap<String, Vec<AuthorityClass>> =
+        std::collections::BTreeMap::new();
+    for (class, role) in role_map {
+        by_role.entry(role.clone()).or_default().push(*class);
+    }
+    by_role
+        .into_iter()
+        .filter(|(_, classes)| classes.len() > 1)
+        .map(|(role, classes)| RoleCollapse { role, classes })
+        .collect()
 }
 
 #[cfg(test)]
