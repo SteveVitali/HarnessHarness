@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:e8980920c4c586ea9e0a138c797dad5ad8333efd3697731957c4929ec37b2d41";
+    "sha256:bf545dcf163c46d3d0cddffe2e1b8dd5ef91060d71a2d8d8d289eead8822c4ef";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -913,8 +913,11 @@ impl ContractIdentity {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CounterfactualParams {
     pub session_id: String,
+    pub run_id: Option<String>,
     pub at_seq: i64,
-    pub edits: Json,
+    pub intervention: Json,
+    pub design: Json,
+    pub env: Option<String>,
     pub idempotency_key: Option<String>,
 }
 
@@ -922,8 +925,15 @@ impl CounterfactualParams {
     pub fn to_json(&self) -> Json {
         let mut pairs: Vec<(&'static str, Json)> = Vec::new();
         pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.run_id {
+            pairs.push(("run_id", Json::str(v.clone())));
+        }
         pairs.push(("at_seq", Json::Int(self.at_seq.clone())));
-        pairs.push(("edits", self.edits.clone()));
+        pairs.push(("intervention", self.intervention.clone()));
+        pairs.push(("design", self.design.clone()));
+        if let Some(v) = &self.env {
+            pairs.push(("env", Json::str(v.clone())));
+        }
         if let Some(v) = &self.idempotency_key {
             pairs.push(("idempotency_key", Json::str(v.clone())));
         }
@@ -940,17 +950,39 @@ impl CounterfactualParams {
                     .map(|s| s.to_string())
                     .ok_or_else(|| "expected string".to_string())?
             },
+            run_id: match v.get("run_id") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
             at_seq: {
                 let f = v
                     .get("at_seq")
                     .ok_or_else(|| format!("missing '{}'", "at_seq"))?;
                 f.as_int().ok_or_else(|| "expected integer".to_string())?
             },
-            edits: {
+            intervention: {
                 let f = v
-                    .get("edits")
-                    .ok_or_else(|| format!("missing '{}'", "edits"))?;
+                    .get("intervention")
+                    .ok_or_else(|| format!("missing '{}'", "intervention"))?;
                 f.clone()
+            },
+            design: {
+                let f = v
+                    .get("design")
+                    .ok_or_else(|| format!("missing '{}'", "design"))?;
+                f.clone()
+            },
+            env: match v.get("env") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
             },
             idempotency_key: match v.get("idempotency_key") {
                 Some(f) => Some(
@@ -959,6 +991,100 @@ impl CounterfactualParams {
                         .ok_or_else(|| "expected string".to_string())?,
                 ),
                 None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CounterfactualResult {
+    pub source_run_id: String,
+    pub at_seq: i64,
+    pub intervention_ref: String,
+    pub factual: Vec<Json>,
+    pub counterfactual: Vec<Json>,
+    pub comparison_ref: String,
+}
+
+impl CounterfactualResult {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("source_run_id", Json::str(self.source_run_id.clone())));
+        pairs.push(("at_seq", Json::Int(self.at_seq.clone())));
+        pairs.push(("intervention_ref", Json::str(self.intervention_ref.clone())));
+        pairs.push((
+            "factual",
+            Json::Arr(self.factual.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push((
+            "counterfactual",
+            Json::Arr(self.counterfactual.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push(("comparison_ref", Json::str(self.comparison_ref.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<CounterfactualResult, String> {
+        Ok(CounterfactualResult {
+            source_run_id: {
+                let f = v
+                    .get("source_run_id")
+                    .ok_or_else(|| format!("missing '{}'", "source_run_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            at_seq: {
+                let f = v
+                    .get("at_seq")
+                    .ok_or_else(|| format!("missing '{}'", "at_seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            intervention_ref: {
+                let f = v
+                    .get("intervention_ref")
+                    .ok_or_else(|| format!("missing '{}'", "intervention_ref"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            factual: {
+                let f = v
+                    .get("factual")
+                    .ok_or_else(|| format!("missing '{}'", "factual"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+            counterfactual: {
+                let f = v
+                    .get("counterfactual")
+                    .ok_or_else(|| format!("missing '{}'", "counterfactual"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+            comparison_ref: {
+                let f = v
+                    .get("comparison_ref")
+                    .ok_or_else(|| format!("missing '{}'", "comparison_ref"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
             },
         })
     }
@@ -3540,8 +3666,9 @@ impl Recorded {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplayParams {
     pub session_id: String,
-    pub from_seq: i64,
-    pub edits: Option<Json>,
+    pub run_id: Option<String>,
+    pub driver_mode: String,
+    pub until_seq: Option<i64>,
     pub idempotency_key: Option<String>,
 }
 
@@ -3549,9 +3676,12 @@ impl ReplayParams {
     pub fn to_json(&self) -> Json {
         let mut pairs: Vec<(&'static str, Json)> = Vec::new();
         pairs.push(("session_id", Json::str(self.session_id.clone())));
-        pairs.push(("from_seq", Json::Int(self.from_seq.clone())));
-        if let Some(v) = &self.edits {
-            pairs.push(("edits", v.clone()));
+        if let Some(v) = &self.run_id {
+            pairs.push(("run_id", Json::str(v.clone())));
+        }
+        pairs.push(("driver_mode", Json::str(self.driver_mode.clone())));
+        if let Some(v) = &self.until_seq {
+            pairs.push(("until_seq", Json::Int(v.clone())));
         }
         if let Some(v) = &self.idempotency_key {
             pairs.push(("idempotency_key", Json::str(v.clone())));
@@ -3569,14 +3699,24 @@ impl ReplayParams {
                     .map(|s| s.to_string())
                     .ok_or_else(|| "expected string".to_string())?
             },
-            from_seq: {
-                let f = v
-                    .get("from_seq")
-                    .ok_or_else(|| format!("missing '{}'", "from_seq"))?;
-                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            run_id: match v.get("run_id") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
             },
-            edits: match v.get("edits") {
-                Some(f) => Some(f.clone()),
+            driver_mode: {
+                let f = v
+                    .get("driver_mode")
+                    .ok_or_else(|| format!("missing '{}'", "driver_mode"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            until_seq: match v.get("until_seq") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
                 None => None,
             },
             idempotency_key: match v.get("idempotency_key") {
@@ -3585,6 +3725,76 @@ impl ReplayParams {
                         .map(|s| s.to_string())
                         .ok_or_else(|| "expected string".to_string())?,
                 ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplayResult {
+    pub run_id: String,
+    pub driver_mode: String,
+    pub mode: String,
+    pub report_ref: String,
+    pub reproduced: bool,
+    pub divergence: Option<Json>,
+}
+
+impl ReplayResult {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("run_id", Json::str(self.run_id.clone())));
+        pairs.push(("driver_mode", Json::str(self.driver_mode.clone())));
+        pairs.push(("mode", Json::str(self.mode.clone())));
+        pairs.push(("report_ref", Json::str(self.report_ref.clone())));
+        pairs.push(("reproduced", Json::Bool(self.reproduced)));
+        if let Some(v) = &self.divergence {
+            pairs.push(("divergence", v.clone()));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ReplayResult, String> {
+        Ok(ReplayResult {
+            run_id: {
+                let f = v
+                    .get("run_id")
+                    .ok_or_else(|| format!("missing '{}'", "run_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            driver_mode: {
+                let f = v
+                    .get("driver_mode")
+                    .ok_or_else(|| format!("missing '{}'", "driver_mode"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            mode: {
+                let f = v
+                    .get("mode")
+                    .ok_or_else(|| format!("missing '{}'", "mode"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            report_ref: {
+                let f = v
+                    .get("report_ref")
+                    .ok_or_else(|| format!("missing '{}'", "report_ref"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            reproduced: match v.get("reproduced") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            divergence: match v.get("divergence") {
+                Some(f) => Some(f.clone()),
                 None => None,
             },
         })
@@ -5392,6 +5602,15 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `counterfactual` → `CounterfactualResult` (see the contract registry).
+    pub fn counterfactual(
+        &mut self,
+        params: &CounterfactualParams,
+    ) -> Result<CounterfactualResult, ClientError> {
+        let raw = self.call("counterfactual", params.to_json())?;
+        CounterfactualResult::from_json(&raw).map_err(ClientError::Transport)
+    }
+
     /// `describe` → `DescribeResult` (see the contract registry).
     pub fn describe(&mut self, params: &DescribeParams) -> Result<DescribeResult, ClientError> {
         let raw = self.call("describe", params.to_json())?;
@@ -5782,6 +6001,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     pub fn read(&mut self, params: &ReadParams) -> Result<Page, ClientError> {
         let raw = self.call("read", params.to_json())?;
         Page::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `replay` → `ReplayResult` (see the contract registry).
+    pub fn replay(&mut self, params: &ReplayParams) -> Result<ReplayResult, ClientError> {
+        let raw = self.call("replay", params.to_json())?;
+        ReplayResult::from_json(&raw).map_err(ClientError::Transport)
     }
 
     /// `report_host_effect` → `Recorded` (see the contract registry).

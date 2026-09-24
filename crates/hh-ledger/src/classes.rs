@@ -648,9 +648,10 @@ const REDACTED_FIELDS: &[AuditField] = &[
 /// `{branch_id, source_run_id, at_seq, at_event_id, kind, env, replay_mode,
 /// effective_replay, downgrade_reason?, policy_ref, budget_slice_ref?,
 /// read_only, coerce_to_boundary, created_event_id, head_event_id, head_seq}` +
-/// content refs `{snapshot_ref?, record_ref?}`. The child run's own row — its
-/// `refs` pin the source prefix's referenced content (§5a.1 §5, "the source
-/// prefix is pinned").
+/// content refs `{snapshot_ref?, record_ref?}` + the S3.6 counterfactual members
+/// `{arm_role?, intervention_ref?, seed?, charged_to?}` (ADR-0135 §6 — additive,
+/// CC8). The child run's own row — its `refs` pin the source prefix's
+/// referenced content (§5a.1 §5, "the source prefix is pinned").
 const FORKED_FIELDS: &[AuditField] = &[
     af("branch_id"),
     af("source_run_id"),
@@ -668,6 +669,9 @@ const FORKED_FIELDS: &[AuditField] = &[
     af("created_event_id"),
     af("head_event_id"),
     af("head_seq"),
+    af("arm_role"),
+    af("seed"),
+    af("charged_to"),
 ];
 
 /// `lifecycle.run.rolled_back` — the rewind record (`R-2.2.5`; §5a.1 `rollback`):
@@ -922,6 +926,10 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("control.subagent.spawned", "none"),
     // ── control:timeout ──
     ("control.timeout.fired", "hint"),
+    // ── control:clock / control:random — the ADR-0135 nondeterminism
+    // records (kernel bookkeeping; never a hosted presentation row) ──
+    ("control.clock.read", "none"),
+    ("control.random.read", "none"),
     // ── control:wakeup ──
     ("control.wakeup.cancelled", "none"),
     ("control.wakeup.fired", "none"),
@@ -1158,7 +1166,7 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("lifecycle.run.resumed",     O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("lifecycle.run.suspended",   O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("lifecycle.run.finished",    O::Events, true,  OPEN_AUDIT, &[], None, None),
-    row_audit("lifecycle.run.forked",      O::Events, true,  FORKED_FIELDS, &["snapshot_ref", "record_ref"], None, None),
+    row_audit("lifecycle.run.forked",      O::Events, true,  FORKED_FIELDS, &["snapshot_ref", "record_ref", "intervention_ref"], None, None),
     row_audit("lifecycle.run.rolled_back", O::Events, true,  ROLLED_BACK_FIELDS, &["record_ref"], None, None),
     row_audit("lifecycle.head.moved",      O::Events, true,  HEAD_MOVED_FIELDS, &[], None, None),
     row_audit("lifecycle.lease.acquired",  O::Events, true,  LEASE_FIELDS, &[], None, None),
@@ -1523,6 +1531,16 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("control.retry.fired",             Led, O::Events, false, true,  None, None),
     row("control.retry.skipped",           Led, O::Events, false, true,  None, None),
     row("control.timeout.fired",           Led, O::Events, false, true,  None, None),
+    // `control.clock.read{value}` / `control.random.read{value}` — the
+    // ADR-0135 §2 nondeterminism-recording rows (R-2.2.4⁰ᵇ): a runtime
+    // wall-clock / recorded-randomness access lands the served value
+    // durable when the run's control-variant declares
+    // `deterministic_replay`; a non-declaring variant's read is served
+    // ephemerally and never mints the row (the class durability is
+    // `ledger` — the "ephemeral otherwise" half is the emit-site rule, a
+    // declaration a non-declaring run has no business recording).
+    row("control.clock.read",              Led, O::Events, false, true,  None, None),
+    row("control.random.read",             Led, O::Events, false, true,  None, None),
     // The S1.20 control-envelope rows (§5e.2 ledger row): the deterministic
     // `loop_detector` verdict (`{detector, pattern{cycle_len, repeats,
     // loop_keys[]}, evidence_refs[], action, ladder_position, validator_ref?}`),

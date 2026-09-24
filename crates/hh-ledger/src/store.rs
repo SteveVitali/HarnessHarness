@@ -238,6 +238,15 @@ pub struct Store {
     /// resolver can replace it without touching the ledger). `None` ⇒
     /// signatures verify shape-only (`unverified`), never fabricated ok.
     audit_keys: Option<Box<dyn AuditKeyResolver>>,
+    /// Fault-injection seam (R-2.2.3⁰ᶜ; [`crate::fault`]) — the number of
+    /// upcoming `append` calls that fail `Durability{injected}` before a
+    /// byte is written (KP-9: the batch is absent as a unit). Armed only by
+    /// the battery's `inject`; production code never sets it.
+    pub(crate) fault_appends: u32,
+    /// Fault-injection seam — `restore` aborts after this many recovery
+    /// appends with `FaultInjected{kp-13}` (KP-13: restore is idempotent;
+    /// the next pass completes identically).
+    pub(crate) fault_restore_after: Option<usize>,
 }
 
 /// A live tail — `Stream<EventFrame>`. The replayed `durable` frames + `sync` ride in
@@ -326,6 +335,8 @@ impl Store {
             runs: BTreeMap::new(),
             tombstones: BTreeMap::new(),
             audit_keys: None,
+            fault_appends: 0,
+            fault_restore_after: None,
         };
         store.load_all()?;
         Ok(store)
@@ -365,6 +376,41 @@ impl Store {
     /// `rfc3339_ms(now_ms())` — the `ts` stamp for caller-built `Event`s.
     pub fn ts_now(&self) -> String {
         rfc3339_ms(self.clock.now_ms())
+    }
+
+    /// Arm the KP-9 durability fault — the next `n` `append` calls fail
+    /// `Durability{injected}` before a byte is written (the batch is absent
+    /// as a unit — R-2.2.3⁰ᶜ's mid-batch kill). The kill-point battery's
+    /// `inject(kill_point, target)` seam; production paths never arm it.
+    pub fn inject_durability_faults(&mut self, n: u32) {
+        self.fault_appends = self.fault_appends.saturating_add(n);
+    }
+
+    /// Arm the KP-13 restore fault — the in-flight `restore` aborts after
+    /// `after_appends` recovery appends with `FaultInjected{kp-13}`.
+    /// Restore is idempotent (R-4): a second pass completes identically.
+    pub fn arm_restore_kill(&mut self, after_appends: usize) {
+        self.fault_restore_after = Some(after_appends);
+    }
+
+    /// The restore path's append — consults the `fault_restore_after` seam
+    /// (KP-13). Never used outside `recovery.rs`.
+    pub(crate) fn append_recovery(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        events: Vec<Event>,
+    ) -> Result<SeqRange, LedgerError> {
+        if let Some(n) = self.fault_restore_after {
+            if n == 0 {
+                self.fault_restore_after = None;
+                return Err(LedgerError::FaultInjected {
+                    at: crate::fault::KillPoint::Kp13.as_str().to_string(),
+                });
+            }
+            self.fault_restore_after = Some(n - 1);
+        }
+        self.append(run_id, lease, events)
     }
 
     /// The C1-tier gate — an op the stage slices at `tier-c1` refuses typed
@@ -1087,6 +1133,14 @@ impl Store {
         lease: &Lease,
         events: Vec<Event>,
     ) -> Result<SeqRange, LedgerError> {
+        // The KP-9 fault-injection seam — the armed batch fails before a
+        // byte is written; the batch is absent as a unit (R-2.2.3⁰ᶜ).
+        if self.fault_appends > 0 {
+            self.fault_appends -= 1;
+            return Err(LedgerError::Durability {
+                detail: "injected fault: the append died before the WAL write".into(),
+            });
+        }
         if !self.runs.contains_key(run_id) {
             return Err(LedgerError::UnknownRun {
                 run_id: run_id.to_string(),
@@ -2672,6 +2726,10 @@ impl Store {
                 let info = infos.iter().find(|i| i.run_id == run_id);
                 views::branch_tree(run_id, info, until)
             }
+            // `effects_by_key` — the §5a.2 dedup projection over the
+            // durable prefix (R-2.2.4⁰ᵇ; S3.6) — the commit path's
+            // durable-side consult.
+            ViewKind::EffectsByKey => views::effects_by_key_view(run_id, &state.events, until),
             ViewKind::TraceView
             | ViewKind::CostView
             | ViewKind::MetricView

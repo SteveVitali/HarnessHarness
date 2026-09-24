@@ -28,6 +28,7 @@ use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, Provisioning
 use hh_hir::records::{AgentProcessBody, KindRecord, SlotBindings};
 use hh_identity::names::ResolveMode;
 use hh_ledger::manifest::{AttendanceSource, AttendanceValue, RunKind, RunManifest};
+use hh_ledger::store::Store;
 use hh_wire::json::Json;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -1939,12 +1940,23 @@ fn control_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
 /// `hh/react-steerable` arms `react/steerable` (R-2.6.1¹); every other
 /// registered binding resolves to the canonical `react/minimal`
 /// interpreter (the family is one loop under presets — ADR-0103 D6).
-fn strategy_for(variant_id: &str) -> Box<dyn ControlStrategy> {
+pub(crate) fn strategy_for(variant_id: &str) -> Box<dyn ControlStrategy> {
     if variant_id.trim_end_matches("@1") == "hh/react-steerable" {
         Box::new(hh_control::react::ReactSteerable::new())
     } else {
         Box::new(ReactMinimal::new())
     }
+}
+
+/// `leaf_arm_for(store, run_id)` — the persisted `leaf.arm` record (the
+/// durable re-arm pair `runs/<run>/leaf.arm`; absent ⇒ `None` — a run
+/// without an arm record never claims a bound control variant).
+pub(crate) fn leaf_arm_for(store: &Store, run_id: &str) -> Option<LeafArm> {
+    let arm_path = store.root().join("runs").join(run_id).join("leaf.arm");
+    std::fs::read_to_string(&arm_path)
+        .ok()
+        .and_then(|s| hh_wire::json::parse(&s).ok())
+        .and_then(|j| LeafArm::from_json(&j))
 }
 
 /// The `(steer_mode, concurrent_input)` the bound variant's declared

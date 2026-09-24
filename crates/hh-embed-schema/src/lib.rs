@@ -918,8 +918,11 @@ fn types_schema() -> Json {
         "CounterfactualParams".into(),
         strct(&[
             ("session_id", "string", true),
+            ("run_id", "string", false),
             ("at_seq", "integer", true),
-            ("edits", "json", true),
+            ("intervention", "json", true),
+            ("design", "json", true),
+            ("env", "string", false),
             ("idempotency_key", "string", false),
         ]),
     );
@@ -963,9 +966,32 @@ fn types_schema() -> Json {
         "ReplayParams".into(),
         strct(&[
             ("session_id", "string", true),
-            ("from_seq", "integer", true),
-            ("edits", "json", false),
+            ("run_id", "string", false),
+            ("driver_mode", "string", true),
+            ("until_seq", "integer", false),
             ("idempotency_key", "string", false),
+        ]),
+    );
+    m.insert(
+        "ReplayResult".into(),
+        strct(&[
+            ("run_id", "string", true),
+            ("driver_mode", "string", true),
+            ("mode", "string", true),
+            ("report_ref", "string", true),
+            ("reproduced", "bool", false),
+            ("divergence", "json", false),
+        ]),
+    );
+    m.insert(
+        "CounterfactualResult".into(),
+        strct(&[
+            ("source_run_id", "string", true),
+            ("at_seq", "integer", true),
+            ("intervention_ref", "string", true),
+            ("factual", "[json]", true),
+            ("counterfactual", "[json]", true),
+            ("comparison_ref", "string", true),
         ]),
     );
     m.insert(
