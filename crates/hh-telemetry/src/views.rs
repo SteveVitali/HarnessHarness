@@ -1022,6 +1022,126 @@ fn compute_metric(name: &str, ev: &[&EventEnvelope]) -> Json {
         "resume_count" => Json::Int(count(&["lifecycle.run.resumed"])),
         "fenced_writer_count" => Json::Int(count(&["lifecycle.lease.fenced"])),
         "rollback_count" => Json::Int(count(&["lifecycle.run.rolled_back"])),
+        // ── the five recovery metrics (AC-R-2.2.3-12; §5a.3 §8) ──────────
+        "recovery_latency_ms" => {
+            // takeover `lease.acquired{scope: writer}` → `Cue.resumed` —
+            // pair each `lifecycle.run.resumed{generation}` with the
+            // writer `lease.acquired` row of the same generation;
+            // `resumed_at_ms` is the delivery stamp (S3.6 member).
+            let mut total = 0i64;
+            let mut paired = 0i64;
+            for r in ev.iter().filter(|e| e.class == "lifecycle.run.resumed") {
+                let gen = payload_int(r, "generation");
+                let resumed_at = payload_int(r, "resumed_at_ms");
+                let acquired = ev
+                    .iter()
+                    .find(|e| {
+                        e.class == "lifecycle.lease.acquired"
+                            && payload_str(e, "scope") == Some("writer")
+                            && payload_int(e, "generation") == gen
+                    })
+                    .map(|e| payload_int(e, "acquired_at_ms"));
+                if let (Some(a), true) = (acquired, resumed_at > 0) {
+                    total += (resumed_at - a).max(0);
+                    paired += 1;
+                }
+            }
+            if paired == 0 {
+                if count(&["lifecycle.run.resumed"]) == 0 {
+                    Json::Int(0)
+                } else {
+                    // resumes without a paired acquire are unmeasured —
+                    // n/a, never 0 (T-LCD-15).
+                    na(NaReason::Capability)
+                }
+            } else {
+                Json::Int(total)
+            }
+        }
+        "wasted_calls" => {
+            // Calls the crash wasted: at each `resumed`, the
+            // `model.call.requested` scopes at/below `from_seq` with no
+            // `completed`/`failed` at/below it (the recovery table marks
+            // them — the pre-crash attempt is the waste).
+            let mut wasted = 0i64;
+            for r in ev.iter().filter(|e| e.class == "lifecycle.run.resumed") {
+                let from = payload_int(r, "from_seq");
+                let mut open: BTreeMap<String, ()> = BTreeMap::new();
+                for e in ev.iter().filter(|e| e.seq <= from as u64) {
+                    if e.class == "model.call.requested" {
+                        if let Some(mc) = e
+                            .scope
+                            .model_call_id
+                            .as_deref()
+                            .or_else(|| payload_str(e, "model_call_id"))
+                        {
+                            open.insert(mc.to_string(), ());
+                        }
+                    } else if matches!(
+                        e.class.as_str(),
+                        "model.call.completed" | "model.call.failed"
+                    ) {
+                        if let Some(mc) = e
+                            .scope
+                            .model_call_id
+                            .as_deref()
+                            .or_else(|| payload_str(e, "model_call_id"))
+                        {
+                            open.remove(mc);
+                        }
+                    }
+                }
+                wasted += open.len() as i64;
+            }
+            Json::Int(wasted)
+        }
+        "unknown_effects_per_resume" => {
+            // Recovery-emitted `unknown` rows ÷ resumes — an `unknown`
+            // whose seq sits between a `resumed` and the next
+            // `control.decision`/`model.call.requested` is the restore's
+            // own resolution output.
+            let resumes: Vec<u64> = ev
+                .iter()
+                .filter(|e| e.class == "lifecycle.run.resumed")
+                .map(|e| e.seq)
+                .collect();
+            if resumes.is_empty() {
+                if count(&["action.effect.unknown"]) > 0 {
+                    // unknowns with no resume — unpaired, n/a not 0.
+                    return na(NaReason::EstimatorUndefined);
+                }
+                Json::Int(0)
+            } else {
+                let mut unknowns = 0i64;
+                for (i, rseq) in resumes.iter().enumerate() {
+                    let upper = resumes.get(i + 1).copied().unwrap_or(u64::MAX);
+                    unknowns += ev
+                        .iter()
+                        .filter(|e| {
+                            e.class == "action.effect.unknown"
+                                && e.seq > *rseq
+                                && e.seq < upper
+                                && matches!(
+                                    payload_str(e, "cause"),
+                                    Some("worker_lost" | "helper_lost" | "scope_lost")
+                                )
+                        })
+                        .count() as i64;
+                }
+                Json::Int(unknowns * ppm / resumes.len() as i64)
+            }
+        }
+        "heal_count" => Json::Int(count(&["action.environment.healed"])),
+        "wakeups_skipped" => {
+            // `{reason: count}` — the `wakeups_skipped{reason}` map
+            // (CountMap; empty map is the honest zero).
+            let mut m = BTreeMap::new();
+            for e in ev.iter().filter(|e| e.class == "control.wakeup.skipped") {
+                let reason = payload_str(e, "reason").unwrap_or("unknown").to_string();
+                *m.entry(reason).or_insert(0i64) += 1;
+            }
+            Json::Obj(m.into_iter().map(|(k, v)| (k, Json::Int(v))).collect())
+        }
         "human_interventions" => Json::Int(
             ev.iter()
                 .filter(|e| {

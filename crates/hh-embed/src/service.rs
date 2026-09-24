@@ -536,6 +536,8 @@ impl EmbedService {
             "steer" => self.steer(&req.params),
             "respond_permission" => self.respond_permission(&req.params),
             "fork" => self.fork(&req.params),
+            "replay" => self.replay(&req.params),
+            "counterfactual" => self.counterfactual(&req.params),
             "navigate" => self.navigate(&req.params),
             "coherent_fork_points" => self.coherent_fork_points(&req.params),
             "rollback" => self.rollback(&req.params),

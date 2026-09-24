@@ -31,6 +31,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use hh_provenance::ProvenanceRecord;
 use hh_wire::json::Json;
 
+use crate::classes::ScopeKind;
 use crate::effect::EffectPhase;
 use crate::errors::LedgerError;
 use crate::event::{Event, Producer, Scope};
@@ -302,6 +303,21 @@ impl Store {
             match f.phase {
                 EffectPhase::Prepared | EffectPhase::Deferred => {
                     if f.risk_class.is_read_only() {
+                        // KP-13 idempotence: a `prepared{reprepared_after}`
+                        // row already durable means this restore's decision
+                        // was taken by a torn predecessor — do not re-mint
+                        // (a second pass completes identically, never twice).
+                        let already = self.run(run_id)?.events.iter().any(|e| {
+                            e.class == "action.effect.prepared"
+                                && e.scope.effect_id.as_deref() == Some(effect_id.as_str())
+                                && e.payload
+                                    .get("reprepared_after")
+                                    .and_then(Json::as_str)
+                                    .is_some()
+                        });
+                        if already {
+                            continue;
+                        }
                         // Re-prepare — a read_only attempt never wrote ahead.
                         let key = f.idempotency_key.clone().ok_or_else(|| {
                             LedgerError::SchemaViolation {
@@ -311,26 +327,40 @@ impl Store {
                                 ),
                             }
                         })?;
+                        // Scope to the members still open — a second restore
+                        // after a torn first pass finds the model_call already
+                        // `failed` closed (KP-13 idempotence); minting under a
+                        // dead scope is a `ScopeNotOpen` self-inflicted crash.
+                        // The chain rule (`tool_call ⇒ model_call`) drops the
+                        // child when the parent is gone.
+                        let open = self.run(run_id)?.open_scopes.clone();
+                        let live = |k: ScopeKind, v: &Option<String>| {
+                            v.as_ref().filter(|id| open.get(*id) == Some(&k)).cloned()
+                        };
+                        let mut rep_scope = Scope {
+                            turn_id: live(ScopeKind::Turn, &f.turn_id),
+                            model_call_id: live(ScopeKind::ModelCall, &f.model_call_id),
+                            tool_call_id: live(ScopeKind::ToolCall, &f.tool_call_id),
+                            effect_id: live(ScopeKind::Effect, &Some(effect_id.clone())),
+                            child_run_id: None,
+                            component_call_id: None,
+                            branch_id: None,
+                        };
+                        if rep_scope.model_call_id.is_none() {
+                            rep_scope.tool_call_id = None;
+                        }
                         let ev = kernel_ev(
                             self,
                             run_id,
                             "action.effect.prepared",
-                            Scope {
-                                turn_id: f.turn_id.clone(),
-                                model_call_id: f.model_call_id.clone(),
-                                tool_call_id: f.tool_call_id.clone(),
-                                effect_id: Some(effect_id.clone()),
-                                child_run_id: None,
-                                component_call_id: None,
-                                branch_id: None,
-                            },
+                            rep_scope,
                             Json::obj([
                                 ("idempotency_key", Json::str(key)),
                                 ("reprepared_after", Json::str("worker_lost")),
                             ]),
                         )?;
                         let id = ev.event_id.clone();
-                        self.append(run_id, &lease, vec![ev])?;
+                        self.append_recovery(run_id, &lease, vec![ev])?;
                         out.actions.push(RestoreAction {
                             event_id: id,
                             class: "action.effect.prepared".into(),
@@ -408,7 +438,7 @@ impl Store {
                 Json::obj([("cause", Json::str("worker_lost"))]),
             )?;
             let id = ev.event_id.clone();
-            self.append(run_id, &lease, vec![ev])?;
+            self.append_recovery(run_id, &lease, vec![ev])?;
             out.actions.push(RestoreAction {
                 event_id: id,
                 class: "model.call.failed".into(),
@@ -535,6 +565,10 @@ impl Store {
                 ("from_seq", Json::Int(from_seq as i64)),
                 ("holder", Json::str(holder)),
                 ("generation", Json::Int(gen as i64)),
+                // `resumed_at_ms` — the `Cue.resumed` delivery timestamp
+                // (the `recovery_latency_ms` metric's end anchor —
+                // AC-R-2.2.3-12).
+                ("resumed_at_ms", Json::Int(self.now_ms() as i64)),
                 ("actions", Json::Int(out.actions.len() as i64)),
                 (
                     "recovery_decision",
@@ -548,7 +582,7 @@ impl Store {
             ]),
         )?;
         let resumed_event_id = ev.event_id.clone();
-        self.append(run_id, &lease, vec![ev])?;
+        self.append_recovery(run_id, &lease, vec![ev])?;
 
         Ok(RestoreReport {
             run_id: run_id.to_string(),
@@ -597,7 +631,7 @@ impl Store {
             ]),
         )?;
         let id = ev.event_id.clone();
-        self.append(run_id, lease, vec![ev])?;
+        self.append_recovery(run_id, lease, vec![ev])?;
         out.actions.push(RestoreAction {
             event_id: id,
             class: "action.effect.unknown".into(),
@@ -662,7 +696,7 @@ impl Store {
             Json::Obj(payload),
         )?;
         let id = ev.event_id.clone();
-        self.append(run_id, lease, vec![ev])?;
+        self.append_recovery(run_id, lease, vec![ev])?;
         out.actions.push(RestoreAction {
             event_id: id,
             class: "control.retry.scheduled".into(),
