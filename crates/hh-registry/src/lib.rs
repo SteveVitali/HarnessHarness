@@ -40,6 +40,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod capability;
 pub mod corpus;
 pub mod errors;
 pub mod events;

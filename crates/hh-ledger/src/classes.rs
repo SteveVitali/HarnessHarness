@@ -607,6 +607,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("lifecycle.registry.version_revoked",   O::Events, true,  REGISTRY_FIELDS, &[], None, None),
     row_audit("lifecycle.registry.snapshotted",       O::Events, true,  REGISTRY_FIELDS, &[], None, None),
     row_audit("lifecycle.registry.conformance_recorded", O::Events, true, REGISTRY_FIELDS, &[], None, None),
+    // `lifecycle.capability.registered` — a typed `ToolCapability` record (the
+    // registry body is a `hir.node` semantic id + pinned `version_id`) passed
+    // V-E1 and entered the store (ADR-0147 (d); §5d.1; S1.17).
+    row_audit("lifecycle.capability.registered",      O::Events, true,  REGISTRY_FIELDS, &[], None, None),
 
     // ── model boundary ───────────────────────────────────────────────────
     // `model.call.{requested,completed,failed}` are audit-grade (§05b.1; §5g.6 §3
@@ -663,6 +667,16 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("action.tool.surface.revealed",    Led, O::Events, false, false, None, None),
     row("action.tool.output_chunk",        Eph, O::Events, false, false, None, None),
     row("action.tool.progress",            Eph, O::Events, false, false, None, None),
+    // The ADR-0212 OQ-235 exposure set (§5d.3 §4; S1.17). `planned` carries
+    // `model_call_id`/`plan_id`/`catalog_id`/mode changes; `call.refused`
+    // closes the tool_call scope (a refusal is terminal — like `rejected`).
+    row("action.tool.exposure.planned",    Led, O::Events, false, true,  None, None),
+    row("action.tool.discovery.searched",  Led, O::Events, false, true,  None, None),
+    row("action.tool.surface.evicted",     Led, O::Events, false, true,  None, None),
+    row("action.tool.call.refused",        Led, O::Events, false, true,  None, Some(ToolCall)),
+    row("action.tool.catalog.built",       Led, O::Events, false, true,  None, None),
+    row("action.tool.catalog.delta",       Led, O::Events, false, true,  None, None),
+    row("action.tool.catalog.epoch",       Led, O::Events, false, true,  None, None),
     // The `action.environment.*` lifecycle family (ADR-0136 §7) — kernel-origin rows.
     row("action.environment.provision.requested",  Led, O::Events, false, true, None, None),
     row("action.environment.provisioned",          Led, O::Events, false, true, None, None),

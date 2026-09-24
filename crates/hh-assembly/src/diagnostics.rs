@@ -463,6 +463,13 @@ pub fn kern_code(e: &HirError) -> Code {
         DialectIncompatible { .. } => "DialectIncompatible",
         SchemaViolation { .. } => "SchemaViolation",
         SecretValueInDefinition { .. } => "SecretValueInDefinition",
+        EmptyEffectSet => "EmptyEffectSet",
+        UnmappedParameter { .. } => "UnmappedParameter",
+        UnscopedParameter { .. } => "UnscopedParameter",
+        LiftedDeclarationsNotUnverified { .. } => "LiftedDeclarationsNotUnverified",
+        ExactCostUnmeasured { .. } => "ExactCostUnmeasured",
+        DerivedEffectsMismatch { .. } => "DerivedEffectsMismatch",
+        NoDiscoverySurface => "NoDiscoverySurface",
     })
 }
 

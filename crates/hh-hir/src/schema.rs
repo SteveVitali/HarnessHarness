@@ -1371,9 +1371,15 @@ pub(crate) fn semantic_record_json(rec: &KindRecord, semantic: bool) -> Json {
                 ("observation_contract", t.observation_contract.clone()),
                 ("execution_requirement", t.execution_requirement.clone()),
                 ("source", t.source.clone()),
-                ("exposure_hint", t.exposure_hint.clone()),
                 ("postconditions", ref_vec_json(&t.postconditions, semantic)),
             ];
+            // V-E1-9 / AC-E1-2 (§5d.1 §3): `exposure_hint` is a run-time-selection
+            // input and `cost_model.measured_ref` is a measurement *reference* —
+            // both are excluded from the semantic projection (and so from
+            // `semantic_id`); both remain in the version basis.
+            if !semantic {
+                v.push(("exposure_hint", t.exposure_hint.clone()));
+            }
             if let Some(o) = &t.output_schema {
                 v.push(("output_schema", o.clone()));
             }
@@ -1382,7 +1388,19 @@ pub(crate) fn semantic_record_json(rec: &KindRecord, semantic: bool) -> Json {
                 ScopeBindings::Unknown => v.push(("scope_bindings_unknown", Json::Bool(true))),
             }
             if let Some(c) = &t.cost_model {
-                v.push(("cost_model", c.clone()));
+                let c = if semantic {
+                    match c {
+                        Json::Obj(m) => {
+                            let mut m = m.clone();
+                            m.remove("measured_ref");
+                            Json::Obj(m)
+                        }
+                        other => other.clone(),
+                    }
+                } else {
+                    c.clone()
+                };
+                v.push(("cost_model", c));
             }
             if let Some(f) = &t.flow_contract {
                 v.push(("flow_contract", f.clone()));
@@ -2295,7 +2313,9 @@ impl HirDocument {
     }
 }
 
-pub(crate) fn node_from_json(j: &Json, path: &str) -> Result<Node, HirError> {
+/// Decode a node's canonical JSON (the `node_to_json` inverse — the one codec,
+/// CC7; made `pub` at S1.17 for the registry's `capability` record body).
+pub fn node_from_json(j: &Json, path: &str) -> Result<Node, HirError> {
     let kind = EntityKind::parse(&req_str(j, "kind", path)?)?;
     let dialect = req_str(j, "dialect", path)?;
     if dialect != "HIR/1" {

@@ -806,6 +806,13 @@ fn transform_from_json(j: &Json, path: &str) -> Result<ArgTransform, CompileErro
 }
 
 fn arg_map_json(m: &SurfaceArgMap) -> Json {
+    arg_map_json_pub(m)
+}
+
+/// The canonical `SurfaceArgMap` encoding — `pub(crate)` so
+/// `crate::surface::surface_id` hashes the same bytes the wire form writes
+/// (CC7 — one encoding).
+pub(crate) fn arg_map_json_pub(m: &SurfaceArgMap) -> Json {
     Json::Obj(
         m.iter()
             .map(|(k, e)| {
@@ -848,24 +855,195 @@ fn arg_map_from_json(j: &Json, path: &str) -> Result<SurfaceArgMap, CompileError
 fn surface_binding_json(b: &SurfaceBinding) -> Json {
     Json::obj([
         ("arg_map", arg_map_json(&b.arg_map)),
+        (
+            "admitted_modes",
+            Json::Arr(
+                b.admitted_modes
+                    .iter()
+                    .map(|m| Json::str(m.as_str()))
+                    .collect(),
+            ),
+        ),
         ("capability_ref", pinned_ref_json(&b.capability_ref)),
+        (
+            "capability_refs",
+            Json::Arr(
+                b.capability_refs
+                    .iter()
+                    .map(|r| Json::str(r.clone()))
+                    .collect(),
+            ),
+        ),
         ("dialect", Json::str(b.dialect.clone())),
+        (
+            "effects_bound",
+            Json::Arr(
+                b.effects_bound
+                    .iter()
+                    .map(|e| Json::str(e.clone()))
+                    .collect(),
+            ),
+        ),
+        (
+            "evidence_ref",
+            b.evidence_ref.clone().map_or(Json::Null, Json::str),
+        ),
+        ("exposure_mode", Json::str(b.exposure_mode.as_str())),
+        (
+            "family_id",
+            b.family_id.clone().map_or(Json::Null, Json::str),
+        ),
+        ("hidden", Json::Bool(b.hidden)),
         ("hir_node_id", Json::str(b.hir_node_id.clone())),
+        ("mapping", {
+            match &b.mapping {
+                crate::surface::BindingMapping::SurfaceArgMap => {
+                    Json::obj([("kind", Json::str("surface_arg_map"))])
+                }
+                crate::surface::BindingMapping::PlanMap(r) => Json::obj([
+                    ("kind", Json::str("plan_map")),
+                    ("plan_ref", Json::str(r.clone())),
+                ]),
+            }
+        }),
+        ("pinned", Json::Bool(b.pinned)),
+        (
+            "rule_ids",
+            Json::Arr(b.rule_ids.iter().map(|r| Json::str(r.clone())).collect()),
+        ),
+        (
+            "safety_ref",
+            b.safety_ref.clone().map_or(Json::Null, Json::str),
+        ),
+        ("surface_id", Json::str(b.surface_id.clone())),
         ("surface_name", Json::str(b.surface_name.clone())),
+        (
+            "variant_id",
+            b.variant_id.clone().map_or(Json::Null, Json::str),
+        ),
     ])
 }
 
 fn surface_binding_from_json(j: &Json, path: &str) -> Result<SurfaceBinding, CompileError> {
-    Ok(SurfaceBinding {
+    let mapping = match j.get("mapping") {
+        Some(m) => match m.get("kind").and_then(Json::as_str) {
+            Some("surface_arg_map") => crate::surface::BindingMapping::SurfaceArgMap,
+            Some("plan_map") => crate::surface::BindingMapping::PlanMap(
+                m.get("plan_ref")
+                    .and_then(Json::as_str)
+                    .ok_or_else(|| {
+                        schema_err(&format!("{path}.mapping"), "plan_map needs plan_ref")
+                    })?
+                    .to_string(),
+            ),
+            other => {
+                return Err(schema_err(
+                    &format!("{path}.mapping"),
+                    format!("mapping kind: {other:?}"),
+                ))
+            }
+        },
+        // CC8: a pre-S1.17 body decodes as the C0 mapping.
+        None => crate::surface::BindingMapping::SurfaceArgMap,
+    };
+    let admitted_modes = match j.get("admitted_modes") {
+        Some(Json::Arr(ms)) => {
+            let mut set = std::collections::BTreeSet::new();
+            for m in ms {
+                let sp = m.as_str().ok_or_else(|| {
+                    schema_err(&format!("{path}.admitted_modes"), "mode must be a string")
+                })?;
+                set.insert(hh_hir::tools::ExposureMode::parse(sp).ok_or_else(|| {
+                    schema_err(&format!("{path}.admitted_modes"), format!("mode {sp}"))
+                })?);
+            }
+            set
+        }
+        Some(_) => {
+            return Err(schema_err(
+                &format!("{path}.admitted_modes"),
+                "must be an array",
+            ))
+        }
+        None => [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+    };
+    let str_list = |k: &str| -> Result<Vec<String>, CompileError> {
+        match j.get(k) {
+            Some(Json::Arr(xs)) => xs
+                .iter()
+                .map(|x| {
+                    x.as_str().map(String::from).ok_or_else(|| {
+                        schema_err(&format!("{path}.{k}"), "member must be a string")
+                    })
+                })
+                .collect(),
+            Some(_) => Err(schema_err(&format!("{path}.{k}"), "must be an array")),
+            None => Ok(Vec::new()),
+        }
+    };
+    let mut b = SurfaceBinding {
         surface_name: str_at(j, "surface_name", path)?,
+        surface_id: j
+            .get("surface_id")
+            .and_then(Json::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        exposure_mode: match j.get("exposure_mode").and_then(Json::as_str) {
+            Some(sp) => crate::surface::CompileExposureMode::parse(sp).ok_or_else(|| {
+                schema_err(&format!("{path}.exposure_mode"), format!("mode {sp}"))
+            })?,
+            None => crate::surface::CompileExposureMode::Primitive,
+        },
         capability_ref: pinned_ref_from_json(
             req(j, "capability_ref", path)?,
             &format!("{path}.capability_ref"),
         )?,
+        capability_refs: str_list("capability_refs")?,
         hir_node_id: str_at(j, "hir_node_id", path)?,
         arg_map: arg_map_from_json(req(j, "arg_map", path)?, &format!("{path}.arg_map"))?,
+        mapping,
+        rule_ids: str_list("rule_ids")?,
+        evidence_ref: j
+            .get("evidence_ref")
+            .and_then(Json::as_str)
+            .map(String::from),
+        safety_ref: j.get("safety_ref").and_then(Json::as_str).map(String::from),
+        effects_bound: str_list("effects_bound")?,
+        family_id: j.get("family_id").and_then(Json::as_str).map(String::from),
+        variant_id: j.get("variant_id").and_then(Json::as_str).map(String::from),
         dialect: str_at(j, "dialect", path)?,
-    })
+        admitted_modes,
+        pinned: matches!(j.get("pinned"), Some(Json::Bool(true))),
+        hidden: matches!(j.get("hidden"), Some(Json::Bool(true))),
+    };
+    // `capability_refs` absent (a pre-S1.17 body) ⇒ the single pinned
+    // capability's semantic id; present ⇒ must agree with `capability_ref` at
+    // C0 (one-capability bindings — composites land at C1).
+    if b.capability_refs.is_empty() {
+        b.capability_refs = vec![b.capability_ref.semantic_id.clone()];
+    } else if b.mapping == crate::surface::BindingMapping::SurfaceArgMap
+        && b.capability_refs != vec![b.capability_ref.semantic_id.clone()]
+    {
+        return Err(schema_err(
+            &format!("{path}.capability_refs"),
+            "surface_arg_map bindings name exactly capability_ref.semantic_id",
+        ));
+    }
+    // `surface_id` absent ⇒ minted; present ⇒ verified (integrity, never
+    // silently re-derived — I-CLOSED).
+    let computed = crate::surface::surface_id(&b);
+    if b.surface_id.is_empty() {
+        b.surface_id = computed;
+    } else if b.surface_id != computed {
+        return Err(schema_err(
+            &format!("{path}.surface_id"),
+            format!(
+                "surface_id {} does not re-mint to {}",
+                b.surface_id, computed
+            ),
+        ));
+    }
+    Ok(b)
 }
 
 fn tool_binding_json(t: &ToolBinding) -> Json {

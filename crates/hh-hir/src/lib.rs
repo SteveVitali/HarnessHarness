@@ -27,6 +27,7 @@ pub mod records;
 pub mod refs;
 pub mod risk;
 pub(crate) mod schema;
+pub mod tools;
 
 // The canonical `AssumptionDebtRecord` codec is re-exported for `hh-registry`
 // (`VariantRecord.conditioned_rules` — CC7: the schema source owns both
@@ -130,6 +131,13 @@ pub mod wire {
     /// the `semantic_id` basis, §3.1.2).
     pub fn node_semantic_projection(n: &crate::document::Node) -> Json {
         crate::schema::node_semantic_projection(n)
+    }
+
+    /// Parse a [`crate::document::Node`] from its canonical JSON (consumed by
+    /// `hh-registry`'s `CapabilityRecord` body — CC7: the schema source owns the
+    /// decoding).
+    pub fn node_from_json(j: &Json) -> Result<crate::document::Node, HirError> {
+        crate::schema::node_from_json(j, "$")
     }
 
     /// The canonical JSON of a `ControlBoundary` (the CC11 record — consumed by

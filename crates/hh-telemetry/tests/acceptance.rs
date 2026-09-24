@@ -620,3 +620,37 @@ fn export_delivered_round_trips_through_the_ledger() {
     m.insert("bogus".into(), Json::Null);
     assert!(export_delivered_from_json(&Json::Obj(m)).is_err());
 }
+
+/// AC-R-2.5.2-12 (declaration half — §5d.2; S1.17): `surface_rejection_rate`
+/// is a registered `MetricDeclaration` with `applies_to_classes = {native}`
+/// and `requires_observability ⊇ {ledger}`, computed from
+/// `surface_rejected ÷ model-emitted calls` (computation lands at C0/S3 —
+/// the catalogue row is the C0/S1 half).
+#[test]
+fn ac_e2_12_surface_rejection_rate_is_registered() {
+    let m = catalogue::metric("surface_rejection_rate").expect("registered");
+    assert_eq!(
+        m.applies_to,
+        &[hh_ontology::participant::ParticipantClass::Native]
+    );
+    assert!(m.requires_observability.contains(&Observability::Ledger));
+    assert_eq!(m.unit, catalogue::MetricUnit::Ppm);
+    assert_eq!(
+        m.computed_from,
+        &["action.tool.surface_rejected", "action.tool.proposed"]
+    );
+    // The declaration shape is the §2.6.3 `MetricDeclaration`.
+    let d = m.declaration();
+    assert_eq!(d.name, "surface_rejection_rate");
+    // The exposure family declared with it (ADR-0094 D6).
+    for name in [
+        "tool_surface_tokens",
+        "catalog_exposure_ratio",
+        "discovery_calls",
+        "unrevealed_call_rate",
+        "catalog_drift_events",
+        "epochs_adopted",
+    ] {
+        assert!(catalogue::metric(name).is_some(), "{name} registered");
+    }
+}

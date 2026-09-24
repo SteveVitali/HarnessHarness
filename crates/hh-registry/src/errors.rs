@@ -165,6 +165,12 @@ pub enum RegistryError {
     },
     /// A non-ancestor/sibling edge (allowed only with `reason = fork`).
     NotAncestorOrSibling,
+    /// `register` of a `capability` record that fails the V-E1 battery
+    /// (§5d.1 §3; ADR-0088 D1 — `ValidationErrors`, collected not fail-fast).
+    CapabilityValidation {
+        /// Every violated V-E1 check.
+        violations: Vec<hh_hir::errors::HirError>,
+    },
     /// An operation on a record the store does not hold.
     UnknownVersion {
         /// The `version_id`.
@@ -203,6 +209,7 @@ impl RegistryError {
             RegistryError::AuthorityInsufficient { .. } => "AuthorityInsufficient",
             RegistryError::CycleDetected { .. } => "CycleDetected",
             RegistryError::NotAncestorOrSibling => "NotAncestorOrSibling",
+            RegistryError::CapabilityValidation { .. } => "CapabilityValidation",
             RegistryError::UnknownVersion { .. } => "UnknownVersion",
         }
     }

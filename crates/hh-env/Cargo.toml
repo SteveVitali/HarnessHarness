@@ -24,6 +24,10 @@ hh-monitor = { path = "../hh-monitor" }
 # `CanonicalArgs` via `args::eval`; `Proposal.capability_ref` is the pinned
 # pair). hh-compiler sits below hh-env in the DAG (no cycle).
 hh-compiler = { path = "../hh-compiler" }
+# `RegistryStore::get` for the spec's `bind(version_id, environment, executors)`
+# verb (R-2.5.1; ADR-0088 D5) — the capability record is read, the executor
+# declarations are this crate's. hh-registry sits below hh-env in the DAG.
+hh-registry = { path = "../hh-registry" }
 # `attach`/`verify_report`/`floor_gate`/`PolicySlot`/`ContainmentReport` — the
 # DF-S1.12-3 handle seam lands here.
 hh-containment = { path = "../hh-containment" }

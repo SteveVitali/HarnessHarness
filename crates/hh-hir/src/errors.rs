@@ -149,6 +149,46 @@ pub enum HirError {
         /// matched bytes).
         detail: String,
     },
+    /// V-E1-1 (§5d.1 §3): a `ToolCapability` declared `effects` as the empty
+    /// set — `pure` is the only honest empty.
+    EmptyEffectSet,
+    /// V-E1-4 (§5d.1 §3): a `scope_bindings` row's `param_path` does not resolve
+    /// in `input_schema` (the ADR-0052 `UnmappedParameter` spelling).
+    UnmappedParameter {
+        /// The unmapped path.
+        param_path: String,
+    },
+    /// V-E1-3 (§5d.1 §3): a scope-bearing effect domain with no `scope_bindings`
+    /// row and no `scope_bindings_unknown` (the ADR-0052 `UnscopedParameter`
+    /// spelling).
+    UnscopedParameter {
+        /// The unscoped domain.
+        domain: String,
+    },
+    /// V-E1-7 (§5d.1 §3; ADR-0034 P7): a lifted source (`mcp_listing` /
+    /// `participant_supplied`) whose declarations are stamped above
+    /// `unverified` — a `pin` endorsement raises the class by minting a new
+    /// version, never by registering over it.
+    LiftedDeclarationsNotUnverified {
+        /// The lifted source kind.
+        source_kind: String,
+    },
+    /// V-E1-8 (§5d.1 §3; ADR-0089 D1): a `cost_model.declared` estimate claimed
+    /// `confidence = exact` with no `measured_ref` on the record.
+    ExactCostUnmeasured {
+        /// The dimension claimed exact.
+        dimension: String,
+    },
+    /// V-E1-10 (§5d.1 §3): a `procedure`-sourced capability whose declared
+    /// `effects` differ from the procedure's derived effects.
+    DerivedEffectsMismatch {
+        /// Which side drifted.
+        detail: String,
+    },
+    /// I-DISCOVERY (§5d.3 §2; ADR-0093 D8): a definition admits `deferred`
+    /// without binding a `discover_surfaces` capability (`exposure_hint.
+    /// discovery = true`).
+    NoDiscoverySurface,
 }
 
 impl fmt::Display for HirError {
@@ -203,6 +243,23 @@ impl fmt::Display for HirError {
             HirError::SecretValueInDefinition { detail } => {
                 write!(f, "SecretValueInDefinition: {detail}")
             }
+            HirError::EmptyEffectSet => write!(f, "EmptyEffectSet: declare `pure`"),
+            HirError::UnmappedParameter { param_path } => {
+                write!(f, "UnmappedParameter: {param_path}")
+            }
+            HirError::UnscopedParameter { domain } => {
+                write!(f, "UnscopedParameter: {domain}")
+            }
+            HirError::LiftedDeclarationsNotUnverified { source_kind } => {
+                write!(f, "LiftedDeclarationsNotUnverified: {source_kind}")
+            }
+            HirError::ExactCostUnmeasured { dimension } => {
+                write!(f, "ExactCostUnmeasured: {dimension}")
+            }
+            HirError::DerivedEffectsMismatch { detail } => {
+                write!(f, "DerivedEffectsMismatch: {detail}")
+            }
+            HirError::NoDiscoverySurface => write!(f, "NoDiscoverySurface"),
         }
     }
 }

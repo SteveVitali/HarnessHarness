@@ -48,105 +48,19 @@ pub enum ArgError {
     },
 }
 
-/// `ScopeBinding = {param_path, scope_kind ∈ {fs_path, host, recipient,
-/// spend_amount, secret_ref, process_target, memory_scope, resource_key},
-/// canonicalization}` (§05d; ADR-0087 D1). The record is read from the
-/// capability's `scope_bindings` JSON member — a `ScopeBinding` value is
-/// `{param_path, scope_kind, canonicalization?}`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScopeBinding {
-    /// The canonical parameter path the binding selects (`a.b` dotted).
-    pub param_path: String,
-    /// The closed scope kind.
-    pub scope_kind: ScopeKind,
-    /// The declared canonicalization (e.g. `path_canonical`, `host_lower`) —
-    /// the transform's name is recorded, its application is R-2.8.4's.
-    pub canonicalization: Option<String>,
-}
-
-/// `scope_kind ∈ {fs_path, host, recipient, spend_amount, secret_ref,
-/// process_target, memory_scope, resource_key}` (§05d; ADR-0087 D1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ScopeKind {
-    /// A filesystem path.
-    FsPath,
-    /// A network host.
-    Host,
-    /// A human recipient.
-    Recipient,
-    /// A spend amount.
-    SpendAmount,
-    /// A secret reference.
-    SecretRef,
-    /// A process target.
-    ProcessTarget,
-    /// A memory persistence scope.
-    MemoryScope,
-    /// A `share`-mode resource key.
-    ResourceKey,
-}
-
-impl ScopeKind {
-    /// The canonical spelling.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            ScopeKind::FsPath => "fs_path",
-            ScopeKind::Host => "host",
-            ScopeKind::Recipient => "recipient",
-            ScopeKind::SpendAmount => "spend_amount",
-            ScopeKind::SecretRef => "secret_ref",
-            ScopeKind::ProcessTarget => "process_target",
-            ScopeKind::MemoryScope => "memory_scope",
-            ScopeKind::ResourceKey => "resource_key",
-        }
-    }
-
-    /// Parse the closed sum.
-    pub fn parse(s: &str) -> Option<ScopeKind> {
-        match s {
-            "fs_path" => Some(ScopeKind::FsPath),
-            "host" => Some(ScopeKind::Host),
-            "recipient" => Some(ScopeKind::Recipient),
-            "spend_amount" => Some(ScopeKind::SpendAmount),
-            "secret_ref" => Some(ScopeKind::SecretRef),
-            "process_target" => Some(ScopeKind::ProcessTarget),
-            "memory_scope" => Some(ScopeKind::MemoryScope),
-            "resource_key" => Some(ScopeKind::ResourceKey),
-            _ => None,
-        }
-    }
-}
+// `ScopeBinding`, `ScopeKind` and the `scope_bindings` parser live in
+// `hh_hir::tools` — the one schema source (CC7; V-E1-3/4 read the same
+// definition at validate/register as the monitor reads at dispatch).
+pub use hh_hir::tools::{ScopeBinding, ScopeKind};
 
 /// Parse a `ScopeBindings` record into the binding list. `Bindings(json)` is
 /// `[{param_path, scope_kind, canonicalization?}]`; `Unknown` ⇒ `None` (the
 /// `scope_bindings_unknown` member — `resolve_scope` then matches `*` only).
+/// A malformed member also yields `None` at run time — fail-closed (`*`-only
+/// coverage); V-E1 refuses the malformed member at validate/register, so this
+/// branch is defence in depth, not a silent drop (CC3 is enforced upstream).
 pub fn scope_bindings(s: &ScopeBindings) -> Option<Vec<ScopeBinding>> {
-    match s {
-        ScopeBindings::Unknown => None,
-        ScopeBindings::Bindings(j) => {
-            let rows = match j {
-                Json::Arr(rows) => rows.clone(),
-                other => vec![other.clone()], // a single-binding record
-            };
-            let mut out = Vec::new();
-            for r in &rows {
-                let path = r.get("param_path").and_then(Json::as_str)?;
-                let kind = r
-                    .get("scope_kind")
-                    .and_then(Json::as_str)
-                    .and_then(ScopeKind::parse)?;
-                out.push(ScopeBinding {
-                    param_path: path.to_string(),
-                    scope_kind: kind,
-                    canonicalization: r
-                        .get("canonicalization")
-                        .and_then(Json::as_str)
-                        .map(String::from),
-                });
-            }
-            Some(out)
-        }
-    }
+    hh_hir::tools::scope_bindings(s).ok().flatten()
 }
 
 /// The canonical-parameter projection of a call — `param_path → value` (the

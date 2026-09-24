@@ -23,6 +23,12 @@ use crate::schema;
 /// The `version_id` of a record — `idp(<kind domain tag>, H(full body))`.
 /// Covers every declared field: a rename or a summary edit is a new version.
 pub fn version_id(r: &RegistryRecord) -> String {
+    // V-E1-9 / CC1: a capability's `version_id` is the node's own — the registry
+    // envelope never enters it, and the same record carries one id wherever it
+    // is pinned (a `SurfaceBinding.capability_ref` resolves to this value).
+    if let RegistryRecord::Capability(c) = r {
+        return hh_hir::identity::version_id(&c.node);
+    }
     let body = schema::body_json(r, false);
     let tag = r.kind().domain_tag();
     let digest = body.to_canonical_string();
@@ -32,6 +38,11 @@ pub fn version_id(r: &RegistryRecord) -> String {
 /// The `semantic_id` of a record with a declared projection — the comparison
 /// coordinate that survives a rename (N6). `None` for version-only kinds.
 pub fn semantic_id(r: &RegistryRecord) -> Option<String> {
+    // The capability's `semantic_id` is the node's own projection coordinate
+    // (V-E1-9 — `exposure_hint`/`cost_model.measured_ref` already excluded).
+    if let RegistryRecord::Capability(c) = r {
+        return Some(hh_hir::identity::semantic_id(&c.node));
+    }
     let proj = schema::semantic_projection_json(r)?;
     let tag = format!("semantic.{}", r.kind().domain_tag());
     let digest = proj.to_canonical_string();
@@ -43,6 +54,17 @@ pub fn semantic_id(r: &RegistryRecord) -> Option<String> {
 /// mints over its own projection ([`snapshot_id`]) — a record's id never covers
 /// the id member itself.
 pub fn verify_body(r: &RegistryRecord, claimed_version_id: &str) -> Result<(), RegistryError> {
+    if let RegistryRecord::Capability(c) = r {
+        let recomputed = hh_hir::identity::version_id(&c.node);
+        return if recomputed == claimed_version_id {
+            Ok(())
+        } else {
+            Err(RegistryError::SchemaViolation {
+                path: "version_id".to_string(),
+                detail: format!("capability id mismatch: {recomputed} != {claimed_version_id}"),
+            })
+        };
+    }
     if let RegistryRecord::Snapshot(s) = r {
         let recomputed = snapshot_id_of(s);
         return if recomputed == claimed_version_id {

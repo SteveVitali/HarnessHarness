@@ -131,24 +131,65 @@ pub struct ArgMapEntry {
 /// (a `BTreeMap` — canonical order).
 pub type SurfaceArgMap = BTreeMap<String, ArgMapEntry>;
 
-/// `SurfaceBinding{surface_name, capability_ref, arg_map, dialect}` (ADR-0090 — the
-/// compiled-surface record). It is **one atomic record**, bound only inside an
-/// equivalence-checked compile; `hir_node_id` names the capability node the surface is
-/// declared on.
+/// `SurfaceBinding{surface_id, exposure_mode, capability_refs: [semantic_id],
+/// mapping, rule_ids[], evidence_ref, safety_ref, effects_bound, family_id,
+/// variant_id}` (§5d.2 §3; ADR-0090 D4) — the record the trace map, the
+/// reference monitor and every `action.tool.*` event reference; the only
+/// accounting key (E7). It is **one atomic record**, bound only inside an
+/// equivalence-checked compile; `hir_node_id` names the capability node the
+/// surface is declared on.
+///
+/// The C0 additions keep the compiled members the run reads (`surface_name`,
+/// `capability_ref` — the pinned version coordinate; `arg_map`, `dialect`)
+/// beside the spec members; `capability_refs` are **semantic ids** (S1
+/// inclusion reads them; a rename never touches them — AC-R-2.5.2-2).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SurfaceBinding {
     /// The model-facing surface name (the `ToolSurface.name`).
     pub surface_name: String,
-    /// The capability the surface exposes.
+    /// `surface_id` — the surface-record hash (`crate::surface::surface_id`;
+    /// the catalog/trace-map/`action.tool.*` coordinate).
+    pub surface_id: String,
+    /// The compile-time exposure mode (`primitive` at C0).
+    pub exposure_mode: crate::surface::CompileExposureMode,
+    /// The capability the surface exposes (the pinned version coordinate the
+    /// run resolves).
     pub capability_ref: PinnedRef,
+    /// `capability_refs: [semantic_id]` — the S1 inclusion set (at C0 the
+    /// single capability's semantic id; composites carry several at C1).
+    pub capability_refs: Vec<String>,
     /// The capability node's semantic id (the surface's home node).
     pub hir_node_id: String,
-    /// The argument map (total over the surface's `argument_order`).
+    /// The argument map (total over the surface's `argument_order`) — the
+    /// `mapping = SurfaceArgMap` payload.
     pub arg_map: SurfaceArgMap,
+    /// The `mapping` kind (`SurfaceArgMap` at C0; `PlanMap` is the C1 shape).
+    pub mapping: crate::surface::BindingMapping,
+    /// The `ProfileRule` ids that shaped the variant (C0 primitives: `[]`).
+    pub rule_ids: Vec<String>,
+    /// The `EquivalenceEvidence` record ref, when produced.
+    pub evidence_ref: Option<String>,
+    /// The `SafetyEvidence` record ref, when produced.
+    pub safety_ref: Option<String>,
+    /// `effects_bound` — the declared effect-domain spellings the surface
+    /// binds (`⊆ effects(capability_refs)`; S1).
+    pub effects_bound: Vec<String>,
+    /// The surface family id (C1; `None` for C0 primitives).
+    pub family_id: Option<String>,
+    /// The variant id within the family (C1).
+    pub variant_id: Option<String>,
     /// The schema dialect the surface's schemas are expressed in (default
     /// `json-schema-2020-12`; a narrowing must be declared — `DialectNarrowingUndeclared`
     /// otherwise).
     pub dialect: String,
+    /// The authored run-time admitted-mode set (`ToolSurface.exposure_mode.
+    /// admitted_modes`; the definition side of I-NARROW).
+    pub admitted_modes: std::collections::BTreeSet<hh_hir::tools::ExposureMode>,
+    /// `pinned` — definition/kernel-set, immutable to policy (I-NARROW);
+    /// pinned surfaces stay `direct` and cannot be evicted.
+    pub pinned: bool,
+    /// `hidden` — never delivered, indexed or callable (AC-R-2.5.3-12).
+    pub hidden: bool,
 }
 
 /// Derive the `SurfaceBinding` for a `ToolCapability` node carrying a `Tool` surface:
@@ -180,16 +221,45 @@ pub fn bind_surface(
         .and_then(Json::as_str)
         .unwrap_or(DEFAULT_SCHEMA_DIALECT)
         .to_string();
-    SurfaceBinding {
+    let authored = hh_hir::tools::authored_exposure(Some(&surface.exposure_mode)).unwrap_or(
+        hh_hir::tools::AuthoredExposure {
+            hidden: false,
+            pinned: false,
+            admitted: [hh_hir::tools::ExposureMode::Direct].into_iter().collect(),
+        },
+    );
+    let mut binding = SurfaceBinding {
         surface_name: surface.name.clone(),
+        surface_id: String::new(),
+        exposure_mode: crate::surface::CompileExposureMode::Primitive,
         capability_ref: PinnedRef {
             semantic_id: node.semantic_id(),
             version_id: node.version_id(),
         },
+        capability_refs: vec![node.semantic_id()],
         hir_node_id: node.semantic_id(),
         arg_map,
+        mapping: crate::surface::BindingMapping::SurfaceArgMap,
+        rule_ids: Vec::new(),
+        evidence_ref: None,
+        safety_ref: None,
+        effects_bound: Vec::new(),
+        family_id: None,
+        variant_id: None,
         dialect,
+        admitted_modes: authored.admitted,
+        pinned: authored.pinned,
+        hidden: authored.hidden,
+    };
+    // `effects_bound` is the declared effect-domain set of the capability (S1
+    // inclusion is `effects_bound ⊆ effects(capability_refs)` — equality at C0).
+    if let hh_hir::records::KindRecord::ToolCapability(t) = &node.semantic {
+        if let hh_hir::kinds::ToolEffects::Declared(set) = &t.effects {
+            binding.effects_bound = set.iter().map(|e| e.domain.name().to_string()).collect();
+        }
     }
+    binding.surface_id = crate::surface::surface_id(&binding);
+    binding
 }
 
 /// `EquivalenceEvidence` — `{E1..E7 : pass | fail | n/a(reason)}` (§3.2.5). One record

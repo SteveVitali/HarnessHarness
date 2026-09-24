@@ -33,6 +33,10 @@ pub const VERSION_REVOKED: &str = "lifecycle.registry.version_revoked";
 pub const SNAPSHOTTED: &str = "lifecycle.registry.snapshotted";
 /// `lifecycle.registry.conformance_recorded`.
 pub const CONFORMANCE_RECORDED: &str = "lifecycle.registry.conformance_recorded";
+/// `lifecycle.capability.registered{version_id, semantic_id, source_kind,
+/// registrar}` — the kind-specific class for capability registration
+/// (ADR-0088 D8; CF-327 — kind-specific classes under ADR-0151 D9).
+pub const CAPABILITY_REGISTERED: &str = "lifecycle.capability.registered";
 
 /// A pending registry audit row — the class plus its content-free payload.
 #[derive(Debug, Clone, PartialEq)]
@@ -60,6 +64,26 @@ impl RegistryEvent {
                 ("semantic_id", semantic_id.map_or(Json::Null, Json::str)),
                 ("admission", Json::str(admission)),
                 ("registrar_origin", Json::str(registrar_origin)),
+            ]),
+        }
+    }
+
+    /// A `lifecycle.capability.registered` row — the kind-specific class a
+    /// capability `register` emits instead of `lifecycle.registry.registered`
+    /// (ADR-0088 D8).
+    pub fn capability_registered(
+        version_id: &str,
+        semantic_id: Option<&str>,
+        source_kind: &str,
+        registrar_origin: &str,
+    ) -> RegistryEvent {
+        RegistryEvent {
+            class: CAPABILITY_REGISTERED,
+            payload: Json::obj([
+                ("version_id", Json::str(version_id)),
+                ("semantic_id", semantic_id.map_or(Json::Null, Json::str)),
+                ("source_kind", Json::str(source_kind)),
+                ("registrar", Json::str(registrar_origin)),
             ]),
         }
     }

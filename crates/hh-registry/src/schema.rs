@@ -32,10 +32,10 @@ use crate::kinds::{
     PublishRule, RecordKind, RequireConformance, SubjectKind, TestDriver, TestKind,
 };
 use crate::records::{
-    AppliesTo, ClassRecord, ConformanceReport, ConformanceSuite, ContractOperation, ForeignImport,
-    Implementation, NamespaceRecord, ParamDecl, RegistryDiagnostic, RegistryEnvelope,
-    RegistryPolicy, RegistryRecord, RegistrySnapshot, ReportHost, ReportResult, SuiteTest,
-    VariantRecord, REGISTRY_DIALECT,
+    AppliesTo, CapabilityRecord, ClassRecord, ConformanceReport, ConformanceSuite,
+    ContractOperation, ForeignImport, Implementation, NamespaceRecord, ParamDecl,
+    RegistryDiagnostic, RegistryEnvelope, RegistryPolicy, RegistryRecord, RegistrySnapshot,
+    ReportHost, ReportResult, SuiteTest, VariantRecord, REGISTRY_DIALECT,
 };
 
 fn obj(pairs: Vec<(&str, Json)>) -> Json {
@@ -1166,6 +1166,9 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         RegistryRecord::Namespace(n) => namespace_body_json(n),
         RegistryRecord::Snapshot(s) => snapshot_body_json(s),
         RegistryRecord::ForeignImport(f) => foreign_import_body_json(f),
+        // The capability body IS the canonical HIR node (V-E1-9 — the `semantic`
+        // flag is irrelevant: the node's own codec already splits identity).
+        RegistryRecord::Capability(c) => hh_hir::wire::node_to_json(&c.node),
     }
 }
 
@@ -1181,6 +1184,7 @@ pub fn semantic_projection_json(r: &RegistryRecord) -> Option<Json> {
             }
             Some(j)
         }
+        RegistryRecord::Capability(c) => Some(hh_hir::wire::node_semantic_projection(&c.node)),
         _ => None,
     }
 }
@@ -1199,6 +1203,23 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
         RecordKind::ForeignImport => Ok(RegistryRecord::ForeignImport(foreign_import_from_json(
             j, path,
         )?)),
+        RecordKind::Capability => {
+            let node =
+                hh_hir::wire::node_from_json(j).map_err(|e| RegistryError::SchemaViolation {
+                    path: path.to_string(),
+                    detail: format!("capability node: {e}"),
+                })?;
+            if node.kind != hh_hir::kinds::EntityKind::ToolCapability {
+                return Err(RegistryError::SchemaViolation {
+                    path: format!("{path}.kind"),
+                    detail: format!(
+                        "capability body must be a tool_capability node, not {}",
+                        node.kind.name()
+                    ),
+                });
+            }
+            Ok(RegistryRecord::Capability(CapabilityRecord { node }))
+        }
         other if !other.has_stage1_schema() => Err(RegistryError::SchemaViolation {
             path: "kind".to_string(),
             detail: format!(
