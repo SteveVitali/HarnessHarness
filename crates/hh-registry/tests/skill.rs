@@ -199,3 +199,127 @@ fn ac_r_2_4_5_1_text_authority_caps_at_external() {
 }
 
 use hh_hir::validate;
+
+// ── AC-R-2.4.5-7: export round trip ──────────────────────────────────────────
+// `lift(export(P, skill_tree)) ∪ loss_report = P` — the loss report lists at
+// least `preconditions`, `expected_evidence`, `tests`, `handlers`, `outputs`
+// as `no_slot` (§5c.5 row 7; ADR-0086).
+
+use hh_registry::skill::{export_skill, ExportError};
+
+#[test]
+fn ac_r_2_4_5_7_export_lift_round_trip() {
+    // Lift a spec-conformant tree, export the procedure back, lift again —
+    // the re-lifted body/scripts/name equal the first lift's, and the loss
+    // report names every member the skill format cannot carry.
+    let first = lift_skill(&skill_ext("local/demo"), &demo_tree(), 7).unwrap();
+    let p = &first.procedure;
+
+    // The blob resolver — the caller's content store, keyed by bytes_hash.
+    let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    for f in demo_tree().scripts.iter() {
+        let addr = hh_identity::idp::address(&f.bytes, f.media_type.clone());
+        blobs.insert(addr.id(), f.bytes.clone());
+    }
+    let resolve = |h: &str| blobs.get(h).cloned();
+
+    let export = export_skill(p, &resolve).expect("a procedure exports");
+    // The mandated no_slot rows.
+    for member in [
+        "preconditions",
+        "expected_evidence",
+        "tests",
+        "failure_handlers",
+        "outputs",
+    ] {
+        assert!(
+            export
+                .loss
+                .lost
+                .iter()
+                .any(|(f, r)| f == member && r == "no_slot"),
+            "loss report must list {member} as no_slot"
+        );
+    }
+    // The carried members map.
+    assert_eq!(export.tree.name, p.semantic_id());
+    assert_eq!(export.tree.body, demo_tree().body);
+    assert_eq!(export.tree.scripts.len(), 1);
+
+    // Re-lift — the recovered members equal the originals.
+    let second = lift_skill(&skill_ext("local/demo"), &export.tree, 9).unwrap();
+    let KindRecord::Procedure(rec) = &second.procedure.semantic else {
+        panic!("lift yields a Procedure");
+    };
+    let bodies: Vec<&str> = rec
+        .steps
+        .iter()
+        .filter_map(|s| match s {
+            ProcedureStep::Instruction(t) => t.content.as_deref(),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(bodies, vec![demo_tree().body.as_str()]);
+    assert_eq!(
+        rec.steps
+            .iter()
+            .filter(|s| matches!(s, ProcedureStep::Opaque(_)))
+            .count(),
+        1,
+        "the script round-trips through scripts/*"
+    );
+}
+
+#[test]
+fn ac_r_2_4_5_7_export_declares_losses_never_drops() {
+    // A procedure carrying members with no skill slot: Invoke/Branch steps,
+    // preconditions — all surface in the loss report.
+    let lift = lift_skill(&skill_ext("local/demo"), &demo_tree(), 7).unwrap();
+    let mut p = lift.procedure.clone();
+    let KindRecord::Procedure(rec) = &mut p.semantic else {
+        unreachable!()
+    };
+    rec.steps.push(ProcedureStep::Invoke {
+        tool: hh_hir::refs::Ref::selected("test:tool", "latest"),
+        args: Json::Null,
+    });
+    rec.preconditions = Json::Arr(vec![Json::obj([("kind", Json::str("env_requires"))])]);
+
+    let export = export_skill(&p, &|_| None).unwrap();
+    assert!(export
+        .loss
+        .lost
+        .iter()
+        .any(|(f, r)| f.starts_with("steps[") && f.contains("invoke") && r == "no_slot"));
+    // The Opaque payload's bytes were unresolvable — a `lost` row, never a
+    // silent omission.
+    assert!(export.loss.lost.iter().any(|(f, _)| f.contains("opaque")));
+}
+
+#[test]
+fn ac_r_2_4_5_7_export_refuses_non_procedure() {
+    let not_proc = hh_hir::document::Node::new(
+        EntityKind::Goal,
+        KindRecord::Goal(hh_hir::records::GoalRecord {
+            statement: hh_hir::leaves::Text::new(
+                "g",
+                "test",
+                hh_provenance::ProvenanceRecord::kernel("test", 0),
+            ),
+            success_criteria: vec![],
+            unverifiable_reason: Some(hh_hir::leaves::Text::new(
+                "unverifiable",
+                "test",
+                hh_provenance::ProvenanceRecord::kernel("test", 0),
+            )),
+            budget: hh_hir::refs::Ref::selected("test:budget", "latest"),
+            origin: hh_hir::records::GoalOrigin::Human,
+            parent: None,
+        }),
+        hh_provenance::ProvenanceRecord::kernel("test", 0),
+    );
+    assert!(matches!(
+        export_skill(&not_proc, &|_| None),
+        Err(ExportError::NotAProcedure { .. })
+    ));
+}

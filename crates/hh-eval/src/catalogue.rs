@@ -281,6 +281,180 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
                 ..base()
             }
         },
+        // ── §5c context/memory (S3.8 — the context_metrics fold's rows) ──
+        // Heavy-tailed units take clustered_clt; rates are ppm/Wilson; every
+        // row requires the events the fold reads (ADR-0045 D4).
+        MetricDeclaration {
+            name: "harness_overhead.tokens".into(),
+            dimension: Dimension::Efficiency,
+            unit: "tokens".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                outcome_class_policy: OutcomeClassPolicy::for_efficiency(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "harness_overhead.model_calls".into(),
+            dimension: Dimension::Efficiency,
+            unit: "calls".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                outcome_class_policy: OutcomeClassPolicy::for_efficiency(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "compaction.tokens_freed".into(),
+            dimension: Dimension::Efficiency,
+            unit: "tokens".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                outcome_class_policy: OutcomeClassPolicy::for_efficiency(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "reacquisition_count".into(),
+            dimension: Dimension::Efficiency,
+            unit: "count".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "repeated_action_count".into(),
+            dimension: Dimension::Efficiency,
+            unit: "count".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "recall_probe_hit_rate".into(),
+            dimension: Dimension::Reliability,
+            unit: "ppm".into(),
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                ..base()
+            }
+        },
+        // The memory compliance chain (AC-R-2.4.3-9's emitted rows).
+        MetricDeclaration {
+            name: "memory.delivered".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "memory.activated".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "memory.followed".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "memory.promoted".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "memory.withheld".into(),
+            dimension: Dimension::Reliability,
+            unit: "count".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "memory.over_invalidation".into(),
+            dimension: Dimension::Reliability,
+            unit: "count".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "memory.validity_rate".into(),
+            dimension: Dimension::Reliability,
+            unit: "ppm".into(),
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "memory.activated_given_delivered".into(),
+            dimension: Dimension::Compliance,
+            unit: "ppm".into(),
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "compaction.applied".into(),
+            dimension: Dimension::Efficiency,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "compaction.model_calls".into(),
+            dimension: Dimension::Efficiency,
+            unit: "calls".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
         // ── security (AgentDojo — §5h.4 process metric) ──────────────────
         MetricDeclaration {
             name: "injection_delivered_rate".into(),

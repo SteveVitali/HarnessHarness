@@ -26,6 +26,7 @@ pub mod benefits;
 pub mod catalogue;
 pub mod compare;
 pub mod compliance;
+pub mod context_metrics;
 pub mod facts;
 pub mod faults;
 pub mod loss;

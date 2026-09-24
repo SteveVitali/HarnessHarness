@@ -518,6 +518,10 @@ mod tests {
             detector: None,
             rule_id: None,
             predicate_ref: None,
+            kind: None,
+            by_reference: None,
+            signal: None,
+            evidence_ref: None,
         });
         let ctx = VetoContext {
             held_out_refs: ["secret-fixture".to_string()].into_iter().collect(),
