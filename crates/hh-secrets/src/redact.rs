@@ -31,6 +31,10 @@ pub enum DetectorKind {
     Pattern,
     /// A registered canary value.
     Canary,
+    /// An encoded form (base64/hex/percent) of a mask-set value — the
+    /// C1/Stage-3 LT-12 detector (§5g.3 §2 `known_value_encoded`; §8's
+    /// "encoded variants defeat known-value masking" row).
+    KnownValueEncoded,
 }
 
 impl DetectorKind {
@@ -41,6 +45,7 @@ impl DetectorKind {
             DetectorKind::KnownValue => "known_value",
             DetectorKind::Pattern => "pattern",
             DetectorKind::Canary => "canary",
+            DetectorKind::KnownValueEncoded => "known_value_encoded",
         }
     }
 
@@ -51,6 +56,7 @@ impl DetectorKind {
             "known_value" => DetectorKind::KnownValue,
             "pattern" => DetectorKind::Pattern,
             "canary" => DetectorKind::Canary,
+            "known_value_encoded" => DetectorKind::KnownValueEncoded,
             _ => return None,
         })
     }
@@ -274,6 +280,41 @@ pub fn detect(text: &str, detectors: &DetectorSet) -> Vec<Hit> {
         }
     }
 
+    // known_value_encoded — the canonical encodings of each mask-set value
+    // (§5g.3 §8 LT-12: "encoded forms of a known value in tool output are
+    // masked"). The same placeholder/tombstone replacement as `known_value` —
+    // a leak is a leak regardless of spelling.
+    for entry in detectors.mask_set.all_entries() {
+        if entry.value.len() < crate::encoded::ENCODED_MIN_LEN {
+            continue;
+        }
+        for form in crate::encoded::encoded_forms(&entry.value) {
+            let mut from = 0;
+            while let Some(rel) = text[from..].find(form.as_str()) {
+                let start = from + rel;
+                hits.push(Hit {
+                    span: (start, start + form.len()),
+                    detector: DetectorKind::KnownValueEncoded,
+                    tombstone: Some(RedactionTombstone {
+                        detector: DetectorKind::KnownValueEncoded,
+                        fingerprint: Some(entry.fingerprint.render()),
+                        label: format!("${{SECRET:{}}}", entry.channel_id),
+                    }),
+                    replacement: Some(match &entry.placeholder {
+                        Some(p) => p.spelling.clone(),
+                        None => RedactionTombstone {
+                            detector: DetectorKind::KnownValueEncoded,
+                            fingerprint: Some(entry.fingerprint.render()),
+                            label: format!("${{SECRET:{}}}", entry.channel_id),
+                        }
+                        .render(),
+                    }),
+                });
+                from = start + form.len();
+            }
+        }
+    }
+
     // canary — planted values (Stage-1 verbatim form; encoded forms are Stage 3).
     for c in &detectors.canaries {
         if c.value.is_empty() {
@@ -355,6 +396,7 @@ fn dedup_hits(mut hits: Vec<Hit>) -> Vec<Hit> {
 fn det_rank(d: DetectorKind) -> u8 {
     match d {
         DetectorKind::KnownValue => 0,
+        DetectorKind::KnownValueEncoded => 0,
         DetectorKind::Canary => 1,
         DetectorKind::Pattern => 2,
         DetectorKind::PlaceholderPassthrough => 3,
@@ -467,12 +509,14 @@ pub fn leak_scan(items: &[(ScanTarget, &str)], detectors: &DetectorSet) -> Vec<L
         for h in detect(text, detectors) {
             match h.detector {
                 DetectorKind::PlaceholderPassthrough => {} // the safe form — not a leak
-                DetectorKind::KnownValue => leaks.push(Leak {
-                    target: target.clone(),
-                    detector: DetectorKind::KnownValue,
-                    fingerprint: h.tombstone.and_then(|t| t.fingerprint),
-                    label: None,
-                }),
+                DetectorKind::KnownValue | DetectorKind::KnownValueEncoded => {
+                    leaks.push(Leak {
+                        target: target.clone(),
+                        detector: h.detector,
+                        fingerprint: h.tombstone.and_then(|t| t.fingerprint),
+                        label: None,
+                    });
+                }
                 DetectorKind::Pattern => leaks.push(Leak {
                     target: target.clone(),
                     detector: DetectorKind::Pattern,

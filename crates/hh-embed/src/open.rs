@@ -1611,6 +1611,7 @@ impl EmbedService {
     /// Arm the session driver over the session's run — the bound
     /// `control_strategy` slot selects the variant (`strategy_for`; the
     /// canonical control loop under `KernelSink` + the writer lease).
+    #[allow(clippy::too_many_arguments)] // the arming record is the §5f.2 arm tuple — the arity is the call's.
     fn arm_driver(
         &mut self,
         run_id: &str,
@@ -1745,8 +1746,7 @@ impl EmbedService {
         // plan surface (S3.10 — `plan_execute` resumes `model_emitted`);
         // the `TaskContract` re-projects from the persisted sealed
         // definition (`manifest.harness_def_ref`), never from a side file.
-        let is_plan_execute =
-            arm.control_variant.trim_end_matches("@1") == "hh/plan-execute";
+        let is_plan_execute = arm.control_variant.trim_end_matches("@1") == "hh/plan-execute";
         let boundary = if is_plan_execute {
             hh_control::plan_exec::PlanExecute::new()
                 .capabilities()

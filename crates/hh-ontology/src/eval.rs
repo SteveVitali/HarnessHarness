@@ -374,6 +374,9 @@ pub enum MetricLevel {
     Arm,
     /// `comparison`.
     Comparison,
+    /// `suite` — a fold over the whole suite's runs (§5g.3 §4
+    /// `secret_detector_miss_rate{level: suite}`; S3.11b — additive variant).
+    Suite,
 }
 
 impl MetricLevel {
@@ -385,6 +388,7 @@ impl MetricLevel {
             MetricLevel::Configuration => "configuration",
             MetricLevel::Arm => "arm",
             MetricLevel::Comparison => "comparison",
+            MetricLevel::Suite => "suite",
         }
     }
 
@@ -396,6 +400,7 @@ impl MetricLevel {
             "configuration" => Some(MetricLevel::Configuration),
             "arm" => Some(MetricLevel::Arm),
             "comparison" => Some(MetricLevel::Comparison),
+            "suite" => Some(MetricLevel::Suite),
             _ => None,
         }
     }

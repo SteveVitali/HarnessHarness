@@ -894,18 +894,19 @@ fn decide(
         } = &d.kind
         {
             let view = crate::views::fold_envelope_view(events);
-            if matches!(proposed_reason, StopReason::Completed) {
-                if !submission_present && submission_ref.is_none() {
-                    // A `stop{completed}` with no recorded submission is
-                    // ungrounded — the envelope converts it (guard_fired
-                    // nudge ≤ max_continue_nudges, else refused — the
-                    // driver applies the nudge budget; here the verdict is
-                    // the typed refusal record).
-                    return GuardVerdict::Respond {
-                        observation: Json::obj([("kind", Json::str("missing_submission"))]),
-                        events: vec![],
-                    };
-                }
+            if matches!(proposed_reason, StopReason::Completed)
+                && !submission_present
+                && submission_ref.is_none()
+            {
+                // A `stop{completed}` with no recorded submission is
+                // ungrounded — the envelope converts it (guard_fired
+                // nudge ≤ max_continue_nudges, else refused — the
+                // driver applies the nudge budget; here the verdict is
+                // the typed refusal record).
+                return GuardVerdict::Respond {
+                    observation: Json::obj([("kind", Json::str("missing_submission"))]),
+                    events: vec![],
+                };
             }
             let _ = view;
         }

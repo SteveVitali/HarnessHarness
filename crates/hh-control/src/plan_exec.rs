@@ -147,7 +147,7 @@ pub fn plan_emitted_payload(
         ),
         (
             "reject_reason",
-            reject_reason.map_or(Json::Null, |r| Json::str(r)),
+            reject_reason.map_or(Json::Null, Json::str),
         ),
     ])
 }
