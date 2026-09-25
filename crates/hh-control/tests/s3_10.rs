@@ -912,15 +912,13 @@ fn drive(
     };
     let mut g = gate;
     let mut asm = NullAssembler;
-    let r = loop {
-        match driver.run(&mut model, &mut g, &mut asm, &mut sink) {
-            Ok(r) => break r,
-            Err(hh_control::driver::DriverError::Port { port, .. }) if port == "inbox" => {
-                // Parked — nothing more to feed; the run suspended.
-                panic!("run parked mid-battery — the script needs a cue");
-            }
-            Err(e) => panic!("driver error: {e:?}"),
+    let r = match driver.run(&mut model, &mut g, &mut asm, &mut sink) {
+        Ok(r) => r,
+        Err(hh_control::driver::DriverError::Port { port: "inbox", .. }) => {
+            // Parked — nothing more to feed; the run suspended.
+            panic!("run parked mid-battery — the script needs a cue");
         }
+        Err(e) => panic!("driver error: {e:?}"),
     };
     (r, sink.events)
 }

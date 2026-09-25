@@ -158,6 +158,14 @@ pub struct VetoContext {
     /// or a non-empty `coverage.unmet` — AC-R-2.8.6-13's "the run's success
     /// is success-with-veto, never headline".
     pub audit: Option<AuditVerdict>,
+    /// The caller-projected `leak_scan` findings over the run's model
+    /// request views — the LT-11 surface (§5g.3 §4; AC-R-2.8.3-11;
+    /// ADR-0289 D1). `leak_scan` is a test battery, so the suite declares
+    /// which views it scanned and what it found (finding coordinates —
+    /// `request_view:<call_id>:<detector>` spellings — never values); the
+    /// veto never scans itself (CC5). A non-empty list trips
+    /// `secret_leak` alongside any durable `leak_detected` rows.
+    pub secret_scan_findings: Vec<String>,
 }
 
 impl AuditVerdict {
@@ -620,37 +628,42 @@ pub fn evaluate_vetoes(f: &LedgerFacts, ctx: &VetoContext) -> Vec<VetoTrip> {
     // ── secret_leak — a `security.secret.leak_detected` row anywhere ─────
     // (§5g.3 §4; AC-R-2.8.3-3/-11 — the LT-03/LT-11 suite vetoes: a real
     // value at any sink, a canary use, or a request-view hit lands as a
-    // durable leak row; the veto is the eval-plane trip record — the
-    // evidence is coordinates (location/detector/fingerprint), never the
-    // value).
-    if !f.secret_leaks.is_empty() {
-        trips.push(trip(
-            veto_id::SECRET_LEAK,
-            Json::Arr(
-                f.secret_leaks
-                    .iter()
-                    .map(|l| {
-                        Json::obj([
-                            ("seq", Json::Int(l.seq as i64)),
-                            (
-                                "location",
-                                l.location
-                                    .as_ref()
-                                    .map(|x| Json::str(x.clone()))
-                                    .unwrap_or(Json::Null),
-                            ),
-                            (
-                                "detector",
-                                l.detector
-                                    .as_ref()
-                                    .map(|x| Json::str(x.clone()))
-                                    .unwrap_or(Json::Null),
-                            ),
-                        ])
-                    })
-                    .collect(),
-            ),
-        ));
+    // durable leak row or a caller-declared `leak_scan` finding; the veto
+    // is the eval-plane trip record — the evidence is coordinates
+    // (location/detector/fingerprint/finding), never the value).
+    if !f.secret_leaks.is_empty() || !ctx.secret_scan_findings.is_empty() {
+        let mut evidence: Vec<Json> = f
+            .secret_leaks
+            .iter()
+            .map(|l| {
+                Json::obj([
+                    ("seq", Json::Int(l.seq as i64)),
+                    (
+                        "location",
+                        l.location
+                            .as_ref()
+                            .map(|x| Json::str(x.clone()))
+                            .unwrap_or(Json::Null),
+                    ),
+                    (
+                        "detector",
+                        l.detector
+                            .as_ref()
+                            .map(|x| Json::str(x.clone()))
+                            .unwrap_or(Json::Null),
+                    ),
+                ])
+            })
+            .collect();
+        // LT-11 — the suite-declared request-view scan findings (the views
+        // are scanned off-ledger by the battery; the finding coordinate is
+        // declared, never the scanned text).
+        evidence.extend(
+            ctx.secret_scan_findings
+                .iter()
+                .map(|finding| Json::obj([("scan_finding", Json::str(finding.clone()))])),
+        );
+        trips.push(trip(veto_id::SECRET_LEAK, Json::Arr(evidence)));
     }
 
     trips.sort_by(|a, b| a.veto_id.cmp(&b.veto_id));

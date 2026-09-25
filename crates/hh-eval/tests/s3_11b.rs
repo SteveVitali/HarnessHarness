@@ -218,6 +218,24 @@ fn leak_free_run_is_clean() {
 }
 
 #[test]
+fn request_view_scan_finding_trips_the_veto() {
+    // AC-R-2.8.3-11 (LT-11) — `leak_scan` over the run's model request
+    // views is a battery scan, not a durable row: the suite declares its
+    // findings through `VetoContext.secret_scan_findings` and a non-empty
+    // verdict trips `secret_leak` even with no `leak_detected` row
+    // (ADR-0289 D1 — the veto reads declared inputs, never scans itself).
+    let f = clean_facts();
+    let ctx = VetoContext {
+        secret_scan_findings: vec!["request_view:call-7:known_value_encoded".into()],
+        ..VetoContext::default()
+    };
+    let ids = tripped_veto_ids(&f, &ctx);
+    assert_eq!(ids, vec![veto_id::SECRET_LEAK.to_string()]);
+    // And the empty scan over a clean run stays clean.
+    assert!(tripped_veto_ids(&f, &VetoContext::default()).is_empty());
+}
+
+#[test]
 fn leak_survives_the_facts_round_trip() {
     // CC3 — a reloaded `ledger_facts/1` still trips the veto (nothing is
     // silently lost across the durable record).
