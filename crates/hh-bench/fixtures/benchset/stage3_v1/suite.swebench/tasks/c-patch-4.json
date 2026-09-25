@@ -1,0 +1,36 @@
+{
+  "expected": "{\"answer\":\"patch-4\"}",
+  "instruction": "Apply the recorded patch: write {\"answer\":\"patch-4\"} to submission.json.",
+  "model_io": [
+    {
+      "args": {
+        "path": "submission.json",
+        "text": "{\"answer\":\"patch-4\"}"
+      },
+      "surface": "fs.write"
+    },
+    {
+      "args": {
+        "text": "{\"answer\":\"patch-4\"}"
+      },
+      "surface": "hh.submit"
+    }
+  ],
+  "name": "c-patch-4",
+  "original_runs": [
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    }
+  ],
+  "schema": "benchset_task/1",
+  "split": "held_out"
+}
