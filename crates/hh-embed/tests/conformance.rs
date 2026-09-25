@@ -3137,6 +3137,300 @@ fn s31_check_completeness_and_reproduce_over_boundary() {
     );
 }
 
+// ── S3.12 — AC-R-2.12.1-9: bit-exact view derivation from the bundle ────────
+//
+// "Any view or UI surface derivable from the run ledger MUST be derivable
+// bit-for-bit from the bundle's own ledger export." The fold is `idp/1`
+// digests over `{run_id, watermark, view_policy_version, payload}` — decode
+// the bundle's ledger pages, re-run the same view functions the live store
+// projects, and the `view_hash`es must be identical; the decoded manifest's
+// recomputed `version_id` equals the recorded one (CC3/CC7).
+
+#[test]
+fn s312_bit_exact_view_derivation_from_bundle_export() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let s = open_new(&mut svc);
+    let session_id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    submit(&mut svc, &session_id, text_input("bit-exact"));
+    close(&mut svc, &session_id);
+
+    // Live-store projections — what the kernel serves.
+    let live_ctx = svc
+        .store()
+        .project(&run_id, hh_ledger::views::ViewKind::ContextView, None)
+        .unwrap();
+    let live_eff = svc
+        .store()
+        .project(&run_id, hh_ledger::views::ViewKind::EffectLedger, None)
+        .unwrap();
+
+    let dir = test_dir("bitexact");
+    let delivered = deliver_bundle(&mut svc, &run_id, &dir);
+    let recorded_version = delivered
+        .get("manifest")
+        .and_then(|m| m.get("version_id"))
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    // Decode the bundle alone — no live-store access. The ledger export's
+    // pages are bundle members; `decode_page` is the one decode rule (CC7).
+    let decoded = hh_bundle::codec::decode_dir(&dir).unwrap();
+    let manifest = &decoded.manifest;
+    let mut envelopes = Vec::new();
+    let export = manifest
+        .traces
+        .get(&run_id)
+        .expect("the subject run's ledger export is a bundle member");
+    for page_addr in &export.pages {
+        envelopes.extend(
+            hh_bundle::export::decode_page(decoded.members.get(page_addr).unwrap()).unwrap(),
+        );
+    }
+
+    // The same view functions fold the decoded envelopes to identical
+    // `view_hash`es (AC-R-2.12.1-9 — bit-for-bit).
+    let re_ctx = hh_ledger::views::context_view(&run_id, &envelopes, None);
+    let re_eff = hh_ledger::views::effect_ledger(&run_id, &envelopes, None);
+    assert_eq!(live_ctx.view_hash, re_ctx.view_hash, "ContextView diverged");
+    assert_eq!(
+        live_eff.view_hash, re_eff.view_hash,
+        "EffectLedger diverged"
+    );
+    assert_eq!(
+        live_ctx.payload.to_canonical_string(),
+        re_ctx.payload.to_canonical_string(),
+        "ContextView payload diverged"
+    );
+
+    // Bundle identity recomputes equal to the recorded `version_id`.
+    assert_eq!(manifest.compute_id(), recorded_version);
+
+    // Deterministic reproduction over the decoded bundle (S3.12: the R0/R1
+    // paths must reproduce without the live store). R0 always reproduces;
+    // R1 reproduces when the bundle's own `max_supported_level` reaches it,
+    // else the report is a *reported* `ReproClaimUnsupported` refusal —
+    // never a silent promotion.
+    let max_level = delivered
+        .get("manifest")
+        .and_then(|m| m.get("reproducibility"))
+        .and_then(|r| r.get("max_supported_level"))
+        .and_then(Json::as_str)
+        .unwrap_or("R0")
+        .to_string();
+    for level in ["R0", "R1"] {
+        let r = ok(&call(
+            &mut svc,
+            "kernel.reproduce",
+            Json::obj([
+                ("path", Json::str(dir.to_string_lossy().to_string())),
+                ("level", Json::str(level)),
+            ]),
+        ));
+        let outcome = r.get("outcome").and_then(Json::as_str);
+        let supported = max_level.as_str() >= level;
+        if supported {
+            assert_eq!(outcome, Some("pass"), "{level}: {r:?}");
+        } else {
+            assert_eq!(outcome, Some("refused"), "{level}: {r:?}");
+            assert!(
+                r.get("refusal")
+                    .and_then(Json::as_str)
+                    .unwrap_or("")
+                    .contains("ReproClaimUnsupported"),
+                "{level}: {r:?}"
+            );
+        }
+    }
+}
+
+// ── S3.12 — AC-R-2.12.1-13: `reproduce(R3, seeds[])` ─────────────────────
+//
+// `kernel.bundle` today emits no `configuration.budget`/model snapshots
+// (the conformance run declares neither), so the bundle it delivers caps
+// below R3. To exercise the R3 legs the test lifts the *delivered*
+// manifest the way a bundler that captured them would — declaring
+// `budget`, a fingerprinted `model` member + `snapshots[]`, and the
+// compiled plan's `validators[]` — then re-seals `version_id` so the
+// identity leg stays clean. The seeds gate and the report members are
+// the new code under test.
+
+#[test]
+fn s312_reproduce_r3_seeds_unbudgeted_arm_distributions_validators() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let s = open_new(&mut svc);
+    let session_id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    submit(&mut svc, &session_id, text_input("seeded repro"));
+    close(&mut svc, &session_id);
+    let dir = test_dir("r3-seeds");
+    deliver_bundle(&mut svc, &run_id, &dir);
+
+    // Lift to R3 capability: declared budget + one fingerprinted,
+    // pinned snapshot + its `model` member + a bound validator set.
+    let decoded = hh_bundle::codec::decode_dir(&dir).unwrap();
+    let mut m = decoded.manifest.clone();
+    let mut members = decoded.members.clone();
+    let budget_doc = Json::obj([("limits", Json::obj([("calls", Json::Int(10))]))]);
+    if let Json::Obj(c) = &mut m.configuration {
+        c.insert("budget".into(), budget_doc.clone());
+    }
+    let snap = Json::obj([
+        ("model_id", Json::str("model:x")),
+        ("snapshot_id", Json::str("sha256:snap")),
+        ("weights", Json::str("sha256:weights")),
+        ("pinned", Json::Bool(true)),
+        ("observed_fingerprint", Json::str("sha256:fp")),
+    ]);
+    let snap_bytes = snap.to_canonical_string().into_bytes();
+    let snap_addr = hh_identity::address(&snap_bytes, "application/json").id();
+    members.insert(snap_addr.clone(), snap_bytes.clone());
+    m.members.push(hh_bundle::manifest::MemberRef::present(
+        "model",
+        snap_addr,
+        "application/json",
+        snap_bytes.len() as u64,
+    ));
+    m.model = Json::obj([("snapshots", Json::Arr(vec![snap]))]);
+    if let Json::Obj(d) = &mut m.resolved_dependencies {
+        d.insert(
+            "validators".into(),
+            Json::Arr(vec![Json::str("validator:pinned-v1")]),
+        );
+    }
+    // Re-seal — the identity leg's recompute must meet the recorded id.
+    m.version_id = m.compute_id();
+    let r3dir = test_dir("r3-seeds-r3");
+    hh_bundle::codec::encode_dir(&r3dir, &m, &members).unwrap();
+    let r3path = r3dir.to_string_lossy().to_string();
+
+    // R3 with two budgeted seed legs — per-leg distributions, the
+    // validator set named, `budget_match` true (no fingerprint drift:
+    // declared `observed_fingerprint` meets no contradicting member).
+    let r = ok(&call(
+        &mut svc,
+        "kernel.reproduce",
+        Json::obj([
+            ("path", Json::str(r3path.clone())),
+            ("level", Json::str("R3")),
+            ("eval_budget", budget_doc.clone()),
+            (
+                "seeds",
+                Json::Arr(vec![
+                    Json::obj([("seed", Json::Int(1)), ("eval_budget", budget_doc.clone())]),
+                    Json::obj([("seed", Json::Int(2)), ("eval_budget", budget_doc.clone())]),
+                ]),
+            ),
+        ]),
+    ));
+    assert_ne!(
+        r.get("outcome").and_then(Json::as_str),
+        Some("refused"),
+        "R3 must run on the lifted bundle: {r:?}"
+    );
+    let ev = r.get("evidence").expect("evidence member");
+    assert_eq!(
+        ev.get("validators"),
+        Some(&Json::Arr(vec![Json::str("validator:pinned-v1")])),
+        "an R2+ verdict names its validator set: {r:?}"
+    );
+    let Json::Arr(dist) = ev.get("distributions").cloned().unwrap_or(Json::Null) else {
+        panic!("distributions must be an array: {r:?}")
+    };
+    assert_eq!(dist.len(), 2, "one row per declared seed leg: {r:?}");
+    for (row, seed) in dist.iter().zip([1i64, 2]) {
+        assert_eq!(row.get("seed"), Some(&Json::Int(seed)), "{row:?}");
+        assert_eq!(
+            row.get("outcome").and_then(Json::as_str),
+            Some("pass"),
+            "the per-leg verdict, never a mean: {row:?}"
+        );
+        assert_eq!(row.get("drift"), Some(&Json::Int(0)), "{row:?}");
+    }
+    assert_eq!(ev.get("budget_match"), Some(&Json::Bool(true)), "{r:?}");
+
+    // A seed leg the manifest cannot budget-match refuses the whole
+    // reproduce — `UnbudgetedArm{seed}`; the leg never enters a
+    // distribution (matched-budget-or-refuse, CC9).
+    let e = ok(&call(
+        &mut svc,
+        "kernel.reproduce",
+        Json::obj([
+            ("path", Json::str(r3path.clone())),
+            ("level", Json::str("R3")),
+            (
+                "seeds",
+                Json::Arr(vec![
+                    Json::obj([("seed", Json::Int(3)), ("eval_budget", budget_doc.clone())]),
+                    // No eval_budget — unbudgeted.
+                    Json::obj([("seed", Json::Int(4))]),
+                ]),
+            ),
+        ]),
+    ));
+    assert_eq!(
+        e.get("outcome").and_then(Json::as_str),
+        Some("refused"),
+        "{e:?}"
+    );
+    assert!(
+        e.get("refusal")
+            .and_then(Json::as_str)
+            .unwrap_or("")
+            .contains("UnbudgetedArm{seed 4}"),
+        "{e:?}"
+    );
+    assert_eq!(
+        e.get("evidence").and_then(|ev| ev.get("distributions")),
+        Some(&Json::Arr(vec![])),
+        "the refused leg never lands a distribution row: {e:?}"
+    );
+
+    // A mismatched seed budget refuses the same way (not just a missing
+    // one — equality, not presence).
+    let e2 = ok(&call(
+        &mut svc,
+        "kernel.reproduce",
+        Json::obj([
+            ("path", Json::str(r3path)),
+            ("level", Json::str("R3")),
+            (
+                "seeds",
+                Json::Arr(vec![Json::obj([
+                    ("seed", Json::Int(5)),
+                    (
+                        "eval_budget",
+                        Json::obj([("limits", Json::obj([("calls", Json::Int(11))]))]),
+                    ),
+                ])]),
+            ),
+        ]),
+    ));
+    assert_eq!(
+        e2.get("outcome").and_then(Json::as_str),
+        Some("refused"),
+        "{e2:?}"
+    );
+    assert!(
+        e2.get("refusal")
+            .and_then(Json::as_str)
+            .unwrap_or("")
+            .contains("UnbudgetedArm{seed 5}"),
+        "{e2:?}"
+    );
+}
+
 #[test]
 fn s31_import_lifts_refs_only_with_unverified_authority() {
     let mut svc = service();

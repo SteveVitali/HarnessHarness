@@ -29,6 +29,11 @@ pub struct CompileOutcome {
     pub lcd_report: Json,
     /// The opacity report.
     pub opacity_report: Json,
+    /// The validator set the compiled `RuntimePlan` binds — the pinned
+    /// `{semantic_id, version_id}` refs (`runtime_plan.validators[].validator`).
+    /// `resolved_dependencies.validators[]` names this set so an R2
+    /// `reproduce` verdict reports it (AC-R-2.12.1-13; S3.12).
+    pub validators: Vec<Json>,
 }
 
 /// Everything `assemble` needs from its caller's planes.
@@ -388,6 +393,27 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
         (
             "extensions",
             Json::Arr(inputs.extensions.iter().map(|e| e.entry.clone()).collect()),
+        ),
+        // AC-R-2.12.1-8's completeness clause (S3.12): the lock-manifest
+        // index — every reference the subject run's `RunManifest` carries
+        // resolves inside `resolved_dependencies`. `validate`'s S1
+        // recomputes this index from the exported `lifecycle.run.created`
+        // and compares; a manifest ref the index lacks (or an index entry
+        // the manifest never made) fails `manifest_reference_unresolved`.
+        ("run_refs", crate::runrefs::run_refs_index(&[(run_id, rm)])),
+        // The validator set the run's compiled `RuntimePlan` binds
+        // (AC-R-2.12.1-13: an R2 verdict names its validator set) —
+        // the pinned `{semantic_id, version_id}` refs, `[]` when the
+        // definition binds none (the set is *named*, never implied).
+        (
+            "validators",
+            Json::Arr(
+                inputs
+                    .compiled
+                    .as_ref()
+                    .map(|c| c.validators.clone())
+                    .unwrap_or_default(),
+            ),
         ),
     ]);
     let _deps_addr = doc_member(&mut members, "resolved_dependencies", &deps_doc, &mut index);

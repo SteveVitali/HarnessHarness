@@ -517,6 +517,7 @@ dependencies = [
  "hh-hir",
  "hh-identity",
  "hh-ledger",
+ "hh-ontology",
  "hh-plugin",
  "hh-plugin-fixture",
  "hh-provenance",

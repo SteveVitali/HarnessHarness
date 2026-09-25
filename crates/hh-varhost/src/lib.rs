@@ -18,6 +18,7 @@
 
 pub mod channel;
 pub mod host;
+pub mod kit;
 pub mod lower;
 pub mod package;
 pub mod ports;
@@ -26,6 +27,7 @@ pub mod session;
 
 pub use channel::{AbiChannel, ChannelError, FrameIo, MemIo, SocketIo, MAX_FRAME_BYTES};
 pub use host::{digest_docs, InvokeOutcome, SessionEvents, VariantHost, VecEvents};
+pub use kit::{run_kit, KitRequest, CLASS_TESTS, LAYERS, PROBES};
 pub use lower::{
     lower_requests, stamp_json, view_kinds_for, LowerContext, LowerError, LoweredRequests,
 };

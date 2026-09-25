@@ -128,6 +128,7 @@ pub fn assemble(
     contrasts: Vec<Json>,
     equivalence: Option<Json>,
     transfer_profile: Option<Json>,
+    frontier: Option<Json>,
     excluded_not_run: Vec<String>,
 ) -> AnalysisOutcome {
     let mut run_ids: Vec<String> = input.rows.iter().map(|r| r.key.run_id.clone()).collect();
@@ -164,6 +165,9 @@ pub fn assemble(
     }
     if let Some(t) = transfer_profile {
         body.insert("transfer".into(), t);
+    }
+    if let Some(f) = frontier {
+        body.insert("frontier".into(), f);
     }
     body.insert(
         "excluded".into(),
