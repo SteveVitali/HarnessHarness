@@ -1,0 +1,36 @@
+{
+  "expected": "{\"answer\":\"ping\"}",
+  "instruction": "Echo \"ping\" ({\"answer\":\"ping\"}) to submission.json.",
+  "model_io": [
+    {
+      "args": {
+        "path": "submission.json",
+        "text": "{\"answer\":\"ping\"}"
+      },
+      "surface": "fs.write"
+    },
+    {
+      "args": {
+        "text": "{\"answer\":\"ping\"}"
+      },
+      "surface": "hh.submit"
+    }
+  ],
+  "name": "a-echo",
+  "original_runs": [
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    }
+  ],
+  "schema": "benchset_task/1",
+  "split": "held_out"
+}

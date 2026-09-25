@@ -1,0 +1,24 @@
+{
+  "adapter_id": "adapter_d",
+  "contamination_stratum": "public_dated",
+  "episode_model": null,
+  "family": "structured_tool",
+  "flawed_task_ids": [],
+  "parity_subset": [
+    "d-tool",
+    "d-args",
+    "d-retry"
+  ],
+  "requires": {
+    "handle.file": "required"
+  },
+  "retired_for_headline": false,
+  "schema": "benchset_suite/1",
+  "suite_id": "suite.taubench",
+  "tasks": [
+    "d-tool",
+    "d-args",
+    "d-retry"
+  ],
+  "verifier_isolation": "separate"
+}

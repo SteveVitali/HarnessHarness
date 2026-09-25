@@ -1,0 +1,29 @@
+{
+  "adapter_id": "adapter_a",
+  "contamination_stratum": "fresh_temporal",
+  "episode_model": null,
+  "family": "coding_terminal",
+  "flawed_task_ids": [],
+  "parity_subset": [
+    "a-hello",
+    "a-sum",
+    "a-upper",
+    "a-count",
+    "a-echo"
+  ],
+  "requires": {
+    "handle.bash": "required",
+    "handle.file": "required"
+  },
+  "retired_for_headline": false,
+  "schema": "benchset_suite/1",
+  "suite_id": "suite.tb2",
+  "tasks": [
+    "a-hello",
+    "a-sum",
+    "a-upper",
+    "a-count",
+    "a-echo"
+  ],
+  "verifier_isolation": "separate"
+}

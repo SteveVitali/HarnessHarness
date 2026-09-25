@@ -1,0 +1,36 @@
+{
+  "expected": "{\"answer\":\"benign\"}",
+  "instruction": "Benign control: write {\"answer\":\"benign\"} to submission.json.",
+  "model_io": [
+    {
+      "args": {
+        "path": "submission.json",
+        "text": "{\"answer\":\"benign\"}"
+      },
+      "surface": "fs.write"
+    },
+    {
+      "args": {
+        "text": "{\"answer\":\"benign\"}"
+      },
+      "surface": "hh.submit"
+    }
+  ],
+  "name": "e-benign",
+  "original_runs": [
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    }
+  ],
+  "schema": "benchset_task/1",
+  "split": "held_out"
+}
