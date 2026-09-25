@@ -23,7 +23,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use hh_bundle::assemble::{assemble, AssembleInputs, CompileOutcome};
+use hh_bundle::assemble::{assemble, AssembleInputs, CompileOutcome, ExtensionInput};
 use hh_bundle::codec::{decode_container, decode_dir, encode_dir, Decoded};
 use hh_bundle::error::BundleError;
 use hh_bundle::export::decode_page;
@@ -199,6 +199,76 @@ impl EmbedService {
         ])
     }
 
+    /// The definition's bound extensions as `resolved_dependencies
+    /// .extensions[]` members — the `trust_snapshot` projection over the
+    /// sealed definition's `assembly.extensions.refs[]` against the run's
+    /// pinned registry snapshot (§5g.5 §3; ADR-0064 D7; S3.11b).
+    /// `[]` only when the definition binds no extensions — a bound-but-
+    /// unresolvable extension refuses, never silently drops (CC3).
+    /// Each entry carries its payload bytes when the blob pool holds them
+    /// (the assembler verifies the `content` digest against the member);
+    /// absent bytes land `unpinned{not_captured}`, never a silent ref.
+    fn extension_entries(&self, rm: &RunManifest) -> Result<Vec<ExtensionInput>, EmbedError> {
+        let Some(def_ref) = rm.harness_def_ref.as_deref() else {
+            return Ok(vec![]);
+        };
+        let def_doc = match self.artifact_bytes(def_ref) {
+            Ok(bytes) => hh_wire::json::parse(std::str::from_utf8(&bytes).map_err(|_| {
+                EmbedError::Refused {
+                    reason: "extension_entries: sealed definition is not utf-8".into(),
+                }
+            })?)
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("extension_entries: sealed definition parse: {e}"),
+            })?,
+            // The definition member is itself optional in the assembly path
+            // (`MemberUnavailable` is the assembler's own refusal) — a read
+            // miss here just means no definition bytes to project from.
+            Err(_) => return Ok(vec![]),
+        };
+        let has_refs = def_doc
+            .get("assembly")
+            .and_then(|a| a.get("extensions"))
+            .and_then(|e| e.get("refs"))
+            .map(|r| matches!(r, Json::Arr(v) if !v.is_empty()))
+            .unwrap_or(false);
+        if !has_refs {
+            return Ok(vec![]);
+        }
+        let Some(snap_id) = rm
+            .experiment
+            .as_ref()
+            .and_then(|b| b.registry_snapshot_id.clone())
+            .or_else(|| rm.registry_snapshot_id.clone())
+        else {
+            return Err(EmbedError::Refused {
+                reason:
+                    "extension_entries: definition binds extensions but the run pins no registry_snapshot_id"
+                        .into(),
+            });
+        };
+        let Some((_, hh_registry::records::RegistryRecord::Snapshot(snap))) =
+            self.registry.get(&snap_id)
+        else {
+            return Err(EmbedError::Refused {
+                reason: format!("extension_entries: registry snapshot {snap_id} is not held"),
+            });
+        };
+        let ts = hh_registry::extension::trust_snapshot(&self.registry, &def_doc, snap).map_err(
+            |e| EmbedError::Refused {
+                reason: format!("extension_entries: trust_snapshot: {}", e.reason()),
+            },
+        )?;
+        Ok(ts
+            .extensions
+            .iter()
+            .map(|e| ExtensionInput {
+                entry: e.to_json(),
+                bytes: self.artifact_bytes(&e.content).ok(),
+            })
+            .collect())
+    }
+
     // ── Group M — measurement.emit_metric ────────────────────────────
 
     /// `measurement.emit_metric{session_id, metrics[], idempotency_key}`
@@ -344,6 +414,12 @@ impl EmbedService {
                 .and_then(|b| b.registry_snapshot_id.clone())
                 .or_else(|| run_manifest.registry_snapshot_id.clone()),
             variants: vec![],
+            // §5g.5 §3 `resolved_dependencies.extensions[]` — the
+            // `trust_snapshot` projection over the sealed definition's
+            // `assembly.extensions.refs[]` against the run's pinned registry
+            // snapshot (S3.11b). A bound-but-unresolvable extension refuses,
+            // never silently drops (CC3).
+            extensions: self.extension_entries(&run_manifest)?,
             budget,
             profile: Json::str("none"),
             nondeterminism: vec![],

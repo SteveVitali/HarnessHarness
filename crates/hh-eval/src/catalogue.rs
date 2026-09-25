@@ -577,6 +577,130 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
                 ..base()
             }
         },
+        // ── §5g.4 containment/egress process metrics (S3.11b — the T-CON
+        //    battery's reported rows; AC-R-2.8.4-11's matched-budget
+        //    comparison reads them) ───────────────────────────────────────
+        MetricDeclaration {
+            name: "egress.ask_rate".into(),
+            dimension: Dimension::Security,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_mediation: MediationRequirement::Mediated(MediationChannel::Egress),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "egress.approval_rate".into(),
+            dimension: Dimension::Security,
+            unit: "ppm".into(),
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_mediation: MediationRequirement::Mediated(MediationChannel::Egress),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "containment.violation_rate".into(),
+            dimension: Dimension::Security,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_mediation: MediationRequirement::Mediated(MediationChannel::Egress),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "containment.amendments_per_run".into(),
+            dimension: Dimension::Security,
+            unit: "count".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_mediation: MediationRequirement::Mediated(MediationChannel::Egress),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "classifier.miss_rate".into(),
+            dimension: Dimension::Security,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        // ── §5g.6/§5g.7 audit + approval process metrics (S3.11b) ────────
+        MetricDeclaration {
+            name: "approvals.granted".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "permission_decisions_by_decider_and_scope".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "coverage_unmet_count".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "redaction_count".into(),
+            dimension: Dimension::Security,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "checkpoint_interval_events".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "unsigned_tail_events".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                ..base()
+            }
+        },
     ];
     // The veto metrics (the C0/Stage-3 veto tier — §5h.2 §2.3 + §5h.4). Per-veto
     // applicability overrides (ADR-0165 D6–D8; §6.6 §2.4): a hosted row never
@@ -599,6 +723,7 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
         (veto_id::GRADER_LOG_INCONSISTENT, Dimension::Reliability),
         (veto_id::SUITE_NOT_RUN, Dimension::Reliability),
         (veto_id::HELD_OUT_SKIPPED, Dimension::Reliability),
+        (veto_id::SECRET_LEAK, Dimension::Security),
     ] {
         let mut m = veto_metric(&format!("veto.{id}"), dim);
         match id {
@@ -607,6 +732,14 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
             }
             veto_id::DUPLICATE_EFFECT | veto_id::AUDIT_COMPLETENESS => {
                 m.applies_to_classes = [ParticipantClass::Native].into_iter().collect();
+            }
+            // A leak is only visible where the broker mediates (§5g.3 §4's
+            // `requires_mediation: mediated(egress)` — AC-R-2.8.3-3/-11).
+            veto_id::SECRET_LEAK => {
+                m.requires_mediation = MediationRequirement::Mediated(MediationChannel::Egress);
+                m.requires_observability = [Observability::Events, Observability::Ledger]
+                    .into_iter()
+                    .collect();
             }
             _ => {}
         }
@@ -761,6 +894,7 @@ pub const C0_VETO_IDS: &[&str] = &[
     veto_id::GRADER_LOG_INCONSISTENT,
     veto_id::SUITE_NOT_RUN,
     veto_id::HELD_OUT_SKIPPED,
+    veto_id::SECRET_LEAK,
 ];
 
 /// The catalogue conformance check — pure, deterministic, reportable.

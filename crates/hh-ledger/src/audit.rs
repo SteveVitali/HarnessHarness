@@ -1294,6 +1294,119 @@ pub fn audit_view(
         Some(v) => Json::Bool(v),
         None => na("no cross-run anchors"),
     };
+
+    // extensions — the AC-H5-10 provenance fold (§5g.5 §6 audit obligation +
+    // §7 AC-R-2.8.5-10): for every effect in the run, the extensions whose
+    // text was in the proposing call's context and whose code produced the
+    // effect. The fold reads only what the durable record carries —
+    // `context.assembled{model_call_id}.context_label.taint[]` supplies the
+    // `extension:<id>` tags the proposing call saw; the producer side joins
+    // the effect's `capability`/`capability_ref` through the run's own
+    // `security.extension.*{extension_id, contributes[]}` declarations and
+    // `lifecycle.capability.registered{version_id|semantic_id, produced_by}`
+    // rows (`Origin.tool` on the row's provenance names the capability — the
+    // extension link is the ledger-visible `contributes`/`produced_by`
+    // evidence, never a registry lookup — CC5).
+    let mut extension_ids: BTreeSet<String> = BTreeSet::new();
+    // capability ref → the extension that declared contributing it.
+    let mut capability_owner: BTreeMap<String, String> = BTreeMap::new();
+    // model_call_id → the `extension:<id>` taint tags its assembled context
+    // carried.
+    let mut call_extension_taint: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for e in &events {
+        if e.class.starts_with("security.extension.") {
+            if let Some(id) = str_member(e, "extension_id") {
+                extension_ids.insert(id.to_string());
+                if let Some(Json::Arr(cs)) = e.payload.get("contributes") {
+                    for c in cs.iter().filter_map(Json::as_str) {
+                        capability_owner.insert(c.to_string(), id.to_string());
+                    }
+                }
+            }
+        } else if e.class == "lifecycle.capability.registered" {
+            if let Some(producer) = str_member(e, "produced_by") {
+                let ext_id = producer.strip_prefix("extension:").unwrap_or(producer);
+                for cap in [str_member(e, "version_id"), str_member(e, "semantic_id")]
+                    .into_iter()
+                    .flatten()
+                {
+                    capability_owner
+                        .entry(cap.to_string())
+                        .or_insert_with(|| ext_id.to_string());
+                }
+            }
+        } else if e.class == "context.assembled" {
+            if let Some(mc) = str_member(e, "model_call_id") {
+                let set = call_extension_taint.entry(mc.to_string()).or_default();
+                if let Some(Json::Arr(tags)) =
+                    e.payload.get("context_label").and_then(|l| l.get("taint"))
+                {
+                    for t in tags.iter().filter_map(Json::as_str) {
+                        if let Some(id) = t.strip_prefix("extension:") {
+                            set.insert(id.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let extension_effects: Vec<Json> = events
+        .iter()
+        .filter(|e| e.class == "action.effect.intended")
+        .map(|e| {
+            let effect_id = str_member(e, "effect_id")
+                .map(str::to_string)
+                .or_else(|| e.scope.effect_id.clone())
+                .unwrap_or_default();
+            let capability = str_member(e, "capability")
+                .or_else(|| str_member(e, "capability_ref"))
+                .map(str::to_string);
+            let context_exts: Vec<String> = e
+                .scope
+                .model_call_id
+                .as_ref()
+                .and_then(|mc| call_extension_taint.get(mc))
+                .map(|s| s.iter().cloned().collect())
+                .unwrap_or_default();
+            let producer_exts: Vec<String> = capability
+                .as_ref()
+                .map(|c| {
+                    let mut v = Vec::new();
+                    if let Some(owner) = capability_owner.get(c) {
+                        v.push(owner.clone());
+                    }
+                    if extension_ids.contains(c) && !v.contains(c) {
+                        v.push(c.clone());
+                    }
+                    v
+                })
+                .unwrap_or_default();
+            Json::obj([
+                ("effect_id", Json::str(&effect_id)),
+                (
+                    "model_call_id",
+                    e.scope
+                        .model_call_id
+                        .as_ref()
+                        .map(|c| Json::str(c.clone()))
+                        .unwrap_or(Json::Null),
+                ),
+                (
+                    "capability_ref",
+                    capability.map(Json::str).unwrap_or(Json::Null),
+                ),
+                (
+                    "context_extensions",
+                    Json::Arr(context_exts.iter().map(Json::str).collect()),
+                ),
+                (
+                    "producer_extensions",
+                    Json::Arr(producer_exts.iter().map(Json::str).collect()),
+                ),
+            ])
+        })
+        .collect();
+
     let completeness = Json::obj([
         ("chain_ok", Json::Bool(chain_ok)),
         ("checkpoints_ok", checkpoints_component.clone()),
@@ -1348,6 +1461,18 @@ pub fn audit_view(
         ("cross_run", Json::Arr(cross_run)),
         ("redactions", Json::Arr(redaction_rows)),
         ("sink_deliveries", Json::Arr(sink_deliveries)),
+        // AC-H5-10 — the extension provenance component: the run's declared
+        // extension ids plus the per-effect context/producer answer.
+        (
+            "extensions",
+            Json::obj([
+                (
+                    "declared",
+                    Json::Arr(extension_ids.iter().map(Json::str).collect()),
+                ),
+                ("effects", Json::Arr(extension_effects)),
+            ]),
+        ),
         ("completeness", completeness),
     ]);
     View::stamped(run_id, ViewKind::AuditView, watermark, payload)

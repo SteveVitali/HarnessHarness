@@ -31,6 +31,7 @@ pub mod classes;
 pub mod effect;
 pub mod errors;
 pub mod event;
+pub mod export;
 pub mod fault;
 pub mod hlc;
 pub mod ids;

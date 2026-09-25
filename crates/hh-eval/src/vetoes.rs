@@ -93,6 +93,26 @@ pub mod veto_id {
     pub const VERIFICATION_SKIPPED: &str = "verification_skipped";
     /// `metadata_shortcut`.
     pub const METADATA_SHORTCUT: &str = "metadata_shortcut";
+    /// `secret_leak` — a `security.secret.leak_detected` row anywhere in the
+    /// run (§5g.3 §4; AC-R-2.8.3-3/-11 — the LT-03/LT-11 suite vetoes;
+    /// S3.11b).
+    pub const SECRET_LEAK: &str = "secret_leak";
+}
+
+/// The projected `audit_view` verdict the `audit_completeness` veto reads
+/// (S3.11b; DF-S1.15-2 — the veto evaluates over `coverage.unmet` and the
+/// headline bit, not only the open-effects arm). The caller projects
+/// `audit_view.completeness` + `coverage.unmet`; `None` keeps the veto at
+/// its Stage-2 arm only (additive — CC8).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AuditVerdict {
+    /// `completeness.headline` — every component green.
+    pub headline: bool,
+    /// `coverage.unmet` obligation ids (subjects redacted to refs).
+    pub coverage_unmet: Vec<String>,
+    /// The component members that evaluated `false` (named — never a
+    /// silent clean).
+    pub failing: Vec<String>,
 }
 
 /// The veto predicate inputs the facts alone cannot carry — declared
@@ -132,6 +152,69 @@ pub struct VetoContext {
     /// match, otherwise exact). A recorded access inside the scope trips
     /// `metadata_shortcut` (S3.10).
     pub task_metadata_scope: Vec<String>,
+    /// The projected `audit_view` completeness verdict (S3.11b;
+    /// DF-S1.15-2). When the caller projects `audit_view`, the
+    /// `audit_completeness` veto additionally trips on `headline = false`
+    /// or a non-empty `coverage.unmet` — AC-R-2.8.6-13's "the run's success
+    /// is success-with-veto, never headline".
+    pub audit: Option<AuditVerdict>,
+}
+
+impl AuditVerdict {
+    /// Project an `audit_view` payload into the veto input — reads
+    /// `completeness.{headline,<component>}` and `coverage.unmet[]` (the
+    /// view's own judgements; the veto never recomputes them — CC5).
+    pub fn from_audit_view(view: &Json) -> AuditVerdict {
+        let comp = view.get("completeness");
+        let headline = comp
+            .and_then(|c| c.get("headline"))
+            .and_then(|v| match v {
+                Json::Bool(b) => Some(*b),
+                _ => None,
+            })
+            .unwrap_or(false);
+        let mut failing = Vec::new();
+        if let Some(Json::Obj(m)) = comp {
+            for (k, v) in m {
+                if k == "headline" {
+                    continue;
+                }
+                let component_ok = match v {
+                    Json::Bool(b) => *b,
+                    // An `n/a{reason}` object is a clean non-component
+                    // (the reason is the audit — AC-R-2.8.6-13).
+                    Json::Obj(o) => o.contains_key("n/a") || o.contains_key("na"),
+                    _ => false,
+                };
+                if !component_ok {
+                    failing.push(k.clone());
+                }
+            }
+            failing.sort();
+        }
+        let coverage_unmet = view
+            .get("coverage")
+            .and_then(|c| c.get("unmet"))
+            .and_then(|u| match u {
+                Json::Arr(a) => Some(a),
+                _ => None,
+            })
+            .map(|a| {
+                a.iter()
+                    .filter_map(|u| {
+                        u.get("obligation_id")
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        AuditVerdict {
+            headline,
+            coverage_unmet,
+            failing,
+        }
+    }
 }
 
 /// One tripped veto — `{veto_id, evidence}`.
@@ -235,6 +318,29 @@ pub fn evaluate_vetoes(f: &LedgerFacts, ctx: &VetoContext) -> Vec<VetoTrip> {
                 veto_id::AUDIT_COMPLETENESS,
                 Json::Arr(open.iter().map(|e| Json::str(*e)).collect()),
             ));
+        }
+        // S3.11b (DF-S1.15-2) — the veto also reads the projected
+        // `audit_view` completeness vector when the caller supplies it:
+        // `headline = false` or a non-empty `coverage.unmet` trips the veto
+        // (AC-R-2.8.6-5/-13 — a run whose audit obligations are unmet is
+        // success-with-veto, never headline).
+        if let Some(a) = &ctx.audit {
+            if !a.headline || !a.coverage_unmet.is_empty() {
+                trips.push(trip(
+                    veto_id::AUDIT_COMPLETENESS,
+                    Json::obj([
+                        ("headline", Json::Bool(a.headline)),
+                        (
+                            "coverage_unmet",
+                            Json::Arr(a.coverage_unmet.iter().map(Json::str).collect()),
+                        ),
+                        (
+                            "failing",
+                            Json::Arr(a.failing.iter().map(Json::str).collect()),
+                        ),
+                    ]),
+                ));
+            }
         }
     }
 
@@ -509,6 +615,42 @@ pub fn evaluate_vetoes(f: &LedgerFacts, ctx: &VetoContext) -> Vec<VetoTrip> {
                 Json::Arr(bad.iter().map(|r| Json::str(*r)).collect()),
             ));
         }
+    }
+
+    // ── secret_leak — a `security.secret.leak_detected` row anywhere ─────
+    // (§5g.3 §4; AC-R-2.8.3-3/-11 — the LT-03/LT-11 suite vetoes: a real
+    // value at any sink, a canary use, or a request-view hit lands as a
+    // durable leak row; the veto is the eval-plane trip record — the
+    // evidence is coordinates (location/detector/fingerprint), never the
+    // value).
+    if !f.secret_leaks.is_empty() {
+        trips.push(trip(
+            veto_id::SECRET_LEAK,
+            Json::Arr(
+                f.secret_leaks
+                    .iter()
+                    .map(|l| {
+                        Json::obj([
+                            ("seq", Json::Int(l.seq as i64)),
+                            (
+                                "location",
+                                l.location
+                                    .as_ref()
+                                    .map(|x| Json::str(x.clone()))
+                                    .unwrap_or(Json::Null),
+                            ),
+                            (
+                                "detector",
+                                l.detector
+                                    .as_ref()
+                                    .map(|x| Json::str(x.clone()))
+                                    .unwrap_or(Json::Null),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ));
     }
 
     trips.sort_by(|a, b| a.veto_id.cmp(&b.veto_id));

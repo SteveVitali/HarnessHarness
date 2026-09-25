@@ -63,6 +63,7 @@ pub mod channel;
 mod codec;
 pub mod decisions;
 pub mod defscan;
+pub mod encoded;
 pub mod env;
 pub mod errors;
 pub mod events;
