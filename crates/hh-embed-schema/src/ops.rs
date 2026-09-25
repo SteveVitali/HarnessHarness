@@ -731,11 +731,16 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.registry.lineage", "L", "json", "json"),
         labi("lab.registry.sameness", "L", "json", "json"),
         // S3.9 (§5d.1 §2; R-2.5.4⁰): `import`/`refresh` over
-        // `hh-mcp-listing/1` documents are live dispatch; `export` stays
-        // `stage_pending`.
+        // `hh-mcp-listing/1` documents are live dispatch.
+        // S4.1 (§6.2; R-2.10.2): the general `import` head
+        // (`{foreign_ref, document}` vs `{listing}`), `export` →
+        // `plugin_manifest/1`, `pin` endorsement, and the
+        // `publisher_claims` review projection are all live dispatch.
         labi("lab.registry.import", "L", "json", "json"),
         labi("lab.registry.refresh", "L", "json", "json"),
-        lab("lab.registry.export", "L", "json", "json"),
+        labi("lab.registry.export", "L", "json", "json"),
+        labi("lab.registry.pin", "L", "json", "json"),
+        labi("lab.registry.publisher_claims", "L", "json", "json"),
         labi("lab.registry.verify", "L", "json", "json"),
         // S3.3: the `lab.eval.*` eval-kernel boundary (R-2.9.2/R-2.9.4⁰ᵇ;
         // records-in/records-out).

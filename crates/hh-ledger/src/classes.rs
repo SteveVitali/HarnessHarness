@@ -256,6 +256,9 @@ const REGISTRY_FIELDS: &[AuditField] = &[
     af("subject_ref"),
     af("suite_ref"),
     af("produced_by"),
+    // S4.1 — `lifecycle.registry.imported` carries the closed `ForeignSystem`
+    // spelling (never content).
+    af("system"),
 ];
 
 /// `lifecycle.capability.registered` — REGISTRY_FIELDS + `source_kind`
@@ -1011,8 +1014,10 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── lifecycle:registry ──
     ("lifecycle.registry.admission_refused", "none"),
     ("lifecycle.registry.conformance_recorded", "none"),
+    ("lifecycle.registry.imported", "none"),
     ("lifecycle.registry.name_deprecated", "none"),
     ("lifecycle.registry.name_yanked", "none"),
+    ("lifecycle.registry.pin_subject", "none"),
     ("lifecycle.registry.published", "none"),
     ("lifecycle.registry.registered", "none"),
     ("lifecycle.registry.snapshotted", "none"),
@@ -1248,6 +1253,13 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("lifecycle.registry.version_revoked",   O::Events, true,  REGISTRY_FIELDS, &[], None, None),
     row_audit("lifecycle.registry.snapshotted",       O::Events, true,  REGISTRY_FIELDS, &[], None, None),
     row_audit("lifecycle.registry.conformance_recorded", O::Events, true, REGISTRY_FIELDS, &[], None, None),
+    // S4.1 — `imported`: the quarantined `foreign_import` receipt
+    // (`{version_id, system, admission}`; §6.2 R-2.10.2) — the closed
+    // `ForeignSystem` spelling lands on the `system` field.
+    row_audit("lifecycle.registry.imported",          O::Events, true,  REGISTRY_FIELDS, &[], None, None),
+    // S4.1 — `pin_subject`: the two-phase pin anchor (subject-side provenance;
+    // the later endorsement row's `subject_ref` rewrites to this row's id).
+    row_audit("lifecycle.registry.pin_subject",       O::Events, true,  REGISTRY_FIELDS, &[], None, None),
     // `lifecycle.capability.registered` — a typed `ToolCapability` record (the
     // registry body is a `hir.node` semantic id + pinned `version_id`) passed
     // V-E1 and entered the store (ADR-0147 (d); §5d.1; S1.17).

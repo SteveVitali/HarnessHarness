@@ -678,18 +678,133 @@ impl EmbedService {
         ]))
     }
 
-    /// `lab.registry.import` — `{listing, registrar}` (S3.9; §5d.1 §2;
-    /// AC-R-2.5.1-11's live boundary half): a `hh-mcp-listing/1` document
-    /// is lifted and registered — one `ToolCapabilityRecord` per wire
-    /// tool, `unverified` + `quarantined` for `mcp_listing` sources,
-    /// published under `local/mcp/{server_ref}/{name}`.
+    /// `lab.registry.import` — two request shapes (S4.1; §6.2 R-2.10.2):
+    ///
+    ///  - `{foreign_ref{system, locator, digest?, label?}, document,
+    ///    registrar}` — the *general* foreign-system import: a closed
+    ///    `ForeignSystem` (`mcp_registry | acp_registry | marketplace | git |
+    ///    archive`) document lifts to a quarantined `foreign_import` record
+    ///    with a structured loss report (`unverified` content, never a
+    ///    variant; AC-R-2.10.2-11).
+    ///  - `{listing, registrar}` — the S3.9 `hh-mcp-listing/1` path
+    ///    (unchanged): one `ToolCapabilityRecord` per wire tool,
+    ///    `unverified` + `quarantined`, published under
+    ///    `local/mcp/{server_ref}/{name}` (AC-R-2.5.1-11).
     pub(crate) fn lab_registry_import(&mut self, params: &Json) -> Result<Json, EmbedError> {
-        let listing = req(params, "listing")?;
         let registrar = registrar_of(params)?;
+        if params.get("foreign_ref").is_some() {
+            let fref = hh_registry::foreign::ForeignRef::from_json(req(params, "foreign_ref")?)
+                .map_err(reg_err)?;
+            let document = req(params, "document")?;
+            let out = hh_registry::foreign::import_foreign(
+                &mut self.registry,
+                &fref,
+                document,
+                &registrar,
+                opt_str(params, "trust_record_ref"),
+            )
+            .map_err(reg_err)?;
+            self.flush_registry_events()?;
+            return Ok(Json::obj([
+                ("version_id", Json::str(out.version_id.clone())),
+                ("admission", Json::str(out.admission.as_str())),
+                ("loss_report", schema::loss_report_json(&out.loss_report)),
+            ]));
+        }
+        let listing = req(params, "listing")?;
         let out = hh_registry::import::import_listing(&mut self.registry, listing, &registrar)
             .map_err(reg_err)?;
         self.flush_registry_events()?;
         Ok(import_outcome_json(&out))
+    }
+
+    /// `lab.registry.export` — `{refs: [version_id | ns/name[@label]], target}`
+    /// → `{target, documents[{version_id, document, loss_report}]}` (S4.1;
+    /// §6.2 R7). `target` is closed — `plugin_manifest/1` only at Stage 4;
+    /// a `variant` record lowers to a canonical `PluginManifest/1` document
+    /// that re-decodes cleanly (the boundary emits nothing it cannot parse).
+    pub(crate) fn lab_registry_export(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let target = req_str(params, "target")?.to_string();
+        let refs = match req(params, "refs")? {
+            Json::Arr(rs) => rs
+                .iter()
+                .map(|r| {
+                    r.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| bad("/refs", "type_mismatch"))
+                })
+                .collect::<Result<Vec<String>, EmbedError>>()?,
+            _ => return Err(bad("/refs", "type_mismatch")),
+        };
+        let out = hh_registry::foreign::export(&self.registry, &refs, &target).map_err(reg_err)?;
+        Ok(Json::obj([
+            ("target", Json::str(out.target.clone())),
+            (
+                "documents",
+                Json::Arr(
+                    out.documents
+                        .iter()
+                        .map(|d| {
+                            Json::obj([
+                                ("version_id", Json::str(d.version_id.clone())),
+                                ("document", d.document.clone()),
+                                ("loss_report", schema::loss_report_json(&d.loss_report)),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ]))
+    }
+
+    /// `lab.registry.pin` — `{version_id, registrar}` (the endorser's
+    /// provenance; S4.1; §6.2 `pin`). Lifts a `quarantined` record to
+    /// `resolved` under a verified `pin|signature` attestation — the
+    /// endorsement rides the *record's* registrar attestation (never a
+    /// self-declared claim, CC2) verified against the store's trust anchors.
+    pub(crate) fn lab_registry_pin(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let version_id = req_str(params, "version_id")?.to_string();
+        let endorser = registrar_of(params)?;
+        let r = self.registry.pin(&version_id, &endorser);
+        self.flush_registry_events()?;
+        r.map_err(reg_err)?;
+        Ok(Json::obj([
+            ("ok", Json::Bool(true)),
+            ("version_id", Json::str(version_id)),
+            ("admission", Json::str("resolved")),
+        ]))
+    }
+
+    /// `lab.registry.publisher_claims` — `{version_id}` → `{claims[]}` (S4.1;
+    /// §6.2 `publisher_claims(version_id)`): the `publisher_claim` conformance
+    /// reports registered against the subject — review evidence only; they
+    /// never count toward `probed` (ADR-0152 D3).
+    pub(crate) fn lab_registry_publisher_claims(
+        &mut self,
+        params: &Json,
+    ) -> Result<Json, EmbedError> {
+        let vid = req_str(params, "version_id")?;
+        let claims = self.registry.publisher_claims(vid);
+        Ok(Json::obj([(
+            "claims",
+            Json::Arr(
+                claims
+                    .iter()
+                    .map(|c| {
+                        Json::obj([
+                            ("report_id", Json::str(c.report_id.clone())),
+                            ("subject_ref", Json::str(c.subject_ref.clone())),
+                            ("produced_by", Json::str(c.produced_by.as_str())),
+                            ("run_id", Json::str(c.run_id.clone())),
+                            (
+                                "report",
+                                schema::body_json(&RegistryRecord::Report((*c).clone()), false),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        )]))
     }
 
     /// `lab.registry.refresh` — `{listing, registrar}` (S3.9): re-lift and

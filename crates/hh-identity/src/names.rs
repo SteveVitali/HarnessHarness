@@ -1,38 +1,106 @@
-//! The **local single-namespace name index** with `publish`/`resolve` (§8.3 #2/#9, C0/Stage 1;
+//! The **local single-namespace name index** with `publish`/`resolve` (§8.3 #2/#9;
 //! ADR-0037 D1). A name is a *mutable pointer with an append-only history* (I2, N4) — never an
-//! identity. Stage 1 lands the local index and the two Stage-1 namespaces (`hh/` kernel-owned,
-//! `local/`); the multi-namespace registry *service*, `exp/` and shared reverse-DNS namespaces
-//! are the C1 registry (S4.1 / §06).
+//! identity. Stage 1 landed the local index and the two Stage-1 namespaces (`hh/` kernel-owned,
+//! `local/`); the multi-namespace registry *service* (S4.1 / §06 — the C1 slice) extends the
+//! spelling grammar to `exp/<experiment_id>/` and shared reverse-DNS namespaces while keeping
+//! the one index and the one history structure (CC1).
 
 use hh_provenance::{AuthorityClass, ProvenanceRecord};
 
 use crate::kinds::RecordKind;
 use crate::refs::{Name, NameSelector, VersionedRef};
 
-/// A namespace (Stage-1 subset). `hh/` is kernel-owned (publishing to it requires a kernel-origin
-/// provenance); `local/` is the working namespace.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// A namespace (S4.1 — the full §06 grammar). `hh/` is kernel-owned (publishing to it requires a
+/// kernel-origin provenance); `local/` is the working namespace; `exp/<id>/` is the experiment
+/// lineage namespace (ADR-0153; the evolution service publishes only here at `origin = model`);
+/// shared namespaces are reverse-DNS spellings, owned by an accepted signer or principal
+/// (§6.2 heading 2 — `TrustRootPolicy.accepted_signers`, ADR-0063).
+///
+/// The enum is *not* `Copy` — `Experiment`/`Shared` carry their spelling segments.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Namespace {
-    /// Kernel-owned.
+    /// Kernel-owned (`hh`).
     Hh,
-    /// Local working namespace.
+    /// Local working namespace (`local`).
     Local,
+    /// An experiment namespace — `exp/<experiment_id>`.
+    Experiment(String),
+    /// A shared reverse-DNS namespace (e.g. `org.example` — the C1 service's
+    /// third-party namespaces).
+    Shared(String),
 }
 
 impl Namespace {
-    pub fn as_str(self) -> &'static str {
+    /// The canonical spelling (`exp/<id>` renders with the prefix).
+    pub fn as_str(&self) -> String {
         match self {
-            Namespace::Hh => "hh",
-            Namespace::Local => "local",
+            Namespace::Hh => "hh".to_string(),
+            Namespace::Local => "local".to_string(),
+            Namespace::Experiment(id) => format!("exp/{id}"),
+            Namespace::Shared(s) => s.clone(),
         }
     }
+
+    /// Whether the spelling is a *reserved* namespace (`hh`, `local`, `exp/<id>`) —
+    /// the ones the registry itself bootstraps or administers, versus a shared
+    /// reverse-DNS namespace a signer registers.
+    pub fn is_reserved(&self) -> bool {
+        matches!(
+            self,
+            Namespace::Hh | Namespace::Local | Namespace::Experiment(_)
+        )
+    }
+
+    /// Parse a namespace spelling: the two reserved names, `exp/<id>`, or a
+    /// shared reverse-DNS spelling (`≥ 2` dot-separated labels, each
+    /// `[a-z0-9_-]+` with a letter leading the first label). Anything else is
+    /// not a namespace — `NamespaceForbidden`/`Unresolved` at the callers.
     pub fn parse(s: &str) -> Option<Namespace> {
         match s {
-            "hh" => Some(Namespace::Hh),
-            "local" => Some(Namespace::Local),
-            _ => None,
+            "hh" => return Some(Namespace::Hh),
+            "local" => return Some(Namespace::Local),
+            _ => {}
+        }
+        if let Some(id) = s.strip_prefix("exp/") {
+            return valid_experiment_id(id).then(|| Namespace::Experiment(id.to_string()));
+        }
+        if is_reverse_dns(s) {
+            return Some(Namespace::Shared(s.to_string()));
+        }
+        None
+    }
+}
+
+/// `exp/<id>` id grammar: one non-empty segment of `[A-Za-z0-9._:-]` (no `/` —
+/// the experiment id is a single coordinate; ADR-0194's `exp/<experiment_id>/`).
+fn valid_experiment_id(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | ':' | '-'))
+}
+
+/// Shared reverse-DNS spelling: `≥ 2` dot-separated labels, each non-empty and
+/// `[a-z0-9_-]+`, the first label led by an ASCII letter (a DNS-ish shape —
+/// never a bare word, never a path).
+fn is_reverse_dns(s: &str) -> bool {
+    let labels: Vec<&str> = s.split('.').collect();
+    if labels.len() < 2 {
+        return false;
+    }
+    for (i, l) in labels.iter().enumerate() {
+        if l.is_empty()
+            || !l
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+        {
+            return false;
+        }
+        if i == 0 && !l.chars().next().unwrap().is_ascii_lowercase() {
+            return false;
         }
     }
+    true
 }
 
 /// The status of a name-history entry (§8.3 #3). `yanked` hides from default resolution and never
@@ -132,10 +200,10 @@ impl NameIndex {
     }
 
     /// All history entries for a `(namespace, name)`, in publish order.
-    pub fn history(&self, namespace: Namespace, name: &str) -> Vec<&NameHistoryEntry> {
+    pub fn history(&self, namespace: &Namespace, name: &str) -> Vec<&NameHistoryEntry> {
         self.entries
             .iter()
-            .filter(|e| e.namespace == namespace && e.name == name)
+            .filter(|e| e.namespace == *namespace && e.name == name)
             .collect()
     }
 
@@ -163,7 +231,7 @@ impl NameIndex {
         }
         if let Some(l) = &label {
             if self
-                .history(namespace, name)
+                .history(&namespace, name)
                 .iter()
                 .any(|e| e.label.as_deref() == Some(l.as_str()))
             {
@@ -240,7 +308,7 @@ impl NameIndex {
             Some(ns) => ns,
             None => return ResolveOutcome::Unresolved,
         };
-        let mut hist: Vec<&NameHistoryEntry> = self.history(ns, &selector.name);
+        let mut hist: Vec<&NameHistoryEntry> = self.history(&ns, &selector.name);
         if hist.is_empty() {
             return ResolveOutcome::Unresolved;
         }
@@ -283,7 +351,7 @@ impl NameIndex {
             version_id: e.version_id.clone(),
             semantic_id: e.semantic_id.clone(),
             name: Some(Name {
-                namespace: e.namespace.as_str().to_string(),
+                namespace: e.namespace.as_str(),
                 name: e.name.clone(),
                 label: e.label.clone(),
             }),
@@ -373,7 +441,7 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(idx.history(Namespace::Local, "tool/grep").len(), 2);
+        assert_eq!(idx.history(&Namespace::Local, "tool/grep").len(), 2);
         match idx.resolve(
             &NameSelector::new("local", "tool/grep"),
             ResolveMode::Execute,
@@ -593,5 +661,104 @@ mod tests {
             ResolveOutcome::Resolved(r) => assert_eq!(r.version_id, "sha256:v2"),
             o => panic!("unexpected {o:?}"),
         }
+    }
+
+    // ── S4.1 — the multi-namespace grammar (§06; ADR-0153 D2) ────────────
+
+    #[test]
+    fn namespace_grammar_covers_exp_and_shared() {
+        // Reserved spellings.
+        assert_eq!(Namespace::parse("hh"), Some(Namespace::Hh));
+        assert_eq!(Namespace::parse("local"), Some(Namespace::Local));
+        // `exp/<id>` — the experiment-lineage namespace.
+        assert_eq!(
+            Namespace::parse("exp/e-42"),
+            Some(Namespace::Experiment("e-42".to_string()))
+        );
+        assert_eq!(
+            Namespace::parse("exp/run.2026:09"),
+            Some(Namespace::Experiment("run.2026:09".to_string()))
+        );
+        // Shared reverse-DNS namespaces.
+        assert_eq!(
+            Namespace::parse("org.example"),
+            Some(Namespace::Shared("org.example".to_string()))
+        );
+        assert_eq!(
+            Namespace::parse("dev.cognition.internal_tools"),
+            Some(Namespace::Shared(
+                "dev.cognition.internal_tools".to_string()
+            ))
+        );
+        // Refused: bare words, paths, empty ids, leading-digit first labels,
+        // uppercase, trailing dots.
+        for bad in [
+            "",
+            "n",
+            "Exp",
+            "exp",
+            "exp/",
+            "exp/a/b",
+            "9.example",
+            "Org.Example",
+            "org.example.",
+            ".org.example",
+            "org./x",
+            "a b.c",
+            "org.example/x",
+        ] {
+            assert_eq!(Namespace::parse(bad), None, "{bad} must not parse");
+        }
+        // `is_reserved` splits administered spellings from shared ones.
+        assert!(Namespace::Hh.is_reserved());
+        assert!(Namespace::Local.is_reserved());
+        assert!(Namespace::Experiment("e".to_string()).is_reserved());
+        assert!(!Namespace::Shared("org.example".to_string()).is_reserved());
+        // Spelling round-trips.
+        assert_eq!(Namespace::Experiment("e1".to_string()).as_str(), "exp/e1");
+        assert_eq!(
+            Namespace::Shared("org.example".to_string()).as_str(),
+            "org.example"
+        );
+        assert_eq!(Namespace::Hh.as_str(), "hh");
+    }
+
+    #[test]
+    fn exp_namespace_publishes_and_resolves() {
+        // `exp/<id>/` behaves as an ordinary (non-kernel) namespace in the index —
+        // the store layer owns its authority rules; the index is one structure.
+        let mut idx = NameIndex::new();
+        let v1 = vref(RecordKind::VariantRecord, "sha256:v1", None);
+        idx.publish(
+            Namespace::Experiment("e1".to_string()),
+            "arm/a",
+            &v1,
+            Some("1.0.0".into()),
+            None,
+            NameStatus::Active,
+            agent(),
+            false,
+            None,
+        )
+        .unwrap();
+        match idx.resolve(&NameSelector::new("exp/e1", "arm/a"), ResolveMode::Execute) {
+            ResolveOutcome::Resolved(r) => assert_eq!(r.version_id, "sha256:v1"),
+            o => panic!("expected exp/ resolution, got {o:?}"),
+        }
+        // A shared namespace resolves the same way.
+        let ns = Namespace::Shared("org.example".to_string());
+        idx.publish(
+            ns.clone(),
+            "pkg",
+            &v1,
+            None,
+            None,
+            NameStatus::Active,
+            agent(),
+            false,
+            None,
+        )
+        .unwrap();
+        assert_eq!(idx.history(&ns, "pkg").len(), 1);
     }
 }
