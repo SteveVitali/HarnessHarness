@@ -169,5 +169,8 @@ fn adapter_lifecycle_over_corpus_task() {
             isolation: hh_ontology::lab::VerifierIsolation::Separate,
         })
         .unwrap();
-    assert_eq!(res.reward_ppm, 1_000_000, "expected bytes grade full reward");
+    assert_eq!(
+        res.reward_ppm, 1_000_000,
+        "expected bytes grade full reward"
+    );
 }

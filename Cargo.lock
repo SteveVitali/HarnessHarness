@@ -76,7 +76,9 @@ name = "hh-bench"
 version = "0.0.1"
 dependencies = [
  "hh-budget",
+ "hh-control",
  "hh-eval",
+ "hh-gateway",
  "hh-hir",
  "hh-identity",
  "hh-lab",

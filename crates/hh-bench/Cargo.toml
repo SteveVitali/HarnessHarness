@@ -23,3 +23,10 @@ hh-hir = { path = "../hh-hir" }
 hh-provenance = { path = "../hh-provenance" }
 hh-budget = { path = "../hh-budget" }
 hh-eval = { path = "../hh-eval" }
+
+[dev-dependencies]
+# S3.12b (GATE-G2 G2-1): the real-suite legs drive the recorded `model_io`
+# corpus through the canonical `hh-control` Driver (dev-only — the bench
+# crate itself never depends on the control plane; CC10/CC6).
+hh-control = { path = "../hh-control" }
+hh-gateway = { path = "../hh-gateway" }

@@ -29,11 +29,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use hh_identity::idp_digest;
-use hh_lab::bench::{
-    split_hash, SplitAssignmentRecord, SuiteManifest, SuiteValidityRecord,
-};
-use hh_lab::model::ForeignRef;
 use hh_lab::bench::ForeignTaskId;
+use hh_lab::bench::{split_hash, SplitAssignmentRecord, SuiteManifest, SuiteValidityRecord};
+use hh_lab::model::ForeignRef;
 use hh_ontology::lab::{
     ContaminationStratum, EnvironmentFamily, EpisodeModel, HandleCapability, SplitLabel, Support,
     VerifierIsolation,
@@ -358,12 +356,11 @@ fn load_task(
             detail: format!("name member ≠ file name {name}"),
         });
     }
-    let split = SplitLabel::parse(&req_str(m, "split", &ps)?).ok_or_else(|| {
-        BenchsetError::Malformed {
+    let split =
+        SplitLabel::parse(&req_str(m, "split", &ps)?).ok_or_else(|| BenchsetError::Malformed {
             path: ps.clone(),
             detail: "unknown split label".into(),
-        }
-    })?;
+        })?;
     let instruction = req_str(m, "instruction", &ps)?;
     let expected = req_str(m, "expected", &ps)?.into_bytes();
 
@@ -510,12 +507,14 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
     };
     let isolation = match m.get("verifier_isolation") {
         None | Some(Json::Null) => None,
-        Some(Json::Str(s)) => Some(VerifierIsolation::parse(s).ok_or_else(|| {
-            BenchsetError::Malformed {
-                path: ps.clone(),
-                detail: "unknown verifier_isolation".into(),
-            }
-        })?),
+        Some(Json::Str(s)) => {
+            Some(
+                VerifierIsolation::parse(s).ok_or_else(|| BenchsetError::Malformed {
+                    path: ps.clone(),
+                    detail: "unknown verifier_isolation".into(),
+                })?,
+            )
+        }
         _ => {
             return Err(BenchsetError::Malformed {
                 path: ps,
@@ -525,12 +524,14 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
     };
     let episode = match m.get("episode_model") {
         None | Some(Json::Null) => None,
-        Some(Json::Str(s)) => Some(EpisodeModel::parse(s).ok_or_else(|| {
-            BenchsetError::Malformed {
-                path: ps.clone(),
-                detail: "unknown episode_model".into(),
-            }
-        })?),
+        Some(Json::Str(s)) => {
+            Some(
+                EpisodeModel::parse(s).ok_or_else(|| BenchsetError::Malformed {
+                    path: ps.clone(),
+                    detail: "unknown episode_model".into(),
+                })?,
+            )
+        }
         _ => {
             return Err(BenchsetError::Malformed {
                 path: ps,
@@ -546,13 +547,12 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
                     path: ps.clone(),
                     detail: format!("unknown handle capability {k}"),
                 })?;
-                let sup = v
-                    .as_str()
-                    .and_then(Support::parse)
-                    .ok_or_else(|| BenchsetError::Malformed {
+                let sup = v.as_str().and_then(Support::parse).ok_or_else(|| {
+                    BenchsetError::Malformed {
                         path: ps.clone(),
                         detail: format!("unknown support level for {k}"),
-                    })?;
+                    }
+                })?;
                 requires.insert(cap, sup);
             }
         }
@@ -568,12 +568,12 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
         Some(Json::Arr(a)) => a
             .iter()
             .map(|v| {
-                v.as_str().map(str::to_string).ok_or_else(|| {
-                    BenchsetError::Malformed {
+                v.as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| BenchsetError::Malformed {
                         path: ps.clone(),
                         detail: "flawed_task_ids member not a string".into(),
-                    }
-                })
+                    })
             })
             .collect::<Result<_, _>>()?,
         _ => {
@@ -588,12 +588,12 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
         Some(Json::Arr(a)) => a
             .iter()
             .map(|v| {
-                v.as_str().map(str::to_string).ok_or_else(|| {
-                    BenchsetError::Malformed {
+                v.as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| BenchsetError::Malformed {
                         path: ps.clone(),
                         detail: "parity_subset member not a string".into(),
-                    }
-                })
+                    })
             })
             .collect::<Result<_, _>>()?,
         _ => {
@@ -607,12 +607,12 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
         Json::Arr(a) => a
             .iter()
             .map(|v| {
-                v.as_str().map(str::to_string).ok_or_else(|| {
-                    BenchsetError::Malformed {
+                v.as_str()
+                    .map(str::to_string)
+                    .ok_or_else(|| BenchsetError::Malformed {
                         path: ps.clone(),
                         detail: "tasks member not a string".into(),
-                    }
-                })
+                    })
             })
             .collect::<Result<_, _>>()?,
         _ => {
@@ -626,7 +626,14 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
     let mut tasks = Vec::with_capacity(task_names.len());
     for name in &task_names {
         tasks.push(load_task(
-            &suite_dir, suite_id, &adapter_id, family, stratum, isolation, episode, name,
+            &suite_dir,
+            suite_id,
+            &adapter_id,
+            family,
+            stratum,
+            isolation,
+            episode,
+            name,
         )?);
     }
 
@@ -634,13 +641,14 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
     // a subset member without three recorded original-runner verdicts
     // refuses at load, never at the comparison.
     for name in &parity_subset {
-        let t = tasks
-            .iter()
-            .find(|t| &t.name == name)
-            .ok_or_else(|| BenchsetError::Inconsistent {
-                path: ps.clone(),
-                detail: format!("parity_subset member {name} not in tasks[]"),
-            })?;
+        let t =
+            tasks
+                .iter()
+                .find(|t| &t.name == name)
+                .ok_or_else(|| BenchsetError::Inconsistent {
+                    path: ps.clone(),
+                    detail: format!("parity_subset member {name} not in tasks[]"),
+                })?;
         if t.original_runs.len() < 3 {
             return Err(BenchsetError::Inconsistent {
                 path: ps.clone(),
