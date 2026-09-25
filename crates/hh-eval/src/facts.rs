@@ -449,6 +449,18 @@ pub struct SpendRowFact {
     pub charged_to: Option<String>,
     /// `provenance` (`measured | estimated_from_pricing | …`).
     pub provenance: Option<String>,
+    /// `provenance_class` (`measured | reported | reconstructed | unknown`)
+    /// — the M2 frontier's stratification key (§8.2; AC-R-2.1.6-8).
+    pub provenance_class: Option<String>,
+    /// `confidence` — decoded (`exact | bounded{lo,hi} | estimate |
+    /// unknown`); estimate/unknown render bands, never points.
+    pub confidence: Option<hh_budget::pricing::Confidence>,
+    /// `coverage` — the ppm share of the run's calls the row prices; a
+    /// row with `coverage < 1` is never summed as complete (OQ-033).
+    pub coverage_ppm: Option<i64>,
+    /// `money.currency` — rows in different currencies never share a
+    /// frontier point.
+    pub currency: Option<String>,
     /// `money.micro_units`.
     pub micro_units: Option<i64>,
     /// The `model_call_id` the row joins to (payload member or
@@ -985,6 +997,12 @@ impl LedgerFacts {
                         model_ref: p.get("model_ref").cloned(),
                         charged_to,
                         provenance: s(p, "provenance"),
+                        provenance_class: s(p, "provenance_class"),
+                        confidence: p
+                            .get("confidence")
+                            .and_then(hh_budget::pricing::Confidence::from_json),
+                        coverage_ppm: p.get("coverage").and_then(Json::as_int),
+                        currency: s(&p.get("money").cloned().unwrap_or(Json::Null), "currency"),
                         micro_units: si(p, "money", "micro_units"),
                         model_call_id: call,
                     });
@@ -1870,6 +1888,14 @@ impl LedgerFacts {
                             "provenance",
                             r.provenance.as_deref().map(Json::str),
                         );
+                        insert_opt(
+                            &mut rm,
+                            "provenance_class",
+                            r.provenance_class.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut rm, "confidence", r.confidence.map(|c| c.to_json()));
+                        insert_opt(&mut rm, "coverage", r.coverage_ppm.map(Json::Int));
+                        insert_opt(&mut rm, "currency", r.currency.as_deref().map(Json::str));
                         insert_opt(&mut rm, "micro_units", r.micro_units.map(Json::Int));
                         insert_opt(
                             &mut rm,
@@ -2213,6 +2239,12 @@ impl LedgerFacts {
                     model_ref: r.get("model_ref").cloned(),
                     charged_to: s(r, "charged_to"),
                     provenance: s(r, "provenance"),
+                    provenance_class: s(r, "provenance_class"),
+                    confidence: r
+                        .get("confidence")
+                        .and_then(hh_budget::pricing::Confidence::from_json),
+                    coverage_ppm: r.get("coverage").and_then(Json::as_int),
+                    currency: s(r, "currency"),
                     micro_units: r.get("micro_units").and_then(Json::as_int),
                     model_call_id: s(r, "model_call_id"),
                 });

@@ -14,7 +14,13 @@
 //! - `transfer` — transfer rows: `benefits::transfer` for the arm pair
 //!   (paired held-out comparison + `transfer_ratio`);
 //! - `equivalence` — A8: `benefits::equivalence_run` under the
-//!   pre-registration's margins.
+//!   pre-registration's margins;
+//! - `frontier` — the M2 capability–cost Pareto frontier with provenance
+//!   bands (spec §8.2; AC-R-2.1.6-8): per-`(arm, provenance_class,
+//!   currency)` cells, per-class + combined non-dominated frontiers,
+//!   `estimate`/`unknown`/partial-coverage rows rendered as bands,
+//!   never points; the same `validate_match` refusal vocabulary as
+//!   `compare`.
 //!
 //! A12 `multiplicity` is not a kind — it is a pass over every produced
 //! comparison (Holm on the pre-registered primary family, BH on the
@@ -36,7 +42,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use hh_budget::matchspec::ArmSpec;
 use hh_eval::benefits;
-use hh_eval::compare::{compare, contrast, CompareInput, CompareOutcome};
+use hh_eval::compare::{compare, contrast, CompareError, CompareInput, CompareOutcome};
 use hh_eval::facts::LedgerFacts;
 use hh_eval::runs::{EvalRun, SuiteContext, TaskContext};
 use hh_eval::scorecard::render_cell;
@@ -429,6 +435,7 @@ pub fn analyze(
     let mut transfer_profile: Option<Json> = None;
     let mut per_task_tables: Vec<Json> = Vec::new();
     let mut summary_details: Vec<Json> = Vec::new();
+    let mut frontier: Option<Json> = None;
 
     match spec.kind.as_str() {
         "summarize" => {
@@ -543,6 +550,59 @@ pub fn analyze(
                 }
             }
         }
+        "frontier" => {
+            // M2 capability–cost frontier (§8.2) — a comparison surface:
+            // the same `validate_match` gate `compare` runs (matched_cap /
+            // iso_cost arms only; an exploratory `mode:none` spec may
+            // execute but never reports a frontier — ExploratoryNoMatch).
+            let metric = decls_for(input, &spec.query.metrics)?
+                .into_iter()
+                .next()
+                .ok_or_else(|| AnalysisError::BadSpec {
+                    member: "query.metrics".into(),
+                    detail: "frontier requires at least one metric".into(),
+                })?;
+            if let Some(r) = runs.iter().find(|r| !r.comparable) {
+                return Err(AnalysisError::Compare(CompareError::ExploratoryRun {
+                    run_id: r.run_id.clone(),
+                }));
+            }
+            let comparable: Vec<&EvalRun> = runs.iter().collect();
+            let arm_ids: BTreeSet<&str> = comparable.iter().map(|r| r.arm_id.as_str()).collect();
+            if arm_ids.len() < 2 {
+                return Err(AnalysisError::BadSpec {
+                    member: "query.filters".into(),
+                    detail: "frontier requires runs from at least two arms".into(),
+                });
+            }
+            let arms: Vec<ArmSpec> = arm_ids
+                .iter()
+                .map(|a| arm_spec(input, a).cloned())
+                .collect::<Result<_, _>>()?;
+            hh_budget::matchspec::validate_match(&arms)
+                .map_err(CompareError::Match)
+                .map_err(AnalysisError::Compare)?;
+            if arms[0].match_spec.as_ref().map(|s| s.mode)
+                == Some(hh_budget::matchspec::MatchMode::None)
+            {
+                // Belt-and-braces — validate_match already refuses.
+                return Err(AnalysisError::Compare(CompareError::Match(
+                    hh_budget::MatchError {
+                        arm: Some(0),
+                        refusal: hh_budget::MatchRefusal::IncommensurableMatch {
+                            reason: hh_budget::RefusalReason::ExploratoryNoMatch,
+                            dimension: None,
+                            enforceability: None,
+                        },
+                    },
+                )));
+            }
+            frontier = Some(crate::frontier::frontier_report(
+                metric,
+                &comparable,
+                input.facts,
+            ));
+        }
         other => {
             return Err(AnalysisError::KindNotImplemented {
                 kind: other.to_string(),
@@ -569,6 +629,7 @@ pub fn analyze(
         contrasts,
         equivalence,
         transfer_profile,
+        frontier,
         not_run,
     ))
 }

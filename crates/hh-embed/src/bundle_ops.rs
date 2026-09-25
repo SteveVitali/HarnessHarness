@@ -566,12 +566,27 @@ impl EmbedService {
             reason: format!("compile: {e:?}"),
         })?;
         let doc = hh_compiler::schema::bundle_to_json(&bundle);
+        // The validator set the plan binds — `resolved_dependencies
+        // .validators[]` names it so an R2 verdict reports the set it
+        // re-derived under (AC-R-2.12.1-13; S3.12).
+        let validators = doc
+            .get("runtime_plan")
+            .and_then(|p| p.get("validators"))
+            .and_then(|v| match v {
+                Json::Arr(vs) => Some(vs.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|b| b.get("validator").cloned())
+            .collect();
         Ok(Some(CompileOutcome {
             bundle_id: bundle.bundle_id.clone(),
             derivation_key: bundle.derivation_key.clone(),
             member_bytes: doc.to_canonical_string().into_bytes(),
             lcd_report: doc.get("lcd_report").cloned().unwrap_or(Json::Null),
             opacity_report: doc.get("opacity_report").cloned().unwrap_or(Json::Null),
+            validators,
         }))
     }
 
@@ -693,6 +708,53 @@ impl EmbedService {
                         false,
                         false,
                     );
+                }
+            }
+            // AC-R-2.12.1-13 — `reproduce(bundle, R3, seeds[])`: every
+            // seed arm carries `search_budget`/`eval_budget` equal to the
+            // bundle's declared budgets, else `UnbudgetedArm{seed}`
+            // (matched-budget-or-refuse — an arm the manifest can't
+            // budget-match never enters the distribution).
+            let declared_eval = m.configuration.get("budget").cloned().unwrap_or(Json::Null);
+            let declared_search = m
+                .results
+                .get("search_budget")
+                .or_else(|| m.configuration.get("search_budget"))
+                .cloned()
+                .unwrap_or(Json::Null);
+            if let Some(Json::Arr(seeds)) = params.get("seeds") {
+                for arm in seeds {
+                    let seed_label = arm
+                        .get("seed")
+                        .and_then(Json::as_int)
+                        .map(|s| s.to_string())
+                        .or_else(|| arm.as_int().map(|s| s.to_string()))
+                        .unwrap_or_else(|| "?".to_string());
+                    let arm_eval = arm.get("eval_budget").cloned().unwrap_or(Json::Null);
+                    let arm_search = arm.get("search_budget").cloned().unwrap_or(Json::Null);
+                    let eval_ok = !matches!(arm_eval, Json::Null)
+                        && budget_limits_equal(&declared_eval, &arm_eval);
+                    let search_ok = match (&declared_search, &arm_search) {
+                        (Json::Null, Json::Null) => true,
+                        (Json::Null, _) | (_, Json::Null) => false,
+                        _ => budget_limits_equal(&declared_search, &arm_search),
+                    };
+                    if !eval_ok || !search_ok {
+                        return mk(
+                            ReproOutcome::Refused,
+                            Some(format!("UnbudgetedArm{{seed {seed_label}}}")),
+                            Json::obj([
+                                ("oracle_diff", Json::Arr(vec![])),
+                                ("fingerprints", Json::Arr(vec![])),
+                                ("budget_match", Json::Bool(false)),
+                                ("distributions", Json::Arr(vec![])),
+                            ]),
+                            vec![],
+                            None,
+                            false,
+                            false,
+                        );
+                    }
                 }
             }
         }
@@ -861,6 +923,48 @@ impl EmbedService {
             .members
             .iter()
             .any(|mm| mm.role == levels::roles::ENVIRONMENT);
+        // AC-R-2.12.1-13 — an R2+ verdict *names its validator set*:
+        // `resolved_dependencies.validators[]` (the pinned refs the
+        // compiled `RuntimePlan` bound — `[]` is the honestly empty set).
+        let validators = m
+            .resolved_dependencies
+            .get("validators")
+            .cloned()
+            .unwrap_or(Json::Arr(vec![]));
+        // …and reports *distributions*, never means alone: one row per
+        // seed leg the caller declared (`{seed, outcome, drift}`), the
+        // per-leg verdict — no aggregate column.
+        let distributions = if level == ReproLevel::R3 {
+            match params.get("seeds") {
+                Some(Json::Arr(seeds)) => Json::Arr(
+                    seeds
+                        .iter()
+                        .map(|arm| {
+                            let seed = arm
+                                .get("seed")
+                                .cloned()
+                                .or_else(|| arm.as_int().map(Json::Int))
+                                .unwrap_or(Json::Null);
+                            Json::obj([
+                                ("seed", seed),
+                                (
+                                    "outcome",
+                                    Json::str(if drift.is_empty() && model_ok {
+                                        "pass"
+                                    } else {
+                                        "drift"
+                                    }),
+                                ),
+                                ("drift", Json::Int(drift.len() as i64)),
+                            ])
+                        })
+                        .collect(),
+                ),
+                _ => Json::Arr(vec![]),
+            }
+        } else {
+            Json::Arr(vec![])
+        };
         let outcome = if !drift.is_empty() {
             ReproOutcome::Drift
         } else if inconclusive {
@@ -874,6 +978,8 @@ impl EmbedService {
             Json::obj([
                 ("oracle_diff", Json::Arr(vec![])),
                 ("fingerprints", Json::Arr(fingerprints)),
+                ("validators", validators),
+                ("distributions", distributions),
                 (
                     "budget_match",
                     if level == ReproLevel::R3 {

@@ -9,6 +9,12 @@
 //!   source — §5h.6 §6).
 //! - [`DebtNotice`] — the notification record the expiry/removal-test-due
 //!   sinks carry (OQ-446's `reach_via` sinks).
+//! - the Stage-3 retirement slice (R-2.9.6⁰ᵇ): [`settle_removal_test`]
+//!   (`RemovalVerdict` + the settle effects — pass ⇒ retirement-eligible,
+//!   fail ⇒ `revalidated{evidence_ref}`, inconclusive ⇒ reschedule),
+//!   [`retire`] (the human-sealed `expired → retired` gate), and the
+//!   `expired_used` exclusion helpers
+//!   ([`expired_used_payload`]/[`headline_admitted`]).
 //!
 //! Everything here is a derived *view* — never stored as truth (the ledger's
 //! debt rows are the truth; `project`-style rebuild is the Stage-3 half).
@@ -17,6 +23,7 @@ use std::collections::BTreeMap;
 
 use hh_ontology::debt::{
     DebtHome, DebtStatus, EvidenceRef, ExpiryCondition, ExpiryKind, OwnerRef, RemovalTestKind,
+    RemovalVerdict, Verdict,
 };
 use hh_wire::Json;
 
@@ -382,4 +389,221 @@ pub fn home_for(record_kind: &str, field: &str) -> Option<&'static DebtHome> {
     hh_ontology::debt::DEBT_HOMES
         .iter()
         .find(|h| h.record_kind == record_kind && h.field == field)
+}
+
+// ── Stage-3 retirement machinery (R-2.9.6⁰ᵇ; §5h.6 §2; ADR-0197 D6/D7) ──────
+
+/// `DebtTransition{debt_ref, from, to, trigger, evidence_ref?}` — the pure
+/// transition record `settle_removal_test`/`retire` produce; the caller
+/// (kernel/registry) appends `lifecycle.debt.status.changed` with `causes[]`.
+/// Nothing here writes a ledger — records-in, transitions-out (the manager
+/// holds no authority handle — §5h.6 §6 D-2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DebtTransition {
+    /// The debt record the transition settles.
+    pub debt_ref: String,
+    /// The status before.
+    pub from: DebtStatus,
+    /// The status after.
+    pub to: DebtStatus,
+    /// The trigger spelling (`removal_test_failed`, `retired`, …).
+    pub trigger: String,
+    /// The evidence the transition cites (the `ComparisonReport` ref).
+    pub evidence_ref: Option<String>,
+}
+
+impl DebtTransition {
+    /// The `lifecycle.debt.status.changed` payload (the event class's
+    /// registered members; `causes[]` is the caller's append).
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("debt_ref".into(), Json::str(&self.debt_ref));
+        m.insert("from".into(), Json::str(self.from.name()));
+        m.insert("to".into(), Json::str(self.to.name()));
+        m.insert("trigger".into(), Json::str(&self.trigger));
+        if let Some(e) = &self.evidence_ref {
+            m.insert("evidence_ref".into(), Json::str(e));
+        }
+        Json::Obj(m)
+    }
+}
+
+/// What `settle_removal_test` did to the record (§5h.6 §2 — the verdict's
+/// record-facing half; the immutable `RemovalVerdict` is the other half).
+#[derive(Debug, Clone, PartialEq)]
+pub enum SettleEffect {
+    /// `pass` — the rule is retirement-eligible; status unchanged until a
+    /// human seal retires it (D-5/D7 — never automatic).
+    RetirementEligible,
+    /// `fail` — the report becomes a `comparison_report` evidence ref and
+    /// the grade re-derives `confirmed`; an `expiring`/`expired` record
+    /// returns to `active` (a fail verdict is evidence, never a
+    /// punishment).
+    Revalidated {
+        /// The `ComparisonReport` ref the revalidation cites.
+        evidence_ref: String,
+    },
+    /// `inconclusive` — the test reschedules under `DebtPolicy` (the
+    /// `reason` rides the `RemovalVerdict.inconclusive{reason}` member).
+    Reschedule,
+}
+
+/// `settle_removal_test(debt_ref, kind, report, prior_status) →
+/// (RemovalVerdict, SettleEffect, [DebtTransition])` — the Stage-3 settle:
+/// reads the `ComparisonReport`-backed result, produces the immutable
+/// `RemovalVerdict` and the transitions the caller appends (§5h.6 §2).
+///
+/// `verdict`/`reason` are the report's settled outcome (`inconclusive`
+/// carries the reason — the caller derives both from the report; this
+/// function never re-judges it).
+pub fn settle_removal_test(
+    debt_ref: &str,
+    kind: RemovalTestKind,
+    report_ref: &str,
+    verdict: Verdict,
+    reason: Option<String>,
+    settled_at: u64,
+    prior_status: DebtStatus,
+) -> (RemovalVerdict, SettleEffect, Vec<DebtTransition>) {
+    let v = RemovalVerdict {
+        debt_ref: debt_ref.to_string(),
+        kind,
+        verdict,
+        reason: reason.clone(),
+        report_ref: report_ref.to_string(),
+        settled_at,
+    };
+    match verdict {
+        // `pass` ⇒ eligible for retirement — the status is *unchanged*
+        // until the human-sealed `retire` (ADR-0197 D7).
+        Verdict::Pass => (v, SettleEffect::RetirementEligible, Vec::new()),
+        // `fail` ⇒ `revalidated{evidence_ref = report}` — a still-needed
+        // rule leaves `expiring`/`expired`; an `active`/`retired` record
+        // records no status transition (retired is terminal).
+        Verdict::Fail => {
+            let transitions = match prior_status {
+                DebtStatus::Expiring | DebtStatus::Expired => vec![DebtTransition {
+                    debt_ref: debt_ref.to_string(),
+                    from: prior_status,
+                    to: DebtStatus::Active,
+                    trigger: "removal_test_failed".into(),
+                    evidence_ref: Some(report_ref.to_string()),
+                }],
+                _ => Vec::new(),
+            };
+            (
+                v,
+                SettleEffect::Revalidated {
+                    evidence_ref: report_ref.to_string(),
+                },
+                transitions,
+            )
+        }
+        // `inconclusive` ⇒ reschedule under policy — no transition.
+        Verdict::Inconclusive => (v, SettleEffect::Reschedule, Vec::new()),
+    }
+}
+
+/// The `retire` refusals (§5h.6 §2's `retire` row; AC-R-2.9.6-4).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RetireError {
+    /// `RetirementNotEvidenced` — no `pass` `RemovalVerdict` on the debt
+    /// (an `origin = evolution` diff removing a rule without one is
+    /// refused at the gate; proposal is separated from deployment).
+    RetirementNotEvidenced {
+        /// The debt the removal targeted.
+        debt_ref: String,
+    },
+    /// `decided_by.origin ≠ human` — a `RetirementRecord` is human-sealed
+    /// by construction; a non-human `decided_by` never retires.
+    NotHumanSealed {
+        /// The debt the removal targeted.
+        debt_ref: String,
+    },
+    /// `retired` is terminal — a second `retire` never rewrites history.
+    AlreadyRetired {
+        /// The debt the removal targeted.
+        debt_ref: String,
+    },
+}
+
+/// The `retire` outcome — the superseding version's debt-facing content:
+/// `supersedes{reason: expiry}` plus the `→ retired` transition the caller
+/// appends (`lifecycle.debt.status.changed{to: retired}`; the
+/// `security.label.endorsed{basis: seal}` row is the seal call's own).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RetirementOutcome {
+    /// The retired debt.
+    pub debt_ref: String,
+    /// `supersedes.reason` — always `expiry` (the supersession reason the
+    /// new version carries; §5h.6 `retire`).
+    pub supersedes_reason: &'static str,
+    /// The status transition.
+    pub transition: DebtTransition,
+}
+
+/// `retire(debt_ref, status, verdicts, record)` — the retirement gate
+/// (§5h.6 §2; AC-R-2.9.6-4): a `pass` verdict on the debt *and* a
+/// human-sealed `RetirementRecord` admit the `→ retired` supersession;
+/// anything else is a typed refusal (nothing deletes, nothing
+/// auto-retires).
+pub fn retire(
+    debt_ref: &str,
+    status: DebtStatus,
+    verdicts: &[RemovalVerdict],
+    record: &hh_hir::debt::RetirementRecord,
+) -> Result<RetirementOutcome, RetireError> {
+    if status == DebtStatus::Retired {
+        return Err(RetireError::AlreadyRetired {
+            debt_ref: debt_ref.to_string(),
+        });
+    }
+    if !matches!(
+        record.decided_by.origin,
+        hh_provenance::Origin::Human { .. }
+    ) {
+        return Err(RetireError::NotHumanSealed {
+            debt_ref: debt_ref.to_string(),
+        });
+    }
+    if !verdicts
+        .iter()
+        .any(|v| v.debt_ref == debt_ref && v.verdict == Verdict::Pass)
+    {
+        return Err(RetireError::RetirementNotEvidenced {
+            debt_ref: debt_ref.to_string(),
+        });
+    }
+    Ok(RetirementOutcome {
+        debt_ref: debt_ref.to_string(),
+        supersedes_reason: "expiry",
+        transition: DebtTransition {
+            debt_ref: debt_ref.to_string(),
+            from: status,
+            to: DebtStatus::Retired,
+            trigger: "retired".into(),
+            evidence_ref: Some(record.removal_test_report_ref.clone()),
+        },
+    })
+}
+
+/// `lifecycle.debt.expired_used{debt_ref, intent_ref}` — the payload a
+/// bundle compiled under an `expired` record appends (§5h.6 §3's event
+/// row; `classes.rs` registers the class). `intent_ref` names the recorded
+/// intent that admitted the compile (`compile_for_expired` in
+/// `hh_compiler::link` — absent intent refuses `link` outright).
+pub fn expired_used_payload(debt_ref: &str, intent_ref: &str) -> Json {
+    Json::obj([
+        ("debt_ref", Json::str(debt_ref)),
+        ("intent_ref", Json::str(intent_ref)),
+    ])
+}
+
+/// The headline-exclusion rule (AC-R-2.9.6-5; ADR-0197 D9): a run whose
+/// conditioned rule carried an `expired` debt record is excluded from a
+/// headline `ComparisonReport` unless the `Design` declares dead-weight
+/// purpose. The rule is data — the caller (the report generator / the
+/// kernel's `expired_used` projection) supplies both flags.
+pub fn headline_admitted(expired_used: bool, dead_weight_purpose: bool) -> bool {
+    !expired_used || dead_weight_purpose
 }
