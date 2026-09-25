@@ -96,6 +96,7 @@ subsystem seam. Ordering follows the §4.4 topological order (`tier_violations=[
 | 57 | `057_S3.11a__security-eval-monitor-ifc.md` | Stage 3 | ticket | Land the Stage-3 monitor/IFC security executables (§5g.1–§5g.2): AC-R-2.1.5-3/-4/-7/-10/… | — |
 | 58 | `058_S3.11b__security-eval-broker-audit-trust.md` | Stage 3 | ticket | Land the Stage-3 credential/egress/audit/trust/approval security executables (§5g.3–§5g.… | — |
 | 59 | `059_S3.12__bundle-and-plugin-conformance.md` | Stage 3 | ticket | Land the run-bundle completeness and plugin conformance: `BundleManifest` members, `chec… | — |
+| 59a | `059a_S3.12b__gate-g2-gap-closure.md` | Stage 3 | ticket | GATE-G2 gap closure — hermetic benchmarkSet, real-suite legs, exemplar→compare, hosting-absent run, DEFERRALS sweep (inserted 2026-09-25) | — |
 | 60 | `060_GATE-G2__stage3-first-claim.md` | Stage 3 | gate | Stage-3 evaluation-first acceptance — the first claim about a harness may exist | STOP |
 | 61 | `061_HUMAN-H1__bind-surface-ecosystem.md` | Stage 4 | human | Bind the surface (E3) ecosystem for generated clients (OQ-130 / WS-K2) | — |
 | 62 | `062_S4.1__registry-service.md` | Stage 4 | ticket | Land the component-variation registry service (C1): the multi-namespace service with sig… | — |
@@ -326,6 +327,8 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   recorded in its Notes for run-time split if it overflows; (9) S4.6 keeps the C1 `spawn` slice with the C3
   orchestrator (the orchestrator is the slice's only consumer) with the `removability(1)` lint boundary
   noted. Verdict: sound to build from.
+
+- 2026-09-25 · **inserted** `059a_S3.12b__gate-g2-gap-closure.md` (id `S3.12b`, row `59a`) between S3.12 and GATE-G2. Reason: the operator's GATE-G2 Reading-1 disposition (PENDING) authorized a gap-closure ticket to close the machine-achievable cells — the hermetic `benchmarkSet` + deferred real-suite legs (AC-I2-6, AC-I4-3/-11), the exemplar→`ComparisonReport` wiring, the hosting-absent native-suite run, and the Stage-3-scoped DEFERRALS sweep. Foreign-toolchain rows and the R2 human signature are explicitly NOT pulled in. GATE-G2 stays PENDING until S3.12b lands and the operator re-reads the evidence.
 
 ## Plan extensions
 (append-only: inserts `NNa_…`, splits `<ID>a`/`<ID>b` with the original marked superseded-by-split, rounds)
