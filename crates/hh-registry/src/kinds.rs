@@ -146,6 +146,7 @@ impl RecordKind {
                 | RecordKind::Namespace
                 | RecordKind::RegistrySnapshot
                 | RecordKind::ForeignImport
+                | RecordKind::TrustRootPolicy
                 | RecordKind::Capability
                 | RecordKind::MetricDeclaration
                 | RecordKind::Validator

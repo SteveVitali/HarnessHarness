@@ -158,7 +158,7 @@ fn ac_r_2_8_5_10_unresolvable_and_wrong_kind_refs_refuse() {
                 digest: None,
                 label: None,
                 lifted_record: Json::Null,
-                loss_report: vec![],
+                loss_report: hh_registry::records::LossReport::default(),
             }),
             &kernel(),
             None,

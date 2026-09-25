@@ -94,7 +94,7 @@ fn ac2_closed_kinds_and_closed_status_vocabularies() {
                 digest: None,
                 label: None,
                 lifted_record: Json::Null,
-                loss_report: vec![],
+                loss_report: hh_registry::records::LossReport::default(),
             }),
             &kernel,
             None,

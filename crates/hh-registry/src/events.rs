@@ -37,6 +37,20 @@ pub const CONFORMANCE_RECORDED: &str = "lifecycle.registry.conformance_recorded"
 /// registrar_origin}` — the kind-specific class for capability registration
 /// (ADR-0088 D8; CF-327 — kind-specific classes under ADR-0151 D9).
 pub const CAPABILITY_REGISTERED: &str = "lifecycle.capability.registered";
+/// `lifecycle.registry.imported{version_id, system, admission,
+/// registrar_origin}` — a `foreign_import` record landed (S4.1; §6.2 event
+/// family; the kind-specific class under ADR-0151 D9).
+pub const IMPORTED: &str = "lifecycle.registry.imported";
+/// `lifecycle.registry.pin_subject{version_id, admission}` — the subject anchor
+/// a `security.label.endorsed` pin row references (S4.1). The row carries the
+/// *subject-side* provenance (the record's quarantined standing) so the ledger's
+/// append-time `check_endorsement` recomputes `from` off it — the subject's
+/// label is a fact the endorsement re-derives, never a claim.
+pub const PIN_SUBJECT: &str = "lifecycle.registry.pin_subject";
+/// `security.label.endorsed{subject_ref, from, to, endorser, basis, basis_ref}`
+/// — the `pin` endorsement that lifts a signature-required quarantine (§6.2;
+/// §8.1 #3; the ledger re-verifies legitimacy at append — ADR-0035 §1).
+pub const LABEL_ENDORSED: &str = "security.label.endorsed";
 
 /// A pending registry audit row — the class plus its content-free payload.
 #[derive(Debug, Clone, PartialEq)]
@@ -45,6 +59,16 @@ pub struct RegistryEvent {
     pub class: &'static str,
     /// The payload (ids/spellings only — audit rows are content-free).
     pub payload: Json,
+    /// The event's provenance override — `None` (the default) stamps the kernel
+    /// provenance `emit` supplies (the audit-grade fenced-writer rule). The
+    /// `pin_subject` anchor carries the *subject-side* provenance — a
+    /// non-kernel standing the endorsement check reads as the `from` label.
+    pub provenance: Option<ProvenanceRecord>,
+    /// A tag binding this row to its allocated `event_id`: `emit` commits
+    /// anchor rows in a first batch, then rewrites a later payload's
+    /// `subject_ref = "@anchor:<tag>"` to the committed id (the ledger's
+    /// endorsement check resolves committed events only).
+    pub anchor_tag: Option<String>,
 }
 
 impl RegistryEvent {
@@ -65,6 +89,8 @@ impl RegistryEvent {
                 ("admission", Json::str(admission)),
                 ("registrar_origin", Json::str(registrar_origin)),
             ]),
+            provenance: None,
+            anchor_tag: None,
         }
     }
 
@@ -85,6 +111,8 @@ impl RegistryEvent {
                 ("source_kind", Json::str(source_kind)),
                 ("registrar_origin", Json::str(registrar_origin)),
             ]),
+            provenance: None,
+            anchor_tag: None,
         }
     }
 
@@ -97,6 +125,8 @@ impl RegistryEvent {
                 ("reason", Json::str(reason)),
                 ("subject", subject.map_or(Json::Null, Json::str)),
             ]),
+            provenance: None,
+            anchor_tag: None,
         }
     }
 
@@ -119,6 +149,8 @@ impl RegistryEvent {
                 ("supersedes", supersedes.map_or(Json::Null, Json::str)),
                 ("registrar_origin", Json::str(registrar_origin)),
             ]),
+            provenance: None,
+            anchor_tag: None,
         }
     }
 
@@ -136,6 +168,8 @@ impl RegistryEvent {
                 ("name", Json::str(name)),
                 ("registrar_origin", Json::str(registrar_origin)),
             ]),
+            provenance: None,
+            anchor_tag: None,
         }
     }
 
@@ -148,6 +182,8 @@ impl RegistryEvent {
                 ("reason", Json::str(reason)),
                 ("revoker_origin", Json::str(revoker_origin)),
             ]),
+            provenance: None,
+            anchor_tag: None,
         }
     }
 
@@ -160,6 +196,8 @@ impl RegistryEvent {
                 ("member_count", Json::Int(member_count as i64)),
                 ("seq", Json::Int(seq as i64)),
             ]),
+            provenance: None,
+            anchor_tag: None,
         }
     }
 
@@ -178,6 +216,82 @@ impl RegistryEvent {
                 ("suite_ref", Json::str(suite_ref)),
                 ("produced_by", Json::str(produced_by)),
             ]),
+            provenance: None,
+            anchor_tag: None,
+        }
+    }
+
+    /// A `lifecycle.registry.imported` row — `{version_id, system, admission,
+    /// registrar_origin}` (S4.1; the foreign-system spelling is a closed value,
+    /// never content).
+    pub fn imported(
+        version_id: &str,
+        system: &str,
+        admission: &str,
+        registrar_origin: &str,
+    ) -> RegistryEvent {
+        RegistryEvent {
+            class: IMPORTED,
+            payload: Json::obj([
+                ("version_id", Json::str(version_id)),
+                ("system", Json::str(system)),
+                ("admission", Json::str(admission)),
+                ("registrar_origin", Json::str(registrar_origin)),
+            ]),
+            provenance: None,
+            anchor_tag: None,
+        }
+    }
+
+    /// The `lifecycle.registry.pin_subject` anchor — carries the record's
+    /// *subject-side* provenance (the quarantined standing the pin lifts from)
+    /// so the ledger's append-time `check_endorsement` resolves the `from`
+    /// label off a committed event, never a claim. `anchor_tag` binds the
+    /// allocated `event_id` for the paired `pin_endorsed` row.
+    pub fn pin_subject(
+        version_id: &str,
+        anchor_tag: &str,
+        subject: ProvenanceRecord,
+    ) -> RegistryEvent {
+        RegistryEvent {
+            class: PIN_SUBJECT,
+            payload: Json::obj([
+                ("version_id", Json::str(version_id)),
+                ("admission", Json::str("quarantined")),
+            ]),
+            provenance: Some(subject),
+            anchor_tag: Some(anchor_tag.to_string()),
+        }
+    }
+
+    /// The `security.label.endorsed` pin row — the `LabelEndorsed` payload
+    /// partitioned over `LABEL_FIELDS` (`subject_ref` is the `@anchor:<tag>`
+    /// placeholder `emit` rewrites to the committed anchor's event id).
+    pub fn pin_endorsed(anchor_tag: &str, ev: &hh_provenance::LabelEndorsed) -> RegistryEvent {
+        let label = |l: &hh_provenance::Label| {
+            Json::obj([
+                ("authority", Json::str(l.authority.as_str())),
+                (
+                    "taint",
+                    Json::Arr(l.taint.iter().map(|t| Json::str(t.as_string())).collect()),
+                ),
+            ])
+        };
+        RegistryEvent {
+            class: LABEL_ENDORSED,
+            payload: Json::obj([
+                ("subject_ref", Json::str(format!("@anchor:{anchor_tag}"))),
+                ("from", label(&ev.from)),
+                ("to", label(&ev.to)),
+                ("endorser", ev.endorser.to_json()),
+                ("basis", Json::str(ev.basis.as_str())),
+                (
+                    "basis_ref",
+                    ev.basis_ref.clone().map_or(Json::Null, Json::Str),
+                ),
+            ]),
+            provenance: None,
+            anchor_tag: None,
         }
     }
 }
@@ -187,6 +301,11 @@ impl RegistryEvent {
 /// `kernel` is the kernel provenance the `kernel_origin` classes require; the
 /// registrar's own provenance is payload data (CC2 — authority is conferred by the
 /// row's origin, never read from registry content).
+///
+/// Two-phase for anchor rows (S4.1 `pin`): a row carrying `anchor_tag` commits in
+/// a first `append` so a later row's `subject_ref = "@anchor:<tag>"` resolves
+/// through the ledger's *committed* event index — `check_endorsement` reads
+/// committed events only (the subject's provenance supplies the `from` label).
 pub fn emit(
     store: &mut Store,
     run_id: &str,
@@ -197,28 +316,83 @@ pub fn emit(
     if events.is_empty() {
         return Ok(());
     }
-    let mut batch = Vec::with_capacity(events.len());
-    let mut parent = store.head_event_id(run_id)?;
-    for ev in events {
-        let event_id = store.alloc_id("event");
-        batch.push(Event {
-            event_id: event_id.clone(),
-            class: ev.class.to_string(),
-            ts: store.ts_now(),
-            hlc: None,
-            producer: Producer::kernel("registry"),
-            scope: Scope::default(),
-            parent_event_id: parent,
-            causes: Vec::<EventRef>::new(),
-            refs: Vec::new(),
-            ir_refs: Vec::new(),
-            surface_ids: Default::default(),
-            provenance: Some(kernel.clone()),
-            content_kind: None,
-            payload: ev.payload,
-        });
-        parent = event_id;
+    let (anchors, rest): (Vec<RegistryEvent>, Vec<RegistryEvent>) =
+        events.into_iter().partition(|e| e.anchor_tag.is_some());
+    let mut anchor_ids: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let build = |store: &mut Store,
+                 kernel: &ProvenanceRecord,
+                 anchor_ids: &std::collections::HashMap<String, String>,
+                 batch: Vec<RegistryEvent>|
+     -> Result<Vec<Event>, LedgerError> {
+        let mut out = Vec::with_capacity(batch.len());
+        let mut parent = store.head_event_id(run_id)?;
+        for ev in batch {
+            let event_id = store.alloc_id("event");
+            let mut payload = ev.payload;
+            // An `@anchor:<tag>` subject ref resolves to the committed anchor id.
+            if let Json::Obj(m) = &mut payload {
+                if let Some(Json::Str(s)) = m.get("subject_ref") {
+                    if let Some(tag) = s.strip_prefix("@anchor:") {
+                        if let Some(id) = anchor_ids.get(tag) {
+                            m.insert("subject_ref".to_string(), Json::str(id.clone()));
+                        }
+                    }
+                }
+            }
+            out.push(Event {
+                event_id: event_id.clone(),
+                class: ev.class.to_string(),
+                ts: store.ts_now(),
+                hlc: None,
+                producer: Producer::kernel("registry"),
+                scope: Scope::default(),
+                parent_event_id: parent,
+                causes: Vec::<EventRef>::new(),
+                refs: Vec::new(),
+                ir_refs: Vec::new(),
+                surface_ids: Default::default(),
+                provenance: Some(ev.provenance.unwrap_or_else(|| kernel.clone())),
+                content_kind: None,
+                payload,
+            });
+            parent = event_id;
+        }
+        Ok(out)
+    };
+    if !anchors.is_empty() {
+        // The anchor ids are the store's allocator output — the second batch's
+        // `@anchor:<tag>` rewrites name these committed ids, never a claim.
+        let mut parent = store.head_event_id(run_id)?;
+        let mut batch = Vec::with_capacity(anchors.len());
+        for ev in anchors {
+            let event_id = store.alloc_id("event");
+            if let Some(tag) = &ev.anchor_tag {
+                anchor_ids.insert(tag.clone(), event_id.clone());
+            }
+            batch.push(Event {
+                event_id: event_id.clone(),
+                class: ev.class.to_string(),
+                ts: store.ts_now(),
+                hlc: None,
+                producer: Producer::kernel("registry"),
+                scope: Scope::default(),
+                parent_event_id: parent,
+                causes: Vec::<EventRef>::new(),
+                refs: Vec::new(),
+                ir_refs: Vec::new(),
+                surface_ids: Default::default(),
+                provenance: Some(ev.provenance.unwrap_or_else(|| kernel.clone())),
+                content_kind: None,
+                payload: ev.payload,
+            });
+            parent = event_id;
+        }
+        store.append(run_id, lease, batch)?;
     }
-    store.append(run_id, lease, batch)?;
+    let batch = build(store, kernel, &anchor_ids, rest)?;
+    if !batch.is_empty() {
+        store.append(run_id, lease, batch)?;
+    }
     Ok(())
 }

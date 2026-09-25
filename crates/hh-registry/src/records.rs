@@ -490,9 +490,8 @@ impl RegistryPolicy {
 }
 
 /// A `foreign_import` record (`{ForeignRef{system, digest?, label}, lifted record,
-/// LossReport, admission}` — ADR-0153 D4). Imported text legs are `unverified`
-/// (P7); quarantined by default. The `import`/`export` operations are Stage 4 —
-/// this is the record shape.
+/// LossReport, admission}` — ADR-0153 D4; S4.1). Imported text legs are
+/// `unverified` (P7); quarantined by default.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ForeignImport {
     /// The foreign system (`mcp_registry`, `acp_registry`, `marketplace`, `git`,
@@ -508,13 +507,130 @@ pub struct ForeignImport {
     /// for ACP `agent.json`, never a `VariantRecord`).
     pub lifted_record: Json,
     /// The loss report — what the lift could not carry (`{capabilities,
-    /// conformance, trust legs, digest}` at minimum).
-    pub loss_report: Vec<String>,
+    /// conformance, trust_legs, digest}` partitions + `other`).
+    pub loss_report: LossReport,
+}
+
+/// The `LossReport` — the partitioned answer to "what the foreign lift could not
+/// carry" (§6.2 R7's `structured_loss` for `import`/`export`; ADR-0153 D4).
+/// Every member is a list of *named* losses (a path or a member name plus, where
+/// the shape admits it, the reason) — nothing is silently dropped (CC3). The
+/// closed partitions:
+///
+/// - `capabilities` — declared capabilities/effects the lift could not map onto
+///   a registry declaration member;
+/// - `conformance` — conformance/verification claims the foreign shape carries
+///   that cannot become admissible `registry_ci`/`lab` evidence (they surface at
+///   `review`, never `probed`);
+/// - `trust_legs` — signature/attestation/provenance legs the foreign document
+///   asserted that no `TrustRootPolicy` anchor verifies (authority defaults to
+///   `unverified`);
+/// - `digest` — digest/hash legs absent or under a foreign algorithm the lift
+///   cannot re-pin under `idp/1`;
+/// - `other` — any further loss that fits no partition (the bucket is listed,
+///   never silently merged).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LossReport {
+    /// Capability-mapping losses.
+    pub capabilities: Vec<String>,
+    /// Conformance-evidence losses.
+    pub conformance: Vec<String>,
+    /// Trust-leg losses (unverifiable signatures/claims).
+    pub trust_legs: Vec<String>,
+    /// Digest-leg losses (absent/unverifiable foreign digests).
+    pub digest: Vec<String>,
+    /// Losses fitting no named partition.
+    pub other: Vec<String>,
+}
+
+impl LossReport {
+    /// Whether the lift lost nothing at all.
+    pub fn is_empty(&self) -> bool {
+        self.capabilities.is_empty()
+            && self.conformance.is_empty()
+            && self.trust_legs.is_empty()
+            && self.digest.is_empty()
+            && self.other.is_empty()
+    }
+}
+
+/// The `model_install` member's closed spelling (§6.2 TrustRootPolicy —
+/// `deny | ask | allow_attenuated`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelInstallRule {
+    /// Model packages never install from a registry hit.
+    Deny,
+    /// Install requires an interactive principal confirmation.
+    Ask,
+    /// Install proceeds under attenuated requests only.
+    AllowAttenuated,
+}
+
+impl ModelInstallRule {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ModelInstallRule::Deny => "deny",
+            ModelInstallRule::Ask => "ask",
+            ModelInstallRule::AllowAttenuated => "allow_attenuated",
+        }
+    }
+
+    /// The closed-sum parse.
+    pub fn parse(s: &str) -> Option<ModelInstallRule> {
+        match s {
+            "deny" => Some(ModelInstallRule::Deny),
+            "ask" => Some(ModelInstallRule::Ask),
+            "allow_attenuated" => Some(ModelInstallRule::AllowAttenuated),
+            _ => None,
+        }
+    }
+}
+
+/// The `TrustRootPolicy` record (§6.2; ADR-0153 D3/D4; S4.1) — the registry's
+/// trust anchor set: which signer coordinates the store accepts
+/// (`accepted_signers` names `AttestationAnchor::Signer` values — identity
+/// coordinates, never record refs), which record/extension spellings register
+/// `quarantined` until a verified signature/pin lifts them
+/// (`require_signature_for`), the authority ceiling a hash-only pin may confer
+/// (`hash_only_ceiling`, default `external` — integrity, never endorsement),
+/// and the drift/scanner/model-install/archive postures carried as data (CC1 —
+/// one trust scheme shared with `hh-provenance`'s attestation machinery;
+/// registration of this kind requires `principal`+ authority — see `store.rs`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrustRootPolicy {
+    /// The attestation kinds this root admits (`AttestationKind` spellings —
+    /// `signature`, `pin`, `seal`, …).
+    pub allowed_sources: BTreeSet<String>,
+    /// The accepted signer coordinates (the `AttestationAnchor::Signer` set —
+    /// signer identity refs, never registry version ids).
+    pub accepted_signers: BTreeSet<String>,
+    /// The predicates an accepted attestation must carry (per-source rules).
+    pub required_predicates: BTreeSet<String>,
+    /// The record/extension spellings requiring a verified signature at register
+    /// (`component_variant`, `plugin`, `mcp_server`, `skill`, …) — a matching
+    /// record lands `quarantined` until a `pin` endorsement lifts it.
+    pub require_signature_for: BTreeSet<String>,
+    /// The authority ceiling a hash-only pin may confer (default `external`).
+    pub hash_only_ceiling: hh_provenance::AuthorityClass,
+    /// The freshness bound for signature-required records (transaction-time).
+    pub max_age: Option<u64>,
+    /// The signer-set drift posture (`quarantine` — a removed signer's records
+    /// keep their admission; the *pin* path is the re-verification op).
+    pub drift_policy: String,
+    /// The scanner posture (advisory — scanners are not part of this slice).
+    pub scanner_policy: String,
+    /// The model-package install posture (closed sum).
+    pub model_install: ModelInstallRule,
+    /// The archive-trust posture (advisory — archives lift to candidates only).
+    pub archive_policy: String,
+    /// Extension members (never authority-relevant).
+    pub ext: BTreeMap<String, Json>,
 }
 
 /// A `registry_snapshot` record (ADR-0038 — a closure, not a catalog). The
-/// `registry_snapshot_id` is the snapshot role of the TUF-shaped freshness model
-/// (ADR-0153 D3); `resolve`/`query`/`slot_choices` over it are deterministic (R8).
+/// `registry_snapshot_id` is the snapshot role of the TUF timestamp-role freshness
+/// model (ADR-0153 D3); `resolve`/`query`/`slot_choices` over it are deterministic (R8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct RegistrySnapshot {
     /// The content id (`registry_snapshot_id`).
@@ -612,6 +728,9 @@ pub enum RegistryRecord {
     Snapshot(RegistrySnapshot),
     /// A `foreign_import`.
     ForeignImport(ForeignImport),
+    /// A `trust_root_policy` — the registry's trust anchor set (S4.1; §6.2;
+    /// ADR-0153 D3/D4). Registering one requires `principal`+ authority.
+    TrustRootPolicy(TrustRootPolicy),
     /// A `capability` — a registered `ToolCapability` HIR/1 node.
     Capability(CapabilityRecord),
     /// A `metric_declaration` — the full §5h.2 `MetricDeclaration` is the body
@@ -667,6 +786,7 @@ impl RegistryRecord {
             RegistryRecord::Namespace(_) => RecordKind::Namespace,
             RegistryRecord::Snapshot(_) => RecordKind::RegistrySnapshot,
             RegistryRecord::ForeignImport(_) => RecordKind::ForeignImport,
+            RegistryRecord::TrustRootPolicy(_) => RecordKind::TrustRootPolicy,
             RegistryRecord::Capability(_) => RecordKind::Capability,
             RegistryRecord::MetricDeclaration(_) => RecordKind::MetricDeclaration,
             RegistryRecord::Validator(_) => RecordKind::Validator,
@@ -689,7 +809,11 @@ impl RegistryRecord {
             RegistryRecord::Report(r) => {
                 vec![r.subject_ref.clone(), r.suite_ref.clone()]
             }
-            RegistryRecord::Namespace(_) | RegistryRecord::ForeignImport(_) => Vec::new(),
+            RegistryRecord::Namespace(_)
+            | RegistryRecord::ForeignImport(_)
+            // `accepted_signers` names signer identity coordinates (anchor
+            // spellings), never registry `version_id`s — no closure edges.
+            | RegistryRecord::TrustRootPolicy(_) => Vec::new(),
             // The opaque participant/adapter bodies carry no registry-level
             // pins (C0 — their internal refs live inside the body; hh-hosting
             // owns any projection that reads them).
