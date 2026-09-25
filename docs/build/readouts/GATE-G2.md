@@ -132,5 +132,11 @@ already ran; residuals are later-phase or housekeeping.
 - **Later-phase residuals** annotated in the sweep (S4/S6-scoped cells of Stage-3 rows): DF-S1.13-4, DF-S1.19-2, DF-S1.22-1, DF-S1.24-1, DF-S2.4-3, DF-S3.5-1, DF-S3.9-1, plus the earlier-phase carry set (DF-S1.5-1, DF-S1.12-1/-2, DF-S1.14-1, DF-S1.15-1, DF-S1.21-1, DF-S2.9-1).
 - **Spec-level items for the operator:** §9.4-vs-§10.7 scope ruling; OQ-363 interim rule standing (AC-J3-9); OQ-338/OQ-342 headline-eligibility blocks (spec: stratum A carries Stage-3 acceptance regardless).
 
-### Disposition
-- [ ] PENDING — awaiting operator ruling: PASSED | SKIPPED-BY-OPERATOR | NOT PASSABLE
+### Operator disposition — **PASSED** (2026-09-25)
+The operator ruled **PASS**: the Stage-3 suite is accepted on the recorded evidence. Carried forward as
+**accepted deviations** to GATE-ACCEPT: the five foreign-toolchain rows (DF-S0.3-2, DF-S1.2-2, DF-S1.5-3,
+DF-S1.8-1, DF-S1.27-1), the R2 cross-camp human signature (DF-S0.3-3 residual, carried from GATE-G1), the
+LT-03 live AgentDojo arm, DF-S1.17-1's non-`native_fc` form arm, DF-S1.21-2's OOP validator battery, the
+discovered defects DF-S3.12b-1/-2, and the annotated later-phase residuals. **Rulings bundled:** §10.7's
+Stage-3 row governs acceptance (§9.4's broader list noted; AC-R-2.5.3-7's deferred arm rides DF-S1.17-3);
+ADR-0213's OQ-363 interim rule stands for AC-J3-9. Stage 4 is released (nextTicket → HUMAN-H1).
