@@ -1056,6 +1056,11 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         ("eval", verb @ ("compare" | "scorecard" | "equivalence" | "loss-report")) => {
             go(crate::lab::cmd_eval_op(b, io, p, verb))
         }
+        // ── S4.5a — the `participant` noun (R-2.11.1²; §6.6 verbs) ──
+        ("participant", "describe") => go(crate::lab::cmd_participant_describe(b, io, p)),
+        ("participant", "probe") => go(crate::lab::cmd_participant_probe(b, io, p)),
+        ("participant", "register") => go(crate::lab::cmd_participant_register(b, io, p)),
+        ("participant", "conformance") => go(crate::lab::cmd_participant_conformance(b, io, p)),
         ("bundle", "create") => go(crate::lab::cmd_bundle_create(b, io, p)),
         ("bundle", "validate") => go(crate::lab::cmd_bundle_validate(b, io, p)),
         ("bundle", "reproduce") => go(crate::lab::cmd_bundle_reproduce(b, io, p)),

@@ -28,6 +28,7 @@ pub mod envops;
 pub(crate) mod eval_ops;
 pub(crate) mod experiment_ops;
 pub mod frames;
+pub(crate) mod hosting_ops;
 pub mod inject;
 pub(crate) mod lab_c1_ops;
 pub mod open;
