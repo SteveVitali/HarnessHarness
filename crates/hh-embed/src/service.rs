@@ -667,6 +667,9 @@ impl EmbedService {
             "lab.leaderboard.diff_snapshots" => self.lab_leaderboard_diff_snapshots(&req.params),
             "lab.leaderboard.publish" => self.lab_leaderboard_publish(&req.params),
             "lab.leaderboard.retract_entry" => self.lab_leaderboard_retract_entry(&req.params),
+            // S4.4 — §6.5 §2.2's `snapshots(definition_ref) →
+            // [snapshot_id]` retained-snapshot list.
+            "lab.leaderboard.snapshots" => self.lab_leaderboard_snapshots(&req.params),
             // ── S3.5: `lab.assembly.*` — the assembly service boundary
             // (R-2.10.1; §6.1). Semantics-free: records-in/records-out over
             // the one kernel resolver via `hh_lab::assembly`.

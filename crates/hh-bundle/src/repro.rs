@@ -46,8 +46,25 @@ impl ReproOutcome {
 }
 
 /// `ReproReport{bundle_id, requested_level, achieved_level?, outcome,
-/// refusal?, evidence{oracle_diff[], fingerprints[], budget_match},
-/// drift[], basis[], environment_ok, model_ok, report_id}`.
+/// refusal?, verdict, reproducer, reproducer_instrument, independent,
+/// evidence{oracle_diff[], fingerprints[], budget_match},
+/// drift[], basis[], environment_ok, model_ok, report_id}` (§5h.3 §2's
+/// `ReproReport{bundle_id, level, independent, verdict,
+/// per_member_hash_checks[], per_validator_agreement[],
+/// end_state_diff_ref?, distributions?, nondeterminism_sources_observed[],
+/// budget_match, seeds[], cost, environment_ok, model_ok, reproducer:
+/// ProvenanceRecord, reproducer_instrument{version_id,
+/// component_versions, installation_id}}` — S4.4, R-2.9.3 C1/Stage-4
+/// "`ReproReport` sidecar with `independent`").
+///
+/// `verdict` is the spec's four-valued spelling
+/// (`reproduced | not_reproduced | inconclusive | n/a{reason}`) derived
+/// from `outcome` at serialisation — `outcome` stays as the interim C0
+/// spelling (CC8 additive; the `set_status{to: reproduced}` gate and
+/// imported codecs read `verdict`). `independent` is **kernel-computed
+/// by [`compute_independence`]** — never read from the request and
+/// never minted by a codec: repeatability ≠ reproducibility (OQ-334
+/// interim rule, ADR-0295).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReproReport {
     /// The subject bundle.
@@ -56,11 +73,25 @@ pub struct ReproReport {
     pub requested_level: String,
     /// The achieved level (`None` on refusal).
     pub achieved_level: Option<String>,
-    /// The verdict.
+    /// The outcome (C0 spelling — `verdict` is the spec vocabulary).
     pub outcome: ReproOutcome,
     /// The refusal reason (outcome `refused`).
     pub refusal: Option<String>,
-    /// `{oracle_diff[], fingerprints[], budget_match}`.
+    /// The reproducer's declared `ProvenanceRecord` JSON (`Json::Null`
+    /// when the call declared none — the kernel's own provenance is
+    /// stamped by the driver in that case).
+    pub reproducer: Json,
+    /// The reproducer's declared
+    /// `InstrumentRecord{version_id, component_versions?, installation_id?}`
+    /// JSON (`Json::Null` when undeclared).
+    pub reproducer_instrument: Json,
+    /// `true` only when the reproducer's declared signer AND
+    /// installation both resolve and BOTH differ from the producer's
+    /// declared material ([`compute_independence`]; fail-closed —
+    /// undeclared or equal material computes `false`).
+    pub independent: bool,
+    /// `{oracle_diff[], fingerprints[], budget_match,
+    /// independent_basis}`.
     pub evidence: Json,
     /// The `DriftReport[]` rows.
     pub drift: Vec<Json>,
@@ -95,6 +126,13 @@ impl ReproReport {
         if let Some(r) = &self.refusal {
             m.insert("refusal".into(), Json::str(r.clone()));
         }
+        m.insert("verdict".into(), self.verdict_json());
+        m.insert("reproducer".into(), self.reproducer.clone());
+        m.insert(
+            "reproducer_instrument".into(),
+            self.reproducer_instrument.clone(),
+        );
+        m.insert("independent".into(), Json::Bool(self.independent));
         m.insert("evidence".into(), self.evidence.clone());
         m.insert("drift".into(), Json::Arr(self.drift.clone()));
         m.insert("basis".into(), Json::Arr(self.basis.clone()));
@@ -102,6 +140,32 @@ impl ReproReport {
         m.insert("model_ok".into(), Json::Bool(self.model_ok));
         m.insert("report_id".into(), Json::str(self.report_id.clone()));
         Json::Obj(m)
+    }
+    /// The spec's four-valued `verdict` member — derived from `outcome`,
+    /// never stored separately (CC1): `pass → reproduced`,
+    /// `drift → not_reproduced`, `nondeterministic | inconclusive →
+    /// inconclusive`, `refused → n/a{reason}` (the `MetricValueKind::Na`
+    /// spelling `{"kind": "na", "reason": …}` — refusal is not a
+    /// reproduction verdict).
+    pub fn verdict_json(&self) -> Json {
+        match self.outcome {
+            ReproOutcome::Pass => Json::str("reproduced"),
+            ReproOutcome::Drift => Json::str("not_reproduced"),
+            ReproOutcome::Nondeterministic | ReproOutcome::Inconclusive => {
+                Json::str("inconclusive")
+            }
+            ReproOutcome::Refused => Json::obj([
+                ("kind", Json::str("na")),
+                (
+                    "reason",
+                    Json::str(
+                        self.refusal
+                            .clone()
+                            .unwrap_or_else(|| "refused".to_string()),
+                    ),
+                ),
+            ]),
+        }
     }
     /// Stamp `report_id`.
     pub fn seal(&mut self) {
@@ -124,6 +188,9 @@ impl ReproReport {
             achieved_level: None,
             outcome: ReproOutcome::Refused,
             refusal: Some(reason.into()),
+            reproducer: Json::Null,
+            reproducer_instrument: Json::Null,
+            independent: false,
             evidence: Json::obj([
                 ("oracle_diff", Json::Arr(vec![])),
                 ("fingerprints", Json::Arr(vec![])),
@@ -146,6 +213,67 @@ impl ReproReport {
 pub fn budget_limits_equal(declared: &Json, requested: &Json) -> bool {
     let norm = |j: &Json| -> Json { j.get("limits").cloned().unwrap_or_else(|| j.clone()) };
     norm(declared).to_canonical_string() == norm(requested).to_canonical_string()
+}
+
+/// The declared signer of a `ProvenanceRecord` JSON — the
+/// `attestation.anchor.signer` member (one scheme: a signing claim IS an
+/// attestation anchor — CC1). `signer` is never invented from `origin`.
+fn declared_signer(provenance: &Json) -> Option<&str> {
+    provenance
+        .get("attestation")
+        .and_then(|a| a.get("anchor"))
+        .and_then(|a| a.get("signer"))
+        .and_then(Json::as_str)
+}
+
+/// `independent` — the §5h.3 `ReproReport` flag (S4.4; OQ-334 interim
+/// rule, ADR-0295). A reproduction is `independent` only when the
+/// reproducer's declared identity material BOTH resolves AND differs
+/// from the producer's on **both** axes:
+///
+/// - **signer** — `producer.attestation.anchor.signer` vs
+///   `reproducer.attestation.anchor.signer`;
+/// - **installation** — `manifest.instrument.installation_id` vs
+///   `reproducer_instrument.installation_id`.
+///
+/// The rule is fail-closed: undeclared material on either side computes
+/// `false` with the basis named (`*_undeclared`), as does equal material
+/// (`same_signer` / `same_installation`). Cryptographic establishment of
+/// the reproducer's claim (the §05g "distinct installation and signer,
+/// attested" verification — a signed statement from the reproducer's own
+/// root) is the C2/Stage-5 item the `reproduced`-status admission needs
+/// (R-2.9.3 stage row; S5.4 owns the runtime arm); until then this flag
+/// is a declared-material comparison and the gate stays on it.
+///
+/// Returns `(independent, basis)` — `basis` is recorded on
+/// `evidence.independent_basis` so the flag is auditable. `producer` is
+/// the manifest's `producer` `ProvenanceRecord` JSON, `instrument` the
+/// manifest's `instrument` JSON, `reproducer` /
+/// `reproducer_instrument` the declared counterparts.
+pub fn compute_independence(
+    producer: &Json,
+    instrument: &Json,
+    reproducer: &Json,
+    reproducer_instrument: &Json,
+) -> (bool, &'static str) {
+    let rep_signer = declared_signer(reproducer);
+    let prod_signer = declared_signer(producer);
+    let rep_inst = reproducer_instrument
+        .get("installation_id")
+        .and_then(Json::as_str);
+    let prod_inst = instrument.get("installation_id").and_then(Json::as_str);
+    match (rep_signer, prod_signer, rep_inst, prod_inst) {
+        (Some(rs), Some(ps), Some(ri), Some(pi)) if rs != ps && ri != pi => {
+            (true, "distinct_signer_and_installation")
+        }
+        (Some(rs), Some(ps), _, _) if rs == ps => (false, "same_signer"),
+        (None, _, _, _) => (false, "reproducer_signer_undeclared"),
+        (_, None, _, _) => (false, "producer_signer_undeclared"),
+        (_, _, None, _) => (false, "reproducer_installation_undeclared"),
+        (_, _, _, None) => (false, "producer_installation_undeclared"),
+        (_, _, Some(ri), Some(pi)) if ri == pi => (false, "same_installation"),
+        _ => (false, "incomparable"),
+    }
 }
 
 /// A model snapshot's fingerprint — `idp/1` over the snapshot's pinned

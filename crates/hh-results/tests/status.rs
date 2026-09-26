@@ -121,8 +121,34 @@ fn transitions_are_gated_by_evidence() {
         Json::obj([(
             "repro_report",
             Json::obj([
+                ("bundle_id", Json::str(b)),
                 ("verdict", Json::str("reproduced")),
                 ("independent", Json::Bool(false)),
+            ]),
+        )]),
+    ) {
+        Err(ResultsError::StatusGateFailed { detail }) => {
+            assert!(detail.contains("reproduced"), "{detail}")
+        }
+        _ => panic!("expected StatusGateFailed"),
+    }
+    // A report for *another* bundle is not evidence for this one
+    // (S4.4 — the gate binds `repro_report.bundle_id` to the subject).
+    match set_status(
+        &mut store,
+        &results,
+        &run,
+        b,
+        BundleStatus::Reproduced,
+        "",
+        vec![],
+        Json::Null,
+        Json::obj([(
+            "repro_report",
+            Json::obj([
+                ("bundle_id", Json::str("idp:bundle-other")),
+                ("verdict", Json::str("reproduced")),
+                ("independent", Json::Bool(true)),
             ]),
         )]),
     ) {
@@ -143,6 +169,7 @@ fn transitions_are_gated_by_evidence() {
         Json::obj([(
             "repro_report",
             Json::obj([
+                ("bundle_id", Json::str(b)),
                 ("verdict", Json::str("reproduced")),
                 ("independent", Json::Bool(true)),
             ]),

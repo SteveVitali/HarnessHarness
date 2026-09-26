@@ -270,8 +270,10 @@ pub fn fold(store: &Store) -> StatusBook {
 
 /// `set_status` — the gated transition (§5h.3 §2). `evidence` is the
 /// caller-supplied gate proof: `{validation_report?: {status}, attestation?,
-/// repro_report?: {verdict, independent}, successor?}` — the op refuses
-/// `StatusGateFailed` (a typed refusal, never a skipped check).
+/// repro_report?: {bundle_id, verdict, independent}, successor?}` — the
+/// op refuses `StatusGateFailed` (a typed refusal, never a skipped
+/// check). `repro_report.bundle_id` must equal the transition's
+/// `bundle_ref` (S4.4 — evidence binds to the record it attests).
 #[allow(clippy::too_many_arguments)] // the status event's fields are the record's shape.
 pub fn set_status(
     store: &mut Store,
@@ -333,10 +335,18 @@ pub fn set_status(
                 Some(Json::Bool(true))
             );
             let verdict = repro.and_then(|r| r.get("verdict")).and_then(Json::as_str);
-            if !(independent && verdict == Some("reproduced")) {
+            // The report must name *this* bundle — a `ReproReport` is
+            // evidence for its `bundle_id`, never a transferable badge
+            // (S4.4; CC2 — evidence binds to the record it attests).
+            let bound = repro
+                .and_then(|r| r.get("bundle_id"))
+                .and_then(Json::as_str)
+                == Some(bundle_ref);
+            if !(independent && verdict == Some("reproduced") && bound) {
                 return Err(ResultsError::StatusGateFailed {
                     detail: "StatusGateFailed: reproduced requires \
-                             ReproReport{verdict = reproduced, independent = true}"
+                             ReproReport{verdict = reproduced, independent = true, \
+                             bundle_id = this bundle}"
                         .into(),
                 });
             }
