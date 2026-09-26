@@ -350,6 +350,10 @@ impl SealedDefinition {
     pub fn minting_context(&self) -> hh_provenance::MintingContext {
         hh_provenance::MintingContext {
             closed_world_tools: self.closed_world_tools.clone(),
+            // A sealed definition vouches for no participant — the vouch set
+            // is conferred by the Hosting-ABI boundary, never by a document
+            // (CC2). S4.5a / DF-S1.3-2.
+            vouched_participants: std::collections::BTreeSet::new(),
         }
     }
 

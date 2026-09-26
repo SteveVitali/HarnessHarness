@@ -699,7 +699,9 @@ fn report_result_json(r: &ReportResult) -> Json {
     ])
 }
 
-fn hosted_entry_json(e: &ConformanceRecord) -> Json {
+/// Canonical JSON for a §6.6 `hosted_entries[]` member (the boundary's
+/// `describe`/`conformance` views reuse it — one spelling, never two).
+pub fn hosted_entry_json(e: &ConformanceRecord) -> Json {
     obj(vec![
         (
             "adapter_version_id",

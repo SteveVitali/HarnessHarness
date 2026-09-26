@@ -80,6 +80,10 @@ pub struct EmbedService {
     /// JournalSubscription` (the results-store post-durability journal;
     /// S4.3/R-2.10.5).
     pub(crate) results_subscriptions: BTreeMap<String, hh_results::journal::JournalSubscription>,
+    /// The removable Hosting Plane driver (S4.5a; `hosting_ops::HostingPlane`
+    /// — a pure-Json seam keeping `hosting_edges = []`). `None` = the tier
+    /// is absent; ops needing it refuse `hosting_plane_absent`, never fake.
+    pub(crate) hosting_plane: Option<crate::hosting_ops::HostingPlane>,
 }
 
 /// A declared host-executor capability (`supplies.host_capabilities[]`).
@@ -285,6 +289,7 @@ impl EmbedService {
             workspace_root: config.workspace_root,
             holder: config.holder,
             registry_run: None,
+            hosting_plane: None,
             experiment_engines: BTreeMap::new(),
             results_subscriptions: BTreeMap::new(),
         })
@@ -670,6 +675,12 @@ impl EmbedService {
             // S4.4 — §6.5 §2.2's `snapshots(definition_ref) →
             // [snapshot_id]` retained-snapshot list.
             "lab.leaderboard.snapshots" => self.lab_leaderboard_snapshots(&req.params),
+            // ── S4.5a: `lab.hosting.*` — the Hosting ABI boundary
+            // (R-2.10.6; records-in/records-out over registry + ledger;
+            // `drive` forwards through the removable HostingPlane seam).
+            "lab.hosting.describe" => self.lab_hosting_describe(&req.params),
+            "lab.hosting.probe" => self.lab_hosting_probe(&req.params),
+            "lab.hosting.attach" => self.lab_hosting_attach(&req.params),
             // ── S3.5: `lab.assembly.*` — the assembly service boundary
             // (R-2.10.1; §6.1). Semantics-free: records-in/records-out over
             // the one kernel resolver via `hh_lab::assembly`.
@@ -705,6 +716,13 @@ impl EmbedService {
     pub(crate) fn alloc(&mut self, prefix: &str) -> String {
         self.next += 1;
         format!("{prefix}-{}", self.next)
+    }
+
+    /// Wire the removable Hosting Plane driver (S4.5a; CC6 — `None`
+    /// removes the tier: `lab.hosting.probe{drive}` then refuses
+    /// `hosting_plane_absent`; describe/attach stay records-only).
+    pub fn set_hosting_plane(&mut self, plane: Option<crate::hosting_ops::HostingPlane>) {
+        self.hosting_plane = plane;
     }
 
     /// Mint one kernel-provenance event and append it under the

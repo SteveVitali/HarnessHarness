@@ -34,6 +34,7 @@ pub mod event;
 pub mod export;
 pub mod fault;
 pub mod hlc;
+pub mod hosted;
 pub mod ids;
 pub mod leases;
 pub mod manifest;

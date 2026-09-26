@@ -236,7 +236,7 @@ pub fn validate_assembly(
     // ── Stage 3 — parameter space ────────────────────────────────────────────────
     report.stages.push(StageOutcome::ran(3));
     if let Some(a) = &assembly {
-        stage3_parameters(a, &mut diags, kernel);
+        stage3_parameters(a, root_declared_capabilities(doc), &mut diags, kernel);
     }
 
     // ── Stage 4 — constraints ────────────────────────────────────────────────────
@@ -353,6 +353,21 @@ fn root_is_hosted(doc: &HirDocument) -> bool {
             _ => None,
         })
         .unwrap_or(false)
+}
+
+/// The hosted root's declared capability tri-state (`None` on a native root) —
+/// the declaration the R-2.10.1² parameter-space admissibility check reads.
+fn root_declared_capabilities(
+    doc: &HirDocument,
+) -> Option<&hh_hir::records::CapabilityDeclarationRecord> {
+    doc.node(&doc.root.semantic_id)
+        .and_then(|n| match &n.semantic {
+            KindRecord::AgentProcess(a) => match &a.body {
+                AgentProcessBody::Hosted(o) => Some(&o.declared_capabilities),
+                _ => None,
+            },
+            _ => None,
+        })
 }
 
 /// A copy of `doc` with `assembly.slots` materialised onto the root `native` process —
@@ -543,7 +558,12 @@ fn class_for_slot(
 
 // ── Stage 3 — parameter space ─────────────────────────────────────────────────
 
-fn stage3_parameters(a: &Assembly, diags: &mut Vec<AssemblyDiagnostic>, kernel: &ProvenanceRecord) {
+fn stage3_parameters(
+    a: &Assembly,
+    hosted_caps: Option<&hh_hir::records::CapabilityDeclarationRecord>,
+    diags: &mut Vec<AssemblyDiagnostic>,
+    kernel: &ProvenanceRecord,
+) {
     // Every `values` key is declared.
     for k in a.values.keys() {
         if !a.parameters.contains_key(k) {
@@ -583,6 +603,48 @@ fn stage3_parameters(a: &Assembly, diags: &mut Vec<AssemblyDiagnostic>, kernel: 
                 kernel,
                 Stage::Validate(3),
             ));
+        }
+        // R-2.10.1² (ADR-0013 (4)) — on a hosted root the parameter space
+        // admits `affects ⊆ {configuration, product}` only (the OpaqueProcess
+        // boundary has no component classes to affect) and `sweepable` only
+        // over a capability coordinate the participant declaration records
+        // `supported`; an `unknown` claim is never coerced (T-LCD-07), and
+        // the experiment's `enumerate` refuses the same inadmissible
+        // coordinate with `InadmissibleFactor` (§6.3's check_factors).
+        if let Some(caps) = hosted_caps {
+            for aff in &spec.affects {
+                if aff != "configuration" && aff != "product" {
+                    diags.push(diag(
+                        Code::ParamHostedInadmissible,
+                        &format!("/assembly/parameters/{id}/affects"),
+                        aff,
+                        &format!(
+                            "hosted parameter `{id}` affects `{aff}` — a hosted `ParameterSpec` admits only `configuration`/`product` coordinates"
+                        ),
+                        "restrict `affects` to the hosted granularities (D5: there are no component classes to affect)",
+                        kernel,
+                        Stage::Validate(3),
+                    ));
+                }
+            }
+            if spec.sweepable {
+                if let Some(state) = caps.get(id) {
+                    if state != hh_hir::records::CapabilityState::Supported {
+                        diags.push(diag(
+                            Code::ParamHostedInadmissible,
+                            &format!("/assembly/parameters/{id}/sweepable"),
+                            id,
+                            &format!(
+                                "parameter `{id}` is sweepable over capability coordinate `{id}` the declaration records `{}`",
+                                state.name()
+                            ),
+                            "declare the coordinate `supported`, or drop `sweepable` — an unknown capability is never coerced",
+                            kernel,
+                            Stage::Validate(3),
+                        ));
+                    }
+                }
+            }
         }
     }
     // `$param:`/`$entity:` markers — used set vs declared set, both directions.

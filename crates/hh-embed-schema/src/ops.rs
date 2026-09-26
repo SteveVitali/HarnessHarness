@@ -807,9 +807,14 @@ pub fn registry() -> Vec<OpSpec> {
         // read (the retained-snapshot list; `leaderboard` returns the
         // snapshot document itself).
         labi("lab.leaderboard.snapshots", "L", "json", "json"),
-        lab("lab.hosting.describe", "L", "json", "json"),
-        lab("lab.hosting.probe", "L", "json", "json"),
-        lab("lab.hosting.attach", "L", "json", "json"),
+        // S4.5a (§6.6; R-2.10.6): the Hosting ABI boundary — `describe`
+        // (registry read + reconciled capability_vector), `probe`
+        // (conformance entries + P0 quarantine; `drive` through the
+        // removable HostingPlane seam), `attach` (the hosted-session
+        // ledger write + metric emissions).
+        labi("lab.hosting.describe", "L", "json", "json"),
+        labi("lab.hosting.probe", "L", "json", "json"),
+        labi("lab.hosting.attach", "L", "json", "json"),
         // S3.1 (R-2.11.3⁰; ADR-0097 D7/ADR-0173): `serve(bundle)` — the
         // Stage-3 fixture MCP server over stdio. The op decodes the
         // bundle, extracts its compiled `target:mcp` member and returns
