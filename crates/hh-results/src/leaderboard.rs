@@ -437,7 +437,7 @@ pub fn leaderboard(
                 .iter()
                 .filter(|e| {
                     e.subject_runs.iter().any(|r| r == &row.key.run_id)
-                        && e.status >= definition.min_status
+                        && e.status.satisfies(definition.min_status)
                         && definition
                             .min_claimed_level
                             .is_none_or(|m| e.claimed_level.is_some_and(|c| c >= m))
@@ -493,7 +493,7 @@ pub fn leaderboard(
                 .iter()
                 .filter(|e| {
                     e.subject_runs.iter().any(|r| r == &row.key.run_id)
-                        && e.status >= definition.min_status
+                        && e.status.satisfies(definition.min_status)
                         && definition
                             .min_claimed_level
                             .is_none_or(|m| e.claimed_level.is_some_and(|c| c >= m))

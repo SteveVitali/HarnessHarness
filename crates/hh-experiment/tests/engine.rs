@@ -98,6 +98,7 @@ fn arm(arm_id: &str, level: &str, eval: &str, search: Option<&str>) -> ArmSpec {
         level_assignment: BTreeMap::from([("compaction_strategy".to_string(), level.to_string())]),
         eval_budget: eval.to_string(),
         search_budget: search.map(str::to_string),
+        inference_budget: None,
         match_spec: Some(MatchSpec::matched_cap(&[DimensionId::ModelCalls])),
         artifact_ref: Ref::new("artifact:x", pinned("artifact.x")),
         limits_enforced: "full".to_string(),
@@ -913,7 +914,7 @@ fn pause_gates_next_claim_launch_but_not_settle() {
     let (rpid, l) = launch_one(&mut r, &eid);
     let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
     eng.attach(&eid).unwrap();
-    eng.pause(PauseReason::Operator).unwrap();
+    eng.pause(PauseReason::Operator, None).unwrap();
     assert!(matches!(
         eng.next().unwrap_err(),
         ExperimentError::ExperimentPaused { .. }
@@ -934,7 +935,7 @@ fn pause_gates_next_claim_launch_but_not_settle() {
     let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
     eng.attach(&eid).unwrap();
     assert!(eng.settle(&rpid).unwrap().accepted);
-    eng.resume().unwrap();
+    eng.resume(None).unwrap();
     assert!(matches!(
         eng.next().unwrap(),
         NextVerdict::Plan { .. } | NextVerdict::Done

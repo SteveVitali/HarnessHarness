@@ -89,6 +89,7 @@ fn budget_map() -> BTreeMap<String, BudgetSpec> {
         ("budget:search-zero".to_string(), caps(0)),
         ("budget:experiment".to_string(), caps(100_000)),
         ("budget:instrument".to_string(), caps(100_000)),
+        ("budget:inference-zero".to_string(), caps(0)),
     ])
 }
 
@@ -449,4 +450,193 @@ fn retrieval_index_v1_registers_structural_index_arm() {
     let plan = expand(&spec, &t, &expand_ctx()).unwrap();
     assert_eq!(plan.cells.len(), 4);
     assert_eq!(plan.run_plans.len(), 20);
+}
+
+// ── S4.2 Phase-4 recipes ────────────────────────────────────────────────────
+
+fn delegation_pins() -> DelegationPins {
+    DelegationPins {
+        topology_refs: (
+            pinned("topology.t0"),
+            pinned("topology.t1f2"),
+            pinned("topology.t1f4"),
+            pinned("topology.t2"),
+            pinned("topology.t3"),
+        ),
+        model_family_refs: (pinned("model.family_a"), pinned("model.family_b")),
+        environment_level_ref: pinned("env.coding"),
+        artifacts: (
+            Ref::new("definition:delegation", pinned("artifact.t0")),
+            Ref::new("definition:delegation", pinned("artifact.t1f2")),
+            Ref::new("definition:delegation", pinned("artifact.t1f4")),
+            Ref::new("definition:delegation", pinned("artifact.t2")),
+            Ref::new("definition:delegation", pinned("artifact.t3")),
+        ),
+        pricing_table_ref: PricingTableRef {
+            table_id: "pricing:test".to_string(),
+            version: "1".to_string(),
+            pin: Some(pinned("pricing.table")),
+        },
+        inference_budget_ref: "budget:inference-zero".to_string(),
+    }
+}
+
+fn voc_pins() -> ValueOfComputePins {
+    ValueOfComputePins {
+        policy_refs: (
+            pinned("policy.static"),
+            pinned("policy.uniform"),
+            pinned("policy.rules"),
+        ),
+        model_family_refs: (pinned("model.family_a"), pinned("model.family_b")),
+        environment_level_ref: pinned("env.coding"),
+        artifacts: (
+            Ref::new("definition:compute", pinned("artifact.static")),
+            Ref::new("definition:compute", pinned("artifact.uniform")),
+            Ref::new("definition:compute", pinned("artifact.rules")),
+        ),
+        iso_artifact: Ref::new("definition:compute", pinned("artifact.rules")),
+        pricing_table_ref: PricingTableRef {
+            table_id: "pricing:test".to_string(),
+            version: "1".to_string(),
+            pin: Some(pinned("pricing.table")),
+        },
+        eval_budget_wide: "budget:eval".to_string(),
+    }
+}
+
+fn coord_pins() -> CoordinationTopologyPins {
+    CoordinationTopologyPins {
+        topology_refs: (
+            pinned("topology.single"),
+            pinned("topology.ow_iso"),
+            pinned("topology.ow_share"),
+            pinned("topology.peer"),
+        ),
+        merge_policy_refs: (
+            pinned("merge.parent_effects"),
+            pinned("merge.three_way_text"),
+        ),
+        isolation_refs: (pinned("iso.fork_snapshot"), pinned("iso.scoped_subtree")),
+        model_family_ref: pinned("model.family_a"),
+        environment_level_ref: pinned("env.coding"),
+        artifacts: (
+            Ref::new("definition:coord", pinned("artifact.single")),
+            Ref::new("definition:coord", pinned("artifact.ow_iso")),
+            Ref::new("definition:coord", pinned("artifact.ow_share")),
+            Ref::new("definition:coord", pinned("artifact.peer")),
+        ),
+        pricing_table_ref: PricingTableRef {
+            table_id: "pricing:test".to_string(),
+            version: "1".to_string(),
+            pin: Some(pinned("pricing.table")),
+        },
+        inference_budget_ref: "budget:inference-zero".to_string(),
+    }
+}
+
+#[test]
+fn delegation_v1_registers_and_expands() {
+    let spec = delegation_v1(&pins(), &delegation_pins(), 1);
+    assert_eq!(spec.design.id, "lab/delegation-v1");
+    assert_eq!(spec.design.kind, DesignKind::FullFactorial);
+    // The full product: topology(5) × model_snapshot(2).
+    assert_eq!(spec.arms.len(), 10);
+    assert_eq!(spec.replicates_per_cell, EXEMPLAR_REPLICATES);
+    let topo = spec
+        .factors
+        .iter()
+        .find(|f| f.name == "topology")
+        .expect("topology factor");
+    assert_eq!(
+        topo.granularity,
+        Some(hh_ontology::participant::Granularity::ComponentLevel)
+    );
+    assert_eq!(topo.levels.len(), 5);
+    // Every arm matches under matched_total (ADR-0186 D6).
+    assert!(spec
+        .arms
+        .iter()
+        .all(|a| a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedTotal));
+    spec.register(&ctx()).unwrap();
+    let again = delegation_v1(&pins(), &delegation_pins(), 1);
+    assert_eq!(spec.experiment_id, again.experiment_id);
+    let t = tasks(3);
+    let plan = expand(&spec, &t, &expand_ctx()).unwrap();
+    assert_eq!(plan.cells.len(), 10 * 3);
+    assert_eq!(plan.run_plans.len(), 10 * 3 * EXEMPLAR_REPLICATES as usize);
+}
+
+#[test]
+fn value_of_compute_v1_registers_with_iso_companion() {
+    let spec = value_of_compute_v1(&pins(), &voc_pins(), 1);
+    assert_eq!(spec.design.id, "lab/value-of-compute-v1");
+    assert_eq!(spec.design.kind, DesignKind::FullFactorial);
+    // The product (3 policies × 2 models × 2 budgets) + the iso_cost
+    // companion.
+    assert_eq!(spec.arms.len(), 13);
+    let modes: Vec<MatchMode> = spec
+        .arms
+        .iter()
+        .map(|a| a.match_spec.as_ref().unwrap().mode)
+        .collect();
+    assert_eq!(
+        modes
+            .iter()
+            .filter(|m| **m == MatchMode::MatchedCap)
+            .count(),
+        12
+    );
+    assert_eq!(
+        modes.iter().filter(|m| **m == MatchMode::IsoCost).count(),
+        1
+    );
+    // The budget factor is declared with both levels.
+    let budget = spec
+        .factors
+        .iter()
+        .find(|f| f.name == "eval_budget")
+        .expect("eval_budget factor");
+    assert_eq!(budget.levels.len(), 2);
+    spec.register(&ctx()).unwrap();
+    let again = value_of_compute_v1(&pins(), &voc_pins(), 1);
+    assert_eq!(spec.experiment_id, again.experiment_id);
+    let t = tasks(2);
+    let plan = expand(&spec, &t, &expand_ctx()).unwrap();
+    assert_eq!(plan.cells.len(), 13 * 2);
+}
+
+#[test]
+fn coordination_topology_v1_registers_and_expands() {
+    let spec = coordination_topology_v1(&pins(), &coord_pins(), 1);
+    assert_eq!(spec.design.id, "lab/coordination-topology-v1");
+    assert_eq!(spec.design.kind, DesignKind::FullFactorial);
+    // 4 topologies × 2 merge policies × 2 isolation defaults.
+    assert_eq!(spec.arms.len(), 16);
+    assert_eq!(spec.replicates_per_cell, EXEMPLAR_REPLICATES);
+    // All three factors are component-level (AC-R-2.6.5-7).
+    for name in ["topology", "merge_policy", "default_isolation"] {
+        let f = spec
+            .factors
+            .iter()
+            .find(|f| f.name == name)
+            .unwrap_or_else(|| panic!("{name} factor"));
+        assert_eq!(
+            f.granularity,
+            Some(hh_ontology::participant::Granularity::ComponentLevel),
+            "{name}"
+        );
+    }
+    // matched_total everywhere — child spend charges the subject.
+    assert!(spec
+        .arms
+        .iter()
+        .all(|a| a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedTotal));
+    spec.register(&ctx()).unwrap();
+    let again = coordination_topology_v1(&pins(), &coord_pins(), 1);
+    assert_eq!(spec.experiment_id, again.experiment_id);
+    let t = tasks(2);
+    let plan = expand(&spec, &t, &expand_ctx()).unwrap();
+    assert_eq!(plan.cells.len(), 16 * 2);
+    assert_eq!(plan.run_plans.len(), 16 * 2 * EXEMPLAR_REPLICATES as usize);
 }

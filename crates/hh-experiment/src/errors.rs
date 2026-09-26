@@ -102,6 +102,24 @@ pub enum ExperimentError {
         /// The failure detail.
         detail: String,
     },
+    /// The dispatch would exceed a `SchedulingPolicy` pool's declared
+    /// capacity (§6.3 §2.2; AC-R-2.10.3-10 — the claim/launch waits, the
+    /// pool never over-admits).
+    PoolExhausted {
+        /// The pool key (`model_snapshot:<ref>`, `environment_class:<c>`,
+        /// `participant:<ref>`, `instrument[:<name>]`, or the global
+        /// `max_concurrent_runs` gate).
+        pool: String,
+        /// The pool's declared limit.
+        limit: u32,
+    },
+    /// The arm assigns hosted levels but no `HostedLauncher` adapter is
+    /// wired — the launch refuses rather than silently dispatching
+    /// native (AC-R-2.10.3-14; hosted work is never downgraded).
+    HostedLaunchUnavailable {
+        /// The failure detail.
+        detail: String,
+    },
 }
 
 impl ExperimentError {
@@ -127,6 +145,8 @@ impl ExperimentError {
             ExperimentError::AlreadyOpen { .. } => "AlreadyOpen",
             ExperimentError::Unresolvable { .. } => "Unresolvable",
             ExperimentError::Store { .. } => "StoreError",
+            ExperimentError::PoolExhausted { .. } => "PoolExhausted",
+            ExperimentError::HostedLaunchUnavailable { .. } => "HostedLaunchUnavailable",
         }
     }
 }
@@ -204,6 +224,12 @@ impl std::fmt::Display for ExperimentError {
             } => write!(f, "experiment {experiment_id} already open as {run_id}"),
             ExperimentError::Unresolvable { detail } => write!(f, "unresolvable: {detail}"),
             ExperimentError::Store { detail } => write!(f, "lab docs: {detail}"),
+            ExperimentError::PoolExhausted { pool, limit } => {
+                write!(f, "pool {pool} exhausted (limit {limit})")
+            }
+            ExperimentError::HostedLaunchUnavailable { detail } => {
+                write!(f, "hosted launch unavailable: {detail}")
+            }
         }
     }
 }

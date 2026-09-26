@@ -171,6 +171,7 @@ fn arm(
             .collect(),
         eval_budget: pins.eval_budget.clone(),
         search_budget: Some(pins.search_budget.clone()),
+        inference_budget: None,
         match_spec: Some(match_spec),
         artifact_ref: artifact.clone(),
         limits_enforced: "full".to_string(),
@@ -1560,6 +1561,779 @@ pub fn retrieval_index_v1(
         budgets: budgets(pins),
         bundle_policy: BundlePolicy::Named {
             name: "lab/retrieval-index-v1".to_string(),
+        },
+        ext: BTreeMap::new(),
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}
+
+// ── lab/delegation-v1 (ADR-0186 D6; §6.3's Phase-4 recipe) ──────────────────
+
+/// The level pins `lab/delegation-v1` binds, beyond [`ExemplarPins`].
+/// `topology` is a component-level factor (`Harness` kind,
+/// `component_level` granularity) — the `TopologyPreset` catalogue refs
+/// the sealed definition's goal/procedure resolves against.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DelegationPins {
+    /// `topology` level refs — `(T0 solo, T1 fan_out 2, T1 fan_out 4,
+    /// T2, T3 depth-2)` order (ADR-0186 D6's level set).
+    pub topology_refs: (String, String, String, String, String),
+    /// The two pinned model-family level refs.
+    pub model_family_refs: (String, String),
+    /// The coding-suite environment level ref (Stage-4 first
+    /// execution).
+    pub environment_level_ref: String,
+    /// The sealed artifacts the five topology arms bind (same order as
+    /// `topology_refs`).
+    pub artifacts: (Ref, Ref, Ref, Ref, Ref),
+    /// The pinned pricing table — `spend` is a matched dimension.
+    pub pricing_table_ref: PricingTableRef,
+    /// The pinned `inference_budget` ref — `matched_total` (M3) sums
+    /// `search + eval + inference` per arm.
+    pub inference_budget_ref: String,
+}
+
+/// `lab/delegation-v1`'s primary contrast — `matched_total` on
+/// `{tokens.* constituents, spend}` (ADR-0186 D6; child spend is subject
+/// spend — ADR-0041 M3). The time companion arm set (`matched_cap` on
+/// `time.wall_ms`) is a second `MatchSpec` on the same arms — a
+/// cross-mode `compare` is `IncommensurableMatch`.
+fn delegation_match(pricing: &PricingTableRef) -> MatchSpec {
+    use hh_ontology::dimensions::DimensionId::*;
+    MatchSpec {
+        dimensions: vec![
+            TokensInputUncached,
+            TokensInputCacheRead,
+            TokensInputCacheWrite,
+            TokensOutputVisible,
+            TokensOutputReasoning,
+            Spend,
+        ],
+        mode: MatchMode::MatchedTotal,
+        tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
+        pricing_table_ref: Some(pricing.clone()),
+        model_scope: ModelScope::SameSnapshot,
+        cache_policy: CachePolicy::ColdStart,
+        utilization_floor_ppm: None,
+    }
+}
+
+/// `lab/delegation-v1` at its Stage-4 first-execution size (ADR-0186
+/// D6): `comparative`, `full_factorial` over `topology ∈ {T0, T1(2),
+/// T1(4), T2, T3(2)}` (component-level) × two model families, one coding
+/// suite held-out split, `replicates_per_cell = 5` (≥ 5 seeds),
+/// `MatchSpec{matched_total, tolerance 0.10}` — the negative-literature
+/// null hypothesis H0 (T0 vs every delegating topology at matched
+/// total) with primaries `{capability.task_success,
+/// coordination.lost_write_count, efficiency.cost_of_pass}`.
+pub fn delegation_v1(
+    pins: &ExemplarPins,
+    own: &DelegationPins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "H0 — no headline difference between T0 and any delegating topology at \
+         matched total on the coding suite; H1 — T1 lowers time.wall_ms at equal \
+         tokens where subtasks are independent",
+        &[
+            "capability.task_success",
+            "coordination.lost_write_count",
+            "efficiency.cost_of_pass",
+        ],
+        &["model_snapshot × topology"],
+        pins,
+    );
+    let topology_levels: &[(&str, &str, &str)] = &[
+        ("t0", &own.topology_refs.0, "T0 — solo"),
+        ("t1_fan2", &own.topology_refs.1, "T1 — fan_out 2"),
+        ("t1_fan4", &own.topology_refs.2, "T1 — fan_out 4"),
+        ("t2", &own.topology_refs.3, "T2 — orchestrator/worker"),
+        ("t3_depth2", &own.topology_refs.4, "T3 — recursive depth 2"),
+    ];
+    let artifact_for = |tid: &str| -> Ref {
+        match tid {
+            "t0" => own.artifacts.0.clone(),
+            "t1_fan2" => own.artifacts.1.clone(),
+            "t1_fan4" => own.artifacts.2.clone(),
+            "t2" => own.artifacts.3.clone(),
+            _ => own.artifacts.4.clone(),
+        }
+    };
+    // `full_factorial` — the arms are the complete varied-factor
+    // product: topology(5) × model_snapshot(2) (the single-level
+    // environment factor rides every arm's assignment).
+    let model_levels: &[(&str, &str)] = &[
+        ("model:a", &own.model_family_refs.0),
+        ("model:b", &own.model_family_refs.1),
+    ];
+    let mut arms: Vec<ArmSpec> = Vec::new();
+    for (tid, _r, tlabel) in topology_levels {
+        for (mid, _mr) in model_levels {
+            arms.push(arm(
+                &format!("arm:{tid}:{mid}"),
+                &format!("delegation {tlabel} × {mid}"),
+                &[
+                    ("topology", tid),
+                    ("model_snapshot", mid),
+                    ("environment", "coding-suite"),
+                ],
+                delegation_match(&own.pricing_table_ref),
+                &artifact_for(tid),
+                pins,
+            ));
+            arms.last_mut().unwrap().inference_budget = Some(own.inference_budget_ref.clone());
+        }
+    }
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/delegation-v1".to_string(),
+            kind: DesignKind::FullFactorial,
+            factors: vec![
+                FactorDeclaration {
+                    name: "topology".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: topology_levels
+                        .iter()
+                        .map(|(id, r, label)| decl_level(id, r, label))
+                        .collect(),
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "model_snapshot".to_string(),
+                    kind: FactorKind::ModelSnapshot,
+                    granularity: None,
+                    levels: vec![
+                        decl_level("model:a", &own.model_family_refs.0, "family A"),
+                        decl_level("model:b", &own.model_family_refs.1, "family B"),
+                    ],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "environment".to_string(),
+                    kind: FactorKind::Environment,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "coding-suite",
+                        &own.environment_level_ref,
+                        "Stage-3 coding suite",
+                    )],
+                    role: None,
+                },
+            ],
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: vec![
+            FactorSpec {
+                name: "topology".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: topology_levels
+                    .iter()
+                    .map(|(id, r, label)| level(id, r, label))
+                    .collect(),
+            },
+            FactorSpec {
+                name: "model_snapshot".to_string(),
+                kind: FactorKind::ModelSnapshot,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![
+                    level("model:a", &own.model_family_refs.0, "family A"),
+                    level("model:b", &own.model_family_refs.1, "family B"),
+                ],
+            },
+            FactorSpec {
+                name: "environment".to_string(),
+                kind: FactorKind::Environment,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level(
+                    "coding-suite",
+                    &own.environment_level_ref,
+                    "Stage-3 coding suite",
+                )],
+            },
+        ],
+        arms,
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.delegation-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/delegation-v1".to_string(),
+        },
+        ext: BTreeMap::new(),
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}
+
+// ── lab/value-of-compute-v1 (ADR-0190 D1–D6; §6.3's Phase-4 recipe) ─────────
+
+/// The level pins `lab/value-of-compute-v1` binds, beyond
+/// [`ExemplarPins`]. `compute_policy` is a component-level factor; the
+/// `bandit`/`predictor` levels land at Stage 5 (the recipe's
+/// `matched_total` rule — ADR-0041 M3 — makes a `search_budget > 0` arm
+/// `IncommensurableMatch` under `matched_cap`, never silently admitted).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ValueOfComputePins {
+    /// `compute_policy` level refs — `(static, uniform, rules)` order.
+    pub policy_refs: (String, String, String),
+    /// The two pinned model-family level refs.
+    pub model_family_refs: (String, String),
+    /// The coding-suite environment level ref.
+    pub environment_level_ref: String,
+    /// The sealed artifacts the three policy arms bind (same order).
+    pub artifacts: (Ref, Ref, Ref),
+    /// The artifact the `iso_cost` arm binds.
+    pub iso_artifact: Ref,
+    /// The pinned pricing table — mandatory on the `iso_cost` arm and
+    /// the matched-total dims' `spend` leg.
+    pub pricing_table_ref: PricingTableRef,
+    /// The second `eval_budget` ref — the recipe's `budget ∈ {tight,
+    /// wide}` axis.
+    pub eval_budget_wide: String,
+}
+
+/// `lab/value-of-compute-v1`'s primary contrast — `matched_cap` on
+/// `{model_calls, tokens.output.visible, time.wall_ms, spend}`
+/// (ADR-0190 D2) with `budget_utilization` reported.
+fn value_of_compute_match(pricing: &PricingTableRef) -> MatchSpec {
+    use hh_ontology::dimensions::DimensionId::*;
+    MatchSpec {
+        dimensions: vec![ModelCalls, TokensOutputVisible, TimeWallMs, Spend],
+        mode: MatchMode::MatchedCap,
+        tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
+        pricing_table_ref: Some(pricing.clone()),
+        model_scope: ModelScope::SameSnapshot,
+        cache_policy: CachePolicy::ColdStart,
+        utilization_floor_ppm: None,
+    }
+}
+
+/// `lab/value-of-compute-v1` at its Stage-4 first-execution size
+/// (ADR-0190 D1–D6): `comparative`, `full_factorial` over
+/// `compute_policy ∈ {static, uniform, rules}` (component-level) × two
+/// model families × `eval_budget ∈ {tight, wide}` on the coding suite
+/// held-out split, `replicates_per_cell = 5`, primaries
+/// `{capability.task_success, efficiency.cost_of_pass,
+/// scheduling.overhead}` (Holm-controlled), plus one `iso_cost` arm for
+/// the `cost_of_pass` frontier (ADR-0159). H0 — `rules` vs `static` no
+/// headline difference at matched cap; H2 — the budget × policy
+/// contrast is the registered interaction.
+pub fn value_of_compute_v1(
+    pins: &ExemplarPins,
+    own: &ValueOfComputePins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "H0 — no headline difference rules vs static at matched cap; \
+         H1 — rules spends less than uniform at equal task_success; \
+         H2 — larger rules effect at the tight budget (budget × policy contrast)",
+        &[
+            "capability.task_success",
+            "efficiency.cost_of_pass",
+            "scheduling.overhead",
+        ],
+        &["eval_budget × compute_policy"],
+        pins,
+    );
+    let policy_levels: &[(&str, &str, &str)] = &[
+        ("static", &own.policy_refs.0, "static"),
+        ("uniform", &own.policy_refs.1, "uniform"),
+        ("rules", &own.policy_refs.2, "rules"),
+    ];
+    let artifact_for = |pid: &str| -> Ref {
+        match pid {
+            "static" => own.artifacts.0.clone(),
+            "uniform" => own.artifacts.1.clone(),
+            _ => own.artifacts.2.clone(),
+        }
+    };
+    // `full_factorial` — the matched_cap arms are the complete product:
+    // compute_policy(3) × model_snapshot(2) × eval_budget(2).
+    let model_levels: &[(&str, &str)] = &[
+        ("model:a", &own.model_family_refs.0),
+        ("model:b", &own.model_family_refs.1),
+    ];
+    let mut arms: Vec<ArmSpec> = Vec::new();
+    for (pid, _r, label) in policy_levels {
+        for (mid, _mr) in model_levels {
+            for (bid, budget_ref) in [
+                ("tight", &pins.eval_budget),
+                ("wide", &own.eval_budget_wide),
+            ] {
+                let mut a = arm(
+                    &format!("arm:{pid}:{mid}:{bid}"),
+                    &format!("{label} × {mid} at {bid} budget"),
+                    &[
+                        ("compute_policy", pid),
+                        ("model_snapshot", mid),
+                        ("eval_budget", bid),
+                        ("environment", "coding-suite"),
+                    ],
+                    value_of_compute_match(&own.pricing_table_ref),
+                    &artifact_for(pid),
+                    pins,
+                );
+                a.eval_budget = budget_ref.clone();
+                arms.push(a);
+            }
+        }
+    }
+    // The `iso_cost` companion arm — the frontier read (ADR-0159); it
+    // shares `rules × model:a × tight`'s design point under its own
+    // comparand group (ADR-0156 D2 — a different-mode arm at an occupied
+    // point; a direct compare across modes is `IncommensurableMatch`).
+    let mut iso = arm(
+        "arm:rules:model:a:tight:iso",
+        "rules at iso_cost — the frontier read",
+        &[
+            ("compute_policy", "rules"),
+            ("model_snapshot", "model:a"),
+            ("eval_budget", "tight"),
+            ("environment", "coding-suite"),
+        ],
+        MatchSpec {
+            dimensions: vec![hh_ontology::dimensions::DimensionId::Spend],
+            mode: MatchMode::IsoCost,
+            tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
+            pricing_table_ref: Some(own.pricing_table_ref.clone()),
+            model_scope: ModelScope::SameSnapshot,
+            cache_policy: CachePolicy::ColdStart,
+            utilization_floor_ppm: None,
+        },
+        &own.iso_artifact,
+        pins,
+    );
+    iso.eval_budget = pins.eval_budget.clone();
+    arms.push(iso);
+
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/value-of-compute-v1".to_string(),
+            kind: DesignKind::FullFactorial,
+            factors: vec![
+                FactorDeclaration {
+                    name: "compute_policy".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: policy_levels
+                        .iter()
+                        .map(|(id, r, label)| decl_level(id, r, label))
+                        .collect(),
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "model_snapshot".to_string(),
+                    kind: FactorKind::ModelSnapshot,
+                    granularity: None,
+                    levels: vec![
+                        decl_level("model:a", &own.model_family_refs.0, "family A"),
+                        decl_level("model:b", &own.model_family_refs.1, "family B"),
+                    ],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "environment".to_string(),
+                    kind: FactorKind::Environment,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "coding-suite",
+                        &own.environment_level_ref,
+                        "Stage-3 coding suite",
+                    )],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "eval_budget".to_string(),
+                    kind: FactorKind::Budget,
+                    granularity: None,
+                    levels: vec![
+                        decl_level("tight", &pins.eval_budget, "tight budget"),
+                        decl_level("wide", &own.eval_budget_wide, "wide budget"),
+                    ],
+                    role: None,
+                },
+            ],
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: vec![
+            FactorSpec {
+                name: "compute_policy".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: policy_levels
+                    .iter()
+                    .map(|(id, r, label)| level(id, r, label))
+                    .collect(),
+            },
+            FactorSpec {
+                name: "model_snapshot".to_string(),
+                kind: FactorKind::ModelSnapshot,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![
+                    level("model:a", &own.model_family_refs.0, "family A"),
+                    level("model:b", &own.model_family_refs.1, "family B"),
+                ],
+            },
+            FactorSpec {
+                name: "environment".to_string(),
+                kind: FactorKind::Environment,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level(
+                    "coding-suite",
+                    &own.environment_level_ref,
+                    "Stage-3 coding suite",
+                )],
+            },
+            FactorSpec {
+                name: "eval_budget".to_string(),
+                kind: FactorKind::Budget,
+                granularity: None,
+                role: Some("contrast".to_string()),
+                levels: vec![
+                    level("tight", &pins.eval_budget, "tight budget"),
+                    level("wide", &own.eval_budget_wide, "wide budget"),
+                ],
+            },
+        ],
+        arms,
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.value-of-compute-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/value-of-compute-v1".to_string(),
+        },
+        ext: BTreeMap::new(),
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}
+
+// ── lab/coordination-topology-v1 (ADR-0193 D6; §6.3's Phase-4 recipe) ───────
+
+/// The level pins `lab/coordination-topology-v1` binds, beyond
+/// [`ExemplarPins`]. All three factors are component-level: `topology`,
+/// `merge_policy` and `default_isolation` are C3 contract axes whose
+/// value is a matched-budget Lab question (AC-R-2.6.5-7).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CoordinationTopologyPins {
+    /// `topology` level refs — `(single_agent,
+    /// orchestrator_worker_isolated, orchestrator_worker_share,
+    /// peer_messaging)` order.
+    pub topology_refs: (String, String, String, String),
+    /// `merge_policy` level refs — `(parent_effects, three_way_text)`
+    /// order.
+    pub merge_policy_refs: (String, String),
+    /// `default_isolation` level refs — `(fork_snapshot, scoped_subtree)`
+    /// order.
+    pub isolation_refs: (String, String),
+    /// The pinned model-family level ref.
+    pub model_family_ref: String,
+    /// The coding-suite environment level ref.
+    pub environment_level_ref: String,
+    /// The sealed artifacts the topology arms bind (same order as
+    /// `topology_refs`; merge/isolation stay definition-level pins on
+    /// the artifact).
+    pub artifacts: (Ref, Ref, Ref, Ref),
+    /// The pinned pricing table — `spend` is a matched dimension.
+    pub pricing_table_ref: PricingTableRef,
+    /// The pinned `inference_budget` ref — `matched_total` (M3) sums
+    /// `search + eval + inference` per arm.
+    pub inference_budget_ref: String,
+}
+
+/// `lab/coordination-topology-v1`'s `MatchSpec{matched_total}` — child
+/// spend is `charged_to = subject` (AC-R-2.6.5-7; ADR-0041 M3).
+fn coordination_match(pricing: &PricingTableRef) -> MatchSpec {
+    use hh_ontology::dimensions::DimensionId::*;
+    MatchSpec {
+        dimensions: vec![
+            TokensInputUncached,
+            TokensInputCacheRead,
+            TokensInputCacheWrite,
+            TokensOutputVisible,
+            TokensOutputReasoning,
+            Spend,
+            Spawns,
+        ],
+        mode: MatchMode::MatchedTotal,
+        tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
+        pricing_table_ref: Some(pricing.clone()),
+        model_scope: ModelScope::SameSnapshot,
+        cache_policy: CachePolicy::ColdStart,
+        utilization_floor_ppm: None,
+    }
+}
+
+/// `lab/coordination-topology-v1` at its Stage-4 first-execution size
+/// (ADR-0193 D6; AC-R-2.6.5-7): `comparative`, `full_factorial` over
+/// `topology ∈ {single_agent, orchestrator_worker_isolated,
+/// orchestrator_worker_share, peer_messaging}` × `merge_policy` ×
+/// `default_isolation` (all component-level) on the coding suite,
+/// `MatchSpec{matched_total}`, `replicates_per_cell = 5`, reporting
+/// `capability.task_success`, the two veto metrics
+/// (`coordination.lost_write_count`, `coordination
+/// .silent_overwrite_count`), `conflicts_open_at_completion` and cost —
+/// the model × topology interaction as a `contrast`.
+pub fn coordination_topology_v1(
+    pins: &ExemplarPins,
+    own: &CoordinationTopologyPins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "H0 — no headline difference between single_agent and any coordination \
+         topology at matched total; the merge/isolation levels are evidence for \
+         the single_writer/three_way_text defaults (OQ-427), never defaults on \
+         provisional evidence",
+        &[
+            "capability.task_success",
+            "coordination.lost_write_count",
+            "coordination.silent_overwrite_count",
+            "efficiency.cost_of_pass",
+        ],
+        &["model_snapshot × topology"],
+        pins,
+    );
+    let topology_levels: &[(&str, &str, &str)] = &[
+        ("single_agent", &own.topology_refs.0, "single agent"),
+        (
+            "orchestrator_worker_isolated",
+            &own.topology_refs.1,
+            "orchestrator/worker — isolated children",
+        ),
+        (
+            "orchestrator_worker_share",
+            &own.topology_refs.2,
+            "orchestrator/worker — shared subtree",
+        ),
+        ("peer_messaging", &own.topology_refs.3, "peer messaging"),
+    ];
+    let merge_levels: &[(&str, &str, &str)] = &[
+        ("parent_effects", &own.merge_policy_refs.0, "parent effects"),
+        ("three_way_text", &own.merge_policy_refs.1, "three_way_text"),
+    ];
+    let isolation_levels: &[(&str, &str, &str)] = &[
+        ("fork_snapshot", &own.isolation_refs.0, "fork_snapshot"),
+        ("scoped_subtree", &own.isolation_refs.1, "scoped_subtree"),
+    ];
+    let artifact_for = |tid: &str| -> Ref {
+        match tid {
+            "single_agent" => own.artifacts.0.clone(),
+            "orchestrator_worker_isolated" => own.artifacts.1.clone(),
+            "orchestrator_worker_share" => own.artifacts.2.clone(),
+            _ => own.artifacts.3.clone(),
+        }
+    };
+    let mut arms: Vec<ArmSpec> = Vec::new();
+    for (tid, _r, tlabel) in topology_levels {
+        for (mid, _r, _mlabel) in merge_levels {
+            for (iid, _r, _ilabel) in isolation_levels {
+                arms.push(arm(
+                    &format!("arm:{tid}:{mid}:{iid}"),
+                    &format!("{tlabel} / {mid} / {iid}"),
+                    &[
+                        ("topology", tid),
+                        ("merge_policy", mid),
+                        ("default_isolation", iid),
+                        ("model_snapshot", "model:a"),
+                        ("environment", "coding-suite"),
+                    ],
+                    coordination_match(&own.pricing_table_ref),
+                    &artifact_for(tid),
+                    pins,
+                ));
+                arms.last_mut().unwrap().inference_budget = Some(own.inference_budget_ref.clone());
+            }
+        }
+    }
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/coordination-topology-v1".to_string(),
+            kind: DesignKind::FullFactorial,
+            factors: vec![
+                FactorDeclaration {
+                    name: "topology".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: topology_levels
+                        .iter()
+                        .map(|(id, r, label)| decl_level(id, r, label))
+                        .collect(),
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "merge_policy".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: merge_levels
+                        .iter()
+                        .map(|(id, r, label)| decl_level(id, r, label))
+                        .collect(),
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "default_isolation".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: isolation_levels
+                        .iter()
+                        .map(|(id, r, label)| decl_level(id, r, label))
+                        .collect(),
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "model_snapshot".to_string(),
+                    kind: FactorKind::ModelSnapshot,
+                    granularity: None,
+                    levels: vec![decl_level("model:a", &own.model_family_ref, "family A")],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "environment".to_string(),
+                    kind: FactorKind::Environment,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "coding-suite",
+                        &own.environment_level_ref,
+                        "Stage-3 coding suite",
+                    )],
+                    role: None,
+                },
+            ],
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: vec![
+            FactorSpec {
+                name: "topology".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: topology_levels
+                    .iter()
+                    .map(|(id, r, label)| level(id, r, label))
+                    .collect(),
+            },
+            FactorSpec {
+                name: "merge_policy".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: merge_levels
+                    .iter()
+                    .map(|(id, r, label)| level(id, r, label))
+                    .collect(),
+            },
+            FactorSpec {
+                name: "default_isolation".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: isolation_levels
+                    .iter()
+                    .map(|(id, r, label)| level(id, r, label))
+                    .collect(),
+            },
+            FactorSpec {
+                name: "model_snapshot".to_string(),
+                kind: FactorKind::ModelSnapshot,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level("model:a", &own.model_family_ref, "family A")],
+            },
+            FactorSpec {
+                name: "environment".to_string(),
+                kind: FactorKind::Environment,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level(
+                    "coding-suite",
+                    &own.environment_level_ref,
+                    "Stage-3 coding suite",
+                )],
+            },
+        ],
+        arms,
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.coordination-topology-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/coordination-topology-v1".to_string(),
         },
         ext: BTreeMap::new(),
     };

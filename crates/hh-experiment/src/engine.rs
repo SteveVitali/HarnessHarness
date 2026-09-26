@@ -58,11 +58,15 @@ use hh_lab::experiment::{
 };
 use hh_ledger::event::{Event, Producer, Scope};
 use hh_ledger::leases::LeaseScope;
-use hh_ledger::manifest::{EventRef, ExperimentBinding, RunKind, RunManifest, TaskRef};
+use hh_ledger::manifest::{
+    EventRef, ExperimentBinding, ParticipantClass as ManifestClass, RunKind, RunManifest, TaskRef,
+};
 use hh_ledger::store::{Lease, Store};
 use hh_ontology::compliance::NaReason;
 use hh_ontology::control::{CancelledBy, OutcomeClass, StopReason};
 use hh_ontology::dimensions::{DimensionId, DimensionKey};
+use hh_ontology::eval::FactorKind;
+use hh_ontology::participant::ParticipantClass as LevelClass;
 use hh_provenance::ProvenanceRecord;
 use hh_wire::json::Json;
 
@@ -101,6 +105,56 @@ pub type BudgetRelevantResolver<'a> = dyn Fn(&str) -> BTreeMap<String, BudgetRel
 /// the arm's dialect is not resolvable at this validation point — the check
 /// defers, it never guesses).
 pub type CacheVisibilityResolver<'a> = dyn Fn(&ArmSpec) -> Option<bool> + 'a;
+/// `participant ref → the registry's participant descriptor body`
+/// (`capabilities{coordinate → verdict}`; ADR-0013/0151). Powers the
+/// hosted-level admissibility check at `register` (AC-R-2.10.3-3).
+pub type ParticipantResolver<'a> = dyn Fn(&str) -> Option<Json> + 'a;
+/// `environment level ref → environment class` — the
+/// `environment_class:<class>` pool membership resolver (AC-R-2.10.3-10).
+/// `None`/unresolvable = the plan is never counted into a pool whose
+/// membership the context cannot prove (never coerced to a match).
+pub type EnvironmentClassResolver<'a> = dyn Fn(&str) -> Option<String> + 'a;
+/// The C1 hosted-dispatch SPI (§6.3; ADR-0046 (d)) — the boundary's
+/// adapter opens the hosted session and reports the enforcement it
+/// actually applied. `Err(detail)` refuses the launch
+/// (`HostedLaunchUnavailable`); the refused launch returns its slice.
+pub type HostedLauncher<'a> =
+    dyn Fn(&HostedLaunchRequest) -> Result<HostedLaunchOutcome, String> + 'a;
+
+/// The `HostedLauncher` request (the adapter's input — the engine passes
+/// the arm's declared claim and its budget facts; the *adapter* derives
+/// `limits_enforced`, never the engine's guess — ADR-0046 (d)).
+#[derive(Debug, Clone)]
+pub struct HostedLaunchRequest {
+    /// The dispatched run plan.
+    pub run_plan_id: String,
+    /// The arm being launched.
+    pub arm_id: String,
+    /// The hosted participant refs on the arm's level assignment.
+    pub participant_refs: Vec<String>,
+    /// The slice budget allocated for this run.
+    pub budget_id: String,
+    /// The arm's declared `limits_enforced` claim (the stamp the adapter
+    /// confirms or downgrades — reported, never asserted).
+    pub limits_enforced_declared: String,
+    /// The eval budget's `time.wall_ms` hard cap — the wall-clock ceiling
+    /// the environment boundary enforces for the hosted session
+    /// (AC-R-2.10.3-14; `None` = undeclared, reported as-is).
+    pub wall_clock_ms: Option<u64>,
+}
+
+/// The `HostedLauncher` result — the adapter's honest report.
+#[derive(Debug, Clone)]
+pub struct HostedLaunchOutcome {
+    /// The hosting mechanism the adapter used (stamped on the subject
+    /// manifest's `hosting_mechanism`).
+    pub hosting_mechanism: String,
+    /// The session record ref (`run_launched.hosted_session_ref`).
+    pub session_ref: Option<String>,
+    /// The `limits_enforced` stamp the adapter actually applied
+    /// (`full | partial | none`).
+    pub limits_enforced: String,
+}
 
 #[derive(Default)]
 pub struct EngineContext<'a> {
@@ -142,6 +196,15 @@ pub struct EngineContext<'a> {
     /// `natural` arm on a cache-invisible dialect is refused without the
     /// design's `cache_na_stratified` declaration).
     pub cache_state_visible: Option<Box<CacheVisibilityResolver<'a>>>,
+    /// `participant ref → registry descriptor` (the hosted-level
+    /// admissibility check's capability vector source; AC-R-2.10.3-3).
+    pub participant_descriptor: Option<Box<ParticipantResolver<'a>>>,
+    /// `environment level ref → environment class` (the
+    /// `environment_class:<class>` pool membership resolver).
+    pub environment_class: Option<Box<EnvironmentClassResolver<'a>>>,
+    /// The hosted-dispatch adapter (`None` = hosted launches refuse
+    /// `HostedLaunchUnavailable` — never a silent native downgrade).
+    pub hosted_launcher: Option<Box<HostedLauncher<'a>>>,
 }
 
 impl EngineContext<'_> {
@@ -164,6 +227,10 @@ impl EngineContext<'_> {
                 .cache_state_visible
                 .as_ref()
                 .map(|f| f as &dyn Fn(&ArmSpec) -> Option<bool>),
+            participant_descriptor: self
+                .participant_descriptor
+                .as_ref()
+                .map(|f| f as &dyn Fn(&str) -> Option<Json>),
         }
     }
 }
@@ -429,7 +496,11 @@ impl<'a> ExperimentEngine<'a> {
 
         // One commit: declared + run_planned (in recorded schedule order) +
         // the opened drift bracket.
-        let mut events = vec![self.mint(&run_id, class::DECLARED, ev::declared(&spec, &plan))?];
+        let mut events = vec![self.mint(
+            &run_id,
+            class::DECLARED,
+            ev::declared(&spec, &plan, self.store.now_ms()),
+        )?];
         let order = plan
             .run_plans
             .iter()
@@ -566,16 +637,47 @@ impl<'a> ExperimentEngine<'a> {
         let view = self.project()?;
         self.live(&view, &run_id)?;
         let eligible = view.eligible_at(now);
-        if eligible.is_empty() {
+        // §6.3 §2.2 admission (AC-R-2.10.3-10): `start_stagger_ms` delays a
+        // plan until `opened_ms + order_pos · stagger`; `max_concurrent_runs`
+        // and the typed pools cap the consuming set (live claims + in-flight
+        // attempts). A pool-blocked head is skipped, never over-admitted —
+        // recorded schedule order is preserved among dispatchable plans.
+        let spec = match &view.declared {
+            Some(d) => Some(self.spec(&d.experiment_id)?),
+            None => None,
+        };
+        let opened_ms = view.declared.as_ref().map(|d| d.opened_ms).unwrap_or(0);
+        let stagger = spec
+            .as_ref()
+            .map(|sp| sp.scheduling.start_stagger_ms)
+            .unwrap_or(0);
+        let mut stagger_wait: Option<u64> = None;
+        let mut dispatchable: Vec<&PlanState> = Vec::new();
+        for ps in &eligible {
+            let ready_at = opened_ms.saturating_add(ps.order_pos.saturating_mul(stagger));
+            if now < ready_at {
+                stagger_wait = Some(stagger_wait.map_or(ready_at, |t| t.min(ready_at)));
+                continue;
+            }
+            if let Some(sp) = &spec {
+                if self.pool_blocker(sp, &view, ps, now).is_some() {
+                    continue;
+                }
+            }
+            dispatchable.push(ps);
+        }
+        if dispatchable.is_empty() {
             if view.open_plans(now).is_empty() {
                 return Ok(NextVerdict::Done);
             }
-            // Everything open is claimed-live or inside its backoff window.
+            // Everything open is claimed-live, inside its backoff window, or
+            // behind its stagger slot — report the earliest wake-up.
             let backoff = view
                 .plans
                 .values()
                 .filter(|p| p.open_at(now))
                 .map(|p| p.not_before_ms)
+                .chain(stagger_wait)
                 .filter(|t| *t > now)
                 .min();
             return Ok(match backoff {
@@ -585,7 +687,7 @@ impl<'a> ExperimentEngine<'a> {
         }
         // The pool must fund the next slice — else pause `budget_exhausted`
         // (E-2; the experiment never trims a run mid-flight).
-        let head = eligible[0];
+        let head = dispatchable[0];
         if let Err(e) = self.slice_affordable(&run_id, &lease, &view, head) {
             return match e {
                 ExperimentError::InsufficientBudget { .. } => {
@@ -599,6 +701,7 @@ impl<'a> ExperimentEngine<'a> {
                                 ev::paused(
                                     PauseReason::BudgetExhausted,
                                     self.root_budget(&run_id).ok().as_deref(),
+                                    None,
                                 ),
                             )?],
                         )?;
@@ -644,6 +747,15 @@ impl<'a> ExperimentEngine<'a> {
                 run_plan_id: run_plan_id.to_string(),
                 detail: "plan is not claimable (in flight, settled, or in backoff)".to_string(),
             });
+        }
+        // Pool admission (§6.3 §2.2; AC-R-2.10.3-10): a claim reserves the
+        // plan's pool slots — a pool-blocked claim refuses `PoolExhausted`
+        // rather than parking a claim it cannot dispatch.
+        if let Some(d) = &view.declared {
+            let spec = self.spec(&d.experiment_id)?;
+            if let Some((pool, limit)) = self.pool_blocker(&spec, &view, ps, now) {
+                return Err(ExperimentError::PoolExhausted { pool, limit });
+            }
         }
         let scope = LeaseScope::Resource(format!("run_plan:{run_plan_id}"));
         let scoped = self
@@ -757,6 +869,14 @@ impl<'a> ExperimentEngine<'a> {
             })?
             .clone();
 
+        // Pool admission re-check (AC-R-2.10.3-10): a claim may predate a
+        // competing dispatch — `launch` re-verifies and refuses
+        // `PoolExhausted`; the claim stays live for a later dispatch.
+        if let Some((pool, limit)) = self.pool_blocker(&spec, &view, &ps, now) {
+            return Err(ExperimentError::PoolExhausted { pool, limit });
+        }
+        let pools = self.plan_pool_keys(&spec, &arm.arm_id);
+
         // E-2 launch probes — capability drift under the pinned snapshot, and
         // the model-fingerprint drift probe against the `opened` bracket.
         for (fname, lid) in &arm.level_assignment {
@@ -809,7 +929,7 @@ impl<'a> ExperimentEngine<'a> {
                                         self.mint(
                                             &run_id,
                                             class::PAUSED,
-                                            ev::paused(PauseReason::DriftDetected, None),
+                                            ev::paused(PauseReason::DriftDetected, None, None),
                                         )?,
                                     ],
                                 )?;
@@ -849,6 +969,75 @@ impl<'a> ExperimentEngine<'a> {
             }
         };
 
+        // C1 hosted dispatch (§6.3; AC-R-2.10.3-14; ADR-0046 (d)): an arm
+        // assigning hosted levels routes through the boundary's
+        // `HostedLauncher` SPI before the subject run opens — the adapter
+        // opens the session and reports the enforcement it applied; a
+        // missing/refused adapter fails the launch `HostedLaunchUnavailable`
+        // (the slice returns to the pool) — a hosted run is never silently
+        // downgraded to native.
+        let hosted_refs: Vec<String> = arm
+            .level_assignment
+            .iter()
+            .filter_map(|(fname, lid)| {
+                spec.factors
+                    .iter()
+                    .find(|f| &f.name == fname)
+                    .and_then(|f| f.levels.iter().find(|l| &l.level_id == lid))
+                    .filter(|l| l.class == LevelClass::Hosted)
+                    .map(|l| l.ref_.clone())
+            })
+            .collect();
+        let hosted_outcome = if hosted_refs.is_empty() {
+            None
+        } else {
+            let launcher = self.ctx.hosted_launcher.as_deref().ok_or_else(|| {
+                ExperimentError::HostedLaunchUnavailable {
+                    detail: format!(
+                        "arm `{}` assigns hosted levels {:?} but no HostedLauncher is wired",
+                        arm.arm_id, hosted_refs
+                    ),
+                }
+            })?;
+            let wall_clock_ms = self
+                .resolve_budget_opt(&arm.eval_budget)
+                .and_then(|e| {
+                    e.hard_caps_map()
+                        .get(DimensionId::TimeWallMs.as_str())
+                        .copied()
+                })
+                .map(|v| v.max(0) as u64);
+            match launcher(&HostedLaunchRequest {
+                run_plan_id: ps.run_plan_id.clone(),
+                arm_id: arm.arm_id.clone(),
+                participant_refs: hosted_refs.clone(),
+                budget_id: budget_id.clone(),
+                limits_enforced_declared: arm.limits_enforced.clone(),
+                wall_clock_ms,
+            }) {
+                Ok(o) => Some(o),
+                Err(detail) => {
+                    // The refused launch returns the slice to the pool —
+                    // nothing is left accounted against it (CC3).
+                    let mut acct = Account::open(self.store, &run_id)?;
+                    let _ = acct.complete(&lease, &budget_id);
+                    return Err(ExperimentError::HostedLaunchUnavailable { detail });
+                }
+            }
+        };
+        let participant_class = if hosted_refs.is_empty() {
+            "native"
+        } else {
+            "hosted"
+        };
+        // The `limits_enforced` stamp is *derived*: the adapter's report on
+        // a hosted launch, the arm's (register-verified) claim on a native
+        // one — never a stamped upgrade (ADR-0046 (d); AC-R-2.10.3-3).
+        let limits_enforced = hosted_outcome
+            .as_ref()
+            .map(|o| o.limits_enforced.clone())
+            .unwrap_or_else(|| arm.limits_enforced.clone());
+
         // The subject run — `run_kind = agent` with the complete experiment
         // row-key binding (§6.5's result-row key fields).
         let attempt_no = ps.next_attempt_no;
@@ -871,6 +1060,17 @@ impl<'a> ExperimentEngine<'a> {
         // The `Design`'s snapshot on the top-level member too — the subject
         // run's bundle carries it (§6.2 "in every bundle and `Design`").
         manifest.registry_snapshot_id = spec.design.registry_snapshot_id.clone();
+        manifest.participant_class = if hosted_refs.is_empty() {
+            ManifestClass::Native
+        } else {
+            ManifestClass::Hosted
+        };
+        if let Some(o) = &hosted_outcome {
+            manifest.hosting_mechanism = Some(o.hosting_mechanism.clone());
+            // The participant descriptor carries the capability vector the
+            // dispatch resolved against (ADR-0152's record ref).
+            manifest.capability_declaration_ref = hosted_refs.first().cloned();
+        }
         manifest.experiment = Some(ExperimentBinding {
             experiment_run_id: Some(run_id.clone()),
             arm_id: Some(arm.arm_id.clone()),
@@ -896,6 +1096,8 @@ impl<'a> ExperimentEngine<'a> {
             ps.replicate_index,
             attempt_no,
             &budget_id,
+            participant_class,
+            &limits_enforced,
         );
         let bound_ev = self.mint(&subject_id, class::BOUND, bound_payload)?;
         self.store
@@ -914,7 +1116,20 @@ impl<'a> ExperimentEngine<'a> {
                 self.mint(
                     &run_id,
                     class::RUN_LAUNCHED,
-                    ev::run_launched(&ps.run_plan_id, &subject_id, attempt_no, &budget_id),
+                    ev::run_launched(
+                        &ps.run_plan_id,
+                        &subject_id,
+                        attempt_no,
+                        &budget_id,
+                        &ev::LaunchStamp {
+                            pool_consumed: &pools,
+                            participant_class,
+                            limits_enforced: &limits_enforced,
+                            hosted_session_ref: hosted_outcome
+                                .as_ref()
+                                .and_then(|o| o.session_ref.as_deref()),
+                        },
+                    ),
                 )?,
                 self.mint(
                     &run_id,
@@ -926,6 +1141,8 @@ impl<'a> ExperimentEngine<'a> {
                         ps.replicate_index,
                         attempt_no,
                         &subject_head,
+                        participant_class,
+                        &limits_enforced,
                     ),
                 )?,
             ],
@@ -1124,7 +1341,7 @@ impl<'a> ExperimentEngine<'a> {
                     extra.push(self.mint(
                         &run_id,
                         class::PAUSED,
-                        ev::paused(PauseReason::InfrastructureSuspected, None),
+                        ev::paused(PauseReason::InfrastructureSuspected, None, None),
                     )?);
                 }
             }
@@ -1169,7 +1386,18 @@ impl<'a> ExperimentEngine<'a> {
             paused: paused.clone(),
             regrade_pending,
         };
-        let mut batch = vec![self.mint(&run_id, class::RUN_SETTLED, ev::run_settled(&outcome))?];
+        // `pool_released` — the keys the attempt's `run_launched` consumed
+        // (pre-C1 rows without the member re-derive from the arm; S-1).
+        let pool_released = if attempt.pools.is_empty() {
+            self.plan_pool_keys(&spec, &ps.arm_id)
+        } else {
+            attempt.pools.clone()
+        };
+        let mut batch = vec![self.mint(
+            &run_id,
+            class::RUN_SETTLED,
+            ev::run_settled(&outcome, &pool_released),
+        )?];
         if superseded && outcome_class == OutcomeClass::InfrastructureFailure {
             // §2.3: `run_settled` and `run_excluded{infrastructure_retry}`
             // land **before** `run_replanned`. A cancelled supersede carries
@@ -1258,9 +1486,15 @@ impl<'a> ExperimentEngine<'a> {
 
     // ── pause / resume / amend / close ───────────────────────────────────
 
-    /// `pause(reason)` — the attended pause (`operator`) or a driver-recorded
-    /// pause row. Idempotent while paused (the second row is a no-op record).
-    pub fn pause(&mut self, reason: PauseReason) -> Result<(), ExperimentError> {
+    /// `pause(reason, probe)` — the attended pause (`operator`) or a
+    /// driver-recorded pause row; `probe` is the boundary's audit tag
+    /// (§6.3 `pause{probe?}`). Idempotent while paused (the second row is a
+    /// no-op record).
+    pub fn pause(
+        &mut self,
+        reason: PauseReason,
+        probe: Option<&str>,
+    ) -> Result<(), ExperimentError> {
         let (run_id, lease) = self.bound()?;
         let view = self.project()?;
         if view.closed.is_some() {
@@ -1274,13 +1508,14 @@ impl<'a> ExperimentEngine<'a> {
         self.append_chained(
             &run_id,
             &lease,
-            vec![self.mint(&run_id, class::PAUSED, ev::paused(reason, None))?],
+            vec![self.mint(&run_id, class::PAUSED, ev::paused(reason, None, probe))?],
         )?;
         Ok(())
     }
 
-    /// `resume()` — clears the pause.
-    pub fn resume(&mut self) -> Result<(), ExperimentError> {
+    /// `resume(probe)` — clears the pause; `probe` is the boundary's audit
+    /// tag (`resumed{probe?}`).
+    pub fn resume(&mut self, probe: Option<&str>) -> Result<(), ExperimentError> {
         let (run_id, lease) = self.bound()?;
         let view = self.project()?;
         if view.closed.is_some() {
@@ -1291,7 +1526,7 @@ impl<'a> ExperimentEngine<'a> {
         self.append_chained(
             &run_id,
             &lease,
-            vec![self.mint(&run_id, class::RESUMED, ev::resumed())?],
+            vec![self.mint(&run_id, class::RESUMED, ev::resumed(probe))?],
         )?;
         Ok(())
     }
@@ -1982,6 +2217,137 @@ impl<'a> ExperimentEngine<'a> {
             }
         }
         out
+    }
+
+    // ── SchedulingPolicy pools (§6.3 §2.2; AC-R-2.10.3-10) ───────────
+
+    /// The pool keys an arm's plans consume. Key spellings:
+    /// `model_snapshot:<ref>` (the arm's model_snapshot level ref),
+    /// `environment_class:<class>` (the `environment_class` resolver's
+    /// class for the arm's environment level — unresolvable ⇒ not a
+    /// member, never coerced), `participant:<ref>` (the arm's hosted
+    /// level refs), `instrument[:<name>]` (instrument pools gate every
+    /// plan — the experiment's instruments are shared).
+    fn plan_pool_keys(&self, spec: &ExperimentSpec, arm_id: &str) -> Vec<String> {
+        if spec.scheduling.pools.is_empty() {
+            return Vec::new();
+        }
+        let Some(arm) = spec.arms.iter().find(|a| a.arm_id == arm_id) else {
+            return Vec::new();
+        };
+        let mut model_ref: Option<&str> = None;
+        let mut env_ref: Option<&str> = None;
+        let mut participants: Vec<&str> = Vec::new();
+        for (fname, lid) in &arm.level_assignment {
+            let Some(f) = spec.factors.iter().find(|f| &f.name == fname) else {
+                continue;
+            };
+            let Some(l) = f.levels.iter().find(|l| &l.level_id == lid) else {
+                continue;
+            };
+            match f.kind {
+                FactorKind::ModelSnapshot => model_ref = Some(l.ref_.as_str()),
+                FactorKind::Environment => env_ref = Some(l.ref_.as_str()),
+                _ => {}
+            }
+            if l.class == LevelClass::Hosted {
+                participants.push(l.ref_.as_str());
+            }
+        }
+        let env_class =
+            env_ref.and_then(|r| self.ctx.environment_class.as_deref().and_then(|f| f(r)));
+        spec.scheduling
+            .pools
+            .iter()
+            .filter(|p| {
+                let (class, want) = p
+                    .key
+                    .split_once(':')
+                    .map(|(a, b)| (a, Some(b)))
+                    .unwrap_or((p.key.as_str(), None));
+                match (class, want) {
+                    ("model_snapshot", Some(w)) => model_ref == Some(w),
+                    ("environment_class", Some(w)) => env_class.as_deref() == Some(w),
+                    ("participant", Some(w)) => participants.contains(&w),
+                    ("instrument", _) => true,
+                    _ => false,
+                }
+            })
+            .map(|p| p.key.clone())
+            .collect()
+    }
+
+    /// `pool key → consuming plans` — in-flight attempts plus live claims
+    /// (a claim reserves the slot it will dispatch under), `exclude`
+    /// aside (a candidate's own pending claim must not block it).
+    fn pool_usage(
+        &self,
+        spec: &ExperimentSpec,
+        view: &ExperimentView,
+        exclude: &str,
+        now: u64,
+    ) -> BTreeMap<String, u32> {
+        let mut m: BTreeMap<String, u32> = BTreeMap::new();
+        for p in view.plans.values() {
+            if p.run_plan_id == exclude {
+                continue;
+            }
+            let consuming =
+                p.in_flight().is_some() || matches!(&p.claim, Some(c) if c.expires_at_ms > now);
+            if !consuming {
+                continue;
+            }
+            for k in self.plan_pool_keys(spec, &p.arm_id) {
+                *m.entry(k).or_default() += 1;
+            }
+        }
+        m
+    }
+
+    /// The capacity gate `ps` cannot dispatch under — `Some((key, limit))`
+    /// on the global `max_concurrent_runs` gate or the first exhausted
+    /// typed pool, else `None`. Deterministic: pool order is the spec's
+    /// declared order (S-6).
+    fn pool_blocker(
+        &self,
+        spec: &ExperimentSpec,
+        view: &ExperimentView,
+        ps: &PlanState,
+        now: u64,
+    ) -> Option<(String, u32)> {
+        let max = spec.scheduling.max_concurrent_runs;
+        if max > 0 {
+            let consuming = view
+                .plans
+                .values()
+                .filter(|p| {
+                    p.run_plan_id != ps.run_plan_id
+                        && (p.in_flight().is_some()
+                            || matches!(&p.claim, Some(c) if c.expires_at_ms > now))
+                })
+                .count() as u32;
+            if consuming >= max {
+                return Some(("max_concurrent_runs".to_string(), max));
+            }
+        }
+        let keys = self.plan_pool_keys(spec, &ps.arm_id);
+        if keys.is_empty() {
+            return None;
+        }
+        let usage = self.pool_usage(spec, view, &ps.run_plan_id, now);
+        for k in keys {
+            let limit = spec
+                .scheduling
+                .pools
+                .iter()
+                .find(|p| p.key == k)
+                .map(|p| p.limit)
+                .unwrap_or(0);
+            if usage.get(&k).copied().unwrap_or(0) >= limit {
+                return Some((k, limit));
+            }
+        }
+        None
     }
 }
 

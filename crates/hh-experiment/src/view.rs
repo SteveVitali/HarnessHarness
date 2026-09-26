@@ -67,6 +67,10 @@ pub struct Attempt {
     /// final and a regrade overlay is pending; the subject is never re-run
     /// (AC-R-2.10.3-6; ADR-0155 D5).
     pub regrade_pending: bool,
+    /// The pool keys this attempt consumed at launch
+    /// (`run_launched.pool_consumed` — the `run_settled.pool_released`
+    /// record derives from it; §6.3 §2.2; AC-R-2.10.3-10).
+    pub pools: Vec<String>,
 }
 
 /// The scheduler's per-plan state.
@@ -164,6 +168,9 @@ pub struct Declared {
     pub n_cells: u64,
     /// The declared run-plan count.
     pub n_run_plans: u64,
+    /// The open wall-clock stamp `start_stagger_ms` offsets from (a
+    /// ledger fact; `0` on pre-C1 rows ⇒ no stagger delay).
+    pub opened_ms: u64,
 }
 
 /// A drift bracket row (`opened`/`closed`).
@@ -236,6 +243,7 @@ impl ExperimentView {
                     registry_snapshot_id: s(p, "registry_snapshot_id"),
                     n_cells: i(p, "n_cells").unwrap_or(0) as u64,
                     n_run_plans: i(p, "n_run_plans").unwrap_or(0) as u64,
+                    opened_ms: i(p, "opened_ms").unwrap_or(0).max(0) as u64,
                 });
             }
             c if c == class::RUN_PLANNED => {
@@ -306,6 +314,14 @@ impl ExperimentView {
                         veto_tripped: Vec::new(),
                         budget_utilization: None,
                         regrade_pending: false,
+                        pools: match p.get("pool_consumed") {
+                            Some(Json::Arr(items)) => items
+                                .iter()
+                                .filter_map(Json::as_str)
+                                .map(str::to_string)
+                                .collect(),
+                            _ => Vec::new(),
+                        },
                     });
                 }
             }

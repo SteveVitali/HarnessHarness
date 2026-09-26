@@ -42,6 +42,27 @@ pub enum BundleError {
     ModelUnavailable { detail: String },
     /// The artefact handed to `import` is not a `ledger_native` bundle.
     FormatUnknown { detail: String },
+    /// `export` target has no slot for the bundle's class (§5h.3 §2;
+    /// ADR-0141 D5).
+    TargetUnsupportedForClass { target: String, class: String },
+    /// A member the target cannot express at all (dropped, listed in the
+    /// loss report — the refusal form is for a target that would silently
+    /// produce nothing).
+    UnexpressibleMember { member: String },
+    /// A hosted L2 export/import without the recorded consent (§5h.3 §6;
+    /// OQ-116 — `ConsentMissing`).
+    ConsentMissing { detail: String },
+    /// `bundle(kind ≠ run)` scoped assembly input that cannot resolve
+    /// (missing arm, empty subject set, child bundle not supplied).
+    ScopeInvalid { detail: String },
+    /// A `fetch[]` member read was requested of a store with no fetcher —
+    /// the typed refusal AC-R-2.9.3-8/-10 require (never a fabricated
+    /// payload; §5h.3 `fetch` contract).
+    FetchRequired { address: String },
+    /// `attest`/provenance surfaces: a signature did not verify or a
+    /// claimed signer statement does not bind the bundle
+    /// (`ProvenanceInvalid`; ADR-0141 D2).
+    ProvenanceInvalid { detail: String },
     /// An IO failure at the directory/archive seam.
     Io { detail: String },
     /// A malformed record decode.
@@ -90,6 +111,24 @@ impl fmt::Display for BundleError {
                 write!(f, "model_unavailable: {detail}")
             }
             BundleError::FormatUnknown { detail } => write!(f, "format_unknown: {detail}"),
+            BundleError::TargetUnsupportedForClass { target, class } => {
+                write!(f, "target_unsupported_for_class: {target}/{class}")
+            }
+            BundleError::UnexpressibleMember { member } => {
+                write!(f, "unexpressible_member: {member}")
+            }
+            BundleError::ConsentMissing { detail } => {
+                write!(f, "consent_missing: {detail}")
+            }
+            BundleError::ScopeInvalid { detail } => {
+                write!(f, "scope_invalid: {detail}")
+            }
+            BundleError::FetchRequired { address } => {
+                write!(f, "fetch_required: {address}")
+            }
+            BundleError::ProvenanceInvalid { detail } => {
+                write!(f, "provenance_invalid: {detail}")
+            }
             BundleError::Io { detail } => write!(f, "io: {detail}"),
             BundleError::Malformed { detail } => write!(f, "malformed: {detail}"),
         }

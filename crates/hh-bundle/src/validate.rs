@@ -828,6 +828,16 @@ fn validate_stages(
         });
     }
 
+    // ── S9 cross_section (publication-time; §5h.3 §2, ADR-0140 D1;
+    //    AC-R-2.9.3-12, AC-R-2.10.3-11) ────────────────────────────────
+    if want(9) {
+        stages.push(StageReport {
+            stage: 9,
+            name: "cross_section",
+            checks: stage9(manifest, members),
+        });
+    }
+
     // ── fold ─────────────────────────────────────────────────────────
     let completeness_names = [
         "completeness",
@@ -867,4 +877,229 @@ fn validate_stages(
 /// manifests only.
 pub fn ensure_manifest(j: &Json) -> Result<BundleManifest, BundleError> {
     BundleManifest::from_json(j)
+}
+
+/// `validate_bundle` with the S9 cross-section stage included — the
+/// publication-time pass (§5h.3 §2; `experiment`/`arm` bundles carry it
+/// before a `published`/`restricted` status transition).
+pub fn validate_publication(
+    manifest: &BundleManifest,
+    members: &MemberBytes,
+) -> BundleValidationReport {
+    validate_stages(manifest, members, &[1, 2, 3, 4, 5, 6, 7, 8, 9])
+}
+
+/// S9 `cross_section` — the scoped-kind checks (§5h.3 §2 S9 row;
+/// AC-R-2.9.3-12, AC-R-2.10.3-11). Codes: `RowOrphan`,
+/// `DeclarationMissing`, `ContainmentMismatch{run}`, `UnmatchedBudget`,
+/// `PreRegistrationLate`. Pure over the manifest + materialized bytes —
+/// contained manifests arrive as `contains:<bundle_id>` members and are
+/// decoded in place.
+fn stage9(manifest: &BundleManifest, members: &MemberBytes) -> Vec<CheckRow> {
+    let mut s9 = Vec::new();
+    let kind = manifest.bundle_kind.as_str();
+    let scoped = matches!(kind, "arm" | "experiment" | "lineage");
+    if !scoped {
+        s9.push(CheckRow::pass("kind:unscoped"));
+        return s9;
+    }
+
+    // ── DeclarationMissing — the experiment-plane members S9 names
+    //    must resolve (AC-R-2.10.3-11's member list). ─────────────────
+    let declared_sections: &[&str] = match kind {
+        "arm" => &[
+            "design",
+            "pre_registration",
+            "arm",
+            "match_spec",
+            "search_budget",
+        ],
+        // The experiment scope's per-arm record is `results.arms[]` —
+        // a single `results.arm` member would be the arm kind's shape.
+        "experiment" => &["design", "pre_registration", "match_spec", "search_budget"],
+        _ => &[],
+    };
+    for section in declared_sections {
+        match manifest.results.get(section).and_then(Json::as_str) {
+            Some(addr) => {
+                if manifest.members.iter().any(|m| m.address == addr) {
+                    s9.push(CheckRow::pass(format!("results.{section}")));
+                } else {
+                    s9.push(CheckRow::fail(
+                        format!("results.{section}"),
+                        "DeclarationMissing",
+                        format!("results.{section} names {addr} — not a member"),
+                    ));
+                }
+            }
+            None => s9.push(CheckRow::fail(
+                format!("results.{section}"),
+                "DeclarationMissing",
+                format!("kind {kind} requires results.{section}"),
+            )),
+        }
+    }
+    for decl_kind in ["metric_declarations", "oracle_declarations"] {
+        match manifest.results.get(decl_kind) {
+            Some(Json::Arr(_)) => s9.push(CheckRow::pass(format!("results.{decl_kind}"))),
+            _ => s9.push(CheckRow::fail(
+                format!("results.{decl_kind}"),
+                "DeclarationMissing",
+                format!("results.{decl_kind} is absent or not an array"),
+            )),
+        }
+    }
+
+    // ── PreRegistrationLate — the pre-registration fact must precede
+    //    the first planned run (§5h.3 §2's comparison is over seq). ────
+    match (
+        manifest
+            .results
+            .get("pre_registration_seq")
+            .and_then(Json::as_int),
+        manifest
+            .results
+            .get("first_plan_seq")
+            .and_then(Json::as_int),
+    ) {
+        (Some(reg), Some(plan)) if reg < plan => {
+            s9.push(CheckRow::pass("pre_registration.ordering"))
+        }
+        (Some(reg), Some(plan)) => s9.push(CheckRow::fail(
+            "pre_registration.ordering",
+            "PreRegistrationLate",
+            format!("pre_registration_seq {reg} ≥ first_plan_seq {plan}"),
+        )),
+        _ => s9.push(CheckRow::unmaterialized(
+            "pre_registration.ordering",
+            "seq pair not declared — the ordering check is unmaterialized",
+        )),
+    }
+
+    // ── RowOrphan — every declared row must be a `row:<vid>` member. ──
+    let member_roles: std::collections::BTreeSet<&str> =
+        manifest.members.iter().map(|m| m.role.as_str()).collect();
+    if let Some(Json::Arr(rows)) = manifest.results.get("rows") {
+        for r in rows {
+            let Some(vid) = r.as_str() else { continue };
+            let role = format!("row:{vid}");
+            if member_roles.contains(role.as_str()) {
+                s9.push(CheckRow::pass(format!("row:{vid}")));
+            } else {
+                s9.push(CheckRow::fail(
+                    format!("row:{vid}"),
+                    "RowOrphan",
+                    format!("declared row {vid} is not a member"),
+                ));
+            }
+        }
+    }
+
+    // ── Containment + budgets — decode the contained manifests. ──────
+    let arms: Vec<Json> = match manifest.results.get("arms") {
+        Some(Json::Arr(a)) => a.clone(),
+        _ => Vec::new(),
+    };
+    let arm_row = |id: &str| -> Option<&Json> {
+        arms.iter()
+            .find(|a| a.get("arm_id").and_then(Json::as_str) == Some(id))
+    };
+    if let Some(Json::Arr(contains)) = manifest.composition.get("contains") {
+        for c in contains {
+            let child_id = c.get("bundle_id").and_then(Json::as_str).unwrap_or("");
+            let member_addr = c.get("member").and_then(Json::as_str).unwrap_or("");
+            let label = if child_id.is_empty() {
+                member_addr.to_string()
+            } else {
+                child_id.to_string()
+            };
+            let child: Option<BundleManifest> = members
+                .get(member_addr)
+                .and_then(|b| std::str::from_utf8(b).ok())
+                .and_then(|t| hh_wire::json::parse(t).ok())
+                .and_then(|j| BundleManifest::from_json(&j).ok());
+            let Some(child) = child else {
+                s9.push(CheckRow::unmaterialized(
+                    format!("contains:{label}"),
+                    "contained manifest not materialized",
+                ));
+                continue;
+            };
+            // Every subject run of a contained bundle must be a subject
+            // run of the parent (the experiment ⊃ arm ⊃ run DAG).
+            for run in &child.subject.run_ids {
+                if !manifest.subject.run_ids.contains(run) {
+                    s9.push(CheckRow::fail(
+                        format!("contains:{label}:{run}"),
+                        "ContainmentMismatch",
+                        format!("contained subject run {run} is not a parent subject"),
+                    ));
+                    continue;
+                }
+                // The run's arm binding (the child's own
+                // `subject.experiment` record) must name an arm the
+                // parent's `results.arms[]` declares, and that arm's
+                // `definition_ref` must equal the contained manifest's
+                // `definition` member (AC-R-2.9.3-12).
+                let arm_id = child
+                    .subject
+                    .experiment
+                    .get(run)
+                    .and_then(|b| b.get("arm_id"))
+                    .and_then(Json::as_str)
+                    .map(String::from);
+                match arm_id.and_then(|id| arm_row(&id).map(|a| (id, a))) {
+                    Some((id, arm)) => {
+                        let declared_def = arm
+                            .get("definition_ref")
+                            .and_then(Json::as_str)
+                            .unwrap_or("");
+                        let child_def = child
+                            .definition
+                            .get("member")
+                            .and_then(Json::as_str)
+                            .unwrap_or("");
+                        if !declared_def.is_empty() && declared_def != child_def {
+                            s9.push(CheckRow::fail(
+                                format!("contains:{label}:{run}"),
+                                "ContainmentMismatch",
+                                format!(
+                                    "run {run} (arm {id}): contained definition {child_def} ≠ declared {declared_def}"
+                                ),
+                            ));
+                        }
+                        // `UnmatchedBudget` — the run's recorded
+                        // `configuration.budget` must equal the arm's
+                        // declared `eval_budget` (CC9 at the bundle
+                        // seam).
+                        let declared_budget = arm.get("eval_budget").cloned().unwrap_or(Json::Null);
+                        let child_budget = child
+                            .configuration
+                            .get("budget")
+                            .cloned()
+                            .unwrap_or(Json::Null);
+                        if !matches!(declared_budget, Json::Null)
+                            && !matches!(child_budget, Json::Null)
+                            && !crate::repro::budget_limits_equal(&child_budget, &declared_budget)
+                        {
+                            s9.push(CheckRow::fail(
+                                format!("contains:{label}:{run}"),
+                                "UnmatchedBudget",
+                                format!("run {run} (arm {id}): contained eval_budget ≠ declared"),
+                            ));
+                        }
+                    }
+                    None => s9.push(CheckRow::fail(
+                        format!("contains:{label}:{run}"),
+                        "ContainmentMismatch",
+                        format!("run {run} binds no declared arm"),
+                    )),
+                }
+            }
+        }
+    }
+    if s9.is_empty() {
+        s9.push(CheckRow::pass("cross_section"));
+    }
+    s9
 }
