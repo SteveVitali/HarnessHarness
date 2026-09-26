@@ -2317,3 +2317,256 @@ fn ac_e2_7_unmapped_call_is_surface_rejected_never_an_effect() {
     );
     assert!(envs.iter().all(|e| e.class != "action.tool.rejected"));
 }
+
+// ── DF-S3.9-1 / §5d.4 D3 — the paused arm (S4.5b) ────────────────────────────
+//
+// A protocol edge answering `input_required` is *not* a terminal outcome:
+// the effect stays `prepared`/`committed`, `control.decision{kind: ask,
+// decision_point: protocol_input_required}` records the opaque
+// `request_state`, the `message_human` elicitation effect opens with the
+// decision in `causes`, and `resume_paused` re-executes under the same
+// `effect_id` at `attempt_no + 1` echoing `request_state` unmodified.
+
+/// An executor that reports `Paused` on the first call and `Ok` after —
+/// recording every `ExecutionRequest` (attempt_no / request_state /
+/// effect_id) so the test asserts the retry's echo semantics.
+struct PauseFirstExecutor {
+    decl: ExecutorDeclaration,
+    calls: std::cell::Cell<u64>,
+    seen: std::cell::RefCell<Vec<(u64, Option<Json>, String)>>,
+}
+
+impl PauseFirstExecutor {
+    fn new() -> Self {
+        let mut e = MockExecutor::ok();
+        e.decl.domains.insert(EffectDomain::MessageHuman);
+        PauseFirstExecutor {
+            decl: e.decl,
+            calls: std::cell::Cell::new(0),
+            seen: std::cell::RefCell::new(vec![]),
+        }
+    }
+}
+
+impl ToolExecutor for PauseFirstExecutor {
+    fn declaration(&self) -> &ExecutorDeclaration {
+        &self.decl
+    }
+    fn execute(
+        &mut self,
+        request: &ExecutionRequest,
+        _sink: &mut dyn FnMut(ExecutorSignal),
+    ) -> Result<TerminalReport, EnvError> {
+        self.calls.set(self.calls.get() + 1);
+        self.seen.borrow_mut().push((
+            request.attempt_no,
+            request.request_state.clone(),
+            request.effect_id.clone(),
+        ));
+        if self.calls.get() == 1 {
+            Ok(TerminalReport {
+                status: TerminalStatus::Paused {
+                    detail: Json::obj([
+                        (
+                            "input_requests",
+                            Json::obj([("prompt", Json::str("which file?"))]),
+                        ),
+                        (
+                            "request_state",
+                            Json::obj([("opaque", Json::str("edge-blob-42"))]),
+                        ),
+                    ]),
+                },
+                exit_status: None,
+                outcome_hint: "paused".to_string(),
+                retryable_hint: None,
+                detail_ref: None,
+                truncated: false,
+                omitted_bytes: 0,
+                original_size: 0,
+            })
+        } else {
+            Ok(report_ok())
+        }
+    }
+    fn probe(&self, _e: &str, _a: u64) -> Result<ProbeVerdict, EnvError> {
+        Ok(ProbeVerdict::Undeterminable)
+    }
+}
+
+#[test]
+fn df_s3_9_1_paused_call_records_ask_and_resume_echoes_state() {
+    let (mut store, run, lease, _clock) = open("paused");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("paused");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(EffectDomain::FsWrite, reversible_attrs(), scope_bindings());
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [11u8; 32], DetectorSet::default());
+    let mut exec = PauseFirstExecutor::new();
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-pause",
+        Json::obj([
+            ("path", Json::str(format!("{}/p.txt", ws.display()))),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::FsWrite,
+            attributes: Some(reversible_attrs()),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    let (effect_id, elicitation_id, request_state, input_requests) = match out {
+        DispatchOutcome::Paused {
+            effect_id,
+            elicitation_effect_id,
+            request_state,
+            input_requests,
+        } => (
+            effect_id,
+            elicitation_effect_id,
+            request_state,
+            input_requests,
+        ),
+        other => panic!("expected Paused, got {other:?}"),
+    };
+    // The elicitation is a separate `message_human` tool call — its
+    // effect id is the derived coordinate
+    // `f(run, mc, "{tc}.elicitation.{attempt}", 0)`.
+    assert_eq!(
+        elicitation_id,
+        hh_ledger::store::Store::effect_id(&run, "mc-1", "tc-pause.elicitation.1", 0)
+    );
+    assert_eq!(
+        request_state.get("opaque"),
+        Some(&Json::str("edge-blob-42"))
+    );
+    assert_eq!(
+        input_requests.get("prompt"),
+        Some(&Json::str("which file?"))
+    );
+
+    // The ledger fold: `control.decision{kind: ask,
+    // decision_point: protocol_input_required}` owns the effect and
+    // carries the request_state verbatim; the `message_human`
+    // elicitation's `intended` names the decision in `causes`.
+    let envs = read_all(disp.store_mut(), &run);
+    let ask = envs
+        .iter()
+        .find(|e| {
+            e.class == "control.decision"
+                && e.payload.get("kind").and_then(Json::as_str) == Some("ask")
+                && e.payload.get("decision_point").and_then(Json::as_str)
+                    == Some("protocol_input_required")
+        })
+        .expect("the ask row");
+    assert_eq!(
+        ask.payload.get("owner").and_then(Json::as_str),
+        Some(effect_id.as_str())
+    );
+    assert_eq!(
+        ask.payload
+            .get("request_state")
+            .and_then(|s| s.get("opaque")),
+        Some(&Json::str("edge-blob-42"))
+    );
+    // `causes` names the ask *event* (the ledger coordinate — the
+    // payload's `decision_id` is a member, never an event ref).
+    let decision_id = ask.event_id.clone();
+    let intended = envs
+        .iter()
+        .find(|e| {
+            e.class == "action.effect.intended"
+                && e.scope.effect_id.as_deref() == Some(elicitation_id.as_str())
+        })
+        .expect("the elicitation intended row");
+    assert_eq!(
+        intended.payload.get("domain").and_then(Json::as_str),
+        Some("message_human")
+    );
+    assert!(
+        intended.causes.iter().any(|c| c.event_id == decision_id),
+        "elicitation must name the decision in causes"
+    );
+    // Non-terminal: no `observed`/`completed`/`failed` for the paused
+    // effect; the fold stays pre-terminal.
+    let pre_terminal = envs.iter().all(|e| {
+        !(e.scope.effect_id.as_deref() == Some(effect_id.as_str())
+            && matches!(
+                e.class.as_str(),
+                "action.effect.observed" | "action.effect.completed" | "action.effect.failed"
+            ))
+    });
+    assert!(pre_terminal, "a paused effect never lands a terminal row");
+
+    // Retry: same input (the human's answer rides `surface_args`),
+    // `resume_paused` re-executes under the same `effect_id` at
+    // `attempt_no + 1` echoing `request_state` unmodified.
+    let resumed = disp
+        .resume_paused(&mut driver, &mut exec, &inp, &lease)
+        .unwrap();
+    assert!(
+        matches!(resumed, DispatchOutcome::Observed(_)),
+        "{resumed:?}"
+    );
+    let seen = exec.seen.borrow();
+    assert_eq!(seen.len(), 2);
+    assert_eq!(seen[0].0, 1, "first attempt");
+    assert_eq!(seen[1].0, 2, "retry is attempt_no + 1");
+    assert_eq!(seen[0].2, seen[1].2, "same effect_id across the retry");
+    assert_eq!(
+        seen[1].1.as_ref().and_then(|s| s.get("opaque")),
+        Some(&Json::str("edge-blob-42")),
+        "request_state echoes byte-for-byte"
+    );
+    assert!(
+        seen[0].1.is_none(),
+        "first attempt carries no request_state"
+    );
+}
+
+#[test]
+fn df_s3_9_1_resume_without_pause_trail_is_typed_refusal() {
+    let (mut store, run, lease, _clock) = open("nopause");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("nopause");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(EffectDomain::FsWrite, reversible_attrs(), scope_bindings());
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [12u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-nopause",
+        Json::obj([
+            ("path", Json::str(format!("{}/n.txt", ws.display()))),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::FsWrite,
+            attributes: Some(reversible_attrs()),
+        },
+    );
+    // No dispatch happened — `resume_paused` refuses (a missing pause
+    // trail is a typed InvalidState, never a silent fresh dispatch).
+    let err = disp
+        .resume_paused(&mut driver, &mut exec, &inp, &lease)
+        .unwrap_err();
+    assert!(matches!(err, EnvError::InvalidState { .. }), "{err:?}");
+    assert_eq!(exec.calls.get(), 0, "a refused resume never executes");
+}

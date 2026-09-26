@@ -139,6 +139,12 @@ pub enum EnvError {
         /// The kill point that fired.
         at: String,
     },
+    /// `resume_paused`'s arg-map eval refused — the re-entry's `surface_args`
+    /// must evaluate the same way the original dispatch's did (§5d.4 D3).
+    ResumeRefused {
+        /// The closed refusal detail.
+        reason: String,
+    },
 }
 
 impl std::fmt::Display for EnvError {
@@ -206,6 +212,9 @@ impl std::fmt::Display for EnvError {
             }
             EnvError::FaultInjected { at } => {
                 write!(f, "fault injected at {at}")
+            }
+            EnvError::ResumeRefused { reason } => {
+                write!(f, "ResumeRefused: {reason}")
             }
         }
     }

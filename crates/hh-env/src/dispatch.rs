@@ -199,6 +199,26 @@ pub enum DispatchOutcome {
         /// The owed permission (the durable `pending` row).
         permission_id: String,
     },
+    /// `paused` — the protocol edge answered `input_required` (§5d.4 D3;
+    /// ADR-0097 D3). The effect stays `prepared`/`committed` — *never*
+    /// `observed`, never `failed` — the ledger records
+    /// `control.decision{kind: ask}` and opens the `message_human`
+    /// elicitation effect; `resume_paused` re-executes under the same
+    /// `effect_id` at `attempt_no + 1` echoing `request_state` unmodified.
+    /// Distinct from `Suspended` (a kernel *permission* ask — the run
+    /// defers behind a durable subscription) and from `Unknown`.
+    Paused {
+        /// The paused effect's id.
+        effect_id: String,
+        /// The opened elicitation effect's id — the derived
+        /// `f(run, mc, {tc}.elicitation.{attempt}, 0)` coordinate (a
+        /// `message_human` tool call under its own tool_call scope).
+        elicitation_effect_id: String,
+        /// The opaque resume payload — echoed to the edge unmodified.
+        request_state: Json,
+        /// The edge's `inputRequests` (the elicitation payload).
+        input_requests: Json,
+    },
     /// `observed` — served from the K4 tool-result cache (§5b.4; R-2.3.4¹):
     /// no executor ran, `action.tool.started`/`committed` are absent by
     /// construction, and the ledger carries `model.cache.resolved{hit}` plus
@@ -1185,13 +1205,212 @@ impl<'a> Dispatcher<'a> {
         } else {
             crate::helper::CommitEvidence::ReadOnly
         };
+        self.execute_capture_observe(
+            driver,
+            executor,
+            input,
+            lease,
+            &handle,
+            &effect_id,
+            attempt_no,
+            None,
+            &canonical,
+            &key,
+            risk,
+            &args_canonical_hash,
+            pre_baseline,
+            &token,
+            commit_evidence,
+        )
+    }
+
+    /// `resume_paused(driver, executor, input, lease)` — the §5d.4 D3 retry
+    /// (ADR-0097 D3): a paused effect (still `prepared`/`committed`, never
+    /// terminal) re-executes under the same `effect_id` at `attempt_no + 1`,
+    /// echoing the recorded `request_state` unmodified. The caller supplies
+    /// the human's answer in `surface_args` — the same `DispatchInput`, the
+    /// same effect coordinate. A missing pause trail or a non-paused phase
+    /// is a typed refusal, never a silent fresh dispatch.
+    pub fn resume_paused(
+        &mut self,
+        driver: &mut EnvDriver,
+        executor: &mut dyn ToolExecutor,
+        input: &DispatchInput,
+        lease: &Lease,
+    ) -> Result<DispatchOutcome, EnvError> {
+        let handle = driver
+            .handle(&input.env_handle_id)
+            .ok_or_else(|| EnvError::Unavailable {
+                env_handle_id: input.env_handle_id.clone(),
+                state: "missing",
+            })?
+            .clone();
+        handle.verify_environment()?;
+        let effect_id = Store::effect_id(
+            &self.run_id,
+            &input.chain.model_call_id,
+            &input.chain.tool_call_id,
+            input.ordinal,
+        );
+        let fold = self
+            .store
+            .effect_folds(&self.run_id)?
+            .into_iter()
+            .find(|(id, _)| id == &effect_id)
+            .map(|(_, f)| f)
+            .ok_or(EnvError::InvalidState {
+                op: "resume_paused",
+                state: "no_fold",
+            })?;
+        // The pause trail: the `control.decision{kind: ask,
+        // decision_point: protocol_input_required}` row owning this effect.
+        // Its `request_state` is echoed byte-for-byte — never read.
+        let ask = self
+            .store
+            .events(&self.run_id)?
+            .iter()
+            .rev()
+            .find(|e| {
+                e.class == "control.decision"
+                    && e.payload.get("kind").and_then(Json::as_str) == Some("ask")
+                    && e.payload.get("decision_point").and_then(Json::as_str)
+                        == Some("protocol_input_required")
+                    && e.payload.get("owner").and_then(Json::as_str) == Some(effect_id.as_str())
+            })
+            .ok_or(EnvError::InvalidState {
+                op: "resume_paused",
+                state: "no_pause_trail",
+            })?;
+        let request_state = ask
+            .payload
+            .get("request_state")
+            .cloned()
+            .unwrap_or(Json::Null);
+        let attempt_no = fold.attempt_no + 1;
+        match fold.phase {
+            hh_ledger::effect::EffectPhase::Committed
+            | hh_ledger::effect::EffectPhase::Prepared => {}
+            other => {
+                return Err(EnvError::InvalidState {
+                    op: "resume_paused",
+                    state: other.as_str(),
+                })
+            }
+        }
+        let canonical =
+            hh_monitor::args::eval(input.binding, input.scope_bindings, &input.surface_args)
+                .map_err(|e| EnvError::ResumeRefused {
+                    reason: format!("arg_eval: {e:?}"),
+                })?;
+        let args_canonical_hash = hh_identity::idp::idp_id(
+            "canonical_args",
+            canonical_json(&canonical).to_canonical_string().as_bytes(),
+        );
+        let risk = fold.risk_class;
+        let key = idempotency_key(
+            &self.run_id,
+            &effect_id,
+            &args_canonical_hash,
+            &input.capability_ref.version_id,
+        );
+        let token = self
+            .minter
+            .mint(&effect_id, attempt_no, &input.env_handle_id);
+        let (pre_rec, pre_baseline) =
+            driver.path_baseline(self.store, lease, &input.env_handle_id)?;
+        let _ = pre_rec;
+        let commit_evidence = if !risk.is_read_only() {
+            // The retry is a fresh ledger attempt: complete mediation
+            // wants a `security.permission.decided{allow}` for
+            // `(effect_id, attempt_no)` before the `committed` write-ahead
+            // (§5g.1 I-H7). The carried decision is the envelope's —
+            // the recorded ask trail already established the pause was
+            // legitimate; the fresh `decided` names `paused_resume` as
+            // its proposal so the audit shows the carry, never a new
+            // discretionary grant.
+            let mut decided = self.minter_ev().mint_effect(
+                "security.permission.decided",
+                Json::obj([
+                    ("decision", Json::str("allow")),
+                    ("decider", Json::str("envelope")),
+                    ("proposal", Json::str("paused_resume")),
+                    ("attempt_no", Json::Int(attempt_no as i64)),
+                    ("reason", Json::str("paused_retry_carry:input_required")),
+                ]),
+                &effect_id,
+                &input.chain,
+            )?;
+            decided.scope.effect_id = Some(effect_id.clone());
+            let committed = self.minter_ev().mint_effect(
+                "action.effect.committed",
+                events::committed_payload(attempt_no, lease.generation, self.store.now_ms()),
+                &effect_id,
+                &input.chain,
+            )?;
+            let committed_event_id = committed.event_id.clone();
+            let range = self
+                .store
+                .append(&self.run_id, lease, vec![decided, committed])?;
+            crate::helper::CommitEvidence::Committed {
+                event_id: committed_event_id,
+                seq: range.last,
+                fencing_token: lease.generation,
+            }
+        } else {
+            crate::helper::CommitEvidence::ReadOnly
+        };
+        self.execute_capture_observe(
+            driver,
+            executor,
+            input,
+            lease,
+            &handle,
+            &effect_id,
+            attempt_no,
+            Some(&request_state),
+            &canonical,
+            &key,
+            risk,
+            &args_canonical_hash,
+            pre_baseline,
+            &token,
+            commit_evidence,
+        )
+    }
+
+    /// `execute_capture_observe` — the dispatch tail (IR-3 epoch bump →
+    /// `action.tool.started` → execute → capture → observe; the §5d.4 D3
+    /// paused arm included). Shared by `dispatch` (attempt 1) and
+    /// `resume_paused` (`attempt_no + 1`, `request_state` echoed).
+    #[allow(clippy::too_many_arguments)]
+    fn execute_capture_observe(
+        &mut self,
+        driver: &mut EnvDriver,
+        executor: &mut dyn ToolExecutor,
+        input: &DispatchInput,
+        lease: &Lease,
+        handle: &crate::handle::EnvHandle,
+        effect_id: &str,
+        attempt_no: u64,
+        request_state: Option<&Json>,
+        canonical: &CanonicalArgs,
+        idem_key: &str,
+        risk: RiskClass,
+        args_canonical_hash: &str,
+        pre_baseline: PathBaseline,
+        token: &crate::tokens::AttributionToken,
+        commit_evidence: crate::helper::CommitEvidence,
+    ) -> Result<DispatchOutcome, EnvError> {
+        let effect_id = effect_id.to_string();
+        let key = idem_key.to_string();
+        let args_canonical_hash = args_canonical_hash.to_string();
         // IR-3 — a committed effect in a mutating domain
         // (`fs_write | exec | net_egress | spawn_process`) bumps
         // `mutation_epoch(environment_ref)`; every K4 entry pinned to the
         // earlier epoch is `stale_withheld` on its next lookup (nothing is
         // cleared — the stamp mismatch is the withholding mechanism).
         if let Some(c) = self.cache.as_mut() {
-            c.note_committed(&env_ref_str(&handle), input.declared.domain);
+            c.note_committed(&env_ref_str(handle), input.declared.domain);
         }
         let execution_id = self.store.alloc_id("exec");
         // The M-point around `exec`/`read` (AC-R-2.5.5-11) — `action.tool.
@@ -1203,6 +1422,7 @@ impl<'a> Dispatcher<'a> {
             &effect_id,
             &input.chain,
         )?;
+        let started_id = started.event_id.clone();
         self.store.append(&self.run_id, lease, vec![started])?;
 
         // ── 5 execute + 6 capture ──────────────────────────────────────────
@@ -1215,7 +1435,7 @@ impl<'a> Dispatcher<'a> {
                 input.capability_ref.version_id.clone(),
             ),
             effect: input.declared.clone(),
-            args: canonical_json(&canonical),
+            args: canonical_json(canonical),
             env_handle_id: input.env_handle_id.clone(),
             attribution_token: token.token.clone(),
             deadline_ms: input.ladder.effective(),
@@ -1223,6 +1443,7 @@ impl<'a> Dispatcher<'a> {
             retain_bytes_cap: input.output_policy.retain_bytes_cap,
             idempotency_key: key.clone(),
             commit_evidence,
+            request_state: request_state.cloned(),
         };
         let resolver = self.minter.resolver();
         let run_id = self.run_id.clone();
@@ -1413,6 +1634,96 @@ impl<'a> Dispatcher<'a> {
         .seal()?;
         let manifest_ref = manifest.content_id();
 
+        // ── 7 observe — the paused arm (§5d.4 D3; ADR-0097 D3) ─────────
+        // `input_required` is *not* a terminal outcome: the effect stays
+        // `prepared`/`committed` (the `tool_call`/`effect_id` scopes stay
+        // open — `completed`/`observed` close them only on a real terminal),
+        // the ledger records `control.decision{kind: ask,
+        // decision_point: protocol_input_required}` carrying the opaque
+        // `request_state`, and the elicitation opens as a `message_human`
+        // effect whose `causes` name the decision row (the human's answer
+        // is `principal`-authored content, never an endorsement).
+        if let TerminalStatus::Paused { detail } = &report.status {
+            let input_requests = detail.get("input_requests").cloned().unwrap_or(Json::Null);
+            let pause_state = detail.get("request_state").cloned().unwrap_or(Json::Null);
+            let decision_id = self.store.alloc_id("decision");
+            let ask = self.minter_ev().mint_effect(
+                "control.decision",
+                events::control_decision_ask_payload(
+                    &decision_id,
+                    &effect_id,
+                    &started_id,
+                    &input_requests,
+                    &pause_state,
+                ),
+                &effect_id,
+                &input.chain,
+            )?;
+            // The elicitation is a *separate* `message_human` tool call
+            // (ADR-0097 D3): a fresh `tool_call_id` scope —
+            // `{tc}.elicitation.{attempt}` — so its `effect_id` stays the
+            // derived `f(run, mc, tc, ordinal)` coordinate (the fold
+            // refuses any other id). `action.tool.proposed` opens the
+            // tool_call scope, `action.effect.intended` opens the effect
+            // scope; `causes` names the ask row.
+            let tc_elic = format!("{}.elicitation.{}", input.chain.tool_call_id, attempt_no);
+            let mh_chain = events::ScopeChain {
+                turn_id: input.chain.turn_id.clone(),
+                model_call_id: input.chain.model_call_id.clone(),
+                tool_call_id: tc_elic.clone(),
+            };
+            let mh_id = Store::effect_id(&self.run_id, &mh_chain.model_call_id, &tc_elic, 0);
+            let mut mh_proposed = self.minter_ev().mint(
+                "action.tool.proposed",
+                events::tool_proposed_payload("hh:message_human", "elicitation"),
+            )?;
+            mh_proposed.scope = hh_ledger::event::Scope {
+                turn_id: Some(mh_chain.turn_id.clone()),
+                model_call_id: Some(mh_chain.model_call_id.clone()),
+                tool_call_id: Some(tc_elic.clone()),
+                ..Default::default()
+            };
+            let mut intended = self.minter_ev().mint_effect(
+                "action.effect.intended",
+                events::elicitation_intended_payload(&effect_id, &input_requests, 0),
+                &mh_id,
+                &mh_chain,
+            )?;
+            // `causes` names the *ask event* (the ledger coordinate —
+            // `decision_id` is a payload member, never an event ref).
+            intended.causes = vec![hh_ledger::manifest::EventRef {
+                run_id: self.run_id.clone(),
+                event_id: ask.event_id.clone(),
+            }];
+            // `action.effect.input_required{attempt_no}` — the
+            // non-terminal pause marker the fold records (`paused_at`);
+            // the retry's `committed{attempt+1}` is legal only behind it.
+            let input_req = self.minter_ev().mint_effect(
+                "action.effect.input_required",
+                Json::obj([
+                    ("attempt_no", Json::Int(attempt_no as i64)),
+                    ("reason", Json::str("protocol_input_required")),
+                ]),
+                &effect_id,
+                &input.chain,
+            )?;
+            // Two appends: `causes` resolves against committed events
+            // only — the `intended` may name the `ask` row only after
+            // the ask has landed (batch-internal refs are refused).
+            self.store
+                .append(&self.run_id, lease, vec![ask, input_req])?;
+            self.store
+                .append(&self.run_id, lease, vec![mh_proposed, intended])?;
+            self.emit_unattributed(&unattributed, lease)?;
+            self.minter.expire(&effect_id, attempt_no);
+            return Ok(DispatchOutcome::Paused {
+                effect_id: effect_id.clone(),
+                elicitation_effect_id: mh_id,
+                request_state: pause_state,
+                input_requests,
+            });
+        }
+
         // ── 7 observe ──────────────────────────────────────────────────────
         let (class, origin) = classify_report(&report, input.capability, executor.declaration());
         let kernel_retryable = retryable(&class, origin, &risk);
@@ -1440,6 +1751,11 @@ impl<'a> Dispatcher<'a> {
                 detail_ref: report.detail_ref.clone(),
                 retryable: retryable_final,
             },
+            // The paused arm returned above — a paused report never lands
+            // on `observed`.
+            TerminalStatus::Paused { .. } => {
+                unreachable!("paused reports return before observed")
+            }
         };
         // ── admission (§5g.2 §2; ADR-0054 D1) ─────────────────────────────
         // A `flow_contract` capability's result is admitted at `L(r) =
@@ -1488,7 +1804,7 @@ impl<'a> Dispatcher<'a> {
             &diff,
             outcome,
             &raw_output,
-            &handle,
+            handle,
             &effect_id,
         );
         let postcondition_results: Vec<String> =
@@ -1526,6 +1842,7 @@ impl<'a> Dispatcher<'a> {
                 match &report.status {
                     TerminalStatus::Ok => "ok",
                     TerminalStatus::ToolError { .. } => "error",
+                    TerminalStatus::Paused { .. } => "paused",
                 },
                 None,
                 Some(&overhead),
@@ -1577,7 +1894,7 @@ impl<'a> Dispatcher<'a> {
         // the next lookup a plain `miss` (fail-safe — never a stale serve).
         self.k4_write(
             input,
-            &handle,
+            handle,
             &risk,
             &effect_id,
             &args_canonical_hash,
@@ -2193,6 +2510,9 @@ pub fn classify_report(
 ) -> (ErrorClass, ErrorOrigin) {
     match &report.status {
         TerminalStatus::Ok => (ErrorClass::ExecutorError, ErrorOrigin::Tool), // unused on ok
+        // `paused` is handled before classify — a paused report never maps
+        // to an error class (§5d.4 D3: `input_required` is not a failure).
+        TerminalStatus::Paused { .. } => (ErrorClass::ExecutorError, ErrorOrigin::Tool),
         TerminalStatus::ToolError { class } => {
             let declared_ok = decl.error_classes.contains(class.as_str())
                 || capability_error_classes(capability).contains(class.as_str());
@@ -2234,6 +2554,10 @@ pub fn outcome_for(
 ) -> OutcomeMap {
     match &report.status {
         TerminalStatus::Ok => OutcomeMap::Observed(EffectOutcome::Applied),
+        // Unreachable — the paused arm short-circuits before `outcome_for`.
+        TerminalStatus::Paused { .. } => OutcomeMap::Unknown {
+            cause: "executor_error".to_string(),
+        },
         TerminalStatus::ToolError { .. } => match origin {
             ErrorOrigin::Tool => {
                 // The tool's own result — read_only/reversible settle
@@ -2349,6 +2673,7 @@ fn terminal_item(
         TerminalStatus::ToolError { .. } => {
             ("error", report.retryable_hint, report.detail_ref.clone())
         }
+        TerminalStatus::Paused { .. } => ("paused", None, None),
     };
     CaptureItem {
         run_id: run_id.to_string(),

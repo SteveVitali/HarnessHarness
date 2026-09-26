@@ -323,6 +323,55 @@ pub fn authorized_payload(effective: &hh_ontology::risk::RiskClass) -> Json {
     Json::obj([("effective_risk_class", effective.to_json())])
 }
 
+/// `control.decision{kind: "ask", decision_point: "protocol_input_required",
+/// decider: "envelope", owner, triggered_by, request_state}` — the paused-arm
+/// decision row (§5d.4 D3): the kernel records *that* it asked; the opaque
+/// `request_state` rides as an `other`-partition member the resume echoes
+/// byte-for-byte (never read — I7), `input_requests` lands there too (the
+/// elicitation content the `message_human` effect carries).
+pub fn control_decision_ask_payload(
+    decision_id: &str,
+    owner: &str,
+    triggered_by: &str,
+    input_requests: &Json,
+    request_state: &Json,
+) -> Json {
+    Json::obj([
+        ("decision_id", Json::str(decision_id)),
+        ("kind", Json::str("ask")),
+        ("decision_point", Json::str("protocol_input_required")),
+        ("decider", Json::str("envelope")),
+        ("owner", Json::str(owner)),
+        ("triggered_by", Json::Arr(vec![Json::str(triggered_by)])),
+        ("input_requests", input_requests.clone()),
+        ("request_state", request_state.clone()),
+    ])
+}
+
+/// The `message_human` elicitation effect the paused arm opens —
+/// `action.effect.intended` under a fresh `effect_id` scope
+/// (`{parent}.elicitation.{attempt_no}`) whose `causes` name the
+/// `control.decision{ask}` row. `domain: "message_human"` and
+/// `elicitation_of` are `other`-partition members; the declared-partition
+/// members mirror an ordinary `intended`.
+pub fn elicitation_intended_payload(
+    parent_effect_id: &str,
+    input_requests: &Json,
+    ordinal: u64,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert(
+        "effective_risk_class".to_string(),
+        hh_ontology::risk::RiskClass::UNKNOWN.to_json(),
+    );
+    m.insert("domain".to_string(), Json::str("message_human"));
+    m.insert("elicitation_of".to_string(), Json::str(parent_effect_id));
+    m.insert("parent_effect_id".to_string(), Json::str(parent_effect_id));
+    m.insert("input_requests".to_string(), input_requests.clone());
+    m.insert("ordinal".to_string(), Json::Int(ordinal as i64));
+    Json::Obj(m)
+}
+
 /// `action.effect.prepared{idempotency_key, baseline_ref?,
 /// compensation_plan_id?, attribution_token_hash, deadline, output_policy_ref}`
 /// — the write-ahead record's prepare half.
