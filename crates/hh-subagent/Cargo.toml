@@ -1,0 +1,26 @@
+[package]
+name = "hh-subagent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C1/Stage-4 subagent kernel slice (spec §5e.3, R-2.6.3¹ + R-2.1.6¹; ticket S4.6): the one kernel operation `spawn` composing delegate + allocate + derive + the child writer lease atomically (idempotent on `(decision, H(spec))`), `SubagentSpec`/`SubagentResult`/`ReturnContract`/`ChildOutcome`, `merge` under `single_writer`/`parent_decides` with `MergeReport` + the G-1/G-2/G-5 vetoes, spawn-time `OwnershipRecord` grants, parent-mediated peer messaging, `cancel`/`detach_to_child` containment, the `control.subagent.*`/`control.merge.*`/`control.message.*`/`control.ownership.transferred` audit rows, and the subagent run-tree projection. MUST-code (TCB); never model-facing; no `Text` leaf is read on any path."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+hh-budget = { path = "../hh-budget" }
+hh-monitor = { path = "../hh-monitor" }
+hh-env = { path = "../hh-env" }
+
+[dev-dependencies]
+hh-compiler = { path = "../hh-compiler" }
+hh-control = { path = "../hh-control" }
+hh-lab = { path = "../hh-lab" }

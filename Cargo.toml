@@ -256,6 +256,18 @@ members = [
     # TrustRootPolicy, TaskState projection, delegate_task records).
     # Records-in/records-out; a PERSISTENT workspace member.
     "crates/hh-acp",
+    # The C1/Stage-4 subagent kernel slice (spec §5e.3, R-2.6.3¹ + the
+    # R-2.1.6¹ `slice`/`pool` delegation half; ticket S4.6; ADR-0185/0186/
+    # 0187/0191/0192/0193) — the one kernel operation `spawn` composing
+    # `delegate` + `allocate` + `derive` + the child writer lease atomically
+    # (idempotent on `(decision, H(spec))`), `SubagentSpec`/`SubagentResult`/
+    # `ReturnContract`/`ChildOutcome`, `merge` under `single_writer`/
+    # `parent_decides` with `MergeReport` + G-1/G-2/G-5 vetoes, spawn-time
+    # `OwnershipRecord` grants, parent-mediated peer messaging, `cancel`/
+    # `detach_to_child` containment, the `control.subagent.*`/`control.merge.*`/
+    # `control.message.*`/`control.ownership.transferred` audit rows, and the
+    # subagent run-tree projection. MUST-code (TCB); never model-facing.
+    "crates/hh-subagent",
     # The hh-embed/1 embedding boundary (spec §7.4, R-2.11.4⁰ᵇ; ticket S1.25) — EmbedService
     # (binding a) + the stdio loop (binding b) over Store/EnvDriver/Driver; the kernel binary
     # delegates to it. A PERSISTENT workspace member.
@@ -326,6 +338,19 @@ members = [
     # exactly-once). Reads hh-lab records + hh-ledger/hh-budget primitives;
     # registry facts arrive through the context (plane separation — CC10).
     "crates/hh-experiment",
+    # The C3/Stage-4 sub-agent orchestrator class (spec §5e.3, R-2.6.3;
+    # ticket S4.6; ADR-0186) — the `orchestrator` component class binding the
+    # closed `TopologyPreset` catalogue (T0 `single`; T1 `orchestrator_worker`;
+    # T2 `pipeline`; T6 `background_detached`; T3/T4/T5/T7 declared, bound by
+    # their own tickets), the runtime that executes admitted `delegate`
+    # decisions through `hh-subagent`'s `spawn`, wait policies
+    # `{all, any, quorum(k)}`, tree-local peer messaging under the sealed
+    # `MessagingPolicy`, `detach_to_child` + goal-inbox completion delivery,
+    # the mandatory typed `delegation_reason`, and the `lab/delegation-v1`
+    # first execution under `MatchSpec{matched_total}`. The one consumer of
+    # the C1 slice — independently removable (CC6 note: the C1 slice must
+    # survive removability(1); nothing below C3 may depend on this crate).
+    "crates/hh-orchestrator",
     # The C0/Stage-3 results store (spec §6.5, R-2.10.5⁰; ticket S3.4b;
     # ADR-0161/0162/0163). A PERSISTENT workspace member: `ResultsRow/1` +
     # `project_row`, immutable row versions under the fixed key with head

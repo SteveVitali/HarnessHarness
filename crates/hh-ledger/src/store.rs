@@ -673,6 +673,13 @@ impl Store {
             })
     }
 
+    /// Whether `run_id` is held in this store (the C1 spawn slice's
+    /// half-created-child check — `open_run_with_id` already refuses a
+    /// collision; this is the probe the idempotent path uses).
+    pub fn has_run(&self, run_id: &str) -> bool {
+        self.runs.contains_key(run_id)
+    }
+
     // ── open_run ─────────────────────────────────────────────────────────
 
     /// `open_run(manifest, holder) → (RunId, Lease)` — allocates a time-ordered
@@ -683,6 +690,36 @@ impl Store {
         manifest: RunManifest,
         holder: &str,
     ) -> Result<(String, Lease), LedgerError> {
+        let run_id = self.ids.alloc("run");
+        self.open_run_with_id(&run_id, manifest, holder)
+    }
+
+    /// `open_run_with_id(run_id, manifest, holder)` — the `open_run` body
+    /// under a caller-determined `RunId` (S4.6 `spawn`: the child's manifest
+    /// `spawn_event` names the parent's `control.subagent.spawned` row, which
+    /// itself carries `child_run_id` — the child's id must be fixed before
+    /// that row lands; the deterministic `sub-<H(decision, H(spec))>` id is
+    /// also what lets a post-crash re-run adopt a half-created child instead
+    /// of orphaning one — the `(decision, H(spec))` idempotency pair is the
+    /// id). The id must be well-formed and unused (live in the store or on
+    /// disk); everything else validates as `open_run`.
+    pub fn open_run_with_id(
+        &mut self,
+        run_id: &str,
+        manifest: RunManifest,
+        holder: &str,
+    ) -> Result<(String, Lease), LedgerError> {
+        if run_id.is_empty() || run_id.contains('/') || run_id.contains('.') {
+            return Err(LedgerError::SchemaViolation {
+                detail: format!("run_id {run_id} is not a well-formed id"),
+            });
+        }
+        if self.runs.contains_key(run_id) || self.run_dir(run_id).exists() {
+            return Err(LedgerError::ManifestInvalid {
+                detail: format!("run_id already held: {run_id}"),
+            });
+        }
+        let run_id = run_id.to_string();
         manifest.validate()?;
         // Lineage anchors: `forked_from`/`continued_from` must resolve and bind the
         // source head hash at `at_seq` (ADR-0027 §6; ADR-0131 §5).
@@ -702,7 +739,6 @@ impl Store {
         if let Some(ev) = &manifest.spawn_event {
             self.resolve_event_ref(ev)?;
         }
-        let run_id = self.ids.alloc("run");
         let dir = self.run_dir(&run_id);
         fs::create_dir_all(&dir).map_err(|e| LedgerError::Io {
             detail: format!("create run dir: {e}"),
