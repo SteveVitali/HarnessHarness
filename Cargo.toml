@@ -51,6 +51,17 @@ members = [
     # `DimensionId` registry itself lives in hh-ontology (the vocabulary crate) so hh-hir
     # can check bound keys — this crate is the accounting layer over it (CC7).
     "crates/hh-budget",
+    # The C0/Stage-1 control plane (spec §5e.1/§5e.2, R-2.6.1/R-2.6.2; ticket
+    # S1.20). A PERSISTENT workspace member: the `control_strategy` contract
+    # (closed Cue/ControlDecision/ControlState sums, open/observe/decide/
+    # terminate/checkpoint/restore, react/minimal + the variant registry), the
+    # control envelope (EnvelopePolicy + the six guards + stop/drain +
+    # retry/timeout/reservation sizing + INV-1…9 + the deterministic
+    # loop_detector ladder + strict output validation), and the cue-inbox
+    # driver that emits the full `control.decision` row with `checkpoint_ref`
+    # and resumes by leaf. The control-plane `StopReason` sum is owned by
+    # `hh_ontology::control` (ADR-0106 D6; CC7).
+    "crates/hh-control",
     # The C0/Stage-1 component-variation registry *store* (spec §6.2, R-2.10.2⁰;
     # ticket S1.8). A PERSISTENT workspace member: the closed registry/1 record
     # kinds + the one RegistryEnvelope (three status axes), the hh/ + local/
@@ -176,10 +187,10 @@ members = [
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
-    # THROWAWAY Stage-0 baseline (doc 3 §11.0; ticket S0.2). A workspace member so its
-    # acceptance tests run under `cargo test --workspace`, but NOT a dependency of the kernel:
-    # deleting `crates/hh-baseline` at the Stage-0 boundary breaks nothing persistent.
-    "crates/hh-baseline",
+    # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
+    # was deleted at S1.20 — the canonical `hh-control` lands the full control
+    # strategy + envelope and the baseline's throwaway `StopReason` subset retired
+    # with it (CC1; nothing persistent depended on it).
 ]
 # Throwaway spike trees (ADR-0050 R1–R6; doc 3 §11.0) live outside the workspace: they build
 # against the persistent kernel but are never a build dependency of it.

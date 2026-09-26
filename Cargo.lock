@@ -17,16 +17,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hh-baseline"
-version = "0.0.1"
-dependencies = [
- "hh-budget",
- "hh-embed-schema",
- "hh-provenance",
- "hh-wire",
-]
-
-[[package]]
 name = "hh-budget"
 version = "0.0.1"
 dependencies = [
@@ -80,6 +70,23 @@ dependencies = [
  "hh-ledger",
  "hh-provenance",
  "hh-telemetry",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-control"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-compiler",
+ "hh-context",
+ "hh-env",
+ "hh-gateway",
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-provenance",
  "hh-wire",
 ]
 

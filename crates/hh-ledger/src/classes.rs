@@ -452,16 +452,27 @@ const BUDGET_AUDIT_FIELDS: &[AuditField] = &[
     af("authority"),
 ];
 
-/// `control.decision` — the audit-grade decision row (`{kind, reason?,
-/// budget_id?, dimension?, triggered_by?, decider, call_no?}`).
+/// `control.decision` — the audit-grade decision row. The §5e.1 full payload
+/// (S1.20) is `{decision_id, decision_point, owner, checkpoint_ref, cursor,
+/// verdict, decider ∈ {strategy, envelope, principal, parent, hosting},
+/// triggered_by, reason: StopReason?}`; the Stage-0 driver members `{kind,
+/// budget_id?, dimension?, call_no?}` and `submission_ref?` complete the
+/// declared partition (`reason` is the `StopReason` record — bounded).
 const DECISION_FIELDS: &[AuditField] = &[
     af("kind"),
-    af("reason"),
+    afb("reason", AUDIT_FIELD_LIST_BYTES),
     af("budget_id"),
     af("dimension"),
     afb("triggered_by", AUDIT_FIELD_LIST_BYTES),
     af("decider"),
     af("call_no"),
+    af("decision_id"),
+    af("decision_point"),
+    af("owner"),
+    af("checkpoint_ref"),
+    afb("cursor", AUDIT_FIELD_LIST_BYTES),
+    afb("verdict", AUDIT_FIELD_LIST_BYTES),
+    af("submission_ref"),
 ];
 
 /// `lifecycle.ledger.redacted` — the tombstone (`{targets[], reason_code,
@@ -871,6 +882,28 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("control.retry.fired",             Led, O::Events, false, true,  None, None),
     row("control.retry.skipped",           Led, O::Events, false, true,  None, None),
     row("control.timeout.fired",           Led, O::Events, false, true,  None, None),
+    // The S1.20 control-envelope rows (§5e.2 ledger row): the deterministic
+    // `loop_detector` verdict (`{detector, pattern{cycle_len, repeats,
+    // loop_keys[]}, evidence_refs[], action, ladder_position, validator_ref?}`),
+    // the strict-output rejection (`{model_call_id, failure_class, surface_id?,
+    // detail_ref, repaired, format_failures_running}` — `detail_ref` is the
+    // redaction-safe content address; no rejected bytes ride the row), and the
+    // INV-1…9 violation record (`{invariant_id, evidence_refs[],
+    // detected_at_guard}`) that precedes `stop{invariant_violation}` + the
+    // quarantine checkpoint. Kernel-origin, provenance-bearing, `ledger` —
+    // citable by `audit_ref` (ADR-0106/0108).
+    row("control.loop.detected",           Led, O::Events, false, true,  None, None),
+    row("control.output.rejected",         Led, O::Events, false, true,  None, None),
+    row("control.invariant.violated",      Led, O::Events, false, true,  None, None),
+    // `control.plan.emitted{plan_ref, schema_validator_ref, valid}` — the
+    // plan-execute audit row (§5e.1 §sec "Audit events emitted"); the emitter
+    // lands at Stage 3 with `plan_execute` — the class is declared now so the
+    // dialect table is complete.
+    row_audit("control.plan.emitted",      O::Events, true,  OPEN_AUDIT, &[], None, None),
+    // `control.compute.decided{ComputeDecisionRecord}` — §5e.4's bind record:
+    // "not audit-grade but citable by `audit_ref`" (the emitter lands with the
+    // compute policy at C3/Stage 4 — R-2.6.4).
+    row_prov("control.compute.decided",    Led, O::Ledger, false, true,  true,  None, None),
 
     // ── measurement (P7) — the spend-attribution row (§8.2
     // `measurement.cost.attributed{scope?, subject_ref, dimension, quantity|money?,

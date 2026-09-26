@@ -1,0 +1,23 @@
+[package]
+name = "hh-control"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-1 control plane (spec §5e.1/§5e.2, R-2.6.1/R-2.6.2; ticket S1.20; ADR-0103…0108). The `control_strategy` contract — the closed `Cue`/`ControlDecision`/`ControlState`/`ControlCapabilities` sums, `open`/`observe`/`decide`/`terminate`/`checkpoint`/`restore`, the `react/minimal` variant with its fixed parameters and F1 decision table, the variant registry — and the control envelope — the sealed `EnvelopePolicy` with `RetryPolicy`/`TimeoutPolicy`/`LoopPolicy`/`OutputValidationPolicy`/`ExhaustionPolicy`/`InvariantSet`, the six guard points as pure folds over the durable prefix, `envelope.check` (the F2 driver view), the stop protocol with barrier + drain + `DrainReport`, shared attempt identity + derived deadlines + reservation sizing, INV-1…9 with the quarantine path, the deterministic `loop_detector` ladder (nudge→deny→stop), strict form-level output validation, and the cue-inbox driver that emits the full `control.decision` audit row, persists `checkpoint_ref` per decision and resumes by leaf (`restore` + `observe` of the tail). The control-plane `StopReason`/`StopKind`/`OutcomeClass` vocabulary lives in `hh_ontology::control` (CC7 — the shared vocabulary crate); the gateway's `StopReason` is a different sum (R-2.3.1) and is never read against it."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+hh-budget = { path = "../hh-budget" }
+hh-compiler = { path = "../hh-compiler" }
+hh-gateway = { path = "../hh-gateway" }
+hh-env = { path = "../hh-env" }
+hh-context = { path = "../hh-context" }
