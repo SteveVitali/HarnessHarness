@@ -149,6 +149,7 @@ impl RecordKind {
                 | RecordKind::Capability
                 | RecordKind::MetricDeclaration
                 | RecordKind::Validator
+                | RecordKind::Extension
         )
     }
 

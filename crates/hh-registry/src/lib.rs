@@ -44,6 +44,7 @@ pub mod capability;
 pub mod corpus;
 pub mod errors;
 pub mod events;
+pub mod extension;
 pub mod identity;
 pub mod kinds;
 pub mod records;

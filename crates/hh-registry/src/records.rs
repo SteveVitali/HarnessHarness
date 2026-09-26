@@ -479,6 +479,10 @@ pub enum RegistryRecord {
     /// ADR-0047). A Validator *component* registers as a `variant` of the
     /// `validator` class; this kind is the oracle's declaration record.
     Validator(OracleDeclaration),
+    /// An `extension` — the §5g.5 `ExtensionRecord` (R-2.8.5⁰): declared-source
+    /// locator + content pin + trust record; a registry-layer versioned record,
+    /// never a HIR entity.
+    Extension(crate::extension::ExtensionRecord),
 }
 
 impl RegistryRecord {
@@ -495,6 +499,7 @@ impl RegistryRecord {
             RegistryRecord::Capability(_) => RecordKind::Capability,
             RegistryRecord::MetricDeclaration(_) => RecordKind::MetricDeclaration,
             RegistryRecord::Validator(_) => RecordKind::Validator,
+            RegistryRecord::Extension(_) => RecordKind::Extension,
         }
     }
 
@@ -515,6 +520,14 @@ impl RegistryRecord {
             // `calibration_ref` is a pinned `version_id` of the deterministic
             // oracle the judge calibrates against (ADR-0047(c)(ii)).
             RegistryRecord::Validator(o) => o.calibration_ref.iter().cloned().collect(),
+            // The extension's snapshot-closure edge set: contributed components
+            // + conferred grant pins (R7 — both are `VersionedRef`s).
+            RegistryRecord::Extension(e) => e
+                .contributes
+                .iter()
+                .chain(e.trust.grants.iter())
+                .map(|r| r.version_id.clone())
+                .collect(),
             RegistryRecord::Snapshot(s) => s.members.iter().cloned().collect(),
             // A capability's pinned postcondition refs close over the Validators/
             // Observations it names (the snapshot closure — R7; unpinned selectors

@@ -1173,6 +1173,7 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         // the registry re-encodes, never re-schemas).
         RegistryRecord::MetricDeclaration(m) => m.to_json(),
         RegistryRecord::Validator(o) => o.to_json(),
+        RegistryRecord::Extension(e) => crate::extension::extension_body_json(e),
     }
 }
 
@@ -1240,6 +1241,13 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
                 }
             })?,
         )),
+        RecordKind::Extension => {
+            let rec = crate::extension::extension_from_json(j, path)?;
+            // L1–L3 checks are the schema gate (LocationElevation/LegCrossing
+            // refuse at decode + register, never at first use).
+            crate::extension::validate_extension_record(&rec)?;
+            Ok(RegistryRecord::Extension(rec))
+        }
         other if !other.has_stage1_schema() => Err(RegistryError::SchemaViolation {
             path: "kind".to_string(),
             detail: format!(

@@ -356,6 +356,13 @@ pub fn seal(doc: &HirDocument, sealed_at: u64) -> Result<SealedDefinition, Vec<H
             });
             return Err(errs);
         }
+        // §5g.5 L4 (S1.23): a sealed form carries only pinned extension refs —
+        // a surviving `locator.selector` or a missing `resolved`/`fetched_at`/
+        // `content` pin fails `UnpinnedInSealedForm`.
+        if let Some(what) = unpinned_extension_in_assembly(a, "assembly") {
+            errs.push(HirError::UnpinnedInSealedForm { detail: what });
+            return Err(errs);
+        }
     }
     validate::validate(doc)?;
 
@@ -558,6 +565,42 @@ fn unresolved_in_assembly(j: &hh_wire::json::Json, path: &str) -> Option<String>
         }
         _ => None,
     }
+}
+
+/// The §5g.5 L4 walk over `assembly.extensions.refs[]`: a ref is pinned when
+/// its locator carries `resolved` + `fetched_at` with no surviving `selector`
+/// and `content` is present (S1.23). Returns the first offending path/member.
+fn unpinned_extension_in_assembly(j: &hh_wire::json::Json, path: &str) -> Option<String> {
+    use hh_wire::json::Json;
+    let refs = match j {
+        Json::Obj(m) => m.get("extensions")?.get("refs")?,
+        _ => return None,
+    };
+    let items = match refs {
+        Json::Arr(items) => items,
+        _ => return None,
+    };
+    for (i, r) in items.iter().enumerate() {
+        let Json::Obj(rm) = r else { continue };
+        let rp = format!("{path}/extensions/refs/{i}");
+        let name = rm.get("name").and_then(Json::as_str).unwrap_or("<unnamed>");
+        if let Some(Json::Obj(loc)) = rm.get("locator") {
+            if loc.contains_key("selector") {
+                return Some(format!(
+                    "{rp} ({name}): locator.selector survived into a sealed form"
+                ));
+            }
+            if !loc.contains_key("resolved") || !loc.contains_key("fetched_at") {
+                return Some(format!(
+                    "{rp} ({name}): locator lacks its resolved/fetched_at pin"
+                ));
+            }
+        }
+        if !rm.contains_key("content") {
+            return Some(format!("{rp} ({name}): missing the content pin"));
+        }
+    }
+    None
 }
 
 /// A `ProfileRef` must be pinned inside a sealed form (N5) — except the `unbound` sentinel

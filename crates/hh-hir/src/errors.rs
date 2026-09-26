@@ -189,6 +189,13 @@ pub enum HirError {
     /// without binding a `discover_surfaces` capability (`exposure_hint.
     /// discovery = true`).
     NoDiscoverySurface,
+    /// §5g.5 L4 (S1.23): a sealed form carrying an `assembly.extensions.refs[]`
+    /// member that is not fully pinned — a surviving `locator.selector`, or a
+    /// missing `locator.resolved`/`fetched_at`/`content` pin.
+    UnpinnedInSealedForm {
+        /// Which ref and which pin member is missing.
+        detail: String,
+    },
 }
 
 impl fmt::Display for HirError {
@@ -260,6 +267,9 @@ impl fmt::Display for HirError {
                 write!(f, "DerivedEffectsMismatch: {detail}")
             }
             HirError::NoDiscoverySurface => write!(f, "NoDiscoverySurface"),
+            HirError::UnpinnedInSealedForm { detail } => {
+                write!(f, "UnpinnedInSealedForm: {detail}")
+            }
         }
     }
 }

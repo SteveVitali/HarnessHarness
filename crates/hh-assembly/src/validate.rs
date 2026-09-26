@@ -138,6 +138,53 @@ pub fn validate_assembly(
                 }
             }
         }
+        // ── extension trust (§5g.5; S1.23) ─────────────────────────────────────
+        // L1 — declared sources only (CF-079): every ref's locator scheme must be
+        // covered by `extensions.sources[]`. L2 — `merge_policy = exact_only`
+        // admits one ref per `(name, kind)`. L4 — a sealed subject carries only
+        // pinned refs (`C-EXT-1`; `seal` refuses the same — validate reports it).
+        if let Some(eb) = &a.extensions {
+            let declared: BTreeSet<&str> = eb.sources.iter().map(|s| s.kind_str()).collect();
+            let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
+            for (i, r) in eb.refs.iter().enumerate() {
+                let path = format!("/assembly/extensions/refs/{i}");
+                if !declared.contains(r.locator.scheme.as_str()) {
+                    diags.push(diag(
+                        Code::ExtUndeclaredSource,
+                        &path,
+                        &r.name,
+                        "the ref's locator scheme is not covered by `extensions.sources[]`",
+                        "declare the source kind in `extensions.sources[]` — sources are declared, never implicit",
+                        kernel,
+                        Stage::Validate(1),
+                    ));
+                }
+                if matches!(eb.merge_policy, crate::grammar::MergePolicy::ExactOnly)
+                    && !seen.insert((r.name.clone(), r.kind.as_str().to_string()))
+                {
+                    diags.push(diag(
+                        Code::ExtNameCollision,
+                        &path,
+                        &r.name,
+                        "two extension refs bind the same `(name, kind)` under `merge_policy = exact_only`",
+                        "rename one ref or declare `merge_policy = disjoint`",
+                        kernel,
+                        Stage::Validate(1),
+                    ));
+                }
+                if matches!(subject, Subject::Sealed(_)) && !r.is_pinned() {
+                    diags.push(diag(
+                        Code::ExtUnpinnedInSealedForm,
+                        &path,
+                        &r.name,
+                        "an extension ref reaching a sealed form is not pinned",
+                        "run `resolve` — a selector/missing pin fails `UnpinnedInSealedForm` at `seal`",
+                        kernel,
+                        Stage::Validate(1),
+                    ));
+                }
+            }
+        }
         // C-CLASS-6 — slots on a hosted process (T-LCD-15): the grammar-level check
         // runs at stage 1 (stage 2 is `n/a{class}` for hosted roots).
         if hosted && !a.slots.is_empty() {

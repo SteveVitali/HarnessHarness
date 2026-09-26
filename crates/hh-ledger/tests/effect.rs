@@ -803,13 +803,24 @@ fn ac_2_2_3_2_restore_fences_marks_unknown_and_audits() {
     s.append(
         &run,
         &lease,
-        vec![eff(
-            "perm1",
-            "security.permission.requested",
-            "unused",
-            Json::obj([("permission_id", Json::str("perm-1"))]),
-            0,
-        )],
+        vec![
+            // The durable owed-decision row (S1.23) — the ephemeral
+            // `requested` rendering beside it never substitutes.
+            eff(
+                "perm1",
+                "security.permission.pending",
+                "unused",
+                Json::obj([("permission_id", Json::str("perm-1"))]),
+                0,
+            ),
+            eff(
+                "perm2",
+                "security.permission.requested",
+                "unused",
+                Json::obj([("permission_id", Json::str("perm-eph"))]),
+                0,
+            ),
+        ],
     )
     .unwrap();
     // Checkpoint is a pure fold — rebuild and compare byte-for-byte.
@@ -1023,4 +1034,121 @@ fn mediation_allow_decision_survives_rebuild() {
         .append(&run, &lease2, vec![decided("d2", "e1", 1, "deny")])
         .unwrap_err();
     assert!(matches!(e, LedgerError::DuplicateDecision { .. }), "{e:?}");
+}
+
+// ── AC-R-2.8.7-1 — complete mediation as a checkable fold (S1.23) ────────────
+// "No `action.effect.prepared` exists without a preceding
+// `security.permission.decided{decision: allow}` or a Π `allow` for the same
+// `effect_id`" — the Π allow is the `action.effect.authorized` record; the
+// write-ahead `committed` gate stays `decided{allow}`-specific (I-H7).
+
+#[test]
+fn ac_2_8_7_1_check_mediation_replays_the_ordering() {
+    let (mut s, run, lease) = open("mediation-fold");
+    let gen = lease.generation;
+    // Π-allow prefix: `authorized` mediates `prepared` (no permission row yet).
+    to_prepared(&mut s, &run, &lease, "e1", irreversible());
+    hh_ledger::effect::check_mediation(s.events(&run).unwrap())
+        .expect("the Π allow mediates preparation");
+    // The committed gate: `decided{allow}` lands, then `committed` — the whole
+    // committed prefix replays clean.
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a1", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
+    hh_ledger::effect::check_mediation(s.events(&run).unwrap())
+        .expect("a legal committed prefix mediates");
+}
+
+#[test]
+fn ac_2_8_7_1_committed_requires_the_decided_allow() {
+    let (mut s, run, lease) = open("mediation-undecided");
+    let gen = lease.generation;
+    to_prepared(&mut s, &run, &lease, "e1", irreversible());
+    s.append(
+        &run,
+        &lease,
+        vec![allow("a1", "e1", 1), committed("c1", "e1", 1, gen)],
+    )
+    .unwrap();
+    // Rebuild the prefix without the permission row: `authorized` alone never
+    // opens the write-ahead gate (I-H7).
+    let stripped: Vec<_> = s
+        .events(&run)
+        .unwrap()
+        .iter()
+        .filter(|e| e.class != "security.permission.decided")
+        .cloned()
+        .collect();
+    assert!(matches!(
+        hh_ledger::effect::check_mediation(&stripped),
+        Err(LedgerError::Undecided { .. })
+    ));
+}
+
+#[test]
+fn ac_2_8_7_1_a_final_deny_vetoes_later_effect_motion() {
+    let (mut s, run, lease) = open("mediation-deny");
+    // A recorded `deny` for the attempt followed by `prepared` — the append
+    // gate is committed-only so the prefix exists; the fold must refuse it.
+    // (`decided` lands after `intended` opens the effect scope, before the
+    // Π `allow` and `prepared`.)
+    s.append(
+        &run,
+        &lease,
+        vec![
+            intended("i1", "e1", irreversible(), Json::Null),
+            decided("d1", "e1", 1, "deny"),
+            authorized("au1", "e1", irreversible()),
+            prepared("p1", "e1", "k1"),
+        ],
+    )
+    .unwrap();
+    assert!(matches!(
+        hh_ledger::effect::check_mediation(s.events(&run).unwrap()),
+        Err(LedgerError::Undecided { .. })
+    ));
+}
+
+#[test]
+fn ac_2_8_7_1_no_decision_at_all_is_undecided() {
+    // A bare `prepared` with neither `authorized` nor `decided` — the row a
+    // corrupted/malformed prefix carries (the append path can't produce it,
+    // the offline fold still names it).
+    let (mut s, run, lease) = open("mediation-bare");
+    s.append(
+        &run,
+        &lease,
+        vec![
+            intended("i1", "e1", irreversible(), Json::Null),
+            authorized("au1", "e1", irreversible()),
+        ],
+    )
+    .unwrap();
+    // Strip the authorized row, then append nothing — construct the prefix by
+    // filtering out `authorized` and letting a `prepared` appear only in a
+    // synthetic suffix: rebuild by hand over the envelopes.
+    let mut evs: Vec<_> = s
+        .events(&run)
+        .unwrap()
+        .iter()
+        .filter(|e| e.class != "action.effect.authorized")
+        .cloned()
+        .collect();
+    let p = prepared("p1", "e1", "k1");
+    // Envelopes need seq/scope — clone the last envelope's shell.
+    let shell = evs.last().unwrap().clone();
+    let mut env = shell.clone();
+    env.event_id = "p1".into();
+    env.class = "action.effect.prepared".into();
+    env.scope.effect_id = Some("e1".into());
+    env.payload = p.payload.clone();
+    env.seq = shell.seq + 1;
+    evs.push(env);
+    assert!(matches!(
+        hh_ledger::effect::check_mediation(&evs),
+        Err(LedgerError::Undecided { .. })
+    ));
 }

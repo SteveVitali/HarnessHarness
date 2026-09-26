@@ -319,6 +319,36 @@ pub struct ResolvedInfo {
     pub resolved_at: u64,
 }
 
+/// The extension merge policy (§5g.5 §3; S1.23): how two sources' candidates
+/// combine under one name. `exact_only` is the default — a ref binds exactly
+/// one pinned record and a second candidate for the same name is a collision;
+/// `disjoint` declares that the sources bind disjoint namespaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MergePolicy {
+    /// Exact-only merge (the default).
+    #[default]
+    ExactOnly,
+    /// Declared disjoint namespaces.
+    Disjoint,
+}
+
+/// The `extensions` member (§5g.5 §3; S1.23): `{sources, refs, merge_policy}` —
+/// the **declared** extension surface. Sources are declared, never implicit
+/// (CF-079 — there is no silent home/project directory scan); every ref's
+/// locator scheme must be covered by a declared source (L1); refs pin at
+/// `resolve` (`locator.resolved`/`fetched_at`, `content`, `extension_id`); a
+/// selector or missing pin reaching a sealed form fails `UnpinnedInSealedForm`
+/// (L4; AC-R-2.8.5-1).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExtensionBlock {
+    /// The declared sources the refs' locators resolve under.
+    pub sources: Vec<hh_registry::extension::DeclaredSource>,
+    /// The extension references (selector-bearing before `resolve`, pinned after).
+    pub refs: Vec<hh_registry::extension::ExtensionRef>,
+    /// The declared merge policy (`exact_only` by default).
+    pub merge_policy: MergePolicy,
+}
+
 /// The typed `Assembly` section (§3.3.2).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Assembly {
@@ -339,6 +369,10 @@ pub struct Assembly {
     pub constraints: Vec<Constraint>,
     /// `layers?: [LayerProvenance]` — present on composed documents only.
     pub layers: Option<Vec<LayerProvenance>>,
+    /// `extensions?: {sources, refs, merge_policy}` — the declared extension
+    /// surface (§5g.5 §3; S1.23): declared sources only (no implicit scanning,
+    /// CF-079), refs pinned at `resolve`, `UnpinnedInSealedForm` at `seal` (L4).
+    pub extensions: Option<ExtensionBlock>,
     /// `resolved?` — the member `resolve` writes (never authored).
     pub resolved: Option<ResolvedInfo>,
     /// `ext` — the only place unknown keys may live.
@@ -357,6 +391,7 @@ impl Assembly {
             entities: BTreeMap::new(),
             constraints: Vec::new(),
             layers: None,
+            extensions: None,
             resolved: None,
             ext: BTreeMap::new(),
         }
@@ -364,9 +399,16 @@ impl Assembly {
 
     /// Whether the section is in *resolved* form — no `version_selector`, no
     /// `$param:`/`$entity:` binding form anywhere (`$secret:` channel names survive
-    /// resolve — they are names, never values). Mirrors `seal`'s admission check.
+    /// resolve — they are names, never values), and every extension ref pinned
+    /// (§5g.5 L4 — an unpinned ref is not a resolved section). Mirrors `seal`'s
+    /// admission check.
     pub fn is_resolved(&self) -> bool {
         unresolved_in_json(&self.to_json(), "assembly").is_none()
+            && self
+                .extensions
+                .as_ref()
+                .map(|e| e.refs.iter().all(|r| r.is_pinned()))
+                .unwrap_or(true)
     }
 
     /// The canonical JSON encoding (the member `HirDocument.assembly` carries).
@@ -406,6 +448,9 @@ impl Assembly {
                 "layers".into(),
                 Json::Arr(layers.iter().map(layer_json).collect()),
             );
+        }
+        if let Some(e) = &self.extensions {
+            m.insert("extensions".into(), extension_block_json(e));
         }
         if let Some(r) = &self.resolved {
             m.insert(
@@ -453,6 +498,7 @@ impl Assembly {
             "entities",
             "constraints",
             "layers",
+            "extensions",
             "resolved",
             "ext",
         ];
@@ -630,6 +676,19 @@ impl Assembly {
                     "author `layers` as [LayerProvenance]",
                     kernel,
                 ));
+            }
+        }
+        if let Some(e) = m.get("extensions") {
+            match extension_block_from_json(e, &format!("{path}/extensions")) {
+                Ok(eb) => a.extensions = Some(eb),
+                Err(detail) => diags.push(diag(
+                    Code::LoadParse,
+                    &format!("{path}/extensions"),
+                    "extensions",
+                    &detail,
+                    "author `extensions` as `{sources: [DeclaredSource], refs: [ExtensionRef], merge_policy}`",
+                    kernel,
+                )),
             }
         }
         if let Some(r) = m.get("resolved") {
@@ -919,6 +978,81 @@ fn resolved_from_json(j: &Json, path: &str) -> Result<ResolvedInfo, String> {
     Ok(ResolvedInfo {
         registry_snapshot_id: snap.to_string(),
         resolved_at: at,
+    })
+}
+
+fn extension_block_json(e: &ExtensionBlock) -> Json {
+    Json::obj([
+        (
+            "sources",
+            Json::Arr(
+                e.sources
+                    .iter()
+                    .map(hh_registry::extension::declared_source_json)
+                    .collect(),
+            ),
+        ),
+        (
+            "refs",
+            Json::Arr(
+                e.refs
+                    .iter()
+                    .map(hh_registry::extension::extension_ref_json)
+                    .collect(),
+            ),
+        ),
+        (
+            "merge_policy",
+            Json::str(match e.merge_policy {
+                MergePolicy::ExactOnly => "exact_only",
+                MergePolicy::Disjoint => "disjoint",
+            }),
+        ),
+    ])
+}
+
+fn extension_block_from_json(j: &Json, path: &str) -> Result<ExtensionBlock, String> {
+    let m = match j {
+        Json::Obj(m) => m,
+        _ => return Err(format!("{path} must be an object")),
+    };
+    let mut sources = Vec::new();
+    match m.get("sources") {
+        Some(Json::Arr(items)) => {
+            for (i, s) in items.iter().enumerate() {
+                let sp = format!("{path}/sources/{i}");
+                sources.push(
+                    hh_registry::extension::declared_source_from_json(s, &sp)
+                        .map_err(|e| format!("{sp}: {e:?}"))?,
+                );
+            }
+        }
+        Some(_) => return Err(format!("{path}.sources must be a list")),
+        None => {}
+    }
+    let mut refs = Vec::new();
+    match m.get("refs") {
+        Some(Json::Arr(items)) => {
+            for (i, r) in items.iter().enumerate() {
+                let rp = format!("{path}/refs/{i}");
+                refs.push(
+                    hh_registry::extension::extension_ref_from_json(r, &rp)
+                        .map_err(|e| format!("{rp}: {e:?}"))?,
+                );
+            }
+        }
+        Some(_) => return Err(format!("{path}.refs must be a list")),
+        None => {}
+    }
+    let merge_policy = match m.get("merge_policy").and_then(Json::as_str) {
+        None | Some("exact_only") => MergePolicy::ExactOnly,
+        Some("disjoint") => MergePolicy::Disjoint,
+        Some(other) => return Err(format!("{path}.merge_policy: unknown spelling `{other}`")),
+    };
+    Ok(ExtensionBlock {
+        sources,
+        refs,
+        merge_policy,
     })
 }
 
