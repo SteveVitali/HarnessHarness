@@ -92,6 +92,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-embed"
+version = "0.0.1"
+dependencies = [
+ "hh-assembly",
+ "hh-containment",
+ "hh-control",
+ "hh-embed-schema",
+ "hh-env",
+ "hh-gateway",
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-monitor",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-registry",
+ "hh-secrets",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-embed-client-generated"
 version = "0.0.1"
 dependencies = [
@@ -163,6 +184,7 @@ dependencies = [
 name = "hh-kernel"
 version = "0.0.1"
 dependencies = [
+ "hh-embed",
  "hh-embed-client-generated",
  "hh-embed-schema",
  "hh-wire",

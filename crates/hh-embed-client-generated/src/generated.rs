@@ -3,64 +3,838 @@
 // Source of truth: the `hh-embed-schema` crate (the single schema source, CC7). Regenerate
 // with `cargo run -p hh-codegen -- --root <repo>`; `scripts/check-drift.sh` fails the build
 // if this file drifts from the schema. A generated client contains no runtime logic beyond
-// the transport binding (ADR-0179): it asserts `(contract_major, schema_hash)` and lowers a
-// mismatch to a typed error.
+// the transport binding (ADR-0179): it asserts `(contract_major, schema_hash)` at `hello`
+// and lowers a mismatch to a typed error — never a silent fallback (ADR-0178 D2).
 
 #![allow(clippy::all)]
 
 use hh_wire::json::Json;
+use std::collections::BTreeMap;
 use std::io::{BufRead, Write};
 
 /// The contract major this client was generated against.
 pub const CONTRACT_MAJOR: i64 = 1;
 
-/// The schema content address this client was generated against (`sha256:<hex>`).
+/// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:c6f41391ff48db1a2adf1ea99c876183350ecbef6369830bfefcd1ee27669370";
+    "sha256:500857f539f198e3cba6d418cb18e7e8feb8dd39b7d2c2b41ae8bcdbd801e244";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HelloParams {
-    pub client_name: String,
-    pub client_version: String,
-    pub asserted_contract_major: i64,
-    pub asserted_schema_hash: Option<String>,
+pub struct Accepted {
+    pub turn_id: String,
 }
 
-impl HelloParams {
+impl Accepted {
     pub fn to_json(&self) -> Json {
         let mut pairs: Vec<(&'static str, Json)> = Vec::new();
-        pairs.push(("client_name", Json::str(self.client_name.clone())));
-        pairs.push(("client_version", Json::str(self.client_version.clone())));
-        pairs.push((
-            "asserted_contract_major",
-            Json::Int(self.asserted_contract_major),
-        ));
-        if let Some(v) = &self.asserted_schema_hash {
-            pairs.push(("asserted_schema_hash", Json::str(v.clone())));
+        pairs.push(("turn_id", Json::str(self.turn_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Accepted, String> {
+        Ok(Accepted {
+            turn_id: {
+                let f = v
+                    .get("turn_id")
+                    .ok_or_else(|| format!("missing '{}'", "turn_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountParams {
+    pub session_id: String,
+    pub until_seq: Option<i64>,
+}
+
+impl AccountParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.until_seq {
+            pairs.push(("until_seq", Json::Int(v.clone())));
         }
         Json::obj(pairs)
     }
 
-    pub fn from_json(v: &Json) -> Result<HelloParams, String> {
-        Ok(HelloParams {
-            client_name: v
-                .get("client_name")
-                .and_then(Json::as_str)
-                .map(|s| s.to_string())
-                .ok_or_else(|| "missing 'client_name'".to_string())?,
-            client_version: v
-                .get("client_version")
-                .and_then(Json::as_str)
-                .map(|s| s.to_string())
-                .ok_or_else(|| "missing 'client_version'".to_string())?,
-            asserted_contract_major: v
-                .get("asserted_contract_major")
-                .and_then(Json::as_int)
-                .ok_or_else(|| "missing 'asserted_contract_major'".to_string())?,
-            asserted_schema_hash: v
-                .get("asserted_schema_hash")
-                .and_then(Json::as_str)
-                .map(|s| s.to_string()),
+    pub fn from_json(v: &Json) -> Result<AccountParams, String> {
+        Ok(AccountParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            until_seq: match v.get("until_seq") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountView {
+    pub account: Json,
+}
+
+impl AccountView {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("account", self.account.clone()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<AccountView, String> {
+        Ok(AccountView {
+            account: {
+                let f = v
+                    .get("account")
+                    .ok_or_else(|| format!("missing '{}'", "account"))?;
+                f.clone()
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Acknowledged {
+    pub acknowledged: bool,
+}
+
+impl Acknowledged {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("acknowledged", Json::Bool(self.acknowledged.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Acknowledged, String> {
+        Ok(Acknowledged {
+            acknowledged: {
+                let f = v
+                    .get("acknowledged")
+                    .ok_or_else(|| format!("missing '{}'", "acknowledged"))?;
+                match f {
+                    Json::Bool(b) => *b,
+                    _ => return Err("expected bool".to_string()),
+                }
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AmendParams {
+    pub session_id: String,
+    pub target: String,
+    pub value: Json,
+    pub attestation: Option<Json>,
+    pub idempotency_key: Option<String>,
+}
+
+impl AmendParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("target", Json::str(self.target.clone())));
+        pairs.push(("value", self.value.clone()));
+        if let Some(v) = &self.attestation {
+            pairs.push(("attestation", v.clone()));
+        }
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<AmendParams, String> {
+        Ok(AmendParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            target: {
+                let f = v
+                    .get("target")
+                    .ok_or_else(|| format!("missing '{}'", "target"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            value: {
+                let f = v
+                    .get("value")
+                    .ok_or_else(|| format!("missing '{}'", "value"))?;
+                f.clone()
+            },
+            attestation: match v.get("attestation") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArchiveParams {
+    pub session_id: String,
+}
+
+impl ArchiveParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ArchiveParams, String> {
+        Ok(ArchiveParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AssumptionDebtRecord {
+    pub assumption_id: String,
+    pub debt_id: String,
+    pub owner_layer: String,
+    pub stage_gate: String,
+    pub status: String,
+    pub detail: String,
+}
+
+impl AssumptionDebtRecord {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("assumption_id", Json::str(self.assumption_id.clone())));
+        pairs.push(("debt_id", Json::str(self.debt_id.clone())));
+        pairs.push(("owner_layer", Json::str(self.owner_layer.clone())));
+        pairs.push(("stage_gate", Json::str(self.stage_gate.clone())));
+        pairs.push(("status", Json::str(self.status.clone())));
+        pairs.push(("detail", Json::str(self.detail.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<AssumptionDebtRecord, String> {
+        Ok(AssumptionDebtRecord {
+            assumption_id: {
+                let f = v
+                    .get("assumption_id")
+                    .ok_or_else(|| format!("missing '{}'", "assumption_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            debt_id: {
+                let f = v
+                    .get("debt_id")
+                    .ok_or_else(|| format!("missing '{}'", "debt_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            owner_layer: {
+                let f = v
+                    .get("owner_layer")
+                    .ok_or_else(|| format!("missing '{}'", "owner_layer"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            stage_gate: {
+                let f = v
+                    .get("stage_gate")
+                    .ok_or_else(|| format!("missing '{}'", "stage_gate"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            status: {
+                let f = v
+                    .get("status")
+                    .ok_or_else(|| format!("missing '{}'", "status"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            detail: {
+                let f = v
+                    .get("detail")
+                    .ok_or_else(|| format!("missing '{}'", "detail"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttendanceDeclaration {
+    pub value: AttendanceValue,
+    pub source: AttendanceSource,
+}
+
+impl AttendanceDeclaration {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("value", self.value.to_json()));
+        pairs.push(("source", self.source.to_json()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<AttendanceDeclaration, String> {
+        Ok(AttendanceDeclaration {
+            value: {
+                let f = v
+                    .get("value")
+                    .ok_or_else(|| format!("missing '{}'", "value"))?;
+                AttendanceValue::from_json(f).map_err(|e| e)?
+            },
+            source: {
+                let f = v
+                    .get("source")
+                    .ok_or_else(|| format!("missing '{}'", "source"))?;
+                AttendanceSource::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttendanceSource {
+    Declared,
+    TtyInferred,
+    Forced,
+}
+
+impl AttendanceSource {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AttendanceSource::Declared => "declared",
+            AttendanceSource::TtyInferred => "tty_inferred",
+            AttendanceSource::Forced => "forced",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<AttendanceSource, String> {
+        match v.as_str() {
+            Some("declared") => Ok(AttendanceSource::Declared),
+            Some("tty_inferred") => Ok(AttendanceSource::TtyInferred),
+            Some("forced") => Ok(AttendanceSource::Forced),
+            other => Err(format!("unknown AttendanceSource variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttendanceValue {
+    Interactive,
+    Async,
+    Unattended,
+}
+
+impl AttendanceValue {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AttendanceValue::Interactive => "interactive",
+            AttendanceValue::Async => "async",
+            AttendanceValue::Unattended => "unattended",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<AttendanceValue, String> {
+        match v.as_str() {
+            Some("interactive") => Ok(AttendanceValue::Interactive),
+            Some("async") => Ok(AttendanceValue::Async),
+            Some("unattended") => Ok(AttendanceValue::Unattended),
+            other => Err(format!("unknown AttendanceValue variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuditViewParams {
+    pub session_id: String,
+    pub until_seq: Option<i64>,
+}
+
+impl AuditViewParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.until_seq {
+            pairs.push(("until_seq", Json::Int(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<AuditViewParams, String> {
+        Ok(AuditViewParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            until_seq: match v.get("until_seq") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BudgetInput {
+    Ref { r#ref: String },
+    Node { node: Json },
+}
+
+impl BudgetInput {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            BudgetInput::Ref { r#ref } => {
+                pairs.push(("kind", Json::str("ref")));
+                pairs.push(("ref", Json::str(r#ref.clone())));
+            }
+            BudgetInput::Node { node } => {
+                pairs.push(("kind", Json::str("node")));
+                pairs.push(("node", node.clone()));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<BudgetInput, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "ref" => Ok(BudgetInput::Ref {
+                r#ref: {
+                    let f = v.get("ref").ok_or_else(|| format!("missing '{}'", "ref"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "node" => Ok(BudgetInput::Node {
+                node: {
+                    let f = v
+                        .get("node")
+                        .ok_or_else(|| format!("missing '{}'", "node"))?;
+                    f.clone()
+                },
+            }),
+            other => Err(format!("unknown BudgetInput variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CancelParams {
+    pub session_id: String,
+    pub scope: CancelScope,
+    pub idempotency_key: Option<String>,
+}
+
+impl CancelParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("scope", self.scope.to_json()));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<CancelParams, String> {
+        Ok(CancelParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            scope: {
+                let f = v
+                    .get("scope")
+                    .ok_or_else(|| format!("missing '{}'", "scope"))?;
+                CancelScope::from_json(f).map_err(|e| e)?
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CancelScope {
+    Turn { turn_id: String },
+    Run,
+}
+
+impl CancelScope {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            CancelScope::Turn { turn_id } => {
+                pairs.push(("kind", Json::str("turn")));
+                pairs.push(("turn_id", Json::str(turn_id.clone())));
+            }
+            CancelScope::Run => {
+                pairs.push(("kind", Json::str("run")));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<CancelScope, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "turn" => Ok(CancelScope::Turn {
+                turn_id: {
+                    let f = v
+                        .get("turn_id")
+                        .ok_or_else(|| format!("missing '{}'", "turn_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "run" => Ok(CancelScope::Run),
+            other => Err(format!("unknown CancelScope variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassFilter {
+    pub classes: Vec<String>,
+}
+
+impl ClassFilter {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push((
+            "classes",
+            Json::Arr(self.classes.iter().map(|x| Json::str(x.clone())).collect()),
+        ));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ClassFilter, String> {
+        Ok(ClassFilter {
+            classes: match v.get("classes") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .ok_or_else(|| "expected string".to_string())?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientDescriptor {
+    pub name: String,
+    pub version: String,
+    pub kind: ClientKind,
+}
+
+impl ClientDescriptor {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("name", Json::str(self.name.clone())));
+        pairs.push(("version", Json::str(self.version.clone())));
+        pairs.push(("kind", self.kind.to_json()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ClientDescriptor, String> {
+        Ok(ClientDescriptor {
+            name: {
+                let f = v
+                    .get("name")
+                    .ok_or_else(|| format!("missing '{}'", "name"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            version: {
+                let f = v
+                    .get("version")
+                    .ok_or_else(|| format!("missing '{}'", "version"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            kind: {
+                let f = v
+                    .get("kind")
+                    .ok_or_else(|| format!("missing '{}'", "kind"))?;
+                ClientKind::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClientKind {
+    Cli,
+    Web,
+    Ide,
+    Sdk,
+    Lab,
+    McpServer,
+    AcpBridge,
+    Test,
+}
+
+impl ClientKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ClientKind::Cli => "cli",
+            ClientKind::Web => "web",
+            ClientKind::Ide => "ide",
+            ClientKind::Sdk => "sdk",
+            ClientKind::Lab => "lab",
+            ClientKind::McpServer => "mcp_server",
+            ClientKind::AcpBridge => "acp_bridge",
+            ClientKind::Test => "test",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<ClientKind, String> {
+        match v.as_str() {
+            Some("cli") => Ok(ClientKind::Cli),
+            Some("web") => Ok(ClientKind::Web),
+            Some("ide") => Ok(ClientKind::Ide),
+            Some("sdk") => Ok(ClientKind::Sdk),
+            Some("lab") => Ok(ClientKind::Lab),
+            Some("mcp_server") => Ok(ClientKind::McpServer),
+            Some("acp_bridge") => Ok(ClientKind::AcpBridge),
+            Some("test") => Ok(ClientKind::Test),
+            other => Err(format!("unknown ClientKind variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CloseParams {
+    pub session_id: String,
+    pub reason: CloseReason,
+}
+
+impl CloseParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("reason", self.reason.to_json()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<CloseParams, String> {
+        Ok(CloseParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            reason: {
+                let f = v
+                    .get("reason")
+                    .ok_or_else(|| format!("missing '{}'", "reason"))?;
+                CloseReason::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseReason {
+    Done,
+    Abandon,
+    HostShutdown,
+}
+
+impl CloseReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CloseReason::Done => "done",
+            CloseReason::Abandon => "abandon",
+            CloseReason::HostShutdown => "host_shutdown",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<CloseReason, String> {
+        match v.as_str() {
+            Some("done") => Ok(CloseReason::Done),
+            Some("abandon") => Ok(CloseReason::Abandon),
+            Some("host_shutdown") => Ok(CloseReason::HostShutdown),
+            other => Err(format!("unknown CloseReason variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Closed {
+    pub r#final: RunSummaryRef,
+}
+
+impl Closed {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("final", self.r#final.to_json()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Closed, String> {
+        Ok(Closed {
+            r#final: {
+                let f = v
+                    .get("final")
+                    .ok_or_else(|| format!("missing '{}'", "final"))?;
+                RunSummaryRef::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClosedReason {
+    Complete,
+    Cancelled,
+    SlowConsumer,
+    RunEnded,
+    SessionDetached,
+    KernelShutdown,
+}
+
+impl ClosedReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ClosedReason::Complete => "complete",
+            ClosedReason::Cancelled => "cancelled",
+            ClosedReason::SlowConsumer => "slow_consumer",
+            ClosedReason::RunEnded => "run_ended",
+            ClosedReason::SessionDetached => "session_detached",
+            ClosedReason::KernelShutdown => "kernel_shutdown",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<ClosedReason, String> {
+        match v.as_str() {
+            Some("complete") => Ok(ClosedReason::Complete),
+            Some("cancelled") => Ok(ClosedReason::Cancelled),
+            Some("slow_consumer") => Ok(ClosedReason::SlowConsumer),
+            Some("run_ended") => Ok(ClosedReason::RunEnded),
+            Some("session_detached") => Ok(ClosedReason::SessionDetached),
+            Some("kernel_shutdown") => Ok(ClosedReason::KernelShutdown),
+            other => Err(format!("unknown ClosedReason variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoherentForkPointsParams {
+    pub session_id: String,
+}
+
+impl CoherentForkPointsParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<CoherentForkPointsParams, String> {
+        Ok(CoherentForkPointsParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
         })
     }
 }
@@ -75,7 +849,7 @@ pub struct ContractIdentity {
 impl ContractIdentity {
     pub fn to_json(&self) -> Json {
         let mut pairs: Vec<(&'static str, Json)> = Vec::new();
-        pairs.push(("contract_major", Json::Int(self.contract_major)));
+        pairs.push(("contract_major", Json::Int(self.contract_major.clone())));
         pairs.push(("schema_hash", Json::str(self.schema_hash.clone())));
         pairs.push((
             "kernel_version_id",
@@ -86,115 +860,4223 @@ impl ContractIdentity {
 
     pub fn from_json(v: &Json) -> Result<ContractIdentity, String> {
         Ok(ContractIdentity {
-            contract_major: v
-                .get("contract_major")
-                .and_then(Json::as_int)
-                .ok_or_else(|| "missing 'contract_major'".to_string())?,
-            schema_hash: v
-                .get("schema_hash")
-                .and_then(Json::as_str)
-                .map(|s| s.to_string())
-                .ok_or_else(|| "missing 'schema_hash'".to_string())?,
-            kernel_version_id: v
-                .get("kernel_version_id")
-                .and_then(Json::as_str)
-                .map(|s| s.to_string())
-                .ok_or_else(|| "missing 'kernel_version_id'".to_string())?,
+            contract_major: {
+                let f = v
+                    .get("contract_major")
+                    .ok_or_else(|| format!("missing '{}'", "contract_major"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            schema_hash: {
+                let f = v
+                    .get("schema_hash")
+                    .ok_or_else(|| format!("missing '{}'", "schema_hash"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            kernel_version_id: {
+                let f = v
+                    .get("kernel_version_id")
+                    .ok_or_else(|| format!("missing '{}'", "kernel_version_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
         })
     }
 }
 
-/// A typed client error. A negotiation mismatch is surfaced here, never as a silent
-/// fallback (ADR-0178 D2).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ClientError {
-    Transport(String),
-    Rpc {
-        code: i64,
-        kind: String,
-        message: String,
+pub struct CounterfactualParams {
+    pub session_id: String,
+    pub at_seq: i64,
+    pub edits: Json,
+    pub idempotency_key: Option<String>,
+}
+
+impl CounterfactualParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("at_seq", Json::Int(self.at_seq.clone())));
+        pairs.push(("edits", self.edits.clone()));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<CounterfactualParams, String> {
+        Ok(CounterfactualParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            at_seq: {
+                let f = v
+                    .get("at_seq")
+                    .ok_or_else(|| format!("missing '{}'", "at_seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            edits: {
+                let f = v
+                    .get("edits")
+                    .ok_or_else(|| format!("missing '{}'", "edits"))?;
+                f.clone()
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DefinitionInput {
+    Document { document: Json },
+    Ref { r#ref: String },
+}
+
+impl DefinitionInput {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            DefinitionInput::Document { document } => {
+                pairs.push(("kind", Json::str("document")));
+                pairs.push(("document", document.clone()));
+            }
+            DefinitionInput::Ref { r#ref } => {
+                pairs.push(("kind", Json::str("ref")));
+                pairs.push(("ref", Json::str(r#ref.clone())));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<DefinitionInput, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "document" => Ok(DefinitionInput::Document {
+                document: {
+                    let f = v
+                        .get("document")
+                        .ok_or_else(|| format!("missing '{}'", "document"))?;
+                    f.clone()
+                },
+            }),
+            "ref" => Ok(DefinitionInput::Ref {
+                r#ref: {
+                    let f = v.get("ref").ok_or_else(|| format!("missing '{}'", "ref"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            other => Err(format!("unknown DefinitionInput variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DerivedFrom {
+    pub seq: i64,
+    pub hash: String,
+}
+
+impl DerivedFrom {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("seq", Json::Int(self.seq.clone())));
+        pairs.push(("hash", Json::str(self.hash.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<DerivedFrom, String> {
+        Ok(DerivedFrom {
+            seq: {
+                let f = v.get("seq").ok_or_else(|| format!("missing '{}'", "seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            hash: {
+                let f = v
+                    .get("hash")
+                    .ok_or_else(|| format!("missing '{}'", "hash"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeParams {
+    pub session_id: String,
+}
+
+impl DescribeParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<DescribeParams, String> {
+        Ok(DescribeParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeResult {
+    pub manifest_ref: String,
+    pub participant_descriptor: Json,
+    pub protocol_bindings: Vec<Json>,
+    pub realized: RealizedSettings,
+    pub environment: EnvDescribe,
+}
+
+impl DescribeResult {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("manifest_ref", Json::str(self.manifest_ref.clone())));
+        pairs.push((
+            "participant_descriptor",
+            self.participant_descriptor.clone(),
+        ));
+        pairs.push((
+            "protocol_bindings",
+            Json::Arr(self.protocol_bindings.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push(("realized", self.realized.to_json()));
+        pairs.push(("environment", self.environment.to_json()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<DescribeResult, String> {
+        Ok(DescribeResult {
+            manifest_ref: {
+                let f = v
+                    .get("manifest_ref")
+                    .ok_or_else(|| format!("missing '{}'", "manifest_ref"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            participant_descriptor: {
+                let f = v
+                    .get("participant_descriptor")
+                    .ok_or_else(|| format!("missing '{}'", "participant_descriptor"))?;
+                f.clone()
+            },
+            protocol_bindings: match v.get("protocol_bindings") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+            realized: {
+                let f = v
+                    .get("realized")
+                    .ok_or_else(|| format!("missing '{}'", "realized"))?;
+                RealizedSettings::from_json(f).map_err(|e| e)?
+            },
+            environment: {
+                let f = v
+                    .get("environment")
+                    .ok_or_else(|| format!("missing '{}'", "environment"))?;
+                EnvDescribe::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscardParams {
+    pub session_id: String,
+    pub branch_id: String,
+    pub idempotency_key: Option<String>,
+}
+
+impl DiscardParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("branch_id", Json::str(self.branch_id.clone())));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<DiscardParams, String> {
+        Ok(DiscardParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            branch_id: {
+                let f = v
+                    .get("branch_id")
+                    .ok_or_else(|| format!("missing '{}'", "branch_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ElicitOutcome {
+    Answer { value: Json },
+    Cancelled,
+}
+
+impl ElicitOutcome {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            ElicitOutcome::Answer { value } => {
+                pairs.push(("kind", Json::str("answer")));
+                pairs.push(("value", value.clone()));
+            }
+            ElicitOutcome::Cancelled => {
+                pairs.push(("kind", Json::str("cancelled")));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ElicitOutcome, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "answer" => Ok(ElicitOutcome::Answer {
+                value: {
+                    let f = v
+                        .get("value")
+                        .ok_or_else(|| format!("missing '{}'", "value"))?;
+                    f.clone()
+                },
+            }),
+            "cancelled" => Ok(ElicitOutcome::Cancelled),
+            other => Err(format!("unknown ElicitOutcome variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElicitParams {
+    pub elicitation_id: String,
+    pub prompt: Json,
+    pub options: Vec<Json>,
+}
+
+impl ElicitParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("elicitation_id", Json::str(self.elicitation_id.clone())));
+        pairs.push(("prompt", self.prompt.clone()));
+        pairs.push((
+            "options",
+            Json::Arr(self.options.iter().map(|x| x.clone()).collect()),
+        ));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ElicitParams, String> {
+        Ok(ElicitParams {
+            elicitation_id: {
+                let f = v
+                    .get("elicitation_id")
+                    .ok_or_else(|| format!("missing '{}'", "elicitation_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            prompt: {
+                let f = v
+                    .get("prompt")
+                    .ok_or_else(|| format!("missing '{}'", "prompt"))?;
+                f.clone()
+            },
+            options: match v.get("options") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ElicitResult {
+    pub outcome: ElicitOutcome,
+}
+
+impl ElicitResult {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("outcome", self.outcome.to_json()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ElicitResult, String> {
+        Ok(ElicitResult {
+            outcome: {
+                let f = v
+                    .get("outcome")
+                    .ok_or_else(|| format!("missing '{}'", "outcome"))?;
+                ElicitOutcome::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnvDescribe {
+    pub connection_info: Json,
+    pub health: String,
+    pub meters: Vec<Json>,
+}
+
+impl EnvDescribe {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("connection_info", self.connection_info.clone()));
+        pairs.push(("health", Json::str(self.health.clone())));
+        pairs.push((
+            "meters",
+            Json::Arr(self.meters.iter().map(|x| x.clone()).collect()),
+        ));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<EnvDescribe, String> {
+        Ok(EnvDescribe {
+            connection_info: {
+                let f = v
+                    .get("connection_info")
+                    .ok_or_else(|| format!("missing '{}'", "connection_info"))?;
+                f.clone()
+            },
+            health: {
+                let f = v
+                    .get("health")
+                    .ok_or_else(|| format!("missing '{}'", "health"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            meters: match v.get("meters") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EnvironmentInput {
+    ConnectionInfo { connection_info: Json },
+    Ref { r#ref: String },
+}
+
+impl EnvironmentInput {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            EnvironmentInput::ConnectionInfo { connection_info } => {
+                pairs.push(("kind", Json::str("connection_info")));
+                pairs.push(("connection_info", connection_info.clone()));
+            }
+            EnvironmentInput::Ref { r#ref } => {
+                pairs.push(("kind", Json::str("ref")));
+                pairs.push(("ref", Json::str(r#ref.clone())));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<EnvironmentInput, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "connection_info" => Ok(EnvironmentInput::ConnectionInfo {
+                connection_info: {
+                    let f = v
+                        .get("connection_info")
+                        .ok_or_else(|| format!("missing '{}'", "connection_info"))?;
+                    f.clone()
+                },
+            }),
+            "ref" => Ok(EnvironmentInput::Ref {
+                r#ref: {
+                    let f = v.get("ref").ok_or_else(|| format!("missing '{}'", "ref"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            other => Err(format!("unknown EnvironmentInput variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EphemeralKind {
+    Delta,
+    Progress,
+    PermissionRendering,
+    GuardNotice,
+    Log,
+}
+
+impl EphemeralKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EphemeralKind::Delta => "delta",
+            EphemeralKind::Progress => "progress",
+            EphemeralKind::PermissionRendering => "permission_rendering",
+            EphemeralKind::GuardNotice => "guard_notice",
+            EphemeralKind::Log => "log",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<EphemeralKind, String> {
+        match v.as_str() {
+            Some("delta") => Ok(EphemeralKind::Delta),
+            Some("progress") => Ok(EphemeralKind::Progress),
+            Some("permission_rendering") => Ok(EphemeralKind::PermissionRendering),
+            Some("guard_notice") => Ok(EphemeralKind::GuardNotice),
+            Some("log") => Ok(EphemeralKind::Log),
+            other => Err(format!("unknown EphemeralKind variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForkParams {
+    pub session_id: String,
+    pub at: ForkPoint,
+    pub manifest_delta: Option<Json>,
+    pub idempotency_key: Option<String>,
+}
+
+impl ForkParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("at", self.at.to_json()));
+        if let Some(v) = &self.manifest_delta {
+            pairs.push(("manifest_delta", v.clone()));
+        }
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ForkParams, String> {
+        Ok(ForkParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            at: {
+                let f = v.get("at").ok_or_else(|| format!("missing '{}'", "at"))?;
+                ForkPoint::from_json(f).map_err(|e| e)?
+            },
+            manifest_delta: match v.get("manifest_delta") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ForkPoint {
+    Seq { seq: i64 },
+    EventRef { run_id: String, event_id: String },
+}
+
+impl ForkPoint {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            ForkPoint::Seq { seq } => {
+                pairs.push(("kind", Json::str("seq")));
+                pairs.push(("seq", Json::Int(seq.clone())));
+            }
+            ForkPoint::EventRef { run_id, event_id } => {
+                pairs.push(("kind", Json::str("event_ref")));
+                pairs.push(("run_id", Json::str(run_id.clone())));
+                pairs.push(("event_id", Json::str(event_id.clone())));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ForkPoint, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "seq" => Ok(ForkPoint::Seq {
+                seq: {
+                    let f = v.get("seq").ok_or_else(|| format!("missing '{}'", "seq"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+            }),
+            "event_ref" => Ok(ForkPoint::EventRef {
+                run_id: {
+                    let f = v
+                        .get("run_id")
+                        .ok_or_else(|| format!("missing '{}'", "run_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                event_id: {
+                    let f = v
+                        .get("event_id")
+                        .ok_or_else(|| format!("missing '{}'", "event_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            other => Err(format!("unknown ForkPoint variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GetArtifactParams {
+    pub session_id: String,
+    pub address: String,
+}
+
+impl GetArtifactParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("address", Json::str(self.address.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<GetArtifactParams, String> {
+        Ok(GetArtifactParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            address: {
+                let f = v
+                    .get("address")
+                    .ok_or_else(|| format!("missing '{}'", "address"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrantParams {
+    pub session_id: String,
+    pub grant: Json,
+    pub idempotency_key: Option<String>,
+}
+
+impl GrantParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("grant", self.grant.clone()));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<GrantParams, String> {
+        Ok(GrantParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            grant: {
+                let f = v
+                    .get("grant")
+                    .ok_or_else(|| format!("missing '{}'", "grant"))?;
+                f.clone()
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Head {
+    pub seq: i64,
+    pub event_id: String,
+    pub hash: String,
+}
+
+impl Head {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("seq", Json::Int(self.seq.clone())));
+        pairs.push(("event_id", Json::str(self.event_id.clone())));
+        pairs.push(("hash", Json::str(self.hash.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Head, String> {
+        Ok(Head {
+            seq: {
+                let f = v.get("seq").ok_or_else(|| format!("missing '{}'", "seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            event_id: {
+                let f = v
+                    .get("event_id")
+                    .ok_or_else(|| format!("missing '{}'", "event_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            hash: {
+                let f = v
+                    .get("hash")
+                    .ok_or_else(|| format!("missing '{}'", "hash"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HeadParams {
+    pub session_id: String,
+}
+
+impl HeadParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<HeadParams, String> {
+        Ok(HeadParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HelloParams {
+    pub contract_major: i64,
+    pub client: ClientDescriptor,
+    pub capabilities: HostCapabilities,
+    pub schema_hash: Option<String>,
+    pub kernel_floor: Option<String>,
+}
+
+impl HelloParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("contract_major", Json::Int(self.contract_major.clone())));
+        pairs.push(("client", self.client.to_json()));
+        pairs.push(("capabilities", self.capabilities.to_json()));
+        if let Some(v) = &self.schema_hash {
+            pairs.push(("schema_hash", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.kernel_floor {
+            pairs.push(("kernel_floor", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<HelloParams, String> {
+        Ok(HelloParams {
+            contract_major: {
+                let f = v
+                    .get("contract_major")
+                    .ok_or_else(|| format!("missing '{}'", "contract_major"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            client: {
+                let f = v
+                    .get("client")
+                    .ok_or_else(|| format!("missing '{}'", "client"))?;
+                ClientDescriptor::from_json(f).map_err(|e| e)?
+            },
+            capabilities: {
+                let f = v
+                    .get("capabilities")
+                    .ok_or_else(|| format!("missing '{}'", "capabilities"))?;
+                HostCapabilities::from_json(f).map_err(|e| e)?
+            },
+            schema_hash: match v.get("schema_hash") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            kernel_floor: match v.get("kernel_floor") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HelloResult {
+    pub kernel: KernelDescriptor,
+    pub negotiated: HostCapabilities,
+    pub stability: Json,
+    pub experimental_enabled: bool,
+}
+
+impl HelloResult {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("kernel", self.kernel.to_json()));
+        pairs.push(("negotiated", self.negotiated.to_json()));
+        pairs.push(("stability", self.stability.clone()));
+        pairs.push((
+            "experimental_enabled",
+            Json::Bool(self.experimental_enabled),
+        ));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<HelloResult, String> {
+        Ok(HelloResult {
+            kernel: {
+                let f = v
+                    .get("kernel")
+                    .ok_or_else(|| format!("missing '{}'", "kernel"))?;
+                KernelDescriptor::from_json(f).map_err(|e| e)?
+            },
+            negotiated: {
+                let f = v
+                    .get("negotiated")
+                    .ok_or_else(|| format!("missing '{}'", "negotiated"))?;
+                HostCapabilities::from_json(f).map_err(|e| e)?
+            },
+            stability: {
+                let f = v
+                    .get("stability")
+                    .ok_or_else(|| format!("missing '{}'", "stability"))?;
+                f.clone()
+            },
+            experimental_enabled: match v.get("experimental_enabled") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HookNotification {
+    pub hook_id: String,
+    pub event_class: String,
+    pub event: Json,
+}
+
+impl HookNotification {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("hook_id", Json::str(self.hook_id.clone())));
+        pairs.push(("event_class", Json::str(self.event_class.clone())));
+        pairs.push(("event", self.event.clone()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<HookNotification, String> {
+        Ok(HookNotification {
+            hook_id: {
+                let f = v
+                    .get("hook_id")
+                    .ok_or_else(|| format!("missing '{}'", "hook_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            event_class: {
+                let f = v
+                    .get("event_class")
+                    .ok_or_else(|| format!("missing '{}'", "event_class"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            event: {
+                let f = v
+                    .get("event")
+                    .ok_or_else(|| format!("missing '{}'", "event"))?;
+                f.clone()
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HookResult {
+    Raise { reason: String },
+    Deny { reason: String },
+    Annotate { annotations: Json },
+    None,
+}
+
+impl HookResult {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            HookResult::Raise { reason } => {
+                pairs.push(("kind", Json::str("raise")));
+                pairs.push(("reason", Json::str(reason.clone())));
+            }
+            HookResult::Deny { reason } => {
+                pairs.push(("kind", Json::str("deny")));
+                pairs.push(("reason", Json::str(reason.clone())));
+            }
+            HookResult::Annotate { annotations } => {
+                pairs.push(("kind", Json::str("annotate")));
+                pairs.push(("annotations", annotations.clone()));
+            }
+            HookResult::None => {
+                pairs.push(("kind", Json::str("none")));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<HookResult, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "raise" => Ok(HookResult::Raise {
+                reason: {
+                    let f = v
+                        .get("reason")
+                        .ok_or_else(|| format!("missing '{}'", "reason"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "deny" => Ok(HookResult::Deny {
+                reason: {
+                    let f = v
+                        .get("reason")
+                        .ok_or_else(|| format!("missing '{}'", "reason"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "annotate" => Ok(HookResult::Annotate {
+                annotations: {
+                    let f = v
+                        .get("annotations")
+                        .ok_or_else(|| format!("missing '{}'", "annotations"))?;
+                    f.clone()
+                },
+            }),
+            "none" => Ok(HookResult::None),
+            other => Err(format!("unknown HookResult variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostCapabilities {
+    pub experimental: bool,
+    pub opt_out_notifications: Vec<String>,
+    pub serves_permission_channel: bool,
+    pub serves_host_executor: bool,
+    pub serves_hook_observer: bool,
+    pub serves_elicitation: bool,
+    pub serves_measurement: bool,
+    pub serves_principal_channel: bool,
+    pub accepts_ephemeral_frames: bool,
+    pub max_in_flight_sessions: Option<i64>,
+    pub extensions: BTreeMap<String, Json>,
+}
+
+impl HostCapabilities {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("experimental", Json::Bool(self.experimental)));
+        pairs.push((
+            "opt_out_notifications",
+            Json::Arr(
+                self.opt_out_notifications
+                    .iter()
+                    .map(|x| Json::str(x.clone()))
+                    .collect(),
+            ),
+        ));
+        pairs.push((
+            "serves_permission_channel",
+            Json::Bool(self.serves_permission_channel),
+        ));
+        pairs.push((
+            "serves_host_executor",
+            Json::Bool(self.serves_host_executor),
+        ));
+        pairs.push((
+            "serves_hook_observer",
+            Json::Bool(self.serves_hook_observer),
+        ));
+        pairs.push(("serves_elicitation", Json::Bool(self.serves_elicitation)));
+        pairs.push(("serves_measurement", Json::Bool(self.serves_measurement)));
+        pairs.push((
+            "serves_principal_channel",
+            Json::Bool(self.serves_principal_channel),
+        ));
+        pairs.push((
+            "accepts_ephemeral_frames",
+            Json::Bool(self.accepts_ephemeral_frames),
+        ));
+        if let Some(v) = &self.max_in_flight_sessions {
+            pairs.push(("max_in_flight_sessions", Json::Int(v.clone())));
+        }
+        if !self.extensions.is_empty() {
+            pairs.push(("extensions", Json::Obj(self.extensions.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<HostCapabilities, String> {
+        Ok(HostCapabilities {
+            experimental: match v.get("experimental") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            opt_out_notifications: match v.get("opt_out_notifications") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .ok_or_else(|| "expected string".to_string())?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+            serves_permission_channel: match v.get("serves_permission_channel") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            serves_host_executor: match v.get("serves_host_executor") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            serves_hook_observer: match v.get("serves_hook_observer") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            serves_elicitation: match v.get("serves_elicitation") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            serves_measurement: match v.get("serves_measurement") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            serves_principal_channel: match v.get("serves_principal_channel") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            accepts_ephemeral_frames: match v.get("accepts_ephemeral_frames") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            max_in_flight_sessions: match v.get("max_in_flight_sessions") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+            extensions: match v.get("extensions") {
+                Some(Json::Obj(m)) => m.clone(),
+                _ => BTreeMap::new(),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostEffectOutcome {
+    Observed {
+        outcome: String,
+        output_artifacts: Vec<String>,
     },
-    IdentityMismatch {
-        field: String,
+    Refused {
+        reason: String,
+    },
+    Unknown {
+        detail: Option<String>,
     },
 }
 
-/// Drive one `hello` negotiation over a newline-delimited JSON-RPC 2.0 stream (binding (b)).
-/// Asserts `(contract_major, schema_hash)` against the kernel's returned identity.
-pub fn negotiate<R: BufRead, W: Write>(
-    reader: &mut R,
-    writer: &mut W,
-    client_name: &str,
-    client_version: &str,
-) -> Result<ContractIdentity, ClientError> {
-    let params = HelloParams {
-        client_name: client_name.to_string(),
-        client_version: client_version.to_string(),
-        asserted_contract_major: CONTRACT_MAJOR,
-        asserted_schema_hash: Some(EXPECTED_SCHEMA_HASH.to_string()),
-    };
-    let req = Json::obj([
-        ("jsonrpc", Json::str("2.0")),
-        ("id", Json::Int(1)),
-        ("method", Json::str("hello")),
-        ("params", params.to_json()),
-    ]);
-    let mut line = req.to_canonical_string();
-    line.push('\n');
-    writer
-        .write_all(line.as_bytes())
-        .map_err(|e| ClientError::Transport(e.to_string()))?;
-    writer
-        .flush()
-        .map_err(|e| ClientError::Transport(e.to_string()))?;
+impl HostEffectOutcome {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            HostEffectOutcome::Observed {
+                outcome,
+                output_artifacts,
+            } => {
+                pairs.push(("kind", Json::str("observed")));
+                pairs.push(("outcome", Json::str(outcome.clone())));
+                pairs.push((
+                    "output_artifacts",
+                    Json::Arr(
+                        output_artifacts
+                            .iter()
+                            .map(|x| Json::str(x.clone()))
+                            .collect(),
+                    ),
+                ));
+            }
+            HostEffectOutcome::Refused { reason } => {
+                pairs.push(("kind", Json::str("refused")));
+                pairs.push(("reason", Json::str(reason.clone())));
+            }
+            HostEffectOutcome::Unknown { detail } => {
+                pairs.push(("kind", Json::str("unknown")));
+                if let Some(v) = detail {
+                    pairs.push(("detail", Json::str(v.clone())));
+                }
+            }
+        }
+        Json::obj(pairs)
+    }
 
-    let mut resp_line = String::new();
-    let n = reader
-        .read_line(&mut resp_line)
-        .map_err(|e| ClientError::Transport(e.to_string()))?;
-    if n == 0 {
-        return Err(ClientError::Transport(
-            "kernel closed the stream".to_string(),
+    pub fn from_json(v: &Json) -> Result<HostEffectOutcome, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "observed" => Ok(HostEffectOutcome::Observed {
+                outcome: {
+                    let f = v
+                        .get("outcome")
+                        .ok_or_else(|| format!("missing '{}'", "outcome"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                output_artifacts: match v.get("output_artifacts") {
+                    Some(f) => match f {
+                        Json::Arr(a) => a
+                            .iter()
+                            .map(|x| {
+                                let r: Result<_, String> = Ok(x
+                                    .as_str()
+                                    .map(|s| s.to_string())
+                                    .ok_or_else(|| "expected string".to_string())?);
+                                r
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
+                        _ => return Err("expected array".to_string()),
+                    },
+                    None => Vec::new(),
+                },
+            }),
+            "refused" => Ok(HostEffectOutcome::Refused {
+                reason: {
+                    let f = v
+                        .get("reason")
+                        .ok_or_else(|| format!("missing '{}'", "reason"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "unknown" => Ok(HostEffectOutcome::Unknown {
+                detail: match v.get("detail") {
+                    Some(f) => Some(
+                        f.as_str()
+                            .map(|s| s.to_string())
+                            .ok_or_else(|| "expected string".to_string())?,
+                    ),
+                    None => None,
+                },
+            }),
+            other => Err(format!("unknown HostEffectOutcome variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostResult {
+    pub outcome: Json,
+}
+
+impl HostResult {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("outcome", self.outcome.clone()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<HostResult, String> {
+        Ok(HostResult {
+            outcome: {
+                let f = v
+                    .get("outcome")
+                    .ok_or_else(|| format!("missing '{}'", "outcome"))?;
+                f.clone()
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvokeHostCapability {
+    pub capability_id: String,
+    pub args: Json,
+    pub effect_id: String,
+    pub attempt_no: i64,
+}
+
+impl InvokeHostCapability {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("capability_id", Json::str(self.capability_id.clone())));
+        pairs.push(("args", self.args.clone()));
+        pairs.push(("effect_id", Json::str(self.effect_id.clone())));
+        pairs.push(("attempt_no", Json::Int(self.attempt_no.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<InvokeHostCapability, String> {
+        Ok(InvokeHostCapability {
+            capability_id: {
+                let f = v
+                    .get("capability_id")
+                    .ok_or_else(|| format!("missing '{}'", "capability_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            args: {
+                let f = v
+                    .get("args")
+                    .ok_or_else(|| format!("missing '{}'", "args"))?;
+                f.clone()
+            },
+            effect_id: {
+                let f = v
+                    .get("effect_id")
+                    .ok_or_else(|| format!("missing '{}'", "effect_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            attempt_no: {
+                let f = v
+                    .get("attempt_no")
+                    .ok_or_else(|| format!("missing '{}'", "attempt_no"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItemKind {
+    ContextItem,
+    ContextDelta,
+}
+
+impl ItemKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ItemKind::ContextItem => "context_item",
+            ItemKind::ContextDelta => "context_delta",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<ItemKind, String> {
+        match v.as_str() {
+            Some("context_item") => Ok(ItemKind::ContextItem),
+            Some("context_delta") => Ok(ItemKind::ContextDelta),
+            other => Err(format!("unknown ItemKind variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KernelDescriptor {
+    pub version: String,
+    pub schema_hash: String,
+    pub contract_major: i64,
+    pub idp: String,
+}
+
+impl KernelDescriptor {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("version", Json::str(self.version.clone())));
+        pairs.push(("schema_hash", Json::str(self.schema_hash.clone())));
+        pairs.push(("contract_major", Json::Int(self.contract_major.clone())));
+        pairs.push(("idp", Json::str(self.idp.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<KernelDescriptor, String> {
+        Ok(KernelDescriptor {
+            version: {
+                let f = v
+                    .get("version")
+                    .ok_or_else(|| format!("missing '{}'", "version"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            schema_hash: {
+                let f = v
+                    .get("schema_hash")
+                    .ok_or_else(|| format!("missing '{}'", "schema_hash"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            contract_major: {
+                let f = v
+                    .get("contract_major")
+                    .ok_or_else(|| format!("missing '{}'", "contract_major"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            idp: {
+                let f = v.get("idp").ok_or_else(|| format!("missing '{}'", "idp"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LineageParams {
+    pub session_id: String,
+}
+
+impl LineageParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<LineageParams, String> {
+        Ok(LineageParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListLeasesParams {
+    pub session_id: String,
+}
+
+impl ListLeasesParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ListLeasesParams, String> {
+        Ok(ListLeasesParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListLeasesResult {
+    pub leases: Vec<Json>,
+}
+
+impl ListLeasesResult {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push((
+            "leases",
+            Json::Arr(self.leases.iter().map(|x| x.clone()).collect()),
         ));
+        Json::obj(pairs)
     }
-    let resp =
-        hh_wire::parse(resp_line.trim()).map_err(|e| ClientError::Transport(e.to_string()))?;
 
-    if let Some(err) = resp.get("error") {
-        let code = err.get("code").and_then(Json::as_int).unwrap_or(0);
-        let kind = err
-            .get("data")
-            .and_then(|d| d.get("kind"))
+    pub fn from_json(v: &Json) -> Result<ListLeasesResult, String> {
+        Ok(ListLeasesResult {
+            leases: {
+                let f = v
+                    .get("leases")
+                    .ok_or_else(|| format!("missing '{}'", "leases"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NavigateParams {
+    pub session_id: String,
+    pub to: Option<Json>,
+    pub idempotency_key: Option<String>,
+}
+
+impl NavigateParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.to {
+            pairs.push(("to", v.clone()));
+        }
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<NavigateParams, String> {
+        Ok(NavigateParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            to: match v.get("to") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenSessionParams {
+    pub spec: OpenSpec,
+    pub idempotency_key: String,
+}
+
+impl OpenSessionParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("spec", self.spec.to_json()));
+        pairs.push(("idempotency_key", Json::str(self.idempotency_key.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<OpenSessionParams, String> {
+        Ok(OpenSessionParams {
+            spec: {
+                let f = v
+                    .get("spec")
+                    .ok_or_else(|| format!("missing '{}'", "spec"))?;
+                OpenSpec::from_json(f).map_err(|e| e)?
+            },
+            idempotency_key: {
+                let f = v
+                    .get("idempotency_key")
+                    .ok_or_else(|| format!("missing '{}'", "idempotency_key"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OpenSpec {
+    New {
+        definition: DefinitionInput,
+        overrides: Vec<Override>,
+        profile_binding: Option<Json>,
+        environment: EnvironmentInput,
+        budget: Option<BudgetInput>,
+        participant: Option<Json>,
+        supplies: Option<Supplies>,
+        attendance: AttendanceDeclaration,
+        approval_mode: Option<String>,
+    },
+    Resume {
+        run_id: String,
+        mode: ResumeMode,
+        from_seq: Option<i64>,
+    },
+    Attach {
+        run_id: String,
+        read_only: bool,
+    },
+}
+
+impl OpenSpec {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            OpenSpec::New {
+                definition,
+                overrides,
+                profile_binding,
+                environment,
+                budget,
+                participant,
+                supplies,
+                attendance,
+                approval_mode,
+            } => {
+                pairs.push(("kind", Json::str("new")));
+                pairs.push(("definition", definition.to_json()));
+                pairs.push((
+                    "overrides",
+                    Json::Arr(overrides.iter().map(|x| x.to_json()).collect()),
+                ));
+                if let Some(v) = profile_binding {
+                    pairs.push(("profile_binding", v.clone()));
+                }
+                pairs.push(("environment", environment.to_json()));
+                if let Some(v) = budget {
+                    pairs.push(("budget", v.to_json()));
+                }
+                if let Some(v) = participant {
+                    pairs.push(("participant", v.clone()));
+                }
+                if let Some(v) = supplies {
+                    pairs.push(("supplies", v.to_json()));
+                }
+                pairs.push(("attendance", attendance.to_json()));
+                if let Some(v) = approval_mode {
+                    pairs.push(("approval_mode", Json::str(v.clone())));
+                }
+            }
+            OpenSpec::Resume {
+                run_id,
+                mode,
+                from_seq,
+            } => {
+                pairs.push(("kind", Json::str("resume")));
+                pairs.push(("run_id", Json::str(run_id.clone())));
+                pairs.push(("mode", mode.to_json()));
+                if let Some(v) = from_seq {
+                    pairs.push(("from_seq", Json::Int(v.clone())));
+                }
+            }
+            OpenSpec::Attach { run_id, read_only } => {
+                pairs.push(("kind", Json::str("attach")));
+                pairs.push(("run_id", Json::str(run_id.clone())));
+                pairs.push(("read_only", Json::Bool(*read_only)));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<OpenSpec, String> {
+        let tag = v
+            .get("kind")
             .and_then(Json::as_str)
-            .unwrap_or("Unknown")
-            .to_string();
-        let message = err
-            .get("message")
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "new" => Ok(OpenSpec::New {
+                definition: {
+                    let f = v
+                        .get("definition")
+                        .ok_or_else(|| format!("missing '{}'", "definition"))?;
+                    DefinitionInput::from_json(f).map_err(|e| e)?
+                },
+                overrides: match v.get("overrides") {
+                    Some(f) => match f {
+                        Json::Arr(a) => a
+                            .iter()
+                            .map(|x| {
+                                let r: Result<_, String> =
+                                    Ok(Override::from_json(x).map_err(|e| e)?);
+                                r
+                            })
+                            .collect::<Result<Vec<_>, _>>()?,
+                        _ => return Err("expected array".to_string()),
+                    },
+                    None => Vec::new(),
+                },
+                profile_binding: match v.get("profile_binding") {
+                    Some(f) => Some(f.clone()),
+                    None => None,
+                },
+                environment: {
+                    let f = v
+                        .get("environment")
+                        .ok_or_else(|| format!("missing '{}'", "environment"))?;
+                    EnvironmentInput::from_json(f).map_err(|e| e)?
+                },
+                budget: match v.get("budget") {
+                    Some(f) => Some(BudgetInput::from_json(f).map_err(|e| e)?),
+                    None => None,
+                },
+                participant: match v.get("participant") {
+                    Some(f) => Some(f.clone()),
+                    None => None,
+                },
+                supplies: match v.get("supplies") {
+                    Some(f) => Some(Supplies::from_json(f).map_err(|e| e)?),
+                    None => None,
+                },
+                attendance: {
+                    let f = v
+                        .get("attendance")
+                        .ok_or_else(|| format!("missing '{}'", "attendance"))?;
+                    AttendanceDeclaration::from_json(f).map_err(|e| e)?
+                },
+                approval_mode: match v.get("approval_mode") {
+                    Some(f) => Some(
+                        f.as_str()
+                            .map(|s| s.to_string())
+                            .ok_or_else(|| "expected string".to_string())?,
+                    ),
+                    None => None,
+                },
+            }),
+            "resume" => Ok(OpenSpec::Resume {
+                run_id: {
+                    let f = v
+                        .get("run_id")
+                        .ok_or_else(|| format!("missing '{}'", "run_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                mode: {
+                    let f = v
+                        .get("mode")
+                        .ok_or_else(|| format!("missing '{}'", "mode"))?;
+                    ResumeMode::from_json(f).map_err(|e| e)?
+                },
+                from_seq: match v.get("from_seq") {
+                    Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                    None => None,
+                },
+            }),
+            "attach" => Ok(OpenSpec::Attach {
+                run_id: {
+                    let f = v
+                        .get("run_id")
+                        .ok_or_else(|| format!("missing '{}'", "run_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                read_only: match v.get("read_only") {
+                    Some(Json::Bool(b)) => *b,
+                    _ => false,
+                },
+            }),
+            other => Err(format!("unknown OpenSpec variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Override {
+    pub pointer: String,
+    pub value: Json,
+}
+
+impl Override {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("pointer", Json::str(self.pointer.clone())));
+        pairs.push(("value", self.value.clone()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Override, String> {
+        Ok(Override {
+            pointer: {
+                let f = v
+                    .get("pointer")
+                    .ok_or_else(|| format!("missing '{}'", "pointer"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            value: {
+                let f = v
+                    .get("value")
+                    .ok_or_else(|| format!("missing '{}'", "value"))?;
+                f.clone()
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Page {
+    pub events: Vec<Json>,
+    pub next: Option<ReadCursor>,
+}
+
+impl Page {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push((
+            "events",
+            Json::Arr(self.events.iter().map(|x| x.clone()).collect()),
+        ));
+        if let Some(v) = &self.next {
+            pairs.push(("next", v.to_json()));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Page, String> {
+        Ok(Page {
+            events: {
+                let f = v
+                    .get("events")
+                    .ok_or_else(|| format!("missing '{}'", "events"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+            next: match v.get("next") {
+                Some(f) => Some(ReadCursor::from_json(f).map_err(|e| e)?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PermissionOption {
+    pub option_id: String,
+    pub label: String,
+}
+
+impl PermissionOption {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("option_id", Json::str(self.option_id.clone())));
+        pairs.push(("label", Json::str(self.label.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<PermissionOption, String> {
+        Ok(PermissionOption {
+            option_id: {
+                let f = v
+                    .get("option_id")
+                    .ok_or_else(|| format!("missing '{}'", "option_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            label: {
+                let f = v
+                    .get("label")
+                    .ok_or_else(|| format!("missing '{}'", "label"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PermissionOutcome {
+    Selected { option_id: String },
+    Cancelled,
+}
+
+impl PermissionOutcome {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            PermissionOutcome::Selected { option_id } => {
+                pairs.push(("kind", Json::str("selected")));
+                pairs.push(("option_id", Json::str(option_id.clone())));
+            }
+            PermissionOutcome::Cancelled => {
+                pairs.push(("kind", Json::str("cancelled")));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<PermissionOutcome, String> {
+        let tag = v
+            .get("kind")
             .and_then(Json::as_str)
-            .unwrap_or("")
-            .to_string();
-        return Err(ClientError::Rpc {
-            code,
-            kind,
-            message,
-        });
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "selected" => Ok(PermissionOutcome::Selected {
+                option_id: {
+                    let f = v
+                        .get("option_id")
+                        .ok_or_else(|| format!("missing '{}'", "option_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "cancelled" => Ok(PermissionOutcome::Cancelled),
+            other => Err(format!("unknown PermissionOutcome variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectParams {
+    pub session_id: String,
+    pub view_kind: ViewKind,
+    pub until_seq: Option<i64>,
+}
+
+impl ProjectParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("view_kind", self.view_kind.to_json()));
+        if let Some(v) = &self.until_seq {
+            pairs.push(("until_seq", Json::Int(v.clone())));
+        }
+        Json::obj(pairs)
     }
 
-    let ci_json = resp
-        .get("result")
-        .and_then(|r| r.get("contract_identity"))
-        .ok_or_else(|| ClientError::Transport("missing result.contract_identity".to_string()))?;
-    let ci = ContractIdentity::from_json(ci_json).map_err(ClientError::Transport)?;
+    pub fn from_json(v: &Json) -> Result<ProjectParams, String> {
+        Ok(ProjectParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            view_kind: {
+                let f = v
+                    .get("view_kind")
+                    .ok_or_else(|| format!("missing '{}'", "view_kind"))?;
+                ViewKind::from_json(f).map_err(|e| e)?
+            },
+            until_seq: match v.get("until_seq") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+        })
+    }
+}
 
-    if ci.contract_major != CONTRACT_MAJOR {
-        return Err(ClientError::IdentityMismatch {
-            field: "contract_major".to_string(),
-        });
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromoteParams {
+    pub session_id: String,
+    pub branch_id: String,
+    pub idempotency_key: Option<String>,
+}
+
+impl PromoteParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("branch_id", Json::str(self.branch_id.clone())));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
     }
-    if ci.schema_hash != EXPECTED_SCHEMA_HASH {
-        return Err(ClientError::IdentityMismatch {
-            field: "schema_hash".to_string(),
-        });
+
+    pub fn from_json(v: &Json) -> Result<PromoteParams, String> {
+        Ok(PromoteParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            branch_id: {
+                let f = v
+                    .get("branch_id")
+                    .ok_or_else(|| format!("missing '{}'", "branch_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
     }
-    Ok(ci)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProveInclusionParams {
+    pub session_id: String,
+    pub seq: i64,
+}
+
+impl ProveInclusionParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("seq", Json::Int(self.seq.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ProveInclusionParams, String> {
+        Ok(ProveInclusionParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            seq: {
+                let f = v.get("seq").ok_or_else(|| format!("missing '{}'", "seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReadCursor {
+    Seq { seq: i64 },
+    EventId { event_id: String },
+    Now,
+}
+
+impl ReadCursor {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            ReadCursor::Seq { seq } => {
+                pairs.push(("kind", Json::str("seq")));
+                pairs.push(("seq", Json::Int(seq.clone())));
+            }
+            ReadCursor::EventId { event_id } => {
+                pairs.push(("kind", Json::str("event_id")));
+                pairs.push(("event_id", Json::str(event_id.clone())));
+            }
+            ReadCursor::Now => {
+                pairs.push(("kind", Json::str("now")));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ReadCursor, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "seq" => Ok(ReadCursor::Seq {
+                seq: {
+                    let f = v.get("seq").ok_or_else(|| format!("missing '{}'", "seq"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+            }),
+            "event_id" => Ok(ReadCursor::EventId {
+                event_id: {
+                    let f = v
+                        .get("event_id")
+                        .ok_or_else(|| format!("missing '{}'", "event_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "now" => Ok(ReadCursor::Now),
+            other => Err(format!("unknown ReadCursor variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReadDirection {
+    Fwd,
+    Rev,
+}
+
+impl ReadDirection {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ReadDirection::Fwd => "fwd",
+            ReadDirection::Rev => "rev",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<ReadDirection, String> {
+        match v.as_str() {
+            Some("fwd") => Ok(ReadDirection::Fwd),
+            Some("rev") => Ok(ReadDirection::Rev),
+            other => Err(format!("unknown ReadDirection variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReadParams {
+    pub session_id: String,
+    pub cursor: ReadCursor,
+    pub direction: Option<ReadDirection>,
+    pub limit: Option<i64>,
+    pub filter: Option<ClassFilter>,
+}
+
+impl ReadParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("cursor", self.cursor.to_json()));
+        if let Some(v) = &self.direction {
+            pairs.push(("direction", v.to_json()));
+        }
+        if let Some(v) = &self.limit {
+            pairs.push(("limit", Json::Int(v.clone())));
+        }
+        if let Some(v) = &self.filter {
+            pairs.push(("filter", v.to_json()));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ReadParams, String> {
+        Ok(ReadParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            cursor: {
+                let f = v
+                    .get("cursor")
+                    .ok_or_else(|| format!("missing '{}'", "cursor"))?;
+                ReadCursor::from_json(f).map_err(|e| e)?
+            },
+            direction: match v.get("direction") {
+                Some(f) => Some(ReadDirection::from_json(f).map_err(|e| e)?),
+                None => None,
+            },
+            limit: match v.get("limit") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+            filter: match v.get("filter") {
+                Some(f) => Some(ClassFilter::from_json(f).map_err(|e| e)?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RealizedSettings {
+    pub model_role_table_realized: Json,
+    pub cwd: String,
+    pub containment_effective: Json,
+    pub policy_mode: String,
+    pub profile_bindings: Json,
+    pub protocol_bindings: Vec<Json>,
+    pub secrets_declared: Vec<Json>,
+    pub attendance: AttendanceDeclaration,
+}
+
+impl RealizedSettings {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push((
+            "model_role_table_realized",
+            self.model_role_table_realized.clone(),
+        ));
+        pairs.push(("cwd", Json::str(self.cwd.clone())));
+        pairs.push(("containment_effective", self.containment_effective.clone()));
+        pairs.push(("policy_mode", Json::str(self.policy_mode.clone())));
+        pairs.push(("profile_bindings", self.profile_bindings.clone()));
+        pairs.push((
+            "protocol_bindings",
+            Json::Arr(self.protocol_bindings.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push((
+            "secrets_declared",
+            Json::Arr(self.secrets_declared.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push(("attendance", self.attendance.to_json()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RealizedSettings, String> {
+        Ok(RealizedSettings {
+            model_role_table_realized: {
+                let f = v
+                    .get("model_role_table_realized")
+                    .ok_or_else(|| format!("missing '{}'", "model_role_table_realized"))?;
+                f.clone()
+            },
+            cwd: {
+                let f = v.get("cwd").ok_or_else(|| format!("missing '{}'", "cwd"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            containment_effective: {
+                let f = v
+                    .get("containment_effective")
+                    .ok_or_else(|| format!("missing '{}'", "containment_effective"))?;
+                f.clone()
+            },
+            policy_mode: {
+                let f = v
+                    .get("policy_mode")
+                    .ok_or_else(|| format!("missing '{}'", "policy_mode"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            profile_bindings: {
+                let f = v
+                    .get("profile_bindings")
+                    .ok_or_else(|| format!("missing '{}'", "profile_bindings"))?;
+                f.clone()
+            },
+            protocol_bindings: match v.get("protocol_bindings") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+            secrets_declared: match v.get("secrets_declared") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+            attendance: {
+                let f = v
+                    .get("attendance")
+                    .ok_or_else(|| format!("missing '{}'", "attendance"))?;
+                AttendanceDeclaration::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Recorded {
+    pub recorded: bool,
+    pub permission_id: String,
+}
+
+impl Recorded {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("recorded", Json::Bool(self.recorded.clone())));
+        pairs.push(("permission_id", Json::str(self.permission_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Recorded, String> {
+        Ok(Recorded {
+            recorded: {
+                let f = v
+                    .get("recorded")
+                    .ok_or_else(|| format!("missing '{}'", "recorded"))?;
+                match f {
+                    Json::Bool(b) => *b,
+                    _ => return Err("expected bool".to_string()),
+                }
+            },
+            permission_id: {
+                let f = v
+                    .get("permission_id")
+                    .ok_or_else(|| format!("missing '{}'", "permission_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplayParams {
+    pub session_id: String,
+    pub from_seq: i64,
+    pub edits: Option<Json>,
+    pub idempotency_key: Option<String>,
+}
+
+impl ReplayParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("from_seq", Json::Int(self.from_seq.clone())));
+        if let Some(v) = &self.edits {
+            pairs.push(("edits", v.clone()));
+        }
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ReplayParams, String> {
+        Ok(ReplayParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            from_seq: {
+                let f = v
+                    .get("from_seq")
+                    .ok_or_else(|| format!("missing '{}'", "from_seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            edits: match v.get("edits") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportHostEffectParams {
+    pub session_id: String,
+    pub effect_id: String,
+    pub attempt_no: i64,
+    pub outcome: HostEffectOutcome,
+    pub idempotency_key: Option<String>,
+}
+
+impl ReportHostEffectParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("effect_id", Json::str(self.effect_id.clone())));
+        pairs.push(("attempt_no", Json::Int(self.attempt_no.clone())));
+        pairs.push(("outcome", self.outcome.to_json()));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ReportHostEffectParams, String> {
+        Ok(ReportHostEffectParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            effect_id: {
+                let f = v
+                    .get("effect_id")
+                    .ok_or_else(|| format!("missing '{}'", "effect_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            attempt_no: {
+                let f = v
+                    .get("attempt_no")
+                    .ok_or_else(|| format!("missing '{}'", "attempt_no"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            outcome: {
+                let f = v
+                    .get("outcome")
+                    .ok_or_else(|| format!("missing '{}'", "outcome"))?;
+                HostEffectOutcome::from_json(f).map_err(|e| e)?
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequestPermission {
+    pub permission_id: String,
+    pub proposal: String,
+    pub options: Vec<PermissionOption>,
+    pub effect_id: Option<String>,
+    pub rendering: Option<Json>,
+}
+
+impl RequestPermission {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("permission_id", Json::str(self.permission_id.clone())));
+        pairs.push(("proposal", Json::str(self.proposal.clone())));
+        pairs.push((
+            "options",
+            Json::Arr(self.options.iter().map(|x| x.to_json()).collect()),
+        ));
+        if let Some(v) = &self.effect_id {
+            pairs.push(("effect_id", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.rendering {
+            pairs.push(("rendering", v.clone()));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RequestPermission, String> {
+        Ok(RequestPermission {
+            permission_id: {
+                let f = v
+                    .get("permission_id")
+                    .ok_or_else(|| format!("missing '{}'", "permission_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            proposal: {
+                let f = v
+                    .get("proposal")
+                    .ok_or_else(|| format!("missing '{}'", "proposal"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            options: {
+                let f = v
+                    .get("options")
+                    .ok_or_else(|| format!("missing '{}'", "options"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> =
+                                Ok(PermissionOption::from_json(x).map_err(|e| e)?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+            effect_id: match v.get("effect_id") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            rendering: match v.get("rendering") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RequestRedactionParams {
+    pub session_id: String,
+    pub refs: Vec<String>,
+    pub reason: String,
+    pub idempotency_key: Option<String>,
+}
+
+impl RequestRedactionParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push((
+            "refs",
+            Json::Arr(self.refs.iter().map(|x| Json::str(x.clone())).collect()),
+        ));
+        pairs.push(("reason", Json::str(self.reason.clone())));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RequestRedactionParams, String> {
+        Ok(RequestRedactionParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            refs: {
+                let f = v
+                    .get("refs")
+                    .ok_or_else(|| format!("missing '{}'", "refs"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .ok_or_else(|| "expected string".to_string())?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+            reason: {
+                let f = v
+                    .get("reason")
+                    .ok_or_else(|| format!("missing '{}'", "reason"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RespondElicitationParams {
+    pub session_id: String,
+    pub elicitation_id: String,
+    pub outcome: ElicitOutcome,
+    pub idempotency_key: Option<String>,
+}
+
+impl RespondElicitationParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("elicitation_id", Json::str(self.elicitation_id.clone())));
+        pairs.push(("outcome", self.outcome.to_json()));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RespondElicitationParams, String> {
+        Ok(RespondElicitationParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            elicitation_id: {
+                let f = v
+                    .get("elicitation_id")
+                    .ok_or_else(|| format!("missing '{}'", "elicitation_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            outcome: {
+                let f = v
+                    .get("outcome")
+                    .ok_or_else(|| format!("missing '{}'", "outcome"))?;
+                ElicitOutcome::from_json(f).map_err(|e| e)?
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RespondPermissionParams {
+    pub session_id: String,
+    pub permission_id: String,
+    pub outcome: PermissionOutcome,
+    pub idempotency_key: String,
+}
+
+impl RespondPermissionParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("permission_id", Json::str(self.permission_id.clone())));
+        pairs.push(("outcome", self.outcome.to_json()));
+        pairs.push(("idempotency_key", Json::str(self.idempotency_key.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RespondPermissionParams, String> {
+        Ok(RespondPermissionParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            permission_id: {
+                let f = v
+                    .get("permission_id")
+                    .ok_or_else(|| format!("missing '{}'", "permission_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            outcome: {
+                let f = v
+                    .get("outcome")
+                    .ok_or_else(|| format!("missing '{}'", "outcome"))?;
+                PermissionOutcome::from_json(f).map_err(|e| e)?
+            },
+            idempotency_key: {
+                let f = v
+                    .get("idempotency_key")
+                    .ok_or_else(|| format!("missing '{}'", "idempotency_key"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResumeMode {
+    Continue,
+    Takeover,
+}
+
+impl ResumeMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ResumeMode::Continue => "continue",
+            ResumeMode::Takeover => "takeover",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<ResumeMode, String> {
+        match v.as_str() {
+            Some("continue") => Ok(ResumeMode::Continue),
+            Some("takeover") => Ok(ResumeMode::Takeover),
+            other => Err(format!("unknown ResumeMode variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RevokeLeaseParams {
+    pub session_id: String,
+    pub lease_id: String,
+    pub idempotency_key: Option<String>,
+}
+
+impl RevokeLeaseParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("lease_id", Json::str(self.lease_id.clone())));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RevokeLeaseParams, String> {
+        Ok(RevokeLeaseParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            lease_id: {
+                let f = v
+                    .get("lease_id")
+                    .ok_or_else(|| format!("missing '{}'", "lease_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RollbackParams {
+    pub session_id: String,
+    pub to_seq: i64,
+    pub idempotency_key: Option<String>,
+}
+
+impl RollbackParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("to_seq", Json::Int(self.to_seq.clone())));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RollbackParams, String> {
+        Ok(RollbackParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            to_seq: {
+                let f = v
+                    .get("to_seq")
+                    .ok_or_else(|| format!("missing '{}'", "to_seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunSummaryRef {
+    pub run_id: String,
+    pub seq: i64,
+    pub hash: String,
+}
+
+impl RunSummaryRef {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("run_id", Json::str(self.run_id.clone())));
+        pairs.push(("seq", Json::Int(self.seq.clone())));
+        pairs.push(("hash", Json::str(self.hash.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RunSummaryRef, String> {
+        Ok(RunSummaryRef {
+            run_id: {
+                let f = v
+                    .get("run_id")
+                    .ok_or_else(|| format!("missing '{}'", "run_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            seq: {
+                let f = v.get("seq").ok_or_else(|| format!("missing '{}'", "seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            hash: {
+                let f = v
+                    .get("hash")
+                    .ok_or_else(|| format!("missing '{}'", "hash"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SeqCursor {
+    pub seq: i64,
+}
+
+impl SeqCursor {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("seq", Json::Int(self.seq.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<SeqCursor, String> {
+        Ok(SeqCursor {
+            seq: {
+                let f = v.get("seq").ok_or_else(|| format!("missing '{}'", "seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Session {
+    pub session_id: String,
+    pub run_id: String,
+    pub attachment_id: String,
+    pub manifest_ref: String,
+    pub configuration_id: String,
+    pub configuration_version_id: String,
+    pub realized: RealizedSettings,
+    pub cursor: SeqCursor,
+}
+
+impl Session {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("run_id", Json::str(self.run_id.clone())));
+        pairs.push(("attachment_id", Json::str(self.attachment_id.clone())));
+        pairs.push(("manifest_ref", Json::str(self.manifest_ref.clone())));
+        pairs.push(("configuration_id", Json::str(self.configuration_id.clone())));
+        pairs.push((
+            "configuration_version_id",
+            Json::str(self.configuration_version_id.clone()),
+        ));
+        pairs.push(("realized", self.realized.to_json()));
+        pairs.push(("cursor", self.cursor.to_json()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Session, String> {
+        Ok(Session {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            run_id: {
+                let f = v
+                    .get("run_id")
+                    .ok_or_else(|| format!("missing '{}'", "run_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            attachment_id: {
+                let f = v
+                    .get("attachment_id")
+                    .ok_or_else(|| format!("missing '{}'", "attachment_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            manifest_ref: {
+                let f = v
+                    .get("manifest_ref")
+                    .ok_or_else(|| format!("missing '{}'", "manifest_ref"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            configuration_id: {
+                let f = v
+                    .get("configuration_id")
+                    .ok_or_else(|| format!("missing '{}'", "configuration_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            configuration_version_id: {
+                let f = v
+                    .get("configuration_version_id")
+                    .ok_or_else(|| format!("missing '{}'", "configuration_version_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            realized: {
+                let f = v
+                    .get("realized")
+                    .ok_or_else(|| format!("missing '{}'", "realized"))?;
+                RealizedSettings::from_json(f).map_err(|e| e)?
+            },
+            cursor: {
+                let f = v
+                    .get("cursor")
+                    .ok_or_else(|| format!("missing '{}'", "cursor"))?;
+                SeqCursor::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetCoordinateParams {
+    pub session_id: String,
+    pub coordinate: String,
+    pub value: Json,
+    pub idempotency_key: Option<String>,
+}
+
+impl SetCoordinateParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("coordinate", Json::str(self.coordinate.clone())));
+        pairs.push(("value", self.value.clone()));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<SetCoordinateParams, String> {
+        Ok(SetCoordinateParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            coordinate: {
+                let f = v
+                    .get("coordinate")
+                    .ok_or_else(|| format!("missing '{}'", "coordinate"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            value: {
+                let f = v
+                    .get("value")
+                    .ok_or_else(|| format!("missing '{}'", "value"))?;
+                f.clone()
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SteerParams {
+    pub session_id: String,
+    pub expected_turn_id: Option<String>,
+    pub input: Vec<Json>,
+    pub idempotency_key: Option<String>,
+}
+
+impl SteerParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.expected_turn_id {
+            pairs.push(("expected_turn_id", Json::str(v.clone())));
+        }
+        pairs.push((
+            "input",
+            Json::Arr(self.input.iter().map(|x| x.clone()).collect()),
+        ));
+        if let Some(v) = &self.idempotency_key {
+            pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<SteerParams, String> {
+        Ok(SteerParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            expected_turn_id: match v.get("expected_turn_id") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            input: {
+                let f = v
+                    .get("input")
+                    .ok_or_else(|| format!("missing '{}'", "input"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+            idempotency_key: match v.get("idempotency_key") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamEventsParams {
+    pub session_id: String,
+    pub from: Option<ReadCursor>,
+    pub filter: Option<ClassFilter>,
+}
+
+impl StreamEventsParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.from {
+            pairs.push(("from", v.to_json()));
+        }
+        if let Some(v) = &self.filter {
+            pairs.push(("filter", v.to_json()));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<StreamEventsParams, String> {
+        Ok(StreamEventsParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            from: match v.get("from") {
+                Some(f) => Some(ReadCursor::from_json(f).map_err(|e| e)?),
+                None => None,
+            },
+            filter: match v.get("filter") {
+                Some(f) => Some(ClassFilter::from_json(f).map_err(|e| e)?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamNotification {
+    pub subscription_id: String,
+    pub frame: Frame,
+}
+
+impl StreamNotification {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("subscription_id", Json::str(self.subscription_id.clone())));
+        pairs.push(("frame", self.frame.to_json()));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<StreamNotification, String> {
+        Ok(StreamNotification {
+            subscription_id: {
+                let f = v
+                    .get("subscription_id")
+                    .ok_or_else(|| format!("missing '{}'", "subscription_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            frame: {
+                let f = v
+                    .get("frame")
+                    .ok_or_else(|| format!("missing '{}'", "frame"))?;
+                Frame::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamTicket {
+    pub subscription_id: String,
+}
+
+impl StreamTicket {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("subscription_id", Json::str(self.subscription_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<StreamTicket, String> {
+        Ok(StreamTicket {
+            subscription_id: {
+                let f = v
+                    .get("subscription_id")
+                    .ok_or_else(|| format!("missing '{}'", "subscription_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubmitParams {
+    pub session_id: String,
+    pub input: Vec<Json>,
+    pub idempotency_key: String,
+}
+
+impl SubmitParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push((
+            "input",
+            Json::Arr(self.input.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push(("idempotency_key", Json::str(self.idempotency_key.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<SubmitParams, String> {
+        Ok(SubmitParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            input: {
+                let f = v
+                    .get("input")
+                    .ok_or_else(|| format!("missing '{}'", "input"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+            idempotency_key: {
+                let f = v
+                    .get("idempotency_key")
+                    .ok_or_else(|| format!("missing '{}'", "idempotency_key"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Supplies {
+    pub context: Vec<Json>,
+    pub host_capabilities: Vec<Json>,
+    pub mcp_servers: Vec<Json>,
+    pub procedures: Vec<Json>,
+}
+
+impl Supplies {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push((
+            "context",
+            Json::Arr(self.context.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push((
+            "host_capabilities",
+            Json::Arr(self.host_capabilities.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push((
+            "mcp_servers",
+            Json::Arr(self.mcp_servers.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push((
+            "procedures",
+            Json::Arr(self.procedures.iter().map(|x| x.clone()).collect()),
+        ));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Supplies, String> {
+        Ok(Supplies {
+            context: match v.get("context") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+            host_capabilities: match v.get("host_capabilities") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+            mcp_servers: match v.get("mcp_servers") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+            procedures: match v.get("procedures") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyParams {
+    pub session_id: String,
+    pub until_seq: Option<i64>,
+}
+
+impl VerifyParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.until_seq {
+            pairs.push(("until_seq", Json::Int(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<VerifyParams, String> {
+        Ok(VerifyParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            until_seq: match v.get("until_seq") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct View {
+    pub payload: Json,
+    pub derived_from: DerivedFrom,
+    pub view_hash: String,
+}
+
+impl View {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("payload", self.payload.clone()));
+        pairs.push(("derived_from", self.derived_from.to_json()));
+        pairs.push(("view_hash", Json::str(self.view_hash.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<View, String> {
+        Ok(View {
+            payload: {
+                let f = v
+                    .get("payload")
+                    .ok_or_else(|| format!("missing '{}'", "payload"))?;
+                f.clone()
+            },
+            derived_from: {
+                let f = v
+                    .get("derived_from")
+                    .ok_or_else(|| format!("missing '{}'", "derived_from"))?;
+                DerivedFrom::from_json(f).map_err(|e| e)?
+            },
+            view_hash: {
+                let f = v
+                    .get("view_hash")
+                    .ok_or_else(|| format!("missing '{}'", "view_hash"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewKind {
+    ContextView,
+    RunSummary,
+    Checkpoint,
+}
+
+impl ViewKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ViewKind::ContextView => "context_view",
+            ViewKind::RunSummary => "run_summary",
+            ViewKind::Checkpoint => "checkpoint",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<ViewKind, String> {
+        match v.as_str() {
+            Some("context_view") => Ok(ViewKind::ContextView),
+            Some("run_summary") => Ok(ViewKind::RunSummary),
+            Some("checkpoint") => Ok(ViewKind::Checkpoint),
+            other => Err(format!("unknown ViewKind variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Frame {
+    Durable {
+        seq: i64,
+        hash: String,
+        event: Json,
+        durability: String,
+    },
+    Sync {
+        from_seq: i64,
+        through_seq: i64,
+        head_hash: String,
+        durability: String,
+    },
+    Ephemeral {
+        ephemeral_kind: EphemeralKind,
+        scope: Json,
+        attempt: i64,
+        order: i64,
+        payload: Json,
+        durability: String,
+    },
+    ItemStarted {
+        item_id: String,
+        attempt: i64,
+        anchor_seq: i64,
+        durability: String,
+    },
+    ItemAborted {
+        item_id: String,
+        attempt: i64,
+        reason: String,
+        durability: String,
+    },
+    Lagged {
+        dropped: Json,
+        resume_from_seq: i64,
+        durability: String,
+    },
+    Closed {
+        reason: ClosedReason,
+        detail: Option<String>,
+        durability: String,
+    },
+}
+
+impl Frame {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        match self {
+            Frame::Durable {
+                seq,
+                hash,
+                event,
+                durability,
+            } => {
+                pairs.push(("kind", Json::str("durable")));
+                pairs.push(("seq", Json::Int(seq.clone())));
+                pairs.push(("hash", Json::str(hash.clone())));
+                pairs.push(("event", event.clone()));
+                pairs.push(("durability", Json::str(durability.clone())));
+            }
+            Frame::Sync {
+                from_seq,
+                through_seq,
+                head_hash,
+                durability,
+            } => {
+                pairs.push(("kind", Json::str("sync")));
+                pairs.push(("from_seq", Json::Int(from_seq.clone())));
+                pairs.push(("through_seq", Json::Int(through_seq.clone())));
+                pairs.push(("head_hash", Json::str(head_hash.clone())));
+                pairs.push(("durability", Json::str(durability.clone())));
+            }
+            Frame::Ephemeral {
+                ephemeral_kind,
+                scope,
+                attempt,
+                order,
+                payload,
+                durability,
+            } => {
+                pairs.push(("kind", Json::str("ephemeral")));
+                pairs.push(("ephemeral_kind", ephemeral_kind.to_json()));
+                pairs.push(("scope", scope.clone()));
+                pairs.push(("attempt", Json::Int(attempt.clone())));
+                pairs.push(("order", Json::Int(order.clone())));
+                pairs.push(("payload", payload.clone()));
+                pairs.push(("durability", Json::str(durability.clone())));
+            }
+            Frame::ItemStarted {
+                item_id,
+                attempt,
+                anchor_seq,
+                durability,
+            } => {
+                pairs.push(("kind", Json::str("item_started")));
+                pairs.push(("item_id", Json::str(item_id.clone())));
+                pairs.push(("attempt", Json::Int(attempt.clone())));
+                pairs.push(("anchor_seq", Json::Int(anchor_seq.clone())));
+                pairs.push(("durability", Json::str(durability.clone())));
+            }
+            Frame::ItemAborted {
+                item_id,
+                attempt,
+                reason,
+                durability,
+            } => {
+                pairs.push(("kind", Json::str("item_aborted")));
+                pairs.push(("item_id", Json::str(item_id.clone())));
+                pairs.push(("attempt", Json::Int(attempt.clone())));
+                pairs.push(("reason", Json::str(reason.clone())));
+                pairs.push(("durability", Json::str(durability.clone())));
+            }
+            Frame::Lagged {
+                dropped,
+                resume_from_seq,
+                durability,
+            } => {
+                pairs.push(("kind", Json::str("lagged")));
+                pairs.push(("dropped", dropped.clone()));
+                pairs.push(("resume_from_seq", Json::Int(resume_from_seq.clone())));
+                pairs.push(("durability", Json::str(durability.clone())));
+            }
+            Frame::Closed {
+                reason,
+                detail,
+                durability,
+            } => {
+                pairs.push(("kind", Json::str("closed")));
+                pairs.push(("reason", reason.to_json()));
+                if let Some(v) = detail {
+                    pairs.push(("detail", Json::str(v.clone())));
+                }
+                pairs.push(("durability", Json::str(durability.clone())));
+            }
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<Frame, String> {
+        let tag = v
+            .get("kind")
+            .and_then(Json::as_str)
+            .ok_or_else(|| format!("missing '{}'", "kind"))?;
+        match tag {
+            "durable" => Ok(Frame::Durable {
+                seq: {
+                    let f = v.get("seq").ok_or_else(|| format!("missing '{}'", "seq"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                hash: {
+                    let f = v
+                        .get("hash")
+                        .ok_or_else(|| format!("missing '{}'", "hash"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                event: {
+                    let f = v
+                        .get("event")
+                        .ok_or_else(|| format!("missing '{}'", "event"))?;
+                    f.clone()
+                },
+                durability: {
+                    let f = v
+                        .get("durability")
+                        .ok_or_else(|| format!("missing '{}'", "durability"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "sync" => Ok(Frame::Sync {
+                from_seq: {
+                    let f = v
+                        .get("from_seq")
+                        .ok_or_else(|| format!("missing '{}'", "from_seq"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                through_seq: {
+                    let f = v
+                        .get("through_seq")
+                        .ok_or_else(|| format!("missing '{}'", "through_seq"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                head_hash: {
+                    let f = v
+                        .get("head_hash")
+                        .ok_or_else(|| format!("missing '{}'", "head_hash"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                durability: {
+                    let f = v
+                        .get("durability")
+                        .ok_or_else(|| format!("missing '{}'", "durability"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "ephemeral" => Ok(Frame::Ephemeral {
+                ephemeral_kind: {
+                    let f = v
+                        .get("ephemeral_kind")
+                        .ok_or_else(|| format!("missing '{}'", "ephemeral_kind"))?;
+                    EphemeralKind::from_json(f).map_err(|e| e)?
+                },
+                scope: {
+                    let f = v
+                        .get("scope")
+                        .ok_or_else(|| format!("missing '{}'", "scope"))?;
+                    f.clone()
+                },
+                attempt: {
+                    let f = v
+                        .get("attempt")
+                        .ok_or_else(|| format!("missing '{}'", "attempt"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                order: {
+                    let f = v
+                        .get("order")
+                        .ok_or_else(|| format!("missing '{}'", "order"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                payload: {
+                    let f = v
+                        .get("payload")
+                        .ok_or_else(|| format!("missing '{}'", "payload"))?;
+                    f.clone()
+                },
+                durability: {
+                    let f = v
+                        .get("durability")
+                        .ok_or_else(|| format!("missing '{}'", "durability"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "item_started" => Ok(Frame::ItemStarted {
+                item_id: {
+                    let f = v
+                        .get("item_id")
+                        .ok_or_else(|| format!("missing '{}'", "item_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                attempt: {
+                    let f = v
+                        .get("attempt")
+                        .ok_or_else(|| format!("missing '{}'", "attempt"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                anchor_seq: {
+                    let f = v
+                        .get("anchor_seq")
+                        .ok_or_else(|| format!("missing '{}'", "anchor_seq"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                durability: {
+                    let f = v
+                        .get("durability")
+                        .ok_or_else(|| format!("missing '{}'", "durability"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "item_aborted" => Ok(Frame::ItemAborted {
+                item_id: {
+                    let f = v
+                        .get("item_id")
+                        .ok_or_else(|| format!("missing '{}'", "item_id"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                attempt: {
+                    let f = v
+                        .get("attempt")
+                        .ok_or_else(|| format!("missing '{}'", "attempt"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                reason: {
+                    let f = v
+                        .get("reason")
+                        .ok_or_else(|| format!("missing '{}'", "reason"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+                durability: {
+                    let f = v
+                        .get("durability")
+                        .ok_or_else(|| format!("missing '{}'", "durability"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "lagged" => Ok(Frame::Lagged {
+                dropped: {
+                    let f = v
+                        .get("dropped")
+                        .ok_or_else(|| format!("missing '{}'", "dropped"))?;
+                    f.clone()
+                },
+                resume_from_seq: {
+                    let f = v
+                        .get("resume_from_seq")
+                        .ok_or_else(|| format!("missing '{}'", "resume_from_seq"))?;
+                    f.as_int().ok_or_else(|| "expected integer".to_string())?
+                },
+                durability: {
+                    let f = v
+                        .get("durability")
+                        .ok_or_else(|| format!("missing '{}'", "durability"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            "closed" => Ok(Frame::Closed {
+                reason: {
+                    let f = v
+                        .get("reason")
+                        .ok_or_else(|| format!("missing '{}'", "reason"))?;
+                    ClosedReason::from_json(f).map_err(|e| e)?
+                },
+                detail: match v.get("detail") {
+                    Some(f) => Some(
+                        f.as_str()
+                            .map(|s| s.to_string())
+                            .ok_or_else(|| "expected string".to_string())?,
+                    ),
+                    None => None,
+                },
+                durability: {
+                    let f = v
+                        .get("durability")
+                        .ok_or_else(|| format!("missing '{}'", "durability"))?;
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?
+                },
+            }),
+            other => Err(format!("unknown Frame variant {other:?}")),
+        }
+    }
+}
+
+/// The closed `hh-embed/1` error sum — decoded from `error.data`
+/// (`kind` tag + members). A variant absent from the table is
+/// impossible by construction (CC1; a response-position sum grows
+/// only by a dialect bump).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmbedError {
+    pub code: i64,
+    pub kind: String,
+    pub retryable: bool,
+    pub message: String,
+    /// The typed `error.data` members (`kind`/`retryable` re-keyed out).
+    pub data: Json,
+}
+
+/// `kind` → code, for client-side construction in tests/fixtures.
+pub fn error_code_for(kind: &str) -> Option<i64> {
+    Some(match kind {
+        "NotInitialized" => 1001,
+        "ContractMajorUnsupported" => 1002,
+        "SchemaMismatch" => 1003,
+        "KernelBelowFloor" => 1004,
+        "ExperimentalRequired" => 1005,
+        "CapabilityNotDeclared" => 1006,
+        "UnknownField" => 1100,
+        "SchemaViolation" => 1101,
+        "SecretInPayload" => 1102,
+        "UnknownSession" => 1200,
+        "UnknownRun" => 1201,
+        "WouldBlock" => 1202,
+        "Draining" => 1203,
+        "SessionDetached" => 1204,
+        "DefinitionChanged" => 1205,
+        "TurnMismatch" => 1206,
+        "TurnActive" => 1207,
+        "InvalidDefinition" => 1300,
+        "UnresolvedRef" => 1301,
+        "AmbiguousVersion" => 1302,
+        "AuthorityViolation" => 1303,
+        "UnexpressibleSurface" => 1304,
+        "LinkError" => 1305,
+        "InsufficientBudget" => 1400,
+        "UnbudgetedArm" => 1401,
+        "UnattendedRequiresInput" => 1402,
+        "Refused" => 1403,
+        "Unsupported" => 1404,
+        "UnknownEffect" => 1500,
+        "AlreadyDecided" => 1501,
+        "OptionNotOffered" => 1502,
+        "UnknownPermission" => 1503,
+        "Fenced" => 1504,
+        "EnvironmentUnavailable" => 1600,
+        "UnknownCapability" => 1601,
+        "Overloaded" => 1700,
+        "Disconnected" => 1701,
+        "Timeout" => 1702,
+        _ => return None,
+    })
+}
+
+/// Whether `kind` is retryable (safe to retry with the same
+/// `idempotency_key`).
+pub fn error_retryable(kind: &str) -> bool {
+    matches!(
+        kind,
+        "WouldBlock" | "Draining" | "Overloaded" | "Disconnected" | "Timeout"
+    )
+}
+
+/// A typed client error. Transport failures and RPC errors are distinct;
+/// the RPC arm carries the decoded `EmbedError` sum (never free text —
+/// ADR-0176 D5).
+#[derive(Debug)]
+pub enum ClientError {
+    Transport(String),
+    /// A typed kernel refusal — `code`/`kind`/`retryable`/`data`.
+    Rpc(EmbedError),
+    /// The response's `result` failed schema decode.
+    Decode(String),
+    /// The kernel's returned `(contract_major, schema_hash)` does not
+    /// match the constants this client was generated against — never a
+    /// silent fallback (ADR-0178 D2). `field` names the mismatched member.
+    IdentityMismatch {
+        field: &'static str,
+    },
+}
+
+/// The newline-delimited JSON-RPC 2.0 client (binding (b) transport;
+/// binding (a) is `hh_embed::EmbedService` — same ops, same bytes).
+/// Notifications (`stream.frame`) are buffered on `pending` and drained
+/// by [`Client::poll_notification`]/[`Client::take_notifications`].
+pub struct Client<R, W> {
+    reader: R,
+    writer: W,
+    next_id: i64,
+    /// Notifications received while waiting for responses.
+    pending: Vec<StreamNotification>,
+    /// The negotiated `HelloResult` (set by `hello`).
+    pub hello_result: Option<HelloResult>,
+}
+
+impl<R: BufRead, W: Write> Client<R, W> {
+    pub fn new(reader: R, writer: W) -> Client<R, W> {
+        Client {
+            reader,
+            writer,
+            next_id: 0,
+            pending: Vec::new(),
+            hello_result: None,
+        }
+    }
+
+    /// Send a request, read until the matching response arrives —
+    /// buffering any `stream.frame` notifications seen meanwhile.
+    pub fn call(&mut self, method: &str, params: Json) -> Result<Json, ClientError> {
+        self.next_id += 1;
+        let id = self.next_id;
+        let req = Json::obj([
+            ("jsonrpc", Json::str("2.0")),
+            ("id", Json::Int(id)),
+            ("method", Json::str(method)),
+            ("params", params),
+        ]);
+        let mut line = req.to_canonical_string();
+        line.push('\n');
+        self.writer
+            .write_all(line.as_bytes())
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
+        self.writer
+            .flush()
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
+
+        loop {
+            let mut resp_line = String::new();
+            let n = self
+                .reader
+                .read_line(&mut resp_line)
+                .map_err(|e| ClientError::Transport(e.to_string()))?;
+            if n == 0 {
+                return Err(ClientError::Transport("kernel closed the stream".into()));
+            }
+            let msg = hh_wire::json::parse(resp_line.trim())
+                .map_err(|e| ClientError::Transport(e.to_string()))?;
+            // A notification: buffer and keep waiting for the response.
+            if msg.get("id").is_none() {
+                if msg.get("method").and_then(Json::as_str) == Some("stream.frame") {
+                    if let Some(p) = msg.get("params") {
+                        if let Ok(n) = StreamNotification::from_json(p) {
+                            self.pending.push(n);
+                        }
+                    }
+                }
+                continue;
+            }
+            if msg.get("id").and_then(Json::as_int) != Some(id) {
+                return Err(ClientError::Transport(format!(
+                    "response id mismatch: got {:?}, want {id}",
+                    msg.get("id")
+                )));
+            }
+            if let Some(err) = msg.get("error") {
+                return Err(ClientError::Rpc(decode_error(err)));
+            }
+            return msg
+                .get("result")
+                .cloned()
+                .ok_or_else(|| ClientError::Transport("response has no result".into()));
+        }
+    }
+
+    /// Read one message; if it is a `stream.frame` notification return
+    /// it, else ignore it (one-shot — used while a subscription is live
+    /// between calls).
+    pub fn poll_notification(&mut self) -> Result<Option<StreamNotification>, ClientError> {
+        if let Some(n) = self.pending.pop() {
+            return Ok(Some(n));
+        }
+        let mut line = String::new();
+        let n = self
+            .reader
+            .read_line(&mut line)
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
+        if n == 0 {
+            return Err(ClientError::Transport("kernel closed the stream".into()));
+        }
+        let msg =
+            hh_wire::json::parse(line.trim()).map_err(|e| ClientError::Transport(e.to_string()))?;
+        if msg.get("method").and_then(Json::as_str) == Some("stream.frame") {
+            if let Some(p) = msg.get("params") {
+                let n = StreamNotification::from_json(p).map_err(ClientError::Decode)?;
+                return Ok(Some(n));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Drain buffered notifications without blocking.
+    pub fn take_notifications(&mut self) -> Vec<StreamNotification> {
+        std::mem::take(&mut self.pending)
+    }
+    /// `account` → `AccountView` (see the contract registry).
+    pub fn account(&mut self, params: &AccountParams) -> Result<AccountView, ClientError> {
+        let raw = self.call("account", params.to_json())?;
+        AccountView::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `cancel` → `Acknowledged` (see the contract registry).
+    pub fn cancel(&mut self, params: &CancelParams) -> Result<Acknowledged, ClientError> {
+        let raw = self.call("cancel", params.to_json())?;
+        Acknowledged::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `close` → `Closed` (see the contract registry).
+    pub fn close(&mut self, params: &CloseParams) -> Result<Closed, ClientError> {
+        let raw = self.call("close", params.to_json())?;
+        Closed::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `describe` → `DescribeResult` (see the contract registry).
+    pub fn describe(&mut self, params: &DescribeParams) -> Result<DescribeResult, ClientError> {
+        let raw = self.call("describe", params.to_json())?;
+        DescribeResult::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `fork` → `Session` (see the contract registry).
+    pub fn fork(&mut self, params: &ForkParams) -> Result<Session, ClientError> {
+        let raw = self.call("fork", params.to_json())?;
+        Session::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `get_artifact` → `json` (see the contract registry).
+    pub fn get_artifact(&mut self, params: &GetArtifactParams) -> Result<Json, ClientError> {
+        let raw = self.call("get_artifact", params.to_json())?;
+        Ok(raw)
+    }
+
+    /// `head` → `Head` (see the contract registry).
+    pub fn head(&mut self, params: &HeadParams) -> Result<Head, ClientError> {
+        let raw = self.call("head", params.to_json())?;
+        Head::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `hello` → `HelloResult` (see the contract registry).
+    pub fn hello(&mut self, params: &HelloParams) -> Result<HelloResult, ClientError> {
+        let raw = self.call("hello", params.to_json())?;
+        {
+            let r = HelloResult::from_json(&raw).map_err(ClientError::Transport)?;
+            if r.kernel.contract_major != CONTRACT_MAJOR {
+                return Err(ClientError::IdentityMismatch {
+                    field: "contract_major",
+                });
+            }
+            if r.kernel.schema_hash != EXPECTED_SCHEMA_HASH {
+                return Err(ClientError::IdentityMismatch {
+                    field: "schema_hash",
+                });
+            }
+            self.hello_result = Some(r.clone());
+            Ok(r)
+        }
+    }
+
+    /// `lineage` → `Page` (see the contract registry).
+    pub fn lineage(&mut self, params: &LineageParams) -> Result<Page, ClientError> {
+        let raw = self.call("lineage", params.to_json())?;
+        Page::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `list_leases` → `ListLeasesResult` (see the contract registry).
+    pub fn list_leases(
+        &mut self,
+        params: &ListLeasesParams,
+    ) -> Result<ListLeasesResult, ClientError> {
+        let raw = self.call("list_leases", params.to_json())?;
+        ListLeasesResult::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `open_session` → `Session` (see the contract registry).
+    pub fn open_session(&mut self, params: &OpenSessionParams) -> Result<Session, ClientError> {
+        let raw = self.call("open_session", params.to_json())?;
+        Session::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `project` → `View` (see the contract registry).
+    pub fn project(&mut self, params: &ProjectParams) -> Result<View, ClientError> {
+        let raw = self.call("project", params.to_json())?;
+        View::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `read` → `Page` (see the contract registry).
+    pub fn read(&mut self, params: &ReadParams) -> Result<Page, ClientError> {
+        let raw = self.call("read", params.to_json())?;
+        Page::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `report_host_effect` → `Recorded` (see the contract registry).
+    pub fn report_host_effect(
+        &mut self,
+        params: &ReportHostEffectParams,
+    ) -> Result<Recorded, ClientError> {
+        let raw = self.call("report_host_effect", params.to_json())?;
+        Recorded::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `respond_elicitation` → `Recorded` (see the contract registry).
+    pub fn respond_elicitation(
+        &mut self,
+        params: &RespondElicitationParams,
+    ) -> Result<Recorded, ClientError> {
+        let raw = self.call("respond_elicitation", params.to_json())?;
+        Recorded::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `respond_permission` → `Recorded` (see the contract registry).
+    pub fn respond_permission(
+        &mut self,
+        params: &RespondPermissionParams,
+    ) -> Result<Recorded, ClientError> {
+        let raw = self.call("respond_permission", params.to_json())?;
+        Recorded::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `steer` → `Accepted` (see the contract registry).
+    pub fn steer(&mut self, params: &SteerParams) -> Result<Accepted, ClientError> {
+        let raw = self.call("steer", params.to_json())?;
+        Accepted::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `stream_events` → `StreamTicket` (see the contract registry).
+    pub fn stream_events(
+        &mut self,
+        params: &StreamEventsParams,
+    ) -> Result<StreamTicket, ClientError> {
+        let raw = self.call("stream_events", params.to_json())?;
+        StreamTicket::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `submit` → `Accepted` (see the contract registry).
+    pub fn submit(&mut self, params: &SubmitParams) -> Result<Accepted, ClientError> {
+        let raw = self.call("submit", params.to_json())?;
+        Accepted::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// The negotiated capabilities (from the completed `hello`).
+    pub fn negotiated(&self) -> Option<&HostCapabilities> {
+        self.hello_result.as_ref().map(|h| &h.negotiated)
+    }
+}
+
+/// Decode a JSON-RPC `error` object into the typed `EmbedError`.
+fn decode_error(err: &Json) -> EmbedError {
+    let code = err.get("code").and_then(Json::as_int).unwrap_or(0);
+    let message = err
+        .get("message")
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    let data = err.get("data").cloned().unwrap_or(Json::Null);
+    let kind = data
+        .get("kind")
+        .and_then(Json::as_str)
+        .unwrap_or("Unknown")
+        .to_string();
+    let retryable = data
+        .get("retryable")
+        .map(|r| matches!(r, Json::Bool(true)))
+        .unwrap_or_else(|| error_retryable(&kind));
+    EmbedError {
+        code,
+        kind,
+        retryable,
+        message,
+        data,
+    }
+}
+
+/// AC-R-2.11.4-3 client-side check: a `durable` frame's `hash` must equal
+/// the ledger hash of `seq`. The client verifies by re-reading `seq`
+/// through `read`/`head` and comparing — this helper performs the
+/// comparison given the kernel's word.
+pub fn verify_durable_hash(frame: &Frame, ledger_hash_for_seq: &str) -> bool {
+    match frame {
+        Frame::Durable { hash, .. } => hash == ledger_hash_for_seq,
+        _ => true,
+    }
 }

@@ -1,9 +1,13 @@
-//! Rust emission for the generated client. Schema-driven: struct fields, `to_json` and
-//! `from_json` are derived from the exported schema's field lists; the transport glue
-//! (`negotiate`, `ClientError`) is a fixed template. Deterministic output — the same schema
-//! always produces byte-identical bytes, so the CI drift check is stable.
+//! Rust emission for the generated client. Fully schema-driven: every
+//! record, string-enum, and tagged sum in the exported schema's `types`
+//! table (plus `frames.Frame`) is emitted with `to_json`/`from_json`; the
+//! transport glue (`Client`, `ClientError`, `EmbedError` decode, the
+//! `stream.frame` notification drain) is a fixed template plus one typed
+//! method per `implemented` op in the `methods` table.
+//!
+//! Deterministic output — the same schema always produces byte-identical
+//! bytes, so the CI drift check is stable (CC7).
 
-use crate::type_fields;
 use hh_wire::json::Json;
 use std::fmt::Write as _;
 
@@ -13,8 +17,8 @@ const HEADER: &str = "\
 // Source of truth: the `hh-embed-schema` crate (the single schema source, CC7). Regenerate
 // with `cargo run -p hh-codegen -- --root <repo>`; `scripts/check-drift.sh` fails the build
 // if this file drifts from the schema. A generated client contains no runtime logic beyond
-// the transport binding (ADR-0179): it asserts `(contract_major, schema_hash)` and lowers a
-// mismatch to a typed error.
+// the transport binding (ADR-0179): it asserts `(contract_major, schema_hash)` at `hello`
+// and lowers a mismatch to a typed error — never a silent fallback (ADR-0178 D2).
 ";
 
 /// Emit the full `generated.rs` for the client crate.
@@ -29,6 +33,7 @@ pub fn generated_client(schema: &Json, schema_hash: &str) -> Result<String, Stri
     s.push('\n');
     s.push_str("#![allow(clippy::all)]\n\n");
     s.push_str("use hh_wire::json::Json;\n");
+    s.push_str("use std::collections::BTreeMap;\n");
     s.push_str("use std::io::{BufRead, Write};\n\n");
 
     writeln!(
@@ -38,71 +43,251 @@ pub fn generated_client(schema: &Json, schema_hash: &str) -> Result<String, Stri
     .unwrap();
     writeln!(
         s,
-        "/// The schema content address this client was generated against (`sha256:<hex>`).\npub const EXPECTED_SCHEMA_HASH: &str = {schema_hash:?};\n"
+        "/// The schema content address this client was generated against.\npub const EXPECTED_SCHEMA_HASH: &str = {schema_hash:?};\n"
     )
     .unwrap();
 
-    // Schema-derived types the round trip uses.
-    for type_name in ["HelloParams", "ContractIdentity"] {
-        emit_struct(&mut s, schema, type_name)?;
+    // Emit every declared type (structs, string enums, tagged sums) then
+    // the frame sum.
+    let types = match schema.get("types") {
+        Some(Json::Obj(m)) => m,
+        _ => return Err("schema missing types".into()),
+    };
+    for (name, def) in types {
+        emit_type(&mut s, name, def)?;
+    }
+    if let Some(Json::Obj(frames)) = schema.get("frames") {
+        for (name, def) in frames {
+            emit_type(&mut s, name, def)?;
+        }
     }
 
-    s.push_str(GLUE);
+    emit_error_sum(&mut s, schema)?;
+    emit_client(&mut s, schema)?;
     Ok(s)
 }
 
-fn emit_struct(out: &mut String, schema: &Json, type_name: &str) -> Result<(), String> {
-    let fields = type_fields(schema, type_name)?;
+// ── Type emission ───────────────────────────────────────────────────────
 
-    // Struct definition.
+fn emit_type(out: &mut String, name: &str, def: &Json) -> Result<(), String> {
+    match def.get("kind").and_then(Json::as_str) {
+        Some("struct") => emit_struct(out, name, def),
+        Some("string_enum") => emit_string_enum(out, name, def),
+        Some("tagged_sum") => emit_tagged_sum(out, name, def),
+        other => Err(format!("type {name}: unknown kind {other:?}")),
+    }
+}
+
+fn fields_of(def: &Json) -> Result<&Vec<Json>, String> {
+    match def.get("fields") {
+        Some(Json::Arr(v)) => Ok(v),
+        _ => Err("fields not an array".into()),
+    }
+}
+
+fn field_parts(f: &Json) -> Result<(String, String, bool), String> {
+    let name = f
+        .get("name")
+        .and_then(Json::as_str)
+        .ok_or("field missing name")?
+        .to_string();
+    let ty = f
+        .get("type")
+        .and_then(Json::as_str)
+        .ok_or("field missing type")?
+        .to_string();
+    let required = matches!(f.get("required"), Some(Json::Bool(true)));
+    Ok((name, ty, required))
+}
+
+/// Rust type for a schema type-expression. `required:false` maps:
+/// `bool`→`bool` (the absent⇒false rule), `[T]`→`Vec<T>`,
+/// `map`→`BTreeMap`, everything else→`Option<T>` (omitted on encode).
+fn rust_type(ty: &str, required: bool) -> String {
+    let base = base_type(ty);
+    if required {
+        return base;
+    }
+    match ty {
+        "bool" => base,
+        t if t.starts_with('[') || t.starts_with("map<") => base,
+        _ => format!("Option<{base}>"),
+    }
+}
+
+fn base_type(ty: &str) -> String {
+    match ty {
+        "string" => "String".into(),
+        "integer" => "i64".into(),
+        "bool" => "bool".into(),
+        "json" => "Json".into(),
+        t if t.starts_with('[') && t.ends_with(']') => {
+            format!("Vec<{}>", base_type(&t[1..t.len() - 1]))
+        }
+        "map<string,json>" => "BTreeMap<String, Json>".into(),
+        named => pascal(named),
+    }
+}
+
+/// `snake_name` → `SnakeName`; leading digits are disambiguated.
+fn pascal(s: &str) -> String {
+    let mut out = String::new();
+    for part in s.split('_') {
+        let mut c = part.chars();
+        if let Some(f) = c.next() {
+            out.extend(f.to_uppercase());
+            out.push_str(c.as_str());
+        }
+    }
+    out
+}
+
+/// Wire field names that are Rust keywords get a raw-identifier prefix
+/// (`ref` → `r#ref`). The wire key is unaffected — only the Rust binding.
+fn rident(name: &str) -> String {
+    match name {
+        "as" | "async" | "await" | "box" | "break" | "const" | "continue" | "crate" | "dyn"
+        | "else" | "enum" | "extern" | "false" | "final" | "fn" | "for" | "if" | "impl" | "in"
+        | "let" | "loop" | "match" | "mod" | "move" | "mut" | "pub" | "ref" | "return" | "self"
+        | "static" | "struct" | "super" | "trait" | "true" | "type" | "unsafe" | "use"
+        | "where" | "while" | "yield" => {
+            format!("r#{name}")
+        }
+        _ => name.to_string(),
+    }
+}
+
+fn to_json_expr(access: &str, ty: &str) -> String {
+    match ty {
+        "string" => format!("Json::str({access}.clone())"),
+        "integer" => format!("Json::Int({access}.clone())"),
+        "bool" => format!("Json::Bool({access}.clone())"),
+        "json" => format!("{access}.clone()"),
+        t if t.starts_with('[') && t.ends_with(']') => {
+            let inner = &t[1..t.len() - 1];
+            format!(
+                "Json::Arr({access}.iter().map(|x| {}).collect())",
+                to_json_expr("x", inner)
+            )
+        }
+        "map<string,json>" => format!("Json::Obj({access}.clone())"),
+        _ => format!("{access}.to_json()"),
+    }
+}
+
+/// Decode one `Json` value expression `e` (a `&Json`) into `ty`.
+fn decode_expr(e: &str, ty: &str) -> String {
+    match ty {
+        "string" => format!(
+            "{e}.as_str().map(|s| s.to_string()).ok_or_else(|| \"expected string\".to_string())?"
+        ),
+        "integer" => format!(
+            "{e}.as_int().ok_or_else(|| \"expected integer\".to_string())?"
+        ),
+        "bool" => format!(
+            "match {e} {{ Json::Bool(b) => *b, _ => return Err(\"expected bool\".to_string()) }}"
+        ),
+        "json" => format!("{e}.clone()"),
+        t if t.starts_with('[') && t.ends_with(']') => {
+            let inner = &t[1..t.len() - 1];
+            format!(
+                "match {e} {{ Json::Arr(a) => a.iter().map(|x| {{ let r: Result<_, String> = Ok({}); r }}).collect::<Result<Vec<_>, _>>()?, _ => return Err(\"expected array\".to_string()) }}",
+                decode_expr("x", inner)
+            )
+        }
+        "map<string,json>" => format!(
+            "match {e} {{ Json::Obj(m) => m.clone(), _ => return Err(\"expected object\".to_string()) }}"
+        ),
+        named => format!("{}::from_json({e}).map_err(|e| e)?", pascal(named)),
+    }
+}
+
+/// Read field `name` out of `v` (a `&Json` object) into `ty`.
+fn read_field(v: &str, name: &str, ty: &str, required: bool) -> String {
+    if required {
+        return format!(
+            "{{ let f = {v}.get({name:?}).ok_or_else(|| format!(\"missing '{{}}'\", {name:?}))?; {} }}",
+            decode_expr("f", ty)
+        );
+    }
+    match ty {
+        // absent ⇒ false (HostCapabilities / flags)
+        "bool" => format!("match {v}.get({name:?}) {{ Some(Json::Bool(b)) => *b, _ => false }}"),
+        t if t.starts_with('[') => format!(
+            "match {v}.get({name:?}) {{ Some(f) => {}, None => Vec::new() }}",
+            decode_expr("f", ty)
+        ),
+        "map<string,json>" => format!(
+            "match {v}.get({name:?}) {{ Some(Json::Obj(m)) => m.clone(), _ => BTreeMap::new() }}"
+        ),
+        _ => format!(
+            "match {v}.get({name:?}) {{ Some(f) => Some({}), None => None }}",
+            decode_expr("f", ty)
+        ),
+    }
+}
+
+/// Encode `self.<name>` push into `pairs`/`m`.
+fn push_field(name: &str, ty: &str, required: bool) -> String {
+    let access = format!("self.{}", rident(name));
+    if required {
+        return format!("pairs.push(({name:?}, {}));", to_json_expr(&access, ty));
+    }
+    match ty {
+        "bool" => format!("pairs.push(({name:?}, Json::Bool(self.{})));", rident(name)),
+        t if t.starts_with('[') => {
+            format!("pairs.push(({name:?}, {}));", to_json_expr(&access, ty))
+        }
+        "map<string,json>" => format!(
+            "if !self.{rid}.is_empty() {{ pairs.push(({name:?}, Json::Obj(self.{rid}.clone()))); }}",
+            rid = rident(name)
+        ),
+        _ => format!(
+            "if let Some(v) = &self.{rid} {{ pairs.push(({name:?}, {})); }}",
+            to_json_expr("v", ty),
+            rid = rident(name)
+        ),
+    }
+}
+
+fn emit_struct(out: &mut String, name: &str, def: &Json) -> Result<(), String> {
+    let fields = fields_of(def)?;
     writeln!(out, "#[derive(Debug, Clone, PartialEq, Eq)]").unwrap();
-    writeln!(out, "pub struct {type_name} {{").unwrap();
+    writeln!(out, "pub struct {name} {{").unwrap();
     for f in fields {
-        let (name, ty, required) = field_parts(f)?;
-        let rust_ty = rust_type(ty, required);
-        writeln!(out, "    pub {name}: {rust_ty},").unwrap();
+        let (fname, ty, required) = field_parts(f)?;
+        writeln!(
+            out,
+            "    pub {}: {},",
+            rident(&fname),
+            rust_type(&ty, required)
+        )
+        .unwrap();
     }
     out.push_str("}\n\n");
 
-    // impl with to_json / from_json.
-    writeln!(out, "impl {type_name} {{").unwrap();
-
-    // to_json
+    writeln!(out, "impl {name} {{").unwrap();
     out.push_str("    pub fn to_json(&self) -> Json {\n");
     out.push_str("        let mut pairs: Vec<(&'static str, Json)> = Vec::new();\n");
     for f in fields {
-        let (name, ty, required) = field_parts(f)?;
-        if required {
-            writeln!(
-                out,
-                "        pairs.push(({name:?}, {}));",
-                to_json_expr(name, ty)
-            )
-            .unwrap();
-        } else {
-            writeln!(
-                out,
-                "        if let Some(v) = &self.{name} {{ pairs.push(({name:?}, {})); }}",
-                to_json_expr_opt(ty)
-            )
-            .unwrap();
-        }
+        let (fname, ty, required) = field_parts(f)?;
+        writeln!(out, "        {}", push_field(&fname, &ty, required)).unwrap();
     }
     out.push_str("        Json::obj(pairs)\n    }\n\n");
 
-    // from_json
     writeln!(
         out,
-        "    pub fn from_json(v: &Json) -> Result<{type_name}, String> {{"
+        "    pub fn from_json(v: &Json) -> Result<{name}, String> {{"
     )
     .unwrap();
-    writeln!(out, "        Ok({type_name} {{").unwrap();
+    writeln!(out, "        Ok({name} {{").unwrap();
     for f in fields {
-        let (name, ty, required) = field_parts(f)?;
+        let (fname, ty, required) = field_parts(f)?;
         writeln!(
             out,
-            "            {name}: {},",
-            from_json_expr(name, ty, required)
+            "            {}: {},",
+            rident(&fname),
+            read_field("v", &fname, &ty, required)
         )
         .unwrap();
     }
@@ -110,152 +295,525 @@ fn emit_struct(out: &mut String, schema: &Json, type_name: &str) -> Result<(), S
     Ok(())
 }
 
-fn field_parts(f: &Json) -> Result<(&str, &str, bool), String> {
-    let name = f
-        .get("name")
-        .and_then(Json::as_str)
-        .ok_or("field missing name")?;
-    let ty = f
-        .get("type")
-        .and_then(Json::as_str)
-        .ok_or("field missing type")?;
-    let required = matches!(f.get("required"), Some(Json::Bool(true)));
-    Ok((name, ty, required))
-}
-
-fn rust_type(ty: &str, required: bool) -> String {
-    let base = match ty {
-        "string" => "String",
-        "integer" => "i64",
-        other => other, // a named type, e.g. ContractIdentity
+fn emit_string_enum(out: &mut String, name: &str, def: &Json) -> Result<(), String> {
+    let variants = match def.get("variants") {
+        Some(Json::Arr(v)) => v,
+        _ => return Err(format!("{name}: variants not an array")),
     };
-    if required {
-        base.to_string()
-    } else {
-        format!("Option<{base}>")
+    writeln!(out, "#[derive(Debug, Clone, Copy, PartialEq, Eq)]").unwrap();
+    writeln!(out, "pub enum {name} {{").unwrap();
+    for v in variants {
+        let s = v.as_str().ok_or("variant not a string")?;
+        writeln!(out, "    {},", pascal(s)).unwrap();
     }
+    out.push_str("}\n\n");
+    writeln!(out, "impl {name} {{").unwrap();
+    writeln!(out, "    pub fn as_str(self) -> &'static str {{").unwrap();
+    writeln!(out, "        match self {{").unwrap();
+    for v in variants {
+        let s = v.as_str().unwrap();
+        writeln!(out, "            {name}::{} => {s:?},", pascal(s)).unwrap();
+    }
+    out.push_str("        }\n    }\n\n");
+    out.push_str("    pub fn to_json(&self) -> Json { Json::str(self.as_str()) }\n\n");
+    writeln!(
+        out,
+        "    pub fn from_json(v: &Json) -> Result<{name}, String> {{"
+    )
+    .unwrap();
+    writeln!(out, "        match v.as_str() {{").unwrap();
+    for v in variants {
+        let s = v.as_str().unwrap();
+        writeln!(out, "            Some({s:?}) => Ok({name}::{}),", pascal(s)).unwrap();
+    }
+    writeln!(
+        out,
+        "            other => Err(format!(\"unknown {name} variant {{other:?}}\")),"
+    )
+    .unwrap();
+    out.push_str("        }\n    }\n}\n\n");
+    Ok(())
 }
 
-fn to_json_expr(name: &str, ty: &str) -> String {
-    match ty {
-        "string" => format!("Json::str(self.{name}.clone())"),
-        "integer" => format!("Json::Int(self.{name})"),
-        _ => format!("self.{name}.to_json()"),
-    }
-}
+fn emit_tagged_sum(out: &mut String, name: &str, def: &Json) -> Result<(), String> {
+    let tag = def.get("tag").and_then(Json::as_str).unwrap_or("kind");
+    let variants = match def.get("variants") {
+        Some(Json::Arr(v)) => v,
+        _ => return Err(format!("{name}: variants not an array")),
+    };
 
-fn to_json_expr_opt(ty: &str) -> String {
-    match ty {
-        "string" => "Json::str(v.clone())".to_string(),
-        "integer" => "Json::Int(*v)".to_string(),
-        _ => "v.to_json()".to_string(),
+    writeln!(out, "#[derive(Debug, Clone, PartialEq, Eq)]").unwrap();
+    writeln!(out, "pub enum {name} {{").unwrap();
+    for v in variants {
+        let vname = v
+            .get("name")
+            .and_then(Json::as_str)
+            .ok_or("variant missing name")?;
+        let fs = fields_of(v)?;
+        if fs.is_empty() {
+            writeln!(out, "    {},", pascal(vname)).unwrap();
+        } else {
+            writeln!(out, "    {} {{", pascal(vname)).unwrap();
+            for f in fs {
+                let (fname, ty, required) = field_parts(f)?;
+                writeln!(
+                    out,
+                    "        {}: {},",
+                    rident(&fname),
+                    rust_type(&ty, required)
+                )
+                .unwrap();
+            }
+            out.push_str("    },\n");
+        }
     }
-}
+    out.push_str("}\n\n");
 
-fn from_json_expr(name: &str, ty: &str, required: bool) -> String {
-    if !required {
-        return match ty {
-            "string" => format!("v.get({name:?}).and_then(Json::as_str).map(|s| s.to_string())"),
-            "integer" => format!("v.get({name:?}).and_then(Json::as_int)"),
-            _ => format!(
-                "match v.get({name:?}) {{ Some(x) => Some({ty}::from_json(x)?), None => None }}"
-            ),
+    // to_json
+    writeln!(out, "impl {name} {{").unwrap();
+    out.push_str("    pub fn to_json(&self) -> Json {\n");
+    out.push_str("        let mut pairs: Vec<(&'static str, Json)> = Vec::new();\n");
+    writeln!(out, "        match self {{").unwrap();
+    for v in variants {
+        let vname = v.get("name").and_then(Json::as_str).unwrap();
+        let fs = fields_of(v)?;
+        let bind = if fs.is_empty() {
+            String::new()
+        } else {
+            let names: Vec<String> = fs
+                .iter()
+                .map(|f| rident(&field_parts(f).unwrap().0))
+                .collect();
+            format!(" {{ {} }}", names.join(", "))
         };
+        writeln!(out, "            {name}::{}{} => {{", pascal(vname), bind).unwrap();
+        writeln!(
+            out,
+            "                pairs.push(({tag:?}, Json::str({vname:?})));"
+        )
+        .unwrap();
+        for f in fs {
+            let (fname, ty, required) = field_parts(f)?;
+            // Fields bound by the match; encode with the same rules as
+            // struct fields but on the binding name.
+            let rid = rident(&fname);
+            if required {
+                writeln!(
+                    out,
+                    "                pairs.push(({fname:?}, {}));",
+                    to_json_expr(&rid, &ty)
+                )
+                .unwrap();
+            } else {
+                match ty.as_str() {
+                    "bool" => writeln!(
+                        out,
+                        "                pairs.push(({fname:?}, Json::Bool(*{rid})));"
+                    )
+                    .unwrap(),
+                    t if t.starts_with('[') => writeln!(
+                        out,
+                        "                pairs.push(({fname:?}, {}));",
+                        to_json_expr(&rid, t)
+                    )
+                    .unwrap(),
+                    _ => writeln!(
+                        out,
+                        "                if let Some(v) = {rid} {{ pairs.push(({fname:?}, {})); }}",
+                        to_json_expr("v", &ty)
+                    )
+                    .unwrap(),
+                }
+            }
+        }
+        out.push_str("            }\n");
     }
-    match ty {
-        "string" => format!(
-            "v.get({name:?}).and_then(Json::as_str).map(|s| s.to_string()).ok_or_else(|| \"missing '{name}'\".to_string())?"
-        ),
-        "integer" => format!(
-            "v.get({name:?}).and_then(Json::as_int).ok_or_else(|| \"missing '{name}'\".to_string())?"
-        ),
-        _ => format!(
-            "{ty}::from_json(v.get({name:?}).ok_or_else(|| \"missing '{name}'\".to_string())?)?"
-        ),
+    out.push_str("        }\n        Json::obj(pairs)\n    }\n\n");
+
+    // from_json
+    writeln!(
+        out,
+        "    pub fn from_json(v: &Json) -> Result<{name}, String> {{"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "        let tag = v.get({tag:?}).and_then(Json::as_str).ok_or_else(|| format!(\"missing '{{}}'\", {tag:?}))?;"
+    )
+    .unwrap();
+    writeln!(out, "        match tag {{").unwrap();
+    for v in variants {
+        let vname = v.get("name").and_then(Json::as_str).unwrap();
+        let fs = fields_of(v)?;
+        if fs.is_empty() {
+            writeln!(
+                out,
+                "            {vname:?} => Ok({name}::{}),",
+                pascal(vname)
+            )
+            .unwrap();
+        } else {
+            writeln!(
+                out,
+                "            {vname:?} => Ok({name}::{} {{",
+                pascal(vname)
+            )
+            .unwrap();
+            for f in fs {
+                let (fname, ty, required) = field_parts(f)?;
+                writeln!(
+                    out,
+                    "                {}: {},",
+                    rident(&fname),
+                    read_field("v", &fname, &ty, required)
+                )
+                .unwrap();
+            }
+            out.push_str("            }),\n");
+        }
     }
+    writeln!(
+        out,
+        "            other => Err(format!(\"unknown {name} variant {{other:?}}\")),"
+    )
+    .unwrap();
+    out.push_str("        }\n    }\n}\n\n");
+    Ok(())
 }
 
-/// The fixed transport glue: the `hello` negotiation and the typed client error sum.
-const GLUE: &str = r##"/// A typed client error. A negotiation mismatch is surfaced here, never as a silent
-/// fallback (ADR-0178 D2).
-#[derive(Debug, Clone, PartialEq, Eq)]
+// ── Error sum emission ──────────────────────────────────────────────────
+
+/// Emit `EmbedError` — the closed error sum with `from_data_json` decode
+/// (code → variant; `data.kind` cross-check; members surfaced).
+fn emit_error_sum(out: &mut String, schema: &Json) -> Result<(), String> {
+    let errors = match schema.get("errors") {
+        Some(Json::Arr(v)) => v,
+        _ => return Err("schema missing errors".into()),
+    };
+    writeln!(
+        out,
+        "/// The closed `hh-embed/1` error sum — decoded from `error.data`"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "/// (`kind` tag + members). A variant absent from the table is"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "/// impossible by construction (CC1; a response-position sum grows"
+    )
+    .unwrap();
+    writeln!(out, "/// only by a dialect bump).").unwrap();
+    writeln!(out, "#[derive(Debug, Clone, PartialEq, Eq)]").unwrap();
+    writeln!(out, "pub struct EmbedError {{").unwrap();
+    out.push_str("    pub code: i64,\n    pub kind: String,\n    pub retryable: bool,\n    pub message: String,\n    /// The typed `error.data` members (`kind`/`retryable` re-keyed out).\n    pub data: Json,\n}\n\n");
+
+    writeln!(
+        out,
+        "/// `kind` → code, for client-side construction in tests/fixtures."
+    )
+    .unwrap();
+    writeln!(out, "pub fn error_code_for(kind: &str) -> Option<i64> {{").unwrap();
+    writeln!(out, "    Some(match kind {{").unwrap();
+    for e in errors {
+        let kind = e.get("kind").and_then(Json::as_str).unwrap();
+        let code = e.get("code").and_then(Json::as_int).unwrap();
+        writeln!(out, "        {kind:?} => {code},").unwrap();
+    }
+    out.push_str("        _ => return None,\n    })\n}\n\n");
+
+    // Retryable kinds — mirrored from the schema (the binding-level
+    // transient set).
+    writeln!(
+        out,
+        "/// Whether `kind` is retryable (safe to retry with the same"
+    )
+    .unwrap();
+    writeln!(out, "/// `idempotency_key`).").unwrap();
+    writeln!(out, "pub fn error_retryable(kind: &str) -> bool {{").unwrap();
+    writeln!(
+        out,
+        "    matches!(kind, \"WouldBlock\" | \"Draining\" | \"Overloaded\" | \"Disconnected\" | \"Timeout\")"
+    )
+    .unwrap();
+    out.push_str("}\n\n");
+    Ok(())
+}
+
+// ── Client glue emission ────────────────────────────────────────────────
+
+/// Emit `ClientError`, `Client` (the newline-delimited JSON-RPC stdio
+/// binding), one typed method per `implemented` op, and the
+/// `stream.frame` notification drain.
+fn emit_client(out: &mut String, schema: &Json) -> Result<(), String> {
+    out.push_str(CLIENT_HEAD);
+
+    let methods = match schema.get("methods") {
+        Some(Json::Obj(m)) => m,
+        _ => return Err("schema missing methods".into()),
+    };
+    // Implemented calls, in registry (BTreeMap = sorted) order.
+    let mut emitted = Vec::new();
+    for (mname, mdef) in methods {
+        let implemented = matches!(mdef.get("implemented"), Some(Json::Bool(true)));
+        let direction = mdef.get("direction").and_then(Json::as_str).unwrap_or("");
+        if implemented && direction == "call" {
+            emitted.push((mname.clone(), mdef));
+        }
+    }
+    for (mname, mdef) in emitted {
+        let params = mdef.get("params").and_then(Json::as_str).unwrap_or("json");
+        let result = mdef.get("result").and_then(Json::as_str).unwrap_or("json");
+        emit_method(out, &mname, params, result)?;
+    }
+    out.push_str(CLIENT_TAIL);
+    out.push_str(CLIENT_TAIL_3);
+    Ok(())
+}
+
+/// `method_name` → `method_name` (Rust fn names keep the snake spelling;
+/// `hello`, `open_session`, `stream_events` are already valid).
+fn emit_method(
+    out: &mut String,
+    mname: &str,
+    params_ty: &str,
+    result_ty: &str,
+) -> Result<(), String> {
+    let params_rust = if params_ty == "json" {
+        "Json".to_string()
+    } else {
+        pascal(params_ty)
+    };
+    let result_rust = if result_ty == "json" {
+        "Json".to_string()
+    } else {
+        pascal(result_ty)
+    };
+    let params_expr = if params_ty == "json" {
+        "params".to_string()
+    } else {
+        "params.to_json()".to_string()
+    };
+    let result_expr = if result_ty == "json" {
+        "Ok(raw)".to_string()
+    } else if mname == "hello" {
+        // `hello` asserts the kernel's `(contract_major, schema_hash)` against
+        // the constants this client was generated against, then stores the
+        // negotiated result — a mismatch lowers to a typed error, never a
+        // silent fallback (ADR-0178 D2).
+        "{ let r = HelloResult::from_json(&raw).map_err(ClientError::Transport)?; if r.kernel.contract_major != CONTRACT_MAJOR { return Err(ClientError::IdentityMismatch { field: \"contract_major\" }); } if r.kernel.schema_hash != EXPECTED_SCHEMA_HASH { return Err(ClientError::IdentityMismatch { field: \"schema_hash\" }); } self.hello_result = Some(r.clone()); Ok(r) }".to_string()
+    } else {
+        format!("{result_rust}::from_json(&raw).map_err(ClientError::Transport)")
+    };
+    writeln!(
+        out,
+        "    /// `{mname}` → `{result_ty}` (see the contract registry)."
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    pub fn {}(&mut self, params: &{params_rust}) -> Result<{result_rust}, ClientError> {{",
+        mname.replace('.', "_")
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "        let raw = self.call({mname:?}, {params_expr})?;"
+    )
+    .unwrap();
+    writeln!(out, "        {result_expr}").unwrap();
+    out.push_str("    }\n\n");
+    Ok(())
+}
+
+/// The fixed transport prelude: `ClientError`, `Client` struct, `call`,
+/// the notification buffer.
+const CLIENT_HEAD: &str = r##"/// A typed client error. Transport failures and RPC errors are distinct;
+/// the RPC arm carries the decoded `EmbedError` sum (never free text —
+/// ADR-0176 D5).
+#[derive(Debug)]
 pub enum ClientError {
     Transport(String),
-    Rpc { code: i64, kind: String, message: String },
-    IdentityMismatch { field: String },
+    /// A typed kernel refusal — `code`/`kind`/`retryable`/`data`.
+    Rpc(EmbedError),
+    /// The response's `result` failed schema decode.
+    Decode(String),
+    /// The kernel's returned `(contract_major, schema_hash)` does not
+    /// match the constants this client was generated against — never a
+    /// silent fallback (ADR-0178 D2). `field` names the mismatched member.
+    IdentityMismatch { field: &'static str },
 }
 
-/// Drive one `hello` negotiation over a newline-delimited JSON-RPC 2.0 stream (binding (b)).
-/// Asserts `(contract_major, schema_hash)` against the kernel's returned identity.
-pub fn negotiate<R: BufRead, W: Write>(
-    reader: &mut R,
-    writer: &mut W,
-    client_name: &str,
-    client_version: &str,
-) -> Result<ContractIdentity, ClientError> {
-    let params = HelloParams {
-        client_name: client_name.to_string(),
-        client_version: client_version.to_string(),
-        asserted_contract_major: CONTRACT_MAJOR,
-        asserted_schema_hash: Some(EXPECTED_SCHEMA_HASH.to_string()),
-    };
-    let req = Json::obj([
-        ("jsonrpc", Json::str("2.0")),
-        ("id", Json::Int(1)),
-        ("method", Json::str("hello")),
-        ("params", params.to_json()),
-    ]);
-    let mut line = req.to_canonical_string();
-    line.push('\n');
-    writer
-        .write_all(line.as_bytes())
-        .map_err(|e| ClientError::Transport(e.to_string()))?;
-    writer
-        .flush()
-        .map_err(|e| ClientError::Transport(e.to_string()))?;
+/// The newline-delimited JSON-RPC 2.0 client (binding (b) transport;
+/// binding (a) is `hh_embed::EmbedService` — same ops, same bytes).
+/// Notifications (`stream.frame`) are buffered on `pending` and drained
+/// by [`Client::poll_notification`]/[`Client::take_notifications`].
+pub struct Client<R, W> {
+    reader: R,
+    writer: W,
+    next_id: i64,
+    /// Notifications received while waiting for responses.
+    pending: Vec<StreamNotification>,
+    /// The negotiated `HelloResult` (set by `hello`).
+    pub hello_result: Option<HelloResult>,
+}
 
-    let mut resp_line = String::new();
-    let n = reader
-        .read_line(&mut resp_line)
-        .map_err(|e| ClientError::Transport(e.to_string()))?;
-    if n == 0 {
-        return Err(ClientError::Transport("kernel closed the stream".to_string()));
-    }
-    let resp = hh_wire::parse(resp_line.trim())
-        .map_err(|e| ClientError::Transport(e.to_string()))?;
-
-    if let Some(err) = resp.get("error") {
-        let code = err.get("code").and_then(Json::as_int).unwrap_or(0);
-        let kind = err
-            .get("data")
-            .and_then(|d| d.get("kind"))
-            .and_then(Json::as_str)
-            .unwrap_or("Unknown")
-            .to_string();
-        let message = err
-            .get("message")
-            .and_then(Json::as_str)
-            .unwrap_or("")
-            .to_string();
-        return Err(ClientError::Rpc { code, kind, message });
+impl<R: BufRead, W: Write> Client<R, W> {
+    pub fn new(reader: R, writer: W) -> Client<R, W> {
+        Client {
+            reader,
+            writer,
+            next_id: 0,
+            pending: Vec::new(),
+            hello_result: None,
+        }
     }
 
-    let ci_json = resp
-        .get("result")
-        .and_then(|r| r.get("contract_identity"))
-        .ok_or_else(|| ClientError::Transport("missing result.contract_identity".to_string()))?;
-    let ci = ContractIdentity::from_json(ci_json).map_err(ClientError::Transport)?;
+    /// Send a request, read until the matching response arrives —
+    /// buffering any `stream.frame` notifications seen meanwhile.
+    pub fn call(&mut self, method: &str, params: Json) -> Result<Json, ClientError> {
+        self.next_id += 1;
+        let id = self.next_id;
+        let req = Json::obj([
+            ("jsonrpc", Json::str("2.0")),
+            ("id", Json::Int(id)),
+            ("method", Json::str(method)),
+            ("params", params),
+        ]);
+        let mut line = req.to_canonical_string();
+        line.push('\n');
+        self.writer
+            .write_all(line.as_bytes())
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
+        self.writer
+            .flush()
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
 
-    if ci.contract_major != CONTRACT_MAJOR {
-        return Err(ClientError::IdentityMismatch {
-            field: "contract_major".to_string(),
-        });
+        loop {
+            let mut resp_line = String::new();
+            let n = self
+                .reader
+                .read_line(&mut resp_line)
+                .map_err(|e| ClientError::Transport(e.to_string()))?;
+            if n == 0 {
+                return Err(ClientError::Transport("kernel closed the stream".into()));
+            }
+            let msg = hh_wire::json::parse(resp_line.trim())
+                .map_err(|e| ClientError::Transport(e.to_string()))?;
+            // A notification: buffer and keep waiting for the response.
+            if msg.get("id").is_none() {
+                if msg.get("method").and_then(Json::as_str) == Some("stream.frame") {
+                    if let Some(p) = msg.get("params") {
+                        if let Ok(n) = StreamNotification::from_json(p) {
+                            self.pending.push(n);
+                        }
+                    }
+                }
+                continue;
+            }
+            if msg.get("id").and_then(Json::as_int) != Some(id) {
+                return Err(ClientError::Transport(format!(
+                    "response id mismatch: got {:?}, want {id}",
+                    msg.get("id")
+                )));
+            }
+            if let Some(err) = msg.get("error") {
+                return Err(ClientError::Rpc(decode_error(err)));
+            }
+            return msg
+                .get("result")
+                .cloned()
+                .ok_or_else(|| ClientError::Transport("response has no result".into()));
+        }
     }
-    if ci.schema_hash != EXPECTED_SCHEMA_HASH {
-        return Err(ClientError::IdentityMismatch {
-            field: "schema_hash".to_string(),
-        });
+
+    /// Read one message; if it is a `stream.frame` notification return
+    /// it, else ignore it (one-shot — used while a subscription is live
+    /// between calls).
+    pub fn poll_notification(&mut self) -> Result<Option<StreamNotification>, ClientError> {
+        if let Some(n) = self.pending.pop() {
+            return Ok(Some(n));
+        }
+        let mut line = String::new();
+        let n = self
+            .reader
+            .read_line(&mut line)
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
+        if n == 0 {
+            return Err(ClientError::Transport("kernel closed the stream".into()));
+        }
+        let msg = hh_wire::json::parse(line.trim())
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
+        if msg.get("method").and_then(Json::as_str) == Some("stream.frame") {
+            if let Some(p) = msg.get("params") {
+                let n = StreamNotification::from_json(p)
+                    .map_err(ClientError::Decode)?;
+                return Ok(Some(n));
+            }
+        }
+        Ok(None)
     }
-    Ok(ci)
+
+    /// Drain buffered notifications without blocking.
+    pub fn take_notifications(&mut self) -> Vec<StreamNotification> {
+        std::mem::take(&mut self.pending)
+    }
+"##;
+
+/// Mid-template: after CLIENT_HEAD the `impl` block is still open — typed
+/// methods land inside it; CLIENT_TAIL closes the impl and adds free fns.
+const CLIENT_TAIL_2: &str = r##"    /// The negotiated capabilities (from the completed `hello`).
+    pub fn negotiated(&self) -> Option<&HostCapabilities> {
+        self.hello_result.as_ref().map(|h| &h.negotiated)
+    }
+}
+
+/// Decode a JSON-RPC `error` object into the typed `EmbedError`.
+fn decode_error(err: &Json) -> EmbedError {
+    let code = err.get("code").and_then(Json::as_int).unwrap_or(0);
+    let message = err
+        .get("message")
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    let data = err.get("data").cloned().unwrap_or(Json::Null);
+    let kind = data
+        .get("kind")
+        .and_then(Json::as_str)
+        .unwrap_or("Unknown")
+        .to_string();
+    let retryable = data
+        .get("retryable")
+        .map(|r| matches!(r, Json::Bool(true)))
+        .unwrap_or_else(|| error_retryable(&kind));
+    EmbedError {
+        code,
+        kind,
+        retryable,
+        message,
+        data,
+    }
+}
+
+"##;
+
+/// The tail after typed methods: `hello` convenience + `verify_frame`
+/// (the AC-R-2.11.4-3 client-side durable-hash check).
+const CLIENT_TAIL: &str = CLIENT_TAIL_2;
+
+/// The tail after typed methods: `hello` convenience + `verify_frame`
+/// (the AC-R-2.11.4-3 client-side durable-hash check).
+const CLIENT_TAIL_3: &str = r##"
+/// AC-R-2.11.4-3 client-side check: a `durable` frame's `hash` must equal
+/// the ledger hash of `seq`. The client verifies by re-reading `seq`
+/// through `read`/`head` and comparing — this helper performs the
+/// comparison given the kernel's word.
+pub fn verify_durable_hash(frame: &Frame, ledger_hash_for_seq: &str) -> bool {
+    match frame {
+        Frame::Durable { hash, .. } => hash == ledger_hash_for_seq,
+        _ => true,
+    }
 }
 "##;

@@ -93,10 +93,15 @@ fn doctor() -> ExitCode {
         Json::Int(1),
         "hello",
         embed::HelloParams {
-            client_name: "hh-kernel doctor".into(),
-            client_version: env!("CARGO_PKG_VERSION").into(),
-            asserted_contract_major: embed::CONTRACT_MAJOR,
-            asserted_schema_hash: Some(id.schema_hash.clone()),
+            contract_major: embed::CONTRACT_MAJOR,
+            client: embed::ClientDescriptor {
+                name: "hh-kernel doctor".into(),
+                version: env!("CARGO_PKG_VERSION").into(),
+                kind: "cli".into(),
+            },
+            capabilities: embed::HostCapabilities::default(),
+            schema_hash: Some(id.schema_hash.clone()),
+            kernel_floor: None,
         }
         .to_json(),
     );
@@ -115,25 +120,32 @@ fn doctor() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let ci = resp
-        .get("result")
-        .and_then(|r| r.get("contract_identity"))
-        .and_then(|c| embed::ContractIdentity::from_json(c).ok());
-    match ci {
-        Some(got) if got == id => {
-            let _ = writeln!(
-                io::stderr(),
-                "doctor: ok — {} schema_hash={}",
-                got.kernel_version_id,
-                got.schema_hash
-            );
-            println!("ok");
-            ExitCode::SUCCESS
-        }
-        other => {
-            eprintln!("doctor: identity mismatch: {other:?}");
-            ExitCode::FAILURE
-        }
+    // The hello result's kernel descriptor must report this kernel's
+    // identity — version id, contract major, schema hash (the
+    // negotiated identity the client pins, I4).
+    let kernel = resp.get("result").and_then(|r| r.get("kernel"));
+    let ok = kernel.and_then(|k| k.get("version")).and_then(Json::as_str)
+        == Some(id.kernel_version_id.as_str())
+        && kernel
+            .and_then(|k| k.get("schema_hash"))
+            .and_then(Json::as_str)
+            == Some(id.schema_hash.as_str())
+        && kernel
+            .and_then(|k| k.get("contract_major"))
+            .and_then(Json::as_int)
+            == Some(id.contract_major);
+    if ok {
+        let _ = writeln!(
+            io::stderr(),
+            "doctor: ok — {} schema_hash={}",
+            id.kernel_version_id,
+            id.schema_hash
+        );
+        println!("ok");
+        ExitCode::SUCCESS
+    } else {
+        eprintln!("doctor: identity mismatch: {resp_line}");
+        ExitCode::FAILURE
     }
 }
 

@@ -1,0 +1,27 @@
+[package]
+name = "hh-embed"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The hh-embed/1 embedding boundary (spec §7.4, R-2.11.4⁰ᵇ; ticket S1.25). EmbedService is binding (a) — the in-process service over Store + EnvDriver + the hh-control Driver; the stdio JSON-RPC loop in `stdio` is binding (b) — both dispatch through the one `handle` path so the bindings are byte-identical by construction. Sessions are ledger runs under a fenced writer lease; attach sessions are read-only by construction (no lease, no appends)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+hh-assembly = { path = "../hh-assembly" }
+hh-registry = { path = "../hh-registry" }
+hh-env = { path = "../hh-env" }
+hh-control = { path = "../hh-control" }
+hh-containment = { path = "../hh-containment" }
+hh-secrets = { path = "../hh-secrets" }
+hh-monitor = { path = "../hh-monitor" }
+hh-gateway = { path = "../hh-gateway" }

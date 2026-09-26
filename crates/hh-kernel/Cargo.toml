@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 hh-wire = { path = "../hh-wire" }
 hh-embed-schema = { path = "../hh-embed-schema" }
+hh-embed = { path = "../hh-embed" }
 
 [dev-dependencies]
 # The generated, drift-checked client — used to prove the end-to-end codegen round trip over
