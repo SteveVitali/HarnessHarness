@@ -144,6 +144,7 @@ fn extra_class(class_id: &str) -> ClassRecord {
         metrics_declared: vec![],
         slot_key: class_id.to_string(),
         tier: "C0".to_string(),
+        depends_on: Vec::new(),
     }
 }
 

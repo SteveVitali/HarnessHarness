@@ -285,8 +285,40 @@ fn contract_from_json(j: &Json, path: &str) -> Result<Vec<ContractOperation>, Re
 
 // ── ClassRecord ──────────────────────────────────────────────────────────────
 
+/// `ContractRef` list member → JSON (empty lists encode absent — CC8: the
+/// pre-S1.27 canonical bytes are unchanged for a record with no `depends_on`).
+fn depends_on_json(deps: &[hh_plugin::ContractRef]) -> Json {
+    Json::Arr(deps.iter().map(|d| d.to_json()).collect())
+}
+
+fn depends_on_from_json(
+    j: &Json,
+    path: &str,
+) -> Result<Vec<hh_plugin::ContractRef>, RegistryError> {
+    match j.get("depends_on") {
+        None | Some(Json::Null) => Ok(Vec::new()),
+        Some(Json::Arr(a)) => {
+            a.iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    hh_plugin::ContractRef::from_json(v, &format!("{path}.depends_on[{i}]"))
+                        .map_err(|e| match e {
+                            hh_plugin::ContractRefError::SchemaViolation { path, detail } => {
+                                RegistryError::SchemaViolation { path, detail }
+                            }
+                        })
+                })
+                .collect()
+        }
+        Some(_) => Err(RegistryError::SchemaViolation {
+            path: format!("{path}.depends_on"),
+            detail: "expected array of ContractRef".to_string(),
+        }),
+    }
+}
+
 fn class_body_json(c: &ClassRecord) -> Json {
-    obj(vec![
+    let mut members = vec![
         ("base_param_schema", params_json(&c.base_param_schema)),
         ("cardinality", Json::str(c.cardinality.as_str())),
         ("class_id", Json::str(c.class_id.clone())),
@@ -313,7 +345,11 @@ fn class_body_json(c: &ClassRecord) -> Json {
         ("required_inputs", strs(&c.required_inputs)),
         ("slot_key", Json::str(c.slot_key.clone())),
         ("tier", Json::str(c.tier.clone())),
-    ])
+    ];
+    if !c.depends_on.is_empty() {
+        members.push(("depends_on", depends_on_json(&c.depends_on)));
+    }
+    obj(members)
 }
 
 fn class_from_json(j: &Json, path: &str) -> Result<ClassRecord, RegistryError> {
@@ -338,6 +374,7 @@ fn class_from_json(j: &Json, path: &str) -> Result<ClassRecord, RegistryError> {
         metrics_declared: str_vec_dec(j, "metrics_declared", path)?,
         slot_key: req_str(j, "slot_key", path)?,
         tier: req_str(j, "tier", path)?,
+        depends_on: depends_on_from_json(j, path)?,
     })
 }
 
@@ -841,6 +878,9 @@ fn foreign_import_from_json(j: &Json, path: &str) -> Result<ForeignImport, Regis
 }
 
 /// The canonical `RegistryPolicy` encoding (the snapshot pins its digest — AC-8).
+/// `contract_version_policies` encodes only when non-empty — the pre-S1.27
+/// canonical bytes are unchanged for a policy carrying no layered policies
+/// (CC8 additive discipline).
 pub fn policy_json(p: &RegistryPolicy) -> Json {
     let mut localities = BTreeMap::new();
     for (k, v) in &p.allowed_localities_by_origin {
@@ -849,7 +889,7 @@ pub fn policy_json(p: &RegistryPolicy) -> Json {
             Json::Arr(v.iter().map(|x| Json::str(x.as_str())).collect()),
         );
     }
-    obj(vec![
+    let mut members = vec![
         (
             "admissible_report_producers",
             Json::Arr(
@@ -887,7 +927,19 @@ pub fn policy_json(p: &RegistryPolicy) -> Json {
             "require_trust_record_for_origins",
             strs(&p.require_trust_record_for_origins),
         ),
-    ])
+    ];
+    if !p.contract_version_policies.is_empty() {
+        members.push((
+            "contract_version_policies",
+            Json::Arr(
+                p.contract_version_policies
+                    .iter()
+                    .map(|c| c.to_json())
+                    .collect(),
+            ),
+        ));
+    }
+    obj(members)
 }
 
 /// Decode a `RegistryPolicy`.
@@ -992,6 +1044,30 @@ pub fn policy_from_json(j: &Json, path: &str) -> Result<RegistryPolicy, Registry
         })?,
         allowed_localities_by_origin: localities,
         allowed_foreign_systems: str_set(j, "allowed_foreign_systems", path)?,
+        contract_version_policies: match j.get("contract_version_policies") {
+            None | Some(Json::Null) => Vec::new(),
+            Some(Json::Arr(a)) => a
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    hh_plugin::ContractVersionPolicy::from_json(
+                        v,
+                        &format!("{path}.contract_version_policies[{i}]"),
+                    )
+                    .map_err(|e| match e {
+                        hh_plugin::ContractRefError::SchemaViolation { path, detail } => {
+                            RegistryError::SchemaViolation { path, detail }
+                        }
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            Some(_) => {
+                return Err(RegistryError::SchemaViolation {
+                    path: format!("{path}.contract_version_policies"),
+                    detail: "expected array of ContractVersionPolicy".to_string(),
+                })
+            }
+        },
     })
 }
 

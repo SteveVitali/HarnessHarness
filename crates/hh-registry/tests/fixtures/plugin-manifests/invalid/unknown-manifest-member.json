@@ -1,0 +1,41 @@
+{
+  "claims": {},
+  "conformance_claims": [],
+  "contributions": [],
+  "depends_on": [],
+  "identity": {
+    "name": "corpus-bad",
+    "namespace": "hh"
+  },
+  "launch_command": "sh -c evil",
+  "requests": {
+    "effects": [],
+    "egress": [],
+    "env_keys": [],
+    "fs_roots": [],
+    "hot_path_operations": []
+  },
+  "requires": {
+    "contracts": [],
+    "hir_dialect": "1",
+    "plugin_abi": "1",
+    "records": [],
+    "registry_dialect": "1"
+  },
+  "summary": {
+    "authority": "external",
+    "content_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "owner": "corpus",
+    "provenance": {
+      "authority": "external",
+      "created_at": 0,
+      "origin": {
+        "author_ref": "corpus",
+        "kind": "human",
+        "role": "author"
+      },
+      "scope": "run"
+    }
+  },
+  "tier": "C0"
+}

@@ -84,6 +84,16 @@ impl SpecDag {
         });
     }
 
+    /// The node count (the spec-DAG check's verification statement reports it).
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// The edge count.
+    pub fn edge_count(&self) -> usize {
+        self.edges.len()
+    }
+
     fn kind_of(&self, id: &str) -> Option<NodeKind> {
         self.nodes.get(id).map(|n| n.kind)
     }

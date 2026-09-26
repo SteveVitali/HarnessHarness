@@ -252,6 +252,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-plugin"
+version = "0.0.1"
+dependencies = [
+ "hh-identity",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-provenance"
 version = "0.0.1"
 dependencies = [
@@ -266,6 +276,7 @@ dependencies = [
  "hh-identity",
  "hh-ledger",
  "hh-ontology",
+ "hh-plugin",
  "hh-provenance",
  "hh-wire",
 ]

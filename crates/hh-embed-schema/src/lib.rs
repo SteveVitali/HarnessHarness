@@ -24,6 +24,11 @@ use hh_wire::json::Json;
 pub mod errors;
 pub mod frames;
 pub mod ops;
+/// The `plugin_abi/1` kernel↔extension binding schema (spec §8.4, R-2.12.2;
+/// ticket S1.27) — the same single schema source (V6/CC7); its export is the
+/// `schema/plugin-abi-1.schema.json` artifact. The Hosting ABI is a different
+/// binding — this module never references it (AC-R-2.12.2-12).
+pub mod plugin_abi;
 pub mod strict;
 pub mod types;
 

@@ -16,3 +16,4 @@ hh-provenance = { path = "../hh-provenance" }
 hh-ontology = { path = "../hh-ontology" }
 hh-hir = { path = "../hh-hir" }
 hh-ledger = { path = "../hh-ledger" }
+hh-plugin = { path = "../hh-plugin" }

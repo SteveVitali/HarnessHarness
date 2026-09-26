@@ -29,6 +29,9 @@ use hh_wire::json::Json;
 
 use crate::RegistryError;
 
+/// The `PluginManifest/1` codec + admission gate (§8.4, R-2.12.2; S1.27).
+pub mod plugin;
+
 // ── ExtensionKind ─────────────────────────────────────────────────────────────
 
 /// The `ExtensionKind` sum (§5g.5 §3): `skill | hook | plugin | mcp_server |

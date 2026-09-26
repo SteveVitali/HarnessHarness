@@ -220,6 +220,16 @@ members = [
     # delegates to it. A PERSISTENT workspace member.
     "crates/hh-embed",
     "crates/hh-kernel",
+    # The C0/Stage-1 extensibility / plugin architecture (spec §8.4, R-2.12.2;
+    # ticket S1.27; ADR-0180…0182). A PERSISTENT workspace member: ContractRef /
+    # ContractVersionPolicy / check_compatibility (the pre-load refusal — AC-2),
+    # the tier/depends_on declarations + spec_dag_check over the §4.4 tables
+    # parsed as data (AC-8), the module-graph lint for first-party in-process
+    # variants (AC-9), the golden-manifest corpus driver, and the
+    # hh-plugin-check readiness binary. The PluginManifest/1 codec + admission
+    # live in hh-registry::extension::plugin; the plugin_abi/1 schema lives in
+    # hh-embed-schema::plugin_abi (one schema source — CC7/V6).
+    "crates/hh-plugin",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
     # The C0 attended CLI slice (spec §7.1, R-2.11.1⁰ᵇ; ticket S1.26;

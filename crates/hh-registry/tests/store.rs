@@ -91,6 +91,7 @@ fn class(id: &str) -> ClassRecord {
         metrics_declared: vec![],
         slot_key: id.to_string(),
         tier: "C0".to_string(),
+        depends_on: Vec::new(),
     }
 }
 

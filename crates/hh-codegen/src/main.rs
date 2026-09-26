@@ -63,6 +63,14 @@ pub fn generate(root: &Path) -> Result<Vec<PathBuf>, String> {
     let schema_body = format!("{}\n", embed::canonical_schema_bytes());
     write(&schema_path, &schema_body)?;
 
+    // 1b. The `plugin_abi/1` schema export (spec §8.4 §3 "the `plugin_abi/1`
+    // schema in the kernel schema export"; R-2.12.2; V6 — one schema source;
+    // ticket S1.27). No client bindings yet — the variant host lands at
+    // Stage 2; the artifact is the drift-checked contract.
+    let plugin_abi_path = root.join("schema").join("plugin-abi-1.schema.json");
+    let plugin_abi_body = format!("{}\n", embed::plugin_abi::canonical_plugin_abi_bytes());
+    write(&plugin_abi_path, &plugin_abi_body)?;
+
     // 2. The generated client bindings.
     let client_path = root
         .join("crates")
@@ -76,7 +84,7 @@ pub fn generate(root: &Path) -> Result<Vec<PathBuf>, String> {
     // disagree. rustfmt is a pinned toolchain component (rust-toolchain.toml).
     rustfmt(&client_path)?;
 
-    Ok(vec![schema_path, client_path])
+    Ok(vec![schema_path, plugin_abi_path, client_path])
 }
 
 fn rustfmt(path: &Path) -> Result<(), String> {
