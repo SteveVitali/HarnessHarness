@@ -258,16 +258,22 @@ pub enum OutcomeClass {
     /// `infrastructure_failure` — an invariant violation or infrastructure
     /// error ended the run (never scored).
     InfrastructureFailure,
+    /// `oracle_failure` — an oracle failed (crash, timeout, unparseable,
+    /// non-finite, refused verdict); the run is never scored (ADR-0047 D4;
+    /// spec §5h.2 §2.3). Derived from oracle-failure ledger facts by
+    /// `eval::derive_outcome_class`, never a metric value.
+    OracleFailure,
 }
 
 impl OutcomeClass {
-    /// The full closed set (five classes).
-    pub const ALL: [OutcomeClass; 5] = [
+    /// The full closed set (six classes).
+    pub const ALL: [OutcomeClass; 6] = [
         OutcomeClass::Scored,
         OutcomeClass::BudgetExhausted,
         OutcomeClass::Refused,
         OutcomeClass::Cancelled,
         OutcomeClass::InfrastructureFailure,
+        OutcomeClass::OracleFailure,
     ];
 
     /// The canonical spelling.
@@ -278,6 +284,7 @@ impl OutcomeClass {
             OutcomeClass::Refused => "refused",
             OutcomeClass::Cancelled => "cancelled",
             OutcomeClass::InfrastructureFailure => "infrastructure_failure",
+            OutcomeClass::OracleFailure => "oracle_failure",
         }
     }
 
@@ -289,6 +296,7 @@ impl OutcomeClass {
             "refused" => OutcomeClass::Refused,
             "cancelled" => OutcomeClass::Cancelled,
             "infrastructure_failure" => OutcomeClass::InfrastructureFailure,
+            "oracle_failure" => OutcomeClass::OracleFailure,
             _ => return None,
         })
     }

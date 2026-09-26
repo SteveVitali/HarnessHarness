@@ -464,48 +464,10 @@ pub struct ProfileSelector {
 }
 
 /// `roles_admitted` — the closed role vocabulary (§3.2.3 per-role binding).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ModelRole {
-    /// The main loop model.
-    Primary,
-    /// A cheap auxiliary call.
-    Utility,
-    /// Context compaction.
-    Compaction,
-    /// Sub-agent delegation.
-    Subagent,
-    /// A judge/verifier model.
-    Judge,
-    /// Router prediction.
-    RouterPredictor,
-}
-
-impl ModelRole {
-    /// Canonical spelling.
-    pub fn name(self) -> &'static str {
-        match self {
-            ModelRole::Primary => "primary",
-            ModelRole::Utility => "utility",
-            ModelRole::Compaction => "compaction",
-            ModelRole::Subagent => "subagent",
-            ModelRole::Judge => "judge",
-            ModelRole::RouterPredictor => "router_predictor",
-        }
-    }
-
-    /// Parse a spelling.
-    pub fn parse(s: &str) -> Option<Self> {
-        Some(match s {
-            "primary" => ModelRole::Primary,
-            "utility" => ModelRole::Utility,
-            "compaction" => ModelRole::Compaction,
-            "subagent" => ModelRole::Subagent,
-            "judge" => ModelRole::Judge,
-            "router_predictor" => ModelRole::RouterPredictor,
-            _ => return None,
-        })
-    }
-}
+/// The canonical definition lives in `hh-ontology::eval` (S1.22, R-2.9.2 —
+/// the eval `Factor.role` member names the same closed sum; CC7 — one
+/// definition, both spellings resolve to it).
+pub use hh_ontology::eval::ModelRole;
 
 /// A typed, metered `ext` block — `{vendor-prefix: typed block}` where the block carries
 /// its own debt record (§3.2.3; the same CF-049 shape).

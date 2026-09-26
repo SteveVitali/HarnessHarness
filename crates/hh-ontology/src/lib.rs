@@ -31,6 +31,7 @@ pub mod config;
 pub mod control;
 pub mod dag;
 pub mod dimensions;
+pub mod eval;
 pub mod formal;
 pub mod glossary;
 pub mod participant;
@@ -40,13 +41,22 @@ pub mod structure;
 pub mod surface;
 
 pub use compliance::{
-    validity, ChainEvent, Detector, MetricDeclaration, NaReason, Validity, ValidityOutcome,
+    validity, ChainEvent, Detector, MetricDeclaration, MetricError, NaReason, Validity,
+    ValidityOutcome,
 };
-pub use config::{Configuration, ConfigurationId, ConfigurationVersionId, Factor};
+pub use config::{Configuration, ConfigurationId, ConfigurationVersionId, Factor, Ref};
 pub use control::{ControlBoundary, DecisionPoint, Owner};
 pub use dag::{spec_dag_check, DagReport};
 pub use dimensions::{
     DerivedDimension, DimensionClass, DimensionId, DimensionKey, RegisteredDimension,
+};
+pub use eval::{
+    derive_outcome_class, Arm, ArmError, Cell, ChargedTo, Design, DesignError, DesignKind,
+    Dimension, Direction, EstimatorSelection, EvalError, EvidenceKind, FactorDeclError,
+    FactorDeclaration, FactorKind, FactorLevel, IntervalMethod, LatticeValue, MediationChannel,
+    MediationRequirement, MetricLevel, MetricValue, MetricValueKind, MetricValueType, ModelRole,
+    OracleClass, OracleDeclaration, OracleError, OutcomeClassPolicy, OutcomePolicy, Pairing,
+    PreRegistration, ReplicateReducer, RunOutcome, SearchBudgetRecord, SeedPolicy, VerdictType,
 };
 pub use formal::{resolve, Symbol, SymbolDef};
 pub use glossary::{glossary_check, GlossaryFinding};

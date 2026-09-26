@@ -179,23 +179,16 @@ pub fn export_delivered_from_json(j: &Json) -> Result<ExportDelivered, CodecErro
     })
 }
 
-/// `measurement.metric.emitted{subject, metric_ref, value, unit, detector_ref}`
-/// (§5h.1 §2.2 — restricted to observations **not derivable** from other
-/// events; derived metrics are `metric_view` values, never emitted rows).
-pub fn metric_emitted_payload(
-    subject: &str,
-    metric_ref: &str,
-    value: &Json,
-    unit: &str,
-    detector_ref: &str,
-) -> Json {
-    let mut m = BTreeMap::new();
-    m.insert("subject".into(), Json::str(subject));
-    m.insert("metric_ref".into(), Json::str(metric_ref));
-    m.insert("value".into(), value.clone());
-    m.insert("unit".into(), Json::str(unit));
-    m.insert("detector_ref".into(), Json::str(detector_ref));
-    Json::Obj(m)
+/// `measurement.metric.emitted{metric_ref, value, applies_to, oracle_ref,
+/// detector, confidence, evidence_ref}` (§5h.2 §3 — the scorer-boundary
+/// payload, ADR-0045 D9; the §5h.1 §2.2 `{subject, unit, detector_ref}` partial
+/// form is superseded by the `MetricValue` record — the unit is declared on
+/// the `MetricDeclaration`, the detector is the value's provenance class, and
+/// every value names its producing oracle). Restricted to observations **not
+/// derivable** from other events; derived metrics are `metric_view` values,
+/// never emitted rows.
+pub fn metric_emitted_payload(value: &hh_ontology::eval::MetricValue) -> Json {
+    value.to_json()
 }
 
 #[cfg(test)]

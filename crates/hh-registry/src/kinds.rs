@@ -147,6 +147,8 @@ impl RecordKind {
                 | RecordKind::RegistrySnapshot
                 | RecordKind::ForeignImport
                 | RecordKind::Capability
+                | RecordKind::MetricDeclaration
+                | RecordKind::Validator
         )
     }
 

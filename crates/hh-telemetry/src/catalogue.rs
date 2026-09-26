@@ -16,6 +16,7 @@ use std::collections::BTreeSet;
 
 use hh_ledger::manifest::ObservabilityLevel;
 use hh_ontology::compliance::MetricDeclaration;
+use hh_ontology::eval::{Dimension, Direction, MetricLevel, MetricValueType, OutcomeClassPolicy};
 use hh_ontology::participant::{Observability, ParticipantClass};
 
 use crate::errors::TelemetryError;
@@ -81,6 +82,10 @@ pub enum FoldStatus {
 pub struct ProcessMetric {
     /// The metric name (§8's registered spellings).
     pub name: &'static str,
+    /// The scorecard dimension (ADR-0045 D1).
+    pub dimension: Dimension,
+    /// Whether a higher or lower reading is better.
+    pub direction: Direction,
     /// The observability the metric requires (`requires_observability`).
     pub requires_observability: &'static [Observability],
     /// The participant classes the metric applies to.
@@ -94,15 +99,36 @@ pub struct ProcessMetric {
 }
 
 impl ProcessMetric {
-    /// The §2.6.3 `MetricDeclaration` form (the registry record shape).
+    /// The full §5h.2 `MetricDeclaration` form (the registry record shape —
+    /// the single complete form of ADR-0045 D1, CF-094).
     pub fn declaration(&self) -> MetricDeclaration {
+        let value_type = match self.unit {
+            MetricUnit::Tokens | MetricUnit::CountMap | MetricUnit::Attribution => {
+                MetricValueType::Vector
+            }
+            _ => MetricValueType::Decimal,
+        };
         MetricDeclaration {
             name: self.name.to_string(),
-            applies_to_classes: self.applies_to.iter().copied().collect(),
+            dimension: self.dimension,
+            level: MetricLevel::Run,
+            value_type,
+            direction: self.direction,
+            unit: self.unit.as_str().to_string(),
             requires_observability: self.requires_observability.iter().copied().collect(),
+            applies_to_classes: self.applies_to.iter().copied().collect(),
             detector_classes_allowed: [hh_ontology::compliance::Detector::Deterministic]
                 .into_iter()
                 .collect(),
+            outcome_class_policy: match self.dimension {
+                Dimension::Efficiency => OutcomeClassPolicy::for_efficiency(),
+                _ => OutcomeClassPolicy::for_capability(),
+            },
+            // The spec-named process vetoes: `audit_completeness` (ADR-0068 §6)
+            // and `duplicate_effect_count` (ADR-0047 §5 — "duplicate side
+            // effect after retry").
+            veto: matches!(self.name, "audit_completeness" | "duplicate_effect_count"),
+            ..MetricDeclaration::default()
         }
     }
 }
@@ -120,178 +146,178 @@ const BOTH: &[ParticipantClass] = &[N_, H];
 #[rustfmt::skip]
 pub const PROCESS_METRICS: &[ProcessMetric] = &[
     // ── efficiency ──────────────────────────────────────────────────────
-    ProcessMetric { name: "tokens_total", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "tokens_total", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["model.call.completed"], unit: MetricUnit::Tokens, fold: C },
-    ProcessMetric { name: "tokens_by_bucket", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "tokens_by_bucket", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["model.call.completed"], unit: MetricUnit::Tokens, fold: C },
-    ProcessMetric { name: "cost_money", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "cost_money", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["measurement.cost.attributed"], unit: MetricUnit::MicroUnits, fold: C },
-    ProcessMetric { name: "cache_hit_rate", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "cache_hit_rate", dimension: Dimension::Efficiency, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["model.call.completed"], unit: MetricUnit::Ppm, fold: C },
-    ProcessMetric { name: "latency_e2e_ms", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "latency_e2e_ms", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.run.finished"], unit: MetricUnit::Milliseconds, fold: C },
-    ProcessMetric { name: "ttft_ms", requires_observability: &[IO], applies_to: BOTH,
+    ProcessMetric { name: "ttft_ms", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[IO], applies_to: BOTH,
         computed_from: &["model.call.attempt.completed"], unit: MetricUnit::Milliseconds, fold: C },
-    ProcessMetric { name: "ttfm_ms", requires_observability: &[IO], applies_to: BOTH,
+    ProcessMetric { name: "ttfm_ms", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[IO], applies_to: BOTH,
         computed_from: &["model.call.attempt.completed"], unit: MetricUnit::Milliseconds, fold: C },
-    ProcessMetric { name: "turn_phase_profile", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "turn_phase_profile", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.turn.started", "lifecycle.turn.finished"],
         unit: MetricUnit::Attribution, fold: N(NA::NotRun) }, // the profile is Stage 2 (§9)
-    ProcessMetric { name: "context_tokens_per_call", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "context_tokens_per_call", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["context.assembled", "model.call.requested"],
         unit: MetricUnit::Tokens, fold: N(NA::Capability) }, // `context.assembled` is §05c's
-    ProcessMetric { name: "context_growth_rate", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "context_growth_rate", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["context.assembled"], unit: MetricUnit::Ppm, fold: N(NA::Capability) },
-    ProcessMetric { name: "compaction_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "compaction_count", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["context.compaction.completed"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "compaction_token_reduction", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "compaction_token_reduction", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["context.compaction.started", "context.compaction.completed"],
         unit: MetricUnit::Tokens, fold: N(NA::Capability) }, // tokens_before/after fields are §05c's
-    ProcessMetric { name: "harness_overhead_share", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "harness_overhead_share", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["measurement.cost.attributed"], unit: MetricUnit::Ppm, fold: C },
-    ProcessMetric { name: "model_calls", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "model_calls", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["model.call.requested"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "tool_calls", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "tool_calls", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["action.tool.proposed"], unit: MetricUnit::Count, fold: C },
     // ── reliability ─────────────────────────────────────────────────────
-    ProcessMetric { name: "tool_error_rate", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "tool_error_rate", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["action.tool.completed", "action.tool.rejected", "action.tool.surface_rejected"],
         unit: MetricUnit::Ppm, fold: C },
-    ProcessMetric { name: "invalid_action_rate", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "invalid_action_rate", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["model.call.failed"], unit: MetricUnit::Ppm,
         fold: N(NA::Capability) }, // the closed error.class sum is §05d.5's
-    ProcessMetric { name: "retries", requires_observability: &[EV, IO], applies_to: BOTH,
+    ProcessMetric { name: "retries", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV, IO], applies_to: BOTH,
         computed_from: &["control.retry.fired", "model.call.attempt.started"],
         unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "duplicate_effect_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "duplicate_effect_count", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["action.effect.committed"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "abandoned_effect_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "abandoned_effect_count", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["action.effect.abandoned"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "unknown_effect_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "unknown_effect_count", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["action.effect.unknown"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "crash_recovery_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "crash_recovery_count", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.run.resumed"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "resume_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "resume_count", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.run.resumed"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "fenced_writer_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "fenced_writer_count", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.lease.fenced"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "loop_detection", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "loop_detection", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.turn.started"], unit: MetricUnit::Count,
         fold: N(NA::NoDetector) },
-    ProcessMetric { name: "rollback_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "rollback_count", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.run.rolled_back"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "surface_rejection_rate", requires_observability: &[EV, LG], applies_to: &[N_],
+    ProcessMetric { name: "surface_rejection_rate", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: &[N_],
         computed_from: &["action.tool.surface_rejected", "action.tool.proposed"],
         unit: MetricUnit::Ppm, fold: N(NA::Capability) }, // per (profile, family) — C0/S3
     // ── exposure (ADR-0094 D6; §5d.3 §5) — declarations land at C0/S1;
     // computation is C0/S3 (fixtures + the per-plan fold) ─────────────────
-    ProcessMetric { name: "tool_surface_tokens", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "tool_surface_tokens", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.exposure.planned"], unit: MetricUnit::Tokens,
         fold: N(NA::Capability) },
-    ProcessMetric { name: "catalog_exposure_ratio", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "catalog_exposure_ratio", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.exposure.planned", "action.tool.catalog.built"],
         unit: MetricUnit::Ppm, fold: N(NA::Capability) },
-    ProcessMetric { name: "discovery_calls", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "discovery_calls", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.discovery.searched"], unit: MetricUnit::Count,
         fold: N(NA::Capability) },
-    ProcessMetric { name: "discovery_tokens", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "discovery_tokens", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.discovery.searched"], unit: MetricUnit::Tokens,
         fold: N(NA::Capability) },
-    ProcessMetric { name: "discovery_latency_ms", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "discovery_latency_ms", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.discovery.searched"], unit: MetricUnit::Milliseconds,
         fold: N(NA::Capability) },
-    ProcessMetric { name: "unrevealed_call_rate", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "unrevealed_call_rate", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.call.refused", "action.tool.proposed"],
         unit: MetricUnit::Ppm, fold: N(NA::Capability) },
-    ProcessMetric { name: "first_call_success_after_reveal", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "first_call_success_after_reveal", dimension: Dimension::Grounding, direction: Direction::Higher, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.surface.revealed", "action.tool.completed"],
         unit: MetricUnit::Ppm, fold: N(NA::Capability) },
-    ProcessMetric { name: "reveal_to_use_distance", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "reveal_to_use_distance", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.surface.revealed", "action.tool.proposed"],
         unit: MetricUnit::Count, fold: N(NA::Capability) },
-    ProcessMetric { name: "catalog_drift_events", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "catalog_drift_events", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.catalog.delta"], unit: MetricUnit::Count,
         fold: N(NA::Capability) },
-    ProcessMetric { name: "epochs_adopted", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "epochs_adopted", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.catalog.epoch"], unit: MetricUnit::Count,
         fold: N(NA::Capability) },
-    ProcessMetric { name: "selection_recall_at_need", requires_observability: &[EV, IO], applies_to: &[N_],
+    ProcessMetric { name: "selection_recall_at_need", dimension: Dimension::Grounding, direction: Direction::Higher, requires_observability: &[EV, IO], applies_to: &[N_],
         computed_from: &["action.tool.exposure.planned"], unit: MetricUnit::Ppm,
         fold: N(NA::NoDetector) }, // needs labels — OQ-237
-    ProcessMetric { name: "selection_precision", requires_observability: &[EV, IO], applies_to: &[N_],
+    ProcessMetric { name: "selection_precision", dimension: Dimension::Grounding, direction: Direction::Higher, requires_observability: &[EV, IO], applies_to: &[N_],
         computed_from: &["action.tool.exposure.planned"], unit: MetricUnit::Ppm,
         fold: N(NA::NoDetector) },
-    ProcessMetric { name: "unrevealed_need", requires_observability: &[EV, IO], applies_to: &[N_],
+    ProcessMetric { name: "unrevealed_need", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV, IO], applies_to: &[N_],
         computed_from: &["action.tool.call.refused"], unit: MetricUnit::Count,
         fold: N(NA::NoDetector) },
-    ProcessMetric { name: "index_recall_at_k", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "index_recall_at_k", dimension: Dimension::Grounding, direction: Direction::Higher, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.discovery.searched"], unit: MetricUnit::Ppm,
         fold: N(NA::NotRun) }, // offline, instrument-charged
-    ProcessMetric { name: "index_ndcg_at_k", requires_observability: &[EV], applies_to: &[N_],
+    ProcessMetric { name: "index_ndcg_at_k", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
         computed_from: &["action.tool.discovery.searched"], unit: MetricUnit::Ppm,
         fold: N(NA::NotRun) },
     // ── grounding / compliance (T-LCD-13) ────────────────────────────────
-    ProcessMetric { name: "validator_pass_rate", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "validator_pass_rate", dimension: Dimension::Grounding, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["verification.validator.invoked", "verification.validator.verdict"],
         unit: MetricUnit::Ppm, fold: N(NA::Capability) }, // `verdict` is §05f's
-    ProcessMetric { name: "claim_state_agreement", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "claim_state_agreement", dimension: Dimension::Grounding, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["verification.claim.reconciled"], unit: MetricUnit::Ppm,
         fold: N(NA::Capability) }, // the class is S1.21's; the fold is Stage 3's
-    ProcessMetric { name: "evidence_traceability", requires_observability: &[EV, LG], applies_to: BOTH,
+    ProcessMetric { name: "evidence_traceability", dimension: Dimension::Grounding, direction: Direction::Higher, requires_observability: &[EV, LG], applies_to: BOTH,
         computed_from: &["verification.evidence.recorded"], unit: MetricUnit::Ppm,
         fold: N(NA::NotRun) }, // the evidence corpus is Stage 3's
-    ProcessMetric { name: "artifact_activation_rate", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "artifact_activation_rate", dimension: Dimension::Compliance, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["context.artefact.delivered", "context.artefact.activated"],
         unit: MetricUnit::Ppm, fold: N(NA::Capability) }, // `activated` is §05c's
-    ProcessMetric { name: "artifact_follow_rate", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "artifact_follow_rate", dimension: Dimension::Compliance, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["context.artefact.activated", "verification.artefact.followed"],
         unit: MetricUnit::Ppm, fold: N(NA::Capability) },
-    ProcessMetric { name: "delivered_but_never_activated", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "delivered_but_never_activated", dimension: Dimension::Compliance, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["context.artefact.delivered", "context.artefact.activated"],
         unit: MetricUnit::Count, fold: N(NA::Capability) },
     // ── autonomy ────────────────────────────────────────────────────────
-    ProcessMetric { name: "human_interventions", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "human_interventions", dimension: Dimension::Autonomy, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.permission.decided"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "approval_requests", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "approval_requests", dimension: Dimension::Autonomy, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.permission.requested"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "approval_wait_ms", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "approval_wait_ms", dimension: Dimension::Autonomy, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.permission.decided"], unit: MetricUnit::Milliseconds, fold: C },
-    ProcessMetric { name: "approval_cache_hit_rate", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "approval_cache_hit_rate", dimension: Dimension::Autonomy, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.permission.decided"], unit: MetricUnit::Ppm, fold: C },
-    ProcessMetric { name: "steering_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "steering_count", dimension: Dimension::Autonomy, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["control.steer.issued"], unit: MetricUnit::Count,
         fold: N(NA::Capability) }, // the steering classes are §05e's
     // ── security ────────────────────────────────────────────────────────
-    ProcessMetric { name: "permission_denials", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "permission_denials", dimension: Dimension::Security, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.permission.decided"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "policy_evaluations", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "policy_evaluations", dimension: Dimension::Security, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.permission.decided"], unit: MetricUnit::CountMap, fold: C },
-    ProcessMetric { name: "egress_blocked", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "egress_blocked", dimension: Dimension::Security, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.egress.denied", "security.containment.violated"],
         unit: MetricUnit::Count, fold: N(NA::Capability) }, // `security.egress.*` is S2.4's
-    ProcessMetric { name: "credential_mediations", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "credential_mediations", dimension: Dimension::Security, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.credential.used"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "taint_declassifications", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "taint_declassifications", dimension: Dimension::Security, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.label.declassified"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "audit_completeness", requires_observability: &[EV, LG], applies_to: BOTH,
+    ProcessMetric { name: "audit_completeness", dimension: Dimension::Security, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: BOTH,
         computed_from: &["lifecycle.run.finished"], unit: MetricUnit::Ppm,
         fold: N(NA::NotRun) }, // `audit_view` + §05g.6 attestation is Stage 2's
     // ── evolvability ────────────────────────────────────────────────────
-    ProcessMetric { name: "time_to_diagnose", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "time_to_diagnose", dimension: Dimension::Evolvability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["measurement.evolution.candidate.transitioned"],
         unit: MetricUnit::Milliseconds, fold: N(NA::Capability) }, // CF-422's re-key; §05h.5's
-    ProcessMetric { name: "boundary_overhead_ms", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "boundary_overhead_ms", dimension: Dimension::Evolvability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.component.invoked"], unit: MetricUnit::Milliseconds, fold: C },
     // ── budget discipline ────────────────────────────────────────────────
-    ProcessMetric { name: "budget_exceeded_count", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "budget_exceeded_count", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["control.budget.exceeded"], unit: MetricUnit::Count, fold: C },
-    ProcessMetric { name: "search_budget_consumed", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "search_budget_consumed", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["control.budget.consumed"], unit: MetricUnit::Attribution,
         fold: N(NA::NotRun) }, // arm-level (`search_budget`) — the Stage-3 harness's
-    ProcessMetric { name: "eval_budget_consumed", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "eval_budget_consumed", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["control.budget.consumed"], unit: MetricUnit::Attribution,
         fold: N(NA::NotRun) }, // arm-level (`eval_budget`) — the Stage-3 harness's
-    ProcessMetric { name: "attribution_coverage", requires_observability: &[EV], applies_to: BOTH,
+    ProcessMetric { name: "attribution_coverage", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["measurement.cost.attributed"], unit: MetricUnit::Ppm, fold: C },
 ];
 
@@ -386,6 +412,8 @@ mod tests {
     fn a_metric_underdeclaring_observability_fails_the_check() {
         let bad = ProcessMetric {
             name: "test:underdeclared",
+            dimension: Dimension::Reliability,
+            direction: Direction::Lower,
             requires_observability: &[Observability::Events],
             applies_to: BOTH,
             computed_from: &["model.call.attempt.started"], // min = model_io

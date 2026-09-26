@@ -77,7 +77,10 @@ pub use env::{
 };
 pub use errors::{BrokerError, CodecError, Refused, RefusedCode};
 pub use mask::{MaskEntry, MaskSet};
-pub use metrics::{registered_metrics, MetricCharge, MetricLevel, SecretMetric};
+pub use metrics::{
+    registered_metrics, SECRET_VALUE_IN_ENVIRONMENT, SECRET_VALUE_IN_LEDGER,
+    SECRET_VALUE_IN_MODEL_CONTEXT, SECRET_VALUE_IN_REPORT,
+};
 pub use patterns::{SecretPattern, REGISTERED_PATTERNS};
 pub use redact::{
     detect, leak_scan, redact, Canary, DetectorKind, DetectorSet, Hit, Leak, RedactionTombstone,

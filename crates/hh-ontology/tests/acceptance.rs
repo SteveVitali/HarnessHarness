@@ -117,6 +117,7 @@ fn ac_a2_3_chain_fixture_has_three_events_with_detector() {
         applies_to_classes: [ParticipantClass::Native].into_iter().collect(),
         requires_observability: [Observability::Events].into_iter().collect(),
         detector_classes_allowed: [Detector::Deterministic].into_iter().collect(),
+        ..MetricDeclaration::default()
     };
     assert!(metric
         .requires_observability
@@ -160,6 +161,7 @@ fn ac_a2_4_mixed_class_fixture_renders_na_on_inadmissible_cell() {
         applies_to_classes: [ParticipantClass::Native].into_iter().collect(),
         requires_observability: [Observability::Ledger].into_iter().collect(),
         detector_classes_allowed: [Detector::Deterministic].into_iter().collect(),
+        ..MetricDeclaration::default()
     };
     assert!(metric
         .applies_to_classes

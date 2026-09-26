@@ -15,3 +15,6 @@ hh-wire = { path = "../hh-wire" }
 # content-addressing scheme (CC1 — no second canonicalization/hash scheme). ADR-0227 D2 flagged
 # this migration; it lands with S1.2.
 hh-identity = { path = "../hh-identity" }
+# The provenance record (ADR-0033/0035) — declarations (OracleDeclaration, Arm) carry it
+# (S1.22, R-2.9.2).
+hh-provenance = { path = "../hh-provenance" }

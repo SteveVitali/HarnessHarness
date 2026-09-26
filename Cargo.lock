@@ -197,6 +197,7 @@ name = "hh-ontology"
 version = "0.0.1"
 dependencies = [
  "hh-identity",
+ "hh-provenance",
  "hh-wire",
 ]
 
