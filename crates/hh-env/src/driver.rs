@@ -771,6 +771,28 @@ impl EnvDriver {
         scope: Option<&str>,
         on_parent_end: crate::handle::OnParentEnd,
     ) -> Result<EnvHandle, EnvError> {
+        self.derive_for(store, lease, parent_id, mode, scope, on_parent_end, None)
+    }
+
+    /// `derive` with an explicit `derived_for` run id — C1's spawn replay
+    /// key. The member is optional so existing callers keep the unadorned
+    /// audit shape; subagent spawn names its deterministic child id and a
+    /// retry can adopt the durable handle instead of deriving twice.
+    ///
+    /// The driver seam keeps the ledger/environment parameters explicit;
+    /// packing them into a context struct would hide the call's authority
+    /// surface, so the long signature is intentional.
+    #[allow(clippy::too_many_arguments)]
+    pub fn derive_for(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        parent_id: &str,
+        mode: crate::handle::DeriveMode,
+        scope: Option<&str>,
+        on_parent_end: crate::handle::OnParentEnd,
+        derived_for: Option<&str>,
+    ) -> Result<EnvHandle, EnvError> {
         use crate::handle::DeriveMode;
         let parent = self
             .handles
@@ -852,7 +874,7 @@ impl EnvDriver {
         )?;
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.derived",
-            events::derived_payload(&child),
+            events::derived_payload(&child, derived_for),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok(child)
@@ -1327,7 +1349,7 @@ impl EnvDriver {
         )?;
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.derived",
-            events::derived_payload(&child),
+            events::derived_payload(&child, None),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok(child)

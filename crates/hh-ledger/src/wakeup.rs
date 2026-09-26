@@ -190,7 +190,11 @@ impl Trigger {
         }
     }
 
-    /// Whether the trigger is admissible at Stage 2 — the kernel-internal five.
+    /// Whether the trigger is admissible at this stage — the kernel-internal
+    /// five plus `peer_message` (S4.6: the one peer-messaging mechanism —
+    /// ADR-0191 D6–D8; `send_message` records an occurrence on the receiver's
+    /// `peer_message` subscription). `schedule`/`external`/`manual`/`healed`
+    /// still parse and refuse typed at `subscribe`.
     pub fn admissible(&self) -> bool {
         matches!(
             self,
@@ -199,6 +203,7 @@ impl Trigger {
                 | Trigger::ChildTerminal { .. }
                 | Trigger::EffectTerminal { .. }
                 | Trigger::RetryDue { .. }
+                | Trigger::PeerMessage { .. }
         )
     }
 }

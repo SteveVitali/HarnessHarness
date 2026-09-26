@@ -1836,6 +1836,7 @@ fn ac_f2_10_envelope_rebuild_equality() {
         effect_classes: Default::default(),
         cancel_requested: None,
         interactive_attendance: false,
+        delegation_available: false,
     };
     let v1 = env_a.guard(
         &prefix,
