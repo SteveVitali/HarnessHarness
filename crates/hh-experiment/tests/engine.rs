@@ -1721,3 +1721,208 @@ fn infra_retry_lands_settled_excluded_replanned_in_order() {
     let replanned = pos("measurement.experiment.run_replanned");
     assert!(settled < excluded && excluded < replanned);
 }
+
+// ── AC-R-2.10.5-10: ledger immutability + producer contract ─────────────────
+
+/// A producer-contract `AnalysisRecord` bound to `exp_run` — `analysis_id`
+/// recomputes from the canonical body (the record is content-addressed).
+fn analysis_record(
+    exp_run: &str,
+    pre_reg: bool,
+    registered_ref: Option<&str>,
+    post_amendment: bool,
+) -> hh_lab::analysis::AnalysisRecord {
+    let mut rec = hh_lab::analysis::AnalysisRecord::from_json(&Json::obj([
+        ("analysis_id", Json::str("pending")),
+        ("spec_ref", Json::str("spec:analysis.test")),
+        (
+            "generated_from",
+            hh_lab::analysis::WatermarkSet::default().to_json(),
+        ),
+        ("outputs", Json::Arr(vec![])),
+        ("status", Json::str("final")),
+        ("kind", Json::str("comparison_report")),
+        ("experiment_run_id", Json::str(exp_run)),
+        ("pre_registered", Json::Bool(pre_reg)),
+        (
+            "registered_analysis_ref",
+            registered_ref.map_or(Json::Null, Json::str),
+        ),
+        ("post_amendment", Json::Bool(post_amendment)),
+    ]))
+    .unwrap();
+    rec.analysis_id = rec.analysis_id();
+    rec
+}
+
+fn refusal_of(err: &ExperimentError) -> String {
+    match err {
+        ExperimentError::Refusal(r) => refusal_code(r).to_string(),
+        other => format!("{other:?}"),
+    }
+}
+
+#[test]
+fn producer_contract_refusals_and_chain_verify() {
+    use hh_lab::experiment::ExperimentRefusal;
+    let mut r = rig("producer", 42_000);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, exp_run) = open(&mut r, &s);
+
+    // A second `declared` before anything binds is the plain `AlreadyOpen`
+    // (the append layer's SchemaViolation surface — the run exists).
+    {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        assert!(matches!(
+            eng.open_experiment(&eid).unwrap_err(),
+            ExperimentError::AlreadyOpen { .. }
+        ));
+    }
+
+    // `declare` after `bind` — launch one attempt (the `run_bound` mirror
+    // lands), then a second `declared` is `DeclarationLate`.
+    let (rpid1, launched1) = launch_one(&mut r, &eid);
+    {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        let err = eng.open_experiment(&eid).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ExperimentError::Refusal(ExperimentRefusal::DeclarationLate { .. })
+            ),
+            "second declared after run_bound must be DeclarationLate: {err:?}"
+        );
+    }
+
+    // `PreRegistrationLate` — a fresh experiment whose declared
+    // `registered_at` postdates its first bound run refuses the second
+    // declare with the pre-registration member (the S9 mirror refusal).
+    {
+        let mut s2 = spec(ExperimentKind::Comparative);
+        s2.pre_registration.as_mut().unwrap().registered_at = u64::MAX;
+        s2.experiment_id = s2.experiment_id();
+        let (eid2, _r2) = open(&mut r, &s2);
+        let (_rp2, _l2) = launch_one(&mut r, &eid2);
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid2).unwrap();
+        let err = eng.open_experiment(&eid2).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                ExperimentError::Refusal(ExperimentRefusal::PreRegistrationLate { .. })
+            ),
+            "late pre-registration must be PreRegistrationLate: {err:?}"
+        );
+        drop(eng);
+    }
+
+    // `record_analysis` refusal battery — every check folds the ledger,
+    // never trusts the caller (ADR-0162 D3).
+    {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+
+        // A record bound to a different run.
+        let foreign = analysis_record("exp-run-elsewhere", false, None, false);
+        let err = eng.record_analysis(&foreign, None).unwrap_err();
+        assert_eq!(refusal_of(&err), "NotPreRegistered");
+
+        // `pre_registered = true` against the wrong analysis-plan ref.
+        let bad_plan = analysis_record(&exp_run, true, Some(&pinned("analysis.wrong")), false);
+        let err = eng.record_analysis(&bad_plan, None).unwrap_err();
+        assert_eq!(refusal_of(&err), "NotPreRegistered");
+
+        // A comparison report lacking `budget_match` → UnmatchedBudget.
+        let exploratory = analysis_record(&exp_run, false, None, false);
+        let no_match = Json::obj([(
+            "comparisons",
+            Json::Arr(vec![Json::obj([("benefit_kind", Json::str("latency"))])]),
+        )]);
+        let err = eng
+            .record_analysis(&exploratory, Some(&no_match))
+            .unwrap_err();
+        assert_eq!(refusal_of(&err), "UnmatchedBudget");
+
+        // `budget_match` present but `benefit_kind` dropped →
+        // MissingMatchSpec.
+        let no_kind = Json::obj([(
+            "comparisons",
+            Json::Arr(vec![Json::obj([(
+                "budget_match",
+                Json::obj([("status", Json::str("matched"))]),
+            )])]),
+        )]);
+        let err = eng
+            .record_analysis(&exploratory, Some(&no_kind))
+            .unwrap_err();
+        assert_eq!(refusal_of(&err), "MissingMatchSpec");
+
+        // The valid record stamps `measurement.analysis.recorded`.
+        let good_body = Json::obj([(
+            "comparisons",
+            Json::Arr(vec![Json::obj([
+                (
+                    "budget_match",
+                    Json::obj([("status", Json::str("matched"))]),
+                ),
+                ("benefit_kind", Json::str("latency")),
+            ])]),
+        )]);
+        eng.record_analysis(&exploratory, Some(&good_body)).unwrap();
+        // The pre-registered record naming the pinned plan lands.
+        let pre = analysis_record(&exp_run, true, Some(&pinned("analysis")), false);
+        eng.record_analysis(&pre, None).unwrap();
+
+        // After an `amended` row, a record claiming `post_amendment =
+        // false` refuses (the ledger does not vouch a stale stamp).
+        eng.amend("diff:post", "protocol fix", "operator").unwrap();
+        let stale = analysis_record(&exp_run, false, None, false);
+        let err = eng.record_analysis(&stale, None).unwrap_err();
+        assert_eq!(refusal_of(&err), "NotPreRegistered");
+        let post = analysis_record(&exp_run, false, None, true);
+        eng.record_analysis(&post, None).unwrap();
+        drop(eng);
+    }
+
+    // The recorded stamps are durable ledger facts — the view folds them.
+    let view = ExperimentView::fold(r.store.envelopes(&exp_run).unwrap());
+    assert_eq!(view.analyses.len(), 3);
+    assert_eq!(view.amendments.len(), 1);
+    assert!(
+        view.analyses
+            .iter()
+            .filter(|a| a.get("pre_registered") == Some(&Json::Bool(true)))
+            .count()
+            == 1
+    );
+
+    // Drive the rest of the lifecycle + close, then `verify` — the
+    // experiment run's hash chain re-verifies clean (immutability).
+    finish_subject(
+        &mut r.store,
+        &launched1.run_id,
+        &launched1.subject_writer,
+        StopReason::Completed,
+        &[(DimensionId::ModelCalls, 3)],
+    );
+    {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        eng.settle(&rpid1).unwrap();
+        drop(eng);
+    }
+    let _report = run_to_close(&mut r, &eid, 3);
+    {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        eng.verify().unwrap();
+    }
+    // And the store-level chain verify agrees.
+    r.store.verify(&exp_run).unwrap();
+    // (The S9 `cross_section` publication check over `experiment` bundles
+    // is exercised in `hh-bundle/tests/s4_2.rs` — `validate_publication`
+    // runs stages S1–S9 including DeclarationMissing / UnmatchedBudget /
+    // PreRegistrationLate, the same refusal names the engine emits here.)
+}

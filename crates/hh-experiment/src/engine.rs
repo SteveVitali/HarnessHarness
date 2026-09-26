@@ -461,6 +461,44 @@ impl<'a> ExperimentEngine<'a> {
                 experiment_id: experiment_id.to_string(),
             })?;
         if let Some(run_id) = entry.as_ref().and_then(|e| e.run_id.clone()) {
+            // The producer contract's timing refusals (§6.5 §2.3;
+            // ADR-0162 D2/D4): a second `declared` after a `run_bound` is
+            // `DeclarationLate` — and `PreRegistrationLate` when the
+            // pre-registration itself postdates the first bound run; a
+            // second `declared` with nothing bound is the plain
+            // `AlreadyOpen` (`SchemaViolation` at the append layer).
+            if let Ok(events) = self.store.envelopes(&run_id) {
+                let first_bound = events
+                    .iter()
+                    .find(|e| e.class == class::RUN_BOUND)
+                    .map(|e| e.seq);
+                if let Some(bound_seq) = first_bound {
+                    let prereg_late = spec
+                        .pre_registration
+                        .as_ref()
+                        .is_some_and(|p| p.registered_at > bound_seq);
+                    if prereg_late {
+                        return Err(ExperimentError::Refusal(
+                            hh_lab::experiment::ExperimentRefusal::PreRegistrationLate {
+                                detail: format!(
+                                    "pre_registration.registered_at {} postdates the first run_bound (seq {bound_seq})",
+                                    spec.pre_registration
+                                        .as_ref()
+                                        .map(|p| p.registered_at)
+                                        .unwrap_or(0),
+                                ),
+                            },
+                        ));
+                    }
+                    return Err(ExperimentError::Refusal(
+                        hh_lab::experiment::ExperimentRefusal::DeclarationLate {
+                            detail: format!(
+                                "experiment run {run_id} already carries run_bound rows"
+                            ),
+                        },
+                    ));
+                }
+            }
             return Err(ExperimentError::AlreadyOpen {
                 experiment_id: experiment_id.to_string(),
                 run_id,
@@ -1455,7 +1493,11 @@ impl<'a> ExperimentEngine<'a> {
     }
 
     /// `exclude(run_plan_id, run_id, reason, authority)` — the operator's
-    /// exclusion row (§6.3 `exclude`; the closed reason set).
+    /// exclusion row (§6.3/§6.5 §2.3 `exclude`; the closed reason set —
+    /// a non-member refuses, never records). An `analyst_exclusion`
+    /// requires `authority = human` (ADR-0162 D2; I-A5's human-origin
+    /// rule — a tool, model or kernel holder never excludes a run on
+    /// analyst judgement).
     pub fn exclude(
         &mut self,
         run_plan_id: &str,
@@ -1470,6 +1512,28 @@ impl<'a> ExperimentEngine<'a> {
         if !view.plans.contains_key(run_plan_id) {
             return Err(ExperimentError::UnknownRunPlan {
                 run_plan_id: run_plan_id.to_string(),
+            });
+        }
+        use ev::exclude_reason as ex;
+        const REASONS: &[&str] = &[
+            ex::INFRASTRUCTURE_RETRY,
+            ex::DUPLICATE_ATTEMPT,
+            ex::SUPERSEDED_BY_FORK,
+            ex::PRE_REGISTERED_EXCLUSION,
+            ex::BUDGET_UNMATCHED,
+            ex::CONSENT_WITHDRAWN,
+            ex::ANALYST_EXCLUSION,
+        ];
+        if !REASONS.contains(&reason) {
+            return Err(ExperimentError::ExclusionRefused {
+                detail: format!("exclusion reason {reason:?} is outside the closed set"),
+            });
+        }
+        if reason == ex::ANALYST_EXCLUSION && authority != "human" {
+            return Err(ExperimentError::ExclusionRefused {
+                detail: format!(
+                    "analyst_exclusion requires origin = human (authority {authority:?})"
+                ),
             });
         }
         self.append_chained(
@@ -1569,6 +1633,173 @@ impl<'a> ExperimentEngine<'a> {
             )?],
         )?;
         Ok(())
+    }
+
+    /// `bind(run_id, cell_id)` — the producer contract's standalone bind
+    /// (§6.5 §2.3; ADR-0162 D2): appends the experiment run's `run_bound`
+    /// mirror naming the subject run, its declared cell and the subject's
+    /// head event (`subject_head` — the subject's own `bound` chain is the
+    /// proof). The subject run must exist; the cell must be declared.
+    /// Engine-launched runs bind through `launch` — this verb serves the
+    /// records-in producer path (a run bound without an engine launch).
+    pub fn producer_bind(&mut self, run_id: &str, cell_id: &str) -> Result<(), ExperimentError> {
+        let (exp_run, lease) = self.bound()?;
+        let view = self.project()?;
+        self.live(&view, &exp_run)?;
+        let ps = view
+            .plans
+            .values()
+            .find(|p| p.cell_id == cell_id)
+            .ok_or_else(|| ExperimentError::BadPlanState {
+                run_plan_id: cell_id.to_string(),
+                detail: format!("no declared cell {cell_id}"),
+            })?
+            .clone();
+        let manifest = self
+            .store
+            .manifest(run_id)
+            .map_err(|_| ExperimentError::Unresolvable {
+                detail: format!("subject run {run_id} unknown to the ledger"),
+            })?
+            .clone();
+        let subject_head = self
+            .store
+            .head_event_id(run_id)
+            .map_err(ExperimentError::Ledger)?;
+        let attempt_no = ps.next_attempt_no;
+        self.append_chained(
+            &exp_run,
+            &lease,
+            vec![self.mint(
+                &exp_run,
+                class::RUN_BOUND,
+                ev::run_bound_mirror(
+                    run_id,
+                    &ps.run_plan_id,
+                    cell_id,
+                    ps.replicate_index,
+                    attempt_no,
+                    &subject_head,
+                    manifest.participant_class.as_str(),
+                    "full",
+                ),
+            )?],
+        )?;
+        Ok(())
+    }
+
+    /// `record_analysis(record, report_body)` — the §6.5 §2.3 producer
+    /// verb: validates the `AnalysisRecord` against the experiment view
+    /// and stamps `measurement.analysis.recorded` on the experiment run.
+    ///
+    /// Refusals (ADR-0162 D3 — the store validates every append):
+    /// - `NotAnExperimentRun` — the engine is bound to no declared
+    ///   experiment;
+    /// - `UnmatchedBudget` / `MissingMatchSpec` — a `ComparisonReport` in
+    ///   the report body lacking `budget_match` / `benefit_kind` (the
+    ///   matched-budget trail is a *required* member, never optional);
+    /// - `NotPreRegistered` — `pre_registered = true` whose
+    ///   `registered_analysis_ref` does not match the declared
+    ///   pre-registration's `analysis_plan_ref` by identity.
+    ///
+    /// `post_amendment` on the record must agree with the view — a record
+    /// produced after an `amended` row carries `post_amendment = true`
+    /// (§6.4 §6; a false claim is a `NotPreRegistered`-family refusal: the
+    /// stamp is a fact the ledger must not vouch for).
+    pub fn record_analysis(
+        &mut self,
+        record: &hh_lab::analysis::AnalysisRecord,
+        report_body: Option<&Json>,
+    ) -> Result<(), ExperimentError> {
+        let (exp_run, lease) = self.bound()?;
+        let view = self.project()?;
+        self.live(&view, &exp_run)?;
+        let declared =
+            view.declared
+                .clone()
+                .ok_or_else(|| ExperimentError::NotAnExperimentRun {
+                    run_id: exp_run.clone(),
+                })?;
+        if let Some(r) = &record.experiment_run_id {
+            if *r != exp_run {
+                return Err(ExperimentError::Refusal(
+                    hh_lab::experiment::ExperimentRefusal::NotPreRegistered {
+                        detail: format!(
+                            "record binds experiment_run_id {r} — this run is {exp_run}"
+                        ),
+                    },
+                ));
+            }
+        }
+        // The report body's comparisons must carry the matched-budget
+        // trail (`budget_match`) and the benefit-kind stamp — the
+        // producer-contract refuses a comparison that dropped them.
+        if let Some(body) = report_body {
+            if let Some(Json::Arr(comps)) = body.get("comparisons") {
+                for c in comps {
+                    if c.get("budget_match").is_none() {
+                        return Err(ExperimentError::Refusal(
+                            hh_lab::experiment::ExperimentRefusal::UnmatchedBudget {
+                                detail: "comparison report lacks budget_match".into(),
+                            },
+                        ));
+                    }
+                    if c.get("benefit_kind").is_none() {
+                        return Err(ExperimentError::Refusal(
+                            hh_lab::experiment::ExperimentRefusal::MissingMatchSpec {
+                                arm: "comparison report lacks benefit_kind".into(),
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+        // `pre_registered = true` — the registered ref must match the
+        // experiment's pinned analysis plan *by identity* (ADR-0162 D3).
+        if record.pre_registered {
+            let spec = self.spec(&declared.experiment_id)?;
+            let plan_ref = spec
+                .pre_registration
+                .as_ref()
+                .map(|p| p.analysis_plan_ref.clone())
+                .unwrap_or_default();
+            let claimed = record.registered_analysis_ref.clone().unwrap_or_default();
+            if plan_ref.is_empty() || claimed != plan_ref {
+                return Err(ExperimentError::Refusal(
+                    hh_lab::experiment::ExperimentRefusal::NotPreRegistered {
+                        detail: format!(
+                            "registered_analysis_ref {claimed:?} does not match the pinned plan {plan_ref:?}"
+                        ),
+                    },
+                ));
+            }
+        }
+        // `post_amendment` — a record produced after an `amended` row must
+        // carry the flag (the ledger does not stamp a stale claim).
+        if !view.amendments.is_empty() && !record.post_amendment {
+            return Err(ExperimentError::Refusal(
+                hh_lab::experiment::ExperimentRefusal::NotPreRegistered {
+                    detail: "record postdates an amendment but post_amendment = false".into(),
+                },
+            ));
+        }
+        self.append_chained(
+            &exp_run,
+            &lease,
+            vec![self.mint(
+                &exp_run,
+                class::ANALYSIS_RECORDED,
+                ev::analysis_recorded(record),
+            )?],
+        )?;
+        Ok(())
+    }
+
+    /// `verify()` — the experiment run's hash chain re-verification (the
+    /// store's `verify` over the bound run; AC-R-2.10.5-10).
+    pub fn verify(&self) -> Result<(), ExperimentError> {
+        let run_id = self.bound_run()?.to_string();
+        self.store.verify(&run_id).map_err(ExperimentError::Ledger)
     }
 
     /// `close(partial)` — the S-4 close: refuses `CloseBlocked` while

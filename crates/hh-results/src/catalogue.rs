@@ -470,6 +470,12 @@ pub fn refresh(
     for e in &mut entries {
         if let Some(rec) = book.records.get(&e.bundle_id).and_then(|rs| rs.last()) {
             e.status = rec.status;
+            // The book's declared reader set rides the entry — the
+            // disclosure summary's restricted/published split reads it
+            // (§6.5 §2.3; recorded verbatim, never inferred).
+            if !rec.readers.is_empty() {
+                e.readers = rec.readers.clone();
+            }
         }
     }
 

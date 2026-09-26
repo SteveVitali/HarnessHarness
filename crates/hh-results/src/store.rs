@@ -79,6 +79,10 @@ pub enum VerifyVerdict {
 /// The results store — see module docs.
 pub struct ResultsStore {
     root: PathBuf,
+    /// The change-journal hub — `record`/`annotate`/`publish` emit a
+    /// journal event *after* their durable write returns
+    /// (durable-before-visible, §6.5 §2.2 `subscribe`).
+    journal: crate::journal::JournalHub,
 }
 
 impl ResultsStore {
@@ -87,7 +91,25 @@ impl ResultsStore {
         let root = root.as_ref().to_path_buf();
         fs::create_dir_all(root.join("rows")).map_err(|e| io_err(format!("create rows: {e}")))?;
         fs::create_dir_all(root.join("heads")).map_err(|e| io_err(format!("create heads: {e}")))?;
-        Ok(ResultsStore { root })
+        Ok(ResultsStore {
+            root,
+            journal: crate::journal::JournalHub::default(),
+        })
+    }
+
+    /// `subscribe(filter)` — the change journal (§6.5 §2.2): a stream of
+    /// `RowHeadChanged | AnnotationChanged | SnapshotPublished` events
+    /// emitted only after the underlying write is durable.
+    pub fn subscribe(
+        &self,
+        filter: crate::journal::JournalFilter,
+    ) -> crate::journal::JournalSubscription {
+        self.journal.subscribe(filter)
+    }
+
+    /// Emit a journal event post-commit (crate-internal).
+    pub(crate) fn journal_emit(&self, e: crate::journal::JournalEvent) {
+        self.journal.emit(e);
     }
 
     /// The store directory.
@@ -155,6 +177,13 @@ impl ResultsStore {
             ),
         ]);
         write_atomic(&head_path, head_json.to_canonical_string().as_bytes())?;
+        // Journal: the head move is durable — emit `row_head_changed`
+        // (post-commit emission is the subscribe contract).
+        self.journal_emit(crate::journal::JournalEvent {
+            kind: crate::journal::JournalKind::RowHeadChanged,
+            subject: key_id,
+            detail: row.version_id.clone(),
+        });
         Ok(version)
     }
 
@@ -505,14 +534,34 @@ impl ResultsStore {
     }
 
     /// `annotate(scope)` — rebuild the annotation index over the catalogue +
-    /// experiment exclusions (the Stage-3 slice of ADR-0161 D3; the full
-    /// `StaleIndex`/snapshot sources are C1 — DEFERRALS-tracked).
+    /// experiment exclusions + the retained snapshot membership (the C1
+    /// extension lands `leaders[]`/`scoring_marks[]` — ADR-0161 D3).
+    /// Committed indexes emit `annotation_changed` on the journal.
     pub fn annotate(
         &self,
         store: &Store,
         scope: Option<&[String]>,
     ) -> Result<annotations::AnnotationIndex, ResultsError> {
-        annotations::annotate(self, store, scope)
+        let idx = annotations::annotate(self, store, scope)?;
+        self.journal_emit(crate::journal::JournalEvent {
+            kind: crate::journal::JournalKind::AnnotationChanged,
+            subject: idx.view_hash.clone(),
+            detail: format!("{} entries", idx.entries.len()),
+        });
+        Ok(idx)
+    }
+
+    /// `export_rows(query, target, policy)` — the export op (§6.5 §2.2):
+    /// see [`crate::export`]. `measurement.export.delivered` lands on
+    /// every cited run; foreign targets produce a `LoweringLossReport`.
+    pub fn export_rows(
+        &self,
+        store: &mut Store,
+        rows: &[ResultsRow],
+        target: crate::export::ExportTarget,
+        policy: &Json,
+    ) -> Result<crate::export::ExportOutcome, ResultsError> {
+        crate::export::export_rows(self, store, rows, target, policy)
     }
 
     /// `leaderboard(definition, at?)` — the lab-internal L1–L5 view (pure;

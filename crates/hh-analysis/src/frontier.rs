@@ -206,8 +206,8 @@ fn membership_probability(
         return stats::PPM;
     }
     // A cell with no task spread cannot move — its membership is
-    // determined (resampling one task is identity).
-    let tasks: BTreeSet<&str> = c.task_values.iter().map(|(t, _)| t.as_str()).collect();
+    // determined (resampling one task is identity; the loop below
+    // already reproduces it, so no early exit is needed).
     let mut member = 0u64;
     let mut rng = stats::XorShift64::seeded(&format!("frontier.membership/{seed}"));
     // The resampled capability means for every point cell (same stream
@@ -232,14 +232,25 @@ fn membership_probability(
             };
             means.insert(q.point_id(), resampled_mean);
         }
-        let my_cap = means.get(&c.point_id()).copied().unwrap_or(c.capability_ppm);
+        let my_cap = means
+            .get(&c.point_id())
+            .copied()
+            .unwrap_or(c.capability_ppm);
         let dominated = point_cells.iter().any(|q| {
             q.point_id() != c.point_id()
                 && q.currency == c.currency
                 && q.cost_micros <= c.cost_micros
-                && means.get(&q.point_id()).copied().unwrap_or(q.capability_ppm) >= my_cap
+                && means
+                    .get(&q.point_id())
+                    .copied()
+                    .unwrap_or(q.capability_ppm)
+                    >= my_cap
                 && (q.cost_micros < c.cost_micros
-                    || means.get(&q.point_id()).copied().unwrap_or(q.capability_ppm) > my_cap)
+                    || means
+                        .get(&q.point_id())
+                        .copied()
+                        .unwrap_or(q.capability_ppm)
+                        > my_cap)
         });
         if !dominated {
             member += 1;
@@ -454,10 +465,7 @@ pub fn frontier_report(
             ("micros", cost_value),
             ("currency", Json::str(&c.currency)),
             ("provenance", Json::str(&c.provenance_class)),
-            (
-                "confidence",
-                Json::str(confidence_label(c.confidence_min)),
-            ),
+            ("confidence", Json::str(confidence_label(c.confidence_min))),
             ("coverage_min_ppm", Json::Int(c.coverage_min_ppm)),
         ])
     };
@@ -494,18 +502,10 @@ pub fn frontier_report(
                     "on_frontier",
                     Json::Bool(combined_ids.contains(&c.point_id())),
                 ),
-                (
-                    "membership_probability_ppm",
-                    Json::Int(membership),
-                ),
+                ("membership_probability_ppm", Json::Int(membership)),
                 (
                     "dominated_by",
-                    Json::Arr(
-                        dominated_by(c, &cells)
-                            .iter()
-                            .map(Json::str)
-                            .collect(),
-                    ),
+                    Json::Arr(dominated_by(c, &cells).iter().map(Json::str).collect()),
                 ),
             ])
         })
@@ -572,7 +572,10 @@ pub fn frontier_report(
                     ("micros_per_success", Json::Int(point)),
                     (
                         "interval",
-                        Json::obj([("lo", Json::Int(interval.lo)), ("hi", Json::Int(interval.hi))]),
+                        Json::obj([
+                            ("lo", Json::Int(interval.lo)),
+                            ("hi", Json::Int(interval.hi)),
+                        ]),
                     ),
                 ]),
                 None => Json::obj([("n/a", Json::str("estimator_undefined"))]),
@@ -616,8 +619,24 @@ pub fn frontier_report(
         (
             "strata",
             Json::obj([
-                ("confidence", Json::Obj(by_conf)),
-                ("class", Json::Obj(by_pclass)),
+                (
+                    "confidence",
+                    Json::Obj(
+                        by_conf
+                            .into_iter()
+                            .map(|(k, v)| (k, Json::Arr(v)))
+                            .collect(),
+                    ),
+                ),
+                (
+                    "class",
+                    Json::Obj(
+                        by_pclass
+                            .into_iter()
+                            .map(|(k, v)| (k, Json::Arr(v)))
+                            .collect(),
+                    ),
+                ),
             ]),
         ),
         ("cost_of_pass", Json::Arr(cost_of_pass)),

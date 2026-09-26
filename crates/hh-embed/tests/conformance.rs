@@ -3777,8 +3777,11 @@ fn s31_group_ml_capability_gate() {
 
     let mut svc = service();
     lab_hello(&mut svc);
-    // A still-pending Group L op answers `stage_pending`.
-    let e = call(&mut svc, "lab.results.query_rows", Json::obj([]));
+    // A still-pending Group L op answers `stage_pending` — the
+    // results/leaderboard/analysis surface went live at S4.3
+    // (`lab.results.query_rows` now answers a real row set); the hosting
+    // attach surface is the remaining staged op.
+    let e = call(&mut svc, "lab.hosting.describe", Json::obj([]));
     assert_eq!(err_kind(&e), "Refused");
     assert_eq!(
         e.get("error")

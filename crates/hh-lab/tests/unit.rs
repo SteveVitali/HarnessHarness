@@ -1010,6 +1010,20 @@ fn analysis_records_round_trip() {
         generated_from: wm.clone(),
         outputs: vec!["comparison".into()],
         status: AnalysisStatus::Final,
+        kind: None,
+        experiment_run_id: None,
+        procedure: None,
+        inputs: None,
+        metric_registry_version: None,
+        price_table_version: None,
+        oracle_ids: vec![],
+        judge_snapshots: vec![],
+        report: None,
+        pre_registered: false,
+        registered_analysis_ref: None,
+        post_amendment: false,
+        provenance: None,
+        cost: None,
     };
     let mut rec = rec;
     rec.analysis_id = rec.analysis_id();
@@ -1021,6 +1035,7 @@ fn analysis_records_round_trip() {
         generated_from: wm,
         status: AnalysisStatus::Final,
         result_ref: Some("result:1".into()),
+        kind: None,
     };
     assert_eq!(
         AnalysisReport::from_json(&report.to_json()).unwrap(),
