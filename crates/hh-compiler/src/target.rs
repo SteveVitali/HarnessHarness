@@ -80,6 +80,8 @@ pub fn lower_target(
     match spec.target_id.as_str() {
         "mcp" => lower_mcp(linked, plan, surface, spec),
         "provider_tool_api" => lower_provider(linked, plan, surface, spec),
+        // C1 — the ACP session artefact (§5d.4; R-2.1.3¹; S4.5b).
+        "acp" => crate::acp::lower_acp(linked, plan, surface, spec),
         other => Err(CompileError::TargetError {
             detail: format!("target {other} has no Stage-3 lowering (C1/C2)"),
         }),
@@ -537,9 +539,11 @@ pub struct PartialHIR {
 pub fn lift(artefact: &Json, target: &str) -> Result<PartialHIR, CompileError> {
     match target {
         "mcp" => lift_mcp(artefact),
+        // C1 — the `agent&run` minimum-carried-set lift (§3.2.7; S4.5b).
+        "acp" => crate::acp::lift_acp(artefact),
         other => Err(CompileError::TargetError {
             detail: format!(
-                "target {other} declares no lifting contract (provider_tool_api: ADR-0021 D5; acp/a2a/agent_spec: C1/C2)"
+                "target {other} declares no lifting contract (provider_tool_api: ADR-0021 D5; a2a/agent_spec: C1/C2)"
             ),
         }),
     }

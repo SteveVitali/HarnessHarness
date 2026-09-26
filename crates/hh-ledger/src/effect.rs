@@ -264,6 +264,10 @@ pub struct EffectFold {
     pub last_probe_verdict: Option<ProbeVerdict>,
     /// Attempts with an `observed` record — exactly one per `(effect_id, attempt_no)`.
     pub observed_attempts: BTreeSet<u64>,
+    /// The `action.effect.input_required` marker (§5d.4 D3): the
+    /// attempt the protocol edge paused on — `Some(n)` while a paused
+    /// resume is owed; cleared by the retry's `committed`.
+    pub paused_at: Option<u64>,
     /// `attempt_no → (commit event_id, seq)` — every durable write-ahead record.
     pub commits: BTreeMap<u64, (String, u64)>,
     /// The enclosing scopes.
@@ -301,6 +305,7 @@ impl EffectFold {
             outcome: None,
             risk_class: RiskClass::UNKNOWN,
             declared_risk_class: None,
+            paused_at: None,
             attempt_no: 0,
             probe_count: 0,
             last_probe_verdict: None,
@@ -514,7 +519,15 @@ fn apply_event_fields(
                 f.attempt_no = n as u64;
             }
             f.commits.insert(f.attempt_no, (event_id.to_string(), seq));
+            f.paused_at = None;
             f.phase = EffectPhase::Committed;
+        }
+        "action.effect.input_required" => {
+            if let Some(n) = payload.get("attempt_no").and_then(Json::as_int) {
+                f.paused_at = Some(n as u64);
+                f.attempt_no = (n as u64).max(f.attempt_no);
+            }
+            // Non-terminal: the phase stays `prepared`/`committed`.
         }
         "action.effect.observed" => {
             if let Some(n) = payload.get("attempt_no").and_then(Json::as_int) {
@@ -937,6 +950,44 @@ pub fn validate_event(
             Ok(())
         }
         "action.effect.committed" => validate_committed(ev, effects, decisions, effect_id),
+        "action.effect.input_required" => {
+            let f = get_fold(effects, effect_id)?;
+            phase_gate(
+                f,
+                effect_id,
+                class,
+                &[EffectPhase::Prepared, EffectPhase::Committed],
+            )?;
+            let attempt = ev
+                .payload
+                .get("attempt_no")
+                .and_then(Json::as_int)
+                .filter(|n| *n >= 1)
+                .map(|n| n as u64)
+                .ok_or_else(|| bad("input_required requires attempt_no ≥ 1"))?;
+            // The marker names the pausing attempt: at `committed` that
+            // is the live attempt (`f.attempt_no`); at `prepared`
+            // (read_only — no write-ahead) it is the next one.
+            let expect = if f.phase == EffectPhase::Committed {
+                f.attempt_no
+            } else {
+                f.attempt_no + 1
+            };
+            if attempt != expect {
+                return Err(bad(format!(
+                    "input_required.attempt_no {attempt} ≠ {expect}"
+                )));
+            }
+            apply_event_fields(
+                effects,
+                class,
+                &ev.payload,
+                &ev.scope,
+                &ev.event_id,
+                u64::MAX,
+            );
+            Ok(())
+        }
         "action.effect.observed" => validate_observed(ev, effects, effect_id),
         "action.effect.unknown" => {
             let f = get_fold(effects, effect_id)?;
@@ -1265,6 +1316,19 @@ fn validate_committed(
             if attempt != f.attempt_no + 1 {
                 return Err(bad(format!(
                     "retry committed.attempt_no {attempt} ≠ {}",
+                    f.attempt_no + 1
+                )));
+            }
+        }
+        EffectPhase::Committed if f.paused_at.is_some() => {
+            // The §5d.4 D3 paused retry (S4.5b): a paused `committed`
+            // re-commits at `attempt_no + 1` — the fresh write-ahead
+            // record for the resumed attempt (ADR-0097 D3). Without a
+            // durable `input_required` marker the transition stays
+            // illegal — a re-commit is never a silent re-run.
+            if attempt != f.attempt_no + 1 {
+                return Err(bad(format!(
+                    "paused retry committed.attempt_no {attempt} ≠ {}",
                     f.attempt_no + 1
                 )));
             }

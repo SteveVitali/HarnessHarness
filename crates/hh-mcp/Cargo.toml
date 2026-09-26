@@ -19,3 +19,19 @@ hh-identity = { path = "../hh-identity" }
 # The binary decodes `hh-bundle/1` directories/containers (the lib's
 # lowering is over member bytes only — the dep serves `hh-mcp-serve`).
 hh-bundle = { path = "../hh-bundle" }
+# S4.5b — the `McpExecutor` is a `ToolExecutor`; `hh-hir`/`hh-containment`
+# name its declaration's domains/isolation.
+hh-env = { path = "../hh-env" }
+hh-hir = { path = "../hh-hir" }
+hh-containment = { path = "../hh-containment" }
+
+[dev-dependencies]
+# The paused-arm integration fixture (DF-S3.9-1): a real Dispatcher over a
+# scripted transport needs the same crates hh-env's own acceptance tests use.
+hh-compiler = { path = "../hh-compiler" }
+hh-context = { path = "../hh-context" }
+hh-ledger = { path = "../hh-ledger" }
+hh-monitor = { path = "../hh-monitor" }
+hh-ontology = { path = "../hh-ontology" }
+hh-provenance = { path = "../hh-provenance" }
+hh-secrets = { path = "../hh-secrets" }

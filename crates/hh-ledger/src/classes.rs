@@ -365,6 +365,15 @@ const EFFECT_FIELDS: &[AuditField] = &[
     // S2.7 (R-2.8.2; ADR-0054 D1) — `observed{admission}`: the recorded
     // `AdmissionKind` for a `flow_contract` capability's result.
     af("admission"),
+    // S4.5b (§5d.4 D3) — the paused arm's `message_human` elicitation:
+    // `intended` under a fresh elicitation tool call carries `domain:
+    // message_human`, `elicitation_of`/`parent_effect_id` naming the
+    // paused effect, and the edge's `input_requests` (bounded, opaque —
+    // never parsed for authority, I7).
+    af("domain"),
+    af("elicitation_of"),
+    af("parent_effect_id"),
+    afb("input_requests", AUDIT_FIELD_LIST_BYTES),
 ];
 
 /// `security.permission.decided` — the §5g.6 §3 dossier partition (the
@@ -662,6 +671,13 @@ const DECISION_FIELDS: &[AuditField] = &[
     // (`steer_ref`/`follow_up_ref`; the audit shows *which* input, never
     // the bytes — I7). S2.11.
     afb("context_request", AUDIT_FIELD_LIST_BYTES),
+    // The §5d.4 D3 paused arm (S4.5b): `kind: ask,
+    // decision_point: protocol_input_required` carries the edge's
+    // `input_requests` (the elicitation payload) and the opaque
+    // `request_state` the retry echoes byte-for-byte — bounded
+    // audit members, never parsed for authority (I7).
+    afb("input_requests", AUDIT_FIELD_LIST_BYTES),
+    afb("request_state", AUDIT_FIELD_LIST_BYTES),
 ];
 
 /// `lifecycle.ledger.redacted` — the tombstone (`{targets[], reason_code,
@@ -835,6 +851,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("action.effect.committed", "hint"),
     ("action.effect.compensated", "hint"),
     ("action.effect.deferred", "hint"),
+    ("action.effect.input_required", "hint"),
     ("action.effect.intended", "hint"),
     ("action.effect.observed", "hint"),
     ("action.effect.prepared", "hint"),
@@ -1305,6 +1322,12 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("action.effect.prepared",    O::Events, false, EFFECT_FIELDS, &[], None, None),
     row_audit("action.effect.deferred",    O::Events, false, EFFECT_FIELDS, &[], None, None),
     row_audit("action.effect.committed",   O::Events, false, EFFECT_FIELDS, &[], None, None),
+    // `input_required` — the §5d.4 D3 paused marker (S4.5b): a
+    // non-terminal row that records the attempt the protocol edge
+    // paused on; the scope stays open (no closer), the phase stays
+    // `prepared`/`committed` with `paused_at` set so the retry's
+    // `committed{attempt+1}` is legal.
+    row_audit("action.effect.input_required", O::Events, false, EFFECT_FIELDS, &[], None, None),
     row_audit("action.effect.observed",    O::Events, false, EFFECT_FIELDS, &[], None, Some(Effect)),
     row_audit("action.effect.unknown",     O::Events, false, EFFECT_FIELDS, &[], None, None),
     // `probed` and `compensated` close the effect scope **conditionally** —
