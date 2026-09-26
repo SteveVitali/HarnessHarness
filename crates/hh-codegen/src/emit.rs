@@ -649,13 +649,18 @@ pub enum ClientError {
 /// The newline-delimited JSON-RPC 2.0 client (binding (b) transport;
 /// binding (a) is `hh_embed::EmbedService` — same ops, same bytes).
 /// Notifications (`stream.frame`) are buffered on `pending` and drained
-/// by [`Client::poll_notification`]/[`Client::take_notifications`].
+/// by [`Client::poll_notification`]/[`Client::take_notifications`];
+/// `upcall.*` asks buffer on `pending_upcalls` for
+/// [`Client::poll_upcall`]/[`Client::take_upcalls`] (Group U — the host
+/// channels a serving host answers, ADR-0177 D3).
 pub struct Client<R, W> {
     reader: R,
     writer: W,
     next_id: i64,
     /// Notifications received while waiting for responses.
     pending: Vec<StreamNotification>,
+    /// `upcall.*` notifications — `(method, params)` in arrival order.
+    pending_upcalls: Vec<(String, Json)>,
     /// The negotiated `HelloResult` (set by `hello`).
     pub hello_result: Option<HelloResult>,
 }
@@ -667,6 +672,7 @@ impl<R: BufRead, W: Write> Client<R, W> {
             writer,
             next_id: 0,
             pending: Vec::new(),
+            pending_upcalls: Vec::new(),
             hello_result: None,
         }
     }
@@ -704,12 +710,18 @@ impl<R: BufRead, W: Write> Client<R, W> {
                 .map_err(|e| ClientError::Transport(e.to_string()))?;
             // A notification: buffer and keep waiting for the response.
             if msg.get("id").is_none() {
-                if msg.get("method").and_then(Json::as_str) == Some("stream.frame") {
+                let method = msg.get("method").and_then(Json::as_str).unwrap_or("");
+                if method == "stream.frame" {
                     if let Some(p) = msg.get("params") {
                         if let Ok(n) = StreamNotification::from_json(p) {
                             self.pending.push(n);
                         }
                     }
+                } else if method.starts_with("upcall.") {
+                    self.pending_upcalls.push((
+                        method.to_string(),
+                        msg.get("params").cloned().unwrap_or(Json::Null),
+                    ));
                 }
                 continue;
             }
@@ -746,12 +758,18 @@ impl<R: BufRead, W: Write> Client<R, W> {
         }
         let msg = hh_wire::json::parse(line.trim())
             .map_err(|e| ClientError::Transport(e.to_string()))?;
-        if msg.get("method").and_then(Json::as_str) == Some("stream.frame") {
+        let method = msg.get("method").and_then(Json::as_str).unwrap_or("");
+        if method == "stream.frame" {
             if let Some(p) = msg.get("params") {
                 let n = StreamNotification::from_json(p)
                     .map_err(ClientError::Decode)?;
                 return Ok(Some(n));
             }
+        } else if method.starts_with("upcall.") {
+            self.pending_upcalls.push((
+                method.to_string(),
+                msg.get("params").cloned().unwrap_or(Json::Null),
+            ));
         }
         Ok(None)
     }
@@ -759,6 +777,45 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// Drain buffered notifications without blocking.
     pub fn take_notifications(&mut self) -> Vec<StreamNotification> {
         std::mem::take(&mut self.pending)
+    }
+
+    /// Read one message; if it is an `upcall.*` notification return its
+    /// `(method, params)`, else `Ok(None)` (a `stream.frame` read here is
+    /// buffered for [`Client::poll_notification`], never dropped).
+    pub fn poll_upcall(&mut self) -> Result<Option<(String, Json)>, ClientError> {
+        if !self.pending_upcalls.is_empty() {
+            return Ok(Some(self.pending_upcalls.remove(0)));
+        }
+        let mut line = String::new();
+        let n = self
+            .reader
+            .read_line(&mut line)
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
+        if n == 0 {
+            return Err(ClientError::Transport("kernel closed the stream".into()));
+        }
+        let msg = hh_wire::json::parse(line.trim())
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
+        let method = msg.get("method").and_then(Json::as_str).unwrap_or("");
+        if method.starts_with("upcall.") {
+            return Ok(Some((
+                method.to_string(),
+                msg.get("params").cloned().unwrap_or(Json::Null),
+            )));
+        }
+        if method == "stream.frame" {
+            if let Some(p) = msg.get("params") {
+                if let Ok(n) = StreamNotification::from_json(p) {
+                    self.pending.push(n);
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Drain buffered `upcall.*` notifications without blocking.
+    pub fn take_upcalls(&mut self) -> Vec<(String, Json)> {
+        std::mem::take(&mut self.pending_upcalls)
     }
 "##;
 

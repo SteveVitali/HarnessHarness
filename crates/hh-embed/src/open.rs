@@ -45,6 +45,7 @@ struct CarriedRuntime {
     decided: BTreeMap<String, Json>,
     host_asks: BTreeMap<String, HostAsk>,
     idem: BTreeMap<String, Json>,
+    budget_ceiling: BTreeMap<String, i64>,
 }
 
 impl EmbedService {
@@ -53,8 +54,48 @@ impl EmbedService {
         inject::refuse_handle_keys(params, "open_session")?;
         inject::refuse_secrets(params)?;
         let p = OpenSessionParams::from_json(params)?;
-        if let Some(hit) = self.open_idem.get(&p.idempotency_key) {
-            return Ok(hit.clone());
+        // A session id is a live handle — idempotency dedupes the
+        // *open*, not the handle's lifetime. When the recorded session
+        // is gone the verbatim replay would hand back a dead id
+        // (`UnknownSession` on the next call):
+        //  - `new`: the run is the idempotent product — mint a fresh
+        //    attach handle on the recorded `run_id` so the retried
+        //    invocation sees the same run (the caller finds
+        //    `lifecycle.run.finished` in the durable prefix and skips
+        //    `submit`).
+        //  - `attach`/`resume`: fall through — the open is itself
+        //    idempotent, so mint a fresh session for the same spec.
+        enum Replay {
+            None,
+            Verbatim(Json),
+            AttachOf(String),
+        }
+        let replay = match self.open_idem.get(&p.idempotency_key) {
+            Some(hit) => {
+                let sid_live = hit
+                    .get("session_id")
+                    .and_then(Json::as_str)
+                    .map(|sid| self.sessions.contains_key(sid))
+                    .unwrap_or(false);
+                if sid_live {
+                    Replay::Verbatim(hit.clone())
+                } else if matches!(&p.spec, OpenSpec::New { .. }) {
+                    Replay::AttachOf(
+                        hit.get("run_id")
+                            .and_then(Json::as_str)
+                            .unwrap_or("")
+                            .to_string(),
+                    )
+                } else {
+                    Replay::None
+                }
+            }
+            None => Replay::None,
+        };
+        match replay {
+            Replay::Verbatim(hit) => return Ok(hit),
+            Replay::AttachOf(run_id) => return self.open_attach(&run_id),
+            Replay::None => {}
         }
         let session = match &p.spec {
             OpenSpec::New {
@@ -67,20 +108,21 @@ impl EmbedService {
                 supplies,
                 attendance,
                 approval_mode,
-            } => {
-                inject::refuse_override_widening(overrides)?;
-                self.open_new(
-                    definition,
-                    environment,
-                    budget.as_ref(),
-                    profile_binding.as_ref(),
-                    participant.as_ref(),
-                    supplies.as_ref(),
-                    attendance,
-                    approval_mode.as_deref(),
-                )?
+            } => self.open_new(
+                definition,
+                overrides,
+                environment,
+                budget.as_ref(),
+                profile_binding.as_ref(),
+                participant.as_ref(),
+                supplies.as_ref(),
+                attendance,
+                approval_mode.as_deref(),
+                p.invocation.as_ref(),
+            )?,
+            OpenSpec::Resume { run_id, mode, .. } => {
+                self.open_resume(run_id, mode, p.invocation.as_ref())?
             }
-            OpenSpec::Resume { run_id, mode, .. } => self.open_resume(run_id, mode)?,
             OpenSpec::Attach { run_id } => self.open_attach(run_id)?,
         };
         self.open_idem
@@ -99,11 +141,13 @@ impl EmbedService {
     }
 
     /// `open_session{kind:"new"}` — resolve → validate → seal →
-    /// `open_run` → provision `local_host` → arm the driver.
+    /// override desugar + I-1 → `open_run` → provision `local_host` →
+    /// arm the driver.
     #[allow(clippy::too_many_arguments)]
     fn open_new(
         &mut self,
         definition: &DefinitionInput,
+        overrides: &[Override],
         environment: &EnvironmentInput,
         budget: Option<&BudgetInput>,
         profile_binding: Option<&Json>,
@@ -111,16 +155,35 @@ impl EmbedService {
         supplies: Option<&Supplies>,
         attendance: &AttendanceDeclaration,
         approval_mode: Option<&str>,
+        invocation: Option<&InvocationRecord>,
     ) -> Result<Json, EmbedError> {
-        if self.sessions.len() >= self.session_cap() {
+        // `max_in_flight_sessions` bounds *live* sessions — a fenced or
+        // detached session is residue, not in-flight (the negotiated
+        // cap would otherwise deadlock the parked-run workflow: a
+        // detached-CLI writer plus the next invocation's session).
+        let live = self
+            .sessions
+            .values()
+            .filter(|s| s.detached.is_none())
+            .count();
+        if live >= self.session_cap() {
             return Err(EmbedError::Overloaded);
         }
-        // Attendance gate — an unattended run must never wait on a human
-        // (the approval mode or a requires-approval capability would).
+        // Attendance gate (M-2/S-1, ADR-0168 D2) — an unattended run must
+        // never wait on a human, and prompting tools are never *excluded*
+        // (that would change the compiled surface and the
+        // `configuration_id`): a requires-approval capability under
+        // `unattended` resolves by Π-12 below — `decided{decider: policy,
+        // reason: unattended}` — never a refusal. The refusal case is a
+        // declared mode that *demands* a human (`manual`/`tiered`/
+        // `auto_review`) under unattended attendance — that combination
+        // can only hang, so `UnattendedRequiresInput` fires pre-ledger.
         let cap_decl = parse_host_caps(supplies);
-        if attendance.value == "unattended"
-            && (approval_mode == Some("sync") || cap_decl.iter().any(|c| c.requires_approval))
-        {
+        let human_mode = matches!(
+            approval_mode,
+            Some("manual") | Some("tiered") | Some("auto_review") | Some("sync")
+        );
+        if attendance.value == "unattended" && human_mode {
             return Err(EmbedError::UnattendedRequiresInput);
         }
         if let Some(p) = participant {
@@ -137,6 +200,10 @@ impl EmbedService {
         // ── resolve → validate → seal ────────────────────────────────
         let sealed = self.resolve_definition(definition)?;
         let manifest_ref = sealed.definition_ref.version_id.clone();
+
+        // ── override desugar + I-1 (before `open_run` — a refusal means
+        // no run ever existed) ───────────────────────────────────────
+        let overrides_layer_id = self.materialise_overrides(&sealed, overrides, attendance)?;
         // The realized configuration pair — content-addressed through
         // `hh_assembly::configuration` (CC9): the manifest pins the
         // honest Stage-1 composition inputs (the scripted kernel model,
@@ -175,11 +242,24 @@ impl EmbedService {
             AttendanceSource::parse(&attendance.source).unwrap_or(AttendanceSource::Declared),
         );
         manifest.budget = budget.map(|_| budget_input);
+        manifest.overrides_layer_id = overrides_layer_id.clone();
         let holder = self.holder.clone();
         let (run_id, lease) = self
             .store
             .open_run(manifest.clone(), &holder)
             .map_err(ledger_err)?;
+
+        // `lifecycle.surface.invoked` — the durable invocation record
+        // minted when the invocation opens a run (§7.1; the record's
+        // `overrides_layer_id` is the boundary-computed layer identity,
+        // filled here so a surface caller may omit it).
+        if let Some(inv) = invocation {
+            let mut payload = inv.to_json();
+            if let (Some(layer), Json::Obj(m)) = (&overrides_layer_id, &mut payload) {
+                m.insert("overrides_layer_id".into(), Json::str(layer.clone()));
+            }
+            self.mint(&run_id, &lease, "lifecycle.surface.invoked", payload)?;
+        }
 
         // ── environment: provision + attach local_host ───────────────
         let (env_handle_id, env_json) = self.provision_environment(&run_id, &lease, environment)?;
@@ -198,7 +278,7 @@ impl EmbedService {
         )?;
 
         let surfaces = driver_surfaces(&cap_decl);
-        let driver = self.arm_driver(&run_id, &lease, &surfaces, &manifest)?;
+        let driver = self.arm_driver(&run_id, &lease, &surfaces, &manifest, budget)?;
         let realized = realized_settings(self.workspace_root(), attendance, approval_mode);
         let head = self.store.head(&run_id).map_err(ledger_err)?;
 
@@ -220,6 +300,7 @@ impl EmbedService {
             decided: BTreeMap::new(),
             host_asks: BTreeMap::new(),
             idem: BTreeMap::new(),
+            budget_ceiling: budget_dimensions(budget).0,
             scan_seq: head.seq,
             next_invoke: None,
             next_completion: String::new(),
@@ -229,18 +310,84 @@ impl EmbedService {
 
         // Permission asks declared on the supplies — durable pending +
         // ephemeral requested + the upcall when the channel is served.
+        // Under `unattended` attendance every ask resolves by Π-12:
+        // `pending` then `decided{decider: policy, reason: unattended}`
+        // (M-2 — the asks are ledgered, never silently auto-rejected and
+        // never excluded from the surface).
+        let unattended = attendance.value == "unattended";
         for cap in cap_decl.iter().filter(|c| c.requires_approval) {
-            let opts = if cap.options.is_empty() {
-                vec!["allow_once".to_string(), "deny_once".to_string()]
+            let proposal = format!("host capability {} requests approval", cap.capability_id);
+            if unattended {
+                let permission_id = self.alloc("perm");
+                let (run_id, lease) = {
+                    let s = self.session(&session_id)?;
+                    (
+                        s.run_id.clone(),
+                        s.lease.clone().ok_or(EmbedError::Refused {
+                            reason: "session_is_read_only".to_string(),
+                        })?,
+                    )
+                };
+                let now = self.store.now_ms();
+                self.mint(
+                    &run_id,
+                    &lease,
+                    "security.permission.pending",
+                    Json::obj([
+                        ("permission_id", Json::str(permission_id.clone())),
+                        ("effect_ids", Json::Arr(vec![])),
+                        ("requested_at", Json::Int(now as i64)),
+                        ("mode", Json::str("policy")),
+                    ]),
+                )?;
+                self.mint(
+                    &run_id,
+                    &lease,
+                    "security.permission.decided",
+                    Json::obj([
+                        ("permission_id", Json::str(permission_id)),
+                        ("proposal", Json::str(proposal)),
+                        ("decision", Json::str("deny_once")),
+                        ("decider", Json::str("policy")),
+                        ("reason", Json::str("unattended")),
+                    ]),
+                )?;
             } else {
-                cap.options.clone()
-            };
-            self.mint_permission_ask(
-                &session_id,
-                &format!("host capability {} requests approval", cap.capability_id),
-                None,
-                opts,
-            )?;
+                let opts = if cap.options.is_empty() {
+                    vec!["allow_once".to_string(), "deny_once".to_string()]
+                } else {
+                    cap.options.clone()
+                };
+                // AC-R-2.11.1-12 — the ask carries the fields the
+                // surface renders: the untruncated proposal (`text`)
+                // plus the `Explanation` members the declaration
+                // supports (the firing declaration, the identifiers the
+                // ask concerns, and what would auto-approve).
+                // `model_justification` is present only when a delegate
+                // authored the reason — capability-declared asks carry
+                // none.
+                let rendering = Json::obj([
+                    ("text", Json::str(proposal.clone())),
+                    (
+                        "explanation",
+                        Json::obj([
+                            ("rule_id", Json::str("capability.requires_approval")),
+                            (
+                                "risk_factors",
+                                Json::Arr(vec![
+                                    Json::str(format!("capability_id:{}", cap.capability_id)),
+                                    Json::str(format!("surface_id:{}", cap.surface_id)),
+                                ]),
+                            ),
+                            (
+                                "what_would_auto_approve",
+                                Json::obj([("requires_approval", Json::Bool(false))]),
+                            ),
+                        ]),
+                    ),
+                ]);
+                self.mint_permission_ask(&session_id, &proposal, None, opts, rendering)?;
+            }
         }
 
         Ok(session_json(
@@ -257,8 +404,21 @@ impl EmbedService {
 
     /// `open_session{kind:"resume"}` — `continue` (WouldBlock while the
     /// writer lives) | `takeover` (fence the stale writer).
-    fn open_resume(&mut self, run_id: &str, mode: &str) -> Result<Json, EmbedError> {
-        if self.sessions.len() >= self.session_cap() {
+    fn open_resume(
+        &mut self,
+        run_id: &str,
+        mode: &str,
+        invocation: Option<&InvocationRecord>,
+    ) -> Result<Json, EmbedError> {
+        // Live sessions bound the cap; the target run's own writers are
+        // excluded — `takeover` fences them below, `continue` answers
+        // `WouldBlock` at the lease.
+        let live = self
+            .sessions
+            .values()
+            .filter(|s| s.detached.is_none() && (s.attach || s.run_id != run_id))
+            .count();
+        if live >= self.session_cap() {
             return Err(EmbedError::Overloaded);
         }
         // The run must exist and be unfinished.
@@ -287,6 +447,7 @@ impl EmbedService {
                     decided: std::mem::take(&mut s.decided),
                     host_asks: std::mem::take(&mut s.host_asks),
                     idem: std::mem::take(&mut s.idem),
+                    budget_ceiling: std::mem::take(&mut s.budget_ceiling),
                 });
             }
         };
@@ -338,6 +499,11 @@ impl EmbedService {
             ]),
         )?;
         let manifest = self.store.manifest(run_id).map_err(ledger_err)?.clone();
+        // `lifecycle.surface.invoked` — a resume writes to the run, so a
+        // surface invocation mints its durable record here too.
+        if let Some(inv) = invocation {
+            self.mint(run_id, &lease, "lifecycle.surface.invoked", inv.to_json())?;
+        }
         let rt = match carried {
             Some(rt) => rt,
             // The run carries driver rows but no live driver is in the
@@ -373,6 +539,7 @@ impl EmbedService {
             decided: rt.decided,
             host_asks: rt.host_asks,
             idem: rt.idem,
+            budget_ceiling: rt.budget_ceiling,
             scan_seq: head.seq,
             next_invoke: None,
             next_completion: String::new(),
@@ -397,7 +564,16 @@ impl EmbedService {
     /// `open_session{kind:"attach"}` — read-only always: no writer
     /// lease, no appends, no driver (I6).
     fn open_attach(&mut self, run_id: &str) -> Result<Json, EmbedError> {
-        if self.sessions.len() >= self.session_cap() {
+        // `max_in_flight_sessions` bounds *live* sessions — a fenced or
+        // detached session is residue, not in-flight (the negotiated
+        // cap would otherwise deadlock the parked-run workflow: a
+        // detached-CLI writer plus the next invocation's session).
+        let live = self
+            .sessions
+            .values()
+            .filter(|s| s.detached.is_none())
+            .count();
+        if live >= self.session_cap() {
             return Err(EmbedError::Overloaded);
         }
         self.store.events(run_id).map_err(ledger_err)?;
@@ -423,6 +599,7 @@ impl EmbedService {
             decided: BTreeMap::new(),
             host_asks: BTreeMap::new(),
             idem: BTreeMap::new(),
+            budget_ceiling: BTreeMap::new(),
             scan_seq: head.seq,
             next_invoke: None,
             next_completion: String::new(),
@@ -488,7 +665,22 @@ impl EmbedService {
                 }
                 let _ = self.drive(&p.session_id);
             }
-            self.store.release(&lease, &p.reason).map_err(ledger_err)?;
+            // The run's event stream seals at `lifecycle.run.finished`
+            // — either before this `close` or via the interrupt drive
+            // above. A post-terminal `lease.released` row would break
+            // the stream ≡ export byte-identity (AC-R-2.11.1-3), so a
+            // sealed run releases silently (the lease file still
+            // records `Released`).
+            let sealed = self
+                .store
+                .events(&run_id)
+                .map(|e| e.iter().any(|ev| ev.class == "lifecycle.run.finished"))
+                .unwrap_or(false);
+            if sealed {
+                self.store.release_silent(&lease).map_err(ledger_err)?;
+            } else {
+                self.store.release(&lease, &p.reason).map_err(ledger_err)?;
+            }
         }
         let fin = self.summary_ref(&run_id);
         self.sessions.remove(&p.session_id);
@@ -684,6 +876,7 @@ impl EmbedService {
         lease: &hh_ledger::store::Lease,
         surfaces: &[SurfaceSpec],
         manifest: &RunManifest,
+        budget: Option<&BudgetInput>,
     ) -> Result<Driver<ReactMinimal>, EmbedError> {
         let ctx = ControlContext {
             process_ref: format!("hh-embed/{}", manifest.run_kind.as_str()),
@@ -700,11 +893,27 @@ impl EmbedService {
             capabilities_available: surfaces.iter().map(|s| s.surface_id.clone()).collect(),
             steering: (SteerMode::Unsupported, ConcurrentInput::QueueOnly),
         };
-        let policy = EnvelopePolicy::stage1_default(
+        // ADR-0168 D6 — `interactive` attendance escalates on every
+        // budgeted ceiling; anything else stops `budget_exhausted`.
+        let interactive = manifest.attendance.0 == AttendanceValue::Interactive;
+        let mut policy = EnvelopePolicy::stage1_default(
             &manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
-        )
-        .seal()
-        .map_err(|e| EmbedError::Refused {
+        );
+        let (mut budget_ceiling, mut remaining) = budget_dimensions(budget);
+        if interactive {
+            for dim in budget_ceiling.keys().chain(remaining.keys()) {
+                if hh_ontology::dimensions::DimensionId::parse(dim).is_some() {
+                    policy.exhaustion.rules.insert(
+                        dim.clone(),
+                        hh_control::policy::ExhaustionRule {
+                            on_exhaustion: hh_control::policy::ExhaustionAction::Escalate,
+                            grace_calls: 0,
+                        },
+                    );
+                }
+            }
+        }
+        let policy = policy.seal().map_err(|e| EmbedError::Refused {
             reason: format!("envelope_policy: {e:?}"),
         })?;
         let mut sink = crate::runtime::KernelSink {
@@ -718,6 +927,9 @@ impl EmbedService {
             &mut sink,
             DriverConfig {
                 surfaces: surfaces.to_vec(),
+                budget_ceiling: std::mem::take(&mut budget_ceiling),
+                remaining: std::mem::take(&mut remaining),
+                interactive_attendance: interactive,
                 ..DriverConfig::default()
             },
         )
@@ -736,6 +948,46 @@ impl EmbedService {
 }
 
 // ── module helpers ──────────────────────────────────────────────────────────
+
+/// The declared `dimensions` of a `BudgetInput` split into the
+/// driver-counted ceilings (`model_calls`, `turns`, `retries`,
+/// `time.working_ms`, `time.wall_ms` — the driver's own consumption fold)
+/// and the caller-maintained `remaining` view (token/effect dimensions the
+/// boundary does not meter at Stage 1 — their `remaining` stays at the
+/// declared ceiling until a metered charge lands, so an unmetered
+/// dimension never silently exhausts).
+fn budget_dimensions(
+    budget: Option<&BudgetInput>,
+) -> (BTreeMap<String, i64>, BTreeMap<String, i64>) {
+    const DRIVER_COUNTED: &[&str] = &[
+        "model_calls",
+        "turns",
+        "retries",
+        "time.working_ms",
+        "time.wall_ms",
+    ];
+    let mut ceiling = BTreeMap::new();
+    let mut remaining = BTreeMap::new();
+    let dims = match budget {
+        Some(BudgetInput::Node(n)) => n
+            .get("semantic")
+            .and_then(|s| s.get("dimensions"))
+            .or_else(|| n.get("dimensions")),
+        _ => None,
+    };
+    if let Some(Json::Obj(m)) = dims {
+        for (dim, bound) in m {
+            if let Some(hard) = bound.get("hard").and_then(Json::as_int) {
+                if DRIVER_COUNTED.contains(&dim.as_str()) {
+                    ceiling.insert(dim.clone(), hard);
+                } else {
+                    remaining.insert(dim.clone(), hard);
+                }
+            }
+        }
+    }
+    (ceiling, remaining)
+}
 
 /// The attendance a `resume`/`attach` session reports — the declaration
 /// travels on the source run's manifest; the boundary records `async`

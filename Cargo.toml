@@ -222,6 +222,15 @@ members = [
     "crates/hh-kernel",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
+    # The C0 attended CLI slice (spec §7.1, R-2.11.1⁰ᵇ; ticket S1.26;
+    # ADR-0167/0168/0169). A PERSISTENT workspace member: the `hh` binary — a generated
+    # client and renderer over hh-embed/1 (attended terminal mode, per-effect approvals,
+    # `approval *`, run resume/fork/cancel/inspect, the attendance declaration, I-1,
+    # exhaustion escalate/stop, the full exit-class table, `json`/`jsonl`, stdin typing,
+    # InvocationRecord + idempotency). Depends only on the generated client
+    # (AC-R-2.11.1-1); no kernel semantics live here (K-2) — every command is one typed
+    # boundary operation sequence.
+    "crates/hh-cli",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired

@@ -1,0 +1,33 @@
+[package]
+name = "hh-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0 attended CLI slice R-2.11.1^0b — a generated client and renderer over hh-embed/1 (ADR-0167/0168/0169): attended terminal mode with per-effect approvals, `approval *`, `run resume/fork/cancel/inspect`, the attendance declaration, I-1, exhaustion escalate/stop, the full exit-class table, `json`, stdin typing, InvocationRecord + idempotency. The package depends only on the generated client (AC-R-2.11.1-1); it contains no kernel semantics (K-2)."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh"
+path = "src/main.rs"
+
+[dependencies]
+# The generated, drift-checked client — the CLI's only contract dependency
+# (AC-R-2.11.1-1; every command is one typed hh-embed/1 operation sequence).
+hh-embed-client-generated = { path = "../hh-embed-client-generated" }
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+
+[dev-dependencies]
+# The in-process service, for the binding-(a) conformance suite — the same
+# command paths run over the spawned `hh-kernel serve` process and the
+# in-process binding (AC-K4-2 byte parity). Never linked into `hh`.
+hh-embed = { path = "../hh-embed" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+hh-ledger = { path = "../hh-ledger" }
+hh-assembly = { path = "../hh-assembly" }
+hh-hir = { path = "../hh-hir" }
+hh-ontology = { path = "../hh-ontology" }
+hh-provenance = { path = "../hh-provenance" }

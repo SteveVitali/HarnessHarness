@@ -40,8 +40,8 @@ pub mod validate;
 pub const DIALECT: &str = "HIR/1";
 
 pub use diff::{
-    apply, classify, diff, invert, AuthorityDelta, Delta, DiffClassification, DiffDerivation,
-    DiffOp, DiffOpTag, HirDiff,
+    apply, classify, classify_pair, diff, invert, AuthorityDelta, Delta, DiffClassification,
+    DiffDerivation, DiffOp, DiffOpTag, HirDiff,
 };
 pub use document::{
     parse_document, DefinitionVersionRef, Edge, HirDocument, Node, SealedDefinition,

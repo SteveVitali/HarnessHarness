@@ -691,15 +691,73 @@ fn decide(
         };
     }
     // 3. exhaustion — same fold as post_effect's hard-ceiling check.
+    // Two carve-outs against the plain `stop`: (a) a `stop{cancelled}`
+    // proposal rides the declared cancel channel — spend rules never
+    // convert the principal's own stop into a budget row; (b) under
+    // `interactive` attendance an `escalate` rule on a *work* proposal
+    // parks the loop at the exhaustion decision point (ADR-0168 D6) —
+    // a `stop` proposal while exhausted still lands `budget_exhausted`
+    // (escalating a terminal is meaningless). Every other decision is
+    // governed by the dimension's rule.
     for (dim, rem) in &ctx.remaining {
         if *rem <= 0 {
+            let proposed_stop = proposed.and_then(|d| match &d.kind {
+                DecisionKind::Stop {
+                    proposed_reason, ..
+                } => Some(proposed_reason.clone()),
+                _ => None,
+            });
+            if matches!(proposed_stop, Some(StopReason::Cancelled { .. })) {
+                break;
+            }
+            // The escalation response itself is not a fresh decision
+            // point — refusing `Escalate` would re-signal
+            // `escalate_on_exhaustion` and spin the loop forever.
+            if matches!(
+                proposed.map(|d| &d.kind),
+                Some(DecisionKind::Escalate { .. })
+            ) {
+                break;
+            }
+            let dimension = hh_ontology::dimensions::DimensionId::parse(dim)
+                .unwrap_or(hh_ontology::dimensions::DimensionId::Turns);
+            if policy.exhaustion.rule(dimension).on_exhaustion
+                == crate::policy::ExhaustionAction::Escalate
+                && ctx.interactive_attendance
+                && proposed_stop.is_none()
+            {
+                return GuardVerdict::Respond {
+                    observation: Json::obj([
+                        ("kind", Json::str("escalate_on_exhaustion")),
+                        ("dimension", Json::str(dim)),
+                    ]),
+                    events: vec![GuardEvent {
+                        class: "control.budget.exceeded".into(),
+                        payload: crate::events::budget_exceeded_payload(
+                            &policy.budget_ref,
+                            dim,
+                            *rem,
+                            0,
+                        ),
+                        scope_id: None,
+                    }],
+                };
+            }
             return GuardVerdict::Stop {
                 reason: StopReason::BudgetExhausted {
                     budget_id: policy.budget_ref.clone(),
-                    dimension: hh_ontology::dimensions::DimensionId::parse(dim)
-                        .unwrap_or(hh_ontology::dimensions::DimensionId::Turns),
+                    dimension,
                 },
-                events: vec![],
+                events: vec![GuardEvent {
+                    class: "control.budget.exceeded".into(),
+                    payload: crate::events::budget_exceeded_payload(
+                        &policy.budget_ref,
+                        dim,
+                        *rem,
+                        0,
+                    ),
+                    scope_id: None,
+                }],
             };
         }
     }

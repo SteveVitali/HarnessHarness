@@ -114,6 +114,10 @@ pub(crate) struct SessionState {
     pub decided: BTreeMap<String, Json>,
     pub host_asks: BTreeMap<String, HostAsk>,
     pub idem: BTreeMap<String, Json>,
+    /// The budget ceilings armed at `open` and lifted by `amend(budget)`
+    /// — the boundary's own record of the driver's `budget_ceiling`
+    /// (the driver's copy is private; the amend gate compares old → new).
+    pub budget_ceiling: BTreeMap<String, i64>,
     pub scan_seq: u64,
     /// The  block staged for the next drive (a
     /// submit input).
@@ -139,6 +143,32 @@ impl EmbedService {
         let store = Store::open(&config.store_root).map_err(|e| EmbedError::Refused {
             reason: format!("store_open: {e:?}"),
         })?;
+        Self::build(config, store)
+    }
+
+    /// Open over an injected clock / id source — the deterministic seam
+    /// (`ManualClock`/`SeqIds`) the AC-R-2.11.1-2 byte-identity fixture
+    /// and the golden corpus drive. `None` ids = `TimeIds` (production).
+    pub fn open_with(
+        config: ServiceConfig,
+        clock: Box<dyn hh_ledger::ids::Clock>,
+        ids: Option<Box<dyn hh_ledger::ids::IdSource>>,
+    ) -> Result<Self, EmbedError> {
+        let store = Store::open_with(
+            &config.store_root,
+            clock,
+            ids,
+            hh_ledger::DEFAULT_BLOB_MAX_BYTES,
+        )
+        .map_err(|e| EmbedError::Refused {
+            reason: format!("store_open: {e:?}"),
+        })?;
+        Self::build(config, store)
+    }
+
+    /// Shared construction — registry seed + the service state over a
+    /// ready `Store`.
+    fn build(config: ServiceConfig, store: Store) -> Result<Self, EmbedError> {
         let mut registry = RegistryStore::open(
             config.store_root.join("registry"),
             &ProvenanceRecord::kernel("hh-embed", 0),
@@ -405,6 +435,7 @@ impl EmbedService {
             "steer" => self.steer(&req.params),
             "respond_permission" => self.respond_permission(&req.params),
             "fork" => self.fork(&req.params),
+            "amend" => self.amend(&req.params),
             "report_host_effect" => self.report_host_effect(&req.params),
             "respond_elicitation" => self.respond_elicitation(&req.params),
             "stream_events" => self.stream_events(&req.params),
@@ -496,6 +527,7 @@ impl EmbedService {
         proposal: &str,
         effect_id: Option<String>,
         options: Vec<String>,
+        rendering: Json,
     ) -> Result<String, EmbedError> {
         let permission_id = self.alloc("perm");
         let (run_id, lease) = {
@@ -529,10 +561,7 @@ impl EmbedService {
             Json::obj([
                 ("permission_id", Json::str(permission_id.clone())),
                 ("proposal", Json::str(proposal.to_string())),
-                (
-                    "rendering",
-                    Json::obj([("text", Json::str(proposal.to_string()))]),
-                ),
+                ("rendering", rendering.clone()),
             ]),
         )?;
         self.session_mut(sess_id)?.pendings.insert(
@@ -557,7 +586,7 @@ impl EmbedService {
                         })
                         .collect(),
                     effect_id,
-                    rendering: None,
+                    rendering: Some(rendering),
                 }
                 .to_json(),
             );

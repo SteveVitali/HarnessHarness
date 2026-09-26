@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:500857f539f198e3cba6d418cb18e7e8feb8dd39b7d2c2b41ae8bcdbd801e244";
+    "sha256:a768bcfe4919fe183dd1bd4d0d5fa4d1d871d66d99b96b5bd16e48f4e261e8fc";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -137,6 +137,7 @@ pub struct AmendParams {
     pub value: Json,
     pub attestation: Option<Json>,
     pub idempotency_key: Option<String>,
+    pub invocation: Option<InvocationRecord>,
 }
 
 impl AmendParams {
@@ -150,6 +151,9 @@ impl AmendParams {
         }
         if let Some(v) = &self.idempotency_key {
             pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.invocation {
+            pairs.push(("invocation", v.to_json()));
         }
         Json::obj(pairs)
     }
@@ -188,6 +192,10 @@ impl AmendParams {
                         .map(|s| s.to_string())
                         .ok_or_else(|| "expected string".to_string())?,
                 ),
+                None => None,
+            },
+            invocation: match v.get("invocation") {
+                Some(f) => Some(InvocationRecord::from_json(f).map_err(|e| e)?),
                 None => None,
             },
         })
@@ -1426,6 +1434,7 @@ pub struct ForkParams {
     pub at: ForkPoint,
     pub manifest_delta: Option<Json>,
     pub idempotency_key: Option<String>,
+    pub invocation: Option<InvocationRecord>,
 }
 
 impl ForkParams {
@@ -1438,6 +1447,9 @@ impl ForkParams {
         }
         if let Some(v) = &self.idempotency_key {
             pairs.push(("idempotency_key", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.invocation {
+            pairs.push(("invocation", v.to_json()));
         }
         Json::obj(pairs)
     }
@@ -1466,6 +1478,10 @@ impl ForkParams {
                         .map(|s| s.to_string())
                         .ok_or_else(|| "expected string".to_string())?,
                 ),
+                None => None,
+            },
+            invocation: match v.get("invocation") {
+                Some(f) => Some(InvocationRecord::from_json(f).map_err(|e| e)?),
                 None => None,
             },
         })
@@ -2159,6 +2175,128 @@ impl HostResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvocationRecord {
+    pub argv_canonical: Vec<String>,
+    pub cwd_ref: String,
+    pub principal: String,
+    pub attendance: AttendanceDeclaration,
+    pub output_format: OutputFormat,
+    pub stdin_digest: Option<String>,
+    pub overrides_layer_id: Option<String>,
+    pub instrument_record: Json,
+    pub idempotency_key: String,
+}
+
+impl InvocationRecord {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push((
+            "argv_canonical",
+            Json::Arr(
+                self.argv_canonical
+                    .iter()
+                    .map(|x| Json::str(x.clone()))
+                    .collect(),
+            ),
+        ));
+        pairs.push(("cwd_ref", Json::str(self.cwd_ref.clone())));
+        pairs.push(("principal", Json::str(self.principal.clone())));
+        pairs.push(("attendance", self.attendance.to_json()));
+        pairs.push(("output_format", self.output_format.to_json()));
+        if let Some(v) = &self.stdin_digest {
+            pairs.push(("stdin_digest", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.overrides_layer_id {
+            pairs.push(("overrides_layer_id", Json::str(v.clone())));
+        }
+        pairs.push(("instrument_record", self.instrument_record.clone()));
+        pairs.push(("idempotency_key", Json::str(self.idempotency_key.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<InvocationRecord, String> {
+        Ok(InvocationRecord {
+            argv_canonical: {
+                let f = v
+                    .get("argv_canonical")
+                    .ok_or_else(|| format!("missing '{}'", "argv_canonical"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .ok_or_else(|| "expected string".to_string())?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+            cwd_ref: {
+                let f = v
+                    .get("cwd_ref")
+                    .ok_or_else(|| format!("missing '{}'", "cwd_ref"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            principal: {
+                let f = v
+                    .get("principal")
+                    .ok_or_else(|| format!("missing '{}'", "principal"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            attendance: {
+                let f = v
+                    .get("attendance")
+                    .ok_or_else(|| format!("missing '{}'", "attendance"))?;
+                AttendanceDeclaration::from_json(f).map_err(|e| e)?
+            },
+            output_format: {
+                let f = v
+                    .get("output_format")
+                    .ok_or_else(|| format!("missing '{}'", "output_format"))?;
+                OutputFormat::from_json(f).map_err(|e| e)?
+            },
+            stdin_digest: match v.get("stdin_digest") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            overrides_layer_id: match v.get("overrides_layer_id") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            instrument_record: {
+                let f = v
+                    .get("instrument_record")
+                    .ok_or_else(|| format!("missing '{}'", "instrument_record"))?;
+                f.clone()
+            },
+            idempotency_key: {
+                let f = v
+                    .get("idempotency_key")
+                    .ok_or_else(|| format!("missing '{}'", "idempotency_key"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InvokeHostCapability {
     pub capability_id: String,
     pub args: Json,
@@ -2427,6 +2565,7 @@ impl NavigateParams {
 pub struct OpenSessionParams {
     pub spec: OpenSpec,
     pub idempotency_key: String,
+    pub invocation: Option<InvocationRecord>,
 }
 
 impl OpenSessionParams {
@@ -2434,6 +2573,9 @@ impl OpenSessionParams {
         let mut pairs: Vec<(&'static str, Json)> = Vec::new();
         pairs.push(("spec", self.spec.to_json()));
         pairs.push(("idempotency_key", Json::str(self.idempotency_key.clone())));
+        if let Some(v) = &self.invocation {
+            pairs.push(("invocation", v.to_json()));
+        }
         Json::obj(pairs)
     }
 
@@ -2452,6 +2594,10 @@ impl OpenSessionParams {
                 f.as_str()
                     .map(|s| s.to_string())
                     .ok_or_else(|| "expected string".to_string())?
+            },
+            invocation: match v.get("invocation") {
+                Some(f) => Some(InvocationRecord::from_json(f).map_err(|e| e)?),
+                None => None,
             },
         })
     }
@@ -2640,6 +2786,36 @@ impl OpenSpec {
                 },
             }),
             other => Err(format!("unknown OpenSpec variant {other:?}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputFormat {
+    Human,
+    Json,
+    Jsonl,
+}
+
+impl OutputFormat {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OutputFormat::Human => "human",
+            OutputFormat::Json => "json",
+            OutputFormat::Jsonl => "jsonl",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<OutputFormat, String> {
+        match v.as_str() {
+            Some("human") => Ok(OutputFormat::Human),
+            Some("json") => Ok(OutputFormat::Json),
+            Some("jsonl") => Ok(OutputFormat::Jsonl),
+            other => Err(format!("unknown OutputFormat variant {other:?}")),
         }
     }
 }
@@ -4735,6 +4911,7 @@ pub fn error_code_for(kind: &str) -> Option<i64> {
         "AuthorityViolation" => 1303,
         "UnexpressibleSurface" => 1304,
         "LinkError" => 1305,
+        "AuthorityWideningRequiresHuman" => 1306,
         "InsufficientBudget" => 1400,
         "UnbudgetedArm" => 1401,
         "UnattendedRequiresInput" => 1402,
@@ -4784,13 +4961,18 @@ pub enum ClientError {
 /// The newline-delimited JSON-RPC 2.0 client (binding (b) transport;
 /// binding (a) is `hh_embed::EmbedService` — same ops, same bytes).
 /// Notifications (`stream.frame`) are buffered on `pending` and drained
-/// by [`Client::poll_notification`]/[`Client::take_notifications`].
+/// by [`Client::poll_notification`]/[`Client::take_notifications`];
+/// `upcall.*` asks buffer on `pending_upcalls` for
+/// [`Client::poll_upcall`]/[`Client::take_upcalls`] (Group U — the host
+/// channels a serving host answers, ADR-0177 D3).
 pub struct Client<R, W> {
     reader: R,
     writer: W,
     next_id: i64,
     /// Notifications received while waiting for responses.
     pending: Vec<StreamNotification>,
+    /// `upcall.*` notifications — `(method, params)` in arrival order.
+    pending_upcalls: Vec<(String, Json)>,
     /// The negotiated `HelloResult` (set by `hello`).
     pub hello_result: Option<HelloResult>,
 }
@@ -4802,6 +4984,7 @@ impl<R: BufRead, W: Write> Client<R, W> {
             writer,
             next_id: 0,
             pending: Vec::new(),
+            pending_upcalls: Vec::new(),
             hello_result: None,
         }
     }
@@ -4839,12 +5022,18 @@ impl<R: BufRead, W: Write> Client<R, W> {
                 .map_err(|e| ClientError::Transport(e.to_string()))?;
             // A notification: buffer and keep waiting for the response.
             if msg.get("id").is_none() {
-                if msg.get("method").and_then(Json::as_str) == Some("stream.frame") {
+                let method = msg.get("method").and_then(Json::as_str).unwrap_or("");
+                if method == "stream.frame" {
                     if let Some(p) = msg.get("params") {
                         if let Ok(n) = StreamNotification::from_json(p) {
                             self.pending.push(n);
                         }
                     }
+                } else if method.starts_with("upcall.") {
+                    self.pending_upcalls.push((
+                        method.to_string(),
+                        msg.get("params").cloned().unwrap_or(Json::Null),
+                    ));
                 }
                 continue;
             }
@@ -4881,11 +5070,17 @@ impl<R: BufRead, W: Write> Client<R, W> {
         }
         let msg =
             hh_wire::json::parse(line.trim()).map_err(|e| ClientError::Transport(e.to_string()))?;
-        if msg.get("method").and_then(Json::as_str) == Some("stream.frame") {
+        let method = msg.get("method").and_then(Json::as_str).unwrap_or("");
+        if method == "stream.frame" {
             if let Some(p) = msg.get("params") {
                 let n = StreamNotification::from_json(p).map_err(ClientError::Decode)?;
                 return Ok(Some(n));
             }
+        } else if method.starts_with("upcall.") {
+            self.pending_upcalls.push((
+                method.to_string(),
+                msg.get("params").cloned().unwrap_or(Json::Null),
+            ));
         }
         Ok(None)
     }
@@ -4894,10 +5089,55 @@ impl<R: BufRead, W: Write> Client<R, W> {
     pub fn take_notifications(&mut self) -> Vec<StreamNotification> {
         std::mem::take(&mut self.pending)
     }
+
+    /// Read one message; if it is an `upcall.*` notification return its
+    /// `(method, params)`, else `Ok(None)` (a `stream.frame` read here is
+    /// buffered for [`Client::poll_notification`], never dropped).
+    pub fn poll_upcall(&mut self) -> Result<Option<(String, Json)>, ClientError> {
+        if !self.pending_upcalls.is_empty() {
+            return Ok(Some(self.pending_upcalls.remove(0)));
+        }
+        let mut line = String::new();
+        let n = self
+            .reader
+            .read_line(&mut line)
+            .map_err(|e| ClientError::Transport(e.to_string()))?;
+        if n == 0 {
+            return Err(ClientError::Transport("kernel closed the stream".into()));
+        }
+        let msg =
+            hh_wire::json::parse(line.trim()).map_err(|e| ClientError::Transport(e.to_string()))?;
+        let method = msg.get("method").and_then(Json::as_str).unwrap_or("");
+        if method.starts_with("upcall.") {
+            return Ok(Some((
+                method.to_string(),
+                msg.get("params").cloned().unwrap_or(Json::Null),
+            )));
+        }
+        if method == "stream.frame" {
+            if let Some(p) = msg.get("params") {
+                if let Ok(n) = StreamNotification::from_json(p) {
+                    self.pending.push(n);
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Drain buffered `upcall.*` notifications without blocking.
+    pub fn take_upcalls(&mut self) -> Vec<(String, Json)> {
+        std::mem::take(&mut self.pending_upcalls)
+    }
     /// `account` → `AccountView` (see the contract registry).
     pub fn account(&mut self, params: &AccountParams) -> Result<AccountView, ClientError> {
         let raw = self.call("account", params.to_json())?;
         AccountView::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `amend` → `Session` (see the contract registry).
+    pub fn amend(&mut self, params: &AmendParams) -> Result<Session, ClientError> {
+        let raw = self.call("amend", params.to_json())?;
+        Session::from_json(&raw).map_err(ClientError::Transport)
     }
 
     /// `cancel` → `Acknowledged` (see the contract registry).

@@ -975,6 +975,22 @@ fn diff_edges(base: &HirDocument, target: &HirDocument, ops: &mut Vec<DiffOp>) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// `classify(base, target, ops)` — the §3.1.7 classification over a diff's ops.
+/// `classify_pair(base, target) → DiffClassification` — the gate-free
+/// reading of `diff`: the same op computation and classification fold,
+/// without the provenance derivation or the §3.1.7 gates. The boundary's
+/// I-1 check needs the *classification* of an override-applied pair
+/// before deciding whether to refuse (`AuthorityWideningRequiresHuman`)
+/// — `diff` itself *enforces* the gate, so a caller that must classify
+/// first uses this.
+pub fn classify_pair(base: &HirDocument, target: &HirDocument) -> DiffClassification {
+    let mut ops = Vec::new();
+    diff_doc_members(base, target, &mut ops);
+    diff_nodes(base, target, &mut ops);
+    diff_edges(base, target, &mut ops);
+    ops.sort_by_key(|op| crate::schema::diff_op_json(op).to_canonical_string());
+    classify(base, target, &ops)
+}
+
 pub fn classify(base: &HirDocument, target: &HirDocument, ops: &[DiffOp]) -> DiffClassification {
     let mut c = DiffClassification {
         semantic_ops: 0,
@@ -1306,6 +1322,18 @@ fn budget_dir(old: &Json, new: &Json) -> Delta {
             d
         }
         _ => {
+            // A bound leaf (`…/dimensions/<dim>/hard|soft`) diffs as a
+            // bare scalar pair — the cap *is* the value, so a higher
+            // number loosens and a lower one tightens.
+            if let (Some(ov), Some(nv)) = (old.as_int(), new.as_int()) {
+                if nv > ov {
+                    return Delta::Loosening;
+                }
+                if nv < ov {
+                    return Delta::Tightening;
+                }
+                return Delta::None;
+            }
             let (oh, os) = bound(old);
             let (nh, ns) = bound(new);
             if nh > oh || ns > os {
