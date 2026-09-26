@@ -220,12 +220,30 @@ pub fn annotate_row(results: &ResultsStore, store: &Store, row: &ResultsRow) -> 
     // row's L1 admission state visible without a leaderboard call.
     let unvalidated = results
         .bundle_refs(&row.key.run_id)
-        .map(|es| !es.is_empty() && es.iter().all(|e| e.status < BundleStatus::Validated))
+        .map(|es| {
+            !es.is_empty()
+                && es
+                    .iter()
+                    .all(|e| !e.status.satisfies(BundleStatus::Validated))
+        })
         .unwrap_or(false);
     if unvalidated {
         flags.push("bundle_unvalidated".to_string());
-        flags.sort();
     }
+    // `bundle_superseded` / `bundle_retracted` — the lifecycle terminals
+    // annotate the row (AC-R-2.9.3-11: annotated, never removed or
+    // hidden; the supersession/retraction edge reads off the status
+    // book).
+    if let Ok(es) = results.bundle_refs(&row.key.run_id) {
+        let any = |want: BundleStatus| es.iter().any(|e| e.status == want);
+        if any(BundleStatus::Superseded) {
+            flags.push("bundle_superseded".to_string());
+        }
+        if any(BundleStatus::Retracted) {
+            flags.push("bundle_retracted".to_string());
+        }
+    }
+    flags.sort();
     RowAnnotations {
         key: row.key.key_id(),
         version_id: row.version_id.clone(),

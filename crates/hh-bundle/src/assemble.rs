@@ -119,7 +119,7 @@ pub struct Assembled {
 /// `SecretMaterialPresent` refusal (§5h.3 §2 error column). A
 /// `placeholder_passthrough` mark (`tombstone: None`) is the *safe* form —
 /// it is not a leak.
-fn secret_scan(members: &MemberBytes) -> Result<(), BundleError> {
+pub(crate) fn secret_scan(members: &MemberBytes) -> Result<(), BundleError> {
     let detectors = hh_secrets::DetectorSet::standard(hh_secrets::MaskSet::default());
     for (addr, bytes) in members {
         if let Ok(text) = std::str::from_utf8(bytes) {
@@ -474,6 +474,26 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
         lineage,
         watermarks,
         status,
+        // The experiment binding rides the subject section so a *containing*
+        // bundle's S9 can read the arm off each contained run manifest
+        // (§5h.3 §3 `subject.experiment`; AC-R-2.9.3-12).
+        experiment: rm
+            .experiment
+            .as_ref()
+            .and_then(|b| {
+                let arm = b.arm_id.clone()?;
+                let exp = b.experiment_run_id.clone()?;
+                let mut m = BTreeMap::new();
+                m.insert(
+                    run_id.to_string(),
+                    Json::obj([
+                        ("experiment_run_id", Json::str(exp)),
+                        ("arm_id", Json::str(arm)),
+                    ]),
+                );
+                Some(m)
+            })
+            .unwrap_or_default(),
     };
 
     // ── materialize policy → member statuses + fetch[] ───────────────
@@ -597,6 +617,9 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
             t
         },
         results: results_section,
+        // `composition` is the scoped-kind DAG section (S4.2) — a `run`
+        // bundle carries none.
+        composition: Json::Null,
         // Stamped below — the basis derivation reads the manifest's own
         // member index, so the section is built after the literal.
         reproducibility: Json::Null,

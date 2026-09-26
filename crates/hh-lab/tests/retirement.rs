@@ -107,6 +107,7 @@ fn retirement_arm(id: &str, lid: &str) -> ArmSpec {
         // retirement match shape requires (AC-R-2.9.6-11).
         eval_budget: "budget:eval".into(),
         search_budget: Some("budget:search".into()),
+        inference_budget: None,
         match_spec: Some(MatchSpec::matched_cap(&[])),
         artifact_ref: Ref::new("def:x", "sha256:ee55"),
         limits_enforced: "limits:declared".into(),
@@ -275,7 +276,7 @@ fn settle_and_retire_chain_over_the_minimal_profiles() {
     let outcome = retire(
         &debt_ref,
         DebtStatus::Expired,
-        &[verdict.clone()],
+        std::slice::from_ref(&verdict),
         &retirement_record(report_ref, "verdict:1", human("reviewer:1")),
     )
     .expect("pass verdict + human seal retires");
@@ -289,7 +290,7 @@ fn settle_and_retire_chain_over_the_minimal_profiles() {
         retire(
             &debt_ref,
             DebtStatus::Retired,
-            &[verdict.clone()],
+            std::slice::from_ref(&verdict),
             &retirement_record(report_ref, "verdict:1", human("reviewer:1")),
         ),
         Err(RetireError::AlreadyRetired {

@@ -261,6 +261,10 @@ pub struct ArmSpec {
     /// The pinned `search_budget` ref (`None` = no search budget — legal only
     /// for `exploratory`/product-level rows; the refusal is `UnbudgetedArm`).
     pub search_budget: Option<String>,
+    /// The pinned `inference_budget` ref — `matched_total` (M3) requires all
+    /// three terms (`search + eval + inference`); absent on other modes
+    /// (`UnbudgetedArm` under `matched_total`, additive at the wire).
+    pub inference_budget: Option<String>,
     /// The arm's `MatchSpec` (mandatory on matched kinds — `MissingMatchSpec`).
     pub match_spec: Option<MatchSpec>,
     /// The arm's frozen artifact — a sealed definition or product version.
@@ -297,6 +301,9 @@ impl ArmSpec {
         if let Some(s) = &self.search_budget {
             m.insert("search_budget".into(), Json::str(s));
         }
+        if let Some(s) = &self.inference_budget {
+            m.insert("inference_budget".into(), Json::str(s));
+        }
         if let Some(ms) = &self.match_spec {
             m.insert("match_spec".into(), ms.to_json());
         }
@@ -323,6 +330,7 @@ impl ArmSpec {
                 "level_assignment",
                 "eval_budget",
                 "search_budget",
+                "inference_budget",
                 "match_spec",
                 "artifact_ref",
                 "limits_enforced",
@@ -350,6 +358,7 @@ impl ArmSpec {
             level_assignment,
             eval_budget: str_at(m, "eval_budget", REC)?.to_string(),
             search_budget: opt_str_at(m, "search_budget")?.map(str::to_string),
+            inference_budget: opt_str_at(m, "inference_budget")?.map(str::to_string),
             match_spec: match m.get("match_spec") {
                 None | Some(Json::Null) => None,
                 Some(ms) => Some(
@@ -981,6 +990,10 @@ impl From<SchemaError> for ExperimentRefusal {
 /// `Option` payload mirrors "resolvable at this validation point").
 pub type BudgetResolver<'a> = dyn Fn(&str) -> Option<BudgetSpec> + 'a;
 
+/// Resolves a participant coordinate's capability descriptor for hosted-level
+/// admissibility (`capabilities[<factor name>]` → the ADR-0152 verdict).
+pub type ParticipantDescriptor<'a> = dyn Fn(&str) -> Option<Json> + 'a;
+
 #[derive(Default)]
 pub struct SpecContext<'a> {
     /// Resolve a budget ref to its body (`None` = cannot resolve — the
@@ -1012,6 +1025,14 @@ pub struct SpecContext<'a> {
     /// unsupported`; `None` (resolver absent or arm unresolvable) = the
     /// AC-R-2.3.4-10 visibility check defers to a context that can run it.
     pub cache_state_visible: Option<&'a CacheVisibilityResolver<'a>>,
+    /// The `participant` descriptor resolver — `level ref → the registry's
+    /// `participant` record body` (ADR-0013/0151; §6.3 C1). The hosted-level
+    /// admissibility check reads `capabilities[<factor name>]` off the
+    /// descriptor (ADR-0152's verdict vocabulary): a `configuration-level`
+    /// hosted level is admissible only where the varied coordinate resolves
+    /// `SUPPORTED` (an unknown coordinate is never coerced — T-LCD-07).
+    /// `None` = the check defers to a context that can resolve participants.
+    pub participant_descriptor: Option<&'a ParticipantDescriptor<'a>>,
 }
 
 /// A `budget_relevant` parameter's bound value and the dimensions it drives
@@ -1052,6 +1073,7 @@ impl SpecContext<'_> {
             budget_relevant_params: None,
             min_replicates: 1,
             cache_state_visible: None,
+            participant_descriptor: None,
         }
     }
 }
@@ -1099,8 +1121,9 @@ impl ExperimentSpec {
                 need: floor,
             });
         }
-        // 3. Factor-level admissibility (ADR-0154 D5 + the kind table).
-        self.check_factors()?;
+        // 3. Factor-level admissibility (ADR-0154 D5 + the kind table +
+        //    the hosted-level granularity rule, AC-R-2.10.3-3).
+        self.check_factors(ctx)?;
         // 3.5. The design shape (resolution/generators, kind-table coverage,
         //      named-interaction estimability) and the scheduling pools.
         self.check_design()?;
@@ -1195,7 +1218,7 @@ impl ExperimentSpec {
         Ok(())
     }
 
-    fn check_factors(&self) -> Result<(), ExperimentRefusal> {
+    fn check_factors(&self, ctx: &SpecContext<'_>) -> Result<(), ExperimentRefusal> {
         let mut names = BTreeSet::new();
         for f in &self.factors {
             if !names.insert(f.name.as_str()) {
@@ -1235,6 +1258,59 @@ impl ExperimentSpec {
                             self.kind.name()
                         ),
                     });
+                }
+                // Hosted-level granularity admissibility (§6.3 §2.1;
+                // AC-R-2.10.3-3): a hosted participant admits only
+                // configuration-level and product-level variation — a
+                // component-level coordinate is refused `InadmissibleFactor`
+                // at `register`, never a warning.
+                if l.class == ParticipantClass::Hosted {
+                    match f.granularity {
+                        Some(Granularity::ComponentLevel) => {
+                            return Err(ExperimentRefusal::InadmissibleFactor {
+                                factor: f.name.clone(),
+                                reason: format!(
+                                    "hosted level `{}` is inadmissible on a \
+                                     component-level factor",
+                                    l.level_id
+                                ),
+                            });
+                        }
+                        Some(Granularity::ConfigurationLevel) => {
+                            // Admissible only where the participant
+                            // descriptor's capability vector declares the
+                            // varied coordinate `SUPPORTED`; an unknown
+                            // coordinate is never coerced (T-LCD-07). The
+                            // check defers to a context that can resolve the
+                            // participant record (`None` resolver ⇒ the
+                            // refusal lands where the descriptor resolves).
+                            if let Some(describe) = ctx.participant_descriptor {
+                                let supported = describe(&l.ref_)
+                                    .and_then(|d| {
+                                        d.get("capabilities")
+                                            .and_then(|c| c.get(&f.name))
+                                            .and_then(Json::as_str)
+                                            .map(str::to_string)
+                                    })
+                                    .map(|v| v == "SUPPORTED")
+                                    .unwrap_or(false);
+                                if !supported {
+                                    return Err(ExperimentRefusal::InadmissibleFactor {
+                                        factor: f.name.clone(),
+                                        reason: format!(
+                                            "hosted level `{}` on configuration-level factor \
+                                             `{}` requires capability coordinate `{}` = \
+                                             SUPPORTED on the participant descriptor",
+                                            l.level_id, f.name, f.name
+                                        ),
+                                    });
+                                }
+                            }
+                        }
+                        // `product-level` (or absent — the product
+                        // default) is admissible for hosted.
+                        _ => {}
+                    }
                 }
             }
         }
@@ -1561,6 +1637,7 @@ impl ExperimentSpec {
             // `level_assignment` names known factors/levels and assigns a
             // non_portable level only where the profile is not the varied
             // factor (ADR-0154 D5).
+            let mut hosted_level = false;
             for (fname, lid) in &arm.level_assignment {
                 let f = self
                     .factors
@@ -1578,6 +1655,7 @@ impl ExperimentSpec {
                         factor: fname.clone(),
                         reason: format!("arm `{}` assigns undeclared level `{lid}`", arm.arm_id),
                     })?;
+                hosted_level = hosted_level || level.class == ParticipantClass::Hosted;
                 if level.non_portable && f.kind == FactorKind::Harness {
                     // A pinned-profile level may not be the *varied* harness
                     // factor level — ADR-0154 D5's confinement.
@@ -1603,6 +1681,33 @@ impl ExperimentSpec {
                     return Err(ExperimentRefusal::InadmissibleFactor {
                         factor: fname.clone(),
                         reason: format!("arm `{}` assigns an undeclared factor", arm.arm_id),
+                    });
+                }
+            }
+            // `limits_enforced` honesty (§6.3 C1; ADR-0046 (d);
+            // AC-R-2.10.3-3): the stamp is derived — a hosted arm claims
+            // `full` only where its `budget_enforcement` map proves every
+            // declared dimension enforced. A `full` claim the boundary
+            // cannot prove is refused (never silently restamped, T-LCD-14);
+            // `partial`/`none` claims are always admissible.
+            if hosted_level && arm.limits_enforced == "full" {
+                let proven_full = ctx
+                    .budget_enforcement
+                    .map(|enf| {
+                        let e = enf(arm);
+                        !e.levels.is_empty()
+                            && e.levels
+                                .values()
+                                .all(|l| *l == hh_budget::errors::EnforcementLevel::Enforced)
+                    })
+                    .unwrap_or(false);
+                if !proven_full {
+                    return Err(ExperimentRefusal::InadmissibleFactor {
+                        factor: arm.arm_id.clone(),
+                        reason: "`limits_enforced = full` is unverifiable on a hosted arm \
+                                 (hosted limits are reported, not enforced — the derived \
+                                 stamp is `partial`/`none`)"
+                            .to_string(),
                     });
                 }
             }
@@ -1647,6 +1752,7 @@ impl ExperimentSpec {
         for arm in &self.arms {
             let eval = resolve(&arm.eval_budget);
             let search = arm.search_budget.as_deref().and_then(resolve);
+            let inference = arm.inference_budget.as_deref().and_then(resolve);
             let mode = arm.match_spec.as_ref().expect("checked above").mode;
             let enforcement = ctx
                 .budget_enforcement
@@ -1657,7 +1763,7 @@ impl ExperimentSpec {
                 BudgetArmSpec {
                     search_budget: search,
                     eval_budget: eval,
-                    inference_budget: None,
+                    inference_budget: inference,
                     match_spec: arm.match_spec.clone(),
                     enforcement,
                     spend_confidence: None,

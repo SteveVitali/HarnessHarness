@@ -158,6 +158,12 @@ pub enum ResultsError {
         /// Why.
         detail: String,
     },
+    /// `set_status` refused — an illegal transition or a failed evidence
+    /// gate (`StatusGateFailed`; §5h.3 §2, S4.2).
+    StatusGateFailed {
+        /// The refused transition (`from → to`) plus the failed gate.
+        detail: String,
+    },
 }
 
 impl From<LedgerError> for ResultsError {

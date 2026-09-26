@@ -495,6 +495,12 @@ pub struct SubjectSection {
     /// `open | finished` — an open run caps at R0 (`RunNotDurable` on
     /// higher claims).
     pub status: String,
+    /// The experiment binding the subject runs under — `{experiment_run_id,
+    /// arm_id}` per subject run when the run carries one (§6.3's row-key
+    /// fields; S9's `ContainmentMismatch` reads the arm off a contained run
+    /// bundle). Absent on bundles over unbound runs (additive — pre-S4.2
+    /// manifests decode with `None`).
+    pub experiment: BTreeMap<String, Json>,
 }
 
 impl SubjectSection {
@@ -525,6 +531,17 @@ impl SubjectSection {
             ),
         );
         m.insert("status".into(), Json::str(self.status.clone()));
+        if !self.experiment.is_empty() {
+            m.insert(
+                "experiment".into(),
+                Json::Obj(
+                    self.experiment
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
+                ),
+            );
+        }
         Json::Obj(m)
     }
     /// Decode.
@@ -559,6 +576,10 @@ impl SubjectSection {
                 .and_then(Json::as_str)
                 .unwrap_or("finished")
                 .into(),
+            experiment: match j.get("experiment") {
+                Some(Json::Obj(e)) => e.clone(),
+                _ => BTreeMap::new(),
+            },
         }
     }
 }
@@ -686,6 +707,16 @@ pub struct BundleManifest {
     pub members: Vec<MemberRef>,
     /// Declared-unpinned roles.
     pub unpinned: Vec<Unpinned>,
+    /// `composition` — the scoped-kind DAG section (§5h.3 §2
+    /// "Composition", ADR-0141 D2; S4.2, additive — absent on `run`
+    /// bundles assembled before it):
+    /// `{contains: [{bundle_id, kind, member}], derived_from?:
+    /// {bundle_id, reason}, lift?: {from_format, mapping_report},
+    /// lineage?: {root_run_id}}`. `contains[]` entries reference
+    /// contained manifests by `version_id`, each carried as a
+    /// `contains:<bundle_id>` member; `derived_from` is the
+    /// supersession edge (`supersede_bundle`/`migrate_bundle` write it).
+    pub composition: Json,
     /// Registered extensions (preserved, never deciding validity).
     pub ext: BTreeMap<String, Json>,
     /// The bundle id — `idp/1` over `canonical(manifest − version_id)`.
@@ -747,6 +778,9 @@ impl BundleManifest {
             ),
         );
         m.insert("results".into(), self.results.clone());
+        if self.composition != Json::Null {
+            m.insert("composition".into(), self.composition.clone());
+        }
         m.insert("reproducibility".into(), self.reproducibility.clone());
         m.insert(
             "members".into(),
@@ -881,6 +915,7 @@ impl BundleManifest {
             instrument: j.get("instrument").cloned().unwrap_or(Json::Null),
             traces,
             results: j.get("results").cloned().unwrap_or(Json::Null),
+            composition: j.get("composition").cloned().unwrap_or(Json::Null),
             reproducibility: j.get("reproducibility").cloned().unwrap_or(Json::Null),
             members,
             unpinned,
@@ -933,6 +968,7 @@ mod tests {
                 lineage: vec![],
                 watermarks: BTreeMap::new(),
                 status: "finished".into(),
+                experiment: BTreeMap::new(),
             },
             definition: Json::Null,
             configuration: Json::Null,
@@ -941,6 +977,7 @@ mod tests {
             instrument: Json::Null,
             traces: BTreeMap::new(),
             results: Json::Null,
+            composition: Json::Null,
             reproducibility: Json::Null,
             members: vec![],
             unpinned: vec![],

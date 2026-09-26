@@ -592,6 +592,21 @@ impl EmbedService {
             "kernel.check_completeness" => self.kernel_check_completeness(&req.params),
             "kernel.reproduce" => self.kernel_reproduce(&req.params),
             "kernel.import" => self.kernel_import(&req.params),
+            // ── S4.2: the scoped kinds ride `kernel.bundle{kind}`; the
+            // §5h.3 lifecycle/status surface (validate S1..S9, diff,
+            // fetch, export, status/set_status, attest, audit_bundle,
+            // supersede, migrate, lineage).
+            "kernel.validate" => self.kernel_validate(&req.params),
+            "kernel.diff" => self.kernel_diff(&req.params),
+            "kernel.fetch" => self.kernel_fetch(&req.params),
+            "kernel.export" => self.kernel_export(&req.params),
+            "kernel.status" => self.kernel_status(&req.params),
+            "kernel.set_status" => self.kernel_set_status(&req.params),
+            "kernel.attest" => self.kernel_attest(&req.params),
+            "kernel.audit_bundle" => self.kernel_audit_bundle(&req.params),
+            "kernel.supersede" => self.kernel_supersede(&req.params),
+            "kernel.migrate" => self.kernel_migrate(&req.params),
+            "kernel.lineage" => self.kernel_lineage(&req.params),
             "lab.serve" => self.lab_serve(&req.params),
             // ── S3.3: `lab.eval.*` — the eval kernel boundary
             // (R-2.9.2/R-2.9.4⁰ᵇ; records-in/records-out).
