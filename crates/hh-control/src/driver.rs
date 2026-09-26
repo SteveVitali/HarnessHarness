@@ -16,6 +16,7 @@
 use hh_ledger::event::{Event, EventEnvelope, Scope};
 use hh_ledger::manifest::EventRef;
 use hh_ontology::control::{CancelledBy, DecisionPoint, Owner, StopReason};
+use hh_provenance::record::ProvenanceRecord;
 use hh_wire::json::Json;
 
 use crate::envelope::{CheckVerdict, Envelope, EnvelopeState};
@@ -71,6 +72,15 @@ pub trait EffectGate {
     /// `stop_rule = submit` detection — the marker is detected here,
     /// never by the environment, ADR-0104).
     fn dispatch(&mut self, effect_id: &str, attempt_no: u64, intent: &Json) -> GateOutcome;
+    /// The structured `finish` record the model submitted through the
+    /// completion capability (the claim surface — ADR-0112 D2:
+    /// `finish{completion?, criteria_status[], artifacts_claimed[],
+    /// open_items[]}`). Defaulted `None` — additive for Stage-1 gates that
+    /// predate the claim surface; the driver still emits a completion claim
+    /// for every `stop{completed}` (AC-R-2.7.2a-1).
+    fn finish_record(&self) -> Option<Json> {
+        None
+    }
 }
 
 /// The gate's terminal report.
@@ -245,6 +255,15 @@ pub struct Driver<S: ControlStrategy> {
     /// `TimeoutPolicy` at scope open (INV-1's input; the driver derives,
     /// never guesses).
     deadlines: std::collections::BTreeMap<String, u64>,
+    /// The run id the claim ledger records (`verification.claim.recorded`'s
+    /// `run_id` — the `AgentProcess` ref of this run).
+    run_id: String,
+    /// The most recent `model_call_id` scope (the claim's `model_call_id` —
+    /// the call whose output the completion claim rides).
+    last_model_call_id: Option<String>,
+    /// The subject model ref (the claim provenance's `Origin::Model.model_ref`
+    /// — read from the sealed profile projection, `model_ref` key).
+    model_ref: String,
 }
 
 impl<S: ControlStrategy> Driver<S> {
@@ -295,6 +314,14 @@ impl<S: ControlStrategy> Driver<S> {
             config,
             stop_pending: None,
             deadlines: std::collections::BTreeMap::new(),
+            run_id: ctx.process_ref.clone(),
+            last_model_call_id: None,
+            model_ref: ctx
+                .profile
+                .get("model_ref")
+                .and_then(Json::as_str)
+                .unwrap_or("model/subject")
+                .to_string(),
         })
     }
 
@@ -681,6 +708,7 @@ impl<S: ControlStrategy> Driver<S> {
         scope: Option<(String, u64)>,
     ) -> Result<(), DriverError> {
         let (mc, attempt) = scope.unwrap_or_else(|| (self.alloc("mc"), 1));
+        self.last_model_call_id = Some(mc.clone());
         // G-PRE-CALL — budget/deadline/gauge/reservation/ladder.
         let pre = self.envelope.guard(
             sink.prefix(),
@@ -1001,10 +1029,19 @@ impl<S: ControlStrategy> Driver<S> {
     fn finish(
         &mut self,
         sink: &mut dyn LedgerSink,
-        _gate: &mut dyn EffectGate,
+        gate: &mut dyn EffectGate,
         reason: StopReason,
     ) -> Result<RunResult, DriverError> {
         self.tick(1);
+        // S1.21 — the claim-ledger obligation on `stop{completed}`: emit
+        // `verification.completion.proposed` + `verification.claim.recorded`
+        // before the drain assessment (AC-R-2.7.2a-1: ≥1 claim, kind ∈
+        // {achieved, unachievable}, criteria_status aligned, delegate
+        // provenance). A missing/malformed finish surface still records the
+        // completion claim itself — nothing silently lost (CC3).
+        if matches!(reason, StopReason::Completed) {
+            self.emit_completion_claims(sink, gate)?;
+        }
         let drain = crate::stop::assess_drain(
             sink.prefix(),
             &reason,
@@ -1049,6 +1086,133 @@ impl<S: ControlStrategy> Driver<S> {
             drain,
             decision_events: self.decision_events.clone(),
         })
+    }
+
+    /// The claim-ledger obligation on `stop{completed}` (S1.21 — ADR-0112
+    /// D1/D2/D6; AC-R-2.7.2a-1): `verification.completion.proposed` then
+    /// `verification.claim.recorded` per extracted claim. The model's
+    /// structured `finish` record comes from the gate (`stop_rule = submit`
+    /// detection owns it — the driver never reads the response bytes);
+    /// `extract` runs the structured channel at confidence 1.0. A missing
+    /// surface, a `NoClaimSurface`/`MalformedClaim` refusal, or a gate that
+    /// pre-dates the record all still emit the completion claim itself (the
+    /// `stop{completed}` decision *is* the claim) — the extract error rides
+    /// the claim's `asserted` so nothing is silently lost (CC3).
+    fn emit_completion_claims(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        gate: &mut dyn EffectGate,
+    ) -> Result<(), DriverError> {
+        use hh_provenance::authority::PersistenceScope;
+        use hh_provenance::origin::Origin;
+        use hh_verification::claims::{self, Claim};
+        use hh_verification::vocab::{ClaimKind, ExtractedBy, SubjectRef};
+
+        let mc = self
+            .last_model_call_id
+            .clone()
+            .unwrap_or_else(|| "mc-0".into());
+        let prov = ProvenanceRecord::minted(
+            Origin::model(self.model_ref.clone(), self.run_id.clone(), mc.clone()),
+            PersistenceScope::Run,
+            self.now_ms,
+        );
+        let at_seq = sink.prefix().last().map(|e| e.seq).unwrap_or(0);
+        // `completion.proposed` — the model proposed completion at the stop
+        // decision point (`by` names the model call).
+        self.append_prov(
+            sink,
+            "verification.completion.proposed",
+            hh_verification::events::completion_proposed(&mc, "stop"),
+            None,
+            prov.clone(),
+        )?;
+        // The claim surface — the gate's submitted `finish` record wrapped in
+        // the response view `extract` reads (`{"finish": …}`).
+        let response_view = match gate.finish_record() {
+            Some(fields) => Json::obj([("finish", fields)]),
+            None => Json::Null,
+        };
+        let claims = match claims::extract(
+            &mc,
+            &response_view,
+            "finish",
+            &self.run_id,
+            at_seq,
+            prov.clone(),
+        ) {
+            Ok(cs) => cs,
+            Err(e) => {
+                // The surface was absent or malformed — the completion claim
+                // itself is still recorded (the admitted `stop{completed}`
+                // is the claim; the refusal detail rides `asserted`).
+                let c = Claim {
+                    claim_id: format!("{mc}:claim:1"),
+                    run_id: self.run_id.clone(),
+                    model_call_id: mc.clone(),
+                    at_seq,
+                    kind: ClaimKind::Achieved,
+                    subject: SubjectRef::Run,
+                    predicate: "is_done".into(),
+                    asserted: Json::obj([("extract_error", Json::str(e.to_string()))]),
+                    evidence_refs: vec![],
+                    extracted_by: ExtractedBy::Structured("finish".into()),
+                    extraction_confidence_ppm: 1_000_000,
+                    criteria_status: vec![],
+                    provenance: prov.clone(),
+                };
+                // The delegate provenance is minted above — `validate`
+                // cannot fail here, but honour the contract anyway.
+                let _ = c.validate();
+                vec![c]
+            }
+        };
+        for claim in &claims {
+            self.append_prov(
+                sink,
+                "verification.claim.recorded",
+                hh_verification::events::claim_recorded(claim),
+                Some(&mc),
+                claim.provenance.clone(),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Append one kernel row carrying explicit provenance (the verification
+    /// family is provenance-mandatory — the claim rows carry the claim's
+    /// own `delegate` origin, never a kernel fact — ADR-0112 D6).
+    fn append_prov(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        class: &str,
+        payload: Json,
+        scope_id: Option<&str>,
+        provenance: ProvenanceRecord,
+    ) -> Result<(), DriverError> {
+        let mut ev = crate::events::kernel_event(
+            self.alloc("e"),
+            class,
+            self.ts(),
+            Scope {
+                turn_id: Some("turn-1".into()),
+                model_call_id: scope_id.map(String::from),
+                ..scope_empty()
+            },
+            self.parent_id(sink),
+            vec![],
+            payload,
+        );
+        ev.provenance = Some(provenance);
+        sink.append(vec![ev]).map_err(DriverError::Append)?;
+        let tail: Vec<EventEnvelope> = sink
+            .prefix()
+            .iter()
+            .filter(|e| e.seq > self.state.last_cue_seq)
+            .cloned()
+            .collect();
+        self.strategy.observe(&mut self.state, &tail);
+        Ok(())
     }
 
     /// Append one kernel row through the sink (scope id → `Scope.effect_id`
@@ -1202,7 +1366,7 @@ mod tests {
                     refs: vec![],
                     ir_refs: vec![],
                     surface_ids: Default::default(),
-                    provenance: None,
+                    provenance: e.provenance,
                     payload: e.payload,
                     prev_hash: "h".into(),
                     hash: format!("h{}", self.seq),
@@ -1236,11 +1400,17 @@ mod tests {
     /// A scripted gate.
     struct ScriptedGate {
         out: GateOutcome,
+        /// The structured `finish` record the gate "detected" (the claim
+        /// surface — `None` exercises the synthesized-claim fallback).
+        finish: Option<Json>,
     }
 
     impl EffectGate for ScriptedGate {
         fn dispatch(&mut self, _ef: &str, _a: u64, _i: &Json) -> GateOutcome {
             self.out.clone()
+        }
+        fn finish_record(&self) -> Option<Json> {
+            self.finish.clone()
         }
     }
 
@@ -1331,6 +1501,7 @@ mod tests {
                 submission_ref: Some("sub-1".into()),
                 error_class: None,
             },
+            finish: None,
         };
         let mut asm = NullAssembler;
         let r = driver
@@ -1364,6 +1535,144 @@ mod tests {
     }
 
     #[test]
+    fn a_completed_stop_emits_completion_and_claim_rows() {
+        // AC-R-2.7.2a-1: every `stop{completed}` emits
+        // `verification.completion.proposed` + ≥1
+        // `verification.claim.recorded` with `kind ∈ {achieved,
+        // unachievable}`, the `criteria_status` table carried through, and
+        // `authority = delegate` provenance on every row.
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver = Driver::open_react(
+            &ctx(),
+            policy,
+            &mut sink,
+            DriverConfig {
+                surfaces: vec![SurfaceSpec {
+                    surface_id: "fs.read".into(),
+                    semantic_id: "sem/fs.read".into(),
+                    params: [(
+                        "path".into(),
+                        crate::output::ParamSpec {
+                            required: true,
+                            kind: crate::output::ParamKind::Str,
+                            enum_values: vec![],
+                            domain: vec![],
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                }],
+                ..DriverConfig::default()
+            },
+        )
+        .unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(
+                hh_gateway::vocab::StopReason::ToolUse,
+                vec![ParsedCall {
+                    tool_call_id: "tc-1".into(),
+                    surface: "fs.read".into(),
+                    args_raw: r#"{"path":"/a"}"#.into(),
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = ScriptedGate {
+            out: GateOutcome {
+                outcome: SettledOutcome::Observed {
+                    outcome: "applied".into(),
+                },
+                submission_ref: Some("sub-1".into()),
+                error_class: None,
+            },
+            finish: Some(Json::obj([
+                ("completion", Json::str("achieved")),
+                (
+                    "criteria_status",
+                    Json::Arr(vec![Json::obj([
+                        ("criterion_ref", Json::str("c:read-done")),
+                        ("status", Json::str("met")),
+                        ("evidence_refs", Json::Arr(vec![Json::str("sha256:ev-1")])),
+                    ])]),
+                ),
+                (
+                    "artifacts_claimed",
+                    Json::Arr(vec![Json::str("sha256:art-1")]),
+                ),
+            ])),
+        };
+        let mut asm = NullAssembler;
+        let r = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        assert_eq!(r.report.stop_reason, StopReason::Completed);
+        // `completion.proposed` carries the proposing call at the `stop`
+        // decision point.
+        let proposed = sink
+            .events
+            .iter()
+            .find(|e| e.class == "verification.completion.proposed")
+            .expect("completion.proposed emitted");
+        assert_eq!(
+            proposed
+                .payload
+                .get("decision_point")
+                .and_then(Json::as_str),
+            Some("stop")
+        );
+        // ≥1 `claim.recorded` — the completion claim (kind = achieved,
+        // criteria_status aligned) plus the per-artifact `effected` claim.
+        let recorded: Vec<&EventEnvelope> = sink
+            .events
+            .iter()
+            .filter(|e| e.class == "verification.claim.recorded")
+            .collect();
+        assert!(recorded.len() >= 2, "completion + artifact claims");
+        let completion = &recorded[0];
+        assert_eq!(
+            completion.payload.get("kind").and_then(Json::as_str),
+            Some("achieved")
+        );
+        assert_eq!(
+            completion.payload.get("predicate").and_then(Json::as_str),
+            Some("is_done")
+        );
+        // The criteria_status table is carried through verbatim.
+        let cs = match completion.payload.get("criteria_status") {
+            Some(Json::Arr(items)) => items,
+            _ => panic!("criteria_status present"),
+        };
+        assert_eq!(cs.len(), 1);
+        assert_eq!(cs[0].get("status").and_then(Json::as_str), Some("met"));
+        assert_eq!(
+            cs[0].get("criterion_ref").and_then(Json::as_str),
+            Some("c:read-done")
+        );
+        // Provenance on every claim row is `authority = delegate` — the
+        // claim is the model's, never a kernel fact (AC-R-2.7.2a-1/CC2).
+        for e in &recorded {
+            let p = e.provenance.as_ref().expect("provenance mandatory");
+            assert_eq!(
+                p.authority,
+                hh_provenance::authority::AuthorityClass::Delegate
+            );
+        }
+        // The per-artifact claim is `effected` on `artifact{…}`.
+        assert_eq!(
+            recorded[1].payload.get("kind").and_then(Json::as_str),
+            Some("effected")
+        );
+        // Claim rows precede `lifecycle.run.finished` — the gate reads them.
+        let pos = |class: &str| sink.events.iter().position(|e| e.class == class).unwrap();
+        assert!(pos("verification.claim.recorded") < pos("lifecycle.run.finished"));
+    }
+
+    #[test]
     fn an_error_model_call_retries_then_stops_infra() {
         let mut sink = MemSink {
             events: vec![],
@@ -1392,6 +1701,7 @@ mod tests {
                 submission_ref: None,
                 error_class: None,
             },
+            finish: None,
         };
         let mut asm = NullAssembler;
         let r = driver
@@ -1444,6 +1754,7 @@ mod tests {
                 submission_ref: None,
                 error_class: None,
             },
+            finish: None,
         };
         let mut asm = NullAssembler;
         let r = driver
@@ -1516,6 +1827,7 @@ mod tests {
                 submission_ref: None,
                 error_class: None,
             },
+            finish: None,
         }
     }
 
@@ -1715,6 +2027,7 @@ mod tests {
                 submission_ref: Some("sub-1".into()),
                 error_class: None,
             },
+            finish: None,
         };
         let mut asm = NullAssembler;
         let r = driver
@@ -1779,6 +2092,7 @@ mod tests {
                     submission_ref: Some("sub-1".into()),
                     error_class: None,
                 },
+                finish: None,
             };
             let mut asm = NullAssembler;
             let _ = driver

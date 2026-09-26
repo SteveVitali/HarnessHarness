@@ -199,12 +199,18 @@ pub enum DimensionId {
     FanOut,
     /// `delegation_depth` — live delegation depth.
     DelegationDepth,
+    /// `reconciliation.holds` — the completion gate's consumed-holds level
+    /// against the F4 cap (ADR-0113 D4: a gauge cap on the run's `BudgetNode`;
+    /// each `hold` consumes one unit; exhaustion ⇒ `escalate` or
+    /// `budget_exhausted{reconciliation.holds}`). Stage-1 additive
+    /// registration (S1.21; closed-set growth is per-dialect).
+    ReconciliationHolds,
 }
 
 impl DimensionId {
-    /// The closed list — 24 kernel counters + 5 registered names + 3 gauges, in enum
-    /// (canonical) order.
-    pub const ALL: [DimensionId; 32] = [
+    /// The closed list — 24 kernel counters + 5 registered names + 4 gauges, in enum
+    /// (canonical) order. `reconciliation.holds` joined at S1.21 (ADR-0113 D4).
+    pub const ALL: [DimensionId; 33] = [
         DimensionId::TokensInputUncached,
         DimensionId::TokensInputCacheRead,
         DimensionId::TokensInputCacheWrite,
@@ -237,6 +243,7 @@ impl DimensionId {
         DimensionId::ContextOccupancy,
         DimensionId::FanOut,
         DimensionId::DelegationDepth,
+        DimensionId::ReconciliationHolds,
     ];
 
     /// The canonical spelling (§8.2 `DimensionId` row names).
@@ -274,6 +281,7 @@ impl DimensionId {
             DimensionId::ContextOccupancy => "context.occupancy",
             DimensionId::FanOut => "fan_out",
             DimensionId::DelegationDepth => "delegation_depth",
+            DimensionId::ReconciliationHolds => "reconciliation.holds",
         }
     }
 
@@ -285,9 +293,10 @@ impl DimensionId {
     /// `counter` or `gauge` (§8.2 `DimensionId` row).
     pub fn class(self) -> DimensionClass {
         match self {
-            DimensionId::ContextOccupancy | DimensionId::FanOut | DimensionId::DelegationDepth => {
-                DimensionClass::Gauge
-            }
+            DimensionId::ContextOccupancy
+            | DimensionId::FanOut
+            | DimensionId::DelegationDepth
+            | DimensionId::ReconciliationHolds => DimensionClass::Gauge,
             _ => DimensionClass::Counter,
         }
     }
@@ -326,7 +335,8 @@ impl DimensionId {
             | DimensionId::ExtContainmentViolations
             | DimensionId::ExtEffectsExternalIrreversible
             | DimensionId::FanOut
-            | DimensionId::DelegationDepth => "count",
+            | DimensionId::DelegationDepth
+            | DimensionId::ReconciliationHolds => "count",
         }
     }
 
@@ -523,7 +533,12 @@ mod tests {
         "env.suspended_ms",
         "spend",
     ];
-    const SPEC_GAUGES: &[&str] = &["context.occupancy", "fan_out", "delegation_depth"];
+    const SPEC_GAUGES: &[&str] = &[
+        "context.occupancy",
+        "fan_out",
+        "delegation_depth",
+        "reconciliation.holds", // S1.21 — ADR-0113 D4 (F4)
+    ];
     const SPEC_REGISTERED: &[&str] = &[
         "hh.egress.decisions.allowed",
         "hh.egress.decisions.denied",
@@ -534,8 +549,9 @@ mod tests {
 
     #[test]
     fn kernel_list_matches_the_spec_row_exactly() {
-        // §8.2 §3: 24 counters + 3 gauges + 5 registered = 32 names.
-        assert_eq!(DimensionId::ALL.len(), 32);
+        // §8.2 §3: 24 counters + 4 gauges + 5 registered = 33 names
+        // (`reconciliation.holds` joined at S1.21 — ADR-0113 D4).
+        assert_eq!(DimensionId::ALL.len(), 33);
         let names: BTreeSet<&'static str> = DimensionId::ALL.iter().map(|d| d.as_str()).collect();
         assert_eq!(names.len(), DimensionId::ALL.len(), "duplicate spellings");
         let expected: BTreeSet<&'static str> = SPEC_COUNTERS

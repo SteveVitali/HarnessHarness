@@ -1282,3 +1282,113 @@ fn ac_r_2_5_5_14_one_call_through_the_process_boundary() {
     assert!(envs.iter().any(|e| e.class == "action.effect.observed"));
     assert!(envs.iter().any(|e| e.class == "action.tool.completed"));
 }
+
+// ── AC-R-2.7.1-1 — the kernel local checks ride `action.effect.observed` ────
+
+#[test]
+fn ac_r_2_7_1_1_local_verdicts_after_observed() {
+    // An `fs_write` dispatch settles `observed{applied}` — check (c)
+    // `patch_application` is the applicable built-in, so exactly one
+    // `verification.validator.invoked` + `verification.validator.verdict`
+    // pair lands after the terminal row (`phase = local`, `detector =
+    // deterministic`, `charged_to = subject`, `inputs_digest` present);
+    // the observation itself is never touched (I-V3).
+    let (mut store, run, lease, _clock) = open("localverdicts");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("localverdicts");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(EffectDomain::FsWrite, reversible_attrs(), scope_bindings());
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [5u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        Json::obj([
+            ("path", Json::str(format!("{}/a.txt", ws.display()))),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::FsWrite,
+            attributes: Some(reversible_attrs()),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(matches!(out, DispatchOutcome::Observed(_)), "{out:?}");
+
+    let envs = read_all(disp.store_mut(), &run);
+    let observed = envs
+        .iter()
+        .find(|e| e.class == "action.effect.observed")
+        .expect("observed terminal");
+    let invoked: Vec<_> = envs
+        .iter()
+        .filter(|e| e.class == "verification.validator.invoked")
+        .collect();
+    let verdicts: Vec<_> = envs
+        .iter()
+        .filter(|e| e.class == "verification.validator.verdict")
+        .collect();
+    // Exactly the applicable checks — check (c) only (no `output_schema`
+    // declared ⇒ (a) inapplicable; `fs_write` ⇒ (b) inapplicable).
+    assert_eq!(invoked.len(), 1, "{invoked:?}");
+    assert_eq!(verdicts.len(), 1, "{verdicts:?}");
+    let v = &verdicts[0];
+    // AC: `phase = local`, `detector = deterministic`, `charged_to =
+    // subject`, `inputs_digest` carried — and the verdict names the check.
+    assert_eq!(v.payload.get("phase").and_then(Json::as_str), Some("local"));
+    assert_eq!(
+        v.payload.get("detector").and_then(Json::as_str),
+        Some("deterministic")
+    );
+    assert_eq!(
+        v.payload.get("charged_to").and_then(Json::as_str),
+        Some("subject")
+    );
+    assert!(
+        v.payload
+            .get("inputs_digest")
+            .and_then(Json::as_str)
+            .is_some_and(|d| !d.is_empty()),
+        "inputs_digest carried"
+    );
+    assert_eq!(
+        v.payload.get("validator_ref").and_then(Json::as_str),
+        Some("hir/kernel/local_checks@1")
+    );
+    assert!(
+        v.payload
+            .get("verdict_id")
+            .and_then(Json::as_str)
+            .is_some_and(|id| id.starts_with("verdict:patch_application:")),
+        "{:?}",
+        v.payload.get("verdict_id")
+    );
+    // The verdict rows follow the terminal row they check.
+    assert!(v.seq > observed.seq);
+    assert!(invoked[0].seq > observed.seq);
+    // `verification.validator.invoked` mirrors the digest + charge.
+    assert_eq!(
+        invoked[0].payload.get("inputs_digest"),
+        v.payload.get("inputs_digest")
+    );
+    assert_eq!(
+        invoked[0].payload.get("charged_to").and_then(Json::as_str),
+        Some("subject")
+    );
+    // Provenance-mandatory classes carry provenance (the kernel emits them).
+    assert!(v.provenance.is_some(), "verdict provenance mandatory");
+    // The observation row is untouched — its scope still names the effect
+    // and the payload is the terminal capture verbatim (I-V3: verification
+    // fabric never mutates durable observations).
+    assert!(observed.scope.effect_id.is_some());
+    assert!(observed.payload.get("outcome").is_some() || observed.payload.get("status").is_some());
+}
