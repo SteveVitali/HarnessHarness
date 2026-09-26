@@ -471,9 +471,10 @@ pub fn run_suite(
                 let complete = variant.conditioned_rules.iter().all(|(rid, d)| {
                     !rid.is_empty()
                         && !d.rule_id.is_empty()
-                        && !d.owner.is_empty()
-                        && !d.expiry_condition.is_empty()
+                        && !d.evidence_refs.is_empty()
+                        && !d.owner.id.is_empty()
                         && !d.removal_test_ref.is_empty()
+                        && d.removal_test.is_some()
                 });
                 if complete {
                     ConformanceVerdict::Supported

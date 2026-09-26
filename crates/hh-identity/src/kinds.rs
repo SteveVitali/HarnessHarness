@@ -109,6 +109,26 @@ pub enum RecordKind {
     /// folds (§5c.3; S1.19). Version-only (surface — no semantic id, like
     /// `NameBindingRecord`).
     MemoryManifest,
+    /// A `TaskRecord` (§5h.4; S1.24, R-2.9.4⁰ᵃ) — `task_id` is the semantic
+    /// projection over the canonical record **excluding** the `foreign`,
+    /// `instrument.validity`, `instrument.contamination` and `provenance`
+    /// members (ADR-0142 D2 — claims and per-audit annotations never move a
+    /// task's identity).
+    TaskRecord,
+    /// A `SuiteManifest` (§5h.4; S1.24) — `suite_id` content-addressed over the
+    /// canonical manifest. Version-only.
+    SuiteManifest,
+    /// A `SplitAssignmentRecord` (§5h.4; S1.24) — content-addressed.
+    /// Version-only.
+    SplitAssignment,
+    /// An `ExperimentSpec` (§6.3; S1.24, R-2.10.3⁰ᵃ) —
+    /// `experiment_id = H(canonical(spec))`. Immutable; version-only.
+    ExperimentSpec,
+    /// A `CellPlan` (§6.3; S1.24) — `plan_id` content-addressed. Version-only.
+    CellPlan,
+    /// An `AnalysisRecord` (§6.4; S1.24, R-2.10.4⁰ᵃ) — `analysis_id` is the
+    /// record's version id. Version-only.
+    AnalysisRecord,
 }
 
 impl RecordKind {
@@ -146,6 +166,12 @@ impl RecordKind {
             RecordKind::ToolSurface => "tool_surface",
             RecordKind::Memory => "memory",
             RecordKind::MemoryManifest => "memory_manifest",
+            RecordKind::TaskRecord => "task_record",
+            RecordKind::SuiteManifest => "suite_manifest",
+            RecordKind::SplitAssignment => "split_assignment",
+            RecordKind::ExperimentSpec => "experiment",
+            RecordKind::CellPlan => "cell_plan",
+            RecordKind::AnalysisRecord => "analysis_record",
         }
     }
 
@@ -168,6 +194,7 @@ impl RecordKind {
                 | RecordKind::ContainmentPolicy
                 | RecordKind::EnvironmentRecord
                 | RecordKind::Memory
+                | RecordKind::TaskRecord
         )
     }
 
@@ -249,6 +276,12 @@ mod tests {
             RecordKind::CredentialBinding,
             RecordKind::SinkPolicy,
             RecordKind::EnvironmentRecord,
+            RecordKind::TaskRecord,
+            RecordKind::SuiteManifest,
+            RecordKind::SplitAssignment,
+            RecordKind::ExperimentSpec,
+            RecordKind::CellPlan,
+            RecordKind::AnalysisRecord,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for k in kinds {

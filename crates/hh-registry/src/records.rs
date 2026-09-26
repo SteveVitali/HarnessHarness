@@ -483,6 +483,9 @@ pub enum RegistryRecord {
     /// locator + content pin + trust record; a registry-layer versioned record,
     /// never a HIR entity.
     Extension(crate::extension::ExtensionRecord),
+    /// An `environment_family` — the §5h.4 `EnvironmentFamilyRecord` is the
+    /// body (R-2.9.4⁰ᵃ; the ontology owns the schema — CC7; S1.24).
+    EnvironmentFamily(hh_ontology::lab::EnvironmentFamilyRecord),
 }
 
 impl RegistryRecord {
@@ -500,6 +503,7 @@ impl RegistryRecord {
             RegistryRecord::MetricDeclaration(_) => RecordKind::MetricDeclaration,
             RegistryRecord::Validator(_) => RecordKind::Validator,
             RegistryRecord::Extension(_) => RecordKind::Extension,
+            RegistryRecord::EnvironmentFamily(_) => RecordKind::EnvironmentFamily,
         }
     }
 
@@ -517,6 +521,9 @@ impl RegistryRecord {
             // `applies_to_families` scopes by family *name* (the same treatment
             // `VariantRecord.applies_to.families` gets) — names are never pins.
             RegistryRecord::MetricDeclaration(_) => Vec::new(),
+            // `family_id` is a closed-sum value, never a pin (same treatment
+            // as `applies_to_families`).
+            RegistryRecord::EnvironmentFamily(_) => Vec::new(),
             // `calibration_ref` is a pinned `version_id` of the deterministic
             // oracle the judge calibrates against (ADR-0047(c)(ii)).
             RegistryRecord::Validator(o) => o.calibration_ref.iter().cloned().collect(),

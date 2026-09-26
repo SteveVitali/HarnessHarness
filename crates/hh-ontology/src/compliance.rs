@@ -15,6 +15,7 @@ use crate::eval::{
     ChargedTo, Dimension, Direction, IntervalMethod, MediationChannel, MediationRequirement,
     MetricLevel, MetricValueType, OracleClass, OutcomeClassPolicy, ReplicateReducer,
 };
+use crate::lab::EnvironmentFamily;
 use crate::participant::CapabilityVerdict;
 use crate::participant::{Granularity, Observability, ParticipantClass, ParticipantDescriptor};
 use hh_wire::Json;
@@ -300,9 +301,10 @@ pub struct MetricDeclaration {
     pub requires_observability: BTreeSet<Observability>,
     /// The classes this metric applies to.
     pub applies_to_classes: BTreeSet<ParticipantClass>,
-    /// The `environment_family` registry refs the metric applies to
-    /// (registry-level scoping — OQ-344/CF-326; `∅` = all families).
-    pub applies_to_families: BTreeSet<String>,
+    /// The `environment_family` values the metric applies to — the typed
+    /// closed sum (DF-S1.22-3 closed at S1.24; OQ-344/CF-326; `∅` = all
+    /// families). The canonical spellings are unchanged — `EnvironmentFamily::name()`.
+    pub applies_to_families: BTreeSet<EnvironmentFamily>,
     /// The capability names this metric requires (default `∅`; ADR-0165 D6).
     pub requires_capabilities: BTreeSet<String>,
     /// The mediation this metric requires (default `any`; ADR-0165 D6).
@@ -477,14 +479,14 @@ impl MetricDeclaration {
         &self,
         desc: &ParticipantDescriptor,
         mediated: &BTreeSet<MediationChannel>,
-        environment_family: Option<&str>,
+        environment_family: Option<EnvironmentFamily>,
     ) -> Result<(), NaReason> {
         self.applicability(desc)?;
         if !self.requires_mediation.satisfied_by(mediated) {
             return Err(NaReason::Mediation);
         }
         if let Some(f) = environment_family {
-            if !self.applies_to_families.is_empty() && !self.applies_to_families.contains(f) {
+            if !self.applies_to_families.is_empty() && !self.applies_to_families.contains(&f) {
                 return Err(NaReason::Class);
             }
         }
@@ -520,7 +522,12 @@ impl MetricDeclaration {
         );
         m.insert(
             "applies_to_families".into(),
-            Json::Arr(self.applies_to_families.iter().map(Json::str).collect()),
+            Json::Arr(
+                self.applies_to_families
+                    .iter()
+                    .map(|f| Json::str(f.name()))
+                    .collect(),
+            ),
         );
         m.insert(
             "requires_capabilities".into(),
@@ -651,7 +658,7 @@ impl MetricDeclaration {
             unit: str_at("unit")?.to_string(),
             requires_observability: set_at(m, "requires_observability", REC, Observability::parse)?,
             applies_to_classes: set_at(m, "applies_to_classes", REC, ParticipantClass::parse)?,
-            applies_to_families: set_at(m, "applies_to_families", REC, |s| Some(s.to_string()))?,
+            applies_to_families: set_at(m, "applies_to_families", REC, EnvironmentFamily::parse)?,
             requires_capabilities: set_at(m, "requires_capabilities", REC, |s| {
                 Some(s.to_string())
             })?,

@@ -169,6 +169,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-lab"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-hir",
+ "hh-identity",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-ledger"
 version = "0.0.1"
 dependencies = [

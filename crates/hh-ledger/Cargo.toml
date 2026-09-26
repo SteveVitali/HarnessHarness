@@ -13,4 +13,6 @@ path = "src/lib.rs"
 hh-wire = { path = "../hh-wire" }
 hh-identity = { path = "../hh-identity" }
 hh-provenance = { path = "../hh-provenance" }
+# The Lab closed sums (R-2.9.4⁰ᵃ; S1.24) — `TaskRef.split_label` is the typed
+# `SplitLabel` closed set, never an open string.
 hh-ontology = { path = "../hh-ontology" }

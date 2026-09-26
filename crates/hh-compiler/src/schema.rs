@@ -20,9 +20,9 @@ use crate::plan::{
     RuntimePlan, StepAction, StepMode, StepNode, StopRuleNode, ToolBinding, ValidatorBinding,
 };
 use crate::profile::{
-    CapabilityState, Compliance, ComplianceDetector, DebtStatus, ExpiryCondition, ExpiryKind,
-    ExtBlock, ModelProfile, ModelRole, ProfileCapabilities, ProfileCompatibility,
-    ProfileDebtRecord, ProfileRule, ProfileRuleKind, ProfileSelector, VersionPattern,
+    CapabilityState, Compliance, ComplianceDetector, DebtStatus, ExtBlock, ModelProfile, ModelRole,
+    ProfileCapabilities, ProfileCompatibility, ProfileDebtRecord, ProfileRule, ProfileRuleKind,
+    ProfileSelector, VersionPattern,
 };
 use crate::seal::{CompiledBundle, ModelSurface, ModelSurfaceState};
 use crate::trace::{TraceEntry, TraceMap};
@@ -93,40 +93,166 @@ fn debt_json(d: &ProfileDebtRecord) -> Json {
     if let Some(v) = &d.expiry_condition.value {
         expiry.push(("value", Json::str(v.clone())));
     }
-    Json::obj([
-        (
-            "evidence_refs",
-            Json::Arr(d.evidence_refs.iter().map(Json::str).collect()),
+    let mut m = std::collections::BTreeMap::new();
+    // `evidence_refs` — a pure-legacy ref (`{kind: source}` bare) emits the
+    // landed `ModelProfile/1` string form; a richer ref emits the typed object
+    // (the /1 additive member shape — decode accepts both).
+    m.insert(
+        "evidence_refs".into(),
+        Json::Arr(
+            d.evidence_refs
+                .iter()
+                .map(|r| {
+                    if r.kind == hh_ontology::debt::EvidenceKind::Source
+                        && r.observed_at.is_none()
+                        && r.tier.is_none()
+                        && !r.provisional
+                    {
+                        Json::str(r.reference.clone())
+                    } else {
+                        r.to_json()
+                    }
+                })
+                .collect(),
         ),
-        ("expiry_condition", Json::obj(expiry)),
-        ("hypothesis", Json::str(d.hypothesis.clone())),
-        ("owner", Json::str(d.owner.clone())),
-        ("removal_test_ref", Json::str(d.removal_test_ref.clone())),
-        ("rule_id", Json::str(d.rule_id.clone())),
-        ("status", Json::str(d.status.name())),
-    ])
+    );
+    m.insert("expiry_condition".into(), Json::obj(expiry));
+    m.insert("hypothesis".into(), Json::str(d.hypothesis.clone()));
+    m.insert("owner".into(), Json::str(d.owner.clone()));
+    m.insert(
+        "removal_test_ref".into(),
+        Json::str(d.removal_test_ref.clone()),
+    );
+    m.insert("rule_id".into(), Json::str(d.rule_id.clone()));
+    m.insert("status".into(), Json::str(d.status.name()));
+    // The /1 additive members — emitted only when present (CC8).
+    if !d.reach_via.is_empty() {
+        m.insert(
+            "reach_via".into(),
+            Json::Arr(d.reach_via.iter().map(|s| Json::str(s.clone())).collect()),
+        );
+    }
+    if let Some(t) = &d.removal_test {
+        m.insert("removal_test".into(), t.to_json());
+    }
+    if let Some(c) = &d.debt_class {
+        m.insert("debt_class".into(), Json::str(c.name()));
+    }
+    if let Some(h) = &d.hypothesis_typed {
+        m.insert("hypothesis_typed".into(), h.to_json());
+    }
+    if let Some(s) = &d.scope {
+        m.insert("scope".into(), s.to_json());
+    }
+    if let Some(e) = &d.expiry {
+        m.insert("expiry".into(), e.to_json());
+    }
+    if let Some(r) = d.runway_ms {
+        m.insert("runway_ms".into(), Json::Int(r as i64));
+    }
+    if let Some(r) = &d.revalidation {
+        m.insert("revalidation".into(), r.to_json());
+    }
+    if let Some(c) = d.created_at {
+        m.insert("created_at".into(), Json::Int(c as i64));
+    }
+    if let Some(s) = &d.supersedes {
+        m.insert("supersedes".into(), Json::str(s.clone()));
+    }
+    Json::Obj(m)
+}
+
+fn debt_member_err(path: &str, e: hh_ontology::debt::DebtSchemaError) -> CompileError {
+    schema_err(path, e.detail)
 }
 
 fn debt_from_json(j: &Json, path: &str) -> Result<ProfileDebtRecord, CompileError> {
     let expiry = req(j, "expiry_condition", path)?;
-    let kind = ExpiryKind::parse(&str_at(
-        expiry,
-        "kind",
-        &format!("{path}.expiry_condition"),
-    )?)
-    .ok_or_else(|| schema_err(path, "expiry_condition.kind: bad ExpiryKind"))?;
+    let expiry_condition =
+        hh_ontology::debt::ExpiryCondition::from_json(expiry, &format!("{path}.expiry_condition"))
+            .map_err(|e| debt_member_err(path, e))?;
+    let mut evidence_refs = Vec::new();
+    if let Some(Json::Arr(items)) = j.get("evidence_refs") {
+        for (i, v) in items.iter().enumerate() {
+            evidence_refs.push(
+                hh_ontology::debt::EvidenceRef::from_json(v, &format!("{path}.evidence_refs[{i}]"))
+                    .map_err(|e| debt_member_err(path, e))?,
+            );
+        }
+    }
+    let debt_class = match opt_str(j, "debt_class") {
+        None => None,
+        Some(s) => Some(
+            hh_ontology::debt::DebtClass::parse(&s)
+                .ok_or_else(|| schema_err(path, "debt_class: bad DebtClass"))?,
+        ),
+    };
     Ok(ProfileDebtRecord {
         rule_id: str_at(j, "rule_id", path)?,
         hypothesis: str_at(j, "hypothesis", path)?,
-        evidence_refs: str_vec(j, "evidence_refs", path)?,
+        evidence_refs,
         owner: str_at(j, "owner", path)?,
-        expiry_condition: ExpiryCondition {
-            kind,
-            value: opt_str(expiry, "value"),
-        },
+        reach_via: str_vec(j, "reach_via", path).unwrap_or_default(),
+        expiry_condition,
         removal_test_ref: str_at(j, "removal_test_ref", path)?,
+        removal_test: match j.get("removal_test") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::RemovalTest::from_json(v, &format!("{path}.removal_test"))
+                    .map_err(|e| debt_member_err(path, e))?,
+            ),
+        },
         status: DebtStatus::parse(&str_at(j, "status", path)?)
             .ok_or_else(|| schema_err(path, "status: bad DebtStatus"))?,
+        debt_class,
+        hypothesis_typed: match j.get("hypothesis_typed") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::HypothesisTyped::from_json(
+                    v,
+                    &format!("{path}.hypothesis_typed"),
+                )
+                .map_err(|e| debt_member_err(path, e))?,
+            ),
+        },
+        scope: match j.get("scope") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::DebtScope::from_json(v, &format!("{path}.scope"))
+                    .map_err(|e| debt_member_err(path, e))?,
+            ),
+        },
+        expiry: match j.get("expiry") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::DebtExpiry::from_json(v, &format!("{path}.expiry"))
+                    .map_err(|e| debt_member_err(path, e))?,
+            ),
+        },
+        runway_ms: match j.get("runway_ms") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                v.as_int()
+                    .map(|i| i.max(0) as u64)
+                    .ok_or_else(|| schema_err(path, "runway_ms: not an integer"))?,
+            ),
+        },
+        revalidation: match j.get("revalidation") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                hh_ontology::debt::Revalidation::from_json(v, &format!("{path}.revalidation"))
+                    .map_err(|e| debt_member_err(path, e))?,
+            ),
+        },
+        created_at: match j.get("created_at") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(
+                v.as_int()
+                    .map(|i| i.max(0) as u64)
+                    .ok_or_else(|| schema_err(path, "created_at: not an integer"))?,
+            ),
+        },
+        supersedes: opt_str(j, "supersedes"),
     })
 }
 
@@ -1549,12 +1675,21 @@ fn trace_map_from_json(j: &Json, path: &str) -> Result<TraceMap, CompileError> {
 }
 
 fn conditioned_json(c: &ConditionedRule) -> Json {
-    Json::obj([
+    let mut pairs = vec![
         ("home", Json::str(c.home.name())),
         ("owner", Json::str(c.owner.clone())),
         ("rule_id", Json::str(c.rule_id.clone())),
         ("status", Json::str(c.status.clone())),
-    ])
+    ];
+    // The §5h.6 additions — `evidence_grade` (derived) and
+    // `removal_test.executable` — emitted when the home supplies them.
+    if let Some(g) = &c.evidence_grade {
+        pairs.push(("evidence_grade", Json::str(g.clone())));
+    }
+    if let Some(e) = c.removal_test_executable {
+        pairs.push(("removal_test_executable", Json::Bool(e)));
+    }
+    Json::obj(pairs)
 }
 
 fn conditioned_from_json(j: &Json, path: &str) -> Result<ConditionedRule, CompileError> {
@@ -1568,6 +1703,12 @@ fn conditioned_from_json(j: &Json, path: &str) -> Result<ConditionedRule, Compil
         },
         status: str_at(j, "status", path)?,
         owner: str_at(j, "owner", path)?,
+        evidence_grade: opt_str(j, "evidence_grade"),
+        removal_test_executable: match j.get("removal_test_executable") {
+            None | Some(Json::Null) => None,
+            Some(Json::Bool(b)) => Some(*b),
+            _ => return Err(schema_err(path, "removal_test_executable: not a bool")),
+        },
     })
 }
 

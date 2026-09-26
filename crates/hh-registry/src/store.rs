@@ -651,6 +651,20 @@ impl RegistryStore {
         self.records.keys()
     }
 
+    /// `resolve_environment_family(family) → Option<&EnvironmentFamilyRecord>`
+    /// — the registered `environment_family` record for `family` (DF-S1.22-3:
+    /// a family-scoped `MetricDeclaration.applies_to_families` value resolves
+    /// against the registered record, never a bare name).
+    pub fn resolve_environment_family(
+        &self,
+        family: hh_ontology::lab::EnvironmentFamily,
+    ) -> Option<&hh_ontology::lab::EnvironmentFamilyRecord> {
+        self.records.values().find_map(|(_, r)| match r {
+            RegistryRecord::EnvironmentFamily(f) if f.family_id == family => Some(f),
+            _ => None,
+        })
+    }
+
     // ── register ─────────────────────────────────────────────────────────
 
     /// `register(record, registrar, trust_record_ref?) → VersionedRef` (spec §6.2).
@@ -801,6 +815,17 @@ impl RegistryStore {
                     bail!(e);
                 }
             }
+            RegistryRecord::EnvironmentFamily(f) => {
+                // The family record's own schema checks are the admission gate
+                // (a family accepting submissions declares a verifier —
+                // §5h.4; AC-R-2.9.4 schema half).
+                if let Err(e) = f.validate() {
+                    bail!(RegistryError::SchemaViolation {
+                        path: "environment_family".to_string(),
+                        detail: format!("{e:?}"),
+                    });
+                }
+            }
         }
         // Trust record: mandatory for non-kernel/definition registrars.
         let first_party = matches!(
@@ -943,7 +968,12 @@ impl RegistryStore {
         // declaration_schema: the declared-field contract (required ⊆ declared;
         // additionalProperties=false refuses undeclared fields — R2's field axis).
         check_declaration(&class.declaration_schema, &v.capability_declaration)?;
-        // Conditioned rules carry complete debt records (T-LCD-05).
+        // Conditioned rules carry complete `AssumptionDebtRecord/1`s (T-LCD-05;
+        // R-2.9.6⁰ᵃ — the `routing_policy_conditioned_rule` DebtHomes row):
+        // `validate_for_home` enforces the per-home required fields and runs the
+        // member-level `validate_removal_test` checks (no resolvers at register —
+        // the resolution-dependent refusals land with the experiment registry).
+        let debt_policy = hh_ontology::debt::DebtPolicy::default();
         for (rule_id, debt) in &v.conditioned_rules {
             if rule_id.is_empty()
                 || debt.rule_id.is_empty()
@@ -954,13 +984,32 @@ impl RegistryStore {
                     .unwrap_or("")
                     .trim()
                     .is_empty()
-                || debt.owner.is_empty()
-                || debt.expiry_condition.is_empty()
-                || debt.removal_test_ref.is_empty()
             {
                 return Err(RegistryError::ConditionedRuleIncomplete {
                     rule_id: rule_id.clone(),
                 });
+            }
+            let ctx = hh_hir::debt::RemovalTestContext::member_level();
+            match hh_hir::debt::validate_for_home(
+                debt,
+                "routing_policy_conditioned_rule",
+                "debt",
+                &debt_policy,
+                &ctx,
+            ) {
+                Ok(()) => {}
+                Err(hh_hir::debt::DebtError::MissingField { .. })
+                | Err(hh_hir::debt::DebtError::UnknownDebtHome { .. }) => {
+                    return Err(RegistryError::ConditionedRuleIncomplete {
+                        rule_id: rule_id.clone(),
+                    });
+                }
+                Err(e) => {
+                    return Err(RegistryError::SchemaViolation {
+                        path: format!("conditioned_rules[{rule_id}].debt"),
+                        detail: format!("{e:?}"),
+                    });
+                }
             }
         }
         // Placement admissibility (ADR-0153 D1): kernel/definition → all but the

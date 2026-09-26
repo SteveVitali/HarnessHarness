@@ -1174,6 +1174,7 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         RegistryRecord::MetricDeclaration(m) => m.to_json(),
         RegistryRecord::Validator(o) => o.to_json(),
         RegistryRecord::Extension(e) => crate::extension::extension_body_json(e),
+        RegistryRecord::EnvironmentFamily(f) => f.to_json(),
     }
 }
 
@@ -1235,6 +1236,14 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
         )),
         RecordKind::Validator => Ok(RegistryRecord::Validator(
             hh_ontology::eval::OracleDeclaration::from_json(j).map_err(|e| {
+                RegistryError::SchemaViolation {
+                    path: path.to_string(),
+                    detail: format!("{e:?}"),
+                }
+            })?,
+        )),
+        RecordKind::EnvironmentFamily => Ok(RegistryRecord::EnvironmentFamily(
+            hh_ontology::lab::EnvironmentFamilyRecord::from_json(j).map_err(|e| {
                 RegistryError::SchemaViolation {
                     path: path.to_string(),
                     detail: format!("{e:?}"),

@@ -117,11 +117,37 @@ pub fn complete_debt(rule_id: &str, status: hh_hir::DebtStatus, seq: u64) -> Ass
     AssumptionDebtRecord {
         rule_id: rule_id.to_string(),
         hypothesis: text("the assumption holds while the model family does", seq),
-        evidence_refs: vec!["sha256:ev".to_string()],
-        owner: "test:owner".to_string(),
-        expiry_condition: "date:2099-01-01".to_string(),
+        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
+        owner: hh_hir::OwnerRef::principal("test:owner"),
+        expiry_condition: hh_hir::ExpiryCondition {
+            kind: hh_hir::ExpiryKind::Date,
+            value: Some("2099-01-01".to_string()),
+        },
         removal_test_ref: "sha256:test".to_string(),
         status,
+        // `AssumptionDebtRecord/1` per-home completeness for the `harness_rule`
+        // home (DebtHomes/1 id 1: `debt_class` + `scope.model_selectors` —
+        // `needs_model_scope` — are required fields there; the seal-time
+        // `validate_for_home` battery enforces them).
+        debt_class: Some(hh_hir::DebtClass::Hypothesized),
+        hypothesis_typed: None,
+        scope: Some(hh_hir::DebtScope {
+            model_selectors: vec![hh_hir::ModelSelector::Exact {
+                model_id: "test:model".to_string(),
+            }],
+            ..Default::default()
+        }),
+        expiry: None,
+        runway_ms: None,
+        revalidation: None,
+        removal_test: Some(hh_hir::RemovalTest {
+            kind: hh_hir::RemovalTestKind::Inspection,
+            criteria: Some("human inspection".into()),
+            ..hh_hir::RemovalTest::new(hh_hir::RemovalTestKind::Inspection)
+        }),
+        created_by: None,
+        created_at: None,
+        supersedes: None,
     }
 }
 
@@ -518,14 +544,28 @@ pub fn profile_debt(rule_id: &str, status: DebtStatus) -> ProfileDebtRecord {
     ProfileDebtRecord {
         rule_id: rule_id.to_string(),
         hypothesis: "the model honours the declared contract".to_string(),
-        evidence_refs: vec!["sha256:ev".to_string()],
+        evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
         owner: "test:owner".to_string(),
+        reach_via: Vec::new(),
         expiry_condition: ExpiryCondition {
             kind: ExpiryKind::Date,
             value: Some("2099-01-01".to_string()),
         },
         removal_test_ref: "sha256:test".to_string(),
+        removal_test: Some(hh_hir::RemovalTest {
+            kind: hh_hir::RemovalTestKind::Inspection,
+            criteria: Some("human inspection".into()),
+            ..hh_hir::RemovalTest::new(hh_hir::RemovalTestKind::Inspection)
+        }),
         status,
+        debt_class: None,
+        hypothesis_typed: None,
+        scope: None,
+        expiry: None,
+        runway_ms: None,
+        revalidation: None,
+        created_at: None,
+        supersedes: None,
     }
 }
 

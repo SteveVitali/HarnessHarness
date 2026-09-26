@@ -150,6 +150,7 @@ impl RecordKind {
                 | RecordKind::MetricDeclaration
                 | RecordKind::Validator
                 | RecordKind::Extension
+                | RecordKind::EnvironmentFamily
         )
     }
 

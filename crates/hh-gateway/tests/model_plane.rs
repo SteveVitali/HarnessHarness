@@ -104,14 +104,26 @@ fn debt(status: DebtStatus) -> ProfileDebtRecord {
     ProfileDebtRecord {
         rule_id: "r.profile".into(),
         hypothesis: "h".into(),
-        evidence_refs: vec!["ev:1".into()],
+        evidence_refs: vec![hh_compiler::profile::EvidenceRef::legacy("ev:1")],
         owner: "o".into(),
+        reach_via: Vec::new(),
         expiry_condition: ExpiryCondition {
             kind: ExpiryKind::ModelVersionChange,
             value: None,
         },
         removal_test_ref: "t:1".into(),
+        removal_test: Some(hh_compiler::profile::RemovalTest::new(
+            hh_compiler::profile::RemovalTestKind::Documentation,
+        )),
         status,
+        debt_class: None,
+        hypothesis_typed: None,
+        scope: None,
+        expiry: None,
+        runway_ms: None,
+        revalidation: None,
+        created_at: None,
+        supersedes: None,
     }
 }
 

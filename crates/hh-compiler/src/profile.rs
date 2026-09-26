@@ -128,125 +128,89 @@ pub enum ComplianceDetector {
     None,
 }
 
-/// The expiry/invalidation condition kinds (§3.2.8): `model-version-change | date |
-/// probe-failure | evidence-refresh-due | experiment-ref`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExpiryKind {
-    /// The rule must be re-validated when the bound model version changes.
-    ModelVersionChange,
-    /// The rule expires at a date (`value` carries the date spelling).
-    Date,
-    /// The rule expires when its probe fails.
-    ProbeFailure,
-    /// The rule's evidence must be refreshed (`value` carries the refresh interval/date).
-    EvidenceRefreshDue,
-    /// The rule is valid for the named experiment only (`value` carries the ref).
-    ExperimentRef,
-}
+/// The expiry/invalidation condition kinds (§3.2.8; §5h.6 §3): the canonical
+/// `hh_ontology::debt` closed sum — one vocabulary across homes (CF-049).
+pub use hh_ontology::debt::ExpiryKind;
 
-impl ExpiryKind {
-    /// Canonical spelling.
-    pub fn name(self) -> &'static str {
-        match self {
-            ExpiryKind::ModelVersionChange => "model_version_change",
-            ExpiryKind::Date => "date",
-            ExpiryKind::ProbeFailure => "probe_failure",
-            ExpiryKind::EvidenceRefreshDue => "evidence_refresh_due",
-            ExpiryKind::ExperimentRef => "experiment_ref",
-        }
-    }
-
-    /// Parse a spelling.
-    pub fn parse(s: &str) -> Option<Self> {
-        Some(match s {
-            "model_version_change" => ExpiryKind::ModelVersionChange,
-            "date" => ExpiryKind::Date,
-            "probe_failure" => ExpiryKind::ProbeFailure,
-            "evidence_refresh_due" => ExpiryKind::EvidenceRefreshDue,
-            "experiment_ref" => ExpiryKind::ExperimentRef,
-            _ => return None,
-        })
-    }
-}
-
-/// The debt status (§3.2.8). `Expired` is a state *recorded on the record* (compiled-out
-/// artifacts carry it and it lands in `lcd_report.conditioned_rules`; it never silently
-/// weakens a rule — compiling under it requires an explicit recorded intent, ADR-0020 §7).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DebtStatus {
-    /// The debt is open and within its expiry condition.
-    Active,
-    /// Expiry is imminent (the `expiring` signal).
-    Expiring,
-    /// Past the expiry condition.
-    Expired,
-    /// The debt has been discharged.
-    Retired,
-}
-
-impl DebtStatus {
-    /// Canonical spelling.
-    pub fn name(self) -> &'static str {
-        match self {
-            DebtStatus::Active => "active",
-            DebtStatus::Expiring => "expiring",
-            DebtStatus::Expired => "expired",
-            DebtStatus::Retired => "retired",
-        }
-    }
-
-    /// Parse a spelling.
-    pub fn parse(s: &str) -> Option<Self> {
-        Some(match s {
-            "active" => DebtStatus::Active,
-            "expiring" => DebtStatus::Expiring,
-            "expired" => DebtStatus::Expired,
-            "retired" => DebtStatus::Retired,
-            _ => return None,
-        })
-    }
-}
+/// The debt status (§3.2.8; §5h.6 §3) — the canonical `hh_ontology::debt`
+/// four-value sum. `Expired` is a state *recorded on the record* (compiled-out
+/// artifacts carry it and it lands in `lcd_report.conditioned_rules`; it never
+/// silently weakens a rule — compiling under it requires an explicit recorded
+/// intent, ADR-0020 §7).
+pub use hh_ontology::debt::DebtStatus;
 
 /// The assumption-debt record (§3.2.8) — the one CF-049 field shape
 /// `{rule_id, hypothesis, evidence_refs, owner, expiry_condition{kind, value?},
-/// removal_test_ref, status}` used for profile rules, metered `ext` blocks, conditioned
-/// variant rules, and definition `HarnessRule.conditioned_on` debts (T-LCD-05, ADR-0020 §6:
-/// the *vocabulary* differs across homes; the field shape does not).
+/// removal_test_ref, status}` used for profile rules, metered `ext` blocks,
+/// conditioned variant rules, and definition `HarnessRule.conditioned_on` debts
+/// (T-LCD-05, ADR-0020 §6: the *vocabulary* differs across homes; the field
+/// shape does not).
+///
+/// `AssumptionDebtRecord/1` (R-2.9.6⁰ᵃ): the record carries the `/1` additive
+/// members where the `ModelProfile/1` spelling can express them — `debt_class`,
+/// `hypothesis_typed`, `scope`, `expiry`, `runway_ms`, `revalidation`,
+/// `removal_test`, `reach_via`, `created_at`, `supersedes`. `evidence_refs` is
+/// typed (`EvidenceRef`) — a bare-string member decodes as `{kind: source, ref}`
+/// (the landed `ModelProfile/1` spelling; emission keeps the string form for
+/// pure-legacy refs). `hypothesis`/`owner` stay the profile home's compact
+/// spellings (the `Text`-leaf/`OwnerRef` forms are the HIR home's — ADR notes
+/// the `ModelProfile/2` unification point).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProfileDebtRecord {
     /// The rule this debt belongs to.
     pub rule_id: String,
     /// The assumption — non-empty free text (kernel-owned `Text` on the wire).
     pub hypothesis: String,
-    /// Evidence refs (idp/1 addresses or registry coordinates).
-    pub evidence_refs: Vec<String>,
-    /// The accountable owner.
+    /// Evidence refs — typed `EvidenceRef`s (bare strings decode as
+    /// `{kind: source, ref}`).
+    pub evidence_refs: Vec<hh_ontology::debt::EvidenceRef>,
+    /// The accountable owner (the profile home's principal id spelling).
     pub owner: String,
+    /// `/1`: the notification sinks the owner is reachable through (`reach_via`).
+    pub reach_via: Vec<String>,
     /// The expiry/invalidation condition.
     pub expiry_condition: ExpiryCondition,
-    /// The test that would discharge the debt.
+    /// The test that would discharge the debt (the template/design ref).
     pub removal_test_ref: String,
+    /// `/1`: the typed removal test.
+    pub removal_test: Option<hh_ontology::debt::RemovalTest>,
     /// The debt's status.
     pub status: DebtStatus,
+    /// `/1`: the closed debt class.
+    pub debt_class: Option<hh_ontology::debt::DebtClass>,
+    /// `/1`: the typed hypothesis.
+    pub hypothesis_typed: Option<hh_ontology::debt::HypothesisTyped>,
+    /// `/1`: the applicability scope.
+    pub scope: Option<hh_ontology::debt::DebtScope>,
+    /// `/1`: the parameterized expiry.
+    pub expiry: Option<hh_ontology::debt::DebtExpiry>,
+    /// `/1`: the declared runway (ms).
+    pub runway_ms: Option<u64>,
+    /// `/1`: the revalidation policy.
+    pub revalidation: Option<hh_ontology::debt::Revalidation>,
+    /// `/1`: when the record was created.
+    pub created_at: Option<u64>,
+    /// `/1`: the retirement record this supersedes.
+    pub supersedes: Option<String>,
 }
 
-/// `expiry_condition{kind, value?}`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ExpiryCondition {
-    /// The closed kind.
-    pub kind: ExpiryKind,
-    /// The kind's operand (date spelling / experiment ref / refresh interval).
-    pub value: Option<String>,
-}
+/// `expiry_condition{kind, value?}` — the canonical `hh_ontology::debt` shape.
+pub use hh_ontology::debt::ExpiryCondition;
+/// The `/1` debt vocabulary the profile record carries — re-exported so the
+/// codec and downstream emitters share the one source (CC7).
+pub use hh_ontology::debt::{EvidenceKind, EvidenceRef, RemovalTest, RemovalTestKind};
 
 impl ProfileDebtRecord {
-    /// Debt completeness (AC-CP-06/T-LCD-05): every field populated and the kind's operand
-    /// present where the kind demands one.
+    /// Debt completeness (AC-CP-06/T-LCD-05; the `/1` required set — base
+    /// members + the typed `removal_test`, §5h.6 §3): every field populated and
+    /// the kind's operand present where the kind demands one.
     pub fn is_complete(&self) -> bool {
         !self.rule_id.is_empty()
             && !self.hypothesis.is_empty()
+            && !self.evidence_refs.is_empty()
             && !self.owner.is_empty()
             && !self.removal_test_ref.is_empty()
+            && self.removal_test.is_some()
             && match self.expiry_condition.kind {
                 ExpiryKind::Date | ExpiryKind::EvidenceRefreshDue | ExpiryKind::ExperimentRef => {
                     self.expiry_condition.value.is_some()
@@ -259,6 +223,12 @@ impl ProfileDebtRecord {
     /// hypothesis.
     pub fn is_dated(&self) -> bool {
         self.expiry_condition.kind == ExpiryKind::Date && self.expiry_condition.value.is_some()
+    }
+
+    /// The derived `evidence_grade` (ADR-0197 — derived from `evidence_refs`,
+    /// never stored).
+    pub fn evidence_grade(&self) -> hh_ontology::debt::EvidenceGrade {
+        hh_ontology::debt::evidence_grade(&self.evidence_refs)
     }
 }
 
@@ -1019,14 +989,30 @@ pub fn null_profile() -> ModelProfile {
             hypothesis: "the null profile declares nothing; it exists so the \
                          machinery has a floor, never as a silent default"
                 .to_string(),
-            evidence_refs: Vec::new(),
+            evidence_refs: vec![hh_ontology::debt::EvidenceRef::legacy("null_profile")],
             owner: "kernel".to_string(),
+            reach_via: Vec::new(),
             expiry_condition: ExpiryCondition {
                 kind: ExpiryKind::Date,
                 value: Some("9999-12-31".to_string()),
             },
             removal_test_ref: "null_profile_compile".to_string(),
+            removal_test: Some(hh_ontology::debt::RemovalTest {
+                kind: hh_ontology::debt::RemovalTestKind::Documentation,
+                criteria: Some("the null profile compiles".to_string()),
+                ..hh_ontology::debt::RemovalTest::new(
+                    hh_ontology::debt::RemovalTestKind::Documentation,
+                )
+            }),
             status: DebtStatus::Active,
+            debt_class: None,
+            hypothesis_typed: None,
+            scope: None,
+            expiry: None,
+            runway_ms: None,
+            revalidation: None,
+            created_at: None,
+            supersedes: None,
         },
         compatibility: ProfileCompatibility {
             inventory_version: "1".to_string(),

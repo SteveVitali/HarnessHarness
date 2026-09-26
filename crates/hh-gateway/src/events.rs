@@ -165,7 +165,17 @@ pub fn debt_json(d: &hh_compiler::profile::ProfileDebtRecord) -> Json {
             Json::Arr(
                 d.evidence_refs
                     .iter()
-                    .map(|r| Json::str(r.clone()))
+                    .map(|r| {
+                        if r.kind == hh_compiler::profile::EvidenceKind::Source
+                            && r.observed_at.is_none()
+                            && r.tier.is_none()
+                            && !r.provisional
+                        {
+                            Json::str(r.reference.clone())
+                        } else {
+                            r.to_json()
+                        }
+                    })
                     .collect(),
             ),
         ),

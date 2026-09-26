@@ -157,13 +157,7 @@ pub fn check(decl: &PolicyDeclaration) -> Result<(), RegistrationError> {
                         member: "removal_test_ref".to_string(),
                     });
                 }
-                if d.expiry_condition.is_empty() {
-                    return Err(RegistrationError::MissingDebt {
-                        rule_id: rule.rule_id.clone(),
-                        member: "expiry_condition".to_string(),
-                    });
-                }
-                if d.owner.is_empty() {
+                if d.owner.id.is_empty() {
                     return Err(RegistrationError::MissingDebt {
                         rule_id: rule.rule_id.clone(),
                         member: "owner".to_string(),

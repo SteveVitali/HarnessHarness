@@ -993,6 +993,47 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // not the kernel). Provenance mandatory per the same table.
     row_prov("measurement.metric.emitted", Led, O::Events, false, false, true,  None, None),
 
+    // ── lifecycle.debt (§5h.6 §6; R-2.9.6⁰ᵃ; S1.24) — the assumption-debt
+    // lifecycle rows: "Audit events with mandatory provenance" per §5h.6's
+    // list; producer kernel/registry ⇒ `row_audit` (kernel-origin), like the
+    // evolution rows above.
+    row_audit("lifecycle.debt.status.changed",          O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("lifecycle.debt.removal_test.scheduled",  O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("lifecycle.debt.removal_test.settled",    O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("lifecycle.debt.expired_used",            O::Events, true, OPEN_AUDIT, &[], None, None),
+
+    // ── measurement.experiment (§6.3 §6 / §9.2; R-2.10.3⁰ᵃ+R-2.10.5⁰; S1.24) —
+    // the experiment-run event family. Producer = the sweep engine through the
+    // kernel's append path (same convention as the evolution rows); the audit
+    // subset per spec is `declared, run_excluded, amended, closed, paused`
+    // (`row_audit`); the rest are durable ledger rows with mandatory
+    // provenance (`row_prov`).
+    row_audit("measurement.experiment.declared",        O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_prov("measurement.experiment.run_planned",      Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.run_claimed",      Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.claim_expired",    Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.run_launched",     Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.run_bound",        Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.run_settled",      Led, O::Events, false, false, true,  None, None),
+    row_audit("measurement.experiment.run_excluded",    O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_prov("measurement.experiment.run_replanned",    Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.cell_completed",   Led, O::Events, false, false, true,  None, None),
+    row_audit("measurement.experiment.amended",         O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("measurement.experiment.closed",          O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("measurement.experiment.paused",          O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_prov("measurement.experiment.resumed",          Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.drift_bracket",    Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.experiment.bundle_assembled", Led, O::Events, false, false, true,  None, None),
+
+    // ── measurement.analysis / measurement.leaderboard (§6.4/§9.2; R-2.10.4⁰ᵃ;
+    // S1.24) — analysis records and leaderboard publications. The leaderboard
+    // rows are audit-grade (`published`, `entry_retracted`); the analysis rows
+    // are durable + provenance-mandatory.
+    row_prov("measurement.analysis.recorded",           Led, O::Events, false, false, true,  None, None),
+    row_prov("measurement.analysis.superseded",         Led, O::Events, false, false, true,  None, None),
+    row_audit("measurement.leaderboard.published",       O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("measurement.leaderboard.entry_retracted", O::Events, true, OPEN_AUDIT, &[], None, None),
+
     // ── verification (P4) — `verification.validator.invoked` is an accountable
     // event class (R-ACC-2): every invocation is charged (to the instrument).
     // Provenance is mandatory on every `verification.*` class (§5f.1 §6;
@@ -1246,6 +1287,81 @@ mod tests {
             assert!(spec.kernel_origin, "{c}");
             assert!(spec.requires_provenance, "{c}");
             assert_eq!(spec.durability, Durability::Ledger, "{c}");
+        }
+    }
+
+    #[test]
+    fn s1_24_measurement_and_debt_classes_are_registered() {
+        // R-2.9.6⁰ᵃ/§5h.6 §6 — the four `lifecycle.debt.*` rows are audit-grade.
+        for c in [
+            "lifecycle.debt.status.changed",
+            "lifecycle.debt.removal_test.scheduled",
+            "lifecycle.debt.removal_test.settled",
+            "lifecycle.debt.expired_used",
+        ] {
+            let spec = lookup(c).unwrap_or_else(|| panic!("{c} not registered"));
+            assert!(spec.audit_grade, "{c}");
+            assert!(spec.kernel_origin, "{c}");
+            assert!(spec.requires_provenance, "{c}");
+            assert_eq!(spec.durability, Durability::Ledger, "{c}");
+        }
+        // R-2.10.3⁰ᵃ/R-2.10.5⁰ — the `measurement.experiment.*` rows: the
+        // audit-grade subset is exactly {declared, run_excluded, amended,
+        // closed, paused} (§6.3 §6/§9.2); the rest are durable + provenance-
+        // mandatory.
+        let audit_subset = [
+            "measurement.experiment.declared",
+            "measurement.experiment.run_excluded",
+            "measurement.experiment.amended",
+            "measurement.experiment.closed",
+            "measurement.experiment.paused",
+        ];
+        let experiment_rows = [
+            "measurement.experiment.declared",
+            "measurement.experiment.run_planned",
+            "measurement.experiment.run_claimed",
+            "measurement.experiment.claim_expired",
+            "measurement.experiment.run_launched",
+            "measurement.experiment.run_bound",
+            "measurement.experiment.run_settled",
+            "measurement.experiment.run_excluded",
+            "measurement.experiment.run_replanned",
+            "measurement.experiment.cell_completed",
+            "measurement.experiment.amended",
+            "measurement.experiment.closed",
+            "measurement.experiment.paused",
+            "measurement.experiment.resumed",
+            "measurement.experiment.drift_bracket",
+            "measurement.experiment.bundle_assembled",
+        ];
+        for c in experiment_rows {
+            let spec = lookup(c).unwrap_or_else(|| panic!("{c} not registered"));
+            assert_eq!(
+                spec.audit_grade,
+                audit_subset.contains(&c),
+                "{c} audit-grade flag"
+            );
+            assert!(spec.requires_provenance, "{c}");
+            assert_eq!(spec.durability, Durability::Ledger, "{c}");
+        }
+        // R-2.10.4⁰ᵃ — analysis rows durable + provenance-mandatory; the
+        // leaderboard rows audit-grade.
+        for c in [
+            "measurement.analysis.recorded",
+            "measurement.analysis.superseded",
+        ] {
+            let spec = lookup(c).unwrap_or_else(|| panic!("{c} not registered"));
+            assert!(!spec.audit_grade, "{c}");
+            assert!(spec.requires_provenance, "{c}");
+            assert_eq!(spec.durability, Durability::Ledger, "{c}");
+        }
+        for c in [
+            "measurement.leaderboard.published",
+            "measurement.leaderboard.entry_retracted",
+        ] {
+            let spec = lookup(c).unwrap_or_else(|| panic!("{c} not registered"));
+            assert!(spec.audit_grade, "{c}");
+            assert!(spec.kernel_origin, "{c}");
         }
     }
 
