@@ -803,6 +803,10 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.leaderboard.diff_snapshots", "L", "json", "json"),
         labi("lab.leaderboard.publish", "L", "json", "json"),
         labi("lab.leaderboard.retract_entry", "L", "json", "json"),
+        // S4.4 — §6.5 §2.2's `snapshots(definition_ref) → [snapshot_id]`
+        // read (the retained-snapshot list; `leaderboard` returns the
+        // snapshot document itself).
+        labi("lab.leaderboard.snapshots", "L", "json", "json"),
         lab("lab.hosting.describe", "L", "json", "json"),
         lab("lab.hosting.probe", "L", "json", "json"),
         lab("lab.hosting.attach", "L", "json", "json"),

@@ -5670,3 +5670,144 @@ fn s42_scoped_bundle_validate_status_and_lifecycle() {
         Some(run_bundle_id.as_str())
     );
 }
+
+// ── S4.4 — `ReproReport{independent}` + `lab.leaderboard.snapshots` ──
+//
+// R-2.9.3 C1/Stage-4 lands "`ReproReport` sidecar with `independent`"
+// (§5h.3 §2): the report names its reproducer and reproducer
+// instrument, carries the spec's four-valued `verdict`, and computes
+// `independent` over declared identity material — never claimed by the
+// request (OQ-334 interim rule, ADR-0295; CC2). Plus §6.5 §2.2's
+// `snapshots(definition_ref) → [snapshot_id]` retained-snapshot read.
+#[test]
+fn s44_repro_report_independent_and_leaderboard_snapshots() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let s = open_new(&mut svc);
+    let session_id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    submit(&mut svc, &session_id, text_input("s44 repro"));
+    close(&mut svc, &session_id);
+    let dir = test_dir("s44-repro");
+    deliver_bundle(&mut svc, &run_id, &dir);
+
+    // An unattributed reproduce is the kernel re-checking its own
+    // bundle — repeatability, never independence.
+    let r = ok(&call(
+        &mut svc,
+        "kernel.reproduce",
+        Json::obj([
+            ("path", Json::str(dir.to_string_lossy().to_string())),
+            ("level", Json::str("R0")),
+        ]),
+    ));
+    assert_eq!(r.get("independent"), Some(&Json::Bool(false)), "{r:?}");
+    assert_eq!(
+        r.get("verdict").and_then(Json::as_str),
+        Some("reproduced"),
+        "{r:?}"
+    );
+    assert_eq!(
+        r.get("reproducer")
+            .and_then(|p| p.get("origin"))
+            .and_then(|o| o.get("kind"))
+            .and_then(Json::as_str),
+        Some("kernel"),
+        "{r:?}"
+    );
+    assert_eq!(
+        r.get("evidence")
+            .and_then(|e| e.get("independent_basis"))
+            .and_then(Json::as_str),
+        Some("reproducer_signer_undeclared"),
+        "{r:?}"
+    );
+
+    // A declared reproducer's claim rides verbatim — but a caller-
+    // supplied `independent` member is never read: the flag computes
+    // from the declared signer/installation material only (here the
+    // declared provenance anchors no signer → false).
+    let r2 = ok(&call(
+        &mut svc,
+        "kernel.reproduce",
+        Json::obj([
+            ("path", Json::str(dir.to_string_lossy().to_string())),
+            ("level", Json::str("R0")),
+            (
+                "reproducer",
+                Json::obj([
+                    (
+                        "provenance",
+                        Json::obj([("origin", Json::obj([("kind", Json::str("lab"))]))]),
+                    ),
+                    (
+                        "instrument",
+                        Json::obj([
+                            ("version_id", Json::str("idp:kernel-2")),
+                            ("installation_id", Json::str("box-9")),
+                        ]),
+                    ),
+                    // The false claim must be ignored, not honoured.
+                    ("independent", Json::Bool(true)),
+                ]),
+            ),
+        ]),
+    ));
+    assert_eq!(
+        r2.get("reproducer")
+            .and_then(|p| p.get("origin"))
+            .and_then(|o| o.get("kind"))
+            .and_then(Json::as_str),
+        Some("lab"),
+        "{r2:?}"
+    );
+    assert_eq!(
+        r2.get("reproducer_instrument")
+            .and_then(|i| i.get("installation_id"))
+            .and_then(Json::as_str),
+        Some("box-9"),
+        "{r2:?}"
+    );
+    assert_eq!(r2.get("independent"), Some(&Json::Bool(false)), "{r2:?}");
+    assert_eq!(
+        r2.get("evidence")
+            .and_then(|e| e.get("independent_basis"))
+            .and_then(Json::as_str),
+        Some("reproducer_signer_undeclared"),
+        "{r2:?}"
+    );
+
+    // §6.5 §2.2's `snapshots(definition_ref)` — the retained-snapshot
+    // list over the persisted index.
+    let def =
+        hh_results::leaderboard::LeaderboardDefinition::new("idp:experiment-s44", "wall_time_ms");
+    let defined = ok(&call(
+        &mut svc,
+        "lab.leaderboard.define",
+        Json::obj([("definition", def.to_json())]),
+    ));
+    let def_id = defined
+        .get("definition_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let snaps = ok(&call(
+        &mut svc,
+        "lab.leaderboard.snapshots",
+        Json::obj([("definition_ref", Json::str(def_id.clone()))]),
+    ));
+    assert_eq!(
+        snaps.get("definition_id").and_then(Json::as_str),
+        Some(def_id.as_str()),
+        "{snaps:?}"
+    );
+    assert_eq!(
+        snaps.get("snapshots"),
+        Some(&Json::Arr(vec![])),
+        "{snaps:?}"
+    );
+}
