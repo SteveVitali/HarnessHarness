@@ -766,6 +766,14 @@ pub enum RegistryRecord {
     /// layering as `Participant`: `hh-hosting` owns the schema; the registry
     /// stores the canonical body verbatim (`kind: "adapter"` tag gated).
     Adapter(Json),
+    /// A `leaderboard_definition` — the §6.5 named `LeaderboardDefinition`
+    /// record (R-2.10.5 C1; ADR-0294). `hh-results` owns the schema (the same
+    /// opaque layering as `Participant`/`Adapter`): the registry stores the
+    /// canonical body verbatim and gates the `kind: "leaderboard_definition"`
+    /// tag (`record_from_json`); the definition's `definition_id` is its
+    /// `version_id` and its name binds through `publish` under ADR-0153
+    /// namespace authority (OQ-372).
+    LeaderboardDefinition(Json),
     /// A `sealed_definition` — a sealed `hir/1` document plus its own identity
     /// (`R-2.10.1`; `hh-hir` owns the schema — `hh_hir::wire::sealed_*` is the
     /// one codec, CC7). The record's `version_id`/`semantic_id` ARE the
@@ -795,6 +803,7 @@ impl RegistryRecord {
             RegistryRecord::EnvironmentRecord(_) => RecordKind::EnvironmentRecord,
             RegistryRecord::Participant(_) => RecordKind::Participant,
             RegistryRecord::Adapter(_) => RecordKind::Adapter,
+            RegistryRecord::LeaderboardDefinition(_) => RecordKind::LeaderboardDefinition,
             RegistryRecord::SealedDefinition(_) => RecordKind::SealedDefinition,
         }
     }
@@ -814,10 +823,13 @@ impl RegistryRecord {
             // `accepted_signers` names signer identity coordinates (anchor
             // spellings), never registry `version_id`s — no closure edges.
             | RegistryRecord::TrustRootPolicy(_) => Vec::new(),
-            // The opaque participant/adapter bodies carry no registry-level
-            // pins (C0 — their internal refs live inside the body; hh-hosting
-            // owns any projection that reads them).
-            RegistryRecord::Participant(_) | RegistryRecord::Adapter(_) => Vec::new(),
+            // The opaque participant/adapter/leaderboard-definition bodies
+            // carry no registry-level pins (C1 — their internal refs live
+            // inside the body; `hh-hosting`/`hh-results` own any projection
+            // that reads them).
+            RegistryRecord::Participant(_)
+            | RegistryRecord::Adapter(_)
+            | RegistryRecord::LeaderboardDefinition(_) => Vec::new(),
             // `applies_to_families` scopes by family *name* (the same treatment
             // `VariantRecord.applies_to.families` gets) — names are never pins.
             RegistryRecord::MetricDeclaration(_) => Vec::new(),

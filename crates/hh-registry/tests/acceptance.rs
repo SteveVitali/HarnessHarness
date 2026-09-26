@@ -82,9 +82,9 @@ fn ac2_closed_kinds_and_closed_status_vocabularies() {
     let d = dir("ac2");
     let kernel = corpus::kernel_registrar();
     let mut s = RegistryStore::open(&d, &kernel).unwrap();
-    // The kind list is closed at 25 — `whatever` is not a kind.
+    // The kind list is closed at 26 — `whatever` is not a kind.
     assert_eq!(RecordKind::parse("whatever"), None);
-    assert_eq!(RecordKind::ALL.len(), 25);
+    assert_eq!(RecordKind::ALL.len(), 26);
     // A kind in the list but without a Stage-1 schema is refused, not admitted.
     let e = s
         .register(

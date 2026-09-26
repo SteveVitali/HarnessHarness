@@ -1486,9 +1486,12 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         // form `hh-env` minted — CC7 says the schema owner encodes, the
         // registry stores).
         RegistryRecord::EnvironmentRecord(b) => b.clone(),
-        // The opaque hosting bodies — `hh-hosting` owns the §6.6 schemas; the
+        // The opaque hosting/leaderboard bodies — `hh-hosting` owns the §6.6
+        // schemas, `hh-results` the §6.5 `LeaderboardDefinition` schema; the
         // registry stores the canonical Json verbatim (same layering).
-        RegistryRecord::Participant(b) | RegistryRecord::Adapter(b) => b.clone(),
+        RegistryRecord::Participant(b)
+        | RegistryRecord::Adapter(b)
+        | RegistryRecord::LeaderboardDefinition(b) => b.clone(),
         // The sealed-definition body — `hh-hir` owns the schema
         // (`sealed_definition_json`; like `Capability`, the `semantic` flag is
         // irrelevant: the document's own codec splits identity).
@@ -1631,11 +1634,12 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             }
             Ok(RegistryRecord::EnvironmentRecord(j.clone()))
         }
-        RecordKind::Participant | RecordKind::Adapter => {
+        RecordKind::Participant | RecordKind::Adapter | RecordKind::LeaderboardDefinition => {
             // Opaque body, structural gate only — `hh-hosting` owns the §6.6
-            // schema (same layering as `EnvironmentRecord`). The registry
-            // requires the body's `kind` tag to match the record kind so a
-            // mistagged body can never register under the wrong kind.
+            // schemas, `hh-results` the §6.5 `LeaderboardDefinition` schema
+            // (same layering as `EnvironmentRecord`). The registry requires
+            // the body's `kind` tag to match the record kind so a mistagged
+            // body can never register under the wrong kind.
             let want = kind.as_str();
             match j.get("kind").and_then(|k| k.as_str()) {
                 Some(t) if t == want => {}
@@ -1654,7 +1658,8 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             }
             match kind {
                 RecordKind::Participant => Ok(RegistryRecord::Participant(j.clone())),
-                _ => Ok(RegistryRecord::Adapter(j.clone())),
+                RecordKind::Adapter => Ok(RegistryRecord::Adapter(j.clone())),
+                _ => Ok(RegistryRecord::LeaderboardDefinition(j.clone())),
             }
         }
         RecordKind::SealedDefinition => {

@@ -208,6 +208,10 @@ pub struct ExperimentView {
     pub wasted_runs: Vec<String>,
     /// `amended` rows (each marks later analyses `post_amendment`).
     pub amendments: Vec<Json>,
+    /// `measurement.analysis.recorded` payloads (the producer contract's
+    /// analysis stamps — `DisclosureSummary.analyses_*` counts them;
+    /// §6.5 §2.3, ADR-0162 D3).
+    pub analyses: Vec<Json>,
     /// `outcome_class → count` over settled runs (all attempts).
     pub outcome_counts: BTreeMap<String, u64>,
     /// `provider_drift = observed` — set when a `closed` bracket reports a
@@ -453,6 +457,9 @@ impl ExperimentView {
             }
             c if c == class::AMENDED => {
                 self.amendments.push(p.clone());
+            }
+            c if c == class::ANALYSIS_RECORDED => {
+                self.analyses.push(p.clone());
             }
             _ => {}
         }

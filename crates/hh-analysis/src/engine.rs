@@ -9,12 +9,14 @@
 //! for the same `(spec, rows @ watermark, seed, draws)`.
 
 use hh_experiment::docs::{kind as doc_kind, LabDocs};
-use hh_lab::analysis::{AnalysisRecord, AnalysisReport, AnalysisSpec, AnalysisStatus};
+use hh_lab::analysis::{AnalysisReport, AnalysisSpec, AnalysisStatus};
 use hh_wire::Json;
 
 use crate::error::AnalysisError;
 use crate::kernel::{analyze, AnalysisInput};
-use crate::report::{generated_from_for, lab_watermarks, report_id_for, AnalysisOutcome};
+use crate::report::{
+    generated_from_for, lab_watermarks, record_for, record_kind, report_id_for, AnalysisOutcome,
+};
 
 /// `analyze_and_record(docs, spec, input)` — run the kernel and persist
 /// `{AnalysisRecord, analysis_report_body/1}` idempotently. A recorded
@@ -41,21 +43,18 @@ pub fn analyze_and_record(
             Some("confirmatory") => AnalysisStatus::Final,
             _ => AnalysisStatus::Exploratory,
         };
-        let watermarks = lab_watermarks(input.watermark_set);
-        let mut record = AnalysisRecord {
-            analysis_id: String::new(),
-            spec_ref: spec.spec_id(),
-            generated_from: watermarks.clone(),
-            outputs: vec![report_id.clone()],
-            status,
-        };
-        record.analysis_id = record.analysis_id();
+        // The envelope is rebuilt through the shared `record_for` — a
+        // re-served record recomputes to the same `analysis_id` (the
+        // record is content-addressed; divergent envelopes would fork
+        // the anchor).
+        let record = record_for(spec, input, &report_id, status);
         let report = AnalysisReport {
             report_id: report_id.clone(),
             spec_hash: spec.spec_id(),
-            generated_from: watermarks,
+            generated_from: lab_watermarks(input.watermark_set),
             status,
             result_ref: Some(report_id.clone()),
+            kind: Some(record_kind(&spec.kind).to_string()),
         };
         return Ok(AnalysisOutcome {
             body,

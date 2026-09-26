@@ -327,8 +327,9 @@ impl AnalysisStatus {
     }
 }
 
-/// `AnalysisRecord` — the persisted analysis (§6.4; content-addressed under
-/// `analysis_record`).
+/// `AnalysisRecord` — the persisted analysis (§6.4 §6.5; content-addressed
+/// under `analysis_record`). The C1 canonical members are additive — a
+/// record produced at C0 decodes with `None`/empty/false on every C1 member.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalysisRecord {
     /// `analysis_id = H(canonical(record minus analysis_id))`.
@@ -341,6 +342,42 @@ pub struct AnalysisRecord {
     pub outputs: Vec<String>,
     /// The record status.
     pub status: AnalysisStatus,
+    /// The record kind (`summary_report` | `comparison_report` |
+    /// `interaction_report` | `frontier_report` | `transfer_report` |
+    /// `benefit_decomposition` | `rank_report` | `reliability_profile` |
+    /// `power_report` | `strata_view` | `diagnostics` | `fitted_surface` |
+    /// `equivalence_report` | `custom`; §6.5 producer-contract vocabulary).
+    /// `None` on C0-produced records — emit `custom` when re-declared.
+    pub kind: Option<String>,
+    /// The producing experiment run (None for ad-hoc analyses).
+    pub experiment_run_id: Option<String>,
+    /// The estimator procedure version_id (what ran, not a name).
+    pub procedure: Option<String>,
+    /// The declared inputs — `{row_versions[] | {query, watermark_set}}`.
+    pub inputs: Option<Json>,
+    /// The metric-registry version the analysis resolved against.
+    pub metric_registry_version: Option<String>,
+    /// The price-table version the analysis resolved against.
+    pub price_table_version: Option<String>,
+    /// The oracle refs used across the analysis's cells.
+    pub oracle_ids: Vec<String>,
+    /// The judge snapshot refs used across the analysis's cells.
+    pub judge_snapshots: Vec<String>,
+    /// The `AnalysisReport` content address the record points at.
+    pub report: Option<String>,
+    /// `true` when the record's {kind, metric refs, procedure} match a
+    /// `PreRegistration` plan by identity (emitted only when `true`).
+    pub pre_registered: bool,
+    /// The matching registered analysis ref when `pre_registered`.
+    pub registered_analysis_ref: Option<String>,
+    /// `true` when the record postdates an experiment amendment (emitted
+    /// only when `true`).
+    pub post_amendment: bool,
+    /// The record's provenance payload.
+    pub provenance: Option<Json>,
+    /// The analysis's own cost account (the compute-effort proxy at this
+    /// tier: `{resampling_draws, seed, n_rows, n_tasks}` — ADR-0294).
+    pub cost: Option<Json>,
 }
 
 impl AnalysisRecord {
@@ -359,19 +396,68 @@ impl AnalysisRecord {
 
     /// The canonical JSON.
     pub fn to_json(&self) -> Json {
-        Json::obj([
-            ("analysis_id", Json::str(&self.analysis_id)),
-            ("spec_ref", Json::str(&self.spec_ref)),
-            ("generated_from", self.generated_from.to_json()),
-            (
-                "outputs",
-                Json::Arr(self.outputs.iter().map(Json::str).collect()),
-            ),
-            ("status", Json::str(self.status.name())),
-        ])
+        let mut m = BTreeMap::new();
+        m.insert("analysis_id".into(), Json::str(&self.analysis_id));
+        m.insert("spec_ref".into(), Json::str(&self.spec_ref));
+        m.insert("generated_from".into(), self.generated_from.to_json());
+        m.insert(
+            "outputs".into(),
+            Json::Arr(self.outputs.iter().map(Json::str).collect()),
+        );
+        m.insert("status".into(), Json::str(self.status.name()));
+        if let Some(k) = &self.kind {
+            m.insert("kind".into(), Json::str(k));
+        }
+        if let Some(r) = &self.experiment_run_id {
+            m.insert("experiment_run_id".into(), Json::str(r));
+        }
+        if let Some(p) = &self.procedure {
+            m.insert("procedure".into(), Json::str(p));
+        }
+        if let Some(i) = &self.inputs {
+            m.insert("inputs".into(), i.clone());
+        }
+        if let Some(v) = &self.metric_registry_version {
+            m.insert("metric_registry_version".into(), Json::str(v));
+        }
+        if let Some(v) = &self.price_table_version {
+            m.insert("price_table_version".into(), Json::str(v));
+        }
+        if !self.oracle_ids.is_empty() {
+            m.insert(
+                "oracle_ids".into(),
+                Json::Arr(self.oracle_ids.iter().map(Json::str).collect()),
+            );
+        }
+        if !self.judge_snapshots.is_empty() {
+            m.insert(
+                "judge_snapshots".into(),
+                Json::Arr(self.judge_snapshots.iter().map(Json::str).collect()),
+            );
+        }
+        if let Some(r) = &self.report {
+            m.insert("report".into(), Json::str(r));
+        }
+        if self.pre_registered {
+            m.insert("pre_registered".into(), Json::Bool(true));
+        }
+        if let Some(r) = &self.registered_analysis_ref {
+            m.insert("registered_analysis_ref".into(), Json::str(r));
+        }
+        if self.post_amendment {
+            m.insert("post_amendment".into(), Json::Bool(true));
+        }
+        if let Some(p) = &self.provenance {
+            m.insert("provenance".into(), p.clone());
+        }
+        if let Some(c) = &self.cost {
+            m.insert("cost".into(), c.clone());
+        }
+        Json::Obj(m)
     }
 
-    /// Strict decode.
+    /// Strict decode (C0 records decode with `None`/`[]`/`false` on every
+    /// C1 member — additive per CC8).
     pub fn from_json(j: &Json) -> Result<AnalysisRecord, SchemaError> {
         const REC: &str = "AnalysisRecord";
         let m = expect_obj(j, REC)?;
@@ -383,6 +469,20 @@ impl AnalysisRecord {
                 "generated_from",
                 "outputs",
                 "status",
+                "kind",
+                "experiment_run_id",
+                "procedure",
+                "inputs",
+                "metric_registry_version",
+                "price_table_version",
+                "oracle_ids",
+                "judge_snapshots",
+                "report",
+                "pre_registered",
+                "registered_analysis_ref",
+                "post_amendment",
+                "provenance",
+                "cost",
             ],
             REC,
         )?;
@@ -393,11 +493,59 @@ impl AnalysisRecord {
             outputs: str_vec_at(m, "outputs", REC)?,
             status: AnalysisStatus::parse(str_at(m, "status", REC)?)
                 .ok_or_else(|| SchemaError::v("status", "unknown analysis status"))?,
+            kind: opt_str_at(m, "kind")?.map(str::to_string),
+            experiment_run_id: opt_str_at(m, "experiment_run_id")?.map(str::to_string),
+            procedure: opt_str_at(m, "procedure")?.map(str::to_string),
+            inputs: match m.get("inputs") {
+                None | Some(Json::Null) => None,
+                Some(i) => Some(i.clone()),
+            },
+            metric_registry_version: opt_str_at(m, "metric_registry_version")?
+                .map(str::to_string),
+            price_table_version: opt_str_at(m, "price_table_version")?.map(str::to_string),
+            oracle_ids: match m.get("oracle_ids") {
+                None | Some(Json::Null) => Vec::new(),
+                Some(Json::Arr(a)) => a
+                    .iter()
+                    .map(|v| {
+                        v.as_str()
+                            .map(str::to_string)
+                            .ok_or_else(|| SchemaError::v("oracle_ids", "expected strings"))
+                    })
+                    .collect::<Result<_, _>>()?,
+                Some(_) => return Err(SchemaError::v("oracle_ids", "expected array")),
+            },
+            judge_snapshots: match m.get("judge_snapshots") {
+                None | Some(Json::Null) => Vec::new(),
+                Some(Json::Arr(a)) => a
+                    .iter()
+                    .map(|v| {
+                        v.as_str()
+                            .map(str::to_string)
+                            .ok_or_else(|| SchemaError::v("judge_snapshots", "expected strings"))
+                    })
+                    .collect::<Result<_, _>>()?,
+                Some(_) => return Err(SchemaError::v("judge_snapshots", "expected array")),
+            },
+            report: opt_str_at(m, "report")?.map(str::to_string),
+            pre_registered: opt_bool_at(m, "pre_registered")?.unwrap_or(false),
+            registered_analysis_ref: opt_str_at(m, "registered_analysis_ref")?
+                .map(str::to_string),
+            post_amendment: opt_bool_at(m, "post_amendment")?.unwrap_or(false),
+            provenance: match m.get("provenance") {
+                None | Some(Json::Null) => None,
+                Some(p) => Some(p.clone()),
+            },
+            cost: match m.get("cost") {
+                None | Some(Json::Null) => None,
+                Some(c) => Some(c.clone()),
+            },
         })
     }
 }
 
-/// `AnalysisReport` — the rendered analysis output (§6.4).
+/// `AnalysisReport` — the rendered analysis output (§6.4). `kind` is the
+/// additive C1 member (the report's operation kind spelling).
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalysisReport {
     /// The report id.
@@ -410,6 +558,9 @@ pub struct AnalysisReport {
     pub status: AnalysisStatus,
     /// The result payload ref.
     pub result_ref: Option<String>,
+    /// The report kind (`frontier_report` | `rank_report` | …) — additive
+    /// C1 member, absent on C0 reports.
+    pub kind: Option<String>,
 }
 
 impl AnalysisReport {
@@ -422,6 +573,9 @@ impl AnalysisReport {
         m.insert("status".into(), Json::str(self.status.name()));
         if let Some(r) = &self.result_ref {
             m.insert("result_ref".into(), Json::str(r));
+        }
+        if let Some(k) = &self.kind {
+            m.insert("kind".into(), Json::str(k));
         }
         Json::Obj(m)
     }
@@ -438,6 +592,7 @@ impl AnalysisReport {
                 "generated_from",
                 "status",
                 "result_ref",
+                "kind",
             ],
             REC,
         )?;
@@ -448,6 +603,7 @@ impl AnalysisReport {
             status: AnalysisStatus::parse(str_at(m, "status", REC)?)
                 .ok_or_else(|| SchemaError::v("status", "unknown analysis status"))?,
             result_ref: opt_str_at(m, "result_ref")?.map(str::to_string),
+            kind: opt_str_at(m, "kind")?.map(str::to_string),
         })
     }
 }

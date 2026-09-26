@@ -972,6 +972,27 @@ pub enum ExperimentRefusal {
         /// The failure detail.
         detail: String,
     },
+    /// `declare` after a `run_bound` on the experiment run — the producer
+    /// contract's timing refusal (§6.5 §2.3; ADR-0162 D2). A second
+    /// `declared` *without* bound runs is `SchemaViolation` (`AlreadyOpen`
+    /// at the engine layer); with bound runs the refusal is this member.
+    DeclarationLate {
+        /// The failure detail.
+        detail: String,
+    },
+    /// `PreRegistration.registered_at` postdates a bound run — the S9
+    /// mirror refusal at the producer boundary (§6.5 §2.3; ADR-0162 D4).
+    PreRegistrationLate {
+        /// The failure detail.
+        detail: String,
+    },
+    /// `record_analysis` on a record claiming `pre_registered = true` whose
+    /// `registered_analysis_ref` does not match the experiment's pinned
+    /// plan by identity (§6.5 §2.3; ADR-0162 D3).
+    NotPreRegistered {
+        /// The failure detail.
+        detail: String,
+    },
     /// A member-level schema violation (decode).
     Schema(SchemaError),
 }

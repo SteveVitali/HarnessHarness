@@ -20,10 +20,12 @@ use crate::catalogue::BundleStatus;
 use crate::error::ResultsError;
 use crate::row::ResultsRow;
 use crate::store::ResultsStore;
+use crate::version::DerivedReason;
 use crate::watermark::WatermarkSet;
 
-/// `RowAnnotations{key, version_id, bundle_refs[], flags[]}` — the
-/// rebuildable sidecar for one stored row.
+/// `RowAnnotations{key, version_id, bundle_refs[], flags[], leaders[],
+/// scoring_marks[]}` — the rebuildable sidecar for one stored row
+/// (C1: the `leaders`/`scoring_marks` members land — §6.5 §2.1).
 #[derive(Debug, Clone, PartialEq)]
 pub struct RowAnnotations {
     /// The fixed key's pinned id.
@@ -34,8 +36,19 @@ pub struct RowAnnotations {
     pub bundle_refs: Vec<String>,
     /// The derived flags — `open` (unfinished), `excluded:<reason>`,
     /// `superseded`, `not_comparable`, `bundle_unvalidated` (a covering
-    /// bundle exists below `validated`).
+    /// bundle exists below `validated`), `contaminated` (a
+    /// `security.containment.violated` row on the subject run),
+    /// `member_revoked`/`suite_retired`/`evidence_missing` (the C1
+    /// snapshot-overlay marks; annotate, never hide).
     pub flags: Vec<String>,
+    /// The retained leaderboard snapshots admitting this key —
+    /// `leaderboards/snapshots/*` membership, derived (never recorded on
+    /// the row — CF-298).
+    pub leaders: Vec<String>,
+    /// The score-derivation marks — `rescored:<reason>` per non-initial
+    /// version and `analysis:<event_ref>` per `measurement.analysis.
+    /// recorded` row citing this version.
+    pub scoring_marks: Vec<String>,
 }
 
 impl RowAnnotations {
@@ -51,6 +64,14 @@ impl RowAnnotations {
             (
                 "flags",
                 Json::Arr(self.flags.iter().map(Json::str).collect()),
+            ),
+            (
+                "leaders",
+                Json::Arr(self.leaders.iter().map(Json::str).collect()),
+            ),
+            (
+                "scoring_marks",
+                Json::Arr(self.scoring_marks.iter().map(Json::str).collect()),
             ),
         ])
     }
@@ -133,6 +154,8 @@ pub fn load(results: &ResultsStore) -> Result<AnnotationIndex, ResultsError> {
                 version_id: v.to_string(),
                 bundle_refs: strs("bundle_refs"),
                 flags: strs("flags"),
+                leaders: strs("leaders"),
+                scoring_marks: strs("scoring_marks"),
             });
         }
     }
@@ -187,6 +210,36 @@ fn experiment_flags(store: &Store, row: &ResultsRow) -> (Vec<String>, WatermarkS
         }
         if touched {
             wm.pin(&run_id, head.seq);
+            // `suite_retired` — a `measurement.suite.retired` row on the
+            // bound experiment run marks every row of the retired suite
+            // (AC-R-2.10.5-4's third flag; the retirement is a ledger
+            // fact, the flag a derived overlay — annotate, never hide).
+            // When the row names a `suite_ref`/`suite_id`, a row whose
+            // task suite differs is not marked.
+            let row_suite = row
+                .coordinates
+                .task
+                .as_ref()
+                .and_then(|t| t.get("suite_id"))
+                .and_then(Json::as_str);
+            let retired = events.iter().any(|e| {
+                if e.class != "measurement.suite.retired" {
+                    return false;
+                }
+                let named = e
+                    .payload
+                    .get("suite_ref")
+                    .or_else(|| e.payload.get("suite_id"))
+                    .or_else(|| e.payload.get("suite"))
+                    .and_then(Json::as_str);
+                match (named, row_suite) {
+                    (Some(n), Some(s)) => n == s,
+                    _ => true,
+                }
+            });
+            if retired {
+                flags.push("suite_retired".to_string());
+            }
         }
     }
     if let Some(exp) = &row.experiment {
@@ -198,12 +251,59 @@ fn experiment_flags(store: &Store, row: &ResultsRow) -> (Vec<String>, WatermarkS
             flags.push("not_comparable".to_string());
         }
     }
+    // `contaminated` — a `security.containment.violated` row on the
+    // subject run marks the row (the leaderboard L8 veto consumes this
+    // flag; annotate, never hide).
+    if let Ok(events) = store.envelopes(&row.key.run_id) {
+        if events
+            .iter()
+            .any(|e| e.class == "security.containment.violated")
+        {
+            flags.push("contaminated".to_string());
+        }
+    }
     if row.outcome.status != "finished" {
         flags.push("open".to_string());
     }
     flags.sort();
     flags.dedup();
     (flags, wm)
+}
+
+/// The score-derivation marks — `rescored:<reason>` for every non-initial
+/// version on the key's chain and `analysis:<event_id>` for each
+/// `measurement.analysis.recorded` row citing the row's `version_id` or
+/// key (the §6.5 §2.1 `scoring_marks[]` member).
+fn scoring_marks(results: &ResultsStore, store: &Store, row: &ResultsRow) -> Vec<String> {
+    let mut marks = Vec::new();
+    if let Ok(history) = results.row_history(&row.key.key_id()) {
+        for v in &history {
+            if v.derived_from_reason != DerivedReason::Initial {
+                marks.push(format!("rescored:{}", v.derived_from_reason.as_str()));
+            }
+        }
+    }
+    // Analysis rows cite the version — a `measurement.analysis.recorded`
+    // payload carrying the version id (or the key id) marks the row.
+    let needles = [row.version_id.clone(), row.key.key_id()];
+    'runs: for run_id in store.run_ids() {
+        let Ok(events) = store.envelopes(&run_id) else {
+            continue;
+        };
+        for e in events {
+            if e.class != "measurement.analysis.recorded" {
+                continue;
+            }
+            let s = e.payload.to_canonical_string();
+            if needles.iter().any(|n| s.contains(n.as_str())) {
+                marks.push(format!("analysis:{}", e.event_id));
+                continue 'runs;
+            }
+        }
+    }
+    marks.sort();
+    marks.dedup();
+    marks
 }
 
 /// `annotate_row(row)` — the per-row sidecar (the `get_row` read composes
@@ -243,12 +343,25 @@ pub fn annotate_row(results: &ResultsStore, store: &Store, row: &ResultsRow) -> 
             flags.push("bundle_retracted".to_string());
         }
     }
+    // `member_revoked`/`suite_retired` — a retracted bundle reads as a
+    // revoked member; a suite the row's cells name that is marked
+    // retired in the registry/annotations source flags `suite_retired`.
+    // (The flags spell out the §6.5 §4 snapshot-overlay vocabulary so the
+    // leaderboard diff reports them as flag changes, never removals.)
+    if flags.iter().any(|f| f == "bundle_retracted") {
+        flags.push("member_revoked".to_string());
+    }
     flags.sort();
+    flags.dedup();
+    let leaders = crate::leaderboard::snapshot_memberships(results, &row.key.key_id());
+    let marks = scoring_marks(results, store, row);
     RowAnnotations {
         key: row.key.key_id(),
         version_id: row.version_id.clone(),
         bundle_refs,
         flags,
+        leaders,
+        scoring_marks: marks,
     }
 }
 

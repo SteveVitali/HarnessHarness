@@ -217,6 +217,38 @@ impl EmbedService {
                 .and_then(Json::as_int)
                 .unwrap_or(2000) as u64,
             seed: params.get("seed").and_then(Json::as_int).unwrap_or(0) as u64,
+            // `post_amendment` — the bound experiment run's view carries
+            // `measurement.experiment.amended` rows (§6.3; ADR-0162). A
+            // mixed/unbound selection is never marked amended.
+            post_amendment: {
+                let mut bound: Option<&str> = None;
+                let mut mixed = false;
+                for r in &rows {
+                    let e = r
+                        .experiment
+                        .as_ref()
+                        .and_then(|x| x.get("experiment_run_id"))
+                        .and_then(Json::as_str);
+                    match (bound, e) {
+                        (None, Some(e)) => bound = Some(e),
+                        (Some(b), Some(e)) if b == e => {}
+                        _ => mixed = true,
+                    }
+                }
+                match (mixed, bound) {
+                    (false, Some(eid)) => match self.store.events(eid) {
+                        // The `experiment_run_id` marker is row metadata — a
+                        // bound id that is not a ledger run (ad-hoc rows, a
+                        // foreign store) is never an amended experiment, and
+                        // the analysis is never refused for it.
+                        Ok(evs) => !hh_experiment::view::ExperimentView::fold(evs)
+                            .amendments
+                            .is_empty(),
+                        Err(_) => false,
+                    },
+                    _ => false,
+                }
+            },
         };
         let outcome = analyze_and_record(&docs, &spec, &input).map_err(xerr)?;
         Ok(Json::obj([

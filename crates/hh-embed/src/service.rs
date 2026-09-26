@@ -76,6 +76,10 @@ pub struct EmbedService {
     /// (`experiment_run_id → Lease`; the fence still lives in the ledger —
     /// this map only avoids release/re-acquire churn per call).
     pub(crate) experiment_engines: BTreeMap<String, Lease>,
+    /// `lab.results.subscribe` pull surfaces — `subscription_id →
+    /// JournalSubscription` (the results-store post-durability journal;
+    /// S4.3/R-2.10.5).
+    pub(crate) results_subscriptions: BTreeMap<String, hh_results::journal::JournalSubscription>,
 }
 
 /// A declared host-executor capability (`supplies.host_capabilities[]`).
@@ -282,6 +286,7 @@ impl EmbedService {
             holder: config.holder,
             registry_run: None,
             experiment_engines: BTreeMap::new(),
+            results_subscriptions: BTreeMap::new(),
         })
     }
 
@@ -633,6 +638,35 @@ impl EmbedService {
             // A12 + transfer rows; the remaining `lab.analysis.*` /
             // `lab.results.*` ops land with their own tickets).
             "lab.analysis.analyze" => self.lab_analysis_analyze(&req.params),
+            // ── S4.3: `lab.producer.*` (the §6.5 §2.3 producer contract),
+            // `lab.results.*` (the derived-state read/verify/export
+            // surface), `lab.leaderboard.*` (define/snapshot/diff/publish/
+            // retract) and `lab.analysis.{render,diff_reports,power}`
+            // (R-2.10.4¹ / R-2.10.5; ADR-0294).
+            "lab.producer.declare" => self.lab_producer_declare(&req.params),
+            "lab.producer.bind" => self.lab_producer_bind(&req.params),
+            "lab.producer.exclude" => self.lab_producer_exclude(&req.params),
+            "lab.producer.amend" => self.lab_producer_amend(&req.params),
+            "lab.producer.record_analysis" => self.lab_producer_record_analysis(&req.params),
+            "lab.analysis.render" => self.lab_analysis_render(&req.params),
+            "lab.analysis.diff_reports" => self.lab_analysis_diff_reports(&req.params),
+            "lab.analysis.power" => self.lab_analysis_power(&req.params),
+            "lab.results.get_row" => self.lab_results_get_row(&req.params),
+            "lab.results.row_history" => self.lab_results_row_history(&req.params),
+            "lab.results.query_rows" => self.lab_results_query_rows(&req.params),
+            "lab.results.cells" => self.lab_results_cells(&req.params),
+            "lab.results.distribution" => self.lab_results_distribution(&req.params),
+            "lab.results.catalogue" => self.lab_results_catalogue(&req.params),
+            "lab.results.subscribe" => self.lab_results_subscribe(&req.params),
+            "lab.results.verify_row" => self.lab_results_verify_row(&req.params),
+            "lab.results.verify_snapshot" => self.lab_results_verify_snapshot(&req.params),
+            "lab.results.verify_citation" => self.lab_results_verify_citation(&req.params),
+            "lab.results.export_rows" => self.lab_results_export_rows(&req.params),
+            "lab.leaderboard.define" => self.lab_leaderboard_define(&req.params),
+            "lab.leaderboard.leaderboard" => self.lab_leaderboard_leaderboard(&req.params),
+            "lab.leaderboard.diff_snapshots" => self.lab_leaderboard_diff_snapshots(&req.params),
+            "lab.leaderboard.publish" => self.lab_leaderboard_publish(&req.params),
+            "lab.leaderboard.retract_entry" => self.lab_leaderboard_retract_entry(&req.params),
             // ── S3.5: `lab.assembly.*` — the assembly service boundary
             // (R-2.10.1; §6.1). Semantics-free: records-in/records-out over
             // the one kernel resolver via `hh_lab::assembly`.
