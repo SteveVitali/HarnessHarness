@@ -401,6 +401,7 @@ fn scope_json(s: &Scope) -> Json {
         ("effect_id", &s.effect_id),
         ("child_run_id", &s.child_run_id),
         ("branch_id", &s.branch_id),
+        ("component_call_id", &s.component_call_id),
     ] {
         if let Some(v) = v {
             m.insert(k.to_string(), Json::str(v));
@@ -429,6 +430,7 @@ fn scope_from_json(j: &Json) -> Result<Scope, LedgerError> {
                 "effect_id",
                 "child_run_id",
                 "branch_id",
+                "component_call_id",
             ]
             .contains(&k.as_str())
             {
@@ -445,6 +447,7 @@ fn scope_from_json(j: &Json) -> Result<Scope, LedgerError> {
         effect_id: get("effect_id")?,
         child_run_id: get("child_run_id")?,
         branch_id: get("branch_id")?,
+        component_call_id: get("component_call_id")?,
     })
 }
 

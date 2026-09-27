@@ -213,6 +213,10 @@ pub fn build(dir: &Path) -> Result<(String, Vec<String>), RegistryError> {
     for class in [
         crate::suites::validator_class(),
         crate::suites::execution_alignment_class(),
+        // S2.2 — the `compaction_strategy` family class (§8.4's packaged
+        // first-party variant lives under `plugins/hh-compact-evict-oldest`;
+        // the corpus registers the class floors-only).
+        crate::suites::compaction_strategy_class(),
     ] {
         store.register(RegistryRecord::Class(class), &kernel, None)?;
     }

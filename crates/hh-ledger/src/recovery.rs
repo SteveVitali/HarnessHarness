@@ -289,6 +289,7 @@ impl Store {
                                 tool_call_id: f.tool_call_id.clone(),
                                 effect_id: Some(effect_id.clone()),
                                 child_run_id: None,
+                                component_call_id: None,
                                 branch_id: None,
                             },
                             Json::obj([
@@ -369,6 +370,7 @@ impl Store {
                     tool_call_id: None,
                     effect_id: None,
                     child_run_id: None,
+                    component_call_id: None,
                     branch_id: None,
                 },
                 Json::obj([("cause", Json::str("worker_lost"))]),
@@ -532,6 +534,7 @@ impl Store {
                 tool_call_id: f.tool_call_id.clone(),
                 effect_id: Some(f.effect_id.clone()),
                 child_run_id: None,
+                component_call_id: None,
                 branch_id: None,
             },
             Json::obj([

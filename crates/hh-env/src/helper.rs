@@ -502,6 +502,10 @@ impl ToolExecutor for HelperExecutor {
             attribution_token: request.attribution_token.clone(),
             commit_proof,
             idempotency_key: Some(request.idempotency_key.clone()),
+            // The environment handle's exec path inherits the helper env —
+            // `env_clear` is the variant host's placement contract (S2.2),
+            // not the §5d.5 executor's.
+            env_clear: false,
         })?;
         // An executor-side dedup hit returns the recorded verdict — the
         // effect was *not* re-executed (R-2.5.5¹).

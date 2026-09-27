@@ -89,16 +89,12 @@ pub fn seatbelt_profile(policy: &ContainmentPolicy) -> String {
     for root in &writable {
         s.push_str(&format!(
             "(allow file-write* (subpath \"{}\"))\n",
-            escape(&paths::normalize_path(root))
+            escape(&resolve(root))
         ));
     }
     for w in &policy.fs.write.allow {
         for sub in &w.read_only_subpaths {
-            let full = format!(
-                "{}/{}",
-                paths::normalize_path(&w.root),
-                paths::normalize_path(sub)
-            );
+            let full = format!("{}/{}", resolve(&w.root), paths::normalize_path(sub));
             s.push_str(&format!(
                 "(deny file-write* (subpath \"{}\"))\n",
                 escape(&full)
@@ -124,8 +120,8 @@ pub fn seatbelt_profile(policy: &ContainmentPolicy) -> String {
             for p in set {
                 s.push_str(&format!(
                     "(allow process-exec* (subpath \"{}\") (literal \"{}\"))\n",
-                    escape(&paths::normalize_path(p)),
-                    escape(&paths::normalize_path(p))
+                    escape(&resolve(p)),
+                    escape(&resolve(p))
                 ));
             }
         }
@@ -135,16 +131,25 @@ pub fn seatbelt_profile(policy: &ContainmentPolicy) -> String {
     // sandbox's); `public` gets the full class.
     match policy.net.mode {
         NetMode::None => {}
-        NetMode::Mediated => {
-            s.push_str("(allow network-outbound)\n");
-            for sock in &policy.net.unix_sockets.allow {
-                s.push_str(&format!(
-                    "(allow network* (remote unix-socket (path-literal \"{}\")))\n",
-                    escape(sock)
-                ));
-            }
-        }
+        NetMode::Mediated => s.push_str("(allow network-outbound)\n"),
         NetMode::Public => s.push_str("(allow network*)\n"),
+    }
+    // `unix_sockets.allow` is orthogonal to `net.mode` (S2.2 — a
+    // `subprocess_confined` plugin under `net.mode = none` reaches exactly
+    // its declared per-path sockets, its host channel included; every
+    // other socket stays deny-default). The policy validator refuses a
+    // populated `allow` under `bridged_only`, so a non-empty list here is
+    // always `allow_listed`.
+    for sock in &policy.net.unix_sockets.allow {
+        // The kernel-side filter that actually matches an AF_UNIX connect
+        // on current macOS is the regex form — `literal`/`path-literal`/
+        // `subpath` inside `remote unix-socket` never match (verified by
+        // the isolation suite's allow-list probe: the channel connects,
+        // a sibling socket is EPERM).
+        s.push_str(&format!(
+            "(allow network* (remote unix-socket (regex #\"{}\")))\n",
+            regex_escape_components(&resolve(sock))
+        ));
     }
     if policy.net.local_binding {
         s.push_str("(allow network-bind network-inbound)\n");
@@ -155,7 +160,7 @@ pub fn seatbelt_profile(policy: &ContainmentPolicy) -> String {
 /// A read-deny rule for a path pattern — `/`-anchored patterns become
 /// `(subpath …)`/literal denials; basename patterns become regex denials.
 fn deny_read_rule(pattern: &str) -> String {
-    let p = paths::normalize_path(pattern);
+    let p = resolve(pattern);
     if p.starts_with('/') {
         format!(
             "(deny file-read* (subpath \"{}\") (literal \"{}\"))\n",
@@ -171,7 +176,7 @@ fn deny_read_rule(pattern: &str) -> String {
 }
 
 fn allow_read_rule(pattern: &str) -> String {
-    let p = paths::normalize_path(pattern);
+    let p = resolve(pattern);
     if p.starts_with('/') {
         format!(
             "(allow file-read* (subpath \"{}\") (literal \"{}\"))\n",
@@ -187,7 +192,7 @@ fn allow_read_rule(pattern: &str) -> String {
 }
 
 fn deny_write_pattern(pattern: &str) -> String {
-    let p = paths::normalize_path(pattern);
+    let p = resolve(pattern);
     if p.starts_with('/') {
         format!(
             "(deny file-write* (subpath \"{}\") (literal \"{}\"))\n",
@@ -200,6 +205,22 @@ fn deny_write_pattern(pattern: &str) -> String {
             regex_escape_components(&p)
         )
     }
+}
+
+/// The seatbelt evaluator matches *resolved* vnode paths — a `/var/…`
+/// spelling (the per-user temp dir's public face; the real dir is
+/// `/private/var/…`) never matches a rule written under the unresolved
+/// name. Every absolute path emitted into the profile goes through
+/// `resolve`: canonicalize when the path exists, else the normalized
+/// spelling (a deny rule on a not-yet-created path still lands).
+fn resolve(p: &str) -> String {
+    let n = paths::normalize_path(p);
+    if !n.starts_with('/') {
+        return n;
+    }
+    std::fs::canonicalize(&n)
+        .map(|c| c.to_string_lossy().to_string())
+        .unwrap_or(n)
 }
 
 fn escape(p: &str) -> String {
@@ -267,5 +288,23 @@ mod tests {
         assert!(s.contains("(deny file-write* (subpath \"/ws/frozen\"))"));
         assert!(s.contains(".hh"));
         assert_eq!(s, seatbelt_profile(&p));
+    }
+
+    #[test]
+    fn unix_socket_allow_survives_net_mode_none() {
+        // S2.2 (§8.4 subprocess_confined): the plugin's only reach is its
+        // host channel — `net.mode = none` + `unix_sockets = allow_listed`
+        // must still emit the per-path rule (deny-default covers the rest).
+        use hh_containment::policy::{UnixSocketMode, UnixSockets};
+        let mut p = kernel_default(0);
+        p.net.unix_sockets = UnixSockets {
+            mode: UnixSocketMode::AllowListed,
+            allow: vec!["/tmp/chan.sock".into()],
+        };
+        let s = seatbelt_profile(&p);
+        assert!(s.contains("(deny default)"));
+        assert!(s.contains("(allow network* (remote unix-socket (regex #\"/tmp/chan\\.sock\")))"));
+        // No broad outbound grant under `none`.
+        assert!(!s.contains("network-outbound"));
     }
 }

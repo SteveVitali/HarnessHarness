@@ -1,0 +1,31 @@
+[package]
+name = "hh-varhost"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-2 out-of-process variant host — the kernel side of `plugin_abi/1` for `subprocess_confined` variants (spec §8.4, R-2.12.2; ticket S2.2; ADR-0180/0181/0182). Session lifecycle over the live `hh-helper` boundary (one plugin, one process, one policy — V3/V4), the probe-first `hello` handshake with pin/schema/protocol checks (V5/V6), bind/invoke/stream/cancel/unbind/close/guard/run_conformance, closed host-callback mediation under grant+budget checks, inbound screening + output stamping (V1), `requests → Permission + ContainmentPolicy` lowering, and the packaged-variant seal/load path. DF-S1.9-1."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+hh-containment = { path = "../hh-containment" }
+hh-plugin = { path = "../hh-plugin" }
+hh-registry = { path = "../hh-registry" }
+hh-helper = { path = "../hh-helper" }
+hh-env = { path = "../hh-env" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+
+[dev-dependencies]
+# The fixture runs in-process over `MemIo` for the protocol suite and as a
+# spawned `subprocess_confined` binary for the isolation suite — a
+# dev-dependency cycle (fixture → varhost is the runtime edge) is the
+# standard pattern and adds no production edge.
+hh-plugin-fixture = { path = "../hh-plugin-fixture" }
+tempfile = "3"

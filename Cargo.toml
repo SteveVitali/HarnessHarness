@@ -244,6 +244,17 @@ members = [
     # live in hh-registry::extension::plugin; the plugin_abi/1 schema lives in
     # hh-embed-schema::plugin_abi (one schema source — CC7/V6).
     "crates/hh-plugin",
+    # The C0/Stage-2 out-of-process variant host (spec §8.4, R-2.12.2; ticket S2.2;
+    # DF-S1.9-1) — plugin_abi/1 sessions over the hh-helper boundary, V1–V6,
+    # callback mediation, requests lowering, packaged-variant seal/load.
+    "crates/hh-varhost",
+    # The S2.2 plugin-side runtime + conformance fixture (null/hostile/guard/crash/
+    # slow modes) — the protocol/isolation/reach suites' counterpart binary.
+    "crates/hh-plugin-fixture",
+    # The packaged first-party variant — `compaction_strategy`'s C0 `evict_oldest`
+    # (spec §5c R-2.4.2, §8.4; ADR-0075/0146), shipped as a `subprocess_confined`
+    # plugin under `plugins/hh-compact-evict-oldest`.
+    "crates/hh-compact-evict-oldest",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
     # The C0 attended CLI slice (spec §7.1, R-2.11.1⁰ᵇ; ticket S1.26;

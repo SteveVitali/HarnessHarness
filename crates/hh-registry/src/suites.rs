@@ -348,6 +348,160 @@ pub fn execution_alignment_class() -> ClassRecord {
     }
 }
 
+/// `compaction_strategy` — the context-compaction component class (spec §5c
+/// R-2.4.2 / §8.4's packaged-variant family; ADR-0075/0146; S2.2). Ordered-many,
+/// decision point `compact`, the `{assess, propose, execute, declare}` contract
+/// over the closed op sum `{Evict, Offload, Summarize, Restructure}`; the
+/// deterministic C0 `evict_oldest` variant is the packaged first-party variant
+/// this stage ships.
+pub fn compaction_strategy_class() -> ClassRecord {
+    ClassRecord {
+        class_id: "compaction_strategy".to_string(),
+        contract: vec![
+            ContractOperation {
+                name: "assess".to_string(),
+                inputs: Json::obj([
+                    ("view", Json::str("context_view")),
+                    ("requirement", Json::str("compaction_requirement")),
+                ]),
+                outputs: Json::obj([("assessment", Json::str("{required, reason}"))]),
+                invariants: vec![
+                    "a pure fold over the view + requirement (deterministic)".to_string(),
+                    "a `hard` requirement never reports `required = false` when occupancy > cap"
+                        .to_string(),
+                ],
+                failure_modes: vec!["refuse".to_string()],
+            },
+            ContractOperation {
+                name: "propose".to_string(),
+                inputs: Json::obj([
+                    ("assessment", Json::str("{required, reason}")),
+                    ("view", Json::str("context_view")),
+                ]),
+                outputs: Json::obj([("proposal", Json::str("{ops: [CompactionOp]}"))]),
+                invariants: vec![
+                    "every op names the items it consumes".to_string(),
+                    "ops ∈ {Evict, Offload, Summarize, Restructure}".to_string(),
+                ],
+                failure_modes: vec!["CompactionImpossible".to_string()],
+            },
+            ContractOperation {
+                name: "execute".to_string(),
+                inputs: Json::obj([
+                    ("proposal", Json::str("{ops: [CompactionOp]}")),
+                    ("view", Json::str("context_view")),
+                ]),
+                outputs: Json::obj([("result", Json::str("compaction_result"))]),
+                invariants: vec![
+                    "Evict emits one `kernel`-authority omission item per contiguous evicted range"
+                        .to_string(),
+                    "deterministic variants apply the proposal verbatim".to_string(),
+                ],
+                failure_modes: vec!["CompactionImpossible".to_string()],
+            },
+            ContractOperation {
+                name: "declare".to_string(),
+                inputs: Json::obj([]),
+                outputs: Json::obj([("declaration", Json::str("variant_declaration"))]),
+                invariants: vec![
+                    "deterministic ⇒ no model call anywhere in the variant".to_string(),
+                    "op_kinds ⊆ {evict, offload, summarize, restructure}".to_string(),
+                ],
+                failure_modes: vec!["IncompleteDeclaration".to_string()],
+            },
+        ],
+        cardinality: crate::kinds::Cardinality::OrderedMany,
+        required_inputs: BTreeSet::from([
+            "ModelProfile".to_string(),
+            "ResourceAccount".to_string(),
+        ]),
+        base_param_schema: BTreeMap::new(),
+        hot_path: false,
+        dialect_introduced: "registry/1".to_string(),
+        contract_version: "1.0".to_string(),
+        home: "kernel".to_string(),
+        declaration_schema: Json::obj([
+            (
+                "properties",
+                Json::obj([
+                    ("deterministic", Json::Null),
+                    ("op_kinds", Json::Null),
+                    ("control_boundary_compact", Json::Null),
+                    ("target_fraction", Json::Null),
+                ]),
+            ),
+            ("additionalProperties", Json::Bool(false)),
+            (
+                "required",
+                Json::Arr(vec![Json::str("deterministic"), Json::str("op_kinds")]),
+            ),
+        ]),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
+        conformance_suite_ref: None,
+        decision_points: vec!["compact".to_string()],
+        metrics_declared: vec!["reclaimed_tokens".to_string()],
+        slot_key: "compaction_strategy".to_string(),
+        tier: "C0".to_string(),
+    }
+}
+
+/// The `compaction_strategy` conformance suite (same deterministic four-test
+/// shape as the Stage-1 classes).
+pub fn compaction_strategy_suite(class_version_id: &str) -> ConformanceSuite {
+    ConformanceSuite {
+        suite_id: "compaction_strategy.c0".to_string(),
+        class_ref: class_version_id.to_string(),
+        contract_version: "1.0".to_string(),
+        tests: vec![
+            SuiteTest {
+                test_id: "static.declaration".to_string(),
+                kind: TestKind::Static,
+                fixture_ref: None,
+                driver: TestDriver::InProcess,
+                oracle_class: OracleClass::Deterministic,
+                budget: Json::obj([("max_ms", Json::Int(100))]),
+                verdict_rule: "all declared fields present".to_string(),
+            },
+            SuiteTest {
+                test_id: "contract.assess".to_string(),
+                kind: TestKind::Contract,
+                fixture_ref: None,
+                driver: TestDriver::InProcess,
+                oracle_class: OracleClass::Deterministic,
+                budget: Json::obj([("max_ms", Json::Int(100))]),
+                verdict_rule: "contract_range covers the class version".to_string(),
+            },
+            SuiteTest {
+                test_id: "executable.debt".to_string(),
+                kind: TestKind::Executable,
+                fixture_ref: None,
+                driver: TestDriver::InProcess,
+                oracle_class: OracleClass::Deterministic,
+                budget: Json::obj([("max_ms", Json::Int(100))]),
+                verdict_rule: "conditioned rules carry complete debt records".to_string(),
+            },
+            SuiteTest {
+                test_id: "property.placement".to_string(),
+                kind: TestKind::Property,
+                fixture_ref: None,
+                driver: TestDriver::InProcess,
+                oracle_class: OracleClass::Deterministic,
+                budget: Json::obj([("max_ms", Json::Int(100))]),
+                verdict_rule: "placement declared and not reserved".to_string(),
+            },
+        ],
+        required_for_status: BTreeSet::from([
+            "static.declaration".to_string(),
+            "contract.assess".to_string(),
+            "executable.debt".to_string(),
+            "property.placement".to_string(),
+        ]),
+    }
+}
+
 /// The `control_strategy` conformance suite — one test per kind (ADR-0152 D1/D2;
 /// deterministic oracles only at C0).
 pub fn control_strategy_suite(class_version_id: &str) -> ConformanceSuite {
