@@ -540,6 +540,7 @@ mod tests {
             evidence_kinds_required: vec![],
             budget_ref: "b".into(),
             sealed: true,
+            task_value: None,
         }
     }
 

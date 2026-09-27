@@ -63,6 +63,74 @@ pub struct AcceptanceCriterion {
 /// `TaskContract` — the typed projection over `Goal`, its `success_criteria`
 /// and `validates` records (ADR-0109 D1 — *not* an HIR entity; computed at
 /// `seal`, never edited during a run).
+/// `TaskValue{success_value, failure_cost | from_reversibility, currency}`
+/// — §5e.4's value anchor, sealed on the contract: the scheduler's
+/// objective `ΔP̂(success) × success_value − λ·cost − P̂(harm)·failure_cost`
+/// reads both magnitudes here (R-2.6.4). A contract carrying no
+/// `task_value` projects `None` — the objective never invents a value.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskValue {
+    /// The success value (a currency amount in `currency` units; `None`
+    /// = unscored — the arm declares no payoff).
+    pub success_value: Option<i64>,
+    /// The declared failure-cost amount (`None` when the cost is the
+    /// symbolic `from_reversibility` class).
+    pub failure_cost: Option<i64>,
+    /// The `reversibility` class `failure_cost` resolves from
+    /// (`reversible` | `reversible_with_cost` | `irreversible` …) — a
+    /// spelling the scheduler maps to its declared class table, never a
+    /// free-text claim.
+    pub from_reversibility: Option<String>,
+    /// The currency dimension spelling (`spend`, `tokens.*`, …).
+    pub currency: String,
+}
+
+impl TaskValue {
+    /// The canonical JSON — `{success_value?, failure_cost? |
+    /// from_reversibility?, currency}` (exactly one cost member).
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            (
+                "success_value",
+                self.success_value.map(Json::Int).unwrap_or(Json::Null),
+            ),
+            (
+                "failure_cost",
+                self.failure_cost.map(Json::Int).unwrap_or(Json::Null),
+            ),
+            (
+                "from_reversibility",
+                self.from_reversibility
+                    .as_deref()
+                    .map(Json::str)
+                    .unwrap_or(Json::Null),
+            ),
+            ("currency", Json::str(&self.currency)),
+        ])
+    }
+
+    /// Parse a sealed `task_value` member (`ext["task_value"]` on the
+    /// `Goal` node); `None` on any malformed member — the projection
+    /// never coerces a partial value.
+    pub fn from_json(j: &Json) -> Option<TaskValue> {
+        let currency = j.get("currency")?.as_str()?.to_string();
+        let failure_cost = j.get("failure_cost").and_then(Json::as_int);
+        let from_reversibility = j
+            .get("from_reversibility")
+            .and_then(Json::as_str)
+            .map(str::to_string);
+        if failure_cost.is_none() && from_reversibility.is_none() {
+            return None;
+        }
+        Some(TaskValue {
+            success_value: j.get("success_value").and_then(Json::as_int),
+            failure_cost,
+            from_reversibility,
+            currency,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TaskContract {
     /// `contract_id = H(canonical(goal.semantic_id ∥ sorted criterion refs ∥
@@ -82,6 +150,11 @@ pub struct TaskContract {
     pub budget_ref: String,
     /// Whether the contract is sealed (an unsealed contract is a draft).
     pub sealed: bool,
+    /// The `TaskValue` the `compute_policy` objective reads (§5e.4;
+    /// `ext["task_value"]` on the `Goal` node, projected at seal). `None`
+    /// ⇒ the arm declares no value — estimators score `unknown`, never
+    /// a guessed magnitude.
+    pub task_value: Option<TaskValue>,
 }
 
 impl TaskContract {
@@ -839,6 +912,10 @@ pub fn project_contract(
         evidence_kinds_required: vec![],
         budget_ref: goal.budget.semantic_id.clone(),
         sealed: node.version.sealed,
+        task_value: node
+            .ext
+            .get("task_value")
+            .and_then(TaskValue::from_json),
     })
 }
 

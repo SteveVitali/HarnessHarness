@@ -319,6 +319,7 @@ fn contract(criteria: Vec<hh_verification::gate::AcceptanceCriterion>) -> hh_ver
         evidence_kinds_required: vec![],
         budget_ref: "b-1".into(),
         sealed: true,
+        task_value: None,
     }
 }
 

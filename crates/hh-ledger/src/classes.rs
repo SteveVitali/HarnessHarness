@@ -953,6 +953,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("control.budget.reserved", "hint"),
     // ── control:compute ──
     ("control.compute.decided", "none"),
+    ("control.compute.prior_reset", "none"),
     // ── control:decision ──
     ("control.decision", "none"),
     // ── control:guard ──
@@ -1652,6 +1653,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // "not audit-grade but citable by `audit_ref`" (the emitter lands with the
     // compute policy at C3/Stage 4 — R-2.6.4).
     row_prov("control.compute.decided",    Led, O::Ledger, false, true,  true,  None, None),
+    // `control.compute.prior_reset{trigger_event_ref, trigger_class,
+    // reason, policy_ref}` — provider drift / profile supersession voids
+    // the prior cells a non-static policy reads; the reset is itself the
+    // evidence the next record's empty `priors_used[]` cites (AC-F4-9).
+    row_prov("control.compute.prior_reset", Led, O::Ledger, false, true, true, None, None),
 
     // ── measurement (P7) — the spend-attribution row (§8.2
     // `measurement.cost.attributed{scope?, subject_ref, dimension, quantity|money?,

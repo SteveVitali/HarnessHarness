@@ -1177,6 +1177,11 @@ fn finish_child_open(
         healing_policy_ref: parent_manifest.healing_policy_ref.clone(),
         lease_ttl: parent_manifest.lease_ttl,
         audit_policy_ref: parent_manifest.audit_policy_ref.clone(),
+        // A spawned child binds its own `compute_policy` from its sealed
+        // `harness_def` (never inherited from the parent's binding — the
+        // child is a different `AgentProcess`; §5e.4): the stamp lands
+        // `None` here and is set by the child's own open path.
+        compute_policy_ref: None,
         // A spawned child participates in the same audit-policy family as
         // its parent: it may mint final checkpoints under the declared key
         // ids (custody stays outside the manifest).

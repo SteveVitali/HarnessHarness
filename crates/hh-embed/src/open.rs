@@ -72,6 +72,9 @@ pub(crate) struct LeafArm {
     /// re-arms the same variant (`checkpoint`'s `variant_ref` validates
     /// against it — restore-by-leaf never silently swaps strategies).
     pub control_variant: String,
+    /// The bound `compute_policy` slot's variant spelling (§5e.4 — a
+    /// resume re-arms the same scheduler; `static` when absent/unbound).
+    pub compute_variant: String,
 }
 
 impl LeafArm {
@@ -100,6 +103,7 @@ impl LeafArm {
                 ),
             ),
             ("control_variant", Json::str(self.control_variant.clone())),
+            ("compute_variant", Json::str(self.compute_variant.clone())),
         ])
     }
 
@@ -128,6 +132,13 @@ impl LeafArm {
                 .get("control_variant")
                 .and_then(Json::as_str)
                 .unwrap_or(crate::open::REACT_MINIMAL_VARIANT)
+                .to_string(),
+            // Pre-S4.7 `leaf.arm` records lack the member — `static` is
+            // the honest decode (no scheduler ⇒ no compute rows).
+            compute_variant: j
+                .get("compute_variant")
+                .and_then(Json::as_str)
+                .unwrap_or("static")
                 .to_string(),
         })
     }
@@ -497,6 +508,10 @@ impl EmbedService {
                     .unwrap_or_else(|| REACT_MINIMAL_VARIANT.to_string()),
             ),
         );
+        // §5e.4 — the `compute_policy` slot's bound variant stamps the
+        // manifest (`static` semantics when the slot is unbound — the
+        // member stays absent, the run is byte-identical to pre-S4.7).
+        manifest.compute_policy_ref = compute_slot_variant(&sealed.document);
         manifest.configuration_id = Some(configuration_id.clone());
         manifest.configuration_version_id = Some(configuration_version_id.clone());
         manifest.harness_def_ref = Some(manifest_ref.clone());
@@ -594,6 +609,8 @@ impl EmbedService {
         let surfaces = driver_surfaces(&cap_decl);
         let control_variant = control_slot_variant(&sealed.document)
             .unwrap_or_else(|| REACT_MINIMAL_VARIANT.to_string());
+        let compute_variant =
+            compute_slot_variant(&sealed.document).unwrap_or_else(|| "static".to_string());
         let driver = self.arm_driver(
             &run_id,
             &lease,
@@ -601,6 +618,7 @@ impl EmbedService {
             &manifest,
             budget,
             &control_variant,
+            &compute_variant,
             Some(&sealed.document),
         )?;
         let realized = realized_settings(self.workspace_root(), attendance, approval_mode);
@@ -635,6 +653,8 @@ impl EmbedService {
                 budget_ceiling: budget_dimensions(budget).0,
                 remaining: budget_dimensions(budget).1,
                 control_variant: control_variant.clone(),
+                compute_variant: compute_slot_variant(&sealed.document)
+                    .unwrap_or_else(|| "static".to_string()),
             },
             scan_seq: head.seq,
             next_invoke: None,
@@ -1620,13 +1640,34 @@ impl EmbedService {
         manifest: &RunManifest,
         budget: Option<&BudgetInput>,
         control_variant: &str,
+        compute_variant: &str,
         doc: Option<&hh_hir::document::HirDocument>,
     ) -> Result<Driver<Box<dyn ControlStrategy>>, EmbedError> {
+        // §5e.4 — the bound `compute_policy` variant must resolve at arm
+        // time (`policy_for` is the admission check; a `bandit`/
+        // `surface_prior`/`predictor` ref or an unknown spelling refuses
+        // the open, never fails mid-run).
+        hh_control::compute::policy_for(compute_variant).map_err(|e| EmbedError::Refused {
+            reason: format!("compute_policy: {e:?}"),
+        })?;
         // S3.10 — the `TaskContract` projection (§5f.2; ADR-0109 D1): the
         // sealed doc's `Goal` projects to the gate's pass table; the
         // `contract_id` is stamped `manifest.extra["task_contract_id"]` at
         // `open_run`.
         let task_contract = doc.and_then(project_task_contract);
+        // The sealed `TaskContract`'s `task_value` is the ctx's
+        // authoritative value anchor (§5e.4 — a slot param may restate
+        // it but never overrides the contract the value was sealed on).
+        let mut compute_facts = doc.map(compute_facts_for).unwrap_or_default();
+        if let Some(tv) = task_contract.as_ref().and_then(|c| c.task_value.as_ref()) {
+            compute_facts.task_value = Some(hh_control::compute::TaskValueFact::from_task_value(
+                &task_contract
+                    .as_ref()
+                    .map(|c| c.contract_id.clone())
+                    .unwrap_or_default(),
+                tv,
+            ));
+        }
         // `plan_execute` arms the `hh.plan` surface + the model-emitted
         // switch (S3.10); other variants keep the react preset params.
         let is_plan_execute = control_variant.trim_end_matches("@1") == "hh/plan-execute";
@@ -1713,6 +1754,8 @@ impl EmbedService {
                 task_contract,
                 plan_surface_id: is_plan_execute
                     .then(|| hh_control::plan_exec::PLAN_SURFACE_ID.to_string()),
+                compute_policy_ref: compute_variant.to_string(),
+                compute_facts,
                 ..DriverConfig::default()
             },
         )
@@ -1800,6 +1843,24 @@ impl EmbedService {
         let policy = policy.seal().map_err(|e| EmbedError::Refused {
             reason: format!("envelope_policy: {e:?}"),
         })?;
+        // The resume re-projects the scheduler's declared facts from the
+        // persisted definition — the same fold `arm_driver` runs (the
+        // sealed doc is the arm record, never a side channel).
+        let mut compute_facts = manifest
+            .harness_def_ref
+            .as_deref()
+            .and_then(|r| self.persisted_definition(r).ok())
+            .map(|sealed| compute_facts_for(&sealed.document))
+            .unwrap_or_default();
+        if let Some(tv) = task_contract.as_ref().and_then(|c| c.task_value.as_ref()) {
+            compute_facts.task_value = Some(hh_control::compute::TaskValueFact::from_task_value(
+                &task_contract
+                    .as_ref()
+                    .map(|c| c.contract_id.clone())
+                    .unwrap_or_default(),
+                tv,
+            ));
+        }
         let mut sink = crate::runtime::KernelSink {
             store: &mut self.store,
             run_id: run_id.to_string(),
@@ -1821,6 +1882,8 @@ impl EmbedService {
                 task_contract,
                 plan_surface_id: is_plan_execute
                     .then(|| hh_control::plan_exec::PLAN_SURFACE_ID.to_string()),
+                compute_policy_ref: arm.compute_variant.clone(),
+                compute_facts,
                 ..DriverConfig::default()
             },
         )
@@ -2010,6 +2073,87 @@ fn control_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
         }
     }
     None
+}
+
+/// The sealed `compute_policy` slot's bound variant spelling (§5e.4) —
+/// `None` when the slot is unbound (`static` semantics: the scheduler
+/// binds nothing and no `control.compute.*` rows land).
+fn compute_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
+    for n in &doc.nodes {
+        if let KindRecord::AgentProcess(a) = &n.semantic {
+            if let AgentProcessBody::Native(np) = &a.body {
+                match np.slots.get("compute_policy") {
+                    Some(SlotBindings::One(b)) => return Some(b.variant.variant_id.clone()),
+                    Some(SlotBindings::Many(v)) => {
+                        return v.first().map(|b| b.variant.variant_id.clone())
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    None
+}
+
+/// The `ComputeFacts` the sealed `compute_policy` binding declares on its
+/// `params` — `parallel_steps`, `subagent_task_targets`,
+/// `ensemble{k_max, oracle}`, `verifier`, `profile_capabilities`,
+/// `role_table`, `delegation_depth`, `context_label`, `task_value`
+/// (§5e.4's ctx members are typed declarations, never prose; anything
+/// the params don't carry stays at the fact's zero value and the
+/// scheduler reads it as absent).
+fn compute_facts_for(doc: &hh_hir::document::HirDocument) -> hh_control::compute::ComputeFacts {
+    let mut facts = hh_control::compute::ComputeFacts::default();
+    for n in &doc.nodes {
+        if let KindRecord::AgentProcess(a) = &n.semantic {
+            if let AgentProcessBody::Native(np) = &a.body {
+                let params = match np.slots.get("compute_policy") {
+                    Some(SlotBindings::One(b)) => Some(&b.params),
+                    Some(SlotBindings::Many(v)) => v.first().map(|b| &b.params),
+                    _ => None,
+                };
+                let Some(p) = params else { continue };
+                facts.declared_parallel_steps = p
+                    .get("parallel_steps")
+                    .and_then(Json::as_int)
+                    .unwrap_or(0)
+                    .max(0) as u32;
+                if let Some(Json::Arr(t)) = p.get("subagent_task_targets") {
+                    facts.subagent_task_targets = t
+                        .iter()
+                        .filter_map(Json::as_str)
+                        .map(str::to_string)
+                        .collect();
+                }
+                if let Some(e) = p.get("ensemble") {
+                    facts.ensemble = Some(hh_control::compute::EnsembleFact {
+                        k_max: e.get("k_max").and_then(Json::as_int).unwrap_or(0).max(0) as u32,
+                        oracle: e.get("oracle").and_then(Json::as_str).map(str::to_string),
+                    });
+                }
+                facts.verifier = p.get("verifier").and_then(Json::as_str).map(str::to_string);
+                if let Some(c) = p.get("profile_capabilities") {
+                    facts.profile_capabilities = c.clone();
+                }
+                if let Some(r) = p.get("role_table") {
+                    facts.role_table = r.clone();
+                }
+                facts.delegation_depth = p
+                    .get("delegation_depth")
+                    .and_then(Json::as_int)
+                    .unwrap_or(0)
+                    .max(0) as u32;
+                facts.context_label = p
+                    .get("context_label")
+                    .and_then(Json::as_str)
+                    .map(str::to_string);
+                facts.task_value = p
+                    .get("task_value")
+                    .and_then(hh_control::compute::TaskValueFact::from_json);
+            }
+        }
+    }
+    facts
 }
 
 /// The strategy instance the bound `control_strategy` variant selects —
