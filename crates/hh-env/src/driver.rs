@@ -856,6 +856,51 @@ impl EnvDriver {
         Ok(child)
     }
 
+    /// `rebind_credentials_for_fork(store, lease, broker, parent_id, child_id)`
+    /// — LT-09's fork half (S2.4; ADR-0266 D4): after `derive(ForkSnapshot)`,
+    /// the parent's live bindings are *re-bound* onto the child's env handle
+    /// with **fresh** placeholders (`CredentialBroker::virtualize_for_fork`),
+    /// the child's `credential_bindings` list gains the new binding ids, and
+    /// the returned rewrite map is what the caller applies to any materialised
+    /// env projection the snapshot carried (placeholder spellings only — a
+    /// snapshot never holds a value, so the rewrite is spelling→spelling).
+    /// The fork's `env_spec_for(child)` then projects the fresh spellings —
+    /// the parent's nonce never transfers (SV-10).
+    pub fn rebind_credentials_for_fork(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        broker: &mut hh_secrets::CredentialBroker,
+        parent_id: &str,
+        child_id: &str,
+    ) -> Result<hh_secrets::ForkVirtualization, EnvError> {
+        let parent = self.handles.get(parent_id).ok_or(EnvError::Unavailable {
+            env_handle_id: parent_id.to_string(),
+            state: "missing",
+        })?;
+        let child_state = self.handles.get(child_id).ok_or(EnvError::Unavailable {
+            env_handle_id: child_id.to_string(),
+            state: "missing",
+        })?;
+        if child_state
+            .parent
+            .as_ref()
+            .map(|p| p.env_handle_id.as_str())
+            != Some(parent.env_handle_id.as_str())
+        {
+            return Err(EnvError::InvalidState {
+                op: "rebind_credentials_for_fork",
+                state: "not_a_derive_child",
+            });
+        }
+        let virt = broker
+            .virtualize_for_fork(store, &self.run_id, lease, parent_id, child_id)
+            .map_err(|e| EnvError::Blob(format!("virtualize_for_fork: {e:?}")))?;
+        let h = self.handles.get_mut(child_id).expect("child present");
+        h.credential_bindings = virt.bindings.clone();
+        Ok(virt)
+    }
+
     /// `spawn_handle(parent, roots, parent_edge, env_handle_id)` — the
     /// shared child-provisioning body (`replace`/`derive`): mint the handle
     /// over the parent's class/image/policy, append `declared` +

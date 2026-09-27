@@ -203,6 +203,12 @@ pub struct DestinationBinding {
     pub path_prefix: Option<String>,
     /// How the credential rides a request to this destination.
     pub auth_carrier: AuthCarrier,
+    /// The destination's revocation endpoint (a path on this destination the
+    /// mediator POSTs a revoke intent to when the binding drops — LT-05's
+    /// "wrapped values are revoked at the destination"; S2.4, ADR-0266 D4).
+    /// Absent = the destination has no revocation path (the revoked row's
+    /// `intents` list is then empty for this destination).
+    pub revocation_path: Option<String>,
 }
 
 impl DestinationBinding {
@@ -228,6 +234,13 @@ impl DestinationBinding {
                     .map(|p| Json::str(p.clone()))
                     .unwrap_or(Json::Null),
             ),
+            (
+                "revocation_path",
+                self.revocation_path
+                    .as_ref()
+                    .map(|p| Json::str(p.clone()))
+                    .unwrap_or(Json::Null),
+            ),
             ("auth_carrier", self.auth_carrier.to_json()),
         ])
     }
@@ -242,6 +255,7 @@ impl DestinationBinding {
                 "host_pattern",
                 "port",
                 "path_prefix",
+                "revocation_path",
                 "auth_carrier",
             ],
             path,
@@ -260,6 +274,7 @@ impl DestinationBinding {
             host_pattern: codec::str_at(m, "host_pattern", path)?.to_string(),
             port,
             path_prefix: codec::opt_str_at(m, "path_prefix", path)?.map(String::from),
+            revocation_path: codec::opt_str_at(m, "revocation_path", path)?.map(String::from),
             auth_carrier: AuthCarrier::from_json(
                 codec::member(m, "auth_carrier", path)?,
                 &format!("{path}.auth_carrier"),

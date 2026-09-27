@@ -47,13 +47,26 @@
 //!   unverified}` payload builders (audit-grade, content-free; the class rows
 //!   are registered in `hh-ledger`).
 //!
-//! Deliberately **absent** (the stage map puts them later — they are deferred
-//! in `docs/tickets/DEFERRALS.md`): `decide_egress`/the mediator, `amend()`,
-//! the credential-binding slot resolution, `security.egress.*`, approval
-//! cache, `network.calls` metering, resources→budget mapping, phase
-//! schedules, `user_space_kernel`/`microvm`/`external` attested backends,
-//! `tls.terminate`/`inspect_hooks` enforcement, and the T-CON/AC-H4
-//! executable battery.
+//! Stage 2 (S2.4; ADR-0266) adds:
+//!
+//! - **`decide_egress`** ([`egress`]) — the §5g.4 §2 normative decision
+//!   order, pure: `mode_guard → attribution → deny rules → non_public_guard
+//!   → protocol/port/method → allow → approval_cache → default_unmatched`,
+//!   plus [`egress::recheck_resolved`] (the decide-once-consume-once second
+//!   pass over the mediator's own resolution — the SSRF pivot check) and
+//!   [`egress::ApprovalCache`] (narrowing-only, version-pinned). The runtime
+//!   mediator lives in `hh-env::egress::EgressMediator`.
+//! - **`amend`** ([`amend`]) — the §5g.4 amendment verb: additive
+//!   `ContainmentDiff`, basis ∈ `allowed_bases`, endorser authority floor
+//!   per basis, `strict` refusals, persistence-ceiling check, fresh
+//!   `version_id`.
+//!
+//! Deliberately **absent** (still deferred in `docs/tickets/DEFERRALS.md`):
+//! the credential-binding slot resolution's *helper* side (the mediator
+//! resolves sentinels through `hh-secrets`), resources→budget mapping,
+//! phase schedules, `user_space_kernel`/`microvm`/`external` attested
+//! backends, `tls.terminate`/`inspect_hooks` enforcement, and the
+//! T-CON/AC-H4 executable battery.
 //!
 //! Boundary rules (same discipline as `hh-monitor`): every type is a
 //! canonical record — no `Text` is *read* on any decision path (the record
@@ -62,8 +75,10 @@
 //! from content, and `unknown` evidence is never coerced.
 
 pub mod admit;
+pub mod amend;
 pub mod attach;
 pub mod backend;
+pub mod egress;
 pub mod events;
 pub mod meet;
 pub mod paths;
@@ -75,12 +90,17 @@ pub use admit::{
     admit_input, floor_gate, required_field_groups, unreachable_permissions, workspace_scope,
     AdmitInput, AdmitVerdict, ContainmentDiff, RefusedReason, UnreachableGrant,
 };
+pub use amend::{amend, AmendError, AmendOutcome};
 pub use attach::{
     attach, relied_groups, AttachError, AttachInput, AttachMode, AttachOutcome, PolicySlot,
     SealWarning,
 };
 pub use backend::{
     BackendCaps, ContainmentBackend, Ep2Model, GateVerdict, Syscall, UnsupportedBackend,
+};
+pub use egress::{
+    decide_egress, effective_addrs, is_non_public, recheck_resolved, ApprovalCache, CacheEntry,
+    CacheScope, EgressDecision, EgressReason, EgressRequest, EgressSource, EgressVerdict,
 };
 pub use meet::{effective, ContainmentWidening, MeetError};
 pub use policy::{kernel_default, ContainmentPolicy, PolicyError, KERNEL_DENY, KERNEL_PROTECTED};

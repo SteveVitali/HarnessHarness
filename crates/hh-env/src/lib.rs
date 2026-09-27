@@ -21,6 +21,7 @@ pub mod capture;
 pub mod deadline;
 pub mod dispatch;
 pub mod driver;
+pub mod egress;
 pub mod errors;
 pub mod events;
 pub mod executor;

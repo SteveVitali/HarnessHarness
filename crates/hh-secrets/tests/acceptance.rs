@@ -176,6 +176,7 @@ fn github_spec() -> SecretChannelSpec {
                 host_pattern: "api.github.com".into(),
                 port: None,
                 path_prefix: None,
+                revocation_path: None,
                 auth_carrier: AuthCarrier::Header {
                     name: "Authorization".into(),
                     prefix: Some("Bearer ".into()),
@@ -186,6 +187,7 @@ fn github_spec() -> SecretChannelSpec {
                 host_pattern: "api.github.com/*".into(),
                 port: None,
                 path_prefix: None,
+                revocation_path: None,
                 auth_carrier: AuthCarrier::Header {
                     name: "Authorization".into(),
                     prefix: Some("Bearer ".into()),
@@ -508,6 +510,7 @@ fn ac_r_2_8_3_10_fail_closed_no_env_fallback() {
             &lease,
             &binding.binding_id,
             &RequestDescriptor {
+                env_handle: "env-1".into(),
                 effect_id: "eff-1".into(),
                 destination: "api.github.com".into(),
                 method: Some("GET".into()),
@@ -707,6 +710,7 @@ fn ac_r_2_8_3_13_pdp_decides_broker_delivers() {
             &lease,
             &binding.binding_id,
             &RequestDescriptor {
+                env_handle: "env-1".into(),
                 effect_id: "eff-1".into(),
                 destination: "api.github.com".into(),
                 method: None,
