@@ -1,0 +1,30 @@
+[package]
+name = "hh-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C1 read-only web instrument (spec §7.2, R-2.11.2¹; S4.10). A pure projection client over hh-embed/1 binding (c): no state of record, every view derived through canonical ops, all writes named kernel/Lab operations with responder provenance; the P1–P13 security posture is enforced at the surface gate."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh-web"
+path = "src/main.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+hh-embed-client-generated = { path = "../hh-embed-client-generated" }
+# The declared SinkPolicy is the hh-telemetry record (P8 — the surface is
+# a sink, not a store): content classes, redaction, field caps, consent.
+hh-telemetry = { path = "../hh-telemetry" }
+# The serving scrub — every payload sweeps `hh_secrets::redact` before it
+# leaves (AC-6(g): the LT canary battery leaks nothing through any
+# response — SV-3's mask-before-model-visible applied at the surface).
+hh-secrets = { path = "../hh-secrets" }
+
+[dev-dependencies]
+hh-embed = { path = "../hh-embed" }
+hh-ledger = { path = "../hh-ledger" }

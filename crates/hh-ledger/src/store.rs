@@ -284,6 +284,81 @@ pub struct LineageEntry {
     pub head_hash: String,
 }
 
+/// One `run_index` row — the store-side shape the boundary renders to the
+/// `hh-embed/1` `RunIndexEntry` (§7.2 V1; ADR-0301 D5). Every member is a
+/// manifest field or a tail-event fold product.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunIndexEntry {
+    /// The run's id.
+    pub run_id: String,
+    /// The manifest `run_kind` (`cli`/`fleet`/`experiment`/…).
+    pub run_kind: String,
+    /// The manifest `participant_class` (`native`/`hosted`).
+    pub participant_class: String,
+    /// `open` | `finished`.
+    pub status: String,
+    /// Head seq of the durable prefix.
+    pub head_seq: u64,
+    /// `lifecycle.run.finished{outcome}` when finished.
+    pub outcome_class: Option<String>,
+    /// The manifest `configuration_id` (agent runs).
+    pub configuration_id: Option<String>,
+    /// The manifest experiment binding's semantic id
+    /// (`experiment_id` or `experiment_run_id`).
+    pub experiment_ref: Option<String>,
+    /// `lifecycle.run.opened` ts.
+    pub opened_ts: Option<String>,
+}
+
+/// The `run_index` filter dossier (the wire `RunIndexFilter`'s store-side
+/// twin — the boundary converts; absent member = unconstrained).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RunIndexFilter {
+    /// `run_kind` exact match.
+    pub run_kind: Option<String>,
+    /// `participant_class` exact match.
+    pub participant_class: Option<String>,
+    /// `open`/`finished` exact match.
+    pub status: Option<String>,
+    /// Outcome-class exact match (finished runs only).
+    pub outcome_class: Option<String>,
+    /// `configuration_id` exact match.
+    pub configuration_id: Option<String>,
+    /// Experiment-binding semantic-id exact match.
+    pub experiment_ref: Option<String>,
+    /// Substring over `run_id`/`configuration_id`.
+    pub text: Option<String>,
+}
+
+impl RunIndexFilter {
+    /// Whether an index entry satisfies every declared member.
+    pub fn matches(&self, e: &RunIndexEntry) -> bool {
+        let eq = |want: &Option<String>, have: &Option<String>| match want {
+            None => true,
+            Some(w) => have.as_deref() == Some(w.as_str()),
+        };
+        let eq_s = |want: &Option<String>, have: &str| match want {
+            None => true,
+            Some(w) => w == have,
+        };
+        eq_s(&self.run_kind, &e.run_kind)
+            && eq_s(&self.participant_class, &e.participant_class)
+            && eq_s(&self.status, &e.status)
+            && eq(&self.outcome_class, &e.outcome_class)
+            && eq(&self.configuration_id, &e.configuration_id)
+            && eq(&self.experiment_ref, &e.experiment_ref)
+            && match &self.text {
+                None => true,
+                Some(t) => {
+                    e.run_id.contains(t.as_str())
+                        || e.configuration_id
+                            .as_deref()
+                            .is_some_and(|c| c.contains(t.as_str()))
+                }
+            }
+    }
+}
+
 impl Store {
     /// Open (or create) a store at `root` with the system clock, time-ordered ids and
     /// the default blob ceiling. Replays every run's WAL.
@@ -2889,6 +2964,79 @@ impl Store {
     /// rebuild equality) work over. Derived, never authoritative.
     pub fn run_ids(&self) -> Vec<String> {
         self.runs.keys().cloned().collect()
+    }
+
+    /// `run_index` — the store-level run listing the V1 run browser folds
+    /// from (§7.2 V1; ADR-0301 D5): one [`RunIndexEntry`] per run —
+    /// manifest fields (`run_kind`, `participant_class`,
+    /// `configuration_id`, the experiment binding's semantic id) plus the
+    /// tail-event fold (`status`, `outcome_class`, `head_seq`,
+    /// `opened_ts`). Sorted by `run_id`; `cursor` is the last `run_id` of
+    /// the previous page (exclusive); fold cost is O(runs) + result page —
+    /// never O(total event count): each entry reads the manifest + the
+    /// *last* event, not the log.
+    pub fn run_index(
+        &self,
+        filter: &RunIndexFilter,
+        cursor: Option<&str>,
+        limit: usize,
+    ) -> (Vec<RunIndexEntry>, Option<String>) {
+        let mut entries = Vec::new();
+        let mut next_cursor = None;
+        for (run_id, state) in &self.runs {
+            if let Some(c) = cursor {
+                if run_id.as_str() <= c {
+                    continue;
+                }
+            }
+            let m = &state.manifest;
+            let last = state.events.last();
+            let finished = state
+                .events
+                .iter()
+                .any(|e| e.class == "lifecycle.run.finished");
+            let (status, outcome_class) = if finished {
+                let outcome = state
+                    .events
+                    .iter()
+                    .rev()
+                    .find(|e| e.class == "lifecycle.run.finished")
+                    .and_then(|e| e.payload.get("outcome").and_then(Json::as_str))
+                    .map(str::to_string);
+                ("finished".to_string(), outcome)
+            } else {
+                ("open".to_string(), None)
+            };
+            let opened_ts = state
+                .events
+                .iter()
+                .find(|e| e.class == "lifecycle.run.opened")
+                .map(|e| e.ts.clone());
+            let experiment_ref = m
+                .experiment
+                .as_ref()
+                .and_then(|x| x.experiment_id.clone().or(x.experiment_run_id.clone()));
+            let entry = RunIndexEntry {
+                run_id: run_id.clone(),
+                run_kind: m.run_kind.as_str().to_string(),
+                participant_class: m.participant_class.as_str().to_string(),
+                status,
+                head_seq: last.map(|e| e.seq).unwrap_or(0),
+                outcome_class,
+                configuration_id: m.configuration_id.clone(),
+                experiment_ref,
+                opened_ts,
+            };
+            if !filter.matches(&entry) {
+                continue;
+            }
+            if entries.len() == limit {
+                next_cursor = entries.last().map(|e: &RunIndexEntry| e.run_id.clone());
+                break;
+            }
+            entries.push(entry);
+        }
+        (entries, next_cursor)
     }
 
     /// Whether a blob exists at the address — `audit_view`'s `content_refs`

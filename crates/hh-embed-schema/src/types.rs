@@ -887,6 +887,86 @@ impl OpenSpec {
     }
 }
 
+/// The client descriptor a session declares at `open_session` (§7.2 P8/P12;
+/// ADR-0301 D3). The kernel records it verbatim on the session — it never
+/// interprets `sink` — but uses `kind` to (a) stamp
+/// `lifecycle.session.attached{binding, client{kind}}` and (b) mint
+/// `measurement.export.delivered` rows for content-class servings to a
+/// declared `web` surface (the surface's own SinkPolicy does the
+/// withholding; the kernel records what was served).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientDecl {
+    /// `web` | `cli` | `test` | … — a closed-in-practice string (the kernel
+    /// gates delivery minting on `web` but accepts any non-empty tag so
+    /// future surfaces declare before the enum hardens).
+    pub kind: String,
+    /// The surface's declared `SinkPolicy`, verbatim (`content_classes`,
+    /// redaction, field caps, consent — the `hh-telemetry` shape). Optional;
+    /// the boundary carries it without decoding its semantics.
+    pub sink: Option<Json>,
+    /// The surface's own authority/identifier, verbatim — recorded on
+    /// `lifecycle.session.attached{client}` so the V10 accountability
+    /// view names *which* surface instance held the session.
+    pub surface_ref: Option<String>,
+    /// The surface's declared UI capabilities, verbatim (e.g.
+    /// `read_only`, `declared_writes`) — recorded, never interpreted.
+    pub ui_caps: Vec<String>,
+}
+
+impl ClientDecl {
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("kind".into(), Json::str(self.kind.clone()));
+        if let Some(s) = &self.sink {
+            m.insert("sink".into(), s.clone());
+        }
+        if let Some(r) = &self.surface_ref {
+            m.insert("surface_ref".into(), Json::str(r.clone()));
+        }
+        if !self.ui_caps.is_empty() {
+            m.insert(
+                "ui_caps".into(),
+                Json::Arr(self.ui_caps.iter().map(Json::str).collect()),
+            );
+        }
+        Json::Obj(m)
+    }
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let kind = s.req_str("kind")?;
+        if kind.is_empty() {
+            return Err(EmbedError::SchemaViolation {
+                path: format!("{path}/kind"),
+                code: "empty".to_string(),
+            });
+        }
+        let sink = s.take("sink").cloned();
+        let surface_ref = s.opt_str("surface_ref")?;
+        let ui_caps = match s.opt_arr("ui_caps")? {
+            None => Vec::new(),
+            Some(a) => {
+                let mut out = Vec::with_capacity(a.len());
+                for (i, v) in a.iter().enumerate() {
+                    out.push(v.as_str().map(|x| x.to_string()).ok_or_else(|| {
+                        EmbedError::SchemaViolation {
+                            path: format!("{path}/ui_caps[{i}]"),
+                            code: "expected_string".to_string(),
+                        }
+                    })?);
+                }
+                out
+            }
+        };
+        s.finish()?;
+        Ok(ClientDecl {
+            kind,
+            sink,
+            surface_ref,
+            ui_caps,
+        })
+    }
+}
+
 /// `open_session` params.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenSessionParams {
@@ -896,6 +976,10 @@ pub struct OpenSessionParams {
     /// `lifecycle.surface.invoked` when the spec opens a run
     /// (`new`); absent for every non-surface caller.
     pub invocation: Option<InvocationRecord>,
+    /// The client descriptor (§7.2 P8). Declared by every surface-session
+    /// opener; absent for callers that do not identify a surface (the CLI
+    /// attaches declare nothing — the boundary binds them implicitly).
+    pub client: Option<ClientDecl>,
 }
 
 impl OpenSessionParams {
@@ -909,6 +993,9 @@ impl OpenSessionParams {
         if let Some(i) = &self.invocation {
             m.insert("invocation".into(), i.to_json());
         }
+        if let Some(c) = &self.client {
+            m.insert("client".into(), c.to_json());
+        }
         Json::Obj(m)
     }
     pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
@@ -919,11 +1006,16 @@ impl OpenSessionParams {
             .take("invocation")
             .map(|i| InvocationRecord::from_json(i, "open_session/invocation"))
             .transpose()?;
+        let client = s
+            .take("client")
+            .map(|c| ClientDecl::from_json(c, "open_session/client"))
+            .transpose()?;
         s.finish()?;
         Ok(OpenSessionParams {
             spec,
             idempotency_key,
             invocation,
+            client,
         })
     }
 }
@@ -1349,16 +1441,72 @@ pub struct RespondPermissionParams {
     pub permission_id: String,
     pub outcome: PermissionOutcome,
     pub idempotency_key: String,
+    /// The surface's responder declaration (§7.2 P10/P12; ADR-0301 D4).
+    /// When present the kernel stamps
+    /// `responder_provenance{subject_ref, surface_session_ref}` + `request_id`
+    /// (the idempotency key) on the `security.permission.decided` row — the
+    /// durable record of *who answered through which surface session*. The
+    /// kernel validates `subject_ref` against the session's declared
+    /// authority; it never reads authority from the payload.
+    pub responder: Option<ResponderDecl>,
+}
+
+/// The `responder` member of `respond_permission` — a surface's declaration
+/// of the human acting through it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResponderDecl {
+    /// The human's canonical subject ref (e.g. `human:principal`,
+    /// `human:reviewer:…`).
+    pub subject_ref: String,
+    /// The surface session the response transited — the browser session
+    /// reference P12 requires on every surface write.
+    pub surface_session_ref: Option<String>,
+}
+
+impl ResponderDecl {
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("subject_ref".into(), Json::str(self.subject_ref.clone()));
+        if let Some(s) = &self.surface_session_ref {
+            m.insert("surface_session_ref".into(), Json::str(s.clone()));
+        }
+        Json::Obj(m)
+    }
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let subject_ref = s.req_str("subject_ref")?;
+        if subject_ref.is_empty() {
+            return Err(EmbedError::SchemaViolation {
+                path: format!("{path}/subject_ref"),
+                code: "empty".to_string(),
+            });
+        }
+        let surface_session_ref = s.opt_str("surface_session_ref")?;
+        s.finish()?;
+        Ok(ResponderDecl {
+            subject_ref,
+            surface_session_ref,
+        })
+    }
 }
 
 impl RespondPermissionParams {
     pub fn to_json(&self) -> Json {
-        Json::obj([
-            ("session_id", Json::str(self.session_id.clone())),
-            ("permission_id", Json::str(self.permission_id.clone())),
-            ("outcome", self.outcome.to_json()),
-            ("idempotency_key", Json::str(self.idempotency_key.clone())),
-        ])
+        let mut m: BTreeMap<String, Json> = BTreeMap::new();
+        m.insert("session_id".into(), Json::str(self.session_id.clone()));
+        m.insert(
+            "permission_id".into(),
+            Json::str(self.permission_id.clone()),
+        );
+        m.insert("outcome".into(), self.outcome.to_json());
+        m.insert(
+            "idempotency_key".into(),
+            Json::str(self.idempotency_key.clone()),
+        );
+        if let Some(r) = &self.responder {
+            m.insert("responder".into(), r.to_json());
+        }
+        Json::Obj(m)
     }
     pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
         let mut s = StrictObj::new(v, "respond_permission")?;
@@ -1367,17 +1515,192 @@ impl RespondPermissionParams {
         let outcome =
             PermissionOutcome::from_json(s.req("outcome")?, "respond_permission/outcome")?;
         let idempotency_key = s.req_str("idempotency_key")?;
+        let responder = s
+            .take("responder")
+            .map(|r| ResponderDecl::from_json(r, "respond_permission/responder"))
+            .transpose()?;
         s.finish()?;
         Ok(RespondPermissionParams {
             session_id,
             permission_id,
             outcome,
             idempotency_key,
+            responder,
         })
     }
 }
 
 // ── Read (Group R) ──────────────────────────────────────────────────────
+
+/// `run_index` params — the store-level run listing the V1 run browser
+/// needs before any per-run attach exists (§7.2 V1; ADR-0301 D5).
+/// Session-free (precedent: `lab.results.*` reads) — a cross-run index is
+/// not a run read and cannot take a session's run scope.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunIndexParams {
+    /// The closed filter table — every member narrows the index over
+    /// manifest fields + the run's terminal status (fold-computed in the
+    /// kernel, never in the surface).
+    pub filters: Option<RunIndexFilter>,
+    /// Resume key — the last `run_id` of the previous page (exclusive).
+    pub cursor: Option<String>,
+    /// Page bound (default `RUN_INDEX_DEFAULT_LIMIT`, capped at
+    /// `RUN_INDEX_MAX_LIMIT`).
+    pub limit: Option<u64>,
+}
+
+/// The V1 filter dossier. Absent member = unconstrained. `text` matches a
+/// substring over `run_id` and `configuration_id` (the only text fields the
+/// manifest pins).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RunIndexFilter {
+    /// `run_kind` manifest member (`cli`, `fleet`, `experiment`, …).
+    pub run_kind: Option<String>,
+    /// `participant_class` manifest member (`agent`, `hosted`, `human`, …).
+    pub participant_class: Option<String>,
+    /// `open` | `finished` — the tail-event fold's status.
+    pub status: Option<String>,
+    /// The run's outcome class (from `lifecycle.run.finished{outcome}`);
+    /// only ever present on `status = finished` entries.
+    pub outcome_class: Option<String>,
+    /// `configuration_id` manifest member — exact match.
+    pub configuration_id: Option<String>,
+    /// Experiment binding ref — exact semantic id match.
+    pub experiment_ref: Option<String>,
+    /// Free-text over `run_id`/`configuration_id` (substring, canonical).
+    pub text: Option<String>,
+}
+
+/// The default `run_index` page size.
+pub const RUN_INDEX_DEFAULT_LIMIT: u64 = 100;
+/// The `run_index` page cap — the index is a listing view, not an export.
+pub const RUN_INDEX_MAX_LIMIT: u64 = 1000;
+
+/// One `run_index` result row — the V1 entry dossier, every member a
+/// manifest field or tail-fold product (nothing computed client-side).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunIndexEntry {
+    pub run_id: String,
+    pub run_kind: String,
+    pub participant_class: String,
+    /// `open` | `finished`.
+    pub status: String,
+    /// Head seq of the run's durable prefix.
+    pub head_seq: u64,
+    /// The `lifecycle.run.finished` outcome class, when finished.
+    pub outcome_class: Option<String>,
+    pub configuration_id: Option<String>,
+    /// The manifest's experiment binding ref (semantic id).
+    pub experiment_ref: Option<String>,
+    /// `lifecycle.run.opened` ts.
+    pub opened_ts: Option<String>,
+}
+
+impl RunIndexParams {
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        if let Some(f) = &self.filters {
+            m.insert("filters".into(), f.to_json());
+        }
+        if let Some(c) = &self.cursor {
+            m.insert("cursor".into(), Json::str(c.clone()));
+        }
+        if let Some(l) = &self.limit {
+            m.insert("limit".into(), Json::Int(*l as i64));
+        }
+        Json::Obj(m)
+    }
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "run_index")?;
+        let filters = s
+            .take("filters")
+            .map(|f| RunIndexFilter::from_json(f, "run_index/filters"))
+            .transpose()?;
+        let cursor = s.opt_str("cursor")?;
+        let limit = s.opt_int("limit")?.map(|l| l.max(0) as u64);
+        s.finish()?;
+        Ok(RunIndexParams {
+            filters,
+            cursor,
+            limit,
+        })
+    }
+}
+
+impl RunIndexFilter {
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        for (k, v) in [
+            ("run_kind", &self.run_kind),
+            ("participant_class", &self.participant_class),
+            ("status", &self.status),
+            ("outcome_class", &self.outcome_class),
+            ("configuration_id", &self.configuration_id),
+            ("experiment_ref", &self.experiment_ref),
+            ("text", &self.text),
+        ] {
+            if let Some(x) = v {
+                m.insert(k.to_string(), Json::str(x.clone()));
+            }
+        }
+        Json::Obj(m)
+    }
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let out = RunIndexFilter {
+            run_kind: s.opt_str("run_kind")?,
+            participant_class: s.opt_str("participant_class")?,
+            status: s.opt_str("status")?,
+            outcome_class: s.opt_str("outcome_class")?,
+            configuration_id: s.opt_str("configuration_id")?,
+            experiment_ref: s.opt_str("experiment_ref")?,
+            text: s.opt_str("text")?,
+        };
+        s.finish()?;
+        Ok(out)
+    }
+}
+
+impl RunIndexEntry {
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("run_id".into(), Json::str(self.run_id.clone()));
+        m.insert("run_kind".into(), Json::str(self.run_kind.clone()));
+        m.insert(
+            "participant_class".into(),
+            Json::str(self.participant_class.clone()),
+        );
+        m.insert("status".into(), Json::str(self.status.clone()));
+        m.insert("head_seq".into(), Json::Int(self.head_seq as i64));
+        for (k, v) in [
+            ("outcome_class", &self.outcome_class),
+            ("configuration_id", &self.configuration_id),
+            ("experiment_ref", &self.experiment_ref),
+            ("opened_ts", &self.opened_ts),
+        ] {
+            if let Some(x) = v {
+                m.insert(k.to_string(), Json::str(x.clone()));
+            }
+        }
+        Json::Obj(m)
+    }
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let out = RunIndexEntry {
+            run_id: s.req_str("run_id")?,
+            run_kind: s.req_str("run_kind")?,
+            participant_class: s.req_str("participant_class")?,
+            status: s.req_str("status")?,
+            head_seq: s.req_int("head_seq")?.max(0) as u64,
+            outcome_class: s.opt_str("outcome_class")?,
+            configuration_id: s.opt_str("configuration_id")?,
+            experiment_ref: s.opt_str("experiment_ref")?,
+            opened_ts: s.opt_str("opened_ts")?,
+        };
+        s.finish()?;
+        Ok(out)
+    }
+}
 
 /// `stream_events` params — `{session_id, from, filter?}` →
 /// `{subscription_id}` + `frame` notifications (§7.4 §2.4, §5). `from` is

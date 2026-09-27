@@ -11,6 +11,12 @@
 //!   loop over stdin/stdout. It calls the *same* `EmbedService::handle`,
 //!   so the bindings are byte-identical by construction (AC-R-2.11.4-9).
 //!
+//! - **Binding (c)** — [`net::serve_net`], the `local_network` transport
+//!   (§7.2; S4.10): JSON-RPC over loopback HTTP/1.1 with the per-launch
+//!   bearer + Host/Origin posture (P1–P9's kernel-side end). It calls the
+//!   *same* `EmbedService::handle`; `GET /hh-embed/1/events` drains the
+//!   notification channel as NDJSON.
+//!
 //! A session is a ledger run under a fenced writer lease (`open_session`
 //! `new`/`resume`); `attach` sessions are read-only by construction — no
 //! lease is taken and no append path exists for them (I6). `open_session`
@@ -32,6 +38,7 @@ pub mod frames;
 pub(crate) mod hosting_ops;
 pub mod inject;
 pub(crate) mod lab_c1_ops;
+pub mod net;
 pub mod open;
 pub mod overrides;
 pub(crate) mod registry_ops;

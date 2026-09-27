@@ -90,3 +90,5 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0298](ADR-0298-s4.6-subagent-orchestrator-rulings.md) | S4.6 subagent and orchestrator rulings | S4.6 | Accepted |
 | [ADR-0299](ADR-0299-s4.7-value-of-compute-scheduler-rulings.md) | S4.7 value-of-compute scheduler rulings | S4.7 | Accepted |
 | [ADR-0300](ADR-0300-s4.8-coordination-consistency-rulings.md) | S4.8 multi-agent coordination & consistency rulings | S4.8 | Accepted |
+| [ADR-0301](ADR-0301-s4.10-binding-c-local-network-rulings.md) | S4.10 binding (c) `local_network` rulings | S4.10 | Accepted |
+| [ADR-0302](ADR-0302-s4.10-web-surface-rulings.md) | S4.10 `hh-web` surface rulings | S4.10 | Accepted |
