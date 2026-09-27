@@ -41,3 +41,7 @@ hh-budget = { path = "../hh-budget" }
 # over the terminal capture after `action.effect.observed` (S1.21; ADR-0111
 # D1/(e); AC-R-2.7.1-1). hh-verification sits below hh-env in the DAG.
 hh-verification = { path = "../hh-verification" }
+# The `hh-helper/1` schema codec + `fstree` + podman backend — the single
+# schema source for the helper wire (S2.1; the dedicated helper binary is
+# spawned per contained environment and driven over the bridged channel).
+hh-helper = { path = "../hh-helper" }

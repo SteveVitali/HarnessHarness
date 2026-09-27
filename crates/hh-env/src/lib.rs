@@ -25,6 +25,7 @@ pub mod errors;
 pub mod events;
 pub mod executor;
 pub mod handle;
+pub mod helper;
 pub mod local;
 pub mod observe;
 pub mod protocol;

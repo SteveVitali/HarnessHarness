@@ -151,6 +151,7 @@ dependencies = [
  "hh-budget",
  "hh-compiler",
  "hh-containment",
+ "hh-helper",
  "hh-hir",
  "hh-identity",
  "hh-ledger",
@@ -175,6 +176,15 @@ dependencies = [
  "hh-provenance",
  "hh-secrets",
  "hh-telemetry",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-helper"
+version = "0.0.1"
+dependencies = [
+ "hh-containment",
+ "hh-identity",
  "hh-wire",
 ]
 

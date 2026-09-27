@@ -78,6 +78,14 @@ impl EnvironmentClass {
         )
     }
 
+    /// Whether the class is provisionable at Stage 2 (S2.1 — adds
+    /// `local_container`, whose execs run inside a podman container through
+    /// the helper's `container` backend; remote/provider classes remain
+    /// Stage-3).
+    pub fn provisionable(self) -> bool {
+        self.stage1_supported() || matches!(self, EnvironmentClass::LocalContainer)
+    }
+
     /// The `isolation_class` the *class name implies* before attach — the floor
     /// the handle reports when no `ContainmentReport` exists yet (e.g. a
     /// `declared`/`provisioning` handle, or `local_host` whose `none` is

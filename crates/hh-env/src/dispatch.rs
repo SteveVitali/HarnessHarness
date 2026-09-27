@@ -611,15 +611,26 @@ impl<'a> Dispatcher<'a> {
         // every other class commits under the fencing token — and the ledger
         // refuses `committed` without a preceding allow (complete mediation).
         let attempt_no = 1u64;
-        if !risk.is_read_only() {
+        let commit_evidence = if !risk.is_read_only() {
             let committed = self.minter_ev().mint_effect(
                 "action.effect.committed",
                 events::committed_payload(attempt_no, lease.generation, self.store.now_ms()),
                 &effect_id,
                 &input.chain,
             )?;
-            self.store.append(&self.run_id, lease, vec![committed])?;
-        }
+            let committed_event_id = committed.event_id.clone();
+            let range = self.store.append(&self.run_id, lease, vec![committed])?;
+            // The write-ahead evidence the helper recomputes `commit_proof`
+            // over (S2.1 — the helper admits `exec` only when the durable
+            // `committed` row's members prove prepare-before-execute).
+            crate::helper::CommitEvidence::Committed {
+                event_id: committed_event_id,
+                seq: range.first,
+                fencing_token: lease.generation,
+            }
+        } else {
+            crate::helper::CommitEvidence::ReadOnly
+        };
         let execution_id = self.store.alloc_id("exec");
         let started = self.minter_ev().mint_effect(
             "action.tool.started",
@@ -645,6 +656,8 @@ impl<'a> Dispatcher<'a> {
             deadline_ms: input.ladder.effective(),
             ladder: input.ladder,
             retain_bytes_cap: input.output_policy.retain_bytes_cap,
+            idempotency_key: key.clone(),
+            commit_evidence,
         };
         let resolver = self.minter.resolver();
         let run_id = self.run_id.clone();

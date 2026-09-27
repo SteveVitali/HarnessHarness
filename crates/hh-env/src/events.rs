@@ -168,6 +168,43 @@ pub fn reattached_payload(h: &EnvHandle) -> Json {
     ])
 }
 
+/// `action.environment.replaced{env_handle, successor}` — the heal ladder's
+/// replace rung: the old handle is terminal, the successor owns the
+/// environment (`replaced` names the new handle).
+pub fn replaced_payload(h: &EnvHandle, successor: &str) -> Json {
+    Json::obj([
+        ("env_handle", Json::str(h.env_handle_id.clone())),
+        ("successor", Json::str(successor)),
+    ])
+}
+
+/// `action.environment.derived{env_handle, parent, mode, on_parent_end}` —
+/// the `derive` op's record (the child's `ParentEdge` is the handle-side
+/// member; this row is the audit).
+pub fn derived_payload(h: &EnvHandle) -> Json {
+    let mut m = vec![("env_handle", Json::str(h.env_handle_id.clone()))];
+    if let Some(p) = &h.parent {
+        m.push(("parent", Json::str(p.env_handle_id.clone())));
+        m.push((
+            "mode",
+            Json::str(match p.mode {
+                crate::handle::DeriveMode::FreshFromImage => "fresh_from_image",
+                crate::handle::DeriveMode::ForkSnapshot => "fork_snapshot",
+                crate::handle::DeriveMode::Share => "share",
+                crate::handle::DeriveMode::ScopedSubtree => "scoped_subtree",
+            }),
+        ));
+        m.push((
+            "on_parent_end",
+            Json::str(match p.on_parent_end {
+                crate::handle::OnParentEnd::Teardown => "teardown",
+                crate::handle::OnParentEnd::DetachToChild => "detach_to_child",
+            }),
+        ));
+    }
+    Json::Obj(m.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+}
+
 /// `action.environment.torn_down{env_handle, reason}`.
 pub fn torn_down_payload(h: &EnvHandle, reason: &str) -> Json {
     Json::obj([

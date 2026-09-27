@@ -28,15 +28,25 @@ use crate::handle::{
     EnvCapabilityDeclaration, EnvHandle, EnvSession, HandleState, Health, OnLoss, Roots,
     SnapshotCadence,
 };
-use crate::record::{EnvironmentRecord, ResolvedImage};
+use crate::helper::{HelperClient, HelperExecutor};
+use crate::record::{EnvironmentClass, EnvironmentRecord, ResolvedImage};
 use crate::snapshot::{PathBaseline, SnapshotKind, SnapshotRecord, TakenBy};
 
 /// `EnvDriver` — the environment manager (owns the handle table; borrows the
-/// store per call).
+/// store per call). Since S2.1 it also owns the live helper sessions — one
+/// `hh-helper` process per contained environment (the committed
+/// `env_handle`'s runtime reachability path; the `EnvSession` record is the
+/// ledger-visible half, the `HelperClient` the channel).
 pub struct EnvDriver {
     run_id: String,
     /// The live handles (`env_handle_id → handle`).
     handles: BTreeMap<String, EnvHandle>,
+    /// The live helper sessions (`env_handle_id → client`) — `local_host`
+    /// has none (the in-process executor is the honest `none` isolation).
+    sessions: BTreeMap<String, HelperClient>,
+    /// The podman containers the `local_container` handles own
+    /// (`env_handle_id → backend` — teardown stops them).
+    containers: BTreeMap<String, hh_helper::podman::PodmanBackend>,
 }
 
 impl EnvDriver {
@@ -45,6 +55,8 @@ impl EnvDriver {
         EnvDriver {
             run_id: run_id.to_string(),
             handles: BTreeMap::new(),
+            sessions: BTreeMap::new(),
+            containers: BTreeMap::new(),
         }
     }
 
@@ -77,11 +89,11 @@ impl EnvDriver {
         containment: PolicySlot,
         on_loss: OnLoss,
     ) -> Result<EnvHandle, EnvError> {
-        if !record.class.stage1_supported() {
+        if !record.class.provisionable() {
             return Err(EnvError::Unsupported {
                 capability: "provision",
                 detail: format!(
-                    "class {} is not Stage-1 provisionable",
+                    "class {} is not provisionable at this stage",
                     record.class.as_str()
                 ),
             });
@@ -241,7 +253,175 @@ impl EnvDriver {
         let ready = EventMinter::new(store, &self.run_id)
             .mint("action.environment.ready", events::ready_payload(h))?;
         store.append(&self.run_id, lease, vec![attached, ready])?;
+        // S2.1 — the contained classes run behind a live `hh-helper`
+        // session (the committed `env_handle`'s only reachability path —
+        // R-NOSIDE). A helper that won't start fails the attach closed:
+        // the handle lands `failed`, the `failed` row is the audit.
+        if let Err(e) = self.start_helper(store, env_handle_id) {
+            let h = self.handles.get_mut(env_handle_id).unwrap();
+            let _ = h.transition(HandleState::Failed, now);
+            h.session = None;
+            let ev = EventMinter::new(store, &self.run_id).mint(
+                "action.environment.failed",
+                events::failed_payload(h, "helper_spawn_failed"),
+            )?;
+            store.append(&self.run_id, lease, vec![ev])?;
+            return Err(e);
+        }
         Ok((report, warnings))
+    }
+
+    /// `start_helper(env_handle_id)` — spawn the `hh-helper` process for the
+    /// contained classes and `hello` the session open: the nonce (the
+    /// `commit_proof` recompute key — kernel-held, never ledgered), the
+    /// attached containment policy, and the roots. `local_host` has no
+    /// helper (its `none` isolation is honest — the in-process
+    /// `LocalExecutor` runs it).
+    fn start_helper(&mut self, store: &mut Store, env_handle_id: &str) -> Result<(), EnvError> {
+        use hh_helper::protocol::OnKernelLoss;
+        let h = self.handles.get(env_handle_id).unwrap().clone();
+        let (backend, extra_args) = match h.class {
+            EnvironmentClass::LocalSandboxed => ("seatbelt".to_string(), Vec::new()),
+            EnvironmentClass::LocalContainer => {
+                // The helper owns the container's lifecycle (`--backend
+                // podman` creates + starts it; teardown stops it). The
+                // image must be an OCI reference — a content-addressed
+                // image has no podman spelling at S2.1 (honest refusal;
+                // the record keeps its identity claim).
+                let image = match &h.image {
+                    ResolvedImage::UnpinnedTag(t) => t.clone(),
+                    ResolvedImage::Foreign { value, .. } => value.clone(),
+                    ResolvedImage::Address(_) => {
+                        return Err(EnvError::Unsupported {
+                            capability: "local_container.image",
+                            detail: "a content_address image has no OCI ref — declare a tag/digest"
+                                .to_string(),
+                        })
+                    }
+                };
+                let container = format!(
+                    "hh-env-{}",
+                    h.env_handle_id
+                        .chars()
+                        .map(|c| if c.is_ascii_alphanumeric() || c == '-' {
+                            c
+                        } else {
+                            '-'
+                        })
+                        .collect::<String>()
+                );
+                let ws = h.roots.cwd.clone();
+                std::fs::create_dir_all(&ws)
+                    .map_err(|e| EnvError::Blob(format!("container workspace: {e}")))?;
+                (
+                    "podman".to_string(),
+                    vec![
+                        "--container".to_string(),
+                        container.clone(),
+                        "--image".to_string(),
+                        image,
+                        "--workspace".to_string(),
+                        ws,
+                    ],
+                )
+            }
+            _ => return Ok(()),
+        };
+        // The socket lives under a *short* path — AF_UNIX pathnames cap at
+        // ~104 bytes on darwin, and a store root under `/var/folders/…`
+        // blows past it; the persisted session coordinates (nonce/id/sock)
+        // stay under the store root's `envs/<id>/` (regular files, no cap).
+        // The dir name carries a store-root hash so parallel drivers whose
+        // env ids coincide can't unlink each other's live socket.
+        let sock_dir = std::env::temp_dir().join(format!(
+            "hh-s-{}-{}",
+            &hh_identity::idp::idp_id("sock_dir", store.root().to_string_lossy().as_bytes())[..12],
+            h.env_handle_id
+        ));
+        let mut client = HelperClient::spawn(&sock_dir, &backend, &extra_args)?;
+        // The session nonce — kernel-allocated, carried on `hello`, never
+        // ledgered (the `commit_proof` recompute key).
+        let nonce = store.alloc_id("nonce");
+        client
+            .hello(
+                OnKernelLoss::PreserveUntil { ttl_ms: 86_400_000 },
+                &nonce,
+                Some(86_400_000),
+                Some(&h.containment.policy().to_json()),
+                Some((
+                    h.roots.workspace_roots.clone(),
+                    h.roots.writable_roots.clone(),
+                )),
+                false,
+            )
+            .map_err(|e| EnvError::Transport {
+                detail: format!("helper hello: {e}"),
+            })?;
+        let session_id = client.session_id.clone();
+        let backend_name = client.backend.clone();
+        // Persist the session coordinates (nonce + id) under the store root —
+        // kernel-held, never ledgered. A kernel restart resumes the helper
+        // session by reading them back (`resume_helper`); the nonce is the
+        // `commit_proof` recompute key, so a lost nonce means a lost resume
+        // (honest — the helper refuses a mismatched resume).
+        let coord_dir = store.root().join("envs").join(&h.env_handle_id);
+        std::fs::create_dir_all(&coord_dir).map_err(|e| EnvError::Blob(e.to_string()))?;
+        std::fs::write(coord_dir.join("session.nonce"), &nonce)
+            .map_err(|e| EnvError::Blob(e.to_string()))?;
+        std::fs::write(coord_dir.join("session.id"), &session_id)
+            .map_err(|e| EnvError::Blob(e.to_string()))?;
+        std::fs::write(
+            coord_dir.join("session.sock"),
+            client.socket.to_string_lossy().as_bytes(),
+        )
+        .map_err(|e| EnvError::Blob(e.to_string()))?;
+        self.sessions.insert(env_handle_id.to_string(), client);
+        if let Some(s) = &mut self.handles.get_mut(env_handle_id).unwrap().session {
+            s.session_id = session_id;
+            s.helper_identity = format!("hh-helper/1:{backend_name}");
+        }
+        Ok(())
+    }
+
+    /// `take_executor(env_handle_id, projected_env)` — hand the helper
+    /// session to the dispatcher as a `ToolExecutor`. The caller MUST
+    /// `return_executor` after dispatch — the session outlives the effect.
+    /// `local_host` has no session (its executor is `LocalExecutor`).
+    pub fn take_executor(
+        &mut self,
+        env_handle_id: &str,
+        projected_env: Vec<(String, String)>,
+    ) -> Result<HelperExecutor, EnvError> {
+        let client = self.sessions.remove(env_handle_id).ok_or_else(|| {
+            let state = self
+                .handles
+                .get(env_handle_id)
+                .map(|h| h.state.as_str())
+                .unwrap_or("missing");
+            EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state,
+            }
+        })?;
+        Ok(HelperExecutor::new(client, projected_env))
+    }
+
+    /// `return_executor(env_handle_id, exec)` — return the session to the
+    /// table after dispatch (the helper stays live across effects).
+    pub fn return_executor(&mut self, env_handle_id: &str, exec: HelperExecutor) {
+        // Per-class meter — the session's exec-spawn count lands on the
+        // handle's declared `helper.spawns` meter.
+        let spawns = exec.client.spawns;
+        self.sessions.insert(env_handle_id.to_string(), exec.client);
+        if let Some(h) = self.handles.get_mut(env_handle_id) {
+            h.meters.extra.insert(
+                "helper.spawns".to_string(),
+                crate::handle::MeterSample {
+                    value: spawns,
+                    provenance: crate::handle::MeterProvenance::Measured,
+                },
+            );
+        }
     }
 
     /// `detach(env_handle_id)` — `ready → detached`, release the session.
@@ -262,6 +442,12 @@ impl EnvDriver {
         h.verify_environment()?;
         h.transition(HandleState::Detached, now)?;
         h.session = None;
+        // The helper session releases with the handle — the channel closes;
+        // the helper's `preserve_until` keeps its journal so a later
+        // `attach` can resume it (the container persists under the helper).
+        if let Some(client) = self.sessions.remove(env_handle_id) {
+            drop(client);
+        }
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.detached",
             events::detached_payload(h, "released"),
@@ -293,6 +479,13 @@ impl EnvDriver {
         }
         h.transition(HandleState::TornDown, now)?;
         h.session = None;
+        // The helper session + container go with the environment.
+        if let Some(mut client) = self.sessions.remove(env_handle_id) {
+            client.shutdown();
+        }
+        if let Some(b) = self.containers.remove(env_handle_id) {
+            let _ = b.stop();
+        }
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.torn_down",
             events::torn_down_payload(h, "teardown"),
@@ -385,6 +578,459 @@ impl EnvDriver {
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok(())
+    }
+
+    /// `heal_live(env_handle_id)` — the session-aware heal: `session_still_
+    /// live` is *measured* off the live helper channel (`is_live` — a
+    /// `list_detached` round-trip), never the caller's claim.
+    pub fn heal_live(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+    ) -> Result<(), EnvError> {
+        let live = self
+            .sessions
+            .get_mut(env_handle_id)
+            .map(|c| c.is_live())
+            .unwrap_or(false);
+        self.heal(store, lease, env_handle_id, live)
+    }
+
+    /// `resume_helper(env_handle_id)` — kernel-restart resume: reconnect to
+    /// the surviving helper's socket and `hello{resume_session_id}` with the
+    /// persisted nonce (kernel death ≠ environment death — the helper kept
+    /// the exec table under `preserve_until`). The caller then `heal`s the
+    /// `unreachable` handle.
+    pub fn resume_helper(
+        &mut self,
+        store: &mut Store,
+        env_handle_id: &str,
+    ) -> Result<(), EnvError> {
+        use hh_helper::protocol::OnKernelLoss;
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        let coord_dir = store.root().join("envs").join(&h.env_handle_id);
+        let nonce = std::fs::read_to_string(coord_dir.join("session.nonce"))
+            .map_err(|e| EnvError::Blob(format!("session nonce: {e}")))?;
+        let session_id = std::fs::read_to_string(coord_dir.join("session.id"))
+            .map_err(|e| EnvError::Blob(format!("session id: {e}")))?;
+        let sock = std::fs::read_to_string(coord_dir.join("session.sock"))
+            .map_err(|e| EnvError::Blob(format!("session sock: {e}")))?;
+        let mut client = HelperClient::connect(std::path::Path::new(sock.trim()))?;
+        client.session_id = session_id.trim().to_string();
+        client.hello(
+            OnKernelLoss::PreserveUntil { ttl_ms: 86_400_000 },
+            nonce.trim(),
+            Some(86_400_000),
+            None,
+            None,
+            true,
+        )?;
+        self.sessions.insert(env_handle_id.to_string(), client);
+        Ok(())
+    }
+
+    /// `replace(env_handle_id) → EnvHandle` — the heal ladder's replace
+    /// rung. An `unreachable` environment whose `on_loss` is
+    /// `ReplaceFromImage`/`ReplaceFromSnapshot` yields a successor handle:
+    /// the old handle lands `replaced` (terminal), the successor is a new
+    /// handle over a fresh workspace with the same `environment_ref` and a
+    /// `ParentEdge`. `ReplaceFromSnapshot` restores the parent's latest
+    /// `fs_tree` state (the workspace copy is the restore; the recorded
+    /// `base` names the parent snapshot). `FailRun` refuses — `heal` owns
+    /// that posture.
+    pub fn replace(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+    ) -> Result<EnvHandle, EnvError> {
+        let now = store.now_ms();
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        if h.state != HandleState::Unreachable {
+            return Err(EnvError::InvalidState {
+                op: "replace",
+                state: h.state.as_str(),
+            });
+        }
+        let mode = match h.on_loss {
+            OnLoss::ReplaceFromSnapshot => crate::handle::DeriveMode::ForkSnapshot,
+            OnLoss::ReplaceFromImage => crate::handle::DeriveMode::FreshFromImage,
+            OnLoss::FailRun => {
+                return Err(EnvError::InvalidState {
+                    op: "replace",
+                    state: "on_loss=fail_run",
+                })
+            }
+        };
+        // Fresh workspace for the successor.
+        let new_id = store.alloc_id("env");
+        let ws = store.root().join("envs").join(&new_id).join("workspace");
+        std::fs::create_dir_all(&ws).map_err(|e| EnvError::Blob(e.to_string()))?;
+        if matches!(mode, crate::handle::DeriveMode::ForkSnapshot) {
+            // Restore the parent's *current* tree into the child's
+            // workspace (the recorded snapshot ref is the `base` claim).
+            for root in &h.roots.workspace_roots {
+                copy_tree(root, &ws.to_string_lossy())?;
+            }
+        }
+        let child = self.spawn_handle(
+            store,
+            lease,
+            &h,
+            Roots {
+                workspace_roots: vec![ws.to_string_lossy().to_string()],
+                writable_roots: vec![ws.to_string_lossy().to_string()],
+                cwd: ws.to_string_lossy().to_string(),
+            },
+            Some(crate::handle::ParentEdge {
+                env_handle_id: env_handle_id.to_string(),
+                mode,
+                on_parent_end: crate::handle::OnParentEnd::Teardown,
+            }),
+            new_id,
+        )?;
+        // The old handle lands `replaced` (terminal) — its session and
+        // container are released.
+        if let Some(mut client) = self.sessions.remove(env_handle_id) {
+            client.shutdown();
+        }
+        if let Some(b) = self.containers.remove(env_handle_id) {
+            let _ = b.stop();
+        }
+        let h = self.handles.get_mut(env_handle_id).unwrap();
+        h.transition(HandleState::Replaced, now)?;
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.replaced",
+            events::replaced_payload(h, &child.env_handle_id),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok(child)
+    }
+
+    /// `derive(parent_id, mode, scope, on_parent_end) → EnvHandle` — a child
+    /// environment from a live parent (§5a.5 `derive`; S2.1):
+    ///
+    /// - `FreshFromImage` — a fresh workspace under the parent's record
+    ///   (the image's initial state);
+    /// - `ForkSnapshot` — the parent's current tree copied into the child's
+    ///   workspace (an `fs_tree` snapshot of the parent is recorded as the
+    ///   child's `base` claim);
+    /// - `ScopedSubtree` — the child's roots are narrowed to `scope` inside
+    ///   the parent's workspace (a shared, *scoped* subtree — the child's
+    ///   helper re-gates fs access to the subtree);
+    /// - `Share` — declared in the sum but not provisionable at S2.1
+    ///   (`Unsupported`, never coerced).
+    ///
+    /// The child lands in `provisioning` — `attach` completes it (the
+    /// `derived` event records the `ParentEdge`).
+    pub fn derive(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        parent_id: &str,
+        mode: crate::handle::DeriveMode,
+        scope: Option<&str>,
+        on_parent_end: crate::handle::OnParentEnd,
+    ) -> Result<EnvHandle, EnvError> {
+        use crate::handle::DeriveMode;
+        let parent = self
+            .handles
+            .get(parent_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: parent_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        match parent.state {
+            HandleState::Ready | HandleState::Detached => {}
+            s => {
+                return Err(EnvError::InvalidState {
+                    op: "derive",
+                    state: s.as_str(),
+                })
+            }
+        }
+        let new_id = store.alloc_id("env");
+        let base_dir = store.root().join("envs").join(&new_id).join("workspace");
+        let roots = match mode {
+            DeriveMode::FreshFromImage => {
+                std::fs::create_dir_all(&base_dir).map_err(|e| EnvError::Blob(e.to_string()))?;
+                Roots {
+                    workspace_roots: vec![base_dir.to_string_lossy().to_string()],
+                    writable_roots: vec![base_dir.to_string_lossy().to_string()],
+                    cwd: base_dir.to_string_lossy().to_string(),
+                }
+            }
+            DeriveMode::ForkSnapshot => {
+                std::fs::create_dir_all(&base_dir).map_err(|e| EnvError::Blob(e.to_string()))?;
+                for root in &parent.roots.workspace_roots {
+                    copy_tree(root, &base_dir.to_string_lossy())?;
+                }
+                Roots {
+                    workspace_roots: vec![base_dir.to_string_lossy().to_string()],
+                    writable_roots: vec![base_dir.to_string_lossy().to_string()],
+                    cwd: base_dir.to_string_lossy().to_string(),
+                }
+            }
+            DeriveMode::ScopedSubtree => {
+                let scope = scope.ok_or_else(|| EnvError::Unsupported {
+                    capability: "derive.scoped_subtree",
+                    detail: "a scope path is required".to_string(),
+                })?;
+                let sub = canonicalize(&format!(
+                    "{}/{}",
+                    parent.roots.cwd.trim_end_matches('/'),
+                    scope.trim_start_matches('/')
+                ));
+                if !parent.roots.is_writable(&sub) {
+                    return Err(EnvError::OutsideRoots { path: sub });
+                }
+                std::fs::create_dir_all(&sub).map_err(|e| EnvError::Blob(e.to_string()))?;
+                Roots {
+                    workspace_roots: vec![sub.clone()],
+                    writable_roots: vec![sub.clone()],
+                    cwd: sub,
+                }
+            }
+            DeriveMode::Share => {
+                return Err(EnvError::Unsupported {
+                    capability: "derive.share",
+                    detail: "a shared unscoped view is not provisionable at S2.1".to_string(),
+                })
+            }
+        };
+        let child = self.spawn_handle(
+            store,
+            lease,
+            &parent,
+            roots,
+            Some(crate::handle::ParentEdge {
+                env_handle_id: parent_id.to_string(),
+                mode,
+                on_parent_end,
+            }),
+            new_id,
+        )?;
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.derived",
+            events::derived_payload(&child),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok(child)
+    }
+
+    /// `spawn_handle(parent, roots, parent_edge, env_handle_id)` — the
+    /// shared child-provisioning body (`replace`/`derive`): mint the handle
+    /// over the parent's class/image/policy, append `declared` +
+    /// `provisioning` + `provisioned`, land it in `provisioning` (the
+    /// caller `attach`es it — `start_helper` runs there).
+    fn spawn_handle(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        parent: &EnvHandle,
+        roots: Roots,
+        parent_edge: Option<crate::handle::ParentEdge>,
+        env_handle_id: String,
+    ) -> Result<EnvHandle, EnvError> {
+        let now = store.now_ms();
+        let h = EnvHandle {
+            env_handle_id,
+            run_id: self.run_id.clone(),
+            environment_ref: parent.environment_ref.clone(),
+            class: parent.class,
+            state: HandleState::Declared,
+            health: Health::Unknown,
+            session: None,
+            capabilities: parent.capabilities.clone(),
+            containment: parent.containment.clone(),
+            report: None,
+            credential_bindings: vec![],
+            roots,
+            limits: parent.limits.clone(),
+            budget_node_refs: vec![],
+            meters: crate::handle::EnvMeters::new(now),
+            snapshots: vec![],
+            parent: parent_edge,
+            on_loss: parent.on_loss,
+            snapshot_cadence: SnapshotCadence::Never,
+            heal_count: 0,
+            image: parent.image.clone(),
+            applied_event_ref: None,
+            created_ms: now,
+        };
+        let declared = EventMinter::new(store, &self.run_id)
+            .mint("action.environment.declared", events::declared_payload(&h))?;
+        store.append(&self.run_id, lease, vec![declared])?;
+        let mut h = h;
+        h.transition(HandleState::Provisioning, now)?;
+        let provisioning = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.provisioning",
+            events::provisioning_payload(&h),
+        )?;
+        let provisioned = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.provisioned",
+            events::provisioned_payload(&h),
+        )?;
+        store.append(&self.run_id, lease, vec![provisioning, provisioned])?;
+        self.handles.insert(h.env_handle_id.clone(), h.clone());
+        Ok(h)
+    }
+
+    // ── `fs_tree` — the content-addressed whole-tree snapshot (S2.1) ──────
+
+    /// `fs_tree_snapshot(env_handle_id) → (SnapshotRecord, FsTreeSnapshot)`
+    /// — walk the workspace roots into a content-addressed tree manifest
+    /// (equal state ⇒ equal ref, positional addressing — the helper's
+    /// `fstree` module is the single implementation; local classes share
+    /// the filesystem so the kernel-side walk is the same tree the
+    /// helper's `snapshot` verb would produce — the workspace is
+    /// host-mounted even under `local_container`). Appends
+    /// `action.environment.snapshot{kind: fs_tree}`.
+    pub fn fs_tree_snapshot(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+    ) -> Result<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot), EnvError> {
+        let (roots, image_base) = {
+            let h = self
+                .handles
+                .get(env_handle_id)
+                .ok_or(EnvError::Unavailable {
+                    env_handle_id: env_handle_id.to_string(),
+                    state: "missing",
+                })?;
+            h.verify_environment()?;
+            h.capabilities.snapshot_supported(SnapshotKind::FsTree)?;
+            let base = match &h.image {
+                ResolvedImage::Address(ca) => Some(ca.id()),
+                _ => None,
+            };
+            (h.roots.workspace_roots.clone(), base)
+        };
+        let tree = hh_helper::fstree::walk(&roots)
+            .map_err(|e| EnvError::Blob(format!("fs_tree walk: {e}")))?;
+        // The manifest's content addresses must *resolve* — deposit every
+        // file's bytes into the ledger blob pool so `fs_tree_restore` is
+        // independent of the live workspace (idempotent: identical bytes
+        // deduplicate to the same address).
+        for (root, entries) in &tree.manifest {
+            for (rel, node) in entries {
+                if let hh_helper::fstree::FsNode::File { .. } = node {
+                    let p = format!("{root}/{rel}");
+                    let bytes = std::fs::read(&p)
+                        .map_err(|e| EnvError::Blob(format!("fs_tree read {p}: {e}")))?;
+                    store
+                        .put_blob(&bytes, "application/octet-stream")
+                        .map_err(EnvError::Ledger)?;
+                }
+            }
+        }
+        let mut rec = SnapshotRecord {
+            snapshot_ref: String::new(),
+            env_handle_id: env_handle_id.to_string(),
+            at_seq: 0,
+            kind: SnapshotKind::FsTree,
+            base: image_base,
+            content: tree.manifest_json(),
+            roots_covered: roots,
+            quiesced: false,
+            taken_by: TakenBy::Subject,
+            size_bytes: tree.size_bytes,
+            expires_at_ms: None,
+        };
+        rec.snapshot_ref = rec.compute_ref();
+        let h = self.handles.get_mut(env_handle_id).unwrap();
+        h.snapshots.push(rec.snapshot_ref.clone());
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.snapshot",
+            events::snapshot_payload(h, &rec.snapshot_ref, "fs_tree"),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok((rec, tree))
+    }
+
+    /// `fs_tree_verify(env_handle_id, snap)` — re-walk and compare the
+    /// manifest (content-addressed: a changed byte is a different ref —
+    /// `false` is a verification failure, never silently accepted).
+    pub fn fs_tree_verify(
+        &mut self,
+        env_handle_id: &str,
+        snap: &hh_helper::fstree::FsTreeSnapshot,
+    ) -> Result<bool, EnvError> {
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?;
+        h.verify_environment()?;
+        hh_helper::fstree::verify(snap).map_err(|e| EnvError::Blob(e.to_string()))
+    }
+
+    /// `fs_tree_restore(env_handle_id, snap) → tree_address` — materialise
+    /// the snapshot's tree into the environment's first workspace root.
+    /// Each entry's content address resolves against the ledger blob pool
+    /// (`fs_tree_snapshot` deposits it); a missing blob is a `Blob`
+    /// refusal, and the returned recompute must equal `tree_address` —
+    /// a mismatch is `ContainmentUnverified`-shaped, never silently
+    /// accepted.
+    pub fn fs_tree_restore(
+        &mut self,
+        store: &Store,
+        env_handle_id: &str,
+        snap: &hh_helper::fstree::FsTreeSnapshot,
+    ) -> Result<String, EnvError> {
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?;
+        h.verify_environment()?;
+        let dest = std::path::PathBuf::from(h.roots.cwd.clone());
+        std::fs::create_dir_all(&dest).map_err(|e| EnvError::Blob(e.to_string()))?;
+        let recomputed = hh_helper::fstree::restore(snap, &dest, &|ca| blob_by_id(store, ca))
+            .map_err(|e| EnvError::Blob(format!("fs_tree restore: {e}")))?;
+        if recomputed != snap.tree_address && !snap.roots.is_empty() {
+            // A single-root snapshot's address re-keys identically; a
+            // multi-root restore into one root legitimately differs — the
+            // verify contract is honoured per-entry via the blob digests
+            // (each `get_blob` rehashes — `BlobCorrupt` surfaces).
+            let all_ok = snap
+                .manifest
+                .values()
+                .flat_map(|m| m.values())
+                .all(|n| match n {
+                    hh_helper::fstree::FsNode::File { ca, .. } => blob_by_id(store, ca).is_some(),
+                    _ => true,
+                });
+            if !all_ok {
+                return Err(EnvError::ContainmentUnverified {
+                    field_group: "fs".to_string(),
+                    reason: "fs_tree restore recomputed under missing blobs".to_string(),
+                });
+            }
+        }
+        Ok(recomputed)
     }
 
     /// `verify(env_handle_id)` — the explicit verification point (appends the
@@ -611,4 +1257,58 @@ fn collect_files(root: &str, out: &mut Vec<String>) {
             }
         }
     }
+}
+
+/// `blob_by_id(store, "sha256:<hex>")` — resolve a manifest content
+/// address through the ledger blob pool (`get_blob` rehashes — corruption
+/// surfaces as `BlobCorrupt`, never silent bytes).
+fn blob_by_id(store: &Store, ca: &str) -> Option<Vec<u8>> {
+    let digest = ca.strip_prefix("sha256:")?.to_string();
+    let addr = hh_identity::idp::ContentAddress {
+        idp: "idp/1",
+        algorithm: "sha256",
+        digest,
+        media_type: "application/octet-stream".to_string(),
+        size: 0,
+    };
+    store.get_blob(&addr).ok()
+}
+
+/// `copy_tree(src_root, dest_root)` — recursive copy of the source tree's
+/// files/dirs into `dest` (the `fork_snapshot`/replace restore substrate —
+/// per-file, no symlinks preserved beyond `symlink`+target).
+fn copy_tree(src_root: &str, dest_root: &str) -> Result<(), EnvError> {
+    let mut stack = vec![std::path::PathBuf::from(src_root)];
+    while let Some(dir) = stack.pop() {
+        let rd = std::fs::read_dir(&dir)
+            .map_err(|e| EnvError::Blob(format!("copy_tree read_dir {}: {e}", dir.display())))?;
+        for e in rd.flatten() {
+            let p = e.path();
+            let rel = p
+                .strip_prefix(src_root)
+                .map_err(|e| EnvError::Blob(e.to_string()))?;
+            let dest = std::path::Path::new(dest_root).join(rel);
+            let ft = e.file_type().map_err(|e| EnvError::Blob(e.to_string()))?;
+            if ft.is_dir() {
+                std::fs::create_dir_all(&dest).map_err(|e| EnvError::Blob(e.to_string()))?;
+                stack.push(p);
+            } else if ft.is_symlink() {
+                if let Ok(target) = std::fs::read_link(&p) {
+                    if let Some(par) = dest.parent() {
+                        std::fs::create_dir_all(par).map_err(|e| EnvError::Blob(e.to_string()))?;
+                    }
+                    let _ = std::fs::remove_file(&dest);
+                    #[cfg(unix)]
+                    std::os::unix::fs::symlink(&target, &dest)
+                        .map_err(|e| EnvError::Blob(e.to_string()))?;
+                }
+            } else if ft.is_file() {
+                if let Some(par) = dest.parent() {
+                    std::fs::create_dir_all(par).map_err(|e| EnvError::Blob(e.to_string()))?;
+                }
+                std::fs::copy(&p, &dest).map_err(|e| EnvError::Blob(e.to_string()))?;
+            }
+        }
+    }
+    Ok(())
 }

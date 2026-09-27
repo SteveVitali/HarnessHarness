@@ -97,6 +97,23 @@ pub enum EnvError {
     Blob(String),
     /// An idp/1 identity failure.
     Identity(String),
+    /// The helper channel failed (send/recv/decode — transport plane; the
+    /// dispatcher settles it `unknown{executor_error}` → probe, never a
+    /// silent redispatch).
+    Transport {
+        /// What failed.
+        detail: String,
+    },
+    /// The helper returned a typed refusal (`err{class, detail}` — e.g.
+    /// `NotCommitted` for a missing/mismatched `commit_proof`, `BadToken`,
+    /// `Dedup`). Surfaced verbatim — the class is the helper's closed
+    /// refusal sum.
+    HelperRefused {
+        /// The refusal class.
+        class: String,
+        /// The detail.
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for EnvError {
@@ -147,6 +164,10 @@ impl std::fmt::Display for EnvError {
             EnvError::BudgetRefused { detail } => write!(f, "BudgetRefused: {detail}"),
             EnvError::Blob(d) => write!(f, "blob: {d}"),
             EnvError::Identity(d) => write!(f, "identity: {d}"),
+            EnvError::Transport { detail } => write!(f, "transport: {detail}"),
+            EnvError::HelperRefused { class, detail } => {
+                write!(f, "helper refused: {class} ({detail})")
+            }
         }
     }
 }
