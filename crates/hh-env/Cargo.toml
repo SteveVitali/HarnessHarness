@@ -9,13 +9,20 @@ description = "The C0/Stage-1 execution-environment abstraction + sandboxed tool
 [lib]
 path = "src/lib.rs"
 
+[features]
+# `tier-c1` — the C1 durability surface (§5a.3): the `HealingPolicy`-bound
+# `heal` path. Absent ⇒ the op refuses typed `Unsupported{tier}` (CC6 —
+# never a silent degrade) and `hh-ledger`'s C1 ops refuse with it.
+default = ["tier-c1"]
+tier-c1 = ["hh-ledger/tier-c1"]
+
 [dependencies]
 hh-wire = { path = "../hh-wire" }
 hh-identity = { path = "../hh-identity" }
 hh-provenance = { path = "../hh-provenance" }
 hh-ontology = { path = "../hh-ontology" }
 hh-hir = { path = "../hh-hir" }
-hh-ledger = { path = "../hh-ledger" }
+hh-ledger = { path = "../hh-ledger", default-features = false }
 # `authorize` is the monitor's — the dispatcher consumes `KernelDecision` and
 # emits `decided_payload`; executors never decide (ADR-0100 I-3).
 hh-monitor = { path = "../hh-monitor" }

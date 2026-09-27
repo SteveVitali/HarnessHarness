@@ -212,7 +212,8 @@ pub const KERNEL_PRODUCERS: &[&str] = &[crate::event::KERNEL_COMPONENT];
 // member is a schema error, never an offload). `"*"` partitions (`OPEN_AUDIT`)
 // cover classes whose payload dossier is the owning subsystem's contract.
 
-/// `lifecycle.lease.*` — the `emit_lease_row` members.
+/// `lifecycle.lease.*` — the `emit_lease_row` members + the scoped-lease
+/// members (`acquired_at_ms`/`expires_at_ms`/`progress` — §5a.3; S2.3).
 const LEASE_FIELDS: &[AuditField] = &[
     af("scope"),
     af("lease_id"),
@@ -221,6 +222,9 @@ const LEASE_FIELDS: &[AuditField] = &[
     af("stale_lease_id"),
     af("stale_generation"),
     af("reason"),
+    af("acquired_at_ms"),
+    af("expires_at_ms"),
+    af("progress"),
 ];
 
 /// `lifecycle.registry.*` — the registry-store audit rows (content-free: ids,
@@ -286,6 +290,10 @@ const EFFECT_FIELDS: &[AuditField] = &[
     af("decision_ref"),
     af("reprepared_after"),
     af("original_effect_id"),
+    // S2.3 (R-2.2.3; ADR-0132 §3) — `observed{terminated: true}` is the
+    // detached reconciliation's terminal marker (a `preserve_until` sweep
+    // writes it for a reaped child).
+    af("terminated"),
     af("schedule_event_id"),
     af("not_before"),
     af("kind"),
@@ -927,9 +935,14 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("control.budget.exceeded",   O::Events, true,  BUDGET_AUDIT_FIELDS, &[], None, None),
     row_audit("control.budget.amended",    O::Events, true,  BUDGET_AUDIT_FIELDS, &[], None, None),
     row_audit("control.decision",          O::Events, true,  DECISION_FIELDS, &[], None, None),
-    // `control.wakeup.fired` — the audit-grade wakeup record (§5g.6 §3; the
-    // `control.wakeup.occurred` ingress row stays ordinary-ledger).
+    // `control.wakeup.fired` — the audit-grade wakeup record (§5g.6 §3); the
+    // subscription/occurrence/skip/cancel rows stay ordinary-ledger (§5a.3;
+    // S2.3 — kernel-origin, provenance-bearing).
     row_audit("control.wakeup.fired",      O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row("control.wakeup.scheduled",        Led, O::Events, false, true,  None, None),
+    row("control.wakeup.occurred",         Led, O::Events, false, true,  None, None),
+    row("control.wakeup.skipped",          Led, O::Events, false, true,  None, None),
+    row("control.wakeup.cancelled",        Led, O::Events, false, true,  None, None),
     // The subagent/merge/ownership/work-item audit rows (§5g.6 §3) — declared
     // now (the class list is dialect schema); their emitters land with the
     // subagent (S2.x/§05e F3) and fleet (§05i) machinery. `spawned`'s child_run

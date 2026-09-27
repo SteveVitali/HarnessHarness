@@ -609,13 +609,17 @@ pub enum OpenSpec {
         /// `sync` | `out_of_process` (OQ-435) — absent ⇒ policy default.
         approval_mode: Option<String>,
     },
-    /// `{kind:"resume", run_id, mode, from_seq?}` — `mode` ∈
+    /// `{kind:"resume", run_id, mode, from_seq?, definition?}` — `mode` ∈
     /// {continue (WouldBlock while the writer lives), takeover
-    /// (fence the old writer)}.
+    /// (fence the old writer)}. `definition` is the resume-time
+    /// re-presentation (S2.3; AC-R-2.2.3-11): identical ⇒ continue,
+    /// add-only ⇒ `lifecycle.definition.changed` + continue, otherwise
+    /// `DefinitionChanged`.
     Resume {
         run_id: String,
         mode: String,
         from_seq: Option<i64>,
+        definition: Option<DefinitionInput>,
     },
     /// `{kind:"attach", run_id, read_only:true}` — read-only always;
     /// `read_only:false` is a `SchemaViolation`.
@@ -666,6 +670,7 @@ impl OpenSpec {
                 run_id,
                 mode,
                 from_seq,
+                definition,
             } => {
                 let mut m = BTreeMap::new();
                 m.insert("kind".into(), Json::str("resume"));
@@ -673,6 +678,9 @@ impl OpenSpec {
                 m.insert("mode".into(), Json::str(mode.clone()));
                 if let Some(s) = from_seq {
                     m.insert("from_seq".into(), Json::Int(*s));
+                }
+                if let Some(d) = definition {
+                    m.insert("definition".into(), d.to_json());
                 }
                 Json::Obj(m)
             }
@@ -746,10 +754,15 @@ impl OpenSpec {
                     &format!("{path}/mode"),
                 )?;
                 let from_seq = s.opt_int("from_seq")?;
+                let definition = s
+                    .take("definition")
+                    .map(|d| DefinitionInput::from_json(d, &format!("{path}/definition")))
+                    .transpose()?;
                 OpenSpec::Resume {
                     run_id,
                     mode,
                     from_seq,
+                    definition,
                 }
             }
             _ => {

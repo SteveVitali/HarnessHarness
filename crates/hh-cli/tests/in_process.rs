@@ -1050,6 +1050,259 @@ fn widening_override_refused_unattended_invocation_error() {
     let _ = out;
 }
 
+// ── AC-R-2.2.3-11 — resume definition verification ────────────────────
+
+/// `open_session{kind:"resume", definition}` — the re-presented
+/// definition is `verify_resume`-checked against the persisted sealed
+/// definition *before* the takeover: add-only ⇒ `lifecycle.definition
+/// .changed` + the session opens; a mid-run budget decrease the
+/// accounting gate refuses ⇒ `DefinitionChanged` and no session.
+#[test]
+fn resume_verifies_a_re_presented_definition() {
+    let mut b = ServiceBoundary::new("resumedef");
+    let def = write_definition("resumedef");
+    let (_c, out, _e) = hh(
+        &mut b,
+        &["run", "start", &def, "hi", "--budget", "model_calls=0"],
+        ALL_TTY,
+        None,
+        &[],
+    );
+    let run_id = result_run_id(&out);
+    assert!(!run_id.is_empty(), "{out}");
+
+    let resume_params = |doc: Json, key: &str| {
+        Json::obj([
+            (
+                "spec",
+                Json::obj([
+                    ("kind", Json::str("resume")),
+                    ("run_id", Json::str(run_id.clone())),
+                    ("mode", Json::str("takeover")),
+                    (
+                        "definition",
+                        Json::obj([("kind", Json::str("document")), ("document", doc)]),
+                    ),
+                ]),
+            ),
+            ("idempotency_key", Json::str(key)),
+        ])
+    };
+
+    // (a) add-only — a second HarnessRule node ⇒ `Compatible`; the
+    // session opens and `lifecycle.definition.changed` is durable.
+    let mut added = document_json();
+    if let Json::Obj(m) = &mut added {
+        if let Some(Json::Arr(nodes)) = m.get_mut("nodes") {
+            nodes.push(hh_hir::wire::node_to_json(&sid(
+                node(
+                    EntityKind::HarnessRule,
+                    KindRecord::HarnessRule(HarnessRuleRecord {
+                        rule_id: "test:rule2".into(),
+                        trigger: Json::Null,
+                        action: RuleAction::RequestApproval(Json::Null),
+                        scope: Json::Null,
+                        conditioned_on: None,
+                        assumption_debt: None,
+                    }),
+                    9,
+                ),
+                "test:rule2",
+            )));
+        }
+    }
+    let sess = b
+        .call("open_session", &resume_params(added, "resume-def-add"))
+        .unwrap();
+    assert!(
+        sess.get("session_id").and_then(Json::as_str).is_some(),
+        "{sess:?}"
+    );
+    let classes = event_classes(&mut b, &run_id);
+    assert!(
+        classes.iter().any(|c| c == "lifecycle.definition.changed"),
+        "{classes:?}"
+    );
+
+    // (b) a mid-run budget decrease — the accounting gate refuses ⇒
+    // `DefinitionChanged{budget_decrease_denied}`, and the refused
+    // attempt mints no `lifecycle.session.attached`.
+    let before = event_classes(&mut b, &run_id).len();
+    let mut shrunk = document_json();
+    if let Json::Obj(m) = &mut shrunk {
+        if let Some(Json::Arr(nodes)) = m.get_mut("nodes") {
+            for n in nodes.iter_mut() {
+                if let Some(Json::Obj(dm)) =
+                    n.get("semantic").and_then(|s| s.get("dimensions")).cloned()
+                {
+                    let mut dm = dm;
+                    if let Some(Json::Obj(tb)) = dm.get_mut("tokens.blended") {
+                        tb.insert("hard".to_string(), Json::Int(500));
+                    }
+                    if let Json::Obj(nm) = n {
+                        if let Some(Json::Obj(sm)) = nm.get_mut("semantic") {
+                            sm.insert("dimensions".to_string(), Json::Obj(dm));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    match b.call("open_session", &resume_params(shrunk, "resume-def-shrink")) {
+        Err(CliError::Kernel(e)) => {
+            assert_eq!(e.kind, "DefinitionChanged", "{e:?}");
+            assert!(
+                e.message.contains("budget_decrease_denied")
+                    || e.data
+                        .get("reasons")
+                        .and_then(|r| {
+                            if let Json::Arr(a) = r {
+                                Some(
+                                    a.iter()
+                                        .filter_map(Json::as_str)
+                                        .any(|s| s.contains("budget_decrease_denied")),
+                                )
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(false),
+                "{e:?}"
+            );
+        }
+        other => panic!("a refused resume change must not open a session: {other:?}"),
+    }
+    assert_eq!(
+        event_classes(&mut b, &run_id).len(),
+        before,
+        "the refused resume must leave the ledger untouched"
+    );
+}
+
+// ── DF-S1.25-2/-3 — durable resume across a service restart ─────────
+
+/// A `open_session{resume}` after the whole service is dropped and
+/// reopened on the same store root restores the leaf from the persisted
+/// `leaf.checkpoint` (DF-S1.25-2) and `verify_resume` reads the sealed
+/// definition from the durable artifact pool (DF-S1.25-3) — the
+/// in-memory `sealed_defs` table is empty in the new lifetime.
+#[test]
+fn durable_resume_survives_a_service_restart() {
+    let root = test_dir("svc-restart");
+    let def = write_definition("restart");
+    let run_id;
+    {
+        // The "crashed" service's holder carries a probeable dead pid —
+        // `restore`'s liveness-shortened takeover admits it (AC-R-2.2.3-5).
+        let svc = EmbedService::open(ServiceConfig {
+            store_root: root.join("store"),
+            kernel_version_id: "hh-kernel/0.1.0".into(),
+            workspace_root: root.join("ws"),
+            holder: hh_ledger::leases::holder_spelling("conformance", 99_999_999),
+        })
+        .unwrap();
+        let mut b = ServiceBoundary::with_svc(root.clone(), svc);
+        let (_c, out, _e) = hh(
+            &mut b,
+            &["run", "start", &def, "hi", "--budget", "model_calls=0"],
+            ALL_TTY,
+            None,
+            &[],
+        );
+        run_id = result_run_id(&out);
+        assert!(!run_id.is_empty(), "{out}");
+        // The leaf pair is durable before the "crash".
+        let leaf = root
+            .join("store")
+            .join("runs")
+            .join(&run_id)
+            .join("leaf.checkpoint");
+        assert!(leaf.exists(), "no persisted leaf checkpoint: {leaf:?}");
+    }
+    // The first service is dropped — its in-memory driver table and
+    // `sealed_defs` are gone; the store root persists. The stale writer
+    // lease is expiry-gated (the writer lease is never liveness-shortened
+    // — AC-5's probe shortens *scoped* leases), so the restart ages past
+    // its TTL: rewrite `expires_at_ms` to the past, exactly what a
+    // post-TTL resume sees.
+    let lease_file = root
+        .join("store")
+        .join("runs")
+        .join(&run_id)
+        .join("lease.json");
+    let mut lj = hh_wire::json::parse(&std::fs::read_to_string(&lease_file).unwrap()).unwrap();
+    if let Json::Obj(m) = &mut lj {
+        m.insert("expires_at_ms".to_string(), Json::Int(0));
+    }
+    std::fs::write(&lease_file, lj.to_canonical_string()).unwrap();
+    let svc = EmbedService::open(ServiceConfig {
+        store_root: root.join("store"),
+        kernel_version_id: "hh-kernel/0.1.0".into(),
+        workspace_root: root.join("ws"),
+        holder: "conformance".into(),
+    })
+    .unwrap();
+    let mut b2 = ServiceBoundary::with_svc(root, svc);
+    // Resume re-presenting the same definition — the artifact pool
+    // (not the dropped service's memory) supplies the persisted sealed
+    // doc for `verify_resume`.
+    let params = Json::obj([
+        (
+            "spec",
+            Json::obj([
+                ("kind", Json::str("resume")),
+                ("run_id", Json::str(run_id.clone())),
+                ("mode", Json::str("takeover")),
+                (
+                    "definition",
+                    Json::obj([
+                        ("kind", Json::str("document")),
+                        ("document", document_json()),
+                    ]),
+                ),
+            ]),
+        ),
+        ("idempotency_key", Json::str("resume-restart")),
+    ]);
+    let sess = b2.call("open_session", &params).unwrap();
+    assert!(
+        sess.get("session_id").and_then(Json::as_str).is_some(),
+        "{sess:?}"
+    );
+    let classes = event_classes(&mut b2, &run_id);
+    assert!(
+        classes.iter().any(|c| c == "lifecycle.run.resumed"),
+        "{classes:?}"
+    );
+    // `get_artifact` serves the sealed definition across the restart —
+    // the durable artifact pool, not `sealed_defs`.
+    let manifest_ref = sess
+        .get("manifest_ref")
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    assert!(!manifest_ref.is_empty(), "{sess:?}");
+    let sid = sess
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    let got = b2
+        .call(
+            "get_artifact",
+            &Json::obj([
+                ("session_id", Json::str(sid)),
+                ("address", Json::str(manifest_ref.clone())),
+            ]),
+        )
+        .unwrap();
+    assert_eq!(
+        got.get("address").and_then(Json::as_str),
+        Some(manifest_ref.as_str()),
+        "{got:?}"
+    );
+}
+
 // ── resume / fork / amend / submit on a parked run (AC-6/9) ─────────
 
 #[test]
@@ -1577,6 +1830,44 @@ fn ac5_attended_and_unattended_share_one_configuration() {
         diffs.iter().any(|d| d.ends_with("attendance.value")),
         "the attendance rows did not differ: {diffs:?}"
     );
+}
+
+// ── AC-R-2.2.4-12 — the speculation-policy floor at the override seam ──
+
+/// An `overrides[]` write of a `speculation_policy` member meets the
+/// §5a.4 floor wherever it lands: `defer_irreversible = false` is
+/// `AuthorityViolation` — refused before the run opens — and the
+/// `allow_classes` widening leg refuses the same way. (Narrowing is
+/// admitted at the `check_override` seam — hh-hir's unit tests; a
+/// schema-invisible member is *also* refused downstream by the
+/// coordinate-space rule, which the floor precedes.)
+#[test]
+fn ac_2_2_4_12_speculation_floor_refuses_widening_overrides() {
+    for (tag, ov) in [
+        (
+            "floor-defer",
+            r#"/nodes/0/speculation_policy={"defer_irreversible":false}"#,
+        ),
+        (
+            "floor-classes",
+            r#"/nodes/0/speculation_policy={"allow_classes":["read_only","compensable"],"max_concurrent_branches":9}"#,
+        ),
+    ] {
+        let mut b = ServiceBoundary::new(tag);
+        let def = write_definition(tag);
+        let (class, out, err) = hh(
+            &mut b,
+            &["run", "start", &def, "hi", "--override", ov],
+            ALL_TTY,
+            None,
+            &[],
+        );
+        assert_eq!(class, ExitClass::RefusedByKernel, "{tag}: {out} {err}");
+        assert!(
+            err.contains("speculation_policy") || out.contains("speculation_policy"),
+            "{tag}: the refusal names the floor member: {out} {err}"
+        );
+    }
 }
 
 // ── AC-8/AC-9: the attended half of I-1 + layer-id determinism ─────────

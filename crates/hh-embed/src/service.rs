@@ -10,6 +10,7 @@ use crate::frames::FrameAdapter;
 use crate::runtime::{EmbedGate, EmbedModel, KernelAssembler, KernelSink};
 use hh_control::driver::{Driver, DriverError};
 use hh_control::react::ReactMinimal;
+use hh_control::vocab::{Cue, DeliveryMode, WokenTrigger};
 use hh_embed_schema::errors::EmbedError;
 use hh_embed_schema::frames::StreamNotification;
 use hh_embed_schema::negotiate;
@@ -17,7 +18,8 @@ use hh_embed_schema::ops::{self, Direction, Tier};
 use hh_embed_schema::types::*;
 use hh_env::driver::EnvDriver;
 use hh_env::events::EventMinter;
-use hh_ledger::store::{Lease, Store, Subscription};
+use hh_ledger::store::{rfc3339_ms, Lease, Store, Subscription};
+use hh_ledger::wakeup::{Trigger as LedgerTrigger, WokenDelivery};
 use hh_provenance::ProvenanceRecord;
 use hh_registry::store::RegistryStore;
 use hh_wire::json::Json;
@@ -112,12 +114,21 @@ pub(crate) struct SessionState {
     pub detached: Option<String>,
     pub pendings: BTreeMap<String, PendingAsk>,
     pub decided: BTreeMap<String, Json>,
+    /// `(subscription_id, occurrence_key)` pairs already submitted as
+    /// `Cue.woken` — the caller-side delivery dedup key (`wakeup_drain`
+    /// is a pure projection; the durable `fired` row stays deliverable
+    /// across a restart, which is exactly the at-least-once-into-the-
+    /// inbox semantics AC-7/8 want).
+    pub delivered_wokens: BTreeSet<String>,
     pub host_asks: BTreeMap<String, HostAsk>,
     pub idem: BTreeMap<String, Json>,
     /// The budget ceilings armed at `open` and lifted by `amend(budget)`
     /// — the boundary's own record of the driver's `budget_ceiling`
     /// (the driver's copy is private; the amend gate compares old → new).
     pub budget_ceiling: BTreeMap<String, i64>,
+    /// The resume-by-leaf arm record (S2.3) — `surfaces` + the arm-time
+    /// budget maps the durable-resume path re-reads from `leaf.arm`.
+    pub leaf_arm: crate::open::LeafArm,
     pub scan_seq: u64,
     /// The  block staged for the next drive (a
     /// submit input).
@@ -623,6 +634,34 @@ impl EmbedService {
         let invoke = self.session(sess_id)?.next_invoke.clone();
         let completion = self.session(sess_id)?.next_completion.clone();
         let response_ref = self.session(sess_id)?.next_response_ref.clone();
+        // S2.3 / AC-8 — drain durable wakeups at the decision point. The
+        // kernel-internal trigger pass materialises due occurrences and
+        // fires them under the W-1 claim (crash-safe: an `occurred` row
+        // without `fired` redelivers); `wakeup_drain` then withholds a
+        // `follow_up` delivery while its `deliver_after` effect is open
+        // (W-3). Each undelivered `(subscription, occurrence)` pair becomes
+        // one `Cue.woken` — the loop's only input (I7); while effects are
+        // open, react parks the cue on `effects_settled` (I4).
+        let now = self.store.now_ms();
+        self.store
+            .deliver_wakeup(&run_id, &lease, now)
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("wakeup_deliver: {e:?}"),
+            })?;
+        let drained = self
+            .store
+            .wakeup_drain(&run_id)
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("wakeup_drain: {e:?}"),
+            })?;
+        for w in drained {
+            let key = format!("{}\u{0}{}", w.subscription_id, w.occurrence_key);
+            if self.session(sess_id)?.delivered_wokens.contains(&key) {
+                continue;
+            }
+            driver.submit(woken_cue(&w));
+            self.session_mut(sess_id)?.delivered_wokens.insert(key);
+        }
         let mut sink = KernelSink {
             store: &mut self.store,
             run_id: run_id.clone(),
@@ -676,6 +715,12 @@ impl EmbedService {
                 })
             }
         }
+        // Persist the resume-by-leaf pair (S2.3; DF-S1.25-2) — the leaf
+        // checkpoint + arm record under `runs/<run_id>/` so a
+        // cross-process resume restores the leaf where the writer left
+        // it (atomic tmp+rename — a torn write reads as `unavailable`,
+        // never as a half-checkpoint).
+        self.persist_leaf(sess_id);
         self.post_drive_scan(sess_id, asks);
         Ok(())
     }
@@ -810,6 +855,54 @@ impl EmbedService {
                 hash: String::new(),
             },
         }
+    }
+}
+
+/// `WokenDelivery → Cue.woken` — the ledger dialect's trigger/mode
+/// rendered into the control dialect (ADR-0131 §1 closed sum; `Timer`
+/// carries its instant as RFC-3339; the caller-side dedup key stays the
+/// `(subscription, occurrence)` pair, never the cue itself).
+fn woken_cue(w: &WokenDelivery) -> Cue {
+    let trigger = match &w.trigger {
+        LedgerTrigger::Timer { at_ms } => WokenTrigger::Timer {
+            at: rfc3339_ms(*at_ms),
+        },
+        LedgerTrigger::Schedule { expr } => WokenTrigger::Schedule {
+            expression: expr.clone(),
+            timezone: String::new(),
+            kind: "cron".to_string(),
+        },
+        LedgerTrigger::PermissionDecided { permission_id } => WokenTrigger::PermissionDecided {
+            permission_id: permission_id.clone(),
+        },
+        LedgerTrigger::ChildTerminal { child_run_id } => WokenTrigger::ChildTerminal {
+            child_run_id: child_run_id.clone(),
+        },
+        LedgerTrigger::EffectTerminal { effect_id } => WokenTrigger::EffectTerminal {
+            effect_id: effect_id.clone(),
+        },
+        LedgerTrigger::EnvironmentReady { env_handle_id } => WokenTrigger::EnvironmentReady {
+            handle: env_handle_id.clone(),
+        },
+        LedgerTrigger::RetryDue { scope_id } => WokenTrigger::RetryDue {
+            scope_id: scope_id.clone(),
+        },
+        LedgerTrigger::External { kind } => WokenTrigger::External {
+            source_ref: kind.clone(),
+            filter: String::new(),
+        },
+        LedgerTrigger::Manual { principal } => WokenTrigger::Manual {
+            principal: principal.clone(),
+        },
+        LedgerTrigger::PeerMessage { from } => WokenTrigger::PeerMessage { from: from.clone() },
+    };
+    Cue::Woken {
+        trigger,
+        payload_ref: w.payload_ref.clone().unwrap_or_default(),
+        delivery_mode: match w.delivery_mode {
+            hh_ledger::DeliveryMode::Steer => DeliveryMode::Steer,
+            hh_ledger::DeliveryMode::FollowUp => DeliveryMode::FollowUp,
+        },
     }
 }
 

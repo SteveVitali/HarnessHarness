@@ -26,20 +26,34 @@
 #![warn(missing_docs)]
 
 pub mod audit;
+pub mod branch;
 pub mod classes;
 pub mod effect;
 pub mod errors;
 pub mod event;
+pub mod hlc;
 pub mod ids;
+pub mod leases;
 pub mod manifest;
 pub mod recovery;
+pub mod saga;
 pub mod schema;
 pub mod store;
+pub mod suspend;
 pub mod views;
+pub mod wakeup;
 
 pub use audit::{AuditObligation, ObligationQuantifier, Unmet, DEFERRED_OBLIGATIONS, OBLIGATIONS};
 pub use effect::{CommitOutcome, CommitToken, EffectFold, EffectPhase};
 pub use errors::{LedgerError, MissingReason, Tampered, TamperedKind};
+pub use hlc::Hlc;
+pub use leases::{HolderProbe, LeaseScope, ScopedLease};
 pub use recovery::{RestoreAction, RestoreReport, RetryTimer};
+pub use saga::{CompensationIntent, SagaReport};
 pub use store::{LineageEntry, Store, Subscription, DEFAULT_BLOB_MAX_BYTES};
+pub use suspend::{SuspendOutcome, SuspendReason};
 pub use views::{View, ViewKind, VIEW_POLICY_VERSION};
+pub use wakeup::{
+    Coalesce, DeliveryMode, FireOutcome, OccurOutcome, Trigger, WakeupPolicy, WakeupSubscription,
+    WokenDelivery,
+};

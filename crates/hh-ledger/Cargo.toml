@@ -9,6 +9,13 @@ description = "The C0/Stage-1 event store / run ledger (spec §5a.1, R-2.2.1; AD
 [lib]
 path = "src/lib.rs"
 
+[features]
+# `tier-c1` — the C1 durability surface (§5a.3: scoped leases, `suspend`,
+# wakeup subscriptions, `compensate_run`). Absent ⇒ the ops refuse typed
+# `UnsupportedTier{tier: c1}` — `removability(0)`'s honest-refusal leg (CC6).
+default = ["tier-c1"]
+tier-c1 = []
+
 [dependencies]
 hh-wire = { path = "../hh-wire" }
 hh-identity = { path = "../hh-identity" }

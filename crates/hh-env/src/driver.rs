@@ -38,16 +38,28 @@ use crate::snapshot::{PathBaseline, SnapshotKind, SnapshotRecord, TakenBy};
 /// `env_handle`'s runtime reachability path; the `EnvSession` record is the
 /// ledger-visible half, the `HelperClient` the channel).
 pub struct EnvDriver {
-    run_id: String,
+    pub(crate) run_id: String,
     /// The live handles (`env_handle_id → handle`).
-    handles: BTreeMap<String, EnvHandle>,
+    pub(crate) handles: BTreeMap<String, EnvHandle>,
     /// The live helper sessions (`env_handle_id → client`) — `local_host`
     /// has none (the in-process executor is the honest `none` isolation).
-    sessions: BTreeMap<String, HelperClient>,
+    pub(crate) sessions: BTreeMap<String, HelperClient>,
     /// The podman containers the `local_container` handles own
     /// (`env_handle_id → backend` — teardown stops them).
     containers: BTreeMap<String, hh_helper::podman::PodmanBackend>,
 }
+
+/// `preserve_until(ttl)` offered to the helper on `hello` — §05a
+/// `reconcile_detached` requires `ttl ≥ writer_lease.ttl + recovery_grace`
+/// (ADR-0130 §6; ADR-0132 §3; OQ-252). 24h dominates every shipped writer
+/// TTL + grace by three orders of magnitude; the bound is asserted in
+/// `durable_recovery::preserve_until_exceeds_writer_ttl_plus_grace`.
+pub const PRESERVE_UNTIL_TTL_MS: u64 = 86_400_000;
+
+/// The executor-side dedup window offered on `hello` (C1; R-2.5.5¹) —
+/// the same horizon as `preserve_until` so a resumed writer still finds
+/// its dedup records inside the preserved journal.
+pub const DEDUP_WINDOW_MS: u64 = PRESERVE_UNTIL_TTL_MS;
 
 impl EnvDriver {
     /// A driver for `run_id`.
@@ -58,6 +70,12 @@ impl EnvDriver {
             sessions: BTreeMap::new(),
             containers: BTreeMap::new(),
         }
+    }
+
+    /// The live handle ids — `verify_environment` on resume iterates them
+    /// (§5a.3 C0 — every handle in the checkpoint view is re-verified; S2.3).
+    pub fn handle_ids(&self) -> Vec<String> {
+        self.handles.keys().cloned().collect()
     }
 
     /// A handle by id.
@@ -344,9 +362,11 @@ impl EnvDriver {
         let nonce = store.alloc_id("nonce");
         client
             .hello(
-                OnKernelLoss::PreserveUntil { ttl_ms: 86_400_000 },
+                OnKernelLoss::PreserveUntil {
+                    ttl_ms: PRESERVE_UNTIL_TTL_MS,
+                },
                 &nonce,
-                Some(86_400_000),
+                Some(DEDUP_WINDOW_MS),
                 Some(&h.containment.policy().to_json()),
                 Some((
                     h.roots.workspace_roots.clone(),
@@ -626,9 +646,11 @@ impl EnvDriver {
         let mut client = HelperClient::connect(std::path::Path::new(sock.trim()))?;
         client.session_id = session_id.trim().to_string();
         client.hello(
-            OnKernelLoss::PreserveUntil { ttl_ms: 86_400_000 },
+            OnKernelLoss::PreserveUntil {
+                ttl_ms: PRESERVE_UNTIL_TTL_MS,
+            },
             nonce.trim(),
-            Some(86_400_000),
+            Some(DEDUP_WINDOW_MS),
             None,
             None,
             true,
@@ -1008,6 +1030,18 @@ impl EnvDriver {
         h.verify_environment()?;
         let dest = std::path::PathBuf::from(h.roots.cwd.clone());
         std::fs::create_dir_all(&dest).map_err(|e| EnvError::Blob(e.to_string()))?;
+        // GC'd snapshot ⇒ `SnapshotMissing{snapshot_ref}` — the missing
+        // blob's content address is itself the verifiable hash the caller
+        // checks the tombstone against (AC-R-2.2.4-9).
+        for node in snap.manifest.values().flat_map(|m| m.values()) {
+            if let hh_helper::fstree::FsNode::File { ca, .. } = node {
+                if blob_by_id(store, ca).is_none() {
+                    return Err(EnvError::SnapshotMissing {
+                        snapshot_ref: snap.tree_address.clone(),
+                    });
+                }
+            }
+        }
         let recomputed = hh_helper::fstree::restore(snap, &dest, &|ca| blob_by_id(store, ca))
             .map_err(|e| EnvError::Blob(format!("fs_tree restore: {e}")))?;
         if recomputed != snap.tree_address && !snap.roots.is_empty() {

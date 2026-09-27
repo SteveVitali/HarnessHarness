@@ -170,8 +170,24 @@ pub(crate) struct RunState {
     /// final verdict` (ADR-0052 D6 complete mediation; §5g.1 I-H7). Same
     /// commit/rebuild discipline as `effects`.
     pub(crate) decisions: effect::DecisionFolds,
-    head: Option<Head>,
+    pub(crate) head: Option<Head>,
     pub(crate) finished: bool,
+    /// `lifecycle.run.suspended` … `lifecycle.run.resumed`/`finished` (ADR-0131
+    /// §3 — a suspended run is exempt from liveness-based takeover).
+    pub(crate) suspended: bool,
+    /// The scoped-lease fold — `lifecycle.lease.*` rows whose `scope` ≠
+    /// `writer` (`effect:`/`resource:`/`environment:`/`wakeup:` — §5a.3;
+    /// ADR-0131 §1; S2.3).
+    pub(crate) scoped_leases: BTreeMap<String, crate::leases::ScopedLease>,
+    /// The wakeup fold — `control.wakeup.*` rows → `subscription_id →
+    /// WakeupSubscription` (§5a.3; ADR-0131 §4; S2.3).
+    pub(crate) wakeups: BTreeMap<String, crate::wakeup::WakeupSubscription>,
+    /// The HLC node id — `Some` only on continuation/child runs (the
+    /// `R-2.2.3⁰ᵇ` slice stamps `hlc` on their events; plain runs carry none —
+    /// additive, CC8).
+    pub(crate) hlc_node: Option<String>,
+    /// The last stamped HLC (the tick base; rebuilt from the events' `hlc`).
+    pub(crate) hlc_last: Option<crate::hlc::Hlc>,
     subscribers: Vec<Subscriber>,
 }
 
@@ -301,6 +317,22 @@ impl Store {
         rfc3339_ms(self.clock.now_ms())
     }
 
+    /// The C1-tier gate — an op the stage slices at `tier-c1` refuses typed
+    /// `UnsupportedTier` on a `--no-default-features` build (removability(0)'s
+    /// honest-refusal leg, CC6 — never a silent skip).
+    #[allow(dead_code)]
+    pub(crate) fn tier_c1(&self, op: &'static str) -> Result<(), LedgerError> {
+        #[cfg(feature = "tier-c1")]
+        {
+            let _ = op;
+            Ok(())
+        }
+        #[cfg(not(feature = "tier-c1"))]
+        {
+            Err(LedgerError::UnsupportedTier { tier: "c1", op })
+        }
+    }
+
     /// The run's head `event_id` — the `parent_event_id` for a new caller event
     /// extending the branch head ([`crate::ids::ROOT_EVENT`] when the run is
     /// still at genesis).
@@ -382,11 +414,22 @@ impl Store {
             decisions: BTreeMap::new(),
             head: None,
             finished: false,
+            suspended: false,
+            scoped_leases: BTreeMap::new(),
+            wakeups: BTreeMap::new(),
+            hlc_node: None,
+            hlc_last: None,
             subscribers: Vec::new(),
         };
         for env in committed {
             if env.seq == 0 && env.class == "lifecycle.run.created" {
                 state.manifest = RunManifest::from_json(&env.payload)?;
+                // A lineage-bearing run stamps `hlc` — the node id is the run
+                // id itself (one node identity per run lifetime; the writer
+                // identity rides `holder` on the lease rows).
+                if manifest_has_lineage(&state.manifest) {
+                    state.hlc_node = Some(run_id.to_string());
+                }
             }
             state.by_event_id.insert(env.event_id.clone(), env.seq);
             for r in &env.ir_refs {
@@ -399,8 +442,16 @@ impl Store {
             apply_scope_marks(&mut state.open_scopes, &state.effects, &env);
             effect::fold_event(&mut state.effects, &env);
             effect::apply_decision(&mut state.decisions, &state.effects, &env);
-            if env.class == "lifecycle.run.finished" {
-                state.finished = true;
+            crate::leases::fold_lease_row(&mut state.scoped_leases, &env);
+            crate::wakeup::fold_wakeup_row(&mut state.wakeups, &env);
+            if let Some(h) = env.hlc.as_deref().and_then(crate::hlc::Hlc::parse) {
+                state.hlc_last = Some(h);
+            }
+            match env.class.as_str() {
+                "lifecycle.run.finished" => state.finished = true,
+                "lifecycle.run.suspended" => state.suspended = true,
+                "lifecycle.run.resumed" => state.suspended = false,
+                _ => {}
             }
             state.head = Some(Head {
                 seq: env.seq,
@@ -472,8 +523,43 @@ impl Store {
             decisions: BTreeMap::new(),
             head: None,
             finished: false,
+            suspended: false,
+            scoped_leases: BTreeMap::new(),
+            wakeups: BTreeMap::new(),
+            // A continuation/child run stamps `hlc` on every event — seeded
+            // causally above the lineage anchor's own stamp (ADR-0131 §5).
+            hlc_node: manifest_has_lineage(&manifest).then(|| run_id.clone()),
+            hlc_last: None,
             subscribers: Vec::new(),
         };
+        // Seed the continuation clock from the lineage source's stamp — the
+        // `continued_from`/`forked_from` anchor event's own `hlc`, else the
+        // parent run's head stamp (ADR-0131 §5's causal order).
+        if state.hlc_node.is_some() {
+            let src_hlc = manifest
+                .continued_from
+                .as_ref()
+                .or(manifest.forked_from.as_ref())
+                .and_then(|l| {
+                    self.runs
+                        .get(&l.run_id)
+                        .and_then(|s| s.events.get(l.at_seq as usize))
+                })
+                .or_else(|| {
+                    manifest
+                        .parent_run_id
+                        .as_ref()
+                        .and_then(|p| self.runs.get(p))
+                        .and_then(|s| s.events.last())
+                })
+                .and_then(|e| e.hlc.as_deref())
+                .and_then(crate::hlc::Hlc::parse);
+            state.hlc_last = Some(crate::hlc::Hlc::seed(
+                self.clock.now_ms(),
+                src_hlc.as_ref(),
+                state.hlc_node.as_deref().unwrap_or("run"),
+            ));
+        }
         // seq 0 — `lifecycle.run.created{manifest}` under the anchor.
         let created = system_event(
             &*self.ids,
@@ -485,7 +571,11 @@ impl Store {
             &anchor,
             1, // generation 1 — the lease record lands right after.
         );
-        commit_envelopes(&mut state, vec![Staged::Durable(created)])?;
+        commit_envelopes(
+            &mut state,
+            vec![Staged::Durable(created)],
+            self.clock.now_ms(),
+        )?;
         // The writer lease (generation 1) + the audited `lease.acquired` row.
         let rec = LeaseRecord {
             lease_id: self.ids.alloc("lease"),
@@ -535,6 +625,7 @@ impl Store {
             return Err(LedgerError::ForkPointNotCoherent {
                 run_id: link.run_id.clone(),
                 at_seq: link.at_seq,
+                open_scopes: Vec::new(),
             });
         }
         Ok(())
@@ -1138,7 +1229,8 @@ impl Store {
             }
         }
         // ── commit (durable-before-visible) ─────────────────────────────
-        commit_envelopes(state, staged)
+        let now_ms = self.clock.now_ms();
+        commit_envelopes(state, staged, now_ms)
     }
 
     // ── read / head / subscribe ──────────────────────────────────────────
@@ -1592,6 +1684,18 @@ impl Store {
             .unwrap_or(false)
     }
 
+    /// Every `(effect_id, fold)` in id order — the reconciliation sweep's
+    /// enumeration (e.g. `reconcile_detached`; `effect_fold` is the
+    /// single-id form, `effects_in_state` the phase-indexed one).
+    pub fn effect_folds(&self, run_id: &str) -> Result<Vec<(String, EffectFold)>, LedgerError> {
+        Ok(self
+            .run(run_id)?
+            .effects
+            .iter()
+            .map(|(id, f)| (id.clone(), f.clone()))
+            .collect())
+    }
+
     /// `effect_id = f(run_id, model_call_id, tool_call_id, ordinal)` — the derived
     /// id (ADR-0027 §2).
     pub fn effect_id(
@@ -1736,7 +1840,7 @@ fn emit_lease_row(
         &prev,
         rec.generation,
     );
-    commit_envelopes(state, vec![Staged::Durable(env)])?;
+    commit_envelopes(state, vec![Staged::Durable(env)], clock.now_ms())?;
     Ok(())
 }
 
@@ -1833,7 +1937,29 @@ enum Staged {
 /// Write + sync the batch's durable lines, write + sync the commit marker, then make
 /// everything visible — and only then notify subscribers, in submission order
 /// (durable-before-visible).
-fn commit_envelopes(state: &mut RunState, staged: Vec<Staged>) -> Result<SeqRange, LedgerError> {
+fn commit_envelopes(
+    state: &mut RunState,
+    mut staged: Vec<Staged>,
+    now_ms: u64,
+) -> Result<SeqRange, LedgerError> {
+    // ── HLC stamp (R-2.2.3⁰ᵇ; ADR-0131 §5) ────────────────────────────────
+    // Continuation/child runs stamp `hlc` on every durable event — set it
+    // here, then re-hash so the stamp rides the chain (plain runs carry no
+    // `hlc` — byte-goldens never move, CC8).
+    if let Some(node) = state.hlc_node.clone() {
+        for s in staged.iter_mut() {
+            if let Staged::Durable(env) = s {
+                let h = state
+                    .hlc_last
+                    .take()
+                    .map(|prev| prev.tick(now_ms))
+                    .unwrap_or_else(|| crate::hlc::Hlc::seed(now_ms, None, &node));
+                env.hlc = Some(h.render());
+                env.hash = env.recompute_hash();
+                state.hlc_last = Some(h);
+            }
+        }
+    }
     let durable: Vec<&EventEnvelope> = staged
         .iter()
         .filter_map(|s| match s {
@@ -1884,8 +2010,13 @@ fn commit_envelopes(state: &mut RunState, staged: Vec<Staged>) -> Result<SeqRang
                 apply_scope_marks(&mut state.open_scopes, &state.effects, &env);
                 effect::fold_event(&mut state.effects, &env);
                 effect::apply_decision(&mut state.decisions, &state.effects, &env);
-                if env.class == "lifecycle.run.finished" {
-                    state.finished = true;
+                crate::leases::fold_lease_row(&mut state.scoped_leases, &env);
+                crate::wakeup::fold_wakeup_row(&mut state.wakeups, &env);
+                match env.class.as_str() {
+                    "lifecycle.run.finished" => state.finished = true,
+                    "lifecycle.run.suspended" => state.suspended = true,
+                    "lifecycle.run.resumed" => state.suspended = false,
+                    _ => {}
                 }
                 state.head = Some(Head {
                     seq: env.seq,
@@ -2249,6 +2380,12 @@ fn notify(state: &mut RunState, frame: EventFrame) {
     for i in drop_idx.into_iter().rev() {
         state.subscribers.remove(i);
     }
+}
+
+/// Is this manifest the child of a continuation/fork/spawn? — the `R-2.2.3⁰ᵇ`
+/// HLC-stamp gate (`hlc_node = run_id` on lineage-bearing runs only).
+fn manifest_has_lineage(m: &RunManifest) -> bool {
+    m.continued_from.is_some() || m.forked_from.is_some() || m.parent_run_id.is_some()
 }
 
 /// RFC 3339 UTC ms — `YYYY-MM-DDTHH:MM:SS.mmmZ` (the civil-from-days algorithm).

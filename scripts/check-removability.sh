@@ -23,6 +23,15 @@ cargo test -p hh-env --test helper_live
 
 echo "check-removability: OK (tier-0 honest refusals verified; tier-1 suite green)"
 
+echo "== removability(0): the S2.3 C1 surface (hh-ledger + hh-env) =="
+# S2.3 (§5a.3 C1): scoped leases, `suspend`, wakeup subscriptions and
+# `compensate_run` are `tier-c1` on hh-ledger; `HealingPolicy` healing is
+# `tier-c1` on hh-env (which forwards the feature). Absent => typed
+# `UnsupportedTier{tier:"c1"}` / `Unsupported{heal}` refusals (CC6).
+cargo build -p hh-ledger --no-default-features
+cargo build -p hh-env --no-default-features
+cargo test -p hh-ledger --no-default-features --test durable_execution removability0
+
 echo "== removability(extension): no base crate depends on the variant host =="
 # S2.2 (§8.4 removability tiers): hh-varhost, hh-plugin-fixture and
 # hh-compact-evict-oldest are the extension tier — removable without

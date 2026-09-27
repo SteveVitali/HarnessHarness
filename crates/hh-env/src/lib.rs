@@ -30,6 +30,7 @@ pub mod local;
 pub mod observe;
 pub mod protocol;
 pub mod record;
+pub mod recovery;
 pub mod seal;
 pub mod snapshot;
 pub mod tokens;
