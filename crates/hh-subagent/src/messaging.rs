@@ -375,7 +375,22 @@ pub fn inbox_scan(
                 .as_deref(),
                 store.now_ms(),
             ) {
-                Ok(hh_ledger::wakeup::OccurOutcome::Occurred(_)) => delivered.push(message_id),
+                Ok(hh_ledger::wakeup::OccurOutcome::Occurred(_)) => {
+                    // M-4 — every delivered peer message is a delivered
+                    // artefact on the *receiver's* ledger (T-LCD-13:
+                    // `activated`/`followed` are then measurable; the
+                    // occurrence dedupe above makes this row fire-once
+                    // per `message_id`).
+                    record_artefact_delivered(
+                        store,
+                        receiver_run_id,
+                        receiver_lease,
+                        &message_id,
+                        &body_ref,
+                        &from,
+                    )?;
+                    delivered.push(message_id);
+                }
                 Ok(hh_ledger::wakeup::OccurOutcome::Skipped(_)) => {
                     // `duplicate_occurrence` — already delivered; the
                     // audited skip row stands, the id is not re-reported.
@@ -438,4 +453,143 @@ pub fn relay_set(store: &Store, parent_run_id: &str) -> Result<Vec<String>, Spaw
         .collect();
     set.push(parent_run_id.to_string());
     Ok(set)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M-4 — delivered artefacts (§5e.5 peer-message record; T-LCD-13)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `record_artefact_delivered(store, run_id, lease, message_id, body_ref,
+/// from)` — the `context.artefact.delivered` row for a delivered peer
+/// message: `artefact_id = body_ref` (the bytes' content address),
+/// `delivery_id = message_id`, `kind = peer_message` (M-4 — every message
+/// is a delivered artefact, so `activated`/`followed` are computable).
+pub fn record_artefact_delivered(
+    store: &mut Store,
+    run_id: &str,
+    lease: &Lease,
+    message_id: &str,
+    body_ref: &str,
+    from: &str,
+) -> Result<String, SpawnError> {
+    let ev = kernel_ev_pub(
+        store,
+        run_id,
+        "context.artefact.delivered",
+        Json::obj([
+            ("artefact_id", Json::str(body_ref)),
+            ("delivery_id", Json::str(message_id)),
+            ("kind", Json::str("peer_message")),
+            ("from", Json::str(from)),
+            ("activation_observable", Json::Bool(true)),
+        ]),
+        vec![],
+        None,
+    )
+    .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    let id = ev.event_id.clone();
+    store
+        .append(run_id, lease, vec![ev])
+        .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    Ok(id)
+}
+
+/// `record_artefact_activated(store, run_id, lease, artefact_id,
+/// delivery_id, detector)` — the receiver marked the delivered
+/// artefact activated (`context.artefact.activated`; `detector ∈
+/// {deterministic, judged}` — the caller names which).
+pub fn record_artefact_activated(
+    store: &mut Store,
+    run_id: &str,
+    lease: &Lease,
+    artefact_id: &str,
+    delivery_id: &str,
+    detector: &str,
+) -> Result<String, SpawnError> {
+    let ev = kernel_ev_pub(
+        store,
+        run_id,
+        "context.artefact.activated",
+        Json::obj([
+            ("artefact_id", Json::str(artefact_id)),
+            ("delivery_id", Json::str(delivery_id)),
+            ("detector", Json::str(detector)),
+        ]),
+        vec![],
+        None,
+    )
+    .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    let id = ev.event_id.clone();
+    store
+        .append(run_id, lease, vec![ev])
+        .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    Ok(id)
+}
+
+/// `record_artefact_followed(store, run_id, lease, artefact_id,
+/// delivery_id)` — the receiver *followed* the artefact
+/// (`verification.artefact.followed` — the computable half of
+/// `message.followed_rate`: followed/delivered over `peer_message`
+/// deliveries).
+pub fn record_artefact_followed(
+    store: &mut Store,
+    run_id: &str,
+    lease: &Lease,
+    artefact_id: &str,
+    delivery_id: &str,
+) -> Result<String, SpawnError> {
+    let ev = kernel_ev_pub(
+        store,
+        run_id,
+        "verification.artefact.followed",
+        Json::obj([
+            ("artefact_id", Json::str(artefact_id)),
+            ("delivery_id", Json::str(delivery_id)),
+        ]),
+        vec![],
+        None,
+    )
+    .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    let id = ev.event_id.clone();
+    store
+        .append(run_id, lease, vec![ev])
+        .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    Ok(id)
+}
+
+/// `message_followed_rate(store, run_id) → {delivered, followed, rate}` —
+/// the T-LCD-13 computable: `followed / delivered` over `kind:
+/// peer_message` delivered rows (a delivery with no `followed` row is
+/// the "ignored other agent's input" detector's numerator).
+pub fn message_followed_rate(store: &Store, run_id: &str) -> Result<Json, SpawnError> {
+    let events = store
+        .events(run_id)
+        .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    let mut delivered: std::collections::BTreeSet<String> = Default::default();
+    let mut followed: std::collections::BTreeSet<String> = Default::default();
+    for e in events {
+        match e.class.as_str() {
+            "context.artefact.delivered"
+                if e.payload.get("kind").and_then(Json::as_str) == Some("peer_message") =>
+            {
+                if let Some(d) = e.payload.get("delivery_id").and_then(Json::as_str) {
+                    delivered.insert(d.to_string());
+                }
+            }
+            "verification.artefact.followed" => {
+                if let Some(d) = e.payload.get("delivery_id").and_then(Json::as_str) {
+                    followed.insert(d.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    let d = delivered.len() as u64;
+    let f = followed.intersection(&delivered).count() as u64;
+    Ok(Json::obj([
+        ("delivered", Json::Int(d as i64)),
+        ("followed", Json::Int(f as i64)),
+        ("rate_num", Json::Int(f as i64)),
+        ("rate_den", Json::Int(d as i64)),
+    ]))
 }

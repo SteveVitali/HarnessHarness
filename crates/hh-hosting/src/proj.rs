@@ -586,6 +586,26 @@ pub fn lift_stop_reason(raw: &str) -> StopReason {
     }
 }
 
+/// `lift_stop_reason_json(raw) → Json` — the *member-level* lift used on
+/// hosted boundary payloads (T-LCD-07; AC-R-2.6.2-11): `max_tokens` /
+/// `max_turn_requests` — and any `budget_exhausted{…}`-class terminal —
+/// lift as `budget_exhausted{dimension: "unknown"}`, never a guessed
+/// `DimensionId` (the participant's word does not name a kernel
+/// dimension; `authority = unverified` rides the event envelope, and
+/// `stop_reason_raw` beside it preserves the raw spelling). The typed
+/// [`lift_stop_reason`] table stays for callers that *know* the native
+/// dimension; this member path is the boundary's honest one.
+pub fn lift_stop_reason_json(raw: &str) -> Json {
+    match raw {
+        "max_tokens" | "max_turn_requests" => Json::obj([
+            ("kind", Json::str("budget_exhausted")),
+            ("budget_id", Json::str("boundary")),
+            ("dimension", Json::str("unknown")),
+        ]),
+        _ => lift_stop_reason(raw).to_json(),
+    }
+}
+
 /// The `ext["hh.hosting/1"].source` embed a hint row carries.
 fn hint_source(e: &HostedEvent) -> Option<&Json> {
     e.ext.get("hh.hosting/1").and_then(|x| x.get("source"))
@@ -648,7 +668,7 @@ pub fn lift_event(e: &HostedEvent) -> LiftedRow {
                     .unwrap_or("")
                     .to_string();
                 if let Json::Obj(m) = &mut p {
-                    m.insert("stop_reason".into(), lift_stop_reason(&raw).to_json());
+                    m.insert("stop_reason".into(), lift_stop_reason_json(&raw));
                 }
             }
             row("lifecycle.turn.finished", p, tid())

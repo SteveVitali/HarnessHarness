@@ -7,8 +7,16 @@
 //!   rows (`control.merge.resolved` is the resolution row; `choose{side}`/
 //!   `supersede{new_ref}` are the parent's `delegate`-class resolutions —
 //!   never model-owned; `escalate` is `IllegitimateResolution` here).
-//! - `three_way_text{line}` / `validator_selected` — the R-2.6.5 arm,
-//!   `MergePolicyUnsupported` (declared, never silent).
+//! - `three_way_text{line}` (S4.8/R-2.6.5) — line-level diff3 over the
+//!   fork-point snapshot: disjoint hunks merge (a new blob the parent
+//!   writes), overlapping hunks are `MergeConflict` records (`detector:
+//!   deterministic`), never a picked side.
+//! - `validator_selected` (S4.8/R-2.6.5) — conflicts go to a bound
+//!   [`MergeValidator`] port; a `choose`/`supersede` verdict lands as a
+//!   ledgered `control.merge.resolved{resolver: validator}` (G-2 — no
+//!   side without a row); an abstention leaves the conflict open; no
+//!   bound port is the typed `ValidatorUnavailable` veto, never a
+//!   silent pick.
 //!
 //! G-1 (no lost writes): `merged[] ∪ conflicts[] ∪ absent[]` covers every
 //! child output; a merge completing with `lost_write_count > 0` vetoes.
@@ -23,6 +31,7 @@ use hh_ledger::manifest::EventRef;
 use hh_ledger::store::{Lease, Store};
 use hh_wire::json::Json;
 
+use crate::consistency::OnAbsentChild;
 use crate::ownership::OwnershipTable;
 use crate::spawn::{fold_children, kernel_ev_pub};
 use crate::types::SpawnError;
@@ -70,6 +79,29 @@ pub struct MergeCtx<'a> {
     /// The child's ownership at merge time (`child → objects` — a child
     /// only merges objects it owns or that are unowned-and-new).
     pub child_ownerships: &'a BTreeMap<String, Vec<OwnedObject>>,
+    /// The S4.8 merge options (`on_absent_child`, the `validator_selected`
+    /// port) — `MergeOpts::default()` is the S4.6 behaviour.
+    pub opts: MergeOpts<'a>,
+}
+
+/// The S4.8 merge options — the `CoordinationPolicy` members `merge`
+/// consults (K-4's `on_absent_child` gating and the `validator_selected`
+/// invocation port).
+#[derive(Default)]
+pub struct MergeOpts<'a> {
+    /// `block_completion` (default) — `MergeReport::blocks_completion`
+    /// reports the gate condition; `annotate` completes with the absence
+    /// annotated (the gate's own call — the merge records `absent[]`
+    /// faithfully either way, G-5).
+    pub on_absent_child: OnAbsentChild,
+    /// The `validator_selected` invocation port (ADR-0110's accountable
+    /// validator seam — `None` with a declared `validator_selected`
+    /// policy is the `ValidatorUnavailable` veto).
+    pub validator: Option<&'a dyn MergeValidator>,
+    /// The `validator_ref` the `validator_selected{validator_ref}` arm
+    /// names (the `verification.validator.*` rows and the
+    /// `control.merge.resolved{resolver}` member).
+    pub validator_ref: Option<String>,
 }
 
 /// The typed merge outcome — `control.merge.{started, completed}` rows
@@ -107,6 +139,13 @@ pub enum MergeVeto {
     PolicyUnsupported { policy: String },
     /// `escalate` requires the H7 channel (absent at this slice).
     IllegitimateResolution { resolution: String },
+    /// `three_way_text` could not read a side's blob (the fork-point
+    /// snapshot is a `ForkPointMissing` refusal — the merge does not
+    /// guess at bytes it cannot hash, G-6's pure-function contract).
+    ForkPointMissing { path: String },
+    /// `validator_selected` declared with no bound port — a veto, never
+    /// a silent side-pick (AC-R-2.6.5-2).
+    ValidatorUnavailable { validator_ref: Option<String> },
 }
 
 /// `merge(ctx) → MergeOutcome` — appends `control.merge.started`, folds
@@ -123,8 +162,16 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
             }),
         });
     }
+    // G-6 determinism — the fold walks children in canonical
+    // `child_run_id` order, never in completion/arrival order
+    // (`merge_hash` is then order-independent by construction).
+    let mut inputs_sorted: Vec<&MergeInput> = ctx.inputs.iter().collect();
+    inputs_sorted.sort_by(|a, b| a.child_run_id.cmp(&b.child_run_id));
     // `control.merge.started{merge inputs}` — durable before the fold.
-    let children: Vec<String> = ctx.inputs.iter().map(|i| i.child_run_id.clone()).collect();
+    let children: Vec<String> = inputs_sorted
+        .iter()
+        .map(|i| i.child_run_id.clone())
+        .collect();
     let started = kernel_ev_pub(
         ctx.store,
         ctx.parent_run_id,
@@ -161,7 +208,7 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
     };
     let mut veto: Option<MergeVeto> = None;
     // First pass — absent bookkeeping (G-5) + NotOwner.
-    for input in &ctx.inputs {
+    for input in &inputs_sorted {
         match terminal.get(&input.child_run_id).map(String::as_str) {
             Some("control.subagent.result") | None => {}
             Some(_) => {
@@ -191,15 +238,21 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
         }
     }
     // Second pass — conflict detection + merge accounting (G-1/G-2).
+    // `current` is the running parent-state overlay: a `three_way_text`
+    // or validator-resolved write updates it so the *next* child (in
+    // canonical order) three-ways against the merged head, not the stale
+    // `parent_versions` snapshot — sequential pairwise diff3, still a
+    // pure function of (child heads, fork-point, policy) (G-6).
     let mut applied: BTreeMap<String, Json> = BTreeMap::new();
+    let mut current: BTreeMap<String, Option<String>> = ctx.parent_versions.clone();
     if veto.is_none() {
-        for input in &ctx.inputs {
+        for input in &inputs_sorted {
             if report.absent.contains(&input.child_run_id) {
                 continue;
             }
             for (path, (before, after)) in &input.changes {
                 let baseline = ctx.baseline.get(path).cloned();
-                let parent_now = ctx.parent_versions.get(path).cloned().flatten();
+                let parent_now = current.get(path).cloned().flatten();
                 // Conflict iff the parent moved since the child's
                 // baseline (`before` = the snapshot the child wrote from;
                 // `parent_baseline` = the fork point). A parent move the
@@ -207,50 +260,138 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                 let parent_moved = parent_now != baseline;
                 let child_moved = after.is_some() && after != &baseline;
                 if parent_moved && child_moved {
+                    let conflict = MergeConflictRecord {
+                        conflict_id: hh_identity::idp::idp_id(
+                            "hh.subagent.conflict",
+                            Json::obj([
+                                ("path", Json::str(path.clone())),
+                                ("child", Json::str(input.child_run_id.clone())),
+                            ])
+                            .to_canonical_string()
+                            .as_bytes(),
+                        ),
+                        kind: "workspace".into(),
+                        path: path.clone(),
+                        parent_baseline: baseline.clone(),
+                        child_before: before.clone(),
+                        child_after: after.clone(),
+                        parent_current: parent_now.clone(),
+                        child_run_id: input.child_run_id.clone(),
+                        detector: None,
+                    };
                     match ctx.policy {
                         MergePolicy::SingleWriter => {
                             // The veto is typed — nothing applies.
                             veto = Some(MergeVeto::Conflict { path: path.clone() });
-                            report.conflicts.push(MergeConflictRecord {
-                                conflict_id: hh_identity::idp::idp_id(
-                                    "hh.subagent.conflict",
-                                    Json::obj([
-                                        ("path", Json::str(path.clone())),
-                                        ("child", Json::str(input.child_run_id.clone())),
-                                    ])
-                                    .to_canonical_string()
-                                    .as_bytes(),
-                                ),
-                                kind: "workspace".into(),
-                                path: path.clone(),
-                                parent_baseline: baseline.clone(),
-                                child_before: before.clone(),
-                                child_after: after.clone(),
-                                parent_current: parent_now.clone(),
-                                child_run_id: input.child_run_id.clone(),
-                            });
+                            report.conflicts.push(conflict);
                         }
                         MergePolicy::ParentDecides => {
-                            report.conflicts.push(MergeConflictRecord {
-                                conflict_id: hh_identity::idp::idp_id(
-                                    "hh.subagent.conflict",
-                                    Json::obj([
-                                        ("path", Json::str(path.clone())),
-                                        ("child", Json::str(input.child_run_id.clone())),
-                                    ])
-                                    .to_canonical_string()
-                                    .as_bytes(),
-                                ),
-                                kind: "workspace".into(),
-                                path: path.clone(),
-                                parent_baseline: baseline.clone(),
-                                child_before: before.clone(),
-                                child_after: after.clone(),
-                                parent_current: parent_now.clone(),
-                                child_run_id: input.child_run_id.clone(),
-                            });
+                            report.conflicts.push(conflict);
                         }
-                        _ => unreachable!("implemented() gate"),
+                        MergePolicy::ThreeWayText => {
+                            match three_way_merge_path(
+                                ctx.store,
+                                path,
+                                baseline.as_deref(),
+                                parent_now.as_deref(),
+                                after.as_deref(),
+                            )? {
+                                TextMerge::Merged(new_ref) => {
+                                    let entry = Json::obj([
+                                        ("child_run_id", Json::str(input.child_run_id.clone())),
+                                        ("path", Json::str(path.clone())),
+                                        ("after_ref", Json::str(new_ref.clone())),
+                                        ("merged_by", Json::str("three_way_text{line}")),
+                                    ]);
+                                    report.merged.push(entry.clone());
+                                    applied.insert(path.clone(), entry);
+                                    current.insert(path.clone(), Some(new_ref));
+                                }
+                                TextMerge::Conflicts => {
+                                    // Disjoint hunks merged, overlaps are
+                                    // the recorded conflict — never a
+                                    // picked side (G-2).
+                                    let mut c = conflict;
+                                    c.detector = Some("deterministic{three_way_text}".to_string());
+                                    report.conflicts.push(c);
+                                }
+                                TextMerge::MissingBlob => {
+                                    veto = Some(MergeVeto::ForkPointMissing { path: path.clone() });
+                                }
+                            }
+                        }
+                        MergePolicy::ValidatorSelected => {
+                            let mut c = conflict;
+                            c.detector = Some(format!(
+                                "judged{{{}}}",
+                                ctx.opts.validator_ref.as_deref().unwrap_or("?")
+                            ));
+                            report.conflicts.push(c.clone());
+                            let Some(port) = ctx.opts.validator else {
+                                veto = Some(MergeVeto::ValidatorUnavailable {
+                                    validator_ref: ctx.opts.validator_ref.clone(),
+                                });
+                                continue;
+                            };
+                            let verdict = port.select(&c);
+                            emit_validator_rows(
+                                ctx.store,
+                                ctx.parent_run_id,
+                                ctx.parent_lease,
+                                ctx.opts.validator_ref.as_deref(),
+                                &c,
+                                &verdict,
+                                &merge_id,
+                            )?;
+                            match verdict {
+                                ValidatorMergeVerdict::Abstain => {
+                                    // The conflict stays open — an
+                                    // abstaining validator resolves
+                                    // nothing (no silent pick, AC-2).
+                                }
+                                v => {
+                                    let resolution = match v {
+                                        ValidatorMergeVerdict::Choose { side } => {
+                                            MergeResolution::Choose { side }
+                                        }
+                                        ValidatorMergeVerdict::Supersede { new_ref } => {
+                                            MergeResolution::Supersede { new_ref }
+                                        }
+                                        ValidatorMergeVerdict::Coexist => MergeResolution::Coexist,
+                                        ValidatorMergeVerdict::Abandon { side } => {
+                                            MergeResolution::Abandon { side }
+                                        }
+                                        ValidatorMergeVerdict::Abstain => unreachable!(),
+                                    };
+                                    resolve_conflict_as(
+                                        ctx.store,
+                                        ctx.parent_run_id,
+                                        ctx.parent_lease,
+                                        &merge_id,
+                                        &c.conflict_id,
+                                        &resolution,
+                                        ctx.opts.validator_ref.as_deref().unwrap_or("validator"),
+                                    )?;
+                                    let applied_ref = match &resolution {
+                                        MergeResolution::Choose {
+                                            side: ChooseSide::Child,
+                                        } => after.clone(),
+                                        _ => parent_now.clone(),
+                                    };
+                                    if let Some(r) = applied_ref {
+                                        let entry = Json::obj([
+                                            ("child_run_id", Json::str(input.child_run_id.clone())),
+                                            ("path", Json::str(path.clone())),
+                                            ("after_ref", Json::str(r.clone())),
+                                            ("merged_by", Json::str("validator_selected")),
+                                        ]);
+                                        report.merged.push(entry.clone());
+                                        applied.insert(path.clone(), entry);
+                                        current.insert(path.clone(), Some(r));
+                                    }
+                                }
+                            }
+                        }
                     }
                 } else if child_moved || (after.is_some() && baseline.is_none()) {
                     // Clean merge — the child wrote where the parent did
@@ -270,6 +411,9 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                     ]);
                     report.merged.push(entry.clone());
                     applied.insert(path.clone(), entry);
+                    if let Some(a) = after {
+                        current.insert(path.clone(), Some(a.clone()));
+                    }
                 }
             }
         }
@@ -300,6 +444,77 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
         ("fold", Json::str("hh-subagent::merge")),
         ("merge_id", Json::str(merge_id.clone())),
     ]);
+    // G-6 `merge_hash` — the order-independent outcome address: a crash
+    // matrix row proves "merge after restore = merge without crash" by
+    // comparing this id (AC-R-2.6.5-4; computed over the *outcome*
+    // projection — merged refs, conflict ids, absent set — so two
+    // different outcomes can never collide).
+    report.merge_hash = hh_identity::idp::idp_id(
+        "hh.subagent.merge_hash",
+        Json::obj([
+            ("policy", Json::str(ctx.policy.as_str())),
+            (
+                "merged",
+                Json::Arr(
+                    {
+                        let mut m: Vec<(String, String)> = report
+                            .merged
+                            .iter()
+                            .map(|e| {
+                                (
+                                    e.get("path")
+                                        .and_then(Json::as_str)
+                                        .unwrap_or("")
+                                        .to_string(),
+                                    e.get("after_ref")
+                                        .and_then(Json::as_str)
+                                        .unwrap_or("")
+                                        .to_string(),
+                                )
+                            })
+                            .collect();
+                        m.sort();
+                        m
+                    }
+                    .into_iter()
+                    .map(|(p, r)| Json::obj([("path", Json::str(p)), ("after_ref", Json::str(r))]))
+                    .collect(),
+                ),
+            ),
+            (
+                "conflicts",
+                Json::Arr(
+                    {
+                        let mut c: Vec<String> = report
+                            .conflicts
+                            .iter()
+                            .map(|c| c.conflict_id.clone())
+                            .collect();
+                        c.sort();
+                        c
+                    }
+                    .into_iter()
+                    .map(Json::str)
+                    .collect(),
+                ),
+            ),
+            (
+                "absent",
+                Json::Arr(
+                    {
+                        let mut a = report.absent.clone();
+                        a.sort();
+                        a
+                    }
+                    .into_iter()
+                    .map(Json::str)
+                    .collect(),
+                ),
+            ),
+        ])
+        .to_canonical_string()
+        .as_bytes(),
+    );
     report.derived_from = Json::obj([
         ("kind", Json::str("subagent_result")),
         (
@@ -337,6 +552,15 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                     Some(v) => Json::str(merge_veto_str(v)),
                 },
             ),
+            ("merge_hash", Json::str(report.merge_hash.clone())),
+            (
+                "on_absent_child",
+                Json::str(ctx.opts.on_absent_child.as_str()),
+            ),
+            (
+                "absent_children",
+                Json::Arr(report.absent.iter().map(|a| Json::str(a.clone())).collect()),
+            ),
             // `merge_report_ref` resolves through `project_merge_report`
             // to the blob above (ADR-0192 D3 rebuild-equality).
         ]),
@@ -364,6 +588,8 @@ fn merge_veto_str(v: &MergeVeto) -> &'static str {
         MergeVeto::SilentOverwrite { .. } => "silent_overwrite",
         MergeVeto::PolicyUnsupported { .. } => "policy_unsupported",
         MergeVeto::IllegitimateResolution { .. } => "illegitimate_resolution",
+        MergeVeto::ForkPointMissing { .. } => "fork_point_missing",
+        MergeVeto::ValidatorUnavailable { .. } => "validator_unavailable",
     }
 }
 
@@ -378,6 +604,30 @@ pub fn resolve_conflict(
     merge_id: &str,
     conflict_id: &str,
     resolution: &MergeResolution,
+) -> Result<hh_ledger::event::SeqRange, SpawnError> {
+    resolve_conflict_as(
+        store,
+        parent_run_id,
+        parent_lease,
+        merge_id,
+        conflict_id,
+        resolution,
+        "parent",
+    )
+}
+
+/// `resolve_conflict_as(…, resolver)` — the `control.merge.resolved` row
+/// with the explicit `resolver` member (G-2: the parent for
+/// `parent_decides`, the `validator_ref` for a `validator_selected`
+/// verdict — every chosen side names who chose it).
+pub fn resolve_conflict_as(
+    store: &mut Store,
+    parent_run_id: &str,
+    parent_lease: &Lease,
+    merge_id: &str,
+    conflict_id: &str,
+    resolution: &MergeResolution,
+    resolver: &str,
 ) -> Result<hh_ledger::event::SeqRange, SpawnError> {
     let res_json = match resolution {
         MergeResolution::Choose { side } => Json::obj([
@@ -394,6 +644,17 @@ pub fn resolve_conflict(
             ("kind", Json::str("supersede")),
             ("new_ref", Json::str(new_ref.clone())),
         ]),
+        MergeResolution::Coexist => Json::obj([("kind", Json::str("coexist"))]),
+        MergeResolution::Abandon { side } => Json::obj([
+            ("kind", Json::str("abandon")),
+            (
+                "side",
+                Json::str(match side {
+                    ChooseSide::Parent => "parent",
+                    ChooseSide::Child => "child",
+                }),
+            ),
+        ]),
         MergeResolution::Escalate => {
             return Err(SpawnError::Refused(SpawnRefused::ModeUnsupported {
                 detail: "resolve{escalate} requires the WS-H7 channel".into(),
@@ -408,6 +669,7 @@ pub fn resolve_conflict(
             ("merge_id", Json::str(merge_id)),
             ("conflict_id", Json::str(conflict_id)),
             ("resolution", res_json),
+            ("resolver", Json::str(resolver)),
         ]),
         vec![],
         None,
@@ -495,6 +757,7 @@ pub fn report_from_json(j: &Json) -> Option<MergeReport> {
                 child_after: s("child_after"),
                 parent_current: s("parent_current"),
                 child_run_id: s("child_run_id").unwrap_or_default(),
+                detector: s("detector"),
             });
         }
     }
@@ -505,5 +768,309 @@ pub fn report_from_json(j: &Json) -> Option<MergeReport> {
         .unwrap_or(0);
     r.provenance = j.get("provenance").cloned().unwrap_or(Json::Null);
     r.derived_from = j.get("derived_from").cloned().unwrap_or(Json::Null);
+    r.merge_hash = j
+        .get("merge_hash")
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_string();
     Some(r)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `three_way_text{line}` — the line-tokenized diff3 (§5e.5; ADR-0192 D2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The textual-merge outcome for one path.
+enum TextMerge {
+    /// Disjoint hunks merged — `put_blob` minted the new head's address.
+    Merged(String),
+    /// Overlapping hunks — a `MergeConflict` record, never a pick (G-2).
+    Conflicts,
+    /// A side's ref is not a readable text blob (fork-point or head
+    /// missing → `ForkPointMissing` veto).
+    MissingBlob,
+}
+
+/// `three_way_merge_path(store, path, base_ref, parent_ref, child_ref)` —
+/// fetch the three text heads from the blob pool and run
+/// [`merge_lines`]; a clean merge commits the merged text as a parent
+/// blob (the merge's own effect, `merged_by: three_way_text{line}`).
+fn three_way_merge_path(
+    store: &mut Store,
+    path: &str,
+    base_ref: Option<&str>,
+    parent_ref: Option<&str>,
+    child_ref: Option<&str>,
+) -> Result<TextMerge, SpawnError> {
+    let fetch = |id: Option<&str>| -> Result<Option<String>, SpawnError> {
+        let Some(id) = id else { return Ok(None) };
+        let Ok(parsed) = hh_identity::idp::parse_id(id) else {
+            return Ok(None); // a non-idp ref cannot name blob bytes
+        };
+        let addr = hh_identity::idp::ContentAddress {
+            idp: "idp/1",
+            algorithm: "sha256",
+            digest: parsed.digest_hex,
+            media_type: String::new(),
+            size: 0,
+        };
+        match store.get_blob(&addr) {
+            Ok(bytes) => Ok(String::from_utf8(bytes).ok()),
+            Err(hh_ledger::errors::LedgerError::Missing { .. }) => Ok(None),
+            Err(e) => Err(SpawnError::Kernel(format!("blob {id}: {e}"))),
+        }
+    };
+    let (Some(base), Some(parent), Some(child)) =
+        (fetch(base_ref)?, fetch(parent_ref)?, fetch(child_ref)?)
+    else {
+        return Ok(TextMerge::MissingBlob);
+    };
+    match merge_lines(&base, &parent, &child) {
+        Ok(text) => {
+            let addr = store
+                .put_blob(text.as_bytes(), "text/plain")
+                .map_err(|e| SpawnError::Kernel(format!("merge blob {path}: {e}")))?;
+            Ok(TextMerge::Merged(addr.id()))
+        }
+        Err(_hunks) => Ok(TextMerge::Conflicts),
+    }
+}
+
+/// `merge_lines(base, ours, theirs) → merged text | conflicted` — the
+/// classic diff3 chunked over lines (the `tokenizer ∈ {line}` arm;
+/// `ast(grammar_ref)` is a declared policy member, never silently run as
+/// `line`). Deterministic: LCS matches are canonically tie-broken, hunks
+/// are maximal, and a both-changed-differently hunk is a conflict —
+/// `seq`/arrival order never selects a side (G-6).
+fn merge_lines(base: &str, ours: &str, theirs: &str) -> Result<String, Vec<String>> {
+    let b: Vec<&str> = base.split('\n').collect();
+    let o: Vec<&str> = ours.split('\n').collect();
+    let t: Vec<&str> = theirs.split('\n').collect();
+    let mo = lcs_match(&b, &o);
+    let mt = lcs_match(&b, &t);
+    let mut out: Vec<&str> = Vec::new();
+    let mut conflicts: Vec<String> = Vec::new();
+    let (mut ib, mut io, mut it) = (0usize, 0usize, 0usize);
+    while ib < b.len() {
+        // The next base line matched on *both* sides ends the changed
+        // region; everything before it is one hunk.
+        let mut j = ib;
+        while j < b.len() && !(mo[j].is_some() && mt[j].is_some()) {
+            j += 1;
+        }
+        if j == b.len() {
+            // Tail hunk — the rest of all three files.
+            let (bs, os, ts) = (&b[ib..], &o[io..], &t[it..]);
+            if os == ts {
+                out.extend_from_slice(os);
+            } else if os == bs {
+                out.extend_from_slice(ts);
+            } else if ts == bs {
+                out.extend_from_slice(os);
+            } else {
+                conflicts.push(format!("hunk@{}", ib));
+            }
+            break;
+        }
+        let oj = mo[j].expect("matched");
+        let tj = mt[j].expect("matched");
+        let (bs, os, ts) = (&b[ib..j], &o[io..oj], &t[it..tj]);
+        if os == ts {
+            out.extend_from_slice(os);
+        } else if os == bs {
+            out.extend_from_slice(ts);
+        } else if ts == bs {
+            out.extend_from_slice(os);
+        } else {
+            conflicts.push(format!("hunk@{}", ib));
+        }
+        out.push(b[j]);
+        ib = j + 1;
+        io = oj + 1;
+        it = tj + 1;
+    }
+    // Base exhausted — trailing insertions from a side that ran ahead of
+    // the other's last match surface in the final hunk above (io/it).
+    if !conflicts.is_empty() {
+        return Err(conflicts);
+    }
+    Ok(out.join("\n"))
+}
+
+/// `lcs_match(a, b) → for each `a` index the matched `b` index` — the
+/// longest-common-subsequence monotone matching (classic DP, canonical
+/// backtrack: on ties prefer consuming `b` first — deterministic under
+/// any input order).
+fn lcs_match(a: &[&str], b: &[&str]) -> Vec<Option<usize>> {
+    let (n, m) = (a.len(), b.len());
+    // dp[i][j] = lcs length of a[i..], b[j..].
+    let mut dp = vec![vec![0usize; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            dp[i][j] = if a[i] == b[j] {
+                dp[i + 1][j + 1] + 1
+            } else {
+                dp[i + 1][j].max(dp[i][j + 1])
+            };
+        }
+    }
+    let mut out = vec![None; n];
+    let (mut i, mut j) = (0usize, 0usize);
+    while i < n && j < m {
+        if a[i] == b[j] {
+            out[i] = Some(j);
+            i += 1;
+            j += 1;
+        } else if dp[i + 1][j] >= dp[i][j + 1] {
+            i += 1;
+        } else {
+            j += 1;
+        }
+    }
+    out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `validator_selected` — the accountable-validator port (§5e.5; ADR-0110/0192)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The `validator_selected` invocation port — the caller binds an
+/// accountable validator (the same `verification.validator.*` evidence
+/// class ADR-0110 owns). The port *selects*, never writes: a verdict is
+/// authoritative only through the ledgered `control.merge.resolved` row
+/// the merge emits from it (ADR-0192 G-2 — a judged detector may create
+/// a conflict and never resolve one without that row).
+pub trait MergeValidator {
+    /// `select(conflict) → verdict` — called once per open conflict under
+    /// `validator_selected`; `Abstain` leaves the conflict open.
+    fn select(&self, conflict: &MergeConflictRecord) -> ValidatorMergeVerdict;
+}
+
+/// The port's verdict vocabulary (a subset of `MergeResolution` plus the
+/// honest no-answer — an abstention is not a pick).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ValidatorMergeVerdict {
+    /// `choose{side}` — pick the parent or the child head.
+    Choose { side: ChooseSide },
+    /// `supersede{new_ref}` — a new value supersedes both sides.
+    Supersede { new_ref: String },
+    /// `coexist` — both versions stand (no merge output; conflict
+    /// closes resolved).
+    Coexist,
+    /// `abandon{side}` — retire one side.
+    Abandon { side: ChooseSide },
+    /// No verdict — the conflict stays open (never a silent pick).
+    Abstain,
+}
+
+/// `emit_validator_rows(…)` — the `verification.validator.invoked` +
+/// `verification.validator.verdict` pair for one `validator_selected`
+/// conflict (the evidence rows that make the port's answer auditable;
+/// `charged_to = subject` — merge-side validator cost is the parent's).
+fn emit_validator_rows(
+    store: &mut Store,
+    parent_run_id: &str,
+    parent_lease: &Lease,
+    validator_ref: Option<&str>,
+    conflict: &MergeConflictRecord,
+    verdict: &ValidatorMergeVerdict,
+    merge_id: &str,
+) -> Result<(), SpawnError> {
+    let vref = validator_ref.unwrap_or("validator").to_string();
+    let invoked = kernel_ev_pub(
+        store,
+        parent_run_id,
+        "verification.validator.invoked",
+        Json::obj([
+            ("validator_ref", Json::str(vref.clone())),
+            ("merge_id", Json::str(merge_id)),
+            ("conflict_id", Json::str(conflict.conflict_id.clone())),
+            ("object", Json::str(conflict.path.clone())),
+            ("phase", Json::str("merge")),
+            ("detector", Json::str("judged")),
+            ("charged_to", Json::str("subject")),
+        ]),
+        vec![],
+        None,
+    )
+    .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    let verdict_str = match verdict {
+        ValidatorMergeVerdict::Choose { side } => match side {
+            ChooseSide::Parent => "choose{parent}",
+            ChooseSide::Child => "choose{child}",
+        },
+        ValidatorMergeVerdict::Supersede { .. } => "supersede",
+        ValidatorMergeVerdict::Coexist => "coexist",
+        ValidatorMergeVerdict::Abandon { .. } => "abandon",
+        ValidatorMergeVerdict::Abstain => "abstain",
+    };
+    let verdict_ev = kernel_ev_pub(
+        store,
+        parent_run_id,
+        "verification.validator.verdict",
+        Json::obj([
+            ("validator_ref", Json::str(vref)),
+            ("merge_id", Json::str(merge_id)),
+            ("conflict_id", Json::str(conflict.conflict_id.clone())),
+            ("verdict", Json::str(verdict_str)),
+            ("charged_to", Json::str("subject")),
+        ]),
+        vec![],
+        None,
+    )
+    .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    store
+        .append(parent_run_id, parent_lease, vec![invoked, verdict_ev])
+        .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    Ok(())
+}
+
+/// `merge_lines` / `three_way_merge_path` exposed for the test seam (the
+/// merge engine is pure — the crash-matrix rebuild asserts the same
+/// `merge_hash` on re-fold, and the line engine itself is unit-testable).
+#[cfg(test)]
+pub(crate) fn merge_lines_pub(base: &str, ours: &str, theirs: &str) -> Result<String, Vec<String>> {
+    merge_lines(base, ours, theirs)
+}
+
+#[cfg(test)]
+mod line_engine_tests {
+    use super::merge_lines_pub;
+
+    #[test]
+    fn disjoint_hunks_merge_both_sides() {
+        let base = "l1\nl2\nl3\nl4\nl5\n";
+        let ours = "L1\nl2\nl3\nl4\nl5\n";
+        let theirs = "l1\nl2\nl3\nl4\nL5\n";
+        let out = merge_lines_pub(base, ours, theirs).expect("disjoint merges");
+        assert!(out.contains("L1") && out.contains("L5"), "{out}");
+        assert!(out.contains("l2") && out.contains("l4"));
+    }
+
+    #[test]
+    fn overlapping_hunks_conflict_never_pick() {
+        let base = "a\nb\nc\n";
+        let ours = "a\nOURS\nc\n";
+        let theirs = "a\nTHEIRS\nc\n";
+        let conflicts = merge_lines_pub(base, ours, theirs).unwrap_err();
+        assert_eq!(conflicts.len(), 1, "one overlapping hunk, no picked side");
+    }
+
+    #[test]
+    fn identical_edits_merge_cleanly() {
+        let base = "a\nb\n";
+        let same = "a\nSAME\n";
+        let out = merge_lines_pub(base, same, same).expect("same edit merges");
+        assert_eq!(out, "a\nSAME\n");
+    }
+
+    #[test]
+    fn one_sided_edits_take_the_edited_side() {
+        let base = "a\nb\n";
+        let edited = "a\nEDITED\n";
+        let out = merge_lines_pub(base, edited, base).expect("their edit wins untouched side");
+        assert_eq!(out, "a\nEDITED\n");
+        let out = merge_lines_pub(base, base, edited).expect("our edit wins untouched side");
+        assert_eq!(out, "a\nEDITED\n");
+    }
 }

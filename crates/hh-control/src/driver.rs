@@ -361,6 +361,11 @@ pub struct DriverConfig {
     /// `open`/`resume` from the manifest/profile projection. Everything
     /// else in the `ComputeContext` folds from the durable prefix.
     pub compute_facts: crate::compute::ComputeFacts,
+    /// The `judged` loop detector's `Validator{kind: judge}` port
+    /// (Stage-4; binds the `Validator` the `LoopPolicy.judged.validator_ref`
+    /// names — `None` with a declared spec means the detector never
+    /// fires, never gets guessed at).
+    pub judge: Option<std::sync::Arc<dyn crate::loops::JudgePort>>,
 }
 
 impl Default for DriverConfig {
@@ -385,6 +390,7 @@ impl Default for DriverConfig {
             delegation_available: false,
             compute_policy_ref: "static".to_string(),
             compute_facts: crate::compute::ComputeFacts::default(),
+            judge: None,
         }
     }
 }
@@ -763,6 +769,7 @@ impl<S: ControlStrategy> Driver<S> {
             cancel_requested: None,
             interactive_attendance: self.config.interactive_attendance,
             delegation_available: self.config.delegation_available,
+            judge: self.config.judge.clone(),
         }
     }
 
@@ -1468,8 +1475,57 @@ impl<S: ControlStrategy> Driver<S> {
                 not_before,
             } => {
                 if let crate::vocab::RetryTarget::ModelCall { model_call_id } = target {
-                    let request = assembler.assemble(&Json::Null).request;
+                    let mut request = assembler.assemble(&Json::Null).request;
                     let next_attempt = crate::retry::attempt_no(sink.prefix(), &model_call_id) + 1;
+                    // `model_fallback{profile_ref}` execution (§5e.2;
+                    // AC-R-2.6.2-11): the last `control.retry.scheduled`
+                    // for this call that carried the declared delta is
+                    // the reroute's basis — the driver emits the
+                    // `model.rerouted` audit row and stamps the
+                    // `profile_override` member on the request (never a
+                    // silent alteration: the delta is the recorded one,
+                    // `attempt_delta_allowed` having admitted it).
+                    let fallback = sink
+                        .prefix()
+                        .iter()
+                        .rev()
+                        .find(|e| {
+                            e.class == "control.retry.scheduled"
+                                && e.payload.get("scope_id").and_then(Json::as_str)
+                                    == Some(model_call_id.as_str())
+                                && e.payload
+                                    .get("attempt_delta")
+                                    .and_then(Json::as_str)
+                                    .is_some_and(|d| d.starts_with("model_fallback{"))
+                        })
+                        .and_then(|e| {
+                            e.payload
+                                .get("attempt_delta")
+                                .and_then(Json::as_str)
+                                .map(|d| {
+                                    (
+                                        d["model_fallback{".len()..d.len() - 1].to_string(),
+                                        e.event_id.clone(),
+                                    )
+                                })
+                        });
+                    if let Some((profile_ref, basis)) = fallback {
+                        self.append(
+                            sink,
+                            "model.rerouted",
+                            Json::obj([
+                                ("model_call_id", Json::str(&model_call_id)),
+                                ("to_profile_ref", Json::str(&profile_ref)),
+                                ("cause", Json::str("model_fallback")),
+                                ("basis", Json::str(&basis)),
+                                ("charged_to", Json::str("subject")),
+                            ]),
+                            Some(&model_call_id),
+                        )?;
+                        if let Json::Obj(m) = &mut request {
+                            m.insert("profile_override".to_string(), Json::str(profile_ref));
+                        }
+                    }
                     let payload = crate::events::retry_scheduled_payload(
                         ScopeKind::ModelCall,
                         &model_call_id,
@@ -1614,14 +1670,13 @@ impl<S: ControlStrategy> Driver<S> {
                             "sha256:{}",
                             hh_wire::sha256::sha256_hex(c.args.to_canonical_string().as_bytes())
                         );
-                        let (valid, steps, reason) =
-                            match crate::plan_exec::plan_validate(
-                                &c.args.to_canonical_string(),
-                                &self.config.surfaces,
-                            ) {
-                                Ok(steps) => (true, steps, None),
-                                Err(r) => (false, vec![], Some(r)),
-                            };
+                        let (valid, steps, reason) = match crate::plan_exec::plan_validate(
+                            &c.args.to_canonical_string(),
+                            &self.config.surfaces,
+                        ) {
+                            Ok(steps) => (true, steps, None),
+                            Err(r) => (false, vec![], Some(r)),
+                        };
                         self.append(
                             sink,
                             "control.plan.emitted",
@@ -1651,12 +1706,7 @@ impl<S: ControlStrategy> Driver<S> {
                     // activated typed `procedure` emits
                     // `verification.artefact.followed{detector:
                     // deterministic}` (§02's detector table).
-                    self.maybe_emit_artefact_followed(
-                        sink,
-                        &mc,
-                        &c.surface_id,
-                        &c.tool_call_id,
-                    )?;
+                    self.maybe_emit_artefact_followed(sink, &mc, &c.surface_id, &c.tool_call_id)?;
                     proposed_tool_calls.push(c.tool_call_id);
                 }
             }
@@ -1864,18 +1914,10 @@ impl<S: ControlStrategy> Driver<S> {
                 let mut terminal_payload = crate::events::settled_outcome_json(&out.outcome);
                 if let Some(s) = &out.submission_ref {
                     if let Json::Obj(m) = &mut terminal_payload {
-                        m.insert(
-                            "submission_ref".to_string(),
-                            Json::str(s.clone()),
-                        );
+                        m.insert("submission_ref".to_string(), Json::str(s.clone()));
                     }
                 }
-                self.append(
-                    sink,
-                    terminal_class,
-                    terminal_payload,
-                    Some(&ef),
-                )?;
+                self.append(sink, terminal_class, terminal_payload, Some(&ef))?;
                 if let Some(s) = &out.submission_ref {
                     self.submission = Some(s.clone());
                 }
@@ -2292,9 +2334,7 @@ impl<S: ControlStrategy> Driver<S> {
                         causes.clear();
                         if let Some(Json::Arr(items)) = e.payload.get("items") {
                             for it in items {
-                                if let Some(d) =
-                                    it.get("delivery_id").and_then(Json::as_str)
-                                {
+                                if let Some(d) = it.get("delivery_id").and_then(Json::as_str) {
                                     causes.push(d.to_string());
                                 }
                             }
@@ -2360,12 +2400,9 @@ impl<S: ControlStrategy> Driver<S> {
                 .find(|(delivery_id, _)| *delivery_id == d.delivery_id)
                 .and_then(|(_, caps)| caps.clone());
             let Some(caps) = caps else { continue };
-            if let Some(ev) = hh_context::procedure::detect_followed(
-                &d.delivery_id,
-                surface_id,
-                &caps,
-                &causes,
-            ) {
+            if let Some(ev) =
+                hh_context::procedure::detect_followed(&d.delivery_id, surface_id, &caps, &causes)
+            {
                 if delivered_is_followed(sink.prefix(), &d.delivery_id) {
                     continue;
                 }
@@ -2526,10 +2563,7 @@ impl<S: ControlStrategy> Driver<S> {
         );
         if let Some(r) = &summary_ref {
             if let Json::Obj(m) = &mut finished {
-                m.insert(
-                    "verification_summary_ref".to_string(),
-                    Json::str(r.clone()),
-                );
+                m.insert("verification_summary_ref".to_string(), Json::str(r.clone()));
             }
         }
         // §5e.4 — the run's `control.compute.decided` record refs ride the
@@ -2567,21 +2601,17 @@ impl<S: ControlStrategy> Driver<S> {
     ) -> Result<CompletionFlow, DriverError> {
         use hh_verification::bind::{bind_claim, fold_effect_states, fold_verdicts};
         use hh_verification::claims::reconcile_ledger_only;
+        use hh_verification::claims::CriterionState;
         use hh_verification::gate::{
             decision_stratum, evaluate_gate, GateCriterion, GateFacts, OpenEffect,
         };
-        use hh_verification::claims::CriterionState;
         use hh_verification::vocab::{Agreement, ClaimKind, CompletionPolicy, GateVerdict};
 
         // Phase 1 — the pure fold over the durable prefix (the immutable
         // borrow ends before the first append; every fact is owned).
         let kernel_prov = ProvenanceRecord::kernel("hh-control/reconcile", self.now_ms);
         let claims = std::mem::take(&mut self.completion_claims);
-        let (
-            records,
-            completion_claim_ref,
-            facts,
-        ): (
+        let (records, completion_claim_ref, facts): (
             Vec<hh_verification::claims::ReconciliationRecord>,
             String,
             GateFacts,
@@ -2746,8 +2776,8 @@ impl<S: ControlStrategy> Driver<S> {
                     &facts,
                     "gate:exhausted",
                 )?;
-                Ok(CompletionFlow::Decided(decided.with_stop(
-                    StopReason::BudgetExhausted {
+                Ok(CompletionFlow::Decided(
+                    decided.with_stop(StopReason::BudgetExhausted {
                         // The contract's budget ref first, else the run's
                         // bound budget (the cursor's `bound_ref` — the
                         // `reconciliation.holds` dimension charges against
@@ -2759,8 +2789,8 @@ impl<S: ControlStrategy> Driver<S> {
                             .map(|c| c.budget_ref.clone())
                             .unwrap_or_else(|| self.state.cursor.bound_ref.clone()),
                         dimension: hh_ontology::dimensions::DimensionId::ReconciliationHolds,
-                    },
-                )))
+                    }),
+                ))
             }
             GateVerdict::Hold {
                 divergences,
@@ -2826,13 +2856,14 @@ impl<S: ControlStrategy> Driver<S> {
                 // failure ⇒ `failed_honest`; `veto`/`abandoned` ⇒
                 // `succeeded_with_veto`; the `unverifiable` policy ⇒
                 // `succeeded_unverified` (never `succeeded`).
-                let unverifiable = self
-                    .config
-                    .task_contract
-                    .as_ref()
-                    .is_some_and(|c| matches!(c.completion_policy, CompletionPolicy::Unverifiable(_)));
+                let unverifiable = self.config.task_contract.as_ref().is_some_and(|c| {
+                    matches!(c.completion_policy, CompletionPolicy::Unverifiable(_))
+                });
                 let (status, stratum) = if result.honest_failure {
-                    ("failed_honest", decision_stratum(&result).map(str::to_string))
+                    (
+                        "failed_honest",
+                        decision_stratum(&result).map(str::to_string),
+                    )
                 } else if result.success_with_veto.is_some()
                     || matches!(result.verdict, GateVerdict::Veto { .. })
                 {
@@ -2876,8 +2907,7 @@ impl<S: ControlStrategy> Driver<S> {
                     goal_ref: String::new(),
                     criteria: vec![],
                     invariants: vec![],
-                    completion_policy:
-                        hh_verification::vocab::CompletionPolicy::AllRequired,
+                    completion_policy: hh_verification::vocab::CompletionPolicy::AllRequired,
                     evidence_kinds_required: vec![],
                     budget_ref: "budget".into(),
                     sealed: true,
@@ -3221,8 +3251,7 @@ fn scope_empty() -> Scope {
 fn resolve_intents(prefix: &[EventEnvelope], intents: &[Json]) -> Vec<Json> {
     let mut surfaces: std::collections::BTreeMap<String, String> =
         std::collections::BTreeMap::new();
-    let mut args: std::collections::BTreeMap<String, Json> =
-        std::collections::BTreeMap::new();
+    let mut args: std::collections::BTreeMap<String, Json> = std::collections::BTreeMap::new();
     for e in prefix {
         match e.class.as_str() {
             "action.tool.proposed" => {
@@ -4863,7 +4892,10 @@ mod tests {
             Some(Json::Arr(rows)) => rows,
             _ => panic!("options_considered present"),
         };
-        assert_eq!(considered.len(), crate::compute::ComputeOptionKind::ALL.len());
+        assert_eq!(
+            considered.len(),
+            crate::compute::ComputeOptionKind::ALL.len()
+        );
         for row in considered {
             assert!(
                 row.get("estimate").is_some() || row.get("infeasible").is_some(),
@@ -4882,8 +4914,8 @@ mod tests {
             seq: 0,
         };
         let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
-        let mut driver = Driver::open_react(&ctx(), policy, &mut sink, DriverConfig::default())
-            .unwrap();
+        let mut driver =
+            Driver::open_react(&ctx(), policy, &mut sink, DriverConfig::default()).unwrap();
         let mut model = ScriptedModel {
             script: [outcome(
                 hh_gateway::vocab::StopReason::ToolUse,

@@ -314,7 +314,7 @@ impl AdapterA {
                 Json::obj([
                     ("turn_id", Json::str(turn_id)),
                     ("stop_reason_raw", Json::str(&raw)),
-                    ("stop_reason", crate::proj::lift_stop_reason(&raw).to_json()),
+                    ("stop_reason", crate::proj::lift_stop_reason_json(&raw)),
                 ]),
             ));
         }
@@ -742,7 +742,7 @@ impl AdapterA {
                             ("stop_reason_raw", Json::str(&raw_reason)),
                             (
                                 "stop_reason",
-                                crate::proj::lift_stop_reason(&raw_reason).to_json(),
+                                crate::proj::lift_stop_reason_json(&raw_reason),
                             ),
                         ]),
                     ),

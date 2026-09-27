@@ -293,6 +293,10 @@ pub fn record_child_result(
     let range = store
         .append(parent_run_id, parent_lease, vec![ev])
         .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    // O-5 / crash matrix — the `resource(key)` scoped leases spawn held
+    // for this child release at its terminal (a `share` child's keys go
+    // back to the pool in the same breath as the ledgered terminal).
+    crate::ownership::release_resource_locks(store, parent_run_id, parent_lease, child_run_id)?;
     Ok(SeqRangePair { range, result })
 }
 
@@ -346,9 +350,12 @@ pub fn record_child_cancelled(
     .map_err(|e| SpawnError::Kernel(e.to_string()))?;
     // `cancelled` is the other durable closer of the child-run scope.
     ev.scope.child_run_id = Some(child_run_id.to_string());
-    store
+    let range = store
         .append(parent_run_id, parent_lease, vec![ev])
-        .map_err(|e| SpawnError::Kernel(e.to_string()))
+        .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+    // O-5 — cancelled children release their `resource(key)` holds too.
+    crate::ownership::release_resource_locks(store, parent_run_id, parent_lease, child_run_id)?;
+    Ok(range)
 }
 
 /// `control.subagent.detached{child_run_id}` — T6's `detach_to_child` arm:
@@ -523,6 +530,7 @@ pub fn cancel_unresponsive(
         store
             .append(parent_run_id, parent_lease, vec![ev])
             .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+        crate::ownership::release_resource_locks(store, parent_run_id, parent_lease, child_run_id)?;
         done.push(child_run_id.clone());
     }
     Ok(done)

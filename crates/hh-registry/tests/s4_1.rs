@@ -822,7 +822,8 @@ fn ac11_export_round_trip_preserves_every_non_lost_field() {
         RegistryError::UnsupportedExportKind { .. }
     ));
 
-    let out = foreign::export(&s, std::slice::from_ref(&v.version_id), "plugin_manifest/1").unwrap();
+    let out =
+        foreign::export(&s, std::slice::from_ref(&v.version_id), "plugin_manifest/1").unwrap();
     assert_eq!(out.documents.len(), 1);
     let doc = &out.documents[0];
     // The kernel-authority summary could not occupy the manifest's

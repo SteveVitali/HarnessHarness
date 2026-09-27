@@ -433,20 +433,14 @@ pub fn lower_verdict(seq: u64, payload: &Json) -> (Json, Vec<LossEntry>) {
         "charged_to",
     ] {
         if payload.get(m).is_some() && !consumed.contains(m) {
-            member_loss(
-                &mut loss,
-                &format!("verification.validator.verdict.{m}"),
-            );
+            member_loss(&mut loss, &format!("verification.validator.verdict.{m}"));
             consumed.insert(m);
         }
     }
     if let Json::Obj(m) = payload {
         for k in m.keys() {
             if !consumed.contains(k.as_str()) {
-                member_loss(
-                    &mut loss,
-                    &format!("verification.validator.verdict.{k}"),
-                );
+                member_loss(&mut loss, &format!("verification.validator.verdict.{k}"));
             }
         }
     }

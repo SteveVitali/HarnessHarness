@@ -505,6 +505,89 @@ mod tests {
     }
 
     #[test]
+    fn model_fallback_delta_admitted_only_when_declared() {
+        // §5e.2 kernel constraint — `attempt_delta ∈ {transport,
+        // sampling_temperature, model_fallback(profile_ref)}` is
+        // recorded, never silent; a delta outside
+        // `attempt_delta_allowed` is a give_up (AC-R-2.6.2-11's
+        // `model_fallback` arm).
+        let mut p = RetryPolicy::default();
+        p.set(
+            ScopeKind::ModelCall,
+            "network",
+            RetrySpec {
+                max_attempts: MaxAttempts::Bounded(3),
+                backoff: Backoff {
+                    initial_ms: 10,
+                    factor_ppm: 1_000_000,
+                    max_ms: 10,
+                    jitter_ppm: 0,
+                },
+                honour_retry_after: false,
+                attempt_delta_allowed: vec![crate::vocab::DeltaKind::ModelFallback {
+                    profile_ref: String::new(),
+                }],
+            },
+        );
+        let delta = crate::vocab::DeltaKind::ModelFallback {
+            profile_ref: "model:fallback-v2".into(),
+        };
+        let out = schedule_retry(
+            &[],
+            &p,
+            ScopeKind::ModelCall,
+            "m",
+            "network",
+            0,
+            None,
+            Some(delta.clone()),
+            0,
+            8,
+        );
+        match out {
+            RetryOutcome::Retry(r) => {
+                assert_eq!(r.attempt_delta, Some(delta.clone()));
+                assert_eq!(
+                    r.attempt_delta.unwrap().as_str(),
+                    "model_fallback{model:fallback-v2}"
+                );
+            }
+            other => panic!("a declared fallback delta schedules: {other:?}"),
+        }
+        // An undeclared delta kind gives up — never a silent alteration.
+        p.set(
+            ScopeKind::ModelCall,
+            "network",
+            RetrySpec {
+                max_attempts: MaxAttempts::Bounded(3),
+                backoff: Backoff {
+                    initial_ms: 10,
+                    factor_ppm: 1_000_000,
+                    max_ms: 10,
+                    jitter_ppm: 0,
+                },
+                honour_retry_after: false,
+                attempt_delta_allowed: vec![],
+            },
+        );
+        assert!(matches!(
+            schedule_retry(
+                &[],
+                &p,
+                ScopeKind::ModelCall,
+                "m",
+                "network",
+                0,
+                None,
+                Some(delta),
+                0,
+                8,
+            ),
+            RetryOutcome::GiveUp(_)
+        ));
+    }
+
+    #[test]
     fn deterministic_delays_and_retry_after_only_extends() {
         let p = policy();
         let a = schedule_retry(

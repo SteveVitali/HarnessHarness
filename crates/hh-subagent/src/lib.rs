@@ -21,6 +21,7 @@
 
 pub mod types;
 
+pub mod consistency;
 pub mod merge;
 pub mod messaging;
 pub mod ownership;

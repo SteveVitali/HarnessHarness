@@ -206,3 +206,27 @@ fn execution_ms_renders_typed_na() {
         &Json::obj([("na", Json::str("observability"))])
     );
 }
+
+// ── AC-R-2.6.2-11 — hosted `loop_*`/`format_failure_rate` are `n/a`
+// unless calls are observable (S4.8; never a fabricated 0). ─────────────
+
+#[test]
+fn hosted_loop_and_format_metrics_are_na_without_observable_calls() {
+    let (s, run, _lease) = open("hosted-loop-na");
+    // The hosted arm's declared observability admits the Events plane
+    // (the metric's `requires_observability` floor) — no model or tool
+    // rows exist for the boundary to have emitted.
+    let hosted: BTreeSet<Observability> = [Observability::Events].into_iter().collect();
+    let v = metric_view(&run, &run, &hosted, &read_all(&s, &run), None);
+    for name in [
+        "loop_stop_rate",
+        "loop_nudge_recovery_rate",
+        "format_failure_rate",
+    ] {
+        assert_eq!(
+            metric_cell(&v, name),
+            &Json::obj([("na", Json::str("estimator_undefined"))]),
+            "{name} is n/a on an empty denominator, never a fabricated 0"
+        );
+    }
+}

@@ -757,8 +757,9 @@ impl EnvDriver {
     /// - `ScopedSubtree` — the child's roots are narrowed to `scope` inside
     ///   the parent's workspace (a shared, *scoped* subtree — the child's
     ///   helper re-gates fs access to the subtree);
-    /// - `Share` — declared in the sum but not provisionable at S2.1
-    ///   (`Unsupported`, never coerced).
+    /// - `Share` — the child shares the parent's roots verbatim (§5e.5;
+    ///   write coordination is the `resource(key)` lease + ownership layer,
+    ///   never a copied view).
     ///
     /// The child lands in `provisioning` — `attach` completes it (the
     /// `derived` event records the `ParentEdge`).
@@ -854,10 +855,17 @@ impl EnvDriver {
                 }
             }
             DeriveMode::Share => {
-                return Err(EnvError::Unsupported {
-                    capability: "derive.share",
-                    detail: "a shared unscoped view is not provisionable at S2.1".to_string(),
-                })
+                // `share` — the child's workspace *is* the parent's
+                // (§5e.5/ADR-0192: one shared mutable view, unscoped).
+                // Containment is unchanged — the child inherits exactly the
+                // parent's roots, never widened; write coordination lives
+                // above the fs layer (ownership records + `resource(key)`
+                // leases, spawn step 4c), never in a copied view.
+                Roots {
+                    workspace_roots: parent.roots.workspace_roots.clone(),
+                    writable_roots: parent.roots.writable_roots.clone(),
+                    cwd: parent.roots.cwd.clone(),
+                }
             }
         };
         let child = self.spawn_handle(

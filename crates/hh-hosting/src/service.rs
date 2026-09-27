@@ -941,6 +941,12 @@ impl HostingService {
         {
             return Ok(());
         }
+        // AC-R-2.6.2-11 — the boundary budget's terminal cancels the
+        // participant through the Hosting ABI (`session/cancel` — the
+        // adapter's own verb, never a synthetic drop); an adapter that
+        // cannot honour it is drift evidence on the row, not a block
+        // (`cancel_via`/`cancel_ok` record the attempt honestly).
+        let cancel_ok = self.adapter.cancel(session_ref, None).is_ok();
         let _ = self.close(session_ref);
         // The exhaustion fact lands after `session.closed`.
         self.clock += 1;
@@ -957,6 +963,8 @@ impl HostingService {
             payload: Json::obj([
                 ("dimension", Json::str(dimension)),
                 ("synthesized", Json::Bool(true)),
+                ("cancel_via", Json::str("session/cancel")),
+                ("cancel_ok", Json::Bool(cancel_ok)),
             ]),
             provenance: HostedProvenance {
                 origin: crate::events::HostedOrigin::Adapter,
@@ -971,7 +979,15 @@ impl HostingService {
         if let Some(s) = self.sessions.get_mut(session_ref) {
             s.events.push(e);
             if let Some(end) = &mut s.end_state {
-                end.reason = format!("budget_exhausted{{{dimension}}}");
+                // T-LCD-07 — the lifted terminal names `dimension: unknown`
+                // when the boundary's dimension is not a kernel
+                // `DimensionId` (the raw spelling stays on the event
+                // payload's `dimension` member — preserved, never dropped).
+                let canonical = hh_ontology::dimensions::DimensionId::parse(dimension);
+                end.reason = match canonical {
+                    Some(d) => format!("budget_exhausted{{{}}}", d.as_str()),
+                    None => "budget_exhausted{unknown}".to_string(),
+                };
             }
         }
         Ok(())

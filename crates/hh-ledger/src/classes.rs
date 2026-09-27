@@ -964,6 +964,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("control.loop.detected", "hint"),
     // ── control:merge ──
     ("control.merge.completed", "none"),
+    ("control.merge.proposed", "none"),
     ("control.merge.resolved", "none"),
     ("control.merge.started", "none"),
     ("control.message.refused", "none"),
@@ -971,6 +972,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── control:output ──
     ("control.output.rejected", "hint"),
     // ── control:ownership ──
+    ("control.ownership.granted", "none"),
+    ("control.ownership.returned", "none"),
     ("control.ownership.transferred", "none"),
     // ── control:plan ──
     ("control.plan.emitted", "none"),
@@ -1595,10 +1598,13 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("control.subagent.cancelled",    O::Events, true,  OPEN_AUDIT, &[], None, Some(ScopeKind::ChildRun)),
     row_audit("control.subagent.detached",     O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.merge.started",         O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("control.merge.proposed",        O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.merge.completed",       O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.merge.resolved",        O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.message.sent",          O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.message.refused",       O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("control.ownership.granted",     O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("control.ownership.returned",    O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.ownership.transferred", O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.work_item.dispatched",         O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.work_item.stopped",            O::Events, true,  OPEN_AUDIT, &[], None, None),

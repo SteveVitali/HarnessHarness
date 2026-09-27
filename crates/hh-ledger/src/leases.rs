@@ -228,6 +228,30 @@ pub fn holder_spelling(label: &str, pid: u32) -> String {
 }
 
 impl Store {
+    /// `scoped_lease_holders(scope) → [(run_id, ScopedLease)]` — every live,
+    /// unclosed record for the scope across **all** runs in the store, sorted
+    /// by run id (deterministic). The `resource(key)` contention scan
+    /// (§5e.5, ADR-0192 D6): a `share`-mode writer must see — and lose to —
+    /// a lease held by a *sibling* run, so the check cannot stay run-local.
+    /// `fenced` records count as live until `expires_at_ms` passes (a fenced
+    /// record whose generation died is excluded by the caller's `generation`
+    /// comparison — the fold already hides superseded ones per run).
+    pub fn scoped_lease_holders(&self, scope: &LeaseScope) -> Vec<(String, ScopedLease)> {
+        let spelling = scope.spelling();
+        let mut out: Vec<(String, ScopedLease)> = self
+            .runs
+            .iter()
+            .filter_map(|(run_id, st)| {
+                st.scoped_leases
+                    .get(&spelling)
+                    .filter(|l| !l.closed)
+                    .map(|l| (run_id.clone(), l.clone()))
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    }
+
     /// `scoped_lease(run, scope)` — the fold's current record for the scope,
     /// when one exists and is still live under the *current* writer generation
     /// (a record under a superseded generation is fenced — invisible here).
@@ -242,6 +266,23 @@ impl Store {
             .get(&scope.spelling())
             .filter(|l| !l.closed)
             .cloned())
+    }
+
+    /// `scoped_leases_for(run_id)` — every live (unclosed) scoped-lease record
+    /// held by `holder` in the run's fold — the terminal drain set
+    /// (`release_resource_locks` walks this to free `resource:*` keys).
+    pub fn scoped_leases_for(
+        &self,
+        run_id: &str,
+        holder: &str,
+    ) -> Result<Vec<ScopedLease>, LedgerError> {
+        let st = self.run(run_id)?;
+        Ok(st
+            .scoped_leases
+            .values()
+            .filter(|l| !l.closed && l.holder == holder)
+            .cloned()
+            .collect())
     }
 
     /// `acquire(scope, holder, ttl)` — mint a scoped lease under the caller's

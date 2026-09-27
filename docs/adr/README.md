@@ -89,3 +89,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0297](ADR-0297-s4.5b-protocol-edges-and-acp-rulings.md) | S4.5b protocol-edge + ACP rulings — the `input_required` pause model, shared edge vocabulary in `hh-mcp`, compiler-owned lowering tables, fail-closed Origin/OAuth guards, A2A card = bundle identity | S4.5b (`067_S4.5b__protocol-edges-and-acp.md`) | Accepted |
 | [ADR-0298](ADR-0298-s4.6-subagent-orchestrator-rulings.md) | S4.6 subagent and orchestrator rulings | S4.6 | Accepted |
 | [ADR-0299](ADR-0299-s4.7-value-of-compute-scheduler-rulings.md) | S4.7 value-of-compute scheduler rulings | S4.7 | Accepted |
+| [ADR-0300](ADR-0300-s4.8-coordination-consistency-rulings.md) | S4.8 multi-agent coordination & consistency rulings | S4.8 | Accepted |
