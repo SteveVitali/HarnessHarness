@@ -40,6 +40,7 @@ pub mod saga;
 pub mod schema;
 pub mod store;
 pub mod suspend;
+pub mod tree;
 pub mod views;
 pub mod wakeup;
 

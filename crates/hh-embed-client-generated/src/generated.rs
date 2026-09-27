@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:5325e46fb4e18198a7590729a8739cc22c88dd9d01897357234352a61f5f560b";
+    "sha256:499a809a59d884eb212c0e665139fe928bc43700c7b48efce874c0083832c32d";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -3077,6 +3077,48 @@ impl PromoteParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProveConsistencyParams {
+    pub session_id: String,
+    pub first_size: i64,
+    pub second_size: i64,
+}
+
+impl ProveConsistencyParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("first_size", Json::Int(self.first_size.clone())));
+        pairs.push(("second_size", Json::Int(self.second_size.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ProveConsistencyParams, String> {
+        Ok(ProveConsistencyParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            first_size: {
+                let f = v
+                    .get("first_size")
+                    .ok_or_else(|| format!("missing '{}'", "first_size"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            second_size: {
+                let f = v
+                    .get("second_size")
+                    .ok_or_else(|| format!("missing '{}'", "second_size"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProveInclusionParams {
     pub session_id: String,
     pub seq: i64,
@@ -5149,6 +5191,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Session::from_json(&raw).map_err(ClientError::Transport)
     }
 
+    /// `audit_view` → `json` (see the contract registry).
+    pub fn audit_view(&mut self, params: &AuditViewParams) -> Result<Json, ClientError> {
+        let raw = self.call("audit_view", params.to_json())?;
+        Ok(raw)
+    }
+
     /// `cancel` → `Acknowledged` (see the contract registry).
     pub fn cancel(&mut self, params: &CancelParams) -> Result<Acknowledged, ClientError> {
         let raw = self.call("cancel", params.to_json())?;
@@ -5232,6 +5280,21 @@ impl<R: BufRead, W: Write> Client<R, W> {
         View::from_json(&raw).map_err(ClientError::Transport)
     }
 
+    /// `prove_consistency` → `json` (see the contract registry).
+    pub fn prove_consistency(
+        &mut self,
+        params: &ProveConsistencyParams,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("prove_consistency", params.to_json())?;
+        Ok(raw)
+    }
+
+    /// `prove_inclusion` → `json` (see the contract registry).
+    pub fn prove_inclusion(&mut self, params: &ProveInclusionParams) -> Result<Json, ClientError> {
+        let raw = self.call("prove_inclusion", params.to_json())?;
+        Ok(raw)
+    }
+
     /// `read` → `Page` (see the contract registry).
     pub fn read(&mut self, params: &ReadParams) -> Result<Page, ClientError> {
         let raw = self.call("read", params.to_json())?;
@@ -5284,6 +5347,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     pub fn submit(&mut self, params: &SubmitParams) -> Result<Accepted, ClientError> {
         let raw = self.call("submit", params.to_json())?;
         Accepted::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `verify` → `json` (see the contract registry).
+    pub fn verify(&mut self, params: &VerifyParams) -> Result<Json, ClientError> {
+        let raw = self.call("verify", params.to_json())?;
+        Ok(raw)
     }
 
     /// The negotiated capabilities (from the completed `hello`).

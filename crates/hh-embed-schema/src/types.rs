@@ -2243,3 +2243,125 @@ impl ElicitParams {
 pub struct ElicitResult {
     pub outcome: ElicitOutcome,
 }
+
+// ── R-2.8.6 audit surface (S2.5) ────────────────────────────────────────
+
+/// `audit_view` params — the session's run, optionally truncated at
+/// `until_seq` (absent ⇒ the durable head; ADR-0066 D1, ADR-0068 D6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AuditViewParams {
+    pub session_id: String,
+    /// Audit through this seq (absent ⇒ head).
+    pub until_seq: Option<i64>,
+}
+
+impl AuditViewParams {
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("session_id".into(), Json::str(self.session_id.clone()));
+        if let Some(u) = self.until_seq {
+            m.insert("until_seq".into(), Json::Int(u));
+        }
+        Json::Obj(m)
+    }
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "audit_view")?;
+        let session_id = s.req_str("session_id")?;
+        let until_seq = s.opt_int("until_seq")?;
+        s.finish()?;
+        Ok(AuditViewParams {
+            session_id,
+            until_seq,
+        })
+    }
+}
+
+/// `verify` params — recompute the session run's chain/tree/checkpoints
+/// through `until_seq` (absent ⇒ head); the verdict is the `Tampered`
+/// taxonomy or `ok` (AC-R-2.8.6-1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyParams {
+    pub session_id: String,
+    /// Verify through this seq (absent ⇒ head).
+    pub until_seq: Option<i64>,
+}
+
+impl VerifyParams {
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("session_id".into(), Json::str(self.session_id.clone()));
+        if let Some(u) = self.until_seq {
+            m.insert("until_seq".into(), Json::Int(u));
+        }
+        Json::Obj(m)
+    }
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "verify")?;
+        let session_id = s.req_str("session_id")?;
+        let until_seq = s.opt_int("until_seq")?;
+        s.finish()?;
+        Ok(VerifyParams {
+            session_id,
+            until_seq,
+        })
+    }
+}
+
+/// `prove_inclusion` params — the event at `seq` proven against the
+/// session run's tree head (RFC 6962-style; §5g.6 §3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProveInclusionParams {
+    pub session_id: String,
+    /// The leaf seq to prove.
+    pub seq: i64,
+}
+
+impl ProveInclusionParams {
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("session_id", Json::str(self.session_id.clone())),
+            ("seq", Json::Int(self.seq)),
+        ])
+    }
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "prove_inclusion")?;
+        let session_id = s.req_str("session_id")?;
+        let seq = s.req_int("seq")?;
+        s.finish()?;
+        Ok(ProveInclusionParams { session_id, seq })
+    }
+}
+
+/// `prove_consistency` params — an append-only consistency proof
+/// between two tree sizes of the session run
+/// (`first_size <= second_size`; §5g.6 §3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProveConsistencyParams {
+    pub session_id: String,
+    /// The earlier tree size.
+    pub first_size: i64,
+    /// The later tree size.
+    pub second_size: i64,
+}
+
+impl ProveConsistencyParams {
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("session_id", Json::str(self.session_id.clone())),
+            ("first_size", Json::Int(self.first_size)),
+            ("second_size", Json::Int(self.second_size)),
+        ])
+    }
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "prove_consistency")?;
+        let session_id = s.req_str("session_id")?;
+        let first_size = s.req_int("first_size")?;
+        let second_size = s.req_int("second_size")?;
+        s.finish()?;
+        Ok(ProveConsistencyParams {
+            session_id,
+            first_size,
+            second_size,
+        })
+    }
+}

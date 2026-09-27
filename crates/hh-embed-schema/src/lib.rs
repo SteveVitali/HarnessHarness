@@ -936,6 +936,14 @@ fn types_schema() -> Json {
         ]),
     );
     m.insert(
+        "ProveConsistencyParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("first_size", "integer", true),
+            ("second_size", "integer", true),
+        ]),
+    );
+    m.insert(
         "ProveInclusionParams".into(),
         strct(&[("session_id", "string", true), ("seq", "integer", true)]),
     );

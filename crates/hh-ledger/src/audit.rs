@@ -1,25 +1,32 @@
+// SYNC_PROBE_AUDIT
 //! The audit trail (§5g.6 R-2.8.6, C0/Stage 1; ADR-0066/0067/0068) — the run
 //! ledger read through `audit_view`. There is no second audit store: the view
 //! is a pure fold over the durable prefix (`derived_from` watermark +
 //! `view_hash`, like every `project` kind), and `Store::verify` is the
 //! byte-exact chain check.
 //!
-//! Stage-1 reach (the §5g.6 §9 stage map): the audit-grade class list with the
+//! Stage reach (the §5g.6 §9 stage map): the audit-grade class list with the
 //! `audit_fields`/`content_refs` partition (Rule C), kernel-only producers and
 //! `authority = kernel` provenance (Rule P) — both enforced at `append` and
 //! re-checked by `verify` — the `AuditObligation` record set evaluated here,
-//! and `content_refs` presence accounting over the blob pool. Compact-range
-//! tree heads, signed checkpoints, proofs, cross-run anchors, redaction
-//! endorsement and the completeness veto are Stage 2+ — the corresponding
-//! `AuditView` members render honestly (`[]` / `n/a`), never fabricated.
+//! `content_refs` presence accounting over the blob pool (tombstone-aware),
+//! and the Stage-2 halves: the signed `security.audit.checkpoint` fold
+//! (head/chain/linkage recompute + signature status), cross-run anchor
+//! verification, the `AuditSigner`/`AuditKeyResolver` seams (C0
+//! `hmac-sha256`), and the independent `Auditor` head-holder. The Stage-3
+//! completeness veto and deferred obligations still report honestly.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use hh_wire::json::Json;
+use hh_wire::sha256::hmac_sha256;
 
 use crate::classes::{self, ScopeKind};
 use crate::effect::{EffectFold, EffectPhase};
-use crate::event::EventEnvelope;
+use crate::errors::MissingReason;
+use crate::event::{EventEnvelope, EventFrame};
+use crate::manifest::RunManifest;
+use crate::tree::{self, CheckpointClaim};
 use crate::views::{View, ViewKind};
 
 /// `AuditObligation` (§5g.6 §3; ADR-0066 D5) — `{id, class, quantifier,
@@ -193,6 +200,445 @@ pub const DEFERRED_OBLIGATIONS: &[&str] = &[
     "producer_resolution",
     "fleet_anchor",
 ];
+
+// ── checkpoint signing (R-2.8.6 Stage 2; ADR-0050 §8(a) C0) ──────────────
+
+/// The C0 checkpoint signature construction: keyed SHA-256 over the unsigned
+/// claim's canonical bytes. `alg_ref` spells `"hmac-sha256"`; `sig` spells
+/// `"hmac-sha256:<hex>"`. Rotation lands at C1 (ADR-0050 §8(b)) — `alg_ref`
+/// is the seam, never a second spelling in the meantime.
+pub const CHECKPOINT_ALG: &str = "hmac-sha256";
+
+/// The checkpoint kind vocabulary — `{periodic, effect_terminal, final,
+/// rotation, on_demand}` (§5g.6 checkpoint contract).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckpointKind {
+    /// Interval-driven head (policy cadence).
+    Periodic,
+    /// Emitted at an effect terminal boundary.
+    EffectTerminal,
+    /// The terminal checkpoint — lands *after* `lifecycle.run.finished`
+    /// commits, covering it. Exactly one per signed run.
+    Final,
+    /// Key rotation boundary.
+    Rotation,
+    /// Operator/explicit call.
+    OnDemand,
+}
+
+impl CheckpointKind {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CheckpointKind::Periodic => "periodic",
+            CheckpointKind::EffectTerminal => "effect_terminal",
+            CheckpointKind::Final => "final",
+            CheckpointKind::Rotation => "rotation",
+            CheckpointKind::OnDemand => "on_demand",
+        }
+    }
+}
+
+/// A checkpoint signer — the run's registered kernel key, resolved outside the
+/// ledger. Custody never crosses into `hh-ledger`: the embed layer resolves
+/// the key through `CredentialBroker::kernel_use` (`KernelPurpose::Ledger
+/// Signing`, R-2.8.3) and wraps the bytes in an `AuditSigner`; the ledger sees
+/// `key_id` + `sign(preimage)` only, and the row carries `key_id`/`sig` —
+/// never key material.
+pub trait AuditSigner {
+    /// The key id — must be a member of the run manifest's `signer_key_ids`.
+    fn key_id(&self) -> &str;
+    /// Sign the canonical unsigned-claim bytes → the raw signature bytes.
+    fn sign(&mut self, preimage: &[u8]) -> Result<Vec<u8>, String>;
+}
+
+/// The auditor-side key lookup — resolves a `signer_key_ids` member to the
+/// bytes `verify` checks a `sig` against. `None` means the key is not held:
+/// `verify_run` then answers `SignerUnavailable` rather than fabricating ok
+/// (CC4 — an unverifiable signature is never "passed").
+pub trait AuditKeyResolver {
+    /// The key bytes for `key_id`, or `None` when not held.
+    fn verify_key(&self, key_id: &str) -> Option<Vec<u8>>;
+}
+
+/// A fixed `hmac-sha256` key pair — the resolved key material wrapped for
+/// signing (`AuditSigner`) and verification (`AuditKeyResolver`). Used by the
+/// embed layer over `kernel_use` output and by tests directly.
+#[derive(Debug, Clone)]
+pub struct FixedSigner {
+    key_id: String,
+    key: Vec<u8>,
+}
+
+impl FixedSigner {
+    /// Wrap resolved key bytes under its declared id.
+    pub fn new(key_id: impl Into<String>, key: impl Into<Vec<u8>>) -> Self {
+        Self {
+            key_id: key_id.into(),
+            key: key.into(),
+        }
+    }
+}
+
+impl AuditSigner for FixedSigner {
+    fn key_id(&self) -> &str {
+        &self.key_id
+    }
+
+    fn sign(&mut self, preimage: &[u8]) -> Result<Vec<u8>, String> {
+        Ok(hmac_sha256(&self.key, preimage).to_vec())
+    }
+}
+
+impl AuditKeyResolver for FixedSigner {
+    fn verify_key(&self, key_id: &str) -> Option<Vec<u8>> {
+        (key_id == self.key_id).then(|| self.key.clone())
+    }
+}
+
+/// A key table resolver — `key_id → bytes` for multi-key verification
+/// (rotation histories, witness sets).
+#[derive(Debug, Clone, Default)]
+pub struct KeyTable(pub BTreeMap<String, Vec<u8>>);
+
+impl AuditKeyResolver for KeyTable {
+    fn verify_key(&self, key_id: &str) -> Option<Vec<u8>> {
+        self.0.get(key_id).cloned()
+    }
+}
+
+/// Render raw signature bytes as the canonical `sig` spelling.
+pub fn render_sig(sig: &[u8]) -> String {
+    let mut hex = String::with_capacity(64);
+    for b in sig {
+        hex.push_str(&format!("{b:02x}"));
+    }
+    format!("{CHECKPOINT_ALG}:{hex}")
+}
+
+/// Parse a `sig` member back to bytes — `None` for a wrong `alg_ref` spelling
+/// or malformed hex (the caller maps that to `BadSignature`).
+pub fn parse_sig(sig: &str) -> Option<Vec<u8>> {
+    let hex = sig.strip_prefix("hmac-sha256:")?;
+    if hex.len() != 64 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(32);
+    let bytes = hex.as_bytes();
+    for i in (0..64).step_by(2) {
+        let hi = (bytes[i] as char).to_digit(16)?;
+        let lo = (bytes[i + 1] as char).to_digit(16)?;
+        out.push(((hi << 4) | lo) as u8);
+    }
+    Some(out)
+}
+
+// ── the independent auditor (§5g.6 auditor model) ─────────────────────────
+
+/// A fault the auditor raises — the streaming counterpart of `verify`'s
+/// `Tampered{kind}` vocabulary, surfaced as it observes rather than at a
+/// whole-run recheck.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuditFault {
+    /// The frame does not continue the auditor's own record — a replayed fork,
+    /// a rewritten hash, a wrong `prev_hash` (§5g.6 `fork_equivocation`).
+    Equivocation {
+        /// The offending seq.
+        at_seq: u64,
+        /// What disagreed.
+        detail: String,
+    },
+    /// A signed checkpoint's claim disagrees with the auditor's record —
+    /// wrong `tree_size`/`tree_head`/`chain_hash`, or a `prev_checkpoint`
+    /// link that does not name the claim the auditor holds.
+    Inconsistent {
+        /// The checkpoint's seq.
+        at_seq: u64,
+        /// What disagreed.
+        detail: String,
+    },
+    /// A checkpoint signature failed (only raised when a resolver was
+    /// supplied — without keys the auditor records, never fabricates).
+    BadSignature {
+        /// The checkpoint's seq.
+        at_seq: u64,
+        /// What failed.
+        detail: String,
+    },
+    /// A seq was skipped or duplicated in the stream.
+    Gap {
+        /// The seq the record expected next.
+        expected: u64,
+        /// What arrived.
+        found: u64,
+    },
+    /// The frame can't be read as its class.
+    Malformed {
+        /// The frame's seq.
+        at_seq: u64,
+        /// Why.
+        detail: String,
+    },
+}
+
+/// The independent auditor (§5g.6: "an auditor subscribes to the durable event
+/// stream, verifies each signed head against an independently held copy of the
+/// covered range... and holds observed heads — the writer cannot overwrite
+/// what the auditor already holds"). Pure: feed durable frames in stream
+/// order; the auditor keeps its *own* leaf list and recomputes every signed
+/// claim against it. No store access — the independence is the point.
+pub struct Auditor {
+    run_id: String,
+    /// The auditor's own leaf-hash record — its held ground truth.
+    leaves: Vec<String>,
+    /// The auditor's compact range over `leaves` (its own fold — derived, as
+    /// every fold is).
+    range: tree::CompactRange,
+    /// Held heads — every `(tree_size, tree_head)` the auditor verified,
+    /// newest last. The writer can never overwrite these.
+    held_heads: Vec<(u64, String)>,
+    /// The checkpoint claims observed, in order (event seq, claim).
+    claims: Vec<(u64, CheckpointClaim)>,
+}
+
+impl Auditor {
+    /// Start an audit of `run_id` from genesis.
+    pub fn new(run_id: impl Into<String>) -> Self {
+        Self {
+            run_id: run_id.into(),
+            leaves: Vec::new(),
+            range: tree::CompactRange::default(),
+            held_heads: Vec::new(),
+            claims: Vec::new(),
+        }
+    }
+
+    /// The auditor's own current head `(tree_size, tree_head)` over its
+    /// record — what it would compare a signed claim against.
+    pub fn head(&self) -> (u64, String) {
+        let (n, h) = self.range.head();
+        (n as u64, h)
+    }
+
+    /// The held heads — `(tree_size, tree_head)` pairs the writer cannot
+    /// overwrite.
+    pub fn held_heads(&self) -> &[(u64, String)] {
+        &self.held_heads
+    }
+
+    /// The checkpoint claims observed (seq, claim), in order.
+    pub fn claims(&self) -> &[(u64, CheckpointClaim)] {
+        &self.claims
+    }
+
+    /// Fold one durable frame into the auditor's record. Dense seqs, the
+    /// `prev_hash` chain and the event hash recompute run against the
+    /// *auditor's* leaves — a replayed fork is `Equivocation`, a hole is
+    /// `Gap`. On a `security.audit.checkpoint` row the auditor additionally
+    /// recomputes the signed claim against its own head and, when `keys` is
+    /// supplied, checks the signature; a verified claim becomes a held head.
+    /// Non-durable frames (`Sync`/`Closed`/`Ephemeral`) are ignored — they
+    /// carry no hash chain.
+    pub fn observe(
+        &mut self,
+        frame: &EventFrame,
+        keys: Option<&dyn AuditKeyResolver>,
+    ) -> Result<(), AuditFault> {
+        let EventFrame::Durable { seq, hash, event } = frame else {
+            return Ok(());
+        };
+        let seq = *seq;
+        let expected = self.leaves.len() as u64;
+        if seq != expected {
+            return Err(AuditFault::Gap {
+                expected,
+                found: seq,
+            });
+        }
+        if event.seq != seq {
+            return Err(AuditFault::Malformed {
+                at_seq: seq,
+                detail: "frame seq ≠ envelope seq".into(),
+            });
+        }
+        if event.run_id != self.run_id {
+            return Err(AuditFault::Malformed {
+                at_seq: seq,
+                detail: format!("frame run {} ≠ audited run {}", event.run_id, self.run_id),
+            });
+        }
+        if event.recompute_hash() != event.hash || event.hash != *hash {
+            return Err(AuditFault::Equivocation {
+                at_seq: seq,
+                detail: "event bytes do not recompute to the delivered hash".into(),
+            });
+        }
+        let expect_prev = self
+            .leaves
+            .last()
+            .cloned()
+            .unwrap_or_else(|| crate::ids::GENESIS_HASH.to_string());
+        // seq 0 anchors on GENESIS or on the lineage link's head hash — both
+        // legitimate; the chain check starts at seq 1.
+        if seq > 0 && event.prev_hash != expect_prev {
+            return Err(AuditFault::Equivocation {
+                at_seq: seq,
+                detail: "prev_hash does not continue the auditor's record".into(),
+            });
+        }
+        self.leaves.push(event.hash.clone());
+        self.range.push(event.hash.clone());
+        if event.class == "security.audit.checkpoint" {
+            self.check_claim(seq, event, keys)?;
+        }
+        Ok(())
+    }
+
+    /// Recheck a checkpoint claim against the auditor's own record.
+    fn check_claim(
+        &mut self,
+        seq: u64,
+        event: &EventEnvelope,
+        keys: Option<&dyn AuditKeyResolver>,
+    ) -> Result<(), AuditFault> {
+        let inconsistent = |detail: String| AuditFault::Inconsistent {
+            at_seq: seq,
+            detail,
+        };
+        let claim =
+            tree::parse_checkpoint(&event.payload).ok_or_else(|| AuditFault::Malformed {
+                at_seq: seq,
+                detail: "checkpoint payload does not parse".into(),
+            })?;
+        if claim.tree_size != Some(seq) {
+            return Err(inconsistent(format!(
+                "tree_size {:?} ≠ seq {seq}",
+                claim.tree_size
+            )));
+        }
+        let my_head = tree::mth_prefix(&self.leaves, seq as usize);
+        if claim.tree_head.as_deref() != Some(my_head.as_str()) {
+            return Err(AuditFault::Equivocation {
+                at_seq: seq,
+                detail: "signed tree_head disagrees with the auditor's covered range".into(),
+            });
+        }
+        let expect_chain = self
+            .leaves
+            .get(seq.saturating_sub(1) as usize)
+            .cloned()
+            .unwrap_or_else(|| crate::ids::GENESIS_HASH.to_string());
+        if claim.chain_hash.as_deref() != Some(expect_chain.as_str()) {
+            return Err(inconsistent("chain_hash ≠ the covered tip".into()));
+        }
+        match self.claims.last() {
+            None => {
+                if let Some(p) = &claim.prev_checkpoint {
+                    if *p != Json::Null {
+                        return Err(inconsistent(
+                            "first checkpoint carries a prev_checkpoint link".into(),
+                        ));
+                    }
+                }
+            }
+            Some((_, prev)) => {
+                let Some(Json::Obj(link)) = claim.prev_checkpoint.as_ref() else {
+                    return Err(inconsistent(
+                        "prev_checkpoint missing on a later claim".into(),
+                    ));
+                };
+                let ok = link
+                    .get("tree_size")
+                    .and_then(Json::as_int)
+                    .map(|v| v as u64)
+                    == prev.tree_size
+                    && link
+                        .get("tree_head")
+                        .and_then(Json::as_str)
+                        .map(str::to_string)
+                        .as_deref()
+                        == prev.tree_head.as_deref();
+                if !ok {
+                    return Err(AuditFault::Equivocation {
+                        at_seq: seq,
+                        detail: "prev_checkpoint does not name the held claim".into(),
+                    });
+                }
+            }
+        }
+        if let Some(resolver) = keys {
+            if claim.signatures.is_empty() {
+                return Err(AuditFault::BadSignature {
+                    at_seq: seq,
+                    detail: "no signatures on the claim".into(),
+                });
+            }
+            let preimage = tree::checkpoint_sig_preimage(&event.payload);
+            let mut any = false;
+            for s in &claim.signatures {
+                let (Some(kid), Some(alg), Some(sig)) = (
+                    s.get("key_id").and_then(Json::as_str),
+                    s.get("alg_ref").and_then(Json::as_str),
+                    s.get("sig").and_then(Json::as_str),
+                ) else {
+                    return Err(AuditFault::BadSignature {
+                        at_seq: seq,
+                        detail: "signature entry malformed".into(),
+                    });
+                };
+                if alg != CHECKPOINT_ALG {
+                    return Err(AuditFault::BadSignature {
+                        at_seq: seq,
+                        detail: format!("alg_ref {alg} unsupported"),
+                    });
+                }
+                let Some(sig_bytes) = parse_sig(sig) else {
+                    return Err(AuditFault::BadSignature {
+                        at_seq: seq,
+                        detail: "sig malformed".into(),
+                    });
+                };
+                let Some(key) = resolver.verify_key(kid) else {
+                    return Err(AuditFault::BadSignature {
+                        at_seq: seq,
+                        detail: format!("key_id {kid} unresolvable"),
+                    });
+                };
+                if hmac_sha256(&key, &preimage).to_vec() != sig_bytes {
+                    return Err(AuditFault::BadSignature {
+                        at_seq: seq,
+                        detail: format!("key_id {kid} signature mismatch"),
+                    });
+                }
+                any = true;
+            }
+            if !any {
+                return Err(AuditFault::BadSignature {
+                    at_seq: seq,
+                    detail: "no signatures on the claim".into(),
+                });
+            }
+        }
+        self.held_heads
+            .push((seq, claim.tree_head.clone().unwrap_or_default()));
+        self.claims.push((seq, claim));
+        Ok(())
+    }
+}
+
+/// How a blob address resolves for `audit_view`'s `content_refs` accounting —
+/// the store supplies it (present / tombstoned with the GC or redaction reason
+/// / absent with no audit row = `missing`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlobStatus {
+    /// Bytes exist at the address.
+    Present,
+    /// No bytes, and no tombstone row accounts for it — the `missing` bucket.
+    Missing,
+    /// No bytes, but a `lifecycle.ledger.{redacted,gc}` row names it — the
+    /// address reports under its reason, never `missing` (AC-R-2.8.6-9).
+    Tombstoned(MissingReason),
+}
 
 /// One unmet obligation — `{obligation_id, subject}` (the source event's id or
 /// the scoped subject it names).
@@ -395,18 +841,29 @@ fn eval_obligation(
 
 /// `project(audit_view)` — the §5g.6 §2 record over the durable prefix:
 /// `events_seen`, `chain_ok` (the pure recompute — `Store::verify` is the
-/// byte-exact disk check), `checkpoints` (empty until Stage 2),
+/// byte-exact disk check), `checkpoints` (the signed-head fold — Stage 2),
 /// `scopes_unclosed`, `content_refs` presence accounting, `producer_violations`
 /// (Rule-P recheck over stored rows), `coverage` (the obligation evaluation),
-/// `cross_run`, `redactions`, `sink_deliveries`, and the `completeness` vector
-/// with per-component `n/a` for the Stage-2 halves (never `false` by absence).
+/// `cross_run` (anchor verification), `redactions`, `sink_deliveries`, and the
+/// `completeness` vector. Components that legitimately do not apply render
+/// `n/a{reason}` — never `false` by absence, never fabricated `true`.
+///
+/// `blob_status` is the store's tombstone-aware lookup; `other_head` resolves
+/// a cross-run anchor's claimed `{tree_size, tree_head}` against the named
+/// run's durable prefix (`None` = the run is not held — `unresolvable`, an
+/// honest status, not a failure); `keys`, when supplied, lets signature checks
+/// report `verified`/`failed` instead of `unverified`.
+#[allow(clippy::too_many_arguments)]
 pub fn audit_view(
     run_id: &str,
     events: &[EventEnvelope],
     open_scopes: &BTreeMap<String, ScopeKind>,
     finished: bool,
-    blob_present: impl Fn(&str) -> bool,
+    blob_status: impl Fn(&str) -> BlobStatus,
     until: Option<u64>,
+    manifest: &RunManifest,
+    other_head: impl Fn(&str, u64) -> Option<(u64, String)>,
+    keys: Option<&dyn AuditKeyResolver>,
 ) -> View {
     let events: Vec<&EventEnvelope> = events
         .iter()
@@ -455,7 +912,9 @@ pub fn audit_view(
     }
 
     // content_refs accounting — declared content-ref members resolved against
-    // the blob pool; `redacted`/`gc` name the tombstoned addresses.
+    // the blob pool; tombstoned addresses report under their reason
+    // (redacted/gc) whether the tombstone row is this run's or another's —
+    // cross-run tombstones keep *this* run's accounting complete.
     let mut refs_present: BTreeSet<String> = BTreeSet::new();
     let mut refs_missing: BTreeSet<String> = BTreeSet::new();
     let mut refs_redacted: BTreeSet<String> = BTreeSet::new();
@@ -496,13 +955,19 @@ pub fn audit_view(
                 _ => vec![],
             };
             for a in addrs {
-                if refs_redacted.contains(a) || refs_gc.contains(a) {
-                    continue;
-                }
-                if blob_present(a) {
-                    refs_present.insert(a.to_string());
-                } else {
-                    refs_missing.insert(a.to_string());
+                match blob_status(a) {
+                    BlobStatus::Present => {
+                        refs_present.insert(a.to_string());
+                    }
+                    BlobStatus::Tombstoned(MissingReason::Redacted) => {
+                        refs_redacted.insert(a.to_string());
+                    }
+                    BlobStatus::Tombstoned(_) => {
+                        refs_gc.insert(a.to_string());
+                    }
+                    BlobStatus::Missing => {
+                        refs_missing.insert(a.to_string());
+                    }
                 }
             }
         }
@@ -573,15 +1038,270 @@ pub fn audit_view(
         })
         .collect();
 
+    // checkpoints — the Stage-2 signed-head fold. Every
+    // `security.audit.checkpoint` row is re-read as a claim and recomputed
+    // against the covered prefix: `tree_size == seq`, `tree_head` is the
+    // covered range's own MTH, `chain_hash` is the covered tip, the
+    // `prev_checkpoint` chain links, and `idp` re-derives over the unsigned
+    // claim. Signatures are shape-checked always and value-checked when the
+    // caller supplies a key resolver (`verified`/`unverified`/`failed` — an
+    // unverifiable signature is never "ok").
+    let leaf_hashes: Vec<String> = events.iter().map(|e| e.hash.clone()).collect();
+    let has_signers = !manifest.signer_key_ids.is_empty();
+    let mut checkpoints = Vec::new();
+    let mut checkpoints_ok = true;
+    let mut prev_claim: Option<(u64, CheckpointClaim)> = None;
+    let mut final_seen = false;
+    for e in &events {
+        if e.class != "security.audit.checkpoint" {
+            continue;
+        }
+        let mut status: &'static str = "verified";
+        let Some(claim) = tree::parse_checkpoint(&e.payload) else {
+            checkpoints.push(Json::obj([
+                ("seq", Json::Int(e.seq as i64)),
+                ("verification_status", Json::str("failed")),
+            ]));
+            checkpoints_ok = false;
+            continue;
+        };
+        // Structural recomputation — the claim vs the covered prefix.
+        let size_ok = claim.tree_size == Some(e.seq);
+        let head_ok = size_ok
+            && claim.tree_head.as_deref()
+                == Some(tree::mth_prefix(&leaf_hashes, e.seq as usize).as_str());
+        let chain_hash_ok = size_ok
+            && e.seq > 0
+            && claim.chain_hash.as_deref() == Some(leaf_hashes[(e.seq - 1) as usize].as_str());
+        let idp_ok = claim.idp.as_deref() == Some(tree::checkpoint_idp(&e.payload).as_str());
+        let link_ok = match &prev_claim {
+            None => claim
+                .prev_checkpoint
+                .as_ref()
+                .map(|p| p == &Json::Null)
+                .unwrap_or(true),
+            Some((_, prev)) => match claim.prev_checkpoint.as_ref() {
+                Some(Json::Obj(link)) => {
+                    link.get("tree_size")
+                        .and_then(Json::as_int)
+                        .map(|v| v as u64)
+                        == prev.tree_size
+                        && link.get("tree_head").and_then(Json::as_str) == prev.tree_head.as_deref()
+                }
+                _ => false,
+            },
+        };
+        if !(size_ok && head_ok && chain_hash_ok && idp_ok && link_ok) {
+            status = "failed";
+        }
+        // Signatures — shape always; value when a resolver is held.
+        if status == "verified" {
+            if claim.signatures.is_empty() {
+                status = "failed";
+            } else if let Some(resolver) = keys {
+                let preimage = tree::checkpoint_sig_preimage(&e.payload);
+                for s in &claim.signatures {
+                    let ok = (|| -> Option<bool> {
+                        let kid = s.get("key_id")?.as_str()?;
+                        if s.get("alg_ref")?.as_str()? != CHECKPOINT_ALG {
+                            return None;
+                        }
+                        if !manifest.signer_key_ids.iter().any(|k| k == kid) {
+                            return None;
+                        }
+                        let sig = parse_sig(s.get("sig")?.as_str()?)?;
+                        let key = resolver.verify_key(kid)?;
+                        Some(hmac_sha256(&key, &preimage).to_vec() == sig)
+                    })()
+                    .unwrap_or(false);
+                    if !ok {
+                        status = "failed";
+                        break;
+                    }
+                }
+            } else {
+                // Shape-check only — key ids must be registered, alg must be
+                // the C0 construction; the HMAC itself reports unverified.
+                let shape_ok = claim.signatures.iter().all(|s| {
+                    s.get("key_id")
+                        .and_then(Json::as_str)
+                        .map(|k| manifest.signer_key_ids.iter().any(|r| r == k))
+                        .unwrap_or(false)
+                        && s.get("alg_ref").and_then(Json::as_str) == Some(CHECKPOINT_ALG)
+                        && s.get("sig")
+                            .and_then(Json::as_str)
+                            .and_then(parse_sig)
+                            .is_some()
+                });
+                status = if shape_ok { "unverified" } else { "failed" };
+            }
+        }
+        if claim.kind == "final" {
+            final_seen = true;
+        }
+        if status == "failed" {
+            checkpoints_ok = false;
+        }
+        checkpoints.push(Json::obj([
+            ("seq", Json::Int(e.seq as i64)),
+            ("kind", Json::str(&claim.kind)),
+            (
+                "tree_size",
+                claim
+                    .tree_size
+                    .map(|v| Json::Int(v as i64))
+                    .unwrap_or(Json::Null),
+            ),
+            (
+                "tree_head",
+                claim
+                    .tree_head
+                    .as_deref()
+                    .map(Json::str)
+                    .unwrap_or(Json::Null),
+            ),
+            ("signatures", Json::Arr(claim.signatures.clone())),
+            ("verification_status", Json::str(status)),
+        ]));
+        prev_claim = Some((e.seq, claim));
+    }
+    // A finished run that declared signers owes a final checkpoint — its
+    // absence is a failed component, not an unnoticed gap (the `truncate`
+    // verdict belongs to `verify_run`; the view surfaces the same truth).
     let na = |reason: &str| Json::obj([("n/a", Json::str(reason))]);
+    let checkpoints_component = if !has_signers && checkpoints.is_empty() {
+        na("no signer_key_ids declared")
+    } else if !checkpoints_ok || (finished && has_signers && !final_seen) {
+        Json::Bool(false)
+    } else {
+        Json::Bool(checkpoints_ok)
+    };
+
+    // cross_run — every anchor the checkpoints sign plus the manifest's own
+    // lineage links, each resolved through `other_head` (the named run's
+    // durable prefix recomputes the claimed head). `unresolvable` is an
+    // honest status for a run this store does not hold — never silently ok.
+    let mut cross_run = Vec::new();
+    let mut cross_run_ok: Option<bool> = None; // None → n/a (no anchors exist)
+                                               // verified ⇒ the claimed head recomputes over the named run; failed ⇒ a
+                                               // contradiction; unresolvable ⇒ the run is not held here (honest, not ok).
+                                               // cross_run_ok: any `failed` ⇒ false; else any `verified` ⇒ true; else
+                                               // stays None (all unresolvable / none at all ⇒ n/a).
+    let push_anchor = |other_run: &str,
+                       size: u64,
+                       head: &str,
+                       relation: &str,
+                       origin: &str,
+                       cross_run: &mut Vec<Json>,
+                       ok: &mut Option<bool>| {
+        let status = match other_head(other_run, size) {
+            Some((_, actual)) if actual == head => "verified",
+            Some(_) => "failed",
+            None => "unresolvable",
+        };
+        match status {
+            "failed" => *ok = Some(false),
+            "verified" => {
+                if *ok != Some(false) {
+                    *ok = Some(true);
+                }
+            }
+            _ => {}
+        }
+        cross_run.push(Json::obj([
+            ("other_run", Json::str(other_run)),
+            ("tree_size", Json::Int(size as i64)),
+            ("tree_head", Json::str(head)),
+            ("relation", Json::str(relation)),
+            ("origin", Json::str(origin)),
+            ("status", Json::str(status)),
+        ]));
+    };
+    // Manifest lineage links — anchors known from seq 0.
+    for (link, relation) in [
+        (manifest.forked_from.as_ref(), "forked_from"),
+        (manifest.continued_from.as_ref(), "continued_from"),
+    ]
+    .into_iter()
+    {
+        let Some(link) = link else { continue };
+        push_anchor(
+            &link.run_id,
+            link.at_seq + 1,
+            &link.head_hash,
+            relation,
+            "manifest",
+            &mut cross_run,
+            &mut cross_run_ok,
+        );
+    }
+    if let Some(parent) = &manifest.parent_run_id {
+        // The parent anchor claims only that the named run is held — its head
+        // at size 0 resolves iff the run is.
+        let status = if other_head(parent, 0).is_some() {
+            "verified"
+        } else {
+            "unresolvable"
+        };
+        if status == "verified" && cross_run_ok.is_none() {
+            cross_run_ok = Some(true);
+        }
+        cross_run.push(Json::obj([
+            ("other_run", Json::str(parent)),
+            ("relation", Json::str("parent")),
+            ("origin", Json::str("manifest")),
+            ("status", Json::str(status)),
+        ]));
+    }
+    // Checkpoint-signed anchors — the claims as they were emitted.
+    for e in &events {
+        if e.class != "security.audit.checkpoint" {
+            continue;
+        }
+        let Some(claim) = tree::parse_checkpoint(&e.payload) else {
+            continue;
+        };
+        for a in &claim.cross_run_anchors {
+            let (Some(other), Some(oh)) = (
+                a.get("other_run").and_then(Json::as_str),
+                a.get("other_head"),
+            ) else {
+                continue;
+            };
+            let (Some(size), Some(head)) = (
+                oh.get("tree_size").and_then(Json::as_int).map(|v| v as u64),
+                oh.get("tree_head").and_then(Json::as_str),
+            ) else {
+                continue;
+            };
+            let relation = a
+                .get("relation")
+                .and_then(Json::as_str)
+                .unwrap_or("unspecified");
+            push_anchor(
+                other,
+                size,
+                head,
+                relation,
+                "checkpoint",
+                &mut cross_run,
+                &mut cross_run_ok,
+            );
+        }
+    }
+
+    let cross_run_component = match cross_run_ok {
+        Some(v) => Json::Bool(v),
+        None => na("no cross-run anchors"),
+    };
     let completeness = Json::obj([
         ("chain_ok", Json::Bool(chain_ok)),
-        ("checkpoints_ok", na("checkpoint emitters land at Stage 2")),
+        ("checkpoints_ok", checkpoints_component.clone()),
         ("scopes_closed", Json::Bool(open_scopes.is_empty())),
         ("blobs_accounted", Json::Bool(refs_missing.is_empty())),
         ("producers_ok", Json::Bool(producer_violations.is_empty())),
         ("coverage_ok", Json::Bool(unmet.is_empty())),
-        ("cross_run_ok", na("cross-run anchors land at Stage 2")),
+        ("cross_run_ok", cross_run_component.clone()),
         (
             "headline",
             Json::Bool(
@@ -589,7 +1309,9 @@ pub fn audit_view(
                     && open_scopes.is_empty()
                     && refs_missing.is_empty()
                     && producer_violations.is_empty()
-                    && unmet.is_empty(),
+                    && unmet.is_empty()
+                    && checkpoints_component != Json::Bool(false)
+                    && cross_run_component != Json::Bool(false),
             ),
         ),
     ]);
@@ -598,7 +1320,7 @@ pub fn audit_view(
         ("kind", Json::str("audit_view")),
         ("events_seen", Json::Int(events.len() as i64)),
         ("chain_ok", Json::Bool(chain_ok)),
-        ("checkpoints", Json::Arr(vec![])),
+        ("checkpoints", Json::Arr(checkpoints)),
         (
             "scopes_unclosed",
             Json::Arr(open_scopes.keys().map(Json::str).collect()),
@@ -623,7 +1345,7 @@ pub fn audit_view(
         ),
         ("producer_violations", Json::Arr(producer_violations)),
         ("coverage", coverage),
-        ("cross_run", Json::Arr(vec![])),
+        ("cross_run", Json::Arr(cross_run)),
         ("redactions", Json::Arr(redaction_rows)),
         ("sink_deliveries", Json::Arr(sink_deliveries)),
         ("completeness", completeness),

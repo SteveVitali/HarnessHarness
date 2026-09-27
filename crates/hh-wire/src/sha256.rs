@@ -103,6 +103,51 @@ fn sha256(data: &[u8]) -> [u8; 32] {
     out
 }
 
+/// The raw SHA-256 digest of `data` (the hex form's byte sibling — the audit
+/// tree/signature preimages need bytes, not text).
+pub fn sha256_bytes(data: &[u8]) -> [u8; 32] {
+    sha256(data)
+}
+
+/// HMAC-SHA256 (RFC 2104) — the C0 checkpoint signature primitive (§5g.6;
+/// ADR-0050 §8(a)). Keyed hashing under one primitive (CC1): the kernel
+/// signer's `sig` is `hmac-sha256:<hex>` of this over the checkpoint claim's
+/// canonical bytes; key custody stays outside (the R-2.8.3 `kernel_use`
+/// channel) — this is only the byte-level primitive.
+pub fn hmac_sha256(key: &[u8], msg: &[u8]) -> [u8; 32] {
+    const BLOCK: usize = 64;
+    // Keys longer than the block size are hashed first (RFC 2104 §2).
+    let mut k = [0u8; BLOCK];
+    if key.len() > BLOCK {
+        let d = sha256(key);
+        k[..32].copy_from_slice(&d);
+    } else {
+        k[..key.len()].copy_from_slice(key);
+    }
+    let mut inner = Vec::with_capacity(BLOCK + msg.len());
+    for b in k.iter() {
+        inner.push(b ^ 0x36);
+    }
+    inner.extend_from_slice(msg);
+    let inner_digest = sha256(&inner);
+    let mut outer = Vec::with_capacity(BLOCK + 32);
+    for b in k.iter() {
+        outer.push(b ^ 0x5c);
+    }
+    outer.extend_from_slice(&inner_digest);
+    sha256(&outer)
+}
+
+/// `hmac_sha256` rendered as lowercase hex.
+pub fn hmac_sha256_hex(key: &[u8], msg: &[u8]) -> String {
+    let digest = hmac_sha256(key, msg);
+    let mut s = String::with_capacity(64);
+    for b in digest {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,6 +176,28 @@ mod tests {
         assert_eq!(
             sha256_hex(input),
             "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+        );
+    }
+
+    #[test]
+    fn hmac_known_answers() {
+        // RFC 4231 test case 1.
+        assert_eq!(
+            hmac_sha256_hex(&[0x0b; 20], b"Hi There"),
+            "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"
+        );
+        // RFC 4231 test case 2 ("Jefe").
+        assert_eq!(
+            hmac_sha256_hex(b"Jefe", b"what do ya want for nothing?"),
+            "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+        );
+        // RFC 4231 test case 6 — a key longer than the 64-byte block.
+        assert_eq!(
+            hmac_sha256_hex(
+                &[0xaa; 131],
+                b"Test Using Larger Than Block-Size Key - Hash Key First"
+            ),
+            "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"
         );
     }
 }
