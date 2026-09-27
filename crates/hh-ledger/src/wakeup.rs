@@ -477,10 +477,26 @@ impl Store {
     ) -> Result<String, LedgerError> {
         self.tier_c1("wakeup_subscribe")?;
         if !trigger.admissible() {
-            return Err(LedgerError::TriggerUnsupported {
-                trigger: trigger.type_name().to_string(),
-                stage: 4,
-            });
+            // S4.9 fleet boundary — `external`/`manual` are admissible
+            // *only* on a `run_kind = fleet` activation (§5i.1 #2; the
+            // fixture adapter's ingress occurrences ride `external`, the
+            // attended-`resume`/`escalate` surface rides `manual`). Every
+            // other run kind keeps the typed Stage-4 refusal unchanged —
+            // the boundary is checked against the durable manifest, never
+            // caller assertion (CC3).
+            let fleet_boundary = matches!(
+                trigger,
+                Trigger::External { .. } | Trigger::Manual { .. }
+            ) && self
+                .manifest(run_id)
+                .map(|m| m.run_kind == crate::manifest::RunKind::Fleet)
+                .unwrap_or(false);
+            if !fleet_boundary {
+                return Err(LedgerError::TriggerUnsupported {
+                    trigger: trigger.type_name().to_string(),
+                    stage: 4,
+                });
+            }
         }
         if policy.delivery_mode == DeliveryMode::Steer {
             return Err(LedgerError::WakeupPolicyUnsupported {

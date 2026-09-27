@@ -999,8 +999,10 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("control.wakeup.scheduled", "none"),
     ("control.wakeup.skipped", "none"),
     // ── control:work_item ──
+    ("control.work_item.annotated", "none"),
     ("control.work_item.blocked", "none"),
     ("control.work_item.cancelled", "none"),
+    ("control.work_item.created", "none"),
     ("control.work_item.dispatched", "none"),
     ("control.work_item.handoff", "none"),
     ("control.work_item.owner_acknowledged", "none"),
@@ -1026,6 +1028,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── lifecycle:escalation ──
     ("lifecycle.escalation.raised", "none"),
     ("lifecycle.escalation.resolved", "none"),
+    // ── lifecycle:fleet ──
+    ("lifecycle.fleet.activated", "none"),
     // ── lifecycle:head ──
     ("lifecycle.head.moved", "none"),
     // ── lifecycle:hosted ──
@@ -1246,6 +1250,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // the emitters land at Stage 2 (the §05e F2/B2 escalation path).
     row_audit("lifecycle.escalation.raised",   O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("lifecycle.escalation.resolved", O::Events, true,  OPEN_AUDIT, &[], None, None),
+    // `lifecycle.fleet.activated` — the S4.9 activation anchor (§5i.1 #1's
+    // definition-record; the `fleet.*` surface emits it at `open` — audit-
+    // grade, the C4 tier's root fact).
+    row_audit("lifecycle.fleet.activated",     O::Events, true,  OPEN_AUDIT, &[], None, None),
     // `lifecycle.hosted.native_record` — the hosted adapter's appended leaf
     // (§5g.6 §3; the adapter is a kernel component — Rule P holds).
     row_audit("lifecycle.hosted.native_record", O::Events, true, OPEN_AUDIT, &[], None, None),
@@ -1606,6 +1614,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("control.ownership.granted",     O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.ownership.returned",    O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.ownership.transferred", O::Events, true,  OPEN_AUDIT, &[], None, None),
+    // S4.9: `created` is the canonical admission row (§5i.1's record
+    // family; the `dispatched{verb:admit}` alias predates the §5i.1
+    // vocabulary — both are declared, emitters prefer `created`).
+    row_audit("control.work_item.created",            O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("control.work_item.annotated",          O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.work_item.dispatched",         O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.work_item.stopped",            O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.work_item.blocked",            O::Events, true,  OPEN_AUDIT, &[], None, None),
