@@ -60,6 +60,8 @@ updatedAt:       2026-09-27
 
 | 2026-09-25 | GATE-G2 | Stage-3 evaluation-first acceptance | disposition (reading 2, post-S3.12b) | **PASSED** — accept carried-forward residuals | benchmarkSet `benchset.stage3.v1` live; real-suite legs + exemplar→ComparisonReport + hosting-absent run closed; §10.7 governs; OQ-363 interim rule stands; accepted deviations to GATE-ACCEPT: 5 foreign-toolchain rows, R2 human signature, LT-03 live corpus arm, DF-S1.17-1 form arm, DF-S1.21-2 OOP battery, DF-S3.12b-1/-2, annotated later-phase residuals. Stage 4 released. |
 
+| 2026-09-27 | S4.10 | Live stage: web instrument + security battery (operator-gated) | instrument + battery scope | authorized — hermetic/offline only; the full V1–V11 instrument + security battery lands in-worktree with no external spend or egress; legs bound to the unbound E3 surface ecosystem (HUMAN-H1) record DEFERRALS rows and report 'gate pending' per manifest, never a failure | runs the read-only web instrument + full security battery (not deferrable) over binding (c); generated-client legs gated on HUMAN-H1 deferred to the owning rows |
+
 ## RETURN PASS
 
 | ticket | gates | what the operator must do | re-run line |
