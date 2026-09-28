@@ -101,7 +101,10 @@ fn registrar(io: &Io) -> Json {
             ]),
         ),
         ("authority", Json::str("principal")),
-        ("scope", Json::str("persistent")),
+        // `user` — the human-principal scope (the closed
+        // `PersistenceScope` vocabulary; `minted` derives the same
+        // ceiling: principal at user scope).
+        ("scope", Json::str("user")),
         ("created_at", Json::Int(0)),
     ])
 }
@@ -313,11 +316,34 @@ pub fn cmd_definition_compile(
     io: &mut Io,
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
-    let text = file_text(p, io, 0, "<definition-file>")?;
+    // `lab.assembly.compile` takes a `DefinitionInput` — the same
+    // `<file|ref:…>` operand `serve`/`run start` speak (one spelling
+    // across verbs; S4.12). `-` is the stdin document.
+    let operand = require_pos(p, 0, "<definition-file|ref:…>")?;
+    let definition = if operand == "-" {
+        let text = file_text(p, io, 0, "<definition-file>")?;
+        let doc = hh_wire::json::parse(&text).map_err(|e| {
+            CliError::Invocation(InvocationError::at(
+                "definition_invalid_json",
+                "<definition-file>",
+                &format!("{e}"),
+            ))
+        })?;
+        Json::obj([("kind", Json::str("document")), ("document", doc)])
+    } else {
+        definition_operand(&operand)?
+    };
     let r = call(
         b,
         "lab.assembly.compile",
-        Json::obj([("definition", Json::str(text))]),
+        Json::Obj({
+            let mut m = std::collections::BTreeMap::new();
+            m.insert("definition".to_string(), definition);
+            if let Some(prof) = p.flag("profile") {
+                m.insert("profile_refs".to_string(), Json::Arr(vec![Json::str(prof)]));
+            }
+            m
+        }),
     )?;
     ok_outcome("definition_compile", r, fmt(p, io)?)
 }
@@ -1311,9 +1337,16 @@ pub fn cmd_participant_probe(
             ))
         })?;
         params.insert("report".to_string(), body);
-    } else if p.flag("drive").is_some() || p.positional.iter().any(|s| s == "drive") {
+    } else if p.has("drive")
+        || p.flag("drive").is_some()
+        || p.positional.iter().any(|s| s == "drive")
+    {
         let mut drive = Json::obj([]);
-        if let Some(probes_path) = p.flag("probes") {
+        // The drive params document (`{probes[], adapter_version_id?}`)
+        // arrives either as the `--probes <file>` value or — with the
+        // bare `--drive` switch — as the positional operand.
+        let probes_path = p.flag("probes").or_else(|| p.positional.first().cloned());
+        if let Some(probes_path) = probes_path {
             let text = std::fs::read_to_string(&probes_path).map_err(|e| {
                 CliError::Invocation(InvocationError::at(
                     "unreadable_file",
@@ -1368,4 +1401,394 @@ pub fn cmd_participant_probe(
     }
     let r = call(b, "lab.hosting.probe", Json::Obj(params))?;
     ok_outcome("participant_probe", r, fmt(p, io)?)
+}
+
+// ── S4.12 — `serve`/`acp`/`leaderboard`/`profile` (§7.1 C1/Stage-4 row;
+// R-2.11.1; ADR-0173/0174 `serve`, ADR-0098 `acp`, ADR-0304 `async`/`defer`,
+// ADR-0161/0163 `leaderboard`, the `model_profile`/`profile_test_report`
+// record kinds) ─────────────────────────────────────────────────────────
+//
+// Every verb is one named `hh-embed/1` operation — the CLI never re-lowers
+// an artefact, never computes a leaderboard, never interprets a profile
+// record (records-in/records-out; K-2).
+
+/// A `<file|ref:…>` operand → `DefinitionInput` (the same shape
+/// `run start`'s `definition_input` mints — one spelling across verbs).
+fn definition_operand(s: &str) -> Result<Json, CliError> {
+    if let Some(r) = s.strip_prefix("ref:") {
+        return Ok(Json::obj([
+            ("kind", Json::str("ref")),
+            ("ref", Json::str(r)),
+        ]));
+    }
+    let text = std::fs::read_to_string(s).map_err(|e| {
+        CliError::Invocation(InvocationError::at(
+            "definition_unreadable",
+            "<definition>",
+            &format!("cannot read {s}: {e}"),
+        ))
+    })?;
+    let doc = hh_wire::json::parse(&text).map_err(|e| {
+        CliError::Invocation(InvocationError::at(
+            "definition_invalid_json",
+            "<definition>",
+            &e.to_string(),
+        ))
+    })?;
+    Ok(Json::obj([
+        ("kind", Json::str("document")),
+        ("document", doc),
+    ]))
+}
+
+/// `hh serve <bundle-path|container> [--target acp|mcp]` /
+/// `hh serve --definition <file|ref:…> [--target]` → `lab.serve`
+/// verbatim (ADR-0173/0174 — the serve op resolves the target member or
+/// runs the on-demand compile and returns the `hh-lab-serve/1` result
+/// `{artifact, binding, launch}`; the CLI prints the launch descriptor,
+/// never spawns it — `hh acp` is the *serving* verb).
+pub fn cmd_serve(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let mut m = std::collections::BTreeMap::new();
+    if let Some(d) = p.flag("definition").or_else(|| {
+        p.positional
+            .first()
+            .cloned()
+            .filter(|s| s.starts_with("ref:") || s.ends_with(".json"))
+    }) {
+        m.insert("definition".to_string(), definition_operand(&d)?);
+    } else {
+        let path = require_pos(p, 0, "<bundle-path|container>")?;
+        let key = if Path::new(&path).is_dir() {
+            "path"
+        } else {
+            "container"
+        };
+        m.insert(key.to_string(), Json::str(path));
+    }
+    if let Some(t) = p.flag("target") {
+        m.insert("target".to_string(), Json::str(t));
+    }
+    if let Some(prof) = p.flag("profile") {
+        m.insert("profile_refs".to_string(), Json::Arr(vec![Json::str(prof)]));
+    }
+    let r = call(b, "lab.serve", Json::Obj(m))?;
+    if let Some(launch) = r
+        .get("launch")
+        .and_then(|l| l.get("program"))
+        .and_then(Json::as_str)
+    {
+        let _ = writeln!(io.err, "serve: launch `{launch}` over stdio");
+    }
+    ok_outcome("serve", r, fmt(p, io)?)
+}
+
+/// `hh acp <definition|ref:…>` → `lab.serve{definition, target:"acp"}`
+/// for the `hh-acp-target/1` artefact, then the agent-side
+/// `serve_session` loop over the stdio frame channel, driven by an
+/// `EmbedDriver` over *this invocation's* `Boundary` — the ACP surface
+/// is a client of `hh-embed/1`, never a second kernel path (§7.1 C1;
+/// ADR-0098; AC-R-2.11.1-1). stdin/stdout is the ACP wire; every
+/// `session/new` opens `OpenSpec::new` over the same definition
+/// (attendance `interactive` + `approval_mode = manual` — asks reach
+/// the ACP client as `session/request_permission`, never a policy
+/// default).
+pub fn cmd_acp(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let operand = require_pos(p, 0, "<definition|ref:…>")?;
+    let definition = definition_operand(&operand)?;
+    // Pre-ledger gate parity with `run start` — a session opens a run;
+    // a run needs a declared budget (the kernel re-checks; this is the
+    // UX gate, never the authority).
+    crate::invocation::missing_budget(
+        definition.get("document").unwrap_or(&Json::Null),
+        p.flag("budget").is_some(),
+    )
+    .map_err(CliError::Invocation)?;
+
+    // 1) The artefact — `lab.serve`'s on-demand compile arm (the
+    //    boundary owns lowering; the CLI consumes the record).
+    let mut serve_params = Json::obj([
+        ("definition", definition.clone()),
+        ("target", Json::str("acp")),
+    ]);
+    if let Some(prof) = p.flag("profile") {
+        if let Json::Obj(m) = &mut serve_params {
+            m.insert(
+                "profile_refs".to_string(),
+                Json::Arr(vec![Json::str(prof.clone())]),
+            );
+        }
+    }
+    let serve = call(b, "lab.serve", serve_params)?;
+    let artifact_json = serve.get("artifact").cloned().ok_or_else(|| {
+        CliError::Transport(format!(
+            "lab.serve{{target:acp}}: response has no `artifact`: {}",
+            serve.to_canonical_string()
+        ))
+    })?;
+    let artifact = hh_acp::AcpArtifact::from_json(&artifact_json)
+        .map_err(|e| CliError::Transport(format!("hh-acp-target/1 decode: {e}")))?;
+
+    // 2) The open spec every `session/new` drives — interactive asks
+    //    round-trip as `session/request_permission` on the ACP wire.
+    let mut spec = Json::obj([
+        ("kind", Json::str("new")),
+        ("definition", definition),
+        (
+            "environment",
+            Json::obj([
+                ("kind", Json::str("connection_info")),
+                (
+                    "connection_info",
+                    Json::obj([("class", Json::str("local_host"))]),
+                ),
+            ]),
+        ),
+        (
+            "supplies",
+            Json::obj([
+                ("context", Json::Arr(vec![])),
+                ("host_capabilities", Json::Arr(vec![])),
+                ("mcp_servers", Json::Arr(vec![])),
+                ("procedures", Json::Arr(vec![])),
+            ]),
+        ),
+        (
+            "attendance",
+            Json::obj([
+                ("value", Json::str("interactive")),
+                ("source", Json::str("declared")),
+            ]),
+        ),
+        ("approval_mode", Json::str("manual")),
+    ]);
+    if let Some(budget) = p.flag("budget") {
+        let bj = hh_wire::json::parse(&budget).map_err(|e| {
+            CliError::Invocation(InvocationError::at(
+                "budget_invalid_json",
+                "--budget",
+                &e.to_string(),
+            ))
+        })?;
+        if let Json::Obj(m) = &mut spec {
+            m.insert("budget".to_string(), bj);
+        }
+    }
+    // `--profile` binds the run's profile coordinate — the same
+    // coordinate the `lab.serve` compile resolved (the manifest's
+    // `profile_binding` member; the canonical `{profile_ref:{profile}}`
+    // spelling `set_coordinate`/`profile_binding` share).
+    if let Some(prof) = p.flag("profile") {
+        if let Json::Obj(m) = &mut spec {
+            m.insert(
+                "profile_binding".to_string(),
+                Json::obj([("profile_ref", Json::obj([("profile", Json::str(prof))]))]),
+            );
+        }
+    }
+
+    // 3) The driver over the command's own boundary + the stdio frame
+    //    channel — piped stdin bytes (tests, a one-shot ACP exchange)
+    //    or the live stdin/stdout pair (`hh acp` spawned by an editor).
+    let call = crate::boundary::BoundaryEmbedCall::new(b);
+    let mut driver = hh_acp::EmbedDriver::new(call, spec);
+    let served = match &io.stdin {
+        Some(bytes) => {
+            let mut t = hh_acp::StdioSessionTransport::new(
+                std::io::Cursor::new(bytes.clone()),
+                &mut *io.out,
+            );
+            hh_acp::serve_session(&artifact, &mut driver, &mut t)
+        }
+        None => {
+            let si = std::io::stdin();
+            let so = std::io::stdout();
+            let mut t = hh_acp::StdioSessionTransport::new(si.lock(), so.lock());
+            hh_acp::serve_session(&artifact, &mut driver, &mut t)
+        }
+    };
+    served.map_err(|e| CliError::Transport(format!("acp serve: {}", e.refusal())))?;
+    ok_outcome("acp_session_end", Json::obj([]), OutputFormat::Json)
+}
+
+/// `leaderboard <verb> <params-file>` → the `lab.leaderboard.*` op —
+/// the params file is the canonical-JSON request body
+/// (`definition`/`snapshot_id`/`rows`/`policy`/`supersedes`…);
+/// `-` reads it from stdin (records-in/records-out; the CLI computes
+/// nothing, R-2.11.1 stage row).
+pub fn cmd_leaderboard(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+    verb: &str,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let method = match verb {
+        "define" => "lab.leaderboard.define",
+        "show" => "lab.leaderboard.leaderboard",
+        "snapshots" => "lab.leaderboard.snapshots",
+        "diff" => "lab.leaderboard.diff_snapshots",
+        "publish" => "lab.leaderboard.publish",
+        "retract" => "lab.leaderboard.retract_entry",
+        _ => {
+            return Err(CliError::Invocation(InvocationError::at(
+                "unknown_command",
+                &format!("leaderboard {verb}"),
+                "leaderboard verbs: define|show|snapshots|diff|publish|retract",
+            )))
+        }
+    };
+    let text = file_text(p, io, 0, "<params-file>")?;
+    let params = hh_wire::json::parse(&text).map_err(|e| {
+        CliError::Invocation(InvocationError::at(
+            "invalid_json",
+            "params-file",
+            &format!("{e:?}"),
+        ))
+    })?;
+    let r = call(b, method, params)?;
+    ok_outcome(&format!("leaderboard_{verb}"), r, fmt(p, io)?)
+}
+
+/// `profile <verb>` — the `model_profile`/`profile_test_report`
+/// registry records over `lab.registry.*` (§7.4's profile coordinates
+/// are registry-resolved — the CLI never interprets a profile body):
+///
+/// - `profile register <record-file>` → `lab.registry.register{kind:
+///   model_profile}` (a `profile_test_report` file registers under its
+///   own kind — the body's `schema` member names it).
+/// - `profile list` → `lab.registry.query{clauses: kind = model_profile}`.
+/// - `profile show|status <name|version-id> [--namespace] [--label]` →
+///   `lab.registry.resolve` — the resolved record (its `status`/
+///   `admission`/`update` members are the status the verb surfaces).
+/// - `profile report <name|version-id>` → `lab.registry.resolve`
+///   against `profile_test_report` (the same selector; the record's
+///   `kind` member disambiguates).
+pub fn cmd_profile(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+    verb: &str,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    match verb {
+        "register" => {
+            let text = file_text(p, io, 0, "<record-file>")?;
+            let body = hh_wire::json::parse(&text).map_err(|e| {
+                CliError::Invocation(InvocationError::at(
+                    "invalid_json",
+                    "record-file",
+                    &format!("{e:?}"),
+                ))
+            })?;
+            // The body's own `schema` member names the kind — a
+            // `profile_test_report` file is never re-typed by the CLI.
+            let kind = match body.get("schema").and_then(Json::as_str) {
+                Some("hh-profile-test-report/1") | Some("profile_test_report") => {
+                    "profile_test_report"
+                }
+                _ => "model_profile",
+            };
+            let r = call(
+                b,
+                "lab.registry.register",
+                Json::obj([
+                    ("kind", Json::str(kind)),
+                    ("body", body),
+                    ("registrar", registrar(io)),
+                    (
+                        "trust_record_ref",
+                        p.flag("trust-record-ref")
+                            .map(Json::str)
+                            .unwrap_or(Json::Null),
+                    ),
+                ]),
+            )?;
+            ok_outcome("profile_register", r, fmt(p, io)?)
+        }
+        "list" => {
+            let r = call(
+                b,
+                "lab.registry.query",
+                Json::obj([(
+                    "clauses",
+                    Json::Arr(vec![Json::obj([
+                        ("field", Json::str("kind")),
+                        ("op", Json::str("eq")),
+                        ("value", Json::str("model_profile")),
+                    ])]),
+                )]),
+            )?;
+            ok_outcome("profile_list", r, fmt(p, io)?)
+        }
+        "show" | "status" | "report" => {
+            let mut params = Json::obj([
+                (
+                    "namespace",
+                    p.flag("namespace")
+                        .map(Json::str)
+                        .unwrap_or_else(|| Json::str("local")),
+                ),
+                (
+                    "label",
+                    p.flag("label").map(Json::str).unwrap_or(Json::Null),
+                ),
+                (
+                    "snapshot_id",
+                    p.flag("snapshot-id").map(Json::str).unwrap_or(Json::Null),
+                ),
+            ]);
+            if let Some(vid) = p.flag("version-id").or_else(|| {
+                p.positional
+                    .first()
+                    .cloned()
+                    .filter(|s| s.starts_with("idp:") || s.starts_with("sha256:"))
+            }) {
+                if let Json::Obj(m) = &mut params {
+                    m.insert("version_id".to_string(), Json::str(vid));
+                }
+            } else {
+                let name = require_pos(p, 0, "<name|version-id>")?;
+                if let Json::Obj(m) = &mut params {
+                    m.insert("name".to_string(), Json::str(name));
+                }
+            }
+            // `show`/`status`/`report` are *inspection* verbs — audit
+            // mode: a quarantined record is the status answer, never a
+            // refusal (admission is data — `execute` is the lift mode
+            // and would hide the record the verb exists to print).
+            if let Json::Obj(m) = &mut params {
+                m.insert("mode".to_string(), Json::str("audit"));
+            }
+            let r = call(b, "lab.registry.resolve", params)?;
+            // `report` asserts the resolved record *is* a test report —
+            // a model_profile answer is the honest `not a report` line,
+            // never a fabricated one.
+            if verb == "report" {
+                let kind = r
+                    .get("record")
+                    .and_then(|rec| rec.get("kind"))
+                    .and_then(Json::as_str)
+                    .unwrap_or_default();
+                if kind != "profile_test_report" {
+                    return Err(CliError::Invocation(InvocationError::at(
+                        "not_a_profile_test_report",
+                        "<name|version-id>",
+                        &format!("resolved record kind is `{kind}`, not `profile_test_report`"),
+                    )));
+                }
+            }
+            ok_outcome(&format!("profile_{verb}"), r, fmt(p, io)?)
+        }
+        _ => Err(CliError::Invocation(InvocationError::at(
+            "unknown_command",
+            &format!("profile {verb}"),
+            "profile verbs: register|list|show|status|report",
+        ))),
+    }
 }

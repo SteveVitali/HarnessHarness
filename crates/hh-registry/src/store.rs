@@ -946,12 +946,15 @@ impl RegistryStore {
             RegistryRecord::ForeignImport(_) | RegistryRecord::Snapshot(_) => {}
             RegistryRecord::Participant(body)
             | RegistryRecord::Adapter(body)
-            | RegistryRecord::LeaderboardDefinition(body) => {
+            | RegistryRecord::LeaderboardDefinition(body)
+            | RegistryRecord::ModelProfile(body)
+            | RegistryRecord::ProfileTestReport(body) => {
                 // Same opaque-body gate as `EnvironmentRecord` — `hh-hosting`
                 // owns the §6.6 schemas, `hh-results` the §6.5
-                // `LeaderboardDefinition` schema; the registry re-runs the
-                // structural decode (the `kind` tag must match the record
-                // kind).
+                // `LeaderboardDefinition` schema, `hh-compiler` the
+                // `ModelProfile/1` view + `ProfileTestReport` schemas; the
+                // registry re-runs the structural decode (the `kind` tag must
+                // match the record kind and the payload member must decode).
                 if let Err(e) = schema::record_from_json(record.kind(), body) {
                     bail!(e);
                 }

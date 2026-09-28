@@ -40,6 +40,7 @@ use hh_ledger::event::{Event, EventEnvelope, Producer, Scope};
 use hh_ledger::manifest::RunManifest;
 use hh_ontology::eval::{EvalError, MetricValue};
 use hh_provenance::ProvenanceRecord;
+use hh_registry::store::RegistryStore;
 use hh_wire::json::Json;
 
 use crate::service::{ledger_err, EmbedService};
@@ -147,15 +148,18 @@ fn mint_embed_event(
     })
 }
 
-/// `profile_binding` coordinates the sealed document pins — the compile
-/// inputs' `profile_refs`. The walk is over the canonical document JSON
-/// (a `profile_binding` object carries `profile_ref.profile`; the
-/// `unbound`/`constraint` spellings contribute nothing).
-fn pinned_profile_refs(sealed: &hh_hir::HirDocument) -> Vec<String> {
+/// The profile coordinates the sealed document pins — the compile
+/// inputs' `profile_refs`. Every `ProfileRef` serializes as
+/// `{profile_ref: <coordinate>, pinned: <bool>}` — that spelling covers
+/// `assembly.profile_binding` (`unbound`/`constraint` contribute
+/// nothing), `native.profile` (the `primary` role), `judge.profile`,
+/// and `conditioned_on` refs. Only *pinned* refs are bound coordinates;
+/// an authored selector or the `unbound` sentinel is not.
+pub(crate) fn pinned_profile_refs(sealed: &hh_hir::HirDocument) -> Vec<String> {
     fn walk(j: &Json, out: &mut Vec<String>) {
-        if let Some(pr) = j.get("profile_binding").and_then(|b| b.get("profile_ref")) {
-            if let Some(c) = pr.get("profile").and_then(Json::as_str) {
-                out.push(c.to_string());
+        if let Some(coord) = j.get("profile_ref").and_then(Json::as_str) {
+            if matches!(j.get("pinned"), Some(Json::Bool(true))) && coord != "unbound" {
+                out.push(coord.to_string());
             }
         }
         match j {
@@ -1842,38 +1846,101 @@ impl EmbedService {
 
     // ── Group L — lab.serve ─────────────────────────────────────────
 
-    /// `lab.serve{path | container}` — the `serve(bundle)` boundary
-    /// half (R-2.11.3⁰; ADR-0097 D7): decode the bundle, lower its
-    /// `target:mcp` member into the `hh-mcp-artifact/1` record and
-    /// return `{artifact, binding, launch}` — the `stdio_launch`
-    /// CallerBinding (fixed to the test principal, R-3) plus the launch
-    /// descriptor the caller uses to spawn `hh-mcp-serve` (the stdio
-    /// pair is the caller's; the kernel never holds it).
+    /// `lab.serve{path | container | definition, target?}` — the
+    /// `serve` boundary half (R-2.11.3⁰/R-2.11.1¹; ADR-0097 D7;
+    /// ADR-0304 D4): decode the bundle, lower its `target:<t>` member
+    /// into the artefact record and return `{artifact, binding,
+    /// launch}` — the `stdio_launch` CallerBinding (fixed to the test
+    /// principal, R-3) plus the launch descriptor the caller uses to
+    /// spawn the serve program (the stdio pair is the caller's; the
+    /// kernel never holds it).
+    ///
+    /// `target ∈ {mcp, acp}` — absent ⇒ inferred from the members
+    /// (`target:acp` preferred so an ACP bundle is never silently
+    /// served as MCP). A `definition` input takes the on-demand path
+    /// (§7.1 §4.3): the source assembles + compiles the named target
+    /// through `lab.assembly.compile`'s own pipeline — never a second
+    /// lowering — and the artefact comes back verbatim.
     pub(crate) fn lab_serve(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        if params.get("definition").is_some() || params.get("source").is_some() {
+            return self.lab_serve_from_definition(params);
+        }
         let decoded = decode_bundle_arg(params, "lab.serve")?;
+        let target = params
+            .get("target")
+            .and_then(Json::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                if decoded
+                    .manifest
+                    .members
+                    .iter()
+                    .any(|m| m.role == "target:acp")
+                {
+                    "acp".to_string()
+                } else {
+                    "mcp".to_string()
+                }
+            });
+        let member_role = format!("target:{target}");
         let member = decoded
             .manifest
             .members
             .iter()
-            .find(|mm| mm.role == "target:mcp")
+            .find(|mm| mm.role == member_role)
             .ok_or_else(|| EmbedError::Refused {
-                reason: "no_target_mcp_member".to_string(),
+                reason: format!("no_{member_role}_member"),
             })?;
         let bytes = decoded
             .members
             .get(&member.address)
             .ok_or_else(|| EmbedError::Refused {
-                reason: "target_mcp_member_absent".to_string(),
+                reason: format!("{member_role}_member_absent"),
             })?;
-        let artifact = hh_mcp::artifact::lower_mcp_target(
-            bytes,
-            &decoded.manifest.version_id,
-            &decoded.manifest.version_id,
-        )
-        .map_err(|e| EmbedError::Refused {
-            reason: format!("mcp_target: {e:?}"),
-        })?;
-        let artifact_json = artifact.to_json();
+        let (artifact_json, program) = match target.as_str() {
+            "mcp" => (
+                hh_mcp::artifact::lower_mcp_target(
+                    bytes,
+                    &decoded.manifest.version_id,
+                    &decoded.manifest.version_id,
+                )
+                .map_err(|e| EmbedError::Refused {
+                    reason: format!("mcp_target: {e:?}"),
+                })?
+                .to_json(),
+                "hh-mcp-serve",
+            ),
+            // §5d.4 D2 — the member is the `hh-acp-target/1` artefact
+            // the compiler's `lower_acp` produced; `lab.serve` carries
+            // it verbatim (the launch runs `serve_session` — the ACP
+            // protocol loop, never the MCP lowerer).
+            "acp" => {
+                let doc = std::str::from_utf8(bytes)
+                    .ok()
+                    .and_then(|t| hh_wire::json::parse(t).ok())
+                    .ok_or_else(|| EmbedError::Refused {
+                        reason: "acp_member_decode".to_string(),
+                    })?;
+                if doc.get("schema").and_then(Json::as_str)
+                    != Some(hh_compiler::acp::ACP_ARTEFACT_SCHEMA)
+                {
+                    return Err(EmbedError::Refused {
+                        reason: format!(
+                            "target:acp member is `{}`, not `{}`",
+                            doc.get("schema").and_then(Json::as_str).unwrap_or("<none>"),
+                            hh_compiler::acp::ACP_ARTEFACT_SCHEMA
+                        ),
+                    });
+                }
+                (doc, "hh acp")
+            }
+            other => {
+                return Err(EmbedError::SchemaViolation {
+                    path: "/target".to_string(),
+                    code: format!("unknown_target {other}"),
+                })
+            }
+        };
         let mut launch_args: Vec<String> = Vec::new();
         if let Some(p) = params.get("path").and_then(Json::as_str) {
             launch_args.push("--bundle".to_string());
@@ -1889,7 +1956,7 @@ impl EmbedService {
             (
                 "launch",
                 Json::obj([
-                    ("program", Json::str("hh-mcp-serve")),
+                    ("program", Json::str(program)),
                     (
                         "args",
                         Json::Arr(launch_args.iter().map(|a| Json::str(a.clone())).collect()),
@@ -1899,4 +1966,254 @@ impl EmbedService {
             ),
         ]))
     }
+
+    /// `lab.serve{definition|source, target}` — the on-demand compile
+    /// path (§7.1 §4.3; ADR-0304 D4): the source assembles + compiles
+    /// the named target through the one pipeline (`lab_assembly_compile`
+    /// — the boundary never re-lowers), the `hh-acp-target/1`/`mcp`
+    /// artefact returns verbatim, and the launch descriptor names the
+    /// serve program the caller spawns.
+    fn lab_serve_from_definition(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let target = params.get("target").and_then(Json::as_str).unwrap_or("acp");
+        if !matches!(target, "acp" | "mcp") {
+            return Err(EmbedError::SchemaViolation {
+                path: "/target".to_string(),
+                code: format!("unknown_target {target}"),
+            });
+        }
+        let mut compile_params = Json::obj([]);
+        if let Json::Obj(m) = &mut compile_params {
+            if let Some(d) = params.get("definition") {
+                m.insert("definition".to_string(), d.clone());
+            }
+            if let Some(src) = params.get("source") {
+                m.insert("source".to_string(), src.clone());
+            }
+            // S4.12 — the bound profile coordinates pass through
+            // verbatim (`lab.assembly.compile` resolves them through
+            // the registry — `UnknownCoordinate`/`LinkError` never a
+            // serve-side substitute).
+            for k in ["profile_refs", "fallback_profile"] {
+                if let Some(v) = params.get(k) {
+                    m.insert(k.to_string(), v.clone());
+                }
+            }
+            m.insert("targets".to_string(), Json::Arr(vec![Json::str(target)]));
+        }
+        let bundle = self.lab_assembly_compile(&compile_params)?;
+        if bundle.get("status").and_then(Json::as_str) != Some("ok") {
+            return Ok(bundle);
+        }
+        let artifact = bundle
+            .get("bundle")
+            .and_then(|b| b.get("target_artefacts"))
+            .and_then(|a| a.get(target))
+            .cloned()
+            .ok_or_else(|| EmbedError::Refused {
+                reason: format!("compiled bundle carries no `{target}` artefact"),
+            })?;
+        Ok(Json::obj([
+            ("schema", Json::str("hh-lab-serve/1")),
+            ("artifact", artifact),
+            ("binding", hh_mcp::stdio_launch_binding()),
+            (
+                "launch",
+                Json::obj([
+                    (
+                        "program",
+                        Json::str(if target == "acp" {
+                            "hh acp"
+                        } else {
+                            "hh-mcp-serve"
+                        }),
+                    ),
+                    ("args", Json::Arr(vec![])),
+                    ("transport", Json::str("stdio")),
+                ]),
+            ),
+            (
+                "compiled",
+                bundle.get("bundle").cloned().unwrap_or(Json::Null),
+            ),
+        ]))
+    }
+}
+
+// ── S4.12: the registry `ProfileView` (§7.4 `set_coordinate` +
+// `lab.assembly.compile`; CF-046's snapshot-confined read model — the
+// compiler never reaches a live registry, the view reads the *records*
+// the one `RegistryStore` holds) ─────────────────────────────────────
+
+/// Resolve a model/profile coordinate through the registry — the
+/// spellings §3.2.2 admits (`content_hash`/`version_id`,
+/// `profile_id@version`, `namespace/name[@label]`). `None` = the
+/// coordinate names nothing *admissible* — `UnknownCoordinate` at the
+/// boundary, never a silent substitute.
+pub(crate) fn resolve_profile_coordinate(
+    store: &RegistryStore,
+    coordinate: &str,
+) -> Option<(String, hh_compiler::profile::ModelProfile)> {
+    use hh_registry::kinds::Admission;
+    use hh_registry::records::RegistryRecord;
+    // The stored body is the registry envelope `{kind:"model_profile",
+    // profile:<ModelProfile/1 view>}` — the compiler decodes the payload
+    // member, never the envelope (opaque layering, CC3).
+    let decode = |body: &Json| {
+        body.get("profile")
+            .and_then(|v| hh_compiler::schema::profile_from_json(v, "profile").ok())
+    };
+    let from_record = |rec: &RegistryRecord, revoked: bool, vid: &str| {
+        if revoked {
+            return None;
+        }
+        if let RegistryRecord::ModelProfile(body) = rec {
+            return decode(body).map(|p| (vid.to_string(), p));
+        }
+        None
+    };
+    // `version_id`/`content_hash` spelling — resolve derives the
+    // effective admission (`revoked` coordinates nothing live).
+    if let Ok(r) = store.resolve(
+        &hh_registry::store::ResolveInput::Version(coordinate.to_string()),
+        hh_identity::names::ResolveMode::Execute,
+        &hh_registry::store::ResolveRequest::default(),
+    ) {
+        if !matches!(r.admission, Admission::Revoked) {
+            if let Some(hit) = from_record(&r.record, false, &r.envelope.version_id) {
+                return Some(hit);
+            }
+        }
+    }
+    // `namespace/name[@label]` — the name-resolution path (revocation
+    // and yank tombstones are the resolve machinery's answers).
+    if let Some((ns, rest)) = coordinate.split_once('/') {
+        let (name, label) = match rest.split_once('@') {
+            Some((n, l)) => (n, Some(l.to_string())),
+            None => (rest, None),
+        };
+        let input = hh_registry::store::ResolveInput::Selector {
+            namespace: ns.to_string(),
+            name: name.to_string(),
+            label,
+            snapshot_id: None,
+        };
+        if let Ok(r) = store.resolve(
+            &input,
+            hh_identity::names::ResolveMode::Execute,
+            &hh_registry::store::ResolveRequest::default(),
+        ) {
+            if !matches!(r.admission, Admission::Revoked) {
+                if let Some(hit) = from_record(&r.record, false, &r.envelope.version_id) {
+                    return Some(hit);
+                }
+            }
+        }
+    }
+    // `profile_id@version` — the canonical coordinate spelling; scan
+    // the kind's catalog (revocation is the derived `revoked` flag —
+    // a revoked profile coordinates nothing live).
+    let pred = hh_registry::store::QueryPredicate {
+        clauses: vec![hh_registry::store::QueryClause {
+            field: "kind".to_string(),
+            op: hh_registry::store::QueryOp::Eq,
+            value: "model_profile".to_string(),
+        }],
+        snapshot_id: None,
+    };
+    for entry in store.catalog(Some(&pred)).unwrap_or_default() {
+        if entry.revoked {
+            continue;
+        }
+        if let Some((vid, p)) = from_record(&entry.record, false, &entry.envelope.version_id) {
+            if hh_compiler::profile::profile_coordinate(&p) == coordinate
+                || p.content_hash == coordinate
+            {
+                return Some((vid, p));
+            }
+        }
+    }
+    None
+}
+
+/// The profile test report the registry holds beside a coordinate
+/// (ADR-0125 d.1): `profile_ref`/`profile_hash` match — `None` is the
+/// link gate's `profile_untested`, never coerced.
+pub(crate) fn resolve_test_report(
+    store: &RegistryStore,
+    coordinate: &str,
+) -> Option<hh_compiler::profile_test::ProfileTestReport> {
+    use hh_registry::records::RegistryRecord;
+    let pred = hh_registry::store::QueryPredicate {
+        clauses: vec![hh_registry::store::QueryClause {
+            field: "kind".to_string(),
+            op: hh_registry::store::QueryOp::Eq,
+            value: "profile_test_report".to_string(),
+        }],
+        snapshot_id: None,
+    };
+    for entry in store.catalog(Some(&pred)).unwrap_or_default() {
+        if entry.revoked {
+            continue;
+        }
+        if let RegistryRecord::ProfileTestReport(body) = &entry.record {
+            // `{kind:"profile_test_report", target:{…}, report:<report>}`
+            // — the payload member, never the envelope.
+            let payload = body.get("report").cloned().unwrap_or(Json::Null);
+            if let Some(r) = hh_compiler::profile_test::test_report_from_json(&payload) {
+                if r.profile_ref == coordinate || r.profile_hash == coordinate {
+                    return Some(r);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// `ProfileView` over the one `RegistryStore` (S4.12; ADR-0304 D3).
+/// Bound coordinates, `extends` ancestors and test reports all read
+/// through the same registry — the compile is as deterministic as the
+/// records are.
+pub(crate) struct RegistryProfiles<'a>(pub &'a RegistryStore);
+
+impl hh_compiler::profile::ProfileView for RegistryProfiles<'_> {
+    fn profile(&self, coordinate: &str) -> Option<hh_compiler::profile::ModelProfile> {
+        resolve_profile_coordinate(self.0, coordinate).map(|(_, p)| p)
+    }
+    fn test_report(
+        &self,
+        coordinate: &str,
+    ) -> Option<hh_compiler::profile_test::ProfileTestReport> {
+        resolve_test_report(self.0, coordinate)
+    }
+}
+
+/// The pinned `TargetSpec` for a registered target id (§3.2.5's spec
+/// table — the version pins are derivation-key inputs; `content_hash`
+/// is `idp/1` over the pair so a bump is a new address).
+pub(crate) fn target_spec(target_id: &str) -> Result<hh_compiler::link::TargetSpec, EmbedError> {
+    let spec_version = match target_id {
+        "acp" => hh_compiler::acp::ACP_VERSION.to_string(),
+        "mcp" => hh_mcp::protocol::PINNED_MODERN.to_string(),
+        "provider_tool_api" | "a2a" | "agent_spec" => "1.0".to_string(),
+        other => {
+            return Err(EmbedError::SchemaViolation {
+                path: "/targets".to_string(),
+                code: format!("unknown_target {other}"),
+            })
+        }
+    };
+    let content_hash = hh_identity::idp_id(
+        "target_spec.1",
+        Json::obj([
+            ("spec_version", Json::str(spec_version.clone())),
+            ("target_id", Json::str(target_id)),
+        ])
+        .to_canonical_string()
+        .as_bytes(),
+    );
+    Ok(hh_compiler::link::TargetSpec {
+        target_id: target_id.to_string(),
+        spec_version,
+        content_hash,
+    })
 }

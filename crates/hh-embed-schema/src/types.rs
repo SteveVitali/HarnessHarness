@@ -719,6 +719,17 @@ pub enum OpenSpec {
         /// (`UnresolvedEventRef` on a dangling claim) — it is a causal
         /// citation, never an authority claim.
         spawn_event: Option<SpawnEventRef>,
+        /// `notification_sink` — the `sink:<scheme>:<arg>` address the
+        /// surface binds for asynchronous deliveries (§7.1 D-2 —
+        /// `async`/`defer` lowers onto this member; ADR-0304 D1). The
+        /// only admitted scheme at C1 is `sink:file:<relpath>` — a path
+        /// *inside* the service's workspace root the kernel appends each
+        /// durable `security.permission.requested` record to (one
+        /// canonical-JSON line per ask). The sink is the delivery
+        /// channel for asks a deferred/async run never surfaces on a
+        /// live permission channel; the durable `permission.pending`
+        /// row remains the authority.
+        notification_sink: Option<String>,
     },
     /// `{kind:"resume", run_id, mode, from_seq?, definition?}` — `mode` ∈
     /// {continue (WouldBlock while the writer lives), takeover
@@ -753,6 +764,7 @@ impl OpenSpec {
                 workspace_trust,
                 narrowing_leaves,
                 spawn_event,
+                notification_sink,
             } => {
                 let mut m = BTreeMap::new();
                 m.insert("kind".into(), Json::str("new"));
@@ -789,6 +801,9 @@ impl OpenSpec {
                 }
                 if let Some(se) = spawn_event {
                     m.insert("spawn_event".into(), se.to_json());
+                }
+                if let Some(ns) = notification_sink {
+                    m.insert("notification_sink".into(), Json::str(ns.clone()));
                 }
                 Json::Obj(m)
             }
@@ -886,6 +901,19 @@ impl OpenSpec {
                     .take("spawn_event")
                     .map(|e| SpawnEventRef::from_json(e, &format!("{path}/spawn_event")))
                     .transpose()?;
+                let notification_sink = s
+                    .opt_str("notification_sink")?
+                    .map(|ns| {
+                        if ns.starts_with("sink:") && ns.len() > "sink:".len() {
+                            Ok(ns)
+                        } else {
+                            Err(EmbedError::SchemaViolation {
+                                path: format!("{path}/notification_sink"),
+                                code: "unsupported_sink".to_string(),
+                            })
+                        }
+                    })
+                    .transpose()?;
                 OpenSpec::New {
                     definition,
                     overrides,
@@ -899,6 +927,7 @@ impl OpenSpec {
                     workspace_trust,
                     narrowing_leaves,
                     spawn_event,
+                    notification_sink,
                 }
             }
             "resume" => {
@@ -1031,6 +1060,14 @@ pub struct OpenSessionParams {
     /// opener; absent for callers that do not identify a surface (the CLI
     /// attaches declare nothing — the boundary binds them implicitly).
     pub client: Option<ClientDecl>,
+    /// `contract_json` — the contract-carried surface descriptor the
+    /// opener binds (AC-R-2.11.4-15; ADR-0304 D2): an opaque payload the
+    /// kernel records verbatim on the session (`client.contract`) and
+    /// names in `lifecycle.session.attached`. A hosted/embedded surface's
+    /// own contract (e.g. the ACP artefact's `initialize_response`, an
+    /// adapter's `AgentCard`) rides here — data the kernel stores, never
+    /// interprets.
+    pub contract_json: Option<Json>,
 }
 
 impl OpenSessionParams {
@@ -1047,6 +1084,9 @@ impl OpenSessionParams {
         if let Some(c) = &self.client {
             m.insert("client".into(), c.to_json());
         }
+        if let Some(c) = &self.contract_json {
+            m.insert("contract_json".into(), c.clone());
+        }
         Json::Obj(m)
     }
     pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
@@ -1061,12 +1101,14 @@ impl OpenSessionParams {
             .take("client")
             .map(|c| ClientDecl::from_json(c, "open_session/client"))
             .transpose()?;
+        let contract_json = s.take("contract_json").cloned();
         s.finish()?;
         Ok(OpenSessionParams {
             spec,
             idempotency_key,
             invocation,
             client,
+            contract_json,
         })
     }
 }
@@ -2272,6 +2314,39 @@ impl SteerParams {
             session_id,
             expected_turn_id,
             input,
+            idempotency_key,
+        })
+    }
+}
+
+/// `set_coordinate` params (§7.4; ADR-0177 D10; S4.12) —
+/// `{session_id, coordinate, value, idempotency_key?}`. `coordinate`
+/// names a session-variable parameter — `model` (the bound model/
+/// profile coordinate; a change is `relower` +
+/// `model.surface.relowered`), `mode`, `thought_level`, or a bound
+/// config-option name. `value` is the typed coordinate value: a
+/// profile coordinate string (`<profile_id>@<version>` or a content
+/// hash) for `model`. A name outside the run's declared coordinate
+/// space is `UnknownCoordinate` — never ignored (T-13).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SetCoordinateParams {
+    pub session_id: String,
+    pub coordinate: String,
+    pub value: Json,
+    pub idempotency_key: Option<String>,
+}
+impl SetCoordinateParams {
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "set_coordinate")?;
+        let session_id = s.req_str("session_id")?;
+        let coordinate = s.req_str("coordinate")?;
+        let value = s.req("value")?.clone();
+        let idempotency_key = s.opt_str("idempotency_key")?;
+        s.finish()?;
+        Ok(SetCoordinateParams {
+            session_id,
+            coordinate,
+            value,
             idempotency_key,
         })
     }

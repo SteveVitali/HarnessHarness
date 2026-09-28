@@ -6,6 +6,7 @@
 //! boundary errors — `EmbedError` is reserved for malformed *params*).
 
 use hh_embed_schema::errors::EmbedError;
+use hh_embed_schema::types::DefinitionInput;
 use hh_lab::assembly::drift::drift_json;
 use hh_lab::assembly::service::{
     diagnostics_json, AssembleMode, AssemblyService, BatchPoint, PublishSpec,
@@ -15,7 +16,7 @@ use hh_provenance::ProvenanceRecord;
 use hh_registry::records::RegistryRecord;
 use hh_wire::json::Json;
 
-use crate::service::EmbedService;
+use crate::service::{ledger_err, EmbedService};
 
 fn bad(path: &str, code: &str) -> EmbedError {
     EmbedError::SchemaViolation {
@@ -237,6 +238,100 @@ impl EmbedService {
             Err(diags) => Ok(Json::obj([
                 ("status", Json::str("error")),
                 ("diagnostics", diagnostics_json(&diags)),
+            ])),
+        }
+    }
+
+    /// `lab.assembly.compile` — `{source? | definition?, targets?,
+    /// profile_refs?, fallback_profile?, compile_for_expired?}`: the
+    /// full §3.2 pipeline (stages 0–5) over the one kernel resolver
+    /// (S4.12; R-2.11.4 — the op `kernel.bundle` runs internally,
+    /// exposed here as a first-class verb). The `source` spelling
+    /// assembles through `AssemblyService` (seal mode); `definition`
+    /// is the embed contract's `DefinitionInput` (`open_session`'s
+    /// own input shape — one resolver, CC1).
+    ///
+    /// `targets` entries are registered target ids (`"acp"`, `"mcp"`,
+    /// …) or explicit `TargetSpec` records; `profile_refs` defaults
+    /// to the sealed document's pinned `profile_binding` coordinates
+    /// (the `kernel.bundle` default — profile coordinates resolve
+    /// through the one `RegistryStore`, CF-046's snapshot-confined
+    /// view). V-1: compile failures are the result record's
+    /// `{status:"error", compile_error, diagnostics}` — `EmbedError`
+    /// stays reserved for malformed params.
+    pub(crate) fn lab_assembly_compile(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let sealed = if let Some(dj) = params.get("definition") {
+            let d = DefinitionInput::from_json(dj, "/definition")?;
+            self.resolve_definition(&d)?
+        } else if let Some(vid) = params.get("sealed").and_then(Json::as_str) {
+            sealed_of(self, vid)?
+        } else {
+            let source = source_of(params)?;
+            let snap = snapshot_of(params);
+            let registrar = self.kernel_prov.clone();
+            let r = svc(self, &registrar).assemble(&source, snap.as_deref(), AssembleMode::Seal);
+            if r.status != "ok" {
+                return Ok(Json::obj([
+                    ("status", Json::str("error")),
+                    ("assembly", r.to_json()),
+                ]));
+            }
+            r.sealed.ok_or_else(|| EmbedError::Refused {
+                reason: "assemble produced no sealed definition".to_string(),
+            })?
+        };
+        let mut targets: Vec<hh_compiler::link::TargetSpec> = Vec::new();
+        if let Some(Json::Arr(ts)) = params.get("targets") {
+            for (i, t) in ts.iter().enumerate() {
+                let spec = match t {
+                    Json::Str(id) => crate::bundle_ops::target_spec(id)?,
+                    other => {
+                        hh_compiler::schema::target_spec_from_json(other, &format!("/targets/{i}"))
+                            .map_err(|e| bad(&format!("/targets/{i}"), &format!("{e:?}")))?
+                    }
+                };
+                targets.push(spec);
+            }
+        }
+        let profile_refs = match params.get("profile_refs") {
+            Some(Json::Arr(a)) => a
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect(),
+            _ => crate::bundle_ops::pinned_profile_refs(&sealed.document),
+        };
+        let fallback_profile = opt_str(params, "fallback_profile");
+        let compile_for_expired =
+            matches!(params.get("compile_for_expired"), Some(Json::Bool(true)));
+        let kernel = self.kernel_prov.clone();
+        let out = hh_compiler::compile(
+            &hh_compiler::CompileInputs {
+                sealed,
+                profile_refs,
+                fallback_profile,
+                targets,
+                compile_for_expired,
+            },
+            &crate::bundle_ops::RegistryProfiles(&self.registry),
+            &self.registry,
+            &self.catalog,
+            &kernel,
+        );
+        match out {
+            Ok(b) => {
+                let doc = hh_compiler::schema::bundle_to_json(&b);
+                // The canonical bundle member is pool-addressable —
+                // `get_artifact{bundle_id}` and a later `lab.serve`
+                // read it back from the one content-addressed store.
+                let bytes = doc.to_canonical_string().into_bytes();
+                self.store
+                    .put_blob(&bytes, "application/json")
+                    .map_err(ledger_err)?;
+                Ok(Json::obj([("status", Json::str("ok")), ("bundle", doc)]))
+            }
+            Err(e) => Ok(Json::obj([
+                ("status", Json::str("error")),
+                ("compile_error", Json::str(format!("{e:?}"))),
             ])),
         }
     }

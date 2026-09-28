@@ -801,6 +801,19 @@ pub enum RegistryRecord {
     /// `Capability` gives a `ToolCapability` node — one coordinate wherever the
     /// definition is pinned).
     SealedDefinition(hh_hir::SealedDefinition),
+    /// A `model_profile` — the `ModelProfile/1` view record (R-2.11.4 C1;
+    /// S4.12). `hh-compiler` owns the schema (`profile_to_json` is the one
+    /// codec) and sits *above* this crate — the same opaque layering as
+    /// `Participant`: the body is `{kind:"model_profile", profile:<view>}`
+    /// and the registry stores the canonical Json verbatim.
+    ModelProfile(Json),
+    /// A `profile_test_report` — the compiler-produced `ProfileTestReport`
+    /// (R-2.11.4 C1; S4.12). Same opaque layering: the body is
+    /// `{kind:"profile_test_report", target:{…}, report:<report>}`; the
+    /// registry stores it verbatim and `profile status`/`profile test`
+    /// results resolve through it (the `hh-test-report/1` fixture arm of
+    /// `WireCompileInputs` carries the same body).
+    ProfileTestReport(Json),
 }
 
 impl RegistryRecord {
@@ -825,6 +838,8 @@ impl RegistryRecord {
             RegistryRecord::Adapter(_) => RecordKind::Adapter,
             RegistryRecord::LeaderboardDefinition(_) => RecordKind::LeaderboardDefinition,
             RegistryRecord::SealedDefinition(_) => RecordKind::SealedDefinition,
+            RegistryRecord::ModelProfile(_) => RecordKind::ModelProfile,
+            RegistryRecord::ProfileTestReport(_) => RecordKind::ProfileTestReport,
         }
     }
 
@@ -843,13 +858,16 @@ impl RegistryRecord {
             // `accepted_signers` names signer identity coordinates (anchor
             // spellings), never registry `version_id`s — no closure edges.
             | RegistryRecord::TrustRootPolicy(_) => Vec::new(),
-            // The opaque participant/adapter/leaderboard-definition bodies
-            // carry no registry-level pins (C1 — their internal refs live
-            // inside the body; `hh-hosting`/`hh-results` own any projection
+            // The opaque participant/adapter/leaderboard/profile bodies carry
+            // no registry-level pins (their internal refs live inside the body
+            // — `profile_ref`/`report_ref` are the compiler's own coordinates,
+            // never registry `version_id`s; `hh-compiler` owns any projection
             // that reads them).
             RegistryRecord::Participant(_)
             | RegistryRecord::Adapter(_)
-            | RegistryRecord::LeaderboardDefinition(_) => Vec::new(),
+            | RegistryRecord::LeaderboardDefinition(_)
+            | RegistryRecord::ModelProfile(_)
+            | RegistryRecord::ProfileTestReport(_) => Vec::new(),
             // `applies_to_families` scopes by family *name* (the same treatment
             // `VariantRecord.applies_to.families` gets) — names are never pins.
             RegistryRecord::MetricDeclaration(_) => Vec::new(),

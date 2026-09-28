@@ -114,7 +114,11 @@ fn document_json() -> Json {
                 body: AgentProcessBody::Native(NativeProcess {
                     harness_def: sel("test:agent"),
                     profile: ProfileRef {
-                        profile: "sha256:profile".into(),
+                        // A registry-coordinate pin (profile_id@version)
+                        // — `lab.serve`/`set_coordinate` compiles bind
+                        // the chain whose head this names (S4.12); runs
+                        // that never compile leave the pin inert.
+                        profile: "test:model@1.0".into(),
                         pinned: true,
                     },
                     slots: BTreeMap::new(),
@@ -3109,9 +3113,10 @@ fn s31_lab_nouns_route_to_group_l_and_dry_run_is_the_planning_half() {
 fn s31_pending_lab_ops_surface_typed_stage_pending() {
     let mut b = ServiceBoundary::new("s31-pending");
     let def = write_lab_definition("pend");
-    // `lab.assembly.compile` stays staged at S3.5 — `definition compile`
-    // forwards to the registered op and surfaces `Refused{stage_pending}`
-    // verbatim (the Lab noun adds no semantics — N-3).
+    // S4.12 — `lab.assembly.compile` is live: `definition compile` now
+    // forwards the file as a `DefinitionInput{document}` and returns the
+    // compile record (records-in/records-out — N-3; the Lab noun adds
+    // no semantics).
     let (class, out, _) = hh(
         &mut b,
         &["definition", "compile", &def, "--format", "json"],
@@ -3119,8 +3124,21 @@ fn s31_pending_lab_ops_surface_typed_stage_pending() {
         None,
         &[],
     );
-    assert_ne!(class, ExitClass::Ok, "{out}");
-    assert!(out.contains("stage_pending"), "{out}");
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("definition_compile"), "{out}");
+
+    // An op still staged surfaces `Refused{stage_pending}` verbatim —
+    // `kernel.compose` has no CLI noun binding, so the Group-M floor is
+    // exercised through the boundary directly (the refusal is the
+    // contract's, never the CLI's).
+    let err = b
+        .call("kernel.compose", &Json::obj([]))
+        .expect_err("staged op must refuse");
+    let s = format!("{err:?}");
+    assert!(
+        s.contains("stage_pending") || s.contains("Unsupported"),
+        "{s}"
+    );
 
     // Verbs with no registered op refuse `invocation_error` stage_pending.
     let (class, out, _) = hh(&mut b, &["definition", "space", &def], NO_TTY, None, &[]);
@@ -3282,4 +3300,583 @@ fn s31_lab_ops_run_over_the_spawned_process() {
     assert_eq!(class, ExitClass::Ok, "{out}");
     let new_run = result_run_id(&out);
     assert_ne!(new_run, run_id, "{out}");
+}
+
+// ── S4.12 — `serve`/`acp`/`leaderboard`/`profile`/`--defer`/`participant` ──
+// (R-2.11.4 C1 + the R-2.11.1 Stage-4 row: every surface is an
+// `hh-embed/1` client — records-in/records-out, the CLI computes
+// nothing the kernel owns; AC-R-2.11.1-1.)
+
+/// The `ModelProfile` the fixture registers — the record view so a
+/// `ProfileTestReport` can carry its `content_hash` (`profile_hash`).
+fn model_profile_record(profile_id: &str, version: &str) -> hh_compiler::profile::ModelProfile {
+    use hh_compiler::profile::*;
+    let mut p = ModelProfile {
+        profile_id: profile_id.into(),
+        version: version.into(),
+        content_hash: String::new(),
+        selector: ProfileSelector {
+            provider_api_family: "test-api".into(),
+            model_family: "test-model".into(),
+            version_pattern: VersionPattern::Any,
+            precedence: 0,
+            successor_ref: None,
+            retirement_at: None,
+            roles_admitted: vec![ModelRole::Primary],
+        },
+        extends: None,
+        capabilities: Default::default(),
+        rules: vec![],
+        ext: std::collections::BTreeMap::new(),
+        expiry: ProfileDebtRecord {
+            rule_id: format!("{profile_id}.expiry"),
+            hypothesis: "the model honours the declared contract".into(),
+            evidence_refs: vec![],
+            owner: "test:owner".into(),
+            reach_via: vec![],
+            expiry_condition: ExpiryCondition {
+                kind: ExpiryKind::Date,
+                value: Some("2099-01-01".into()),
+            },
+            removal_test_ref: "sha256:test".into(),
+            removal_test: None,
+            status: DebtStatus::Active,
+            debt_class: None,
+            hypothesis_typed: None,
+            scope: None,
+            expiry: None,
+            runway_ms: None,
+            revalidation: None,
+            created_at: None,
+            supersedes: None,
+        },
+        compatibility: ProfileCompatibility {
+            inventory_version: "1.0".into(),
+            min_compiler_version: "0.0.0".into(),
+        },
+        tests: Json::obj([]),
+    };
+    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p
+}
+
+/// A `ModelProfile/1` record body the registry admits — built through
+/// the compiler's own codec so `content_hash` recomputes (CC3).
+fn model_profile_json(profile_id: &str, version: &str) -> Json {
+    let p = model_profile_record(profile_id, version);
+    // The registry envelope `{kind, profile}` — the payload member is
+    // the compiler's view, the kind tag the registry's admission gate.
+    Json::obj([
+        ("kind", Json::str("model_profile")),
+        ("profile", hh_compiler::schema::profile_to_json(&p)),
+    ])
+}
+
+/// An all-pass `ProfileTestReport` body bound to the fixture profile —
+/// `link` refuses a bound profile that carries no report
+/// (`ProfileUntested`; AC-R-2.3.3-13), so compile-path tests register
+/// the pair. The `schema` member is the tag `profile register` reads to
+/// pick the record kind.
+fn profile_test_report_json(profile_id: &str, version: &str) -> Json {
+    let p = model_profile_record(profile_id, version);
+    let coord = format!("{profile_id}@{version}");
+    let r = hh_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
+    Json::obj([
+        ("kind", Json::str("profile_test_report")),
+        ("schema", Json::str("hh-profile-test-report/1")),
+        ("report", hh_compiler::profile_test::test_report_json(&r)),
+    ])
+}
+
+/// Write a Json record to a temp file — the `*_register`/leaderboard
+/// verbs take file operands.
+fn write_json_file(tag: &str, name: &str, j: &Json) -> String {
+    let dir = test_dir(&format!("rec-{tag}"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = dir.join(name);
+    std::fs::write(&p, j.to_canonical_string()).unwrap();
+    p.display().to_string()
+}
+
+/// `open_session{new}` over the fixture document — the writer session
+/// `set_coordinate` drives directly through the boundary.
+/// `open_session{kind:"new"}` as a writer — returns `(session_id,
+/// run_id)`: the session id drives session ops; the run id is the
+/// attach/events coordinate.
+fn open_writer(b: &mut dyn Boundary, tag: &str) -> (String, String) {
+    let spec = Json::obj([
+        ("kind", Json::str("new")),
+        (
+            "definition",
+            Json::obj([
+                ("kind", Json::str("document")),
+                ("document", document_json()),
+            ]),
+        ),
+        (
+            "environment",
+            Json::obj([
+                ("kind", Json::str("connection_info")),
+                (
+                    "connection_info",
+                    Json::obj([("class", Json::str("local_host"))]),
+                ),
+            ]),
+        ),
+        (
+            "supplies",
+            Json::obj([
+                ("context", Json::Arr(vec![])),
+                ("host_capabilities", Json::Arr(vec![])),
+                ("mcp_servers", Json::Arr(vec![])),
+                ("procedures", Json::Arr(vec![])),
+            ]),
+        ),
+        (
+            "attendance",
+            Json::obj([
+                ("value", Json::str("unattended")),
+                ("source", Json::str("tty_inferred")),
+            ]),
+        ),
+        ("approval_mode", Json::str("unattended_deny")),
+    ]);
+    let r = b
+        .call(
+            "open_session",
+            &Json::obj([
+                ("spec", spec),
+                ("idempotency_key", Json::str(format!("s412-open-{tag}"))),
+            ]),
+        )
+        .unwrap_or_else(|e| panic!("open_session: {e:?}"));
+    let session_id = r
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    let run_id = r
+        .get("run_id")
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    (session_id, run_id)
+}
+
+/// AC-R-2.11.1-13 — the `participant` noun is a hosting-tier surface:
+/// absent the Hosting Plane, probe-side verbs surface the honest
+/// `hosting_plane_absent` refusal through the contract (never a faked
+/// participant view); with the plane bound the same noun answers.
+#[test]
+fn s412_participant_noun_gates_on_the_hosting_plane() {
+    let mut b = ServiceBoundary::new("s412-participant");
+    // A registered participant record the probe selects.
+    let body = Json::obj([
+        ("kind", Json::str("participant")),
+        ("version_identity", Json::str("idp:participant-1")),
+        (
+            "descriptor",
+            Json::obj([("hosting_mechanism", Json::str("test"))]),
+        ),
+        ("capability_declaration", Json::obj([])),
+    ]);
+    let rec = write_json_file("s412-part", "participant.json", &body);
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "participant",
+            "register",
+            &rec,
+            "--trust-record-ref",
+            "idp:trust-s412",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let j = hh_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
+    let vid = j
+        .get("payload")
+        .and_then(|p| p.get("version_id"))
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    assert!(!vid.is_empty(), "{out}");
+
+    // `probe --drive` is the plane-gated verb — absent plane →
+    // `hosting_plane_absent` verbatim (the noun adds no semantics).
+    let drive_params = Json::obj([
+        ("probes", Json::Arr(vec![Json::str("runtime_attested")])),
+        ("adapter_version_id", Json::str("idp:adapter-1")),
+    ]);
+    let drive_file = write_json_file("s412-drive", "drive.json", &drive_params);
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "participant",
+            "probe",
+            &format!("--participant-ref={vid}"),
+            "--drive",
+            &drive_file,
+            "--base",
+            &drive_file,
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_ne!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("hosting_plane_absent"), "{out}");
+
+    // With the plane bound, `describe` reconciles the record — the
+    // participant noun reads through the same contract either way.
+    b.svc.set_hosting_plane(Some(Box::new(
+        |op: &str, _params: &Json| -> Result<Json, String> {
+            Ok(Json::obj([
+                ("op", Json::str(op)),
+                ("verdict", Json::str("match")),
+                ("observed", Json::str("attested")),
+            ]))
+        },
+    )));
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "participant",
+            "describe",
+            &format!("--participant-ref={vid}"),
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("participant_describe"), "{out}");
+    assert!(out.contains("idp:participant-1"), "{out}");
+}
+
+/// `hh acp <definition>` — the artefact comes from `lab.serve`'s
+/// on-demand compile (never a CLI-side lower); the session loop runs
+/// `serve_session` over the stdio frame channel with an `EmbedDriver`
+/// speaking `hh-embed/1` through this invocation's `Boundary`.
+#[test]
+fn s412_acp_sessions_drive_over_the_embed_boundary() {
+    let mut b = ServiceBoundary::new("s412-acp");
+    // The compile needs a bound profile coordinate — register one and
+    // pass `--profile` (the coordinate is registry-resolved kernel-side;
+    // never a CLI substitute).
+    let profile = model_profile_json("test:model", "1.0");
+    let rec = write_json_file("s412-prof", "profile.json", &profile);
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "profile",
+            "register",
+            &rec,
+            "--trust-record-ref",
+            "idp:trust-s412",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    // `link` gates every bound non-null profile on an all-pass
+    // `ProfileTestReport` (ProfileUntested otherwise) — register the
+    // pair, the same records a real toolchain would publish.
+    let report = profile_test_report_json("test:model", "1.0");
+    let rec = write_json_file("s412-rep", "report.json", &report);
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "profile",
+            "register",
+            &rec,
+            "--trust-record-ref",
+            "idp:trust-s412",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+
+    let def = write_definition("s412-acp");
+    let wire = concat!(
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"0.1.0"}}"#,
+        "\n",
+        r#"{"jsonrpc":"2.0","id":2,"method":"session/new","params":{}}"#,
+        "\n",
+        r#"{"jsonrpc":"2.0","id":3,"method":"_hh/ledger/read","params":{"from_seq":0}}"#,
+        "\n",
+        r#"{"jsonrpc":"2.0","id":4,"method":"_hh/account","params":{}}"#,
+        "\n",
+    );
+    let (class, out, err) = hh(
+        &mut b,
+        &["acp", &def, "--profile", "test:model@1.0"],
+        NO_TTY,
+        Some(wire.as_bytes()),
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out} {err}");
+    // One JSON-RPC response per request, then the session-end record.
+    let frames: Vec<Json> = out
+        .lines()
+        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .collect();
+    let init = frames
+        .iter()
+        .find(|f| f.get("id") == Some(&Json::Int(1)))
+        .expect("initialize response");
+    assert!(
+        init.get("result")
+            .and_then(|r| r.get("agentCapabilities"))
+            .is_some(),
+        "{init:?}"
+    );
+    let new = frames
+        .iter()
+        .find(|f| f.get("id") == Some(&Json::Int(2)))
+        .expect("session/new response");
+    let sid = new
+        .get("result")
+        .and_then(|r| r.get("sessionId"))
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    assert!(!sid.is_empty(), "{new:?}");
+    // The `_hh/*` surface is one contract — ledger read answers the
+    // durable tail; account the same record `account` serves.
+    let ledger = frames
+        .iter()
+        .find(|f| f.get("id") == Some(&Json::Int(3)))
+        .expect("ledger/read response");
+    assert!(ledger.get("result").is_some(), "{ledger:?}");
+    let acct = frames
+        .iter()
+        .find(|f| f.get("id") == Some(&Json::Int(4)))
+        .expect("account response");
+    assert!(acct.get("result").is_some(), "{acct:?}");
+    // No frame carries an error envelope.
+    for f in &frames {
+        assert!(f.get("error").is_none(), "unexpected ACP error: {f:?}");
+    }
+    assert!(out.contains("acp_session_end"), "{out}");
+}
+
+/// `--defer` detaches: `run start` submits and returns `run_deferred`
+/// with the declared `notification_sink`; asks the unattended run
+/// cannot answer defer onto the sink file (ADR-0304 D-1/D-2 — the
+/// durable rows are the authority, the file is the delivery view).
+#[test]
+fn s412_defer_detaches_and_sinks_the_pending_ask() {
+    let mut b = ServiceBoundary::new("s412-defer");
+    let def = write_definition("s412-defer");
+    let cap = r#"{"capability_id":"cap:exec","surface_id":"surface:exec","requires_approval":true,"options":["allow_once","deny_once"]}"#;
+    let (class, out, err) = hh(
+        &mut b,
+        &[
+            "run",
+            "start",
+            &def,
+            "hi",
+            "--defer",
+            "asks/sink.jsonl",
+            "--capability",
+            cap,
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out} {err}");
+    assert!(out.contains("run_deferred"), "{out}");
+    assert!(out.contains("sink:file:asks/sink.jsonl"), "{out}");
+    // The pending ask landed on the sink file — one canonical JSONL row
+    // per `security.permission.*` event since the watermark.
+    let sink = b.root.join("ws").join("asks/sink.jsonl");
+    let lines =
+        std::fs::read_to_string(&sink).unwrap_or_else(|e| panic!("sink file {sink:?}: {e}"));
+    assert!(lines.contains("security.permission."), "{lines}");
+}
+
+/// `set_coordinate` — `model` resolves the coordinate through the
+/// registry (`profile_id@version`, `content_hash`, `version_id`): an
+/// unregistered coordinate is `UnknownCoordinate`, never a silent
+/// substitute (AC-R-2.11.4-14); a registered one re-lowers and mints
+/// `model.surface.relowered` before it applies.
+#[test]
+fn s412_set_coordinate_unknown_and_registered() {
+    let mut b = ServiceBoundary::new("s412-coord");
+    let (session_id, run_id) = open_writer(&mut b, "coord");
+
+    // A name outside the run's coordinate space → UnknownCoordinate.
+    let err = b
+        .call(
+            "set_coordinate",
+            &Json::obj([
+                ("session_id", Json::str(session_id.clone())),
+                ("coordinate", Json::str("nonsense")),
+                ("value", Json::str("test:model@1.0")),
+            ]),
+        )
+        .expect_err("unknown coordinate name");
+    assert!(format!("{err:?}").contains("UnknownCoordinate"), "{err:?}");
+
+    // A `model` coordinate naming nothing registered → UnknownCoordinate.
+    let err = b
+        .call(
+            "set_coordinate",
+            &Json::obj([
+                ("session_id", Json::str(session_id.clone())),
+                ("coordinate", Json::str("model")),
+                ("value", Json::str("test:model@1.0")),
+            ]),
+        )
+        .expect_err("unregistered coordinate");
+    assert!(format!("{err:?}").contains("UnknownCoordinate"), "{err:?}");
+
+    // Register the profile, then the same coordinate resolves and
+    // re-lowers — `model.surface.relowered` is the durable authority.
+    let profile = model_profile_json("test:model", "1.0");
+    let rec = write_json_file("s412-coord-prof", "profile.json", &profile);
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "profile",
+            "register",
+            &rec,
+            "--trust-record-ref",
+            "idp:trust-s412",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    // The relower's baseline compile binds the same profile the
+    // definition pins — `link` requires its `ProfileTestReport`.
+    let report = profile_test_report_json("test:model", "1.0");
+    let rec = write_json_file("s412-coord-rep", "report.json", &report);
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "profile",
+            "register",
+            &rec,
+            "--trust-record-ref",
+            "idp:trust-s412",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+
+    let r = b
+        .call(
+            "set_coordinate",
+            &Json::obj([
+                ("session_id", Json::str(session_id.clone())),
+                ("coordinate", Json::str("model")),
+                ("value", Json::str("test:model@1.0")),
+            ]),
+        )
+        .unwrap_or_else(|e| panic!("set_coordinate: {e:?}"));
+    assert_eq!(
+        r.get("status").and_then(Json::as_str),
+        Some("applied"),
+        "{r:?}"
+    );
+    // `model.surface.relowered` is the durable authority — the event
+    // lands before the coordinate applies (durable-before-visible).
+    let classes = event_classes(&mut b, &run_id);
+    assert!(
+        classes.iter().any(|c| c == "model.surface.relowered"),
+        "{classes:?}"
+    );
+}
+
+/// `leaderboard <verb>` — params-file verbs forward to the
+/// `lab.leaderboard.*` Group L ops verbatim (records-in/records-out).
+#[test]
+fn s412_leaderboard_verbs_forward_group_l() {
+    let mut b = ServiceBoundary::new("s412-lb");
+    let params = Json::obj([(
+        "definition",
+        Json::obj([
+            ("experiment_run_id", Json::str("idp:exp-s412")),
+            ("metric_ref", Json::str("wall_time_ms")),
+        ]),
+    )]);
+    let pf = write_json_file("s412-lb", "lb.json", &params);
+    let (class, out, _) = hh(&mut b, &["leaderboard", "define", &pf], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("leaderboard_define"), "{out}");
+    let j = hh_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
+    let def_id = j
+        .get("payload")
+        .and_then(|p| p.get("definition_id"))
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    assert!(!def_id.is_empty(), "{out}");
+
+    let snaps = Json::obj([("definition_ref", Json::str(def_id))]);
+    let sf = write_json_file("s412-lbs", "snaps.json", &snaps);
+    let (class, out, _) = hh(
+        &mut b,
+        &["leaderboard", "snapshots", &sf],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("leaderboard_snapshots"), "{out}");
+}
+
+/// `profile <verb>` — the `model_profile` record kind over
+/// `lab.registry.*`: register, list, show by version-id. The CLI never
+/// interprets the body (opaque record; R-2.11.4's register path).
+#[test]
+fn s412_profile_verbs_over_registry() {
+    let mut b = ServiceBoundary::new("s412-prof");
+    let profile = model_profile_json("test:model", "1.0");
+    let rec = write_json_file("s412-prof2", "profile.json", &profile);
+    let (class, out, _) = hh(
+        &mut b,
+        &[
+            "profile",
+            "register",
+            &rec,
+            "--trust-record-ref",
+            "idp:trust-s412",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let j = hh_wire::json::parse(out.trim().lines().last().unwrap()).unwrap();
+    let vid = j
+        .get("payload")
+        .and_then(|p| p.get("version_id"))
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    assert!(!vid.is_empty(), "{out}");
+
+    let (class, out, _) = hh(&mut b, &["profile", "list"], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains(&vid) || out.contains("test:model"), "{out}");
+
+    let (class, out, _) = hh(&mut b, &["profile", "show", &vid], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("model_profile"), "{out}");
+
+    // `profile report` on a non-report record refuses honestly.
+    let (class, out, _) = hh(&mut b, &["profile", "report", &vid], NO_TTY, None, &[]);
+    assert_ne!(class, ExitClass::Ok, "{out}");
 }

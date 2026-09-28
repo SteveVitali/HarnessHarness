@@ -128,8 +128,10 @@ dependencies = [
 name = "hh-cli"
 version = "0.0.1"
 dependencies = [
+ "hh-acp",
  "hh-assembly",
  "hh-bundle",
+ "hh-compiler",
  "hh-embed",
  "hh-embed-client-generated",
  "hh-embed-schema",

@@ -231,6 +231,17 @@ pub(crate) struct SessionState {
     /// kernel gates `measurement.export.delivered` minting + session-row
     /// stamping on it. `None` for legacy/CLI attaches.
     pub client: Option<hh_embed_schema::ClientDecl>,
+    /// `contract_json` — the contract-carried surface descriptor the
+    /// `open_session` params declared (AC-R-2.11.4-15; ADR-0304 D2):
+    /// recorded verbatim, surfaced on `describe`'s session row, never
+    /// interpreted.
+    pub contract_json: Option<Json>,
+    /// The durable `security.permission.*`/`lifecycle.run.suspended`
+    /// delivery watermark for the run's declared `notification_sink`
+    /// (`sink:file:*` — §7.1 D-2; ADR-0304 D1). Each session sweeps the
+    /// rows since this seq to the sink file; the durable rows are the
+    /// authority — the file is a derived, at-least-once delivery view.
+    pub sink_seq: i64,
 }
 
 /// A live subscription — the ledger `Subscription` (taken by the stdio
@@ -565,12 +576,13 @@ impl EmbedService {
                 reason: "stage_pending".to_string(),
             });
         }
-        match req.method.as_str() {
+        let result = match req.method.as_str() {
             "open_session" => self.open_session(&req.params),
             "close" => self.close(&req.params),
             "submit" => self.submit(&req.params),
             "cancel" => self.cancel(&req.params),
             "steer" => self.steer(&req.params),
+            "set_coordinate" => self.set_coordinate(&req.params),
             "respond_permission" => self.respond_permission(&req.params),
             "fork" => self.fork(&req.params),
             "replay" => self.replay(&req.params),
@@ -719,6 +731,9 @@ impl EmbedService {
             // (R-2.10.1; §6.1). Semantics-free: records-in/records-out over
             // the one kernel resolver via `hh_lab::assembly`.
             "lab.assembly.assemble" => self.lab_assembly_assemble(&req.params),
+            // S4.12 — `lab.assembly.compile` runs the full §3.2
+            // pipeline (R-2.11.4; records-in/records-out).
+            "lab.assembly.compile" => self.lab_assembly_compile(&req.params),
             "lab.assembly.plan" => self.lab_assembly_plan(&req.params),
             "lab.assembly.apply" => self.lab_assembly_apply(&req.params),
             "lab.assembly.validate_batch" => self.lab_assembly_validate_batch(&req.params),
@@ -731,7 +746,19 @@ impl EmbedService {
                 path: "/method".to_string(),
                 code: "unknown_method".to_string(),
             }),
+        };
+        // §7.1 D-2 (ADR-0304 D1): a successful session call sweeps the
+        // run's newly-durable `security.permission.*`/`suspended` rows
+        // to its declared `notification_sink` — the deferred-ask
+        // delivery a detached `--async`/`--defer` invocation relies on
+        // (`attach` sessions deliver too: the sink is a derived view,
+        // never a write path).
+        if result.is_ok() {
+            if let Some(sid) = req.params.get("session_id").and_then(Json::as_str) {
+                self.flush_notification_sink(sid)?;
+            }
         }
+        result
     }
 
     // ── hello ───────────────────────────────────────────────────────────
