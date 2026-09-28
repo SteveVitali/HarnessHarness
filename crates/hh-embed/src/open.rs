@@ -287,6 +287,7 @@ impl EmbedService {
                 approval_mode,
                 workspace_trust,
                 narrowing_leaves,
+                spawn_event,
             } => self.open_new(
                 definition,
                 overrides,
@@ -299,6 +300,7 @@ impl EmbedService {
                 approval_mode.as_deref(),
                 workspace_trust.as_deref(),
                 narrowing_leaves,
+                spawn_event.as_ref(),
                 p.invocation.as_ref(),
             )?,
             OpenSpec::Resume {
@@ -350,6 +352,7 @@ impl EmbedService {
         approval_mode: Option<&str>,
         workspace_trust: Option<&str>,
         narrowing_leaves: &[NarrowingLeaf],
+        spawn_event: Option<&hh_embed_schema::types::SpawnEventRef>,
         invocation: Option<&InvocationRecord>,
     ) -> Result<Json, EmbedError> {
         // `max_in_flight_sessions` bounds *live* sessions — a fenced or
@@ -541,6 +544,18 @@ impl EmbedService {
         );
         manifest.budget = budget.map(|_| budget_input);
         manifest.overrides_layer_id = overrides_layer_id.clone();
+        // S4.11 — the surface-declared launch-causality citation
+        // (R-2.11.3¹; ADR-0303 D5): `open_run` resolves the ref against
+        // the durable prefix (`UnresolvedEventRef` on a dangling claim);
+        // the child's `lifecycle.run.created` then carries the
+        // `causes[]` record §7.3 requires — the `spawn_event` member is
+        // the ledger's own launch-causality carrier (one scheme, CC1).
+        if let Some(se) = spawn_event {
+            manifest.spawn_event = Some(hh_ledger::manifest::EventRef {
+                run_id: se.run_id.clone(),
+                event_id: se.event_id.clone(),
+            });
+        }
         let holder = self.holder.clone();
         let (run_id, lease) = self
             .store

@@ -491,6 +491,40 @@ impl EnvironmentInput {
     }
 }
 
+/// The `spawn_event` member of `open_session{kind:"new"}` — the
+/// surface-declared launch-causality citation `{run_id, event_id}`
+/// (R-2.11.3¹; ADR-0303 D5). The kernel resolves it at `open_run`; it
+/// lands on the child's manifest `spawn_event` member so
+/// `lifecycle.run.created` records which surface-session effect
+/// launched the run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpawnEventRef {
+    /// The surface session's run.
+    pub run_id: String,
+    /// The launching effect's durable event.
+    pub event_id: String,
+}
+
+impl SpawnEventRef {
+    /// Canonical JSON — `{run_id, event_id}` (the manifest `spawn_event`
+    /// spelling; one shape, CC1).
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("run_id", Json::str(self.run_id.clone())),
+            ("event_id", Json::str(self.event_id.clone())),
+        ])
+    }
+
+    /// Strict decode.
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let run_id = s.req_str("run_id")?;
+        let event_id = s.req_str("event_id")?;
+        s.finish()?;
+        Ok(SpawnEventRef { run_id, event_id })
+    }
+}
+
 /// A budget input — inline `ResourceBudget`/`NodeAddress` or a ref.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BudgetInput {
@@ -677,6 +711,14 @@ pub enum OpenSpec {
         /// The preset's Π narrowing leaves (ADR-0168 D3) — folded into
         /// `policy_fingerprint` at every lease touch; empty ⇒ none.
         narrowing_leaves: Vec<NarrowingLeaf>,
+        /// `spawn_event {run_id, event_id}` — the surface-declared
+        /// launch-causality link (R-2.11.3¹; ADR-0303 D5): a `hh-lab/1`
+        /// launch names the surface session's launching effect so the
+        /// child's `lifecycle.run.created` carries the `causes[]` record
+        /// the spec requires. The kernel resolves the ref at `open_run`
+        /// (`UnresolvedEventRef` on a dangling claim) — it is a causal
+        /// citation, never an authority claim.
+        spawn_event: Option<SpawnEventRef>,
     },
     /// `{kind:"resume", run_id, mode, from_seq?, definition?}` — `mode` ∈
     /// {continue (WouldBlock while the writer lives), takeover
@@ -710,6 +752,7 @@ impl OpenSpec {
                 approval_mode,
                 workspace_trust,
                 narrowing_leaves,
+                spawn_event,
             } => {
                 let mut m = BTreeMap::new();
                 m.insert("kind".into(), Json::str("new"));
@@ -743,6 +786,9 @@ impl OpenSpec {
                         "narrowing_leaves".into(),
                         Json::Arr(narrowing_leaves.iter().map(|l| l.to_json()).collect()),
                     );
+                }
+                if let Some(se) = spawn_event {
+                    m.insert("spawn_event".into(), se.to_json());
                 }
                 Json::Obj(m)
             }
@@ -836,6 +882,10 @@ impl OpenSpec {
                     })
                     .transpose()?
                     .unwrap_or_default();
+                let spawn_event = s
+                    .take("spawn_event")
+                    .map(|e| SpawnEventRef::from_json(e, &format!("{path}/spawn_event")))
+                    .transpose()?;
                 OpenSpec::New {
                     definition,
                     overrides,
@@ -848,6 +898,7 @@ impl OpenSpec {
                     approval_mode,
                     workspace_trust,
                     narrowing_leaves,
+                    spawn_event,
                 }
             }
             "resume" => {
