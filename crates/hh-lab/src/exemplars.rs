@@ -2340,3 +2340,544 @@ pub fn coordination_topology_v1(
     spec.experiment_id = spec.experiment_id();
     spec
 }
+
+// ── lab/extension-trust-v1 (S4.14a; R-2.8.5 AC-9; §6.3's Stage-4 recipe) ────
+
+/// The level pins `lab/extension-trust-v1` binds, beyond [`ExemplarPins`].
+/// The recipe is `trust ∈ {external, sealed}` × `isolation ∈ {confined,
+/// unconfined}` (both `Harness`/`component_level` — trust provenance and
+/// placement are assembly-level properties), one model level, one
+/// environment level; the report's Π-denials leg rides the
+/// `denial_rate`/`approvals_per_kilo_effect` primaries (a sealed arm's
+/// Π-denial rate is the experiment's safety signal — never dropped).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExtensionTrustPins {
+    /// The `external` extension level ref (third-party, quarantined
+    /// admission path).
+    pub external_ref: String,
+    /// The `sealed` extension level ref (signed/sealed admission path).
+    pub sealed_ref: String,
+    /// The `confined` placement level ref (`subprocess_confined`/`container`).
+    pub confined_ref: String,
+    /// The `unconfined` placement level ref (first-party in-process lane —
+    /// present so the recipe can measure the confinement cost; third-party
+    /// contributions never admit under it, admission refuses).
+    pub unconfined_ref: String,
+    /// The single model level ref.
+    pub model_level_ref: String,
+    /// The single environment level ref.
+    pub environment_level_ref: String,
+    /// The sealed artifacts the four arms bind — `(external-confined,
+    /// external-unconfined, sealed-confined, sealed-unconfined)` order.
+    pub artifacts: (Ref, Ref, Ref, Ref),
+}
+
+/// The extension-trust `MatchSpec` — matched cap on the token constituents
+/// + `approvals.requested` (Π-denials are a matched cost, never a dropped
+///   member — AC-R-2.8.5-9).
+fn extension_trust_match() -> MatchSpec {
+    use hh_ontology::dimensions::DimensionId::*;
+    MatchSpec {
+        dimensions: vec![
+            TokensInputUncached,
+            TokensInputCacheRead,
+            TokensInputCacheWrite,
+            TokensOutputVisible,
+            TokensOutputReasoning,
+            ApprovalsRequested,
+            TimeWallMs,
+        ],
+        mode: MatchMode::MatchedCap,
+        tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
+        pricing_table_ref: None,
+        model_scope: ModelScope::SameSnapshot,
+        cache_policy: CachePolicy::ColdStart,
+        utilization_floor_ppm: None,
+    }
+}
+
+/// `lab/extension-trust-v1` (S4.14a; AC-R-2.8.5-9) — `comparative`,
+/// `full_factorial` over `trust ∈ {external, sealed}` × `isolation ∈
+/// {confined, unconfined}`, `MatchSpec{matched_cap, tolerance 0.10,
+/// same_snapshot, cold_start}` ∋ `approvals.requested`, primaries
+/// `{capability.task_success, denial_rate, approvals_per_kilo_effect}` —
+/// the Π-denial rates are the experiment's report leg, so a sealed arm's
+/// supply-chain cost reads in the same comparison as its task yield.
+pub fn extension_trust_v1(
+    pins: &ExemplarPins,
+    own: &ExtensionTrustPins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "H0 — sealing and confinement cost no task_success at matched budget; \
+         H1 — external arms show ≥ sealed-arm denial_rate (Π-denials)",
+        &[
+            "capability.task_success",
+            "denial_rate",
+            "approvals_per_kilo_effect",
+        ],
+        &["trust × isolation"],
+        pins,
+    );
+    let cells: &[(&str, &str, &Ref)] = &[
+        ("external", "confined", &own.artifacts.0),
+        ("external", "unconfined", &own.artifacts.1),
+        ("sealed", "confined", &own.artifacts.2),
+        ("sealed", "unconfined", &own.artifacts.3),
+    ];
+    let trust_level = |tid: &str| -> (&str, &str) {
+        if tid == "external" {
+            ("external", &own.external_ref)
+        } else {
+            ("sealed", &own.sealed_ref)
+        }
+    };
+    let iso_level = |iid: &str| -> (&str, &str) {
+        if iid == "confined" {
+            ("confined", &own.confined_ref)
+        } else {
+            ("unconfined", &own.unconfined_ref)
+        }
+    };
+    let mut arms = Vec::new();
+    for (tid, iid, artifact) in cells {
+        let (t_id, t_ref) = trust_level(tid);
+        let (i_id, i_ref) = iso_level(iid);
+        let _ = (t_ref, i_ref); // level refs ride the factor declarations
+        arms.push(arm(
+            &format!("arm:{tid}:{iid}"),
+            &format!("extension trust {tid} × {iid}"),
+            &[
+                ("trust", t_id),
+                ("isolation", i_id),
+                ("model_snapshot", "model:fixed"),
+                ("environment", "coding-suite"),
+            ],
+            extension_trust_match(),
+            artifact,
+            pins,
+        ));
+    }
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/extension-trust-v1".to_string(),
+            kind: DesignKind::FullFactorial,
+            factors: vec![
+                FactorDeclaration {
+                    name: "trust".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: vec![
+                        decl_level("external", &own.external_ref, "external (quarantined)"),
+                        decl_level("sealed", &own.sealed_ref, "sealed (signed)"),
+                    ],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "isolation".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: vec![
+                        decl_level("confined", &own.confined_ref, "confined placement"),
+                        decl_level("unconfined", &own.unconfined_ref, "unconfined placement"),
+                    ],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "model_snapshot".to_string(),
+                    kind: FactorKind::ModelSnapshot,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "model:fixed",
+                        &own.model_level_ref,
+                        "fixed model",
+                    )],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "environment".to_string(),
+                    kind: FactorKind::Environment,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "coding-suite",
+                        &own.environment_level_ref,
+                        "coding suite",
+                    )],
+                    role: None,
+                },
+            ],
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: vec![
+            FactorSpec {
+                name: "trust".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: vec![
+                    level("external", &own.external_ref, "external (quarantined)"),
+                    level("sealed", &own.sealed_ref, "sealed (signed)"),
+                ],
+            },
+            FactorSpec {
+                name: "isolation".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: vec![
+                    level("confined", &own.confined_ref, "confined placement"),
+                    level("unconfined", &own.unconfined_ref, "unconfined placement"),
+                ],
+            },
+            FactorSpec {
+                name: "model_snapshot".to_string(),
+                kind: FactorKind::ModelSnapshot,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level("model:fixed", &own.model_level_ref, "fixed model")],
+            },
+            FactorSpec {
+                name: "environment".to_string(),
+                kind: FactorKind::Environment,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level(
+                    "coding-suite",
+                    &own.environment_level_ref,
+                    "coding suite",
+                )],
+            },
+        ],
+        arms,
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.extension-trust-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/extension-trust-v1".to_string(),
+        },
+        ext: BTreeMap::new(),
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}
+
+// ── lab/approval-mode-v1 (S4.14a; R-2.8.7 AC-13; §6.3's Stage-4 recipe) ─────
+
+/// A reviewer-variant level pin — the `Validator{kind: judge}` ref plus its
+/// `calibration_ref` (the measured-agreement record). `None` is the
+/// *calibration debt* the recipe records on `ext.calibration_debt` — a
+/// reviewer variant without a calibration record runs, but the debt is
+/// named on the document (never silently absent; AC-R-2.8.7-13).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReviewerLevelPin {
+    /// The level id (`reviewer:<name>`).
+    pub level_id: String,
+    /// The sealed reviewer-variant ref.
+    pub variant_ref: String,
+    /// The judge's calibration record ref (`None` = debt — recorded).
+    pub calibration_ref: Option<String>,
+    /// The display label.
+    pub label: String,
+}
+
+/// The level pins `lab/approval-mode-v1` binds — `approval_mode` ×
+/// `reviewer` × `budget`, the Stage-4 approval-conditioning recipe.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApprovalModePins {
+    /// `approval_mode` level refs — `(sync, auto_review)` order (the two
+    /// decider paths the recipe conditions on).
+    pub approval_mode_refs: (String, String),
+    /// The reviewer-variant levels (≥ 1 — the conditioning axis; every
+    /// level names its `calibration_ref` or records the debt).
+    pub reviewer_levels: Vec<ReviewerLevelPin>,
+    /// `budget` level refs — `(tight, generous)` order.
+    pub budget_refs: (String, String),
+    /// The single model level ref.
+    pub model_level_ref: String,
+    /// The single environment level ref.
+    pub environment_level_ref: String,
+    /// The sealed artifacts — one per `approval_mode` level (reviewer and
+    /// budget levels share the mode's artifact; the reviewer variant is a
+    /// design factor, not a separate binary).
+    pub artifacts: (Ref, Ref),
+}
+
+/// The approval-mode `MatchSpec` — `approvals.requested` is a *matched
+/// dimension* (AC-R-2.8.7-13): arms that can't match on the ask count
+/// refuse at `register` (`validate_match`), never warn.
+fn approval_mode_match() -> MatchSpec {
+    use hh_ontology::dimensions::DimensionId::*;
+    MatchSpec {
+        dimensions: vec![
+            TokensInputUncached,
+            TokensInputCacheRead,
+            TokensInputCacheWrite,
+            TokensOutputVisible,
+            TokensOutputReasoning,
+            ApprovalsRequested,
+            TimeWallMs,
+            TimeHumanWaitMs,
+        ],
+        mode: MatchMode::MatchedCap,
+        tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
+        pricing_table_ref: None,
+        model_scope: ModelScope::SameSnapshot,
+        cache_policy: CachePolicy::ColdStart,
+        utilization_floor_ppm: None,
+    }
+}
+
+/// `lab/approval-mode-v1` (S4.14a; AC-R-2.8.7-13) — `comparative`,
+/// `full_factorial` over `approval_mode ∈ {sync, auto_review}` ×
+/// `reviewer ∈ reviewer_levels` × `budget ∈ {tight, generous}`;
+/// `MatchSpec ∋ approvals.requested`; primaries `{capability.task_success,
+/// approval_rate, auto_review_fn_rate, median_decision_latency_ms}`; the
+/// reviewer-variant conditioning rides the `reviewer` factor and the
+/// `calibration_debt` ext member names every reviewer level without a
+/// calibration record.
+pub fn approval_mode_v1(
+    pins: &ExemplarPins,
+    own: &ApprovalModePins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "H0 — auto_review under a calibrated reviewer holds task_success at \
+         matched approvals.requested; H1 — tight budgets raise denial_rate \
+         on the auto_review arm",
+        &[
+            "capability.task_success",
+            "approval_rate",
+            "auto_review_fn_rate",
+            "median_decision_latency_ms",
+        ],
+        &["approval_mode × reviewer", "approval_mode × budget"],
+        pins,
+    );
+    // The calibration debt — reviewer levels without a `calibration_ref`
+    // are *named* on the document (the debt is the record, never a silent
+    // omission).
+    let mut ext = BTreeMap::new();
+    let debt: Vec<hh_wire::json::Json> = own
+        .reviewer_levels
+        .iter()
+        .filter(|r| r.calibration_ref.is_none())
+        .map(|r| {
+            hh_wire::json::Json::obj([
+                ("reviewer", hh_wire::json::Json::str(r.level_id.clone())),
+                ("debt", hh_wire::json::Json::str("calibration_ref absent")),
+            ])
+        })
+        .collect();
+    ext.insert(
+        "calibration_debt".to_string(),
+        hh_wire::json::Json::Arr(debt),
+    );
+    let mode_levels: &[(&str, &str, &Ref)] = &[
+        ("sync", &own.approval_mode_refs.0, &own.artifacts.0),
+        ("auto_review", &own.approval_mode_refs.1, &own.artifacts.1),
+    ];
+    let budget_levels: &[(&str, &str)] = &[
+        ("tight", &own.budget_refs.0),
+        ("generous", &own.budget_refs.1),
+    ];
+    let mut arms = Vec::new();
+    for (mid, _mref, artifact) in mode_levels {
+        for rev in &own.reviewer_levels {
+            for (bid, _bref) in budget_levels {
+                arms.push(arm(
+                    &format!("arm:{mid}:{}:{bid}", rev.level_id),
+                    &format!("approval {mid} × {} × {bid}", rev.label),
+                    &[
+                        ("approval_mode", mid),
+                        ("reviewer", &rev.level_id),
+                        ("budget", bid),
+                        ("model_snapshot", "model:fixed"),
+                        ("environment", "coding-suite"),
+                    ],
+                    approval_mode_match(),
+                    artifact,
+                    pins,
+                ));
+            }
+        }
+    }
+    let reviewer_decl_levels: Vec<FactorLevel> = own
+        .reviewer_levels
+        .iter()
+        .map(|r| decl_level(&r.level_id, &r.variant_ref, &r.label))
+        .collect();
+    let reviewer_factor_levels: Vec<LevelSpec> = own
+        .reviewer_levels
+        .iter()
+        .map(|r| level(&r.level_id, &r.variant_ref, &r.label))
+        .collect();
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/approval-mode-v1".to_string(),
+            kind: DesignKind::FullFactorial,
+            factors: vec![
+                FactorDeclaration {
+                    name: "approval_mode".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: vec![
+                        decl_level("sync", &own.approval_mode_refs.0, "sync gate"),
+                        decl_level(
+                            "auto_review",
+                            &own.approval_mode_refs.1,
+                            "calibrated auto_review",
+                        ),
+                    ],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "reviewer".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: reviewer_decl_levels,
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "budget".to_string(),
+                    kind: FactorKind::Budget,
+                    granularity: None,
+                    levels: vec![
+                        decl_level("tight", &own.budget_refs.0, "tight budget"),
+                        decl_level("generous", &own.budget_refs.1, "generous budget"),
+                    ],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "model_snapshot".to_string(),
+                    kind: FactorKind::ModelSnapshot,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "model:fixed",
+                        &own.model_level_ref,
+                        "fixed model",
+                    )],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "environment".to_string(),
+                    kind: FactorKind::Environment,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "coding-suite",
+                        &own.environment_level_ref,
+                        "coding suite",
+                    )],
+                    role: None,
+                },
+            ],
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: vec![
+            FactorSpec {
+                name: "approval_mode".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: vec![
+                    level("sync", &own.approval_mode_refs.0, "sync gate"),
+                    level(
+                        "auto_review",
+                        &own.approval_mode_refs.1,
+                        "calibrated auto_review",
+                    ),
+                ],
+            },
+            FactorSpec {
+                name: "reviewer".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("conditioning".to_string()),
+                levels: reviewer_factor_levels,
+            },
+            FactorSpec {
+                name: "budget".to_string(),
+                kind: FactorKind::Budget,
+                granularity: None,
+                role: Some("primary".to_string()),
+                levels: vec![
+                    level("tight", &own.budget_refs.0, "tight budget"),
+                    level("generous", &own.budget_refs.1, "generous budget"),
+                ],
+            },
+            FactorSpec {
+                name: "model_snapshot".to_string(),
+                kind: FactorKind::ModelSnapshot,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level("model:fixed", &own.model_level_ref, "fixed model")],
+            },
+            FactorSpec {
+                name: "environment".to_string(),
+                kind: FactorKind::Environment,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level(
+                    "coding-suite",
+                    &own.environment_level_ref,
+                    "coding suite",
+                )],
+            },
+        ],
+        arms,
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.approval-mode-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/approval-mode-v1".to_string(),
+        },
+        ext,
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}

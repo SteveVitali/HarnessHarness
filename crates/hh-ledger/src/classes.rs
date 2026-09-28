@@ -511,6 +511,34 @@ const GRANT_FIELDS: &[AuditField] = &[
     af("revoker"),
 ];
 
+/// `security.permission.grant_{issued,revoked}` — the `ApproverGrant`
+/// lifecycle rows (§5g.7 §4; ADR-0070; S4.14a): `{grant_ref, grantor,
+/// grantee, capability_prefixes[], max_risk, expires_at?, revoked_at?,
+/// revoker?}` — the durable grant set `ApprovalState::project` folds.
+const APPROVER_GRANT_FIELDS: &[AuditField] = &[
+    af("grant_ref"),
+    af("grantor"),
+    af("grantee"),
+    afb("capability_prefixes", AUDIT_FIELD_LIST_BYTES),
+    afb("max_risk", AUDIT_FIELD_LIST_BYTES),
+    af("expires_at"),
+    af("revoked_at"),
+    af("revoker"),
+];
+
+/// `security.permission.reviewed` — the auto_reviewer stage's calibrated
+/// verdict row (§5g.7 §4; AC-R-2.8.7-8): `{permission_id, rule_ref,
+/// validator_ref, verdict, calibration_ref?, evidence_refs[], failure?}`.
+const REVIEWED_FIELDS: &[AuditField] = &[
+    af("permission_id"),
+    af("rule_ref"),
+    af("validator_ref"),
+    af("verdict"),
+    af("calibration_ref"),
+    afb("evidence_refs", AUDIT_FIELD_LIST_BYTES),
+    af("failure"),
+];
+
 /// `security.label.*` — the endorsement rows (`{subject_ref, from, to,
 /// endorser, basis, basis_ref}`; `label`/`content_kind` for the applied stamp).
 const LABEL_FIELDS: &[AuditField] = &[
@@ -1229,6 +1257,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── security:permission ──
     ("security.permission.decided", "permission.decided"),
     ("security.permission.escalated", "hint"),
+    ("security.permission.grant_issued", "hint"),
+    ("security.permission.grant_revoked", "hint"),
     ("security.permission.granted", "hint"),
     ("security.permission.lease.expired", "hint"),
     ("security.permission.lease.granted", "hint"),
@@ -1236,6 +1266,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("security.permission.lease.used", "hint"),
     ("security.permission.pending", "permission.requested"),
     ("security.permission.requested", "permission.requested"),
+    ("security.permission.reviewed", "hint"),
     ("security.permission.revoked", "hint"),
     // ── security:policy ──
     ("security.policy.evaluated", "none"),
@@ -1545,6 +1576,14 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("security.permission.lease.used",     O::Events, false, LEASE_APPROVAL_FIELDS, &[], None, None),
     row_audit("security.permission.lease.expired",  O::Events, false, LEASE_APPROVAL_FIELDS, &[], None, None),
     row_audit("security.permission.lease.revoked",  O::Events, false, LEASE_APPROVAL_FIELDS, &[], None, None),
+    // S4.14a (§5g.7 §4; AC-R-2.8.7-8/AC-H7-08 + ADR-0070): the `ApproverGrant`
+    // lifecycle rows (`grant_issued`/`grant_revoked` — the durable record the
+    // respond-path legitimacy gate folds) and the calibrated-reviewer verdict
+    // row (`reviewed` — the auto_reviewer stage's `Validator{kind: judge}`
+    // outcome; the failure leg converts to `deny` above `reversible`).
+    row_audit("security.permission.grant_issued",   O::Events, false, APPROVER_GRANT_FIELDS, &[], None, None),
+    row_audit("security.permission.grant_revoked",  O::Events, false, APPROVER_GRANT_FIELDS, &[], None, None),
+    row_audit("security.permission.reviewed",       O::Events, false, REVIEWED_FIELDS, &[], None, None),
     row_audit("security.label.applied",       O::Events, false, LABEL_FIELDS, &[], None, None),
     row_audit("security.label.endorsed",      O::Events, false, LABEL_FIELDS, &[], None, None),
     row_audit("security.label.declassified",  O::Events, false, LABEL_FIELDS, &[], None, None),

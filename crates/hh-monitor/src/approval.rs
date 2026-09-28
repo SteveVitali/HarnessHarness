@@ -1502,6 +1502,13 @@ pub enum ApprovalError {
         /// The detail.
         detail: String,
     },
+    /// `grant_approver`/`revoke_approver` without a legitimate grantor —
+    /// neither `principal`+ nor covered by a live grant (S4.14a; the grant
+    /// *record* confers, never a delegate name).
+    IllegitimateGrant {
+        /// The detail.
+        detail: String,
+    },
 }
 
 /// `ApproverGrant` — the §5g.7 §4 delegated-approval record (ADR-0070; OQ-177):
@@ -1548,6 +1555,332 @@ impl ApproverGrant {
                 .iter()
                 .any(|p| capability_semantic_id.starts_with(p.as_str()))
     }
+
+    /// Whether this grant covers *issuing* `sub` — the delegation-may-never-
+    /// widen rule (S4.14a): every prefix the sub-grant names must sit under
+    /// one of this grant's prefixes (or this grant is unscoped), and the
+    /// sub-grant's risk ceiling may not exceed this grant's.
+    pub fn covers_grant(&self, sub: &ApproverGrant, now: u64) -> bool {
+        if self.revoked_at.is_some() || self.expires_at.map(|e| now > e).unwrap_or(false) {
+            return false;
+        }
+        if !sub.max_risk.leq_danger(&self.max_risk) {
+            return false;
+        }
+        self.capability_prefixes.is_empty()
+            || sub.capability_prefixes.iter().all(|p| {
+                self.capability_prefixes
+                    .iter()
+                    .any(|c| p.starts_with(c.as_str()))
+            })
+    }
+
+    /// The canonical payload — the `security.permission.grant_issued` member
+    /// set (`grant_revoked` adds `revoked_at`/`revoker`; §5g.7 §4).
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("grant_ref".to_string(), Json::str(self.grant_ref.clone()));
+        m.insert("grantor".to_string(), Json::str(self.grantor.clone()));
+        m.insert("grantee".to_string(), Json::str(self.grantee.clone()));
+        m.insert(
+            "capability_prefixes".to_string(),
+            Json::Arr(
+                self.capability_prefixes
+                    .iter()
+                    .map(|p| Json::str(p.clone()))
+                    .collect(),
+            ),
+        );
+        m.insert("max_risk".to_string(), self.max_risk.to_json());
+        m.insert(
+            "expires_at".to_string(),
+            self.expires_at
+                .map(|e| Json::Int(e as i64))
+                .unwrap_or(Json::Null),
+        );
+        m.insert(
+            "revoked_at".to_string(),
+            self.revoked_at
+                .map(|e| Json::Int(e as i64))
+                .unwrap_or(Json::Null),
+        );
+        Json::Obj(m)
+    }
+
+    /// Strict decode — `None` on any malformed member (a malformed grant is
+    /// no grant: the fold drops it, never defaults to covering).
+    pub fn from_json(j: &Json) -> Option<ApproverGrant> {
+        let prefixes = match j.get("capability_prefixes") {
+            Some(Json::Arr(ps)) => ps
+                .iter()
+                .map(|p| p.as_str().map(str::to_string))
+                .collect::<Option<Vec<String>>>()?,
+            _ => return None,
+        };
+        Some(ApproverGrant {
+            grant_ref: j.get("grant_ref")?.as_str()?.to_string(),
+            grantor: j.get("grantor")?.as_str()?.to_string(),
+            grantee: j.get("grantee")?.as_str()?.to_string(),
+            capability_prefixes: prefixes,
+            max_risk: hh_ontology::risk::RiskClass::from_json(j.get("max_risk")?)?,
+            expires_at: match j.get("expires_at") {
+                Some(Json::Int(e)) => Some(*e as u64),
+                Some(Json::Null) | None => None,
+                _ => return None,
+            },
+            revoked_at: match j.get("revoked_at") {
+                Some(Json::Int(e)) => Some(*e as u64),
+                Some(Json::Null) | None => None,
+                _ => return None,
+            },
+        })
+    }
+}
+
+/// The `ProvenanceRecord` origin rendered as an identity coordinate (the
+/// grant's `grantor`/`grantee` spellings — `human:<ref>`, `model:<ref>`, …).
+fn origin_coordinate(o: &hh_provenance::Origin) -> String {
+    use hh_provenance::Origin;
+    match o {
+        Origin::Human { author_ref, .. } => format!("human:{author_ref}"),
+        Origin::Model { model_ref, .. } => format!("model:{model_ref}"),
+        Origin::Tool { capability, .. } => format!("tool:{capability}"),
+        Origin::Evolution { candidate_id, .. } => format!("evolution:{candidate_id}"),
+        Origin::Import { source_system, .. } => format!("import:{source_system}"),
+        Origin::Migration { from_dialect } => format!("migration:{from_dialect}"),
+        Origin::Kernel { component_ref } => format!("kernel:{component_ref}"),
+        Origin::Participant {
+            participant_ref, ..
+        } => format!("participant:{participant_ref}"),
+        Origin::Cache { entry_ref } => format!("cache:{entry_ref}"),
+    }
+}
+
+/// `grant_approver` (§5g.7 §4 organizational routing; ADR-0070; S4.14a —
+/// OQ-177's interim is a ledgered record, never ambient state): mints the
+/// `ApproverGrant` and returns `(grant, issued_payload)` — the caller appends
+/// `security.permission.grant_issued` with the payload; `ApprovalState`
+/// folds it. Legitimacy is typed:
+///
+/// - `grantor.authority` must be `principal`+ (a human principal bootstraps
+///   the grant set), **or** the grantor must be the `grantee` of a live
+///   covering grant (`covers_grant` — delegation never widens: prefixes ⊆
+///   the covering grant's, `max_risk ≤` its ceiling);
+/// - a delegate/model name never confers by itself — the *record* confers
+///   (AC-R-2.8.7-3's leg read the other way: issuance is where a name
+///   becomes a record).
+///
+/// `IllegitimateGrant` otherwise — never a silent narrowing to the grantor's
+/// ceiling.
+pub fn grant_approver(
+    grantor: &hh_provenance::ProvenanceRecord,
+    grantee: &str,
+    capability_prefixes: Vec<String>,
+    max_risk: hh_ontology::risk::RiskClass,
+    expires_at: Option<u64>,
+    now: u64,
+    live_grants: &[ApproverGrant],
+) -> Result<(ApproverGrant, Json), ApprovalError> {
+    let grantor_ref = origin_coordinate(&grantor.origin);
+    let grant = ApproverGrant {
+        // `grant_ref` is content-addressed over the minted record — the same
+        // grant minted twice is the same coordinate (idempotent issue).
+        grant_ref: String::new(),
+        grantor: grantor_ref.clone(),
+        grantee: grantee.to_string(),
+        capability_prefixes,
+        max_risk,
+        expires_at,
+        revoked_at: None,
+    };
+    // Legitimacy: principal+ bootstraps; otherwise a live covering grant the
+    // grantor holds (`covers_grant` enforces the never-widen rule).
+    let bootstrap = grantor.authority >= AuthorityClass::Principal;
+    let covered = live_grants
+        .iter()
+        .any(|g| g.grantee == grantor_ref && g.covers_grant(&grant, now));
+    if !bootstrap && !covered {
+        return Err(ApprovalError::IllegitimateGrant {
+            detail: format!(
+                "grantor {grantor_ref} (authority {}) is neither principal+ nor covered by a live grant",
+                grantor.authority.as_str()
+            ),
+        });
+    }
+    let grant_ref = idp::idp_id(
+        "security.permission.approver_grant",
+        Json::obj([
+            ("grantor", Json::str(grant.grantor.clone())),
+            ("grantee", Json::str(grant.grantee.clone())),
+            (
+                "capability_prefixes",
+                Json::Arr(
+                    grant
+                        .capability_prefixes
+                        .iter()
+                        .map(|p| Json::str(p.clone()))
+                        .collect(),
+                ),
+            ),
+            ("max_risk", grant.max_risk.to_json()),
+            (
+                "expires_at",
+                grant
+                    .expires_at
+                    .map(|e| Json::Int(e as i64))
+                    .unwrap_or(Json::Null),
+            ),
+            ("now", Json::Int(now as i64)),
+        ])
+        .to_canonical_string()
+        .as_bytes(),
+    );
+    let grant = ApproverGrant { grant_ref, ..grant };
+    Ok((grant.clone(), grant.to_json()))
+}
+
+/// `revoke_approver` — the grant lifecycle's other leg: the *grantor* or any
+/// `principal`+ provenance revokes (a delegate cannot revoke upward; the
+/// record's own coordinate names what ends). Returns the
+/// `security.permission.grant_revoked` payload; `ApprovalState` folds it.
+pub fn revoke_approver(
+    grant_ref: &str,
+    revoker: &hh_provenance::ProvenanceRecord,
+    live_grants: &[ApproverGrant],
+    now: u64,
+) -> Result<Json, ApprovalError> {
+    let grant = live_grants
+        .iter()
+        .find(|g| g.grant_ref == grant_ref)
+        .ok_or_else(|| ApprovalError::IllegitimateGrant {
+            detail: format!("no live grant {grant_ref}"),
+        })?;
+    let revoker_ref = origin_coordinate(&revoker.origin);
+    if revoker.authority < AuthorityClass::Principal && revoker_ref != grant.grantor {
+        return Err(ApprovalError::IllegitimateGrant {
+            detail: format!(
+                "revoker {revoker_ref} is neither the grantor ({}) nor principal+",
+                grant.grantor
+            ),
+        });
+    }
+    let mut p = grant.to_json();
+    if let Json::Obj(m) = &mut p {
+        m.insert("revoked_at".to_string(), Json::Int(now as i64));
+        m.insert("revoker".to_string(), Json::str(revoker_ref));
+    }
+    Ok(p)
+}
+
+// ── auto_review calibrated-reviewer binding (AC-R-2.8.7-8; S4.14a) ───────────
+
+/// `ReviewerBinding` — the AC-R-2.8.7-8 binding facts a caller asserts over
+/// the sealed `HarnessRule{kind: auto_review}` and the `Validator{kind:
+/// judge}` variant it names: the auto-reviewer's permissions ⊆ parent ∩
+/// read-only, `net_egress = ∅`, and its evidence set contains no item with
+/// `authority < principal` other than the proposal. The monitor never reads
+/// a registry (CC1) — the caller asserts the sealed record's facts; this
+/// check is where a failure becomes typed, never a quiet pass.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReviewerBinding {
+    /// The reviewer variant's `version_id` (the `Validator{kind: judge}`
+    /// record coordinate the `auto_review` rule names).
+    pub validator_ref: String,
+    /// The calibration record the variant's thresholds/FN rate are
+    /// conditioned on (the AC-R-2.8.7-13 debt record — `None` is an
+    /// *uncalibrated* binding and never serves an auto_review resolve).
+    pub calibration_ref: Option<String>,
+    /// `permissions ⊆ parent ∩ read-only` (the caller's containment check
+    /// over the sealed variant's declared permission set).
+    pub permissions_within_parent_readonly: bool,
+    /// `net_egress = ∅` — the reviewer variant declares no egress.
+    pub net_egress_empty: bool,
+    /// The evidence floor — no evidence item below `principal` other than
+    /// the proposal itself.
+    pub evidence_floor_ok: bool,
+}
+
+/// The binding check's typed failure (one variant per leg — the report names
+/// which clause broke).
+#[derive(Debug, Clone, PartialEq)]
+pub enum AutoReviewBindingError {
+    /// No `calibration_ref` — the reviewer variant is uncalibrated.
+    Uncalibrated,
+    /// The variant's permissions exceed parent ∩ read-only.
+    PermissionWidening,
+    /// The variant declares egress (`net_egress ≠ ∅`).
+    EgressAdmitted,
+    /// An evidence item below `principal` (other than the proposal).
+    EvidenceBelowFloor,
+}
+
+impl std::fmt::Display for AutoReviewBindingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            AutoReviewBindingError::Uncalibrated => "uncalibrated",
+            AutoReviewBindingError::PermissionWidening => "permission_widening",
+            AutoReviewBindingError::EgressAdmitted => "egress_admitted",
+            AutoReviewBindingError::EvidenceBelowFloor => "evidence_below_floor",
+        })
+    }
+}
+
+/// `check_auto_review_binding(binding)` — the AC-R-2.8.7-8 admission gate:
+/// every clause must hold; the first broken clause is the typed refusal.
+pub fn check_auto_review_binding(binding: &ReviewerBinding) -> Result<(), AutoReviewBindingError> {
+    if binding.calibration_ref.is_none() {
+        return Err(AutoReviewBindingError::Uncalibrated);
+    }
+    if !binding.permissions_within_parent_readonly {
+        return Err(AutoReviewBindingError::PermissionWidening);
+    }
+    if !binding.net_egress_empty {
+        return Err(AutoReviewBindingError::EgressAdmitted);
+    }
+    if !binding.evidence_floor_ok {
+        return Err(AutoReviewBindingError::EvidenceBelowFloor);
+    }
+    Ok(())
+}
+
+/// The `security.permission.reviewed` payload (AC-R-2.8.7-8's evidence row —
+/// `{permission_id, rule_ref, validator_ref, verdict, calibration_ref?,
+/// evidence_refs[], failure?}`): the auto_reviewer stage's durable verdict
+/// record, emitted alongside the `decided`/`escalated` rows the chain emits.
+pub fn reviewed_payload(
+    permission_id: &str,
+    rule_ref: &str,
+    binding: &ReviewerBinding,
+    verdict: &str,
+    evidence_refs: &[String],
+    failure: Option<&str>,
+) -> Json {
+    Json::obj([
+        ("permission_id", Json::str(permission_id)),
+        ("rule_ref", Json::str(rule_ref)),
+        ("validator_ref", Json::str(binding.validator_ref.clone())),
+        ("verdict", Json::str(verdict)),
+        (
+            "calibration_ref",
+            binding
+                .calibration_ref
+                .as_ref()
+                .map(|r| Json::str(r.clone()))
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "evidence_refs",
+            Json::Arr(evidence_refs.iter().map(|r| Json::str(r.clone())).collect()),
+        ),
+        ("failure", failure.map(Json::str).unwrap_or(Json::Null)),
+    ])
+}
+
+/// AC-R-2.8.7-8's failure rule: a reviewer *failure* resolves `deny` for
+/// risk classes above `reversible` (read-only/reversible failures fall back
+/// to the chain's `pass` — the human stage still sees the ask).
+pub fn auto_review_failure_denies(risk: &hh_ontology::risk::RiskClass) -> bool {
+    risk.reversibility > hh_ontology::risk::RiskReversibility::Reversible
 }
 
 /// `DenialFallback` — the closed repeated-denial fallback set (§5g.7 §5's
@@ -1648,6 +1981,11 @@ pub struct ApprovalState {
     /// the repeated-denial fallback's record (the count is over *decisions*,
     /// never prompt renderings; coalesced pendings count once).
     pub denial_counts: BTreeMap<String, u64>,
+    /// The live `ApproverGrant` set, keyed by `grant_ref` — folded from
+    /// `security.permission.grant_issued`/`grant_revoked` rows (S4.14a; the
+    /// respond path's `ctx.grants` is filled from this map — the ledger is
+    /// the one truth, never ambient state).
+    pub grants: BTreeMap<String, ApproverGrant>,
 }
 
 impl ApprovalState {
@@ -2323,6 +2661,25 @@ impl ApprovalState {
                         .map(|t| t.max(0) as u64)
                         .unwrap_or(0);
                     self.revoke_lease(k, at);
+                }
+            }
+            // S4.14a — the `ApproverGrant` lifecycle (§5g.7 §4): `grant_issued`
+            // inserts the durable grant; `grant_revoked` marks `revoked_at` (a
+            // malformed row folds to nothing — a grant that does not decode
+            // never covers anything).
+            "security.permission.grant_issued" => {
+                if let Some(g) = ApproverGrant::from_json(p) {
+                    self.grants.insert(g.grant_ref.clone(), g);
+                }
+            }
+            "security.permission.grant_revoked" => {
+                if let Some(r) = p.get("grant_ref").and_then(Json::as_str) {
+                    if let Some(g) = self.grants.get_mut(r) {
+                        g.revoked_at = p
+                            .get("revoked_at")
+                            .and_then(Json::as_int)
+                            .map(|t| t.max(0) as u64);
+                    }
                 }
             }
             _ => {}

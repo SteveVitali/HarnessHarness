@@ -34,6 +34,7 @@ pub(crate) mod durability_ops;
 pub mod envops;
 pub(crate) mod eval_ops;
 pub(crate) mod experiment_ops;
+pub(crate) mod extension_ops;
 pub(crate) mod fleet_ops;
 pub mod frames;
 pub(crate) mod hosting_ops;

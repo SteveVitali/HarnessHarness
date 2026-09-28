@@ -85,6 +85,8 @@ fn spec_for(pkg: VariantPackage, cap: Requests) -> SpawnSpec {
         package: pkg,
         session_id: "kit-s1".into(),
         backend: "direct".into(),
+        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        helper_extra_args: vec![],
         socket_dir: {
             static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             std::env::temp_dir().join(format!(
@@ -185,8 +187,8 @@ fn kit_req(binding: &str, subject_ref: &str, suite_ref: &str, run_id: &str) -> K
     }
 }
 
-fn layer_verdict<'a>(
-    report: &'a hh_registry::records::ConformanceReport,
+fn layer_verdict(
+    report: &hh_registry::records::ConformanceReport,
     layer: &str,
 ) -> ConformanceVerdict {
     report
@@ -374,7 +376,7 @@ fn variant(class_ref: &str, tag: &str, placement: Placement) -> VariantRecord {
             families: vec![],
         },
         declared_costs: None,
-        summary: hh_hir::leaves::Text::new(&format!("v {tag}"), "test", kernel()),
+        summary: hh_hir::leaves::Text::new(format!("v {tag}"), "test", kernel()),
         dialect_range: "registry/1".to_string(),
     }
 }

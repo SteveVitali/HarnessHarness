@@ -659,6 +659,87 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
                 ..base()
             }
         },
+        // ── §5g.7 approval process metrics (S4.14a; AC-R-2.8.7-12) ────────
+        //    Every row requires the `permissions` capability — a hosted
+        //    participant without the permission surface renders the typed
+        //    `n/a{capability}` (applicability = class ∧ observability ∧
+        //    capabilities ∧ mediation ∧ family), never a zero.
+        MetricDeclaration {
+            name: "approval_rate".into(),
+            dimension: Dimension::Compliance,
+            unit: "ppm".into(),
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_capabilities: ["permission_surface".to_string()].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "denial_rate".into(),
+            dimension: Dimension::Compliance,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_capabilities: ["permission_surface".to_string()].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "approvals_per_kilo_effect".into(),
+            dimension: Dimension::Compliance,
+            unit: "count".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_capabilities: ["permission_surface".to_string()].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "median_decision_latency_ms".into(),
+            dimension: Dimension::Compliance,
+            unit: "ms".into(),
+            direction: Direction::Lower,
+            // A median statistic takes a bootstrap interval — `clt` on `ms`
+            // is forbidden outright (heavy-tailed unit, ADR-0158's rule).
+            interval_method: IntervalMethod::Bootstrap,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_capabilities: ["permission_surface".to_string()].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "lease_hit_ratio".into(),
+            dimension: Dimension::Compliance,
+            unit: "ppm".into(),
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_capabilities: ["permission_surface".to_string()].into_iter().collect(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "auto_review_fn_rate".into(),
+            dimension: Dimension::Compliance,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_capabilities: ["permission_surface".to_string()].into_iter().collect(),
+                // The false-negative rate is measured against the calibrated
+                // reviewer variant's verdicts — a `Validator{kind: judge}`
+                // produces them (advisory; never enforcement, I-F1).
+                oracle_classes_allowed: [OracleClass::Judge].into_iter().collect(),
+                ..base()
+            }
+        },
         MetricDeclaration {
             name: "coverage_unmet_count".into(),
             dimension: Dimension::Compliance,
