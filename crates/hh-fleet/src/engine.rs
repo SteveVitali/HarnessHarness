@@ -377,6 +377,8 @@ impl FleetEngine {
                     .external_kind
                     .clone()
                     .unwrap_or_else(|| "occurrence".to_string()),
+                source_ref: None,
+                filter: None,
             },
             "manual" => Trigger::Manual {
                 principal: "fixture".to_string(),
@@ -400,10 +402,9 @@ impl FleetEngine {
             self.view.spec.triggers.values().find(|r| {
                 std::mem::discriminant(&r.trigger) == std::mem::discriminant(trigger)
                     && match (&r.trigger, trigger) {
-                        (
-                            Trigger::External { kind: a },
-                            Trigger::External { kind: b },
-                        ) => a == b || a == "*",
+                        (Trigger::External { kind: a, .. }, Trigger::External { kind: b, .. }) => {
+                            a == b || a == "*"
+                        }
                         (Trigger::Manual { .. }, Trigger::Manual { .. }) => true,
                         _ => true,
                     }

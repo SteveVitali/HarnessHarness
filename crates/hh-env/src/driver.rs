@@ -19,6 +19,7 @@ use hh_containment::attach::{
 use hh_containment::backend::ContainmentBackend;
 use hh_containment::report::ContainmentReport;
 use hh_hir::records::Grant;
+use hh_ledger::leases::LeaseScope;
 use hh_ledger::manifest::EventRef;
 use hh_ledger::store::{Lease, Store};
 use hh_wire::json::Json;
@@ -48,6 +49,9 @@ pub struct EnvDriver {
     /// The podman containers the `local_container` handles own
     /// (`env_handle_id → backend` — teardown stops them).
     containers: BTreeMap<String, hh_helper::podman::PodmanBackend>,
+    /// The registered provider adapters — `environment.class → adapter`
+    /// (S4.13; one adapter per provider class).
+    providers: BTreeMap<String, Box<dyn crate::provider::ProviderAdapter>>,
 }
 
 /// `preserve_until(ttl)` offered to the helper on `hello` — §05a
@@ -70,7 +74,26 @@ impl EnvDriver {
             handles: BTreeMap::new(),
             sessions: BTreeMap::new(),
             containers: BTreeMap::new(),
+            providers: BTreeMap::new(),
         }
+    }
+
+    /// Register a provider adapter for its class (S4.13 —
+    /// `remote_ephemeral`/`remote_persistent`/`provider_hosted` provision
+    /// only through a registered adapter).
+    pub fn register_provider(&mut self, adapter: Box<dyn crate::provider::ProviderAdapter>) {
+        self.providers
+            .insert(adapter.class().as_str().to_string(), adapter);
+    }
+
+    /// The registered adapter for a class, if any.
+    fn provider_for(
+        &mut self,
+        class: crate::record::EnvironmentClass,
+    ) -> Option<&mut (dyn crate::provider::ProviderAdapter + 'static)> {
+        self.providers
+            .get_mut(class.as_str())
+            .map(move |a| a.as_mut())
     }
 
     /// The live handle ids — `verify_environment` on resume iterates them
@@ -108,7 +131,7 @@ impl EnvDriver {
         containment: PolicySlot,
         on_loss: OnLoss,
     ) -> Result<EnvHandle, EnvError> {
-        if !record.class.provisionable() {
+        if !record.class.provisionable() && !record.class.needs_adapter() {
             return Err(EnvError::Unsupported {
                 capability: "provision",
                 detail: format!(
@@ -119,6 +142,39 @@ impl EnvDriver {
         }
         let image = record.resolve()?;
         let identity = record.identify()?;
+        // The handle id is allocated once — the adapter's record and the
+        // kernel's handle name the same coordinate.
+        let env_handle_id = store.alloc_id("env");
+        let run_id = self.run_id.clone();
+        // S4.13 (R-2.2.5¹) — provider classes provision only through a
+        // registered adapter; `local_container`/`local_*` build in-process.
+        let provider_handle = if record.class.needs_adapter() {
+            let Some(adapter) = self.provider_for(record.class) else {
+                return Err(EnvError::Unsupported {
+                    capability: "provision",
+                    detail: format!(
+                        "class {} requires a registered ProviderAdapter — none registered",
+                        record.class.as_str()
+                    ),
+                });
+            };
+            Some(
+                adapter.provision(&crate::provider::ProvisionRequest {
+                    environment_ref: (
+                        identity
+                            .semantic_id
+                            .clone()
+                            .unwrap_or_else(|| identity.version_id.clone()),
+                        identity.version_id.clone(),
+                    ),
+                    image_ref: format!("{:?}", image),
+                    env_handle_id: env_handle_id.clone(),
+                    run_id,
+                })?,
+            )
+        } else {
+            None
+        };
         let environment_ref = (
             identity
                 .semantic_id
@@ -131,10 +187,11 @@ impl EnvDriver {
             crate::record::EnvironmentClass::LocalHost => {
                 EnvCapabilityDeclaration::stage1_local_host()
             }
+            c if c.needs_adapter() => EnvCapabilityDeclaration::provider_class(),
             _ => EnvCapabilityDeclaration::stage1_local_sandboxed(),
         };
         let handle = EnvHandle {
-            env_handle_id: store.alloc_id("env"),
+            env_handle_id,
             run_id: self.run_id.clone(),
             environment_ref,
             class: record.class,
@@ -157,6 +214,8 @@ impl EnvDriver {
             image,
             applied_event_ref: None,
             phase: None,
+            provider: provider_handle,
+            hosted: None,
             created_ms: now,
         };
         let declared = EventMinter::new(store, &self.run_id).mint(
@@ -177,6 +236,125 @@ impl EnvDriver {
         store.append(&self.run_id, lease, vec![provisioning, provisioned])?;
         self.handles.insert(h.env_handle_id.clone(), h.clone());
         Ok(h)
+    }
+
+    /// `provision_hosted` — AC-R-2.2.5-13's container-installed slice: a
+    /// hosted participant whose environment the *provider* (not the kernel)
+    /// installed still gets a kernel-owned `EnvHandle` — same envelope,
+    /// same lifecycle grammar — but its `action.environment.*` rows carry
+    /// `origin = participant` and only the transitions the adapter reports
+    /// are minted. `unobserved` names the `action.environment.*` spellings
+    /// the adapter cannot see (e.g. `attached`/`torn_down` when the host
+    /// owns them); they render `n/a{unobserved}` on the handle and produce
+    /// no fabricated row (`observability_level ∌ events`).
+    ///
+    /// A session-ABI participant in a *kernel-provisioned* environment uses
+    /// `provision`/`attach` — the full kernel-origin lifecycle — exactly as
+    /// a native run does; this path exists only where the provider owns
+    /// the substrate and observes a subset.
+    #[allow(clippy::too_many_arguments)] // the provision record's fields are the arity's.
+    pub fn provision_hosted(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        record: &EnvironmentRecord,
+        roots: Roots,
+        containment: PolicySlot,
+        on_loss: OnLoss,
+        participant_ref: &str,
+        hosting_mechanism: &str,
+        unobserved: &[&str],
+    ) -> Result<EnvHandle, EnvError> {
+        if !record.class.needs_adapter() {
+            return Err(EnvError::Unsupported {
+                capability: "provision_hosted",
+                detail: format!(
+                    "class {} is kernel-provisioned — hosted handles are a provider-class path",
+                    record.class.as_str()
+                ),
+            });
+        }
+        let image = record.resolve()?;
+        let identity = record.identify()?;
+        let env_handle_id = store.alloc_id("env");
+        let environment_ref = (
+            identity
+                .semantic_id
+                .clone()
+                .unwrap_or_else(|| identity.version_id.clone()),
+            identity.version_id.clone(),
+        );
+        let now = store.now_ms();
+        let binding = crate::handle::HostedEnvBinding {
+            participant_ref: participant_ref.to_string(),
+            hosting_mechanism: hosting_mechanism.to_string(),
+            unobserved: unobserved.iter().map(|s| s.to_string()).collect(),
+        };
+        let mut handle = EnvHandle {
+            env_handle_id,
+            run_id: self.run_id.clone(),
+            environment_ref,
+            class: record.class,
+            state: HandleState::Declared,
+            health: Health::Unknown,
+            session: None,
+            capabilities: EnvCapabilityDeclaration::provider_class(),
+            containment,
+            report: None,
+            credential_bindings: vec![],
+            roots,
+            limits: record.limits.clone(),
+            budget_node_refs: vec![],
+            meters: crate::handle::EnvMeters::new(now),
+            snapshots: vec![],
+            parent: None,
+            on_loss,
+            snapshot_cadence: SnapshotCadence::Never,
+            heal_count: 0,
+            image,
+            applied_event_ref: None,
+            phase: None,
+            provider: None,
+            hosted: Some(binding.clone()),
+            created_ms: now,
+        };
+        // Only the transitions the adapter observed are minted — each at
+        // `origin = participant` (the unobserved set produces `n/a`, never
+        // a fabricated row). `declared` is the binding record itself — the
+        // adapter reported the environment exists.
+        let minter = EventMinter::new(store, &self.run_id);
+        let mut batch = Vec::new();
+        if binding.reportable("action.environment.declared") {
+            batch.push(minter.mint_participant(
+                "action.environment.declared",
+                events::declared_payload(&handle),
+                participant_ref,
+                hosting_mechanism,
+            )?);
+        }
+        handle.transition(HandleState::Provisioning, now)?;
+        if binding.reportable("action.environment.provisioning") {
+            batch.push(minter.mint_participant(
+                "action.environment.provisioning",
+                events::provisioning_payload(&handle),
+                participant_ref,
+                hosting_mechanism,
+            )?);
+        }
+        if binding.reportable("action.environment.provisioned") {
+            batch.push(minter.mint_participant(
+                "action.environment.provisioned",
+                events::provisioned_payload(&handle),
+                participant_ref,
+                hosting_mechanism,
+            )?);
+        }
+        if !batch.is_empty() {
+            store.append(&self.run_id, lease, batch)?;
+        }
+        self.handles
+            .insert(handle.env_handle_id.clone(), handle.clone());
+        Ok(handle)
     }
 
     /// `attach(env_handle_id, backend, mode, lab_run, grants) → (report,
@@ -475,16 +653,149 @@ impl EnvDriver {
             events::detached_payload(h, "released"),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
+        // S4.13 (R-2.2.5¹) — provider detach semantics: `remote_persistent`
+        // and `provider_hosted` environments *survive* detach (the adapter
+        // keeps the remote side up for a later `attach`); `remote_ephemeral`
+        // dies with the kernel session.
+        let class = h.class;
+        let ph = if class == crate::record::EnvironmentClass::RemoteEphemeral {
+            h.provider.clone()
+        } else {
+            None
+        };
+        if let Some(ph) = ph {
+            if let Some(adapter) = self.provider_for(class) {
+                adapter.teardown(&ph)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// `suspend(env_handle_id, on_idle?)` — `ready → suspended` (S4.13;
+    /// R-2.2.5¹). Requires the class's declared `suspend` capability —
+    /// `SuspendKind::Unknown` refuses `Unsupported` (a capability the class
+    /// never declared is an honest `UnknownCapability`, never coerced).
+    /// `on_idle` records the policy driving the suspend (`suspended` with
+    /// `on_idle` policy, spec §5a.5 extension row).
+    pub fn suspend(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        on_idle: Option<&str>,
+    ) -> Result<(), EnvError> {
+        let now = store.now_ms();
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        if h.capabilities.suspend == crate::handle::SuspendKind::Unknown {
+            return Err(EnvError::UnknownCapability {
+                capability: "suspend".to_string(),
+            });
+        }
+        // The provider checkpoint runs before the state transition so a
+        // failed checkpoint leaves the handle `ready` (no torn state).
+        if let Some(ph) = &h.provider {
+            if let Some(adapter) = self.provider_for(h.class) {
+                adapter.suspend(ph)?;
+            }
+        }
+        let h = self.handles.get_mut(env_handle_id).unwrap();
+        h.transition(HandleState::Suspended, now)?;
+        let requested = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.suspend.requested",
+            events::suspend_requested_payload(h, on_idle),
+        )?;
+        let suspended = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.suspended",
+            events::suspended_payload(h, on_idle),
+        )?;
+        // request-then-state in one batch — durable before visible.
+        store.append(&self.run_id, lease, vec![requested, suspended])?;
+        Ok(())
+    }
+
+    /// `resume(env_handle_id, cause)` — `suspended → ready` (S4.13). `cause`
+    /// is `wakeup` | `operator` — the same vocabulary `lifecycle.run.resumed`
+    /// uses (one cause enum, CC1); the suspended accrual lands on the row.
+    pub fn resume(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        cause: &str,
+    ) -> Result<(), EnvError> {
+        let now = store.now_ms();
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        if h.state != HandleState::Suspended {
+            return Err(EnvError::InvalidState {
+                op: "resume",
+                state: h.state.as_str(),
+            });
+        }
+        if let Some(ph) = &h.provider {
+            if let Some(adapter) = self.provider_for(h.class) {
+                adapter.resume(ph)?;
+            }
+        }
+        let h = self.handles.get_mut(env_handle_id).unwrap();
+        h.transition(HandleState::Ready, now)?;
+        let suspended_ms = h.meters.view(now).suspended_ms;
+        let requested = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.resume.requested",
+            events::resume_requested_payload(h, cause),
+        )?;
+        let resumed = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.resumed",
+            events::resumed_payload(h, cause, suspended_ms),
+        )?;
+        store.append(&self.run_id, lease, vec![requested, resumed])?;
         Ok(())
     }
 
     /// `teardown(env_handle_id)` — any live state → `torn_down` (terminal).
+    /// S4.13 adds the `on_parent_end` cascade: derived children with
+    /// `Teardown` tear down recursively; `DetachToChild` children keep
+    /// living — the child's ownership transfers to the run (the
+    /// `action.environment.detached{reason: "detach_to_child"}` row is the
+    /// ledger-visible transfer; the child's lifetime is preserved — R-2.2.5¹).
     pub fn teardown(
         &mut self,
         store: &mut Store,
         lease: &Lease,
         env_handle_id: &str,
     ) -> Result<(), EnvError> {
+        // Collect the non-terminal children first — the cascade mutates the
+        // table after the parent's own row lands.
+        let children: Vec<(String, crate::handle::OnParentEnd)> = self
+            .handles
+            .values()
+            .filter(|c| {
+                c.parent
+                    .as_ref()
+                    .map(|p| p.env_handle_id.as_str() == env_handle_id)
+                    .unwrap_or(false)
+                    && !c.state.is_terminal()
+            })
+            .map(|c| {
+                (
+                    c.env_handle_id.clone(),
+                    c.parent.as_ref().unwrap().on_parent_end,
+                )
+            })
+            .collect();
         let now = store.now_ms();
         let h = self
             .handles
@@ -512,8 +823,106 @@ impl EnvDriver {
             "action.environment.torn_down",
             events::torn_down_payload(h, "teardown"),
         )?;
+        // The provider's remote side goes too — teardown is explicit, never
+        // survived (detach is the survivable form for persistent classes).
+        let class = h.class;
+        let ph = h.provider.clone();
         store.append(&self.run_id, lease, vec![ev])?;
+        if let Some(ph) = ph {
+            if let Some(adapter) = self.provider_for(class) {
+                adapter.teardown(&ph)?;
+            }
+        }
+        // The `on_parent_end` cascade — each child's edge decides (KP: the
+        // cascade is recorded per child, never silent).
+        for (child_id, mode) in children {
+            match mode {
+                crate::handle::OnParentEnd::Teardown => {
+                    self.teardown_cascade(store, lease, &child_id)?;
+                }
+                crate::handle::OnParentEnd::DetachToChild => {
+                    let now = store.now_ms();
+                    let h = self.handles.get_mut(&child_id).unwrap();
+                    let released_from =
+                        h.parent.take().map(|p| p.env_handle_id).unwrap_or_default();
+                    // Ownership transfers to the run — the child keeps its
+                    // state/lifetime; the row records the transfer.
+                    let ev = EventMinter::new(store, &self.run_id).mint(
+                        "action.environment.detached",
+                        Json::obj([
+                            ("env_handle", Json::str(h.env_handle_id.clone())),
+                            ("reason", Json::str("detach_to_child")),
+                            ("released_from", Json::str(&released_from)),
+                        ]),
+                    )?;
+                    store.append(&self.run_id, lease, vec![ev])?;
+                    let _ = now;
+                }
+            }
+        }
         Ok(())
+    }
+
+    /// The recursive `Teardown` cascade leg — a child's own children cascade
+    /// under the same rule (the walk is bounded by the tree depth).
+    fn teardown_cascade(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+    ) -> Result<(), EnvError> {
+        // Reuse `teardown` — its own child walk covers the recursion. The
+        // torn row's `reason` is fixed `teardown`; the parent's row names
+        // the cascade's root, so the audit chain stays legible.
+        self.teardown(store, lease, env_handle_id)
+    }
+
+    /// `derive_share(parent_id, resource_keys, on_parent_end)` — the `share`
+    /// mode's resource-key form (S4.13; R-2.2.5¹ "share mode with resource
+    /// keys"). Every named key acquires a `resource:<key>` scoped lease
+    /// before the derive — a live conflicting holder refuses `WouldBlock`
+    /// (unsafe share is refused, never admitted). The keys land on the
+    /// `derived` row via `extra`-style payload members.
+    pub fn derive_share(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        parent_id: &str,
+        resource_keys: &[String],
+        on_parent_end: crate::handle::OnParentEnd,
+        derived_for: Option<&str>,
+    ) -> Result<EnvHandle, EnvError> {
+        if resource_keys.is_empty() {
+            return Err(EnvError::Unsupported {
+                capability: "derive.share",
+                detail: "share requires at least one resource key — write \
+                         coordination is leased, never implied"
+                    .to_string(),
+            });
+        }
+        for key in resource_keys {
+            store
+                .lease_acquire(
+                    &self.run_id,
+                    lease,
+                    &LeaseScope::Resource(key.clone()),
+                    &format!("{}:share:{}", self.run_id, parent_id),
+                    PRESERVE_UNTIL_TTL_MS,
+                )
+                .map_err(|e| EnvError::Unsupported {
+                    capability: "derive.share",
+                    detail: format!("resource key {key} not acquired: {e}"),
+                })?;
+        }
+        self.derive_for(
+            store,
+            lease,
+            parent_id,
+            crate::handle::DeriveMode::Share,
+            None,
+            on_parent_end,
+            derived_for,
+        )
     }
 
     /// `mark_unreachable(env_handle_id)` — contact lost. `ready →
@@ -1051,6 +1460,8 @@ impl EnvDriver {
             image: parent.image.clone(),
             applied_event_ref: None,
             phase: None,
+            provider: parent.provider.clone(),
+            hosted: parent.hosted.clone(),
             created_ms: now,
         };
         let declared = EventMinter::new(store, &self.run_id)
@@ -1478,10 +1889,29 @@ impl EnvDriver {
                 env_handle_id: env_handle_id.to_string(),
                 state: "missing",
             })?;
-        let ev = EventMinter::new(store, &self.run_id).mint(
-            "action.environment.meters_sampled",
-            events::meters_sampled_payload(h, now),
-        )?;
+        // S4.13 — provider meters fold into the same row (the kernel's
+        // clocks plus the adapter's declared samples; undeclared names land
+        // in `unreported`, never silently merged — CC3). Clone the adapter
+        // inputs first so the immutable handle borrow ends before the
+        // `&mut self` adapter lookup.
+        let class = h.class;
+        let ph = h.provider.clone();
+        let provider_samples = if let Some(ph) = &ph {
+            match self.provider_for(class) {
+                Some(adapter) => adapter.meters(ph).unwrap_or_default(),
+                None => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+        let h = self.handles.get(env_handle_id).unwrap();
+        let payload = if provider_samples.is_empty() {
+            events::meters_sampled_payload(h, now)
+        } else {
+            events::provider_meters_sampled_payload(h, now, &provider_samples)
+        };
+        let ev = EventMinter::new(store, &self.run_id)
+            .mint("action.environment.meters_sampled", payload)?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok(())
     }

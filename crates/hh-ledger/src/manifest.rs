@@ -384,6 +384,12 @@ pub struct RunManifest {
     pub forked_from: Option<LineageLink>,
     /// A non-diverging continuation link.
     pub continued_from: Option<LineageLink>,
+    /// `goal_ref` — the durable goal coordinate a continuation chain
+    /// aggregates under (§5a.3; ADR-0131 §5 — S4.13). Required on
+    /// `run_kind = inbox` (the goal's inbox run); carried verbatim on every
+    /// `continued_from` activation so goal-scoped subscriptions and the
+    /// goal's `BudgetNode` resolve across activations.
+    pub goal_ref: Option<String>,
     /// The single overrides layer id (ADR-0168 D4).
     pub overrides_layer_id: Option<String>,
     /// The envelope policy ref (ADR-0132).
@@ -449,6 +455,7 @@ impl RunManifest {
             spawn_event: None,
             forked_from: None,
             continued_from: None,
+            goal_ref: None,
             overrides_layer_id: None,
             envelope_policy_ref: None,
             compute_policy_ref: None,
@@ -597,6 +604,17 @@ impl RunManifest {
         if self.signer_key_ids.iter().any(|k| k.is_empty()) {
             return Err(bad("signer_key_ids members must be non-empty".into()));
         }
+        // §5a.3 (S4.13): an inbox run is *a goal's* inbox — `goal_ref` is
+        // required; it is a durable coordinate, never a content id, so no
+        // pinning rule applies (it is spelled `goal:<ref>` by convention).
+        if self.run_kind == RunKind::Inbox && self.goal_ref.is_none() {
+            return Err(bad("goal_ref required on run_kind = inbox".into()));
+        }
+        if let Some(g) = &self.goal_ref {
+            if g.is_empty() || g.contains('/') || g.contains('.') {
+                return Err(bad(format!("goal_ref {g} is not a well-formed coordinate")));
+            }
+        }
         if let Some(e) = &self.experiment {
             for (field, value) in [
                 ("experiment.experiment_id", &e.experiment_id),
@@ -688,6 +706,7 @@ impl RunManifest {
             ("environment_version_id", &self.environment_version_id),
             ("budget", &self.budget),
             ("hosting_mechanism", &self.hosting_mechanism),
+            ("goal_ref", &self.goal_ref),
             (
                 "capability_declaration_ref",
                 &self.capability_declaration_ref,
@@ -964,6 +983,7 @@ impl RunManifest {
             "compute_policy_ref",
             "envelope_policy_ref",
             "forked_from",
+            "goal_ref",
             "grace_ms",
             "harness_def_ref",
             "healing_policy_ref",
@@ -1013,6 +1033,7 @@ impl RunManifest {
             spawn_event,
             forked_from: link("forked_from")?,
             continued_from: link("continued_from")?,
+            goal_ref: opt_str("goal_ref"),
             overrides_layer_id: opt_str("overrides_layer_id"),
             envelope_policy_ref: opt_str("envelope_policy_ref"),
             compute_policy_ref: opt_str("compute_policy_ref"),

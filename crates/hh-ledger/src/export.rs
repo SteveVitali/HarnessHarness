@@ -244,6 +244,66 @@ pub fn export_audit_view(
     }
 }
 
+/// The lineage-aware export (S4.13; R-2.2.1¹) — an [`AuditExport`] that
+/// carries the run's resolved lineage chain (`lineage[]` root-first, each
+/// entry `{run_id, up_to_seq, head_hash}` — the same shape `Store::lineage`
+/// resolves and `LineageLink` binds). A bundle/export consumer can then
+/// verify the ancestry anchors *of the export itself* — the chain is data
+/// the export carries, never a recompute obligation (I-3; the anchors are
+/// the durable links, exported verbatim).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LineageAwareExport {
+    /// The lowered rows + loss report (verbatim [`AuditExport`]).
+    pub export: AuditExport,
+    /// The resolved lineage chain, root-first, the run's own terminal
+    /// entry last (`run_id → its WAL tip`).
+    pub lineage: Vec<crate::store::LineageEntry>,
+}
+
+impl LineageAwareExport {
+    /// The canonical JSON — `{rows, loss_report, lineage}` (additive over
+    /// [`AuditExport::to_json`]; CC8).
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("rows", Json::Arr(self.export.rows.clone())),
+            ("loss_report", self.export.loss_report.to_json()),
+            (
+                "lineage",
+                Json::Arr(
+                    self.lineage
+                        .iter()
+                        .map(|l| {
+                            Json::obj([
+                                ("run_id", Json::str(l.run_id.clone())),
+                                ("up_to_seq", Json::Int(l.up_to_seq as i64)),
+                                ("head_hash", Json::str(l.head_hash.clone())),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ])
+    }
+}
+
+/// `export_audit_view_with_lineage(events, view_members, convention,
+/// lineage)` — [`export_audit_view`] plus the resolved lineage chain.
+/// `lineage` is the caller-resolved chain (`Store::lineage`); the
+/// export records it verbatim — an empty chain exports `lineage: []`
+/// (a plain run is its own ancestry, the member is never omitted —
+/// absent vs. empty stays distinguishable, CC3).
+pub fn export_audit_view_with_lineage(
+    events: &[crate::event::EventEnvelope],
+    view_members: &[String],
+    convention: ExportConvention,
+    lineage: Vec<crate::store::LineageEntry>,
+) -> LineageAwareExport {
+    LineageAwareExport {
+        export: export_audit_view(events, view_members, convention),
+        lineage,
+    }
+}
+
 /// A lifted external row — the import direction (§5g.6 §7 AC-H6-9): every
 /// row reports `verification_status = "unverified"` and links back to the
 /// external chain through `alias` (the external record's own id — an alias,

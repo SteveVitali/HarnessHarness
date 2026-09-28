@@ -53,6 +53,30 @@ impl<'a> EventMinter<'a> {
         self.build(class, payload, event_id)
     }
 
+    /// Mint a hosted-observed environment row — AC-R-2.2.5-13 (R-2.2.5¹,
+    /// §5a.5): a container-installed hosted environment's handle rows carry
+    /// `origin = participant` for the transitions the adapter reports (the
+    /// `action.environment.*` family admits `Origin::Participant` for this
+    /// path only — the store's `kernel_origin` carve-out is class-scoped).
+    /// The producer stays `hh-env` (the kernel component recorded the fact);
+    /// the *origin* is the participant whose adapter observed it — never a
+    /// second authority.
+    pub fn mint_participant(
+        &self,
+        class: &str,
+        payload: Json,
+        participant_ref: &str,
+        hosting_mechanism: &str,
+    ) -> Result<Event, LedgerError> {
+        let mut ev = self.mint(class, payload)?;
+        ev.provenance = Some(ProvenanceRecord::minted(
+            hh_provenance::Origin::participant(participant_ref, hosting_mechanism),
+            hh_provenance::PersistenceScope::Run,
+            self.store.now_ms(),
+        ));
+        Ok(ev)
+    }
+
     fn build(&self, class: &str, payload: Json, event_id: String) -> Result<Event, LedgerError> {
         Ok(Event {
             event_id,
@@ -265,6 +289,87 @@ pub fn meters_sampled_payload(h: &EnvHandle, now: u64) -> Json {
         ("reserved_ms", Json::Int(v.reserved_ms as i64)),
         ("active_ms", Json::Int(v.active_ms as i64)),
         ("suspended_ms", Json::Int(v.suspended_ms as i64)),
+    ])
+}
+
+/// `action.environment.meters_sampled` with provider-reported meters folded
+/// in (S4.13; R-2.2.5¹): `provider_meters[] = {name, value, unit}`,
+/// `unreported[]` = adapter samples whose names the class never declared
+/// (dropped, never silently merged — CC3).
+pub fn provider_meters_sampled_payload(
+    h: &EnvHandle,
+    now: u64,
+    samples: &[crate::provider::ProviderMeter],
+) -> Json {
+    let v = h.meters.view(now);
+    let mut reported: Vec<Json> = Vec::new();
+    let mut unreported: Vec<Json> = Vec::new();
+    for m in samples {
+        let member = Json::obj([
+            ("name", Json::str(&m.name)),
+            ("value", Json::Int(m.value)),
+            ("unit", Json::str(&m.unit)),
+        ]);
+        if h.capabilities.meters.contains(&m.name) {
+            reported.push(member);
+        } else {
+            unreported.push(member);
+        }
+    }
+    Json::obj([
+        ("env_handle", Json::str(h.env_handle_id.clone())),
+        ("reserved_ms", Json::Int(v.reserved_ms as i64)),
+        ("active_ms", Json::Int(v.active_ms as i64)),
+        ("suspended_ms", Json::Int(v.suspended_ms as i64)),
+        ("provider_meters", Json::Arr(reported)),
+        ("unreported", Json::Arr(unreported)),
+    ])
+}
+
+/// `action.environment.suspend.requested{env_handle, on_idle?}` — S4.13.
+pub fn suspend_requested_payload(h: &EnvHandle, on_idle: Option<&str>) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("env_handle".to_string(), Json::str(h.env_handle_id.clone()));
+    if let Some(p) = on_idle {
+        m.insert("on_idle".to_string(), Json::str(p));
+    }
+    Json::Obj(m)
+}
+
+/// `action.environment.suspended{env_handle, suspend_kind, on_idle?}` — the
+/// handle entered `suspended` (`suspended_ms` starts accruing).
+pub fn suspended_payload(h: &EnvHandle, on_idle: Option<&str>) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("env_handle".to_string(), Json::str(h.env_handle_id.clone()));
+    m.insert(
+        "suspend_kind".to_string(),
+        Json::str(match h.capabilities.suspend {
+            crate::handle::SuspendKind::Memory => "memory",
+            crate::handle::SuspendKind::FsOnly => "fs_only",
+            crate::handle::SuspendKind::Unknown => "unknown",
+        }),
+    );
+    if let Some(p) = on_idle {
+        m.insert("on_idle".to_string(), Json::str(p));
+    }
+    Json::Obj(m)
+}
+
+/// `action.environment.resume.requested{env_handle, cause}` — S4.13.
+pub fn resume_requested_payload(h: &EnvHandle, cause: &str) -> Json {
+    Json::obj([
+        ("env_handle", Json::str(h.env_handle_id.clone())),
+        ("cause", Json::str(cause)),
+    ])
+}
+
+/// `action.environment.resumed{env_handle, cause, suspended_ms}` — the
+/// suspend cycle's accrual lands on the resume row.
+pub fn resumed_payload(h: &EnvHandle, cause: &str, suspended_ms: u64) -> Json {
+    Json::obj([
+        ("env_handle", Json::str(h.env_handle_id.clone())),
+        ("cause", Json::str(cause)),
+        ("suspended_ms", Json::Int(suspended_ms as i64)),
     ])
 }
 

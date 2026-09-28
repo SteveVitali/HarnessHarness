@@ -94,8 +94,9 @@ impl HandleState {
     }
 
     /// Whether `self → next` is a legal transition (the ADR-0136 §5 machine).
-    /// `Suspended` is unreachable at Stage 1 — the `suspend()` op refuses
-    /// `Unsupported` rather than entering it, so no `→ Suspended` edge exists.
+    /// S4.13 reaches `Suspended` — `suspend()` requires the class's declared
+    /// `suspend` capability (`SuspendKind::Unknown` refuses `Unsupported`);
+    /// `resume` re-enters `ready`.
     pub fn allows(self, next: HandleState) -> bool {
         use HandleState::*;
         matches!(
@@ -106,6 +107,11 @@ impl HandleState {
                 | (Ready, Detached)
                 | (Ready, Unreachable)
                 | (Ready, TornDown)
+                | (Ready, Suspended)
+                | (Suspended, Ready)
+                | (Suspended, Unreachable)
+                | (Suspended, TornDown)
+                | (Suspended, Failed)
                 | (Detached, Ready)
                 | (Detached, TornDown)
                 | (Unreachable, Reattached)
@@ -267,6 +273,43 @@ impl EnvCapabilityDeclaration {
         let mut c = Self::stage1_local_sandboxed();
         c.meters = ["helper.spawns"].iter().map(|s| s.to_string()).collect();
         c
+    }
+
+    /// The provider-class declaration (S4.13 — `remote_ephemeral` |
+    /// `remote_persistent` | `provider_hosted`): every kernel-side claim is
+    /// the adapter's — `suspend` declared `fs_only` (the remote snapshot is
+    /// the adapter's mechanism; `memory` is never claimed), `restore_in_place`
+    /// unknown, a reattach window for the heal path, and the provider meter
+    /// names the sample row validates against.
+    pub fn provider_class() -> Self {
+        let mut snapshot = BTreeMap::new();
+        for k in [
+            "path_baseline",
+            "fs_tree",
+            "fs_layer",
+            "memory",
+            "shell_state",
+        ] {
+            snapshot.insert(k.to_string(), Tri::Unknown);
+        }
+        EnvCapabilityDeclaration {
+            snapshot,
+            suspend: SuspendKind::FsOnly,
+            restore_in_place: Tri::Unknown,
+            reattach_window_ms: Some(300_000),
+            output_overflow: OutputOverflow::Unknown,
+            meters: [
+                "provider.reserved_ms",
+                "provider.active_ms",
+                "provider.suspended_ms",
+                "provider.billed_usd_millicents",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+            per_phase_network_policy: Tri::Unknown,
+            residual_channels: vec!["provider.session".to_string()],
+        }
     }
 
     /// Whether a `snapshot(kind)` is supported — `Ok` only on `Supported`;
@@ -567,11 +610,70 @@ pub struct EnvHandle {
     /// The applied phase (`setup | agent | verify`) — `set_phase`
     /// records it; absent ⇒ the provision-time phase (`agent`).
     pub phase: Option<String>,
+    /// The provider-side handle a `remote_*`/`provider_hosted` adapter
+    /// returned at provision (S4.13) — `None` for local classes. The
+    /// adapter's suspend/resume/teardown/meters hooks key off it.
+    pub provider: Option<crate::provider::ProviderHandle>,
+    /// The hosted-environment binding (S4.13; AC-R-2.2.5-13) — `Some` when a
+    /// hosted participant runs inside a container-installed environment:
+    /// the handle's `action.environment.*` rows carry `origin =
+    /// participant` for the transitions the adapter observed, and the
+    /// `unobserved` set names the transitions the adapter cannot report —
+    /// they render `n/a{unobserved}`, never fabricated.
+    pub hosted: Option<HostedEnvBinding>,
     /// Provisioning entry (ms).
     pub created_ms: u64,
 }
 
+/// `HostedEnvBinding` — the container-installed hosted-environment record
+/// (AC-R-2.2.5-13). The kernel is the eventing authority (the mint is
+/// `hh-env`-produced); `origin = participant` marks *who observed* the
+/// transition — the hosted adapter — never a second writer.
+#[derive(Debug, Clone)]
+pub struct HostedEnvBinding {
+    /// `provenance.origin = participant(participant_ref, mechanism)`.
+    pub participant_ref: String,
+    /// The hosting mechanism (`hh.hosting/1` binding id).
+    pub hosting_mechanism: String,
+    /// `action.environment.*` transitions the adapter cannot report —
+    /// `EnvHandle::transition_reportable` returns `false` for these; the
+    /// status view renders `n/a{unobserved}` (`observability_level ∌
+    /// events` — the handle never fabricates what it cannot see).
+    pub unobserved: std::collections::BTreeSet<String>,
+}
+
+impl HostedEnvBinding {
+    /// Whether `transition_class` (an `action.environment.*` spelling) is
+    /// reportable for this binding — `false` ⇒ the transition renders
+    /// `n/a` and no row is minted for it.
+    pub fn reportable(&self, transition_class: &str) -> bool {
+        !self.unobserved.contains(transition_class)
+    }
+}
+
 impl EnvHandle {
+    /// `origin` of this handle's environment rows — `"participant"` when a
+    /// hosted adapter observes them (`hosted` binding), `"kernel"` otherwise
+    /// (AC-R-2.2.5-13; §5a.5 "hosted rows `origin = participant`").
+    pub fn row_origin(&self) -> &'static str {
+        if self.hosted.is_some() {
+            "participant"
+        } else {
+            "kernel"
+        }
+    }
+
+    /// Whether `transition_class` is reportable for this handle — hosted
+    /// bindings answer from the adapter's unobserved set; kernel-observed
+    /// handles report every transition (`observability_level` is the run
+    /// manifest's, not the handle's).
+    pub fn transition_reportable(&self, transition_class: &str) -> bool {
+        match &self.hosted {
+            Some(h) => h.reportable(transition_class),
+            None => true,
+        }
+    }
+
     /// The *honest* `isolation_class` — the attached report's when present
     /// (the truth), else the class's implied claim (pre-attach; `local_host`'s
     /// `none` is honest because nothing is enforced).

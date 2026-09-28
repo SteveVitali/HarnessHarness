@@ -17,8 +17,7 @@ use hh_wire::json::Json;
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
     let n = N.fetch_add(1, Ordering::Relaxed);
-    let p =
-        std::env::temp_dir().join(format!("hh-ledger-s49-{}-{tag}-{n}", std::process::id()));
+    let p = std::env::temp_dir().join(format!("hh-ledger-s49-{}-{tag}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&p);
     p
 }
@@ -51,42 +50,34 @@ fn fleet_manifest() -> RunManifest {
 #[test]
 fn fleet_boundary_trigger_admissibility() {
     let mut s = store("trig", 1_000);
-    let (agent_run, agent_lease) = s
-        .open_run(agent_manifest(), "writer-a")
-        .unwrap();
-    let (fleet_run, fleet_lease) = s
-        .open_run(fleet_manifest(), "writer-f")
-        .unwrap();
+    let (agent_run, agent_lease) = s.open_run(agent_manifest(), "writer-a").unwrap();
+    let (fleet_run, fleet_lease) = s.open_run(fleet_manifest(), "writer-f").unwrap();
 
-    // Agent run — external/manual refuse typed (the Stage-4 gate's
-    // unchanged member; fleet admissibility never leaks downward, CC6).
-    for t in [
-        Trigger::External {
-            kind: "ticket.updated".into(),
-        },
+    // Agent run — `manual` refuses typed (the Stage-4 gate's unchanged
+    // member; fleet admissibility never leaks downward, CC6). `external`
+    // left the boundary at S4.13 — it is admissible on every run kind.
+    match s.wakeup_subscribe(
+        &agent_run,
+        &agent_lease,
         Trigger::Manual {
             principal: "op".into(),
         },
-    ] {
-        match s.wakeup_subscribe(
-            &agent_run,
-            &agent_lease,
-            t,
-            WakeupPolicy::default_policy(),
-            &EventRef {
-                run_id: agent_run.clone(),
-                event_id: "evt-x".into(),
-            },
-        ) {
-            Err(LedgerError::TriggerUnsupported { .. }) => {}
-            other => panic!("agent-run external/manual must refuse: {other:?}"),
-        }
+        WakeupPolicy::default_policy(),
+        &EventRef {
+            run_id: agent_run.clone(),
+            event_id: "evt-x".into(),
+        },
+    ) {
+        Err(LedgerError::TriggerUnsupported { .. }) => {}
+        other => panic!("agent-run manual must refuse: {other:?}"),
     }
 
     // Fleet run — the same triggers admit (the boundary's declared set).
     for t in [
         Trigger::External {
             kind: "ticket.updated".into(),
+            source_ref: None,
+            filter: None,
         },
         Trigger::Manual {
             principal: "op".into(),
@@ -109,13 +100,13 @@ fn fleet_boundary_trigger_admissibility() {
     // Unsupported variants refuse even at the fleet boundary — the
     // fleet's declared set is closed (`external`/`manual`/`timer`; the
     // fleet SPEC layer refuses every other variant at `open` — see the
-    // hh-fleet `unsupported_trigger_variants_refuse` test; `schedule`
-    // keeps its kernel-level refusal everywhere).
+    // hh-fleet `unsupported_trigger_variants_refuse` test;
+    // `environment_ready` keeps its kernel-level refusal everywhere).
     match s.wakeup_subscribe(
         &fleet_run,
         &fleet_lease,
-        Trigger::Schedule {
-            expr: "*/5 * * * *".into(),
+        Trigger::EnvironmentReady {
+            env_handle_id: "env-x".into(),
         },
         WakeupPolicy::default_policy(),
         &EventRef {
@@ -124,7 +115,7 @@ fn fleet_boundary_trigger_admissibility() {
         },
     ) {
         Err(LedgerError::TriggerUnsupported { .. }) => {}
-        other => panic!("schedule must refuse at the fleet boundary: {other:?}"),
+        other => panic!("environment_ready must refuse at the fleet boundary: {other:?}"),
     }
 }
 
