@@ -147,6 +147,7 @@ fn decode_arms(j: &Json) -> Result<Vec<ArmSpec>, EmbedError> {
                 },
                 spend_confidence: None,
                 coverage_ppm: None,
+                ensemble_k: None,
             })
         })
         .collect()

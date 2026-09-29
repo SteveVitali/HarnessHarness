@@ -3572,4 +3572,76 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn effort_ladder_bound_and_step_up_rule() {
+        // AC-R-2.3.3-15 — a step outside the declared ladder is refused; a
+        // step-up is admissible only by the declared streak rule on a
+        // per-message, non-invalidating profile.
+        let mut ctx = ctx_base();
+        ctx.profile_capabilities = Json::obj([(
+            "effort",
+            Json::obj([
+                (
+                    "ladder",
+                    Json::Arr(vec![Json::str("low"), Json::str("high")]),
+                ),
+                ("per_message", Json::Bool(true)),
+                ("cache_invalidation_on_change", Json::Bool(false)),
+            ]),
+        )]);
+        let mut before = propose();
+        if let DecisionKind::Propose {
+            context_request, ..
+        } = &mut before.kind
+        {
+            *context_request = Json::obj([("effort", Json::str("low"))]);
+        }
+        // A rung outside the ladder → refused.
+        let mut off = before.clone();
+        if let DecisionKind::Propose {
+            context_request, ..
+        } = &mut off.kind
+        {
+            *context_request = Json::obj([("effort", Json::str("turbo"))]);
+        }
+        assert!(check_bound(&before, &off, &ctx).is_err());
+        // A step-up without the streak → refused.
+        let mut up = before.clone();
+        if let DecisionKind::Propose {
+            context_request, ..
+        } = &mut up.kind
+        {
+            *context_request = Json::obj([("effort", Json::str("high"))]);
+        }
+        assert!(check_bound(&before, &up, &ctx).is_err());
+        // With the recorded streak (fail ≥ streak_n) on a per-message,
+        // non-invalidating profile the step-up binds.
+        ctx.validator_streaks.fail = RulesConfig::default().streak_n;
+        assert!(check_bound(&before, &up, &ctx).is_ok());
+        // …but never on a profile whose effort changes invalidate the cache.
+        ctx.profile_capabilities = Json::obj([(
+            "effort",
+            Json::obj([
+                (
+                    "ladder",
+                    Json::Arr(vec![Json::str("low"), Json::str("high")]),
+                ),
+                ("per_message", Json::Bool(true)),
+                ("cache_invalidation_on_change", Json::Bool(true)),
+            ]),
+        )]);
+        assert!(check_bound(&before, &up, &ctx).is_err());
+        // A same-or-lower step always binds.
+        let mut down_ctx = ctx_base();
+        down_ctx.profile_capabilities = ctx.profile_capabilities.clone();
+        let mut high_before = before.clone();
+        if let DecisionKind::Propose {
+            context_request, ..
+        } = &mut high_before.kind
+        {
+            *context_request = Json::obj([("effort", Json::str("high"))]);
+        }
+        assert!(check_bound(&high_before, &before, &down_ctx).is_ok());
+    }
 }

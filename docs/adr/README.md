@@ -98,3 +98,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0306](ADR-0306-s4.14a-supply-chain-trust-rulings.md) | S4.14a supply-chain trust & third-party install rulings | S4.14a | Accepted |
 | [ADR-0307](ADR-0307-s4.14b-security-enrichments-rulings.md) | S4.14b security enrichments — backend, attestation, rotation, hosted composition and label-branch rulings | S4.14b | Accepted |
 | [ADR-0308](ADR-0308-s4.15-c1-measurement-depth-rulings.md) | S4.15 C1 measurement depth — adapter declaration, validity gating, foreign interchange and judge-oracle rulings | S4.15 | Accepted |
+| [ADR-0309](ADR-0309-s4.16a-c1-router-and-cache-depth-rulings.md) | S4.16a C1 router depth and cache-projection rulings | S4.16a | Accepted |
