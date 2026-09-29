@@ -1,10 +1,12 @@
 //! `authorize` — the monitor's decision function (§5g.1 §2.1/§2.2; ADR-0052
-//! D1–D3). Steps **0–3 and 6** at Stage 1; step 4 lands as its authority-form
+//! D1–D3). Steps **0–3 and 6** landed at Stage 1; step 4 is its authority-form
 //! half (the Π gate + the ADR-0031 floor + Π-12's unattended transform, all
-//! inside [`PolicyTable::evaluate`]/[`floor_verdict`]); steps 5, 7's lease/
-//! approvals-budget halves and 8 are Stage-2 (the Stage-1 `ask` *is* step 7's
-//! unconditional form — `ask` carries its options, the `ask → deny` unattended
-//! transform is Π-12's).
+//! inside [`PolicyTable::evaluate`]/[`floor_verdict`]); **step 5** (the
+//! persistence ceiling — check 6, ADR-0035 D3 + the `store` dimension) and
+//! **steps 7–8** (approval feasibility + the lease cache) land at Stage 2.
+//! The hook/auto_reviewer/human stages of an `ask` are the §5g.7 §4
+//! escalation chain the dispatcher drives over [`approval::run_chain`] —
+//! `authorize` is pure and never runs a hook.
 //!
 //! Short-circuit on first deny (§2.2). The decision is a pure function of the
 //! recorded inputs — [`Proposal`] carries `AssessmentInputs` as data (the
@@ -23,12 +25,14 @@ use hh_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
 use hh_provenance::{AuthorityClass, Label, ProvenanceRecord, TaintTag};
 use hh_wire::json::Json;
 
+use crate::approval::{self, ApprovalLease, ApprovalMode, ApprovalState, EscalationInput};
 use crate::args::{self, ArgError, CanonicalArgs};
-use crate::assess::{self, AssessmentInputs};
+use crate::assess::{self, AssessmentInputs, MemoryScope};
 use crate::decision::{CheckRecord, Decider, Decision, DecisionScope, DenyReason, KernelDecision};
-use crate::handle::HandleId;
+use crate::handle::{HandleId, OriginBasis};
 use crate::policy::{Mode, PiContext, PiVerdict, PolicyTable};
 use crate::table::HandleTable;
+use hh_provenance::PersistenceScope;
 
 /// `Proposal` — the `action.effect.intended` payload plus `args_provenance`
 /// and `self_report?` (§3). Every member is a canonical record — no `Text`,
@@ -155,12 +159,45 @@ pub struct Monitor {
     /// Whether a decision is currently open (the `DecisionGuard` flag —
     /// `ModelCallDuringDecision` trips on a model call while set).
     pub decision_open: bool,
+    /// The approval fold's read side (steps 7–8): the live leases and the
+    /// The sealed `HarnessRule{auto_review}` set the reviewer chain's
+    /// `auto_reviewer` stage runs (`auto_review_rules(sealed)` extracted at
+    /// monitor setup — I-P2's endorser). Empty = no rule can match.
+    pub auto_review_rules: Vec<crate::approval::AutoReviewRule>,
+    /// The sealed repeated-denial policy (`None` = no ceiling — a denial
+    /// never auto-fires a fallback).
+    pub denial_policy: Option<crate::approval::DenialPolicy>,
+    /// `approvals.requested` count. The dispatcher maintains it from the
+    /// `security.permission.*` trail — a derived view, never a second truth
+    /// (CC1).
+    pub approvals: ApprovalState,
+    /// The `approvals.requested` hard ceiling (ADR-0040 — `None` = the
+    /// dimension is unbudgeted). Exhaustion converts the next
+    /// *human-targeted* ask to `deny{ApprovalsExhausted}` — a serving lease
+    /// resolves regardless (§5g.7's exhaustion row).
+    pub approvals_max: Option<u64>,
+    /// The run's declared approval mode (I-P4 — `async` defers the human
+    /// stage; the request's `mode` member carries it to the surface).
+    pub approval_mode: ApprovalMode,
+    /// The lease key's policy leg — `policy_fingerprint(version_id, mode,
+    /// narrowing_leaf_ids)` computed at monitor setup; a Π/mode change is a
+    /// new fingerprint and revokes every old lease by key construction
+    /// (ADR-0071 D1).
+    pub policy_fingerprint: String,
 }
 
 impl Monitor {
     /// A monitor over the given table and policy (empty registries — tests and
     /// the run-start path populate them).
     pub fn new(table: HandleTable, policy: PolicyTable) -> Monitor {
+        let policy_fingerprint = approval::policy_fingerprint(
+            &policy.version_id,
+            match policy.mode {
+                Mode::Attended => "attended",
+                Mode::Unattended => "unattended",
+            },
+            &[],
+        );
         Monitor {
             table,
             policy,
@@ -171,7 +208,260 @@ impl Monitor {
             run_id: String::new(),
             session: String::new(),
             decision_open: false,
+            auto_review_rules: Vec::new(),
+            denial_policy: None,
+            approvals: ApprovalState::default(),
+            approvals_max: None,
+            approval_mode: ApprovalMode::Sync,
+            policy_fingerprint,
         }
+    }
+
+    /// `escalation_input(p, canonical, cap, eff, risk)` — the record the
+    /// escalation chain consumes (§5g.7 §4; the `EscalationInput` data-model
+    /// row): the lease legs (exact args hash + each declared `ActionPattern`
+    /// projection), the never-auto members, the budget state and the
+    /// fingerprint. Pure over canonical records — the caller (dispatch)
+    /// passes it to [`approval::run_chain`] for the hook/auto_reviewer/human
+    /// stages.
+    pub fn escalation_input(
+        &self,
+        p: &Proposal,
+        canonical: &CanonicalArgs,
+        cap: &CapabilityEntry,
+        eff: AuthorityClass,
+        risk: RiskClass,
+    ) -> EscalationInput {
+        let args_str: BTreeMap<String, String> = canonical
+            .params
+            .iter()
+            .map(|(k, v)| (k.clone(), v.to_canonical_string()))
+            .collect();
+        let pattern_keys = cap
+            .record
+            .action_patterns
+            .iter()
+            .map(|d| {
+                approval::ActionPattern {
+                    fields: d.fields.iter().cloned().collect(),
+                }
+                .key_material(&args_str)
+            })
+            .collect();
+        let irreversible = risk.reversibility == RiskReversibility::Irreversible;
+        EscalationInput {
+            effect_id: p.effect_id.clone(),
+            scope_ref: self.run_id.clone(),
+            capability_ref: p.capability_ref.clone(),
+            args_canonical_hash: args::canonical_args_hash(canonical),
+            pattern_keys,
+            domain: p.effect.domain,
+            risk,
+            eff,
+            holder: p.proposer.clone(),
+            irreversible,
+            mode: self.policy.mode,
+            unattended_policy: self.policy.unattended_policy,
+            approval_mode: self.approval_mode,
+            policy_fingerprint: self.policy_fingerprint.clone(),
+            approvals_used: self.approvals.stats.requested,
+            approvals_max: self.approvals_max,
+            // The sealed-definition `ask` leaf and the revoked/stale legs are
+            // the dispatcher's scan (it reads the sealed rules and the live
+            // grant table); the consent-step member reads the class.
+            explicit_ask: false,
+            consent_step: p.effect.domain == EffectDomain::MessageHuman,
+            revoked_or_stale: false,
+            user_scope_persistence: self.write_scope(p, canonical) == Some(PersistenceScope::User),
+            // `irreversible` is never batched; `permission_request` effects
+            // are their own owed-decision records (never coalesced into a
+            // batch).
+            batchable: !irreversible && p.effect.domain != EffectDomain::PermissionRequest,
+            context_authority: p.context_label.authority,
+        }
+    }
+
+    /// The lease serving `input` — the step-8 lookup over the exact-args leg
+    /// plus each declared pattern leg (the dispatcher's `run_chain` lease
+    /// stage computes the same keys — one rule, one spelling).
+    pub fn lease_hit(&self, input: &EscalationInput) -> Option<(String, ApprovalLease)> {
+        for material in approval::lease_candidates(input) {
+            let key = approval::lease_key(
+                &input.capability_ref,
+                &material,
+                approval::LeaseScope::Run,
+                &input.policy_fingerprint,
+            );
+            if let Some(l) = self.approvals.leases.get(&key) {
+                if approval::lease_serves(l, input) {
+                    return Some((key, l.clone()));
+                }
+            }
+        }
+        None
+    }
+
+    /// Whether a live `policy_rule`-basis handle held by `proposer` covers
+    /// `domain` over `canonical` — the `pre_authorized` assessment input's
+    /// derivation (ADR-0053 D5): the sealed `pre_authorize` rule's *handle
+    /// record* confers, never a flag or a name (I-H1). `Tri::Unknown` only
+    /// when the input itself cannot be decided — a missing handle is `No`.
+    pub fn pre_authorized(
+        &self,
+        proposer: &str,
+        domain: EffectDomain,
+        canonical: &CanonicalArgs,
+    ) -> crate::assess::Tri {
+        let covered = self.table.handles.values().any(|h| {
+            h.origin_basis == OriginBasis::PolicyRule
+                && h.holder.semantic_id == proposer
+                && h.is_live(&self.effect_id, &self.turn_id, &self.run_id, &self.session)
+                && h.grants.iter().any(|g| {
+                    g.effect.domain == domain && args::grant_scope_covers(&g.scope, canonical)
+                })
+        });
+        if covered {
+            crate::assess::Tri::Yes
+        } else {
+            crate::assess::Tri::No
+        }
+    }
+
+    /// The write's target persistence scope — `memory_write` reads the
+    /// recorded `memory_scope` input; `fs_write` reads a `scope`/
+    /// `persistence_scope` canonical param (or any scoped value spelling a
+    /// scope). `None` = no persistence-scope write — the ceiling is exempt.
+    fn write_scope(&self, p: &Proposal, canonical: &CanonicalArgs) -> Option<PersistenceScope> {
+        match p.effect.domain {
+            EffectDomain::MemoryWrite => p.inputs.memory_scope.map(|m| match m {
+                MemoryScope::Run => PersistenceScope::Run,
+                MemoryScope::Session => PersistenceScope::Session,
+                MemoryScope::Project => PersistenceScope::Project,
+                MemoryScope::User => PersistenceScope::User,
+            }),
+            EffectDomain::FsWrite => canonical
+                .params
+                .get("scope")
+                .or_else(|| canonical.params.get("persistence_scope"))
+                .and_then(Json::as_str)
+                .and_then(parse_persistence_scope)
+                .or_else(|| {
+                    canonical
+                        .scoped
+                        .values()
+                        .filter_map(|v| v.as_str())
+                        .find_map(parse_persistence_scope)
+                }),
+            _ => None,
+        }
+    }
+
+    /// Whether a live `approval`-basis handle held by `proposer` grants
+    /// `domain` — the `+ approval` half of the `user`-scope write ceiling
+    /// (the approval *record* confers, never a name).
+    fn approval_evidence(&self, proposer: &str, domain: EffectDomain) -> bool {
+        self.table.handles.values().any(|h| {
+            h.origin_basis == OriginBasis::Approval
+                && h.holder.semantic_id == proposer
+                && h.is_live(&self.effect_id, &self.turn_id, &self.run_id, &self.session)
+                && h.grants.iter().any(|g| g.effect.domain == domain)
+        })
+    }
+
+    /// Step 5 — the persistence ceiling (check 6; ADR-0035 D3 as amended by
+    /// the `store` dimension, ADR-0080 D2/CF-172): a `memory_write`/`fs_write`
+    /// targeting a scope above its write ceiling denies
+    /// `ScopeCeilingExceeded`. `run`/`turn` exempt; `session` needs
+    /// `delegate`; `project` needs `principal`; `user` needs `principal` plus
+    /// approval evidence; `definition` is seal-only — a proposal never
+    /// reaches it. `store = memory` relaxes `project`/`user` to `delegate`
+    /// (the memory-store row).
+    fn persistence_ceiling_violation(
+        &self,
+        p: &Proposal,
+        canonical: &CanonicalArgs,
+        eff: AuthorityClass,
+    ) -> Option<String> {
+        let scope = self.write_scope(p, canonical)?;
+        let store_memory = p.effect.domain == EffectDomain::MemoryWrite
+            && canonical
+                .params
+                .get("store")
+                .and_then(Json::as_str)
+                .map(|s| s == "memory")
+                .unwrap_or(false);
+        let exceeds = |min_eff: AuthorityClass, approval: bool| -> Option<String> {
+            if eff < min_eff {
+                return Some(format!("{}:eff<{}", scope.as_str(), min_eff.as_str()));
+            }
+            if approval && !self.approval_evidence(&p.proposer, p.effect.domain) {
+                return Some(format!("{}:no_approval_evidence", scope.as_str()));
+            }
+            None
+        };
+        match scope {
+            PersistenceScope::Turn | PersistenceScope::Run => None,
+            PersistenceScope::Session => exceeds(AuthorityClass::Delegate, false),
+            PersistenceScope::Project => {
+                if store_memory {
+                    exceeds(AuthorityClass::Delegate, false)
+                } else {
+                    exceeds(AuthorityClass::Principal, false)
+                }
+            }
+            PersistenceScope::User => {
+                if store_memory {
+                    exceeds(AuthorityClass::Delegate, false)
+                } else {
+                    exceeds(AuthorityClass::Principal, true)
+                }
+            }
+            PersistenceScope::Definition => Some("definition:seal_only".to_string()),
+        }
+    }
+
+    /// `replay(p, recorded)` — the decision-replay half of the audit
+    /// contract (§5g.1's replay row): re-derive the decision over the
+    /// recorded inputs and compare member-wise. A mismatch is reported, never
+    /// re-decided silently — `mismatches` names the differing members.
+    pub fn replay(
+        &self,
+        p: &Proposal,
+        recorded: &KernelDecision,
+    ) -> Result<ReplayOutcome, MonitorError> {
+        let fresh = self.authorize(p)?;
+        let mut mismatches: Vec<String> = Vec::new();
+        if fresh.decision != recorded.decision {
+            mismatches.push("decision".to_string());
+        }
+        if fresh.effective_authority != recorded.effective_authority {
+            mismatches.push("effective_authority".to_string());
+        }
+        if fresh.taint != recorded.taint {
+            mismatches.push("taint".to_string());
+        }
+        if fresh.effective_risk_class != recorded.effective_risk_class {
+            mismatches.push("effective_risk_class".to_string());
+        }
+        if fresh.handle_ids != recorded.handle_ids {
+            mismatches.push("handle_ids".to_string());
+        }
+        if fresh.policy_ref != recorded.policy_ref {
+            mismatches.push("policy_ref".to_string());
+        }
+        if fresh.checks != recorded.checks {
+            mismatches.push("checks".to_string());
+        }
+        if fresh.decider != recorded.decider {
+            mismatches.push("decider".to_string());
+        }
+        if fresh.decision_scope != recorded.decision_scope {
+            mismatches.push("decision_scope".to_string());
+        }
+        Ok(ReplayOutcome {
+            matched: mismatches.is_empty(),
+            mismatches,
+        })
     }
 
     /// `resolve_handles(holder, capability, canonical_args)` — the covering
@@ -236,6 +526,9 @@ impl Monitor {
             },
             decider: Decider::Policy,
             decision_scope: DecisionScope::Once,
+            cache_key: None,
+            origin_permission_id: None,
+            assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
         };
         // The containment precondition (ADR-0062 D3; R-2.8.4) — BEFORE any
         // check: a required field group's `unknown` evidence ⇒
@@ -483,61 +776,83 @@ impl Monitor {
         });
         let handle_ids: Vec<String> = covered.iter().map(|h| h.as_str().to_string()).collect();
         match verdict {
-            PiVerdict::Deny => {
-                // `UnattendedAsk` is the reason exactly when Π-12's transform
-                // produced the deny — the Π path marks it by appending `pi_12`
-                // to the matched-row list; the floor path's `ask → deny`
-                // transform above is the same rule applied to the floor.
-                let unattended_fired = rows.iter().any(|r| r == "pi_12")
-                    || (self.policy.mode == Mode::Unattended
-                        && !p.inputs.pre_authorized.is_yes()
-                        && rows.iter().any(|r| r == "floor"));
-                let reason = if unattended_fired {
-                    DenyReason::UnattendedAsk
-                } else {
-                    DenyReason::PolicyDenied
-                };
-                let mut c = checks;
-                c.push(CheckRecord {
-                    step: 4,
-                    outcome: "fail",
-                    detail: reason.as_str().to_string(),
-                });
-                return Ok(KernelDecision {
-                    effect_id: p.effect_id.clone(),
-                    decision: Decision::Deny {
-                        reason,
-                        remedies: Vec::new(),
-                    },
-                    effective_authority: eff,
-                    taint,
-                    effective_risk_class: risk,
-                    handle_ids,
-                    policy_ref: self.policy.version_id.clone(),
-                    checks: c,
-                    decider: Decider::Policy,
-                    decision_scope: DecisionScope::Once,
-                });
-            }
-            PiVerdict::Ask => {
-                return Ok(KernelDecision {
-                    effect_id: p.effect_id.clone(),
-                    decision: Decision::Ask {
-                        options: stage1_ask_options(),
-                        remedies: Vec::new(),
-                    },
-                    effective_authority: eff,
-                    taint,
-                    effective_risk_class: risk,
-                    handle_ids,
-                    policy_ref: self.policy.version_id.clone(),
-                    checks,
-                    decider: Decider::Policy,
-                    decision_scope: DecisionScope::Once,
-                });
-            }
-            PiVerdict::Allow => {}
+            PiVerdict::Deny | PiVerdict::Ask | PiVerdict::Allow => {}
         }
+        if let PiVerdict::Deny = verdict {
+            // `UnattendedAsk` is the reason exactly when Π-12's transform
+            // produced the deny — the Π path marks it by appending `pi_12`
+            // to the matched-row list; the floor path's `ask → deny`
+            // transform above is the same rule applied to the floor.
+            let unattended_fired = rows.iter().any(|r| r == "pi_12")
+                || (self.policy.mode == Mode::Unattended
+                    && !p.inputs.pre_authorized.is_yes()
+                    && rows.iter().any(|r| r == "floor"));
+            let reason = if unattended_fired {
+                DenyReason::UnattendedAsk
+            } else {
+                DenyReason::PolicyDenied
+            };
+            let mut c = checks;
+            c.push(CheckRecord {
+                step: 4,
+                outcome: "fail",
+                detail: reason.as_str().to_string(),
+            });
+            return Ok(KernelDecision {
+                effect_id: p.effect_id.clone(),
+                decision: Decision::Deny {
+                    reason,
+                    remedies: Vec::new(),
+                },
+                effective_authority: eff,
+                taint,
+                effective_risk_class: risk,
+                handle_ids,
+                policy_ref: self.policy.version_id.clone(),
+                checks: c,
+                decider: Decider::Policy,
+                decision_scope: DecisionScope::Once,
+                cache_key: None,
+                origin_permission_id: None,
+                assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+            });
+        }
+
+        // Step 5 — the persistence ceiling (check 6): a `memory_write`/
+        // `fs_write` with a scope above its store's write ceiling denies
+        // `ScopeCeilingExceeded` — for `allow` and `ask` verdicts alike (a Π
+        // row never overrides the ceiling).
+        if let Some(detail) = self.persistence_ceiling_violation(p, &canonical, eff) {
+            let mut c = checks;
+            c.push(CheckRecord {
+                step: 5,
+                outcome: "fail",
+                detail: format!("scope_ceiling:{detail}"),
+            });
+            return Ok(KernelDecision {
+                effect_id: p.effect_id.clone(),
+                decision: Decision::Deny {
+                    reason: DenyReason::ScopeCeilingExceeded,
+                    remedies: Vec::new(),
+                },
+                effective_authority: eff,
+                taint,
+                effective_risk_class: risk,
+                handle_ids,
+                policy_ref: self.policy.version_id.clone(),
+                checks: c,
+                decider: Decider::Policy,
+                decision_scope: DecisionScope::Once,
+                cache_key: None,
+                origin_permission_id: None,
+                assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+            });
+        }
+        checks.push(CheckRecord {
+            step: 5,
+            outcome: "pass",
+            detail: "persistence_ceiling".to_string(),
+        });
 
         // Step 6 — delegation attenuation for `spawn_process`/`Delegate`: the
         // requested child grants must be ⊆ the covering handle's grants
@@ -574,6 +889,9 @@ impl Monitor {
                         checks: c,
                         decider: Decider::Policy,
                         decision_scope: DecisionScope::Once,
+                        cache_key: None,
+                        origin_permission_id: None,
+                        assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                     });
                 }
             }
@@ -581,6 +899,221 @@ impl Monitor {
                 step: 6,
                 outcome: "pass",
                 detail: "attenuated".to_string(),
+            });
+        }
+
+        // Steps 7–8 — approval feasibility then the lease cache (§2.2). The
+        // exhaustion conversion applies to a *human-targeted* ask: a serving
+        // lease resolves first (§5g.7's exhaustion row — "leases still
+        // satisfy requests"), so the cache is evaluated before the budget
+        // converts; the trail records them in spec order.
+        if verdict == PiVerdict::Ask {
+            let input = self.escalation_input(p, &canonical, cap, eff, risk);
+            // A recorded decision covering this effect resolves the
+            // re-dispatch — the suspended run resumed on `permission_decided`
+            // (§5a.3 defer slice). The decided row is the truth: `allow`
+            // serves with `decider = human` and the `origin_permission_id`
+            // back-reference; `deny` reproduces the recorded verdict. The
+            // recorded decision precedes the lease stage — a `decided` row
+            // for this effect+attempt already exists, and re-minting one
+            // would trip the exactly-one-decided gate (DuplicateDecision).
+            if let Some((pid, rec)) = self.approvals.decision_for_effect(&p.effect_id) {
+                match &rec.decision {
+                    Decision::Allow => {
+                        checks.push(CheckRecord {
+                            step: 7,
+                            outcome: "pass",
+                            detail: format!("decided:{pid}"),
+                        });
+                        checks.push(CheckRecord {
+                            step: 8,
+                            outcome: "pass",
+                            detail: format!("recorded:{pid}"),
+                        });
+                        return Ok(KernelDecision {
+                            effect_id: p.effect_id.clone(),
+                            decision: Decision::Allow,
+                            effective_authority: eff,
+                            taint,
+                            effective_risk_class: risk,
+                            handle_ids,
+                            policy_ref: self.policy.version_id.clone(),
+                            checks,
+                            decider: Decider::Human,
+                            decision_scope: DecisionScope::Once,
+                            cache_key: None,
+                            origin_permission_id: Some(pid.clone()),
+                            assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+                        });
+                    }
+                    Decision::Deny { reason, .. } => {
+                        let mut c = checks;
+                        c.push(CheckRecord {
+                            step: 7,
+                            outcome: "fail",
+                            detail: format!("recorded_deny:{pid}"),
+                        });
+                        return Ok(KernelDecision {
+                            effect_id: p.effect_id.clone(),
+                            decision: Decision::Deny {
+                                reason: *reason,
+                                remedies: Vec::new(),
+                            },
+                            effective_authority: eff,
+                            taint,
+                            effective_risk_class: risk,
+                            handle_ids,
+                            policy_ref: self.policy.version_id.clone(),
+                            checks: c,
+                            decider: Decider::Human,
+                            decision_scope: DecisionScope::Once,
+                            cache_key: None,
+                            origin_permission_id: Some(pid.clone()),
+                            assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+                        });
+                    }
+                    Decision::Ask { .. } => {}
+                }
+            }
+            // The repeated-denial fallback (§5g.7 §5) — the sealed
+            // `DenialPolicy` ceiling crossed on the `(capability_ref,
+            // args_canonical_hash)` key converts the fresh ask to `deny`
+            // (record-derived; never a widening, never an unbounded retry
+            // loop). `stop_run`/`refuse_class` deny here; `escalate` leaves
+            // the ask (the human stage re-renders once — the dispatcher's
+            // escalation rows carry the hop).
+            let denial_key = format!(
+                "{}{}",
+                input.capability_ref.version_id, input.args_canonical_hash
+            );
+            let denials = self
+                .approvals
+                .denial_counts
+                .get(&denial_key)
+                .copied()
+                .unwrap_or(0);
+            if let Some(pol) = &self.denial_policy {
+                if denials > pol.max_denials
+                    && !matches!(pol.fallback, crate::approval::DenialFallback::Escalate)
+                {
+                    let mut c = checks;
+                    c.push(CheckRecord {
+                        step: 7,
+                        outcome: "fail",
+                        detail: format!("denial_fallback:{}", pol.fallback.as_str()),
+                    });
+                    return Ok(KernelDecision {
+                        effect_id: p.effect_id.clone(),
+                        decision: Decision::Deny {
+                            reason: DenyReason::PolicyDenied,
+                            remedies: Vec::new(),
+                        },
+                        effective_authority: eff,
+                        taint,
+                        effective_risk_class: risk,
+                        handle_ids,
+                        policy_ref: self.policy.version_id.clone(),
+                        checks: c,
+                        decider: Decider::Policy,
+                        decision_scope: DecisionScope::Once,
+                        cache_key: None,
+                        origin_permission_id: None,
+                        assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+                    });
+                }
+            }
+            let hit = self.lease_hit(&input);
+            let exhausted = self
+                .approvals_max
+                .map(|m| self.approvals.stats.requested >= m)
+                .unwrap_or(false);
+            if exhausted && hit.is_none() {
+                let mut c = checks;
+                c.push(CheckRecord {
+                    step: 7,
+                    outcome: "fail",
+                    detail: DenyReason::ApprovalsExhausted.as_str().to_string(),
+                });
+                return Ok(KernelDecision {
+                    effect_id: p.effect_id.clone(),
+                    decision: Decision::Deny {
+                        reason: DenyReason::ApprovalsExhausted,
+                        remedies: Vec::new(),
+                    },
+                    effective_authority: eff,
+                    taint,
+                    effective_risk_class: risk,
+                    handle_ids,
+                    policy_ref: self.policy.version_id.clone(),
+                    checks: c,
+                    decider: Decider::Policy,
+                    decision_scope: DecisionScope::Once,
+                    cache_key: None,
+                    origin_permission_id: None,
+                    assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+                });
+            }
+            checks.push(CheckRecord {
+                step: 7,
+                outcome: "pass",
+                detail: if hit.is_some() {
+                    "reserved_or_leased".to_string()
+                } else {
+                    "reserved".to_string()
+                },
+            });
+            if let Some((key, lease)) = hit {
+                // Step 8 — the cache resolves `ask → allow`: `decider =
+                // cache`, the lease key and `origin_permission_id` recorded,
+                // the decision scope the lease's (I-P6/ADR-0071 D1).
+                let mut c = checks;
+                c.push(CheckRecord {
+                    step: 8,
+                    outcome: "pass",
+                    detail: format!("lease:{key}"),
+                });
+                return Ok(KernelDecision {
+                    effect_id: p.effect_id.clone(),
+                    decision: Decision::Allow,
+                    effective_authority: eff,
+                    taint,
+                    effective_risk_class: risk,
+                    handle_ids,
+                    policy_ref: self.policy.version_id.clone(),
+                    checks: c,
+                    decider: Decider::Cache,
+                    decision_scope: match lease.scope {
+                        approval::LeaseScope::Turn => DecisionScope::Once,
+                        approval::LeaseScope::Run => DecisionScope::Session,
+                        _ => DecisionScope::Persisted,
+                    },
+                    cache_key: Some(key),
+                    origin_permission_id: Some(lease.origin_permission_id.clone()),
+                    assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+                });
+            }
+            checks.push(CheckRecord {
+                step: 8,
+                outcome: "n/a",
+                detail: "miss".to_string(),
+            });
+            return Ok(KernelDecision {
+                effect_id: p.effect_id.clone(),
+                decision: Decision::Ask {
+                    options: stage1_ask_options(),
+                    remedies: Vec::new(),
+                },
+                effective_authority: eff,
+                taint,
+                effective_risk_class: risk,
+                handle_ids,
+                policy_ref: self.policy.version_id.clone(),
+                checks,
+                decider: Decider::Policy,
+                decision_scope: DecisionScope::Once,
+                cache_key: None,
+                origin_permission_id: None,
+                assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
             });
         }
 
@@ -595,6 +1128,9 @@ impl Monitor {
             checks,
             decider: Decider::Policy,
             decision_scope: DecisionScope::Once,
+            cache_key: None,
+            origin_permission_id: None,
+            assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
         })
     }
 }
@@ -630,6 +1166,41 @@ fn declared_attributes<'a>(
             .iter()
             .find(|e| e.domain == effect.domain)
             .and_then(|e| e.attributes.as_ref()),
+    }
+}
+
+/// `ReplayOutcome` — `replay`'s verdict: whether the re-derived decision
+/// equals the recorded one, and the member names that differed (empty when
+/// `matched`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReplayOutcome {
+    /// Whether every compared member matched.
+    pub matched: bool,
+    /// The differing member names (the mismatch report — typed, not prose).
+    pub mismatches: Vec<String>,
+}
+
+/// The `assessment_inputs_ref` coordinate — `H("assessment_inputs" ∥
+/// canonical(inputs_json))`. The recorded inputs' identity; the reason is
+/// reconstructible from the row it names (ADR-0066 D5).
+pub fn assessment_inputs_ref(inputs: &AssessmentInputs) -> String {
+    hh_identity::idp::idp_id(
+        "assessment_inputs",
+        assess::inputs_json(inputs).to_canonical_string().as_bytes(),
+    )
+}
+
+/// Parse a `PersistenceScope` spelling (`None` on any other value — never
+/// coerced).
+fn parse_persistence_scope(s: &str) -> Option<PersistenceScope> {
+    match s {
+        "definition" => Some(PersistenceScope::Definition),
+        "user" => Some(PersistenceScope::User),
+        "project" => Some(PersistenceScope::Project),
+        "session" => Some(PersistenceScope::Session),
+        "run" => Some(PersistenceScope::Run),
+        "turn" => Some(PersistenceScope::Turn),
+        _ => None,
     }
 }
 

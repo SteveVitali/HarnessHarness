@@ -36,8 +36,26 @@ impl<'a> EventMinter<'a> {
     /// Mint a kernel event (`Producer::kernel` + kernel provenance; the
     /// caller sets `scope`, `causes`, `refs`, `ir_refs` via `with_*`).
     pub fn mint(&self, class: &str, payload: Json) -> Result<Event, LedgerError> {
+        self.build(class, payload, self.store.alloc_id("evt"))
+    }
+
+    /// Mint under a caller-allocated `event_id` — the handle-mint path's
+    /// form: a `security.permission.granted` row's envelope id *is* the
+    /// handle's `issued_at` and the fold's `holder` pin
+    /// (`handle_from_granted` re-pins `holder.version = Pinned(event_id)`),
+    /// so the id is allocated with the handle — never re-rolled at emission.
+    pub fn mint_with_id(
+        &self,
+        class: &str,
+        payload: Json,
+        event_id: String,
+    ) -> Result<Event, LedgerError> {
+        self.build(class, payload, event_id)
+    }
+
+    fn build(&self, class: &str, payload: Json, event_id: String) -> Result<Event, LedgerError> {
         Ok(Event {
-            event_id: self.store.alloc_id("evt"),
+            event_id,
             class: class.to_string(),
             ts: self.store.ts_now(),
             hlc: None,

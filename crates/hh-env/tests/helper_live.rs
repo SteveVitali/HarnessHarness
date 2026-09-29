@@ -247,6 +247,7 @@ fn capability(domain: EffectDomain, a: EffectAttributes) -> ToolCapabilityRecord
         exposure_hint: Json::Null,
         postconditions: vec![],
         flow_contract: None,
+        action_patterns: Vec::new(),
     }
 }
 

@@ -194,14 +194,25 @@ impl EmbedService {
     }
 
     /// `respond_permission` — the host's answer to a live
-    /// `security.permission.pending`: `selected{option_id}` must name an
-    /// offered option (`OptionNotOffered`); the decision mints
-    /// `security.permission.decided` and resumes the loop when the ask
-    /// covered an effect (`approval` cue). `Recorded`.
+    /// `security.permission.pending` (§5g.7 §5): `selected{option_id}` must
+    /// name an offered option (`OptionNotOffered`); the response runs the
+    /// monitor's `ApprovalState::respond` semantics over the folded trail
+    /// (the ledger is the one truth — CC1), mints the final
+    /// `security.permission.decided` (+ `security.permission.lease.granted`
+    /// for `allow_lease`), and resumes the loop when the ask covered an
+    /// effect (`approval` cue). `more_info`/`escalate` leave the pending
+    /// open — they are not decisions. `Recorded`.
     pub(crate) fn respond_permission(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        use hh_monitor::approval::{
+            ApprovalResponse, ApprovalState, EndorserRef, LeaseSpec, RespondCtx, ResponseChoice,
+        };
+        use hh_monitor::decision::{Decision, DecisionScope};
+        use hh_provenance::authority::AuthorityClass;
+        use hh_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
+
         inject::refuse_secrets(params)?;
         let p = RespondPermissionParams::from_json(params)?;
-        {
+        let (run_id, lease, pending, manifest_ref, policy_mode, active_turn, authority_caps) = {
             let s = self.writer_session(&p.session_id)?;
             if let Some(hit) = s.idem.get(&p.idempotency_key) {
                 return Ok(hit.clone());
@@ -214,6 +225,7 @@ impl EmbedService {
             let pending =
                 s.pendings
                     .get(&p.permission_id)
+                    .cloned()
                     .ok_or(EmbedError::UnknownPermission {
                         permission_id: p.permission_id.clone(),
                     })?;
@@ -224,61 +236,283 @@ impl EmbedService {
                     });
                 }
             }
-        }
-        let (run_id, lease, effect_id, allow) = {
-            let s = self.session(&p.session_id)?;
-            let pending = s.pendings.get(&p.permission_id).unwrap();
-            let allow = matches!(
-                p.outcome,
-                PermissionOutcome::Selected { ref option_id } if option_id.starts_with("allow")
-            );
             (
                 s.run_id.clone(),
                 s.lease.clone().ok_or(EmbedError::Refused {
                     reason: "session_is_read_only".to_string(),
                 })?,
-                pending.effect_id.clone(),
-                allow,
+                pending,
+                s.manifest_ref.clone(),
+                s.realized.policy_mode.clone(),
+                s.active_turn.clone(),
+                s.authority_caps.clone(),
             )
         };
-        let decision = match &p.outcome {
-            PermissionOutcome::Selected { option_id } => Json::obj([
-                ("kind", Json::str("selected")),
-                ("option_id", Json::str(option_id.clone())),
-            ]),
-            PermissionOutcome::Cancelled => Json::obj([("kind", Json::str("cancelled"))]),
-        };
-        // `security.permission.decided` is audit-grade — the payload must
-        // carry the class table's declared fields: the ask's `proposal`,
-        // the chosen option id (`decision`) and the deciding party
-        // (`decider`); `outcome` is not a declared member.
-        let (decision_name, proposal) = {
-            let s = self.session(&p.session_id)?;
-            let pending = s.pendings.get(&p.permission_id);
-            (
-                match &p.outcome {
-                    PermissionOutcome::Selected { option_id } => option_id.clone(),
-                    PermissionOutcome::Cancelled => "cancelled".to_string(),
+        // Fold the durable prefix into the approval fold — the response's
+        // semantics (exactly-one, legitimacy, lease minting, the denial
+        // counters) run over the record, never the session cache (CC1).
+        let events = self.store.events(&run_id).map_err(ledger_err)?.to_vec();
+        let head_seq = events.last().map(|e| e.seq).unwrap_or(0);
+        let mut approvals = ApprovalState::project(&events, head_seq);
+        // The non-final `decided{ask}` row for this permission carries the
+        // effective risk the chain assessed — `never_auto` marks the
+        // irreversible/unknown classes whose leases require the declared
+        // admission legs (pattern + `max_uses` + `scope ≤ run`, ADR-0071 D1).
+        let asked_risk = events
+            .iter()
+            .rev()
+            .find(|e| {
+                e.class == "security.permission.decided"
+                    && e.payload.get("permission_id").and_then(Json::as_str)
+                        == Some(p.permission_id.as_str())
+                    && e.payload.get("decision").and_then(Json::as_str) == Some("ask")
+            })
+            .and_then(|e| e.payload.get("effective_risk_class"))
+            .and_then(hh_ontology::risk::RiskClass::from_json);
+        let irreversible = asked_risk
+            .map(hh_monitor::approval::never_auto)
+            .unwrap_or(false);
+        // The wire option → the monitor's response choice. The session's
+        // respond is the principal's answer — `human{authority: principal}`.
+        let (choice, scope) = match &p.outcome {
+            PermissionOutcome::Cancelled => (
+                ResponseChoice::Deny {
+                    reason: "cancelled".to_string(),
                 },
-                pending.map(|pa| pa.proposal.clone()).unwrap_or_default(),
-            )
+                DecisionScope::Once,
+            ),
+            PermissionOutcome::Selected { option_id } => match option_id.as_str() {
+                "allow_once" | "allow" => (ResponseChoice::AllowOnce, DecisionScope::Once),
+                "allow_lease" => (
+                    ResponseChoice::AllowLease(LeaseSpec {
+                        pattern: None,
+                        scope: hh_monitor::approval::LeaseScope::Run,
+                        max_uses: None,
+                    }),
+                    DecisionScope::Session,
+                ),
+                // Not a decision — the owed-decision row survives.
+                "more_info" | "escalate" => (ResponseChoice::MoreInfo, DecisionScope::Once),
+                _ => (
+                    ResponseChoice::Deny {
+                        reason: option_id.clone(),
+                    },
+                    DecisionScope::Once,
+                ),
+            },
         };
-        self.mint(
-            &run_id,
-            &lease,
-            "security.permission.decided",
-            Json::obj([
-                ("permission_id", Json::str(p.permission_id.clone())),
-                ("proposal", Json::str(proposal)),
-                ("decision", Json::str(decision_name)),
-                ("decider", Json::str("principal")),
-            ]),
-        )?;
+        // `allow_lease` mints over the pending's capability material — a
+        // pending without `request{subject_ref, capability_ref,
+        // args_canonical_hash}` cannot key a lease (never fabricated).
+        if matches!(choice, ResponseChoice::AllowLease(_))
+            && (pending.capability_ref.is_none()
+                || pending.args_canonical_hash.is_none()
+                || pending.subject_ref.is_none())
+        {
+            return Err(EmbedError::Refused {
+                reason: "allow_lease_requires_capability_material".to_string(),
+            });
+        }
+        let now = self.store.now_ms();
+        let ctx = RespondCtx {
+            policy_fingerprint: hh_monitor::approval::policy_fingerprint(
+                &manifest_ref,
+                &policy_mode,
+                &[],
+            ),
+            scope_ref: run_id.clone(),
+            risk_ceiling: asked_risk.unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN),
+            grant_authority: AuthorityClass::Principal,
+            grants: Vec::new(),
+            denial_policy: None,
+        };
+        let outcome = approvals
+            .respond_with_ctx(
+                &ApprovalResponse {
+                    permission_id: p.permission_id.clone(),
+                    choice,
+                    scope,
+                    max_uses: None,
+                    justification: None,
+                    decided_by: EndorserRef::Human {
+                        subject_ref: "human:principal".to_string(),
+                        authority: AuthorityClass::Principal,
+                    },
+                    decided_at: now,
+                },
+                irreversible,
+                now,
+                &ctx,
+            )
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("approval_respond: {e:?}"),
+            })?;
+        if outcome.already_decided {
+            return Err(EmbedError::AlreadyDecided {
+                permission_id: p.permission_id.clone(),
+            });
+        }
+        if matches!(outcome.decision, Decision::Ask { .. }) {
+            // `more_info`/`escalate` — the pending stays open; no `decided`
+            // row is minted (the owed-decision record survives §5g.7 §5).
+            let out = recorded_json(&p.permission_id);
+            self.session_mut(&p.session_id)?
+                .idem
+                .insert(p.idempotency_key, out.clone());
+            return Ok(out);
+        }
+        // The final `decided` row — the canonical members the class table
+        // declares (`decision ∈ {allow, deny}`, `decider = human`, the
+        // scope the response conferred, the wait accounting).
+        let decision_tag = match &outcome.decision {
+            Decision::Allow => "allow",
+            Decision::Deny { .. } => "deny",
+            Decision::Ask { .. } => unreachable!("ask handled above"),
+        };
+        let mut members = vec![
+            ("permission_id", Json::str(p.permission_id.clone())),
+            ("proposal", Json::str(pending.proposal.clone())),
+            ("decision", Json::str(decision_tag)),
+            ("decider", Json::str("human")),
+            ("decider_ref", Json::str("human:principal")),
+            ("decision_scope", Json::str(scope.as_str())),
+            ("requested_at", Json::Int(pending.requested_at as i64)),
+            (
+                "wait_ms",
+                Json::Int(now.saturating_sub(pending.requested_at) as i64),
+            ),
+        ];
+        if let Some(ef) = &pending.effect_id {
+            members.push(("effect_id", Json::str(ef.clone())));
+        }
+        if !pending.options.is_empty() {
+            members.push((
+                "options_presented",
+                Json::Arr(
+                    pending
+                        .options
+                        .iter()
+                        .map(|o| Json::str(o.clone()))
+                        .collect(),
+                ),
+            ));
+        }
+        if let PermissionOutcome::Selected { option_id } = &p.outcome {
+            if decision_tag == "deny" {
+                members.push(("reason", Json::str(option_id.clone())));
+            }
+        } else {
+            members.push(("reason", Json::str("cancelled")));
+        }
+        if let Some(l) = &outcome.lease {
+            members.push(("cache_key", Json::str(l.key_hash.clone())));
+        }
+        // `decided` + `lease.granted` commit in one batch — the lease is the
+        // decision's artifact; a torn pair would read as an allow-once.
+        let mut batch = vec![hh_env::events::EventMinter::new(&self.store, &run_id)
+            .mint("security.permission.decided", Json::obj(members))
+            .map_err(ledger_err)?];
+        if let Some(l) = &outcome.lease {
+            batch.push(
+                hh_env::events::EventMinter::new(&self.store, &run_id)
+                    .mint(
+                        "security.permission.lease.granted",
+                        hh_monitor::approval::lease_granted_payload(l),
+                    )
+                    .map_err(ledger_err)?,
+            );
+        }
+        // The `approval`-basis handle (§5g.1 §9 — the approval mints
+        // `{issuer = principal, grants = requested ⊓ authority_cap,
+        // origin_basis = approval, delegable = false, lifetime}`; I-H6/H-7
+        // lifetimes inside `mint_approval_handle`). Minted only over the
+        // pending's *recorded* material — `subject_ref` (the holder),
+        // `capability_ref`, `requested_grants`; a pending without them (a
+        // capability-less host ask) carries no conferable material and the
+        // `decided` row stands alone — nothing is fabricated. The granted
+        // row's envelope id is the handle's `issued_at`/holder pin, so the
+        // ids are allocated with the handle (the fold re-pins
+        // `holder.version = Pinned(event_id)` on rebuild).
+        let allow = matches!(outcome.decision, Decision::Allow);
+        if allow && pending.subject_ref.is_some() && pending.capability_ref.is_some() {
+            let handle_id = self.store.alloc_id("hnd");
+            let granted_event_id = self.store.alloc_id("evt");
+            let mint_in = hh_monitor::mint::ApprovalMint {
+                permission_id: p.permission_id.clone(),
+                holder: hh_hir::refs::Ref {
+                    semantic_id: pending.subject_ref.clone().unwrap_or_default(),
+                    version: hh_hir::refs::RefVersion::Pinned(granted_event_id.clone()),
+                },
+                issuer: ProvenanceRecord::minted(
+                    Origin::human("human:principal", HumanRole::Principal),
+                    PersistenceScope::Run,
+                    now,
+                ),
+                grants: pending.requested_grants.clone(),
+                // `requested ⊓ authority_cap` — the definition's caps (the
+                // `of`-named and `*` global rows) only ever lower the minted
+                // ceiling below the responder's authority. The `of` member
+                // names the bounded *entity* (ADR-0240) — here the pending's
+                // capability semantic id, never the ephemeral request id
+                // (a cap cannot name a request minted at runtime).
+                ceiling: authority_caps
+                    .iter()
+                    .filter(|c| {
+                        c.of.as_deref().is_none_or(|of| {
+                            of == "*"
+                                || pending
+                                    .capability_ref
+                                    .as_ref()
+                                    .map(|(sid, _)| of == sid)
+                                    .unwrap_or(false)
+                        })
+                    })
+                    .fold(ctx.grant_authority, |c, cap| c.min(cap.ceiling)),
+                scope,
+                lease_scope: outcome.lease.as_ref().map(|l| l.scope),
+                lease_pattern: outcome.lease.as_ref().and_then(|l| l.pattern.clone()),
+                effect_id: pending.effect_id.clone().unwrap_or_default(),
+                turn_id: active_turn.clone(),
+                run_id: run_id.clone(),
+                session_ref: p.session_id.clone(),
+                budget_ref: None,
+            };
+            let minted = {
+                let store = &self.store;
+                let mut alloc = |kind: &str| match kind {
+                    "hnd" => handle_id.clone(),
+                    "evt" => granted_event_id.clone(),
+                    other => store.alloc_id(other),
+                };
+                hh_monitor::mint::mint_approval_handle(&mint_in, &mut alloc)
+            };
+            let (handle, evt_id) = minted.map_err(|e| EmbedError::Refused {
+                reason: format!("approval_mint: {e:?}"),
+            })?;
+            batch.push(
+                hh_env::events::EventMinter::new(&self.store, &run_id)
+                    .mint_with_id(
+                        "security.permission.granted",
+                        hh_monitor::events::granted_payload(&handle),
+                        evt_id,
+                    )
+                    .map_err(ledger_err)?,
+            );
+        }
+        self.store
+            .append(&run_id, &lease, batch)
+            .map_err(ledger_err)?;
         {
             let s = self.session_mut(&p.session_id)?;
-            s.decided.insert(p.permission_id.clone(), decision);
+            s.decided.insert(
+                p.permission_id.clone(),
+                Json::obj([
+                    ("kind", Json::str("selected")),
+                    ("decision", Json::str(decision_tag)),
+                ]),
+            );
             s.pendings.remove(&p.permission_id);
-            if let Some(ef) = &effect_id {
+            if let Some(ef) = &pending.effect_id {
                 if let Some(d) = s.driver.as_mut() {
                     d.submit(Cue::HumanInput(HumanInput::Approval {
                         effect_id: ef.clone(),
@@ -287,7 +521,7 @@ impl EmbedService {
                 }
             }
         }
-        if effect_id.is_some() {
+        if pending.effect_id.is_some() {
             let _ = self.drive(&p.session_id);
         }
         let out = recorded_json(&p.permission_id);
@@ -543,6 +777,16 @@ impl EmbedService {
             active_turn: "turn-1".to_string(),
             finished: false,
             detached: None,
+            authority_caps: {
+                let r = sess_manifest_ref(&child);
+                if r.is_empty() {
+                    Vec::new()
+                } else {
+                    self.persisted_definition(&r)
+                        .map(|d| hh_monitor::mint::cap_rows(&d.document))
+                        .unwrap_or_default()
+                }
+            },
             pendings: Default::default(),
             decided: Default::default(),
             delivered_wokens: Default::default(),

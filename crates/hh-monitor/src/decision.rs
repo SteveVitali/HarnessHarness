@@ -223,6 +223,16 @@ pub struct KernelDecision {
     /// `session`/`persisted` grant machinery lands with approvals); declared so
     /// the audit row carries the closed sum, never an implicit default.
     pub decision_scope: DecisionScope,
+    /// `cache_key` — the lease key that served a `decider = cache` allow
+    /// (step 8; §5g.7 I-P6). `None` on every non-cache decision.
+    pub cache_key: Option<String>,
+    /// `origin_permission_id` — the pending the serving lease descends from
+    /// (step 8's `decider = cache` allow carries it; AC-R-2.8.7-4).
+    pub origin_permission_id: Option<String>,
+    /// `assessment_inputs_ref` — the recorded-inputs coordinate (the
+    /// `AssessmentInputs` canonical hash — the reason is reconstructible,
+    /// ADR-0066 D5).
+    pub assessment_inputs_ref: Option<String>,
 }
 
 impl KernelDecision {
@@ -265,6 +275,17 @@ impl KernelDecision {
                 ),
             ),
         ];
+        // Stage-2 members are *absent*, never nulled (CC8 — a Stage-1 row
+        // decodes identically).
+        if let Some(k) = &self.cache_key {
+            m.push(("cache_key", Json::str(k.clone())));
+        }
+        if let Some(k) = &self.origin_permission_id {
+            m.push(("origin_permission_id", Json::str(k.clone())));
+        }
+        if let Some(k) = &self.assessment_inputs_ref {
+            m.push(("assessment_inputs_ref", Json::str(k.clone())));
+        }
         match &self.decision {
             Decision::Ask { options, remedies } => {
                 m.push((

@@ -997,7 +997,9 @@ fn arg_map_from_json(j: &Json, path: &str) -> Result<SurfaceArgMap, CompileError
     }
 }
 
-fn surface_binding_json(b: &SurfaceBinding) -> Json {
+/// The canonical JSON of a `SurfaceBinding` (the codec's write direction —
+/// consumed by `hh-monitor`'s `authorize-input/1` capability rows; CC7).
+pub fn surface_binding_json(b: &SurfaceBinding) -> Json {
     Json::obj([
         ("arg_map", arg_map_json(&b.arg_map)),
         (
@@ -1069,7 +1071,9 @@ fn surface_binding_json(b: &SurfaceBinding) -> Json {
     ])
 }
 
-fn surface_binding_from_json(j: &Json, path: &str) -> Result<SurfaceBinding, CompileError> {
+/// Parse a `SurfaceBinding` from its canonical JSON (the codec's read
+/// direction — consumed by `hh-monitor`'s out-of-process `authorize`).
+pub fn surface_binding_from_json(j: &Json, path: &str) -> Result<SurfaceBinding, CompileError> {
     let mapping = match j.get("mapping") {
         Some(m) => match m.get("kind").and_then(Json::as_str) {
             Some("surface_arg_map") => crate::surface::BindingMapping::SurfaceArgMap,

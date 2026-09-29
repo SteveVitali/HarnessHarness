@@ -389,6 +389,24 @@ pub struct ToolCapabilityRecord {
     pub postconditions: Vec<Ref>,
     /// The flow contract, when declared (§5b-owned shape).
     pub flow_contract: Option<Json>,
+    /// The declared `ActionPattern` projections (§5g.7 I-P6 — the lease-key
+    /// grammar the capability admits; empty = exact-args leases only).
+    /// Excluded from the semantic projection is **not** allowed — the
+    /// declared projection grammar is part of the capability's identity (a
+    /// widened projection widens what a lease covers).
+    pub action_patterns: Vec<ActionPatternRecord>,
+}
+
+/// `ActionPattern` — the capability-declared canonical-parameter projection a
+/// lease keys on (§5g.7 I-P6; §05d owns the projection rule): the set of
+/// canonical `param_path`s the projection binds. Two calls share a pattern
+/// lease iff their projections over `fields` agree — every parameter outside
+/// the projection varies freely. Capabilities without a declared projection
+/// are leased only by exact `args_canonical_hash`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActionPatternRecord {
+    /// The canonical `param_path`s the projection binds.
+    pub fields: Vec<String>,
 }
 
 /// `Permission = {holder: Ref<AgentProcess>, grants[], issuer{authority, reference},
@@ -793,6 +811,19 @@ pub enum RuleAction {
         /// The sanitizer parameter (structured).
         param: Json,
     },
+    /// `pre_authorize{grants, scope, max_risk?, eff_at_most?}` — the
+    /// `definition`-issued pre-authorization (ADR-0053 D5; R-2.8.7): at seal
+    /// the kernel mints a `policy_rule`-basis `AuthorityHandle` covering the
+    /// declared grants — the unattended-`ask` exception (`pre_authorized`)
+    /// and the reviewer chain's `policy_rule` stage read it. Reviewers may
+    /// narrow or withdraw it, never widen (raise-only admission).
+    PreAuthorize(Json),
+    /// `auto_review{domains?, max_risk, eff_at_most?, verdict}` — the sealed
+    /// `HarnessRule{kind: auto_review}` (I-P2): a hook/validator `allow` is an
+    /// input to this rule — the *rule* endorses with basis `policy_rule`,
+    /// never the hook. `conditioned_on` + `assumption_debt` are mandatory on
+    /// the carrying `HarnessRule` (the conditioned-rule discipline applies).
+    AutoReview(Json),
 }
 
 /// `AssumptionDebtRecord/1` — the complete record `{rule_id, hypothesis: Text,

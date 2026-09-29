@@ -141,6 +141,29 @@ pub enum MemoryScope {
     User,
 }
 
+impl MemoryScope {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MemoryScope::Run => "run",
+            MemoryScope::Session => "session",
+            MemoryScope::Project => "project",
+            MemoryScope::User => "user",
+        }
+    }
+
+    /// Parse the canonical spelling (`None` for an unknown tag — never coerced).
+    pub fn parse(s: &str) -> Option<MemoryScope> {
+        match s {
+            "run" => Some(MemoryScope::Run),
+            "session" => Some(MemoryScope::Session),
+            "project" => Some(MemoryScope::Project),
+            "user" => Some(MemoryScope::User),
+            _ => None,
+        }
+    }
+}
+
 /// `kernel_assessed(declared, inputs)` — precedence step (i)+(ii): the static
 /// projection, raised by deterministic argument analysis. `None` declared
 /// attributes already project to `UNKNOWN` (`project_risk`); a failed or

@@ -263,6 +263,7 @@ fn capability(
         exposure_hint: Json::Null,
         postconditions: vec![],
         flow_contract: None,
+        action_patterns: Vec::new(),
     }
 }
 
@@ -1402,15 +1403,16 @@ fn ac_r_2_7_1_1_local_verdicts_after_observed() {
     assert!(observed.payload.get("outcome").is_some() || observed.payload.get("status").is_some());
 }
 
-// ── R-2.8.7⁰ — the C0 owed-decision trail (S1.23) ────────────────────────────
+// ── R-2.8.7 — the C1 ask trail (S2.6) ──────────────────────────────────────
 // `Decision::Ask` emits `security.permission.decided{ask}` → durable
 // `security.permission.pending` → ephemeral `security.permission.requested` →
-// the Stage-1 terminal `action.effect.refused{ask_required}` +
-// `action.tool.rejected`. `requested` is subscribe-only — the durable
-// owed-decision is `pending` (AC-R-2.8.7-{1,6,7}).
+// `control.wakeup.scheduled{permission_decided}` →
+// `lifecycle.run.suspended{awaiting_approval}`. `requested` is subscribe-only
+// — the durable owed-decision is `pending`; the surface's `respond` mints
+// `decided`, the occurrence fires and the run resumes (AC-R-2.8.7-{1,5,6,7,9}).
 
 #[test]
-fn ac_r_2_8_7_ask_emits_pending_then_ephemeral_requested_then_refusal() {
+fn ac_r_2_8_7_ask_emits_pending_then_suspends() {
     let (mut store, run, lease, _clock) = open("ask-trail");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let ws = workspace("ask-trail");
@@ -1454,27 +1456,75 @@ fn ac_r_2_8_7_ask_emits_pending_then_ephemeral_requested_then_refusal() {
     let out = disp
         .dispatch(&mut driver, &mut exec, None, &inp, &lease)
         .unwrap();
-    assert!(
-        matches!(out, DispatchOutcome::Refused { ref reason } if reason == "ask_required"),
-        "{out:?}"
-    );
+    let DispatchOutcome::Suspended { permission_id } = out else {
+        panic!("an ask suspends awaiting_approval, got {out:?}")
+    };
     assert_eq!(exec.calls.get(), 0, "an asked effect never executes");
 
-    // The durable log: `decided` → `pending` → `refused` → `rejected`;
-    // `requested` is the ephemeral prompt-rendering fact (§5g.7 §3) — it
-    // rides subscribe, never the durable log.
+    // The durable log: `decided` → `pending` → `wakeup.scheduled` →
+    // `suspended`; `requested` is the ephemeral prompt-rendering fact
+    // (§5g.7 §3) — it rides subscribe, never the durable log. No refusal
+    // rows — the effect stays `intended` behind the owed decision.
     let envs = read_all(disp.store_mut(), &run);
     let seq_of = |c: &str| envs.iter().find(|e| e.class == c).map(|e| e.seq);
     let decided = seq_of("security.permission.decided").expect("decided");
     let pending = seq_of("security.permission.pending").expect("durable pending");
-    let refused = seq_of("action.effect.refused").expect("refused");
+    let scheduled = seq_of("control.wakeup.scheduled").expect("wakeup scheduled");
+    let suspended = seq_of("lifecycle.run.suspended").expect("suspended");
     assert!(decided < pending, "decided precedes pending");
-    assert!(pending < refused, "pending precedes the refusal");
-    assert!(seq_of("action.tool.rejected").is_some(), "rejected lands");
+    assert!(pending < scheduled, "pending precedes the subscription");
+    assert!(
+        scheduled < suspended,
+        "the subscription precedes the suspend"
+    );
+    assert!(
+        seq_of("action.effect.refused").is_none(),
+        "a suspended ask never refuses"
+    );
+    assert!(
+        seq_of("action.tool.rejected").is_none(),
+        "a suspended ask never rejects the tool_call"
+    );
     assert!(
         envs.iter()
             .all(|e| e.class != "security.permission.requested"),
         "the ephemeral rendering never reaches the durable log"
+    );
+
+    // The suspension names the owed permission; the subscription waits on
+    // its `decided` row.
+    let srow = envs
+        .iter()
+        .find(|e| e.class == "lifecycle.run.suspended")
+        .unwrap();
+    let first_reason = match srow.payload.get("reasons").expect("reasons") {
+        Json::Arr(rows) => rows.first().cloned().unwrap_or(Json::Null),
+        other => panic!("reasons is an array, got {other:?}"),
+    };
+    assert_eq!(
+        first_reason.get("type").and_then(Json::as_str),
+        Some("awaiting_approval")
+    );
+    assert_eq!(
+        first_reason.get("permission_id").and_then(Json::as_str),
+        Some(permission_id.as_str())
+    );
+    let wrow = envs
+        .iter()
+        .find(|e| e.class == "control.wakeup.scheduled")
+        .unwrap();
+    let trig = wrow
+        .payload
+        .get("subscription")
+        .and_then(|s| s.get("trigger"))
+        .expect("trigger");
+    assert_eq!(
+        trig.get("type").and_then(Json::as_str),
+        Some("permission_decided")
+    );
+    assert_eq!(
+        trig.get("permission_id").and_then(Json::as_str),
+        Some(permission_id.as_str())
     );
 
     // The pending row carries the owed-decision record (§5g.7 §3).
@@ -1502,6 +1552,7 @@ fn ac_r_2_8_7_ask_emits_pending_then_ephemeral_requested_then_refusal() {
         .get("args_canonical_hash")
         .and_then(Json::as_str)
         .is_some());
+    assert_eq!(pid, permission_id, "the pending names the suspended id");
     // One `permission_id` threads decided → pending → requested.
     let decided_row = envs
         .iter()
@@ -1533,4 +1584,121 @@ fn ac_r_2_8_7_ask_emits_pending_then_ephemeral_requested_then_refusal() {
         saw_requested,
         "ephemeral requested on subscribe: {frames:?}"
     );
+}
+
+/// AC-R-2.8.7-9 resume half: the surface's `respond` mints
+/// `security.permission.decided{allow}` — the `permission_decided`
+/// occurrence materialises and fires, and the re-dispatched effect is served
+/// by the recorded decision (`decider = human`, `origin_permission_id`) —
+/// never a second `decided` row, never a re-ask.
+#[test]
+fn ac_r_2_8_7_respond_allow_resumes_and_executes() {
+    let (mut store, run, lease, _clock) = open("ask-resume");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("ask-resume");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(
+        EffectDomain::PermissionRequest,
+        attrs(Reversibility::Irreversible),
+        scope_bindings(),
+    );
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [7u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    exec.decl.domains.insert(EffectDomain::PermissionRequest);
+    let mk = |tc: &str| {
+        input(
+            &cap,
+            &bind,
+            &sb,
+            &env,
+            tc,
+            Json::obj([
+                ("path", Json::str(ws.join("perm-req.txt").to_str().unwrap())),
+                ("content", Json::str("hi")),
+            ]),
+            EffectClass {
+                domain: EffectDomain::PermissionRequest,
+                attributes: Some(attrs(Reversibility::Irreversible)),
+            },
+        )
+    };
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &mk("tc-1"), &lease)
+        .unwrap();
+    let DispatchOutcome::Suspended { permission_id: pid } = out else {
+        panic!("expected Suspended, got {out:?}")
+    };
+    let effect_id = Store::effect_id(&run, "mc-1", "tc-1", 0);
+
+    // The surface answers — `respond` mints `decided{allow}` scoped to the
+    // effect (the complete-mediation gate's precondition for `committed`).
+    let m = EventMinter::new(disp.store_mut(), &run);
+    let mut dec = m
+        .mint(
+            "security.permission.decided",
+            Json::obj([
+                ("permission_id", Json::str(pid.clone())),
+                ("decision", Json::str("allow")),
+                ("decider", Json::str("human")),
+                ("decision_scope", Json::str("once")),
+                ("attempt_no", Json::Int(1)),
+            ]),
+        )
+        .unwrap();
+    dec.scope.effect_id = Some(effect_id.clone());
+    disp.store_mut().append(&run, &lease, vec![dec]).unwrap();
+    // The `permission_decided` occurrence materialises and fires.
+    let fired = disp
+        .store_mut()
+        .deliver_wakeup(&run, &lease, 2_000)
+        .expect("deliver_wakeup");
+    assert!(!fired.is_empty(), "the decided row fires the subscription");
+    assert!(read_all(disp.store_mut(), &run)
+        .iter()
+        .any(|e| e.class == "control.wakeup.fired"));
+
+    // The resumed dispatch re-enters at `authorize` — the recorded decision
+    // serves; no second `decided` row, no re-ask, no scope re-open.
+    let mut st = hh_monitor::approval::ApprovalState::default();
+    st.decisions.insert(
+        pid.clone(),
+        hh_monitor::approval::RecordedDecision {
+            decision: hh_monitor::decision::Decision::Allow,
+            decided_by: hh_monitor::approval::EndorserRef::Human {
+                subject_ref: "human:op".into(),
+                authority: AuthorityClass::Principal,
+            },
+            decided_at: 2_000,
+            lease_id: None,
+            effect_ids: vec![effect_id.clone()],
+        },
+    );
+    let mut mon2 = test_monitor(&cap);
+    mon2.approvals = st;
+    let mut disp2 = Dispatcher::new(&mut store, &mon2, &run, [8u8; 32], DetectorSet::default());
+    let out2 = disp2
+        .dispatch(&mut driver, &mut exec, None, &mk("tc-1"), &lease)
+        .unwrap();
+    assert!(matches!(out2, DispatchOutcome::Observed(_)), "{out2:?}");
+    assert_eq!(exec.calls.get(), 1, "the recorded allow executes once");
+
+    let envs = read_all(disp2.store_mut(), &run);
+    let decided: Vec<_> = envs
+        .iter()
+        .filter(|e| e.class == "security.permission.decided")
+        .collect();
+    assert_eq!(
+        decided.len(),
+        2,
+        "decided{{ask}} + the respond's decided{{allow}} — the resume mints none"
+    );
+    assert!(
+        envs.iter().any(|e| e.class == "action.effect.committed"),
+        "the recorded allow opens the committed gate"
+    );
+    assert!(envs.iter().any(|e| e.class == "action.effect.observed"));
 }

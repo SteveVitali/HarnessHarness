@@ -160,6 +160,7 @@ fn tool_node_scoped(
             exposure_hint: Json::Null,
             postconditions: vec![],
             flow_contract: None,
+            action_patterns: Vec::new(),
         }),
         id,
         seq,

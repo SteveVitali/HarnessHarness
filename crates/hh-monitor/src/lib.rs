@@ -39,6 +39,7 @@ pub mod monitor;
 pub mod policy;
 pub mod table;
 pub mod tcb;
+pub mod wire;
 
 pub use decision::{Decider, Decision, DenyReason, KernelDecision};
 pub use handle::{AuthorityHandle, HandleExpiry, HandleId, HandleValidity, OriginBasis};

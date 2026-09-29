@@ -1325,6 +1325,8 @@ fn action_json(a: &RuleAction, semantic: bool) -> Json {
                 ("param", param.clone()),
             ]),
         )]),
+        RuleAction::PreAuthorize(r) => Json::obj([("pre_authorize", r.clone())]),
+        RuleAction::AutoReview(r) => Json::obj([("auto_review", r.clone())]),
     }
 }
 
@@ -1375,6 +1377,12 @@ fn action_from_json(j: &Json, path: &str) -> Result<RuleAction, HirError> {
             sanitizer_ref: req_str(s, "sanitizer_ref", &format!("{path}.sanitize"))?,
             param: s.get("param").cloned().unwrap_or(Json::Null),
         });
+    }
+    if let Some(r) = j.get("pre_authorize") {
+        return Ok(RuleAction::PreAuthorize(r.clone()));
+    }
+    if let Some(r) = j.get("auto_review") {
+        return Ok(RuleAction::AutoReview(r.clone()));
     }
     Err(HirError::SchemaViolation {
         detail: format!("{path}: unknown rule action"),
@@ -1514,6 +1522,24 @@ pub(crate) fn semantic_record_json(rec: &KindRecord, semantic: bool) -> Json {
             }
             if let Some(f) = &t.flow_contract {
                 v.push(("flow_contract", f.clone()));
+            }
+            if !t.action_patterns.is_empty() {
+                v.push((
+                    "action_patterns",
+                    Json::Arr(
+                        t.action_patterns
+                            .iter()
+                            .map(|p| {
+                                Json::obj([(
+                                    "fields",
+                                    Json::Arr(
+                                        p.fields.iter().map(|f| Json::str(f.clone())).collect(),
+                                    ),
+                                )])
+                            })
+                            .collect(),
+                    ),
+                ));
             }
             v
         }),
@@ -1844,6 +1870,41 @@ pub(crate) fn semantic_record_from_json(
                     &format!("{path}.postconditions"),
                 )?,
                 flow_contract: j.get("flow_contract").cloned(),
+                action_patterns: match j.get("action_patterns") {
+                    Some(Json::Arr(rows)) => rows
+                        .iter()
+                        .enumerate()
+                        .map(|(i, r)| {
+                            let path = format!("{path}.action_patterns[{i}]");
+                            let fields = match r.get("fields") {
+                                Some(Json::Arr(fs)) => fs
+                                    .iter()
+                                    .map(|f| {
+                                        f.as_str().map(String::from).ok_or_else(|| {
+                                            HirError::SchemaViolation {
+                                                detail: format!(
+                                                    "{path}.fields members must be strings"
+                                                ),
+                                            }
+                                        })
+                                    })
+                                    .collect::<Result<Vec<_>, _>>()?,
+                                _ => {
+                                    return Err(HirError::SchemaViolation {
+                                        detail: format!("{path}.fields missing"),
+                                    })
+                                }
+                            };
+                            Ok(crate::records::ActionPatternRecord { fields })
+                        })
+                        .collect::<Result<Vec<_>, HirError>>()?,
+                    None => Vec::new(),
+                    _ => {
+                        return Err(HirError::SchemaViolation {
+                            detail: format!("{path}.action_patterns must be an array"),
+                        })
+                    }
+                },
             })
         }
         EntityKind::Permission => {
