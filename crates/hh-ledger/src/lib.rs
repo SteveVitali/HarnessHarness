@@ -45,6 +45,10 @@ pub mod views;
 pub mod wakeup;
 
 pub use audit::{AuditObligation, ObligationQuantifier, Unmet, DEFERRED_OBLIGATIONS, OBLIGATIONS};
+pub use branch::{
+    BranchInfo, BranchKind, BranchRecord, CompensationEntry, EnvBinding, ForkOpts, NavigateTarget,
+    ReplayMode, RollbackRecord,
+};
 pub use effect::{CommitOutcome, CommitToken, EffectFold, EffectPhase};
 pub use errors::{LedgerError, MissingReason, Tampered, TamperedKind};
 pub use hlc::Hlc;

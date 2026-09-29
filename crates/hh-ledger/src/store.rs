@@ -103,7 +103,7 @@ pub enum RedactTarget {
 
 /// The persisted lease record (`lease.json`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct LeaseRecord {
+pub(crate) struct LeaseRecord {
     lease_id: String,
     holder: String,
     generation: u64,
@@ -179,7 +179,7 @@ pub(crate) struct RunState {
     run_id: String,
     manifest: RunManifest,
     pub(crate) events: Vec<EventEnvelope>,
-    by_event_id: HashMap<String, u64>,
+    pub(crate) by_event_id: HashMap<String, u64>,
     ir_index: HashMap<String, Vec<u64>>,
     pub(crate) open_scopes: BTreeMap<String, ScopeKind>,
     /// The `action.effect.*` fold — `effect_id → EffectFold` (§5a.2; R-2.2.2). Fed
@@ -226,7 +226,7 @@ pub struct Store {
     ids: Box<dyn IdSource>,
     clock: Box<dyn Clock>,
     blob_max_bytes: usize,
-    runs: BTreeMap<String, RunState>,
+    pub(crate) runs: BTreeMap<String, RunState>,
     /// Blob tombstones — `<alg>:<digest>` → the reason bytes are gone, folded
     /// from every run's `lifecycle.ledger.redacted`/`lifecycle.ledger.gc` rows
     /// (rebuilt on open, updated on op). `get_blob`'s missing-file path and
@@ -395,6 +395,75 @@ impl Store {
             .unwrap_or_else(|| ROOT_EVENT.to_string()))
     }
 
+    /// The events of a run, in WAL order — the branch model's fold input.
+    pub fn envelopes(&self, run_id: &str) -> Result<&[EventEnvelope], LedgerError> {
+        Ok(&self.run(run_id)?.events)
+    }
+
+    /// Mint + commit one kernel-origin durable row on `run_id` — `system_event`
+    /// under the WAL tip (the logical head supplies `parent_event_id`), with
+    /// caller-set envelope `refs`/`causes`, then the commit path (WAL + sync +
+    /// marker + notify). The branch-model emitters (`lifecycle.run.forked`,
+    /// `lifecycle.run.rolled_back`, `lifecycle.head.moved`) mint through here —
+    /// their rows are ordinary durable facts; the `refs` carry the fork's pin
+    /// set (§5a.1 §5 — the source prefix's referenced content is pinned).
+    pub(crate) fn commit_kernel_row(
+        &mut self,
+        run_id: &str,
+        class: &str,
+        payload: Json,
+        refs: Vec<ContentAddress>,
+        causes: Vec<crate::manifest::EventRef>,
+    ) -> Result<EventEnvelope, LedgerError> {
+        let generation = read_lease_file(&self.lease_path(run_id))?
+            .map(|r| r.generation)
+            .unwrap_or(1);
+        let now = self.clock.now_ms();
+        let state = self
+            .runs
+            .get_mut(run_id)
+            .ok_or_else(|| LedgerError::UnknownRun {
+                run_id: run_id.to_string(),
+            })?;
+        let mut env = system_event(
+            &*self.ids,
+            &*self.clock,
+            state,
+            wal_tip_seq(state),
+            class,
+            payload,
+            &wal_tip_hash(state),
+            generation,
+        );
+        env.refs = refs;
+        env.causes = causes;
+        env.hash = env.recompute_hash();
+        commit_envelopes(state, vec![Staged::Durable(env.clone())], now)?;
+        Ok(env)
+    }
+
+    /// The rewind-frame fan-out — a committed `head.moved` (and the `rolled_back`
+    /// that rides one) delivers `EventFrame::Rewind{to_seq}` to live subscribers
+    /// (§5a.1 §4 — "a `head.moved` is delivered as a `rewind`").
+    pub(crate) fn notify_rewind(
+        &mut self,
+        run_id: &str,
+        to_seq: u64,
+        to_event_id: &str,
+        reason: &str,
+    ) {
+        if let Some(state) = self.runs.get_mut(run_id) {
+            notify(
+                state,
+                EventFrame::Rewind {
+                    to_seq,
+                    to_event_id: to_event_id.to_string(),
+                    reason: reason.to_string(),
+                },
+            );
+        }
+    }
+
     /// The persisted writer-lease generation — the fencing token every
     /// post-`prepared` `action.effect.*` row must carry (§5a.2 invariant 6) and
     /// the `CommitToken`'s epoch check (ADR-0100 I-1).
@@ -520,11 +589,7 @@ impl Store {
                 "lifecycle.run.resumed" => state.suspended = false,
                 _ => {}
             }
-            state.head = Some(Head {
-                seq: env.seq,
-                event_id: env.event_id.clone(),
-                hash: env.hash.clone(),
-            });
+            fold_head(&mut state, &env);
             state.tree.push(env.hash.clone());
             state.events.push(env);
         }
@@ -681,7 +746,7 @@ impl Store {
             .ok_or_else(|| LedgerError::UnknownForkPoint {
                 run_id: link.run_id.clone(),
             })?;
-        let head = src.head.as_ref().map(|h| h.seq).unwrap_or(0);
+        let head = src.events.len().saturating_sub(1) as u64;
         if link.at_seq > head {
             return Err(LedgerError::SourceIncomplete {
                 run_id: link.run_id.clone(),
@@ -938,7 +1003,11 @@ impl Store {
     /// returns the active record (its `generation` stamps the op's rows).
     /// `append` and the kernel audit ops (`checkpoint`/`gc`/`redact`) share
     /// it — one fence, never two spellings (CC1).
-    fn active_lease(&mut self, run_id: &str, lease: &Lease) -> Result<LeaseRecord, LedgerError> {
+    pub(crate) fn active_lease(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+    ) -> Result<LeaseRecord, LedgerError> {
         let rec =
             read_lease_file(&self.lease_path(run_id))?.ok_or_else(|| LedgerError::Fenced {
                 lease_generation: lease.generation,
@@ -1025,12 +1094,11 @@ impl Store {
         // ∪ earlier-in-batch semantics (one machine — CC1).
         let mut decision_folds = state.decisions.clone();
         let mut staged: Vec<Staged> = Vec::new();
-        let mut next_seq = state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0);
-        let mut prev_hash = state
-            .head
-            .as_ref()
-            .map(|h| h.hash.clone())
-            .unwrap_or_else(|| GENESIS_HASH.to_string());
+        // The WAL tip (not the logical head) owns seq/prev_hash — after a
+        // `head.moved` the head may sit behind the tip while appends keep the
+        // linear chain dense (§5a.1 `navigate`; ADR-0027 §5).
+        let mut next_seq = wal_tip_seq(state);
+        let mut prev_hash = wal_tip_hash(state);
         for ev in events.into_iter() {
             let spec = classes::lookup(&ev.class).ok_or_else(|| LedgerError::SchemaViolation {
                 detail: format!("unknown class {}", ev.class),
@@ -1342,10 +1410,10 @@ impl Store {
                 })
             }
         };
-        let head_seq = state.head.as_ref().map(|h| h.seq).unwrap_or(0);
-        if start_seq > head_seq && !state.events.is_empty() {
+        let tip_seq = wal_tip_seq(state).saturating_sub(1);
+        if start_seq > tip_seq && !state.events.is_empty() {
             return Err(LedgerError::UnknownCursor {
-                detail: format!("from_seq {start_seq} beyond head {head_seq}"),
+                detail: format!("from_seq {start_seq} beyond tip {tip_seq}"),
             });
         }
         let matches = |e: &&EventEnvelope| -> bool {
@@ -1419,7 +1487,7 @@ impl Store {
         }
         let next_cursor = out.last().and_then(|e| match direction {
             Direction::Fwd => {
-                if e.seq < head_seq {
+                if e.seq < tip_seq {
                     Some(Cursor::Seq(e.seq + 1))
                 } else {
                     None
@@ -1442,9 +1510,12 @@ impl Store {
     /// `head(run) → {seq, event_id, hash}`.
     pub fn head(&self, run_id: &str) -> Result<Head, LedgerError> {
         let state = self.run(run_id)?;
-        state.head.clone().ok_or_else(|| LedgerError::UnknownRun {
-            run_id: run_id.to_string(),
-        })
+        state
+            .head
+            .clone()
+            .ok_or_else(|| LedgerError::UnknownCursor {
+                detail: "head is the root sentinel (navigate(to: null))".into(),
+            })
     }
 
     /// `subscribe(run, from: Cursor) → Stream<EventFrame>` — replays durable events
@@ -1463,12 +1534,12 @@ impl Store {
                         detail: format!("event_id {id} unknown"),
                     })?
             }
-            Cursor::Now => state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0),
+            Cursor::Now => wal_tip_seq(state),
         };
-        let head_seq = state.head.as_ref().map(|h| h.seq).unwrap_or(0);
-        if start_seq > head_seq + 1 {
+        let tip_seq = wal_tip_seq(state).saturating_sub(1);
+        if start_seq > tip_seq + 1 {
             return Err(LedgerError::UnknownCursor {
-                detail: format!("from {start_seq} beyond head {head_seq}"),
+                detail: format!("from {start_seq} beyond tip {tip_seq}"),
             });
         }
         let mut last = start_seq.saturating_sub(1);
@@ -2107,12 +2178,8 @@ impl Store {
         members.insert("idp".to_string(), Json::str(idp));
         let payload = Json::Obj(members);
         let state = self.runs.get_mut(run_id).unwrap();
-        let seq = state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0);
-        let prev_hash = state
-            .head
-            .as_ref()
-            .map(|h| h.hash.clone())
-            .unwrap_or_else(|| GENESIS_HASH.to_string());
+        let seq = wal_tip_seq(state);
+        let prev_hash = wal_tip_hash(state);
         let env = system_event(
             &*self.ids,
             &*self.clock,
@@ -2304,12 +2371,8 @@ impl Store {
         }
         // The durable record first.
         let state = self.runs.get_mut(run_id).unwrap();
-        let seq = state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0);
-        let prev_hash = state
-            .head
-            .as_ref()
-            .map(|h| h.hash.clone())
-            .unwrap_or_else(|| GENESIS_HASH.to_string());
+        let seq = wal_tip_seq(state);
+        let prev_hash = wal_tip_hash(state);
         let mut members = BTreeMap::new();
         members.insert(
             "addresses".to_string(),
@@ -2482,12 +2545,8 @@ impl Store {
         }
         // The durable tombstone row — committed before any byte leaves.
         let state = self.runs.get_mut(run_id).unwrap();
-        let seq = state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0);
-        let prev_hash = state
-            .head
-            .as_ref()
-            .map(|h| h.hash.clone())
-            .unwrap_or_else(|| GENESIS_HASH.to_string());
+        let seq = wal_tip_seq(state);
+        let prev_hash = wal_tip_hash(state);
         let mut members = BTreeMap::new();
         members.insert(
             "targets".to_string(),
@@ -2577,6 +2636,13 @@ impl Store {
             // `lexical_index`/`memory_stale_index`/`memory_usage` fold in
             // `hh-context` over the `MemoryStore` (§5c.3 — the store, not
             // the run log, is their input; same owner-projection rule).
+            // `branch_tree` — the ledger folds it (the branch index lives in
+            // `lifecycle.*` rows on the runs' own WALs — no second store).
+            ViewKind::BranchTree => {
+                let infos = self.branch_tree();
+                let info = infos.iter().find(|i| i.run_id == run_id);
+                views::branch_tree(run_id, info, until)
+            }
             ViewKind::TraceView
             | ViewKind::CostView
             | ViewKind::MetricView
@@ -2625,15 +2691,13 @@ impl Store {
             }
         }
         chain.reverse(); // root-first
-        let head = self.runs[run_id].head.clone().unwrap_or(Head {
-            seq: 0,
-            event_id: String::new(),
-            hash: String::new(),
-        });
+                         // The terminal entry's bound is the WAL tip — every event of this run —
+                         // not the logical head (navigation never shortens the shared prefix).
+        let tip = self.runs[run_id].events.last();
         chain.push(LineageEntry {
             run_id: run_id.to_string(),
-            up_to_seq: head.seq,
-            head_hash: head.hash,
+            up_to_seq: tip.map(|e| e.seq).unwrap_or(0),
+            head_hash: tip.map(|e| e.hash.clone()).unwrap_or_default(),
         });
         Ok(chain)
     }
@@ -2810,16 +2874,12 @@ fn emit_lease_row(
     if let Json::Obj(m) = extra {
         payload.extend(m);
     }
-    let prev = state
-        .head
-        .as_ref()
-        .map(|h| h.hash.clone())
-        .unwrap_or_else(|| GENESIS_HASH.to_string());
+    let prev = wal_tip_hash(state);
     let env = system_event(
         ids,
         clock,
         state,
-        state.head.as_ref().map(|h| h.seq + 1).unwrap_or(0),
+        wal_tip_seq(state),
         class,
         Json::Obj(payload),
         &prev,
@@ -3003,11 +3063,7 @@ fn commit_envelopes(
                     "lifecycle.run.resumed" => state.suspended = false,
                     _ => {}
                 }
-                state.head = Some(Head {
-                    seq: env.seq,
-                    event_id: env.event_id.clone(),
-                    hash: env.hash.clone(),
-                });
+                fold_head(state, &env);
                 state.tree.push(env.hash.clone());
                 if range.count == 0 {
                     range.first = env.seq;
@@ -3050,6 +3106,58 @@ fn commit_envelopes(
 /// never disagree (CC1). Honors `effect::scope_close_fires` — `observed{partial}`,
 /// `probed{undeterminable}` and a retryable `…{not_applied}` leave the effect
 /// scope open (ADR-0238 §1).
+/// The WAL tip's next seq — the dense append position. `head` is the *logical*
+/// pointer (the `parent_event_id` branch tree's frontier); it may sit behind the
+/// tip after a `head.moved`, while `seq`/`prev_hash` always extend the linear WAL.
+fn wal_tip_seq(state: &RunState) -> u64 {
+    state.events.len() as u64
+}
+
+/// The WAL tip's hash — the linear `prev_hash` chain link (independent of the
+/// `parent_event_id` branch tree).
+fn wal_tip_hash(state: &RunState) -> String {
+    state
+        .events
+        .last()
+        .map(|e| e.hash.clone())
+        .unwrap_or_else(|| GENESIS_HASH.to_string())
+}
+
+/// The HEAD fold (§5a.1 `navigate`; ADR-0027 §5): `lifecycle.head.moved{to_event_id}`
+/// moves the **logical** head to its target (the root sentinel ⇒ `head = None` — the
+/// next append chains from genesis); every other durable row extends it. Runs
+/// identically on the commit path and WAL replay (CC1) — the head pointer is a
+/// rebuildable projection, never a stored fact.
+fn fold_head(state: &mut RunState, env: &EventEnvelope) {
+    if env.class == "lifecycle.head.moved" {
+        let to = env
+            .payload
+            .get("to_event_id")
+            .and_then(Json::as_str)
+            .unwrap_or("");
+        if to.is_empty() || to == ROOT_EVENT {
+            // `navigate(to: null)` — head is the root sentinel.
+            state.head = None;
+            return;
+        }
+        if let Some(t) = state.events.iter().find(|e| e.event_id == to) {
+            state.head = Some(Head {
+                seq: t.seq,
+                event_id: t.event_id.clone(),
+                hash: t.hash.clone(),
+            });
+            return;
+        }
+        // An unresolvable target is impossible — `navigate` resolves `to` before
+        // minting the row. Leave head on the row itself; never fabricate.
+    }
+    state.head = Some(Head {
+        seq: env.seq,
+        event_id: env.event_id.clone(),
+        hash: env.hash.clone(),
+    });
+}
+
 fn apply_scope_marks(
     open: &mut BTreeMap<String, ScopeKind>,
     effects: &BTreeMap<String, effect::EffectFold>,
@@ -3334,6 +3442,7 @@ fn notify(state: &mut RunState, frame: EventFrame) {
     for (i, sub) in state.subscribers.iter_mut().enumerate() {
         let seq = match &frame {
             EventFrame::Durable { seq, .. } => Some(*seq),
+            EventFrame::Rewind { to_seq, .. } => Some(*to_seq),
             _ => None,
         };
         if sub.lagged_from.is_some() {

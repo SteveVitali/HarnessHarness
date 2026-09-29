@@ -265,13 +265,26 @@ pub fn meters_sampled_payload(h: &EnvHandle, now: u64) -> Json {
     ])
 }
 
-/// `action.environment.snapshot{env_handle, snapshot_ref, kind}`.
-pub fn snapshot_payload(h: &EnvHandle, snapshot_ref: &str, kind: &str) -> Json {
-    Json::obj([
-        ("env_handle", Json::str(h.env_handle_id.clone())),
-        ("snapshot_ref", Json::str(snapshot_ref)),
-        ("kind", Json::str(kind)),
-    ])
+/// `action.environment.snapshot{env_handle, snapshot_ref, kind, at_seq,
+/// manifest_ref}` — `at_seq`/`manifest_ref` landed at S2.9 (the branch model's
+/// snapshot chooser reloads the record blob; pre-S2.9 rows lack them and the
+/// chooser falls back to the row's seq).
+pub fn snapshot_payload(
+    h: &EnvHandle,
+    snapshot_ref: &str,
+    kind: &str,
+    at_seq: u64,
+    manifest_ref: Option<&str>,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("env_handle".to_string(), Json::str(h.env_handle_id.clone()));
+    m.insert("snapshot_ref".to_string(), Json::str(snapshot_ref));
+    m.insert("kind".to_string(), Json::str(kind));
+    m.insert("at_seq".to_string(), Json::Int(at_seq as i64));
+    if let Some(mr) = manifest_ref {
+        m.insert("manifest_ref".to_string(), Json::str(mr));
+    }
+    Json::Obj(m)
 }
 
 // ── effect lifecycle (the dispatcher's seven stages) ─────────────────────────

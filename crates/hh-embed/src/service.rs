@@ -480,6 +480,9 @@ impl EmbedService {
             "steer" => self.steer(&req.params),
             "respond_permission" => self.respond_permission(&req.params),
             "fork" => self.fork(&req.params),
+            "navigate" => self.navigate(&req.params),
+            "coherent_fork_points" => self.coherent_fork_points(&req.params),
+            "rollback" => self.rollback(&req.params),
             "amend" => self.amend(&req.params),
             "report_host_effect" => self.report_host_effect(&req.params),
             "respond_elicitation" => self.respond_elicitation(&req.params),
@@ -1070,6 +1073,44 @@ pub(crate) fn ledger_err(e: hh_ledger::errors::LedgerError) -> EmbedError {
         L::SchemaViolation { detail } => EmbedError::SchemaViolation {
             path: "/ledger".to_string(),
             code: detail,
+        },
+        // The branch-model refusals (S2.9; ADR-0271) — the ledger's typed
+        // words, mapped to the contract's closed sum.
+        L::ForkPointNotCoherent {
+            at_seq,
+            open_scopes,
+            ..
+        } => EmbedError::Refused {
+            reason: format!(
+                "fork_point_not_coherent: seq {at_seq} blocked by [{}]",
+                open_scopes.join(", ")
+            ),
+        },
+        L::SourceIncomplete {
+            run_id,
+            at_seq,
+            head,
+        } => EmbedError::Refused {
+            reason: format!("source_incomplete: {run_id} seq {at_seq} beyond tip {head}"),
+        },
+        L::SnapshotUnavailable { kind, detail } => EmbedError::EnvironmentUnavailable {
+            reason: format!("snapshot_unavailable:{kind}: {detail}"),
+        },
+        L::AuthorityWidening { detail } => EmbedError::AuthorityViolation {
+            layer: "policy".to_string(),
+            detail,
+        },
+        L::CoverageInsufficient {
+            required,
+            available,
+        } => EmbedError::Refused {
+            reason: format!("coverage_insufficient: requires {required}, have {available}"),
+        },
+        L::PolicyForbids { detail } => EmbedError::Refused {
+            reason: format!("policy_forbids: {detail}"),
+        },
+        L::Pinned { address, reason } => EmbedError::Refused {
+            reason: format!("pinned: {address} ({reason})"),
         },
         other => EmbedError::Refused {
             reason: format!("ledger: {other:?}"),

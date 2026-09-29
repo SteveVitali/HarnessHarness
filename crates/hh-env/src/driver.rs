@@ -21,6 +21,7 @@ use hh_containment::report::ContainmentReport;
 use hh_hir::records::Grant;
 use hh_ledger::manifest::EventRef;
 use hh_ledger::store::{Lease, Store};
+use hh_wire::json::Json;
 
 use crate::errors::EnvError;
 use crate::events::{self, EventMinter};
@@ -1009,10 +1010,11 @@ impl EnvDriver {
                 }
             }
         }
+        let at_seq = store.head(&self.run_id).map(|h| h.seq).unwrap_or(0);
         let mut rec = SnapshotRecord {
             snapshot_ref: String::new(),
             env_handle_id: env_handle_id.to_string(),
-            at_seq: 0,
+            at_seq,
             kind: SnapshotKind::FsTree,
             base: image_base,
             content: tree.manifest_json(),
@@ -1023,11 +1025,20 @@ impl EnvDriver {
             expires_at_ms: None,
         };
         rec.snapshot_ref = rec.compute_ref();
+        // The record persists as a blob — the fork/rollback chooser reloads it
+        // through `manifest_ref` (S2.9; the snapshot row names both ids).
+        let manifest_ref = store
+            .put_blob(
+                rec.to_json().to_canonical_string().as_bytes(),
+                "application/json",
+            )
+            .map_err(EnvError::Ledger)?
+            .id();
         let h = self.handles.get_mut(env_handle_id).unwrap();
         h.snapshots.push(rec.snapshot_ref.clone());
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.snapshot",
-            events::snapshot_payload(h, &rec.snapshot_ref, "fs_tree"),
+            events::snapshot_payload(h, &rec.snapshot_ref, "fs_tree", at_seq, Some(&manifest_ref)),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok((rec, tree))
@@ -1110,6 +1121,194 @@ impl EnvDriver {
             }
         }
         Ok(recomputed)
+    }
+
+    /// `snapshot_for(store, env_handle_id, at_seq)` — the S2.9 snapshot chooser
+    /// (`fork{env: snapshot}`/`rollback`): the newest `fs_tree` snapshot on this
+    /// run with `at_seq ≤ target`, reloaded from its `manifest_ref` blob.
+    /// `Ok(None)` ⇒ the run recorded none at/below the cut; a named-but-gone
+    /// record blob is `SnapshotMissing` (the tombstone explains — never a
+    /// fabricated snapshot).
+    pub fn snapshot_for(
+        &self,
+        store: &Store,
+        at_seq: u64,
+    ) -> Result<Option<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot)>, EnvError> {
+        let rows = store
+            .env_snapshots(&self.run_id)
+            .map_err(EnvError::Ledger)?;
+        // Greatest `at_seq ≤ at` among fs_tree snapshots.
+        let mut best: Option<(u64, String, Option<String>)> = None;
+        for (s, sr, kind, mr) in rows {
+            if kind != "fs_tree" || s > at_seq {
+                continue;
+            }
+            if best.as_ref().map(|(bs, _, _)| s > *bs).unwrap_or(true) {
+                best = Some((s, sr, mr));
+            }
+        }
+        let Some((_, snapshot_ref, manifest_ref)) = best else {
+            return Ok(None);
+        };
+        let manifest_ref = manifest_ref.ok_or_else(|| EnvError::SnapshotMissing {
+            snapshot_ref: snapshot_ref.clone(),
+        })?;
+        let bytes = blob_by_id(store, &manifest_ref).ok_or_else(|| EnvError::SnapshotMissing {
+            snapshot_ref: snapshot_ref.clone(),
+        })?;
+        let text = String::from_utf8(bytes)
+            .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
+        let j = hh_wire::json::parse(&text)
+            .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
+        let rec = SnapshotRecord::from_json(&j).ok_or_else(|| {
+            EnvError::Blob(format!(
+                "snapshot record {manifest_ref}: malformed member form"
+            ))
+        })?;
+        let tree = hh_helper::fstree::FsTreeSnapshot::from_manifest_json(&rec.content).ok_or_else(
+            || EnvError::Blob(format!("snapshot {snapshot_ref}: malformed manifest")),
+        )?;
+        Ok(Some((rec, tree)))
+    }
+
+    /// `derive_from_snapshot(store, lease, parent_id, snap)` — the S2.9
+    /// `fork{env: snapshot}` provisioning path (ADR-0271): a fresh workspace
+    /// materialised **from the snapshot's blob-pool content** — never the
+    /// parent's live tree (the parent may have moved past the cut). A missing
+    /// content blob is `SnapshotMissing` (DF-S2.9-3's typed refusal).
+    /// NB: `self` is the **child** run's driver — the spawned handle's rows
+    /// append to the child run; `parent` is the source run's handle (borrowed
+    /// from the parent's driver — an inter-run edge by construction).
+    pub fn derive_from_snapshot(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        parent: &EnvHandle,
+        snap: &hh_helper::fstree::FsTreeSnapshot,
+    ) -> Result<EnvHandle, EnvError> {
+        let parent = parent.clone();
+        match parent.state {
+            HandleState::Ready | HandleState::Detached => {}
+            s => {
+                return Err(EnvError::InvalidState {
+                    op: "derive_from_snapshot",
+                    state: s.as_str(),
+                })
+            }
+        }
+        // Content availability first — a GC'd snapshot blob is the typed
+        // `SnapshotMissing` refusal, checked before any fs write.
+        for node in snap.manifest.values().flat_map(|m| m.values()) {
+            if let hh_helper::fstree::FsNode::File { ca, .. } = node {
+                if blob_by_id(store, ca).is_none() {
+                    return Err(EnvError::SnapshotMissing {
+                        snapshot_ref: snap.tree_address.clone(),
+                    });
+                }
+            }
+        }
+        let new_id = store.alloc_id("env");
+        let base_dir = store.root().join("envs").join(&new_id).join("workspace");
+        std::fs::create_dir_all(&base_dir).map_err(|e| EnvError::Blob(e.to_string()))?;
+        hh_helper::fstree::restore(snap, &base_dir, &|ca| blob_by_id(store, ca))
+            .map_err(|e| EnvError::Blob(format!("fork snapshot restore: {e}")))?;
+        let roots = Roots {
+            workspace_roots: vec![base_dir.to_string_lossy().to_string()],
+            writable_roots: vec![base_dir.to_string_lossy().to_string()],
+            cwd: base_dir.to_string_lossy().to_string(),
+        };
+        let child = self.spawn_handle(
+            store,
+            lease,
+            &parent,
+            roots,
+            Some(crate::handle::ParentEdge {
+                env_handle_id: parent.env_handle_id.clone(),
+                mode: crate::handle::DeriveMode::ForkSnapshot,
+                on_parent_end: crate::handle::OnParentEnd::DetachToChild,
+            }),
+            new_id,
+        )?;
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.derived",
+            events::derived_payload(&child),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok(child)
+    }
+
+    /// `rollback_env(store, lease, env_handle_id, at_seq)` — the rewind's
+    /// environment half (§5a.1 `rollback`; ADR-0271): restores the newest
+    /// `fs_tree` snapshot with `at_seq ≤ target` **in place** (manifest-covered
+    /// members written, uncovered members removed), appends
+    /// `action.environment.restored`, and reports `(restored_ref, uncaptured)`
+    /// — the writable roots no snapshot covers land in `uncaptured`, never
+    /// silently kept.
+    pub fn rollback_env(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        at_seq: u64,
+    ) -> Result<(Option<String>, Vec<String>), EnvError> {
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        let Some((rec, snap)) = self.snapshot_for(store, at_seq)? else {
+            // No snapshot at/below the cut — nothing restored; every writable
+            // root is honestly uncaptured.
+            let uncaptured = h
+                .roots
+                .writable_roots
+                .iter()
+                .map(|r| format!("writable_root:{r}"))
+                .collect();
+            return Ok((None, uncaptured));
+        };
+        // Content availability — the missing/corrupt snapshot refusal.
+        for node in snap.manifest.values().flat_map(|m| m.values()) {
+            if let hh_helper::fstree::FsNode::File { ca, .. } = node {
+                if blob_by_id(store, ca).is_none() {
+                    return Err(EnvError::SnapshotMissing {
+                        snapshot_ref: snap.tree_address.clone(),
+                    });
+                }
+            }
+        }
+        let dest = std::path::PathBuf::from(&h.roots.cwd);
+        std::fs::create_dir_all(&dest).map_err(|e| EnvError::Blob(e.to_string()))?;
+        hh_helper::fstree::restore_in_place(&snap, &dest, &|ca| blob_by_id(store, ca))
+            .map_err(|e| EnvError::Blob(format!("rollback env restore: {e}")))?;
+        // Writable roots outside the snapshot's coverage are uncaptured.
+        let covered: std::collections::BTreeSet<&str> =
+            rec.roots_covered.iter().map(String::as_str).collect();
+        let uncaptured: Vec<String> = h
+            .roots
+            .writable_roots
+            .iter()
+            .filter(|r| !covered.contains(r.as_str()))
+            .map(|r| format!("writable_root:{r}"))
+            .collect();
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.restored",
+            Json::obj([
+                ("env_handle", Json::str(env_handle_id)),
+                ("snapshot_ref", Json::str(&rec.snapshot_ref)),
+                ("kind", Json::str("fs_tree")),
+                ("at_seq", Json::Int(at_seq as i64)),
+                (
+                    "uncaptured",
+                    Json::Arr(uncaptured.iter().map(Json::str).collect()),
+                ),
+            ]),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok((Some(rec.snapshot_ref), uncaptured))
     }
 
     /// `verify(env_handle_id)` — the explicit verification point (appends the
@@ -1278,10 +1477,11 @@ impl EnvDriver {
             collect_files(r, &mut paths);
         }
         let baseline = PathBaseline::take(&|p| std::fs::read(p).ok(), &paths);
+        let at_seq = store.head(&self.run_id).map(|h| h.seq).unwrap_or(0);
         let mut rec = SnapshotRecord {
             snapshot_ref: String::new(),
             env_handle_id: env_handle_id.to_string(),
-            at_seq: 0,
+            at_seq,
             kind: SnapshotKind::PathBaseline,
             base: image_base,
             content: baseline.to_json(),
@@ -1296,7 +1496,7 @@ impl EnvDriver {
         h.snapshots.push(rec.snapshot_ref.clone());
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.snapshot",
-            events::snapshot_payload(h, &rec.snapshot_ref, "path_baseline"),
+            events::snapshot_payload(h, &rec.snapshot_ref, "path_baseline", at_seq, None),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok((rec, baseline))

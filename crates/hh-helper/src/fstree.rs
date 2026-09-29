@@ -417,6 +417,61 @@ pub fn restore(
     Ok(check.tree_address)
 }
 
+/// `restore_in_place(snapshot, dest_root, blob_read)` — the rollback/rewind
+/// restore (§5a.1 `rollback`; ADR-0271): unlike `restore` (empty dest), this
+/// first removes every `dest_root` member the manifest does not name — the
+/// workspace returns to the snapshot's state, not a merge of it. Then the
+/// manifest replays as in `restore` and the recompute check runs identically.
+pub fn restore_in_place(
+    snap: &FsTreeSnapshot,
+    dest_root: &Path,
+    blob_read: &dyn Fn(&str) -> Option<Vec<u8>>,
+) -> std::io::Result<String> {
+    // Phase 1 — remove what the manifest does not cover (bottom-up: files and
+    // symlinks first, then emptied dirs).
+    if dest_root.exists() {
+        let mut entries: Vec<PathBuf> = Vec::new();
+        let mut stack = vec![dest_root.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            if let Ok(rd) = std::fs::read_dir(&d) {
+                for e in rd.flatten() {
+                    entries.push(e.path());
+                    if e.path().is_dir() && !e.path().is_symlink() {
+                        stack.push(e.path());
+                    }
+                }
+            }
+        }
+        // Deepest paths first — children before their parents.
+        entries.sort_by_key(|p| std::cmp::Reverse(p.components().count()));
+        // The union of covered manifests — a multi-root snapshot restores into
+        // one dest tree; any rel named by any root's manifest is kept.
+        let covered: std::collections::BTreeSet<&String> =
+            snap.manifest.values().flat_map(|m| m.keys()).collect();
+        for p in entries {
+            let rel = p
+                .strip_prefix(dest_root)
+                .unwrap_or(&p)
+                .to_string_lossy()
+                .to_string();
+            if covered.contains(&rel) {
+                continue;
+            }
+            // An ancestor of a covered member is kept (it is a prefix dir).
+            if covered.iter().any(|c| c.starts_with(&format!("{rel}/"))) {
+                continue;
+            }
+            let md = std::fs::symlink_metadata(&p)?;
+            if md.is_dir() && !md.is_symlink() {
+                std::fs::remove_dir(&p)?;
+            } else {
+                std::fs::remove_file(&p)?;
+            }
+        }
+    }
+    restore(snap, dest_root, blob_read)
+}
+
 /// The content-addressed blob helper — `address(bytes)` (the blob pool id).
 pub fn content_address(bytes: &[u8]) -> String {
     hh_identity::idp::address(bytes, "application/octet-stream").id()

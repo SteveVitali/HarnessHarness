@@ -392,6 +392,10 @@ pub enum EventFrame {
     Rewind {
         /// The seq the head moved back to.
         to_seq: u64,
+        /// The target's event id (`root` = the run-start sentinel).
+        to_event_id: String,
+        /// The `head.moved` row's reason.
+        reason: String,
     },
     /// The subscription's bounded buffer overflowed — frames were dropped.
     Lagged {

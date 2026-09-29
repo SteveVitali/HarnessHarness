@@ -761,6 +761,13 @@ fn types_schema() -> Json {
         strct(&[
             ("session_id", "string", true),
             ("at", "ForkPoint", true),
+            ("kind", "string", false),
+            ("env", "string", false),
+            ("replay_mode", "string", false),
+            ("policy_ref", "string", false),
+            ("budget_slice_ref", "string", false),
+            ("coerce_to_boundary", "bool", false),
+            ("snapshot_ref", "string", false),
             ("manifest_delta", "json", false),
             ("idempotency_key", "string", false),
             ("invocation", "InvocationRecord", false),
@@ -873,6 +880,7 @@ fn types_schema() -> Json {
         strct(&[
             ("session_id", "string", true),
             ("to", "json", false),
+            ("reason", "string", false),
             ("idempotency_key", "string", false),
         ]),
     );
@@ -900,7 +908,11 @@ fn types_schema() -> Json {
     );
     m.insert(
         "CoherentForkPointsParams".into(),
-        strct(&[("session_id", "string", true)]),
+        strct(&[
+            ("session_id", "string", true),
+            ("from_seq", "integer", false),
+            ("to_seq", "integer", false),
+        ]),
     );
     m.insert(
         "CounterfactualParams".into(),
@@ -978,6 +990,8 @@ fn types_schema() -> Json {
         strct(&[
             ("session_id", "string", true),
             ("to_seq", "integer", true),
+            ("reason", "string", false),
+            ("restore_env", "bool", false),
             ("idempotency_key", "string", false),
         ]),
     );
@@ -1078,6 +1092,14 @@ fn frames_schema() -> Json {
                         vec![
                             field("reason", "ClosedReason", true),
                             field("detail", "string", false),
+                        ],
+                    ),
+                    variant(
+                        "rewind",
+                        vec![
+                            field("to_seq", "integer", true),
+                            field("to_event_id", "string", true),
+                            field("reason", "string", true),
                         ],
                     ),
                 ]),
