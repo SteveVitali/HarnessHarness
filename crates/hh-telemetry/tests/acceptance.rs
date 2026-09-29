@@ -25,7 +25,10 @@ use hh_telemetry::export::{deliver, export_events, export_view};
 use hh_telemetry::propagation::{outbound_context, propagation_unsupported_loss, subprocess_env};
 use hh_telemetry::sinks::{ContentClass, Sampling, SamplingMode, SinkPolicy};
 use hh_telemetry::tokens::{normalize_usage, ProviderUsage, TokenVector};
-use hh_telemetry::views::{cost_view, metric_view, sink_deliveries, trace_view};
+use hh_telemetry::views::{
+    cost_view, cost_view_run_tree, metric_view, sink_deliveries, trace_view, CostTreeError,
+    RunTreeSlice,
+};
 use hh_wire::json::Json;
 
 const TS: &str = "2026-01-01T00:00:00.000Z";
@@ -1169,4 +1172,227 @@ fn genai_verdict_lowering_roundtrips_and_names_loss_classes() {
         a2.get("gen_ai.response.id").unwrap().as_str().unwrap(),
         "v-10"
     );
+}
+
+// ── AC-R-2.9.1-9 (S4.15, M12) — `cost_view` over a run tree ─────────────
+//
+// A grandchild tree's `cost_view(run_tree).totals` equals the sum of the
+// three runs' `cost_view(run).totals`, and each child appears exactly once
+// under its parent's `subagent` scope (the manifest's `parent_run_id` edge —
+// the `control.subagent.spawned` link the §05e orchestrator emits).
+
+fn open_child(s: &mut Store, parent: &str, spawn_id: &str) -> (String, Lease) {
+    let mut m = RunManifest::minimal(RunKind::Agent);
+    m.parent_run_id = Some(parent.to_string());
+    m.spawn_event = Some(EventRef {
+        run_id: parent.to_string(),
+        event_id: spawn_id.to_string(),
+    });
+    s.open_run(m, "writer-a").unwrap()
+}
+
+#[test]
+fn cost_view_run_tree_rolls_children_up_exactly_once() {
+    let (mut s, root, lease) = open("m12-tree");
+    // The parent's `subagent` scopes: the spawn rows the manifest link
+    // resolves against (they also keep the parent's own spend).
+    s.append(
+        &root,
+        &lease,
+        vec![
+            ev(
+                "spawn-c",
+                "control.subagent.spawned",
+                TS,
+                Scope::default(),
+                Json::obj([("child_run_id", Json::str("run-child"))]),
+            ),
+            ev(
+                "c-root",
+                "measurement.cost.attributed",
+                TS,
+                Scope::default(),
+                spend_row(&root, "e-root", 100),
+            ),
+        ],
+    )
+    .unwrap();
+    let (child, child_lease) = open_child(&mut s, &root, "spawn-c");
+    s.append(
+        &child,
+        &child_lease,
+        vec![
+            ev(
+                "spawn-g",
+                "control.subagent.spawned",
+                TS,
+                Scope::default(),
+                Json::obj([("child_run_id", Json::str("run-grandchild"))]),
+            ),
+            ev(
+                "c-child",
+                "measurement.cost.attributed",
+                TS,
+                Scope::default(),
+                spend_row(&child, "e-child", 30),
+            ),
+        ],
+    )
+    .unwrap();
+    let (grand, grand_lease) = open_child(&mut s, &child, "spawn-g");
+    s.append(
+        &grand,
+        &grand_lease,
+        vec![ev(
+            "c-grand",
+            "measurement.cost.attributed",
+            TS,
+            Scope::default(),
+            spend_row(&grand, "e-grand", 7),
+        )],
+    )
+    .unwrap();
+
+    let root_ev = read_all(&s, &root);
+    let child_ev = read_all(&s, &child);
+    let grand_ev = read_all(&s, &grand);
+    // The per-run baselines (the AC's right-hand side).
+    let run_total = |ev: &[EventEnvelope]| -> i64 {
+        cost_view("r", "r", ev, None)
+            .payload
+            .get("total_spend_micro")
+            .and_then(|t| t.get("USD"))
+            .and_then(Json::as_int)
+            .unwrap_or(0)
+    };
+    let expect = run_total(&root_ev) + run_total(&child_ev) + run_total(&grand_ev);
+    assert_eq!(expect, 137);
+
+    let tree = cost_view_run_tree(
+        &root,
+        &[
+            RunTreeSlice {
+                run_id: &root,
+                parent_run_id: None,
+                events: &root_ev,
+            },
+            RunTreeSlice {
+                run_id: &child,
+                parent_run_id: Some(&root),
+                events: &child_ev,
+            },
+            RunTreeSlice {
+                run_id: &grand,
+                parent_run_id: Some(&child),
+                events: &grand_ev,
+            },
+        ],
+        None,
+    )
+    .unwrap();
+    let p = &tree.payload;
+    // Tree totals = the sum of the three runs' totals (AC's head clause).
+    assert_eq!(
+        p.get("total_spend_micro")
+            .and_then(|t| t.get("USD"))
+            .and_then(Json::as_int),
+        Some(expect)
+    );
+    // Each child appears exactly once, under its parent's `subagent` scope.
+    let subs = p.get("subagents").expect("subagents map");
+    let under_root = subs.get(&root).expect("child under the root's scope");
+    assert_eq!(
+        under_root.get(&child).and_then(|c| c.get("total_spend_micro")).and_then(|t| t.get("USD")),
+        Some(&Json::Int(30)),
+        "the child contributes its own-run totals under the parent's subagent scope"
+    );
+    let under_child = subs.get(&child).expect("grandchild under the child's scope");
+    assert_eq!(
+        under_child.get(&grand).and_then(|c| c.get("total_spend_micro")).and_then(|t| t.get("USD")),
+        Some(&Json::Int(7))
+    );
+    // …and nowhere else — the grandchild is not double-counted at the root.
+    assert!(
+        under_root.get(&grand).is_none(),
+        "a grandchild belongs under its own parent's scope, never the root's"
+    );
+    // Per-run folds and watermarks are present for every member.
+    let runs = p.get("runs").unwrap();
+    for r in [&root, &child, &grand] {
+        assert!(runs.get(r.as_str()).is_some(), "run {r} fold missing");
+        assert!(
+            p.get("watermarks").and_then(|w| w.get(r.as_str())).is_some(),
+            "run {r} watermark missing"
+        );
+    }
+    // view_hash rebuild equality still holds for the tree view.
+    let again = cost_view_run_tree(
+        &root,
+        &[
+            RunTreeSlice { run_id: &root, parent_run_id: None, events: &root_ev },
+            RunTreeSlice { run_id: &child, parent_run_id: Some(&root), events: &child_ev },
+            RunTreeSlice { run_id: &grand, parent_run_id: Some(&child), events: &grand_ev },
+        ],
+        None,
+    )
+    .unwrap();
+    assert_eq!(tree.view_hash, again.view_hash);
+}
+
+#[test]
+fn cost_view_run_tree_refuses_malformed_trees() {
+    let (mut s, root, lease) = open("m12-bad");
+    s.append(
+        &root,
+        &lease,
+        vec![ev(
+            "c-root",
+            "measurement.cost.attributed",
+            TS,
+            Scope::default(),
+            spend_row(&root, "e-root", 100),
+        )],
+    )
+    .unwrap();
+    let evs = read_all(&s, &root);
+    let root_slice = RunTreeSlice {
+        run_id: &root,
+        parent_run_id: None,
+        events: &evs,
+    };
+    // A duplicated member is a typed refusal — never a silent single count.
+    let phantom = RunTreeSlice {
+        run_id: "run-dup",
+        parent_run_id: Some(&root),
+        events: &evs,
+    };
+    assert!(matches!(
+        cost_view_run_tree(&root, &[root_slice, phantom, phantom], None),
+        Err(CostTreeError::DuplicateRun { .. })
+    ));
+    // An unknown parent refuses.
+    let orphan = RunTreeSlice {
+        run_id: "run-orphan",
+        parent_run_id: Some("run-missing"),
+        events: &evs,
+    };
+    assert!(matches!(
+        cost_view_run_tree(&root, &[root_slice, orphan], None),
+        Err(CostTreeError::UnknownParent { .. })
+    ));
+    // A member without a parent that is not the root refuses.
+    let second_root = RunTreeSlice {
+        run_id: "run-other",
+        parent_run_id: None,
+        events: &evs,
+    };
+    assert!(matches!(
+        cost_view_run_tree(&root, &[root_slice, second_root], None),
+        Err(CostTreeError::RootMismatch { .. })
+    ));
+    // A root absent from the member set refuses.
+    assert!(matches!(
+        cost_view_run_tree("run-absent", &[root_slice], None),
+        Err(CostTreeError::RootMissing { .. })
+    ));
 }

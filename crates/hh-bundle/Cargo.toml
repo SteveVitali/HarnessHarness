@@ -20,3 +20,11 @@ hh-secrets = { path = "../hh-secrets" }
 # member) are §6.4 records — the lab schema plane is the one schema
 # source (CC7); hh-bundle carries the record, never redefines it.
 hh-lab = { path = "../hh-lab" }
+# `cost_view` is the one cost fold (CC1) — the interchange export reads the
+# projection's fields rather than re-folding `measurement.cost.attributed`.
+hh-telemetry = { path = "../hh-telemetry" }
+
+[dev-dependencies]
+# SpendRow/cost_attributed_payload — the cost-row fixture the interchange
+# test feeds the ledger (the one payload builder, never a hand-rolled twin).
+hh-budget = { path = "../hh-budget" }

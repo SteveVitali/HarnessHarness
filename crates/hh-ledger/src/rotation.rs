@@ -87,6 +87,18 @@ pub fn rotate(
     signer: &mut dyn AuditSigner,
     plan: &RotationPlan,
 ) -> Result<RotationReceipt, LedgerError> {
+    rotate_impl(store, run_id, lease, signer, plan, None)
+}
+
+/// `rotate` with an explicit `links_run_ids` — the corpus driver's call.
+fn rotate_impl(
+    store: &mut Store,
+    run_id: &str,
+    lease: &Lease,
+    signer: &mut dyn AuditSigner,
+    plan: &RotationPlan,
+    links: Option<Vec<String>>,
+) -> Result<RotationReceipt, LedgerError> {
     let (from, to) = plan.validate().map_err(rot_err)?;
     // The bridge record is minted first — the checkpoint's
     // `bridge_record_ref` names its event id.
@@ -110,7 +122,7 @@ pub fn rotate(
             from_idp: from.idp_id.to_string(),
             to_idp: to.idp_id.to_string(),
             rotations,
-            links_run_ids: vec![run_id.to_string()],
+            links_run_ids: links.unwrap_or_else(|| vec![run_id.to_string()]),
             prev_bridge_ref: state
                 .events
                 .iter()
@@ -190,4 +202,48 @@ where
     let ok_head = rehash.get("tree_head").and_then(Json::as_str)
         == Some(crate::tree::mth_in(profile, &leaves).as_str());
     Some(ok_chain && ok_head)
+}
+
+/// `rotate` over a corpus of chained runs (AC-R-2.12.1-6; S4.15) — every
+/// live member (`parent`/`child` subagent runs, `continued_from`
+/// activations) receives its own `security.audit.checkpoint{kind =
+/// rotation}` in `runs` order (the caller passes each run's writer lease —
+/// rotation is an owner act, never an ambient one). Each run's bridge
+/// record lists the whole corpus in `links_run_ids` so the cross-profile
+/// resolution graph names the chain it spans.
+///
+/// No stored id is rewritten: the bridge/checkpoint rows are *appended*;
+/// `idp/1` hashes continue to verify under `idp/1` (the covered prefix is
+/// frozen), while every `rehash` recomputes under `to_idp`.
+pub fn rotate_corpus(
+    store: &mut Store,
+    runs: &[(&str, &Lease)],
+    signer: &mut dyn AuditSigner,
+    plan: &RotationPlan,
+) -> Result<Vec<RotationReceipt>, LedgerError> {
+    // The corpus must be well-formed before any row lands: distinct runs,
+    // all present (a mid-corpus failure would leave a half-rotated corpus
+    // — declared, never partial-silent, so the shape check runs first).
+    let mut seen = std::collections::BTreeSet::new();
+    for (run_id, _) in runs {
+        if !seen.insert(*run_id) {
+            return Err(LedgerError::SchemaViolation {
+                detail: format!("duplicate run in rotation corpus: {run_id}"),
+            });
+        }
+        store.run(run_id)?;
+    }
+    let links: Vec<String> = runs.iter().map(|(r, _)| (*r).to_string()).collect();
+    let mut receipts = Vec::with_capacity(runs.len());
+    for (run_id, lease) in runs {
+        receipts.push(rotate_impl(
+            store,
+            run_id,
+            lease,
+            signer,
+            plan,
+            Some(links.clone()),
+        )?);
+    }
+    Ok(receipts)
 }
