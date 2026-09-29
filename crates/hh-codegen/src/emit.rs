@@ -592,7 +592,9 @@ fn emit_method(
         pascal(result_ty)
     };
     let params_expr = if params_ty == "json" {
-        "params".to_string()
+        // `call` takes `Json` by value; the `json`-typed param arrives
+        // as `&Json`.
+        "params.clone()".to_string()
     } else {
         "params.to_json()".to_string()
     };

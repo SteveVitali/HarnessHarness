@@ -13,6 +13,9 @@ path = "src/lib.rs"
 hh-wire = { path = "../hh-wire" }
 hh-identity = { path = "../hh-identity" }
 hh-provenance = { path = "../hh-provenance" }
+# The risk-class vocabulary (R-2.2.2) — K4 admissibility reads
+# `RiskClass`/`Reversibility`/`RepeatSafety` (S2.10, R-2.3.4¹).
+hh-ontology = { path = "../hh-ontology" }
 hh-hir = { path = "../hh-hir" }
 hh-ledger = { path = "../hh-ledger" }
 # `MeasuredAt::Runtime` stamps `assembly_ms{measured_at}` — the declared

@@ -257,6 +257,8 @@ impl EmbedService {
                 supplies,
                 attendance,
                 approval_mode,
+                workspace_trust,
+                narrowing_leaves,
             } => self.open_new(
                 definition,
                 overrides,
@@ -267,6 +269,8 @@ impl EmbedService {
                 supplies.as_ref(),
                 attendance,
                 approval_mode.as_deref(),
+                workspace_trust.as_deref(),
+                narrowing_leaves,
                 p.invocation.as_ref(),
             )?,
             OpenSpec::Resume {
@@ -307,6 +311,8 @@ impl EmbedService {
         supplies: Option<&Supplies>,
         attendance: &AttendanceDeclaration,
         approval_mode: Option<&str>,
+        workspace_trust: Option<&str>,
+        narrowing_leaves: &[NarrowingLeaf],
         invocation: Option<&InvocationRecord>,
     ) -> Result<Json, EmbedError> {
         // `max_in_flight_sessions` bounds *live* sessions — a fenced or
@@ -384,8 +390,80 @@ impl EmbedService {
         let configuration_id = cfg.configuration_id;
         let configuration_version_id = cfg.configuration_version_id;
 
+        // ── environment spec + the `BypassWithoutContainment` gate ─────
+        // The spec is pure — building it pre-`open_run` lets the
+        // manifest record the binding's enforcement evidence
+        // (`containment.enforcement_evidence`, §7.1 §3's consumed-fields
+        // row) and lets a `bypass` approval mode fail *before any run
+        // opens* when the binding cannot mint it (AC-R-2.11.1-7). The
+        // gate runs the identical apply+battery fold the real attach
+        // will run — never a surface claim (`attach::evidence_preview`).
+        let env_spec = {
+            let ws = self.workspace_root().display().to_string();
+            environment_spec(environment, &ws)?
+        };
+        let (_, _, env_policy, _) = &env_spec;
+        let backend = hh_containment::backend::Ep2Model::reference();
+        let evidence =
+            hh_containment::attach::evidence_preview(&backend, env_policy).map_err(|e| {
+                EmbedError::EnvironmentUnavailable {
+                    reason: format!("containment_preview:{e:?}"),
+                }
+            })?;
+        if approval_mode == Some("bypass") {
+            bypass_gate(env_policy)?;
+        }
+
         // ── manifest + open_run ──────────────────────────────────────
         let mut manifest = RunManifest::minimal(RunKind::Agent);
+        // `workspace_trust` — the H5 trust-store claim recorded verbatim
+        // (ADR-0168 D7); absent ⇒ `unknown`, never inferred (OQ-387).
+        manifest.workspace_trust = workspace_trust
+            .and_then(hh_ledger::manifest::WorkspaceTrust::parse)
+            .unwrap_or(hh_ledger::manifest::WorkspaceTrust::Unknown);
+        // `containment.enforcement_evidence` — the environment handle's
+        // evidence the gate computed (kernel-minted, never CLI-asserted).
+        let bypass_admissible = hh_containment::attach::relied_groups(env_policy)
+            .iter()
+            .all(|g| {
+                evidence
+                    .get(g)
+                    .is_some_and(|e| *e != hh_containment::report::EnforcementEvidence::Unknown)
+            });
+        manifest.extra.insert(
+            "containment".to_string(),
+            Json::obj([
+                ("enforcement_evidence", evidence_json(&evidence)),
+                ("backend", Json::str("ep2_model")),
+                // The relied-groups verdict the pre-open gate computed —
+                // `amend(approval_mode → bypass)` re-reads *this* durable
+                // record, never re-runs the probe battery.
+                ("bypass_admissible", Json::Bool(bypass_admissible)),
+            ]),
+        );
+        // The approval mode the run opened under — a manifest claim the
+        // resume path re-reads so a later session's `policy_mode` (and
+        // `amend`'s widening check) reflects the record, never a guess.
+        if let Some(am) = approval_mode {
+            manifest
+                .extra
+                .insert("approval_mode".to_string(), Json::str(am));
+        }
+        // The declared Π narrowing leaves (surface presets — ADR-0168 D3):
+        // their ids are a `policy_fingerprint` leg, so the manifest records
+        // the id set the fingerprint folded (leaf change ⇒ lease revocation
+        // by construction, ADR-0071 D1).
+        if !narrowing_leaves.is_empty() {
+            manifest.extra.insert(
+                "narrowing_leaves".to_string(),
+                Json::Arr(
+                    narrowing_leaves
+                        .iter()
+                        .map(|l| Json::str(l.leaf_id()))
+                        .collect(),
+                ),
+            );
+        }
         manifest.configuration_id = Some(configuration_id.clone());
         manifest.configuration_version_id = Some(configuration_version_id.clone());
         manifest.harness_def_ref = Some(manifest_ref.clone());
@@ -489,6 +567,7 @@ impl EmbedService {
             finished: false,
             detached: None,
             authority_caps: hh_monitor::mint::cap_rows(&sealed.document),
+            narrowing_leaf_ids: narrowing_leaves.iter().map(|l| l.leaf_id()).collect(),
             pendings: BTreeMap::new(),
             decided: BTreeMap::new(),
             delivered_wokens: BTreeSet::new(),
@@ -983,7 +1062,17 @@ impl EmbedService {
                 }
             }
         };
-        let realized = realized_settings(self.workspace_root(), &attendance_async(), None);
+        // Rebuild realized settings from the manifest's recorded claims —
+        // the run's *own* attendance and approval mode (never a fresh
+        // default: a resumed session's `policy_mode` feeds Π decisions
+        // and `amend`'s widening check — ADR-0168 D1/D3).
+        let manifest_attendance = AttendanceDeclaration {
+            value: manifest.attendance.0.as_str().to_string(),
+            source: manifest.attendance.1.as_str().to_string(),
+        };
+        let manifest_mode = manifest.extra.get("approval_mode").and_then(Json::as_str);
+        let realized =
+            realized_settings(self.workspace_root(), &manifest_attendance, manifest_mode);
         let head = self.store.head(run_id).map_err(ledger_err)?;
         let sess = SessionState {
             run_id: run_id.to_string(),
@@ -1012,6 +1101,10 @@ impl EmbedService {
                 .and_then(|r| self.persisted_definition(r).ok())
                 .map(|d| hh_monitor::mint::cap_rows(&d.document))
                 .unwrap_or_default(),
+            // The leaf ids re-derive from the manifest's durable
+            // `narrowing_leaves` member — the fingerprint leg survives
+            // a host restart (ADR-0168 D3; absent ⇒ `[]`).
+            narrowing_leaf_ids: manifest_leaf_ids(&manifest),
             pendings: rt.pendings,
             decided: rt.decided,
             delivered_wokens: rt.delivered_wokens,
@@ -1059,7 +1152,17 @@ impl EmbedService {
         let manifest = self.store.manifest(run_id).map_err(ledger_err)?.clone();
         let head = self.store.head(run_id).map_err(ledger_err)?;
         let session_id = self.alloc_session_id();
-        let realized = realized_settings(self.workspace_root(), &attendance_async(), None);
+        // `describe` reports the run's *recorded* settings — the
+        // manifest's attendance + approval_mode claims — not a fresh
+        // attach-time default (ADR-0168 D1/D3).
+        let realized = realized_settings(
+            self.workspace_root(),
+            &AttendanceDeclaration {
+                value: manifest.attendance.0.as_str().to_string(),
+                source: manifest.attendance.1.as_str().to_string(),
+            },
+            manifest.extra.get("approval_mode").and_then(Json::as_str),
+        );
         let sess = SessionState {
             run_id: run_id.to_string(),
             attach: true,
@@ -1075,6 +1178,7 @@ impl EmbedService {
             finished: false,
             detached: None,
             authority_caps: Vec::new(),
+            narrowing_leaf_ids: Vec::new(),
             pendings: BTreeMap::new(),
             decided: BTreeMap::new(),
             delivered_wokens: BTreeSet::new(),
@@ -1341,65 +1445,8 @@ impl EmbedService {
         lease: &hh_ledger::store::Lease,
         environment: &EnvironmentInput,
     ) -> Result<(Option<String>, Json), EmbedError> {
-        let info = match environment {
-            EnvironmentInput::ConnectionInfo(c) => c.clone(),
-            EnvironmentInput::Ref(r) => {
-                return Err(EmbedError::UnresolvedRef {
-                    reference: r.clone(),
-                })
-            }
-        };
-        let class = info
-            .get("class")
-            .and_then(Json::as_str)
-            .unwrap_or("local_host");
-        if class != "local_host" && class != "local" {
-            return Err(EmbedError::EnvironmentUnavailable {
-                reason: format!("environment class {class} is not served at Stage 1"),
-            });
-        }
         let ws = self.workspace_root().display().to_string();
-        let roots_json = match info.get("workspace_roots") {
-            Some(Json::Arr(a)) => a
-                .iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect::<Vec<_>>(),
-            _ => vec![ws.clone()],
-        };
-        let record = EnvironmentRecord {
-            class: EnvironmentClass::LocalHost,
-            image: ImageRef::ContentAddress(hh_identity::address(
-                format!("hh-embed/local_host:{ws}").as_bytes(),
-                "application/vnd.hh.env",
-            )),
-            build_context: None,
-            platform: std::env::consts::ARCH.to_string() + "-" + std::env::consts::OS,
-            provisioning: ProvisioningRecipe::default(),
-            containment_policy_ref: ("hh-embed/kernel_default".to_string(), "v1".to_string()),
-            limits: ResourceLimits::default(),
-            nondeterminism: vec![],
-            unpinned: BTreeSet::new(),
-            ext: BTreeMap::new(),
-        };
-        let roots = Roots {
-            workspace_roots: roots_json.clone(),
-            writable_roots: roots_json,
-            cwd: ws.clone(),
-        };
-        let mut policy = hh_containment::policy::kernel_default(0);
-        for r in &roots.writable_roots {
-            policy
-                .fs
-                .write
-                .allow
-                .push(hh_containment::policy::WritableRoot {
-                    root: r.clone(),
-                    read_only_subpaths: vec![],
-                    protected_metadata_names: vec![],
-                });
-        }
-        policy.net.mode = hh_containment::policy::NetMode::None;
-        policy.compute_ids();
+        let (record, roots, policy, info) = environment_spec(environment, &ws)?;
         let driver = self
             .env_drivers
             .entry(run_id.to_string())
@@ -1787,6 +1834,145 @@ pub(crate) fn sess_manifest_ref(manifest: &RunManifest) -> String {
         .clone()
         .or_else(|| manifest.configuration_version_id.clone())
         .unwrap_or_default()
+}
+
+/// The declared narrowing-leaf ids a manifest records
+/// (`manifest.extra["narrowing_leaves"]` — ADR-0168 D3); absent ⇒ `[]`.
+/// `respond_permission` folds them into `policy_fingerprint` so a leaf
+/// change revokes leases by key construction (ADR-0071 D1).
+pub(crate) fn manifest_leaf_ids(manifest: &RunManifest) -> Vec<String> {
+    match manifest.extra.get("narrowing_leaves") {
+        Some(Json::Arr(a)) => a
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// `environment_spec(environment, workspace_root) → (record, roots,
+/// policy, connection_info)` — the **pure** half of environment
+/// provisioning: the `EnvironmentRecord`, `Roots` and `ContainmentPolicy`
+/// the local binding would run, without touching the store or a driver.
+/// `open_new` builds it pre-`open_run` so the manifest can record the
+/// binding's enforcement evidence and the `bypass` gate can fail before
+/// any run exists (AC-R-2.11.1-7). `provision_environment` consumes the
+/// same spec — one construction, never two rules.
+fn environment_spec(
+    environment: &EnvironmentInput,
+    workspace_root: &str,
+) -> Result<
+    (
+        EnvironmentRecord,
+        Roots,
+        hh_containment::policy::ContainmentPolicy,
+        Json,
+    ),
+    EmbedError,
+> {
+    let info = match environment {
+        EnvironmentInput::ConnectionInfo(c) => c.clone(),
+        EnvironmentInput::Ref(r) => {
+            return Err(EmbedError::UnresolvedRef {
+                reference: r.clone(),
+            })
+        }
+    };
+    let class = info
+        .get("class")
+        .and_then(Json::as_str)
+        .unwrap_or("local_host");
+    if class != "local_host" && class != "local" {
+        return Err(EmbedError::EnvironmentUnavailable {
+            reason: format!("environment class {class} is not served at Stage 2"),
+        });
+    }
+    let ws = workspace_root.to_string();
+    let roots_json = match info.get("workspace_roots") {
+        Some(Json::Arr(a)) => a
+            .iter()
+            .filter_map(|v| v.as_str().map(String::from))
+            .collect::<Vec<_>>(),
+        _ => vec![ws.clone()],
+    };
+    let record = EnvironmentRecord {
+        class: EnvironmentClass::LocalHost,
+        image: ImageRef::ContentAddress(hh_identity::address(
+            format!("hh-embed/local_host:{ws}").as_bytes(),
+            "application/vnd.hh.env",
+        )),
+        build_context: None,
+        platform: std::env::consts::ARCH.to_string() + "-" + std::env::consts::OS,
+        provisioning: ProvisioningRecipe::default(),
+        containment_policy_ref: ("hh-embed/kernel_default".to_string(), "v1".to_string()),
+        limits: ResourceLimits::default(),
+        nondeterminism: vec![],
+        unpinned: BTreeSet::new(),
+        ext: BTreeMap::new(),
+    };
+    let roots = Roots {
+        workspace_roots: roots_json.clone(),
+        writable_roots: roots_json,
+        cwd: ws.clone(),
+    };
+    let mut policy = hh_containment::policy::kernel_default(0);
+    for r in &roots.writable_roots {
+        policy
+            .fs
+            .write
+            .allow
+            .push(hh_containment::policy::WritableRoot {
+                root: r.clone(),
+                read_only_subpaths: vec![],
+                protected_metadata_names: vec![],
+            });
+    }
+    policy.net.mode = hh_containment::policy::NetMode::None;
+    policy.compute_ids();
+    Ok((record, roots, policy, info))
+}
+
+/// The containment `enforcement_evidence` map as a manifest JSON member
+/// (`{fs: probed|reported|unknown, …}`) — the gate's verdict, recorded
+/// verbatim (ADR-0168 D3: "the manifest records
+/// `containment.enforcement_evidence` … from the environment handle").
+fn evidence_json(
+    ev: &BTreeMap<hh_containment::report::FieldGroup, hh_containment::report::EnforcementEvidence>,
+) -> Json {
+    let mut m = BTreeMap::new();
+    for (g, e) in ev {
+        m.insert(g.as_str().to_string(), Json::str(e.as_str()));
+    }
+    Json::Obj(m)
+}
+
+/// `bypass_gate(policy) → Result<(), EmbedError>` — the kernel's half of
+/// `BypassWithoutContainment` (ADR-0168 D3): `approval_mode = bypass` is
+/// admitted only when the binding's reference backend mints non-`unknown`
+/// enforcement evidence for every field group the policy *relies* on —
+/// the same pure apply+battery fold the real attach runs
+/// (`attach::evidence_preview`), evaluated before `open_run` so the
+/// refusal precedes any run's existence.
+fn bypass_gate(policy: &hh_containment::policy::ContainmentPolicy) -> Result<(), EmbedError> {
+    let backend = hh_containment::backend::Ep2Model::reference();
+    let evidence = hh_containment::attach::evidence_preview(&backend, policy).map_err(|e| {
+        EmbedError::EnvironmentUnavailable {
+            reason: format!("containment_preview:{e:?}"),
+        }
+    })?;
+    let enforced = hh_containment::attach::relied_groups(policy)
+        .iter()
+        .all(|g| {
+            evidence.get(g) != Some(&hh_containment::report::EnforcementEvidence::Unknown)
+                && evidence.contains_key(g)
+        });
+    if enforced {
+        Ok(())
+    } else {
+        Err(EmbedError::Refused {
+            reason: "bypass_without_containment".to_string(),
+        })
+    }
 }
 
 /// The `RealizedSettings` the boundary realizes at Stage 1 — the honest

@@ -96,6 +96,16 @@ pub enum Origin {
         /// The hosting mechanism (`hh.hosting/1` binding id).
         hosting_mechanism: String,
     },
+    /// `cache(entry_ref)` — a served cache hit (S2.10 — the K4 `tool_result`
+    /// cache, §5b.4/R-2.3.4¹). The `entry_ref` is the identity coordinate of
+    /// the cache `Memory` entry being served; the served record's authority
+    /// is the cached entry's own label authority (copied, never widened —
+    /// [`default_authority_in`] supplies only the *ceiling* `environment`,
+    /// the maximum any tool-result entry can hold).
+    Cache {
+        /// The `Memory{kind: tool_result}` version ref the hit serves.
+        entry_ref: String,
+    },
 }
 
 impl Origin {
@@ -163,6 +173,13 @@ impl Origin {
         }
     }
 
+    /// Convenience: a cache origin (`cache(entry_ref)`).
+    pub fn cache(entry_ref: impl Into<String>) -> Origin {
+        Origin::Cache {
+            entry_ref: entry_ref.into(),
+        }
+    }
+
     /// Whether this origin is a `delegate`-class producer — `model`, `evolution` or
     /// `participant`. A `delegate`-origin endorser is **never valid** (§8.1 #2 endorse;
     /// "the model never endorses" — constitutional rule).
@@ -185,6 +202,7 @@ impl Origin {
             Origin::Migration { .. } => "migration",
             Origin::Kernel { .. } => "kernel",
             Origin::Participant { .. } => "participant",
+            Origin::Cache { .. } => "cache",
         }
     }
 }
@@ -264,6 +282,13 @@ pub fn default_authority_in(
         Origin::Import { .. } | Origin::Migration { .. } | Origin::Participant { .. } => {
             AuthorityClass::Unverified
         }
+        // `cache(entry_ref)` mints at the tool-result ceiling: a K4 entry's
+        // label authority is ≤ `environment` by construction (the cached
+        // observation minted through `tool`). The *served* record's class is
+        // copied from the entry — the mint supplies the ceiling so a cache
+        // record claiming `principal`/`kernel`/`definition` fails
+        // `AuthorityExceedsOrigin` (never widens — I-NOAUTH's cache face).
+        Origin::Cache { .. } => AuthorityClass::Environment,
     }
 }
 
@@ -418,5 +443,21 @@ mod tests {
         assert!(Origin::participant("p", "m").is_delegate_class());
         assert!(!human().is_delegate_class());
         assert!(!Origin::kernel("k").is_delegate_class());
+        assert!(!Origin::cache("mem:k4:1").is_delegate_class());
+    }
+
+    #[test]
+    fn cache_origin_mints_at_the_tool_result_ceiling() {
+        // `cache(entry_ref)` — the served hit's ceiling is `environment`
+        // (the maximum a `tool_result` entry can hold); the serve path
+        // copies the entry's authority verbatim — the mint never widens.
+        let o = Origin::cache("mem:v:k4entry");
+        assert_eq!(o.tag(), "cache");
+        assert_eq!(
+            default_authority(&o, PersistenceScope::Run, None),
+            AuthorityClass::Environment
+        );
+        // Free text served from cache still caps at `external` (R-TEXT).
+        assert_eq!(default_text_authority(&o, None), AuthorityClass::External);
     }
 }

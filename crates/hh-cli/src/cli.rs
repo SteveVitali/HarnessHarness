@@ -211,6 +211,7 @@ const VALUE_FLAGS: &[&str] = &[
     "format",
     "attendance",
     "approval-mode",
+    "preset",
     "budget",
     "override",
     "capability",
@@ -227,6 +228,9 @@ const VALUE_FLAGS: &[&str] = &[
     "target",
     "value",
     "attestation",
+    "key",
+    "scope",
+    "on-parent-end",
 ];
 
 const SWITCHES: &[&str] = &["no-input", "bypass", "takeover", "follow", "cancel", "help"];
@@ -256,7 +260,7 @@ fn parse_args(argv: &[String]) -> Result<Parsed, InvocationError> {
             "usage: hh run <verb> | hh approval <verb> | hh version | hh doctor",
         ));
     }
-    let single = matches!(noun.as_str(), "version" | "doctor");
+    let single = matches!(noun.as_str(), "version" | "doctor" | "compact");
     let verb = if single {
         noun.clone()
     } else {
@@ -908,6 +912,21 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         ("run", "cancel") => go(cmd_run_cancel(b, io, p, argv)),
         ("run", "amend") => go(cmd_run_amend(b, io, p, argv)),
         ("run", "submit") => go(cmd_run_submit(b, io, p, argv)),
+        ("env", "status") | ("env", "meters") => go(cmd_env_status(b, io, p, argv)),
+        ("env", "snapshot") => go(cmd_env_snapshot(b, io, p, argv)),
+        ("env", "derive") => go(cmd_env_derive(b, io, p, argv)),
+        ("env", "set-phase") => go(cmd_env_set_phase(b, io, p, argv)),
+        ("env", "list-detached") => go(cmd_env_list_detached(b, io, p, argv)),
+        ("env", verb) => Err((
+            CliError::Invocation(InvocationError::at(
+                "stage_pending",
+                &format!("env {verb}"),
+                "env open/attach/close/diff/restore/upload/download are not                  boundary-backed at this stage (DF-S2.10-*) — the verb is                  refused, never faked",
+            )),
+            OutputFormat::Json,
+        )),
+        ("compact", _) => go(cmd_compact(b, io, p, argv)),
+        ("config", "explain") => go(cmd_config_explain(b, io, p, argv)),
         ("approval", "list") => go(cmd_approval_list(b, io, p, argv)),
         ("approval", "show") => go(cmd_approval_show(b, io, p, argv)),
         ("approval", "respond") => go(cmd_approval_respond(b, io, p, argv)),
@@ -936,6 +955,404 @@ fn ok_outcome(
     ))
 }
 
+// ── env ────────────────────────────────────────────────────────────────────
+
+/// `env status|meters <run_id>` → `attach` + `describe` — the
+/// environment's connection-info/health/meters verbatim (the canonical
+/// table maps both verbs onto `describe`; R-NOSIDE means no handle id
+/// ever renders).
+fn cmd_env_status(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let sess = attach(b, &run_id, &r.invocation)?;
+    let view = b.call(
+        "describe",
+        &Json::obj([("session_id", Json::str(sess.session_id.clone()))]),
+    )?;
+    close_session(b, &sess.session_id);
+    let env = Json::obj([
+        (
+            "connection_info",
+            view.get("environment_connection_info")
+                .cloned()
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "health",
+            view.get("environment_health")
+                .cloned()
+                .unwrap_or(Json::str("n/a")),
+        ),
+        (
+            "meters",
+            view.get("environment_meters")
+                .cloned()
+                .unwrap_or(Json::Arr(vec![])),
+        ),
+    ]);
+    ok_outcome("env_status", env, r.format)
+}
+
+/// `env snapshot <run_id>` → writer session + `env.snapshot` (Group M,
+/// `instrument`-charged). A run whose writer session is still live
+/// answers `WouldBlock` — `--takeover` fences it, mirroring `run amend`.
+fn cmd_env_snapshot(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let raw = b.call(
+        "env.snapshot",
+        &Json::obj([("session_id", Json::str(sess.session_id.clone()))]),
+    );
+    // The session stays open — `close` is the writer drain (interrupt →
+    // finished); env ops mirror `run amend`'s session contract.
+    ok_outcome("env_snapshot", raw?, r.format)
+}
+
+/// `env derive <run_id> [--mode fresh_from_image|fork_snapshot|
+/// scoped_subtree] [--scope <path>] [--on-parent-end teardown|
+/// detach_to_child]` → writer session + `env.derive`. The result is the
+/// honest record — never the child's handle id (R-NOSIDE).
+fn cmd_env_derive(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let mut params = Json::obj([("session_id", Json::str(sess.session_id.clone()))]);
+    if let Json::Obj(m) = &mut params {
+        if let Some(md) = p.flag("mode") {
+            m.insert("mode".into(), Json::str(md));
+        }
+        if let Some(sc) = p.flag("scope") {
+            m.insert("scope".into(), Json::str(sc));
+        }
+        if let Some(pe) = p.flag("on-parent-end") {
+            m.insert("on_parent_end".into(), Json::str(pe));
+        }
+    }
+    let raw = b.call("env.derive", &params);
+    // Session stays open — see `cmd_env_snapshot`.
+    ok_outcome("env_derive", raw?, r.format)
+}
+
+/// `env set-phase <run_id> <setup|agent|verify>` → writer session +
+/// `env.set_phase`. The kernel refuses (`phase_schedule_undeclared`)
+/// unless the handle declares `per_phase_network_policy` and the sealed
+/// policy names the phase — the refusal surfaces verbatim.
+fn cmd_env_set_phase(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let phase = require_pos(p, 1, "<setup|agent|verify>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let raw = b.call(
+        "env.set_phase",
+        &Json::obj([
+            ("session_id", Json::str(sess.session_id.clone())),
+            ("phase", Json::str(phase)),
+        ]),
+    );
+    // Session stays open — see `cmd_env_snapshot`.
+    ok_outcome("env_set_phase", raw?, r.format)
+}
+
+/// `env list-detached <run_id>` → `attach` + `read` — the durable
+/// `action.environment.detached` rows folded to event refs (never the
+/// handle ids the payloads carry — R-NOSIDE applies to the surface).
+fn cmd_env_list_detached(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let sess = attach(b, &run_id, &r.invocation)?;
+    let mut detached: Vec<Json> = Vec::new();
+    let mut cursor = Json::obj([("kind", Json::str("seq")), ("seq", Json::Int(0))]);
+    loop {
+        let page = b.call(
+            "read",
+            &Json::obj([
+                ("session_id", Json::str(sess.session_id.clone())),
+                ("cursor", cursor.clone()),
+                ("direction", Json::str("fwd")),
+                ("limit", Json::Int(500)),
+                (
+                    "filter",
+                    Json::obj([(
+                        "classes",
+                        Json::Arr(vec![Json::str("action.environment.detached")]),
+                    )]),
+                ),
+            ]),
+        )?;
+        if let Some(Json::Arr(events)) = page.get("events") {
+            for e in events {
+                detached.push(Json::obj([
+                    (
+                        "event_ref",
+                        e.get("event_id").cloned().unwrap_or(Json::Null),
+                    ),
+                    ("seq", e.get("seq").cloned().unwrap_or(Json::Null)),
+                ]));
+            }
+        }
+        match page.get("next") {
+            Some(n) => cursor = n.clone(),
+            None => break,
+        }
+    }
+    close_session(b, &sess.session_id);
+    ok_outcome(
+        "env_list_detached",
+        Json::obj([
+            ("detached", Json::Arr(detached.clone())),
+            ("count", Json::Int(detached.len() as i64)),
+        ]),
+        r.format,
+    )
+}
+
+// ── compact / config ──────────────────────────────────────────────────
+
+/// `hh compact <run_id> [--at-seq N]` → `attach` + `project{compact}` —
+/// the declared-lossy CLI view (ADR-0169 D3): `message`/`tool`/`effect`/
+/// `approval`/`cost` items plus the `loss_report` enumerating every
+/// dropped class. The report rides the payload verbatim — the surface
+/// never strips it.
+fn cmd_compact(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let sess = attach(b, &run_id, &r.invocation)?;
+    let mut params = Json::obj([
+        ("session_id", Json::str(sess.session_id.clone())),
+        ("view_kind", Json::str("compact")),
+    ]);
+    if let Json::Obj(m) = &mut params {
+        if let Some(seq) = p.flag("at-seq") {
+            match seq.parse::<i64>() {
+                Ok(n) => {
+                    m.insert("until_seq".into(), Json::Int(n));
+                }
+                Err(_) => {
+                    close_session(b, &sess.session_id);
+                    return Err(inv("bad_flag_value", "--at-seq", "needs an integer seq"));
+                }
+            }
+        }
+    }
+    let v = b.call("project", &params);
+    close_session(b, &sess.session_id);
+    ok_outcome("compact", v?, r.format)
+}
+
+/// `hh config explain [--key <name>]` — the layered resolution, rendered
+/// honestly (§7.1; ADR-0169 D7): `session` (flags) > `environment`
+/// (`HH_*`) > `project` > `user` > `packaged`. `project`/`user` carry no
+/// keys at this stage — the CLI reads no config files yet; the layers
+/// are declared `absent`, never invented. A pure surface function: no
+/// session opens, nothing is ledgered.
+fn cmd_config_explain(
+    _b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let r = resolve(p, io, argv, false, false)?;
+    // One entry: `{key, effective, source, layers{session, environment,
+    // project, user, packaged}}` — each layer `{"value":…}` or `absent`.
+    let entry = |key: &str, layers: Vec<(&'static str, Option<Json>)>| -> Json {
+        let mut effective = Json::Null;
+        let mut source = Json::str("absent");
+        let mut layer_obj = BTreeMap::new();
+        for name in ["session", "environment", "project", "user", "packaged"] {
+            let v = layers
+                .iter()
+                .find(|(n, _)| *n == name)
+                .and_then(|(_, v)| v.clone());
+            match &v {
+                Some(val) => {
+                    if source == Json::str("absent") {
+                        effective = val.clone();
+                        source = Json::str(name);
+                    }
+                    layer_obj.insert(name.to_string(), Json::obj([("value", val.clone())]));
+                }
+                None => {
+                    layer_obj.insert(name.to_string(), Json::str("absent"));
+                }
+            }
+        }
+        Json::obj([
+            ("key", Json::str(key)),
+            ("effective", effective),
+            ("source", source),
+            ("layers", Json::Obj(layer_obj)),
+        ])
+    };
+    let preset = resolve_preset(p).map_err(CliError::Invocation)?;
+    let trust_store_env = io.env_lookup("HH_TRUST_STORE").map(Json::str);
+    let all = vec![
+        entry(
+            "kernel_cmd",
+            vec![
+                ("session", p.flag("kernel-cmd").map(Json::str)),
+                ("environment", io.env_lookup("HH_KERNEL_CMD").map(Json::str)),
+                ("packaged", Some(Json::str("hh-kernel"))),
+            ],
+        ),
+        entry(
+            "format",
+            vec![
+                ("session", p.flag("format").map(Json::str)),
+                (
+                    "packaged",
+                    Some(Json::str(if io.tty.stdout {
+                        "human"
+                    } else {
+                        "json|jsonl (stream-derived)"
+                    })),
+                ),
+            ],
+        ),
+        entry(
+            "attendance",
+            vec![
+                (
+                    "session",
+                    p.flag("attendance").map(Json::str).or_else(|| {
+                        p.has("no-input")
+                            .then(|| Json::str("unattended (--no-input)"))
+                    }),
+                ),
+                (
+                    "packaged",
+                    Some(Json::str(
+                        if io.tty.stdin && io.tty.stdout && io.tty.stderr {
+                            "interactive (tty-inferred)"
+                        } else {
+                            "unattended (tty-inferred)"
+                        },
+                    )),
+                ),
+            ],
+        ),
+        entry(
+            "approval_mode",
+            vec![
+                ("session", p.flag("approval-mode").map(Json::str)),
+                (
+                    "session",
+                    preset.map(|pre| {
+                        Json::str(format!("{} (--preset {})", pre.approval_mode, pre.name))
+                    }),
+                ),
+                ("packaged", Some(Json::str("attendance-derived"))),
+            ],
+        ),
+        entry(
+            "preset",
+            vec![(
+                "session",
+                p.flag("preset")
+                    .map(Json::str)
+                    .or_else(|| p.has("bypass").then(|| Json::str("bypass (--bypass)"))),
+            )],
+        ),
+        entry(
+            "trust_store",
+            vec![
+                ("environment", trust_store_env),
+                ("user", Some(Json::str("~/.hh/trust.json"))),
+            ],
+        ),
+        entry(
+            "workspace_trust",
+            vec![(
+                "user",
+                Some(Json::str(crate::trust::workspace_trust(
+                    &std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+                ))),
+            )],
+        ),
+        entry(
+            "principal",
+            vec![
+                ("environment", io.env_lookup("HH_PRINCIPAL").map(Json::str)),
+                ("environment", io.env_lookup("USER").map(Json::str)),
+            ],
+        ),
+        entry(
+            "store_root",
+            vec![("environment", io.env_lookup("HH_STORE_ROOT").map(Json::str))],
+        ),
+        entry(
+            "workspace_root",
+            vec![(
+                "environment",
+                io.env_lookup("HH_WORKSPACE_ROOT").map(Json::str),
+            )],
+        ),
+    ];
+    let entries: Vec<Json> = match p.flag("key") {
+        Some(k) => all
+            .into_iter()
+            .filter(|e| e.get("key").and_then(Json::as_str) == Some(k.as_str()))
+            .collect(),
+        None => all,
+    };
+    ok_outcome(
+        "config_explain",
+        Json::obj([
+            (
+                "precedence",
+                Json::str("session > environment > project > user > packaged"),
+            ),
+            ("keys", Json::Arr(entries)),
+        ]),
+        r.format,
+    )
+}
+
 // ── run start ──────────────────────────────────────────────────────────
 
 /// `run start <definition|ref:…> [prompt|-]` → `open_session{new}` +
@@ -949,13 +1366,23 @@ fn cmd_run_start(
     argv: &[String],
 ) -> Result<(CliOutcome, OutputFormat), CliError> {
     // ── pre-ledger checks (invocation_error, never opens a run) ──────
-    bypass_without_containment(p.has("bypass")).map_err(CliError::Invocation)?;
+    let environment = Json::obj([
+        ("kind", Json::str("connection_info")),
+        (
+            "connection_info",
+            Json::obj([("class", Json::str("local_host"))]),
+        ),
+    ]);
     let definition = definition_input(p).map_err(CliError::Invocation)?;
     missing_budget(
         &definition_document(&definition).unwrap_or(Json::Null),
         p.flag("budget").is_some(),
     )
     .map_err(CliError::Invocation)?;
+    // `SurfacePreset` lowering (ADR-0168 D3): `--preset <name>` (and the
+    // long, completion-hidden `--bypass` spelling) resolve through the
+    // MUST-data table — one `approval_mode` plus the Π narrowing leaves.
+    let preset = resolve_preset(p).map_err(CliError::Invocation)?;
 
     // ── input blocks (D4 origin typing) ──────────────────────────────
     let mut input: Vec<Json> = Vec::new();
@@ -1010,12 +1437,64 @@ fn cmd_run_start(
 
     // ── attendance + format + invocation record ──────────────────────
     let r = resolve(p, io, argv, true, stdin_used)?;
-    let approval_mode = p.flag("approval-mode").or_else(|| {
-        Some(match r.attendance.value {
+    let approval_mode = match (p.flag("approval-mode"), preset) {
+        (Some(am), Some(pre)) if am != pre.approval_mode => {
+            return Err(CliError::Invocation(InvocationError::at(
+                "flag_conflict",
+                "--approval-mode",
+                &format!(
+                    "--preset {} lowers to approval_mode `{}`;                      --approval-mode {am} disagrees",
+                    pre.name, pre.approval_mode
+                ),
+            )));
+        }
+        (Some(am), _) => Some(am),
+        (None, Some(pre)) => Some(pre.approval_mode.to_string()),
+        (None, None) => Some(match r.attendance.value {
             AttendanceValue::Interactive => "tiered".to_string(),
             _ => "unattended_deny".to_string(),
-        })
-    });
+        }),
+    };
+    // `BypassWithoutContainment` — fires on the *effective* mode, so the
+    // `--preset bypass` lowering and a bare `--approval-mode bypass`
+    // meet the same gate (the kernel re-checks at `open_session`; this
+    // is the pre-ledger UX gate, never the authority — §7.1 §2.4).
+    bypass_without_containment(approval_mode.as_deref() == Some("bypass"), &environment)
+        .map_err(CliError::Invocation)?;
+    // A preset whose deny leaves shadow a declared host component warns,
+    // naming it (ADR-0168 D3 warning row): a `domain`-declaring
+    // `--capability` record under a deny leaf is unreachable by
+    // construction.
+    if let Some(pre) = preset {
+        for cap in p
+            .flag_all("capability")
+            .iter()
+            .filter_map(|s| hh_wire::json::parse(s).ok())
+        {
+            let domain = cap.get("domain").and_then(Json::as_str).unwrap_or("");
+            let name = cap
+                .get("capability_id")
+                .and_then(Json::as_str)
+                .unwrap_or("<unnamed>");
+            if !domain.is_empty()
+                && pre.narrowing_leaves.iter().any(|l| {
+                    l.domain == domain && l.disposition == crate::presets::LeafDisposition::Deny
+                })
+            {
+                let _ = writeln!(
+                    io.err,
+                    "warning: preset `{}` shadows host component `{name}`                      (domain `{domain}` denied by narrowing leaf)",
+                    pre.name
+                );
+            }
+        }
+    }
+    // `workspace_trust` — the claim read from the H5 trust store,
+    // carried verbatim onto the manifest (ADR-0168 D7); never a flag,
+    // never inferred — absent ⇒ `unknown` (OQ-387).
+    let workspace_trust = crate::trust::workspace_trust(
+        &std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")),
+    );
 
     // ── open_session{new} → submit → attend ──────────────────────────
     let mut spec = Json::obj([
@@ -1025,16 +1504,7 @@ fn cmd_run_start(
             "overrides",
             Json::Arr(overrides.iter().map(|o| o.to_json()).collect()),
         ),
-        (
-            "environment",
-            Json::obj([
-                ("kind", Json::str("connection_info")),
-                (
-                    "connection_info",
-                    Json::obj([("class", Json::str("local_host"))]),
-                ),
-            ]),
-        ),
+        ("environment", environment.clone()),
         ("attendance", r.attendance.to_json()),
         (
             "supplies",
@@ -1052,6 +1522,17 @@ fn cmd_run_start(
         }
         if let Some(am) = &approval_mode {
             m.insert("approval_mode".into(), Json::str(am.clone()));
+        }
+        if let Some(pre) = preset {
+            if !pre.narrowing_leaves.is_empty() {
+                m.insert(
+                    "narrowing_leaves".into(),
+                    Json::Arr(pre.narrowing_leaves.iter().map(|l| l.to_json()).collect()),
+                );
+            }
+        }
+        if workspace_trust != "unknown" {
+            m.insert("workspace_trust".into(), Json::str(workspace_trust));
         }
     }
     let sess_raw = b.call(
@@ -1099,6 +1580,44 @@ fn cmd_run_start(
         close_session(b, &sess.session_id);
     }
     Ok((outcome, r.format))
+}
+
+/// `resolve_preset(parsed) → Option<&'static SurfacePreset>` — the
+/// `SurfacePreset` table lookup (ADR-0168 D3): `--preset <name>` selects
+/// a row; the long, completion-hidden `--bypass` switch is the `bypass`
+/// row's second spelling. Both spellings naming different rows — or an
+/// unknown name — is `flag_conflict`/`unknown_preset`, never a coercion.
+fn resolve_preset(
+    p: &Parsed,
+) -> Result<Option<&'static crate::presets::SurfacePreset>, InvocationError> {
+    let named = p
+        .flag("preset")
+        .map(|n| {
+            crate::presets::preset(&n).ok_or_else(|| {
+                InvocationError::at(
+                    "unknown_preset",
+                    "--preset",
+                    &format!(
+                        "unknown preset `{n}`; the table admits: {}",
+                        crate::presets::preset_names().join(", ")
+                    ),
+                )
+            })
+        })
+        .transpose()?;
+    match (named, p.has("bypass")) {
+        (Some(pre), true) if pre.name != "bypass" => Err(InvocationError::at(
+            "flag_conflict",
+            "--bypass",
+            &format!(
+                "--bypass is the `bypass` preset; --preset {} disagrees",
+                pre.name
+            ),
+        )),
+        (Some(pre), _) => Ok(Some(pre)),
+        (None, true) => Ok(crate::presets::preset("bypass")),
+        (None, false) => Ok(None),
+    }
 }
 
 fn definition_input(p: &Parsed) -> Result<Json, InvocationError> {
@@ -1280,13 +1799,13 @@ fn cmd_run_inspect(
         .or_else(|| p.positional.get(1).cloned())
         .unwrap_or_else(|| "run_summary".into());
     let kind = match view.as_str() {
-        "context_view" | "run_summary" | "checkpoint" => view.as_str(),
+        "context_view" | "run_summary" | "checkpoint" | "compact" => view.as_str(),
         other => {
             return Err(inv(
                 "unknown_view",
                 "--view",
                 &format!(
-                    "unknown inspect view {other:?}; expected context_view|run_summary|checkpoint"
+                    "unknown inspect view {other:?}; expected context_view|run_summary|checkpoint|compact"
                 ),
             ))
         }
@@ -1492,6 +2011,10 @@ fn cmd_run_amend(
     let value = if value_str.starts_with('{') {
         hh_wire::json::parse(&value_str)
             .map_err(|e| inv("bad_amend_value", "<value>", &e.to_string()))?
+    } else if target == "attendance" || target == "approval_mode" {
+        // A bare mode spelling — `run amend <run> attendance interactive`.
+        // The kernel's closed-set check refuses unknown spellings.
+        Json::str(value_str.clone())
     } else {
         let mut dims = BTreeMap::new();
         for part in value_str.split(',') {

@@ -146,6 +146,12 @@ pub(crate) struct SessionState {
     /// approval mint's `requested ⊓ authority_cap` ceiling leg; computed at
     /// `open` from the sealed document (never re-resolved at respond).
     pub authority_caps: Vec<hh_monitor::mint::AuthorityCap>,
+    /// The declared Π narrowing-leaf ids (the surface preset's —
+    /// ADR-0168 D3): folded into `policy_fingerprint` at every lease
+    /// touch so a leaf change revokes by key construction (ADR-0071 D1).
+    /// Empty on resume/attach — the manifest's `narrowing_leaves` member
+    /// is the durable record a rebuild re-reads.
+    pub narrowing_leaf_ids: Vec<String>,
     pub pendings: BTreeMap<String, PendingAsk>,
     pub decided: BTreeMap<String, Json>,
     /// `(subscription_id, occurrence_key)` pairs already submitted as
@@ -492,6 +498,9 @@ impl EmbedService {
             "project" => self.project(&req.params),
             "account" => self.account(&req.params),
             "describe" => self.describe(&req.params),
+            "env.snapshot" => self.env_snapshot(&req.params),
+            "env.derive" => self.env_derive(&req.params),
+            "env.set_phase" => self.env_set_phase(&req.params),
             "list_leases" => self.list_leases(&req.params),
             "lineage" => self.lineage(&req.params),
             "get_artifact" => self.get_artifact(&req.params),

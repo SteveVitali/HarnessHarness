@@ -2653,6 +2653,9 @@ impl Store {
                     kind: kind.as_str(),
                 });
             }
+            // `compact` folds in the ledger — a pure WAL fold shipped
+            // with its declared loss report (ADR-0169 D3; S2.10).
+            ViewKind::Compact => views::compact(run_id, &state.events, until),
         })
     }
 

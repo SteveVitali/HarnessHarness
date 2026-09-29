@@ -213,7 +213,16 @@ impl EmbedService {
 
         inject::refuse_secrets(params)?;
         let p = RespondPermissionParams::from_json(params)?;
-        let (run_id, lease, pending, manifest_ref, policy_mode, active_turn, authority_caps) = {
+        let (
+            run_id,
+            lease,
+            pending,
+            manifest_ref,
+            policy_mode,
+            active_turn,
+            authority_caps,
+            narrowing_leaf_ids,
+        ) = {
             let s = self.writer_session(&p.session_id)?;
             if let Some(hit) = s.idem.get(&p.idempotency_key) {
                 return Ok(hit.clone());
@@ -247,6 +256,7 @@ impl EmbedService {
                 s.realized.policy_mode.clone(),
                 s.active_turn.clone(),
                 s.authority_caps.clone(),
+                s.narrowing_leaf_ids.clone(),
             )
         };
         // Fold the durable prefix into the approval fold — the response's
@@ -319,7 +329,7 @@ impl EmbedService {
             policy_fingerprint: hh_monitor::approval::policy_fingerprint(
                 &manifest_ref,
                 &policy_mode,
-                &[],
+                &narrowing_leaf_ids,
             ),
             scope_ref: run_id.clone(),
             risk_ceiling: asked_risk.unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN),
@@ -539,11 +549,11 @@ impl EmbedService {
     /// driver's hard ceiling (`amend_budget_ceiling`), and wakes the
     /// parked escalation (`follow_up` → the loop re-proposes under the
     /// new `remaining`). I-1 applies: a *loosening* amendment requires
-    /// the run's `interactive` attendance or a caller `attestation`;
-    /// anything less is `AuthorityWideningRequiresHuman`. A tightening
-    /// amendment is admitted unconditionally. `amend{approval_mode |
-    /// attendance}` answers `Refused{stage_pending}` (C1/Stage 2 —
-    /// ADR-0168(e)).
+    /// the run's `interactive` effective attendance or a caller
+    /// `attestation`; anything less is `AuthorityWideningRequiresHuman`.
+    /// A tightening amendment is admitted unconditionally.
+    /// `amend{approval_mode | attendance}` lands at Stage 2 via
+    /// `amend_policy` (ADR-0168(e)).
     pub(crate) fn amend(&mut self, params: &Json) -> Result<Json, EmbedError> {
         inject::refuse_handle_keys(params, "amend")?;
         inject::refuse_secrets(params)?;
@@ -560,9 +570,7 @@ impl EmbedService {
             }
         }
         if p.target != "budget" {
-            return Err(EmbedError::Refused {
-                reason: "stage_pending".to_string(),
-            });
+            return self.amend_policy(&p);
         }
         let dims: Vec<(String, i64)> = match p.value.get("dimensions") {
             Some(Json::Obj(m)) => m
@@ -599,8 +607,18 @@ impl EmbedService {
                 s.realized.clone(),
             )
         };
-        let interactive =
-            manifest.attendance.0 == hh_ledger::manifest::AttendanceValue::Interactive;
+        let interactive = {
+            // I-1 asks whether a human is at the terminal *now* — the
+            // amending invocation's own declaration when it carries one
+            // (a resumed session inherits the run's open-time record,
+            // which says nothing about this call's channel), else the
+            // session's recorded attendance.
+            let s = self.session(&p.session_id)?;
+            match &p.invocation {
+                Some(inv) => inv.attendance.value == "interactive",
+                None => s.realized.attendance.value == "interactive",
+            }
+        };
         let budget_id = manifest.budget.clone().unwrap_or_else(|| "b-1".to_string());
         for (dim, new_cap) in &dims {
             // I-1 — a loosening amendment widens spend: human at the
@@ -680,6 +698,204 @@ impl EmbedService {
                 .clone()
                 .unwrap_or_default(),
             &realized,
+            head.seq as i64,
+        );
+        if let Some(k) = &p.idempotency_key {
+            self.session_mut(&p.session_id)?
+                .idem
+                .insert(k.clone(), out.clone());
+        }
+        Ok(out)
+    }
+
+    /// `amend{attendance | approval_mode}` — the remaining ADR-0216/OQ-468
+    /// targets (ADR-0168 D1/D3): one ledgered `control.<target>.amended`
+    /// row per amendment, the session's realized settings updated so the
+    /// next `policy_fingerprint` derivation revokes leases by key
+    /// construction (ADR-0071 D1), plus durable `lease.revoked` rows over
+    /// every live lease — an attendance or mode change revokes
+    /// explicitly, never silently (ADR-0168 D1's "like any
+    /// policy-fingerprint change").
+    ///
+    /// Widening rule (I-1's shape): moving *toward* a human/auto
+    /// channel — `→ interactive` attendance, or an `approval_mode` whose
+    /// auto-resolution breadth rank rises — requires a caller
+    /// `attestation` or currently-interactive effective attendance;
+    /// tightening is admitted unconditionally. `approval_mode = bypass`
+    /// additionally re-checks the recorded
+    /// `containment.enforcement_evidence` — a bypass amendment into a
+    /// binding without it is `Refused{bypass_without_containment}`.
+    fn amend_policy(&mut self, p: &AmendParams) -> Result<Json, EmbedError> {
+        use hh_monitor::approval::ApprovalState;
+        let (run_id, lease, manifest, old_attendance, old_mode) = {
+            let s = self.session(&p.session_id)?;
+            (
+                s.run_id.clone(),
+                s.lease.clone().ok_or(EmbedError::Refused {
+                    reason: "session_is_read_only".to_string(),
+                })?,
+                self.store.manifest(&s.run_id).map_err(ledger_err)?.clone(),
+                s.realized.attendance.value.clone(),
+                s.realized.policy_mode.clone(),
+            )
+        };
+        let interactive_now = match &p.invocation {
+            Some(inv) => inv.attendance.value == "interactive",
+            None => old_attendance == "interactive",
+        };
+        let (class, old_v, new_v) = match p.target.as_str() {
+            "attendance" => {
+                let new = p
+                    .value
+                    .get("value")
+                    .and_then(Json::as_str)
+                    .or_else(|| p.value.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if !matches!(new.as_str(), "interactive" | "async" | "unattended") {
+                    return Err(EmbedError::SchemaViolation {
+                        path: "amend/value".to_string(),
+                        code: "bad_attendance_value".to_string(),
+                    });
+                }
+                // Widening ⇒ a human channel appears where Π-12 denied —
+                // attestation only (the run's own attendance is the very
+                // thing being widened; it cannot self-certify).
+                let widening = new == "interactive" && !interactive_now;
+                if widening && p.attestation.is_none() {
+                    return Err(EmbedError::AuthorityWideningRequiresHuman {
+                        detail: "amend(attendance) → interactive widens the approval                                  channel and requires a human attestation"
+                            .to_string(),
+                    });
+                }
+                ("control.attendance.amended", old_attendance, new)
+            }
+            "approval_mode" => {
+                let new = p
+                    .value
+                    .get("mode")
+                    .and_then(Json::as_str)
+                    .or_else(|| p.value.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if !AMENDABLE_APPROVAL_MODES.contains(&new.as_str()) {
+                    return Err(EmbedError::SchemaViolation {
+                        path: "amend/value".to_string(),
+                        code: "bad_approval_mode".to_string(),
+                    });
+                }
+                let widening = approval_mode_rank(&new) > approval_mode_rank(&old_mode);
+                if widening && !interactive_now && p.attestation.is_none() {
+                    return Err(EmbedError::AuthorityWideningRequiresHuman {
+                        detail: format!(
+                            "amend(approval_mode) {old_mode} → {new} widens auto-resolution                              without interactive attendance or attestation"
+                        ),
+                    });
+                }
+                // `bypass` re-checks the recorded enforcement evidence —
+                // the manifest's `containment.enforcement_evidence` member
+                // is the durable verdict `open` computed (ADR-0168 D3).
+                if new == "bypass" {
+                    // The durable relied-groups verdict `open` recorded
+                    // (`containment.bypass_admissible`) — the same fold
+                    // the pre-open gate ran, never a re-derived guess.
+                    let admissible = manifest
+                        .extra
+                        .get("containment")
+                        .and_then(|c| c.get("bypass_admissible"))
+                        .and_then(|v| match v {
+                            Json::Bool(b) => Some(*b),
+                            _ => None,
+                        })
+                        .unwrap_or(false);
+                    if !admissible {
+                        return Err(EmbedError::Refused {
+                            reason: "bypass_without_containment".to_string(),
+                        });
+                    }
+                }
+                ("control.approval_mode.amended", old_mode, new)
+            }
+            _ => {
+                return Err(EmbedError::SchemaViolation {
+                    path: "amend/target".to_string(),
+                    code: "unknown_amend_target".to_string(),
+                })
+            }
+        };
+        // The amendment row — `old`/`new`/`authority` mirroring
+        // `control.budget.amended`'s shape.
+        self.mint(
+            &run_id,
+            &lease,
+            class,
+            Json::obj([
+                ("old", Json::str(old_v.clone())),
+                ("new", Json::str(new_v.clone())),
+                ("authority", Json::str("principal")),
+                ("attested", Json::Bool(p.attestation.is_some())),
+            ]),
+        )?;
+        // Revoke every live lease — a policy change revokes by durable
+        // row, the same class the fingerprint-miss path uses
+        // (ADR-0168 D1; the projector's `key_hash`/`revoked_at` fold).
+        {
+            let events = self.store.events(&run_id).map_err(ledger_err)?.to_vec();
+            let head_seq = events.last().map(|e| e.seq).unwrap_or(0);
+            let approvals = ApprovalState::project(&events, head_seq);
+            let now = self.store.now_ms();
+            for (key, l) in &approvals.leases {
+                if l.revoked_at.is_none() {
+                    self.mint(
+                        &run_id,
+                        &lease,
+                        "security.permission.lease.revoked",
+                        Json::obj([
+                            ("lease_id", Json::str(l.lease_id.clone())),
+                            ("key_hash", Json::str(key.clone())),
+                            ("revoked_at", Json::Int(now as i64)),
+                            ("reason", Json::str("policy_change")),
+                        ]),
+                    )?;
+                }
+            }
+        }
+        // Apply to the session's realized settings — the next
+        // `policy_fingerprint` derivation reads the new legs.
+        {
+            let s = self.session_mut(&p.session_id)?;
+            match p.target.as_str() {
+                "attendance" => {
+                    s.realized.attendance = hh_embed_schema::types::AttendanceDeclaration {
+                        value: new_v.clone(),
+                        source: "declared".to_string(),
+                    };
+                }
+                _ => {
+                    s.realized.policy_mode = new_v.clone();
+                }
+            }
+        }
+        // `lifecycle.surface.invoked` — an amendment is a run-amending
+        // surface invocation.
+        if let Some(inv) = &p.invocation {
+            self.mint(&run_id, &lease, "lifecycle.surface.invoked", inv.to_json())?;
+        }
+        let head = self.store.head(&run_id).map_err(ledger_err)?;
+        // The returned session reflects the *amended* settings — the
+        // pre-amend snapshot would misreport `policy_mode`/`attendance`.
+        let amended_realized = self.session(&p.session_id)?.realized.clone();
+        let out = session_json(
+            &p.session_id,
+            &run_id,
+            &p.session_id,
+            &sess_manifest_ref(&manifest),
+            &manifest.configuration_id.clone().unwrap_or_default(),
+            &manifest
+                .configuration_version_id
+                .clone()
+                .unwrap_or_default(),
+            &amended_realized,
             head.seq as i64,
         );
         if let Some(k) = &p.idempotency_key {
@@ -927,6 +1143,7 @@ impl EmbedService {
                         .unwrap_or_default()
                 }
             },
+            narrowing_leaf_ids: crate::open::manifest_leaf_ids(&child),
             pendings: Default::default(),
             decided: Default::default(),
             delivered_wokens: Default::default(),
@@ -1326,6 +1543,7 @@ impl EmbedService {
         let kind = match p.view_kind.as_str() {
             "context_view" => ViewKind::ContextView,
             "run_summary" => ViewKind::RunSummary,
+            "compact" => ViewKind::Compact,
             _ => ViewKind::Checkpoint,
         };
         let v = self
@@ -1509,7 +1727,38 @@ impl EmbedService {
 
 /// `{session_id}` — the shared shape of `head`/`describe`/`list_leases`
 /// params (declared `*Params` records in the schema; the one field).
-fn session_id_param(params: &Json, path: &str) -> Result<String, EmbedError> {
+/// `AMENDABLE_APPROVAL_MODES` — the closed set `amend(approval_mode)`
+/// admits (§7.1 §2.4's mode spellings; `sync`/`async` are transport
+/// shapes, not policy modes).
+const AMENDABLE_APPROVAL_MODES: &[&str] = &[
+    "unattended_deny",
+    "manual",
+    "observe_only",
+    "pre_approved_only",
+    "unattended_defer",
+    "tiered",
+    "auto_review",
+    "bypass",
+];
+
+/// The auto-resolution breadth order for the widening check —
+/// `unattended_deny` admits nothing, `manual`/`observe_only`/
+/// `unattended_defer` route every ask to a human (or defer it),
+/// `pre_approved_only` admits sealed pre-authorizations, `tiered`/
+/// `auto_review` auto-resolve the non-never-auto floor, `bypass`
+/// auto-resolves everything outside never-auto.
+fn approval_mode_rank(mode: &str) -> u8 {
+    match mode {
+        "unattended_deny" => 0,
+        "manual" | "observe_only" | "unattended_defer" | "async" => 1,
+        "pre_approved_only" => 2,
+        "tiered" | "auto_review" => 3,
+        "bypass" => 4,
+        _ => 1,
+    }
+}
+
+pub(crate) fn session_id_param(params: &Json, path: &str) -> Result<String, EmbedError> {
     let mut s = StrictObj::new(params, path)?;
     let id = s.req_str("session_id")?;
     s.finish()?;

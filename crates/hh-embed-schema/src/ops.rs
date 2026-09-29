@@ -617,9 +617,23 @@ pub fn registry() -> Vec<OpSpec> {
         lab("kernel.bundle", "M", "json", "json"),
         lab("kernel.check_completeness", "M", "json", "json"),
         lab("kernel.reproduce", "M", "json", "json"),
-        lab("env.derive", "M", "json", "json"),
-        lab("env.snapshot", "M", "json", "json"),
-        lab("env.set_phase", "M", "json", "json"),
+        // The Group M environment ops (ADR-0137/0138; ADR-0177 D7) —
+        // implemented at S2.10: `env.snapshot` (fs_tree, `instrument`-
+        // charged), `env.derive` (fresh_from_image/fork_snapshot/
+        // scoped_subtree), `env.set_phase` (the sealed phase schedule —
+        // fail-closed when undeclared). `serves_measurement` gated.
+        OpSpec {
+            implemented: true,
+            ..lab("env.derive", "M", "json", "json")
+        },
+        OpSpec {
+            implemented: true,
+            ..lab("env.snapshot", "M", "json", "json")
+        },
+        OpSpec {
+            implemented: true,
+            ..lab("env.set_phase", "M", "json", "json")
+        },
         // ── Group L — Lab/design-time (ADR-0183; records-in/records-out)
         lab("lab.assembly.assemble", "L", "json", "json"),
         lab("lab.assembly.plan", "L", "json", "json"),

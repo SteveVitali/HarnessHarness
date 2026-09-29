@@ -156,6 +156,7 @@ impl EnvDriver {
             heal_count: 0,
             image,
             applied_event_ref: None,
+            phase: None,
             created_ms: now,
         };
         let declared = EventMinter::new(store, &self.run_id).mint(
@@ -857,6 +858,85 @@ impl EnvDriver {
         Ok(child)
     }
 
+    /// `set_phase(env_handle_id, phase)` — §05a/ADR-0142: applies the
+    /// phase schedule sealed with the handle's containment policy.
+    /// Refused unless (a) the handle declares `per_phase_network_policy`
+    /// `supported` AND (b) the policy's `ext["phase_schedule"][phase]`
+    /// names a `net_mode` — both absent ⇒ `Refused`-class
+    /// `phase_schedule_undeclared`, never a silent policy swap (CF-318).
+    /// On success the policy's `net.mode` becomes the scheduled mode, the
+    /// handle's `phase` records it, and `action.environment.phase.changed`
+    /// lands durable.
+    pub fn set_phase(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        phase: &str,
+    ) -> Result<(), EnvError> {
+        if !matches!(phase, "setup" | "agent" | "verify") {
+            return Err(EnvError::Unsupported {
+                capability: "set_phase.phase",
+                detail: format!("phase must be setup|agent|verify, not {phase}"),
+            });
+        }
+        let h = self
+            .handles
+            .get_mut(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?;
+        h.verify_environment()?;
+        if h.capabilities.per_phase_network_policy != crate::handle::Tri::Supported {
+            return Err(EnvError::Unsupported {
+                capability: "per_phase_network_policy",
+                detail: "set_phase refused: the handle does not declare                          per_phase_network_policy"
+                    .to_string(),
+            });
+        }
+        // The sealed schedule lives on the policy's `ext` — a phase the
+        // schedule does not name is the same fail-closed refusal.
+        let policy = match &mut h.containment {
+            hh_containment::attach::PolicySlot::Inline(p) => &mut **p,
+            hh_containment::attach::PolicySlot::ResolvedRef { policy, .. } => &mut **policy,
+        };
+        let net_mode = policy
+            .ext
+            .get("phase_schedule")
+            .and_then(|s| s.get(phase))
+            .and_then(|e| e.get("net_mode"))
+            .and_then(Json::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| EnvError::Unsupported {
+                capability: "phase_schedule",
+                detail: format!("no sealed phase_schedule entry for `{phase}`"),
+            })?;
+        policy.net.mode = match net_mode.as_str() {
+            "none" => hh_containment::policy::NetMode::None,
+            "mediated" => hh_containment::policy::NetMode::Mediated,
+            "public" => hh_containment::policy::NetMode::Public,
+            other => {
+                return Err(EnvError::Unsupported {
+                    capability: "phase_schedule.net_mode",
+                    detail: format!("unknown net_mode {other} in phase_schedule"),
+                })
+            }
+        };
+        policy.compute_ids();
+        h.phase = Some(phase.to_string());
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.phase.changed",
+            Json::obj([
+                ("env_handle_id", Json::str(h.env_handle_id.clone())),
+                ("phase", Json::str(phase.to_string())),
+                ("net_mode", Json::str(net_mode.to_string())),
+            ]),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok(())
+    }
+
     /// `rebind_credentials_for_fork(store, lease, broker, parent_id, child_id)`
     /// — LT-09's fork half (S2.4; ADR-0266 D4): after `derive(ForkSnapshot)`,
     /// the parent's live bindings are *re-bound* onto the child's env handle
@@ -940,6 +1020,7 @@ impl EnvDriver {
             heal_count: 0,
             image: parent.image.clone(),
             applied_event_ref: None,
+            phase: None,
             created_ms: now,
         };
         let declared = EventMinter::new(store, &self.run_id)
@@ -975,6 +1056,21 @@ impl EnvDriver {
         store: &mut Store,
         lease: &Lease,
         env_handle_id: &str,
+    ) -> Result<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot), EnvError> {
+        self.fs_tree_snapshot_as(store, lease, env_handle_id, TakenBy::Subject)
+    }
+
+    /// `fs_tree_snapshot_as(…, taken_by)` — the charged-to leg of the
+    /// `SnapshotRecord` (ADR-0138 §4): the run's own snapshots are
+    /// `subject`; a Group M `env.snapshot` is `instrument`-charged
+    /// (ADR-0177 D7 — the Lab/measurement caller's budget, never the
+    /// subject's).
+    pub fn fs_tree_snapshot_as(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        taken_by: TakenBy,
     ) -> Result<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot), EnvError> {
         let (roots, image_base) = {
             let h = self
@@ -1020,7 +1116,7 @@ impl EnvDriver {
             content: tree.manifest_json(),
             roots_covered: roots,
             quiesced: false,
-            taken_by: TakenBy::Subject,
+            taken_by,
             size_bytes: tree.size_bytes,
             expires_at_ms: None,
         };

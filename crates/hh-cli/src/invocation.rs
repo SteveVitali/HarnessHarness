@@ -266,16 +266,22 @@ pub fn missing_budget(definition: &Json, flag_budget: bool) -> Result<(), Invoca
 
 /// `BypassWithoutContainment` — the bypass preset is accepted only when
 /// the manifest can record `containment.enforcement_evidence = enforced`
-/// from the environment handle (ADR-0168 D3). At Stage 1 no environment
-/// binding mints that evidence, so any bypass request is refused
-/// pre-ledger.
-pub fn bypass_without_containment(bypass: bool) -> Result<(), InvocationError> {
-    if bypass {
+/// from the environment handle (ADR-0168 D3; AC-R-2.11.1-7 — refused
+/// before any run opens). At Stage 2 the kernel-provisioned `local_host`
+/// binding supplies that evidence (the reference backend's attach report
+/// mints probed/reported evidence for every relied-on field group —
+/// [`crate::presets::environment_supplies_containment_evidence`]); every
+/// other binding — a `ref` the surface cannot inspect, an unknown class —
+/// fails closed here, and `open_session` re-checks kernel-side (the
+/// surface gate is UX, never the authority).
+pub fn bypass_without_containment(bypass: bool, environment: &Json) -> Result<(), InvocationError> {
+    if bypass && !crate::presets::environment_supplies_containment_evidence(environment) {
         Err(InvocationError::at(
             "bypass_without_containment",
             "--bypass",
-            "bypass requires containment.enforcement_evidence = enforced; \
-             no Stage-1 environment binding supplies it",
+            "bypass requires an environment binding whose containment carries \
+             kernel-minted enforcement_evidence (local_host); the requested \
+             binding supplies none",
         ))
     } else {
         Ok(())

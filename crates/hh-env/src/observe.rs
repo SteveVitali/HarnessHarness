@@ -282,6 +282,17 @@ impl EffectOutcome {
             EffectOutcome::Unknown => "unknown",
         }
     }
+
+    /// Parse the canonical spelling — `None` on any other input.
+    pub fn parse(s: &str) -> Option<EffectOutcome> {
+        match s {
+            "applied" => Some(EffectOutcome::Applied),
+            "not_applied" => Some(EffectOutcome::NotApplied),
+            "partial" => Some(EffectOutcome::Partial),
+            "unknown" => Some(EffectOutcome::Unknown),
+            _ => None,
+        }
+    }
 }
 
 /// `Observation` — the observed outcome the kernel settles (the `observed`
@@ -347,5 +358,37 @@ impl Observation {
             pairs.push(("admission", Json::str(a.kind.as_str())));
         }
         Json::obj(pairs)
+    }
+
+    /// `to_json`'s inverse for the shapes the K4 tool-result cache serves
+    /// (R-2.3.4¹; S2.10): `status = ok` only (errored results are never
+    /// deposited), and `admission` must be absent — a flow-contract
+    /// result's admission record is not cache-rebuildable at this slice, so
+    /// its presence refuses the decode (never silently dropped; the caller
+    /// reports `refused{malformed_entry}` — T-LCD-07).
+    pub fn from_json(j: &Json) -> Option<Observation> {
+        let outcome = EffectOutcome::parse(j.get("outcome")?.as_str()?)?;
+        match j.get("status")? {
+            Json::Str(s) if s == "ok" => {}
+            _ => return None,
+        }
+        let exit_status = match j.get("exit_status")? {
+            Json::Null => None,
+            Json::Int(i) => Some(*i),
+            _ => return None,
+        };
+        let manifest_ref = j.get("capture_manifest_ref")?.as_str()?.to_string();
+        let completeness = crate::capture::Completeness::from_json(j.get("completeness")?)?;
+        if j.get("admission").is_some() {
+            return None;
+        }
+        Some(Observation {
+            outcome,
+            status: ObservedStatus::Ok,
+            exit_status,
+            manifest_ref,
+            completeness,
+            admission: None,
+        })
     }
 }

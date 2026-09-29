@@ -486,7 +486,12 @@ fn attendance_plus_no_input_is_flag_conflict() {
 // ── pre-ledger refusals ─────────────────────────────────────────────────
 
 #[test]
-fn bypass_without_containment_is_invocation_error() {
+fn bypass_over_local_host_is_admitted_with_evidence() {
+    // S2.10: `--bypass` over the kernel-provisioned `local_host` binding
+    // is *admitted* — the EP2 reference backend mints probed
+    // enforcement evidence for every relied-on group, recorded on the
+    // manifest (`containment.enforcement_evidence`). The pre-ledger
+    // refusal now applies only to bindings the surface cannot inspect.
     let mut b = ServiceBoundary::new("bypass");
     let def = write_definition("bypass");
     let (class, out, _err) = hh(
@@ -496,8 +501,19 @@ fn bypass_without_containment_is_invocation_error() {
         None,
         &[],
     );
-    assert_eq!(class, ExitClass::InvocationError);
-    assert!(out.contains("bypass_without_containment"), "{out}");
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let run_id = result_run_id(&out);
+    let created = created_payload(&mut b, &run_id);
+    let ev = created
+        .get("containment")
+        .and_then(|c| c.get("enforcement_evidence"))
+        .cloned()
+        .unwrap_or(Json::Null);
+    assert!(
+        matches!(ev, Json::Obj(_)),
+        "manifest must record enforcement_evidence: {}",
+        created.to_canonical_string()
+    );
 }
 
 #[test]
@@ -1996,4 +2012,588 @@ fn ac3_jsonl_stream_minus_result_equals_run_events() {
         replay_events.len()
     );
     assert!(!event_lines.is_empty());
+}
+
+// ── S2.10 — SurfacePreset, workspace_trust, env *, config explain,
+// compact, amend(attendance|approval_mode) ───────────────────────────
+
+/// The `result` record's `payload` member.
+fn result_payload(stdout: &str) -> Json {
+    let line = stdout.trim().lines().last().unwrap_or("");
+    let line = line.strip_prefix("result: ").unwrap_or(line);
+    hh_wire::json::parse(line)
+        .unwrap_or(Json::Null)
+        .get("payload")
+        .cloned()
+        .unwrap_or(Json::Null)
+}
+
+/// `attach` + `describe` + `close` — the session's realized settings.
+fn describe(b: &mut dyn Boundary, run_id: &str) -> Json {
+    let sess = b
+        .call(
+            "open_session",
+            &Json::obj([
+                (
+                    "spec",
+                    Json::obj([
+                        ("kind", Json::str("attach")),
+                        ("run_id", Json::str(run_id)),
+                        ("read_only", Json::Bool(true)),
+                    ]),
+                ),
+                ("idempotency_key", Json::str("test:attach")),
+            ]),
+        )
+        .unwrap();
+    let sid = sess
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let d = b
+        .call(
+            "describe",
+            &Json::obj([("session_id", Json::str(sid.clone()))]),
+        )
+        .unwrap();
+    let _ = b.call(
+        "close",
+        &Json::obj([
+            ("session_id", Json::str(sid)),
+            ("reason", Json::str("done")),
+        ]),
+    );
+    d
+}
+
+/// The durable `lifecycle.run.created` payload — the manifest record.
+fn created_payload(b: &mut dyn Boundary, run_id: &str) -> Json {
+    let (class, out, _) = hh(b, &["run", "events", run_id], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    out.lines()
+        .filter_map(|l| hh_wire::json::parse(l).ok())
+        .find(|e| e.get("class").and_then(Json::as_str) == Some("lifecycle.run.created"))
+        .and_then(|e| e.get("payload").cloned())
+        .unwrap_or(Json::Null)
+}
+
+/// Park a run on the `model_calls=0` escalation — EOF on the prompt
+/// detaches with the writer session live (the takeover test's recipe).
+fn park_run(b: &mut dyn Boundary, tag: &str) -> String {
+    let def = write_definition(tag);
+    let (_class, out, _err) = hh(
+        b,
+        &["run", "start", &def, "hi", "--budget", "model_calls=0"],
+        ALL_TTY,
+        None,
+        &[],
+    );
+    let run_id = result_run_id(&out);
+    assert!(!run_id.is_empty(), "{out}");
+    run_id
+}
+
+#[test]
+fn preset_plan_lowers_to_pre_approved_only() {
+    let mut b = ServiceBoundary::new("preset-plan");
+    let def = write_definition("preset-plan");
+    let (class, out, _err) = hh(
+        &mut b,
+        &["run", "start", &def, "hi", "--preset", "plan"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let run_id = result_run_id(&out);
+    let d = describe(&mut b, &run_id);
+    assert_eq!(
+        d.get("realized")
+            .and_then(|r| r.get("policy_mode"))
+            .and_then(Json::as_str),
+        Some("pre_approved_only"),
+        "{}",
+        d.to_canonical_string()
+    );
+    // The manifest records the narrowing leaves the preset carried.
+    let created = created_payload(&mut b, &run_id);
+    let leaves = created.get("narrowing_leaves");
+    assert!(
+        leaves.is_some(),
+        "narrowing_leaves absent: {}",
+        created.to_canonical_string()
+    );
+}
+
+#[test]
+fn preset_bypass_meets_the_same_gate() {
+    let mut b = ServiceBoundary::new("preset-bypass");
+    let def = write_definition("preset-bypass");
+    let (class, out, _err) = hh(
+        &mut b,
+        &["run", "start", &def, "hi", "--preset", "bypass"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    // `--preset bypass` lowers to approval_mode `bypass` and meets the
+    // identical gate — admitted over local_host.
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let run_id = result_run_id(&out);
+    let d = describe(&mut b, &run_id);
+    assert_eq!(
+        d.get("realized")
+            .and_then(|r| r.get("policy_mode"))
+            .and_then(Json::as_str),
+        Some("bypass"),
+        "{}",
+        d.to_canonical_string()
+    );
+}
+
+#[test]
+fn preset_and_flag_conflict_is_invocation_error() {
+    let mut b = ServiceBoundary::new("preset-conflict");
+    let def = write_definition("preset-conflict");
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "run",
+            "start",
+            &def,
+            "hi",
+            "--preset",
+            "plan",
+            "--approval-mode",
+            "tiered",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::InvocationError, "{out}");
+    assert!(out.contains("flag_conflict"), "{out}");
+}
+
+// `HH_TRUST_STORE` is process-global; the two tests that set it must not
+// interleave or one test's store bleeds into the other's run.start.
+static TRUST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[test]
+fn workspace_trust_claim_lands_on_the_manifest() {
+    let _guard = TRUST_ENV_LOCK.lock().unwrap();
+    let mut b = ServiceBoundary::new("trust");
+    let dir = test_dir("trust-store");
+    std::fs::create_dir_all(&dir).unwrap();
+    let store = dir.join("trust.json");
+    let cwd = std::env::current_dir()
+        .unwrap()
+        .canonicalize()
+        .unwrap()
+        .display()
+        .to_string();
+    std::fs::write(
+        &store,
+        format!("{{\"workspaces\":{{\"{cwd}\":\"trusted\"}}}}"),
+    )
+    .unwrap();
+    std::env::set_var("HH_TRUST_STORE", &store);
+    let def = write_definition("trust");
+    let (class, out, _err) = hh(&mut b, &["run", "start", &def, "hi"], NO_TTY, None, &[]);
+    std::env::remove_var("HH_TRUST_STORE");
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let run_id = result_run_id(&out);
+    let created = created_payload(&mut b, &run_id);
+    assert_eq!(
+        created.get("workspace_trust").and_then(Json::as_str),
+        Some("trusted"),
+        "{}",
+        created.to_canonical_string()
+    );
+}
+
+#[test]
+fn workspace_trust_absent_is_unknown() {
+    let _guard = TRUST_ENV_LOCK.lock().unwrap();
+    let mut b = ServiceBoundary::new("trust-unknown");
+    let dir = test_dir("trust-store-absent");
+    std::fs::create_dir_all(&dir).unwrap();
+    let store = dir.join("trust.json");
+    std::fs::write(&store, "{\"workspaces\":{}}").unwrap();
+    std::env::set_var("HH_TRUST_STORE", &store);
+    let def = write_definition("trust-unknown");
+    let (class, out, _err) = hh(&mut b, &["run", "start", &def, "hi"], NO_TTY, None, &[]);
+    std::env::remove_var("HH_TRUST_STORE");
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let run_id = result_run_id(&out);
+    let created = created_payload(&mut b, &run_id);
+    assert_eq!(
+        created.get("workspace_trust").and_then(Json::as_str),
+        Some("unknown"),
+        "{}",
+        created.to_canonical_string()
+    );
+}
+
+// ── compact ─────────────────────────────────────────────────────
+
+#[test]
+fn compact_view_ships_a_loss_report() {
+    let mut b = ServiceBoundary::new("compact");
+    let def = write_definition("compact");
+    let (_c, out, _err) = hh(&mut b, &["run", "start", &def, "hi"], NO_TTY, None, &[]);
+    let run_id = result_run_id(&out);
+    let (class, out, _err) = hh(
+        &mut b,
+        &["compact", &run_id, "--format", "json"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let view = result_payload(&out);
+    let payload = view.get("payload").cloned().unwrap_or(Json::Null);
+    assert_eq!(
+        payload.get("kind"),
+        Some(&Json::str("compact")),
+        "{}",
+        payload.to_canonical_string()
+    );
+    // AC-R-2.11.1 — the loss report enumerates every dropped class.
+    let dropped = payload
+        .get("loss_report")
+        .and_then(|l| l.get("dropped"))
+        .cloned()
+        .unwrap_or(Json::Arr(vec![]));
+    let dropped_classes: Vec<String> = match &dropped {
+        Json::Arr(rows) => rows
+            .iter()
+            .filter_map(|r| r.get("class").and_then(Json::as_str).map(String::from))
+            .collect(),
+        _ => vec![],
+    };
+    assert!(
+        dropped_classes.iter().any(|c| c == "lifecycle.run.created"),
+        "lifecycle classes must be declared dropped: {dropped_classes:?}"
+    );
+    // The view is a stamped projection — a view_hash, never a bare array.
+    assert!(view.get("view_hash").and_then(Json::as_str).is_some());
+}
+
+#[test]
+fn run_inspect_accepts_compact() {
+    let mut b = ServiceBoundary::new("inspect-compact");
+    let def = write_definition("inspect-compact");
+    let (_c, out, _err) = hh(&mut b, &["run", "start", &def, "hi"], NO_TTY, None, &[]);
+    let run_id = result_run_id(&out);
+    let (class, out, _err) = hh(
+        &mut b,
+        &["run", "inspect", &run_id, "compact", "--format", "json"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let view = result_payload(&out);
+    assert_eq!(
+        view.get("payload")
+            .and_then(|p| p.get("kind"))
+            .and_then(Json::as_str),
+        Some("compact"),
+        "{}",
+        view.to_canonical_string()
+    );
+}
+
+// ── config explain ──────────────────────────────────────────────
+
+#[test]
+fn config_explain_renders_layered_precedence() {
+    let mut b = ServiceBoundary::new("config");
+    let (class, out, _err) = hh(
+        &mut b,
+        &["config", "explain", "--format", "json"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let p = result_payload(&out);
+    assert_eq!(
+        p.get("precedence").and_then(Json::as_str),
+        Some("session > environment > project > user > packaged"),
+        "{}",
+        p.to_canonical_string()
+    );
+    let keys = match p.get("keys") {
+        Some(Json::Arr(k)) => k.clone(),
+        _ => panic!("no keys: {}", p.to_canonical_string()),
+    };
+    let kernel = keys
+        .iter()
+        .find(|k| k.get("key").and_then(Json::as_str) == Some("kernel_cmd"))
+        .cloned()
+        .unwrap_or(Json::Null);
+    assert_eq!(
+        kernel.get("effective").and_then(Json::as_str),
+        Some("hh-kernel"),
+        "{}",
+        kernel.to_canonical_string()
+    );
+    assert_eq!(
+        kernel.get("source").and_then(Json::as_str),
+        Some("packaged"),
+        "{}",
+        kernel.to_canonical_string()
+    );
+    // --key filters to a single entry.
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "config",
+            "explain",
+            "--key",
+            "attendance",
+            "--format",
+            "json",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let p = result_payload(&out);
+    let keys = match p.get("keys") {
+        Some(Json::Arr(k)) => k.clone(),
+        _ => panic!("no keys: {}", p.to_canonical_string()),
+    };
+    assert_eq!(keys.len(), 1, "{keys:?}");
+    assert_eq!(
+        keys[0].get("key").and_then(Json::as_str),
+        Some("attendance")
+    );
+}
+
+// ── env * ───────────────────────────────────────────────────────
+
+#[test]
+fn env_status_and_meters_render_describe() {
+    let mut b = ServiceBoundary::new("env-status");
+    let def = write_definition("env-status");
+    let (_c, out, _err) = hh(&mut b, &["run", "start", &def, "hi"], NO_TTY, None, &[]);
+    let run_id = result_run_id(&out);
+    for verb in ["status", "meters"] {
+        let (class, out, _err) = hh(
+            &mut b,
+            &["env", verb, &run_id, "--format", "json"],
+            NO_TTY,
+            None,
+            &[],
+        );
+        assert_eq!(class, ExitClass::Ok, "{verb}: {out}");
+        let p = result_payload(&out);
+        assert!(
+            p.get("connection_info").is_some(),
+            "{}",
+            p.to_canonical_string()
+        );
+        assert!(p.get("health").is_some(), "{}", p.to_canonical_string());
+        assert!(p.get("meters").is_some(), "{}", p.to_canonical_string());
+    }
+}
+
+#[test]
+fn env_list_detached_answers_a_count() {
+    let mut b = ServiceBoundary::new("env-detached");
+    let def = write_definition("env-detached");
+    let (_c, out, _err) = hh(&mut b, &["run", "start", &def, "hi"], NO_TTY, None, &[]);
+    let run_id = result_run_id(&out);
+    let (class, out, _err) = hh(
+        &mut b,
+        &["env", "list-detached", &run_id, "--format", "json"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let p = result_payload(&out);
+    assert!(
+        p.get("count").and_then(Json::as_int).is_some(),
+        "{}",
+        p.to_canonical_string()
+    );
+    assert!(p.get("detached").is_some(), "{}", p.to_canonical_string());
+}
+
+#[test]
+fn env_snapshot_and_derive_over_the_writer_session() {
+    let mut b = ServiceBoundary::new("env-ops");
+    // `derive` copies the fs_tree — the workspace root must exist.
+    std::fs::create_dir_all(b.root.join("ws")).unwrap();
+    let run_id = park_run(&mut b, "env-ops");
+    // `env snapshot --takeover` fences the parked writer and mints the
+    // instrument-charged fs_tree snapshot (ADR-0177 D7).
+    let (class, out, _err) = hh(
+        &mut b,
+        &["env", "snapshot", &run_id, "--takeover", "--format", "json"],
+        ALL_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let p = result_payload(&out);
+    assert!(
+        p.get("snapshot_ref").and_then(Json::as_str).is_some(),
+        "{}",
+        p.to_canonical_string()
+    );
+    assert_eq!(
+        p.get("taken_by").and_then(Json::as_str),
+        Some("instrument"),
+        "{}",
+        p.to_canonical_string()
+    );
+    // `env derive --takeover` — a fork_snapshot child off the session
+    // handle; the result is the record, never a handle id (R-NOSIDE).
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "env",
+            "derive",
+            &run_id,
+            "--takeover",
+            "--mode",
+            "fork_snapshot",
+            "--format",
+            "json",
+        ],
+        ALL_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let p = result_payload(&out);
+    assert_eq!(
+        p.get("derived"),
+        Some(&Json::Bool(true)),
+        "{}",
+        p.to_canonical_string()
+    );
+    assert!(
+        p.get("env_handle_id").is_none(),
+        "{}",
+        p.to_canonical_string()
+    );
+}
+
+#[test]
+fn env_set_phase_refuses_without_a_sealed_schedule() {
+    let mut b = ServiceBoundary::new("env-phase");
+    let run_id = park_run(&mut b, "env-phase");
+    // The reference local_host policy declares no
+    // `per_phase_network_policy` — the kernel answers the typed refusal,
+    // never a silent phase swap (CF-318; ADR-0142).
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "env",
+            "set-phase",
+            &run_id,
+            "setup",
+            "--takeover",
+            "--format",
+            "json",
+        ],
+        ALL_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::RefusedByKernel, "{out}");
+    assert!(out.contains("phase_schedule_undeclared"), "{out}");
+}
+
+#[test]
+fn env_unsupported_verbs_refuse_stage_pending() {
+    let mut b = ServiceBoundary::new("env-pending");
+    let (class, out, _err) = hh(&mut b, &["env", "upload", "run-x"], NO_TTY, None, &[]);
+    assert_eq!(class, ExitClass::InvocationError, "{out}");
+    assert!(out.contains("stage_pending"), "{out}");
+}
+
+// ── amend(attendance|approval_mode) ─────────────────────────────
+
+#[test]
+fn amend_attendance_and_approval_mode_are_ledgered() {
+    let mut b = ServiceBoundary::new("amend-policy");
+    let run_id = park_run(&mut b, "amend-policy");
+    // `amend attendance async` — a narrowing of the attendance channel;
+    // admitted, minted `control.attendance.amended`.
+    let (class, out, _err) = hh(
+        &mut b,
+        &["run", "amend", &run_id, "attendance", "async", "--takeover"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    // `amend approval_mode manual` — tightening the policy mode
+    // (interactive attendance was the parked run's setting; a manual
+    // mode narrows auto-resolution).
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "run",
+            "amend",
+            &run_id,
+            "approval_mode",
+            "manual",
+            "--takeover",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let classes = event_classes(&mut b, &run_id);
+    assert!(
+        classes.iter().any(|c| c == "control.attendance.amended"),
+        "{classes:?}"
+    );
+    assert!(
+        classes.iter().any(|c| c == "control.approval_mode.amended"),
+        "{classes:?}"
+    );
+}
+
+#[test]
+fn amend_approval_mode_widening_needs_a_human() {
+    let mut b = ServiceBoundary::new("amend-widen");
+    let run_id = park_run(&mut b, "amend-widen");
+    // `manual → bypass` widens auto-resolution *and* bypass requires
+    // containment evidence — under unattended attendance with no
+    // attestation the widening refusal lands first (I-1).
+    let (class, out, _err) = hh(
+        &mut b,
+        &[
+            "run",
+            "amend",
+            &run_id,
+            "approval_mode",
+            "bypass",
+            "--takeover",
+        ],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert!(
+        class == ExitClass::RefusedByKernel || class == ExitClass::InvocationError,
+        "{out}"
+    );
+    let classes = event_classes(&mut b, &run_id);
+    assert!(
+        !classes.iter().any(|c| c == "control.approval_mode.amended"),
+        "{classes:?}"
+    );
 }

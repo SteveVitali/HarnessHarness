@@ -444,6 +444,19 @@ impl IncompleteReason {
             IncompleteReason::ExecutorUnreported => "executor_unreported",
         }
     }
+
+    /// Parse the canonical spelling — `None` on any other input (never
+    /// coerced, T-LCD-07).
+    pub fn parse(s: &str) -> Option<IncompleteReason> {
+        [
+            IncompleteReason::Truncated,
+            IncompleteReason::UnobservedChannel,
+            IncompleteReason::DrainTimeout,
+            IncompleteReason::ExecutorUnreported,
+        ]
+        .into_iter()
+        .find(|r| r.as_str() == s)
+    }
 }
 
 /// `Completeness` — `complete | partial{reasons} | unknown` (T-LCD-07 — never
@@ -473,6 +486,30 @@ impl Completeness {
                     Json::Arr(reasons.iter().map(|r| Json::str(r.as_str())).collect()),
                 ),
             ]),
+        }
+    }
+
+    /// `to_json`'s inverse — `None` on any deviation (never coerced;
+    /// the K4 cache-hit path parses a recorded observation with this —
+    /// S2.10, R-2.3.4¹).
+    pub fn from_json(j: &Json) -> Option<Completeness> {
+        match j {
+            Json::Str(s) if s == "complete" => Some(Completeness::Complete),
+            Json::Str(s) if s == "unknown" => Some(Completeness::Unknown),
+            Json::Obj(_) => {
+                if j.get("status")?.as_str()? != "partial" {
+                    return None;
+                }
+                let Json::Arr(rs) = j.get("reasons")? else {
+                    return None;
+                };
+                let mut reasons = BTreeSet::new();
+                for r in rs {
+                    reasons.insert(IncompleteReason::parse(r.as_str()?)?);
+                }
+                Some(Completeness::Partial(reasons))
+            }
+            _ => None,
         }
     }
 }

@@ -21,6 +21,7 @@
 //! [`Driver`](hh_control::driver::Driver) (`ReactMinimal`) with kernel
 //! ports implemented in this crate ([`runtime`]).
 
+pub mod envops;
 pub mod frames;
 pub mod inject;
 pub mod open;

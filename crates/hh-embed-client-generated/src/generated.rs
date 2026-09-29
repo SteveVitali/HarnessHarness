@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:47c31736e25a077ce2c3574022d1a907699b958f3dcbbdcf72514950a5ba5b29";
+    "sha256:ab6c6502376385110ad020307d7254cb057a45af33f43cc21d271b2b85ba1426";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5396,6 +5396,24 @@ impl<R: BufRead, W: Write> Client<R, W> {
     pub fn describe(&mut self, params: &DescribeParams) -> Result<DescribeResult, ClientError> {
         let raw = self.call("describe", params.to_json())?;
         DescribeResult::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `env.derive` → `json` (see the contract registry).
+    pub fn env_derive(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.derive", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.set_phase` → `json` (see the contract registry).
+    pub fn env_set_phase(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.set_phase", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.snapshot` → `json` (see the contract registry).
+    pub fn env_snapshot(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.snapshot", params.clone())?;
+        Ok(raw)
     }
 
     /// `fork` → `Session` (see the contract registry).
