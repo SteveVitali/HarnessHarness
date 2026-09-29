@@ -212,11 +212,8 @@ pub const OBLIGATIONS: &[AuditObligation] = &[
 /// `control.work_item.dispatched{verb:"run"}` rows anchor the child's
 /// `lifecycle.run.created` in `causes[]`, and the child's own seq-0 row
 /// carries the same `spawn_event` link in its `causes` (§5i.1 #11).
-pub const DEFERRED_OBLIGATIONS: &[&str] = &[
-    "subagent_anchor",
-    "evolution_link",
-    "producer_resolution",
-];
+pub const DEFERRED_OBLIGATIONS: &[&str] =
+    &["subagent_anchor", "evolution_link", "producer_resolution"];
 
 // ── checkpoint signing (R-2.8.6 Stage 2; ADR-0050 §8(a) C0) ──────────────
 
@@ -408,6 +405,11 @@ pub struct Auditor {
     run_id: String,
     /// The auditor's own leaf-hash record — its held ground truth.
     leaves: Vec<String>,
+    /// The envelopes behind `leaves` — kept so a rotation claim's covered
+    /// prefix can be rehashed under the claim's `identity_profile`
+    /// (§5g.6 §2; R-2.8.6 — stored ids are never rewritten, so the
+    /// cross-profile recompute needs the preimages, not just the digests).
+    events: Vec<crate::event::EventEnvelope>,
     /// The auditor's compact range over `leaves` (its own fold — derived, as
     /// every fold is).
     range: tree::CompactRange,
@@ -424,6 +426,7 @@ impl Auditor {
         Self {
             run_id: run_id.into(),
             leaves: Vec::new(),
+            events: Vec::new(),
             range: tree::CompactRange::default(),
             held_heads: Vec::new(),
             claims: Vec::new(),
@@ -505,6 +508,7 @@ impl Auditor {
         }
         self.leaves.push(event.hash.clone());
         self.range.push(event.hash.clone());
+        self.events.push((**event).clone());
         if event.class == "security.audit.checkpoint" {
             self.check_claim(seq, event, keys)?;
         }
@@ -533,20 +537,69 @@ impl Auditor {
                 claim.tree_size
             )));
         }
-        let my_head = tree::mth_prefix(&self.leaves, seq as usize);
+        // The claim's `identity_profile` names the profile its digests are
+        // under (absent ⇒ idp/1 — every pre-rotation claim). The covered
+        // prefix rehashes under it (`rehashed_leaves` is the same
+        // construction, so idp/1 reproduces the stored hashes — CC1).
+        let claim_profile_name = claim
+            .identity_profile
+            .clone()
+            .unwrap_or_else(|| hh_identity::idp::IDP_1.idp_id.to_string());
+        let claim_profile =
+            hh_identity::idp::profile_for(&claim_profile_name).ok_or_else(|| {
+                inconsistent(format!(
+                    "unknown_idp: `{claim_profile_name}` is not a registered identity profile"
+                ))
+            })?;
+        let covered =
+            crate::rotation::rehashed_leaves(claim_profile, self.events.iter().take(seq as usize));
+        let my_head = tree::mth_prefix_in(claim_profile, &covered, seq as usize);
         if claim.tree_head.as_deref() != Some(my_head.as_str()) {
             return Err(AuditFault::Equivocation {
                 at_seq: seq,
                 detail: "signed tree_head disagrees with the auditor's covered range".into(),
             });
         }
-        let expect_chain = self
-            .leaves
+        let expect_chain = covered
             .get(seq.saturating_sub(1) as usize)
             .cloned()
             .unwrap_or_else(|| crate::ids::GENESIS_HASH.to_string());
         if claim.chain_hash.as_deref() != Some(expect_chain.as_str()) {
             return Err(inconsistent("chain_hash ≠ the covered tip".into()));
+        }
+        // `kind = rotation` — the `rehash` member re-verifies under the
+        // claim profile and `bridge_record_ref` names a committed
+        // `security.audit.bridge` row in the covered prefix (the claim is
+        // self-evidencing — §5g.6 §2).
+        if claim.kind == CheckpointKind::Rotation.as_str() {
+            let rehash_ok = match &claim.rehash {
+                Some(r) => {
+                    r.get("idp").and_then(Json::as_str) == Some(claim_profile_name.as_str())
+                        && crate::rotation::verify_rehash(r, self.events.iter().take(seq as usize))
+                            == Some(true)
+                }
+                None => false,
+            };
+            if !rehash_ok {
+                return Err(inconsistent(
+                    "rotation claim's rehash does not recompute under identity_profile".into(),
+                ));
+            }
+            let bridge_ok = claim
+                .bridge_record_ref
+                .as_deref()
+                .map(|bref| {
+                    self.events
+                        .iter()
+                        .take(seq as usize)
+                        .any(|e| e.event_id == bref && e.class == "security.audit.bridge")
+                })
+                .unwrap_or(false);
+            if !bridge_ok {
+                return Err(inconsistent(
+                    "rotation claim's bridge_record_ref names no covered bridge row".into(),
+                ));
+            }
         }
         match self.claims.last() {
             None => {
@@ -913,6 +966,16 @@ pub fn audit_view(
         .collect();
     let mut watermark = None;
 
+    // AC-R-2.8.6-10 (§5g.6 §2): a hosted run at `observability_level =
+    // {events}` has no ledger visibility — the ledger-needing components
+    // (`checkpoints`, `cross_run`) render `n/a{observability}`, never a
+    // fabricated `false`/`0`. `chain_ok` stays a *real* recompute — the
+    // event chain is an events-level datum.
+    let ledger_blind = manifest.participant_class == crate::manifest::ParticipantClass::Hosted
+        && !manifest
+            .observability_level
+            .contains(&crate::manifest::ObservabilityLevel::Ledger);
+
     // chain_ok — recompute the hash chain over the folded prefix (the same rule
     // `verify` runs over the WAL bytes).
     let mut chain_ok = true;
@@ -1088,7 +1151,6 @@ pub fn audit_view(
     // claim. Signatures are shape-checked always and value-checked when the
     // caller supplies a key resolver (`verified`/`unverified`/`failed` — an
     // unverifiable signature is never "ok").
-    let leaf_hashes: Vec<String> = events.iter().map(|e| e.hash.clone()).collect();
     let has_signers = !manifest.signer_key_ids.is_empty();
     let mut checkpoints = Vec::new();
     let mut checkpoints_ok = true;
@@ -1108,14 +1170,61 @@ pub fn audit_view(
             continue;
         };
         // Structural recomputation — the claim vs the covered prefix.
+        // `identity_profile` names the profile the claim's digests are
+        // under (absent ⇒ the manifest `idp` — pre-rotation claims are
+        // idp/1); the covered leaves rehash under it (§5g.6 §2).
+        let claim_profile_name = claim
+            .identity_profile
+            .clone()
+            .unwrap_or_else(|| manifest.idp.clone());
+        let claim_profile = hh_identity::idp::profile_for(&claim_profile_name);
+        let covered_leaves: Vec<String> = claim_profile
+            .map(|p| {
+                crate::rotation::rehashed_leaves(p, events.iter().take(e.seq as usize).copied())
+            })
+            .unwrap_or_default();
         let size_ok = claim.tree_size == Some(e.seq);
-        let head_ok = size_ok
+        let head_ok = claim_profile.is_some()
+            && size_ok
             && claim.tree_head.as_deref()
-                == Some(tree::mth_prefix(&leaf_hashes, e.seq as usize).as_str());
+                == Some(
+                    tree::mth_prefix_in(claim_profile.unwrap(), &covered_leaves, e.seq as usize)
+                        .as_str(),
+                );
         let chain_hash_ok = size_ok
             && e.seq > 0
-            && claim.chain_hash.as_deref() == Some(leaf_hashes[(e.seq - 1) as usize].as_str());
-        let idp_ok = claim.idp.as_deref() == Some(tree::checkpoint_idp(&e.payload).as_str());
+            && claim.chain_hash.as_deref() == Some(covered_leaves[(e.seq - 1) as usize].as_str());
+        let idp_ok = claim_profile
+            .map(|p| claim.idp.as_deref() == Some(tree::checkpoint_idp_in(p, &e.payload).as_str()))
+            .unwrap_or(false);
+        // `kind = rotation` — `rehash` recomputes under the claim profile
+        // and `bridge_record_ref` names a covered `security.audit.bridge`
+        // row (§5g.6 §2).
+        let rotation_ok = if claim.kind == CheckpointKind::Rotation.as_str() {
+            let rehash_ok = match &claim.rehash {
+                Some(r) => {
+                    r.get("idp").and_then(Json::as_str) == Some(claim_profile_name.as_str())
+                        && crate::rotation::verify_rehash(
+                            r,
+                            events.iter().take(e.seq as usize).copied(),
+                        ) == Some(true)
+                }
+                None => false,
+            };
+            rehash_ok
+                && claim
+                    .bridge_record_ref
+                    .as_deref()
+                    .map(|bref| {
+                        events
+                            .iter()
+                            .take(e.seq as usize)
+                            .any(|ev| ev.event_id == bref && ev.class == "security.audit.bridge")
+                    })
+                    .unwrap_or(false)
+        } else {
+            true
+        };
         let link_ok = match &prev_claim {
             None => claim
                 .prev_checkpoint
@@ -1133,7 +1242,7 @@ pub fn audit_view(
                 _ => false,
             },
         };
-        if !(size_ok && head_ok && chain_hash_ok && idp_ok && link_ok) {
+        if !(size_ok && head_ok && chain_hash_ok && idp_ok && link_ok && rotation_ok) {
             status = "failed";
         }
         // Signatures — shape always; value when a resolver is held.
@@ -1211,7 +1320,9 @@ pub fn audit_view(
     // absence is a failed component, not an unnoticed gap (the `truncate`
     // verdict belongs to `verify_run`; the view surfaces the same truth).
     let na = |reason: &str| Json::obj([("n/a", Json::str(reason))]);
-    let checkpoints_component = if !has_signers && checkpoints.is_empty() {
+    let checkpoints_component = if ledger_blind {
+        na("observability")
+    } else if !has_signers && checkpoints.is_empty() {
         na("no signer_key_ids declared")
     } else if !checkpoints_ok || (finished && has_signers && !final_seen) {
         Json::Bool(false)
@@ -1332,9 +1443,13 @@ pub fn audit_view(
         }
     }
 
-    let cross_run_component = match cross_run_ok {
-        Some(v) => Json::Bool(v),
-        None => na("no cross-run anchors"),
+    let cross_run_component = if ledger_blind {
+        na("observability")
+    } else {
+        match cross_run_ok {
+            Some(v) => Json::Bool(v),
+            None => na("no cross-run anchors"),
+        }
     };
 
     // extensions — the AC-H5-10 provenance fold (§5g.5 §6 audit obligation +
@@ -1475,7 +1590,14 @@ pub fn audit_view(
         ("kind", Json::str("audit_view")),
         ("events_seen", Json::Int(events.len() as i64)),
         ("chain_ok", Json::Bool(chain_ok)),
-        ("checkpoints", Json::Arr(checkpoints)),
+        (
+            "checkpoints",
+            if ledger_blind {
+                na("observability")
+            } else {
+                Json::Arr(checkpoints)
+            },
+        ),
         (
             "scopes_unclosed",
             Json::Arr(open_scopes.keys().map(Json::str).collect()),
@@ -1500,7 +1622,14 @@ pub fn audit_view(
         ),
         ("producer_violations", Json::Arr(producer_violations)),
         ("coverage", coverage),
-        ("cross_run", Json::Arr(cross_run)),
+        (
+            "cross_run",
+            if ledger_blind {
+                na("observability")
+            } else {
+                Json::Arr(cross_run)
+            },
+        ),
         ("redactions", Json::Arr(redaction_rows)),
         ("sink_deliveries", Json::Arr(sink_deliveries)),
         // AC-H5-10 — the extension provenance component: the run's declared
@@ -1518,4 +1647,113 @@ pub fn audit_view(
         ("completeness", completeness),
     ]);
     View::stamped(run_id, ViewKind::AuditView, watermark, payload)
+}
+
+// ── the lab-wide audit index (S4.14b — R-2.8.6¹; ADR-0067 D5) ─────────────
+
+/// `AuditIndexEntry` — one row of the lab-wide audit index: the
+/// `(run_id, checkpoint_ref, tree_size, tree_head, signatures)` tuple the
+/// auditor holds where the run's writer cannot write (ADR-0067 D5's four
+/// destinations: the results-store row, the bundle manifest's
+/// `traces.<run>.audit_tree_head`, the parent run's anchor, and this
+/// index). Written verbatim from a verified signed checkpoint — the index
+/// records claims the auditor checked, never heads it computed for the
+/// writer.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AuditIndexEntry {
+    /// The audited run.
+    pub run_id: String,
+    /// The `security.audit.checkpoint` event coordinate the row cites
+    /// (`{run_id, event_id, seq}`).
+    pub checkpoint_ref: hh_wire::json::Json,
+    /// The claim's covered tree size.
+    pub tree_size: u64,
+    /// The claim's tree head at `tree_size`.
+    pub tree_head: String,
+    /// The claim's signature list (`[{key_id, alg_ref, sig}]`), verbatim.
+    pub signatures: Vec<hh_wire::json::Json>,
+}
+
+impl AuditIndexEntry {
+    /// Canonical JSON (the index row's wire form).
+    pub fn to_json(&self) -> hh_wire::json::Json {
+        hh_wire::json::Json::obj([
+            ("run_id", hh_wire::json::Json::str(self.run_id.clone())),
+            ("checkpoint_ref", self.checkpoint_ref.clone()),
+            (
+                "tree_size",
+                hh_wire::json::Json::Int(self.tree_size.min(i64::MAX as u64) as i64),
+            ),
+            (
+                "tree_head",
+                hh_wire::json::Json::str(self.tree_head.clone()),
+            ),
+            (
+                "signatures",
+                hh_wire::json::Json::Arr(self.signatures.clone()),
+            ),
+        ])
+    }
+}
+
+/// `AuditIndex` — the lab-wide audit index: an append-only record of
+/// auditor-observed `(run_id, tree_size, tree_head)` tuples, keyed by run.
+/// Its one semantics is the ADR-0067 D5 fault: recording a *different*
+/// `tree_head` for an `(run_id, tree_size)` the index already holds is
+/// `Equivocation` — two auditors (or a lying writer) can never silently
+/// disagree. A byte-equal re-record is a no-op (re-attestation is not a
+/// fault).
+#[derive(Debug, Default)]
+pub struct AuditIndex {
+    /// The append order (audit history — rows are never rewritten).
+    rows: Vec<AuditIndexEntry>,
+}
+
+impl AuditIndex {
+    /// An empty index.
+    pub fn new() -> AuditIndex {
+        AuditIndex::default()
+    }
+
+    /// `record` — append the entry, refusing `Equivocation` when the index
+    /// already holds a different `tree_head` for `(run_id, tree_size)`.
+    /// Re-recording a byte-equal row is idempotent (returns `Ok(false)` —
+    /// not appended again); a new row returns `Ok(true)`.
+    pub fn record(&mut self, entry: AuditIndexEntry) -> Result<bool, AuditFault> {
+        for held in &self.rows {
+            if held.run_id == entry.run_id && held.tree_size == entry.tree_size {
+                if held.tree_head != entry.tree_head {
+                    return Err(AuditFault::Equivocation {
+                        at_seq: entry.tree_size,
+                        detail: format!(
+                            "audit index: {} @{} held {} ≠ recorded {}",
+                            entry.run_id, entry.tree_size, held.tree_head, entry.tree_head
+                        ),
+                    });
+                }
+                if held == &entry {
+                    return Ok(false);
+                }
+            }
+        }
+        self.rows.push(entry);
+        Ok(true)
+    }
+
+    /// The index's rows for one run, in record order.
+    pub fn rows_for(&self, run_id: &str) -> Vec<&AuditIndexEntry> {
+        self.rows.iter().filter(|r| r.run_id == run_id).collect()
+    }
+
+    /// The newest row for a run (highest `tree_size` recorded).
+    pub fn latest(&self, run_id: &str) -> Option<&AuditIndexEntry> {
+        self.rows_for(run_id)
+            .into_iter()
+            .max_by_key(|r| r.tree_size)
+    }
+
+    /// Every row, in record order.
+    pub fn rows(&self) -> &[AuditIndexEntry] {
+        &self.rows
+    }
 }

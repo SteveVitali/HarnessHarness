@@ -28,6 +28,7 @@ pub mod names;
 pub mod record;
 pub mod refs;
 pub mod repro;
+pub mod rotation;
 pub mod rowkeys;
 pub mod sameness;
 pub mod supersede;
@@ -35,8 +36,10 @@ pub mod tree;
 
 pub use config::{configuration_id, configuration_version_id};
 pub use idp::{
-    address, identify_bytes, identify_text, idp_digest, idp_id, parse_id, verify_blob,
-    verify_record, ContentAddress, IdError, IdentityProfile, ParsedId, VerifyOutcome, IDP_1,
+    address, address_in, digest_named, identify_bytes, identify_text, idp_digest, idp_digest_in,
+    idp_id, idp_id_in, parse_id, parse_id_any, parse_id_in, profile_for, profile_for_algorithm,
+    verify_blob, verify_blob_in, verify_record, verify_record_in, ContentAddress, IdError,
+    IdentityProfile, ParsedId, VerifyOutcome, IDP_1, IDP_2, PROFILES,
 };
 pub use kinds::{AllocatedIdKind, RecordKind};
 pub use names::{
@@ -46,6 +49,9 @@ pub use record::{identify, IdentifyError, Identity, Record, Reference};
 pub use refs::{Name, NameSelector, Origin, Provenance, ProvenanceRecord, VersionedRef};
 pub use repro::{
     check_claim, max_supported_level, InstrumentRecord, ReproClaimUnsupported, ReproLevel,
+};
+pub use rotation::{
+    migrate_id, BridgeRecord, IdMigration, MigrationMethod, RotationError, RotationPlan,
 };
 pub use rowkeys::{IrRef, ResultsRowKey};
 pub use sameness::{

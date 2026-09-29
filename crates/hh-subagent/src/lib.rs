@@ -21,7 +21,9 @@
 
 pub mod types;
 
+pub mod branch;
 pub mod consistency;
+pub mod hosted;
 pub mod merge;
 pub mod messaging;
 pub mod ownership;

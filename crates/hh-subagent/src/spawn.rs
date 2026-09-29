@@ -54,6 +54,7 @@ use hh_provenance::ProvenanceRecord;
 use hh_wire::json::Json;
 
 use crate::consistency::{k1_check, ConsistencyDeclaration};
+use crate::hosted::{HostedOpen, HostedPlaneError};
 use crate::ownership::OwnershipTable;
 use crate::types::*;
 
@@ -114,6 +115,20 @@ pub trait SpawnHook {
     fn at(&mut self, phase: SpawnPhase) -> Result<(), SpawnError>;
 }
 
+/// The kernel-supplied label-branch inputs (§5g.2 `spawn_branch`;
+/// ADR-0054 D1/D4; S4.14b): `ctx₀ = ctx(parent at spawn)` is stamped by the
+/// kernel — never carried in the spec — and `clearance` is the parent's
+/// effective authority the branch's ceiling may not exceed.
+#[derive(Debug, Clone)]
+pub struct BranchCtx {
+    /// `ctx₀` — the parent's context label at spawn (recorded verbatim on
+    /// the `spawned` row's `ctx0` member).
+    pub ctx0: hh_provenance::Label,
+    /// The parent's effective authority — the branch's clearance bound
+    /// (a `ceiling` request above it refuses `ClearanceExceeded`).
+    pub clearance: hh_provenance::AuthorityClass,
+}
+
 /// What `spawn` needs beyond its arguments — the parent's seam set. All
 /// ledgered steps run under `parent_lease` on `parent_run_id`'s store.
 pub struct SpawnCtx<'a> {
@@ -156,6 +171,15 @@ pub struct SpawnCtx<'a> {
     /// The reservation TTL for `reserve(spawns, 1)` (spec: reservations die
     /// with the lease — pass the lease's remaining ms).
     pub reserve_ttl_ms: u64,
+    /// The label-branch inputs — set by [`crate::branch::spawn_branch`]
+    /// (`None` for `isolation.context = fresh`; `label_branch` without it
+    /// refuses `BranchContextMissing`).
+    pub branch_ctx: Option<BranchCtx>,
+    /// The hosted-child composition seam (§5e.3 T7; C-10;
+    /// [`crate::hosted::HostedPlane`]). Required iff `process = hosted` —
+    /// without it the spawn refuses `ModeUnsupported`, never degrades to
+    /// native composition.
+    pub hosted_plane: Option<&'a mut (dyn crate::hosted::HostedPlane + 'static)>,
     /// The fault-injection seam (KP-14/16–21).
     pub hook: Option<&'a mut (dyn SpawnHook + 'static)>,
 }
@@ -260,6 +284,8 @@ fn spawned_payload(
     parent_head: &Json,
     reservation_id: &str,
     messaging_policy: Option<&MessagingPolicy>,
+    branch: Option<&BranchCtx>,
+    hosted: Option<&HostedOpen>,
 ) -> Json {
     let mut m = vec![
         ("child_run_id", Json::str(child_run_id)),
@@ -286,6 +312,10 @@ fn spawned_payload(
         ("reservation_id", Json::str(reservation_id)),
         ("mode", Json::str(budget_mode_str(spec.budget_mode))),
         ("isolation_mode", Json::str(spec.environment.mode_str())),
+        // §5g.2 §3 payload extension — `isolation` is the *context*
+        // isolation spelling (`fresh | label_branch`); `ctx₀`/`clearance`
+        // land only under `label_branch` (kernel-stamped, ADR-0054 D4).
+        ("isolation", Json::str(spec.context.as_str())),
         (
             "supplies_digest",
             Json::str(supplies_digest(&spec.supplies)),
@@ -344,6 +374,17 @@ fn spawned_payload(
     }
     if let Some(p) = messaging_policy {
         m.push(("messaging_policy", p.to_json()));
+    }
+    if let Some(b) = branch {
+        m.push(("ctx0", hh_provenance::label_json_full(&b.ctx0)));
+        m.push(("clearance", Json::str(b.clearance.as_str())));
+    }
+    // T7 — the durable boundary mapping: `hosted{session_ref,
+    // hosting_mechanism, capability_declaration_ref?}` is what the
+    // adopt-the-interrupted-spawn path rebuilds the manifest from (a
+    // second `open_child` never runs on replay).
+    if let Some(h) = hosted {
+        m.push(("hosted", h.to_json()));
     }
     Json::obj(m)
 }
@@ -488,8 +529,16 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
                     ("hash", Json::str(head.hash.as_str())),
                 ])
             });
+        let replay_hosted = rec.spawned.get("hosted").and_then(HostedOpen::from_json);
         let replay_lease = if !ctx.store.has_run(&child_run_id) {
-            finish_child_open(ctx, spec, &child_run_id, &spawn_event, &replay_anchor)?
+            finish_child_open(
+                ctx,
+                spec,
+                &child_run_id,
+                &spawn_event,
+                &replay_anchor,
+                replay_hosted.as_ref(),
+            )?
         } else {
             None
         };
@@ -630,7 +679,34 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
         }));
     }
 
+    // `isolation.context = label_branch` (§5g.2 `spawn_branch`; ADR-0054
+    // D1/D4) — the kernel-supplied `ctx₀`/clearance must be present (it is
+    // never spec-carried — the spec is model-visible data) and a `ceiling`
+    // request above the clearance refuses `ClearanceExceeded`.
+    if spec.context == ContextIsolation::LabelBranch {
+        let Some(b) = &ctx.branch_ctx else {
+            return Err(SpawnError::Refused(SpawnRefused::BranchContextMissing));
+        };
+        if let Some(c) = spec.ceiling {
+            if c > b.clearance {
+                return Err(SpawnError::Refused(SpawnRefused::ClearanceExceeded {
+                    requested: c,
+                    clearance: b.clearance,
+                }));
+            }
+        }
+    }
+
     // ── step 1 — envelope checks ─────────────────────────────────────────
+    // `process = hosted` (§5e.3 T7; C-10; AC-R-2.8.1-4): composition
+    // crosses the `HostedPlane` seam — without a plane the spawn refuses
+    // `ModeUnsupported` (never a silent degrade to native composition).
+    if matches!(spec.process, ChildProcess::Hosted(_)) && ctx.hosted_plane.is_none() {
+        return Err(SpawnError::Refused(SpawnRefused::ModeUnsupported {
+            detail: "hosted child without a hosted plane".into(),
+        }));
+    }
+
     // `fan_out + 1 ≤ cap` reads the live-children fold before the account
     // borrows `ctx.store` mutably.
     let live = live_children(ctx.store, ctx.parent_run_id)?;
@@ -1027,6 +1103,35 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
     };
     hook_phase!(ctx, SpawnPhase::AfterDerive);
 
+    // ── T7 — hosted composition crosses the plane BEFORE the spawned row
+    // The plane-side session is named on `control.subagent.spawned{
+    // hosted{…}}` and the child manifest; a plane refusal maps typed
+    // (`ProcessUnresolvable` → `DefinitionUnresolvable` — a definition
+    // error; anything else is a plane failure, infrastructure, `Kernel`).
+    // Implementations are idempotent on `child_run_id` — a retried spawn
+    // lands on the same session, never a second one (KP-21 at the
+    // boundary).
+    let hosted_open: Option<HostedOpen> = if matches!(spec.process, ChildProcess::Hosted(_)) {
+        let mut open_spec = spec.to_json();
+        if let Json::Obj(m) = &mut open_spec {
+            m.insert("child_run_id".to_string(), Json::str(child_run_id.as_str()));
+        }
+        Some(
+            ctx.hosted_plane
+                .as_deref_mut()
+                .expect("hosted pre-check ran")
+                .open_child(&open_spec)
+                .map_err(|e| match e {
+                    HostedPlaneError::ProcessUnresolvable { detail } => {
+                        SpawnError::Refused(SpawnRefused::DefinitionUnresolvable { detail })
+                    }
+                    other => SpawnError::Kernel(other.to_string()),
+                })?,
+        )
+    } else {
+        None
+    };
+
     // ── step 7a — `control.subagent.spawned` (the delegated-to edge) ────
     // Lands BEFORE `open_run`: the child's `spawn_event` is this row and
     // `open_run` validates it resolves. The union payload carries the
@@ -1083,6 +1188,8 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
             &parent_head,
             &reservation_id,
             spec.messaging_policy.as_ref(),
+            ctx.branch_ctx.as_ref(),
+            hosted_open.as_ref(),
         ),
         vec![ctx.decision.clone()],
         None,
@@ -1142,7 +1249,14 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
     hook_phase!(ctx, SpawnPhase::AfterSpawnedAppend);
 
     // ── step 6 — child run creation + writer lease ───────────────────────
-    let opened_lease = finish_child_open(ctx, spec, &child_run_id, &spawn_event, &parent_head)?;
+    let opened_lease = finish_child_open(
+        ctx,
+        spec,
+        &child_run_id,
+        &spawn_event,
+        &parent_head,
+        hosted_open.as_ref(),
+    )?;
     hook_phase!(ctx, SpawnPhase::AfterChildOpen);
 
     // ── step 7b — subscribe child_terminal on the parent ────────────────
@@ -1272,6 +1386,7 @@ fn finish_child_open(
     child_run_id: &str,
     spawn_event: &EventRef,
     parent_head_at_spawn: &Json,
+    hosted_open: Option<&HostedOpen>,
 ) -> Result<Option<Lease>, SpawnError> {
     if ctx.store.has_run(child_run_id) {
         return Ok(None);
@@ -1329,14 +1444,24 @@ fn finish_child_open(
         budget: None,
         seed: None,
         idp: "idp/1".to_string(),
-        participant_class: parent_manifest.participant_class,
+        // T7 — a hosted child is `participant_class = hosted` regardless of
+        // the parent's class (the class describes the child, not its parent).
+        participant_class: match &spec.process {
+            ChildProcess::Hosted(_) => hh_ledger::manifest::ParticipantClass::Hosted,
+            ChildProcess::Native { .. } => parent_manifest.participant_class,
+        },
         observability_level: parent_manifest.observability_level.clone(),
         run_kind: hh_ledger::manifest::RunKind::Agent,
         activation_no: 1,
         attendance: parent_manifest.attendance,
         workspace_trust: parent_manifest.workspace_trust,
-        hosting_mechanism: None,
-        capability_declaration_ref: parent_manifest.capability_declaration_ref.clone(),
+        hosting_mechanism: hosted_open.map(|o| o.hosting_mechanism.clone()),
+        // A hosted child declares the participant's own capability record
+        // (the plane resolved it); a native child inherits the parent's row.
+        capability_declaration_ref: match hosted_open {
+            Some(o) => o.capability_declaration_ref.clone(),
+            None => parent_manifest.capability_declaration_ref.clone(),
+        },
         parent_run_id: Some(ctx.parent_run_id.to_string()),
         spawn_event: Some(spawn_event.clone()),
         forked_from: None,

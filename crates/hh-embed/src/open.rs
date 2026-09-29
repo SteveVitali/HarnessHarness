@@ -487,16 +487,23 @@ impl EmbedService {
             let ws = self.workspace_root().display().to_string();
             environment_spec(environment, &ws)?
         };
-        let (_, _, env_policy, _) = &env_spec;
-        let backend = hh_containment::backend::Ep2Model::reference();
+        let (_, _, env_policy, _, env_attestation) = &env_spec;
+        // S4.14b (R-2.8.4¹) — the backend is *selected* by the policy's
+        // `proc.isolation_class` (`for_policy`), never hard-coded to the
+        // EP2 model; attesting classes need the binding's declared
+        // `substrate_attestation` (`attestation_missing` refuses).
+        let backend = hh_containment::backend::for_policy(env_policy, env_attestation.clone())
+            .map_err(|e| EmbedError::EnvironmentUnavailable {
+                reason: format!("containment_backend:{e:?}"),
+            })?;
         let evidence =
-            hh_containment::attach::evidence_preview(&backend, env_policy).map_err(|e| {
+            hh_containment::attach::evidence_preview(&*backend, env_policy).map_err(|e| {
                 EmbedError::EnvironmentUnavailable {
                     reason: format!("containment_preview:{e:?}"),
                 }
             })?;
         if approval_mode == Some("bypass") {
-            bypass_gate(env_policy)?;
+            bypass_gate(env_policy, env_attestation.clone())?;
         }
 
         // ── manifest + open_run ──────────────────────────────────────
@@ -519,7 +526,7 @@ impl EmbedService {
             "containment".to_string(),
             Json::obj([
                 ("enforcement_evidence", evidence_json(&evidence)),
-                ("backend", Json::str("ep2_model")),
+                ("backend", Json::str(backend.name())),
                 // The relied-groups verdict the pre-open gate computed —
                 // `amend(approval_mode → bypass)` re-reads *this* durable
                 // record, never re-runs the probe battery.
@@ -1846,7 +1853,17 @@ impl EmbedService {
         environment: &EnvironmentInput,
     ) -> Result<(Option<String>, Json), EmbedError> {
         let ws = self.workspace_root().display().to_string();
-        let (record, roots, policy, info) = environment_spec(environment, &ws)?;
+        let (record, roots, policy, info, attestation) = environment_spec(environment, &ws)?;
+        // S4.14b (R-2.8.4¹) — select the backend by the policy's
+        // `proc.isolation_class` (`for_policy`); the attesting classes
+        // refuse without the binding's declared `substrate_attestation`.
+        // Fail-closed: the report is stored and the applied row lands
+        // durable.
+        let backend = hh_containment::backend::for_policy(&policy, attestation).map_err(|e| {
+            EmbedError::EnvironmentUnavailable {
+                reason: format!("containment_backend:{e:?}"),
+            }
+        })?;
         let driver = self
             .env_drivers
             .entry(run_id.to_string())
@@ -1861,17 +1878,12 @@ impl EmbedService {
                 OnLoss::FailRun,
             )
             .map_err(env_err)?;
-        // The Stage-1 backend is the EP2 reference model — the honest
-        // in-process enforcement declaration (a real EP2 helper lands
-        // with the containment surface at Stage 2). Fail-closed: the
-        // report is stored and the applied row lands durable.
-        let backend = hh_containment::backend::Ep2Model::reference();
         driver
             .attach(
                 &mut self.store,
                 lease,
                 &handle.env_handle_id,
-                Some(&backend),
+                Some(&*backend),
                 AttachMode::FailClosed,
                 false,
                 &[],
@@ -2567,6 +2579,7 @@ fn environment_spec(
         Roots,
         hh_containment::policy::ContainmentPolicy,
         Json,
+        Option<hh_containment::backend::Attestation>,
     ),
     EmbedError,
 > {
@@ -2628,8 +2641,47 @@ fn environment_spec(
             });
     }
     policy.net.mode = hh_containment::policy::NetMode::None;
+    // S4.14b (R-2.8.4¹) — the binding may *raise* the boundary:
+    // `isolation_class` is honoured only above the `process_sandbox`
+    // floor (a binding declaring `none` is refused — an external input
+    // never loosens the kernel's containment). `substrate_attestation
+    // {method, attestation_ref}` carries the measurement the attesting
+    // classes (`user_space_kernel`/`microvm`) require at selection;
+    // `for_policy` fails closed (`attestation_missing`) without it.
+    if let Some(c) = info.get("isolation_class").and_then(Json::as_str) {
+        let class = hh_containment::policy::IsolationClass::parse(c).map_err(|e| {
+            EmbedError::EnvironmentUnavailable {
+                reason: format!("isolation_class:{e}"),
+            }
+        })?;
+        if class == hh_containment::policy::IsolationClass::None {
+            return Err(EmbedError::EnvironmentUnavailable {
+                reason: "isolation_class_weakening".to_string(),
+            });
+        }
+        policy.proc.isolation_class = class;
+    }
+    let attestation = match info.get("substrate_attestation") {
+        None => None,
+        Some(j) => Some(hh_containment::backend::Attestation {
+            method: j
+                .get("method")
+                .and_then(Json::as_str)
+                .ok_or_else(|| EmbedError::EnvironmentUnavailable {
+                    reason: "substrate_attestation.method".to_string(),
+                })?
+                .to_string(),
+            attestation_ref: j
+                .get("attestation_ref")
+                .and_then(Json::as_str)
+                .ok_or_else(|| EmbedError::EnvironmentUnavailable {
+                    reason: "substrate_attestation.attestation_ref".to_string(),
+                })?
+                .to_string(),
+        }),
+    };
     policy.compute_ids();
-    Ok((record, roots, policy, info))
+    Ok((record, roots, policy, info, attestation))
 }
 
 /// The containment `enforcement_evidence` map as a manifest JSON member
@@ -2653,9 +2705,16 @@ fn evidence_json(
 /// the same pure apply+battery fold the real attach runs
 /// (`attach::evidence_preview`), evaluated before `open_run` so the
 /// refusal precedes any run's existence.
-fn bypass_gate(policy: &hh_containment::policy::ContainmentPolicy) -> Result<(), EmbedError> {
-    let backend = hh_containment::backend::Ep2Model::reference();
-    let evidence = hh_containment::attach::evidence_preview(&backend, policy).map_err(|e| {
+fn bypass_gate(
+    policy: &hh_containment::policy::ContainmentPolicy,
+    attestation: Option<hh_containment::backend::Attestation>,
+) -> Result<(), EmbedError> {
+    let backend = hh_containment::backend::for_policy(policy, attestation).map_err(|e| {
+        EmbedError::EnvironmentUnavailable {
+            reason: format!("containment_backend:{e:?}"),
+        }
+    })?;
+    let evidence = hh_containment::attach::evidence_preview(&*backend, policy).map_err(|e| {
         EmbedError::EnvironmentUnavailable {
             reason: format!("containment_preview:{e:?}"),
         }
