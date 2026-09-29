@@ -127,7 +127,13 @@ impl ProcessMetric {
             // The spec-named process vetoes: `audit_completeness` (ADR-0068 §6)
             // and `duplicate_effect_count` (ADR-0047 §5 — "duplicate side
             // effect after retry").
-            veto: matches!(self.name, "audit_completeness" | "duplicate_effect_count"),
+            veto: matches!(
+                self.name,
+                "audit_completeness"
+                    | "duplicate_effect_count"
+                    | "memory.revoked_delivered"
+                    | "memory.stale_delivered"
+            ),
             ..MetricDeclaration::default()
         }
     }
@@ -275,6 +281,28 @@ pub const PROCESS_METRICS: &[ProcessMetric] = &[
     ProcessMetric { name: "delivered_but_never_activated", dimension: Dimension::Compliance, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["context.artefact.delivered", "context.artefact.activated"],
         unit: MetricUnit::Count, fold: N(NA::Capability) },
+    // ── memory lifecycle (§5c.4; R-2.4.4; the C0/Stage-2 vetoes) ─────────
+    ProcessMetric { name: "memory.revoked_delivered", dimension: Dimension::Compliance, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: BOTH,
+        computed_from: &["context.artefact.delivered", "context.memory.invalidated"],
+        unit: MetricUnit::Count, fold: N(NA::Capability) }, // veto — a revoked delivery is never legal
+    ProcessMetric { name: "memory.stale_delivered", dimension: Dimension::Compliance, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: BOTH,
+        computed_from: &["context.artefact.delivered", "context.retrieval.completed"],
+        unit: MetricUnit::Count, fold: N(NA::Capability) }, // veto — a stale delivery is never legal
+    ProcessMetric { name: "memory.validity_rate", dimension: Dimension::Compliance, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["context.retrieval.completed", "context.assembled"],
+        unit: MetricUnit::Ppm, fold: N(NA::Capability) },
+    ProcessMetric { name: "memory.activated", dimension: Dimension::Compliance, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["context.artefact.activated"],
+        unit: MetricUnit::Count, fold: N(NA::Capability) },
+    ProcessMetric { name: "memory.followed", dimension: Dimension::Compliance, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["verification.artefact.followed"],
+        unit: MetricUnit::Count, fold: N(NA::Capability) },
+    ProcessMetric { name: "memory.unknown_admitted_rate", dimension: Dimension::Compliance, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["context.assembled", "context.retrieval.completed"],
+        unit: MetricUnit::Ppm, fold: N(NA::Capability) }, // `unknown`-lifecycle admissions share
+    ProcessMetric { name: "memory.over_invalidation", dimension: Dimension::Compliance, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["context.retrieval.completed"],
+        unit: MetricUnit::Count, fold: N(NA::NoDetector) }, // staleness flagged but still-valid — informational
     // ── autonomy ────────────────────────────────────────────────────────
     ProcessMetric { name: "human_interventions", dimension: Dimension::Autonomy, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["security.permission.decided"], unit: MetricUnit::Count, fold: C },
@@ -477,6 +505,13 @@ mod tests {
             "artifact_activation_rate",
             "artifact_follow_rate",
             "delivered_but_never_activated",
+            "memory.revoked_delivered",
+            "memory.stale_delivered",
+            "memory.validity_rate",
+            "memory.activated",
+            "memory.followed",
+            "memory.unknown_admitted_rate",
+            "memory.over_invalidation",
             "human_interventions",
             "approval_requests",
             "approval_wait_ms",

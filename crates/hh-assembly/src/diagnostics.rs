@@ -463,6 +463,12 @@ pub const KERN_VARIANTS: &[&str] = &[
     "SecretValueInDefinition",
     "UnpinnedInSealedForm",
     "ContributionUndeclared",
+    "HandlerIncomplete",
+    "UnboundParameter",
+    "RenderTimeExecution",
+    "CompositionCycle",
+    "ProcedureUnverifiable",
+    "CapabilityNotAllowed",
 ];
 
 /// The `C-KERN-*` mirror — one code per `HirError` variant, 1:1 (ADR-0148).
@@ -501,6 +507,12 @@ pub fn kern_code(e: &HirError) -> Code {
         NoDiscoverySurface => "NoDiscoverySurface",
         UnpinnedInSealedForm { .. } => "UnpinnedInSealedForm",
         ContributionUndeclared { .. } => "ContributionUndeclared",
+        HandlerIncomplete { .. } => "HandlerIncomplete",
+        UnboundParameter { .. } => "UnboundParameter",
+        RenderTimeExecution { .. } => "RenderTimeExecution",
+        CompositionCycle { .. } => "CompositionCycle",
+        ProcedureUnverifiable { .. } => "ProcedureUnverifiable",
+        CapabilityNotAllowed { .. } => "CapabilityNotAllowed",
     })
 }
 

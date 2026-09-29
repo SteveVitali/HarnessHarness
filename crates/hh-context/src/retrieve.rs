@@ -834,6 +834,23 @@ fn enumerate_query(
             Ok((
                 raw.iter()
                     .filter(|(id, _)| {
+                        // §5c.3 `trigger.path_touched`: a `procedure_pointer`
+                        // memory whose structured content carries a
+                        // `triggers[].path_glob` matching the touched path is a
+                        // hit — the `procedure_index` is what the caller
+                        // stages (the body never lands in the tool output).
+                        if let TriggerKind::PathTouched(path) = kind {
+                            if let Some(v) = store.version(id) {
+                                if v.kind == crate::vocab::MemoryKind::ProcedurePointer {
+                                    let globs = procedure_path_globs(&v.content);
+                                    if !globs.is_empty()
+                                        && globs.iter().any(|g| glob_match(g)(path))
+                                    {
+                                        return true;
+                                    }
+                                }
+                            }
+                        }
                         let text = store
                             .version(id)
                             .map(|v| v.content.index_text())
@@ -1047,5 +1064,25 @@ pub fn artifact_candidate(
         batch_id: None,
         artefact_id: Some(a.artifact_id.clone()),
         handle: None,
+    }
+}
+
+/// A `procedure_pointer` version's declared `triggers[].path_glob` patterns —
+/// the typed trigger members `lift_skill` writes into the structured content
+/// (`{"triggers": [{"path_glob": "src/**"}]}`).
+fn procedure_path_globs(content: &crate::vocab::MemoryContent) -> Vec<String> {
+    let crate::vocab::MemoryContent::Structured(j) = content else {
+        return Vec::new();
+    };
+    match j.get("triggers") {
+        Some(Json::Arr(items)) => items
+            .iter()
+            .filter_map(|t| {
+                t.get("path_glob")
+                    .and_then(Json::as_str)
+                    .map(str::to_string)
+            })
+            .collect(),
+        _ => Vec::new(),
     }
 }

@@ -360,3 +360,112 @@ pub fn stop_decision_payload(required_tokens: u64, cap: u64) -> Json {
         ),
     ])
 }
+
+/// `context.compaction.started` — `{trigger, requirement,
+/// strategy_variant_ref?, pipeline_index, proposal_id?, occupancy_before}`
+/// (§5c.2; emitted once per `compact` run before the ladder walks).
+pub fn compaction_started(
+    trigger: &crate::compact::CompactionTrigger,
+    occupancy_before: u64,
+    assessment: &crate::compact::Assessment,
+) -> Json {
+    Json::obj([
+        ("trigger", Json::str(trigger.as_str())),
+        (
+            "requirement",
+            Json::str(match assessment.requirement {
+                crate::compact::Requirement::None => "none",
+                crate::compact::Requirement::Soft => "soft",
+                crate::compact::Requirement::Hard => "hard",
+            }),
+        ),
+        ("occupancy_before", Json::Int(occupancy_before as i64)),
+        (
+            "target_reclaim",
+            Json::Int(assessment.target_reclaim as i64),
+        ),
+        ("min_reclaim", Json::Int(assessment.min_reclaim as i64)),
+    ])
+}
+
+/// `context.compaction.completed` — the `CompactionRecord` row (§5c.2):
+/// `{compaction_id, variant_ref, trigger, requirement, status, ops_applied[],
+/// forgotten[], summary_ref?, context_label_after, tokens_freed,
+/// derived_from[], summariser_usage?, duration_ms, pipeline_index,
+/// fallback_variant?}` — plus `accounting{charged_to: subject, attribution:
+/// harness_overhead.compaction}` (AC-R-2.4.2-7; `model_calls: 0` at C0 — a
+/// summariser call would post `control.budget.consumed` before dispatch).
+pub fn compaction_completed(record: &crate::compact::CompactionRecord) -> Json {
+    let mut v = vec![
+        ("compaction_id", Json::str(record.compaction_id.clone())),
+        ("variant_ref", Json::str(record.variant_ref.clone())),
+        ("trigger", Json::str(record.trigger.as_str())),
+        (
+            "requirement",
+            Json::str(match record.requirement {
+                crate::compact::Requirement::None => "none",
+                crate::compact::Requirement::Soft => "soft",
+                crate::compact::Requirement::Hard => "hard",
+            }),
+        ),
+        (
+            "status",
+            Json::str(match record.status {
+                crate::compact::CompactionStatus::Applied => "applied",
+                crate::compact::CompactionStatus::Ineffective => "ineffective",
+                crate::compact::CompactionStatus::Failed => "failed",
+            }),
+        ),
+        (
+            "ops_applied",
+            Json::Arr(
+                record
+                    .ops_applied
+                    .iter()
+                    .map(|o| Json::str(o.kind()))
+                    .collect(),
+            ),
+        ),
+        (
+            "forgotten",
+            Json::Arr(
+                record
+                    .forgotten
+                    .iter()
+                    .map(|f| Json::str(f.clone()))
+                    .collect(),
+            ),
+        ),
+        ("tokens_freed", Json::Int(record.tokens_freed as i64)),
+        (
+            "derived_from",
+            Json::Arr(
+                record
+                    .derived_from
+                    .iter()
+                    .map(|f| Json::str(f.clone()))
+                    .collect(),
+            ),
+        ),
+        ("pipeline_index", Json::Int(record.pipeline_index as i64)),
+        ("duration_ms", Json::Int(record.duration_ms as i64)),
+        (
+            "accounting",
+            Json::obj([
+                ("charged_to", Json::str("subject")),
+                ("attribution", Json::str("harness_overhead.compaction")),
+                ("model_calls", Json::Int(0)),
+            ]),
+        ),
+    ];
+    if let Some(s) = &record.summary_ref {
+        v.push(("summary_ref", Json::str(s.clone())));
+    }
+    if let Some(f) = &record.fallback_variant {
+        v.push(("fallback_variant", Json::str(f.clone())));
+    }
+    if let Some(u) = &record.summariser_usage {
+        v.push(("summariser_usage", u.clone()));
+    }
+    Json::obj(v)
+}

@@ -24,6 +24,7 @@ pub mod identity;
 pub mod kinds;
 pub mod leaves;
 pub mod ops;
+pub mod procedure;
 pub mod records;
 pub mod refs;
 pub mod risk;

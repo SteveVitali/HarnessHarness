@@ -213,6 +213,45 @@ pub enum HirError {
         /// The capability's semantic id.
         capability: String,
     },
+    /// §5c.5 `validate_procedure`: a `Procedure`'s `failure_handlers` do not
+    /// cover the whole `failure_classes` set the procedure can raise.
+    HandlerIncomplete {
+        /// The uncovered class.
+        detail: String,
+    },
+    /// §5c.5 `validate_procedure`: a `$param:<name>` reference in a step's
+    /// structured member names no `ProcedureProfile.parameters[]` row.
+    UnboundParameter {
+        /// The unbound name / procedure.
+        detail: String,
+    },
+    /// §5c.5 `validate_procedure` (I-RENDER; ADR-0084 d6): a `Text` leaf inside
+    /// a procedure carries a declared render-time exec marker — no step may
+    /// execute at render time.
+    RenderTimeExecution {
+        /// Where the marker fired.
+        detail: String,
+    },
+    /// §5c.5 `validate_procedure`: the `ProcedureProfile.composition` callee
+    /// graph contains a cycle.
+    CompositionCycle {
+        /// The cycle.
+        detail: String,
+    },
+    /// §5c.5 `validate_procedure` risk floor: an effectful procedure whose
+    /// derived risk class contains `irreversible` or `scope = external` must
+    /// carry `expected_evidence ≠ ∅`.
+    ProcedureUnverifiable {
+        /// The uncovered risk.
+        detail: String,
+    },
+    /// §5c.5 `validate_procedure` (procedural coherence): an `Invoke` step
+    /// names a capability outside the procedure's `allowed_capabilities` —
+    /// the closed set every `Invoke` must reference.
+    CapabilityNotAllowed {
+        /// The procedure and the undeclared capability.
+        detail: String,
+    },
 }
 
 impl fmt::Display for HirError {
@@ -293,6 +332,24 @@ impl fmt::Display for HirError {
             HirError::ContributionUndeclared { capability } => {
                 write!(f, "ContributionUndeclared: {capability}")
             }
+            HirError::HandlerIncomplete { detail } => {
+                write!(f, "HandlerIncomplete: {detail}")
+            }
+            HirError::UnboundParameter { detail } => {
+                write!(f, "UnboundParameter: {detail}")
+            }
+            HirError::RenderTimeExecution { detail } => {
+                write!(f, "RenderTimeExecution: {detail}")
+            }
+            HirError::CompositionCycle { detail } => {
+                write!(f, "CompositionCycle: {detail}")
+            }
+            HirError::ProcedureUnverifiable { detail } => {
+                write!(f, "ProcedureUnverifiable: {detail}")
+            }
+            HirError::CapabilityNotAllowed { detail } => {
+                write!(f, "CapabilityNotAllowed: {detail}")
+            }
         }
     }
 }
@@ -310,4 +367,8 @@ pub struct ValidationReport {
     pub node_count: usize,
     /// Edge count.
     pub edge_count: usize,
+    /// `PreconditionUncheckable` count (§5c.5 `validate_procedure`):
+    /// validator-bound preconditions are applicability notes — counted on the
+    /// report, never errors.
+    pub uncheckable_preconditions: u64,
 }
