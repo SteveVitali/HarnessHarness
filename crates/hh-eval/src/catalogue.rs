@@ -371,6 +371,48 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
                 ..base()
             }
         },
+        // ── execution-alignment detectors (§5h.2 C2; §5f ADR-0114; S4.15 —
+        //    deterministic and judged are *distinct* declarations, never
+        //    merged: the deterministic fold reads the ledger; the judged
+        //    variant reads the trajectory record via an admitted judge
+        //    oracle and is the only member of `detector_classes_allowed =
+        //    {judged}`). The spec's class-conditional observability
+        //    (`ledger` native / `end_state` hosted D5-only — spec §5f.2's
+        //    participant-class note) is not expressible in one
+        //    `requires_observability` set, so the declaration pins the
+        //    stricter native requirement: hosted rows render
+        //    `n/a{observability}` (the §5f.2-prescribed reason) and the
+        //    hosted D5-only cell lands with the C2 `execution_alignment`
+        //    variant — DF-S1.21-3. ──
+        MetricDeclaration {
+            name: "execution_alignment_failure_rate".into(),
+            dimension: Dimension::Reliability,
+            level: MetricLevel::Run,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                applies_to_classes: all_classes(),
+                outcome_class_policy: OutcomeClassPolicy::for_capability(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "execution_alignment_failure_rate_judged".into(),
+            dimension: Dimension::Reliability,
+            level: MetricLevel::Run,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            detector_classes_allowed: [Detector::Judged].into_iter().collect(),
+            ..MetricDeclaration {
+                requires_observability: [Observability::ModelIo].into_iter().collect(),
+                oracle_classes_allowed: [OracleClass::Judge].into_iter().collect(),
+                outcome_class_policy: OutcomeClassPolicy::for_capability(),
+                ..base()
+            }
+        },
         MetricDeclaration {
             name: "reacquisition_count".into(),
             dimension: Dimension::Efficiency,

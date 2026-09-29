@@ -2,11 +2,17 @@
 //! (ticket S3.12b; GATE-G2 gap G2-1; spec §10.3/§5h.4; R-2.9.4⁰ᵇ).
 //!
 //! The committed corpus at `fixtures/benchset/stage3_v1/` is the Stage-3
-//! reference suite: four strata (A `suite.tb2` / `coding_terminal` /
-//! `fresh_temporal`; C `suite.swebench` / `contaminated_public` +
-//! `retired_for_headline` — the SWE-bench-class control of ADR-0146 D3;
-//! D `suite.taubench` / `structured_tool`; E `suite.agentdojo` /
-//! `adversarial_security`), each task carrying its recorded `model_io`
+//! reference suite — the four Stage-3 strata (A `suite.tb2` /
+//! `coding_terminal` / `fresh_temporal`; C `suite.swebench` /
+//! `contaminated_public` + `retired_for_headline` — the SWE-bench-class
+//! control of ADR-0146 D3; D `suite.taubench` / `structured_tool`;
+//! E `suite.agentdojo` / `adversarial_security`) plus the C1 strata
+//! (S4.15): B `suite.swe_fresh` — the temporally-fresh SWE-style pool
+//! whose `SuiteValidityRecord` (the suite's committed `audit` block) is
+//! mandatory before headline use — and G `suite.harbor_index` — the
+//! Harbor-Index adapter-CI smoke suite (`provisional`, `product`-
+//! granularity only, `parity = none`, never headline). Each task carries
+//! its recorded `model_io`
 //! transcript and the original runner's recorded verdicts
 //! (`original_runs` — the parity compare's `original` arm, ≥ 3 per task
 //! on the suite's declared `parity_subset`).
@@ -25,7 +31,7 @@
 //! <suite_id>/tasks/<name>.json      — benchset_task/1 decl (visible/held-out facts + recorded runs)
 //! ```
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use hh_identity::idp_digest;
@@ -197,6 +203,18 @@ pub struct BenchSuite {
     /// pre-registered subset — every member carries ≥ 3 recorded
     /// original-runner verdicts).
     pub parity_subset: Vec<String>,
+}
+
+impl BenchSuite {
+    /// Whether the suite may feed headline comparisons (§5h.4 stratum
+    /// table): never retired, and the committed `audit` block gave the
+    /// `SuiteValidityRecord` an audit timestamp — stratum B lands *once
+    /// its validity record exists* (`audited_at`), and a suite whose
+    /// audit block withholds it (`audited_at = null`) loads but never
+    /// headlines.
+    pub fn headline_admissible(&self) -> bool {
+        !self.manifest.validity.retired_for_headline && self.manifest.validity.audited_at.is_some()
+    }
 }
 
 impl BenchSuite {
@@ -462,7 +480,9 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
             "adapter_id",
             "family",
             "contamination_stratum",
+            "audit",
             "retired_for_headline",
+            "retired_reason",
             "verifier_isolation",
             "episode_model",
             "requires",
@@ -502,6 +522,54 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
             return Err(BenchsetError::Malformed {
                 path: ps,
                 detail: "retired_for_headline not a bool".into(),
+            })
+        }
+    };
+    // The committed `SuiteValidityRecord` facts (C1/stratum-B: the record
+    // must exist — `audited_at` may be `null` to land a suite that loads
+    // but cannot headline until the audit is dated).
+    let am = members(
+        req(m, "audit", &ps)?,
+        &["audited_at", "epoch_seeded", "dispatch_ref"],
+        &ps,
+    )?;
+    let audited_at = match req(am, "audited_at", &ps)? {
+        Json::Null => None,
+        Json::Int(v) if *v >= 0 => Some(*v as u64),
+        _ => {
+            return Err(BenchsetError::Malformed {
+                path: ps.clone(),
+                detail: "audit.audited_at not a non-negative int or null".into(),
+            })
+        }
+    };
+    let epoch_seeded = match req(am, "epoch_seeded", &ps)? {
+        Json::Bool(b) => *b,
+        _ => {
+            return Err(BenchsetError::Malformed {
+                path: ps.clone(),
+                detail: "audit.epoch_seeded not a bool".into(),
+            })
+        }
+    };
+    let dispatch_ref = match req(am, "dispatch_ref", &ps)? {
+        Json::Null => None,
+        Json::Str(s) => Some(s.clone()),
+        _ => {
+            return Err(BenchsetError::Malformed {
+                path: ps.clone(),
+                detail: "audit.dispatch_ref not a string or null".into(),
+            })
+        }
+    };
+    let retired_reason = match m.get("retired_reason") {
+        None => None,
+        Some(Json::Null) => None,
+        Some(Json::Str(s)) => Some(s.clone()),
+        _ => {
+            return Err(BenchsetError::Malformed {
+                path: ps,
+                detail: "retired_reason not a string".into(),
             })
         }
     };
@@ -697,13 +765,14 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
         split_hash: String::new(),
         validity: SuiteValidityRecord {
             audit_ref: format!("audit://{BENCHSET_ID}/{suite_id}"),
-            audited_at: Some(0),
-            epoch_seeded: true,
-            dispatch_ref: Some(format!("dispatch://{BENCHSET_ID}/{suite_id}")),
+            audited_at,
+            epoch_seeded,
+            dispatch_ref,
             flawed_task_ids: flawed_ids,
             noise_ceiling: None,
             retired_for_headline: retired,
-            reason: retired.then(|| format!("{BENCHSET_ID} control stratum")),
+            reason: retired_reason
+                .or_else(|| retired.then(|| format!("{BENCHSET_ID} retired stratum"))),
         },
         contamination_default: stratum,
         adapter_ref: adapter_id.clone(),
@@ -725,12 +794,14 @@ fn load_suite(dir: &Path, key: &str, suite_id: &str) -> Result<BenchSuite, Bench
     split_assignment.validate()?;
 
     let adapter = FixtureAdapter::from_parts(
-        // `from_parts` needs a 'static id — intern the four corpus ids.
+        // `from_parts` needs a 'static id — intern the six corpus ids.
         match adapter_id.as_str() {
             "adapter_a" => "adapter_a",
+            "adapter_b" => "adapter_b",
             "adapter_c" => "adapter_c",
             "adapter_d" => "adapter_d",
             "adapter_e" => "adapter_e",
+            "adapter_g" => "adapter_g",
             other => {
                 return Err(BenchsetError::Malformed {
                     path: ps,
@@ -798,10 +869,18 @@ impl Benchset {
                 })
             }
         }
-        if suites.len() != 4 {
+        // The closed stratum set — the Stage-3 four (a/c/d/e) plus the
+        // C1 strata (b — the validity-gated fresh pool; g — the
+        // Harbor-Index smoke suite). A dropped or invented stratum
+        // refuses, never silently shrinks the set.
+        let keys: BTreeSet<&str> = suites.keys().map(String::as_str).collect();
+        let expected: BTreeSet<&str> = ["a", "b", "c", "d", "e", "g"].into_iter().collect();
+        if keys != expected {
             return Err(BenchsetError::Inconsistent {
                 path: ps,
-                detail: "the Stage-3 set declares exactly four strata (a/c/d/e)".into(),
+                detail: format!(
+                    "the benchmarkSet declares exactly the strata {{a,b,c,d,e,g}} — found {keys:?}"
+                ),
             });
         }
         Ok(Benchset {
@@ -811,7 +890,7 @@ impl Benchset {
         })
     }
 
-    /// The suite bound to a stratum key (`a` | `c` | `d` | `e`).
+    /// The suite bound to a stratum key (`a`…`e`, `g`).
     pub fn suite(&self, key: &str) -> Option<&BenchSuite> {
         self.suites.get(key)
     }

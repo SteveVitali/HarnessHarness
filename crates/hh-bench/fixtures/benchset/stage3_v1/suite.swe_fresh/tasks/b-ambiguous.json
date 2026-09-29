@@ -1,0 +1,36 @@
+{
+ "expected": "{\"resolved\":true,\"patch\":\"amb\"}",
+ "instruction": "Resolve the issue; write the patch payload {\"resolved\":true,\"patch\":\"amb\"} to submission.json.",
+ "model_io": [
+  {
+   "args": {
+    "path": "submission.json",
+    "text": "{\"resolved\":true,\"patch\":\"amb\"}"
+   },
+   "surface": "fs.write"
+  },
+  {
+   "args": {
+    "text": "{\"resolved\":true,\"patch\":\"amb\"}"
+   },
+   "surface": "hh.submit"
+  }
+ ],
+ "name": "b-ambiguous",
+ "original_runs": [
+  {
+   "model_calls": 2,
+   "reward_ppm": 1000000
+  },
+  {
+   "model_calls": 2,
+   "reward_ppm": 1000000
+  },
+  {
+   "model_calls": 2,
+   "reward_ppm": 1000000
+  }
+ ],
+ "schema": "benchset_task/1",
+ "split": "held_out"
+}

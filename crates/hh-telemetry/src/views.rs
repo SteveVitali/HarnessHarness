@@ -554,11 +554,7 @@ fn confidence_label(rank: u8) -> &'static str {
 
 /// Render a `currency → micro_units` map as a JSON object of ints.
 fn micro_map_json(m: &BTreeMap<String, i64>) -> Json {
-    Json::Obj(
-        m.iter()
-            .map(|(k, v)| (k.clone(), Json::Int(*v)))
-            .collect(),
-    )
+    Json::Obj(m.iter().map(|(k, v)| (k.clone(), Json::Int(*v))).collect())
 }
 
 /// `cost_view` — the §3 cost projection: `measurement.cost.attributed` rows
@@ -581,10 +577,7 @@ pub fn cost_view(
         ("run_id", Json::str(run_id)),
         ("root_run_id", Json::str(root_run_id)),
         ("subjects", Json::Obj(fold.subjects_json())),
-        (
-            "total_spend_micro",
-            micro_map_json(&fold.totals_map()),
-        ),
+        ("total_spend_micro", micro_map_json(&fold.totals_map())),
         ("total_rows", Json::Int(fold.total_rows())),
         ("tool_commit_totals", fold.tool_totals_json()),
         ("permission_wait_ms", Json::Int(fold.permission_wait_ms)),
@@ -658,7 +651,10 @@ impl std::fmt::Display for CostTreeError {
                 write!(f, "RootMissing({root_run_id})")
             }
             CostTreeError::RootMismatch { run_id } => {
-                write!(f, "RootMismatch({run_id}: non-root member without a parent)")
+                write!(
+                    f,
+                    "RootMismatch({run_id}: non-root member without a parent)"
+                )
             }
             CostTreeError::UnknownParent {
                 run_id,
@@ -725,10 +721,8 @@ pub fn cost_view_run_tree(
     }
 
     // ── the per-run folds (one fold, one home — CC1) ───────────────────
-    let events_by_id: BTreeMap<&str, &[EventEnvelope]> = members
-        .iter()
-        .map(|m| (m.run_id, m.events))
-        .collect();
+    let events_by_id: BTreeMap<&str, &[EventEnvelope]> =
+        members.iter().map(|m| (m.run_id, m.events)).collect();
     let mut runs_json = BTreeMap::new();
     let mut subagents: BTreeMap<String, BTreeMap<String, Json>> = BTreeMap::new();
     let mut watermarks = BTreeMap::new();
@@ -744,7 +738,10 @@ pub fn cost_view_run_tree(
         if m.run_id == root_run_id {
             root_watermark = fold.watermark;
         }
-        watermarks.insert(m.run_id.to_string(), fold.watermark.map(|w| Json::Int(w as i64)));
+        watermarks.insert(
+            m.run_id.to_string(),
+            fold.watermark.map(|w| Json::Int(w as i64)),
+        );
         let run_totals = fold.totals_map();
         let run_rows = fold.total_rows();
         runs_json.insert(
@@ -779,23 +776,18 @@ pub fn cost_view_run_tree(
             let parent_events = events_by_id.get(p).copied().unwrap_or(&[]);
             let spawned = parent_events.iter().find(|e| {
                 e.class == "control.subagent.spawned"
-                    && (e.payload.get("child_run_id").and_then(Json::as_str)
-                        == Some(m.run_id)
+                    && (e.payload.get("child_run_id").and_then(Json::as_str) == Some(m.run_id)
                         || e.scope.child_run_id.as_deref() == Some(m.run_id))
             });
             let closed = parent_events.iter().find(|e| {
                 matches!(
                     e.class.as_str(),
                     "control.subagent.result" | "control.subagent.cancelled"
-                ) && (e.payload.get("child_run_id").and_then(Json::as_str)
-                    == Some(m.run_id)
+                ) && (e.payload.get("child_run_id").and_then(Json::as_str) == Some(m.run_id)
                     || e.scope.child_run_id.as_deref() == Some(m.run_id))
             });
             if let Some(sp) = spawned {
-                row.push((
-                    "spawn_event",
-                    Json::str(format!("{}:{}", p, sp.event_id)),
-                ));
+                row.push(("spawn_event", Json::str(format!("{}:{}", p, sp.event_id))));
                 for field in ["delegation_ref", "budget_id", "reservation_id", "mode"] {
                     if let Some(v) = sp.payload.get(field) {
                         row.push((field, v.clone()));
@@ -809,10 +801,7 @@ pub fn cost_view_run_tree(
                         "closed_by",
                         Json::str(cl.class.rsplit('.').next().unwrap_or("closed")),
                     ));
-                    row.push((
-                        "close_event",
-                        Json::str(format!("{}:{}", p, cl.event_id)),
-                    ));
+                    row.push(("close_event", Json::str(format!("{}:{}", p, cl.event_id))));
                     // The delegation time — spawned.ts → close.ts, `n/a` when
                     // either stamp cannot be parsed (typed, never 0).
                     let delegation_ms = spawned
@@ -851,10 +840,7 @@ pub fn cost_view_run_tree(
                     .collect(),
             ),
         ),
-        (
-            "total_spend_micro",
-            micro_map_json(&totals),
-        ),
+        ("total_spend_micro", micro_map_json(&totals)),
         ("total_rows", Json::Int(total_rows)),
         (
             "tool_commit_totals",

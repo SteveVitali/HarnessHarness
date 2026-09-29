@@ -954,6 +954,14 @@ impl<'a> ExperimentEngine<'a> {
             })?
             .clone();
 
+        // C1 F-profiles (S4.15; R-2.9.4): the arm's `environment`-kind
+        // levels may carry `fault_profile`/`perturbation_profile` ids in
+        // `overrides` — resolved and catalogue-checked *before* the slice
+        // is allocated, so an unknown id refuses the launch typed, never
+        // spends. The resolved ids stamp the subject manifest's `extra`
+        // below.
+        let (fault_profile, perturbation_profile) = env_profiles(&spec, &arm)?;
+
         // Pool admission re-check (AC-R-2.10.3-10): a claim may predate a
         // competing dispatch — `launch` re-verifies and refuses
         // `PoolExhausted`; the claim stays live for a later dispatch.
@@ -1150,6 +1158,19 @@ impl<'a> ExperimentEngine<'a> {
         } else {
             ManifestClass::Hosted
         };
+        // The C1 F-profiles the environment level declared — stamped on
+        // `extra` so the `ResultsRow → EvalRun` projection and the
+        // compare's `fault_profile`/`perturbation_profile` match axes read
+        // the run's actual fault environment (§5h.2 C2; records-in, never
+        // inferred).
+        if let Some(f) = &fault_profile {
+            manifest.extra.insert("fault_profile".into(), Json::str(f));
+        }
+        if let Some(p) = &perturbation_profile {
+            manifest
+                .extra
+                .insert("perturbation_profile".into(), Json::str(p));
+        }
         if let Some(o) = &hosted_outcome {
             manifest.hosting_mechanism = Some(o.hosting_mechanism.clone());
             // The participant descriptor carries the capability vector the
@@ -2719,6 +2740,87 @@ impl Drop for ExperimentEngine<'_> {
         }
         self.run_id = None;
     }
+}
+
+/// The arm's environment-level fault/perturbation profiles (S4.15; §5h.4
+/// C1's F-suite binding): a `FactorKind::Environment` level's `overrides`
+/// may carry `fault_profile`/`perturbation_profile` members, each naming a
+/// Stage-3 catalogue profile (`hh_eval::stage3_fault_profiles()` /
+/// `stage3_perturbation_profiles()`). The member must be a string id in
+/// the catalogue — anything else, or two environment levels disagreeing
+/// on the same member, is a typed `InadmissibleFactor` refusal (CC10:
+/// never a silently dropped or coerced override). Absent members stay
+/// absent — the manifest carries no profile it was not declared under.
+fn env_profiles(
+    spec: &ExperimentSpec,
+    arm: &ArmSpec,
+) -> Result<(Option<String>, Option<String>), ExperimentError> {
+    let fault_ids: BTreeSet<String> = hh_eval::stage3_fault_profiles()
+        .iter()
+        .map(|p| p.profile_id.clone())
+        .collect();
+    let perturbation_ids: BTreeSet<String> = hh_eval::stage3_perturbation_profiles()
+        .iter()
+        .map(|p| p.profile_id.clone())
+        .collect();
+    let mut fault: Option<String> = None;
+    let mut perturbation: Option<String> = None;
+    for (fname, lid) in &arm.level_assignment {
+        let Some(factor) = spec
+            .factors
+            .iter()
+            .find(|f| &f.name == fname && f.kind == FactorKind::Environment)
+        else {
+            continue;
+        };
+        let Some(level) = factor.levels.iter().find(|l| &l.level_id == lid) else {
+            continue;
+        };
+        let Some(overrides) = &level.overrides else {
+            continue;
+        };
+        for (member, slot, catalogue) in [
+            ("fault_profile", &mut fault, &fault_ids),
+            ("perturbation_profile", &mut perturbation, &perturbation_ids),
+        ] {
+            let Some(declared) = overrides.get(member) else {
+                continue;
+            };
+            let Some(profile_id) = declared.as_str() else {
+                return Err(ExperimentError::Refusal(
+                    ExperimentRefusal::InadmissibleFactor {
+                        factor: fname.clone(),
+                        reason: format!("{member} override is not a profile-id string"),
+                    },
+                ));
+            };
+            if !catalogue.contains(profile_id) {
+                return Err(ExperimentError::Refusal(
+                    ExperimentRefusal::InadmissibleFactor {
+                        factor: fname.clone(),
+                        reason: format!(
+                            "{member} {profile_id:?} names no Stage-3 catalogue profile"
+                        ),
+                    },
+                ));
+            }
+            match slot {
+                Some(existing) if existing != profile_id => {
+                    return Err(ExperimentError::Refusal(
+                        ExperimentRefusal::InadmissibleFactor {
+                            factor: fname.clone(),
+                            reason: format!(
+                                "environment levels disagree on {member}: \
+                                 {existing:?} vs {profile_id:?}"
+                            ),
+                        },
+                    ));
+                }
+                _ => *slot = Some(profile_id.to_string()),
+            }
+        }
+    }
+    Ok((fault, perturbation))
 }
 
 /// The median of a sample (upper median on even counts — deterministic, no

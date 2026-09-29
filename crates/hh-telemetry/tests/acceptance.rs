@@ -1302,13 +1302,21 @@ fn cost_view_run_tree_rolls_children_up_exactly_once() {
     let subs = p.get("subagents").expect("subagents map");
     let under_root = subs.get(&root).expect("child under the root's scope");
     assert_eq!(
-        under_root.get(&child).and_then(|c| c.get("total_spend_micro")).and_then(|t| t.get("USD")),
+        under_root
+            .get(&child)
+            .and_then(|c| c.get("total_spend_micro"))
+            .and_then(|t| t.get("USD")),
         Some(&Json::Int(30)),
         "the child contributes its own-run totals under the parent's subagent scope"
     );
-    let under_child = subs.get(&child).expect("grandchild under the child's scope");
+    let under_child = subs
+        .get(&child)
+        .expect("grandchild under the child's scope");
     assert_eq!(
-        under_child.get(&grand).and_then(|c| c.get("total_spend_micro")).and_then(|t| t.get("USD")),
+        under_child
+            .get(&grand)
+            .and_then(|c| c.get("total_spend_micro"))
+            .and_then(|t| t.get("USD")),
         Some(&Json::Int(7))
     );
     // …and nowhere else — the grandchild is not double-counted at the root.
@@ -1321,7 +1329,9 @@ fn cost_view_run_tree_rolls_children_up_exactly_once() {
     for r in [&root, &child, &grand] {
         assert!(runs.get(r.as_str()).is_some(), "run {r} fold missing");
         assert!(
-            p.get("watermarks").and_then(|w| w.get(r.as_str())).is_some(),
+            p.get("watermarks")
+                .and_then(|w| w.get(r.as_str()))
+                .is_some(),
             "run {r} watermark missing"
         );
     }
@@ -1329,9 +1339,21 @@ fn cost_view_run_tree_rolls_children_up_exactly_once() {
     let again = cost_view_run_tree(
         &root,
         &[
-            RunTreeSlice { run_id: &root, parent_run_id: None, events: &root_ev },
-            RunTreeSlice { run_id: &child, parent_run_id: Some(&root), events: &child_ev },
-            RunTreeSlice { run_id: &grand, parent_run_id: Some(&child), events: &grand_ev },
+            RunTreeSlice {
+                run_id: &root,
+                parent_run_id: None,
+                events: &root_ev,
+            },
+            RunTreeSlice {
+                run_id: &child,
+                parent_run_id: Some(&root),
+                events: &child_ev,
+            },
+            RunTreeSlice {
+                run_id: &grand,
+                parent_run_id: Some(&child),
+                events: &grand_ev,
+            },
         ],
         None,
     )

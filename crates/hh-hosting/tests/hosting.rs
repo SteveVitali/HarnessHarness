@@ -1080,11 +1080,9 @@ fn m18_measured_and_reported_coexist_as_distinct_provenance() {
         .filter(|r| r.class == "model.call.completed")
         .collect();
     assert_eq!(call_rows.len(), 2);
-    assert!(
-        call_rows
-            .iter()
-            .any(|r| r.payload.get("provenance") == Some(&Json::str("participant_reported")))
-    );
+    assert!(call_rows
+        .iter()
+        .any(|r| r.payload.get("provenance") == Some(&Json::str("participant_reported"))));
     // The measured row is verbatim passthrough — its authority/mediation
     // stamps, not a payload provenance member.
     let measured = call_rows

@@ -599,10 +599,7 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
                             ),
                             (
                                 "session_ref",
-                                e.payload
-                                    .get("session_ref")
-                                    .cloned()
-                                    .unwrap_or(Json::Null),
+                                e.payload.get("session_ref").cloned().unwrap_or(Json::Null),
                             ),
                         ]),
                         provenance: claim_prov,
@@ -612,9 +609,18 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
                     claims.push(crate::manifest::Claim {
                         role: "conformance_drift".into(),
                         value: Json::obj([
-                            ("dimension", e.payload.get("dimension").cloned().unwrap_or(Json::Null)),
-                            ("declared", e.payload.get("declared").cloned().unwrap_or(Json::Null)),
-                            ("observed", e.payload.get("observed").cloned().unwrap_or(Json::Null)),
+                            (
+                                "dimension",
+                                e.payload.get("dimension").cloned().unwrap_or(Json::Null),
+                            ),
+                            (
+                                "declared",
+                                e.payload.get("declared").cloned().unwrap_or(Json::Null),
+                            ),
+                            (
+                                "observed",
+                                e.payload.get("observed").cloned().unwrap_or(Json::Null),
+                            ),
                             (
                                 "source_event",
                                 Json::str(format!("{run_id}:{}", e.event_id)),

@@ -13,7 +13,7 @@
 //! in-process body the binary wraps — identical bytes in, identical bytes
 //! out.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use hh_lab::bench::{
@@ -22,13 +22,13 @@ use hh_lab::bench::{
 };
 use hh_lab::model::ForeignRef;
 use hh_ontology::lab::{
-    BenchmarkNetworkMode, ContaminationStratum, EnvironmentFamily, SplitLabel, TaskValidityState,
-    VerifierIsolation,
+    BenchmarkNetworkMode, ContaminationStratum, EnvironmentFamily, SplitLabel, SubmissionKind,
+    TaskValidityState, VerifierIsolation,
 };
 use hh_provenance::ProvenanceRecord;
 use hh_wire::Json;
 
-use crate::adapter::{AdapterError, BenchmarkAdapter};
+use crate::adapter::{AdapterError, BenchmarkAdapter, ExportFormat, HostingSurface};
 use crate::env::FsEnv;
 use crate::grade::{grade, GradeError, GradeRequest, GradeResult};
 use crate::infra::InfraSignal;
@@ -348,13 +348,84 @@ impl FixtureAdapter {
         }
     }
 
+    /// `adapter_b` — the stratum-B fresh SWE-style pool (C1; §5h.4 §2.4
+    /// row B): a `coding_terminal` suite grading by SWE-bench-harness
+    /// patch semantics — `separate` isolation mandatory (pristine image +
+    /// apply chain). Its `SuiteValidityRecord` is the corpus's committed
+    /// evidence — headline use exists only because the record does.
+    pub fn adapter_b() -> FixtureAdapter {
+        let mut tasks = BTreeMap::new();
+        let t = fixture_task(
+            "adapter_b",
+            EnvironmentFamily::CodingTerminal,
+            "b-resolve",
+            SplitLabel::HeldOut,
+            ContaminationStratum::FreshTemporal,
+            "Resolve the issue; write the patch payload to submission.json.",
+            b"{\"resolved\":true}".as_slice(),
+            Some(VerifierIsolation::Separate),
+            None,
+        );
+        tasks.insert(t.record.task_id.clone(), t);
+        FixtureAdapter {
+            adapter_id: "adapter_b",
+            family: EnvironmentFamily::CodingTerminal,
+            requires: [
+                (
+                    hh_ontology::lab::HandleCapability::Bash,
+                    hh_ontology::lab::Support::Required,
+                ),
+                (
+                    hh_ontology::lab::HandleCapability::File,
+                    hh_ontology::lab::Support::Required,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            tasks,
+        }
+    }
+
+    /// `adapter_g` — the Harbor-Index smoke suite (C1; §5h.4 §2.4 row G):
+    /// `provisional`, `product`-granularity only, `parity = none` — the
+    /// I-5 restriction *is* the smoke-suite admission rule (an unvalidated
+    /// adapter never feeds headline rows).
+    pub fn adapter_g() -> FixtureAdapter {
+        let mut tasks = BTreeMap::new();
+        let t = fixture_task(
+            "adapter_g",
+            EnvironmentFamily::CodingTerminal,
+            "g-smoke",
+            SplitLabel::HeldOut,
+            ContaminationStratum::PublicDated,
+            "Smoke: write the smoke payload to submission.json.",
+            b"{\"smoke\":true}".as_slice(),
+            Some(VerifierIsolation::Separate),
+            None,
+        );
+        tasks.insert(t.record.task_id.clone(), t);
+        FixtureAdapter {
+            adapter_id: "adapter_g",
+            family: EnvironmentFamily::CodingTerminal,
+            requires: [(
+                hh_ontology::lab::HandleCapability::File,
+                hh_ontology::lab::Support::Required,
+            )]
+            .into_iter()
+            .collect(),
+            tasks,
+        }
+    }
+
     /// The letter → adapter dispatch.
     pub fn by_id(adapter_id: &str) -> Option<FixtureAdapter> {
         match adapter_id {
             "adapter_a" => Some(Self::adapter_a()),
+            "adapter_b" => Some(Self::adapter_b()),
             "adapter_c" => Some(Self::adapter_c()),
             "adapter_d" => Some(Self::adapter_d()),
             "adapter_e" => Some(Self::adapter_e()),
+            "adapter_g" => Some(Self::adapter_g()),
             _ => None,
         }
     }
@@ -392,6 +463,30 @@ impl BenchmarkAdapter for FixtureAdapter {
 
     fn family(&self) -> EnvironmentFamily {
         self.family
+    }
+
+    fn submission_kind(&self) -> SubmissionKind {
+        decl_facts(self.adapter_id).0
+    }
+
+    fn verifier_isolation_supported(&self) -> BTreeSet<VerifierIsolation> {
+        decl_facts(self.adapter_id).1
+    }
+
+    fn export_formats(&self) -> Vec<ExportFormat> {
+        decl_facts(self.adapter_id).2
+    }
+
+    fn hosting_surfaces_supported(&self) -> BTreeSet<HostingSurface> {
+        decl_facts(self.adapter_id).3
+    }
+
+    fn parity_ref(&self) -> Option<String> {
+        decl_facts(self.adapter_id).4
+    }
+
+    fn version_identity(&self) -> String {
+        format!("fixture-{}/1", self.adapter_id)
     }
 
     fn task_ids(&self) -> Vec<String> {
@@ -569,12 +664,115 @@ impl BenchmarkAdapter for FixtureAdapter {
 pub fn registry() -> BTreeMap<&'static str, FixtureAdapter> {
     [
         ("adapter_a", FixtureAdapter::adapter_a()),
+        ("adapter_b", FixtureAdapter::adapter_b()),
         ("adapter_c", FixtureAdapter::adapter_c()),
         ("adapter_d", FixtureAdapter::adapter_d()),
         ("adapter_e", FixtureAdapter::adapter_e()),
+        ("adapter_g", FixtureAdapter::adapter_g()),
     ]
     .into_iter()
     .collect()
+}
+
+/// The declaration facts a fixture adapter carries (the per-letter
+/// `declare()` members — §5h.4 §2.1). `adapter_g` is `parity = none`:
+/// the Harbor-Index smoke suite never claimed a parity report, so I-5
+/// restricts it to `product`-granularity runs.
+fn decl_facts(
+    adapter_id: &str,
+) -> (
+    SubmissionKind,
+    std::collections::BTreeSet<VerifierIsolation>,
+    Vec<ExportFormat>,
+    std::collections::BTreeSet<HostingSurface>,
+    Option<String>,
+) {
+    let hosted = || {
+        [
+            HostingSurface::NativeParticipant,
+            HostingSurface::ContainerInstalled,
+            HostingSurface::SessionAbi,
+        ]
+        .into_iter()
+        .collect()
+    };
+    let separate = || [VerifierIsolation::Separate].into_iter().collect();
+    match adapter_id {
+        // Stratum A's family record declares `shared` admissible with the
+        // tamper veto `n/a{no_detector}` (§5h.4 §2.4 row A); `separate` is
+        // the graded default.
+        "adapter_a" => (
+            SubmissionKind::Artifact,
+            [VerifierIsolation::Separate, VerifierIsolation::Shared]
+                .into_iter()
+                .collect(),
+            vec![ExportFormat::AdapterExport, ExportFormat::HarborTrialDir],
+            hosted(),
+            Some(format!("parity://fixture/{adapter_id}")),
+        ),
+        // Stratum B — patch submissions under `separate` only (the
+        // SWE-bench-harness grading contract: pristine image + apply).
+        "adapter_b" => (
+            SubmissionKind::Patch,
+            separate(),
+            vec![ExportFormat::AdapterExport],
+            hosted(),
+            Some(format!("parity://fixture/{adapter_id}")),
+        ),
+        "adapter_c" => (
+            SubmissionKind::Answer,
+            separate(),
+            vec![ExportFormat::AdapterExport],
+            [
+                HostingSurface::NativeParticipant,
+                HostingSurface::SessionAbi,
+            ]
+            .into_iter()
+            .collect(),
+            Some(format!("parity://fixture/{adapter_id}")),
+        ),
+        "adapter_d" => (
+            SubmissionKind::Session,
+            separate(),
+            vec![ExportFormat::AdapterExport],
+            [
+                HostingSurface::NativeParticipant,
+                HostingSurface::SessionAbi,
+            ]
+            .into_iter()
+            .collect(),
+            Some(format!("parity://fixture/{adapter_id}")),
+        ),
+        "adapter_e" => (
+            SubmissionKind::Session,
+            separate(),
+            vec![ExportFormat::AdapterExport],
+            [
+                HostingSurface::NativeParticipant,
+                HostingSurface::SessionAbi,
+            ]
+            .into_iter()
+            .collect(),
+            Some(format!("parity://fixture/{adapter_id}")),
+        ),
+        // G smoke — `parity = none` (I-5: product-granularity only) and a
+        // native-participant surface (a hosted surface over an unvalidated
+        // adapter is refused, never silently served).
+        "adapter_g" => (
+            SubmissionKind::Artifact,
+            separate(),
+            vec![ExportFormat::AdapterExport, ExportFormat::HarborTrialDir],
+            [HostingSurface::NativeParticipant].into_iter().collect(),
+            None,
+        ),
+        _ => (
+            SubmissionKind::Answer,
+            separate(),
+            vec![ExportFormat::AdapterExport],
+            [HostingSurface::NativeParticipant].into_iter().collect(),
+            None,
+        ),
+    }
 }
 
 /// The unused-import guard for the held-out hex helper (kept for the

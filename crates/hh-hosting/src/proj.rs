@@ -616,16 +616,19 @@ fn hint_source(e: &HostedEvent) -> Option<&Json> {
 /// carrying `{kind, payload}` (CC3: nothing silently drops). M18's dual-row
 /// lowerings ([`lift_event_rows`]) return their *primary* row here.
 pub fn lift_event(e: &HostedEvent) -> LiftedRow {
-    lift_event_rows(e).into_iter().next().unwrap_or_else(|| LiftedRow {
-        class: "lifecycle.hosted.native_record".to_string(),
-        payload: Json::obj([("kind", Json::str(&e.kind)), ("payload", e.payload.clone())]),
-        seq: e.seq,
-        at: e.at,
-        mediation: e.mediation.clone(),
-        origin: e.provenance.origin.clone(),
-        authority: e.provenance.authority,
-        turn_id: None,
-    })
+    lift_event_rows(e)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| LiftedRow {
+            class: "lifecycle.hosted.native_record".to_string(),
+            payload: Json::obj([("kind", Json::str(&e.kind)), ("payload", e.payload.clone())]),
+            seq: e.seq,
+            at: e.at,
+            mediation: e.mediation.clone(),
+            origin: e.provenance.origin.clone(),
+            authority: e.provenance.authority,
+            turn_id: None,
+        })
 }
 
 /// Lift one hosted event to its native-class row*s* — one row per event for

@@ -259,8 +259,12 @@ fn interchange_exports_cost_view_fields_with_declared_unit_loss() {
         manifest: a.manifest.clone(),
         members: a.members.clone(),
     };
-    let out = export_target(&decoded, "interchange_trajectory", &PublicationPolicy::default())
-        .unwrap();
+    let out = export_target(
+        &decoded,
+        "interchange_trajectory",
+        &PublicationPolicy::default(),
+    )
+    .unwrap();
     assert_eq!(out.granularity_ceiling, "product");
     let header_text = String::from_utf8(out.files["interchange.json"].clone()).unwrap();
     let header = hh_wire::json::parse(&header_text).unwrap();
@@ -309,8 +313,7 @@ fn harbor_export_carries_lineage_prefixes_and_audit_head() {
         manifest: a.manifest.clone(),
         members: a.members.clone(),
     };
-    let out =
-        export_target(&decoded, "harbor_job_dir", &PublicationPolicy::default()).unwrap();
+    let out = export_target(&decoded, "harbor_job_dir", &PublicationPolicy::default()).unwrap();
     let job_text = String::from_utf8(out.files["job.json"].clone()).unwrap();
     let job = hh_wire::json::parse(&job_text).unwrap();
     let run_row: Json = match job.get("runs") {
