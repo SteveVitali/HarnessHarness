@@ -205,6 +205,14 @@ pub enum HirError {
         /// Which ref and which pin member is missing.
         detail: String,
     },
+    /// §5g.2 (R-2.8.2; AC-R-2.8.2-1): a gated `ToolCapability` — `world = open`
+    /// on any declared effect, or a domain in `{net_egress, message_human,
+    /// fs_read, memory_write}` — sealed without a `flow_contract`. The
+    /// contribution declaration is the C2 record's mandatory half.
+    ContributionUndeclared {
+        /// The capability's semantic id.
+        capability: String,
+    },
 }
 
 impl fmt::Display for HirError {
@@ -281,6 +289,9 @@ impl fmt::Display for HirError {
             HirError::NoDiscoverySurface => write!(f, "NoDiscoverySurface"),
             HirError::UnpinnedInSealedForm { detail } => {
                 write!(f, "UnpinnedInSealedForm: {detail}")
+            }
+            HirError::ContributionUndeclared { capability } => {
+                write!(f, "ContributionUndeclared: {capability}")
             }
         }
     }

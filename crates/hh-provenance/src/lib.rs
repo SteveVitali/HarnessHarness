@@ -39,6 +39,9 @@
 //! - [`lower`] — P7 `lower`/`lift` (lossy-explicit carriers) and RP `render_role`.
 //! - [`decode`] — the canonical `from_json` decoders (added for S1.5): the schema source
 //!   owns both directions (CC7), so a stored/endorsed record parses back byte-identically.
+//! - [`flow`] — the C2 slice (§5g.2, R-2.8.2): `FlowContract` + its codec, `L⁺(p)`,
+//!   `admit`, `EnforcementClass`, D-ROBUST, the closed `Remedy` set, check 3, and the
+//!   closed bounded flow-policy language (`FlowCond`/`FlowRule`).
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -47,6 +50,7 @@ pub mod authority;
 pub mod decode;
 pub mod derive;
 pub mod endorse;
+pub mod flow;
 pub mod label;
 pub mod lower;
 pub mod mandatory;
@@ -60,6 +64,16 @@ pub use derive::{check_delegate_attenuation, derive, ingest_child_result, Deriva
 pub use endorse::{
     apply_label, check_endorsement, declassify, endorse, seal, ContentKind, EndorsementBasis,
     EndorsementError, LabelApplied, LabelDeclassified, LabelEndorsed,
+};
+pub use flow::{
+    admit, apply_contribution, apply_sanitizer_bounds, capacity_bits, check3_relevant,
+    check_basis_effect, check_flow, check_reader_coverage, check_shape_endorsement, d_robust,
+    enumerate_remedies, eval_cond, label_bytes, label_from_json, label_json_full,
+    prospective_label, resolve_recipients, Admission, AdmissionKind, BasisEffectError,
+    CommittedEffect, Contribution, EnforcementClass, EvalError, FlowCond, FlowContract,
+    FlowDecision, FlowError, FlowInput, FlowRule, FlowSelector, FlowVerdict, ReadersFrom,
+    ReadersTo, Remedy, RobustnessInput, SanitizerBounds, Subject, TaintTagPattern, CAP_MAX_DEFAULT,
+    COND_MAX_DEPTH, COND_MAX_NODES, LABEL_MAX_BYTES,
 };
 pub use label::{
     check_diff_authority_delta, check_label_transition, classify_label_delta, context_label,

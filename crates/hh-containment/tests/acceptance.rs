@@ -1297,6 +1297,7 @@ fn bare_proposal(domain: EffectDomain, gate: ContainmentGate) -> Proposal {
         inputs: AssessmentInputs::default(),
         requested_grants: vec![],
         containment: gate,
+        flow: Default::default(),
         at: 0,
     }
 }

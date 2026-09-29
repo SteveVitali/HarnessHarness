@@ -426,6 +426,7 @@ fn input<'a>(
         reserve: None,
         compensation_plan_id: None,
         baseline_ref: None,
+        flow: Default::default(),
     }
 }
 

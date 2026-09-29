@@ -195,6 +195,7 @@ fn proposal(cap_semantic: &str, domain: EffectDomain, args: Json) -> Proposal {
         },
         requested_grants: vec![],
         containment: ContainmentGate::Clear,
+        flow: Default::default(),
         at: 0,
     }
 }
@@ -450,4 +451,101 @@ fn oop_approval_state_carried() {
     assert_eq!(m2.approvals.stats.human_wait_ms, 42);
     assert_eq!(m2.denial_policy.unwrap().max_denials, 0);
     assert_eq!(m2.approvals.denial_counts.len(), 1);
+}
+
+// ── AC-R-2.8.2-12 — OOP parity over the flow plane ───────────────────────────
+
+/// A `flow_contract` capability decided through `hh-authorize` is
+/// byte-identical to the in-process decision — the `flow` member round-trips
+/// through `AuthorizeInput` (codec parity), and the decision is
+/// profile-invariant.
+#[test]
+fn oop_flow_contract_byte_identical_and_profile_invariant() {
+    // A `message_human` capability with the C2 contract — `to` the
+    // endorsement-surface recipient param, `body` the content param.
+    let mut n = tool_node(
+        "test:sendmail",
+        &["to", "body"],
+        vec![EffectClass {
+            domain: EffectDomain::MessageHuman,
+            attributes: Some(EffectAttributes {
+                mutability: Mutability::Additive,
+                repeat_safety: RepeatSafety::Idempotent,
+                world: World::Open,
+                reversibility: Reversibility::Compensable,
+            }),
+        }],
+        1,
+    );
+    if let KindRecord::ToolCapability(t) = &mut n.semantic {
+        t.flow_contract = Some(Json::obj([
+            (
+                "contribution",
+                Json::obj([("readers_from", Json::str("reads"))]),
+            ),
+            ("recipient_params", Json::Arr(vec![Json::str("to")])),
+            ("content_params", Json::Arr(vec![Json::str("body")])),
+        ]));
+    }
+    let h = root_handle(
+        "hnd-mail",
+        vec![grant(EffectDomain::MessageHuman, "*", true)],
+        AuthorityClass::Principal,
+    );
+    let m = monitor(Mode::Attended, vec![cap_entry(&n)], vec![h]);
+    let mut p = proposal(
+        "test:sendmail",
+        EffectDomain::MessageHuman,
+        Json::obj([
+            ("to", Json::str("mallory@evil")),
+            ("body", Json::str("report")),
+        ]),
+    );
+    // `to` is clean (principal-supplied); `body`'s readers do not cover the
+    // recipient — the flow stage asks with `{approval, sanitize}`.
+    let mut body = Label::at(AuthorityClass::Principal);
+    body.readers =
+        hh_provenance::ReaderSet::Restricted(["bob@corp".to_string()].into_iter().collect());
+    p.effect = EffectClass {
+        domain: EffectDomain::MessageHuman,
+        attributes: Some(EffectAttributes {
+            mutability: Mutability::Additive,
+            repeat_safety: RepeatSafety::Idempotent,
+            world: World::Open,
+            reversibility: Reversibility::Compensable,
+        }),
+    };
+    p.flow = hh_monitor::monitor::FlowInputs {
+        param_labels: [
+            ("to".to_string(), Label::at(AuthorityClass::Principal)),
+            ("body".to_string(), body),
+        ]
+        .into_iter()
+        .collect(),
+        ..Default::default()
+    };
+    let in_process = m.authorize(&p).expect("in-process").to_json();
+    // The flow stage's ask is on the wire.
+    assert!(matches!(in_process.get("decision"), Some(Json::Str(s)) if s == "ask"));
+
+    for profile in [Some("model:alpha@1".to_string()), None] {
+        let input = AuthorizeInput::capture(&m, &p, profile.clone());
+        // The wire form carries the non-default `flow` member.
+        assert!(input
+            .to_json()
+            .get("proposal")
+            .and_then(|pr| pr.get("flow"))
+            .is_some());
+        let out = run_oop(&input);
+        assert!(
+            out.status.success(),
+            "hh-authorize failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(out.stdout).unwrap().trim_end(),
+            in_process.to_canonical_string(),
+            "OOP diverged from in-process (profile {profile:?})"
+        );
+    }
 }

@@ -389,9 +389,31 @@ impl Label {
 
 impl LabelEndorsed {
     /// Decode the documented `security.label.endorsed` payload `{subject_ref, from, to,
-    /// endorser, basis, basis_ref?}` (§8.1 #3). The ledger's append-time monitor check-5
-    /// ([`crate::endorse::check_endorsement`]) consumes this.
+    /// endorser, basis, basis_ref?, capacity_bits?, sanitizer_ref?, robustness_inputs?}`
+    /// (§8.1 #3; §5g.2 §3 extends it with the shape/sanitizer evidence). The ledger's
+    /// append-time monitor check-5 ([`crate::endorse::check_endorsement`]) consumes this.
     pub fn from_json(j: &Json) -> Result<LabelEndorsed, DecodeError> {
+        let capacity_bits = match j.get("capacity_bits") {
+            Some(Json::Int(i)) if *i >= 0 => Some(*i as u64),
+            Some(_) => return Err(DecodeError::new("label_endorsed.capacity_bits not an int")),
+            None => None,
+        };
+        let robustness_inputs = match j.get("robustness_inputs") {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .map(|i| {
+                    i.as_str().map(str::to_string).ok_or_else(|| {
+                        DecodeError::new("label_endorsed.robustness_inputs not strings")
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            Some(_) => {
+                return Err(DecodeError::new(
+                    "label_endorsed.robustness_inputs not a list",
+                ))
+            }
+            None => Vec::new(),
+        };
         Ok(LabelEndorsed {
             subject_ref: req_str(j, "subject_ref", "label_endorsed")?,
             from: Label::from_json(req(j, "from", "label_endorsed")?)?,
@@ -400,6 +422,9 @@ impl LabelEndorsed {
             basis: EndorsementBasis::parse(&req_str(j, "basis", "label_endorsed")?)
                 .ok_or_else(|| DecodeError::new("label_endorsed.basis unknown"))?,
             basis_ref: opt_str(j, "basis_ref"),
+            capacity_bits,
+            sanitizer_ref: opt_str(j, "sanitizer_ref"),
+            robustness_inputs,
         })
     }
 }
@@ -472,6 +497,9 @@ mod tests {
             endorser: endorser.clone(),
             basis: EndorsementBasis::Seal,
             basis_ref: Some("sha256:perm".into()),
+            capacity_bits: None,
+            sanitizer_ref: None,
+            robustness_inputs: Vec::new(),
         };
         let j = Json::obj([
             ("subject_ref", Json::str(ev.subject_ref.clone())),

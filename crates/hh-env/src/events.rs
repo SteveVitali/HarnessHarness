@@ -377,6 +377,37 @@ pub fn observed_payload(
     Json::Obj(m)
 }
 
+/// `context.observation.recorded{kind: "tool_observation", effect_id,
+/// capability_ref, capture_manifest_ref, outcome, admission, label}` — the
+/// observation-plane record of a `flow_contract` capability's admitted
+/// result (§5g.2 §3's payload extension; §5d.5 observe's second output).
+/// `kind` discriminates the reminder rows (`budget_reminder`) the class
+/// also carries; `admission`/`label` are the recorded admission kind and
+/// the admitted `L(r)` — content-free (ids, enums, the label triple).
+pub fn observation_recorded_payload(
+    effect_id: &str,
+    capability_semantic_id: &str,
+    manifest_ref: &str,
+    outcome: &crate::observe::EffectOutcome,
+    admission: &hh_provenance::flow::Admission,
+) -> Json {
+    Json::obj([
+        ("kind", Json::str("tool_observation")),
+        ("effect_id", Json::str(effect_id.to_string())),
+        (
+            "capability_ref",
+            Json::str(capability_semantic_id.to_string()),
+        ),
+        ("capture_manifest_ref", Json::str(manifest_ref.to_string())),
+        ("outcome", Json::str(outcome.as_str())),
+        ("admission", Json::str(admission.kind.as_str())),
+        (
+            "label",
+            hh_provenance::flow::label_json_full(&admission.label),
+        ),
+    ])
+}
+
 /// `action.effect.unknown{attempt_no?, fencing_token, cause}` — outcome
 /// unknowable; must be probed, never silently redispatched.
 pub fn unknown_payload(attempt_no: u64, fencing_token: u64, cause: &str) -> Json {

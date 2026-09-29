@@ -300,6 +300,12 @@ fn ac_cp_10_open_world_capability_records_e4_na_open_world() {
             .into_iter()
             .collect(),
         );
+        // R-2.8.2: a gated (egress) capability must carry a `flow_contract`
+        // to seal — the minimal declared contribution.
+        tc.flow_contract = Some(Json::obj([(
+            "contribution",
+            Json::obj([("readers_from", Json::str("public"))]),
+        )]));
     }
     doc.nodes.push(t);
     let (store, sealed, _vids) = sealed_doc_with("cp10-ow", doc, vec![], vec![]);

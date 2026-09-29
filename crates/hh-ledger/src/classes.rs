@@ -325,6 +325,9 @@ const EFFECT_FIELDS: &[AuditField] = &[
     af("ordinal"),
     af("status"),
     af("error"),
+    // S2.7 (R-2.8.2; ADR-0054 D1) — `observed{admission}`: the recorded
+    // `AdmissionKind` for a `flow_contract` capability's result.
+    af("admission"),
 ];
 
 /// `security.permission.decided` — the §5g.6 §3 dossier partition (the
@@ -346,6 +349,8 @@ const DECIDED_FIELDS: &[AuditField] = &[
     af("decider"),
     af("decider_ref"),
     afb("decider_provenance", AUDIT_FIELD_LIST_BYTES),
+    // S2.7 (R-2.8.2; §5g.2 §3) — the `Remedy` a prior stage consumed.
+    af("remedy_taken"),
     af("decision"),
     af("decision_scope"),
     af("origin_permission_id"),
@@ -459,6 +464,12 @@ const LABEL_FIELDS: &[AuditField] = &[
     af("basis_ref"),
     af("label"),
     af("content_kind"),
+    // S2.7 (R-2.8.2; §5g.2 §3) — the shape/sanitizer evidence an endorsement
+    // ran under: measured `capacity_bits`, the bounded-sanitizer ref, the
+    // D-ROBUST-covered parameter paths.
+    af("capacity_bits"),
+    af("sanitizer_ref"),
+    afb("robustness_inputs", AUDIT_FIELD_LIST_BYTES),
     af("reason"),
 ];
 

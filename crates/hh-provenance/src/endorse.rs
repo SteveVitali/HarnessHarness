@@ -99,6 +99,16 @@ pub struct LabelEndorsed {
     pub basis: EndorsementBasis,
     /// The basis anchor (`permission_id` for `approval`; pin/policy refs for others).
     pub basis_ref: Option<String>,
+    /// The measured `capacity_bits` of the subject's shape schema when the
+    /// endorsement ran under a shape bound (§5g.2 §3 `cap_max`; absent when
+    /// the basis needed no shape evidence).
+    pub capacity_bits: Option<u64>,
+    /// The bounded sanitizer the endorsement ran under (`policy_rule (b)`),
+    /// when one applied.
+    pub sanitizer_ref: Option<String>,
+    /// The D-ROBUST inputs the endorsement covered — the parameter paths the
+    /// shape endorsement discharged (§5g.2 §4).
+    pub robustness_inputs: Vec<String>,
 }
 
 /// `security.label.declassified` payload — widens **readers only**.
@@ -132,13 +142,33 @@ pub struct LabelApplied {
 
 impl LabelEndorsed {
     /// Canonical JSON (one canonicalizer — `hh-wire` sorted-key compact).
+    /// `capacity_bits`/`sanitizer_ref`/`robustness_inputs` are honestly
+    /// absent unless the endorsement ran under the shape/sanitizer bound.
     pub fn to_json(&self) -> Json {
-        Json::obj([
+        let mut m = vec![
             ("subject_ref", Json::str(self.subject_ref.clone())),
             ("from", label_json(&self.from)),
             ("to", label_json(&self.to)),
             ("basis", Json::str(self.basis.as_str())),
-        ])
+        ];
+        if let Some(bits) = self.capacity_bits {
+            m.push(("capacity_bits", Json::Int(bits as i64)));
+        }
+        if let Some(s) = &self.sanitizer_ref {
+            m.push(("sanitizer_ref", Json::str(s.clone())));
+        }
+        if !self.robustness_inputs.is_empty() {
+            m.push((
+                "robustness_inputs",
+                Json::Arr(
+                    self.robustness_inputs
+                        .iter()
+                        .map(|p| Json::str(p.clone()))
+                        .collect(),
+                ),
+            ));
+        }
+        Json::obj(m)
     }
 }
 
@@ -344,6 +374,20 @@ pub fn endorse(
             });
         }
     }
+    // The C2 per-basis effects table (§5g.2 §2.2): on top of the authority rules above,
+    // `seal`/`pin`/`promotion`/`validator` must satisfy their componentwise effect — a
+    // strict authority raise with `taint` cleared (`validator` fixed to
+    // `external → environment`). `approval` is exempt: it endorses one Effect intent, never
+    // a content label — the table's `approval → NoLabelChange` row is why no
+    // `approval`-basis endorsement of *content* is ever emitted. `policy_rule` never
+    // reaches here (refused above — it declassifies readers only).
+    if !matches!(
+        basis,
+        EndorsementBasis::Approval | EndorsementBasis::PolicyRule
+    ) {
+        crate::flow::check_basis_effect(basis, &from, to)
+            .map_err(|e| crate::flow::basis_effect_endorsement_error(basis, &e))?;
+    }
     Ok(LabelEndorsed {
         subject_ref: subject_ref.into(),
         from,
@@ -351,6 +395,9 @@ pub fn endorse(
         endorser: endorser.clone(),
         basis,
         basis_ref,
+        capacity_bits: None,
+        sanitizer_ref: None,
+        robustness_inputs: Vec::new(),
     })
 }
 
@@ -365,6 +412,10 @@ pub fn seal(
 ) -> Result<LabelEndorsed, EndorsementError> {
     let mut to = subject.label();
     to.authority = AuthorityClass::Definition;
+    // The `seal` basis clears taint (§5g.2 §2.2) — the endorsed label is
+    // `definition`/untainted; a tainted subject is *cleared by the endorsement*, and the
+    // resulting record satisfies `TaintedAboveExternal` at `definition`.
+    to.taint.clear();
     endorse(
         subject,
         subject_ref,

@@ -164,6 +164,14 @@ pub enum AssemblyError {
         /// The candidate.
         candidate_id: String,
     },
+    /// `HandleLeaked` (§5g.2 quarantine handles; AC-R-2.8.2-5): a candidate
+    /// carrying an `OffloadHandle` was inlined — its offloaded blob rendered
+    /// into model-facing `Text` — instead of delivered `handle_only`/
+    /// `by_reference` (the excerpt is the only model-facing rendering).
+    HandleLeaked {
+        /// The candidate whose handle leaked.
+        candidate_id: String,
+    },
 }
 
 impl std::fmt::Display for AssemblyError {
@@ -563,6 +571,19 @@ pub fn assemble(
         } else {
             ac.candidate.state
         };
+        // C2 quarantine (§5g.2; AC-R-2.8.2-5): a handle-carrying candidate
+        // delivered inline (not `handle_only`, not `by_reference`) would
+        // render the offloaded blob into model-facing `Text` — `HandleLeaked`,
+        // a typed refusal, never a silent render. Reveal is a branch/
+        // endorsement operation (Stage 4), not an expand flag.
+        if ac.candidate.handle.is_some()
+            && !by_ref
+            && state != crate::vocab::CandidateState::HandleOnly
+        {
+            return Err(AssemblyError::HandleLeaked {
+                candidate_id: cid.clone(),
+            });
+        }
         let item_id = ac
             .candidate
             .context_item_id

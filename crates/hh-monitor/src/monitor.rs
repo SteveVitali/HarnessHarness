@@ -22,6 +22,7 @@ use hh_hir::kinds::EffectClass;
 use hh_hir::kinds::EffectDomain;
 use hh_hir::records::ToolCapabilityRecord;
 use hh_ontology::risk::{RiskClass, RiskReversibility, RiskScope};
+use hh_provenance::flow::{self, FlowContract, FlowInput, FlowVerdict};
 use hh_provenance::{AuthorityClass, Label, ProvenanceRecord, TaintTag};
 use hh_wire::json::Json;
 
@@ -72,9 +73,36 @@ pub struct Proposal {
     /// the proposal like `inputs` — the monitor never evaluates
     /// containment itself; the operation edge is R-2.8.4 → R-2.8.1.
     pub containment: ContainmentGate,
+    /// The C2 flow inputs (§5g.2; R-2.8.2) — the per-parameter labels the
+    /// kernel stamped at dispatch, the shape-endorsement flags D-ROBUST
+    /// reads, the committed-effect projection `committed`/`every_committed`
+    /// atoms consume, and the recorded detector verdicts. Empty = the flow
+    /// stage still runs on a declared `flow_contract` (its checks degrade
+    /// to `EvaluationError` where a required label is unrecorded).
+    pub flow: FlowInputs,
     /// The decision's logical time (`at` — the seq the `time` constraint's
     /// bound compares against).
     pub at: u64,
+}
+
+/// `FlowInputs` — the flow-plane members `authorize` consumes (§5g.2 §3's
+/// `Proposal` extension). Every member is a kernel-stamped canonical record
+/// (I-H1): `param_labels` is keyed by the **canonical** (post-`SurfaceArgMap`)
+/// parameter name — a handle argument's entry carries the handle's label.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FlowInputs {
+    /// Canonical parameter → its `Label` (`L(args)`'s per-parameter form).
+    pub param_labels: BTreeMap<String, Label>,
+    /// Parameters whose value carries a `validator` shape endorsement —
+    /// D-ROBUST's exemption set (I-F2).
+    pub shape_endorsed: BTreeSet<String>,
+    /// `project(run, effects, until_seq)` — the committed-effect projection
+    /// the `committed`/`every_committed`/`count` atoms read.
+    pub committed: Vec<hh_provenance::flow::CommittedEffect>,
+    /// Recorded deterministic detector verdicts — `"<validator_ref>:<param>"`.
+    /// A `detector` atom on an unrecorded key is an `EvaluationError`, never
+    /// `false`.
+    pub detectors: BTreeMap<String, bool>,
 }
 
 /// `ContainmentGate` — the recorded containment-floor verdict `authorize`
@@ -518,6 +546,7 @@ impl Monitor {
             checks: {
                 let mut c = checks;
                 c.push(CheckRecord {
+                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                     step,
                     outcome: "fail",
                     detail: reason.as_str().to_string(),
@@ -528,7 +557,38 @@ impl Monitor {
             decision_scope: DecisionScope::Once,
             cache_key: None,
             origin_permission_id: None,
+            remedy_taken: None,
             assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+        };
+        let deny_rem = |mut checks: Vec<CheckRecord>,
+                        step: u8,
+                        reason: DenyReason,
+                        remedies: Vec<flow::Remedy>,
+                        eff: AuthorityClass,
+                        taint: BTreeSet<TaintTag>,
+                        risk: RiskClass| {
+            checks.push(CheckRecord {
+                step,
+                outcome: "fail",
+                detail: reason.as_str().to_string(),
+                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+            });
+            KernelDecision {
+                effect_id: p.effect_id.clone(),
+                decision: Decision::Deny { reason, remedies },
+                effective_authority: eff,
+                taint,
+                effective_risk_class: risk,
+                handle_ids: Vec::new(),
+                policy_ref: self.policy.version_id.clone(),
+                checks,
+                decider: Decider::Policy,
+                decision_scope: DecisionScope::Once,
+                cache_key: None,
+                origin_permission_id: None,
+                assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+                remedy_taken: None,
+            }
         };
         // The containment precondition (ADR-0062 D3; R-2.8.4) — BEFORE any
         // check: a required field group's `unknown` evidence ⇒
@@ -539,6 +599,7 @@ impl Monitor {
         match &p.containment {
             ContainmentGate::Unverified { group } => {
                 checks.push(CheckRecord {
+                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                     step: 0,
                     outcome: "fail",
                     detail: format!("containment:unverified:{group}"),
@@ -554,6 +615,7 @@ impl Monitor {
             }
             ContainmentGate::Denied { detail } => {
                 checks.push(CheckRecord {
+                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                     step: 0,
                     outcome: "fail",
                     detail: detail.clone(),
@@ -623,6 +685,7 @@ impl Monitor {
             }
         };
         checks.push(CheckRecord {
+            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
             step: 0,
             outcome: "pass",
             detail: "well_formed".to_string(),
@@ -638,6 +701,7 @@ impl Monitor {
         let eff = ea.authority;
         let taint = ea.taint;
         checks.push(CheckRecord {
+            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
             step: 1,
             outcome: "pass",
             detail: format!("eff={}", eff.as_str()),
@@ -708,6 +772,7 @@ impl Monitor {
             ));
         }
         checks.push(CheckRecord {
+            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
             step: 2,
             outcome: "pass",
             detail: format!("covers={}", covered.len()),
@@ -724,19 +789,295 @@ impl Monitor {
         );
         let risk = assess::apply_self_report(kernel, p.self_report);
         checks.push(CheckRecord {
+            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
             step: 3,
             outcome: "pass",
             detail: risk.to_string(),
         });
 
+        // ── The C2 flow stage (§5g.2; R-2.8.2) ────────────────────────────
+        // Runs between the risk assessment and Π's default row — before any
+        // `ask` (D-ROBUST) and before Π (the rule tiers + check 3). When the
+        // capability declares a `flow_contract`: `L⁺(p)` is computed and
+        // joined into the decision's authority/taint (the contribution's
+        // declared taint can only raise the check surface — join is monotone
+        // restrictive); D-ROBUST refuses a tainted/`≤ external`
+        // endorsement-surface input (`deny{RobustnessViolated}` +
+        // `substitute` remedies); `check_flow` runs the contract's rules in
+        // tier order (deny → allow/declassify/sanitize); check 3 enforces
+        // `recipients(p) ⊆ readers(x)` on the egress domains (I-F4), a
+        // coverage failure asking `{approval, sanitize}` (attended) or
+        // denying `ReaderCoverage`. A `Fallthrough` hands Π's default row
+        // the (possibly raised) `eff`/`taint` — the spec's tier order.
+        let mut eff = eff;
+        let mut taint = taint;
+        let mut flow_verdict: Option<PiVerdict> = None;
+        let mut flow_remedies: Vec<flow::Remedy> = Vec::new();
+        if let Some(fc_json) = &cap.record.flow_contract {
+            let contract = match FlowContract::from_json(fc_json) {
+                Ok(c) => c,
+                Err(e) => {
+                    checks.push(CheckRecord {
+                        step: 4,
+                        outcome: "fail",
+                        detail: format!("flow_contract_malformed:{}", e.detail),
+                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    });
+                    return Ok(deny_rem(
+                        checks,
+                        4,
+                        DenyReason::EvaluationError,
+                        Vec::new(),
+                        eff,
+                        taint,
+                        risk,
+                    ));
+                }
+            };
+            let fclass = contract.enforcement;
+            let l_plus = flow::prospective_label(
+                &p.context_label,
+                p.flow.param_labels.values().cloned(),
+                &contract.contribution,
+                &p.capability_ref.semantic_id,
+            );
+            // Join L⁺ into the decision surface — never lowers (join is
+            // monotone toward restrictive).
+            eff = eff.min(l_plus.authority);
+            taint = taint.union(&l_plus.taint).cloned().collect();
+            checks.push(CheckRecord {
+                step: 4,
+                outcome: "pass",
+                detail: format!("l_plus:{}", l_plus.authority.as_str()),
+                enforcement: fclass,
+            });
+            // D-ROBUST (I-F2) — before any `ask`: the endorsement-surface
+            // params (`recipient_params` ∪ sanitize-decision params) must be
+            // `> external` and untainted or shape-endorsed.
+            let mut robust_params = contract.recipient_params.clone();
+            for r in &contract.rules {
+                if let flow::FlowDecision::Sanitize { param, .. } = &r.decision {
+                    if !robust_params.contains(param) {
+                        robust_params.push(param.clone());
+                    }
+                }
+            }
+            let mut rinputs: Vec<flow::RobustnessInput> = Vec::new();
+            let mut robust_fail: Vec<String> = Vec::new();
+            for pn in &robust_params {
+                match p.flow.param_labels.get(pn) {
+                    Some(l) => rinputs.push(flow::RobustnessInput {
+                        param: pn.clone(),
+                        label: l,
+                        shape_endorsed: p.flow.shape_endorsed.contains(pn),
+                    }),
+                    // An unrecorded label is unaccounted provenance — the
+                    // input cannot be certified robust (fail-closed).
+                    None => robust_fail.push(pn.clone()),
+                }
+            }
+            if let Err(bad) = flow::d_robust(&rinputs) {
+                robust_fail.extend(bad);
+            }
+            robust_fail.sort();
+            robust_fail.dedup();
+            if !robust_fail.is_empty() {
+                checks.push(CheckRecord {
+                    step: 4,
+                    outcome: "fail",
+                    detail: format!("d_robust:{}", robust_fail.join(",")),
+                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                });
+                let remedies = flow::enumerate_remedies(
+                    &p.effect_id,
+                    &[],
+                    &robust_fail,
+                    &contract,
+                    self.policy.mode == Mode::Unattended,
+                );
+                return Ok(deny_rem(
+                    checks,
+                    4,
+                    DenyReason::RobustnessViolated,
+                    remedies,
+                    eff,
+                    taint,
+                    risk,
+                ));
+            }
+            // `recipients(p)` — resolved through `resolve_recipients` over
+            // the canonical params; unresolvable on a contract that declares
+            // recipient params is an evaluation failure (fail-closed).
+            let recipients = match flow::resolve_recipients(&contract, &canonical.params) {
+                Some(r) => r,
+                None => {
+                    checks.push(CheckRecord {
+                        step: 4,
+                        outcome: "fail",
+                        detail: "recipients_unresolvable".to_string(),
+                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    });
+                    return Ok(deny_rem(
+                        checks,
+                        4,
+                        DenyReason::EvaluationError,
+                        Vec::new(),
+                        eff,
+                        taint,
+                        risk,
+                    ));
+                }
+            };
+            let world_open = p
+                .effect
+                .attributes
+                .iter()
+                .chain(declared_attrs.iter().copied())
+                .any(|a| a.world == hh_hir::kinds::World::Open);
+            let memory_ge_project = matches!(
+                p.inputs.memory_scope,
+                Some(MemoryScope::Project) | Some(MemoryScope::User)
+            );
+            let finput = FlowInput {
+                l_plus: &l_plus,
+                param_labels: &p.flow.param_labels,
+                args: &canonical.params,
+                recipients: &recipients,
+                domain: p.effect.domain.name(),
+                world: if world_open { "open" } else { "closed" },
+                committed: &p.flow.committed,
+                detectors: &p.flow.detectors,
+                capability: &p.capability_ref.semantic_id,
+            };
+            let mut declassified_readers: Option<hh_provenance::ReaderSet> = None;
+            match flow::check_flow(&contract.rules, &finput) {
+                Err(e) => {
+                    checks.push(CheckRecord {
+                        step: 4,
+                        outcome: "fail",
+                        detail: format!("eval:{}", e.detail),
+                        enforcement: fclass,
+                    });
+                    return Ok(deny_rem(
+                        checks,
+                        4,
+                        DenyReason::EvaluationError,
+                        Vec::new(),
+                        eff,
+                        taint,
+                        risk,
+                    ));
+                }
+                Ok(FlowVerdict::Deny {
+                    detail,
+                    reason,
+                    remedies,
+                }) => {
+                    checks.push(CheckRecord {
+                        step: 4,
+                        outcome: "fail",
+                        detail,
+                        enforcement: fclass,
+                    });
+                    let reason = deny_reason_spelling(&reason);
+                    return Ok(deny_rem(checks, 4, reason, remedies, eff, taint, risk));
+                }
+                Ok(FlowVerdict::Allow { rule_id }) => {
+                    checks.push(CheckRecord {
+                        step: 4,
+                        outcome: "pass",
+                        detail: format!("flow_allow:{rule_id}"),
+                        enforcement: fclass,
+                    });
+                    flow_verdict = Some(PiVerdict::Allow);
+                }
+                Ok(FlowVerdict::Declassified {
+                    rule_id,
+                    readers_to,
+                }) => {
+                    checks.push(CheckRecord {
+                        step: 4,
+                        outcome: "pass",
+                        detail: format!("flow_declassified:{rule_id}"),
+                        enforcement: fclass,
+                    });
+                    declassified_readers = Some(readers_to);
+                }
+                Ok(FlowVerdict::Ask { detail, remedies }) => {
+                    checks.push(CheckRecord {
+                        step: 4,
+                        outcome: "n/a",
+                        detail,
+                        enforcement: fclass,
+                    });
+                    flow_remedies = remedies;
+                    flow_verdict = Some(PiVerdict::Ask);
+                }
+                Ok(FlowVerdict::Fallthrough) => {}
+            }
+            // Check 3 (I-F4) — `recipients(p) ⊆ readers(x)` for every
+            // `content_param`; `Public` always passes. Runs on the egress
+            // domain set unless a rule already decided the flow (an `ask`
+            // stands; a `deny` returned above).
+            if flow::check3_relevant(p.effect.domain.name(), world_open, memory_ge_project)
+                && !matches!(flow_verdict, Some(PiVerdict::Ask))
+            {
+                let widened = declassified_readers.clone();
+                let failures = flow::check_reader_coverage(&contract, &recipients, |x| {
+                    if let Some(rs) = &widened {
+                        return Some(rs);
+                    }
+                    p.flow.param_labels.get(x).map(|l| &l.readers)
+                });
+                if failures.is_empty() {
+                    checks.push(CheckRecord {
+                        step: 4,
+                        outcome: "pass",
+                        detail: "reader_coverage".to_string(),
+                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    });
+                } else {
+                    checks.push(CheckRecord {
+                        step: 4,
+                        outcome: "fail",
+                        detail: format!("reader_coverage:{}", failures.join(",")),
+                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                    });
+                    let remedies = flow::enumerate_remedies(
+                        &p.effect_id,
+                        &failures,
+                        &[],
+                        &contract,
+                        self.policy.mode == Mode::Unattended,
+                    );
+                    if remedies.is_empty() {
+                        return Ok(deny_rem(
+                            checks,
+                            4,
+                            DenyReason::ReaderCoverage,
+                            Vec::new(),
+                            eff,
+                            taint,
+                            risk,
+                        ));
+                    }
+                    flow_remedies = remedies;
+                    flow_verdict = Some(PiVerdict::Ask);
+                }
+            }
+        }
+
         // Step 4 (authority-form half) — the Π gate: consulted when `eff ≤
         // external ∨ taint ≠ ∅` and the class is not `read_only ∧ closed`;
         // otherwise the ADR-0031 floor decides. Π-12's unattended transform
-        // applies to both.
+        // applies to both. A `flow_verdict` from the C2 stage skips the gate
+        // (the contract's rule decided — Π's default row is the last tier).
         let read_only_closed = risk.reversibility == RiskReversibility::ReadOnly
             && risk.scope == RiskScope::WorkspaceLocal;
         let gate = eff <= AuthorityClass::External || !taint.is_empty();
-        let (verdict, rows) = if gate && !read_only_closed {
+        let (verdict, rows) = if let Some(fv) = flow_verdict {
+            (fv, vec!["flow".to_string()])
+        } else if gate && !read_only_closed {
             let ctx = PiContext {
                 domain: p.effect.domain,
                 risk,
@@ -762,6 +1103,7 @@ impl Monitor {
             verdict
         };
         checks.push(CheckRecord {
+            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
             step: 4,
             outcome: match verdict {
                 PiVerdict::Allow => "pass",
@@ -794,6 +1136,7 @@ impl Monitor {
             };
             let mut c = checks;
             c.push(CheckRecord {
+                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                 step: 4,
                 outcome: "fail",
                 detail: reason.as_str().to_string(),
@@ -814,6 +1157,7 @@ impl Monitor {
                 decision_scope: DecisionScope::Once,
                 cache_key: None,
                 origin_permission_id: None,
+                remedy_taken: None,
                 assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
             });
         }
@@ -825,6 +1169,7 @@ impl Monitor {
         if let Some(detail) = self.persistence_ceiling_violation(p, &canonical, eff) {
             let mut c = checks;
             c.push(CheckRecord {
+                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                 step: 5,
                 outcome: "fail",
                 detail: format!("scope_ceiling:{detail}"),
@@ -845,10 +1190,12 @@ impl Monitor {
                 decision_scope: DecisionScope::Once,
                 cache_key: None,
                 origin_permission_id: None,
+                remedy_taken: None,
                 assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
             });
         }
         checks.push(CheckRecord {
+            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
             step: 5,
             outcome: "pass",
             detail: "persistence_ceiling".to_string(),
@@ -871,6 +1218,7 @@ impl Monitor {
                 {
                     let mut c = checks;
                     c.push(CheckRecord {
+                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                         step: 6,
                         outcome: "fail",
                         detail: DenyReason::AuthorityWidening.as_str().to_string(),
@@ -891,11 +1239,13 @@ impl Monitor {
                         decision_scope: DecisionScope::Once,
                         cache_key: None,
                         origin_permission_id: None,
+                        remedy_taken: None,
                         assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                     });
                 }
             }
             checks.push(CheckRecord {
+                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                 step: 6,
                 outcome: "pass",
                 detail: "attenuated".to_string(),
@@ -921,11 +1271,13 @@ impl Monitor {
                 match &rec.decision {
                     Decision::Allow => {
                         checks.push(CheckRecord {
+                            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                             step: 7,
                             outcome: "pass",
                             detail: format!("decided:{pid}"),
                         });
                         checks.push(CheckRecord {
+                            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                             step: 8,
                             outcome: "pass",
                             detail: format!("recorded:{pid}"),
@@ -943,12 +1295,14 @@ impl Monitor {
                             decision_scope: DecisionScope::Once,
                             cache_key: None,
                             origin_permission_id: Some(pid.clone()),
+                            remedy_taken: None,
                             assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                         });
                     }
                     Decision::Deny { reason, .. } => {
                         let mut c = checks;
                         c.push(CheckRecord {
+                            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                             step: 7,
                             outcome: "fail",
                             detail: format!("recorded_deny:{pid}"),
@@ -969,6 +1323,7 @@ impl Monitor {
                             decision_scope: DecisionScope::Once,
                             cache_key: None,
                             origin_permission_id: Some(pid.clone()),
+                            remedy_taken: None,
                             assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                         });
                     }
@@ -998,6 +1353,7 @@ impl Monitor {
                 {
                     let mut c = checks;
                     c.push(CheckRecord {
+                        enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                         step: 7,
                         outcome: "fail",
                         detail: format!("denial_fallback:{}", pol.fallback.as_str()),
@@ -1018,6 +1374,7 @@ impl Monitor {
                         decision_scope: DecisionScope::Once,
                         cache_key: None,
                         origin_permission_id: None,
+                        remedy_taken: None,
                         assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                     });
                 }
@@ -1030,6 +1387,7 @@ impl Monitor {
             if exhausted && hit.is_none() {
                 let mut c = checks;
                 c.push(CheckRecord {
+                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                     step: 7,
                     outcome: "fail",
                     detail: DenyReason::ApprovalsExhausted.as_str().to_string(),
@@ -1050,10 +1408,12 @@ impl Monitor {
                     decision_scope: DecisionScope::Once,
                     cache_key: None,
                     origin_permission_id: None,
+                    remedy_taken: None,
                     assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                 });
             }
             checks.push(CheckRecord {
+                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                 step: 7,
                 outcome: "pass",
                 detail: if hit.is_some() {
@@ -1068,6 +1428,7 @@ impl Monitor {
                 // the decision scope the lease's (I-P6/ADR-0071 D1).
                 let mut c = checks;
                 c.push(CheckRecord {
+                    enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                     step: 8,
                     outcome: "pass",
                     detail: format!("lease:{key}"),
@@ -1089,10 +1450,12 @@ impl Monitor {
                     },
                     cache_key: Some(key),
                     origin_permission_id: Some(lease.origin_permission_id.clone()),
+                    remedy_taken: None,
                     assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                 });
             }
             checks.push(CheckRecord {
+                enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
                 step: 8,
                 outcome: "n/a",
                 detail: "miss".to_string(),
@@ -1101,7 +1464,7 @@ impl Monitor {
                 effect_id: p.effect_id.clone(),
                 decision: Decision::Ask {
                     options: stage1_ask_options(),
-                    remedies: Vec::new(),
+                    remedies: flow_remedies.clone(),
                 },
                 effective_authority: eff,
                 taint,
@@ -1113,6 +1476,7 @@ impl Monitor {
                 decision_scope: DecisionScope::Once,
                 cache_key: None,
                 origin_permission_id: None,
+                remedy_taken: None,
                 assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
             });
         }
@@ -1130,6 +1494,7 @@ impl Monitor {
             decision_scope: DecisionScope::Once,
             cache_key: None,
             origin_permission_id: None,
+            remedy_taken: None,
             assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
         })
     }
@@ -1188,6 +1553,35 @@ pub fn assessment_inputs_ref(inputs: &AssessmentInputs) -> String {
         "assessment_inputs",
         assess::inputs_json(inputs).to_canonical_string().as_bytes(),
     )
+}
+
+/// Map a flow-rule `deny` decision's reason spelling onto the closed
+/// `DenyReason` sum (§5g.2 §3 — the rule names a reason; an unregistered
+/// spelling degrades to `PolicyDenied`, the Π-default refuse).
+fn deny_reason_spelling(s: &str) -> DenyReason {
+    match s {
+        "MissingProvenance" => DenyReason::MissingProvenance,
+        "UnmappedArgument" => DenyReason::UnmappedArgument,
+        "UnscopedParameter" => DenyReason::UnscopedParameter,
+        "UnknownProposer" => DenyReason::UnknownProposer,
+        "NoCoveringGrant" => DenyReason::NoCoveringGrant,
+        "GrantConstraintExhausted" => DenyReason::GrantConstraintExhausted,
+        "HandleRevoked" => DenyReason::HandleRevoked,
+        "PolicyDenied" => DenyReason::PolicyDenied,
+        "ScopeCeilingExceeded" => DenyReason::ScopeCeilingExceeded,
+        "AuthorityWidening" => DenyReason::AuthorityWidening,
+        "NotDelegable" => DenyReason::NotDelegable,
+        "BudgetExceedsParent" => DenyReason::BudgetExceedsParent,
+        "ApprovalsExhausted" => DenyReason::ApprovalsExhausted,
+        "UnattendedAsk" => DenyReason::UnattendedAsk,
+        "ApprovalTimedOut" => DenyReason::ApprovalTimedOut,
+        "ContainmentUnverified" => DenyReason::ContainmentUnverified,
+        "containment" => DenyReason::Containment,
+        "RobustnessViolated" => DenyReason::RobustnessViolated,
+        "ReaderCoverage" => DenyReason::ReaderCoverage,
+        "EvaluationError" => DenyReason::EvaluationError,
+        _ => DenyReason::PolicyDenied,
+    }
 }
 
 /// Parse a `PersistenceScope` spelling (`None` on any other value — never

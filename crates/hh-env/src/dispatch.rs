@@ -33,8 +33,9 @@ use hh_monitor::args::CanonicalArgs;
 use hh_monitor::assess::{kernel_assessed, AssessmentInputs, ParseOutcome, Tri};
 use hh_monitor::decision::Decision;
 use hh_monitor::events::decided_payload;
-use hh_monitor::monitor::{Monitor, Proposal};
+use hh_monitor::monitor::{FlowInputs, Monitor, Proposal};
 use hh_ontology::risk::{RiskClass, RiskReversibility};
+use hh_provenance::flow;
 use hh_provenance::{Label, ProvenanceRecord};
 use hh_secrets::redact::{redact, DetectorSet};
 use hh_wire::json::Json;
@@ -148,6 +149,14 @@ pub struct DispatchInput<'a> {
     /// A baseline ref, when the effect is `reversible` (the `prepared`
     /// requirement) — taken via `path_baseline` when absent.
     pub baseline_ref: Option<String>,
+    /// The C2 flow inputs (§5g.2; R-2.8.2) — the kernel-stamped
+    /// per-parameter labels (`L(args)`'s per-parameter form), the
+    /// shape-endorsement flags D-ROBUST reads, the committed-effect
+    /// projection and the recorded detector verdicts. `Default` for
+    /// capabilities without a `flow_contract` — the flow stage still runs
+    /// on a declared contract (its checks degrade to `EvaluationError`
+    /// where a required label is unrecorded).
+    pub flow: FlowInputs,
 }
 
 /// `DispatchOutcome` — what `dispatch` settled to.
@@ -465,6 +474,7 @@ impl<'a> Dispatcher<'a> {
             inputs,
             requested_grants: input.requested_grants.clone(),
             containment: gate.clone(),
+            flow: input.flow.clone(),
             at: self.store.now_ms(),
         };
         let decision = self
@@ -1187,12 +1197,40 @@ impl<'a> Dispatcher<'a> {
                 retryable: retryable_final,
             },
         };
+        // ── admission (§5g.2 §2; ADR-0054 D1) ─────────────────────────────
+        // A `flow_contract` capability's result is admitted at `L(r) =
+        // L⁺(p) ⊔ default_authority(tool, world)`. `realized` is `None` —
+        // no result-label channel exists at Stage 2 — so an open-world
+        // tool admits `unverified`, `taint = {tool}`, readers from the
+        // declared `reads`; the recorded `admission` member is the kind,
+        // never a class read from the payload.
+        let admission = input
+            .capability
+            .flow_contract
+            .as_ref()
+            .and_then(|fc| flow::FlowContract::from_json(fc).ok())
+            .map(|contract| {
+                let l_plus = flow::prospective_label(
+                    &input.context_label,
+                    input.flow.param_labels.values().cloned(),
+                    &contract.contribution,
+                    &input.capability_ref.semantic_id,
+                );
+                flow::admit(
+                    None,
+                    &contract,
+                    &l_plus,
+                    &input.capability_ref.semantic_id,
+                    dispatch_world_open(input),
+                )
+            });
         let obs = Observation {
             outcome,
             status,
             exit_status: report.exit_status,
             manifest_ref,
             completeness,
+            admission: admission.clone(),
         };
         let observed = self.minter_ev().mint_effect(
             "action.effect.observed",
@@ -1218,8 +1256,37 @@ impl<'a> Dispatcher<'a> {
             tool_call_id: Some(input.chain.tool_call_id.clone()),
             ..Default::default()
         };
-        self.store
-            .append(&self.run_id, lease, vec![observed, completed])?;
+        // `context.observation.recorded{admission}` (§5d.5 observe's
+        // second output; §5g.2 §3's payload extension) — the observation-
+        // plane record of the admitted result. Emitted only for a
+        // `flow_contract` capability (the member is meaningful only where
+        // `admit` ran); the admitted label rides as the recorded `label`
+        // member — the row's own provenance stays kernel (the kernel's
+        // record of the admission, never the content's claim). It precedes
+        // `completed` in the batch — `completed` closes the `tool_call`
+        // scope this row's scope members name.
+        let mut batch = vec![observed];
+        if let Some(adm) = &admission {
+            let mut recorded = self.minter_ev().mint(
+                "context.observation.recorded",
+                events::observation_recorded_payload(
+                    &effect_id,
+                    &input.capability_ref.semantic_id,
+                    &obs.manifest_ref,
+                    &obs.outcome,
+                    adm,
+                ),
+            )?;
+            recorded.scope = hh_ledger::event::Scope {
+                turn_id: Some(input.chain.turn_id.clone()),
+                model_call_id: Some(input.chain.model_call_id.clone()),
+                tool_call_id: Some(input.chain.tool_call_id.clone()),
+                ..Default::default()
+            };
+            batch.push(recorded);
+        }
+        batch.push(completed);
+        self.store.append(&self.run_id, lease, batch)?;
         self.emit_unattributed(&unattributed, lease)?;
         // ── verification: the kernel local checks (a)–(c) ride every
         // `observed` terminal (S1.21 — ADR-0111 D1/(e); AC-R-2.7.1-1:
@@ -1517,6 +1584,25 @@ fn classify_command(args: &Json) -> ParseOutcome {
         }
         _ => ParseOutcome::Failed,
     }
+}
+
+/// `world = open` for the dispatched effect — the declared attributes or
+/// the capability's declared attributes for the domain (the same source
+/// the monitor's flow stage reads — one definition of "open").
+fn dispatch_world_open(input: &DispatchInput) -> bool {
+    let declared_attrs = match &input.capability.effects {
+        hh_hir::kinds::ToolEffects::Pure => None,
+        hh_hir::kinds::ToolEffects::Declared(set) => set
+            .iter()
+            .find(|e| e.domain == input.declared.domain)
+            .and_then(|e| e.attributes.as_ref()),
+    };
+    input
+        .declared
+        .attributes
+        .iter()
+        .chain(declared_attrs)
+        .any(|a| a.world == hh_hir::kinds::World::Open)
 }
 
 /// `canonical_json(canonical)` — the `params` map as a `Json` object (the
