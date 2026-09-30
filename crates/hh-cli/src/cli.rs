@@ -287,9 +287,32 @@ const VALUE_FLAGS: &[&str] = &[
     "key",
     "scope",
     "on-parent-end",
+    // ── S3.1 Lab nouns + bundle/run import-export (§7.1 verb table) ──
+    "sink",
+    "out",
+    "level",
+    "eval-budget",
+    "namespace",
+    "label",
+    "version-id",
+    "snapshot-id",
+    "kind",
+    "field",
+    "op",
+    "trust-record-ref",
+    "supersedes",
+    "reason",
+    "replacement",
+    "experiment",
+    "metric",
+    "cell",
+    "run",
+    "holder",
 ];
 
-const SWITCHES: &[&str] = &["no-input", "bypass", "takeover", "follow", "cancel", "help"];
+const SWITCHES: &[&str] = &[
+    "no-input", "bypass", "takeover", "follow", "cancel", "help", "dry-run",
+];
 
 impl Parsed {
     /// The first value of `--name`.
@@ -378,7 +401,7 @@ fn inv(code: &str, path: &str, remedy: &str) -> CliError {
 }
 
 /// Positional argument or an `invocation_error`.
-fn require_pos(p: &Parsed, i: usize, name: &str) -> Result<String, CliError> {
+pub(crate) fn require_pos(p: &Parsed, i: usize, name: &str) -> Result<String, CliError> {
     p.positional
         .get(i)
         .cloned()
@@ -990,6 +1013,60 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         ("approval", "list") => go(cmd_approval_list(b, io, p, argv)),
         ("approval", "show") => go(cmd_approval_show(b, io, p, argv)),
         ("approval", "respond") => go(cmd_approval_respond(b, io, p, argv)),
+        // ── S3.1 — the Lab nouns + bundle/run import-export (§7.1;
+        // every verb is one named Group L/M/R op — lab.rs) ──
+        ("definition", "plan") => go(crate::lab::cmd_definition_plan(b, io, p)),
+        ("definition", "apply") => go(crate::lab::cmd_definition_apply(b, io, p)),
+        ("definition", "diff") => go(crate::lab::cmd_definition_diff(b, io, p)),
+        ("definition", "explain") => go(crate::lab::cmd_definition_explain(b, io, p)),
+        ("definition", "validate") => go(crate::lab::cmd_definition_validate(b, io, p)),
+        ("definition", "identity") => go(crate::lab::cmd_definition_identity(b, io, p)),
+        ("definition", "compile") => go(crate::lab::cmd_definition_compile(b, io, p)),
+        ("registry", "catalog") => go(crate::lab::cmd_registry_catalog(b, io, p)),
+        ("registry", "query") => go(crate::lab::cmd_registry_query(b, io, p)),
+        ("registry", "resolve") => go(crate::lab::cmd_registry_resolve(b, io, p)),
+        ("registry", "register") => go(crate::lab::cmd_registry_register(b, io, p)),
+        ("registry", "publish") => go(crate::lab::cmd_registry_publish(b, io, p)),
+        ("registry", "snapshot") => go(crate::lab::cmd_registry_snapshot(b, io, p)),
+        ("registry", "conformance") => go(crate::lab::cmd_registry_conformance(b, io, p)),
+        ("registry", "deprecate") => go(crate::lab::cmd_registry_name_status(b, io, p, "deprecate")),
+        ("registry", "yank") => go(crate::lab::cmd_registry_name_status(b, io, p, "yank")),
+        ("registry", "revoke") => go(crate::lab::cmd_registry_revoke(b, io, p)),
+        ("registry", "lineage") => go(crate::lab::cmd_registry_lineage(b, io, p)),
+        ("registry", "sameness") => go(crate::lab::cmd_registry_sameness(b, io, p)),
+        ("registry", "verify") => go(crate::lab::cmd_registry_verify(b, io, p)),
+        ("experiment", "register") => go(crate::lab::cmd_experiment_register(b, io, p)),
+        ("experiment", "expand") => go(crate::lab::cmd_experiment_expand(b, io, p)),
+        ("experiment", "open") => go(crate::lab::cmd_experiment_open(b, io, p)),
+        ("experiment", verb @ ("next" | "claim" | "launch" | "settle" | "pause" | "resume" | "close")) => {
+            go(crate::lab::cmd_experiment_op(b, io, p, verb))
+        }
+        ("results", "query") => go(crate::lab::cmd_results_query(b, io, p)),
+        ("results", verb @ ("row" | "history")) => {
+            go(crate::lab::cmd_results_row(b, io, p, verb))
+        }
+        ("results", "cells") => go(crate::lab::cmd_results_cells(b, io, p)),
+        ("results", "distribution") => go(crate::lab::cmd_results_distribution(b, io, p)),
+        ("results", "catalogue") => go(crate::lab::cmd_results_catalogue(b, io, p)),
+        ("results", "verify-row") => go(crate::lab::cmd_results_verify_row(b, io, p)),
+        ("results", "export") => go(crate::lab::cmd_results_export(b, io, p)),
+        ("compare", "report") => go(crate::lab::cmd_compare_report(b, io, p)),
+        ("compare", "scorecard") => go(crate::lab::cmd_compare_scorecard(b, io, p)),
+        ("bundle", "create") => go(crate::lab::cmd_bundle_create(b, io, p)),
+        ("bundle", "validate") => go(crate::lab::cmd_bundle_validate(b, io, p)),
+        ("bundle", "reproduce") => go(crate::lab::cmd_bundle_reproduce(b, io, p)),
+        ("bundle", "show") => go(crate::lab::cmd_bundle_show(b, io, p)),
+        ("run", "export") => go(crate::lab::cmd_run_export(b, io, p)),
+        ("run", "import") => go(crate::lab::cmd_run_import(b, io, p)),
+        ("lab", "serve") => go(crate::lab::cmd_lab_serve(b, io, p)),
+        ("definition" | "experiment" | "registry" | "bundle", _)
+            if matches!(
+                p.verb.as_str(),
+                "space" | "status" | "plans" | "runs" | "discover" | "attest" | "verify"
+            ) =>
+        {
+            go(crate::lab::lab_stage_pending(p))
+        }
         (noun, verb) => Err((
             CliError::Invocation(InvocationError::at(
                 "unknown_command",
@@ -1001,7 +1078,7 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
     }
 }
 
-fn ok_outcome(
+pub(crate) fn ok_outcome(
     kind: &str,
     payload: Json,
     format: OutputFormat,

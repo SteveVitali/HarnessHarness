@@ -2758,3 +2758,413 @@ fn lab_registry_gates_still_hold() {
         Some("stage_pending")
     );
 }
+
+// ── S3.1 — Groups M/L bundle ops + lab.serve (R-2.9.3⁰, R-2.11.3⁰) ─────────
+//
+// `kernel.bundle`/`check_completeness`/`reproduce`/`import`,
+// `measurement.emit_metric` and `lab.serve` over binding (a) — the same
+// dispatch binding (b) reaches over `hh-kernel serve` (AC-K4-2), which
+// is what AC-R-2.11.4-10's "the Lab runs over Groups S/R/M/L" means.
+
+/// One metric row for `emit_metric`.
+fn metric_value() -> Json {
+    Json::obj([
+        ("metric_ref", Json::str("hh/test.metric")),
+        (
+            "value",
+            Json::obj([("kind", Json::str("decimal")), ("value", Json::Int(7))]),
+        ),
+        ("applies_to", Json::str("run:test")),
+        ("oracle_ref", Json::str("oracle:test")),
+        ("detector", Json::str("deterministic")),
+    ])
+}
+
+/// A `run` bundle, delivered to a scratch dir — the assembly +
+/// `export.delivered` row + the dir on disk.
+fn deliver_bundle(svc: &mut EmbedService, run_id: &str, dir: &std::path::Path) -> Json {
+    let r = call(
+        svc,
+        "kernel.bundle",
+        Json::obj([
+            ("run_id", Json::str(run_id)),
+            ("deliver_sink", Json::str(dir.to_string_lossy().to_string())),
+        ]),
+    );
+    ok(&r)
+}
+
+#[test]
+fn s31_emit_metric_writes_and_replays() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let s = open_new(&mut svc);
+    let session_id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+
+    let params = Json::obj([
+        ("session_id", Json::str(session_id.clone())),
+        ("metrics", Json::Arr(vec![metric_value()])),
+        ("idempotency_key", Json::str("m1")),
+    ]);
+    let a = ok(&call(&mut svc, "measurement.emit_metric", params.clone()));
+    assert_eq!(a.get("emitted"), Some(&Json::Int(1)));
+    // Idempotent replay — the recorded ack, no second row.
+    let b = ok(&call(&mut svc, "measurement.emit_metric", params));
+    assert_eq!(a.to_canonical_string(), b.to_canonical_string());
+
+    // The row landed on the run's ledger.
+    let evs = svc.store().events(&run_id).unwrap();
+    assert!(
+        evs.iter().any(|e| e.class == "measurement.metric.emitted"),
+        "no metric.emitted row"
+    );
+
+    // An attach session may not write.
+    let att = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            (
+                "spec",
+                Json::obj(vec![
+                    ("kind", Json::str("attach")),
+                    ("run_id", Json::str(run_id)),
+                ]),
+            ),
+            ("idempotency_key", Json::str("att")),
+        ]),
+    ));
+    let att_id = att
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let e = call(
+        &mut svc,
+        "measurement.emit_metric",
+        Json::obj([
+            ("session_id", Json::str(att_id)),
+            ("metrics", Json::Arr(vec![metric_value()])),
+            ("idempotency_key", Json::str("m2")),
+        ]),
+    );
+    assert_eq!(err_kind(&e), "Refused");
+}
+
+#[test]
+fn s31_kernel_bundle_records_contract_identity_and_exports() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let s = open_new(&mut svc);
+    let session_id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    submit(&mut svc, &session_id, text_input("bundle me"));
+    close(&mut svc, &session_id);
+
+    let dir = test_dir("bundle-out");
+    let r = deliver_bundle(&mut svc, &run_id, &dir);
+    let manifest = r.get("manifest").cloned().unwrap();
+    assert_eq!(
+        manifest.get("schema").and_then(Json::as_str),
+        Some("hh-bundle/1")
+    );
+    assert_eq!(
+        manifest.get("bundle_kind").and_then(Json::as_str),
+        Some("run")
+    );
+    // ContractIdentity rides in `instrument.component_versions` — the
+    // bundle's contract is carried, never recomputed by consumers
+    // (R-3.1; AC-R-2.9.3-1's instrument leg).
+    let cv = manifest
+        .get("instrument")
+        .and_then(|i| i.get("component_versions"))
+        .and_then(|v| match v {
+            Json::Arr(a) => Some(a.clone()),
+            _ => None,
+        })
+        .expect("instrument.component_versions");
+    let expected_hash = hh_embed_schema::schema_hash();
+    assert!(
+        cv.iter()
+            .any(|c| c.get("schema_hash").and_then(Json::as_str) == Some(expected_hash.as_str())),
+        "no ContractIdentity in component_versions: {cv:?}"
+    );
+    // The delivery row landed (`export.delivered`, §5h.5).
+    assert_ne!(r.get("delivered_seq"), Some(&Json::Null));
+    // The dir on disk decodes.
+    let decoded = hh_bundle::codec::decode_dir(&dir).expect("delivered dir decodes");
+    assert_eq!(decoded.manifest.bundle_kind, "run");
+    // And the ledger carries the `bundle_assembled` row.
+    let evs = svc.store().events(&run_id).unwrap();
+    assert!(
+        evs.iter()
+            .any(|e| e.class == "measurement.experiment.bundle_assembled"),
+        "no bundle_assembled row"
+    );
+    assert!(
+        evs.iter()
+            .any(|e| e.class == "measurement.export.delivered"),
+        "no export.delivered row"
+    );
+}
+
+#[test]
+fn s31_check_completeness_and_reproduce_over_boundary() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let s = open_new(&mut svc);
+    let session_id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    submit(&mut svc, &session_id, text_input("repro me"));
+    close(&mut svc, &session_id);
+    let dir = test_dir("repro");
+    deliver_bundle(&mut svc, &run_id, &dir);
+
+    // validate_bundle (S1/S2/S4/S7 staged gate) — ok over the boundary.
+    let v = ok(&call(
+        &mut svc,
+        "kernel.check_completeness",
+        Json::obj([("path", Json::str(dir.to_string_lossy().to_string()))]),
+    ));
+    assert_eq!(v.get("complete"), Some(&Json::Bool(true)), "{v:?}");
+
+    // R0 reproduces: the ledger-export fold meets the recorded status.
+    let r = ok(&call(
+        &mut svc,
+        "kernel.reproduce",
+        Json::obj([
+            ("path", Json::str(dir.to_string_lossy().to_string())),
+            ("level", Json::str("R0")),
+        ]),
+    ));
+    assert!(
+        r.get("bundle_id").and_then(Json::as_str).is_some(),
+        "no ReproReport: {r:?}"
+    );
+    assert!(r.get("basis").is_some(), "no basis: {r:?}");
+
+    // R3 over an R0-max bundle is a *reported* refusal —
+    // `ReproClaimUnsupported` (the claim exceeds the bundle's own
+    // `max_supported_level`, never silently promoted).
+    let e = ok(&call(
+        &mut svc,
+        "kernel.reproduce",
+        Json::obj([
+            ("path", Json::str(dir.to_string_lossy().to_string())),
+            ("level", Json::str("R3")),
+            ("eval_budget", Json::Int(999_999)),
+        ]),
+    ));
+    assert_eq!(
+        e.get("outcome").and_then(Json::as_str),
+        Some("refused"),
+        "{e:?}"
+    );
+    assert!(
+        e.get("refusal")
+            .and_then(Json::as_str)
+            .unwrap_or("")
+            .contains("ReproClaimUnsupported"),
+        "{e:?}"
+    );
+}
+
+#[test]
+fn s31_import_lifts_refs_only_with_unverified_authority() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let s = open_new(&mut svc);
+    let session_id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    submit(&mut svc, &session_id, text_input("import me"));
+    close(&mut svc, &session_id);
+    let dir = test_dir("import-src");
+    deliver_bundle(&mut svc, &run_id, &dir);
+
+    let r = ok(&call(
+        &mut svc,
+        "kernel.import",
+        Json::obj([
+            ("path", Json::str(dir.to_string_lossy().to_string())),
+            ("holder", Json::str("importer")),
+        ]),
+    ));
+    let new_run = r.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    assert_ne!(new_run, run_id);
+    // The receipt row names the source coordinates.
+    let evs = svc.store().events(&new_run).unwrap();
+    assert!(
+        evs.iter().any(|e| e.class == "lifecycle.run.imported"),
+        "no imported row: {:?}",
+        evs.iter().map(|e| &e.class).collect::<Vec<_>>()
+    );
+    assert!(
+        evs.iter().any(|e| e.class == "lifecycle.run.created"),
+        "no created row"
+    );
+    // The imported run is readable through the boundary (attach+read).
+    let att = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            (
+                "spec",
+                Json::obj(vec![
+                    ("kind", Json::str("attach")),
+                    ("run_id", Json::str(new_run)),
+                ]),
+            ),
+            ("idempotency_key", Json::str("att-i")),
+        ]),
+    ));
+    let att_id = att
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let page = ok(&call(
+        &mut svc,
+        "read",
+        Json::obj(vec![
+            ("session_id", Json::str(att_id)),
+            (
+                "cursor",
+                Json::obj([("kind", Json::str("seq")), ("seq", Json::Int(0))]),
+            ),
+            ("limit", Json::Int(64)),
+        ]),
+    ));
+    assert!(page.get("events").is_some(), "{page:?}");
+}
+
+/// A hand-authored `hh-bundle/1` dir carrying a `target:mcp` member —
+/// `lab.serve`'s positive leg (the kernel-side `serve(bundle)` half:
+/// decode → lower → `{artifact, stdio_launch binding, launch}`).
+#[test]
+fn s31_lab_serve_lowers_target_mcp_and_binds_test_principal() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+
+    let dir = test_dir("serve-bundle");
+    let member = br#"{"schema":"hh-mcp-target/1","target":"mcp","tools":[{"name":"echo","inputSchema":{"type":"object"}}]}"#
+        .to_vec();
+    let addr = hh_identity::idp_id("member", &member);
+    let doc = Json::obj([
+        ("schema", Json::str("hh-bundle/1")),
+        ("idp", Json::str("idp/1")),
+        ("bundle_kind", Json::str("run")),
+        ("producer", Json::obj([])),
+        (
+            "subject",
+            Json::obj([
+                ("run_ids", Json::Arr(vec![])),
+                ("status", Json::str("finished")),
+            ]),
+        ),
+        (
+            "members",
+            Json::Arr(vec![Json::obj([
+                ("role", Json::str("target:mcp")),
+                ("ref", Json::str(addr.clone())),
+                ("media_type", Json::str("application/json")),
+                ("size", Json::Int(member.len() as i64)),
+                ("status", Json::str("present")),
+            ])]),
+        ),
+        ("version_id", Json::str("pending")),
+    ]);
+    let mut manifest = hh_bundle::manifest::BundleManifest::from_json(&doc).unwrap();
+    manifest.version_id = manifest.compute_id();
+    let mut members = hh_bundle::export::MemberBytes::new();
+    members.insert(addr, member);
+    hh_bundle::codec::encode_dir(&dir, &manifest, &members).unwrap();
+
+    let r = ok(&call(
+        &mut svc,
+        "lab.serve",
+        Json::obj([("path", Json::str(dir.to_string_lossy().to_string()))]),
+    ));
+    let binding = r.get("binding").expect("binding");
+    assert_eq!(
+        binding.get("kind").and_then(Json::as_str),
+        Some("stdio_launch")
+    );
+    assert_eq!(
+        binding.get("principal").and_then(Json::as_str),
+        Some(hh_mcp::binding::TEST_PRINCIPAL),
+        "the binding is fixed to the test principal (R-3)"
+    );
+    let artifact = r.get("artifact").expect("artifact");
+    assert_eq!(
+        artifact.get("schema").and_then(Json::as_str),
+        Some("hh-mcp-artifact/1")
+    );
+    assert!(r.get("launch").is_some(), "launch descriptor: {r:?}");
+
+    // A bundle without the member refuses typed.
+    let e = call(
+        &mut svc,
+        "lab.serve",
+        Json::obj([(
+            "path",
+            Json::str(test_dir("empty").to_string_lossy().to_string()),
+        )]),
+    );
+    assert_eq!(err_kind(&e), "Refused");
+}
+
+/// Group M/L ops are capability-gated: without `serves_measurement`
+/// they refuse `NotAuthorized`-class, and unimplemented Group L ops
+/// still answer `stage_pending` — the boundary is honest either way.
+#[test]
+fn s31_group_ml_capability_gate() {
+    let mut svc = service();
+    // hello WITHOUT serves_measurement.
+    call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("experimental", true)])),
+    );
+    let e = call(
+        &mut svc,
+        "kernel.check_completeness",
+        Json::obj([("path", Json::str("/nonexistent"))]),
+    );
+    let kind = err_kind(&e);
+    assert!(
+        kind == "NotAuthorized"
+            || kind == "CapabilityNotDeclared"
+            || kind == "CapabilityNotNegotiated"
+            || kind == "Refused",
+        "ungated answer: {e:?}"
+    );
+
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let e = call(&mut svc, "lab.experiment.register", Json::obj([]));
+    assert_eq!(err_kind(&e), "Refused");
+    assert_eq!(
+        e.get("error")
+            .and_then(|x| x.get("data"))
+            .and_then(|d| d.get("reason"))
+            .and_then(Json::as_str),
+        Some("stage_pending")
+    );
+}

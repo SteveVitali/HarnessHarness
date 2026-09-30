@@ -415,6 +415,28 @@ impl Store {
         refs: Vec<ContentAddress>,
         causes: Vec<crate::manifest::EventRef>,
     ) -> Result<EventEnvelope, LedgerError> {
+        self.commit_kernel_row_for(KERNEL_LEDGER, run_id, class, payload, refs, causes)
+    }
+
+    /// Mint + commit one kernel-origin durable row on `run_id` on behalf of a
+    /// named kernel subsystem — the producer/provenance name `producer`
+    /// (`kernel:bundle`, `kernel:import`, …) so the audit trail attributes the
+    /// row honestly. This is the path subsystem planes use to append rows like
+    /// `measurement.experiment.bundle_assembled` and
+    /// `measurement.export.delivered` to a subject run whose writer session is
+    /// already closed (§5h.3 — "every publication appends
+    /// `measurement.export.delivered` to each subject run"): it rides the WAL
+    /// tip under the persisted lease generation, never a client lease
+    /// (S3.1; ADR-0139/0141).
+    pub fn commit_kernel_row_for(
+        &mut self,
+        producer: &str,
+        run_id: &str,
+        class: &str,
+        payload: Json,
+        refs: Vec<ContentAddress>,
+        causes: Vec<crate::manifest::EventRef>,
+    ) -> Result<EventEnvelope, LedgerError> {
         let generation = read_lease_file(&self.lease_path(run_id))?
             .map(|r| r.generation)
             .unwrap_or(1);
@@ -434,6 +456,7 @@ impl Store {
             payload,
             &wal_tip_hash(state),
             generation,
+            producer,
         );
         env.refs = refs;
         env.causes = causes;
@@ -704,6 +727,7 @@ impl Store {
             manifest.to_json(),
             &anchor,
             1, // generation 1 — the lease record lands right after.
+            KERNEL_LEDGER,
         );
         commit_envelopes(
             &mut state,
@@ -2189,6 +2213,7 @@ impl Store {
             payload,
             &prev_hash,
             rec.generation,
+            KERNEL_LEDGER,
         );
         commit_envelopes(
             state,
@@ -2392,6 +2417,7 @@ impl Store {
             Json::Obj(members),
             &prev_hash,
             rec.generation,
+            KERNEL_LEDGER,
         );
         commit_envelopes(
             state,
@@ -2567,6 +2593,7 @@ impl Store {
             Json::Obj(members),
             &prev_hash,
             rec.generation,
+            KERNEL_LEDGER,
         );
         commit_envelopes(
             state,
@@ -2887,6 +2914,7 @@ fn emit_lease_row(
         Json::Obj(payload),
         &prev,
         rec.generation,
+        KERNEL_LEDGER,
     );
     commit_envelopes(state, vec![Staged::Durable(env)], clock.now_ms())?;
     Ok(())
@@ -2903,6 +2931,7 @@ fn system_event(
     payload: Json,
     prev_hash: &str,
     generation: u64,
+    producer: &str,
 ) -> EventEnvelope {
     let parent = state
         .head
@@ -2922,7 +2951,7 @@ fn system_event(
         plane: EventPlane::of_class(class).unwrap_or(EventPlane::Lifecycle),
         class: class.to_string(),
         schema_version: SCHEMA_VERSION,
-        producer: Producer::kernel(KERNEL_LEDGER),
+        producer: Producer::kernel(producer),
         participant_class: state.manifest.participant_class,
         observability_level: observability,
         durability: Durability::Ledger,
@@ -2933,7 +2962,7 @@ fn system_event(
         refs: Vec::new(),
         ir_refs: Vec::new(),
         surface_ids: BTreeMap::new(),
-        provenance: Some(ProvenanceRecord::kernel(KERNEL_LEDGER, seq)),
+        provenance: Some(ProvenanceRecord::kernel(producer, seq)),
         prev_hash: prev_hash.to_string(),
         payload,
         hash: String::new(),

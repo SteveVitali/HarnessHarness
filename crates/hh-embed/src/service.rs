@@ -573,6 +573,14 @@ impl EmbedService {
             "lab.registry.lineage" => self.lab_registry_lineage(&req.params),
             "lab.registry.sameness" => self.lab_registry_sameness(&req.params),
             "lab.registry.verify" => self.lab_registry_verify(&req.params),
+            // ── S3.1: Group M measurement/bundle ops + Group L
+            // `lab.serve` (R-2.9.3⁰/R-2.11.3⁰; ADR-0139…0141) ──
+            "measurement.emit_metric" => self.emit_metric(&req.params),
+            "kernel.bundle" => self.kernel_bundle(&req.params),
+            "kernel.check_completeness" => self.kernel_check_completeness(&req.params),
+            "kernel.reproduce" => self.kernel_reproduce(&req.params),
+            "kernel.import" => self.kernel_import(&req.params),
+            "lab.serve" => self.lab_serve(&req.params),
             _ => Err(EmbedError::SchemaViolation {
                 path: "/method".to_string(),
                 code: "unknown_method".to_string(),

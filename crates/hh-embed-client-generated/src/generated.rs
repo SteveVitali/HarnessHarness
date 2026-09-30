@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:c75d98e8e724df95a81f8c1571941696f9cf8ec723eb93a59daec960cb68ed33";
+    "sha256:65654f1feeac315fab86002beec7c8ab31ab1dcafc7f2c895852c03fd8c098db";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5454,6 +5454,30 @@ impl<R: BufRead, W: Write> Client<R, W> {
         }
     }
 
+    /// `kernel.bundle` → `json` (see the contract registry).
+    pub fn kernel_bundle(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.bundle", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.check_completeness` → `json` (see the contract registry).
+    pub fn kernel_check_completeness(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.check_completeness", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.import` → `json` (see the contract registry).
+    pub fn kernel_import(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.import", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.reproduce` → `json` (see the contract registry).
+    pub fn kernel_reproduce(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.reproduce", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.registry.catalog` → `json` (see the contract registry).
     pub fn lab_registry_catalog(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.registry.catalog", params.clone())?;
@@ -5544,6 +5568,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.serve` → `json` (see the contract registry).
+    pub fn lab_serve(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.serve", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lineage` → `Page` (see the contract registry).
     pub fn lineage(&mut self, params: &LineageParams) -> Result<Page, ClientError> {
         let raw = self.call("lineage", params.to_json())?;
@@ -5557,6 +5587,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     ) -> Result<ListLeasesResult, ClientError> {
         let raw = self.call("list_leases", params.to_json())?;
         ListLeasesResult::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `measurement.emit_metric` → `json` (see the contract registry).
+    pub fn measurement_emit_metric(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("measurement.emit_metric", params.clone())?;
+        Ok(raw)
     }
 
     /// `navigate` → `json` (see the contract registry).
