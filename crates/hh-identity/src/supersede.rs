@@ -88,11 +88,17 @@ impl Lineage {
     }
 
     /// Record that `dependant` depends on `member` (used to compute stale-by-dependency).
+    /// When `member` is already revoked — or itself stale on revoked members — the
+    /// dependant joins the derived index immediately (the index is derived, never
+    /// authored; registering onto a revoked pin is never silently clean — S4/CC3).
     pub fn declare_dependency(&mut self, dependant: &str, member: &str) {
         self.dependencies
             .entry(dependant.to_string())
             .or_default()
             .push(member.to_string());
+        for cause in self.revoked_causes(member) {
+            self.mark_stale(dependant, &cause.0, cause.1, cause.2);
+        }
     }
 
     /// `supersede(new, old, reason)` — emit the edge, never touch `old`. Refuses a cycle; a
@@ -143,19 +149,35 @@ impl Lineage {
             provenance: ProvenanceRecord::minted(authority, PersistenceScope::Run, seq),
         };
         self.revocations.push(rec.clone());
-        // Every dependant of `old` becomes stale-by-dependency (never silently excluded — CC3).
-        let dependants: Vec<String> = self
-            .dependencies
-            .iter()
-            .filter(|(_, members)| members.iter().any(|m| m == old))
-            .map(|(d, _)| d.clone())
-            .collect();
-        for d in dependants {
-            self.stale.entry(d).or_default().push(StaleEntry {
-                revoked_member: old.to_string(),
-                reason,
-                since_seq: seq,
-            });
+        // Every *transitive* dependant of `old` becomes stale-by-dependency (never
+        // silently excluded — CC3). A dependant of `old` also inherits every revoked
+        // member `old` was itself stale on: `d → old → … → m` means `d` transitively
+        // depends on `m` too.
+        let mut causes: Vec<(String, SupersedeReason, u64)> = vec![(old.to_string(), reason, seq)];
+        causes.extend(
+            self.stale_for(old)
+                .iter()
+                .map(|s| (s.revoked_member.clone(), s.reason, s.since_seq)),
+        );
+        let mut queue: Vec<String> = vec![old.to_string()];
+        let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        seen.insert(old.to_string());
+        while let Some(node) = queue.pop() {
+            let direct: Vec<String> = self
+                .dependencies
+                .iter()
+                .filter(|(_, members)| members.contains(&node))
+                .map(|(d, _)| d.clone())
+                .collect();
+            for d in direct {
+                if !seen.insert(d.clone()) {
+                    continue;
+                }
+                queue.push(d.clone());
+                for (member, cause_reason, cause_seq) in &causes {
+                    self.mark_stale(&d, member, *cause_reason, *cause_seq);
+                }
+            }
         }
         rec
     }
@@ -163,6 +185,45 @@ impl Lineage {
     /// Whether `version_id` is revoked (a `RevocationRecord` names it).
     pub fn is_revoked(&self, version_id: &str) -> bool {
         self.revocations.iter().any(|r| r.revokes == version_id)
+    }
+
+    /// The revoked members `member` transitively depends on, as
+    /// `(revoked_member, reason, since_seq)` — `{member}` itself when revoked,
+    /// plus every cause already in `StaleIndex[member]` (dependants inherit them).
+    fn revoked_causes(&self, member: &str) -> Vec<(String, SupersedeReason, u64)> {
+        let mut out: Vec<(String, SupersedeReason, u64)> = Vec::new();
+        if let Some(r) = self.revocations.iter().find(|r| r.revokes == member) {
+            out.push((
+                member.to_string(),
+                r.reason,
+                self.revocations
+                    .iter()
+                    .position(|x| x.revokes == member)
+                    .unwrap_or(0) as u64,
+            ));
+        }
+        for s in self.stale_for(member) {
+            out.push((s.revoked_member.clone(), s.reason, s.since_seq));
+        }
+        out
+    }
+
+    /// Record one stale-by-dependency entry (deduplicated on `revoked_member`).
+    fn mark_stale(
+        &mut self,
+        dependant: &str,
+        revoked_member: &str,
+        reason: SupersedeReason,
+        since_seq: u64,
+    ) {
+        let entries = self.stale.entry(dependant.to_string()).or_default();
+        if !entries.iter().any(|e| e.revoked_member == revoked_member) {
+            entries.push(StaleEntry {
+                revoked_member: revoked_member.to_string(),
+                reason,
+                since_seq,
+            });
+        }
     }
 
     /// The stale-by-dependency entries for a dependant (`StaleIndex[dependant]`).

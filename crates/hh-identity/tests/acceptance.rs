@@ -77,6 +77,7 @@ fn ac_r_2_12_1_3_rename_stability_and_pooling() {
             NameStatus::Active,
             ProvenanceRecord::kernel("kernel:test", 0),
             false,
+            None,
         )
         .unwrap();
     let r_after = hh_identity::VersionedRef::pinned(
@@ -94,6 +95,7 @@ fn ac_r_2_12_1_3_rename_stability_and_pooling() {
         NameStatus::Active,
         ProvenanceRecord::kernel("kernel:test", 0),
         false,
+        None,
     )
     .unwrap();
     assert_eq!(
@@ -185,6 +187,7 @@ fn resolve_is_deterministic_and_execute_hides_yanked() {
             NameStatus::Active,
             ProvenanceRecord::kernel("kernel:test", 0),
             false,
+            None,
         )
         .unwrap();
     let v2 = hh_identity::VersionedRef::pinned(
@@ -201,6 +204,7 @@ fn resolve_is_deterministic_and_execute_hides_yanked() {
         NameStatus::Yanked,
         ProvenanceRecord::kernel("kernel:test", 0),
         false,
+        None,
     )
     .unwrap();
     match idx.resolve(&NameSelector::new("local", "n"), ResolveMode::Execute) {

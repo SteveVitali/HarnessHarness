@@ -631,9 +631,57 @@ impl EmbedService {
         // (M-2 — the asks are ledgered, never silently auto-rejected and
         // never excluded from the surface).
         let unattended = attendance.value == "unattended";
+        // AC-R-2.11.1-7's bypass split (I-P1): under `approval_mode = bypass`
+        // (admitted only with recorded `enforcement_evidence` — `bypass_gate`
+        // above), an ask *outside* the constitutional never-auto set
+        // auto-resolves `decided{decision: allow, decider: policy,
+        // reason: bypass}` at either attendance; a never-auto ask
+        // (irreversible or unknown — undeclared `risk_class` reads UNKNOWN,
+        // ADR-0031 §2) still reaches the human stage attended and still
+        // denies unattended (Π-12's deny covers it below).
+        let bypass = approval_mode == Some("bypass");
         for cap in cap_decl.iter().filter(|c| c.requires_approval) {
             let proposal = format!("host capability {} requests approval", cap.capability_id);
-            if unattended {
+            let never_auto = hh_monitor::approval::never_auto(
+                cap.risk_class
+                    .unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN),
+            );
+            if bypass && !never_auto {
+                let permission_id = self.alloc("perm");
+                let (run_id, lease) = {
+                    let s = self.session(&session_id)?;
+                    (
+                        s.run_id.clone(),
+                        s.lease.clone().ok_or(EmbedError::Refused {
+                            reason: "session_is_read_only".to_string(),
+                        })?,
+                    )
+                };
+                let now = self.store.now_ms();
+                self.mint(
+                    &run_id,
+                    &lease,
+                    "security.permission.pending",
+                    Json::obj([
+                        ("permission_id", Json::str(permission_id.clone())),
+                        ("effect_ids", Json::Arr(vec![])),
+                        ("requested_at", Json::Int(now as i64)),
+                        ("mode", Json::str("sync")),
+                    ]),
+                )?;
+                self.mint(
+                    &run_id,
+                    &lease,
+                    "security.permission.decided",
+                    Json::obj([
+                        ("permission_id", Json::str(permission_id)),
+                        ("proposal", Json::str(proposal)),
+                        ("decision", Json::str("allow")),
+                        ("decider", Json::str("policy")),
+                        ("reason", Json::str("bypass")),
+                    ]),
+                )?;
+            } else if unattended {
                 let permission_id = self.alloc("perm");
                 let (run_id, lease) = {
                     let s = self.session(&session_id)?;
@@ -1823,12 +1871,19 @@ pub(crate) fn parse_host_caps(supplies: Option<&Supplies>) -> Vec<HostCap> {
             .get("timeout")
             .and_then(Json::as_int)
             .map(|n| n.max(0) as u64);
+        // `risk_class` — the `{reversibility, repeat_safety, scope}` object;
+        // absent or unparseable leaves `None`, which the ask gate reads as
+        // `UNKNOWN` (never-auto, ADR-0031 §2 — fail closed under `bypass`).
+        let risk_class = c
+            .get("risk_class")
+            .and_then(hh_ontology::risk::RiskClass::from_json);
         out.push(HostCap {
             capability_id,
             surface_id,
             requires_approval,
             options,
             timeout_ms,
+            risk_class,
         });
     }
     out

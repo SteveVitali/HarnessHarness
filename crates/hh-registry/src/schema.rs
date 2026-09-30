@@ -1251,6 +1251,10 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         RegistryRecord::Validator(o) => o.to_json(),
         RegistryRecord::Extension(e) => crate::extension::extension_body_json(e),
         RegistryRecord::EnvironmentFamily(f) => f.to_json(),
+        // The opaque env-plane body: stored verbatim (the `canonical_full()`
+        // form `hh-env` minted — CC7 says the schema owner encodes, the
+        // registry stores).
+        RegistryRecord::EnvironmentRecord(b) => b.clone(),
     }
 }
 
@@ -1267,6 +1271,12 @@ pub fn semantic_projection_json(r: &RegistryRecord) -> Option<Json> {
             Some(j)
         }
         RegistryRecord::Capability(c) => Some(hh_hir::wire::node_semantic_projection(&c.node)),
+        // The env record's semantic coordinate is the `Record::canonical_semantic()`
+        // form `{kind, semantic}` — the same projection `hh-env`'s `identify` mints.
+        RegistryRecord::EnvironmentRecord(b) => Some(obj(vec![
+            ("kind", Json::str("environment")),
+            ("semantic", b.get("semantic").cloned().unwrap_or(Json::Null)),
+        ])),
         _ => None,
     }
 }
@@ -1332,6 +1342,43 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             // refuse at decode + register, never at first use).
             crate::extension::validate_extension_record(&rec)?;
             Ok(RegistryRecord::Extension(rec))
+        }
+        RecordKind::EnvironmentRecord => {
+            // Structural gate only — the §5a.5 schema owner is `hh-env` (above
+            // this crate). The registry requires the `canonical_full()` shape
+            // `{kind: "environment", semantic{…}, surface{…}, refs[]}` and the
+            // pinned `containment_policy.version_id` it projects.
+            let kind_tag = j.get("kind").and_then(|k| k.as_str()).unwrap_or("");
+            if kind_tag != "environment" {
+                return Err(RegistryError::SchemaViolation {
+                    path: "record.kind".to_string(),
+                    detail: format!("environment_record body kind: {kind_tag}"),
+                });
+            }
+            for member in ["semantic", "surface", "refs"] {
+                if j.get(member).is_none() {
+                    return Err(RegistryError::SchemaViolation {
+                        path: format!("record.{member}"),
+                        detail: "missing member".to_string(),
+                    });
+                }
+            }
+            match j
+                .get("semantic")
+                .and_then(|s| s.get("containment_policy"))
+                .and_then(|c| c.get("version_id"))
+                .and_then(|v| v.as_str())
+            {
+                Some(v) if !v.is_empty() => {}
+                _ => {
+                    return Err(RegistryError::SchemaViolation {
+                        path: "record.semantic.containment_policy.version_id".to_string(),
+                        detail: "a registered environment_record pins its containment policy"
+                            .to_string(),
+                    })
+                }
+            }
+            Ok(RegistryRecord::EnvironmentRecord(j.clone()))
         }
         other if !other.has_stage1_schema() => Err(RegistryError::SchemaViolation {
             path: "kind".to_string(),

@@ -22,6 +22,7 @@ use hh_identity::names::{
     NameHistoryEntry, NameIndex, NameStatus, Namespace, PublishError, ResolveMode, ResolveOutcome,
 };
 use hh_identity::refs::{NameSelector, VersionedRef};
+use hh_identity::sameness::{self, Delta, DiffClassification, Sameness};
 use hh_identity::supersede::{
     Lineage, RevocationRecord, StaleEntry, SupersedeError, SupersedeReason,
 };
@@ -31,10 +32,12 @@ use hh_wire::json::Json;
 use crate::errors::RegistryError;
 use crate::events::RegistryEvent;
 use crate::identity;
-use crate::kinds::{Admission, OwnerRef, Placement, PublishRule, RecordKind, RequireConformance};
+use crate::kinds::{
+    Admission, OwnerRef, Placement, ProducedBy, PublishRule, RecordKind, RequireConformance,
+};
 use crate::records::{
-    CapabilityRecord, NamespaceRecord, RegistryDiagnostic, RegistryEnvelope, RegistryPolicy,
-    RegistryRecord, RegistrySnapshot, VariantRecord,
+    CapabilityRecord, ConformanceReport, NamespaceRecord, RegistryDiagnostic, RegistryEnvelope,
+    RegistryPolicy, RegistryRecord, RegistrySnapshot, VariantRecord,
 };
 use crate::schema;
 
@@ -182,6 +185,43 @@ pub struct LineageView {
     pub name_history: Vec<NameHistoryEntry>,
 }
 
+/// One `catalog` row — every record (and every name binding) in the store or a
+/// pinned snapshot, including tombstoned names (deprecate/yank never delete —
+/// AC-R-2.12.2-12/-19). Rows sort by `(namespace, name, version_id)` — R8.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CatalogEntry {
+    /// The record's envelope.
+    pub envelope: RegistryEnvelope,
+    /// The record body.
+    pub record: RegistryRecord,
+    /// The `(namespace, name)` binding when the record is published under a
+    /// name (one row per binding).
+    pub name: Option<(String, String)>,
+    /// The name-history status of that binding (`deprecated`/`yanked`
+    /// tombstones list too — a catalog never hides them).
+    pub name_status: Option<NameStatus>,
+    /// The derived stale-by-dependency entries (never silent — S4).
+    pub stale: Vec<StaleEntry>,
+    /// Whether the version is revoked (derived — never authored).
+    pub revoked: bool,
+}
+
+/// An `update_available` notification — a *newer* published version on the same
+/// name or lineage. A notification, never a re-seal (AC-R-2.12.2-13; CC6/N2).
+#[derive(Debug, Clone, PartialEq)]
+pub struct UpdateNotification {
+    /// The newer version's `version_id`.
+    pub version_id: String,
+    /// Its `semantic_id`, when the kind carries one.
+    pub semantic_id: Option<String>,
+    /// The `(namespace, name)` under which the update is published, when any.
+    pub name: Option<(String, String)>,
+    /// The name-history label of the update entry.
+    pub label: Option<String>,
+    /// The sameness verdict between the pinned and update versions.
+    pub sameness: Sameness,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The store
 // ─────────────────────────────────────────────────────────────────────────────
@@ -207,6 +247,13 @@ pub struct RegistryStore {
     /// Persisted name-history lines — replay state for `NameIndex` (`widening`
     /// is data: recomputing it at replay would need both versions' bodies).
     name_lines: Vec<Json>,
+    /// The successor diffs minted at publish — `newer version_id → ops`. The
+    /// name-history line carries the body (the entry's `diff_ref` is its
+    /// content id — `idp("registry.diff", H(ops))`).
+    diffs: BTreeMap<String, Json>,
+    /// Run ids the store has recorded as durable (a `record_conformance` report
+    /// produced by `registry_ci`/`lab` must name one — `RunNotDurable`).
+    durable_runs: BTreeSet<String>,
     /// The transaction-time clock — the count of persisted log lines.
     seq: u64,
 }
@@ -230,6 +277,8 @@ impl RegistryStore {
             diagnostics: Vec::new(),
             pending: Vec::new(),
             name_lines: Vec::new(),
+            diffs: BTreeMap::new(),
+            durable_runs: BTreeSet::new(),
             seq: 0,
         };
         let path = store.log_path();
@@ -319,6 +368,12 @@ impl RegistryStore {
         }
         for r in self.lineage_revocations_json() {
             lines.push(r);
+        }
+        for run_id in &self.durable_runs {
+            lines.push(Json::obj([
+                ("type", Json::str("durable_run")),
+                ("run_id", Json::str(run_id.clone())),
+            ]));
         }
         if self.policy != RegistryPolicy::stage1_default() {
             lines.push(Json::obj([
@@ -425,6 +480,16 @@ impl RegistryStore {
                         replacement,
                     );
                 }
+                "durable_run" => {
+                    let run_id = str_of(line, "run_id");
+                    if run_id.is_empty() {
+                        return Err(RegistryError::SchemaViolation {
+                            path: "durable_run.run_id".to_string(),
+                            detail: "empty".to_string(),
+                        });
+                    }
+                    self.durable_runs.insert(run_id.to_string());
+                }
                 "policy" => {
                     self.policy = schema::policy_from_json(
                         line.get("policy").unwrap_or(&Json::Null),
@@ -485,6 +550,13 @@ impl RegistryStore {
             .and_then(|s| s.as_str())
             .map(|s| s.to_string());
         let widening = matches!(line.get("widening"), Some(Json::Bool(true)));
+        let diff_ref = line
+            .get("diff_ref")
+            .and_then(|d| d.as_str())
+            .map(|s| s.to_string());
+        if let Some(d) = line.get("diff") {
+            self.diffs.insert(version_id.to_string(), d.clone());
+        }
         let publisher = ProvenanceRecord::from_json(line.get("publisher").unwrap_or(&Json::Null))
             .map_err(|e| RegistryError::SchemaViolation {
             path: "name_history.publisher".to_string(),
@@ -514,7 +586,7 @@ impl RegistryStore {
         let sup_entry = supersedes.as_ref().and_then(|s| by_version.get(s));
         self.names
             .publish(
-                ns, name, &vref, label, sup_entry, status, publisher, widening,
+                ns, name, &vref, label, sup_entry, status, publisher, widening, diff_ref,
             )
             .map_err(|e| RegistryError::SchemaViolation {
                 path: "name_history".to_string(),
@@ -779,6 +851,15 @@ impl RegistryStore {
                 }
             }
             RegistryRecord::ForeignImport(_) | RegistryRecord::Snapshot(_) => {}
+            RegistryRecord::EnvironmentRecord(body) => {
+                // The structural half of the decode gate (`record_from_json`
+                // does the same for the wire path): the `canonical_full()`
+                // shape and the pinned `containment_policy.version_id` the
+                // dependency index consumes.
+                if let Err(e) = schema::record_from_json(RecordKind::EnvironmentRecord, body) {
+                    bail!(e);
+                }
+            }
             RegistryRecord::Capability(c) => {
                 if let Err(e) = check_capability(c) {
                     bail!(e);
@@ -1171,18 +1252,56 @@ impl RegistryStore {
                 bail!(e);
             }
         }
-        // Widening successor: placement grows more privileged vs the superseded
-        // version → requires `principal` + attestation (the NameIndex enforces).
-        let widening = match (&supersedes, &rec) {
-            (Some(s), RegistryRecord::Variant(v)) => match self.records.get(s) {
-                Some((_, RegistryRecord::Variant(old))) => {
-                    placement_rank(v.implementation.placement)
-                        > placement_rank(old.implementation.placement)
-                }
+        // Widening successor: placement grows more privileged, the declared
+        // budget loosens, or (for a plugin extension) `requests`/`required`
+        // hooks grow vs the superseded version → requires `principal` +
+        // attestation *and* a MAJOR label bump (the NameIndex enforces — §8.3 #6,
+        // AC-R-2.12.2-13).
+        let widening = match &supersedes {
+            Some(s) => match self.records.get(s) {
+                Some((_, old_rec)) => successor_widening(old_rec, &rec),
                 _ => false,
             },
-            _ => false,
+            None => false,
         };
+        // §8.3 #3/AC-R-2.12.2-13: a successor publish mints the `diff_ref` —
+        // the content id of the canonical ops over the superseded body. The
+        // diff is *verified* (`apply(old, diff) == new`) before it is stored;
+        // a failing diff is regenerated as a whole-body replace and the
+        // discrepancy logged as a diagnostic — never silently stored.
+        let mut diff_ref: Option<String> = None;
+        if let Some(s) = &supersedes {
+            if let Some((_, old_rec)) = self.records.get(s) {
+                let old_body = schema::body_json(old_rec, false);
+                let new_body = schema::body_json(&rec, false);
+                if old_body != new_body {
+                    let mut ops = record_diff(&old_body, &new_body);
+                    match record_apply(&old_body, &ops) {
+                        Ok(applied) if applied == new_body => {}
+                        _ => {
+                            self.diagnostics.push(RegistryDiagnostic {
+                                operation: "publish".to_string(),
+                                reason: "DiffDivergence".to_string(),
+                                subject: Some(version_id.to_string()),
+                                registrar: registrar.clone(),
+                                seq: self.seq,
+                            });
+                            ops = Json::Arr(vec![Json::obj([
+                                ("op", Json::str("replace")),
+                                ("path", Json::Arr(vec![])),
+                                ("new", new_body.clone()),
+                            ])]);
+                        }
+                    }
+                    let dref = hh_identity::idp::idp_id(
+                        "registry.diff",
+                        ops.to_canonical_string().as_bytes(),
+                    );
+                    self.diffs.insert(version_id.to_string(), ops);
+                    diff_ref = Some(dref);
+                }
+            }
+        }
         let vref = VersionedRef {
             kind: IdentityKind::RegistryRecord,
             version_id: version_id.to_string(),
@@ -1222,6 +1341,7 @@ impl RegistryStore {
             NameStatus::Active,
             registrar.clone(),
             widening,
+            diff_ref.clone(),
         ) {
             Ok(e) => e,
             Err(PublishError::LabelReused { name, label }) => {
@@ -1240,6 +1360,9 @@ impl RegistryStore {
             Err(PublishError::AuthorityWideningRequiresHuman) => {
                 bail!(RegistryError::AuthorityWideningRequiresHuman);
             }
+            Err(PublishError::LabelBumpRequired { name, detail }) => {
+                bail!(RegistryError::LabelBumpRequired { name, detail });
+            }
         };
         // Persist the replayable line and update the envelope's name ref.
         self.name_lines.push(Json::obj([
@@ -1254,6 +1377,11 @@ impl RegistryStore {
                 supersedes.clone().map_or(Json::Null, Json::Str),
             ),
             ("widening", Json::Bool(widening)),
+            ("diff_ref", diff_ref.clone().map_or(Json::Null, Json::Str)),
+            (
+                "diff",
+                self.diffs.get(version_id).cloned().unwrap_or(Json::Null),
+            ),
             ("publisher", registrar.to_json()),
         ]));
         if let Some((env, _)) = self.records.get_mut(version_id) {
@@ -1512,7 +1640,7 @@ impl RegistryStore {
             }
             RequireConformance::Probed => {
                 let mut saw_stale_only = false;
-                for (_env, rec) in self.records.values() {
+                for (env, rec) in self.records.values() {
                     let RegistryRecord::Report(r) = rec else {
                         continue;
                     };
@@ -1526,7 +1654,10 @@ impl RegistryStore {
                     {
                         continue; // publisher_claim never counts
                     }
-                    if r.stale {
+                    // Staleness is *derived* (never trusted from the authored
+                    // flag — S4): the recorded `stale` member OR revocation OR
+                    // stale-by-dependency on the subject/suite pin.
+                    if self.report_is_stale(&env.version_id, r) {
                         saw_stale_only = true;
                         continue;
                     }
@@ -1555,12 +1686,12 @@ impl RegistryStore {
         for field in v.capability_declaration.keys() {
             out.insert(field.clone(), V::Unknown);
         }
-        for (_e, rec) in self.records.values() {
+        for (env, rec) in self.records.values() {
             let RegistryRecord::Report(r) = rec else {
                 continue;
             };
             if r.subject_ref != *version_id
-                || r.stale
+                || self.report_is_stale(&env.version_id, r)
                 || !self
                     .policy
                     .admissible_report_producers
@@ -1573,6 +1704,57 @@ impl RegistryStore {
             }
         }
         out
+    }
+
+    /// Whether a conformance report is stale — **derived** (the authored
+    /// `stale` member OR the report's own version revoked OR stale-by-
+    /// dependency on its `subject_ref`/`suite_ref` pins OR its suite pinned to a
+    /// superseded `contract_version` of its class — S4/CC3; ADR-0152 D3). The
+    /// `subject_ref`/`suite_ref` are declared dependencies at `register`, so
+    /// revoking either propagates here through the one `StaleIndex` (CC1).
+    fn report_is_stale(&self, report_vid: &str, r: &crate::records::ConformanceReport) -> bool {
+        if r.stale
+            || self.lineage.is_revoked(report_vid)
+            || self.lineage.depends_on_revoked(report_vid)
+        {
+            return true;
+        }
+        // Suite-vs-class drift: the class's *current* contract_version is the
+        // max over every registered `ClassRecord` with the suite's `class_id`
+        // (contract versions compare lexicographically at this layer — the
+        // contract's own ordering). A suite pinned behind it stales the report.
+        // A `suite_ref` that does not name a `ConformanceSuite` — or whose class
+        // pin dangles — carries no drift signal here (the authored `stale`
+        // member and the dependency/revocation index still apply; the strict
+        // kind check is `record_conformance`'s).
+        let Some((_, RegistryRecord::Suite(suite))) = self.records.get(&r.suite_ref) else {
+            return false;
+        };
+        let class_id = self
+            .records
+            .get(&suite.class_ref)
+            .and_then(|(_, rec)| match rec {
+                RegistryRecord::Class(c) => Some(c.class_id.clone()),
+                _ => None,
+            });
+        match class_id {
+            Some(cid) => {
+                let current = self
+                    .records
+                    .values()
+                    .filter_map(|(_, rec)| match rec {
+                        RegistryRecord::Class(c) if c.class_id == cid => {
+                            Some(c.contract_version.clone())
+                        }
+                        _ => None,
+                    })
+                    .max();
+                current
+                    .map(|cv| cv != suite.contract_version)
+                    .unwrap_or(false)
+            }
+            None => false,
+        }
     }
 
     // ── deprecate / yank / revoke ────────────────────────────────────────
@@ -1659,6 +1841,7 @@ impl RegistryStore {
                 status,
                 registrar.clone(),
                 false,
+                None,
             )
             .map_err(|e| {
                 self.fail(
@@ -1901,6 +2084,29 @@ impl RegistryStore {
             if !self.records.contains_key(vid) {
                 errors.push(format!("name_history binds unregistered {vid}"));
             }
+            // §8.3 #3: the successor's `diff_ref` must apply byte-for-byte —
+            // `apply(base, diff) = target`. A divergent diff is an error row
+            // (`heal_diffs` regenerates it); it is never silently ignored.
+            if let (Some(d), Some(s)) = (
+                l.get("diff").filter(|d| !matches!(d, Json::Null)),
+                l.get("supersedes").and_then(|s| s.as_str()),
+            ) {
+                match (
+                    self.records.get(s).map(|(_, r)| r),
+                    self.records.get(vid).map(|(_, r)| r),
+                ) {
+                    (Some(base), Some(target)) => {
+                        let base_body = schema::body_json(base, false);
+                        let target_body = schema::body_json(target, false);
+                        match record_apply(&base_body, d) {
+                            Ok(applied) if applied == target_body => {}
+                            _ => errors
+                                .push(format!("{vid}: diff does not apply byte-for-byte over {s}")),
+                        }
+                    }
+                    _ => errors.push(format!("{vid}: diff endpoints unregistered")),
+                }
+            }
         }
         // Tamper check: the on-disk log must equal the canonical in-memory form.
         if let Ok(bytes) = fs::read(self.log_path()) {
@@ -1914,6 +2120,8 @@ impl RegistryStore {
                 diagnostics: Vec::new(),
                 pending: Vec::new(),
                 name_lines: Vec::new(),
+                diffs: BTreeMap::new(),
+                durable_runs: BTreeSet::new(),
                 seq: 0,
             };
             match fresh.replay(&bytes) {
@@ -2247,6 +2455,437 @@ impl RegistryStore {
             .all(|(k, val)| vb.capability_declaration.get(k) == Some(val));
         Ok(covers)
     }
+
+    // ── record_conformance (AC-R-2.12.1-9) ──────────────────────────────
+
+    /// `record_conformance(report, registrar)` — the write path for a
+    /// `conformance_report`. The `stale` member is **derived here**, never
+    /// trusted: a report is stale when its suite is not the head suite of the
+    /// class's current `contract_version`, or its subject/suite pins are
+    /// revoked/stale. A `registry_ci`/`lab` report must name a **durable**
+    /// run (`mark_run_durable`) — `RunNotDurable` otherwise; `publisher_claim`
+    /// never satisfies a `probed` floor (ADR-0152 D3).
+    pub fn record_conformance(
+        &mut self,
+        mut report: ConformanceReport,
+        registrar: &ProvenanceRecord,
+    ) -> Result<VersionedRef, RegistryError> {
+        let op = "record_conformance";
+        let subject = Some(report.subject_ref.clone());
+        macro_rules! bail {
+            ($e:expr) => {
+                return Err(self.fail(op, subject.clone(), Some(registrar), $e))
+            };
+        }
+        if let Err(pe) = registrar.validate(None) {
+            bail!(RegistryError::SchemaViolation {
+                path: "registrar".to_string(),
+                detail: format!("{pe:?}"),
+            });
+        }
+        // Durability: a machine-produced report must reference a run the store
+        // holds as durable (the boundary records durability — the ledger's
+        // seal path calls `mark_run_durable`; the store never trusts a bare
+        // string as evidence).
+        if matches!(report.produced_by, ProducedBy::RegistryCi | ProducedBy::Lab)
+            && !self.durable_runs.contains(&report.run_id)
+        {
+            bail!(RegistryError::RunNotDurable {
+                run_ref: report.run_id.clone(),
+            });
+        }
+        // Both pins must name registered records of the right shape — a report
+        // over a dangling or mistyped pin is a schema violation, not a record.
+        let suite = match self.records.get(&report.suite_ref) {
+            Some((_, RegistryRecord::Suite(s))) => s.clone(),
+            _ => bail!(RegistryError::SchemaViolation {
+                path: "suite_ref".to_string(),
+                detail: format!("unregistered suite pin: {}", report.suite_ref),
+            }),
+        };
+        if !self.records.contains_key(&report.subject_ref) {
+            bail!(RegistryError::SchemaViolation {
+                path: "subject_ref".to_string(),
+                detail: format!("unregistered subject pin: {}", report.subject_ref),
+            });
+        }
+        // Derive `stale`: the suite's pinned contract_version must equal the
+        // class's *current* one (the max contract_version over the class_id's
+        // registered versions); a class bump stales reports against the old
+        // suite (ADR-0152 D3). Pin revocation/staleness is derived at read
+        // time by `report_is_stale` — the recorded member covers the
+        // suite-vs-class drift at write time.
+        let class_id = self
+            .records
+            .get(&suite.class_ref)
+            .and_then(|(_, r)| match r {
+                RegistryRecord::Class(c) => Some(c.class_id.clone()),
+                _ => None,
+            });
+        report.stale = match class_id {
+            Some(cid) => {
+                let current = self
+                    .records
+                    .values()
+                    .filter_map(|(_, r)| match r {
+                        RegistryRecord::Class(c) if c.class_id == cid => {
+                            Some(c.contract_version.clone())
+                        }
+                        _ => None,
+                    })
+                    .max();
+                current
+                    .map(|cv| cv != suite.contract_version)
+                    .unwrap_or(true)
+            }
+            // The suite's class pin dangles — conservative: stale.
+            None => true,
+        };
+        self.register(RegistryRecord::Report(report), registrar, None)
+    }
+
+    /// `mark_run_durable(run_id)` — records that a run's ledger sealed (the
+    /// `charged_to = instrument` durability fact `record_conformance` checks).
+    /// Kernel/principal authority only; persisted as a `durable_run` line.
+    pub fn mark_run_durable(
+        &mut self,
+        run_id: &str,
+        registrar: &ProvenanceRecord,
+    ) -> Result<(), RegistryError> {
+        if !matches!(
+            registrar.authority,
+            AuthorityClass::Kernel | AuthorityClass::Principal
+        ) {
+            return Err(self.fail(
+                "mark_run_durable",
+                Some(run_id.to_string()),
+                Some(registrar),
+                RegistryError::AuthorityInsufficient {
+                    operation: "mark_run_durable".to_string(),
+                },
+            ));
+        }
+        if run_id.is_empty() {
+            return Err(self.fail(
+                "mark_run_durable",
+                None,
+                Some(registrar),
+                RegistryError::SchemaViolation {
+                    path: "run_id".to_string(),
+                    detail: "empty".to_string(),
+                },
+            ));
+        }
+        self.durable_runs.insert(run_id.to_string());
+        self.flush()
+    }
+
+    // ── catalog / sameness / update_available (R-2.12.2) ────────────────
+
+    /// `catalog(query?, snapshot?)` — lists every record and every name binding
+    /// in scope, including tombstoned (`deprecated`/`yanked`) names — a catalog
+    /// never deletes (AC-R-2.12.2-12/-19). Rows sort deterministically (R8).
+    pub fn catalog(
+        &self,
+        predicate: Option<&QueryPredicate>,
+    ) -> Result<Vec<CatalogEntry>, RegistryError> {
+        let member_filter: Option<BTreeSet<String>> =
+            match predicate.and_then(|q| q.snapshot_id.as_ref()) {
+                Some(id) => Some(self.snapshot_by_id(id)?.members.clone()),
+                None => None,
+            };
+        let clauses: &[QueryClause] = predicate.map(|q| q.clauses.as_slice()).unwrap_or(&[]);
+        for c in clauses {
+            const FIELDS: [&str; 7] = [
+                "kind",
+                "class_id",
+                "variant_id",
+                "semantic_id",
+                "admission",
+                "name",
+                "produced_by",
+            ];
+            if !FIELDS.contains(&c.field.as_str()) {
+                return Err(RegistryError::UnknownField {
+                    field: c.field.clone(),
+                });
+            }
+        }
+        let mut out: Vec<CatalogEntry> = Vec::new();
+        for (vid, (env, rec)) in &self.records {
+            if let Some(m) = &member_filter {
+                if !m.contains(vid) {
+                    continue;
+                }
+            }
+            if !self.matches(env, rec, clauses) {
+                continue;
+            }
+            // One row per (namespace, name) binding — the *latest* entry naming
+            // this version carries the tombstone status (a yank re-binds the
+            // same version_id; the earlier `active` entry is history).
+            let mut seen_bindings: BTreeSet<(String, String)> = BTreeSet::new();
+            let mut bindings: Vec<NameHistoryEntry> = Vec::new();
+            for l in &self.name_lines {
+                if l.get("version_id").and_then(|v| v.as_str()) != Some(vid.as_str()) {
+                    continue;
+                }
+                let Some(ns) = Namespace::parse(str_of(l, "namespace")) else {
+                    continue;
+                };
+                let name = str_of(l, "name").to_string();
+                if !seen_bindings.insert((ns.as_str().to_string(), name.clone())) {
+                    continue;
+                }
+                if let Some(e) = self
+                    .names
+                    .history(ns, &name)
+                    .into_iter()
+                    .rev()
+                    .find(|e| e.version_id == *vid)
+                {
+                    bindings.push(e.clone());
+                }
+            }
+            let revoked = self.lineage.is_revoked(vid);
+            let stale = self.lineage.stale_for(vid).to_vec();
+            if bindings.is_empty() {
+                out.push(CatalogEntry {
+                    envelope: env.clone(),
+                    record: rec.clone(),
+                    name: None,
+                    name_status: None,
+                    stale: stale.clone(),
+                    revoked,
+                });
+            } else {
+                for b in &bindings {
+                    out.push(CatalogEntry {
+                        envelope: env.clone(),
+                        record: rec.clone(),
+                        name: Some((b.namespace.as_str().to_string(), b.name.clone())),
+                        name_status: Some(b.status),
+                        stale: stale.clone(),
+                        revoked,
+                    });
+                }
+            }
+        }
+        out.sort_by(|a, b| {
+            (
+                a.name.clone().unwrap_or_default(),
+                a.envelope.version_id.clone(),
+            )
+                .cmp(&(
+                    b.name.clone().unwrap_or_default(),
+                    b.envelope.version_id.clone(),
+                ))
+        });
+        Ok(out)
+    }
+
+    /// `sameness(a, b)` — the L0–L4 ladder over the one identity scheme
+    /// (§8.3 #3; never names/text). L2/L3 discriminate on the published
+    /// `diff_ref` classification (widening authority / loosening budget /
+    /// dialect change ⇒ L3); a successor without a stored diff classifies
+    /// from the two bodies directly.
+    pub fn sameness(&self, a: &str, b: &str) -> Result<Sameness, RegistryError> {
+        let (ea, ra) = self
+            .records
+            .get(a)
+            .ok_or_else(|| RegistryError::UnknownVersion {
+                version_id: a.to_string(),
+            })?;
+        let (eb, rb) = self
+            .records
+            .get(b)
+            .ok_or_else(|| RegistryError::UnknownVersion {
+                version_id: b.to_string(),
+            })?;
+        let va = self.to_versioned_ref(ea, ra);
+        let vb = self.to_versioned_ref(eb, rb);
+        let same_lineage = self.same_lineage(a, b);
+        let class = if same_lineage {
+            let widening = successor_widening(ra, rb) || successor_widening(rb, ra);
+            let dialect_change = match (ra, rb) {
+                (RegistryRecord::Variant(x), RegistryRecord::Variant(y)) => {
+                    x.dialect_range != y.dialect_range
+                }
+                _ => ea.dialect_range != eb.dialect_range,
+            };
+            Some(DiffClassification {
+                semantic_ops_nonempty: schema::body_json(ra, false) != schema::body_json(rb, false),
+                authority_delta: if widening {
+                    Delta::Widening
+                } else {
+                    Delta::None
+                },
+                budget_delta: match (ra, rb) {
+                    (RegistryRecord::Variant(x), RegistryRecord::Variant(y)) => {
+                        let xc = x.declared_costs.as_ref().unwrap_or(&NULL_JSON);
+                        let yc = y.declared_costs.as_ref().unwrap_or(&NULL_JSON);
+                        if budget_loosened(xc, yc) {
+                            Delta::Loosening
+                        } else if budget_loosened(yc, xc) {
+                            Delta::Tightening
+                        } else {
+                            Delta::None
+                        }
+                    }
+                    _ => Delta::None,
+                },
+                dialect_change,
+            })
+        } else {
+            None
+        };
+        Ok(sameness::sameness(&va, &vb, same_lineage, class.as_ref()))
+    }
+
+    /// Whether `a` and `b` sit on one lineage — either is reachable from the
+    /// other along `supersedes` edges, or they share an ancestor (a fork's
+    /// siblings share the lineage).
+    fn same_lineage(&self, a: &str, b: &str) -> bool {
+        let ancestors_of = |start: &str| -> BTreeSet<String> {
+            let mut seen = BTreeSet::new();
+            let mut queue = vec![start.to_string()];
+            seen.insert(start.to_string());
+            while let Some(n) = queue.pop() {
+                for e in self.lineage.edges() {
+                    if e.newer == n && seen.insert(e.older.clone()) {
+                        queue.push(e.older.clone());
+                    }
+                }
+            }
+            seen
+        };
+        let aa = ancestors_of(a);
+        if aa.contains(b) {
+            return true;
+        }
+        let ba = ancestors_of(b);
+        ba.contains(a) || aa.intersection(&ba).next().is_some()
+    }
+
+    /// `update_available(version_id)` — the *newer* published version on the
+    /// same name, when one exists. A notification, never a re-seal
+    /// (AC-R-2.12.2-13): the caller decides; nothing is auto-pinned.
+    pub fn update_available(
+        &self,
+        version_id: &str,
+    ) -> Result<Option<UpdateNotification>, RegistryError> {
+        if !self.records.contains_key(version_id) {
+            return Err(RegistryError::UnknownVersion {
+                version_id: version_id.to_string(),
+            });
+        }
+        // The name's current head in Audit mode — a yanked/deprecated head is
+        // still an update signal (the pinned version is behind the name).
+        for ns in [Namespace::Hh, Namespace::Local] {
+            for l in &self.name_lines {
+                if l.get("version_id").and_then(|v| v.as_str()) != Some(version_id) {
+                    continue;
+                }
+                let lns = str_of(l, "namespace");
+                if lns != ns.as_str() {
+                    continue;
+                }
+                let name = str_of(l, "name");
+                let selector = NameSelector {
+                    namespace: lns.to_string(),
+                    name: name.to_string(),
+                    label: None,
+                };
+                if let ResolveOutcome::Resolved(vref) =
+                    self.names.resolve(&selector, ResolveMode::Audit)
+                {
+                    if vref.version_id != version_id && !self.lineage.is_revoked(&vref.version_id) {
+                        let sam = self.sameness(version_id, &vref.version_id).ok();
+                        return Ok(sam.map(|s| UpdateNotification {
+                            version_id: vref.version_id.clone(),
+                            semantic_id: vref.semantic_id.clone(),
+                            name: Some((lns.to_string(), name.to_string())),
+                            label: vref.name.as_ref().and_then(|n| n.label.clone()),
+                            sameness: s,
+                        }));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// The stored successor diff ops for `version_id` (the `diff_ref` body —
+    /// `apply(superseded, ops) == body(version_id)` was verified at publish).
+    pub fn diff_for(&self, version_id: &str) -> Option<&Json> {
+        self.diffs.get(version_id)
+    }
+
+    /// Regenerate every stored diff that fails `apply(base, diff) = target`
+    /// (§8.3 #3 — a failing diff is regenerated and the discrepancy logged).
+    /// `verify()` reports the divergence; this repairs it (the regenerated
+    /// whole-body replace always applies) and appends a diagnostic row per
+    /// repair — the discrepancy is a record, never silent (R10).
+    pub fn heal_diffs(&mut self) -> Result<usize, RegistryError> {
+        let mut healed = 0;
+        let mut repairs: Vec<(String, Json)> = Vec::new();
+        for l in &self.name_lines {
+            let vid = str_of(l, "version_id").to_string();
+            let sup = l
+                .get("supersedes")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string());
+            let Some(sup) = sup else { continue };
+            let (Some((_, base)), Some((_, target))) =
+                (self.records.get(&sup), self.records.get(&vid))
+            else {
+                continue;
+            };
+            let base_body = schema::body_json(base, false);
+            let target_body = schema::body_json(target, false);
+            let ok = self
+                .diffs
+                .get(&vid)
+                .and_then(|d| record_apply(&base_body, d).ok())
+                .map(|applied| applied == target_body)
+                .unwrap_or(false);
+            if !ok {
+                let regen = Json::Arr(vec![Json::obj([
+                    ("op", Json::str("replace")),
+                    ("path", Json::Arr(vec![])),
+                    ("new", target_body),
+                ])]);
+                repairs.push((vid.clone(), regen));
+            }
+        }
+        for (vid, regen) in repairs {
+            let dref =
+                hh_identity::idp::idp_id("registry.diff", regen.to_canonical_string().as_bytes());
+            self.diffs.insert(vid.clone(), regen.clone());
+            self.diagnostics.push(RegistryDiagnostic {
+                operation: "heal_diffs".to_string(),
+                reason: "DiffDivergence".to_string(),
+                subject: Some(vid.clone()),
+                registrar: ProvenanceRecord::kernel("registry:heal", self.seq),
+                seq: self.seq,
+            });
+            // The append-only name line is amended *forward*: the stored diff
+            // member is replaced and the entry's `diff_ref` re-minted.
+            for l in self.name_lines.iter_mut() {
+                if str_of(l, "version_id") == vid {
+                    if let Json::Obj(m) = l {
+                        m.insert("diff".to_string(), regen.clone());
+                        m.insert("diff_ref".to_string(), Json::str(dref.clone()));
+                    }
+                }
+            }
+            healed += 1;
+        }
+        if healed > 0 {
+            self.flush()?;
+        }
+        Ok(healed)
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2431,4 +3070,197 @@ fn placement_rank(p: Placement) -> u8 {
         Placement::InProcess => 3,
         Placement::ComponentModel => 4,
     }
+}
+
+// ── successor diffs & widening detection (AC-R-2.12.2-13) ────────────────────
+
+/// The shared `Json::Null` for `Option<Json>` fields read as `&Json`.
+static NULL_JSON: Json = Json::Null;
+
+/// The canonical `diff` ops between two record bodies — member-level
+/// `{op: insert|replace|remove, path: [key], new?}` over the top-level object
+/// (`apply(old, ops) == new` byte-for-byte; the diff is data, never code).
+/// A non-object pair falls back to one whole-body `replace`.
+pub fn record_diff(old: &Json, new: &Json) -> Json {
+    let mut ops: Vec<Json> = Vec::new();
+    match (old, new) {
+        (Json::Obj(o), Json::Obj(n)) => {
+            for (k, v) in o {
+                match n.get(k) {
+                    None => ops.push(Json::obj([
+                        ("op", Json::str("remove")),
+                        ("path", Json::Arr(vec![Json::str(k.clone())])),
+                    ])),
+                    Some(nv) if nv != v => ops.push(Json::obj([
+                        ("op", Json::str("replace")),
+                        ("path", Json::Arr(vec![Json::str(k.clone())])),
+                        ("new", nv.clone()),
+                    ])),
+                    _ => {}
+                }
+            }
+            for (k, v) in n {
+                if !o.contains_key(k) {
+                    ops.push(Json::obj([
+                        ("op", Json::str("insert")),
+                        ("path", Json::Arr(vec![Json::str(k.clone())])),
+                        ("new", v.clone()),
+                    ]));
+                }
+            }
+        }
+        _ => {
+            if old != new {
+                ops.push(Json::obj([
+                    ("op", Json::str("replace")),
+                    ("path", Json::Arr(vec![])),
+                    ("new", new.clone()),
+                ]));
+            }
+        }
+    }
+    Json::Arr(ops)
+}
+
+/// `apply(base, ops)` — the inverse of [`record_diff`]. A member-level diff
+/// applies byte-for-byte; a malformed op is a typed failure, never a guess.
+pub fn record_apply(base: &Json, ops: &Json) -> Result<Json, RegistryError> {
+    let mut out = base.clone();
+    let list = match ops {
+        Json::Arr(l) => l,
+        _ => {
+            return Err(RegistryError::SchemaViolation {
+                path: "diff".to_string(),
+                detail: "ops must be an array".to_string(),
+            })
+        }
+    };
+    for op in list {
+        let kind = op.get("op").and_then(|s| s.as_str()).unwrap_or("");
+        let path: Vec<String> = match op.get("path") {
+            Some(Json::Arr(p)) => p
+                .iter()
+                .filter_map(|s| s.as_str().map(|x| x.to_string()))
+                .collect(),
+            _ => Vec::new(),
+        };
+        if path.is_empty() {
+            // Root-level replace is the only valid empty-path op.
+            if kind == "replace" {
+                out = op.get("new").cloned().unwrap_or(Json::Null);
+                continue;
+            }
+            return Err(RegistryError::SchemaViolation {
+                path: "diff".to_string(),
+                detail: format!("root op must be replace: {kind}"),
+            });
+        }
+        let Json::Obj(m) = &mut out else {
+            return Err(RegistryError::SchemaViolation {
+                path: "diff".to_string(),
+                detail: "member op over a non-object body".to_string(),
+            });
+        };
+        let key = path[0].clone();
+        match kind {
+            "remove" => {
+                m.remove(&key);
+            }
+            "insert" | "replace" => {
+                m.insert(key, op.get("new").cloned().unwrap_or(Json::Null));
+            }
+            _ => {
+                return Err(RegistryError::SchemaViolation {
+                    path: "diff".to_string(),
+                    detail: format!("unknown op: {kind}"),
+                })
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Whether `new` loosens `old`'s declared budget — a numeric bound that grew,
+/// or a bound member present in `old` and absent in `new` (a removed bound is
+/// looser). Recursive over objects; `budget_delta = loosening` ⇒ L3 + the
+/// publish widening gate (§8.3 #3/#6).
+fn budget_loosened(old: &Json, new: &Json) -> bool {
+    match (old, new) {
+        (Json::Obj(o), Json::Obj(n)) => {
+            for (k, ov) in o {
+                match n.get(k) {
+                    // A bound dropped from the declaration loosens the budget.
+                    None => return true,
+                    Some(nv) => {
+                        if budget_loosened(ov, nv) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
+        (Json::Int(o), Json::Int(n)) => n > o,
+        (Json::Arr(o), Json::Arr(n)) => {
+            // A cap list losing members loosens; a growing bound set loosens
+            // when it adds numeric ceilings... the conservative rule: any
+            // member of `old` absent from `new` is a removed bound.
+            o.iter().any(|v| !n.contains(v))
+        }
+        _ => false,
+    }
+}
+
+/// Whether the successor `new` widens `old` — placement rank growth (variants),
+/// declared-budget loosening, or plugin `requests`/required-hook growth
+/// (extensions). Widening ⇒ `principal` + attestation + MAJOR label bump at
+/// publish (§8.3 #6; AC-R-2.12.2-13).
+fn successor_widening(old: &RegistryRecord, new: &RegistryRecord) -> bool {
+    match (old, new) {
+        (RegistryRecord::Variant(o), RegistryRecord::Variant(n)) => {
+            placement_rank(n.implementation.placement) > placement_rank(o.implementation.placement)
+                || budget_loosened(
+                    o.declared_costs.as_ref().unwrap_or(&NULL_JSON),
+                    n.declared_costs.as_ref().unwrap_or(&NULL_JSON),
+                )
+        }
+        (RegistryRecord::Extension(o), RegistryRecord::Extension(n)) => extension_widening(o, n),
+        _ => false,
+    }
+}
+
+/// Plugin/extension widening: the successor's `requests` exceed the
+/// predecessor's (`within_cap` inverted — a claim outside the old set is a
+/// growth), or a `hook` contribution appears that the old manifest did not
+/// carry (a required hook gains block power — conservative: any added hook).
+fn extension_widening(
+    old: &crate::extension::ExtensionRecord,
+    new: &crate::extension::ExtensionRecord,
+) -> bool {
+    use crate::extension::plugin::{manifest_from_json, ContributionKind};
+    let (Ok(om), Ok(nm)) = (
+        manifest_from_json(&old.manifest, "manifest"),
+        manifest_from_json(&new.manifest, "manifest"),
+    ) else {
+        // Undecodable manifests carry no comparable claims — the register-time
+        // `admit_plugin` gate owns their refusal; no widening signal here.
+        return false;
+    };
+    if nm.requests.within_cap(&om.requests).is_err() {
+        return true;
+    }
+    let hook_paths = |m: &crate::extension::plugin::PluginManifest| -> Vec<String> {
+        m.contributions
+            .iter()
+            .filter(|c| c.kind == ContributionKind::Hook)
+            .map(|c| match &c.path_or_locator {
+                crate::extension::plugin::PathOrLocator::PackagePath(p) => p.clone(),
+                crate::extension::plugin::PathOrLocator::PinnedLocator(l) => {
+                    l.resolved.clone().unwrap_or_default()
+                }
+            })
+            .collect()
+    };
+    let old_hooks = hook_paths(&om);
+    hook_paths(&nm).iter().any(|p| !old_hooks.contains(p))
 }

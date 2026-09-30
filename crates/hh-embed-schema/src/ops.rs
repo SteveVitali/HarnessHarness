@@ -148,6 +148,20 @@ const fn lab(
     }
 }
 
+/// A Group L op whose dispatch is live in `hh-embed` (S2.12) — `import`/`export`
+/// stay `lab(...)` (StagePending) until their slice lands.
+const fn labi(
+    name: &'static str,
+    group: &'static str,
+    params: &'static str,
+    result: &'static str,
+) -> OpSpec {
+    OpSpec {
+        requires_capability: Some("serves_measurement"),
+        ..call(name, group, params, result, LAB, Tier::Experimental, true)
+    }
+}
+
 const fn upcall(name: &'static str, params: &'static str, result: &'static str) -> OpSpec {
     OpSpec {
         direction: Direction::Upcall,
@@ -643,23 +657,23 @@ pub fn registry() -> Vec<OpSpec> {
         lab("lab.assembly.diff", "L", "json", "json"),
         lab("lab.assembly.identity", "L", "json", "json"),
         lab("lab.assembly.compile", "L", "json", "json"),
-        lab("lab.registry.register", "L", "json", "json"),
-        lab("lab.registry.publish", "L", "json", "json"),
-        lab("lab.registry.resolve", "L", "json", "json"),
-        lab("lab.registry.query", "L", "json", "json"),
-        lab("lab.registry.catalog", "L", "json", "json"),
-        lab("lab.registry.slot_choices", "L", "json", "json"),
-        lab("lab.registry.substitutable", "L", "json", "json"),
-        lab("lab.registry.snapshot", "L", "json", "json"),
-        lab("lab.registry.record_conformance", "L", "json", "json"),
-        lab("lab.registry.deprecate", "L", "json", "json"),
-        lab("lab.registry.yank", "L", "json", "json"),
-        lab("lab.registry.revoke", "L", "json", "json"),
-        lab("lab.registry.lineage", "L", "json", "json"),
-        lab("lab.registry.sameness", "L", "json", "json"),
+        labi("lab.registry.register", "L", "json", "json"),
+        labi("lab.registry.publish", "L", "json", "json"),
+        labi("lab.registry.resolve", "L", "json", "json"),
+        labi("lab.registry.query", "L", "json", "json"),
+        labi("lab.registry.catalog", "L", "json", "json"),
+        labi("lab.registry.slot_choices", "L", "json", "json"),
+        labi("lab.registry.substitutable", "L", "json", "json"),
+        labi("lab.registry.snapshot", "L", "json", "json"),
+        labi("lab.registry.record_conformance", "L", "json", "json"),
+        labi("lab.registry.deprecate", "L", "json", "json"),
+        labi("lab.registry.yank", "L", "json", "json"),
+        labi("lab.registry.revoke", "L", "json", "json"),
+        labi("lab.registry.lineage", "L", "json", "json"),
+        labi("lab.registry.sameness", "L", "json", "json"),
         lab("lab.registry.import", "L", "json", "json"),
         lab("lab.registry.export", "L", "json", "json"),
-        lab("lab.registry.verify", "L", "json", "json"),
+        labi("lab.registry.verify", "L", "json", "json"),
         lab("lab.experiment.register", "L", "json", "json"),
         lab("lab.experiment.expand", "L", "json", "json"),
         lab("lab.experiment.open_experiment", "L", "json", "json"),

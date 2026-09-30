@@ -499,6 +499,16 @@ pub enum RegistryRecord {
     /// An `environment_family` — the §5h.4 `EnvironmentFamilyRecord` is the
     /// body (R-2.9.4⁰ᵃ; the ontology owns the schema — CC7; S1.24).
     EnvironmentFamily(hh_ontology::lab::EnvironmentFamilyRecord),
+    /// An `environment_record` — the §5a.5 record body is owned by the
+    /// environment plane (`hh-env`, which sits *above* this crate — the
+    /// dependency direction forbids a typed arm). The registry stores the
+    /// record's canonical `hh_identity::record::Record::canonical_full()` Json
+    /// verbatim (records-in/records-out — R3) so `version_id =
+    /// idp("environment", H(body))` mints the same coordinate `hh-env`
+    /// computes (CC1). The registry projects only the pinned
+    /// `semantic.containment_policy.version_id` into the dependency/stale
+    /// index and snapshot closure — everything else is opaque.
+    EnvironmentRecord(Json),
 }
 
 impl RegistryRecord {
@@ -517,6 +527,7 @@ impl RegistryRecord {
             RegistryRecord::Validator(_) => RecordKind::Validator,
             RegistryRecord::Extension(_) => RecordKind::Extension,
             RegistryRecord::EnvironmentFamily(_) => RecordKind::EnvironmentFamily,
+            RegistryRecord::EnvironmentRecord(_) => RecordKind::EnvironmentRecord,
         }
     }
 
@@ -537,6 +548,17 @@ impl RegistryRecord {
             // `family_id` is a closed-sum value, never a pin (same treatment
             // as `applies_to_families`).
             RegistryRecord::EnvironmentFamily(_) => Vec::new(),
+            // The pinned `semantic.containment_policy.version_id` is the only
+            // registry-level edge the opaque env body carries (the snapshot
+            // closure + stale index consume it — R7). Blob refs under `refs[]`
+            // are content addresses, never registry `version_id`s.
+            RegistryRecord::EnvironmentRecord(body) => body
+                .get("semantic")
+                .and_then(|s| s.get("containment_policy"))
+                .and_then(|c| c.get("version_id"))
+                .and_then(|v| v.as_str())
+                .map(|s| vec![s.to_string()])
+                .unwrap_or_default(),
             // `calibration_ref` is a pinned `version_id` of the deterministic
             // oracle the judge calibrates against (ADR-0047(c)(ii)).
             RegistryRecord::Validator(o) => o.calibration_ref.iter().cloned().collect(),
