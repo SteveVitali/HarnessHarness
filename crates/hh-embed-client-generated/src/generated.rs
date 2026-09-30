@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:65654f1feeac315fab86002beec7c8ab31ab1dcafc7f2c895852c03fd8c098db";
+    "sha256:9fc2817bb2d817434d6c6bffc087d8823440f7685f73895916edbd7e32639a23";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5475,6 +5475,36 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `kernel.reproduce` → `json` (see the contract registry).
     pub fn kernel_reproduce(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("kernel.reproduce", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.eval.catalogue` → `json` (see the contract registry).
+    pub fn lab_eval_catalogue(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.eval.catalogue", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.eval.compare` → `json` (see the contract registry).
+    pub fn lab_eval_compare(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.eval.compare", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.eval.equivalence_run` → `json` (see the contract registry).
+    pub fn lab_eval_equivalence_run(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.eval.equivalence_run", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.eval.loss_report` → `json` (see the contract registry).
+    pub fn lab_eval_loss_report(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.eval.loss_report", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.eval.render_scorecard` → `json` (see the contract registry).
+    pub fn lab_eval_render_scorecard(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.eval.render_scorecard", params.clone())?;
         Ok(raw)
     }
 

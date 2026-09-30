@@ -1102,3 +1102,53 @@ pub fn lab_stage_pending(
 fn _ok_class() -> ExitClass {
     ExitClass::Ok
 }
+
+// ── eval — Group L `lab.eval.*` (S3.3; R-2.9.2/R-2.9.4⁰ᵇ) ────────────
+// The eval ops are records-in/records-out: the verb takes a params file —
+// the canonical-JSON request body (`runs`/`tasks`/`design`/`arm_specs`/
+// `metrics`/…) — and the response is the report record. No eval maths in
+// the CLI (CC7).
+
+/// `eval catalogue` → `lab.eval.catalogue` — the catalogue conformance
+/// report (missing rows, declaration coverage).
+pub fn cmd_eval_catalogue(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let r = call(b, "lab.eval.catalogue", Json::obj([]))?;
+    ok_outcome("eval_catalogue", r, fmt(p, io)?)
+}
+
+/// `eval compare|scorecard|equivalence|loss-report <params-file>` → the
+/// `lab.eval.*` op; the file is the canonical-JSON params body.
+pub fn cmd_eval_op(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+    verb: &str,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let method = match verb {
+        "compare" => "lab.eval.compare",
+        "scorecard" => "lab.eval.render_scorecard",
+        "equivalence" => "lab.eval.equivalence_run",
+        "loss-report" => "lab.eval.loss_report",
+        _ => {
+            return Err(CliError::Invocation(InvocationError::at(
+                "unknown_command",
+                &format!("eval {verb}"),
+                "unknown eval verb",
+            )))
+        }
+    };
+    let text = file_text(p, io, 0, "<params-file>")?;
+    let params = hh_wire::json::parse(&text).map_err(|e| {
+        CliError::Invocation(InvocationError::at(
+            "invalid_json",
+            "params-file",
+            &format!("{e:?}"),
+        ))
+    })?;
+    let r = call(b, method, params)?;
+    ok_outcome(&format!("eval_{verb}"), r, fmt(p, io)?)
+}

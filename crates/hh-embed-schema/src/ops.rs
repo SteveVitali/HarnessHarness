@@ -684,6 +684,13 @@ pub fn registry() -> Vec<OpSpec> {
         lab("lab.registry.import", "L", "json", "json"),
         lab("lab.registry.export", "L", "json", "json"),
         labi("lab.registry.verify", "L", "json", "json"),
+        // S3.3: the `lab.eval.*` eval-kernel boundary (R-2.9.2/R-2.9.4⁰ᵇ;
+        // records-in/records-out).
+        labi("lab.eval.catalogue", "L", "json", "json"),
+        labi("lab.eval.compare", "L", "json", "json"),
+        labi("lab.eval.render_scorecard", "L", "json", "json"),
+        labi("lab.eval.equivalence_run", "L", "json", "json"),
+        labi("lab.eval.loss_report", "L", "json", "json"),
         lab("lab.experiment.register", "L", "json", "json"),
         lab("lab.experiment.expand", "L", "json", "json"),
         lab("lab.experiment.open_experiment", "L", "json", "json"),

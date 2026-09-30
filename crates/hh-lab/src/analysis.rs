@@ -1076,3 +1076,388 @@ impl ParityReport {
         })
     }
 }
+
+// ── ScorecardReport (S3.3; spec §5h.2 §2.1 `render_scorecard`; R-2.9.2) ─────
+//
+// The scorecard is the deterministic, hash-stable render over the results
+// plane: one `ConfigurationSummary` per configuration, one `MetricCell` per
+// (configuration × metric). Every cell carries the point estimate, the
+// interval with its `EstimatorSelection`, the distribution reference, the
+// tails (P50/P95/max/catastrophic-failure rate) and the per-task `(c, n)`
+// counts so pass^k/pass@k stay recomputable. A cell is `value | n/a{reason}`
+// — never 0 by default (ADR-0045 D5/D6). The report names
+// `metric_registry_version`, `price_table_version` and the results
+// `watermark`; veto-tripped runs are excluded from headline success and
+// counted beside it; strata are never pooled unannotated
+// (`StrataPooledUnannotated` — the renderer refuses).
+
+/// `MetricCell` — one `(configuration, metric)` scorecard cell.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MetricCell {
+    /// The metric name (a `MetricDeclaration` registry ref).
+    pub metric: String,
+    /// The point estimate — `MetricValueKind` (`n/a{reason}` typed; never a
+    /// coerced 0).
+    pub point: hh_ontology::eval::MetricValueKind,
+    /// The interval `[lo, hi]` in the metric's unit, when defined.
+    pub interval: Option<(i64, i64)>,
+    /// The `EstimatorSelection` the interval ran under.
+    pub estimator: Option<EstimatorSelection>,
+    /// The content address of the distribution rows the cell summarises
+    /// (`idp/1` over the canonical per-run values — the distribution is
+    /// *referenced*, never inlined-opaquely).
+    pub distribution_ref: Option<String>,
+    /// `tails{p50, p95, max, catastrophic_rate_ppm}`.
+    pub tails: Option<Tails>,
+    /// The per-task `(c, n)` counts — pass^k/pass@k stay recomputable.
+    pub per_task: Vec<TaskCount>,
+    /// Per-outcome-class excluded counts (`outcome_class → n`) — runs outside
+    /// the denominator are counted beside, never silently dropped.
+    pub excluded: BTreeMap<String, u64>,
+    /// The number of runs excluded by tripped vetoes (counted beside the
+    /// headline, never merged into it).
+    pub vetoed: u64,
+    /// The contamination stratum the cell renders (`Some` on every cell —
+    /// capability is rendered per stratum and pooling without annotation is
+    /// refused; ADR-0143 L5, AC-R-2.9.4-7).
+    pub stratum: Option<String>,
+}
+
+/// `tails{p50, p95, max, catastrophic_rate_ppm}` — the distributional tail
+/// summary every scorecard cell reports (spec §5h.2 AC-8).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Tails {
+    /// The median.
+    pub p50: i64,
+    /// The 95th percentile.
+    pub p95: i64,
+    /// The maximum.
+    pub max: i64,
+    /// The catastrophic-failure rate (ppm) — the share of runs at the metric's
+    /// declared catastrophic floor (0 for rate metrics; the declaration's
+    /// `direction` picks the tail).
+    pub catastrophic_rate_ppm: i64,
+}
+
+/// `per_task[{task_id, c, n}]` — the success counts a pass^k/pass@k cell
+/// stays recomputable from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TaskCount {
+    /// The task id.
+    pub task_id: String,
+    /// Successes.
+    pub c: u64,
+    /// Trials (denominator-policy runs).
+    pub n: u64,
+}
+
+/// `ConfigurationSummary` — one scorecard row (one configuration).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConfigurationSummary {
+    /// The configuration id (`configuration_id` — the seedless coordinate).
+    pub configuration_id: String,
+    /// The participant class.
+    pub participant_class: String,
+    /// The runs that fed this summary.
+    pub run_ids: Vec<String>,
+    /// The per-metric cells.
+    pub cells: Vec<MetricCell>,
+    /// Vetoed-success count — successes on veto-tripped runs, counted beside
+    /// the headline (never inside it).
+    pub vetoed_successes: u64,
+    /// The portability cell (AC-R-2.9.2-10; CF-417): `bool{true}` only when
+    /// the configuration's runs evidence ≥ 2 distinct model snapshots across
+    /// ≥ 2 declared families and ≥ 1 held-out level; `n/a{not_run}`
+    /// otherwise — a portability claim is never fabricated.
+    pub portability: hh_ontology::eval::MetricValueKind,
+}
+
+/// `ScorecardReport/1` — the `render_scorecard` output.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScorecardReport {
+    /// `scorecard_id = H(canonical(minus id))` under `eval.scorecard` — the
+    /// hash-stable id (the render is pure over the inputs + watermark).
+    pub scorecard_id: String,
+    /// The metric-registry version the cells were rendered under.
+    pub metric_registry_version: String,
+    /// The pricing-table version spend metrics read against (`"none"` when no
+    /// spend metric is in the catalogue view).
+    pub price_table_version: String,
+    /// The results watermark the render reads at.
+    pub watermark: u64,
+    /// The per-configuration summaries.
+    pub configurations: Vec<ConfigurationSummary>,
+    /// The strata the render separated (contamination strata never pooled —
+    /// L5; the member documents what separated, the renderer refuses an
+    /// unannotated pool).
+    pub strata: Vec<String>,
+    /// The report label (headline eligibility at the report level).
+    pub label: ReportLabelKind,
+}
+
+fn tails_json(t: &Tails) -> Json {
+    Json::obj([
+        ("p50", Json::Int(t.p50)),
+        ("p95", Json::Int(t.p95)),
+        ("max", Json::Int(t.max)),
+        ("catastrophic_rate_ppm", Json::Int(t.catastrophic_rate_ppm)),
+    ])
+}
+
+fn tails_from_json(j: &Json) -> Result<Tails, SchemaError> {
+    let m = expect_obj(j, "Tails")?;
+    Ok(Tails {
+        p50: int_at(m, "p50", "Tails")?,
+        p95: int_at(m, "p95", "Tails")?,
+        max: int_at(m, "max", "Tails")?,
+        catastrophic_rate_ppm: int_at(m, "catastrophic_rate_ppm", "Tails")?,
+    })
+}
+
+fn task_count_json(t: &TaskCount) -> Json {
+    Json::obj([
+        ("task_id", Json::str(&t.task_id)),
+        ("c", Json::Int(t.c as i64)),
+        ("n", Json::Int(t.n as i64)),
+    ])
+}
+
+fn task_count_from_json(j: &Json) -> Result<TaskCount, SchemaError> {
+    let m = expect_obj(j, "TaskCount")?;
+    Ok(TaskCount {
+        task_id: str_at(m, "task_id", "TaskCount")?.to_string(),
+        c: int_at(m, "c", "TaskCount")? as u64,
+        n: int_at(m, "n", "TaskCount")? as u64,
+    })
+}
+
+impl MetricCell {
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("metric".into(), Json::str(&self.metric));
+        m.insert("point".into(), self.point.to_json());
+        if let Some((lo, hi)) = self.interval {
+            m.insert(
+                "interval".into(),
+                Json::obj([("lo", Json::Int(lo)), ("hi", Json::Int(hi))]),
+            );
+        }
+        if let Some(e) = &self.estimator {
+            m.insert("estimator".into(), e.to_json());
+        }
+        if let Some(d) = &self.distribution_ref {
+            m.insert("distribution_ref".into(), Json::str(d));
+        }
+        if let Some(t) = &self.tails {
+            m.insert("tails".into(), tails_json(t));
+        }
+        m.insert(
+            "per_task".into(),
+            Json::Arr(self.per_task.iter().map(task_count_json).collect()),
+        );
+        if !self.excluded.is_empty() {
+            m.insert(
+                "excluded".into(),
+                Json::Obj(
+                    self.excluded
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                        .collect(),
+                ),
+            );
+        }
+        if self.vetoed > 0 {
+            m.insert("vetoed".into(), Json::Int(self.vetoed as i64));
+        }
+        if let Some(st) = &self.stratum {
+            m.insert("stratum".into(), Json::str(st));
+        }
+        Json::Obj(m)
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<MetricCell, SchemaError> {
+        const REC: &str = "MetricCell";
+        let m = expect_obj(j, REC)?;
+        reject_unknown(
+            m,
+            &[
+                "metric",
+                "point",
+                "interval",
+                "estimator",
+                "distribution_ref",
+                "tails",
+                "per_task",
+                "excluded",
+                "vetoed",
+                "stratum",
+            ],
+            REC,
+        )?;
+        let interval = match m.get("interval") {
+            Some(i) => Some((
+                i.get("lo")
+                    .and_then(Json::as_int)
+                    .ok_or_else(|| SchemaError::v("interval", "missing lo"))?,
+                i.get("hi")
+                    .and_then(Json::as_int)
+                    .ok_or_else(|| SchemaError::v("interval", "missing hi"))?,
+            )),
+            None => None,
+        };
+        let mut excluded = BTreeMap::new();
+        if let Some(Json::Obj(ex)) = m.get("excluded") {
+            for (k, v) in ex {
+                excluded.insert(
+                    k.clone(),
+                    v.as_int()
+                        .ok_or_else(|| SchemaError::v("excluded", "count must be int"))?
+                        as u64,
+                );
+            }
+        }
+        Ok(MetricCell {
+            metric: str_at(m, "metric", REC)?.to_string(),
+            point: hh_ontology::eval::MetricValueKind::from_json(member_at(m, "point", REC)?)
+                .ok_or_else(|| SchemaError::v("point", "unknown value kind"))?,
+            interval,
+            estimator: m
+                .get("estimator")
+                .map(EstimatorSelection::from_json)
+                .transpose()
+                .map_err(|e| SchemaError::v("estimator", format!("{e:?}")))?,
+            distribution_ref: opt_str_at(m, "distribution_ref")?.map(str::to_string),
+            tails: m.get("tails").map(tails_from_json).transpose()?,
+            per_task: arr_at(m, "per_task", REC)?
+                .iter()
+                .map(task_count_from_json)
+                .collect::<Result<Vec<_>, _>>()?,
+            excluded,
+            vetoed: opt_int_at(m, "vetoed")?.unwrap_or(0) as u64,
+            stratum: opt_str_at(m, "stratum")?.map(str::to_string),
+        })
+    }
+}
+
+impl ConfigurationSummary {
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("configuration_id", Json::str(&self.configuration_id)),
+            ("participant_class", Json::str(&self.participant_class)),
+            (
+                "run_ids",
+                Json::Arr(self.run_ids.iter().map(Json::str).collect()),
+            ),
+            (
+                "cells",
+                Json::Arr(self.cells.iter().map(|c| c.to_json()).collect()),
+            ),
+            ("vetoed_successes", Json::Int(self.vetoed_successes as i64)),
+            ("portability", self.portability.to_json()),
+        ])
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<ConfigurationSummary, SchemaError> {
+        const REC: &str = "ConfigurationSummary";
+        let m = expect_obj(j, REC)?;
+        reject_unknown(
+            m,
+            &[
+                "configuration_id",
+                "participant_class",
+                "run_ids",
+                "cells",
+                "vetoed_successes",
+                "portability",
+            ],
+            REC,
+        )?;
+        Ok(ConfigurationSummary {
+            configuration_id: str_at(m, "configuration_id", REC)?.to_string(),
+            participant_class: str_at(m, "participant_class", REC)?.to_string(),
+            run_ids: str_vec_at(m, "run_ids", REC)?,
+            cells: arr_at(m, "cells", REC)?
+                .iter()
+                .map(MetricCell::from_json)
+                .collect::<Result<Vec<_>, _>>()?,
+            vetoed_successes: int_at(m, "vetoed_successes", REC)? as u64,
+            portability: hh_ontology::eval::MetricValueKind::from_json(
+                m.get("portability")
+                    .ok_or_else(|| SchemaError::v("portability", "missing member"))?,
+            )
+            .ok_or_else(|| SchemaError::v("portability", "unknown form"))?,
+        })
+    }
+}
+
+impl ScorecardReport {
+    /// `scorecard_id = H(canonical(minus scorecard_id))` under
+    /// `eval.scorecard` — recomputed by the renderer, never trusted.
+    pub fn compute_id(&self) -> String {
+        let mut j = self.to_json();
+        if let Json::Obj(ref mut m) = j {
+            m.remove("scorecard_id");
+        }
+        hh_identity::idp::idp_id("eval.scorecard", j.to_canonical_string().as_bytes())
+    }
+
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("schema", Json::str("scorecard_report/1")),
+            ("scorecard_id", Json::str(&self.scorecard_id)),
+            (
+                "metric_registry_version",
+                Json::str(&self.metric_registry_version),
+            ),
+            ("price_table_version", Json::str(&self.price_table_version)),
+            ("watermark", Json::Int(self.watermark as i64)),
+            (
+                "configurations",
+                Json::Arr(self.configurations.iter().map(|c| c.to_json()).collect()),
+            ),
+            (
+                "strata",
+                Json::Arr(self.strata.iter().map(Json::str).collect()),
+            ),
+            ("label", Json::str(self.label.name())),
+        ])
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<ScorecardReport, SchemaError> {
+        const REC: &str = "ScorecardReport/1";
+        let m = expect_obj(j, REC)?;
+        reject_unknown(
+            m,
+            &[
+                "schema",
+                "scorecard_id",
+                "metric_registry_version",
+                "price_table_version",
+                "watermark",
+                "configurations",
+                "strata",
+                "label",
+            ],
+            REC,
+        )?;
+        Ok(ScorecardReport {
+            scorecard_id: str_at(m, "scorecard_id", REC)?.to_string(),
+            metric_registry_version: str_at(m, "metric_registry_version", REC)?.to_string(),
+            price_table_version: str_at(m, "price_table_version", REC)?.to_string(),
+            watermark: int_at(m, "watermark", REC)? as u64,
+            configurations: arr_at(m, "configurations", REC)?
+                .iter()
+                .map(ConfigurationSummary::from_json)
+                .collect::<Result<Vec<_>, _>>()?,
+            strata: str_vec_at(m, "strata", REC)?,
+            label: ReportLabelKind::parse(str_at(m, "label", REC)?)
+                .ok_or_else(|| SchemaError::v("label", "unknown label kind"))?,
+        })
+    }
+}

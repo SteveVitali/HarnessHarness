@@ -57,6 +57,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-bench"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-eval",
+ "hh-hir",
+ "hh-identity",
+ "hh-lab",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-budget"
 version = "0.0.1"
 dependencies = [
@@ -178,15 +193,18 @@ name = "hh-embed"
 version = "0.0.1"
 dependencies = [
  "hh-assembly",
+ "hh-budget",
  "hh-bundle",
  "hh-compiler",
  "hh-containment",
  "hh-control",
  "hh-embed-schema",
  "hh-env",
+ "hh-eval",
  "hh-gateway",
  "hh-hir",
  "hh-identity",
+ "hh-lab",
  "hh-ledger",
  "hh-mcp",
  "hh-monitor",
@@ -231,6 +249,19 @@ dependencies = [
  "hh-registry",
  "hh-secrets",
  "hh-verification",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-eval"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-compiler",
+ "hh-identity",
+ "hh-lab",
+ "hh-ontology",
+ "hh-provenance",
  "hh-wire",
 ]
 
