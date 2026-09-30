@@ -1158,7 +1158,7 @@ fn golden_from_json(j: &Json) -> Option<GoldenSurfaces> {
     })
 }
 
-fn conformance_to_json(r: &ConformanceRecord) -> Json {
+pub fn conformance_to_json(r: &ConformanceRecord) -> Json {
     Json::obj([
         ("capability", Json::str(r.capability.clone())),
         ("declared", Json::str(r.declared.clone())),

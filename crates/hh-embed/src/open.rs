@@ -354,6 +354,98 @@ impl EmbedService {
         }
     }
 
+    /// The realized `ModelRoleTable` for a run over the scripted kernel
+    /// port (AC-R-2.3.3-11; CF-313): `primary` is the definition's
+    /// pinned `native.profile` coordinate unless the caller's
+    /// `profile_binding` member names a `primary` row; every other
+    /// declared role binds the scripted kernel model under its declared
+    /// `profile_ref`. A role outside the closed `ModelRole` set is a
+    /// `SchemaViolation` — never coerced, never silently dropped; an
+    /// expired bound profile with no declared `intent_ref` refuses
+    /// `expired_without_intent` (the §5b.3 d.6 link rule applied at
+    /// open). See [`RealizedRoles`] for the returned members.
+    fn realized_role_table(
+        &self,
+        sealed: &hh_hir::document::SealedDefinition,
+        supplied: Option<&Json>,
+    ) -> Result<RealizedRoles, EmbedError> {
+        // Role → `(declared coordinate, intent_ref)` — the caller's rows
+        // first, then the definition pin as the `primary` default.
+        let mut declared: BTreeMap<String, (String, Option<String>)> = BTreeMap::new();
+        if let Some(Json::Obj(m)) = supplied {
+            for (role, value) in m {
+                if hh_compiler::profile::ModelRole::parse(role).is_none() {
+                    return Err(EmbedError::SchemaViolation {
+                        path: format!("spec.profile_binding.{role}"),
+                        code: "unknown_role".to_string(),
+                    });
+                }
+                let (coord, intent) =
+                    profile_binding_entry(value).ok_or_else(|| EmbedError::SchemaViolation {
+                        path: format!("spec.profile_binding.{role}"),
+                        code: "not_a_coordinate".to_string(),
+                    })?;
+                declared.insert(role.clone(), (coord, intent));
+            }
+        }
+        if !declared.contains_key("primary") {
+            if let Some(pin) = native_profile_pin(&sealed.document) {
+                declared.insert("primary".to_string(), (pin, None));
+            }
+        }
+        let mut table = hh_gateway::router::ModelRoleTable::default();
+        let mut expired_rows: Vec<(String, String)> = Vec::new();
+        let mut primary_semantic: Option<String> = None;
+        let mut primary_record_ref: Option<String> = None;
+        for (role, (coord, intent)) in declared {
+            // Canonicalise through the registry: the recorded
+            // `profile_ref` is the resolved profile's canonical
+            // `id@version` (never a substituted guess — a coordinate
+            // that doesn't resolve is recorded verbatim: a declared
+            // claim, not a resolved record).
+            let resolved = crate::bundle_ops::resolve_profile_coordinate(&self.registry, &coord);
+            let (profile_ref, semantic, record_ref, expired) = match &resolved {
+                Some((vid, p)) => (
+                    hh_compiler::profile::profile_coordinate(p),
+                    Some(p.content_hash.clone()),
+                    Some(vid.clone()),
+                    hh_compiler::profile::profile_status(p)
+                        == hh_compiler::profile::DebtStatus::Expired,
+                ),
+                None => (coord.clone(), Some(coord.clone()), None, false),
+            };
+            if expired {
+                match intent {
+                    Some(i) => expired_rows.push((profile_ref.clone(), i)),
+                    None => {
+                        return Err(EmbedError::Refused {
+                            reason: format!("expired_without_intent: {profile_ref}"),
+                        });
+                    }
+                }
+            }
+            if role == "primary" {
+                primary_semantic = semantic;
+                primary_record_ref = record_ref;
+            }
+            table.roles.insert(
+                role,
+                hh_gateway::router::RoleBinding {
+                    primary: scripted_route_candidate(&profile_ref),
+                    alternates: Vec::new(),
+                    policy_ref: "hh-embed/scripted".to_string(),
+                    profile_ref,
+                },
+            );
+        }
+        Ok(RealizedRoles {
+            table,
+            primary_identity: primary_semantic,
+            primary_record_ref,
+            expired_rows,
+        })
+    }
+
     /// `open_session{kind:"new"}` — resolve → validate → seal →
     /// override desugar + I-1 → `open_run` → provision `local_host` →
     /// arm the driver.
@@ -447,12 +539,32 @@ impl EmbedService {
         // ── override desugar + I-1 (before `open_run` — a refusal means
         // no run ever existed) ───────────────────────────────────────
         let overrides_layer_id = self.materialise_overrides(&sealed, overrides, attendance)?;
+        // The realized `ModelRoleTable` (AC-R-2.3.3-11; CF-313;
+        // ADR-0121 d.2): `primary` is the definition's `native.profile`
+        // pin unless the caller's `profile_binding` names a `primary`
+        // row; every other declared role binds the scripted kernel model
+        // under its own `profile_ref`. The table's `semantic_id` is the
+        // `configuration_id.model_ref` (two spec blocks differing only
+        // in the table differ in the configuration id — the AC's
+        // determinism leg), and its profile projection is the manifest's
+        // `profile_binding` member. A bound profile that resolves
+        // `expired` requires the row's declared `intent_ref` (the §5b.3
+        // d.6 link rule applied at open; `expired_without_intent` is the
+        // refusal) — each admitted row mints `model.profile.expired_used`
+        // once the run exists.
+        let RealizedRoles {
+            table: role_table,
+            primary_identity: primary_semantic,
+            primary_record_ref,
+            expired_rows,
+        } = self.realized_role_table(&sealed, profile_binding)?;
         // The realized configuration pair — content-addressed through
         // `hh_assembly::configuration` (CC9): the manifest pins the
-        // honest Stage-1 composition inputs (the scripted kernel model,
-        // the declared profile binding, the realized environment, the
-        // declared budget, seed `0` — `open_session` carries no seed at
-        // Stage 1). The ledger's `open_run` gate requires pinned ids.
+        // honest Stage-1 composition inputs (the realized role table's
+        // semantic id, the primary profile's identity, the realized
+        // environment, the declared budget, seed `0` — `open_session`
+        // carries no seed at Stage 1). The ledger's `open_run` gate
+        // requires pinned ids.
         let budget_input = match budget {
             Some(BudgetInput::Ref(r)) => r.clone(),
             Some(BudgetInput::Node(n)) => {
@@ -463,10 +575,8 @@ impl EmbedService {
         let cfg = hh_assembly::configuration(
             &sealed,
             &hh_assembly::CompositionInputs {
-                model_ref: "hh-embed/kernel-scripted".to_string(),
-                profile: profile_binding
-                    .map(|p| p.to_canonical_string())
-                    .unwrap_or_else(|| "profile:none".to_string()),
+                model_ref: role_table.semantic_id(),
+                profile: primary_semantic.unwrap_or_else(|| "profile:none".to_string()),
                 environment_ref: "local_host".to_string(),
                 budget: budget_input.clone(),
                 seed: "0".to_string(),
@@ -585,6 +695,45 @@ impl EmbedService {
         // manifest (`static` semantics when the slot is unbound — the
         // member stays absent, the run is byte-identical to pre-S4.7).
         manifest.compute_policy_ref = compute_slot_variant(&sealed.document);
+        // The run manifest's `profile_binding` member (CF-313;
+        // AC-R-2.3.3-11): the profile projection of the realized
+        // `ModelRoleTable` — `{roles: map<ModelRole, ProfileRef>,
+        // fallback_used}`. `fallback_used` is false here — the scripted
+        // port never falls back silently (a missing binding is `unbound`,
+        // never substituted).
+        manifest.extra.insert(
+            "profile_binding".to_string(),
+            Json::obj([
+                ("roles", role_table.profile_binding()),
+                ("fallback_used", Json::Bool(false)),
+            ]),
+        );
+        // `model_profile_ref` — the resolved record's `version_id` for
+        // the `primary` binding (absent when `primary` binds no
+        // resolvable record: the ledger's `open_run` gate admits only a
+        // ref that resolves — the declared coordinate stays legible on
+        // `profile_binding.roles.primary.profile_ref`, never widened).
+        manifest.model_profile_ref = primary_record_ref;
+        // `expired_used` — the `{profile_ref, intent_ref}` rows the run
+        // opens under (the manifest's record of the
+        // `model.profile.expired_used` events minted below; absent when
+        // the run binds no expired profile).
+        if !expired_rows.is_empty() {
+            manifest.extra.insert(
+                "expired_used".to_string(),
+                Json::Arr(
+                    expired_rows
+                        .iter()
+                        .map(|(p, i)| {
+                            Json::obj([
+                                ("profile_ref", Json::str(p.clone())),
+                                ("intent_ref", Json::str(i.clone())),
+                            ])
+                        })
+                        .collect(),
+                ),
+            );
+        }
         manifest.configuration_id = Some(configuration_id.clone());
         manifest.configuration_version_id = Some(configuration_version_id.clone());
         manifest.harness_def_ref = Some(manifest_ref.clone());
@@ -675,6 +824,21 @@ impl EmbedService {
             self.mint(&run_id, &lease, "lifecycle.surface.invoked", payload)?;
         }
 
+        // `model.profile.expired_used{profile_ref, intent_ref}` — the
+        // §3.3.1 ledger event for each role binding that admitted an
+        // expired profile under its declared intent (R-2.3.3;
+        // AC-R-2.3.3-11). The manifest's `expired_used` member records
+        // the same rows; an expired binding with no `intent_ref`
+        // refused at `realized_role_table` — never minted.
+        for (profile_ref, intent_ref) in &expired_rows {
+            self.mint(
+                &run_id,
+                &lease,
+                "model.profile.expired_used",
+                hh_gateway::events::profile_expired_used(profile_ref, intent_ref),
+            )?;
+        }
+
         // ── environment: provision + attach local_host ───────────────
         let (env_handle_id, env_json) = self.provision_environment(&run_id, &lease, environment)?;
 
@@ -715,7 +879,12 @@ impl EmbedService {
             &compute_variant,
             Some(&sealed.document),
         )?;
-        let realized = realized_settings(self.workspace_root(), attendance, approval_mode);
+        let realized = realized_settings(
+            self.workspace_root(),
+            attendance,
+            approval_mode,
+            Some(&role_table),
+        );
         let head = self.store.head(&run_id).map_err(ledger_err)?;
 
         let sess = SessionState {
@@ -1306,8 +1475,12 @@ impl EmbedService {
             source: manifest.attendance.1.as_str().to_string(),
         };
         let manifest_mode = manifest.extra.get("approval_mode").and_then(Json::as_str);
-        let realized =
-            realized_settings(self.workspace_root(), &manifest_attendance, manifest_mode);
+        let realized = realized_settings(
+            self.workspace_root(),
+            &manifest_attendance,
+            manifest_mode,
+            None,
+        );
         let head = self.store.head(run_id).map_err(ledger_err)?;
         let sess = SessionState {
             run_id: run_id.to_string(),
@@ -1414,6 +1587,7 @@ impl EmbedService {
                 source: manifest.attendance.1.as_str().to_string(),
             },
             manifest.extra.get("approval_mode").and_then(Json::as_str),
+            None,
         );
         let sess = SessionState {
             run_id: run_id.to_string(),
@@ -2742,12 +2916,19 @@ pub(crate) fn realized_settings(
     workspace_root: &std::path::Path,
     attendance: &AttendanceDeclaration,
     approval_mode: Option<&str>,
+    role_table: Option<&hh_gateway::router::ModelRoleTable>,
 ) -> RealizedSettings {
     RealizedSettings {
-        model_role_table_realized: Json::obj([(
-            "roles",
-            Json::obj([("primary", Json::str("hh-embed/kernel-scripted"))]),
-        )]),
+        // The realized `ModelRoleTable` itself when the caller opened it
+        // (`open_new`; AC-R-2.3.3-11) — a resume/attach re-projection
+        // stays the scripted-port map (the durable record is the run
+        // manifest's `profile_binding` member).
+        model_role_table_realized: role_table.map(|t| t.to_json()).unwrap_or_else(|| {
+            Json::obj([(
+                "roles",
+                Json::obj([("primary", Json::str("hh-embed/kernel-scripted"))]),
+            )])
+        }),
         cwd: workspace_root.display().to_string(),
         containment_effective: Json::obj([("profile", Json::str("kernel_default"))]),
         policy_mode: approval_mode.unwrap_or("observe_only").to_string(),
@@ -2778,4 +2959,91 @@ pub(crate) fn diag_line(d: &hh_assembly::diagnostics::AssemblyDiagnostic) -> Str
         d.subject,
         d.detail.content.as_deref().unwrap_or("")
     )
+}
+
+/// The outcome of `realized_role_table` (AC-R-2.3.3-11; CF-313):
+/// `table` is the realized `ModelRoleTable` (its `semantic_id` is the
+/// `configuration_id.model_ref`); `primary_identity` is the composition
+/// input (`content_hash` when the coordinate resolved, the declared
+/// coordinate otherwise); `primary_record_ref` is the resolved record's
+/// `version_id` — the only spelling the `open_run` gate admits into
+/// `manifest.model_profile_ref` (`None` when the coordinate names no
+/// record); `expired_rows` are the `(profile_ref, intent_ref)` pairs the
+/// run opens under (the `model.profile.expired_used` rows `open_new`
+/// mints and the manifest's `expired_used` member records).
+struct RealizedRoles {
+    table: hh_gateway::router::ModelRoleTable,
+    primary_identity: Option<String>,
+    primary_record_ref: Option<String>,
+    expired_rows: Vec<(String, String)>,
+}
+
+/// The scripted kernel port's route candidate — the one `RouteCandidate`
+/// every `RoleBinding` points at (S5.1; AC-R-2.3.3-11): a real `ModelRef`
+/// (`profile_ref` is the role's bound coordinate; `provider_model_id` the
+/// scripted port's honest identity) over the scripted `ModelCoordinate`.
+fn scripted_route_candidate(profile_ref: &str) -> hh_gateway::router::RouteCandidate {
+    hh_gateway::router::RouteCandidate {
+        model_ref: hh_gateway::plan::ModelRef {
+            profile_ref: profile_ref.to_string(),
+            provider_model_id: "hh-embed/kernel-scripted".to_string(),
+            snapshot_id: None,
+            serving_route: None,
+            effort: None,
+        },
+        coordinate: hh_compiler::profile::ModelCoordinate {
+            provider_api_family: "hh-embed".to_string(),
+            model_family: "kernel-scripted".to_string(),
+            model_version: "1".to_string(),
+        },
+    }
+}
+
+/// One `profile_binding` member's value → `(coordinate, intent_ref)` —
+/// the value grammar is `set_coordinate`'s (a bare coordinate string or
+/// the `{profile_ref: {profile} | "…"}`/`{profile}` spellings —
+/// `profile_binding`'s own value shapes; one resolution path, never a
+/// second grammar) plus the optional `intent_ref` member an expired
+/// binding declares (§5b.3 d.6).
+fn profile_binding_entry(j: &Json) -> Option<(String, Option<String>)> {
+    let coord = match j {
+        Json::Str(v) => v.clone(),
+        other => other
+            .get("profile_ref")
+            .and_then(|r| match r {
+                Json::Str(s) => Some(s.clone()),
+                Json::Obj(_) => r.get("profile").and_then(Json::as_str).map(str::to_string),
+                _ => None,
+            })
+            .or_else(|| {
+                other
+                    .get("profile")
+                    .and_then(Json::as_str)
+                    .map(str::to_string)
+            })?,
+    };
+    let intent = match j {
+        Json::Obj(_) => j
+            .get("intent_ref")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        _ => None,
+    };
+    Some((coord, intent))
+}
+
+/// The definition's `primary` profile coordinate — the root native
+/// `AgentProcess`'s pinned `native.profile` (CF-313; a selector pin or
+/// `unbound` names no coordinate — `profile` is already the bound
+/// coordinate from stage-2b's `native_profile`).
+fn native_profile_pin(doc: &hh_hir::document::HirDocument) -> Option<String> {
+    let root = doc.node(&doc.root.semantic_id)?;
+    if let KindRecord::AgentProcess(ap) = &root.semantic {
+        if let AgentProcessBody::Native(n) = &ap.body {
+            if n.profile.pinned && !n.profile.is_unbound() {
+                return Some(n.profile.profile.clone());
+            }
+        }
+    }
+    None
 }

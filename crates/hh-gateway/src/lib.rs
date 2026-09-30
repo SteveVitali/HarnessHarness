@@ -106,13 +106,13 @@ pub use probes::{
 };
 pub use router::{
     check_reroute_order, error_action, explain, lift, lower, on_attempt_failed, project_health,
-    reroute, select, select_with, AccountBudget, AttemptDisposition, AttemptState, BudgetPort,
-    Candidate, CandidateRejectReason, CandidateVerdict, ErrorAction, GiveUpReason, HealthConfig,
-    HealthView, LiftedPreferences, LoweringLossReport, MigrationLossBound, MigrationView,
-    ModelRoleTable, NoHealth, NoMigration, NoPricing, NoQualityPrior, PolicyConditionedRule,
-    PricingView, QualityPriorView, RerouteOrderError, RoleBinding, RouteCandidate, RoutingDecision,
-    RoutingExplanation, RoutingPolicy, RoutingPolicyKind, RoutingRefusal, RoutingRequest,
-    RoutingViews, TableHealth, TargetHealth,
+    reroute, select, select_with, AccountBudget, AttemptDisposition, AttemptState, BanditCell,
+    BanditView, BudgetPort, Candidate, CandidateRejectReason, CandidateVerdict, ErrorAction,
+    GiveUpReason, HealthConfig, HealthView, LiftedPreferences, LoweringLossReport,
+    MigrationLossBound, MigrationView, ModelRoleTable, NoBandit, NoHealth, NoMigration, NoPricing,
+    NoQualityPrior, PolicyConditionedRule, PricingView, QualityPriorView, RerouteOrderError,
+    RoleBinding, RouteCandidate, RoutingDecision, RoutingExplanation, RoutingPolicy,
+    RoutingPolicyKind, RoutingRefusal, RoutingRequest, RoutingViews, TableHealth, TargetHealth,
 };
 pub use vocab::{
     AttemptPolicy, BlockKind, ErrorAttribution, InvalidResponseKind, ModelError, ModelErrorClass,

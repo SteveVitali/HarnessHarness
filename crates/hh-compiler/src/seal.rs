@@ -93,6 +93,12 @@ pub struct CompiledBundle {
     /// through the explicit `fallback_profile` escape (AC-R-2.3.3-2 records
     /// `fallback_used`; ADR-0124 §5).
     pub fallback_used: bool,
+    /// `model.profile.expired_used{profile_ref, intent_ref}` payload rows —
+    /// one per bound profile whose conditioned rules linked under `expired`
+    /// debt (§5b.3: appended to any run compiled under `expired`; the opening
+    /// run mints them). `[]` for a clean compile; emitted to the canonical
+    /// bundle only when non-empty so clean bundles keep their §3.2.8 shape.
+    pub expired_used: Vec<Json>,
 }
 
 /// `seal_outputs(linked, plan, validation, surface, lower_diags, artefacts, losses)
@@ -257,6 +263,7 @@ pub fn seal_outputs(
             .collect(),
         profile_test_report_ref: linked.profile.test_report_ref.clone(),
         fallback_used: linked.profile.is_fallback,
+        expired_used: linked.expired_used.clone(),
     };
 
     // bundle_id = idp/1 over canonical outputs (the bundle minus `bundle_id`).

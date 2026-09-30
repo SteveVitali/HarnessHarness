@@ -447,6 +447,7 @@ mod tests {
             preferences: None,
             source_profile_ref: None,
             in_flight_effect: false,
+            task_class: None,
         }
     }
 

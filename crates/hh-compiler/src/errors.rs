@@ -27,6 +27,10 @@ pub enum LinkErrorKind {
     /// A `DRIFT`/`UNSUPPORTED` conformance record on a capability in a bound
     /// rule's dependency set, without a recorded intent (ADR-0125 d.3).
     CapabilityDrift,
+    /// Expired conditioned rules were present and `CompileInputs.intent_ref`
+    /// was absent — the recorded-intent *record* (a Design or operator ref) the
+    /// §5b.3 contract names (`LinkError{expired_without_intent}`).
+    ExpiredWithoutIntent,
 }
 
 impl LinkErrorKind {
@@ -40,6 +44,7 @@ impl LinkErrorKind {
             LinkErrorKind::ProfileUntested => "profile_untested",
             LinkErrorKind::ProfileInvalid => "profile_invalid",
             LinkErrorKind::CapabilityDrift => "capability_drift",
+            LinkErrorKind::ExpiredWithoutIntent => "expired_without_intent",
         }
     }
 }

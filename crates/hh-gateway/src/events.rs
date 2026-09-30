@@ -586,6 +586,7 @@ pub fn cache_resolved(
     purpose: &Purpose,
     lookup_duration_ms: u64,
     served_by: Option<&str>,
+    verifier_verdict: Option<&Json>,
 ) -> Json {
     let mut m = std::collections::BTreeMap::new();
     m.insert("cache_kind".into(), Json::str(cache_kind.as_str()));
@@ -618,6 +619,11 @@ pub fn cache_resolved(
             None => Json::Null,
         },
     );
+    // §5b.4 — `verifier_verdict?{validator_ref, verdict}`: present on a K6
+    // marginal serve (the mandatory verifier gate), absent otherwise.
+    if let Some(v) = verifier_verdict {
+        m.insert("verifier_verdict".into(), v.clone());
+    }
     Json::Obj(m)
 }
 

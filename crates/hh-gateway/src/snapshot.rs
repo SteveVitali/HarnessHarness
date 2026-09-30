@@ -272,14 +272,22 @@ pub struct SnapshotClaim {
     pub observed: String,
 }
 
-/// The closed claim-kind sum — the two DRIFT raisers ADR-0203 D5 names.
+/// The closed claim-kind sum — the DRIFT raisers ADR-0203 D5 names plus the
+/// §5b.3 observable (ii) (`capabilities.compatibility_token` changed against
+/// the pinned token — the same claim shape, its own spelling).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotClaimKind {
     /// `served_model ≠ model_ref.provider_model_id` on a call of the binding.
     ServedModelSubstitution,
-    /// The fingerprint probe returned `drift` (or a compatibility-token
-    /// change, which lands as the same claim shape).
+    /// The fingerprint probe returned `drift`.
     FingerprintDrift,
+    /// `capabilities.compatibility_token` ≠ the profile-pinned token in the
+    /// latest discovery claim — a `model_version_change` observable (ii) and
+    /// the `model.surface.relowered{reason: compatibility_token_changed}`
+    /// trigger (AC-R-2.3.3-9; the gateway marks the profile
+    /// `pending_relower` and the next call refuses until the surface
+    /// re-lowers).
+    CompatibilityTokenChanged,
 }
 
 impl SnapshotClaimKind {
@@ -288,7 +296,30 @@ impl SnapshotClaimKind {
         match self {
             SnapshotClaimKind::ServedModelSubstitution => "served_model_substitution",
             SnapshotClaimKind::FingerprintDrift => "fingerprint_drift",
+            SnapshotClaimKind::CompatibilityTokenChanged => "compatibility_token_changed",
         }
+    }
+}
+
+/// `compatibility_token_claim(pinned_token, descriptor, model_id)` — compare
+/// the latest `discover` descriptor's `capabilities.compatibility_token`
+/// against the token the bound profile pins. A changed token yields the
+/// `SnapshotClaim` (observable (ii)); an unchanged or unobserved token is no
+/// claim — absence is never drift (the `unknown`-never-coerced rule).
+pub fn compatibility_token_claim(
+    pinned_token: Option<&Json>,
+    descriptor: &Json,
+    model_id: &str,
+) -> Option<SnapshotClaim> {
+    let claims = crate::probes::discovery_claims(descriptor);
+    match (pinned_token, claims.get("capability.compatibility_token")) {
+        (Some(pinned), Some(observed)) if pinned != observed => Some(SnapshotClaim {
+            claim_kind: SnapshotClaimKind::CompatibilityTokenChanged,
+            snapshot_id: observed.to_canonical_string(),
+            pinned_model_id: model_id.to_string(),
+            observed: observed.to_canonical_string(),
+        }),
+        _ => None,
     }
 }
 

@@ -344,6 +344,7 @@ impl EmbedService {
                 fallback_profile: None,
                 targets: vec![],
                 compile_for_expired: false,
+                intent_ref: None,
             },
             &crate::bundle_ops::RegistryProfiles(&self.registry),
             &self.registry,
@@ -361,6 +362,7 @@ impl EmbedService {
                 fallback_profile: None,
                 targets: vec![],
                 compile_for_expired: false,
+                intent_ref: None,
             },
             &crate::bundle_ops::RegistryProfiles(&self.registry),
             &self.registry,
@@ -1340,7 +1342,7 @@ impl EmbedService {
                 ("attachment_id", Json::str(session_id.clone())),
             ]),
         )?;
-        let realized = realized_settings(&self.workspace_root, &attendance_async(), None);
+        let realized = realized_settings(&self.workspace_root, &attendance_async(), None, None);
         let head = self.store.head(&child_run).map_err(ledger_err)?;
         let read_only = env == EnvBinding::TraceOnly;
         let sess = crate::service::SessionState {

@@ -204,6 +204,7 @@ fn main() {
         now_ms: Box::new(|| 0),
         normalizer_ref: str_member(&req, "normalizer_ref")
             .unwrap_or_else(|| "profile:stub#usage_mapping".into()),
+        pending_relower: std::collections::BTreeSet::new(),
     };
     gateway.load_dialect(dialect);
     let mut sink = CollectSink::default();
