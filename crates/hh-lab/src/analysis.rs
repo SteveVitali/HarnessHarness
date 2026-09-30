@@ -1331,6 +1331,22 @@ pub struct MetricCell {
     /// capability is rendered per stratum and pooling without annotation is
     /// refused; ADR-0143 L5, AC-R-2.9.4-7).
     pub stratum: Option<String>,
+    /// `judged` — the judged-cell label (`calibration_refs`, `exploratory`);
+    /// `Some` iff any folded value was `detector = judged` (AC-R-2.7.3-8/12 —
+    /// an `exploratory` cell is report-only, never a headline/gate input).
+    pub judged: Option<JudgedCellLabel>,
+}
+
+/// `JudgedCellLabel` — the cell-level label a judged fold carries
+/// (AC-R-2.7.3-8): the distinct calibration refs the folded values ran under,
+/// and `exploratory` when any folded value was emitted uncalibrated.
+#[derive(Debug, Clone, PartialEq)]
+pub struct JudgedCellLabel {
+    /// The distinct `calibration_ref`s of the folded judged values, sorted.
+    pub calibration_refs: Vec<String>,
+    /// `true` iff any folded judged value carried `exploratory = true` — the
+    /// cell is exploratory/report-only (never a headline or gate input).
+    pub exploratory: bool,
 }
 
 /// `tails{p50, p95, max, catastrophic_rate_ppm}` — the distributional tail
@@ -1483,6 +1499,18 @@ impl MetricCell {
         if let Some(st) = &self.stratum {
             m.insert("stratum".into(), Json::str(st));
         }
+        if let Some(j) = &self.judged {
+            m.insert(
+                "judged".into(),
+                Json::obj([
+                    (
+                        "calibration_refs",
+                        Json::Arr(j.calibration_refs.iter().map(Json::str).collect()),
+                    ),
+                    ("exploratory", Json::Bool(j.exploratory)),
+                ]),
+            );
+        }
         Json::Obj(m)
     }
 
@@ -1503,6 +1531,7 @@ impl MetricCell {
                 "excluded",
                 "vetoed",
                 "stratum",
+                "judged",
             ],
             REC,
         )?;
@@ -1547,6 +1576,21 @@ impl MetricCell {
             excluded,
             vetoed: opt_int_at(m, "vetoed")?.unwrap_or(0) as u64,
             stratum: opt_str_at(m, "stratum")?.map(str::to_string),
+            judged: match m.get("judged") {
+                None | Some(Json::Null) => None,
+                Some(Json::Obj(jm)) => Some(JudgedCellLabel {
+                    calibration_refs: arr_at(jm, "calibration_refs", "JudgedCellLabel")?
+                        .iter()
+                        .map(|v| {
+                            v.as_str().map(str::to_string).ok_or_else(|| {
+                                SchemaError::v("calibration_refs", "ref must be a string")
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    exploratory: bool_at(jm, "exploratory", "JudgedCellLabel")?,
+                }),
+                _ => return Err(SchemaError::v("judged", "must be an object")),
+            },
         })
     }
 }

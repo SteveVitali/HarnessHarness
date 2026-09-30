@@ -3841,6 +3841,8 @@ fn eval_run_json(arm: &str, task: &str, rep: u64, pass: bool) -> Json {
             detector: Detector::Deterministic,
             confidence: None,
             evidence_ref: None,
+            calibration_ref: None,
+            exploratory: None,
         }],
         environment_version_id: Some("env-1".into()),
         environment_family: EnvironmentFamily::CodingTerminal,

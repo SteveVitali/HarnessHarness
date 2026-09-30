@@ -445,6 +445,8 @@ fn eval_run(
             detector: Detector::Deterministic,
             confidence: None,
             evidence_ref: None,
+            calibration_ref: None,
+            exploratory: None,
         }],
         environment_version_id: Some(format!("env:{suite_id}")),
         environment_family: family,

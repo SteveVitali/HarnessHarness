@@ -60,6 +60,22 @@ pub fn claim_reconciled(record: &ReconciliationRecord) -> Json {
             Json::Int(record.reconciled_at_seq as i64),
         ),
         ("severity", Json::str(record.severity.as_str())),
+        // AC-R-2.7.2b-3 — judged records name their calibration +
+        // independence; deterministic records render `null`.
+        (
+            "calibration_ref",
+            record
+                .calibration_ref
+                .as_ref()
+                .map_or(Json::Null, |r| Json::str(r.clone())),
+        ),
+        (
+            "independence_summary",
+            record
+                .independence_summary
+                .as_ref()
+                .map_or(Json::Null, |s| Json::str(s.clone())),
+        ),
     ])
 }
 
@@ -201,7 +217,81 @@ pub fn validator_verdict(v: &Verdict) -> Json {
             "veto_tripped",
             Json::Arr(v.veto_tripped.iter().map(Json::str).collect()),
         ),
+        // The shared judge/critic extensions (ADR-0115 D8 — absent/null on
+        // deterministic verdicts).
+        (
+            "bundle_id",
+            v.bundle_id
+                .as_ref()
+                .map_or(Json::Null, |b| Json::str(b.clone())),
+        ),
+        (
+            "calibration_ref",
+            v.calibration_ref
+                .as_ref()
+                .map_or(Json::Null, |r| Json::str(r.clone())),
+        ),
+        (
+            "independence_summary",
+            v.independence_summary
+                .as_ref()
+                .map_or(Json::Null, |s| Json::str(s.clone())),
+        ),
+        ("uncited_findings", Json::Int(v.uncited_findings as i64)),
         ("measured_at", Json::Int(v.measured_at as i64)),
+    ])
+}
+
+/// `control.critic.gated` —
+/// `{rule_ref, verdict_id, decision_point, iteration, followup_ref}` —
+/// the runtime critic-gate audit record (AC-R-2.7.3-6; the class is
+/// registered `row_audit` in hh-ledger).
+pub fn critic_gated(
+    rule_ref: &str,
+    verdict: &crate::critics::CriticVerdict,
+    decision_point: &str,
+    iteration: u64,
+    followup_ref: Option<&str>,
+) -> Json {
+    Json::obj([
+        ("rule_ref", Json::str(rule_ref)),
+        ("verdict_id", Json::str(verdict.verdict_id.clone())),
+        (
+            "critic_ref",
+            Json::str(verdict.critic_ref.version_id.clone()),
+        ),
+        ("decision_point", Json::str(decision_point)),
+        ("iteration", Json::Int(iteration as i64)),
+        (
+            "followup_ref",
+            followup_ref.map(Json::str).unwrap_or(Json::Null),
+        ),
+        (
+            "use",
+            Json::str(match verdict.use_ {
+                crate::vocab::CriticUse::Report => "report",
+                crate::vocab::CriticUse::Gate => "gate",
+            }),
+        ),
+    ])
+}
+
+/// `context.artefact.delivered{kind = kernel_notice}` — the
+/// `ReconciliationNotice` feed-back payload (F6; AC-R-2.7.2b-2 — a
+/// deterministic projection delivered at `kernel` authority, deduplicated
+/// by `(class, subject)` per turn by the caller).
+pub fn kernel_notice(notice: &crate::claims::ReconciliationNotice) -> Json {
+    Json::obj([
+        ("kind", Json::str("kernel_notice")),
+        ("record_ref", Json::str(notice.record_ref.clone())),
+        ("class", Json::str(notice.class.as_str())),
+        ("subject", notice.subject.to_json()),
+        ("expected", Json::str(notice.expected.clone())),
+        ("observed", Json::str(notice.observed.clone())),
+        (
+            "suggested",
+            Json::Arr(notice.suggested.iter().map(Json::str).collect()),
+        ),
     ])
 }
 
@@ -359,6 +449,8 @@ mod tests {
             reconciled_at_seq: 20,
             mode: ReconcileMode::LedgerOnly,
             charged_to: crate::vocab::ChargedTo::Subject,
+            calibration_ref: None,
+            independence_summary: None,
             provenance: prov(),
         };
         let s = claim_reconciled(&r).to_canonical_string();

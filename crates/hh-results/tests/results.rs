@@ -335,6 +335,8 @@ fn metric_payload(metric: &str, value: MetricValueKind, applies_to: &str) -> Jso
         detector: Detector::Deterministic,
         confidence: None,
         evidence_ref: None,
+        calibration_ref: None,
+        exploratory: None,
     }
     .to_json()
 }
@@ -2047,6 +2049,8 @@ fn annotate_never_hide_retract_revoke_retire_gc() {
                     detector: Detector::Deterministic,
                     confidence: None,
                     evidence_ref: Some(ev_addr.clone()),
+                    calibration_ref: None,
+                    exploratory: None,
                 }
                 .to_json(),
             )]

@@ -376,6 +376,13 @@ pub struct ReconciliationRecord {
     pub mode: ReconcileMode,
     /// Who the reconciliation was charged to.
     pub charged_to: ChargedTo,
+    /// `calibration_ref` — the `CalibrationRecord` a judged detector ran
+    /// under (AC-R-2.7.2b-3; `Some` iff `detector = judged` — absent at
+    /// C0/C2-deterministic).
+    pub calibration_ref: Option<String>,
+    /// `independence_summary` — the independence dimensions a judged
+    /// detector relied on (AC-R-2.7.2b-3).
+    pub independence_summary: Option<String>,
     /// The record's provenance.
     pub provenance: ProvenanceRecord,
 }
@@ -389,6 +396,13 @@ pub enum ReconcileError {
     /// `probe` mode produced no `probe_effect_ids` — a probe-mode record
     /// without probes is malformed at C0 (probes are C2).
     ProbeModeWithoutProbes,
+    /// A `detector = judged` record carried no `calibration_ref` — a judged
+    /// verdict with no named calibration is malformed (AC-R-2.7.2b-3).
+    JudgedWithoutCalibration,
+    /// A `detector = deterministic` record carried judge members
+    /// (`calibration_ref`/`independence_summary`) — kernel-authoritative
+    /// records never cite a calibration.
+    DeterministicWithJudgeMembers,
 }
 
 impl std::fmt::Display for ReconcileError {
@@ -400,6 +414,12 @@ impl std::fmt::Display for ReconcileError {
             ReconcileError::ProbeModeWithoutProbes => {
                 write!(f, "probe-mode record without probe_effect_ids")
             }
+            ReconcileError::JudgedWithoutCalibration => {
+                write!(f, "judged reconciliation record without calibration_ref")
+            }
+            ReconcileError::DeterministicWithJudgeMembers => {
+                write!(f, "deterministic record carrying judge members")
+            }
         }
     }
 }
@@ -407,7 +427,8 @@ impl std::fmt::Display for ReconcileError {
 impl std::error::Error for ReconcileError {}
 
 impl ReconciliationRecord {
-    /// The record's own contract (a `diverge` always cites a handle).
+    /// The record's own contract (a `diverge` always cites a handle; a judged
+    /// record always names its calibration + independence).
     pub fn validate(&self) -> Result<(), ReconcileError> {
         if matches!(self.agreement, Agreement::Diverge(_)) && self.evidence_refs.is_empty() {
             return Err(ReconcileError::DivergenceWithoutEvidence);
@@ -415,7 +436,21 @@ impl ReconciliationRecord {
         if self.mode == ReconcileMode::Probe && self.probe_effect_ids.is_empty() {
             return Err(ReconcileError::ProbeModeWithoutProbes);
         }
+        if self.detector == Detector::Judged && self.calibration_ref.is_none() {
+            return Err(ReconcileError::JudgedWithoutCalibration);
+        }
+        if self.detector == Detector::Deterministic
+            && (self.calibration_ref.is_some() || self.independence_summary.is_some())
+        {
+            return Err(ReconcileError::DeterministicWithJudgeMembers);
+        }
         Ok(())
+    }
+
+    /// Whether the record is admissible as a `hold` cause (F7 — judged/
+    /// model-originated records can trip a veto but never hold).
+    pub fn hold_admissible(&self) -> bool {
+        self.detector == Detector::Deterministic
     }
 }
 
@@ -517,6 +552,8 @@ pub fn reconcile_ledger_only(
         // AC-R-2.7.2a-8 — the deterministic check is instrument work: the
         // per-claim reconcile cost charges `instrument`, never the subject.
         charged_to: ChargedTo::Instrument,
+        calibration_ref: None,
+        independence_summary: None,
         provenance,
     };
 
@@ -944,6 +981,109 @@ pub fn extract(
             provenance: provenance.clone(),
         };
         push(&mut c)?;
+        claims.push(c);
+    }
+    Ok(claims)
+}
+
+// ── the parsed/judged extraction channels (R-2.7.2b; C2) ─────────────────────
+
+/// `FreeClaim` — a claim a free-text parser or a judged extractor produced
+/// (the channel input — the parse/judge itself is the caller's concern;
+/// this surface stamps the channel, caps the confidence, and validates).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FreeClaim {
+    /// The claim kind.
+    pub kind: ClaimKind,
+    /// The claim subject.
+    pub subject: SubjectRef,
+    /// The claimed predicate.
+    pub predicate: String,
+    /// The asserted value (closed-schema JSON).
+    pub asserted: Json,
+    /// The evidence refs the parser/judge cited.
+    pub evidence_refs: Vec<String>,
+    /// The parser/judge's own confidence in ppm (capped at
+    /// [`crate::vocab::PARSED_CONFIDENCE_CAP_PPM`] on the emitted claim).
+    pub confidence_ppm: u64,
+}
+
+/// `extract_parsed(model_call_id, parsed, grammar_ref, …) → [Claim]` — the
+/// `parsed` channel (R-2.7.2b): free text parsed under the profile's claim
+/// grammar enters at `authority = delegate`, `extracted_by =
+/// parsed(grammar_ref)`, `extraction_confidence_ppm ≤
+/// PARSED_CONFIDENCE_CAP_PPM` (0.8 — never 1.0). Provenance above `delegate`
+/// is refused (`AuthorityExceedsOrigin` rides [`ExtractError::Invalid`]).
+pub fn extract_parsed(
+    model_call_id: &str,
+    parsed: &[FreeClaim],
+    grammar_ref: &str,
+    run_id: &str,
+    at_seq: u64,
+    provenance: ProvenanceRecord,
+) -> Result<Vec<Claim>, ExtractError> {
+    extract_free(
+        model_call_id,
+        parsed,
+        ExtractedBy::Parsed(grammar_ref.to_string()),
+        run_id,
+        at_seq,
+        provenance,
+    )
+}
+
+/// `extract_judged(model_call_id, judged, detector_ref, …) → [Claim]` — the
+/// `judged` channel (R-2.7.2b): a judged extractor's claims enter at
+/// `authority = delegate`, `extracted_by = judged(detector_ref)`, with the
+/// same 0.8 confidence cap as `parsed`. `detector_ref` is the pinned
+/// extractor ref the record names.
+pub fn extract_judged(
+    model_call_id: &str,
+    judged: &[FreeClaim],
+    detector_ref: &str,
+    run_id: &str,
+    at_seq: u64,
+    provenance: ProvenanceRecord,
+) -> Result<Vec<Claim>, ExtractError> {
+    extract_free(
+        model_call_id,
+        judged,
+        ExtractedBy::Judged(detector_ref.to_string()),
+        run_id,
+        at_seq,
+        provenance,
+    )
+}
+
+/// The shared free-channel fold — stamps the channel, caps the confidence,
+/// validates, ids off `model_call_id` (deterministic).
+fn extract_free(
+    model_call_id: &str,
+    free: &[FreeClaim],
+    extracted_by: ExtractedBy,
+    run_id: &str,
+    at_seq: u64,
+    provenance: ProvenanceRecord,
+) -> Result<Vec<Claim>, ExtractError> {
+    let cap = extracted_by.confidence_ceiling_ppm();
+    let mut claims = Vec::with_capacity(free.len());
+    for (i, f) in free.iter().enumerate() {
+        let c = Claim {
+            claim_id: format!("{model_call_id}:claim:{}", i + 1),
+            run_id: run_id.to_string(),
+            model_call_id: model_call_id.to_string(),
+            at_seq,
+            kind: f.kind,
+            subject: f.subject.clone(),
+            predicate: f.predicate.clone(),
+            asserted: f.asserted.clone(),
+            evidence_refs: f.evidence_refs.clone(),
+            extracted_by: extracted_by.clone(),
+            extraction_confidence_ppm: f.confidence_ppm.min(cap),
+            criteria_status: vec![],
+            provenance: provenance.clone(),
+        };
+        c.validate().map_err(ExtractError::Invalid)?;
         claims.push(c);
     }
     Ok(claims)

@@ -361,6 +361,10 @@ fn decided_pass_verdict(
         cost_ppm: 0,
         charged_to: ChargedTo::Subject,
         veto_tripped: vec![],
+        bundle_id: None,
+        calibration_ref: None,
+        independence_summary: None,
+        uncited_findings: 0,
         provenance: hh_provenance::ProvenanceRecord::kernel("hh-test/verify", 0),
         measured_at: 0,
     }
@@ -1357,7 +1361,7 @@ fn followed_deterministic_rows_and_per_profile_share() {
                     .provenance
                     .as_ref()
                     .map(|p| p.authority)
-                    .unwrap_or(hh_provenance::authority::AuthorityClass::Unverified),
+                    .unwrap_or(hh_provenance::authority::AuthorityClass::Kernel),
                 scope_effect_id: e.scope.effect_id.as_deref(),
             })
             .collect();
@@ -1907,4 +1911,176 @@ fn ac_f2_10_envelope_rebuild_equality() {
         &ctx_g,
     );
     assert_eq!(format!("{v1:?}"), format!("{v2:?}"));
+}
+
+// ── S4.16c — the C2 `execution_alignment` reconciler through the driver ─────
+
+/// A bound `ReconcilerDeclaration` runs `reconcile_c2` over the projected
+/// `ReconcileContext` (R-2.7.2b; AC-R-2.7.2b-2): a completion claim citing a
+/// refused effect is a `censored_evidence` divergence (D7) and lands the
+/// `kernel_notice` feed-back row naming the refusal; the same run without
+/// the declaration emits the byte-identical C0 chain.
+#[test]
+fn bound_reconciler_emits_d7_and_kernel_notice() {
+    use hh_verification::reconciler::ReconcilerDeclaration;
+    use hh_verification::vocab::DivergenceClass;
+
+    let decl = ReconcilerDeclaration {
+        reconciler_ref: "reconciler/exec-align.v1".into(),
+        classes_detected: [
+            DivergenceClass::PhantomObservation,
+            DivergenceClass::StaleBelief,
+            DivergenceClass::CensoredEvidence,
+            DivergenceClass::ProgressRegression,
+            DivergenceClass::EvidenceInversion,
+            DivergenceClass::NoProgressLoop,
+        ]
+        .into_iter()
+        .collect(),
+        detector_classes: [hh_verification::vocab::Detector::Deterministic]
+            .into_iter()
+            .collect(),
+        probe_capabilities: vec![],
+        requires_observability: [hh_ontology::participant::Observability::Events]
+            .into_iter()
+            .collect(),
+        applies_to: Default::default(),
+        probe_budget_share_cap_ppm: None,
+        conditioned_on: None,
+        assumption_debt: None,
+        judge_ref: None,
+        calibration_ref: None,
+        independence_summary: None,
+        no_progress_k: 2,
+        enabled: true,
+    };
+    hh_verification::reconciler::declare_reconciler(&decl).unwrap();
+
+    // The model reads a forbidden path (refused → `action.effect.refused`),
+    // then submits `achieved` citing the refused effect — citing a refused
+    // outcome is censored evidence (D7). The refused row's `effect:<id>` is
+    // discovered by a probe run (the alloc counter is shared across tags —
+    // never guess the id).
+    let refused = GateOutcome {
+        outcome: SettledOutcome::Refused,
+        submission_ref: None,
+        error_class: None,
+    };
+
+    let run_once =
+        |with_reconciler: bool, finish: Json| -> (MemSink, hh_control::driver::RunResult) {
+            let mut sink = MemSink::new();
+            let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+            let mut driver = Driver::open_react(
+                &ctx(),
+                policy,
+                &mut sink,
+                DriverConfig {
+                    surfaces: vec![fs_read(), submit_surface()],
+                    reconciler: with_reconciler.then(|| decl.clone()),
+                    ..DriverConfig::default()
+                },
+            )
+            .unwrap();
+            let mut model = ScriptedModel {
+                script: [
+                    call("fs.read", r#"{"path":"/a"}"#),
+                    submit_call(),
+                    submit_call(),
+                    submit_call(),
+                    submit_call(),
+                ]
+                .into_iter()
+                .collect(),
+                calls: 0,
+            };
+            let mut gate = ScriptedGate::observed()
+                .with_submit()
+                .with_surface("fs.read", refused.clone());
+            gate.finish = Some(finish);
+            let mut asm = NullAssembler;
+            let r = driver
+                .run(&mut model, &mut gate, &mut asm, &mut sink)
+                .unwrap();
+            (sink, r)
+        };
+
+    // Probe run — learn the refused effect's id (`action.effect.refused`'s
+    // scope effect_id), then the finish record cites `effect:<id>`.
+    let (probe, _) = run_once(false, Json::obj([("completion", Json::str("achieved"))]));
+    let refused_fx: &EventEnvelope = probe.find("action.effect.refused")[0];
+    let refused_id = refused_fx
+        .scope
+        .effect_id
+        .clone()
+        .expect("the refused row carries scope.effect_id");
+    let finish_with_censored_cite = Json::obj([
+        ("completion", Json::str("achieved")),
+        (
+            "criteria_status",
+            Json::Arr(vec![Json::obj([
+                ("criterion_ref", Json::str("crit:1")),
+                ("status", Json::str("met")),
+                (
+                    "evidence_refs",
+                    Json::Arr(vec![Json::str(format!("effect:{refused_id}"))]),
+                ),
+            ])]),
+        ),
+    ]);
+
+    // ── Bound: the C2 fold ran — D7 diverge + the notice row. ────────────
+    let (sink_on, _r) = run_once(true, finish_with_censored_cite.clone());
+    let refused_row: Vec<&EventEnvelope> = sink_on.find("action.effect.refused");
+    assert_eq!(refused_row.len(), 1, "the fs.read refusal is ledgered");
+    let reconciled: Vec<&EventEnvelope> = sink_on.find("verification.claim.reconciled");
+    assert!(
+        reconciled.iter().any(|e| {
+            e.payload.get("agreement").and_then(Json::as_str) == Some("diverge")
+                && e.payload.get("divergence_class").and_then(Json::as_str)
+                    == Some("censored_evidence")
+        }),
+        "the completion claim's cite of the refused effect is a D7 diverge"
+    );
+    // F6 — the kernel_notice feed-back row landed as
+    // `context.artefact.delivered{kind = kernel_notice}` and names the
+    // refused subject (AC-R-2.7.2b-2).
+    let notices: Vec<&EventEnvelope> = sink_on
+        .events
+        .iter()
+        .filter(|e| {
+            e.class == "context.artefact.delivered"
+                && e.payload.get("kind").and_then(Json::as_str) == Some("kernel_notice")
+        })
+        .collect();
+    assert!(!notices.is_empty(), "the kernel_notice row landed");
+    // (class, subject)-deduplicated per gate evaluation — the hold loop
+    // re-delivers on each re-proposal the censored claim repeats.
+    assert_eq!(
+        notices[0].payload.get("class").and_then(Json::as_str),
+        Some("censored_evidence")
+    );
+    assert!(notices[0]
+        .payload
+        .get("suggested")
+        .map(|s: &Json| s.to_canonical_string().contains("respect_refusal"))
+        .unwrap_or(false));
+    // The divergence holds (deterministic — hold-admissible): the run never
+    // lands `succeeded`.
+    assert!(sink_on
+        .find("verification.completion.decided")
+        .iter()
+        .all(|e| e.payload.get("status").and_then(Json::as_str) != Some("succeeded")));
+
+    // ── Unbound: byte-identical C0 fold — the D7 class and the notice row
+    // are absent (CC6/removal: the reconciler off is the C0 record). ──────
+    let (sink_off, _) = run_once(false, finish_with_censored_cite);
+    let reconciled_off: Vec<&EventEnvelope> = sink_off.find("verification.claim.reconciled");
+    assert!(reconciled_off.iter().all(|e| {
+        e.payload.get("divergence_class").and_then(Json::as_str) != Some("censored_evidence")
+    }));
+    assert!(!sink_off.events.iter().any(|e| {
+        e.class == "context.artefact.delivered"
+            && e.payload.get("kind").and_then(Json::as_str) == Some("kernel_notice")
+    }));
 }

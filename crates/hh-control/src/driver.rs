@@ -366,6 +366,12 @@ pub struct DriverConfig {
     /// names — `None` with a declared spec means the detector never
     /// fires, never gets guessed at).
     pub judge: Option<std::sync::Arc<dyn crate::loops::JudgePort>>,
+    /// The `execution_alignment` C2 reconciler declaration (R-2.7.2b;
+    /// S4.16c): `Some` binds the belief-state reconciler — `completion_gate`
+    /// runs `reconcile_c2` over the projected `ReconcileContext` (D1/D4/
+    /// D7–D10 on top of the C0 classes). `None` (the default) keeps the
+    /// byte-identical C0 `ledger_only` fold.
+    pub reconciler: Option<hh_verification::reconciler::ReconcilerDeclaration>,
 }
 
 impl Default for DriverConfig {
@@ -391,6 +397,7 @@ impl Default for DriverConfig {
             compute_policy_ref: "static".to_string(),
             compute_facts: crate::compute::ComputeFacts::default(),
             judge: None,
+            reconciler: None,
         }
     }
 }
@@ -2619,25 +2626,45 @@ impl<S: ControlStrategy> Driver<S> {
             // The row projection — authority from the row's provenance (CC2:
             // conferred, never read from content); a row without provenance
             // binds nothing (Unverified).
-            let rows: Vec<hh_verification::bind::RowView> = sink
-                .prefix()
-                .iter()
-                .map(|e| hh_verification::bind::RowView {
-                    seq: e.seq,
-                    class: e.class.as_str(),
-                    payload: &e.payload,
-                    authority: e
-                        .provenance
-                        .as_ref()
-                        .map(|p| p.authority)
-                        .unwrap_or(hh_provenance::authority::AuthorityClass::Unverified),
-                    scope_effect_id: e.scope.effect_id.as_deref(),
-                })
-                .collect();
+            let rows: Vec<hh_verification::bind::RowView> =
+                sink.prefix()
+                    .iter()
+                    .map(|e| hh_verification::bind::RowView {
+                        seq: e.seq,
+                        class: e.class.as_str(),
+                        payload: &e.payload,
+                        // CC2 — authority is conferred by the producing
+                        // component: the driver's own kernel rows carry
+                        // `producer.component_class = "kernel"` (their authority
+                        // is kernel by construction — a provenance record only
+                        // narrows it); a non-kernel row without provenance stays
+                        // `Unverified` and binds nothing in the C2 context.
+                        authority: e.provenance.as_ref().map(|p| p.authority).unwrap_or_else(
+                            || {
+                                if e.producer.component_class == hh_ledger::event::KERNEL_COMPONENT
+                                {
+                                    hh_provenance::authority::AuthorityClass::Kernel
+                                } else {
+                                    hh_provenance::authority::AuthorityClass::Unverified
+                                }
+                            },
+                        ),
+                        scope_effect_id: e.scope.effect_id.as_deref(),
+                    })
+                    .collect();
             let head_seq = sink.prefix().last().map(|e| e.seq).unwrap_or(0);
 
             // Reconcile every recorded claim (kernel provenance — the
-            // `claim.reconciled` rows land in phase 2).
+            // `claim.reconciled` rows land in phase 2). A bound C2
+            // `execution_alignment` reconciler runs `reconcile_c2` over the
+            // projected `ReconcileContext` (the D1/D4/D7–D10 detectors on
+            // top of the C0 classes — R-2.7.2b); `None`/`enabled = false`
+            // keeps the byte-identical C0 `ledger_only` fold.
+            let recon_ctx = self
+                .config
+                .reconciler
+                .as_ref()
+                .map(|_| hh_verification::bind::fold_reconcile_context(&rows));
             let mut records = Vec::new();
             let mut completion_idx: Option<usize> = None;
             let mut completion_claim_ref = String::new();
@@ -2645,13 +2672,24 @@ impl<S: ControlStrategy> Driver<S> {
             let mut completion_evidence: Vec<String> = vec![];
             for claim in &claims {
                 let handles = bind_claim(&rows, claim, self.config.task_contract.as_ref());
-                let rec = reconcile_ledger_only(
-                    claim,
-                    &handles,
-                    "hir/kernel/reconcile:1",
-                    head_seq,
-                    kernel_prov.clone(),
-                );
+                let recs: Vec<hh_verification::claims::ReconciliationRecord> =
+                    match (&self.config.reconciler, &recon_ctx) {
+                        (Some(decl), Some(ctx)) => hh_verification::reconciler::reconcile_c2(
+                            claim,
+                            &handles,
+                            ctx,
+                            decl,
+                            head_seq,
+                            kernel_prov.clone(),
+                        ),
+                        _ => vec![reconcile_ledger_only(
+                            claim,
+                            &handles,
+                            "hir/kernel/reconcile:1",
+                            head_seq,
+                            kernel_prov.clone(),
+                        )],
+                    };
                 if completion_idx.is_none()
                     && matches!(claim.kind, ClaimKind::Achieved | ClaimKind::Unachievable)
                 {
@@ -2660,7 +2698,7 @@ impl<S: ControlStrategy> Driver<S> {
                     completion_claim_ref = claim.claim_id.clone();
                     completion_idx = Some(records.len());
                 }
-                records.push(rec);
+                records.extend(recs);
             }
 
             // The gate facts (deterministic-only by construction — the
@@ -2721,17 +2759,41 @@ impl<S: ControlStrategy> Driver<S> {
                 .count() as u64;
             let mut evidence_divergences = vec![];
             let mut completion_agreement = Agreement::Unverifiable;
-            if let Some(rec) = completion_idx.and_then(|i| records.get(i)) {
-                completion_agreement = rec.agreement;
+            // The completion claim's records — the C2 fold may emit several
+            // per claim (the D7+D10 pair); the gate reads every
+            // hold-admissible divergence (deterministic only — F7; judged
+            // records never reach `claim_evidence_divergences`).
+            let completion_records: Vec<&hh_verification::claims::ReconciliationRecord> =
+                completion_idx
+                    .map(|_| {
+                        records
+                            .iter()
+                            .filter(|r| r.claim_id == completion_claim_ref)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+            for rec in &completion_records {
                 if let Agreement::Diverge(class) = rec.agreement {
-                    // `contract_gap` is already F3's own verdict — the
-                    // gate's `required_criteria` table decides it with
-                    // `unverifiable_reason` awareness; re-adding the
-                    // reconciler's class would hold a criterion the
-                    // contract declared unverifiable (S3.10).
-                    if class != hh_verification::vocab::DivergenceClass::ContractGap {
-                        evidence_divergences.push(class);
+                    if rec.hold_admissible() {
+                        completion_agreement = Agreement::Diverge(class);
+                        // `contract_gap` is already F3's own verdict — the
+                        // gate's `required_criteria` table decides it with
+                        // `unverifiable_reason` awareness; re-adding the
+                        // reconciler's class would hold a criterion the
+                        // contract declared unverifiable (S3.10).
+                        if class != hh_verification::vocab::DivergenceClass::ContractGap {
+                            evidence_divergences.push(class);
+                        }
                     }
+                }
+            }
+            // The gate-visible agreement is deterministic-only: a judged
+            // `diverge` annotates the record stream but never holds/vetoes
+            // the completion claim on its own (AC-R-2.7.2b-3 — the fallback
+            // therefore skips non-hold-admissible records entirely).
+            if let Some(first) = completion_records.iter().find(|r| r.hold_admissible()) {
+                if !matches!(completion_agreement, Agreement::Diverge(_)) {
+                    completion_agreement = first.agreement;
                 }
             }
             (
@@ -2759,6 +2821,32 @@ impl<S: ControlStrategy> Driver<S> {
                 None,
                 kernel_prov.clone(),
             )?;
+        }
+        // F6 — the `kernel_notice` feed-back rows (AC-R-2.7.2b-2): one
+        // notice per `(class, subject)` per diverging record, delivered as
+        // `context.artefact.delivered{kind = kernel_notice}` at `kernel`
+        // authority — a deterministic projection, never judged output
+        // rewritten as kernel evidence (the notice names the refusal it
+        // cites). Bound-reconciler runs only; the C0 fold stays
+        // byte-identical.
+        if self.config.reconciler.is_some() {
+            let mut delivered: std::collections::BTreeSet<(
+                hh_verification::vocab::DivergenceClass,
+                String,
+            )> = Default::default();
+            for notice in hh_verification::reconciler::feed_back_notices(
+                &records,
+                claims.iter(),
+                &mut delivered,
+            ) {
+                self.append_prov(
+                    sink,
+                    "context.artefact.delivered",
+                    hh_verification::events::kernel_notice(&notice),
+                    None,
+                    kernel_prov.clone(),
+                )?;
+            }
         }
         let result = evaluate_gate(&facts);
 
@@ -4440,6 +4528,10 @@ mod tests {
             cost_ppm: 0,
             charged_to: vv::ChargedTo::Subject,
             veto_tripped: vec![],
+            bundle_id: None,
+            calibration_ref: None,
+            independence_summary: None,
+            uncited_findings: 0,
             provenance: ProvenanceRecord::minted(
                 Origin::kernel("hir/kernel/check"),
                 PersistenceScope::Run,

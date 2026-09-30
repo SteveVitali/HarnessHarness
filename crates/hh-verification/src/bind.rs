@@ -468,6 +468,240 @@ pub fn bind_claim(
     handles
 }
 
+// ── fold_reconcile_context — the C2 fact projection (R-2.7.2b; S4.16c) ───────
+
+/// `fold_reconcile_context(rows) → ReconcileContext` — the caller-side
+/// projection the C2 reconciler reads (AC-R-2.7.2b-2/3). Conservative by
+/// construction: only `environment`/`kernel`-authority rows contribute
+/// (CC2 — a `delegate`/`unverified` row never grounds a fact), and a
+/// member a row does not carry leaves the fact absent — the fold never
+/// guesses (absent facts ⇒ the detectors simply do not fire).
+pub fn fold_reconcile_context(rows: &[RowView]) -> crate::reconciler::ReconcileContext {
+    use crate::reconciler::{ProgressFact, ReconcileContext, RepetitionFact, Watermark};
+
+    let mut ctx = ReconcileContext::default();
+    let mut delivered: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let mut offloaded: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    type RepetitionWindow = (u64, Option<String>, Vec<String>, u64, u64, bool);
+    let mut windows: std::collections::BTreeMap<String, RepetitionWindow> =
+        std::collections::BTreeMap::new();
+
+    for r in rows {
+        if r.authority < AuthorityClass::Environment {
+            continue; // CC2 — delegate/unverified rows never ground a fact
+        }
+        match r.class {
+            "context.observation.recorded" => {
+                if let Some(key) = payload_subject_key(r.payload) {
+                    ctx.receipts.insert(key, format!("evt:{}", r.seq));
+                }
+            }
+            "action.effect.refused" => {
+                if let Some(id) = r
+                    .payload
+                    .get("effect_id")
+                    .and_then(Json::as_str)
+                    .or(r.scope_effect_id)
+                {
+                    ctx.refused_effect_refs.insert(format!("effect:{id}"));
+                }
+                ctx.refused_effect_refs.insert(format!("evt:{}", r.seq));
+            }
+            "context.compaction.completed" | "context.memory.invalidated" => {
+                collect_refs(
+                    r.payload,
+                    &["forgotten", "evicted", "invalidated", "refs", "items"],
+                    &mut ctx.forgotten_refs,
+                );
+                if let Some(mref) = r.payload.get("ref").and_then(Json::as_str) {
+                    ctx.watermarks.insert(
+                        format!("memory:{mref}"),
+                        Watermark {
+                            changed_at_seq: r.seq,
+                            change_ref: format!("evt:{}", r.seq),
+                        },
+                    );
+                }
+            }
+            "context.memory.written" => {
+                if let Some(mref) = r
+                    .payload
+                    .get("ref")
+                    .and_then(Json::as_str)
+                    .or_else(|| r.payload.get("key").and_then(Json::as_str))
+                {
+                    ctx.watermarks.insert(
+                        format!("memory:{mref}"),
+                        Watermark {
+                            changed_at_seq: r.seq,
+                            change_ref: format!("evt:{}", r.seq),
+                        },
+                    );
+                }
+            }
+            "context.assembled" => {
+                collect_refs(
+                    r.payload,
+                    &["truncated", "omitted"],
+                    &mut ctx.truncated_refs,
+                );
+            }
+            "context.artefact.delivered" => {
+                if let Some(a) = r.payload.get("artefact_ref").and_then(Json::as_str) {
+                    delivered.insert(a.to_string());
+                }
+            }
+            "context.artefact.offloaded" => {
+                collect_refs(
+                    r.payload,
+                    &["artefact_ref", "offloaded", "refs"],
+                    &mut offloaded,
+                );
+            }
+            "context.progress.recorded" => {
+                let item = r
+                    .payload
+                    .get("item")
+                    .and_then(Json::as_str)
+                    .or_else(|| r.payload.get("item_id").and_then(Json::as_str));
+                if let Some(item) = item {
+                    let fact = ProgressFact {
+                        validator_ref: r
+                            .payload
+                            .get("validator_ref")
+                            .and_then(Json::as_str)
+                            .map(str::to_string),
+                        latest_verdict_affirmative: match r.payload.get("verdict") {
+                            Some(Json::Bool(b)) => Some(*b),
+                            Some(Json::Str(s)) => Some(s == "pass" || s == "met"),
+                            _ => None,
+                        },
+                        verdict_ref: Some(format!("evt:{}", r.seq)),
+                        done: matches!(r.payload.get("done"), Some(Json::Bool(true))),
+                    };
+                    ctx.progress_items
+                        .insert(format!("progress_item:{item}"), fact);
+                }
+            }
+            "action.effect.intended" | "action.effect.finished" => {
+                if let Some(Json::Arr(paths)) = r.payload.get("touched_paths") {
+                    for p in paths {
+                        if let Json::Str(path) = p {
+                            ctx.watermarks.insert(
+                                format!("file:{path}"),
+                                Watermark {
+                                    changed_at_seq: r.seq,
+                                    change_ref: format!("evt:{}", r.seq),
+                                },
+                            );
+                        }
+                    }
+                }
+                let cap = r
+                    .payload
+                    .get("capability")
+                    .and_then(Json::as_str)
+                    .or_else(|| r.payload.get("capability_ref").and_then(Json::as_str))
+                    .unwrap_or("");
+                let args = r
+                    .payload
+                    .get("args_canonical_hash")
+                    .and_then(Json::as_str)
+                    .unwrap_or("");
+                if !cap.is_empty() {
+                    let sig = format!("{cap}|{args}");
+                    let obs = r
+                        .payload
+                        .get("result_hash")
+                        .and_then(Json::as_str)
+                        .or_else(|| r.payload.get("observation_hash").and_then(Json::as_str))
+                        .map(str::to_string);
+                    let is_write =
+                        r.payload
+                            .get("domain")
+                            .and_then(Json::as_str)
+                            .is_some_and(|d| {
+                                d.contains("write") || d.contains("exec") || d.contains("net")
+                            });
+                    let entry = windows
+                        .entry(sig)
+                        .or_insert((0, None, vec![], u64::MAX, 0, false));
+                    entry.0 += 1;
+                    match (&entry.1, &obs) {
+                        (None, _) => entry.1 = obs,
+                        (Some(prev), Some(o)) if prev != o => entry.5 = true,
+                        _ => {}
+                    }
+                    entry.2.push(format!("evt:{}", r.seq));
+                    entry.3 = entry.3.min(r.seq);
+                    entry.4 = entry.4.max(r.seq);
+                    if is_write {
+                        entry.5 = true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    ctx.unread_offload_refs = offloaded
+        .into_iter()
+        .filter(|r| !delivered.contains(r))
+        .collect();
+    for (sig, (count, obs, refs, lo, hi, state_changed)) in windows {
+        if count >= 2 {
+            ctx.repetitions.push(RepetitionFact {
+                signature: sig,
+                count,
+                identical_observation: obs.is_some(),
+                state_changed,
+                refs,
+                span: (lo, hi),
+            });
+        }
+    }
+    ctx
+}
+
+/// Collect string/array-of-strings members of `payload` named by `keys`
+/// into `into` (the D7 censor surfaces).
+fn collect_refs(payload: &Json, keys: &[&str], into: &mut std::collections::BTreeSet<String>) {
+    for k in keys {
+        match payload.get(k) {
+            Some(Json::Str(s)) => {
+                into.insert(s.clone());
+            }
+            Some(Json::Arr(a)) => {
+                for v in a {
+                    if let Json::Str(s) = v {
+                        into.insert(s.clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The subject key a context row carries (`subject{kind, ref}`,
+/// `subject_ref`, or `item_ref` member spellings).
+fn payload_subject_key(payload: &Json) -> Option<String> {
+    if let Some(Json::Obj(s)) = payload.get("subject") {
+        let kind = s.get("kind").and_then(Json::as_str)?;
+        let r = s.get("ref").and_then(Json::as_str);
+        return Some(match r {
+            Some(r) => format!("{kind}:{r}"),
+            None => kind.to_string(),
+        });
+    }
+    if let Some(s) = payload.get("subject_ref").and_then(Json::as_str) {
+        return Some(s.to_string());
+    }
+    if let Some(s) = payload.get("item_ref").and_then(Json::as_str) {
+        return Some(format!("file:{s}"));
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

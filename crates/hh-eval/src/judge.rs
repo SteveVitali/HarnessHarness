@@ -345,6 +345,8 @@ pub fn emit_judged(
             detector: Detector::Judged,
             confidence,
             evidence_ref,
+            calibration_ref: oracle.calibration_ref.clone(),
+            exploratory: Some(exploratory),
         },
         exploratory,
         independence_summary: vector.summary(),
