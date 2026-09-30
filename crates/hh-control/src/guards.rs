@@ -345,8 +345,32 @@ fn pre_call(
         .copied()
         .unwrap_or(0);
     if gauge_caps.occupancy_ppm > 0 && occ as u64 >= gauge_caps.occupancy_ppm {
+        // The observation carries the numbers `stop{context_exhausted{
+        // required_tokens, cap}}` and the `compact{reason}` decision need —
+        // required = occupancy + the pending reservation, cap = the window
+        // (CF-225; a guard never guesses).
+        let occupied = ctx
+            .gauges
+            .get("context.occupancy_tokens")
+            .copied()
+            .unwrap_or(0)
+            .max(0) as u64;
+        let cap = ctx
+            .gauges
+            .get("context.window_cap_tokens")
+            .copied()
+            .unwrap_or(0)
+            .max(0) as u64;
         return GuardVerdict::Respond {
-            observation: Json::obj([("kind", Json::str("compaction_required"))]),
+            observation: Json::obj([
+                ("kind", Json::str("compaction_required")),
+                ("gauge", Json::str("context.occupancy_ppm")),
+                (
+                    "required_tokens",
+                    Json::Int(occupied.saturating_add(reservation_size) as i64),
+                ),
+                ("cap", Json::Int(cap as i64)),
+            ]),
             events: vec![],
         };
     }

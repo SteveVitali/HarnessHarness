@@ -105,6 +105,28 @@ mod ext {
     pub const LAST_ERROR_CLASS: &str = "last_error_class";
     pub const LAST_MODEL_CALL_ID: &str = "last_model_call_id";
     pub const CONSECUTIVE_ERRORS: &str = "consecutive_errors";
+    /// `control.guard.fired{compaction_required}` — the recorded pressure
+    /// (`required_tokens`/`cap`) the `context_exhausted` reason cites.
+    pub const CX_REQUIRED_TOKENS: &str = "cx_required_tokens";
+    /// The recorded `window_cap` (tokens).
+    pub const CX_CAP: &str = "cx_cap";
+    /// The seq of the latest `control.guard.fired{compaction_required}` row.
+    pub const CX_GUARD_SEQ: &str = "cx_guard_seq";
+    /// The seq of the `compaction_required` row before the latest.
+    pub const CX_PREV_GUARD_SEQ: &str = "cx_prev_guard_seq";
+    /// How many `compaction_required` signals this run has seen (I4 bound).
+    pub const CX_GUARD_COUNT: &str = "cx_guard_count";
+    /// The seq of the latest `context.compaction.completed` row.
+    pub const LAST_COMPACTION_SEQ: &str = "last_compaction_seq";
+    /// The latest compaction status (`applied | ineffective | failed`).
+    pub const LAST_COMPACTION_STATUS: &str = "last_compaction_status";
+    /// The last `control.loop.detected` detector (a `stop{loop_detected}`
+    /// the strategy proposes cites the ledgered detection — never a guess).
+    pub const LAST_LOOP_DETECTOR: &str = "last_loop_detector";
+    /// The last `control.loop.detected` pattern (the `LoopPattern` record).
+    pub const LAST_LOOP_PATTERN: &str = "last_loop_pattern";
+    /// The guard-fired continuation count (`max_continue_nudges` bound).
+    pub const CONTINUE_NUDGES: &str = "continue_nudges";
 }
 
 impl ReactMinimal {
@@ -270,6 +292,43 @@ impl ControlStrategy for ReactMinimal {
                         .and_then(Json::as_str)
                     {
                         Self::set_ext(state, ext::LAST_ERROR_CLASS, Json::str(c));
+                    }
+                }
+                // The `compaction_required` pressure + the ladder state —
+                // folded so `decide` cites ledgered numbers, never guesses
+                // (the `context_exhausted` reason and the
+                // compact-vs-exhausted bound read these).
+                "control.guard.fired" => {
+                    if ev.payload.get("guard_id").and_then(Json::as_str)
+                        == Some("compaction_required")
+                    {
+                        let prev = Self::ext_u64(state, ext::CX_GUARD_SEQ);
+                        Self::set_ext(state, ext::CX_PREV_GUARD_SEQ, Json::Int(prev as i64));
+                        Self::set_ext(state, ext::CX_GUARD_SEQ, Json::Int(ev.seq as i64));
+                        let n = Self::ext_u64(state, ext::CX_GUARD_COUNT) + 1;
+                        Self::set_ext(state, ext::CX_GUARD_COUNT, Json::Int(n as i64));
+                        for (member, key) in [
+                            ("required_tokens", ext::CX_REQUIRED_TOKENS),
+                            ("cap", ext::CX_CAP),
+                        ] {
+                            if let Some(v) = ev.payload.get(member).and_then(Json::as_int) {
+                                Self::set_ext(state, key, Json::Int(v));
+                            }
+                        }
+                    }
+                }
+                "context.compaction.completed" => {
+                    Self::set_ext(state, ext::LAST_COMPACTION_SEQ, Json::Int(ev.seq as i64));
+                    if let Some(s) = ev.payload.get("status").and_then(Json::as_str) {
+                        Self::set_ext(state, ext::LAST_COMPACTION_STATUS, Json::str(s));
+                    }
+                }
+                "control.loop.detected" => {
+                    if let Some(d) = ev.payload.get("detector").and_then(Json::as_str) {
+                        Self::set_ext(state, ext::LAST_LOOP_DETECTOR, Json::str(d));
+                    }
+                    if let Some(pat) = ev.payload.get("pattern") {
+                        Self::set_ext(state, ext::LAST_LOOP_PATTERN, pat.clone());
                     }
                 }
                 _ => {}
@@ -520,6 +579,18 @@ impl ControlStrategy for ReactMinimal {
                             ask: EscalateAsk::Handoff,
                         },
                     }
+                } else if guard_id == "compaction_required" {
+                    // `react/minimal` declares no `compact` — the occupancy
+                    // cap is `stop{context_exhausted{required_tokens, cap}}`
+                    // (§5e.1's minimal row; the numbers are the guard's
+                    // ledgered pressure, folded in `observe`).
+                    self.stop(
+                        state,
+                        StopReason::ContextExhausted {
+                            required_tokens: Self::ext_u64(state, ext::CX_REQUIRED_TOKENS),
+                            cap: Self::ext_u64(state, ext::CX_CAP),
+                        },
+                    )
                 } else {
                     self.propose(state)
                 }
@@ -658,6 +729,226 @@ impl ReactMinimal {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// `react/steerable` — the Stage-2 steerable variant (R-2.6.1¹; S2.11).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The `react/steerable` variant ref.
+pub const REACT_STEERABLE_REF: &str = "hh/react-steerable@1";
+
+/// `react/steerable` — `react/minimal`'s F1 table plus three differences
+/// (§5e.1; AC-R-2.6.1):
+///
+/// * **steering** — `human_input{steer}`/`{follow_up}` propose the next step
+///   with the payload *ref* riding `context_request` (`{steer_ref}`/
+///   `{follow_up_ref}` — I7: the cue names a ref, never the bytes; the
+///   assembler resolves it). Under `steer_mode = unsupported` the cue can
+///   only arrive forged — the embed surface refuses `steer` before the
+///   driver ever sees it (AC-R-2.6.1-10).
+/// * **compact routing** — `guard_fired{compaction_required}` decides
+///   `compact{reason}` (a `code`-owned point per the react β preset; the
+///   driver runs the injected `CompactionPort`). Bounded (I4): when the
+///   ledger shows a `context.compaction.completed` *after* the previous
+///   `compaction_required` — the ladder ran and did not relieve — or its
+///   status is `ineffective`/`failed`, or the signal count exceeds 4, the
+///   decision is `stop{context_exhausted{required_tokens, cap}}`.
+/// * **`continue_nudge` budget** — `max_continue_nudges` bounds
+///   `guard_fired` continuations; exceeding it stops `loop_detected` with
+///   the detector/pattern the ledgered `control.loop.detected` recorded.
+///
+/// Everything else delegates to the inner `ReactMinimal` (the F1 rows the
+/// variants share are one implementation — `observe`, `terminate`,
+/// `checkpoint`, the format/error/retry arms).
+#[derive(Debug)]
+pub struct ReactSteerable {
+    caps: ControlCapabilities,
+    params: StrategyParams,
+    /// The declared `steer_mode` (`open` reads `ctx.steering.0`).
+    steer_mode: crate::strategy::SteerMode,
+    /// The shared F1 table.
+    inner: ReactMinimal,
+}
+
+impl Default for ReactSteerable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ReactSteerable {
+    /// Construct the variant.
+    pub fn new() -> Self {
+        ReactSteerable {
+            caps: ControlCapabilities {
+                deterministic_replay: true,
+                steering: true,
+                follow_up: true,
+                parallel_effects: false,
+                delegation: false,
+                model_emitted_plan: false,
+                resumable_mid_effect: true,
+                decision_points_owned: vec![
+                    DecisionPoint::Plan,
+                    DecisionPoint::Act,
+                    DecisionPoint::Retrieve,
+                    DecisionPoint::Delegate,
+                ],
+                boundary_preset: react_preset(),
+                requires: VariantRequires {
+                    goal: true,
+                    procedure: false,
+                },
+            },
+            params: StrategyParams::default(),
+            steer_mode: crate::strategy::SteerMode::Unsupported,
+            inner: ReactMinimal::new(),
+        }
+    }
+
+    /// `propose{plan, context_request{steer_ref|follow_up_ref}}` — a steer
+    /// or follow-up re-plans the next step under the referenced input (the
+    /// context builder resolves `Ref<Text>` at assembly — the strategy
+    /// never reads the payload, I2/I7).
+    fn steered_propose(
+        &self,
+        state: &ControlState,
+        member: &'static str,
+        payload_ref: &str,
+    ) -> ControlDecision {
+        ControlDecision {
+            stamp: stamp_for(state, DecisionPoint::Plan, None),
+            kind: DecisionKind::Propose {
+                decision_point: DecisionPoint::Plan,
+                context_request: Json::obj([(member, Json::str(payload_ref.to_string()))]),
+                expected_output: ExpectedOutput::Free,
+            },
+        }
+    }
+
+    /// `guard_fired{compaction_required}` → `compact{reason}` — bounded by
+    /// the ledgered ladder state (`context_exhausted` when a compaction
+    /// already ran for this pressure, reported `ineffective`/`failed`, or
+    /// the signal count trips the I4 bound).
+    fn compact_or_exhausted(&self, state: &mut ControlState) -> ControlDecision {
+        let exhausted = |s: &ControlState| -> ControlDecision {
+            self.inner.stop(
+                s,
+                StopReason::ContextExhausted {
+                    required_tokens: ReactMinimal::ext_u64(s, ext::CX_REQUIRED_TOKENS),
+                    cap: ReactMinimal::ext_u64(s, ext::CX_CAP),
+                },
+            )
+        };
+        let prev_guard = ReactMinimal::ext_u64(state, ext::CX_PREV_GUARD_SEQ);
+        let last_compact = ReactMinimal::ext_u64(state, ext::LAST_COMPACTION_SEQ);
+        let count = ReactMinimal::ext_u64(state, ext::CX_GUARD_COUNT);
+        let status = ReactMinimal::ext_str(state, ext::LAST_COMPACTION_STATUS)
+            .unwrap_or("")
+            .to_string();
+        if matches!(status.as_str(), "ineffective" | "failed")
+            || (prev_guard > 0 && last_compact > prev_guard)
+            || count > 4
+        {
+            return exhausted(state);
+        }
+        ControlDecision {
+            stamp: stamp_for(state, DecisionPoint::Compact, None),
+            kind: DecisionKind::Compact {
+                reason: "compaction_required".into(),
+            },
+        }
+    }
+}
+
+impl ControlStrategy for ReactSteerable {
+    fn capabilities(&self) -> &ControlCapabilities {
+        &self.caps
+    }
+
+    fn open(&mut self, ctx: &ControlContext) -> Result<ControlState, ControlError> {
+        ctx.boundary
+            .validate()
+            .map_err(ControlError::IncompatibleBoundary)?;
+        self.params = ctx.parameters.clone();
+        self.inner.params = ctx.parameters.clone();
+        self.steer_mode = ctx.steering.0;
+        let mut state = self.inner.open(ctx)?;
+        state.variant_ref = REACT_STEERABLE_REF.into();
+        for (k, v) in [
+            (ext::CX_REQUIRED_TOKENS, Json::Int(0)),
+            (ext::CX_CAP, Json::Int(0)),
+            (ext::CX_GUARD_SEQ, Json::Int(0)),
+            (ext::CX_PREV_GUARD_SEQ, Json::Int(0)),
+            (ext::CX_GUARD_COUNT, Json::Int(0)),
+            (ext::LAST_COMPACTION_SEQ, Json::Int(0)),
+            (ext::CONTINUE_NUDGES, Json::Int(0)),
+        ] {
+            ReactMinimal::set_ext(&mut state, k, v);
+        }
+        Ok(state)
+    }
+
+    fn observe(&self, state: &mut ControlState, events: &[EventEnvelope]) {
+        self.inner.observe(state, events)
+    }
+
+    fn decide(&self, state: &mut ControlState, cue: &Cue) -> ControlDecision {
+        let decision = match cue {
+            // Steering — declared only: under `unsupported` a steer cue can
+            // only arrive forged (the embed refuses before `submit`); the
+            // honest fallback is the shared table's plain `propose`.
+            Cue::HumanInput(HumanInput::Steer { payload_ref })
+                if self.steer_mode != crate::strategy::SteerMode::Unsupported =>
+            {
+                self.steered_propose(state, "steer_ref", payload_ref)
+            }
+            Cue::HumanInput(HumanInput::FollowUp { payload_ref }) => {
+                self.steered_propose(state, "follow_up_ref", payload_ref)
+            }
+            // Compaction routing — the react β preset owns `compact` to
+            // code; the decision still passes `envelope.check` like every
+            // other (F2).
+            Cue::GuardFired { guard_id, .. } if guard_id == "compaction_required" => {
+                self.compact_or_exhausted(state)
+            }
+            _ => return self.inner.decide(state, cue),
+        };
+        state.record_decision(decision.stamp.decision_point, decision.stamp.owner);
+        decision
+    }
+
+    fn terminate(&self, state: &ControlState, reason: &StopReason) -> FinalReport {
+        self.inner.terminate(state, reason)
+    }
+
+    fn restore(
+        &mut self,
+        bytes: &[u8],
+        _ctx: &ControlContext,
+    ) -> Result<ControlState, RestoreError> {
+        let text = std::str::from_utf8(bytes).map_err(|_| RestoreError::Malformed)?;
+        let j = hh_wire::json::parse(text).map_err(|_| RestoreError::Malformed)?;
+        let dialect = j
+            .get("dialect")
+            .and_then(Json::as_str)
+            .unwrap_or("")
+            .to_string();
+        if dialect != crate::state::CONTROL_STATE_DIALECT {
+            return Err(RestoreError::DialectMismatch {
+                checkpoint: dialect,
+            });
+        }
+        let state = ControlState::from_json(&j).ok_or(RestoreError::Malformed)?;
+        if state.variant_ref != REACT_STEERABLE_REF {
+            return Err(RestoreError::VariantMismatch {
+                checkpoint: state.variant_ref,
+                restoring: REACT_STEERABLE_REF.into(),
+            });
+        }
+        Ok(state)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // The staged variants — registered with their β presets + required inputs
 // (AC-R-2.6.1-7's bind half); `decide` parks (`wait`) until their stage lands
 // (C1/Stage 2–4 — a staged variant never fakes a step).
@@ -778,30 +1069,6 @@ impl ControlStrategy for StagedVariant {
 /// points, never a fifth variant). Stage-1 registers all four with their
 /// presets; `decide` lands per stage.
 pub fn registry() -> Vec<Box<dyn ControlStrategy>> {
-    let react_steerable = {
-        let mut b = react_preset();
-        b.assignments.insert(DecisionPoint::Escalate, Owner::Human);
-        ControlCapabilities {
-            deterministic_replay: true,
-            steering: true,
-            follow_up: true,
-            parallel_effects: false,
-            delegation: false,
-            model_emitted_plan: false,
-            resumable_mid_effect: true,
-            decision_points_owned: vec![
-                DecisionPoint::Plan,
-                DecisionPoint::Act,
-                DecisionPoint::Retrieve,
-                DecisionPoint::Delegate,
-            ],
-            boundary_preset: b,
-            requires: VariantRequires {
-                goal: true,
-                procedure: false,
-            },
-        }
-    };
     let plan_execute = {
         let mut b = ControlBoundary::default();
         for (p, o) in [
@@ -880,7 +1147,7 @@ pub fn registry() -> Vec<Box<dyn ControlStrategy>> {
     };
     vec![
         Box::new(ReactMinimal::new()),
-        Box::new(StagedVariant::new("hh/react-steerable@1", react_steerable)),
+        Box::new(ReactSteerable::new()),
         Box::new(StagedVariant::new("hh/plan-execute@1", plan_execute)),
         Box::new(StagedVariant::new("hh/workflow@1", workflow)),
         Box::new(StagedVariant::new("hh/program@1", program)),
@@ -1147,5 +1414,208 @@ mod tests {
             ),
             other => panic!("expected wait, got {other:?}"),
         }
+    }
+
+    // ── S2.11 — `react/steerable` (R-2.6.1¹) ─────────────────────────────
+
+    fn steerable_ctx() -> ControlContext {
+        let mut c = ctx(react_preset());
+        c.steering = (SteerMode::InterruptAtDecisionPoint, ConcurrentInput::Steer);
+        c
+    }
+
+    fn steerable_opened() -> ControlState {
+        let mut v = ReactSteerable::new();
+        v.open(&steerable_ctx()).unwrap()
+    }
+
+    /// A `ReactSteerable` opened against the steerable ctx (decide reads
+    /// `self.steer_mode`, so the variant instance must be the opened one).
+    fn steerable() -> ReactSteerable {
+        let mut v = ReactSteerable::new();
+        v.open(&steerable_ctx()).unwrap();
+        v
+    }
+
+    #[test]
+    fn steerable_declares_steering_and_follow_up() {
+        let v = ReactSteerable::new();
+        let c = v.capabilities();
+        assert!(c.steering);
+        assert!(c.follow_up);
+        assert!(c.deterministic_replay);
+        c.boundary_preset.validate().unwrap();
+    }
+
+    #[test]
+    fn steerable_steer_proposes_with_the_ref_not_the_bytes() {
+        let v = steerable();
+        let mut s = steerable_opened();
+        let d = v.decide(
+            &mut s,
+            &Cue::HumanInput(HumanInput::Steer {
+                payload_ref: "sha256:steer-1".into(),
+            }),
+        );
+        match d.kind {
+            DecisionKind::Propose {
+                context_request, ..
+            } => {
+                assert_eq!(
+                    context_request.get("steer_ref").and_then(Json::as_str),
+                    Some("sha256:steer-1")
+                );
+            }
+            other => panic!("expected propose, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn steerable_follow_up_proposes_with_follow_up_ref() {
+        let mut s = steerable_opened();
+        let v = steerable();
+        let d = v.decide(
+            &mut s,
+            &Cue::HumanInput(HumanInput::FollowUp {
+                payload_ref: "sha256:fu-1".into(),
+            }),
+        );
+        match d.kind {
+            DecisionKind::Propose {
+                context_request, ..
+            } => {
+                assert_eq!(
+                    context_request.get("follow_up_ref").and_then(Json::as_str),
+                    Some("sha256:fu-1")
+                );
+            }
+            other => panic!("expected propose, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn steerable_compaction_required_decides_compact() {
+        let mut s = steerable_opened();
+        let v = steerable();
+        let d = v.decide(
+            &mut s,
+            &Cue::GuardFired {
+                decision_point: DecisionPoint::Act,
+                guard_id: "compaction_required".into(),
+            },
+        );
+        match d.kind {
+            DecisionKind::Compact { reason } => {
+                assert_eq!(reason, "compaction_required")
+            }
+            other => panic!("expected compact, got {other:?}"),
+        }
+        // The compact point is code-owned under the react preset.
+        assert_eq!(d.stamp.decision_point, DecisionPoint::Compact);
+        assert_eq!(d.stamp.owner, Owner::Code);
+    }
+
+    #[test]
+    fn steerable_unrelieved_compaction_stops_context_exhausted() {
+        let mut s = steerable_opened();
+        let v = steerable();
+        // The ledgered sequence: guard.fired{cx} (seq 10) →
+        // compaction.completed{applied} (seq 20) → guard.fired{cx} (seq 30)
+        // — the ladder ran and did not relieve.
+        ReactMinimal::set_ext(&mut s, ext::CX_GUARD_SEQ, Json::Int(30));
+        ReactMinimal::set_ext(&mut s, ext::CX_PREV_GUARD_SEQ, Json::Int(10));
+        ReactMinimal::set_ext(&mut s, ext::LAST_COMPACTION_SEQ, Json::Int(20));
+        ReactMinimal::set_ext(&mut s, ext::LAST_COMPACTION_STATUS, Json::str("applied"));
+        ReactMinimal::set_ext(&mut s, ext::CX_GUARD_COUNT, Json::Int(2));
+        ReactMinimal::set_ext(&mut s, ext::CX_REQUIRED_TOKENS, Json::Int(950));
+        ReactMinimal::set_ext(&mut s, ext::CX_CAP, Json::Int(1000));
+        let d = v.decide(
+            &mut s,
+            &Cue::GuardFired {
+                decision_point: DecisionPoint::Act,
+                guard_id: "compaction_required".into(),
+            },
+        );
+        match d.kind {
+            DecisionKind::Stop {
+                proposed_reason:
+                    StopReason::ContextExhausted {
+                        required_tokens,
+                        cap,
+                    },
+                ..
+            } => {
+                assert_eq!(required_tokens, 950);
+                assert_eq!(cap, 1000);
+            }
+            other => panic!("expected stop{{context_exhausted}}, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn steerable_ineffective_compaction_stops_context_exhausted() {
+        let mut s = steerable_opened();
+        let v = steerable();
+        ReactMinimal::set_ext(
+            &mut s,
+            ext::LAST_COMPACTION_STATUS,
+            Json::str("ineffective"),
+        );
+        ReactMinimal::set_ext(&mut s, ext::CX_CAP, Json::Int(1000));
+        let d = v.decide(
+            &mut s,
+            &Cue::GuardFired {
+                decision_point: DecisionPoint::Act,
+                guard_id: "compaction_required".into(),
+            },
+        );
+        assert!(matches!(
+            d.kind,
+            DecisionKind::Stop {
+                proposed_reason: StopReason::ContextExhausted { .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn minimal_compaction_required_stops_context_exhausted() {
+        let mut s = opened();
+        ReactMinimal::set_ext(&mut s, ext::CX_REQUIRED_TOKENS, Json::Int(950));
+        ReactMinimal::set_ext(&mut s, ext::CX_CAP, Json::Int(1000));
+        let d = decide(
+            &mut s,
+            Cue::GuardFired {
+                decision_point: DecisionPoint::Act,
+                guard_id: "compaction_required".into(),
+            },
+        );
+        assert!(matches!(
+            d,
+            DecisionKind::Stop {
+                proposed_reason: StopReason::ContextExhausted {
+                    required_tokens: 950,
+                    cap: 1000
+                },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn steerable_restore_round_trips_and_rejects_foreign_variants() {
+        let mut v = ReactSteerable::new();
+        let s = steerable_opened();
+        let bytes = v.checkpoint(&s);
+        let restored = v.restore(&bytes, &steerable_ctx()).unwrap();
+        assert_eq!(restored.variant_ref, REACT_STEERABLE_REF);
+        // A react/minimal checkpoint refuses (variant mismatch).
+        let m = ReactMinimal::new();
+        let ms = opened();
+        let mbytes = m.checkpoint(&ms);
+        assert!(matches!(
+            v.restore(&mbytes, &steerable_ctx()),
+            Err(RestoreError::VariantMismatch { .. })
+        ));
     }
 }

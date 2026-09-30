@@ -17,12 +17,15 @@ use hh_control::driver::{Driver, DriverConfig};
 use hh_control::output::{ParamKind, ParamSpec, SurfaceSpec};
 use hh_control::policy::EnvelopePolicy;
 use hh_control::react::ReactMinimal;
-use hh_control::strategy::{ConcurrentInput, ControlContext, SteerMode, StrategyParams};
+use hh_control::strategy::{
+    ConcurrentInput, ControlContext, ControlStrategy, SteerMode, StrategyParams,
+};
 use hh_embed_schema::errors::EmbedError;
 use hh_embed_schema::types::*;
 use hh_env::driver::EnvDriver;
 use hh_env::handle::{OnLoss, Roots};
 use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hh_hir::records::{AgentProcessBody, KindRecord, SlotBindings};
 use hh_identity::names::ResolveMode;
 use hh_ledger::manifest::{AttendanceSource, AttendanceValue, RunKind, RunManifest};
 use hh_wire::json::Json;
@@ -35,7 +38,7 @@ use std::collections::BTreeSet;
 /// same leaf under the new writer, so its pending asks stay answerable
 /// and its idempotency keys still replay).
 struct CarriedRuntime {
-    driver: Driver<ReactMinimal>,
+    driver: Driver<Box<dyn ControlStrategy>>,
     env_json: Json,
     env_handle_id: Option<String>,
     host_caps: Vec<HostCap>,
@@ -64,6 +67,10 @@ pub(crate) struct LeafArm {
     pub surfaces: Vec<SurfaceSpec>,
     pub budget_ceiling: BTreeMap<String, i64>,
     pub remaining: BTreeMap<String, i64>,
+    /// The bound `control_strategy` slot's variant id — a durable resume
+    /// re-arms the same variant (`checkpoint`'s `variant_ref` validates
+    /// against it — restore-by-leaf never silently swaps strategies).
+    pub control_variant: String,
 }
 
 impl LeafArm {
@@ -91,6 +98,7 @@ impl LeafArm {
                         .collect(),
                 ),
             ),
+            ("control_variant", Json::str(self.control_variant.clone())),
         ])
     }
 
@@ -112,6 +120,14 @@ impl LeafArm {
             surfaces,
             budget_ceiling: int_map("budget_ceiling"),
             remaining: int_map("remaining"),
+            // Pre-S2.11 `leaf.arm` records lack the member — the Stage-1
+            // default interpreter is the honest decode (the checkpoint's
+            // `variant_ref` would refuse a mismatching restore anyway).
+            control_variant: j
+                .get("control_variant")
+                .and_then(Json::as_str)
+                .unwrap_or(crate::open::REACT_MINIMAL_VARIANT)
+                .to_string(),
         })
     }
 }
@@ -464,6 +480,13 @@ impl EmbedService {
                 ),
             );
         }
+        manifest.extra.insert(
+            "control_variant".to_string(),
+            Json::str(
+                control_slot_variant(&sealed.document)
+                    .unwrap_or_else(|| REACT_MINIMAL_VARIANT.to_string()),
+            ),
+        );
         manifest.configuration_id = Some(configuration_id.clone());
         manifest.configuration_version_id = Some(configuration_version_id.clone());
         manifest.harness_def_ref = Some(manifest_ref.clone());
@@ -548,7 +571,16 @@ impl EmbedService {
         )?;
 
         let surfaces = driver_surfaces(&cap_decl);
-        let driver = self.arm_driver(&run_id, &lease, &surfaces, &manifest, budget)?;
+        let control_variant = control_slot_variant(&sealed.document)
+            .unwrap_or_else(|| REACT_MINIMAL_VARIANT.to_string());
+        let driver = self.arm_driver(
+            &run_id,
+            &lease,
+            &surfaces,
+            &manifest,
+            budget,
+            &control_variant,
+        )?;
         let realized = realized_settings(self.workspace_root(), attendance, approval_mode);
         let head = self.store.head(&run_id).map_err(ledger_err)?;
 
@@ -574,10 +606,13 @@ impl EmbedService {
             host_asks: BTreeMap::new(),
             idem: BTreeMap::new(),
             budget_ceiling: budget_dimensions(budget).0,
+            steering: steering_for(&control_variant),
+            pending_steer: None,
             leaf_arm: LeafArm {
                 surfaces: surfaces.clone(),
                 budget_ceiling: budget_dimensions(budget).0,
                 remaining: budget_dimensions(budget).1,
+                control_variant: control_variant.clone(),
             },
             scan_seq: head.seq,
             next_invoke: None,
@@ -1000,6 +1035,19 @@ impl EmbedService {
                                         .and_then(Json::as_str)
                                         .map(str::to_string),
                                     requested_grants: crate::service::decode_requested_grants(&req),
+                                    deadline_ms: e
+                                        .payload
+                                        .get("timeout")
+                                        .and_then(Json::as_int)
+                                        .map(|t| {
+                                            (e.payload
+                                                .get("requested_at")
+                                                .and_then(Json::as_int)
+                                                .unwrap_or(0)
+                                                .max(0)
+                                                as u64)
+                                                .saturating_add(t.max(0) as u64)
+                                        }),
                                 },
                             );
                         }
@@ -1084,6 +1132,8 @@ impl EmbedService {
                 .unwrap_or_else(|| sess_manifest_ref(&manifest)),
             realized: realized.clone(),
             driver: Some(rt.driver),
+            steering: steering_for(&rt.leaf_arm.control_variant),
+            pending_steer: None,
             env_json: rt.env_json,
             env_handle_id: rt.env_handle_id,
             host_caps: rt.host_caps,
@@ -1170,6 +1220,8 @@ impl EmbedService {
             manifest_ref: sess_manifest_ref(&manifest),
             realized: realized.clone(),
             driver: None,
+            steering: (SteerMode::Unsupported, ConcurrentInput::QueueOnly),
+            pending_steer: None,
             env_json: Json::Null,
             env_handle_id: None,
             host_caps: Vec::new(),
@@ -1485,8 +1537,9 @@ impl EmbedService {
         Ok((Some(handle.env_handle_id.clone()), env_json))
     }
 
-    /// Arm the `ReactMinimal` driver over the session's run — the
-    /// canonical control loop (`KernelSink` under the writer lease).
+    /// Arm the session driver over the session's run — the bound
+    /// `control_strategy` slot selects the variant (`strategy_for`; the
+    /// canonical control loop under `KernelSink` + the writer lease).
     fn arm_driver(
         &mut self,
         run_id: &str,
@@ -1494,7 +1547,8 @@ impl EmbedService {
         surfaces: &[SurfaceSpec],
         manifest: &RunManifest,
         budget: Option<&BudgetInput>,
-    ) -> Result<Driver<ReactMinimal>, EmbedError> {
+        control_variant: &str,
+    ) -> Result<Driver<Box<dyn ControlStrategy>>, EmbedError> {
         let ctx = ControlContext {
             process_ref: format!("hh-embed/{}", manifest.run_kind.as_str()),
             plan: vec![],
@@ -1508,7 +1562,7 @@ impl EmbedService {
             envelope_ref: "env-1".to_string(),
             parameters: StrategyParams::default(),
             capabilities_available: surfaces.iter().map(|s| s.surface_id.clone()).collect(),
-            steering: (SteerMode::Unsupported, ConcurrentInput::QueueOnly),
+            steering: steering_for(control_variant),
         };
         // ADR-0168 D6 — `interactive` attendance escalates on every
         // budgeted ceiling; anything else stops `budget_exhausted`.
@@ -1538,7 +1592,8 @@ impl EmbedService {
             run_id: run_id.to_string(),
             lease: lease.clone(),
         };
-        Driver::open_react(
+        Driver::open(
+            strategy_for(control_variant),
             &ctx,
             policy,
             &mut sink,
@@ -1567,7 +1622,7 @@ impl EmbedService {
         lease: &hh_ledger::store::Lease,
         checkpoint: &[u8],
         manifest: &RunManifest,
-    ) -> Result<(Driver<ReactMinimal>, LeafArm), EmbedError> {
+    ) -> Result<(Driver<Box<dyn ControlStrategy>>, LeafArm), EmbedError> {
         let arm_path = self.store.root().join("runs").join(run_id).join("leaf.arm");
         let arm = std::fs::read_to_string(&arm_path)
             .ok()
@@ -1589,7 +1644,7 @@ impl EmbedService {
             envelope_ref: "env-1".to_string(),
             parameters: StrategyParams::default(),
             capabilities_available: arm.surfaces.iter().map(|s| s.surface_id.clone()).collect(),
-            steering: (SteerMode::Unsupported, ConcurrentInput::QueueOnly),
+            steering: steering_for(&arm.control_variant),
         };
         let interactive = manifest.attendance.0 == AttendanceValue::Interactive;
         let mut policy = EnvelopePolicy::stage1_default(
@@ -1618,7 +1673,8 @@ impl EmbedService {
         };
         let mut ceiling = arm.budget_ceiling.clone();
         let mut remaining = arm.remaining.clone();
-        let driver = Driver::resume_react(
+        let driver = Driver::resume_from(
+            strategy_for(&arm.control_variant),
             &ctx,
             policy,
             checkpoint,
@@ -1763,11 +1819,16 @@ pub(crate) fn parse_host_caps(supplies: Option<&Supplies>) -> Vec<HostCap> {
                 .collect(),
             _ => Vec::new(),
         };
+        let timeout_ms = c
+            .get("timeout")
+            .and_then(Json::as_int)
+            .map(|n| n.max(0) as u64);
         out.push(HostCap {
             capability_id,
             surface_id,
             requires_approval,
             options,
+            timeout_ms,
         });
     }
     out
@@ -1780,6 +1841,54 @@ pub(crate) fn submit_surface_spec() -> SurfaceSpec {
         surface_id: crate::runtime::SUBMIT_SURFACE.to_string(),
         semantic_id: format!("{}/1", crate::runtime::SUBMIT_SURFACE),
         params: std::collections::BTreeMap::new(),
+    }
+}
+
+/// The Stage-1 default `control_strategy` variant (a definition that
+/// binds nothing steerable arms the canonical `react/minimal` loop).
+pub(crate) const REACT_MINIMAL_VARIANT: &str = "hh/react-minimal";
+
+/// The sealed `control_strategy` slot's bound variant id — read off the
+/// root `NativeProcess.slots` the resolver materialised (`resolve` pins
+/// `assembly.slots` onto the process; `None` ⇒ the Stage-1 default).
+fn control_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
+    for n in &doc.nodes {
+        if let KindRecord::AgentProcess(a) = &n.semantic {
+            if let AgentProcessBody::Native(np) = &a.body {
+                match np.slots.get("control_strategy") {
+                    Some(SlotBindings::One(b)) => return Some(b.variant.variant_id.clone()),
+                    Some(SlotBindings::Many(v)) => {
+                        return v.first().map(|b| b.variant.variant_id.clone())
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    None
+}
+
+/// The strategy instance the bound `control_strategy` variant selects —
+/// `hh/react-steerable` arms `react/steerable` (R-2.6.1¹); every other
+/// registered binding resolves to the canonical `react/minimal`
+/// interpreter (the family is one loop under presets — ADR-0103 D6).
+fn strategy_for(variant_id: &str) -> Box<dyn ControlStrategy> {
+    if variant_id.trim_end_matches("@1") == "hh/react-steerable" {
+        Box::new(hh_control::react::ReactSteerable::new())
+    } else {
+        Box::new(ReactMinimal::new())
+    }
+}
+
+/// The `(steer_mode, concurrent_input)` the bound variant's declared
+/// capabilities admit — `capabilities().steering` ⇒ interrupt-at-
+/// decision-point under `steer` concurrent input; anything else declines
+/// honestly (`Unsupported{by: control_strategy}`, AC-R-2.6.1-10).
+pub(crate) fn steering_for(variant_id: &str) -> (SteerMode, ConcurrentInput) {
+    if strategy_for(variant_id).capabilities().steering {
+        (SteerMode::InterruptAtDecisionPoint, ConcurrentInput::Steer)
+    } else {
+        (SteerMode::Unsupported, ConcurrentInput::QueueOnly)
     }
 }
 

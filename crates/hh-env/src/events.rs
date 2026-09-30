@@ -369,16 +369,29 @@ pub fn committed_payload(attempt_no: u64, fencing_token: u64, dispatched_at: u64
 }
 
 /// `action.effect.observed{attempt_no, fencing_token, outcome, status,
-/// exit_status?, capture_manifest_ref, completeness}`.
+/// exit_status?, capture_manifest_ref, completeness, postcondition_results}`.
+/// `postcondition_results` lists the deterministic verdict ids the local
+/// checks/declared postconditions will emit (`verdict:<check>:<effect_id>` —
+/// §5f `Effect.postcondition_results: [EventRef]`; S2.11).
 pub fn observed_payload(
     attempt_no: u64,
     fencing_token: u64,
     obs: &crate::observe::Observation,
+    postcondition_results: &[String],
 ) -> Json {
     let mut m = BTreeMap::new();
     m.insert("attempt_no".to_string(), Json::Int(attempt_no as i64));
     m.insert("fencing_token".to_string(), Json::Int(fencing_token as i64));
     m.insert("outcome".to_string(), Json::str(obs.outcome.as_str()));
+    m.insert(
+        "postcondition_results".to_string(),
+        Json::Arr(
+            postcondition_results
+                .iter()
+                .map(|r| Json::str(r.clone()))
+                .collect(),
+        ),
+    );
     let obsj = obs.to_json();
     if let Json::Obj(om) = obsj {
         // flatten the observation's members into the payload (status/error,

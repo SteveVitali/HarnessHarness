@@ -2178,9 +2178,20 @@ impl ApprovalState {
                     // pending (the final `decided{allow|deny}` for the same
                     // `permission_id` lands at respond/chain-terminal).
                     Some("ask") => return,
-                    Some(d) if d.starts_with("deny") || d == "cancelled" || d == "abort_run" => {
+                    // `timed_out` is the kind-fixed permission terminal
+                    // (TimeoutPolicy[permission].on_expiry; ADR-0070 D3 — a
+                    // refusal record, folded as `deny{timed_out}`), never
+                    // `unknown`.
+                    Some(d)
+                        if d.starts_with("deny")
+                            || d == "cancelled"
+                            || d == "abort_run"
+                            || d == "timed_out" =>
+                    {
                         Decision::Deny {
-                            reason: deny_reason_fold(p.get("reason").and_then(Json::as_str)),
+                            reason: deny_reason_fold(
+                                p.get("reason").and_then(Json::as_str).or(Some(d)),
+                            ),
                             remedies: Vec::new(),
                         }
                     }

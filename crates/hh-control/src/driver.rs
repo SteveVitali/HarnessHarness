@@ -16,6 +16,8 @@
 use hh_ledger::event::{Event, EventEnvelope, Scope};
 use hh_ledger::manifest::EventRef;
 use hh_ontology::control::{CancelledBy, DecisionPoint, Owner, StopReason};
+use hh_provenance::authority::PersistenceScope;
+use hh_provenance::origin::Origin;
 use hh_provenance::record::ProvenanceRecord;
 use hh_wire::json::Json;
 
@@ -126,6 +128,66 @@ pub trait LedgerSink {
     fn prefix(&self) -> &[EventEnvelope];
 }
 
+/// The compaction boundary (R-2.4.2's `compact` driver — §5c.2; the S2.11
+/// seam for `react/steerable`'s `compact` routing). The port owns
+/// `context.compaction.started/completed` emission through its own sink —
+/// the driver sees only the outcome. `Err(CompactionImpossible)` is the
+/// exhausted I-FALLBACK ladder; the driver then stops `context_exhausted`
+/// (CF-225) as an envelope-owned stop, never a strategy proposal.
+pub trait CompactionPort {
+    /// Run the compaction ladder for `reason` (a `CompactionRequired`-class
+    /// spelling); `Ok` carries the post-compaction `context_view` hash the
+    /// `compaction_completed` cue reports.
+    fn compact(&mut self, reason: &str) -> Result<CompactionDone, CompactionImpossible>;
+}
+
+/// What a successful compaction reports.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompactionDone {
+    /// The post-compaction `context_view` hash.
+    pub view_hash: String,
+}
+
+/// `CompactionImpossible{required_tokens, cap}` — the exhausted ladder's
+/// report (§5c.2; the driver stops `context_exhausted` with these numbers).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompactionImpossible {
+    /// The tokens the next step required.
+    pub required_tokens: u64,
+    /// The context window cap.
+    pub cap: u64,
+}
+
+/// The decision-point verification boundary (R-2.7.1's `verify` execution
+/// seam — §5e.1 `verify{validator_refs, subject}`). The port binds the
+/// declared `Ref<Validator>`s and returns the `Verdict`s it actually ran —
+/// never a pass it did not compute. The driver appends
+/// `verification.validator.invoked` + `verification.validator.verdict` per
+/// verdict and cues `verification_completed`.
+pub trait VerifyPort {
+    /// Run `validator_refs` over `subject`; returns the verdicts it
+    /// actually produced (an unbound declared validator yields an
+    /// `inconclusive` verdict, never a silent skip — R-2.7.1).
+    fn verify(
+        &mut self,
+        validator_refs: &[String],
+        subject: &Json,
+    ) -> Vec<hh_verification::validators::Verdict>;
+}
+
+/// A guard-fired nudge `HarnessRule` awaiting its T-LCD-13 `followed` row —
+/// `delivered`/`activated` land when the nudge fires; `followed` lands with
+/// the strategy's next admitted decision (AC-R-2.6.1-8).
+#[derive(Debug, Clone, PartialEq)]
+pub struct NudgePending {
+    /// The minted `HarnessRule`'s `rule_id` (the artefact id).
+    pub rule_id: String,
+    /// The `delivery_id` the `delivered`/`activated` rows share.
+    pub delivery_id: String,
+    /// The nudge kind (`loop_nudge | continue_nudge` — §5e.1 ledger).
+    pub kind: String,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DriverError / RunResult
 // ─────────────────────────────────────────────────────────────────────────────
@@ -150,6 +212,13 @@ pub enum DriverError {
     },
     /// `restore` refused the checkpoint.
     Restore(crate::strategy::RestoreError),
+    /// A decision named a boundary no port is wired for (`verify` without a
+    /// `VerifyPort`, `retrieve`/`delegate` likewise) — the declared step
+    /// fails typed, never silently skipped (R-2.7.1).
+    UnbackedPort {
+        /// The decision kind that needed the port.
+        kind: &'static str,
+    },
 }
 
 impl std::fmt::Display for DriverError {
@@ -160,6 +229,7 @@ impl std::fmt::Display for DriverError {
             DriverError::Append(e) => write!(f, "append{{{e}}}"),
             DriverError::Port { port, detail } => write!(f, "port{{{port}:{detail}}}"),
             DriverError::Restore(e) => write!(f, "restore{{{e}}}"),
+            DriverError::UnbackedPort { kind } => write!(f, "unbacked_port{{{kind}}}"),
         }
     }
 }
@@ -205,6 +275,10 @@ pub struct DriverConfig {
     pub interactive_attendance: bool,
     /// The profile's `max_output` bound (reservation sizing — ADR-0107 D6).
     pub profile_max_output_bound: u64,
+    /// The context `window_cap` in tokens — the `context.occupancy` gauge's
+    /// denominator (I-BUDGET's cap; §5c.1). `0` ⇒ unfurnished: the occupancy
+    /// gauge reads 0 and the `compaction_required` cap never fires.
+    pub window_cap_tokens: u64,
 }
 
 impl Default for DriverConfig {
@@ -221,6 +295,7 @@ impl Default for DriverConfig {
             retries_ceiling: 64,
             interactive_attendance: false,
             profile_max_output_bound: 8_192,
+            window_cap_tokens: 0,
         }
     }
 }
@@ -261,6 +336,20 @@ pub struct Driver<S: ControlStrategy> {
     /// The most recent `model_call_id` scope (the claim's `model_call_id` —
     /// the call whose output the completion claim rides).
     last_model_call_id: Option<String>,
+    /// The compaction port (`compact{reason}` — R-2.4.2; `None` ⇒ the
+    /// occupancy cap escalates straight to `context_exhausted`, the
+    /// portable definition's honest exhausted ladder).
+    compaction_port: Option<Box<dyn CompactionPort>>,
+    /// The verification port (`verify{validator_refs, subject}` — R-2.7.1;
+    /// `None` ⇒ a `verify` decision fails `DriverError::UnbackedPort` — a
+    /// declared verification never silently passes).
+    verify_port: Option<Box<dyn VerifyPort>>,
+    /// A guard-fired nudge `HarnessRule` awaiting its `followed` verdict —
+    /// set when a `LadderAction::Nudge`/`RuleAction::Nudge`/`missing_
+    /// submission` respond fires (the delivered/activated pair is emitted
+    /// there), cleared when the strategy's next admitted decision lands the
+    /// `verification.artefact.followed` row (T-LCD-13; AC-R-2.6.1-8).
+    pending_nudge: Option<NudgePending>,
     /// The subject model ref (the claim provenance's `Origin::Model.model_ref`
     /// — read from the sealed profile projection, `model_ref` key).
     model_ref: String,
@@ -316,6 +405,9 @@ impl<S: ControlStrategy> Driver<S> {
             deadlines: std::collections::BTreeMap::new(),
             run_id: ctx.process_ref.clone(),
             last_model_call_id: None,
+            compaction_port: None,
+            verify_port: None,
+            pending_nudge: None,
             model_ref: ctx
                 .profile
                 .get("model_ref")
@@ -360,6 +452,9 @@ impl<S: ControlStrategy> Driver<S> {
             deadlines: std::collections::BTreeMap::new(),
             run_id: ctx.process_ref.clone(),
             last_model_call_id: None,
+            compaction_port: None,
+            verify_port: None,
+            pending_nudge: None,
             model_ref: ctx
                 .profile
                 .get("model_ref")
@@ -400,16 +495,54 @@ impl<S: ControlStrategy> Driver<S> {
                 remaining.insert(dim.clone(), cap - used);
             }
         }
+        // The context gauges — `context.occupancy_*` fold from the last
+        // `context.assembled` row's `occupancy_estimate` against the
+        // configured `window_cap` (I-BUDGET's cap; §5c.1). `0` cap ⇒ the
+        // gauge reads 0 and the `compaction_required` cap never fires.
+        let mut gauges: std::collections::BTreeMap<String, i64> = Default::default();
+        if self.config.window_cap_tokens > 0 {
+            let occupied = events
+                .iter()
+                .rev()
+                .find(|e| e.class == "context.assembled")
+                .and_then(|e| e.payload.get("occupancy_estimate").and_then(Json::as_int))
+                .map(|t| t.max(0) as u64)
+                .unwrap_or(0);
+            gauges.insert("context.occupancy_tokens".into(), occupied as i64);
+            gauges.insert(
+                "context.window_cap_tokens".into(),
+                self.config.window_cap_tokens as i64,
+            );
+            gauges.insert(
+                "context.occupancy_ppm".into(),
+                (occupied.saturating_mul(1_000_000) / self.config.window_cap_tokens) as i64,
+            );
+        }
         GuardContext {
             remaining,
             retries_ceiling: self.config.retries_ceiling,
             now_ms: self.now_ms,
             deadlines: self.deadlines.clone(),
-            gauges: Default::default(),
+            gauges,
             effect_classes: Default::default(),
             cancel_requested: None,
             interactive_attendance: self.config.interactive_attendance,
         }
+    }
+
+    /// `set_compaction_port` — wire the compaction boundary (R-2.4.2). The
+    /// driver stops `context_exhausted` on `CompactionImpossible` or when
+    /// no port is set — the exhausted ladder is a value, never a panic.
+    pub fn set_compaction_port(&mut self, port: Box<dyn CompactionPort>) {
+        self.compaction_port = Some(port);
+    }
+
+    /// `set_verify_port` — wire the decision-point verification boundary
+    /// (R-2.7.1). A `verify` decision without the port fails
+    /// `DriverError::UnbackedPort` (a declared verification never silently
+    /// passes).
+    pub fn set_verify_port(&mut self, port: Box<dyn VerifyPort>) {
+        self.verify_port = Some(port);
     }
 
     fn alloc(&mut self, tag: &str) -> String {
@@ -563,6 +696,16 @@ impl<S: ControlStrategy> Driver<S> {
                         },
                     );
                     self.append_decision(sink, &ev_id, payload)?;
+                    // T-LCD-13 `followed` — an admitted non-`wait` decision
+                    // discharges a pending nudge: the strategy's response
+                    // *is* the following observation (`evidence_ref` names
+                    // the decision row; a `wait` parks — the cue was not
+                    // consumed).
+                    if !matches!(decision.kind, DecisionKind::Wait { .. }) {
+                        if let Some(pending) = self.pending_nudge.take() {
+                            self.emit_artefact_followed(sink, &pending, &ev_id)?;
+                        }
+                    }
                     if let DecisionKind::Stop {
                         proposed_reason, ..
                     } = &decision.kind
@@ -748,11 +891,17 @@ impl<S: ControlStrategy> Driver<S> {
                 // Stage 1 the decision row (already appended) is the
                 // audit; the loop parks on `human_input`.
             }
-            DecisionKind::Retrieve { .. }
-            | DecisionKind::Compact { .. }
-            | DecisionKind::Verify { .. }
-            | DecisionKind::Delegate { .. } => {
-                // C1+ decision kinds — react/minimal never emits them; a
+            DecisionKind::Compact { reason } => {
+                self.compact_round(sink, &reason)?;
+            }
+            DecisionKind::Verify {
+                validator_refs,
+                subject,
+            } => {
+                self.verify_round(sink, &validator_refs, &subject)?;
+            }
+            DecisionKind::Retrieve { .. } | DecisionKind::Delegate { .. } => {
+                // C1+ decision kinds — no Stage-2 variant emits them; a
                 // staged variant parks before this point.
             }
             DecisionKind::Stop { .. } => {
@@ -1069,13 +1218,51 @@ impl<S: ControlStrategy> Driver<S> {
                             .or(Some(scope_id).filter(|s| !s.is_empty())),
                     )?;
                 }
+                let guard_id = observation
+                    .get("kind")
+                    .and_then(Json::as_str)
+                    .unwrap_or("guard")
+                    .to_string();
+                // The `guard_fired` cue's ledgered spelling (CF-229) — the
+                // audit row carries `verdict: respond` plus the
+                // observation's own members (`required_tokens`, `cap`,
+                // `detector`, `blocking_effects`) so a pure fold recovers
+                // the guard's numbers.
+                let mut fired =
+                    match crate::events::guard_fired_payload(DecisionPoint::Act, &guard_id) {
+                        Json::Obj(m) => m,
+                        other => unreachable!("guard_fired_payload is an object: {other:?}"),
+                    };
+                fired.insert("verdict".into(), Json::str("respond"));
+                if let Json::Obj(obs) = &observation {
+                    for (k, v) in obs {
+                        fired.entry(k.clone()).or_insert_with(|| v.clone());
+                    }
+                }
+                let prov = ProvenanceRecord::minted(
+                    Origin::kernel("hh-control/guard"),
+                    PersistenceScope::Run,
+                    self.now_ms,
+                );
+                self.append_prov(
+                    sink,
+                    "control.guard.fired",
+                    Json::Obj(fired),
+                    Some(scope_id).filter(|s| !s.is_empty()),
+                    prov,
+                )?;
+                // T-LCD-13 — a nudge is a conditioned `HarnessRule`
+                // artefact (I9; AC-R-2.6.1-8): mint the rule with its
+                // complete `AssumptionDebtRecord`, ledger `delivered` +
+                // `activated`, and arm the `followed` discharge for the
+                // strategy's next admitted decision.
+                if let Some(nudge_kind) = nudge_kind(&guard_id) {
+                    self.pending_nudge =
+                        Some(self.emit_nudge_artefact(sink, nudge_kind, &guard_id)?);
+                }
                 Ok(Some(Cue::GuardFired {
                     decision_point: DecisionPoint::Act,
-                    guard_id: observation
-                        .get("kind")
-                        .and_then(Json::as_str)
-                        .unwrap_or("guard")
-                        .to_string(),
+                    guard_id,
                 }))
             }
             GuardVerdict::Stop { reason, events } => {
@@ -1088,6 +1275,269 @@ impl<S: ControlStrategy> Driver<S> {
                 Ok(None)
             }
         }
+    }
+
+    /// `compact{reason}` — the compaction boundary: the port runs the
+    /// I-FALLBACK ladder (its own `context.compaction.started/completed`
+    /// rows ride its sink); `CompactionImpossible` or an absent port is the
+    /// exhausted ladder → envelope-owned `stop{context_exhausted}`
+    /// (CF-225; `stop_pending` — `run` mints the decision row).
+    fn compact_round(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        reason: &str,
+    ) -> Result<(), DriverError> {
+        match &mut self.compaction_port {
+            Some(port) => match port.compact(reason) {
+                Ok(done) => {
+                    self.inbox.push_back(Cue::CompactionCompleted {
+                        view_hash: done.view_hash,
+                    });
+                }
+                Err(impossible) => {
+                    self.stop_pending = Some(StopReason::ContextExhausted {
+                        required_tokens: impossible.required_tokens,
+                        cap: impossible.cap,
+                    });
+                }
+            },
+            None => {
+                // No compaction boundary is wired — the occupancy cap is
+                // the honest `stop{context_exhausted}` (the portable
+                // definition's exhausted ladder; `react/minimal` declares
+                // no `compact`).
+                let (required_tokens, cap) = self.compaction_pressure(sink);
+                self.stop_pending = Some(StopReason::ContextExhausted {
+                    required_tokens,
+                    cap,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// The `(required_tokens, cap)` the last `compaction_required`
+    /// `control.guard.fired` row recorded (0/0 when the cap fired without a
+    /// ledgered observation — the driver never invents numbers).
+    fn compaction_pressure(&self, sink: &dyn LedgerSink) -> (u64, u64) {
+        let ev = sink.prefix().iter().rev().find(|e| {
+            e.class == "control.guard.fired"
+                && e.payload.get("guard_id").and_then(Json::as_str) == Some("compaction_required")
+        });
+        match ev {
+            Some(e) => (
+                e.payload
+                    .get("required_tokens")
+                    .and_then(Json::as_int)
+                    .map(|v| v.max(0) as u64)
+                    .unwrap_or(0),
+                e.payload
+                    .get("cap")
+                    .and_then(Json::as_int)
+                    .map(|v| v.max(0) as u64)
+                    .unwrap_or(0),
+            ),
+            None => (0, 0),
+        }
+    }
+
+    /// `verify{validator_refs, subject}` — the decision-point verification
+    /// seam (R-2.7.1): the port runs the declared validators, the driver
+    /// ledgers `validator.invoked` + `validator.verdict` per produced
+    /// verdict (provenance-bearing — the verdict's own detector authority)
+    /// then cues `verification_completed`.
+    fn verify_round(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        validator_refs: &[String],
+        subject: &Json,
+    ) -> Result<(), DriverError> {
+        let port = self
+            .verify_port
+            .as_mut()
+            .ok_or(DriverError::UnbackedPort { kind: "verify" })?;
+        let verdicts = port.verify(validator_refs, subject);
+        for v in &verdicts {
+            let prov = ProvenanceRecord::minted(
+                Origin::kernel("hh-control/verify"),
+                PersistenceScope::Run,
+                self.now_ms,
+            );
+            self.append_prov(
+                sink,
+                "verification.validator.invoked",
+                hh_verification::events::validator_invoked(
+                    v,
+                    &hh_verification::vocab::Isolation::Kernel,
+                ),
+                None,
+                prov.clone(),
+            )?;
+            self.append_prov(
+                sink,
+                "verification.validator.verdict",
+                hh_verification::events::validator_verdict(v),
+                None,
+                prov,
+            )?;
+        }
+        self.inbox.push_back(Cue::VerificationCompleted);
+        Ok(())
+    }
+
+    /// Mint the nudge `HarnessRule` (conditioned on the run's profile — I9
+    /// requires the complete `AssumptionDebtRecord`), ledger
+    /// `context.artefact.delivered` + `context.artefact.activated`, and
+    /// return the pending-following record (AC-R-2.6.1-8; T-LCD-13).
+    fn emit_nudge_artefact(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        kind: &str,
+        trigger_kind: &str,
+    ) -> Result<NudgePending, DriverError> {
+        let delivery_id = self.alloc("nd");
+        let rule_id = format!("hh/nudge/{kind}/{delivery_id}");
+        let prov = ProvenanceRecord::minted(
+            Origin::kernel("hh-control/nudge"),
+            PersistenceScope::Run,
+            self.now_ms,
+        );
+        // The nudge text is a `Text` leaf the rule's `insert_context_item`
+        // action names — content-addressed (R-TEXT), never free bytes.
+        let text = hh_hir::leaves::Text::new(nudge_text(kind), "hh-control/nudge", prov.clone());
+        let text_ref =
+            hh_hir::refs::Ref::pinned(format!("hh/nudge-text/{kind}"), text.content_hash.clone());
+        let debt = hh_hir::records::AssumptionDebtRecord {
+            rule_id: rule_id.clone(),
+            hypothesis: hh_hir::leaves::Text::new(
+                nudge_hypothesis(kind),
+                "hh-control/nudge",
+                prov.clone(),
+            ),
+            evidence_refs: vec![hh_hir::EvidenceRef::legacy(format!(
+                "control.guard.fired{{{trigger_kind}}}"
+            ))],
+            owner: hh_hir::OwnerRef::principal("kernel"),
+            expiry_condition: hh_hir::ExpiryCondition {
+                kind: hh_hir::ExpiryKind::EvidenceRefreshDue,
+                value: None,
+            },
+            removal_test_ref: format!("{rule_id}/removal_test"),
+            status: hh_hir::DebtStatus::Active,
+            debt_class: Some(hh_hir::DebtClass::ModelConditioned),
+            hypothesis_typed: None,
+            scope: Some(hh_hir::DebtScope {
+                model_selectors: vec![],
+                task_classes: vec![],
+                roles: vec![],
+            }),
+            expiry: None,
+            runway_ms: None,
+            revalidation: None,
+            removal_test: None,
+            created_by: Some(prov.clone()),
+            created_at: Some(self.now_ms),
+            supersedes: None,
+        };
+        let trigger = match trigger_kind {
+            "loop_nudge" => Json::obj([("kind", Json::str("loop_detected"))]),
+            "format_error" => Json::obj([("kind", Json::str("response_without_action"))]),
+            "missing_submission" => Json::obj([("kind", Json::str("stop_without_submission"))]),
+            other => Json::obj([("kind", Json::str(other))]),
+        };
+        let rule = Json::obj([
+            ("rule_id", Json::str(rule_id.clone())),
+            ("trigger", trigger),
+            (
+                "action",
+                Json::obj([("insert_context_item", text_ref.to_json())]),
+            ),
+            (
+                "scope",
+                Json::obj([("run", Json::str(self.run_id.clone()))]),
+            ),
+            (
+                "conditioned_on",
+                Json::obj([
+                    ("profile", Json::str(self.model_ref.clone())),
+                    ("pinned", Json::Bool(false)),
+                ]),
+            ),
+            ("assumption_debt", hh_hir::debt_json(&debt, false)),
+        ]);
+        // `delivered` — the rule artefact enters the next context assembly
+        // (by_reference: the assembled context expands the handle).
+        let mut delivered = match hh_context::events::artefact_delivered_payload(
+            &rule_id,
+            &delivery_id,
+            "harness_rule",
+            Some(&format!("sha256:{}", text.content_hash)),
+            true,
+        ) {
+            Json::Obj(m) => m,
+            other => unreachable!("artefact_delivered_payload is an object: {other:?}"),
+        };
+        delivered.insert("rule".into(), rule);
+        delivered.insert("nudge_kind".into(), Json::str(kind));
+        self.append_prov(
+            sink,
+            "context.artefact.delivered",
+            Json::Obj(delivered),
+            None,
+            prov.clone(),
+        )?;
+        // `activated` — the cue reaching `decide` is the activation signal
+        // (deterministic detector; §5c.1).
+        self.append_prov(
+            sink,
+            "context.artefact.activated",
+            hh_context::events::artefact_activated_payload(
+                &rule_id,
+                &delivery_id,
+                "deterministic",
+                trigger_kind,
+            ),
+            None,
+            prov,
+        )?;
+        Ok(NudgePending {
+            rule_id,
+            delivery_id,
+            kind: kind.to_string(),
+        })
+    }
+
+    /// `verification.artefact.followed` — the pending nudge's `followed`
+    /// verdict: the strategy's admitted decision row is the evidence
+    /// (deterministic detector, `verdict: true` — the loop continued under
+    /// the rule; §5e.1's `kind ∈ {loop_nudge, continue_nudge}` member).
+    fn emit_artefact_followed(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        pending: &NudgePending,
+        decision_ev_id: &str,
+    ) -> Result<(), DriverError> {
+        let prov = ProvenanceRecord::minted(
+            Origin::kernel("hh-control/nudge"),
+            PersistenceScope::Run,
+            self.now_ms,
+        );
+        self.append_prov(
+            sink,
+            "verification.artefact.followed",
+            Json::obj([
+                ("detector", Json::str("deterministic")),
+                ("detector_ref", Json::str(pending.rule_id.clone())),
+                ("verdict", Json::Bool(true)),
+                ("confidence_ppm", Json::Int(1_000_000)),
+                ("evidence_ref", Json::str(decision_ev_id)),
+                ("artefact_id", Json::str(pending.rule_id.clone())),
+                ("delivery_id", Json::str(pending.delivery_id.clone())),
+                ("kind", Json::str(pending.kind.clone())),
+            ]),
+            None,
+            prov,
+        )
     }
 
     /// `finish` — the stop protocol: `control.decision{stop}` was already
@@ -1170,8 +1620,6 @@ impl<S: ControlStrategy> Driver<S> {
         sink: &mut dyn LedgerSink,
         gate: &mut dyn EffectGate,
     ) -> Result<(), DriverError> {
-        use hh_provenance::authority::PersistenceScope;
-        use hh_provenance::origin::Origin;
         use hh_verification::claims::{self, Claim};
         use hh_verification::vocab::{ClaimKind, ExtractedBy, SubjectRef};
 
@@ -1401,6 +1849,55 @@ fn scope_empty() -> Scope {
 /// (`budget_exhausted`'s dimension, `cancelled`'s `by`,
 /// `format_failure`'s count) survive verbatim; the bare-kind spellings
 /// remain as a fallback for any hand-made refusal).
+/// Whether the guard's `respond` observation is a nudge — the observation
+/// kinds that mint a conditioned `HarnessRule` artefact (AC-R-2.6.1-8;
+/// I9). Returns the T-LCD-13 `kind` member (`loop_nudge | continue_nudge`
+/// — §5e.1's ledger); denials, refusals, `compaction_required` and
+/// escalations are not nudges.
+fn nudge_kind(guard_id: &str) -> Option<&'static str> {
+    match guard_id {
+        "loop_nudge" => Some("loop_nudge"),
+        // I6's continue-nudges: the stop-rule nudge, the converted
+        // `stop{completed}` (`missing_submission`) and the format-error
+        // row all deliver "continue with this hint" artefacts.
+        "nudge" | "missing_submission" | "format_error" => Some("continue_nudge"),
+        _ => None,
+    }
+}
+
+/// The canonical nudge `Text` content per kind (a `Text` leaf the minted
+/// `HarnessRule`'s `insert_context_item` names — §5e.1 "nudge and reminder
+/// texts are `Text` leaves in `HarnessRule`s").
+fn nudge_text(kind: &str) -> &'static str {
+    match kind {
+        "loop_nudge" => {
+            "A repeated call pattern was detected. Change approach: different \
+             arguments, a different capability, or finish."
+        }
+        _ => {
+            "The run cannot complete on the current trajectory. Continue with \
+             an admissible call or submit through the declared finish surface."
+        }
+    }
+}
+
+/// The `AssumptionDebtRecord` hypothesis per nudge kind (I9 — a conditioned
+/// rule states the claim it rests on).
+fn nudge_hypothesis(kind: &str) -> &'static str {
+    match kind {
+        "loop_nudge" => {
+            "a loop-nudge reminder steers the conditioned model off the \
+             detected repeat pattern; revisit when per-profile compliance \
+             evidence lands (AC-R-2.6.1-8)"
+        }
+        _ => {
+            "a continue-nudge steers the conditioned model to an admissible \
+             step or the finish surface; revisit when per-profile compliance \
+             evidence lands (AC-R-2.6.1-8)"
+        }
+    }
+}
+
 fn kernel_stop_reason(kind: &str, policy: &EnvelopePolicy) -> StopReason {
     if let Ok(j) = hh_wire::json::parse(kind) {
         if let Some(r) = StopReason::from_json(&j) {
@@ -1430,7 +1927,8 @@ fn kernel_stop_reason(kind: &str, policy: &EnvelopePolicy) -> StopReason {
 mod tests {
     use super::*;
     use crate::policy::EnvelopePolicy;
-    use crate::strategy::{ConcurrentInput, SteerMode, StrategyParams};
+    use crate::strategy::{ConcurrentInput, ControlCapabilities, SteerMode, StrategyParams};
+    use crate::vocab::{ControlDecision, HumanInput};
 
     /// An in-memory sink (the test double — `prefix()` is the fold input).
     struct MemSink {
@@ -2214,5 +2712,542 @@ mod tests {
                 .collect()
         }
         assert_eq!(one_run(), one_run());
+    }
+
+    // ── S2.11 — compaction routing, nudge T-LCD-13, verify, steer ────────
+
+    /// A scripted compaction port (R-2.4.2's `compact` boundary — the
+    /// `context.compaction.*` rows are the port's own; the driver sees the
+    /// outcome).
+    struct ScriptedCompaction {
+        results: std::collections::VecDeque<Result<CompactionDone, CompactionImpossible>>,
+        calls: u32,
+    }
+
+    impl CompactionPort for ScriptedCompaction {
+        fn compact(&mut self, _reason: &str) -> Result<CompactionDone, CompactionImpossible> {
+            self.calls += 1;
+            self.results.pop_front().unwrap_or(Ok(CompactionDone {
+                view_hash: "cv-1".into(),
+            }))
+        }
+    }
+
+    /// A scripted verify port (R-2.7.1's decision-point seam).
+    struct ScriptedVerify {
+        seen: Vec<String>,
+        verdicts: Vec<hh_verification::validators::Verdict>,
+    }
+
+    impl VerifyPort for ScriptedVerify {
+        fn verify(
+            &mut self,
+            validator_refs: &[String],
+            _subject: &Json,
+        ) -> Vec<hh_verification::validators::Verdict> {
+            self.seen.extend(validator_refs.iter().cloned());
+            self.verdicts.clone()
+        }
+    }
+
+    /// An assembler that reports a fixed occupancy in `context.assembled`
+    /// (the gauge fold reads `occupancy_estimate` — §5c.1).
+    struct OccupiedAssembler {
+        occupancy: u64,
+    }
+
+    impl AssemblerPort for OccupiedAssembler {
+        fn assemble(&mut self, _req: &Json) -> AssembledRequest {
+            AssembledRequest {
+                request: Json::Null,
+                assembled_payload: Some(Json::obj([(
+                    "occupancy_estimate",
+                    Json::Int(self.occupancy as i64),
+                )])),
+            }
+        }
+    }
+
+    /// A scripted strategy — `decide` pops the scripted kind (exercises the
+    /// driver arms no registered variant emits yet — `verify`).
+    struct ScriptedStrategy {
+        caps: ControlCapabilities,
+        point: DecisionPoint,
+        script: std::cell::RefCell<std::collections::VecDeque<DecisionKind>>,
+    }
+
+    impl ScriptedStrategy {
+        fn new(point: DecisionPoint, script: Vec<DecisionKind>) -> Self {
+            ScriptedStrategy {
+                caps: ControlCapabilities {
+                    deterministic_replay: true,
+                    steering: false,
+                    follow_up: false,
+                    parallel_effects: false,
+                    delegation: false,
+                    model_emitted_plan: false,
+                    resumable_mid_effect: true,
+                    decision_points_owned: vec![],
+                    boundary_preset: crate::react::react_preset(),
+                    requires: crate::strategy::VariantRequires {
+                        goal: true,
+                        procedure: false,
+                    },
+                },
+                point,
+                script: std::cell::RefCell::new(script.into()),
+            }
+        }
+    }
+
+    impl ControlStrategy for ScriptedStrategy {
+        fn capabilities(&self) -> &ControlCapabilities {
+            &self.caps
+        }
+        fn open(&mut self, ctx: &ControlContext) -> Result<ControlState, ControlError> {
+            ctx.boundary
+                .validate()
+                .map_err(ControlError::IncompatibleBoundary)?;
+            Ok(ControlState {
+                variant_ref: "test/scripted@1".into(),
+                cursor: crate::state::PlanCursor {
+                    node_id: "s-0".into(),
+                    iteration: 0,
+                    bound_ref: ctx.budget_ref.clone(),
+                },
+                decision_count: 0,
+                open_effects: vec![],
+                last_cue_seq: 0,
+                boundary_view: ctx.boundary.assignments.clone(),
+                extension: Json::Null,
+            })
+        }
+        fn observe(&self, state: &mut ControlState, events: &[EventEnvelope]) {
+            for ev in events {
+                if ev.seq > state.last_cue_seq {
+                    state.last_cue_seq = ev.seq;
+                }
+            }
+        }
+        fn decide(&self, state: &mut ControlState, _cue: &Cue) -> ControlDecision {
+            let kind = self.script.borrow_mut().pop_front().unwrap_or({
+                DecisionKind::Stop {
+                    proposed_reason: StopReason::Refused {
+                        blocking_effect_id: "scripted-end".into(),
+                    },
+                    submission_ref: None,
+                }
+            });
+            let d = ControlDecision {
+                stamp: crate::strategy::stamp_for(state, self.point, None),
+                kind,
+            };
+            state.record_decision(d.stamp.decision_point, d.stamp.owner);
+            d
+        }
+        fn terminate(&self, state: &ControlState, reason: &StopReason) -> FinalReport {
+            FinalReport {
+                stop_reason: reason.clone(),
+                submission_ref: None,
+                unresolved_effects: state.open_effects.clone(),
+                decisions: vec![],
+                boundary_observed: state.boundary_view.clone(),
+            }
+        }
+        fn restore(
+            &mut self,
+            _bytes: &[u8],
+            _ctx: &ControlContext,
+        ) -> Result<ControlState, crate::strategy::RestoreError> {
+            Err(crate::strategy::RestoreError::Malformed)
+        }
+    }
+
+    fn test_verdict() -> hh_verification::validators::Verdict {
+        use hh_verification::vocab as vv;
+        hh_verification::validators::Verdict {
+            verdict_id: "verdict:test:1".into(),
+            validator_ref: hh_identity::VersionedRef::pinned(
+                hh_identity::RecordKind::Validator,
+                "sha256:test-validator",
+                ProvenanceRecord::minted(
+                    Origin::kernel("hir/kernel/check"),
+                    PersistenceScope::Definition,
+                    1,
+                ),
+            ),
+            oracle_class: vv::OracleClass::Executable,
+            target: "run-1".into(),
+            criterion_ref: None,
+            contract_id: None,
+            phase: vv::VerdictPhase::Global,
+            role: vv::CriterionRole::Invariant,
+            value: vv::VerdictValue::Bool(true),
+            status: vv::VerdictStatus::Decided,
+            detector: vv::Detector::Deterministic,
+            evidence_refs: vec![],
+            inputs_digest: "sha256:inputs".into(),
+            evidence_head_seq: 0,
+            freshness_ok: true,
+            findings: vec![],
+            cost_ppm: 0,
+            charged_to: vv::ChargedTo::Subject,
+            veto_tripped: vec![],
+            provenance: ProvenanceRecord::minted(
+                Origin::kernel("hir/kernel/check"),
+                PersistenceScope::Run,
+                1,
+            ),
+            measured_at: 0,
+        }
+    }
+
+    /// AC-R-2.6.1-5 — `react/minimal` declares no `compact`: an occupancy
+    /// cap at G-PRE-CALL routes `compaction_required` to
+    /// `stop{context_exhausted{required_tokens, cap}}` with the guard's
+    /// ledgered numbers (bounded — no unbounded compaction loop).
+    #[test]
+    fn minimal_occupancy_cap_stops_context_exhausted() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let cfg = DriverConfig {
+            surfaces: vec![fs_read_surface()],
+            window_cap_tokens: 1_000,
+            ..DriverConfig::default()
+        };
+        let mut driver = Driver::open_react(&ctx(), policy, &mut sink, cfg).unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(hh_gateway::vocab::StopReason::EndTurn, vec![])]
+                .into_iter()
+                .collect(),
+        };
+        let mut gate = observed_gate();
+        // 950/1000 ⇒ 950_000 ppm ≥ the 900_000 cap.
+        let mut asm = OccupiedAssembler { occupancy: 950 };
+        let r = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        assert!(
+            matches!(
+                r.report.stop_reason,
+                StopReason::ContextExhausted { cap: 1_000, .. }
+            ),
+            "got {:?}",
+            r.report.stop_reason
+        );
+        // The `guard_fired` row carries the ledgered pressure.
+        let fired = sink
+            .events
+            .iter()
+            .find(|e| {
+                e.class == "control.guard.fired"
+                    && e.payload.get("guard_id").and_then(Json::as_str)
+                        == Some("compaction_required")
+            })
+            .expect("a compaction_required guard.fired row");
+        assert_eq!(fired.payload.get("cap").and_then(Json::as_int), Some(1_000));
+        assert!(
+            fired
+                .payload
+                .get("required_tokens")
+                .and_then(Json::as_int)
+                .unwrap_or(0)
+                > 0
+        );
+    }
+
+    /// AC-R-2.6.1 steerable half — `guard_fired{compaction_required}` →
+    /// `compact{reason}` → the port runs → `compaction_completed` → the
+    /// loop continues; `CompactionImpossible` → `context_exhausted`.
+    #[test]
+    fn steerable_compact_invokes_port_then_exhausts_on_impossible() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let cfg = DriverConfig {
+            surfaces: vec![fs_read_surface()],
+            window_cap_tokens: 1_000,
+            ..DriverConfig::default()
+        };
+        let mut c = ctx();
+        c.steering = (SteerMode::InterruptAtDecisionPoint, ConcurrentInput::Steer);
+        let mut driver = Driver::open(
+            crate::react::ReactSteerable::new(),
+            &c,
+            policy,
+            &mut sink,
+            cfg,
+        )
+        .unwrap();
+        let port = ScriptedCompaction {
+            results: [
+                Ok(CompactionDone {
+                    view_hash: "cv-1".into(),
+                }),
+                Err(CompactionImpossible {
+                    required_tokens: 950,
+                    cap: 1_000,
+                }),
+            ]
+            .into_iter()
+            .collect(),
+            calls: 0,
+        };
+        driver.set_compaction_port(Box::new(port));
+        let mut model = ScriptedModel {
+            script: [outcome(hh_gateway::vocab::StopReason::EndTurn, vec![])]
+                .into_iter()
+                .collect(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = OccupiedAssembler { occupancy: 950 };
+        let r = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        // The impossible ladder is the envelope-owned context_exhausted.
+        assert!(
+            matches!(
+                r.report.stop_reason,
+                StopReason::ContextExhausted {
+                    required_tokens: 950,
+                    cap: 1_000
+                }
+            ),
+            "got {:?}",
+            r.report.stop_reason
+        );
+        // A `compact` decision was admitted (kind: compact).
+        assert!(sink.events.iter().any(|e| {
+            e.class == "control.decision"
+                && e.payload.get("kind").and_then(Json::as_str) == Some("compact")
+        }));
+    }
+
+    /// A `compact` decision with no wired port is the exhausted ladder —
+    /// `stop{context_exhausted}` (never a fabricated compaction).
+    #[test]
+    fn compact_without_port_stops_context_exhausted() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let strategy = ScriptedStrategy::new(
+            DecisionPoint::Compact,
+            vec![DecisionKind::Compact {
+                reason: "compaction_required".into(),
+            }],
+        );
+        let mut driver =
+            Driver::open(strategy, &ctx(), policy, &mut sink, DriverConfig::default()).unwrap();
+        let mut model = ScriptedModel {
+            script: Default::default(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let r = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        assert!(
+            matches!(r.report.stop_reason, StopReason::ContextExhausted { .. }),
+            "got {:?}",
+            r.report.stop_reason
+        );
+        // The stop decision is the envelope's (decider: envelope).
+        let stop_row = sink
+            .events
+            .iter()
+            .rev()
+            .find(|e| {
+                e.class == "control.decision"
+                    && e.payload.get("kind").and_then(Json::as_str) == Some("stop")
+            })
+            .expect("a stop decision row");
+        assert_eq!(
+            stop_row.payload.get("decider").and_then(Json::as_str),
+            Some("envelope")
+        );
+    }
+
+    /// AC-R-2.7.1 — `verify{validator_refs, subject}` runs the port and
+    /// ledgers `verification.validator.invoked` + `.verdict`, then cues
+    /// `verification_completed`.
+    #[test]
+    fn verify_decision_invokes_port_and_ledgers_verdicts() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let strategy = ScriptedStrategy::new(
+            DecisionPoint::Verify,
+            vec![DecisionKind::Verify {
+                validator_refs: vec!["hir/kernel/diff_sanity".into()],
+                subject: Json::obj([("effect_id", Json::str("ef-1"))]),
+            }],
+        );
+        let mut driver =
+            Driver::open(strategy, &ctx(), policy, &mut sink, DriverConfig::default()).unwrap();
+        driver.set_verify_port(Box::new(ScriptedVerify {
+            seen: vec![],
+            verdicts: vec![test_verdict()],
+        }));
+        let mut model = ScriptedModel {
+            script: Default::default(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let _ = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+        assert!(sink
+            .events
+            .iter()
+            .any(|e| e.class == "verification.validator.invoked"));
+        assert!(sink
+            .events
+            .iter()
+            .any(|e| e.class == "verification.validator.verdict"));
+    }
+
+    /// A `verify` decision with no wired port fails `UnbackedPort` — a
+    /// declared verification never silently passes (R-2.7.1).
+    #[test]
+    fn verify_without_port_fails_unbacked() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let strategy = ScriptedStrategy::new(
+            DecisionPoint::Verify,
+            vec![DecisionKind::Verify {
+                validator_refs: vec!["hir/kernel/diff_sanity".into()],
+                subject: Json::Null,
+            }],
+        );
+        let mut driver =
+            Driver::open(strategy, &ctx(), policy, &mut sink, DriverConfig::default()).unwrap();
+        let mut model = ScriptedModel {
+            script: Default::default(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+        assert!(
+            matches!(r, Err(DriverError::UnbackedPort { kind: "verify" })),
+            "got {r:?}"
+        );
+    }
+
+    /// AC-R-2.6.1-8 — a `loop_nudge` respond mints the conditioned
+    /// `HarnessRule` (complete `AssumptionDebtRecord`) and ledgers the
+    /// T-LCD-13 chain: `delivered` → `activated` → `followed` (the next
+    /// admitted decision).
+    #[test]
+    fn a_loop_nudge_ledgers_the_lcd13_chain() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut cfg = DriverConfig {
+            surfaces: vec![fs_read_surface()],
+            ..DriverConfig::default()
+        };
+        cfg.budget_ceiling.insert("model_calls".into(), 30);
+        let mut driver = Driver::open_react(&ctx(), policy, &mut sink, cfg).unwrap();
+        let mut model = ScriptedModel {
+            script: std::iter::repeat_n(tool_call_outcome("/same"), 30).collect(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let _ = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        // `delivered` — the minted `HarnessRule` with its debt record.
+        let delivered = sink
+            .events
+            .iter()
+            .find(|e| e.class == "context.artefact.delivered")
+            .expect("a nudge delivered row");
+        let rule = delivered.payload.get("rule").expect("rule member");
+        assert_eq!(
+            rule.get("assumption_debt")
+                .and_then(|d| d.get("status"))
+                .and_then(Json::as_str),
+            Some("active"),
+            "the nudge rule carries a complete assumption-debt record"
+        );
+        assert!(rule.get("conditioned_on").is_some());
+        // `activated` — deterministic detector.
+        assert!(sink.events.iter().any(|e| {
+            e.class == "context.artefact.activated"
+                && e.payload.get("detector").and_then(Json::as_str) == Some("deterministic")
+        }));
+        // `followed` — discharged by the next admitted decision.
+        let followed = sink
+            .events
+            .iter()
+            .find(|e| e.class == "verification.artefact.followed")
+            .expect("a followed row");
+        assert_eq!(
+            followed.payload.get("kind").and_then(Json::as_str),
+            Some("loop_nudge")
+        );
+        assert_eq!(followed.payload.get("verdict"), Some(&Json::Bool(true)));
+    }
+
+    /// AC-R-2.6.1-10 — a steer cue under `react/steerable` proposes the
+    /// next step with `steer_ref` riding the context request (I7: the ref,
+    /// never the bytes).
+    #[test]
+    fn steerable_steer_cue_proposes_with_steer_ref() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut c = ctx();
+        c.steering = (SteerMode::InterruptAtDecisionPoint, ConcurrentInput::Steer);
+        let mut driver = Driver::open(
+            crate::react::ReactSteerable::new(),
+            &c,
+            policy,
+            &mut sink,
+            DriverConfig::default(),
+        )
+        .unwrap();
+        // Park the loop: `deferred` → `wait{until: model_completed}` → the
+        // inbox drains and `run` returns parked, then steer.
+        let mut model = ScriptedModel {
+            script: [outcome(hh_gateway::vocab::StopReason::Deferred, vec![])]
+                .into_iter()
+                .collect(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let _ = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+        driver.submit(Cue::HumanInput(HumanInput::Steer {
+            payload_ref: "sha256:steer-1".into(),
+        }));
+        let _ = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+        // The steer decision is a `propose` whose context_request names the
+        // steer ref.
+        let steer_decision = sink.events.iter().find(|e| {
+            e.class == "control.decision"
+                && e.payload
+                    .get("context_request")
+                    .and_then(|cr| cr.get("steer_ref"))
+                    .and_then(Json::as_str)
+                    == Some("sha256:steer-1")
+        });
+        assert!(
+            steer_decision.is_some(),
+            "a propose{{steer_ref}} decision row"
+        );
     }
 }

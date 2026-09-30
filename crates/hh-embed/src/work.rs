@@ -31,7 +31,11 @@ impl EmbedService {
         inject::refuse_handle_keys(params, "submit")?;
         inject::refuse_secrets(params)?;
         let p = SubmitParams::from_json(params)?;
-        {
+        // `concurrent_input` (the bound strategy's declaration): under
+        // `queue_only` a mid-turn `submit` is `TurnActive`; under `steer`
+        // the input lands as a `steer` cue at the next decision point
+        // (AC-R-2.6.1-10 — the declared mode, never a hardcoded answer).
+        let mid_turn = {
             let s = self.writer_session(&p.session_id)?;
             if let Some(hit) = s.idem.get(&p.idempotency_key) {
                 return Ok(hit.clone());
@@ -39,53 +43,20 @@ impl EmbedService {
             if s.finished {
                 return Err(EmbedError::Draining);
             }
-            if s.turn_active {
+            if s.turn_active && s.steering.1 == hh_control::strategy::ConcurrentInput::QueueOnly {
                 return Err(EmbedError::TurnActive);
             }
-        }
-        // The scripted model port reads the staged input: one
-        // `{kind:"invoke"}` block routes to that capability surface;
-        // otherwise the input is the completion the `hh.submit` call
-        // carries (its first `text` member, else the canonical input).
-        let mut invoke: Option<(String, Json)> = None;
-        let mut completion = String::new();
-        for block in &p.input {
-            match block.get("kind").and_then(Json::as_str) {
-                Some("invoke") => {
-                    let cap = block
-                        .get("capability")
-                        .or_else(|| block.get("surface"))
-                        .and_then(Json::as_str)
-                        .unwrap_or("")
-                        .to_string();
-                    if !cap.is_empty() && invoke.is_none() {
-                        invoke = Some((cap, block.get("args").cloned().unwrap_or(Json::Null)));
-                    }
-                }
-                _ => {
-                    if completion.is_empty() {
-                        if let Some(t) = block.get("text").and_then(Json::as_str) {
-                            completion = t.to_string();
-                        }
-                    }
-                }
-            }
-        }
-        if completion.is_empty() && invoke.is_none() {
-            completion = Json::Arr(p.input.clone()).to_canonical_string();
-        }
-        let response_ref = self.alloc("resp");
-        {
-            let s = self.session_mut(&p.session_id)?;
-            s.next_invoke = invoke;
-            s.next_completion = completion.clone();
-            s.next_response_ref = response_ref;
-        }
-        let payload_ref = self.record_input(&p.session_id, &p.input)?;
+            s.turn_active
+        };
+        let payload_ref = self.stage_input(&p.session_id, &p.input)?;
         {
             let s = self.session_mut(&p.session_id)?;
             if let Some(d) = s.driver.as_mut() {
-                d.submit(Cue::HumanInput(HumanInput::FollowUp { payload_ref }));
+                d.submit(Cue::HumanInput(if mid_turn {
+                    HumanInput::Steer { payload_ref }
+                } else {
+                    HumanInput::FollowUp { payload_ref }
+                }));
             }
         }
         self.drive(&p.session_id)?;
@@ -175,23 +146,118 @@ impl EmbedService {
         Ok(out)
     }
 
-    /// `steer` — the react/minimal boundary declares
-    /// `steer_mode = unsupported`; a correctly addressed steer is
-    /// `TurnMismatch`-checked then refused `Unsupported` (the honest
-    /// answer — the strategy surface is closed, not silently queued).
-    pub(crate) fn steer(&mut self, params: &Json) -> Result<Json, EmbedError> {
-        let p = SteerParams::from_json(params)?;
-        let s = self.writer_session(&p.session_id)?;
-        if let Some(t) = &p.expected_turn_id {
-            if t != &s.active_turn {
-                return Err(EmbedError::TurnMismatch {
-                    active_turn_id: s.active_turn.clone(),
-                });
+    /// Stage the scripted input blocks for the model port + mint the
+    /// `context.artefact.delivered` rows; returns the artefact ref the
+    /// cue carries (the cue names a record, never bytes — I2).
+    fn stage_input(&mut self, sess_id: &str, input: &[Json]) -> Result<String, EmbedError> {
+        // The scripted model port reads the staged input: one
+        // `{kind:"invoke"}` block routes to that capability surface;
+        // otherwise the input is the completion the `hh.submit` call
+        // carries (its first `text` member, else the canonical input).
+        let mut invoke: Option<(String, Json)> = None;
+        let mut completion = String::new();
+        for block in input {
+            match block.get("kind").and_then(Json::as_str) {
+                Some("invoke") => {
+                    let cap = block
+                        .get("capability")
+                        .or_else(|| block.get("surface"))
+                        .and_then(Json::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    if !cap.is_empty() && invoke.is_none() {
+                        invoke = Some((cap, block.get("args").cloned().unwrap_or(Json::Null)));
+                    }
+                }
+                _ => {
+                    if completion.is_empty() {
+                        if let Some(t) = block.get("text").and_then(Json::as_str) {
+                            completion = t.to_string();
+                        }
+                    }
+                }
             }
         }
-        Err(EmbedError::Unsupported {
-            by: "control_strategy".to_string(),
-        })
+        if completion.is_empty() && invoke.is_none() {
+            completion = Json::Arr(input.to_vec()).to_canonical_string();
+        }
+        let response_ref = self.alloc("resp");
+        {
+            let s = self.session_mut(sess_id)?;
+            s.next_invoke = invoke;
+            s.next_completion = completion;
+            s.next_response_ref = response_ref;
+        }
+        self.record_input(sess_id, input)
+    }
+
+    /// `steer` — honoured per the bound control strategy's declared
+    /// `steer_mode` (AC-R-2.6.1-10): `interrupt_at_decision_point`
+    /// submits the `steer` cue and drives; `queue_next_turn` records the
+    /// delivery and holds the cue for the next turn's first decision
+    /// point (`Accepted{queued_at}` reports which); `unsupported` is the
+    /// honest `Unsupported{by: control_strategy}`. The input is ledgered
+    /// (`context.artefact.delivered`) before any admission — steering is
+    /// a ledger fact, never UI state.
+    pub(crate) fn steer(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        inject::refuse_secrets(params)?;
+        let p = SteerParams::from_json(params)?;
+        let mode = {
+            let s = self.writer_session(&p.session_id)?;
+            if let Some(k) = &p.idempotency_key {
+                if let Some(hit) = s.idem.get(k) {
+                    return Ok(hit.clone());
+                }
+            }
+            if s.finished {
+                return Err(EmbedError::Draining);
+            }
+            if let Some(t) = &p.expected_turn_id {
+                if t != &s.active_turn {
+                    return Err(EmbedError::TurnMismatch {
+                        active_turn_id: s.active_turn.clone(),
+                    });
+                }
+            }
+            s.steering.0
+        };
+        match mode {
+            hh_control::strategy::SteerMode::Unsupported => Err(EmbedError::Unsupported {
+                by: "control_strategy".to_string(),
+            }),
+            hh_control::strategy::SteerMode::InterruptAtDecisionPoint => {
+                let payload_ref = self.stage_input(&p.session_id, &p.input)?;
+                {
+                    let s = self.session_mut(&p.session_id)?;
+                    if let Some(d) = s.driver.as_mut() {
+                        d.submit(Cue::HumanInput(HumanInput::Steer { payload_ref }));
+                    }
+                }
+                let _ = self.drive(&p.session_id);
+                let turn = self.session(&p.session_id)?.active_turn.clone();
+                let out = Json::obj([
+                    ("turn_id", Json::str(turn)),
+                    ("queued_at", Json::str("decision_point")),
+                ]);
+                if let Some(k) = p.idempotency_key {
+                    self.session_mut(&p.session_id)?.idem.insert(k, out.clone());
+                }
+                Ok(out)
+            }
+            hh_control::strategy::SteerMode::QueueNextTurn => {
+                let payload_ref = self.stage_input(&p.session_id, &p.input)?;
+                self.session_mut(&p.session_id)?.pending_steer = Some(payload_ref);
+                let turn = self.session(&p.session_id)?.active_turn.clone();
+                let out = Json::obj([
+                    ("turn_id", Json::str(turn)),
+                    ("queued_at", Json::str("next_turn")),
+                ]);
+                if let Some(k) = p.idempotency_key {
+                    self.session_mut(&p.session_id)?.idem.insert(k, out.clone());
+                }
+                Ok(out)
+            }
+        }
     }
 
     /// `respond_permission` — the host's answer to a live
@@ -1126,6 +1192,11 @@ impl EmbedService {
             manifest_ref: sess_manifest_ref(&child),
             realized: realized.clone(),
             driver: None,
+            steering: (
+                hh_control::strategy::SteerMode::Unsupported,
+                hh_control::strategy::ConcurrentInput::QueueOnly,
+            ),
+            pending_steer: None,
             env_json: Json::Null,
             env_handle_id: child_env_handle,
             host_caps: Vec::new(),

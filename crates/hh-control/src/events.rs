@@ -75,6 +75,17 @@ pub fn decision_payload(
     if let Some(r) = &d.stamp.rationale_ref {
         m.push(("rationale_ref", Json::str(r)));
     }
+    // A `propose`'s `context_request` rides the audit row when it names a
+    // declared input (a `steer_ref`/`follow_up_ref` — the audit must show
+    // which cue the step answered; the ref only, never the bytes — I7).
+    if let crate::vocab::DecisionKind::Propose {
+        context_request, ..
+    } = &d.kind
+    {
+        if !matches!(context_request, Json::Null) {
+            m.push(("context_request", context_request.clone()));
+        }
+    }
     Json::obj(m)
 }
 

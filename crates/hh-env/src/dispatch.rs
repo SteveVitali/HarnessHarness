@@ -235,6 +235,17 @@ pub struct Dispatcher<'a> {
     /// `MemoryStore` — S2.10). `None` ⇒ no lookup, no write, no epoch
     /// tracking — the pre-S2.10 pipeline verbatim.
     cache: Option<K4Cache>,
+    /// The conditioned `diff_sanity` rule — check (d) of the kernel local
+    /// checks (ADR-0111 D1(d); S2.11). `Some` runs it under its conditioned
+    /// thresholds with the assumption-debt record riding the verdict;
+    /// `None` ablates it (T-LCD-02 — ablation is explicit, never silent).
+    diff_sanity: Option<hh_verification::validators::DiffSanityRule>,
+    /// The `TimeoutPolicy[permission]` deadline in ms (§5e.2; S2.11):
+    /// `None` = `deadline none` — `attended` permission waits have no
+    /// default deadline (bounded by `hard_max` at the caller's sweep).
+    /// `Some(ms)` is recorded on the `pending` row (`ApprovalRequest.timeout`)
+    /// and bounds `expire_permission`.
+    permission_timeout_ms: Option<u64>,
 }
 
 impl<'a> Dispatcher<'a> {
@@ -255,13 +266,29 @@ impl<'a> Dispatcher<'a> {
             dedup: DedupStore::default(),
             detectors,
             cache: None,
+            diff_sanity: Some(hh_verification::validators::DiffSanityRule::kernel_default(
+                &ProvenanceRecord::kernel("hir/kernel/diff_sanity", 0),
+            )),
+            permission_timeout_ms: None,
         }
+    }
+
+    /// Set the `TimeoutPolicy[permission]` deadline in ms (`None` = attended
+    /// `deadline none` — the audited default; §5e.2).
+    pub fn set_permission_timeout(&mut self, timeout_ms: Option<u64>) {
+        self.permission_timeout_ms = timeout_ms;
     }
 
     /// Attach the run's K4 cache (`set_cache` before the first dispatch —
     /// the epoch pins are the run's, never cross-run).
     pub fn set_cache(&mut self, cache: K4Cache) {
         self.cache = Some(cache);
+    }
+
+    /// Set the conditioned `diff_sanity` rule (`None` ablates check (d) —
+    /// the Lab's ablation seam; T-LCD-02).
+    pub fn set_diff_sanity(&mut self, rule: Option<hh_verification::validators::DiffSanityRule>) {
+        self.diff_sanity = rule;
     }
 
     /// The attached K4 cache, if any.
@@ -850,7 +877,10 @@ impl<'a> Dispatcher<'a> {
                             } else {
                                 hh_monitor::approval::ApprovalMode::Sync
                             },
-                            timeout: None,
+                            // `TimeoutPolicy[permission]` — `deadline none`
+                            // attended (`None`); a declared default caps the
+                            // wait (S2.11).
+                            timeout: self.permission_timeout_ms,
                             explanation: hh_monitor::approval::Explanation {
                                 display: format!("pi asked: {} option(s)", options.len()),
                                 rows: decision.checks.clone(),
@@ -946,6 +976,26 @@ impl<'a> Dispatcher<'a> {
             &input.chain,
         )?;
         self.store.append(&self.run_id, lease, vec![authorized])?;
+
+        // ── 2c E1 `state_requires`/`PreconditionDomain` gate at `prepare`
+        // (§5d.1: "`state_requires` at `prepare`"; a violation is
+        // `PreconditionViolated{kind}` → `action.effect.refused` +
+        // `action.tool.rejected`, never a warning — ADR-0087 D2). The gate
+        // runs post-`authorized`/pre-K4 so a stale/unsupported state
+        // precondition refuses before any cache serve or executor touch.
+        if let Err(kind) = check_state_preconditions(input, &handle, self.store.now_ms()) {
+            let reason = format!("PreconditionViolated{{kind: {kind}}}");
+            let refused = self.minter_ev().mint_effect(
+                "action.effect.refused",
+                events::refused_payload(&reason),
+                &effect_id,
+                &input.chain,
+            )?;
+            let rejected = tool_rejected(&self.minter_ev(), &reason)?;
+            self.store
+                .append(&self.run_id, lease, vec![refused, rejected])?;
+            return Ok(DispatchOutcome::Refused { reason });
+        }
 
         // ── 2b K4 lookup (§5b.4; R-2.3.4¹; ADR-0129 d.1) ──────────────────
         // The cache is consulted only *after* the monitor's allow is durable
@@ -1307,9 +1357,26 @@ impl<'a> Dispatcher<'a> {
             completeness,
             admission: admission.clone(),
         };
+        // Compute the local-check + declared-postcondition verdicts *before*
+        // minting `observed` — `postcondition_results[]` points at the
+        // deterministic verdict ids (`verdict:<check>:<effect_id>`;
+        // §5f `Effect.postcondition_results: [EventRef]` — S2.11). The rows
+        // land via `emit_verdicts` after the batch append.
+        let verdicts = self.local_verdicts(
+            input,
+            &report,
+            &class,
+            &diff,
+            outcome,
+            &raw_output,
+            &handle,
+            &effect_id,
+        );
+        let postcondition_results: Vec<String> =
+            verdicts.iter().map(|v| v.verdict_id.clone()).collect();
         let observed = self.minter_ev().mint_effect(
             "action.effect.observed",
-            events::observed_payload(attempt_no, lease.generation, &obs),
+            events::observed_payload(attempt_no, lease.generation, &obs, &postcondition_results),
             &effect_id,
             &input.chain,
         )?;
@@ -1376,23 +1443,14 @@ impl<'a> Dispatcher<'a> {
             lease,
         )?;
         self.emit_unattributed(&unattributed, lease)?;
-        // ── verification: the kernel local checks (a)–(c) ride every
-        // `observed` terminal (S1.21 — ADR-0111 D1/(e); AC-R-2.7.1-1:
-        // `detector = deterministic`, `inputs_digest`, `charged_to =
-        // subject`; the appended observation is never touched — I-V3;
-        // (d) `diff_sanity` is Stage 2). The `effect`/`tool_call` scopes
-        // closed with `observed`/`completed`, so the verdict rows scope
-        // to the still-open turn/model_call chain.
-        self.emit_local_verdicts(
-            lease,
-            input,
-            &report,
-            &class,
-            &diff,
-            outcome,
-            &raw_output,
-            &effect_id,
-        )?;
+        // ── verification: the kernel local checks (a)–(d) + declared
+        // postconditions ride every `observed` terminal (S1.21/S2.11 —
+        // ADR-0111 D1/(d)/(e); AC-R-2.7.1-1: `detector = deterministic`,
+        // `inputs_digest`, `charged_to = subject`; the appended observation
+        // is never touched — I-V3). The `effect`/`tool_call` scopes closed
+        // with `observed`/`completed`, so the verdict rows scope to the
+        // still-open turn/model_call chain.
+        self.emit_verdicts(&verdicts, lease, input)?;
         self.minter.expire(&effect_id, attempt_no);
         Ok(DispatchOutcome::Observed(Box::new(obs)))
     }
@@ -1497,7 +1555,10 @@ impl<'a> Dispatcher<'a> {
                 )?;
                 let observed = self.minter_ev().mint_effect(
                     "action.effect.observed",
-                    events::observed_payload(1, lease.generation, &obs),
+                    // A cache-hit `observed` runs no executor and no checks —
+                    // `postcondition_results` is empty (the recorded entry
+                    // carries the original run's verdict refs).
+                    events::observed_payload(1, lease.generation, &obs, &[]),
                     effect_id,
                     &input.chain,
                 )?;
@@ -1672,25 +1733,26 @@ impl<'a> Dispatcher<'a> {
         Ok(())
     }
 
-    /// The S1.21 local-check emission: run the kernel's built-in checks
-    /// (a)–(c) over the terminal capture and append
-    /// `verification.validator.invoked` + `verification.validator.verdict`
-    /// per applicable check (`phase = local`, `detector = deterministic`,
-    /// `charged_to = subject` — ADR-0111 D1). No applicable check ⇒ no rows
-    /// (a refused/never-captured terminal emits nothing — "exactly the
-    /// applicable" is the AC).
+    /// The S1.21/S2.11 local-check fold: build the `TerminalCapture` and run
+    /// the kernel's built-in checks (a)–(d) + the capability's declared
+    /// `postconditions[]` over it — **pure** (no store writes), so the caller
+    /// can stamp the verdict ids onto `action.effect.observed`'s
+    /// `postcondition_results[]` before the verdict rows land (the ids are
+    /// deterministic — `verdict:<check>:<effect_id>`). `handle` supplies the
+    /// sealed `Permission` scope facts for check (d) (kernel-derived, never
+    /// executor-reported).
     #[allow(clippy::too_many_arguments)]
-    fn emit_local_verdicts(
-        &mut self,
-        lease: &Lease,
+    fn local_verdicts(
+        &self,
         input: &DispatchInput,
         report: &TerminalReport,
         report_class: &ErrorClass,
         diff: &crate::snapshot::FsChangeSet,
         outcome: EffectOutcome,
         raw_output: &str,
+        handle: &crate::handle::EnvHandle,
         effect_id: &str,
-    ) -> Result<(), EnvError> {
+    ) -> Vec<hh_verification::validators::Verdict> {
         let cap = hh_verification::validators::TerminalCapture {
             effect_id: effect_id.to_string(),
             domain: Some(input.declared.domain),
@@ -1719,6 +1781,19 @@ impl<'a> Dispatcher<'a> {
                 hh_hir::records::Resources::Declared(keys) => keys.iter().cloned().collect(),
                 _ => Vec::new(),
             },
+            // (d) inputs — kernel-derived diff facts (`FsWrite` only; other
+            // domains carry no diff ⇒ the check does not apply).
+            diff_files: match input.declared.domain {
+                EffectDomain::FsWrite => Some(diff.entries().count() as u64),
+                _ => None,
+            },
+            diff_lines: None,
+            diff_bytes: None,
+            outside_scope: diff
+                .entries()
+                .filter(|(e, _)| !handle.roots.is_writable(&e.path_canonical))
+                .map(|(e, _)| e.path_canonical.clone())
+                .collect(),
         };
         let now = self.store.now_ms();
         let head = self
@@ -1727,20 +1802,52 @@ impl<'a> Dispatcher<'a> {
             .ok()
             .and_then(|evs| evs.last().map(|e| e.seq))
             .unwrap_or(0);
-        let verdicts = hh_verification::validators::run_local_checks(
+        let provenance = ProvenanceRecord::kernel(crate::events::COMPONENT, now);
+        let mut verdicts = hh_verification::validators::run_local_checks(
             &cap,
             &local_checks_ref(),
-            ProvenanceRecord::kernel(crate::events::COMPONENT, now),
+            self.diff_sanity.as_ref(),
+            provenance.clone(),
             head,
             now,
         );
+        // The declared `postconditions[]` (§5f — `Ref<Validator>` bound and
+        // run per applicable terminal; DF-S1.21-1's Stage-2 half): each ref
+        // resolves to a kernel built-in or yields an `inconclusive` verdict
+        // naming it (declared-but-unbound is reported, never skipped).
+        for pref in &input.capability.postconditions {
+            if let Some(v) = hh_verification::validators::run_declared_postcondition(
+                pref,
+                &cap,
+                self.diff_sanity.as_ref(),
+                provenance.clone(),
+                head,
+                now,
+            ) {
+                verdicts.push(v);
+            }
+        }
+        verdicts
+    }
+
+    /// Append `verification.validator.invoked` + `verification.validator.verdict`
+    /// per precomputed verdict (`phase = local`, `detector = deterministic`,
+    /// `charged_to = subject` — ADR-0111 D1). No verdicts ⇒ no rows (a
+    /// refused/never-captured terminal emits nothing — "exactly the
+    /// applicable" is the AC).
+    fn emit_verdicts(
+        &mut self,
+        verdicts: &[hh_verification::validators::Verdict],
+        lease: &Lease,
+        input: &DispatchInput,
+    ) -> Result<(), EnvError> {
         if verdicts.is_empty() {
             return Ok(());
         }
         let mut rows = Vec::with_capacity(verdicts.len() * 2);
         {
             let m = self.minter_ev();
-            for v in &verdicts {
+            for v in verdicts {
                 let mut invoked = m.mint(
                     "verification.validator.invoked",
                     hh_verification::events::validator_invoked(
@@ -1783,6 +1890,101 @@ impl<'a> Dispatcher<'a> {
             self.store.append(&self.run_id, lease, evs)?;
         }
         Ok(())
+    }
+
+    /// `expire_permission(permission_id, now)` — the `TimeoutPolicy[permission]`
+    /// terminal (§5e.2; ADR-0070 D3; S2.11): a durable
+    /// `security.permission.pending` whose `requested_at + timeout ≤ now`
+    /// resolves `security.permission.decided{decision: timed_out, decider:
+    /// policy}` → `action.effect.refused{permission_timed_out}` — a refusal
+    /// record, never `unknown`. The pending row's own scope supplies the
+    /// chain (the refusal closes the effect scope the ask opened); a landed
+    /// final `decided` stands (the exactly-one gate).
+    pub fn expire_permission(
+        &mut self,
+        permission_id: &str,
+        lease: &Lease,
+    ) -> Result<PermissionExpiry, EnvError> {
+        let now = self.store.now_ms();
+        let events = self.store.events(&self.run_id)?;
+        // The pending row for `permission_id` — its scope supplies the chain.
+        let pending = events.iter().find(|e| {
+            e.class == "security.permission.pending"
+                && e.payload.get("permission_id").and_then(Json::as_str) == Some(permission_id)
+        });
+        let Some(pending) = pending else {
+            return Ok(PermissionExpiry::NotFound {
+                permission_id: permission_id.to_string(),
+            });
+        };
+        // A landed final `decided` stands (exactly-one — `timed_out` never
+        // rewrites history). `ask` rows are non-final and don't gate.
+        let already = events.iter().any(|e| {
+            e.class == "security.permission.decided"
+                && e.payload.get("permission_id").and_then(Json::as_str) == Some(permission_id)
+                && e.payload.get("decision").and_then(Json::as_str) != Some("ask")
+        });
+        if already {
+            return Ok(PermissionExpiry::AlreadyDecided {
+                permission_id: permission_id.to_string(),
+            });
+        }
+        let requested_at = pending
+            .payload
+            .get("requested_at")
+            .and_then(Json::as_int)
+            .map(|t| t.max(0) as u64)
+            .unwrap_or(now);
+        let Some(timeout) = pending
+            .payload
+            .get("timeout")
+            .and_then(Json::as_int)
+            .map(|t| t.max(0) as u64)
+        else {
+            return Ok(PermissionExpiry::NoDeadline {
+                permission_id: permission_id.to_string(),
+            });
+        };
+        let deadline = requested_at.saturating_add(timeout);
+        if now < deadline {
+            return Ok(PermissionExpiry::NotElapsed {
+                permission_id: permission_id.to_string(),
+                remaining_ms: deadline - now,
+            });
+        }
+        let chain = ScopeChain {
+            turn_id: pending.scope.turn_id.clone().unwrap_or_default(),
+            model_call_id: pending.scope.model_call_id.clone().unwrap_or_default(),
+            tool_call_id: pending.scope.tool_call_id.clone().unwrap_or_default(),
+        };
+        let effect_id = pending.scope.effect_id.clone().unwrap_or_default();
+        let decided = self.minter_ev().mint(
+            "security.permission.decided",
+            Json::obj([
+                ("permission_id", Json::str(permission_id.to_string())),
+                ("decision", Json::str("timed_out")),
+                ("decider", Json::str("policy")),
+                ("decision_scope", Json::str("once")),
+                ("requested_at", Json::Int(requested_at as i64)),
+                (
+                    "wait_ms",
+                    Json::Int(now.saturating_sub(requested_at) as i64),
+                ),
+                ("reason", Json::str("timed_out")),
+                ("effect_id", Json::str(effect_id.clone())),
+            ]),
+        )?;
+        let refused = self.minter_ev().mint_effect(
+            "action.effect.refused",
+            events::refused_payload("permission_timed_out"),
+            &effect_id,
+            &chain,
+        )?;
+        self.store
+            .append(&self.run_id, lease, vec![decided, refused])?;
+        Ok(PermissionExpiry::Expired {
+            permission_id: permission_id.to_string(),
+        })
     }
 
     /// `probe(effect_id, attempt_no, executor, chain)` — a lapsed-window /
@@ -2050,4 +2252,78 @@ fn redact_item(
         kinds.extend(hits.iter().map(|h| h.detector));
     }
     kinds
+}
+
+/// `check_state_preconditions` — the E1 `state_requires`/`PreconditionDomain`
+/// evaluation the dispatcher runs at `prepare` (§5d.1; S2.11): each declared
+/// domain tag is checked against kernel-derived state — a domain the runtime
+/// cannot verify is `violated`, never silently passed. Returns the violated
+/// kind (`PreconditionViolated{kind}`) on the first failure, in declaration
+/// order (deterministic).
+fn check_state_preconditions(
+    input: &DispatchInput,
+    handle: &crate::handle::EnvHandle,
+    now: u64,
+) -> Result<(), &'static str> {
+    for d in &input.capability.preconditions {
+        match d {
+            // `network` — the environment admits no egress at this tier
+            // (R-NONET): a declared reachability precondition is
+            // unverifiable ⇒ violated (fail-closed).
+            hh_hir::kinds::PreconditionDomain::Network => return Err("network"),
+            // `filesystem` — every declared workspace/writable root must
+            // exist (the attach-time admission proved scope; `prepare`
+            // re-checks presence — a root that vanished since is `stale`).
+            hh_hir::kinds::PreconditionDomain::Filesystem => {
+                let missing = handle
+                    .roots
+                    .workspace_roots
+                    .iter()
+                    .chain(handle.roots.writable_roots.iter())
+                    .any(|r| !std::path::Path::new(r).exists());
+                if missing {
+                    return Err("filesystem");
+                }
+            }
+            // `credentials` — no secret provision is in the dispatch input:
+            // a declared credential precondition is unverifiable ⇒ violated.
+            hh_hir::kinds::PreconditionDomain::Credentials => return Err("credentials"),
+            // `environment` — `handle.verify_environment()` ran at dispatch
+            // entry (the handle would not be `ready` otherwise).
+            hh_hir::kinds::PreconditionDomain::Environment => {}
+            // `temporal` — the effective deadline must not already be past.
+            hh_hir::kinds::PreconditionDomain::Temporal => {
+                if input.ladder.expired(now) {
+                    return Err("temporal");
+                }
+            }
+            // `capability` — the depends-on edge is the `link` check point
+            // (compiler); re-checking is bind's `capability_requires`.
+            hh_hir::kinds::PreconditionDomain::Capability => {}
+        }
+    }
+    Ok(())
+}
+
+/// `PermissionExpiry` — the `expire_permission` outcome (typed, never a
+/// silent no-op).
+#[derive(Debug, Clone, PartialEq)]
+pub enum PermissionExpiry {
+    /// The pending timed out — `decided{timed_out}` + `refused` appended.
+    Expired { permission_id: String },
+    /// No pending row for the id (already resolved or never opened).
+    NotFound { permission_id: String },
+    /// The pending's window has not elapsed (`requested_at + timeout > now`).
+    NotElapsed {
+        /// The request id.
+        permission_id: String,
+        /// The remaining ms.
+        remaining_ms: u64,
+    },
+    /// A final `decided` row already covers the id (the exactly-one gate —
+    /// a `timed_out` never rewrites a landed decision).
+    AlreadyDecided { permission_id: String },
+    /// The pending carries no `timeout` member (attended `deadline none` —
+    /// nothing to expire).
+    NoDeadline { permission_id: String },
 }
