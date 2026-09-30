@@ -227,6 +227,38 @@ pub fn view_kinds_for(permission: &PermissionRecord) -> BTreeSet<String> {
     kinds
 }
 
+/// `stamp_json`'s mirror for contract-codec consumers (S4.16b's
+/// `memory_store` binding): a session channel that hands outputs to a strict
+/// codec first removes the V1 stamp members — `{origin, authority, taint}` —
+/// the host injected, and unwraps the `{"value": …}` box the stamper puts
+/// around non-object payloads. This is *not* a semantic edit — the stamp is
+/// host-side provenance, and the codec's own provenance/authority members
+/// ride inside the document untouched. Only call it at the kernel-side
+/// boundary where the stamp's consumers (audit/label joins) have already
+/// read it — never to erase provenance a downstream check still needs.
+pub fn unstamp_json(doc: &Json) -> Json {
+    const STAMP: [&str; 3] = ["origin", "authority", "taint"];
+    let Json::Obj(m) = doc else {
+        return doc.clone();
+    };
+    if !STAMP.iter().all(|k| m.contains_key(*k)) {
+        return doc.clone();
+    }
+    if let Some(v) = m.get("value") {
+        // The `{"value": …}` box only wraps non-object payloads — a stamped
+        // document that already carried `value` keeps it by the closed-shape
+        // rule (the codec decides whether `value` is a legal member).
+        if m.len() == STAMP.len() + 1 {
+            return v.clone();
+        }
+    }
+    let mut m = m.clone();
+    for k in STAMP {
+        m.remove(k);
+    }
+    Json::Obj(m)
+}
+
 /// The stamped-output provenance for plugin data crossing inward (V1's
 /// stamping half — `origin = tool(extension_ref)`, `authority ≤ external`,
 /// `taint ∋ extension_id`; the host applies it to every result document it

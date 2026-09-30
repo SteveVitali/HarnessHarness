@@ -15,6 +15,7 @@
 //! - [`errors`] — the typed failure sum; the closed E-1 refusal set renders
 //!   verbatim, never a warning (T-LCD-14, CC9).
 
+pub mod boundary;
 pub mod docs;
 pub mod engine;
 pub mod errors;

@@ -30,5 +30,6 @@ pub mod ownership;
 pub mod recovery;
 pub mod result;
 pub mod spawn;
+pub mod task;
 
 pub use types::*;

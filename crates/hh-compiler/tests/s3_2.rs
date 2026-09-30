@@ -845,6 +845,7 @@ fn ac_r_2_4_5_4_two_profiles_two_targets() {
         proc,
         hh_hir::procedure::CompilationTarget::Instruction,
         Some("profile:minimal-patch"),
+        None,
     )
     .unwrap();
     let p2 = hh_compiler::plan::lower_procedure(
@@ -852,6 +853,7 @@ fn ac_r_2_4_5_4_two_profiles_two_targets() {
         proc,
         hh_hir::procedure::CompilationTarget::Instruction,
         Some("profile:minimal-string-replace"),
+        None,
     )
     .unwrap();
     let (
@@ -884,6 +886,7 @@ fn ac_r_2_4_5_4_two_profiles_two_targets() {
         &sealed.document,
         proc,
         hh_hir::procedure::CompilationTarget::WorkflowNode,
+        None,
         None,
     )
     .unwrap();
@@ -928,6 +931,7 @@ fn ac_r_2_4_5_4_subagent_target_never_falls_back() {
             &sealed.document,
             proc,
             hh_hir::procedure::CompilationTarget::SubagentTask,
+            None,
             None,
         ),
         Err(hh_compiler::errors::CompileError::PlanError { .. })
@@ -984,4 +988,127 @@ fn ac_r_2_4_1_13_relower_drops_stale_signature_and_keeps_plan() {
             .any(|d| d.get("kind").and_then(Json::as_str) == Some("stale_signature"))),
         other => panic!("dropped_items must be an array, got {other:?}"),
     }
+}
+
+/// AC-R-2.4.5-8 (§5c.5; S4.16b) — `subagent_task` is a Stage-4 target:
+/// `select_target` admits it under `I(P)` ∧ `subagents_bound` ∧
+/// `profile_declares_subagents` (rule iii) and on a feasible override
+/// (rule i); `DelegationUnavailable` stays the honest refusal when the
+/// demanded path cannot bind; `lower_procedure` emits the `delegate` node
+/// whose `spec` is the canonical `SubagentSpec` document the kernel `spawn`
+/// consumes (the spec schema is `hh-subagent`'s — the compiler carries it
+/// as data, so the test carries a marker JSON, not a second encoding).
+#[test]
+fn ac_r_2_4_5_8_subagent_target_selects_and_lowers() {
+    use hh_compiler::plan::{PlanNodePayload, SubagentTaskSpec};
+    use hh_hir::procedure::{CompilationTarget, SelectCtx, SelectError};
+    use hh_hir::refs::Ref;
+    let (_store, sealed, _v) = sealed_doc_with("s458a", reference_doc(unbound()), vec![], vec![]);
+    let proc = sealed
+        .document
+        .nodes
+        .iter()
+        .find(|n| n.semantic_id() == "test:proc")
+        .unwrap();
+    let empty_index = std::collections::BTreeMap::new();
+    let sub_ctx = SelectCtx {
+        subagents_bound: true,
+        profile_declares_subagents: true,
+        ..Default::default()
+    };
+
+    // Rule (iii) — I(P) ∧ bound ∧ declared selects `subagent_task`.
+    let d = hh_hir::procedure::select_target(proc, None, &sub_ctx, &empty_index).unwrap();
+    assert_eq!(d.target, CompilationTarget::SubagentTask);
+    assert!(d.i, "the I(P) predicate drove the choice");
+
+    // No binding/declaration → rule (iv) falls through to `instruction`
+    // (the path exists in the closed sum but nothing demands it).
+    let d2 =
+        hh_hir::procedure::select_target(proc, None, &SelectCtx::default(), &empty_index).unwrap();
+    assert_eq!(d2.target, CompilationTarget::Instruction);
+
+    // A demanded `subagent_task` override refuses `DelegationUnavailable`
+    // when the path cannot bind — never a silent instruction fallback.
+    let override_profile = hh_hir::procedure::ProcedureProfile {
+        target_override: Some(hh_hir::records::CompileHint::SubagentTask),
+        ..Default::default()
+    };
+    assert!(matches!(
+        hh_hir::procedure::select_target(
+            proc,
+            Some(&override_profile),
+            &SelectCtx::default(),
+            &empty_index,
+        ),
+        Err(SelectError::DelegationUnavailable { .. })
+    ));
+    // …and selects when it can bind.
+    let d3 =
+        hh_hir::procedure::select_target(proc, Some(&override_profile), &sub_ctx, &empty_index)
+            .unwrap();
+    assert_eq!(d3.target, CompilationTarget::SubagentTask);
+
+    // lower_procedure — the DelegateSpec node (AC-R-2.4.5-8's compile-time
+    // product): `delegate{spec, budget, permission}` carrying the spec JSON
+    // verbatim, with pinned refs and the procedure's trace coordinates.
+    let spec_json = Json::obj([
+        ("process", Json::obj([("kind", Json::str("native"))])),
+        ("isolation", Json::obj([("context", Json::str("fresh"))])),
+    ]);
+    let product = hh_compiler::plan::lower_procedure(
+        &sealed.document,
+        proc,
+        CompilationTarget::SubagentTask,
+        None,
+        Some(&SubagentTaskSpec {
+            spec: spec_json.clone(),
+            budget: Ref::pinned("budget:child", "v1"),
+            permission: Ref::pinned("perm:delegated", "v1"),
+        }),
+    )
+    .unwrap();
+    let hh_compiler::plan::ProcedureProduct::SubagentTask { node } = product else {
+        panic!("subagent product")
+    };
+    assert_eq!(node.hir_node_id, "test:proc", "trace coordinate preserved");
+    let PlanNodePayload::Delegate(dn) = &node.payload else {
+        panic!("delegate payload")
+    };
+    assert_eq!(
+        dn.spec, spec_json,
+        "the spec document travels verbatim (CC7)"
+    );
+    assert_eq!(dn.budget.semantic_id, "budget:child");
+    assert_eq!(dn.permission.semantic_id, "perm:delegated");
+
+    // A demanded `subagent_task` without its DelegateSpec refuses
+    // `PlanError` — never a silent instruction fallback.
+    assert!(matches!(
+        hh_compiler::plan::lower_procedure(
+            &sealed.document,
+            proc,
+            CompilationTarget::SubagentTask,
+            None,
+            None,
+        ),
+        Err(CompileError::PlanError { .. })
+    ));
+
+    // Unpinned delegate refs refuse — the plan never carries a selector
+    // (the stage-1 pin obligation is checked, not assumed).
+    assert!(matches!(
+        hh_compiler::plan::lower_procedure(
+            &sealed.document,
+            proc,
+            CompilationTarget::SubagentTask,
+            None,
+            Some(&SubagentTaskSpec {
+                spec: spec_json.clone(),
+                budget: sel("budget:child"),
+                permission: Ref::pinned("perm:delegated", "v1"),
+            }),
+        ),
+        Err(CompileError::PlanError { .. })
+    ));
 }

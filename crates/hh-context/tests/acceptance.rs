@@ -1446,7 +1446,8 @@ fn filter_for_slot_is_the_attested_order() {
         version_id: "v1".into(),
         authority: AuthorityClass::Unverified, // below floor
         readers: ReaderSet::Restricted(BTreeSet::new()), // admits nobody
-        state: LifecycleStateKind::Revoked,    // not admitted
+        scope: hh_provenance::PersistenceScope::Run,
+        state: LifecycleStateKind::Revoked, // not admitted
         stale_since: None,
         conflict_set_ref: None,
     }];
@@ -1458,6 +1459,7 @@ fn filter_for_slot_is_the_attested_order() {
         ResolveMode::Execute,
         0,
         &BTreeMap::<String, ConflictSet>::new(),
+        None,
     );
     assert_eq!(out.withheld.len(), 1);
     assert_eq!(out.withheld[0].reason, "validity");

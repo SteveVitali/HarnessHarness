@@ -688,3 +688,115 @@ fn coordination_topology_v1_registers_and_expands() {
     assert_eq!(plan.cells.len(), 16 * 2);
     assert_eq!(plan.run_plans.len(), 16 * 2 * EXEMPLAR_REPLICATES as usize);
 }
+
+// ── lab/compaction-boundary-v1 (AC-R-2.4.2-12; ADR-0077 d7; S4.16b) ─────────
+
+fn boundary_pins() -> CompactionBoundaryPins {
+    CompactionBoundaryPins {
+        proposal_variant_ref: pinned("variant.summarize_rolling"),
+        model_level_ref: pinned("model.fixed"),
+        environment_level_ref: pinned("env.tb2"),
+        artifacts: (
+            Ref::new("definition:compaction", pinned("artifact.applied")),
+            Ref::new("definition:compaction", pinned("artifact.withheld")),
+        ),
+    }
+}
+
+#[test]
+fn compaction_boundary_v1_registers_and_stamps_fork_snapshot() {
+    let spec = compaction_boundary_v1(&pins(), &boundary_pins(), 1);
+    // The document shape (ADR-0077 d7): paired on `compaction_proposal`,
+    // `environment_derivation = fork_snapshot`, `boundary_turns = 5`.
+    assert_eq!(spec.design.id, "lab/compaction-boundary-v1");
+    assert_eq!(spec.design.kind, DesignKind::Paired);
+    assert_eq!(spec.arms.len(), 2);
+    assert_eq!(
+        spec.ext
+            .get("environment_derivation")
+            .and_then(|v| v.as_str()),
+        Some("fork_snapshot")
+    );
+    assert_eq!(
+        spec.ext.get("boundary_turns").and_then(|v| v.as_int()),
+        Some(5)
+    );
+    spec.register(&ctx()).unwrap();
+    assert_eq!(
+        spec.experiment_id,
+        compaction_boundary_v1(&pins(), &boundary_pins(), 1).experiment_id
+    );
+    // The spec round-trips byte-equal (the ext members are dialect).
+    let decoded = ExperimentSpec::from_json(&spec.to_json()).unwrap();
+    assert_eq!(decoded, spec);
+
+    let t = tasks(4);
+    let plan = expand(&spec, &t, &expand_ctx()).unwrap();
+    // Every run plan carries `fork_snapshot` — the companion's task
+    // coordinates are `fork_by_reference` cuts at `compaction.started`.
+    assert!(plan.run_plans.iter().all(
+        |p| p.environment_derivation == hh_lab::experiment::EnvironmentDerivation::ForkSnapshot
+    ));
+    // An unmarked spec still expands to `fresh_from_image` (the C0 default
+    // is never re-keyed by the marker's absence).
+    let plain = compaction_family_v1(&pins(), &compaction_pins(), 1);
+    let plan2 = expand(&plain, &t, &expand_ctx()).unwrap();
+    assert!(plan2
+        .run_plans
+        .iter()
+        .all(|p| p.environment_derivation
+            == hh_lab::experiment::EnvironmentDerivation::FreshFromImage));
+    // An unknown spelling is a typed schema refusal, never a silent default.
+    let mut bad = spec.clone();
+    bad.ext.insert(
+        "environment_derivation".to_string(),
+        hh_wire::json::Json::str("borrowed_vm"),
+    );
+    assert!(matches!(
+        expand(&bad, &t, &expand_ctx()),
+        Err(hh_lab::expand::ExpandError::Refusal(
+            ExperimentRefusal::Schema(_)
+        ))
+    ));
+}
+
+#[test]
+fn summary_fidelity_judged_is_instrument_charged_and_never_headline() {
+    let m = summary_fidelity_judged();
+    m.validate().expect("the declaration is well-formed");
+    assert_eq!(m.name, "grounding.summary_fidelity_judged");
+    // ADR-0077 d4: judged fidelity is instrument-charged and never a
+    // headline metric.
+    assert_eq!(m.charged_to, hh_ontology::eval::ChargedTo::Instrument);
+    assert!(!m.headline);
+    // `detector = judged`, `oracle = judge` (ADR-0047) — no deterministic
+    // path may produce the value.
+    use hh_ontology::compliance::Detector;
+    use hh_ontology::eval::OracleClass;
+    assert_eq!(
+        m.detector_classes_allowed,
+        [Detector::Judged].into_iter().collect()
+    );
+    assert_eq!(
+        m.oracle_classes_allowed,
+        [OracleClass::Judge].into_iter().collect()
+    );
+    // Judged stages require `model_io`; native rows only (hosted rows read
+    // `n/a{class}` — ADR-0075 d9).
+    use hh_ontology::participant::Observability;
+    assert!(m.requires_observability.contains(&Observability::ModelIo));
+    assert_eq!(
+        m.applies_to_classes,
+        [hh_ontology::participant::ParticipantClass::Native]
+            .into_iter()
+            .collect()
+    );
+    // A judged value never enters the headline — flipping `headline` is a
+    // typed `HeadlineAdmitsNonDeterministic`, not a warning (AC-R-2.9.2-13).
+    let mut bad = m.clone();
+    bad.headline = true;
+    assert!(matches!(
+        bad.validate(),
+        Err(hh_ontology::compliance::MetricError::HeadlineAdmitsNonDeterministic { .. })
+    ));
+}

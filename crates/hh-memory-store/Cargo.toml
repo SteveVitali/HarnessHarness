@@ -1,0 +1,18 @@
+[package]
+name = "hh-memory-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The packaged `memory_store` variant (§5c.3, R-2.4.3¹; ADR-0078 d2/0080; ticket S4.16b) — a deterministic `MemoryStore` served out of process under `plugin_abi/1` via the shared plugin-side runtime in hh-plugin-fixture. Every op of the `MemoryStorePort` surface (`{put, bind, revoke, resolve, manifest, enumerate, stale_candidates, reads_of, writes_by, record_read, set_stamp, set_validator_verdict, mark_scope_ended, publish_replacement}` plus the contract's read/lease accessors) dispatches through the ONE canonical codec in `hh_context::memory_abi` (CC7 — no second spelling); domain refusals ride inside outputs as the typed refusal envelope, ABI-level `AbiError`s stay at the channel. Packaged at `plugins/hh-memory-store`."
+
+[[bin]]
+name = "hh-memory-store"
+path = "src/main.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+hh-plugin-fixture = { path = "../hh-plugin-fixture" }
+hh-varhost = { path = "../hh-varhost" }
+hh-context = { path = "../hh-context" }

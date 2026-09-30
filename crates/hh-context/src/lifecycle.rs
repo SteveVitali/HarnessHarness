@@ -100,6 +100,20 @@ pub fn check_contract(
     let mut fired = Vec::new();
     if let Some(stamp_fn) = env.current_stamp {
         for d in &contract.dependencies {
+            // `external_resource{validator_ref}` (C2): the kernel stamp
+            // table cannot answer an external resource — the declared
+            // `Validator`'s last verdict gates the dep. A missing verdict
+            // fires (fail closed — `unknown`, never a pass).
+            if d.kind == DependencyKind::ExternalResource {
+                let ok = match (&d.validator_ref, env.validator_verdict) {
+                    (Some(vr), Some(vf)) => vf(&d.ref_, vr) == Some(true),
+                    _ => false,
+                };
+                if !ok {
+                    fired.push(d.clone());
+                }
+                continue;
+            }
             match stamp_fn(d) {
                 Some(s) if s == d.stamp => {}
                 _ => fired.push(d.clone()),
@@ -273,12 +287,28 @@ fn state_inner(
     }
     // stale_by_dependency — J1: transitive over justifications (kind ≠
     // declared_input) and contract dependencies of kind `memory_version`.
+    // `MemoryPolicy.justification_scope = subject_overlap` (C2) narrows the
+    // propagation: only justifications whose target version shares this
+    // version's `subject_key` count (the measured narrowing — `delivered`
+    // is the default; `declared_only` is never admissible, ADR-0083 d4).
+    let subject_overlap =
+        store.policy.justification_scope == crate::memory::JustificationScope::SubjectOverlap;
     let mut stale_inputs = Vec::new();
     for j in &v.justifications {
         if j.kind == crate::memory::JustificationKind::DeclaredInput {
             continue;
         }
         let dep = j.ref_.version_id.clone();
+        if subject_overlap {
+            let same_subject = store
+                .version(&dep)
+                .and_then(|dv| dv.subject_key.clone())
+                .zip(v.subject_key.clone())
+                .is_some_and(|(a, b)| a == b);
+            if !same_subject {
+                continue;
+            }
+        }
         let st = state_inner(store, &dep, at, visited);
         if matches!(
             st.kind(),
@@ -345,7 +375,7 @@ pub fn item_lifecycle_state(v: &hh_hir::records::Validity, at: u64) -> Lifecycle
 
 /// `FilterItem` — the projection `filter_for_slot` consumes: the caller
 /// computes `lifecycle_state` per item and hands `(version_id, authority,
-/// readers, state_kind, conflict_set_ref, created_at, stale_since_seq)`.
+/// readers, scope, state_kind, conflict_set_ref, created_at, stale_since_seq)`.
 #[derive(Debug, Clone)]
 pub struct FilterItem {
     /// The version id.
@@ -354,6 +384,10 @@ pub struct FilterItem {
     pub authority: hh_provenance::AuthorityClass,
     /// The item's readers.
     pub readers: ReaderSet,
+    /// The item's persistence scope — the C2 readers rule needs it: for
+    /// scopes ≥ `user` a missing or empty reader set denies (§5c.4;
+    /// ADR-0081 (e); ADR-0054).
+    pub scope: PersistenceScope,
     /// The lifecycle state kind at `at`.
     pub state: LifecycleStateKind,
     /// `stale_by_dependency` since seq (for `max_stale`).
@@ -405,6 +439,7 @@ pub fn filter_for_slot(
     mode: hh_identity::names::ResolveMode,
     at: u64,
     conflicts: &BTreeMap<String, ConflictSet>,
+    readers_required: Option<&ReaderSet>,
 ) -> FilterOutcome {
     use hh_identity::names::ResolveMode;
     let mut out = FilterOutcome::default();
@@ -442,8 +477,21 @@ pub fn filter_for_slot(
             });
             continue;
         }
-        // readers
-        if !it.readers.admits(reader) {
+        // readers — `reader ∈ readers(item)`; the C2 slot-boundary rules:
+        // (i) for scopes ≥ `user` a missing (`Public`) or empty reader set
+        // denies — a durable memory must name its readers (§5c.4;
+        // ADR-0054); (ii) the slot's `readers_required` is a coverage floor —
+        // the item's readers must admit the required set (never a widen —
+        // a `Public` slot floor admits everything).
+        let readers_missing = match &it.readers {
+            ReaderSet::Public => true,
+            ReaderSet::Restricted(s) => s.is_empty(),
+        };
+        let durable_scope = it.scope <= PersistenceScope::User;
+        if !it.readers.admits(reader)
+            || (durable_scope && readers_missing)
+            || readers_required.is_some_and(|r| !it.readers.is_superset_of(r))
+        {
             out.withheld.push(Withheld {
                 version_id: it.version_id.clone(),
                 state: it.state,

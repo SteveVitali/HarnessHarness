@@ -33,11 +33,12 @@ cargo build -p hh-env --no-default-features
 cargo test -p hh-ledger --no-default-features --test durable_execution removability0
 
 echo "== removability(extension): no base crate depends on the variant host =="
-# S2.2 (§8.4 removability tiers): hh-varhost, hh-plugin-fixture and
-# hh-compact-evict-oldest are the extension tier — removable without
-# breaking the base class contracts. The check: no *other* workspace crate
-# names them as a normal dependency (dev-dependency edges don't ship).
-EXT="hh-varhost hh-plugin-fixture hh-compact-evict-oldest"
+# S2.2 (§8.4 removability tiers): hh-varhost, hh-plugin-fixture and the
+# packaged plugin binaries (hh-compact-evict-oldest; S4.16b's hh-memory-store)
+# are the extension tier — removable without breaking the base class
+# contracts. The check: no *other* workspace crate names them as a normal
+# dependency (dev-dependency edges don't ship).
+EXT="hh-varhost hh-plugin-fixture hh-compact-evict-oldest hh-memory-store"
 cargo metadata --format-version 1 --no-deps | python3 -c "
 import json,sys
 ext=set(sys.argv[1].split())

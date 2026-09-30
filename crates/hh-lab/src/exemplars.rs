@@ -2882,3 +2882,219 @@ pub fn approval_mode_v1(
     spec.experiment_id = spec.experiment_id();
     spec
 }
+
+// ── lab/compaction-boundary-v1 (ADR-0077 d7; AC-R-2.4.2-12; S4.16b) ─────────
+
+/// The level pins `lab/compaction-boundary-v1` binds, beyond
+/// [`ExemplarPins`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompactionBoundaryPins {
+    /// The compaction-strategy variant under test (the proposal source —
+    /// e.g. the `summarize_rolling` variant ref).
+    pub proposal_variant_ref: String,
+    /// The single model level ref (roles fixed incl. `summarizer_profile`).
+    pub model_level_ref: String,
+    /// The single environment level ref.
+    pub environment_level_ref: String,
+    /// The sealed artifact each arm binds — `(applied, withheld)` order.
+    pub artifacts: (Ref, Ref),
+}
+
+/// `lab/compaction-boundary-v1` — the boundary companion (ADR-0077 d7;
+/// AC-R-2.4.2-12): `comparative`, `paired` on `compaction_proposal ∈
+/// {applied, withheld}` at `component-level`, one model level, one
+/// environment level; task coordinates are `fork_by_reference` cuts at
+/// each `context.compaction.started` (the `environment_derivation =
+/// fork_snapshot` ext marker drives the `RunPlan` member at expand);
+/// `eval_budget` on `turns = 5` (`ext.boundary_turns`); the matched
+/// `MatchSpec` is the family's — paired rows join on `forked_from`.
+pub fn compaction_boundary_v1(
+    pins: &ExemplarPins,
+    own: &CompactionBoundaryPins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "H0 — applying the proposal at the boundary is non-inferior to          withholding it on capability.task_success over the k = 5 continued          turns at matched budget (ADR-0077 d7)",
+        &[
+            "capability.task_success",
+            "grounding.reacquisition_rate",
+            "efficiency.compaction_overhead_share",
+        ],
+        &[],
+        pins,
+    );
+    let mut ext = BTreeMap::new();
+    // The task-coordinate + derivation markers the expand/engine boundary
+    // reads (dialect-level members, never schema guests):
+    // `environment_derivation = fork_snapshot` stamps every `RunPlan`;
+    // `boundary_turns = 5` is the companion's continuation length.
+    ext.insert(
+        "environment_derivation".to_string(),
+        hh_wire::json::Json::str("fork_snapshot"),
+    );
+    ext.insert("boundary_turns".to_string(), hh_wire::json::Json::Int(5));
+    // The optional C1 judged-fidelity row the companion may emit
+    // (`grounding.summary_fidelity_judged` — `detector = judged`,
+    // `charged_to = instrument`, never headline; a hosted row reads
+    // `n/a{class}`). Declared as a dialect-level member — never a primary
+    // metric (the prereg's list is headline-only).
+    ext.insert(
+        "optional_metrics".to_string(),
+        hh_wire::json::Json::Arr(vec![hh_wire::json::Json::str(
+            "grounding.summary_fidelity_judged",
+        )]),
+    );
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/compaction-boundary-v1".to_string(),
+            kind: DesignKind::Paired,
+            factors: vec![
+                FactorDeclaration {
+                    name: "compaction_proposal".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: vec![
+                        decl_level("applied", &own.proposal_variant_ref, "proposal applied"),
+                        decl_level("withheld", &own.proposal_variant_ref, "proposal withheld"),
+                    ],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "model_snapshot".to_string(),
+                    kind: FactorKind::ModelSnapshot,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "model:fixed",
+                        &own.model_level_ref,
+                        "fixed model",
+                    )],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "environment".to_string(),
+                    kind: FactorKind::Environment,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "env:fixed",
+                        &own.environment_level_ref,
+                        "fixed environment",
+                    )],
+                    role: None,
+                },
+            ],
+            blocking: vec!["fork_point".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: vec![
+            FactorSpec {
+                name: "compaction_proposal".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: vec![
+                    level("applied", &own.proposal_variant_ref, "proposal applied"),
+                    level("withheld", &own.proposal_variant_ref, "proposal withheld"),
+                ],
+            },
+            FactorSpec {
+                name: "model_snapshot".to_string(),
+                kind: FactorKind::ModelSnapshot,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level("model:fixed", &own.model_level_ref, "fixed model")],
+            },
+            FactorSpec {
+                name: "environment".to_string(),
+                kind: FactorKind::Environment,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level(
+                    "env:fixed",
+                    &own.environment_level_ref,
+                    "fixed environment",
+                )],
+            },
+        ],
+        arms: vec![
+            arm(
+                "arm:applied",
+                "applied does at least as well",
+                &[("compaction_proposal", "applied")],
+                compaction_match(),
+                &own.artifacts.0,
+                pins,
+            ),
+            arm(
+                "arm:withheld",
+                "withheld baseline",
+                &[("compaction_proposal", "withheld")],
+                compaction_match(),
+                &own.artifacts.1,
+                pins,
+            ),
+        ],
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.compaction-boundary-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/compaction-boundary-v1".to_string(),
+        },
+        ext,
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}
+
+/// `grounding.summary_fidelity_judged` — the optional C1 judged-fidelity
+/// `MetricDeclaration` (ADR-0077 d4; `headline = false`,
+/// `charged_to = instrument`, `detector = judged`, `oracle = judge`,
+/// `requires_observability ⊇ {model_io}` — a judged stage reads model
+/// I/O). The judge's calibration and independence are ADR-0047's `Validator
+/// {kind: judge}` declaration, not this record's members. `applies_to`
+/// `native` only — a hosted row renders `n/a{class}` (ADR-0075 d9;
+/// T-LCD-15).
+pub fn summary_fidelity_judged() -> hh_ontology::compliance::MetricDeclaration {
+    use hh_ontology::compliance::{Detector, MetricDeclaration};
+    use hh_ontology::eval::{ChargedTo, Dimension, MetricLevel, MetricValueType, OracleClass};
+    use hh_ontology::participant::{Granularity, Observability};
+    MetricDeclaration {
+        name: "grounding.summary_fidelity_judged".to_string(),
+        dimension: Dimension::Grounding,
+        level: MetricLevel::Run,
+        value_type: MetricValueType::Decimal,
+        direction: hh_ontology::eval::Direction::Higher,
+        unit: "ppm".to_string(),
+        requires_observability: [Observability::ModelIo, Observability::Ledger]
+            .into_iter()
+            .collect(),
+        applies_to_classes: [ParticipantClass::Native].into_iter().collect(),
+        detector_classes_allowed: [Detector::Judged].into_iter().collect(),
+        oracle_classes_allowed: [OracleClass::Judge].into_iter().collect(),
+        admissible_granularities: [Granularity::ComponentLevel].into_iter().collect(),
+        charged_to: ChargedTo::Instrument,
+        headline: false,
+        ..MetricDeclaration::default()
+    }
+}

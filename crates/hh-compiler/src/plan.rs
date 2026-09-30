@@ -672,9 +672,9 @@ pub fn lower_native(linked: &LinkedGraph) -> Result<RuntimePlan, CompileError> {
 /// The `lower_procedure(P, target, profile)` product (§5c.5): `instruction`
 /// renders the body as text (the `procedure_body` context artefact);
 /// `workflow_node` lowers the steps onto the closed `RuntimePlan/1` node set;
-/// `subagent_task` is refused `DelegationUnavailable` before Stage 4 (the
-/// refusal is `select_target`'s — this function only accepts an admitted
-/// target).
+/// `subagent_task` produces the `DelegateSpec` — one `delegate` plan node
+/// whose `spec` is the canonical `SubagentSpec` document the kernel `spawn`
+/// consumes (Stage 4; AC-R-2.4.5-8).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProcedureProduct {
     /// `instruction` — the rendered body text (a `Text` leaf's content).
@@ -688,12 +688,41 @@ pub enum ProcedureProduct {
         /// The control nodes the body lowers to.
         nodes: Vec<PlanNode>,
     },
+    /// `subagent_task` — the `delegate{spec, budget, permission}` node:
+    /// `spec` is the assembled `SubagentSpec` canonical document (the schema
+    /// is `hh-subagent`'s — the compiler carries it as data, CC7); `budget`
+    /// is the child sub-budget (≤ parent — `spawn` enforces through
+    /// `allocate`/`delegate`); `permission` is the delegated permission ref
+    /// (grants ⊆ `allowed_capabilities` — Π's attenuation at `spawn`).
+    SubagentTask {
+        /// The delegate node carrying the spec.
+        node: PlanNode,
+    },
 }
 
-/// `lower_procedure(P, target, profile)` (§5c.5 row; AC-R-2.4.5-4). The
-/// target is a `select_target` verdict — `SubagentTask` refuses
-/// `PlanError{unsupported_construct}` (never a silent instruction
-/// fallback). `instruction` renders through the profile's
+/// The caller-supplied members of the `subagent_task` lowering (§5c.5;
+/// AC-R-2.4.5-8): the assembled `SubagentSpec` document plus the delegate
+/// node's `budget`/`permission` refs. The procedure's own lowering owns
+/// none of these — the *constructor* (hh-subagent's `spec_for_procedure`)
+/// assembles the spec from `P` + bound parameters; this record is what the
+/// plan stamps `hir_node_id`/trace onto.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SubagentTaskSpec {
+    /// The canonical `SubagentSpec` document (`hh_subagent::SubagentSpec`'s
+    /// `to_json` shape — the one schema source).
+    pub spec: Json,
+    /// The child sub-budget ref (must be `≤` the parent's — `spawn`'s
+    /// `delegate`/`allocate` enforce; the compiler pins it).
+    pub budget: Ref,
+    /// The delegated `Permission` ref (the permission covering
+    /// `allowed_capabilities` — Π attenuates at spawn).
+    pub permission: Ref,
+}
+
+/// `lower_procedure(P, target, profile, subagent)` (§5c.5 row;
+/// AC-R-2.4.5-4). The target is a `select_target` verdict — `SubagentTask`
+/// without its `SubagentTaskSpec` input refuses `PlanError` (never a silent
+/// instruction fallback). `instruction` renders through the profile's
 /// `procedure_render` member (`render_prefix`, profile-owned — the only
 /// field the AC allows to differ across profiles).
 pub fn lower_procedure(
@@ -701,6 +730,7 @@ pub fn lower_procedure(
     proc: &Node,
     target: hh_hir::procedure::CompilationTarget,
     procedure_render_prefix: Option<&str>,
+    subagent: Option<&SubagentTaskSpec>,
 ) -> Result<ProcedureProduct, CompileError> {
     let KindRecord::Procedure(rec) = &proc.semantic else {
         return Err(CompileError::PlanError {
@@ -749,10 +779,41 @@ pub fn lower_procedure(
             })
         }
         hh_hir::procedure::CompilationTarget::SubagentTask => {
-            Err(CompileError::PlanError {
+            let Some(spec) = subagent else {
+                return Err(CompileError::PlanError {
+                    node: proc.semantic_id(),
+                    detail: "subagent_task requires a SubagentTaskSpec — the \
+                             DelegateSpec the spawn consumes; lower_procedure \
+                             never falls back to instruction"
+                        .into(),
+                });
+            };
+            let budget = pinned_ref(&spec.budget).ok_or_else(|| CompileError::PlanError {
                 node: proc.semantic_id(),
-                detail: "subagent_task is DelegationUnavailable before Stage 4                          — select_target refused it; lower_procedure never falls back"
-                    .into(),
+                detail: format!(
+                    "subagent_task budget ref {} is not pinned post-link",
+                    spec.budget.semantic_id
+                ),
+            })?;
+            let permission =
+                pinned_ref(&spec.permission).ok_or_else(|| CompileError::PlanError {
+                    node: proc.semantic_id(),
+                    detail: format!(
+                        "subagent_task permission ref {} is not pinned post-link",
+                        spec.permission.semantic_id
+                    ),
+                })?;
+            Ok(ProcedureProduct::SubagentTask {
+                node: PlanNode {
+                    node_id: "n0".to_string(),
+                    hir_node_id: proc.semantic_id(),
+                    hir_version_id: proc.version_id(),
+                    payload: PlanNodePayload::Delegate(DelegateNode {
+                        spec: spec.spec.clone(),
+                        budget,
+                        permission,
+                    }),
+                },
             })
         }
     }

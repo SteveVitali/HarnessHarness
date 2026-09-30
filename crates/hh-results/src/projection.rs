@@ -79,6 +79,7 @@ pub fn project_row(
     let mut metrics: BTreeMap<String, Vec<(u64, MetricValue, Vec<String>)>> = BTreeMap::new();
     let mut checkpoint_ref: Option<String> = None;
     let mut discontinuities: Vec<Json> = Vec::new();
+    let mut catalog_epochs: Vec<Json> = Vec::new();
     let mut experiment_id_from_bound: Option<String> = None;
 
     for e in &events {
@@ -129,6 +130,15 @@ pub fn project_row(
                 if let Some(id) = e.payload.get("experiment_id").and_then(Json::as_str) {
                     experiment_id_from_bound = Some(id.to_string());
                 }
+            }
+            // §5d.3 §2 / ADR-0095 D2 + ADR-0161 D5 (OQ-239): a mid-run
+            // catalog `adopt` lands `action.tool.catalog.epoch` rows on the
+            // ledger; the row folds them into
+            // `annotations_from_ledger.catalog_epochs[]` and raises the
+            // `configuration_drift` flag (pooling exclusion is the
+            // leaderboard's read, not the row's judgement).
+            "action.tool.catalog.epoch" => {
+                catalog_epochs.push(e.payload.clone());
             }
             "security.audit.checkpoint" => {
                 checkpoint_ref = Some(hh_ledger::tree::checkpoint_idp(&e.payload));
@@ -455,7 +465,17 @@ pub fn project_row(
             }
         }
     }
-    let annotations_from_ledger = Json::obj([("discontinuities", Json::Arr(discontinuities))]);
+    let annotations_from_ledger = {
+        let mut a = vec![("discontinuities", Json::Arr(discontinuities))];
+        if !catalog_epochs.is_empty() {
+            a.push(("catalog_epochs", Json::Arr(catalog_epochs.clone())));
+            // `configuration_drift` — the flag ADR-0161 D5 sets when any
+            // epoch adopted mid-run; `configuration_version_id` itself is
+            // the `open_run`-fixed coordinate and never moves.
+            a.push(("configuration_drift", Json::Bool(true)));
+        }
+        Json::obj(a)
+    };
 
     let coordinates = Coordinates {
         configuration_id: manifest.configuration_id.clone(),
