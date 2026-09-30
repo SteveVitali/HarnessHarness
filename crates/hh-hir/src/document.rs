@@ -103,6 +103,33 @@ impl Node {
         }
         out
     }
+
+    /// The mutable mirror of [`Node::text_leaves`] — `ablate`'s leaf-replacement
+    /// path (§3.1.7). Same enumeration, same ordering.
+    pub fn text_leaves_mut(&mut self) -> Vec<&mut Text> {
+        let mut out: Vec<&mut Text> = Vec::new();
+        match &mut self.semantic {
+            KindRecord::Goal(g) => {
+                out.push(&mut g.statement);
+                if let Some(t) = &mut g.unverifiable_reason {
+                    out.push(t);
+                }
+            }
+            KindRecord::Observation(o) => {
+                if let ObservationContent::Text(t) = &mut o.content {
+                    out.push(t);
+                }
+            }
+            KindRecord::Memory(m) => out.push(&mut m.content),
+            KindRecord::Procedure(p) => collect_step_texts_mut(&mut p.steps, &mut out),
+            KindRecord::ToolCapability(t) => out.push(&mut t.purpose),
+            _ => {}
+        }
+        if let Some(SurfaceRecord::Tool(ts)) = &mut self.surface {
+            out.push(&mut ts.description_template);
+        }
+        out
+    }
 }
 
 /// The recursive step walk — `Instruction` is the only `Text`-bearing step kind;
@@ -120,6 +147,25 @@ fn collect_step_texts<'a>(steps: &'a [ProcedureStep], out: &mut Vec<&'a Text>) {
                 collect_step_texts(else_body, out);
             }
             ProcedureStep::Loop { body, .. } => collect_step_texts(body, out),
+            _ => {}
+        }
+    }
+}
+
+/// The mutable mirror of [`collect_step_texts`].
+fn collect_step_texts_mut<'a>(steps: &'a mut [ProcedureStep], out: &mut Vec<&'a mut Text>) {
+    for s in steps {
+        match s {
+            ProcedureStep::Instruction(t) => out.push(t),
+            ProcedureStep::Branch {
+                then_body,
+                else_body,
+                ..
+            } => {
+                collect_step_texts_mut(then_body, out);
+                collect_step_texts_mut(else_body, out);
+            }
+            ProcedureStep::Loop { body, .. } => collect_step_texts_mut(body, out),
             _ => {}
         }
     }
@@ -178,6 +224,14 @@ impl Edge {
     pub fn text_leaves(&self) -> Vec<&Text> {
         match &self.fields {
             EdgeRecord::DerivedFrom { hypothesis, .. } => vec![hypothesis.as_ref()],
+            _ => Vec::new(),
+        }
+    }
+
+    /// The mutable mirror of [`Edge::text_leaves`].
+    pub fn text_leaves_mut(&mut self) -> Vec<&mut Text> {
+        match &mut self.fields {
+            EdgeRecord::DerivedFrom { hypothesis, .. } => vec![hypothesis.as_mut()],
             _ => Vec::new(),
         }
     }
@@ -248,6 +302,15 @@ impl HirDocument {
             .iter()
             .flat_map(|n| n.text_leaves())
             .chain(self.edges.iter().flat_map(|e| e.text_leaves()))
+            .collect()
+    }
+
+    /// The mutable mirror of [`HirDocument::text_leaves`] (`ablate`, §3.1.7).
+    pub fn text_leaves_mut(&mut self) -> Vec<&mut Text> {
+        self.nodes
+            .iter_mut()
+            .flat_map(|n| n.text_leaves_mut())
+            .chain(self.edges.iter_mut().flat_map(|e| e.text_leaves_mut()))
             .collect()
     }
 }

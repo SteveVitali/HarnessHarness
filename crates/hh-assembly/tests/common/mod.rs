@@ -151,6 +151,7 @@ pub fn agent_node(
 }
 
 /// A `hosted` `AgentProcess` (an `OpaqueProcess` body — no slots).
+#[allow(dead_code)]
 pub fn hosted_agent_node(id: &str, budget: &str, perm: &str, seq: u64) -> Node {
     sid(
         node(
@@ -175,6 +176,7 @@ pub fn hosted_agent_node(id: &str, budget: &str, perm: &str, seq: u64) -> Node {
     )
 }
 
+#[allow(dead_code)]
 pub fn tool_node(id: &str, seq: u64) -> Node {
     sid(
         node(
@@ -203,6 +205,7 @@ pub fn tool_node(id: &str, seq: u64) -> Node {
 }
 
 /// A named tool (the `surface.name` `verify_resume` joins delivered events on).
+#[allow(dead_code)]
 pub fn named_tool_node(id: &str, name: &str, seq: u64) -> Node {
     let mut n = tool_node(id, seq);
     n.surface = Some(SurfaceRecord::Tool(Box::new(ToolSurface {
@@ -242,6 +245,7 @@ pub fn doc_with(assembly: &Assembly) -> HirDocument {
 }
 
 /// The minimal valid document whose root is `hosted`.
+#[allow(dead_code)]
 pub fn hosted_doc_with(assembly: &Assembly) -> HirDocument {
     let mut doc = HirDocument::new(sel("test:agent"));
     doc.nodes.push(rule_node("test:rule", 1));
@@ -393,6 +397,7 @@ pub fn seeded_store(tag: &str) -> (RegistryStore, BTreeMap<String, String>) {
 
 /// A registerable `ExtensionRecord` — minted `text_authority` (L1 passes),
 /// credential-free locator, `resolved` trust status.
+#[allow(dead_code)]
 pub fn extension_record(
     name: &str,
     kind: hh_registry::extension::ExtensionKind,
@@ -424,6 +429,7 @@ pub fn extension_record(
 
 /// An authored (unpinned) `ExtensionRef` — selector-bearing locator, no
 /// `content`/`extension_id` pin (what `resolve` fills).
+#[allow(dead_code)]
 pub fn extension_ref(
     name: &str,
     kind: hh_registry::extension::ExtensionKind,

@@ -128,7 +128,7 @@ fn load_rejects_unknown_keys_and_bad_dialect() {
 // ── validate_assembly ────────────────────────────────────────────────────────
 
 #[test]
-fn a_clean_assembly_passes_all_stages_with_6a6b_not_run() {
+fn a_clean_assembly_passes_all_stages_with_6a_run_6b_not_run() {
     let doc = doc_with(&stage1_assembly());
     let cat = Stage1Catalog::stage1();
     let r = validate_authored(&doc, &cat);
@@ -144,8 +144,10 @@ fn a_clean_assembly_passes_all_stages_with_6a6b_not_run() {
         .iter()
         .find(|s| s.stage == 6)
         .expect("stage 6 reported");
-    assert_eq!(stage6.na, Some(NaReason::NotRun));
-    assert!(!stage6.ran);
+    // Stage 6a runs (declaration-level profile compatibility — C1/Stage 3,
+    // R-2.1.4¹ᵃ); an unbound profile makes it vacuous. 6b is C1/Stage 5.
+    assert!(stage6.ran, "6a is implemented at Stage 3");
+    assert_eq!(stage6.na, None);
 }
 
 #[test]

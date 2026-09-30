@@ -22,12 +22,17 @@
 //! report through `hh-provenance`, the single fenced writer through `hh-ledger`, the
 //! `ResourceAccount` input through `hh-budget`.
 //!
-//! Staged later (§3.3.13): `compose` with layers + `authority_cap` (Stage 3),
-//! `space`/`enumerate` + the override grammar (Stage 3), stage 6a/6b (C1), the
-//! out-of-process variant host (Stage 2 — DF-S1.9-1), the assembly service (§6).
+//! `compose` with layers + monotone `authority_cap` ([`compose`]),
+//! `space`/`enumerate` + the ADR-0025 override grammar ([`space`]),
+//! `validate_assembly` stage 6a (declaration-level profile compatibility —
+//! `C-PROF-1`) and `validate_batch` — the ADR-0147 pre-spend gate — are
+//! implemented (C0/Stage 3). Staged later (§3.3.13): stage 6b `C-PROF-2`
+//! (C1/Stage 5), the out-of-process variant host (Stage 2 — DF-S1.9-1), the
+//! assembly service (§6).
 
 pub mod boundary;
 pub mod catalog;
+pub mod compose;
 pub mod diagnostics;
 pub mod diff;
 pub mod events;
@@ -38,10 +43,12 @@ pub mod load;
 pub mod resolve;
 pub mod resume;
 pub mod schema;
+pub mod space;
 pub mod validate;
 
 pub use boundary::{LadderRung, MUST_BE_CODE, MUST_BE_DATA, RUNG};
 pub use catalog::{ClassCatalog, RegistryCatalog, Stage1Catalog, STAGE1_CLASSES};
+pub use compose::{compose, Layer};
 pub use diagnostics::{
     detail_text, diagnostic_from_json, diagnostic_json, kern_code, AssemblyDiagnostic, Code,
     DerivedResults, NaReason, OpacitySummary, ReportStatus, Severity, Stage, StageOutcome,
@@ -71,6 +78,10 @@ pub use resume::{
     ResumeVerdict,
 };
 pub use schema::{encode, merge_policy, MergePolicy, MERGE_POLICIES};
+pub use space::{
+    apply_override, enumerate, space, validate_batch, EnumerateOutcome, EnumeratedPoint, Override,
+    OverrideError, OverrideOp, ParameterSpace, RejectedPoint, SpaceError, SweepDesign,
+};
 pub use validate::{
     benchmark_hits, materialise, status_of, validate_assembly, ProfileView, Subject, BENCH_TOKENS,
 };

@@ -50,6 +50,7 @@ dependencies = [
  "hh-identity",
  "hh-ledger",
  "hh-ontology",
+ "hh-plugin",
  "hh-provenance",
  "hh-registry",
  "hh-wire",

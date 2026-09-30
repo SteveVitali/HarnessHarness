@@ -1211,7 +1211,8 @@ fn check_equivalence_e2_fails_on_an_arg_outside_the_schema() {
             narrowing: None,
         },
     );
-    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None).expect("evidence");
+    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
+        .expect("evidence");
     assert!(matches!(
         e.e2_authority,
         hh_compiler::equiv::EvidenceVerdict::Fail { .. }
@@ -1257,7 +1258,8 @@ fn check_equivalence_e2_fails_when_a_surface_field_lacks_a_map_entry() {
     };
     let mut binding = hh_compiler::equiv::bind_surface(&n, ts, &cap.input_schema);
     binding.arg_map.remove("mode");
-    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None).expect("evidence");
+    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
+        .expect("evidence");
     match &e.e2_authority {
         hh_compiler::equiv::EvidenceVerdict::Fail { reason } => {
             assert!(reason.contains("mode"), "{reason}");
@@ -1301,7 +1303,8 @@ fn check_equivalence_e4_is_na_open_world_for_open_world_capabilities() {
         pinned: false,
         hidden: false,
     };
-    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None).expect("evidence");
+    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
+        .expect("evidence");
     match &e.e4_differential {
         hh_compiler::equiv::EvidenceVerdict::NotApplicable { reason } => {
             assert_eq!(reason, "open-world", "E4 n/a(open-world) — T-LCD-15");
@@ -1344,7 +1347,8 @@ fn check_equivalence_e7_fails_on_a_misattributed_binding() {
         pinned: false,
         hidden: false,
     };
-    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None).expect("evidence");
+    let e = hh_compiler::equiv::check_equivalence(&binding, &n, None, None, None, false)
+        .expect("evidence");
     assert!(matches!(
         e.e7_accounting_identity,
         hh_compiler::equiv::EvidenceVerdict::Fail { .. }

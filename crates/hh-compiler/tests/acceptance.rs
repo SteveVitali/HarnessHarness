@@ -4,9 +4,9 @@
 //! debt-record gate + expired-rule warnings (AC-CP-06 stage-1 half), per-surface
 //! equivalence evidence (AC-CP-10), and the composed static `lcd_report` (CF-050).
 //!
-//! Staged-later rows (recorded in the run ledger + DEFERRALS, not tested here):
-//! AC-CP-02 (two-profile stage-3 diff), AC-CP-06 stage-3 half (`relower`),
-//! AC-CP-09 (`relower`), AC-CP-13 (MCP catalogue) — all S3.2.
+//! S3.2 rows (this ticket): AC-CP-02 (two-profile stage-3 diff), AC-CP-06
+//! stage-3 half + AC-CP-09 (`relower`), AC-CP-04/-07/-08/-12 (lower/lift/loss/
+//! relower evidence) and AC-CP-13 (MCP catalogue) — see `tests/s3_2.rs`.
 
 mod common;
 
@@ -82,9 +82,9 @@ fn ac_cp_01_inputs_change_the_derivation_key() {
     // A different bound target changes the derivation key and the bundle id.
     let mut inputs = inputs_for(&sealed, &p);
     inputs.targets = vec![hh_compiler::link::TargetSpec {
-        target_id: "a2a".to_string(),
+        target_id: "provider_tool_api".to_string(),
         spec_version: "1.0".to_string(),
-        content_hash: "sha256:target-a2a".to_string(),
+        content_hash: "sha256:target-provider".to_string(),
     }];
     let profiles = MapProfileView::of(vec![p.clone()]);
     let cat = hh_assembly::Stage1Catalog::stage1();
@@ -281,9 +281,13 @@ fn ac_cp_10_every_compiled_surface_carries_e1_e3_e7_and_typed_e4() {
     ] {
         assert!(matches!(v, EvidenceVerdict::NotApplicable { .. }));
     }
-    // E4 for a pure (closed-world) capability is `n/a(stage_3)`.
+    // E4 for a pure (closed-world) capability with no declared suite is
+    // `n/a{no_declared_suite}` (the executable E4 lands at S3.2 — a profile's
+    // `tests.e4_suites[]` flips it to a real verdict).
     match &e.e4_differential {
-        EvidenceVerdict::NotApplicable { reason } => assert_eq!(reason, "stage_3"),
+        EvidenceVerdict::NotApplicable { reason } => {
+            assert_eq!(reason, "no_declared_suite")
+        }
         _ => unreachable!(),
     }
 }
@@ -335,7 +339,10 @@ fn lcd_report_composes_stage0_derived_results_never_recomputes() {
         "7-L2 clean fixture"
     );
     assert!(report.hosting_edges.is_empty());
-    assert!(report.lowering_loss.is_empty(), "stage 4 lands at S3.2");
+    // Stage 4 lands at S3.2: one `LoweringLossReport` per bound target (`mcp`
+    // here); the entries may be empty — the report is *carried*.
+    assert_eq!(report.lowering_loss.len(), 1);
+    assert_eq!(report.lowering_loss[0].target, "mcp");
     // per_profile_diff_fields covers the bound chain.
     assert!(report
         .per_profile_diff_fields
@@ -351,12 +358,13 @@ fn lcd_report_composes_stage0_derived_results_never_recomputes() {
     // The bundle record itself is complete.
     assert!(!bundle.bundle_id.is_empty());
     assert!(!bundle.derivation_key.is_empty());
+    // Stage 3 lands at S3.2 — the surface is produced.
     assert!(matches!(
         bundle.model_surface,
-        hh_compiler::seal::ModelSurfaceState::Deferred
+        hh_compiler::seal::ModelSurfaceState::Lowered(_)
     ));
-    assert!(bundle.target_artefacts.is_empty());
-    assert!(bundle.loss_reports.is_empty());
+    assert!(bundle.target_artefacts.contains_key("mcp"));
+    assert_eq!(bundle.loss_reports.len(), 1);
 }
 
 // ── AC-CP-11 — the out-of-process seam ────────────────────────────────────────

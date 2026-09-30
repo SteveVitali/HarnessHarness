@@ -12,7 +12,9 @@ use crate::equiv::{
     ArgTransform, EquivalenceEvidence, EvidenceVerdict, SurfaceArgMap, SurfaceBinding,
 };
 use crate::errors::CompileError;
-use crate::lcd::{LcdReport, LossEntry, LossKind, LoweringLossReport};
+use crate::lcd::{
+    GranularityCeiling, LcdReport, LossEntry, LossKind, LossSeverity, LoweringLossReport,
+};
 use crate::link::{ConditionedRule, ConditionedRuleHome, TargetSpec};
 use crate::plan::{
     BoundSlot, BranchOnValidatorNode, BudgetEnvelope, BudgetRow, DelegateNode, EffectRow, LoopNode,
@@ -1719,15 +1721,17 @@ fn conditioned_from_json(j: &Json, path: &str) -> Result<ConditionedRule, Compil
 fn loss_json(l: &LoweringLossReport) -> Json {
     Json::obj([
         (
-            "losses",
+            "entries",
             Json::Arr(
-                l.losses
+                l.entries
                     .iter()
                     .map(|e| {
                         let mut p = vec![
+                            ("class", Json::str(e.class.name())),
                             ("detail", Json::str(e.detail.clone())),
-                            ("kind", Json::str(e.kind.name())),
-                            ("subject", Json::str(e.subject.clone())),
+                            ("field", Json::str(e.field.clone())),
+                            ("hir_node_id", Json::str(e.hir_node_id.clone())),
+                            ("severity", Json::str(e.severity.name())),
                         ];
                         if let Some(d) = &e.debt_ref {
                             p.push(("debt_ref", Json::str(d.clone())));
@@ -1737,31 +1741,42 @@ fn loss_json(l: &LoweringLossReport) -> Json {
                     .collect(),
             ),
         ),
+        (
+            "granularity_ceiling",
+            Json::str(l.granularity_ceiling.name()),
+        ),
         ("target", Json::str(l.target.clone())),
+        ("target_version", Json::str(l.target_version.clone())),
     ])
 }
 
 fn loss_from_json(j: &Json, path: &str) -> Result<LoweringLossReport, CompileError> {
-    let losses = match req(j, "losses", path)? {
+    let entries = match req(j, "entries", path)? {
         Json::Arr(items) => items
             .iter()
             .enumerate()
             .map(|(i, e)| {
-                let p = format!("{path}.losses[{i}]");
+                let p = format!("{path}.entries[{i}]");
                 Ok(LossEntry {
-                    subject: str_at(e, "subject", &p)?,
-                    kind: LossKind::parse(&str_at(e, "kind", &p)?)
-                        .ok_or_else(|| schema_err(&p, "kind: bad LossKind"))?,
+                    hir_node_id: str_at(e, "hir_node_id", &p)?,
+                    field: str_at(e, "field", &p)?,
+                    class: LossKind::parse(&str_at(e, "class", &p)?)
+                        .ok_or_else(|| schema_err(&p, "class: bad LossKind"))?,
+                    severity: LossSeverity::parse(&str_at(e, "severity", &p)?)
+                        .ok_or_else(|| schema_err(&p, "severity: bad LossSeverity"))?,
                     detail: str_at(e, "detail", &p)?,
                     debt_ref: opt_str(e, "debt_ref"),
                 })
             })
             .collect::<Result<Vec<_>, CompileError>>()?,
-        _ => return Err(schema_err(path, "losses must be an array")),
+        _ => return Err(schema_err(path, "entries must be an array")),
     };
     Ok(LoweringLossReport {
         target: str_at(j, "target", path)?,
-        losses,
+        target_version: str_at(j, "target_version", path)?,
+        entries,
+        granularity_ceiling: GranularityCeiling::parse(&str_at(j, "granularity_ceiling", path)?)
+            .ok_or_else(|| schema_err(path, "granularity_ceiling: bad value"))?,
     })
 }
 
@@ -1922,6 +1937,216 @@ fn evidence_from_json(j: &Json, path: &str) -> Result<EquivalenceEvidence, Compi
     })
 }
 
+fn error_spec_json(s: &crate::surface::ErrorFormatSpec) -> Json {
+    Json::obj([
+        (
+            "distinguishability",
+            Json::str(s.distinguishability.as_str()),
+        ),
+        (
+            "renderings",
+            Json::Obj(
+                s.renderings
+                    .iter()
+                    .map(|(k, t)| (k.clone(), t.to_json()))
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+fn error_spec_from_json(
+    j: &Json,
+    path: &str,
+) -> Result<crate::surface::ErrorFormatSpec, CompileError> {
+    let renderings = match req(j, "renderings", path)? {
+        Json::Obj(m) => m
+            .iter()
+            .map(|(k, v)| {
+                hh_hir::leaves::Text::from_json(v, &format!("{path}.renderings.{k}"))
+                    .map(|t| (k.clone(), t))
+                    .map_err(|e| schema_err(&format!("{path}.renderings.{k}"), format!("{e}")))
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?,
+        _ => return Err(schema_err(path, "renderings must be an object")),
+    };
+    Ok(crate::surface::ErrorFormatSpec {
+        renderings,
+        distinguishability: crate::surface::Distinguishability::parse(&str_at(
+            j,
+            "distinguishability",
+            path,
+        )?)
+        .ok_or_else(|| schema_err(path, "distinguishability: bad value"))?,
+    })
+}
+
+fn result_spec_json(s: &crate::surface::ResultRenderSpec) -> Json {
+    let (mode, extra): (Json, Vec<(&str, Json)>) = match &s.mode {
+        crate::surface::RenderMode::Full => (Json::str("full"), Vec::new()),
+        crate::surface::RenderMode::Truncate {
+            max_lines,
+            max_bytes,
+            max_tokens,
+            direction,
+        } => {
+            let mut p = vec![("direction", Json::str(direction.as_str()))];
+            if let Some(v) = max_lines {
+                p.push(("max_lines", Json::Int(*v as i64)));
+            }
+            if let Some(v) = max_bytes {
+                p.push(("max_bytes", Json::Int(*v as i64)));
+            }
+            if let Some(v) = max_tokens {
+                p.push(("max_tokens", Json::Int(*v as i64)));
+            }
+            (Json::str("truncate"), p)
+        }
+    };
+    let mut mode_obj = vec![("kind", mode)];
+    mode_obj.extend(extra);
+    Json::obj([
+        (
+            "declared_loss",
+            match &s.declared_loss {
+                Some(f) => Json::Arr(f.iter().map(Json::str).collect()),
+                None => Json::Null,
+            },
+        ),
+        ("mode", Json::obj(mode_obj)),
+        (
+            "validator_reads",
+            Json::Arr(s.validator_reads.iter().map(Json::str).collect()),
+        ),
+    ])
+}
+
+fn result_spec_from_json(
+    j: &Json,
+    path: &str,
+) -> Result<crate::surface::ResultRenderSpec, CompileError> {
+    let mode_j = req(j, "mode", path)?;
+    let mode = match str_at(mode_j, "kind", &format!("{path}.mode"))?.as_str() {
+        "full" => crate::surface::RenderMode::Full,
+        "truncate" => crate::surface::RenderMode::Truncate {
+            max_lines: mode_j
+                .get("max_lines")
+                .and_then(Json::as_int)
+                .map(|i| i as u64),
+            max_bytes: mode_j
+                .get("max_bytes")
+                .and_then(Json::as_int)
+                .map(|i| i as u64),
+            max_tokens: mode_j
+                .get("max_tokens")
+                .and_then(Json::as_int)
+                .map(|i| i as u64),
+            direction: mode_j
+                .get("direction")
+                .and_then(Json::as_str)
+                .and_then(crate::surface::TruncateDirection::parse)
+                .unwrap_or(crate::surface::TruncateDirection::Head),
+        },
+        other => return Err(schema_err(path, format!("result_render.mode: {other}"))),
+    };
+    let str_vec = |k: &str| -> Vec<String> {
+        match j.get(k) {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .filter_map(|i| i.as_str().map(str::to_string))
+                .collect(),
+            _ => Vec::new(),
+        }
+    };
+    Ok(crate::surface::ResultRenderSpec {
+        mode,
+        declared_loss: match j.get("declared_loss") {
+            Some(Json::Arr(_)) => Some(str_vec("declared_loss")),
+            _ => None,
+        },
+        validator_reads: str_vec("validator_reads"),
+    })
+}
+
+fn compiled_tool_json(t: &crate::lower::CompiledToolSurface) -> Json {
+    let mut pairs = vec![
+        ("binding", surface_binding_json(&t.binding)),
+        ("description", Json::str(t.description.clone())),
+        ("schema", t.schema.clone()),
+    ];
+    if let Some(e) = &t.error_format {
+        pairs.push(("error_format", error_spec_json(e)));
+    }
+    if let Some(e) = &t.equivalence {
+        pairs.push(("equivalence", evidence_json(e)));
+    }
+    if let Some(r) = &t.result_render {
+        pairs.push(("result_render", result_spec_json(r)));
+    }
+    Json::obj(pairs)
+}
+
+fn compiled_tool_from_json(
+    j: &Json,
+    path: &str,
+) -> Result<crate::lower::CompiledToolSurface, CompileError> {
+    Ok(crate::lower::CompiledToolSurface {
+        binding: surface_binding_from_json(req(j, "binding", path)?, &format!("{path}.binding"))?,
+        schema: req(j, "schema", path)?.clone(),
+        description: str_at(j, "description", path)?,
+        error_format: match j.get("error_format") {
+            Some(e) => Some(error_spec_from_json(e, &format!("{path}.error_format"))?),
+            None => None,
+        },
+        result_render: match j.get("result_render") {
+            Some(r) => Some(result_spec_from_json(r, &format!("{path}.result_render"))?),
+            None => None,
+        },
+        equivalence: match j.get("equivalence") {
+            Some(e) => Some(evidence_from_json(e, &format!("{path}.equivalence"))?),
+            None => None,
+        },
+    })
+}
+
+fn section_json(s: &crate::lower::CompiledSection) -> Json {
+    Json::obj([
+        (
+            "rule_ids",
+            Json::Arr(s.rule_ids.iter().map(Json::str).collect()),
+        ),
+        ("section_id", Json::str(s.section_id.clone())),
+        ("slots", Json::Arr(s.slots.iter().map(Json::str).collect())),
+        (
+            "source_node_ids",
+            Json::Arr(s.source_node_ids.iter().map(Json::str).collect()),
+        ),
+        ("text", s.text.clone().map_or(Json::Null, Json::str)),
+    ])
+}
+
+fn section_from_json(j: &Json, path: &str) -> Result<crate::lower::CompiledSection, CompileError> {
+    let str_vec = |k: &str| -> Vec<String> {
+        match j.get(k) {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .filter_map(|i| i.as_str().map(str::to_string))
+                .collect(),
+            _ => Vec::new(),
+        }
+    };
+    Ok(crate::lower::CompiledSection {
+        section_id: str_at(j, "section_id", path)?,
+        source_node_ids: str_vec("source_node_ids"),
+        slots: str_vec("slots"),
+        text: match j.get("text") {
+            Some(Json::Str(t)) => Some(t.clone()),
+            _ => None,
+        },
+        rule_ids: str_vec("rule_ids"),
+    })
+}
+
 fn model_surface_json(m: &ModelSurfaceState) -> Json {
     match m {
         ModelSurfaceState::Deferred => Json::obj([("deferred", Json::str("stage_3"))]),
@@ -1935,16 +2160,18 @@ fn model_surface_json(m: &ModelSurfaceState) -> Json {
                         .collect(),
                 ),
             ),
+            ("interaction_mode", Json::str(s.interaction_mode.clone())),
+            (
+                "layout",
+                Json::Arr(s.layout.iter().map(section_json).collect()),
+            ),
+            ("params", s.params.clone()),
             ("profile", Json::str(s.profile.clone())),
             (
-                "surfaces",
-                Json::Obj(
-                    s.surfaces
-                        .iter()
-                        .map(|(k, v)| (k.clone(), surface_binding_json(v)))
-                        .collect(),
-                ),
+                "tools",
+                Json::Arr(s.tools.iter().map(compiled_tool_json).collect()),
             ),
+            ("transcript_renderer", s.transcript_renderer.clone()),
         ]),
     }
 }
@@ -1953,19 +2180,27 @@ fn model_surface_from_json(j: &Json, path: &str) -> Result<ModelSurfaceState, Co
     if j.get("deferred").and_then(Json::as_str) == Some("stage_3") {
         return Ok(ModelSurfaceState::Deferred);
     }
-    let surfaces = match req(j, "surfaces", path)? {
-        Json::Obj(m) => m
-            .iter()
-            .map(|(k, v)| {
-                surface_binding_from_json(v, &format!("{path}.surfaces.{k}"))
-                    .map(|s| (k.clone(), s))
-            })
-            .collect::<Result<BTreeMap<_, _>, _>>()?,
-        _ => return Err(schema_err(path, "surfaces must be an object")),
-    };
     Ok(ModelSurfaceState::Lowered(ModelSurface {
         profile: str_at(j, "profile", path)?,
-        surfaces,
+        layout: match req(j, "layout", path)? {
+            Json::Arr(items) => items
+                .iter()
+                .enumerate()
+                .map(|(i, v)| section_from_json(v, &format!("{path}.layout[{i}]")))
+                .collect::<Result<Vec<_>, _>>()?,
+            _ => return Err(schema_err(path, "layout must be an array")),
+        },
+        tools: match req(j, "tools", path)? {
+            Json::Arr(items) => items
+                .iter()
+                .enumerate()
+                .map(|(i, v)| compiled_tool_from_json(v, &format!("{path}.tools[{i}]")))
+                .collect::<Result<Vec<_>, _>>()?,
+            _ => return Err(schema_err(path, "tools must be an array")),
+        },
+        interaction_mode: str_at(j, "interaction_mode", path)?,
+        params: req(j, "params", path)?.clone(),
+        transcript_renderer: req(j, "transcript_renderer", path)?.clone(),
         dialects: match req(j, "dialects", path)? {
             Json::Obj(m) => m
                 .iter()

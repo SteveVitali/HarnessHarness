@@ -1034,6 +1034,139 @@ pub fn null_profile() -> ModelProfile {
     }
 }
 
+/// The **two minimal profiles** (§3.2.8 C0 scope; ADR-0020 §8; T-LCD-01/-04):
+/// `minimal-patch` (prefix namespacing, `edit_file` shaped `patch` under
+/// `parse(grammar_ref)`) and `minimal-string-replace` (suffix namespacing,
+/// `edit_file` shaped `string_replace` under `project`). They differ only in
+/// profile-owned fields — the minimum the two-profile fixtures execute against.
+/// Both are *fixtures with complete debt records*, never silent defaults.
+pub fn minimal_profiles() -> (ModelProfile, ModelProfile) {
+    let debt = |rule_id: &str| {
+        ProfileDebtRecord {
+        rule_id: rule_id.to_string(),
+        hypothesis: "the minimal profile's single surface decision holds for the                      fixture family (T-LCD-01/-04)"
+            .to_string(),
+        evidence_refs: vec![hh_ontology::debt::EvidenceRef::legacy("minimal_profile")],
+        owner: "kernel".to_string(),
+        reach_via: Vec::new(),
+        expiry_condition: ExpiryCondition {
+            kind: ExpiryKind::Date,
+            value: Some("9999-12-31".to_string()),
+        },
+        removal_test_ref: "minimal_profile_compile".to_string(),
+        removal_test: Some(hh_ontology::debt::RemovalTest {
+            kind: hh_ontology::debt::RemovalTestKind::Documentation,
+            criteria: Some("the minimal profile compiles".to_string()),
+            ..hh_ontology::debt::RemovalTest::new(
+                hh_ontology::debt::RemovalTestKind::Documentation,
+            )
+        }),
+        status: DebtStatus::Active,
+        debt_class: None,
+        hypothesis_typed: None,
+        scope: None,
+        expiry: None,
+        runway_ms: None,
+        revalidation: None,
+        created_at: None,
+        supersedes: None,
+    }
+    };
+    let mk = |profile_id: &str, scheme: &str, variant: &str, extra_params: Json| {
+        let rules = vec![
+            ProfileRule {
+                rule_id: format!("{profile_id}.naming"),
+                kind: ProfileRuleKind::Naming,
+                owned_fields: vec!["tools/*/name".to_string()],
+                params: Json::obj([
+                    ("scheme", Json::str(scheme)),
+                    (
+                        "namespace",
+                        Json::str(profile_id.rsplit('-').next().unwrap_or(profile_id)),
+                    ),
+                    ("separator", Json::str("__")),
+                ]),
+                debt: debt(&format!("{profile_id}.naming")),
+                scope: None,
+                supersedes: None,
+                compliance: Compliance {
+                    detector_class: ComplianceDetector::None,
+                    followed_predicate_ref: None,
+                },
+            },
+            ProfileRule {
+                rule_id: format!("{profile_id}.tool_shape.edit_file"),
+                kind: ProfileRuleKind::ToolShape,
+                owned_fields: vec![
+                    "tools/edit_file/arg_map".to_string(),
+                    "tools/edit_file/schema".to_string(),
+                ],
+                params: {
+                    // `{capability_class → SurfaceFamilyRef{family_id, variant_id,
+                    // …}}` — CF-199: the family is named by id, never inline.
+                    let mut m = BTreeMap::new();
+                    m.insert("family_id".to_string(), Json::str("native_fc"));
+                    m.insert("variant_id".to_string(), Json::str(variant));
+                    m.insert("param".to_string(), Json::str("edits"));
+                    if let Json::Obj(x) = extra_params {
+                        m.extend(x);
+                    }
+                    let mut outer = BTreeMap::new();
+                    outer.insert("edit_file".to_string(), Json::Obj(m));
+                    Json::Obj(outer)
+                },
+                debt: debt(&format!("{profile_id}.tool_shape.edit_file")),
+                scope: None,
+                supersedes: None,
+                compliance: Compliance {
+                    detector_class: ComplianceDetector::None,
+                    followed_predicate_ref: None,
+                },
+            },
+        ];
+        let mut p = ModelProfile {
+            profile_id: profile_id.to_string(),
+            version: "1.0".to_string(),
+            content_hash: String::new(),
+            selector: ProfileSelector {
+                provider_api_family: "minimal".to_string(),
+                model_family: profile_id.to_string(),
+                version_pattern: VersionPattern::Any,
+                precedence: 0,
+                successor_ref: None,
+                retirement_at: None,
+                roles_admitted: vec![ModelRole::Primary],
+            },
+            extends: None,
+            capabilities: ProfileCapabilities::default(),
+            rules,
+            ext: BTreeMap::new(),
+            expiry: debt(&format!("{profile_id}.expiry")),
+            compatibility: ProfileCompatibility {
+                inventory_version: "1".to_string(),
+                min_compiler_version: "0".to_string(),
+            },
+            tests: Json::obj([]),
+        };
+        p.content_hash = profile_identity(&p);
+        p
+    };
+    (
+        mk(
+            "minimal-patch",
+            "prefix",
+            "patch",
+            Json::obj([("grammar_ref", Json::str("sha256:patch-grammar"))]),
+        ),
+        mk(
+            "minimal-string-replace",
+            "suffix",
+            "string_replace",
+            Json::obj([]),
+        ),
+    )
+}
+
 impl ProfileCapabilities {
     /// `capabilities[name]` — the tri-state axis read the router's G-2 makes
     /// (`declared`/`probed` satisfy a requirement; `unknown` and an

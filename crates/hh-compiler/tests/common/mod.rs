@@ -285,6 +285,7 @@ pub fn surfaced_tool_node(id: &str, name: &str, args: &[&str], seq: u64) -> Node
 }
 
 /// A `Validator` node (the `branch-on-validator` target / `Verify` operand).
+#[allow(dead_code)]
 pub fn validator_node(id: &str, seq: u64) -> Node {
     sid(
         node(
@@ -554,6 +555,7 @@ pub fn resolve_env<'a>(
 
 /// `resolve(doc_with(stage1_assembly()))` — the compiler's input, sealed.
 /// Returns `(store, sealed, {slot → variant_version_id})`.
+#[allow(dead_code)]
 pub fn sealed_doc(tag: &str) -> (RegistryStore, SealedDefinition, BTreeMap<String, String>) {
     sealed_doc_with(tag, doc_with(&stage1_assembly()), vec![], vec![])
 }
@@ -610,11 +612,13 @@ pub fn profile_debt(rule_id: &str, status: DebtStatus) -> ProfileDebtRecord {
 /// The minimal admissible `ModelProfile/1` — `profile_id = "sha256:profile"` matches the
 /// definition's pinned profile ref; complete dated expiry debt; empty rules; computed
 /// `content_hash`.
+#[allow(dead_code)]
 pub fn test_profile() -> ModelProfile {
     profile_with("sha256:profile", "1.0", vec![])
 }
 
 /// A `ModelProfile/1` with the given identity, version and rules (content_hash computed).
+#[allow(dead_code)]
 pub fn profile_with(id: &str, version: &str, rules: Vec<ProfileRule>) -> ModelProfile {
     let mut p = ModelProfile {
         profile_id: id.to_string(),
@@ -703,6 +707,7 @@ impl<'a> VariantView for CountingVariantView<'a> {
 }
 
 /// A registered target spec (`mcp` is in the Stage-1 table).
+#[allow(dead_code)]
 pub fn mcp_target() -> TargetSpec {
     TargetSpec {
         target_id: "mcp".to_string(),

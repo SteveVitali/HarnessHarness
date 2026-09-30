@@ -327,14 +327,20 @@ impl EvidenceVerdict {
     }
 }
 
-/// `check_equivalence(surface, capability_ref, suite?) → EquivalenceEvidence` (§3.2.7) —
-/// the Stage-1 static half: E1–E3 + E7; E4–E6 carry their `n/a` reasons. `suite` is the
-/// Stage-3 differential suite hook — at C0 a supplied suite is ignored and E4 records
-/// `n/a{stage_3}` regardless (the executable differential lands at S3.2).
+/// `check_equivalence(surface, capability_ref, suite?, error_spec?, result_spec?,
+/// validators_bound) → EquivalenceEvidence` (§3.2.7) — E1–E3/E7 static; **E4 is the
+/// executable differential** over the profile's declared suite (a closed-world
+/// capability with no suite records `n/a{no_declared_suite}`; `edit_file`/`execute`/
+/// `read_file` *require* `pass` — §3.2.6 rule i); E5 checks error-class surjectivity
+/// over the compiled `ErrorFormatSpec`; E6 checks `validator_reads ⊆ retained_fields`
+/// on `truncate` renderers.
 pub fn check_equivalence(
     binding: &SurfaceBinding,
     capability: &hh_hir::Node,
-    suite: Option<&str>,
+    suite: Option<&crate::e4::E4SuiteSpec>,
+    error_spec: Option<&crate::surface::ErrorFormatSpec>,
+    result_spec: Option<&crate::surface::ResultRenderSpec>,
+    validators_bound: bool,
 ) -> Result<EquivalenceEvidence, CompileError> {
     let t = match &capability.semantic {
         hh_hir::KindRecord::ToolCapability(t) => t,
@@ -374,26 +380,93 @@ pub fn check_equivalence(
     // parameter's declared domain under the admitted keyword subset.
     let e3 = e3_check(binding, t);
 
-    // E4 — T-LCD-15: open-world capabilities are `n/a(open-world)`, never 0/fail. A
-    // capability is open-world when any declared effect's `world` is not `closed`, or
-    // `effects` is `declared` with an unattributed class.
+    // E4 — the executable differential (§3.2.6). T-LCD-15: open-world capabilities are
+    // `n/a(open-world)`, never 0/fail; the named closed-world primitives
+    // (`edit_file`/`execute`/`read_file`) require `pass` at Stage 3 — a suite absence
+    // there is a `fail`, not an `n/a`.
     let open_world = match &t.effects {
         hh_hir::ToolEffects::Pure => false,
         hh_hir::ToolEffects::Declared(set) => {
             set.is_empty() || !set.iter().all(|e| e.is_closed_world())
         }
     };
-    let e4 = if suite.is_some() {
-        EvidenceVerdict::na("stage_3")
-    } else if open_world {
+    let e4 = if open_world {
         EvidenceVerdict::na("open-world")
+    } else if let Some(s) = suite {
+        crate::e4::run_e4(binding, &c_sid, s)
+    } else if crate::e4::e4_required(&c_sid) {
+        EvidenceVerdict::fail(format!(
+            "E4 pass is required at Stage 3 for closed-world `{c_sid}` — no declared suite (profile `tests.e4_suites[]`)"
+        ))
     } else {
-        EvidenceVerdict::na("stage_3")
+        EvidenceVerdict::na("no_declared_suite")
     };
 
-    // E5/E6 — §5b/§5f own these; at C0 they are `n/a{stage_3}` (§3.2.14).
-    let e5 = EvidenceVerdict::na("stage_3");
-    let e6 = EvidenceVerdict::na("stage_3");
+    // E5 — error-class surjectivity (§3.2.6): every `observation_contract.error_classes`
+    // member has a pairwise-distinguishable rendering in the surface's
+    // `ErrorFormatSpec`.
+    let error_classes: Vec<String> = match t.observation_contract.get("error_classes") {
+        Some(Json::Arr(items)) => items
+            .iter()
+            .filter_map(|i| i.as_str().map(str::to_string))
+            .collect(),
+        _ => Vec::new(),
+    };
+    let e5 = if error_classes.is_empty() {
+        EvidenceVerdict::na("no_declared_error_classes")
+    } else {
+        match error_spec {
+            None => EvidenceVerdict::fail(format!(
+                "capability declares error_classes {error_classes:?} but the surface carries no ErrorFormatSpec"
+            )),
+            Some(spec) => {
+                if spec.distinguishability == crate::surface::Distinguishability::Failed {
+                    EvidenceVerdict::fail(
+                        "the ErrorFormatSpec renderings are not pairwise distinguishable",
+                    )
+                } else {
+                    match error_classes
+                        .iter()
+                        .find(|c| !spec.renderings.contains_key(c.as_str()))
+                    {
+                        Some(c) => EvidenceVerdict::fail(format!(
+                            "error class {c} has no rendering in the surface's ErrorFormatSpec"
+                        )),
+                        None => EvidenceVerdict::pass(),
+                    }
+                }
+            }
+        }
+    };
+
+    // E6 — result-observation adequacy (§3.2.6): a `truncate` renderer must declare the
+    // fields bound validators read (`validator_reads ⊆ retained_fields`); `full` (and
+    // an absent renderer — the default is `full`) preserves everything.
+    let e6 = match result_spec {
+        None => {
+            if validators_bound {
+                EvidenceVerdict::pass() // absent renderer ⇒ full ⇒ adequate
+            } else {
+                EvidenceVerdict::na("no_declared_result_render")
+            }
+        }
+        Some(spec) => match &spec.mode {
+            crate::surface::RenderMode::Full => EvidenceVerdict::pass(),
+            crate::surface::RenderMode::Truncate { .. } => {
+                let retained = spec.declared_loss.clone().unwrap_or_default();
+                match spec
+                    .validator_reads
+                    .iter()
+                    .find(|r| !retained.contains(r))
+                {
+                    Some(r) => EvidenceVerdict::fail(format!(
+                        "validator reads field {r} which the truncated renderer drops (retained: {retained:?})"
+                    )),
+                    None => EvidenceVerdict::pass(),
+                }
+            }
+        },
+    };
 
     // E7 — accounting/identity: the binding names C by semantic_id and records C's node
     // as its home (`trace_map(S) ∋ C.semantic_id` — the bundle's trace map carries the
@@ -434,14 +507,21 @@ fn e2_check(
     declared_args: &[String],
 ) -> EvidenceVerdict {
     let props = schema_properties(&t.input_schema);
-    // Totality over the surface's declared argument list: a surface field absent
-    // from `arg_map` fails compilation (AC-R-2.8.1-10; §5g.1 I-H5 — the monitor
-    // resolves authority over canonical parameters only, so an unmapped surface
-    // field could otherwise smuggle an argument past the map).
+    // Totality over the authored argument list: an authored arg is *covered* when it
+    // is a surface field (an `arg_map` key) or a `capability_param` root the map
+    // targets (a `tool_shape` variant may re-express it — `patch`/`string_replace`
+    // cover `edits` without exposing it as a field; AC-R-2.8.1-10; §5g.1 I-H5 — the
+    // monitor resolves authority over canonical parameters only, so an uncovered
+    // parameter could smuggle an argument past the map).
     for arg in declared_args {
-        if !binding.arg_map.contains_key(arg) {
+        let covered = binding.arg_map.contains_key(arg)
+            || binding
+                .arg_map
+                .values()
+                .any(|e| e.capability_param.split('.').next() == Some(arg.as_str()));
+        if !covered {
             return EvidenceVerdict::fail(format!(
-                "surface field {arg} is absent from the SurfaceArgMap"
+                "declared argument {arg} is uncovered by the SurfaceArgMap"
             ));
         }
     }
@@ -693,4 +773,144 @@ fn unknown_keywords(schema: &Json) -> Vec<String> {
             .collect(),
         _ => Vec::new(),
     }
+}
+
+/// `surface_diff(a, b)` — the field paths on which two lowered `ModelSurface`s
+/// differ (AC-CP-02/T-LCD-01's check object: the diff must be ⊆ the union of
+/// the two profiles' `owned_fields`). Paths follow the `owned_fields`
+/// convention (`tools/<capability>/<member>`, `layout/<section_id>`, …); the
+/// `profile` member is the *cause* of the diff and is excluded — the check is
+/// over what the profile *changed*, not which profile changed it.
+pub fn surface_diff(a: &crate::seal::ModelSurface, b: &crate::seal::ModelSurface) -> Vec<String> {
+    let mut out = Vec::new();
+    if a.layout != b.layout {
+        // Sections are identity-mapped to their source nodes — compare by id.
+        let am: std::collections::BTreeMap<_, _> =
+            a.layout.iter().map(|s| (s.section_id.clone(), s)).collect();
+        let bm: std::collections::BTreeMap<_, _> =
+            b.layout.iter().map(|s| (s.section_id.clone(), s)).collect();
+        if a.layout.len() != b.layout.len()
+            || am.keys().ne(bm.keys())
+            || a.layout
+                .iter()
+                .map(|s| &s.section_id)
+                .ne(b.layout.iter().map(|s| &s.section_id))
+        {
+            out.push("layout/order".to_string());
+        }
+        for (id, sa) in &am {
+            match bm.get(id) {
+                Some(sb) if sa == sb => {}
+                Some(_) => out.push(format!("layout/{id}")),
+                None => out.push(format!("layout/{id}")),
+            }
+        }
+        for id in bm.keys() {
+            if !am.contains_key(id) {
+                out.push(format!("layout/{id}"));
+            }
+        }
+    }
+    if a.interaction_mode != b.interaction_mode {
+        out.push("interaction_mode".to_string());
+    }
+    if a.params != b.params {
+        let am = match &a.params {
+            Json::Obj(m) => Some(m),
+            _ => None,
+        };
+        let bm = match &b.params {
+            Json::Obj(m) => Some(m),
+            _ => None,
+        };
+        let keys: std::collections::BTreeSet<String> = am
+            .map(|m| {
+                m.keys()
+                    .cloned()
+                    .collect::<std::collections::BTreeSet<String>>()
+            })
+            .unwrap_or_default()
+            .union(&bm.map(|m| m.keys().cloned().collect()).unwrap_or_default())
+            .cloned()
+            .collect();
+        for k in keys {
+            if am.and_then(|m| m.get(&k)) != bm.and_then(|m| m.get(&k)) {
+                out.push(format!("params/{k}"));
+            }
+        }
+        if am.is_none() || bm.is_none() {
+            out.push("params".to_string());
+        }
+    }
+    if a.transcript_renderer != b.transcript_renderer {
+        out.push("transcript/stale_signature".to_string());
+    }
+    if a.dialects != b.dialects {
+        for (role, d) in &a.dialects {
+            if b.dialects.get(role) != Some(d) {
+                out.push(format!("dialects/{role}"));
+            }
+        }
+        for role in b.dialects.keys() {
+            if !a.dialects.contains_key(role) {
+                out.push(format!("dialects/{role}"));
+            }
+        }
+    }
+    // Tools — keyed by the capability's semantic id so the diff is over the
+    // *same* HIR node's surface (the naming rule may move the surface name).
+    let am: std::collections::BTreeMap<_, _> = a
+        .tools
+        .iter()
+        .map(|t| (t.binding.hir_node_id.clone(), t))
+        .collect();
+    let bm: std::collections::BTreeMap<_, _> = b
+        .tools
+        .iter()
+        .map(|t| (t.binding.hir_node_id.clone(), t))
+        .collect();
+    for (sid, ta) in &am {
+        let cap = sid
+            .rsplit(':')
+            .next()
+            .map(str::to_string)
+            .unwrap_or_else(|| sid.clone());
+        match bm.get(sid) {
+            None => out.push(format!("tools/{cap}")),
+            Some(tb) => {
+                if ta.binding.surface_name != tb.binding.surface_name {
+                    out.push(format!("tools/{cap}/name"));
+                }
+                if ta.binding.arg_map != tb.binding.arg_map {
+                    out.push(format!("tools/{cap}/arg_map"));
+                }
+                if ta.schema != tb.schema {
+                    out.push(format!("tools/{cap}/schema"));
+                }
+                if ta.description != tb.description {
+                    out.push(format!("tools/{cap}/description"));
+                }
+                if ta.error_format != tb.error_format {
+                    out.push(format!("tools/{cap}/error_format"));
+                }
+                if ta.result_render != tb.result_render {
+                    out.push(format!("tools/{cap}/result_render"));
+                }
+                if ta.binding.dialect != tb.binding.dialect {
+                    out.push(format!("tools/{cap}/dialect"));
+                }
+            }
+        }
+    }
+    for sid in bm.keys() {
+        if !am.contains_key(sid) {
+            let cap = sid
+                .rsplit(':')
+                .next()
+                .map(str::to_string)
+                .unwrap_or_else(|| sid.clone());
+            out.push(format!("tools/{cap}"));
+        }
+    }
+    out
 }

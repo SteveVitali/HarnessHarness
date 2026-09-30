@@ -33,66 +33,152 @@ pub struct LcdReport {
     pub lowering_loss: Vec<LoweringLossReport>,
 }
 
-/// `LoweringLossReport` — a typed per-target loss record (§3.2.8; ADR-0021's typed
-/// losses: `degraded | synthesized | dropped-with-debt`). No variant is produced at
-/// Stage 1 — the type is declared now so the report schema is stable (CC8).
+/// `LoweringLossReport{target, target_version, entries[{hir_node_id, field, class,
+/// severity}], granularity_ceiling}` (§3.2.5, ADR-0021 as amended). The closed class set
+/// is `{no_slot, hint_only, untyped_slot, narrowed, truncated}`; severity is
+/// `{info, narrowed, lost}`. Silent coercion is forbidden — a narrowing is declared
+/// `narrowed` or raised `UnexpressibleSurface` per the profile's `strict` knob.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoweringLossReport {
     /// The target this report is for.
     pub target: String,
-    /// The losses.
-    pub losses: Vec<LossEntry>,
+    /// The target-spec version (`TargetSpec.spec_version` — a derivation-key input).
+    pub target_version: String,
+    /// The typed loss entries (canonical order: `hir_node_id`, then `field`).
+    pub entries: Vec<LossEntry>,
+    /// The comparison-granularity ceiling the artefact admits.
+    pub granularity_ceiling: GranularityCeiling,
 }
 
-/// One typed loss entry.
+/// One typed loss entry — `{hir_node_id, field, class, severity}` (§3.2.5).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LossEntry {
-    /// The surface/element the loss applies to.
-    pub subject: String,
-    /// `degraded | synthesized | dropped-with-debt`.
-    pub kind: LossKind,
+    /// The HIR node the loss applies to (the capability's semantic id).
+    pub hir_node_id: String,
+    /// The dropped/narrowed field.
+    pub field: String,
+    /// The loss class.
+    pub class: LossKind,
+    /// The severity.
+    pub severity: LossSeverity,
     /// The detail.
     pub detail: String,
-    /// The debt record ref when `kind = dropped-with-debt`.
+    /// The debt record ref when the drop is a conditioned rule.
     pub debt_ref: Option<String>,
 }
 
-/// The closed loss kinds (ADR-0021).
+/// The closed loss-class set (§3.2.5; ADR-0021 as amended).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LossKind {
-    /// The target expresses the element at reduced fidelity.
-    Degraded,
-    /// The element is synthesized (constructed by the lowering, not in the source).
-    Synthesized,
-    /// The element is dropped; the debt record names it.
-    DroppedWithDebt,
+    /// The target has no slot for the element — it is dropped, declared.
+    NoSlot,
+    /// The element travels as a hint only (claims, never authority).
+    HintOnly,
+    /// The element travels in an untyped slot (a metadata string pair).
+    UntypedSlot,
+    /// The element is narrowed to the target's strict subset.
+    Narrowed,
+    /// The element is truncated; the retained set is listed.
+    Truncated,
 }
 
 impl LossKind {
     /// Canonical spelling.
     pub fn name(self) -> &'static str {
         match self {
-            LossKind::Degraded => "degraded",
-            LossKind::Synthesized => "synthesized",
-            LossKind::DroppedWithDebt => "dropped-with-debt",
+            LossKind::NoSlot => "no_slot",
+            LossKind::HintOnly => "hint_only",
+            LossKind::UntypedSlot => "untyped_slot",
+            LossKind::Narrowed => "narrowed",
+            LossKind::Truncated => "truncated",
         }
     }
 
     /// Parse a spelling.
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
-            "degraded" => LossKind::Degraded,
-            "synthesized" => LossKind::Synthesized,
-            "dropped-with-debt" => LossKind::DroppedWithDebt,
+            "no_slot" => LossKind::NoSlot,
+            "hint_only" => LossKind::HintOnly,
+            "untyped_slot" => LossKind::UntypedSlot,
+            "narrowed" => LossKind::Narrowed,
+            "truncated" => LossKind::Truncated,
+            _ => return None,
+        })
+    }
+}
+
+/// The closed severity set (§3.2.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LossSeverity {
+    /// Carried for the record; nothing a consumer must do.
+    Info,
+    /// The element is expressed at reduced fidelity.
+    Narrowed,
+    /// The element is gone from the artefact.
+    Lost,
+}
+
+impl LossSeverity {
+    /// Canonical spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            LossSeverity::Info => "info",
+            LossSeverity::Narrowed => "narrowed",
+            LossSeverity::Lost => "lost",
+        }
+    }
+
+    /// Parse a spelling.
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "info" => LossSeverity::Info,
+            "narrowed" => LossSeverity::Narrowed,
+            "lost" => LossSeverity::Lost,
+            _ => return None,
+        })
+    }
+}
+
+/// The comparison-granularity ceiling (§3.2.5 `granularity_ceiling`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GranularityCeiling {
+    /// Per-component identity survives the lowering.
+    Component,
+    /// Per-configuration identity survives.
+    Configuration,
+    /// Only product-level identity survives.
+    Product,
+}
+
+impl GranularityCeiling {
+    /// Canonical spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            GranularityCeiling::Component => "component",
+            GranularityCeiling::Configuration => "configuration",
+            GranularityCeiling::Product => "product",
+        }
+    }
+
+    /// Parse a spelling.
+    pub fn parse(s: &str) -> Option<Self> {
+        Some(match s {
+            "component" => GranularityCeiling::Component,
+            "configuration" => GranularityCeiling::Configuration,
+            "product" => GranularityCeiling::Product,
             _ => return None,
         })
     }
 }
 
 /// `lcd_report(sealed, profiles, targets)` — the static composition (§3.2.7). Inputs:
-/// the stage-0 `ValidationReport` (the derived results' only producer — CF-050) and the
-/// `LinkedGraph`.
-pub fn lcd_report(validation: &ValidationReport, linked: &LinkedGraph) -> LcdReport {
+/// the stage-0 `ValidationReport` (the derived results' only producer — CF-050), the
+/// `LinkedGraph`, and the stage-4 loss reports (composed, never recomputed).
+pub fn lcd_report(
+    validation: &ValidationReport,
+    linked: &LinkedGraph,
+    losses: &[LoweringLossReport],
+) -> LcdReport {
     let derived = &validation.derived;
     // per-profile diff fields — each chain member vs its parent.
     let mut per_profile_diff_fields: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -119,6 +205,6 @@ pub fn lcd_report(validation: &ValidationReport, linked: &LinkedGraph) -> LcdRep
             .map(|o| (o.opaque_ratio_num, o.total)),
         conditioned_rules: linked.conditioned_rules.clone(),
         per_profile_diff_fields,
-        lowering_loss: Vec::new(),
+        lowering_loss: losses.to_vec(),
     }
 }

@@ -1,7 +1,8 @@
 //! `validate_assembly` (§3.3.4/§3.3.8): the seven-stage validation that **runs and
-//! reports every stage** — never fail-fast. Stages 1–5 and 7 are this ticket's scope
-//! (§3.3.13); 6a/6b are `n/a{not_run}` (C1/Stage 3/5). A hosted root flips stages 2, 6
-//! and the 7-opacity sub-check to `n/a{class}` (AC-CC-12; T-LCD-15).
+//! reports every stage** — never fail-fast. Stages 1–5, 6a and 7 run (§3.3.13);
+//! 6b is `n/a{not_run}` (C1/Stage 5 — `C-PROF-2` is the compiled-surface check
+//! the plan stage propagates). A hosted root flips stages 2, 6 and the
+//! 7-opacity sub-check to `n/a{class}` (AC-CC-12; T-LCD-15).
 //!
 //! Stages: (1) schema — the member-wise grammar decode + `layers`/`source` consistency;
 //! (2) class conformance — catalog coverage, cardinality, class match, `required_inputs`,
@@ -17,7 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use hh_hir::document::{HirDocument, SealedDefinition};
 use hh_hir::records::{AgentProcessBody, KindRecord, SlotBinding, SlotBindings};
 use hh_hir::refs::RefVersion;
-use hh_provenance::{AuthorityClass, OpacityReport, ProvenanceRecord};
+use hh_provenance::{AuthorityClass, ProvenanceRecord};
 use hh_registry::kinds::Cardinality;
 use hh_wire::json::Json;
 
@@ -27,8 +28,8 @@ use crate::diagnostics::{
     ReportStatus, Severity, Stage, StageOutcome, ValidationReport,
 };
 use crate::grammar::{
-    markers_in_json, Assembly, ConstraintKind, EntityBinding, ParamType, ENTITY_MARKER,
-    PARAM_MARKER, SECRET_MARKER,
+    markers_in_json, Assembly, ConstraintKind, EntityBinding, ParamType, ProfileBinding,
+    ASSEMBLY_DIALECT, ENTITY_MARKER, PARAM_MARKER, SECRET_MARKER,
 };
 
 /// The subject `validate_assembly` runs on (§3.3.4: `assembly | sealed`).
@@ -65,7 +66,7 @@ pub const BENCH_TOKENS: &[&str] = &["suite_id", "task_id", "foreign_id", "split"
 pub fn validate_assembly(
     subject: Subject<'_>,
     catalog: &dyn ClassCatalog,
-    _profiles: Option<&dyn ProfileView>,
+    profiles: Option<&dyn ProfileView>,
     kernel: &ProvenanceRecord,
 ) -> ValidationReport {
     let doc = subject.document();
@@ -264,15 +265,28 @@ pub fn validate_assembly(
         }
     }
 
-    // ── Stage 6 — profile compatibility (6a C1/Stage 3; 6b C1/Stage 5) ───────────
-    report.stages.push(StageOutcome::not_applicable(
-        6,
-        if hosted {
-            NaReason::Class
-        } else {
-            NaReason::NotRun
-        },
-    ));
+    // ── Stage 6 — profile compatibility ─────────────────────────────────────────
+    // 6a (C1/Stage 3; `C-PROF-1`): declaration-level — each bound variant's
+    // `capability_declaration` ∧ `dialect_range` against the named profiles'
+    // declarations, no compilation (two-profile sweeps refuse incompatible points
+    // before spend). 6b (`C-PROF-2`, the compiled-surface check) is C1/Stage 5 —
+    // `n/a{not_run}` inside this stage's outcome.
+    if hosted {
+        report
+            .stages
+            .push(StageOutcome::not_applicable(6, NaReason::Class));
+    } else {
+        report.stages.push(StageOutcome::ran(6));
+        stage6a_profile_compat(
+            doc,
+            assembly.as_ref(),
+            &effective,
+            catalog,
+            profiles,
+            &mut diags,
+            kernel,
+        );
+    }
 
     // ── Stage 7 — the LCD static battery ─────────────────────────────────────────
     report.stages.push(StageOutcome::ran(7));
@@ -813,6 +827,180 @@ fn stage4_constraints(
     }
 }
 
+// ── Stage 6a — declaration-level profile compatibility (C-PROF-1) ─────────────
+
+/// Whether a `dialect_range` admits a document-dialect version — the one range
+/// checker (`hh_plugin::contract::range_covers`, CC1). A range scoped to another
+/// family (`registry/1`, `profile/1`, …) declares the *record's* dialect axis —
+/// `register` owns that check; stage 6a constrains only `hir/`…-scoped or
+/// family-free ranges against the document dialect (`hir/1` → version `1`).
+fn dialect_range_covers_document(range: &str) -> bool {
+    let r = range.trim();
+    let normalized = match r.split_once('/') {
+        Some(("hir", v)) => v.to_string(),
+        Some(_) => return true, // a different family's range — not this axis
+        None => r.to_string(),
+    };
+    hh_plugin::contract::range_covers(&normalized, "1")
+}
+
+/// Whether the profile's `capabilities` member declares `cap` supported — an
+/// absent/`"unsupported"`/`false`/`null` entry is *not* supported (omitted is
+/// never coerced — CF-027/T-LCD-07).
+fn capability_supported(caps: &Json, cap: &str) -> bool {
+    match caps.get(cap) {
+        Some(Json::Str(s)) => s != "unsupported" && s != "absent",
+        Some(Json::Bool(b)) => *b,
+        Some(Json::Int(_)) => true,
+        Some(Json::Obj(_)) => true,
+        _ => false,
+    }
+}
+
+/// Whether a variant `capability_declaration` entry is a *requirement* the
+/// profile must satisfy (`"required"` or `{requires: true}` — the declaration's
+/// two admitted requirement spellings).
+fn declaration_requires(decl: &Json) -> bool {
+    match decl {
+        Json::Str(s) => s == "required",
+        Json::Obj(_) => matches!(decl.get("requires"), Some(Json::Bool(true))),
+        _ => false,
+    }
+}
+
+/// Stage 6a (C1/Stage 3; `C-PROF-1 ProfileIncompatible`): for each named
+/// profile, each enabled bound variant's `capability_declaration` requirements
+/// must be supported by the profile's `capabilities` declaration, and the
+/// variant's `dialect_range` must admit the document dialect. Declaration-level
+/// only — no compilation (6b owns the compiled-surface check at C1/Stage 5).
+fn stage6a_profile_compat(
+    doc: &HirDocument,
+    assembly: Option<&Assembly>,
+    slots: &BTreeMap<String, SlotBindings>,
+    catalog: &dyn ClassCatalog,
+    profiles: Option<&dyn ProfileView>,
+    diags: &mut Vec<AssemblyDiagnostic>,
+    kernel: &ProvenanceRecord,
+) {
+    // The named profiles — `assembly.profile_binding` pinned refs ∪ the root's
+    // pinned `native.profile` (a `ProfileConstraint` is opaque here; §5b owns
+    // its semantics at C1/Stage 5).
+    let mut named: Vec<String> = Vec::new();
+    if let Some(a) = assembly {
+        if let ProfileBinding::Pinned(r) = &a.profile_binding {
+            if !r.is_unbound() {
+                named.push(r.profile.clone());
+            }
+        }
+    }
+    if let Some(root) = doc.node(&doc.root.semantic_id) {
+        if let KindRecord::AgentProcess(ap) = &root.semantic {
+            if let AgentProcessBody::Native(n) = &ap.body {
+                if n.profile.pinned
+                    && !n.profile.is_unbound()
+                    && !named.contains(&n.profile.profile)
+                {
+                    named.push(n.profile.profile.clone());
+                }
+            }
+        }
+    }
+    if named.is_empty() {
+        return; // unbound profile — no declarations to check against
+    }
+    let Some(view) = profiles else {
+        return; // no profile view — link's `C-LINK-2` owns the missing-profile refusal
+    };
+    for coord in &named {
+        let rec = view.profile(coord);
+        let Some(rec) = rec else {
+            diags.push(diag(
+                Code::ProfIncompatible,
+                "/assembly/profile_binding",
+                coord,
+                "the bound profile coordinate names no readable record",
+                "bind a profile coordinate the view can read",
+                kernel,
+                Stage::Validate(6),
+            ));
+            continue;
+        };
+        let caps = rec
+            .get("capabilities")
+            .cloned()
+            .unwrap_or_else(|| Json::obj([]));
+        for (slot, sb) in slots {
+            let bindings: Vec<&SlotBinding> = match sb {
+                SlotBindings::One(b) => vec![b],
+                SlotBindings::Many(v) => v.iter().collect(),
+            };
+            for b in bindings {
+                if !b.enabled {
+                    continue; // a disabled binding declares nothing live
+                }
+                let RefVersion::Pinned(version_id) = &b.variant.version else {
+                    continue; // a selector is `resolve`'s input — unpinned is its diagnostic
+                };
+                let Some(variant) = catalog.variant(version_id) else {
+                    continue; // stage 2 / `resolve` own the unresolvable-ref refusal
+                };
+                let path = format!("/assembly/slots/{slot}");
+                if !dialect_range_covers_document(&variant.dialect_range) {
+                    diags.push(diag(
+                        Code::ProfIncompatible,
+                        &path,
+                        &variant.variant_id,
+                        &format!(
+                            "variant `{}`'s `dialect_range` `{}` excludes the document dialect `{}` (profile `{coord}`)",
+                            variant.variant_id, variant.dialect_range, ASSEMBLY_DIALECT
+                        ),
+                        "bind a variant whose dialect range admits the document dialect",
+                        kernel,
+                        Stage::Validate(6),
+                    ));
+                }
+                // A profile record may declare its own `dialect_range` — the
+                // variant's range must cover the profile's declared version.
+                if let Some(pr) = rec.get("dialect_range").and_then(Json::as_str) {
+                    let want = pr.trim().rsplit('/').next().unwrap_or(pr.trim());
+                    let vr = variant.dialect_range.trim();
+                    let vr_norm = vr.rsplit('/').next().unwrap_or(vr);
+                    if !hh_plugin::contract::range_covers(vr_norm, want) {
+                        diags.push(diag(
+                            Code::ProfIncompatible,
+                            &path,
+                            &variant.variant_id,
+                            &format!(
+                                "variant `{}`'s `dialect_range` `{}` does not cover the profile `{coord}`'s declared `{pr}`",
+                                variant.variant_id, variant.dialect_range
+                            ),
+                            "bind a variant covering the profile's declared dialect range",
+                            kernel,
+                            Stage::Validate(6),
+                        ));
+                    }
+                }
+                for (cap, decl) in &variant.capability_declaration {
+                    if declaration_requires(decl) && !capability_supported(&caps, cap) {
+                        diags.push(diag(
+                            Code::ProfIncompatible,
+                            &path,
+                            cap,
+                            &format!(
+                                "variant `{}` requires capability `{cap}` the bound profile `{coord}` does not declare supported",
+                                variant.variant_id
+                            ),
+                            "bind a profile declaring the capability, or a variant not requiring it",
+                            kernel,
+                            Stage::Validate(6),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ── Stage 7 — the LCD static battery ──────────────────────────────────────────
 
 fn stage7_lcd(
@@ -826,24 +1014,20 @@ fn stage7_lcd(
     // 7-O — the opacity report over the document's leaves (n/a{class} on hosted roots —
     // a hosted participant has no visible leaf content at the object level).
     if !hosted {
-        let mut classes: Vec<AuthorityClass> = Vec::new();
-        let mut without_interface = 0usize;
-        for n in &doc.nodes {
-            let sj = hh_hir::wire::node_to_json(n);
-            if let Some(sem) = sj.get("semantic") {
-                collect_leaf_authorities(sem, &mut classes, &mut without_interface);
-            }
-        }
-        let rep = OpacityReport::over(classes.iter().copied());
-        let opaque = rep.count(AuthorityClass::Unverified) + rep.count(AuthorityClass::External);
+        // CF-050 / CC1 — `hh_hir::ops::opacity` is the single producer; the summary
+        // here is a *view* of it, never a recomputation.
+        let rep = hh_hir::ops::opacity(doc, None);
+        let opaque = rep.by_class.count(AuthorityClass::Unverified)
+            + rep.by_class.count(AuthorityClass::External);
         derived.opacity = Some(OpacitySummary {
             by_class: rep
+                .by_class
                 .by_class
                 .iter()
                 .map(|(c, n)| (c.as_str().to_string(), *n))
                 .collect(),
-            total: rep.total(),
-            opaque_ratio_num: opaque + without_interface,
+            total: rep.by_class.total(),
+            opaque_ratio_num: opaque + rep.opaque_without_interface,
         });
     }
 
@@ -939,53 +1123,6 @@ fn stage7_lcd(
             kernel,
             Stage::Validate(7),
         ));
-    }
-}
-
-/// Collect leaf authority classes from a semantic-record JSON — a `Text` leaf carries
-/// `content_hash` + `authority`; a `CompiledPayload` carries `bytes_hash` + `provenance`
-/// (whose `authority` is the leaf's class). Objects matching neither shape are walked.
-fn collect_leaf_authorities(
-    j: &Json,
-    out: &mut Vec<AuthorityClass>,
-    without_interface: &mut usize,
-) {
-    match j {
-        Json::Obj(m) => {
-            if m.contains_key("content_hash") {
-                if let Some(a) = m
-                    .get("authority")
-                    .and_then(Json::as_str)
-                    .and_then(AuthorityClass::parse)
-                {
-                    out.push(a);
-                }
-                return;
-            }
-            if m.contains_key("bytes_hash") {
-                let auth = m
-                    .get("provenance")
-                    .and_then(|p| p.get("authority"))
-                    .and_then(Json::as_str)
-                    .and_then(AuthorityClass::parse);
-                if let Some(a) = auth {
-                    out.push(a);
-                }
-                if m.get("interface").is_none() && m.get("declared_interface").is_none() {
-                    *without_interface += 1;
-                }
-                return;
-            }
-            for v in m.values() {
-                collect_leaf_authorities(v, out, without_interface);
-            }
-        }
-        Json::Arr(items) => {
-            for v in items {
-                collect_leaf_authorities(v, out, without_interface);
-            }
-        }
-        _ => {}
     }
 }
 
