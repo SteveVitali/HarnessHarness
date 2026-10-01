@@ -27,10 +27,13 @@ pub enum TopologyPreset {
         /// The stage count (≥ 1).
         stages: u32,
     },
-    /// `recursive` — full-harness delegation to depth (T3 — declared;
-    /// the recursion bound is its own slice).
+    /// `recursive` — full-harness delegation to depth (T3, S5.5):
+    /// children run the same sealed definition (the recursion is a
+    /// `supplies`/child-definition fact — each child's own
+    /// `delegation_depth` gauge carries `depth − 1`) and may themselves
+    /// orchestrate. `depth ≥ 1` binds; `depth = 0` refuses at `plan`.
     T3Recursive {
-        /// The recursion depth bound.
+        /// The recursion depth bound (`depth_cap ≥ 2` at the ticket's arm).
         depth: u32,
     },
     /// `judge_panel` — role-`judge` verifiers (T4 — ADR-0116's stage).
@@ -82,14 +85,15 @@ impl TopologyPreset {
             .map(|(_, p)| *p)
     }
 
-    /// Whether this slice executes the preset (T0/T1/T2/T6 — the
-    /// ticket's admitted set).
+    /// Whether this slice executes the preset (T0/T1/T2/T3/T6 — T3
+    /// admitted at S5.5; T4/T5/T7 remain declared-not-implemented).
     pub fn implemented(&self) -> bool {
         matches!(
             self,
             TopologyPreset::T0Single
                 | TopologyPreset::T1OrchestratorWorker { .. }
                 | TopologyPreset::T2Pipeline { .. }
+                | TopologyPreset::T3Recursive { .. }
                 | TopologyPreset::T6BackgroundDetached
         )
     }

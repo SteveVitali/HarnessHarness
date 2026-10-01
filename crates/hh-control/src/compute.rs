@@ -316,6 +316,45 @@ pub struct PriorFact {
     pub valid_until: Option<u64>,
 }
 
+impl PriorFact {
+    /// The canonical JSON (`{cell, n, mean_ppm, interval{lo,hi}?,
+    /// valid_until?}` — a declared-seed/prior-cell row).
+    pub fn to_json(&self) -> Json {
+        let mut m = vec![
+            ("cell", Json::str(&self.cell)),
+            ("n", Json::Int(self.n as i64)),
+            ("mean_ppm", Json::Int(self.mean_ppm)),
+        ];
+        if let Some((lo, hi)) = self.interval {
+            m.push((
+                "interval",
+                Json::obj([("lo", Json::Int(lo)), ("hi", Json::Int(hi))]),
+            ));
+        }
+        if let Some(v) = self.valid_until {
+            m.push(("valid_until", Json::Int(v as i64)));
+        }
+        Json::obj(m)
+    }
+
+    /// From canonical JSON (`mean` accepted as a legacy alias for
+    /// `mean_ppm`).
+    pub fn from_json(j: &Json) -> Option<PriorFact> {
+        Some(PriorFact {
+            cell: j.get("cell")?.as_str()?.to_string(),
+            n: j.get("n")?.as_int()?.max(0) as u32,
+            mean_ppm: j
+                .get("mean_ppm")
+                .or_else(|| j.get("mean"))
+                .and_then(Json::as_int)?,
+            interval: j
+                .get("interval")
+                .and_then(|i| Some((i.get("lo")?.as_int()?, i.get("hi")?.as_int()?))),
+            valid_until: j.get("valid_until").and_then(Json::as_int).map(|v| v as u64),
+        })
+    }
+}
+
 /// The model-plane health view the ctx reads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HealthView {
@@ -387,6 +426,21 @@ pub struct ComputeContext {
     /// The `context_label` (the assembled context's provenance label —
     /// carried for the record; bind never branches on it).
     pub context_label: Option<String>,
+    /// `profile_ref` — the bound profile's coordinate (`{profile_id}@{version}`
+    /// — the spelling profile-conditioned rules compare `conditioned_on`
+    /// against). `None` ⇒ every conditioned rule is inert: a rule whose
+    /// condition cannot be evaluated never fires, never degrades silently.
+    pub profile_ref: Option<String>,
+    /// The bound model snapshot fingerprint — the `bandit`/`surface_prior`
+    /// cell key's snapshot constituent (`None` ⇒ the segment spells
+    /// `unknown`; cells still key deterministically).
+    pub snapshot_fingerprint: Option<String>,
+    /// The declared task class — the cell key's `task_class` constituent.
+    pub task_class: Option<String>,
+    /// The fold watermark (`max seq` of the prefix the ctx was projected
+    /// from) — `valid_until` expiry and windowed statistics compare
+    /// against it. `0` on an empty prefix.
+    pub now_seq: u64,
 }
 
 /// The ctx's `TaskValue` view — the sealed contract's `task_value`
@@ -543,6 +597,16 @@ pub struct ComputeFacts {
     pub delegation_depth: u32,
     /// The assembled-context provenance label (recorded, never branched on).
     pub context_label: Option<String>,
+    /// The bound profile's coordinate — the conditioned-rule `conditioned_on`
+    /// comparator (stamped at `open` from the realized binding, never a
+    /// param the definition can lie about).
+    pub profile_ref: Option<String>,
+    /// The bound model snapshot fingerprint (the prior-cell key's snapshot
+    /// constituent).
+    pub snapshot_fingerprint: Option<String>,
+    /// The declared task class (the prior-cell key's `task_class`
+    /// constituent).
+    pub task_class: Option<String>,
 }
 
 impl Default for ComputeFacts {
@@ -560,6 +624,9 @@ impl Default for ComputeFacts {
             task_value: None,
             delegation_depth: 0,
             context_label: None,
+            profile_ref: None,
+            snapshot_fingerprint: None,
+            task_class: None,
         }
     }
 }
@@ -993,12 +1060,17 @@ pub struct ComputeDecisionRecord {
     /// `rules`/`static` — no model calls; `harness_overhead.scheduling`
     /// never records a phantom charge).
     pub cost_of_estimation: ResourceVector,
+    /// `cell` — the prior-cell key the `chosen` option scored under
+    /// (`{profile_version}|{snapshot_fingerprint}|{task_class}|{option_kind}`),
+    /// stamped by prior-consuming variants so [`prior_cells`] joins the
+    /// run's outcome back to the cell — absent for `static`/`uniform`/`rules`.
+    pub cell: Option<String>,
 }
 
 impl ComputeDecisionRecord {
     /// The canonical JSON — the `control.compute.decided` payload verbatim.
     pub fn to_json(&self) -> Json {
-        Json::obj([
+        let mut j = Json::obj([
             ("record_id", Json::str(&self.record_id)),
             ("decision_id", Json::str(&self.decision_id)),
             (
@@ -1101,7 +1173,13 @@ impl ComputeDecisionRecord {
                 ]),
             ),
             ("cost_of_estimation", self.cost_of_estimation.to_json()),
-        ])
+        ]);
+        if let Json::Obj(ref mut m) = j {
+            if let Some(c) = &self.cell {
+                m.insert("cell".to_string(), Json::str(c));
+            }
+        }
+        j
     }
 
     /// The content address — `identify_bytes(ComputeDecisionRecord,
@@ -1210,6 +1288,7 @@ impl ComputeDecisionRecord {
                 },
             },
             cost_of_estimation: ResourceVector::from_json(j.get("cost_of_estimation")?)?,
+            cell: j.get("cell").and_then(Json::as_str).map(str::to_string),
         })
     }
 }
@@ -1328,10 +1407,35 @@ pub trait ComputePolicy {
 /// `surface_prior`/`predictor` are registered class variants whose
 /// implementations land at Stage 5/6 — `VariantNotAdmitted`, never silent).
 pub fn policy_for(variant_ref: &str) -> Result<Box<dyn ComputePolicy>, ComputeError> {
+    policy_for_configured(variant_ref, None)
+}
+
+/// `policy_for` carrying the definition-declared `RulesConfig` (the
+/// conditioned thresholds + `delegation_rules` the sealed
+/// `compute_policy` slot params project — S5.5). `static`/`uniform` take
+/// no rules config (the baseline never reads conditioned rules).
+pub fn policy_for_configured(
+    variant_ref: &str,
+    rules: Option<RulesConfig>,
+) -> Result<Box<dyn ComputePolicy>, ComputeError> {
     match variant_ref {
         "static" => Ok(Box::new(StaticPolicy)),
         "uniform" => Ok(Box::new(UniformPolicy)),
-        "rules" => Ok(Box::new(RulesPolicy::default())),
+        "rules" => Ok(Box::new(RulesPolicy {
+            config: rules.unwrap_or_default(),
+        })),
+        "bandit" => Ok(Box::new(BanditPolicy {
+            config: BanditConfig {
+                rules: rules.unwrap_or_default(),
+                ..BanditConfig::default()
+            },
+        })),
+        "surface_prior" => Ok(Box::new(SurfacePriorPolicy {
+            config: BanditConfig {
+                rules: rules.unwrap_or_default(),
+                ..BanditConfig::default()
+            },
+        })),
         other => Err(ComputeError::VariantNotAdmitted {
             variant_ref: other.to_string(),
         }),
@@ -1377,6 +1481,171 @@ impl ComputePolicy for StaticPolicy {
             record: empty_record(_decision.stamp.decision_point),
         })
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Prior cells — the kernel-derived materialized view (§5e.3; ADR-0078 D4)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `PriorCell` — the deterministic materialized view over
+/// `control.compute.decided` outcomes (§5e.3 "the store folds
+/// `control.compute.decided` outcomes by cell (profile, snapshot, class,
+/// option)"; ADR-0078's kernel-derived view — a derived store, never a
+/// source). The fold joins each cell-carrying decision to the next
+/// `verification.validator.verdict` after it (one observation — the
+/// verdict the decision earned), else the enclosing run's
+/// `lifecycle.run.finished` `outcome_class` (`success` ⇒ 1.0). Cells
+/// observed at or before `cleared_seq` do not fold — the AC-F4-9
+/// `prior_reset` boundary.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct PriorCell {
+    /// Observations joined in-window.
+    pub n: u32,
+    /// Reward mean (ppm; `None` at `n = 0` — the `unknown` rendering).
+    pub mean_ppm: Option<i64>,
+    /// Wilson lower/upper bounds (ppm; `None` below two observations).
+    pub interval: Option<(i64, i64)>,
+}
+
+/// `cell_key` — the materialized prior-cell coordinate
+/// `(profile, snapshot_fingerprint, task_class, option)`. `profile_ref`/
+/// `snapshot_fingerprint`/`task_class` read `-` when unbound — the cell
+/// *key* is the coordinate tuple, separate from the admission question
+/// [`prior_admissible`] answers.
+pub fn cell_key(ctx: &ComputeContext, option: &ComputeOption) -> String {
+    format!(
+        "{}|{}|{}|{}",
+        ctx.profile_ref.as_deref().unwrap_or("-"),
+        ctx.snapshot_fingerprint.as_deref().unwrap_or("-"),
+        ctx.task_class.as_deref().unwrap_or("-"),
+        option_key(option),
+    )
+}
+
+/// `prior_admissible` — whether a prior-backed variant may consult cells
+/// for this decision. AC-F4-12 / ADR-0189 D8: cell keys join on
+/// `profile_ref`; a `bandit`/`surface_prior` decision that cannot name
+/// the bound profile refuses rather than reading unkeyed cells (the
+/// IncommensurableMatch contract — an unmatched cell is never pooled).
+pub fn prior_admissible(ctx: &ComputeContext) -> Result<(), ComputeError> {
+    if ctx.profile_ref.is_none() {
+        return Err(ComputeError::PolicyInvalid {
+            rule_id: "prior".into(),
+            reason: "prior-backed variant requires profile_ref".into(),
+        });
+    }
+    Ok(())
+}
+
+/// `wilson_interval` — integer Wilson bounds (z = 2) over ppm mass —
+/// the internet-vocab `interval` a cell publishes. Exact integer Newton
+/// sqrt; no floats — the fold stays reproducible.
+fn wilson_interval(mean_ppm: i64, n: u32) -> (i64, i64) {
+    if n == 0 {
+        return (0, 1_000_000);
+    }
+    const PPM: u128 = 1_000_000;
+    let (p, n) = (u128::from(mean_ppm.max(0) as u64), u128::from(n));
+    let den = n + 4; // (n + z²) with z² = 4
+    let centre = (n * p + 2 * PPM) / den;
+    let half = 2 * isqrt_u128(p * (PPM - p) * n + PPM * PPM) / den;
+    let lo = centre.saturating_sub(half);
+    let hi = (centre + half).min(PPM);
+    (lo as i64, hi as i64)
+}
+
+/// Integer square root — Newton's method, deterministic.
+fn isqrt_u128(x: u128) -> u128 {
+    if x == 0 {
+        return 0;
+    }
+    let mut r = x;
+    let mut y = (r + 1) / 2;
+    while y < r {
+        r = y;
+        y = (r + x / r) / 2;
+    }
+    r
+}
+
+/// `ln_milli` — `ln(n)·1e6` via the atanh series at `n = 2^k·m`,
+/// `m ∈ [1,2)` — integer-only so the UCB bonus stays reproducible.
+fn ln_milli(n: u64) -> u64 {
+    if n == 0 {
+        return 0;
+    }
+    let k = 63 - n.leading_zeros() as u64; // n = 2^k · m, m ∈ [1,2)
+    let m6 = (u128::from(n) << 20) >> k; // m · 1e6
+    let t = (m6 - 1_000_000) * 1_000_000 / (m6 + 1_000_000); // (m-1)/(m+1)
+    let t2 = t * t / 1_000_000;
+    let mut term = t;
+    let mut sum = 0u128;
+    for i in 0..10u128 {
+        sum += term / (2 * i + 1);
+        term = term * t2 / 1_000_000;
+    }
+    let ln_m = 2 * sum;
+    (k as u128 * 693_147 + ln_m) as u64 // + k·ln2
+}
+
+/// `prior_cells` — fold `events` (a run prefix, seq-ascending) into the
+/// materialized `PriorCell` view. Only `decided` rows carrying a `cell`
+/// member fold (prior-backed variants stamp it at bind; `rules`/`uniform`
+/// leave the view empty — online learning is opt-in per variant).
+/// `cleared_seq` is the AC-F4-9 boundary: rows at or before it never
+/// contribute — the reset hides cells wholesale, no cross-window pooling.
+pub fn prior_cells(
+    events: &[hh_ledger::event::EventEnvelope],
+    cleared_seq: u64,
+) -> BTreeMap<String, PriorCell> {
+    let mut cells: BTreeMap<String, PriorCell> = BTreeMap::new();
+    let mut sums: BTreeMap<String, u128> = BTreeMap::new();
+    for (i, e) in events.iter().enumerate() {
+        if e.class != "control.compute.decided" {
+            continue;
+        }
+        let Some(cell) = e.payload.get("cell").and_then(Json::as_str) else {
+            continue;
+        };
+        if e.seq <= cleared_seq {
+            continue;
+        }
+        // The reward join: the next validator verdict after the decision
+        // (the verdict the decision earned — one observation), else the
+        // enclosing run's outcome class once finished.
+        let reward_ppm = events[i + 1..]
+            .iter()
+            .find(|f| f.class == "verification.validator.verdict")
+            .and_then(|f| f.payload.get("verdict"))
+            .map(|v| {
+                if hh_verification::bind::verdict_affirmative(v) {
+                    1_000_000u128
+                } else {
+                    0
+                }
+            })
+            .or_else(|| {
+                events
+                    .iter()
+                    .rev()
+                    .find(|f| f.class == "lifecycle.run.finished")
+                    .and_then(|f| f.payload.get("outcome_class").and_then(Json::as_str))
+                    .map(|o| if o == "success" { 1_000_000u128 } else { 0 })
+            });
+        let Some(r) = reward_ppm else {
+            continue; // decision still unobserved — no cell mass yet
+        };
+        let c = cells.entry(cell.to_string()).or_default();
+        *sums.entry(cell.to_string()).or_default() += r;
+        c.n += 1;
+        c.mean_ppm = Some((sums[cell] / u128::from(c.n)) as i64);
+        c.interval = if c.n >= 2 {
+            Some(wilson_interval(c.mean_ppm.unwrap(), c.n))
+        } else {
+            None
+        };
+    }
+    cells
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1477,7 +1746,7 @@ impl ComputePolicy for UniformPolicy {
             decision,
             ctx,
             "uniform",
-            &eval_options(decision, ctx, &RulesConfig::default()),
+            &eval_options(decision, ctx, &RulesConfig::default(), &DelegationConstraint::default()),
             vec!["uniform.max".into()],
             binding,
             1_000_000,
@@ -1486,8 +1755,399 @@ impl ComputePolicy for UniformPolicy {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// `bandit` / `surface_prior` — the prior-backed variants (S5.5; §5e.3)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `BanditConfig` — the UCB-over-prior-cells scheduler (the `bandit`
+/// variant): `score = μ + c·√(ln N/n) − λ·E[cost]`, where `(μ, interval)`
+/// come from [`prior_cells`] (the kernel-derived view — the bandit never
+/// stores a cell itself). `explore`/`min_n`/`window` are MUST-data with
+/// `AssumptionDebtRecord`s (`debt`; `min_n` is the OQ-420 placeholder the
+/// stage's learned-vs-static column closes).
+#[derive(Debug, Clone)]
+pub struct BanditConfig {
+    /// UCB exploration constant `c` (ppm-scaled; `1_000_000` ≈ 1.0).
+    pub explore_ppm: u32,
+    /// Cells with `n < min_n` read as `unknown` — no prior pull.
+    pub min_n: u32,
+    /// Observation window (envelope seqs); `0` = since the last reset —
+    /// the post-`prior_reset` view already hides pre-reset cells.
+    pub window: u64,
+    /// `λ` — the cost weight (ppm).
+    pub lambda_ppm: i64,
+    /// The shared rules rows/fallback machinery.
+    pub rules: RulesConfig,
+    /// The family's mandated debt record (§5e.4's expiry set).
+    pub debt: PolicyDebt,
+}
+
+impl Default for BanditConfig {
+    fn default() -> BanditConfig {
+        BanditConfig {
+            explore_ppm: 1_000_000,
+            min_n: 3,
+            window: 0,
+            lambda_ppm: 500_000,
+            rules: RulesConfig::default(),
+            debt: PolicyDebt::mandated("lab/value-of-compute-v1"),
+        }
+    }
+}
+
+/// A cell's mean plus the UCB bonus for `option` — `None` when the cell
+/// is absent, expired (`valid_until < now_seq`) or below `min_n` (the
+/// `unknown` read).
+fn prior_overlay(
+    ctx: &ComputeContext,
+    option: &ComputeOption,
+    explore_ppm: u32,
+    min_n: u32,
+) -> Option<(i64, i64, Option<(i64, i64)>)> {
+    let key = cell_key(ctx, option);
+    let p = ctx.priors.iter().find(|p| p.cell == key)?;
+    if p.valid_until.is_some_and(|t| ctx.now_seq > t) || p.n < min_n {
+        return None;
+    }
+    // UCB: c·√(ln N / n). N = the run-total fold mass (a deterministic
+    // over-count across cells — a per-decision timestamp would do, but
+    // the ledger keeps no decided_clock row; flagged in the debt record).
+    let total: u64 = ctx.priors.iter().map(|p| u64::from(p.n)).sum();
+    let arg = ln_milli(total.saturating_add(1)) / u64::from(p.n);
+    let bonus =
+        u64::from(explore_ppm) * isqrt_u128(u128::from(arg) * 1_000_000) as u64 / 1_000_000;
+    Some((p.mean_ppm, bonus as i64, p.interval))
+}
+
+/// Annotate feasible rows with their admissible cell's `μ + bonus` as the
+/// Δ — the bandit ranks on Δ like `rules`, never an absolute score.
+/// Returns whether any option carried a prior (else the variant falls
+/// back to `rules`, cold-start).
+fn annotate_priors(
+    rows: &mut [OptionRow],
+    ctx: &ComputeContext,
+    explore_ppm: u32,
+    min_n: u32,
+) -> bool {
+    let mut scored = false;
+    for r in rows.iter_mut() {
+        if let OptionEstimate::Estimate(e) = &mut r.estimate {
+            if let Some((mu, bonus, interval)) =
+                prior_overlay(ctx, &r.option, explore_ppm, min_n)
+            {
+                e.delta_p = DeltaP {
+                    point_ppm: Some(mu + bonus),
+                    interval,
+                    source: DeltaPSource::Prior,
+                };
+                e.evidence_refs.push("prior_cell".to_string());
+                scored = true;
+            }
+        }
+    }
+    scored
+}
+
+/// `BanditPolicy` — UCB over [`prior_cells`]: binds like `rules`, stamps
+/// `cell` on the decided row so the fold learns (the parent-annotated
+/// cell a share/T3 child writes to; ADR-0190 D3), falls back to `rules`
+/// when no admissible cell exists — the decided row records
+/// `estimator_ref.variant_ref = "rules"` plus `bandit.cold_start` in
+/// `rules_fired` (F4-8/#963's explainable substitution).
+pub struct BanditPolicy {
+    /// The bandit/prior thresholds.
+    pub config: BanditConfig,
+}
+
+impl ComputePolicy for BanditPolicy {
+    fn variant_ref(&self) -> &str {
+        "bandit"
+    }
+
+    fn capabilities(&self) -> PolicyCapabilities {
+        PolicyCapabilities {
+            options_supported: ComputeOptionKind::ALL.iter().copied().collect(),
+            decision_points: all_decision_points(),
+            makes_model_calls: false,
+            estimator_ref: Some("bandit".into()),
+            requires_task_value: false,
+            requires_priors: true,
+            deterministic: true,
+        }
+    }
+
+    fn bind(
+        &self,
+        decision: &ControlDecision,
+        ctx: &ComputeContext,
+    ) -> Result<BindOutcome, ComputeError> {
+        self.config.rules.validate()?;
+        prior_admissible(ctx)?;
+        let delegation = eval_delegation_rules(&self.config.rules, ctx, decision);
+        let mut rows = eval_options(decision, ctx, &self.config.rules, &delegation);
+        let scored = annotate_priors(&mut rows, ctx, self.config.explore_ppm, self.config.min_n);
+        let variant = if scored { "bandit" } else { "rules" };
+        let binding = rules_binding(decision, ctx, &rows, &self.config.rules, &delegation);
+        let mut fired = rules_fired(&rows);
+        fired.extend(delegation.fired.iter().cloned());
+        if !scored {
+            fired.push("bandit.cold_start".to_string());
+        }
+        let mut b =
+            finish_bind(decision, ctx, variant, &rows, fired, binding, self.config.lambda_ppm)?;
+        // The chosen option's cell key rides the decided row so the
+        // [`prior_cells`] fold attributes the verdict/outcome — cold-start
+        // decisions included (the first observation seeds the cell).
+        let record = record_mut(&mut b);
+        record.cell = Some(cell_key(ctx, &record.chosen));
+        record.record_id = record.compute_record_id();
+        Ok(b)
+    }
+}
+
+/// `SurfacePriorPolicy` — the `surface_prior` variant: the informed-Δ
+/// half of bandit — cell means rank options (interval ordering, **no UCB
+/// bonus** — AC-F4-10's "assisted vs autonomous" cell confound); same
+/// cells, same reset, same `rules` fallback.
+pub struct SurfacePriorPolicy {
+    /// The prior thresholds.
+    pub config: BanditConfig,
+}
+
+impl ComputePolicy for SurfacePriorPolicy {
+    fn variant_ref(&self) -> &str {
+        "surface_prior"
+    }
+
+    fn capabilities(&self) -> PolicyCapabilities {
+        PolicyCapabilities {
+            options_supported: ComputeOptionKind::ALL.iter().copied().collect(),
+            decision_points: all_decision_points(),
+            makes_model_calls: false,
+            estimator_ref: Some("surface_prior".into()),
+            requires_task_value: false,
+            requires_priors: true,
+            deterministic: true,
+        }
+    }
+
+    fn bind(
+        &self,
+        decision: &ControlDecision,
+        ctx: &ComputeContext,
+    ) -> Result<BindOutcome, ComputeError> {
+        self.config.rules.validate()?;
+        prior_admissible(ctx)?;
+        let delegation = eval_delegation_rules(&self.config.rules, ctx, decision);
+        let mut rows = eval_options(decision, ctx, &self.config.rules, &delegation);
+        let scored = annotate_priors(&mut rows, ctx, 0, self.config.min_n);
+        let variant = if scored { "surface_prior" } else { "rules" };
+        let binding = rules_binding(decision, ctx, &rows, &self.config.rules, &delegation);
+        let mut fired = rules_fired(&rows);
+        fired.extend(delegation.fired.iter().cloned());
+        if !scored {
+            fired.push("surface_prior.cold_start".to_string());
+        }
+        let mut b =
+            finish_bind(decision, ctx, variant, &rows, fired, binding, self.config.lambda_ppm)?;
+        let record = record_mut(&mut b);
+        record.cell = Some(cell_key(ctx, &record.chosen));
+        record.record_id = record.compute_record_id();
+        Ok(b)
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // `rules` — the C3 baseline (ADR-0189 D3: five conditioned rules, no calls)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// `PolicyDebt` — the `AssumptionDebtRecord` a non-`static` rule/prior
+/// family carries (§5e.4; T-LCD-05): `expiry_condition ⊇
+/// {profile_superseded, provider_drift_observed, suite_validity_superseded,
+/// age_beyond_window}` and `removal_test_ref` naming the retirement arm
+/// (`lab/value-of-compute-v1`'s conditioned-rule removal — the experiment
+/// that retires the family).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PolicyDebt {
+    /// The expiry-condition spellings the debt record declares.
+    pub expiry_conditions: Vec<String>,
+    /// The retirement experiment the family retires under.
+    pub removal_test_ref: String,
+}
+
+impl PolicyDebt {
+    /// The mandated expiry set — a tighter record may add conditions,
+    /// never drop one.
+    pub fn mandated(removal_test_ref: &str) -> PolicyDebt {
+        PolicyDebt {
+            expiry_conditions: [
+                "profile_superseded",
+                "provider_drift_observed",
+                "suite_validity_superseded",
+                "age_beyond_window",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+            removal_test_ref: removal_test_ref.to_string(),
+        }
+    }
+
+    /// From `{expiry_conditions[], removal_test_ref}`.
+    pub fn from_json(j: &Json) -> Option<PolicyDebt> {
+        Some(PolicyDebt {
+            expiry_conditions: match j.get("expiry_conditions") {
+                Some(Json::Arr(a)) => {
+                    a.iter().map(|v| v.as_str().map(str::to_string)).collect::<Option<_>>()?
+                }
+                _ => return None,
+            },
+            removal_test_ref: j.get("removal_test_ref")?.as_str()?.to_string(),
+        })
+    }
+
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            (
+                "expiry_conditions",
+                Json::Arr(self.expiry_conditions.iter().map(Json::str).collect()),
+            ),
+            ("removal_test_ref", Json::str(&self.removal_test_ref)),
+        ])
+    }
+}
+
+/// `DelegationRule` — a profile-conditioned delegation rule (R-2.6.3's
+/// Stage-5 surface; §5e.3 "profile-conditioned delegation rules with debt
+/// records"): evaluated at `delegate` decisions by the scheduler, inert
+/// unless `ctx.profile_ref == conditioned_on`. Every rule names its
+/// `AssumptionDebtRecord` (`debt_ref` — a conditioned rule without debt
+/// is never admitted; [`RulesConfig::validate`] refuses it).
+#[derive(Debug, Clone, PartialEq)]
+pub struct DelegationRule {
+    /// The rule id (lands in `rules_fired` when the rule applies).
+    pub rule_id: String,
+    /// The `ProfileRef` coordinate the rule is conditioned on.
+    pub conditioned_on: String,
+    /// The rule's effect on the delegate decision.
+    pub effect: DelegationRuleEffect,
+    /// The rule's assumption-debt record ref.
+    pub debt_ref: String,
+}
+
+/// The closed `DelegationRule` effect set.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DelegationRuleEffect {
+    /// Every `spawn_subagent` option is excluded (`policy_excluded`) — the
+    /// conditioned profile may not delegate here.
+    RefuseDelegate,
+    /// `live_fan_out + 1 ≤ k` — a *tightening* cap over the declared gauge
+    /// (a rule may only narrow, never widen, the envelope's cap).
+    FanOutCap(u32),
+    /// The delegation must carry this reason — a declared different reason
+    /// excludes `spawn_subagent`; an absent reason binds it.
+    RequireReason(String),
+}
+
+impl DelegationRule {
+    /// The canonical JSON (`{rule_id, conditioned_on, effect{…},
+    /// debt_ref}` — the sealed slot-param row).
+    pub fn to_json(&self) -> Json {
+        let effect = match &self.effect {
+            DelegationRuleEffect::RefuseDelegate => {
+                Json::obj([("kind", Json::str("refuse_delegate"))])
+            }
+            DelegationRuleEffect::FanOutCap(k) => Json::obj([
+                ("kind", Json::str("fan_out_cap")),
+                ("k", Json::Int(*k as i64)),
+            ]),
+            DelegationRuleEffect::RequireReason(r) => Json::obj([
+                ("kind", Json::str("require_reason")),
+                ("reason", Json::str(r)),
+            ]),
+        };
+        Json::obj([
+            ("rule_id", Json::str(&self.rule_id)),
+            ("conditioned_on", Json::str(&self.conditioned_on)),
+            ("effect", effect),
+            ("debt_ref", Json::str(&self.debt_ref)),
+        ])
+    }
+
+    /// From canonical JSON — a closed-effect member fails `None`.
+    pub fn from_json(j: &Json) -> Option<DelegationRule> {
+        let effect = match j.get("effect")?.get("kind")?.as_str()? {
+            "refuse_delegate" => DelegationRuleEffect::RefuseDelegate,
+            "fan_out_cap" => DelegationRuleEffect::FanOutCap(
+                j.get("effect")?.get("k")?.as_int()?.max(0) as u32,
+            ),
+            "require_reason" => DelegationRuleEffect::RequireReason(
+                j.get("effect")?.get("reason")?.as_str()?.to_string(),
+            ),
+            _ => return None,
+        };
+        Some(DelegationRule {
+            rule_id: j.get("rule_id")?.as_str()?.to_string(),
+            conditioned_on: j.get("conditioned_on")?.as_str()?.to_string(),
+            effect,
+            debt_ref: j.get("debt_ref")?.as_str()?.to_string(),
+        })
+    }
+}
+
+/// The evaluated delegation constraint — rules whose `conditioned_on`
+/// matches `ctx.profile_ref` compose; `fired` lands in `rules_fired`.
+#[derive(Debug, Clone, Default)]
+pub struct DelegationConstraint {
+    /// A matched `refuse_delegate` rule fired.
+    pub refuse: bool,
+    /// The tightest matched `fan_out_cap` (rules compose by `min`).
+    pub fan_out_cap: Option<u32>,
+    /// The matched `require_reason` (the tightest wins — a second
+    /// differing requirement is contradictory and excludes the option).
+    pub require_reason: Option<String>,
+    /// The rule ids that applied (profile matched).
+    pub fired: Vec<String>,
+}
+
+/// Evaluate `cfg.delegation_rules` against `(decision, ctx)` — only on a
+/// `delegate` decision, only for the bound profile. An unmatched profile
+/// (`None` or a different coordinate) leaves every rule inert.
+pub fn eval_delegation_rules(
+    cfg: &RulesConfig,
+    ctx: &ComputeContext,
+    decision: &ControlDecision,
+) -> DelegationConstraint {
+    let mut c = DelegationConstraint::default();
+    if !matches!(decision.kind, DecisionKind::Delegate { .. }) {
+        return c;
+    }
+    let Some(profile) = ctx.profile_ref.as_deref() else {
+        return c;
+    };
+    for r in &cfg.delegation_rules {
+        if r.conditioned_on != profile {
+            continue;
+        }
+        c.fired.push(r.rule_id.clone());
+        match &r.effect {
+            DelegationRuleEffect::RefuseDelegate => c.refuse = true,
+            DelegationRuleEffect::FanOutCap(k) => {
+                c.fan_out_cap = Some(c.fan_out_cap.map_or(*k, |m| m.min(*k)));
+            }
+            DelegationRuleEffect::RequireReason(reason) => {
+                // Two differing requirements compose to a refusal — the
+                // constraint names both rules and cannot be satisfied.
+                match &c.require_reason {
+                    None => c.require_reason = Some(reason.clone()),
+                    Some(prev) if prev != reason => c.refuse = true,
+                    _ => {}
+                }
+            }
+        }
+    }
+    c
+}
 
 /// `RulesConfig` — the conditioned-rule thresholds (MUST-data with
 /// `AssumptionDebtRecord`s; the Stage-4 placeholder set ADR-0189 names:
@@ -1506,6 +2166,55 @@ pub struct RulesConfig {
     pub streak_n: u32,
     /// `λ` — the objective's cost weight (ppm).
     pub lambda_ppm: i64,
+    /// `delegation_rules[]` — the profile-conditioned delegation rules the
+    /// variant evaluates at `delegate` decisions (S5.5).
+    pub delegation_rules: Vec<DelegationRule>,
+    /// The family's assumption-debt record (§5e.4's expiry set — the
+    /// thresholds are themselves conditioned rules).
+    pub debt: PolicyDebt,
+}
+
+impl RulesConfig {
+    /// Refuse a config whose conditioned rules lack debt records or
+    /// conditioning — CC3/§3.2.3 (a profile-conditioned rule is only ever
+    /// admitted with its `AssumptionDebtRecord`).
+    pub fn validate(&self) -> Result<(), ComputeError> {
+        for r in &self.delegation_rules {
+            if r.rule_id.is_empty() || r.conditioned_on.is_empty() || r.debt_ref.is_empty() {
+                return Err(ComputeError::PolicyInvalid {
+                    rule_id: r.rule_id.clone(),
+                    reason: "delegation rule lacks id/conditioned_on/debt_ref".into(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// From the sealed `compute_policy` slot's `rules` member
+    /// (`{theta_agree_ppm?, agree_window?, child_floor_ppm?, streak_n?,
+    /// lambda_ppm?, delegation_rules[]?, debt{expiry_conditions[],
+    /// removal_test_ref}?}` — absent members take the defaults; an
+    /// inadmissible member fails `None`, never coerces).
+    pub fn from_json(j: &Json) -> Option<RulesConfig> {
+        let int = |k: &str| j.get(k).and_then(Json::as_int);
+        let d = RulesConfig::default();
+        Some(RulesConfig {
+            theta_agree_ppm: int("theta_agree_ppm").unwrap_or(d.theta_agree_ppm),
+            agree_window: int("agree_window").map(|v| v.max(0) as u32).unwrap_or(d.agree_window),
+            child_floor_ppm: int("child_floor_ppm").unwrap_or(d.child_floor_ppm),
+            streak_n: int("streak_n").map(|v| v.max(0) as u32).unwrap_or(d.streak_n),
+            lambda_ppm: int("lambda_ppm").unwrap_or(d.lambda_ppm),
+            delegation_rules: match j.get("delegation_rules") {
+                Some(Json::Arr(a)) => a.iter().map(DelegationRule::from_json).collect::<Option<_>>()?,
+                Some(_) => return None,
+                None => vec![],
+            },
+            debt: j
+                .get("debt")
+                .and_then(PolicyDebt::from_json)
+                .unwrap_or_else(|| PolicyDebt::mandated("lab/value-of-compute-v1")),
+        })
+    }
 }
 
 impl Default for RulesConfig {
@@ -1516,6 +2225,8 @@ impl Default for RulesConfig {
             child_floor_ppm: 100_000,
             streak_n: 2,
             lambda_ppm: 500_000,
+            delegation_rules: vec![],
+            debt: PolicyDebt::mandated("lab/value-of-compute-v1"),
         }
     }
 }
@@ -1625,14 +2336,18 @@ impl ComputePolicy for RulesPolicy {
         if self.capabilities().requires_task_value && ctx.task_value.is_none() {
             return Err(ComputeError::TaskValueMissing);
         }
-        let rows = eval_options(decision, ctx, &self.config);
-        let binding = rules_binding(decision, ctx, &rows, &self.config);
+        self.config.validate()?;
+        let delegation = eval_delegation_rules(&self.config, ctx, decision);
+        let rows = eval_options(decision, ctx, &self.config, &delegation);
+        let binding = rules_binding(decision, ctx, &rows, &self.config, &delegation);
+        let mut fired = rules_fired(&rows);
+        fired.extend(delegation.fired.iter().cloned());
         finish_bind(
             decision,
             ctx,
             "rules",
             &rows,
-            rules_fired(&rows),
+            fired,
             binding,
             self.config.lambda_ppm,
         )
@@ -1673,6 +2388,7 @@ fn empty_record(point: DecisionPoint) -> ComputeDecisionRecord {
             task_value_ref: None,
         },
         cost_of_estimation: ResourceVector::zero(),
+        cell: None,
     }
 }
 
@@ -1857,6 +2573,7 @@ fn eval_options(
     decision: &ControlDecision,
     ctx: &ComputeContext,
     cfg: &RulesConfig,
+    delegation: &DelegationConstraint,
 ) -> Vec<OptionRow> {
     let mut rows = Vec::with_capacity(7);
 
@@ -1875,13 +2592,28 @@ fn eval_options(
     // declared parallel steps/subagent_task targets, under both gauges,
     // with a reservable slice ≥ child_floor.
     match &decision.kind {
-        DecisionKind::Delegate { .. } => {
+        DecisionKind::Delegate { delegation_reason, .. } => {
+            // Profile-conditioned delegation rules (S5.5): a matched
+            // `refuse_delegate` or a declared reason contradicting a
+            // `require_reason` rule excludes `spawn_subagent` outright.
+            let reason_refused = match (&delegation.require_reason, delegation_reason) {
+                (Some(req), Some(Json::Str(declared))) => declared != req,
+                _ => false,
+            };
             if !parallel_declared(ctx) {
                 rows.push(infeasible(
                     ComputeOptionKind::SpawnSubagent,
                     ComputeInfeasible::UndeclaredParallelism,
                 ));
+            } else if delegation.refuse || reason_refused {
+                rows.push(infeasible(
+                    ComputeOptionKind::SpawnSubagent,
+                    ComputeInfeasible::PolicyExcluded,
+                ));
             } else if ctx.budget.live_fan_out >= ctx.budget.fan_out_cap
+                || delegation
+                    .fan_out_cap
+                    .is_some_and(|k| ctx.budget.live_fan_out >= k)
                 || ctx.budget.delegation_depth >= ctx.budget.delegation_depth_cap
             {
                 rows.push(infeasible(
@@ -2228,13 +2960,21 @@ fn rules_fired(rows: &[OptionRow]) -> Vec<String> {
             OptionEstimate::Estimate(e) if e.delta_p.point_ppm.is_some_and(|p| p > 0)
         );
         if positive {
-            fired.push(match r.option.kind {
-                ComputeOptionKind::SpawnSubagent => "compute_rule.spawn_declared_parallel",
-                ComputeOptionKind::ExtendSearch => "compute_rule.extend_search_agreement",
-                ComputeOptionKind::Evaluator => "compute_rule.evaluator_calibration",
-                ComputeOptionKind::EffortLevel => "compute_rule.effort_streak",
-                ComputeOptionKind::AlternateRole => "compute_rule.alternate_role_streak",
-                _ => "compute_rule.continue",
+            let prior_sourced = matches!(
+                &r.estimate,
+                OptionEstimate::Estimate(e) if e.delta_p.source == DeltaPSource::Prior
+            );
+            fired.push(if prior_sourced {
+                "compute_rule.prior_cell"
+            } else {
+                match r.option.kind {
+                    ComputeOptionKind::SpawnSubagent => "compute_rule.spawn_declared_parallel",
+                    ComputeOptionKind::ExtendSearch => "compute_rule.extend_search_agreement",
+                    ComputeOptionKind::Evaluator => "compute_rule.evaluator_calibration",
+                    ComputeOptionKind::EffortLevel => "compute_rule.effort_streak",
+                    ComputeOptionKind::AlternateRole => "compute_rule.alternate_role_streak",
+                    _ => "compute_rule.continue",
+                }
             });
         }
     }
@@ -2281,6 +3021,7 @@ fn rules_binding(
     ctx: &ComputeContext,
     rows: &[OptionRow],
     cfg: &RulesConfig,
+    delegation: &DelegationConstraint,
 ) -> BTreeMap<String, Json> {
     let mut best: Option<(&OptionRow, i64)> = None;
     for r in rows {
@@ -2317,9 +3058,16 @@ fn rules_binding(
             }
             if matches!(&decision.kind, DecisionKind::Delegate { delegation_reason, .. } if delegation_reason.is_none())
             {
+                // A matched `require_reason` rule owns the bound spelling;
+                // otherwise the topology-default `parallelism` stands.
                 binding.insert(
                     "delegate.delegation_reason".into(),
-                    Json::str("parallelism"),
+                    Json::str(
+                        delegation
+                            .require_reason
+                            .as_deref()
+                            .unwrap_or("parallelism"),
+                    ),
                 );
             }
         }
@@ -2353,6 +3101,13 @@ fn rules_binding(
 // The shared finish — apply the binding, verify B-1/B-2, build the record
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// `record_mut` — the decided record inside either `BindOutcome` arm.
+fn record_mut(outcome: &mut BindOutcome) -> &mut ComputeDecisionRecord {
+    match outcome {
+        BindOutcome::Bound { record, .. } | BindOutcome::Unchanged { record } => record,
+    }
+}
+
 fn finish_bind(
     decision: &ControlDecision,
     ctx: &ComputeContext,
@@ -2383,14 +3138,20 @@ fn finish_bind(
             version_id: "0".into(),
         },
         rules_fired: fired,
+        // AC-F4-9's `unknown` read: `n = 0` or an expired cell renders
+        // `mean: null` — the reset is observable on the decided row.
         priors_used: ctx
             .priors
             .iter()
             .map(|p| PriorUsed {
                 cell: p.cell.clone(),
                 n: p.n,
-                mean_ppm: Some(p.mean_ppm),
-                interval: p.interval,
+                mean_ppm: if p.n == 0 || p.valid_until.is_some_and(|t| ctx.now_seq > t) {
+                    None
+                } else {
+                    Some(p.mean_ppm)
+                },
+                interval: if p.n == 0 { None } else { p.interval },
                 valid_until: p.valid_until,
             })
             .collect(),
@@ -2402,6 +3163,7 @@ fn finish_bind(
             task_value_ref: ctx.task_value.as_ref().map(|t| t.contract_ref.clone()),
         },
         cost_of_estimation: ResourceVector::zero(),
+        cell: None,
     };
     record.record_id = record.compute_record_id();
 
@@ -2473,6 +3235,16 @@ fn inputs_read(ctx: &ComputeContext) -> Vec<String> {
     if ctx.task_value.is_some() {
         v.push("task_value".to_string());
     }
+    if ctx.profile_ref.is_some() {
+        v.push("profile_ref".to_string());
+    }
+    if ctx.snapshot_fingerprint.is_some() {
+        v.push("snapshot_fingerprint".to_string());
+    }
+    if ctx.task_class.is_some() {
+        v.push("task_class".to_string());
+    }
+    v.push("now_seq".to_string());
     if ctx.ensemble.is_some() {
         v.push("ensemble".to_string());
     }
@@ -2633,6 +3405,28 @@ fn ctx_json(ctx: &ComputeContext) -> Json {
                 .map(Json::str)
                 .unwrap_or(Json::Null),
         ),
+        (
+            "profile_ref",
+            ctx.profile_ref
+                .as_deref()
+                .map(Json::str)
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "snapshot_fingerprint",
+            ctx.snapshot_fingerprint
+                .as_deref()
+                .map(Json::str)
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "task_class",
+            ctx.task_class
+                .as_deref()
+                .map(Json::str)
+                .unwrap_or(Json::Null),
+        ),
+        ("now_seq", Json::Int(ctx.now_seq as i64)),
     ])
 }
 
@@ -3118,6 +3912,10 @@ mod tests {
             health: HealthView::Ok,
             task_value: None,
             context_label: None,
+            profile_ref: None,
+            snapshot_fingerprint: None,
+            task_class: None,
+            now_seq: 0,
         }
     }
 
@@ -3184,13 +3982,10 @@ mod tests {
         assert!(policy_for("static").is_ok());
         assert!(policy_for("uniform").is_ok());
         assert!(policy_for("rules").is_ok());
-        for v in [
-            "bandit",
-            "surface_prior",
-            "predictor",
-            "oracle_allocation",
-            "bogus",
-        ] {
+        // S5.5 — the prior-backed variants are admitted class members.
+        assert!(policy_for("bandit").is_ok());
+        assert!(policy_for("surface_prior").is_ok());
+        for v in ["predictor", "oracle_allocation", "bogus"] {
             assert!(matches!(
                 policy_for(v),
                 Err(ComputeError::VariantNotAdmitted { .. })
@@ -3643,5 +4438,388 @@ mod tests {
             *context_request = Json::obj([("effort", Json::str("high"))]);
         }
         assert!(check_bound(&high_before, &before, &down_ctx).is_ok());
+    }
+    // ── S5.5 — prior cells, bandit/surface_prior, delegation rules ────────
+
+    fn decided_row(seq: u64, cell: &str, _verdict: Option<bool>) -> hh_ledger::event::EventEnvelope {
+        use hh_ledger::classes::Durability;
+        use hh_ledger::event::{EventPlane, Producer, Scope};
+        use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
+        hh_ledger::event::EventEnvelope {
+            event_id: format!("e{seq}"),
+            run_id: "r".into(),
+            seq,
+            ts: "t".into(),
+            hlc: None,
+            plane: EventPlane::Action,
+            class: "control.compute.decided".into(),
+            schema_version: 1,
+            producer: Producer::kernel("t"),
+            participant_class: ParticipantClass::Native,
+            observability_level: [ObservabilityLevel::Events].into_iter().collect(),
+            durability: Durability::Ledger,
+            scope: Scope {
+                turn_id: None,
+                model_call_id: None,
+                tool_call_id: None,
+                effect_id: None,
+                child_run_id: None,
+                component_call_id: None,
+                branch_id: None,
+            },
+            lease_generation: 1,
+            parent_event_id: "root".into(),
+            causes: vec![],
+            refs: vec![],
+            ir_refs: vec![],
+            surface_ids: Default::default(),
+            provenance: None,
+            payload: Json::obj([
+                ("cell", Json::str(cell)),
+            ]),
+            prev_hash: "h".into(),
+            hash: "h".into(),
+        }
+    }
+
+    fn verdict_row(seq: u64, ok: bool) -> hh_ledger::event::EventEnvelope {
+        let mut e = decided_row(seq, "-", None);
+        e.class = "verification.validator.verdict".into();
+        e.payload = Json::obj([(
+            "verdict",
+            Json::str(if ok { "pass" } else { "fail" }),
+        )]);
+        e
+    }
+
+    /// A delegate ctx with declared parallelism + a bound profile — the
+    /// prior-backed variants' admission surface.
+    fn delegate_ctx() -> ComputeContext {
+        let mut ctx = ctx_base();
+        ctx.declared_parallel_steps = 2;
+        ctx.profile_ref = Some("profile/a".into());
+        ctx.snapshot_fingerprint = Some("snap/1".into());
+        ctx.task_class = Some("task/coding".into());
+        ctx
+    }
+
+    /// The cell key a `spawn_subagent` option reads under `delegate_ctx`.
+    fn spawn_cell(ctx: &ComputeContext) -> String {
+        cell_key(
+            ctx,
+            &ComputeOption {
+                kind: ComputeOptionKind::SpawnSubagent,
+                extend_kind: None,
+                target: None,
+                qualifier: None,
+            },
+        )
+    }
+
+    #[test]
+    fn bandit_binds_and_stamps_the_prior_cell() {
+        let mut ctx = delegate_ctx();
+        let cell = spawn_cell(&ctx);
+        // A warm cell — n above `min_n`, positive mean.
+        ctx.priors = vec![
+            PriorFact {
+                cell: cell.clone(),
+                n: 4,
+                mean_ppm: 900_000,
+                interval: Some((700_000, 990_000)),
+                valid_until: None,
+            },
+            PriorFact {
+                cell: "other/cell".into(),
+                n: 10,
+                mean_ppm: 100_000,
+                interval: Some((0, 300_000)),
+                valid_until: None,
+            },
+        ];
+        let p = BanditPolicy {
+            config: BanditConfig::default(),
+        };
+        let out = p.bind(&delegate(), &ctx).unwrap();
+        let record = match &out {
+            BindOutcome::Bound { record, .. } => record,
+            BindOutcome::Unchanged { record } => record,
+        };
+        assert_eq!(record.cell.as_deref(), Some(cell.as_str()));
+        assert_eq!(record.estimator_ref.variant_ref, "bandit");
+        assert!(
+            !record
+                .rules_fired
+                .iter()
+                .any(|f| f == "bandit.cold_start"),
+            "a scored cell is not a cold start"
+        );
+        // The prior surfaces in the record's priors_used.
+        assert!(
+            !record.priors_used.is_empty(),
+            "the warm cell lands in priors_used"
+        );
+    }
+
+    #[test]
+    fn bandit_cold_start_falls_back_to_rules() {
+        let ctx = delegate_ctx(); // profile bound, no priors at all
+        let p = BanditPolicy {
+            config: BanditConfig::default(),
+        };
+        let out = p.bind(&delegate(), &ctx).unwrap();
+        let record = match &out {
+            BindOutcome::Bound { record, .. } => record,
+            BindOutcome::Unchanged { record } => record,
+        };
+        assert_eq!(
+            record.estimator_ref.variant_ref, "rules",
+            "cold start is a rules binding (the explainable substitution)"
+        );
+        assert!(record
+            .rules_fired
+            .iter()
+            .any(|f| f == "bandit.cold_start"));
+        // The first observation's cell still stamps — it seeds the fold.
+        assert_eq!(
+            record.cell.as_deref(),
+            Some(spawn_cell(&ctx).as_str())
+        );
+    }
+
+    #[test]
+    fn bandit_refuses_without_profile_ref() {
+        let mut ctx = delegate_ctx();
+        ctx.profile_ref = None; // AC-F4-12's unmatched cell — never pooled
+        let p = BanditPolicy {
+            config: BanditConfig::default(),
+        };
+        assert!(matches!(
+            p.bind(&delegate(), &ctx),
+            Err(ComputeError::PolicyInvalid { .. })
+        ));
+    }
+
+    #[test]
+    fn surface_prior_scores_on_means_without_ucb() {
+        let mut ctx = delegate_ctx();
+        let cell = spawn_cell(&ctx);
+        ctx.priors = vec![PriorFact {
+            cell: cell.clone(),
+            n: 5,
+            mean_ppm: 800_000,
+            interval: Some((700_000, 900_000)),
+            valid_until: None,
+        }];
+        let p = SurfacePriorPolicy {
+            config: BanditConfig::default(),
+        };
+        let out = p.bind(&delegate(), &ctx).unwrap();
+        let record = match &out {
+            BindOutcome::Bound { record, .. } => record,
+            BindOutcome::Unchanged { record } => record,
+        };
+        assert_eq!(record.estimator_ref.variant_ref, "surface_prior");
+        assert_eq!(record.cell.as_deref(), Some(cell.as_str()));
+        // An expired cell reads unknown → cold-start fallback.
+        ctx.priors[0].valid_until = Some(1);
+        ctx.now_seq = 10;
+        let out2 = p.bind(&delegate(), &ctx).unwrap();
+        let record2 = match &out2 {
+            BindOutcome::Bound { record, .. } => record,
+            BindOutcome::Unchanged { record } => record,
+        };
+        assert_eq!(record2.estimator_ref.variant_ref, "rules");
+        assert!(record2
+            .rules_fired
+            .iter()
+            .any(|f| f == "surface_prior.cold_start"));
+    }
+
+    #[test]
+    fn prior_cells_fold_respects_the_reset_window() {
+        let cell = "profile/a|snap/1|task/coding|spawn_subagent";
+        // seq 1 decided → seq 2 verdict; seq 4 decided → seq 5 verdict.
+        let events = vec![
+            decided_row(1, cell, None),
+            verdict_row(2, true),
+            decided_row(4, cell, None),
+            verdict_row(5, false),
+        ];
+        let cells = prior_cells(&events, 0);
+        let c = cells.get(cell).expect("the cell folds");
+        assert_eq!(c.n, 2);
+        assert_eq!(c.mean_ppm, Some(500_000));
+        assert!(c.interval.is_some(), "n ≥ 2 carries the Wilson bounds");
+        // AC-F4-9 — rows at-or-before cleared_seq never contribute.
+        let after_reset = prior_cells(&events, 3);
+        let c2 = after_reset.get(cell).expect("post-reset cell");
+        assert_eq!(c2.n, 1, "only the post-reset observation counts");
+        assert_eq!(c2.mean_ppm, Some(0));
+        // A reset at/after the last decision leaves no cells.
+        assert!(prior_cells(&events, 5).is_empty());
+    }
+
+    #[test]
+    fn delegation_rules_condition_on_the_bound_profile() {
+        // refuse_delegate conditioned on profile/a — fires under it, inert
+        // under any other coordinate or an unbound profile.
+        let cfg = RulesConfig {
+            delegation_rules: vec![DelegationRule {
+                rule_id: "r/no-delegate".into(),
+                conditioned_on: "profile/a".into(),
+                effect: DelegationRuleEffect::RefuseDelegate,
+                debt_ref: "debt/x".into(),
+            }],
+            ..RulesConfig::default()
+        };
+        let ctx = delegate_ctx();
+        let p = RulesPolicy { config: cfg.clone() };
+        let out = p.bind(&delegate(), &ctx).unwrap();
+        let record = match &out {
+            BindOutcome::Bound { record, .. } => record,
+            BindOutcome::Unchanged { record } => record,
+        };
+        let row = record
+            .options_considered
+            .iter()
+            .find(|o| o.option.kind == ComputeOptionKind::SpawnSubagent)
+            .unwrap();
+        assert!(matches!(
+            row.estimate,
+            OptionEstimate::Infeasible(ComputeInfeasible::PolicyExcluded)
+        ));
+        assert!(record.rules_fired.iter().any(|f| f == "r/no-delegate"));
+        // A different profile leaves the rule inert.
+        let mut other = ctx.clone();
+        other.profile_ref = Some("profile/b".into());
+        let out2 = p.bind(&delegate(), &other).unwrap();
+        let record2 = match &out2 {
+            BindOutcome::Bound { record, .. } => record,
+            BindOutcome::Unchanged { record } => record,
+        };
+        let row2 = record2
+            .options_considered
+            .iter()
+            .find(|o| o.option.kind == ComputeOptionKind::SpawnSubagent)
+            .unwrap();
+        assert!(matches!(row2.estimate, OptionEstimate::Estimate(_)));
+    }
+
+    #[test]
+    fn delegation_rules_cap_fan_out_and_require_reason() {
+        // fan_out_cap{1} — a tightening: live_fan_out = 1 already sits at
+        // the rule's cap → the option excludes as GaugeAtCap.
+        let cfg = RulesConfig {
+            delegation_rules: vec![DelegationRule {
+                rule_id: "r/cap".into(),
+                conditioned_on: "profile/a".into(),
+                effect: DelegationRuleEffect::FanOutCap(1),
+                debt_ref: "debt/y".into(),
+            }],
+            ..RulesConfig::default()
+        };
+        let mut ctx = delegate_ctx();
+        ctx.budget.live_fan_out = 1; // under the envelope cap 8, at the rule cap
+        let p = RulesPolicy { config: cfg };
+        let out = p.bind(&delegate(), &ctx).unwrap();
+        let record = match &out {
+            BindOutcome::Bound { record, .. } => record,
+            BindOutcome::Unchanged { record } => record,
+        };
+        let row = record
+            .options_considered
+            .iter()
+            .find(|o| o.option.kind == ComputeOptionKind::SpawnSubagent)
+            .unwrap();
+        assert!(matches!(
+            row.estimate,
+            OptionEstimate::Infeasible(ComputeInfeasible::GaugeAtCap)
+        ));
+        // require_reason — a delegate carrying the wrong reason excludes
+        // the option; an absent reason binds the required spelling.
+        let cfg2 = RulesConfig {
+            delegation_rules: vec![DelegationRule {
+                rule_id: "r/reason".into(),
+                conditioned_on: "profile/a".into(),
+                effect: DelegationRuleEffect::RequireReason("safety_case".into()),
+                debt_ref: "debt/z".into(),
+            }],
+            ..RulesConfig::default()
+        };
+        let p2 = RulesPolicy { config: cfg2 };
+        let out2 = p2.bind(&delegate(), &ctx).unwrap();
+        if let BindOutcome::Bound { decision, .. } = &out2 {
+            if let DecisionKind::Delegate {
+                delegation_reason, ..
+            } = &decision.kind
+            {
+                assert_eq!(
+                    delegation_reason.as_ref().and_then(Json::as_str),
+                    Some("safety_case")
+                );
+            } else {
+                panic!("the binding stayed a delegate decision");
+            }
+        } else {
+            panic!("require_reason binds the reason");
+        }
+    }
+
+    #[test]
+    fn rules_config_validate_refuses_debtless_rules() {
+        let cfg = RulesConfig {
+            delegation_rules: vec![DelegationRule {
+                rule_id: "r/bad".into(),
+                conditioned_on: "profile/a".into(),
+                effect: DelegationRuleEffect::RefuseDelegate,
+                debt_ref: String::new(), // CC3 — a conditioned rule without
+                // debt is never admitted.
+            }],
+            ..RulesConfig::default()
+        };
+        assert!(matches!(
+            cfg.validate(),
+            Err(ComputeError::PolicyInvalid { .. })
+        ));
+    }
+
+    #[test]
+    fn prior_fact_and_policy_debt_codecs_round_trip() {
+        let f = PriorFact {
+            cell: "c".into(),
+            n: 3,
+            mean_ppm: 400_000,
+            interval: Some((100_000, 700_000)),
+            valid_until: Some(42),
+        };
+        assert_eq!(PriorFact::from_json(&f.to_json()), Some(f));
+        let d = PolicyDebt::mandated("lab/value-of-compute-v1");
+        assert_eq!(PolicyDebt::from_json(&d.to_json()), Some(d.clone()));
+        // The mandated expiry set is exactly §5e.4's four conditions.
+        assert_eq!(
+            d.expiry_conditions,
+            vec![
+                "profile_superseded",
+                "provider_drift_observed",
+                "suite_validity_superseded",
+                "age_beyond_window"
+            ]
+        );
+        // A delegation rule codec round-trips; a closed-set miss fails.
+        let r = DelegationRule {
+            rule_id: "r".into(),
+            conditioned_on: "p".into(),
+            effect: DelegationRuleEffect::FanOutCap(3),
+            debt_ref: "d".into(),
+        };
+        assert_eq!(DelegationRule::from_json(&r.to_json()), Some(r));
+        assert!(DelegationRule::from_json(&Json::obj([
+            ("rule_id", Json::str("r")),
+            ("conditioned_on", Json::str("p")),
+            ("effect", Json::obj([("kind", Json::str("bogus"))])),
+            ("debt_ref", Json::str("d")),
+        ]))
+        .is_none());
     }
 }

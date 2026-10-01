@@ -314,6 +314,10 @@ pub fn capability_dependencies(kind: ProfileRuleKind) -> &'static [&'static str]
         ProfileRuleKind::SamplingDefaults => &["temperature_supported"],
         ProfileRuleKind::CachingMarkers => &["cache_control_convention"],
         ProfileRuleKind::ProcedureTarget => &["native_function_calling"],
+        // `belief_probe` declares no capability dependency — the gate is
+        // observability (`model_io`), which lives on the participant /
+        // metric declaration, not the probe-conformance capability set.
+        ProfileRuleKind::BeliefProbe => &[],
     }
 }
 

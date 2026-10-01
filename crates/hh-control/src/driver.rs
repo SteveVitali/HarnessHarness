@@ -361,6 +361,12 @@ pub struct DriverConfig {
     /// `open`/`resume` from the manifest/profile projection. Everything
     /// else in the `ComputeContext` folds from the durable prefix.
     pub compute_facts: crate::compute::ComputeFacts,
+    /// The definition-declared `RulesConfig` — the conditioned thresholds
+    /// and `delegation_rules[]` the sealed `compute_policy` slot params
+    /// project (S5.5's profile-conditioned rules; `None` = the default
+    /// config — `bandit`/`surface_prior` still run, with no rules'
+    /// delegation conditioning).
+    pub compute_rules: Option<crate::compute::RulesConfig>,
     /// The `judged` loop detector's `Validator{kind: judge}` port
     /// (Stage-4; binds the `Validator` the `LoopPolicy.judged.validator_ref`
     /// names — `None` with a declared spec means the detector never
@@ -396,6 +402,7 @@ impl Default for DriverConfig {
             delegation_available: false,
             compute_policy_ref: "static".to_string(),
             compute_facts: crate::compute::ComputeFacts::default(),
+            compute_rules: None,
             judge: None,
             reconciler: None,
         }
@@ -807,7 +814,11 @@ impl<S: ControlStrategy> Driver<S> {
         if variant == "static" {
             return Ok((decision, None));
         }
-        let policy = crate::compute::policy_for(&variant).map_err(|e| DriverError::Port {
+        let policy = crate::compute::policy_for_configured(
+            &variant,
+            self.config.compute_rules.clone(),
+        )
+        .map_err(|e| DriverError::Port {
             port: "compute_policy",
             detail: e.to_string(),
         })?;
@@ -965,8 +976,13 @@ impl<S: ControlStrategy> Driver<S> {
             .and_then(Json::as_int)
             .unwrap_or(0)
             .max(0) as u32;
-        // Priors — cleared when drift/supersession outruns the last reset
-        // (the `control.compute.prior_reset` row lands in `bind_compute`).
+        // Priors — the AC-F4-9 read. A `control.compute.prior_reset` (or a
+        // drift/supersession row whose reset lands in this bind) zeroes the
+        // declared seeds (`n = 0`, `valid_until` = the cleared seq — the
+        // `unknown` rendering) and hides pre-reset online cells; cells
+        // newer than the reset rebuild from the [`prior_cells`] fold —
+        // the kernel-derived materialized view over `control.compute.
+        // decided` `cell` members (ADR-0189 D4/D7, ADR-0078).
         let reset_at = events.iter().rposition(|e| {
             matches!(
                 e.class.as_str(),
@@ -979,11 +995,48 @@ impl<S: ControlStrategy> Driver<S> {
         let priors_reset = reset_at
             .map(|i| last_reset.map(|r| r < i).unwrap_or(true))
             .unwrap_or(false);
-        let priors = if priors_reset {
-            vec![]
-        } else {
-            facts.priors.clone()
+        let cleared_seq = {
+            let landed = last_reset.map(|i| events[i].seq).unwrap_or(0);
+            let pending = if priors_reset {
+                reset_at.map(|i| events[i].seq).unwrap_or(0)
+            } else {
+                0
+            };
+            landed.max(pending)
         };
+        let mut priors: Vec<crate::compute::PriorFact> = facts
+            .priors
+            .iter()
+            .map(|p| crate::compute::PriorFact {
+                n: if cleared_seq > 0 { 0 } else { p.n },
+                interval: if cleared_seq > 0 { None } else { p.interval },
+                valid_until: if cleared_seq > 0 {
+                    Some(cleared_seq)
+                } else {
+                    p.valid_until
+                },
+                ..p.clone()
+            })
+            .collect();
+        for (key, c) in crate::compute::prior_cells(events, cleared_seq) {
+            match priors.iter_mut().find(|f| f.cell == key) {
+                Some(f) => {
+                    f.n = c.n;
+                    if let Some(m) = c.mean_ppm {
+                        f.mean_ppm = m;
+                    }
+                    f.interval = c.interval;
+                    f.valid_until = None;
+                }
+                None => priors.push(crate::compute::PriorFact {
+                    cell: key,
+                    n: c.n,
+                    mean_ppm: c.mean_ppm.unwrap_or(0),
+                    interval: c.interval,
+                    valid_until: None,
+                }),
+            }
+        }
         // Health — two consecutive trailing attempt failures degrade the
         // model-plane view (conservative options only).
         let mut failed_tail = 0u32;
@@ -1029,6 +1082,10 @@ impl<S: ControlStrategy> Driver<S> {
             },
             task_value: facts.task_value.clone(),
             context_label: facts.context_label.clone(),
+            profile_ref: facts.profile_ref.clone(),
+            snapshot_fingerprint: facts.snapshot_fingerprint.clone(),
+            task_class: facts.task_class.clone(),
+            now_seq: events.last().map(|e| e.seq).unwrap_or(0),
         }
     }
 
@@ -5027,5 +5084,168 @@ mod tests {
             .events
             .iter()
             .all(|e| !e.class.starts_with("control.compute.")));
+    }
+    /// AC-R-2.6.4-9 — a `model.rerouted` trigger lands
+    /// `control.compute.prior_reset` before the next bind; the decided
+    /// row's `priors_used` show the declared seeds zeroed (`n = 0`, mean
+    /// `null`, `valid_until` = the reset seq) and the bandit falls back
+    /// to `rules` (`bandit.cold_start` in `rules_fired`).
+    #[test]
+    fn prior_reset_zeroes_declared_seeds_and_falls_back() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        // The drift trigger sits in the durable prefix — appended rows
+        // chain after it (seq 1 is the seeded row's; the counter resumes
+        // at 2).
+        sink.events.push(EventEnvelope {
+            event_id: "ev-drift".into(),
+            run_id: "run".into(),
+            seq: 1,
+            ts: "t".into(),
+            hlc: None,
+            plane: hh_ledger::event::EventPlane::Control,
+            class: "model.rerouted".into(),
+            schema_version: 1,
+            producer: hh_ledger::event::Producer::kernel("t"),
+            participant_class: hh_ledger::manifest::ParticipantClass::Native,
+            observability_level: Default::default(),
+            durability: hh_ledger::classes::Durability::Ledger,
+            scope: hh_ledger::event::Scope {
+                turn_id: None,
+                model_call_id: None,
+                tool_call_id: None,
+                effect_id: None,
+                child_run_id: None,
+                component_call_id: None,
+                branch_id: None,
+            },
+            lease_generation: 1,
+            parent_event_id: "root".into(),
+            causes: vec![],
+            refs: vec![],
+            ir_refs: vec![],
+            surface_ids: Default::default(),
+            provenance: None,
+            payload: Json::obj([("to", Json::str("model/b"))]),
+            prev_hash: "h".into(),
+            hash: "h".into(),
+        });
+        sink.seq = 1;
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let facts = crate::compute::ComputeFacts {
+            profile_ref: Some("profile/a".into()),
+            snapshot_fingerprint: Some("snap/1".into()),
+            task_class: Some("task/coding".into()),
+            // A declared seed that would score the bandit — the reset
+            // zeroes it before the bind reads ctx.
+            priors: vec![crate::compute::PriorFact {
+                cell: "profile/a|snap/1|task/coding|extend_search".into(),
+                n: 5,
+                mean_ppm: 900_000,
+                interval: Some((700_000, 990_000)),
+                valid_until: None,
+            }],
+            ..Default::default()
+        };
+        let mut driver = Driver::open_react(
+            &ctx(),
+            policy,
+            &mut sink,
+            DriverConfig {
+                compute_policy_ref: "bandit".into(),
+                compute_facts: facts,
+                remaining: [("model_calls".to_string(), 8i64)]
+                    .into_iter()
+                    .collect(),
+                ..DriverConfig::default()
+            },
+        )
+        .unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(
+                hh_gateway::vocab::StopReason::ToolUse,
+                vec![ParsedCall {
+                    tool_call_id: "tc-1".into(),
+                    surface: "fs.read".into(),
+                    args_raw: r#"{"path":"/a"}"#.into(),
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let _ = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+        // The reset row lands once, before the first decided row.
+        let reset = sink
+            .events
+            .iter()
+            .find(|e| e.class == "control.compute.prior_reset")
+            .expect("a prior_reset row");
+        assert_eq!(
+            reset.payload.get("trigger_class").and_then(Json::as_str),
+            Some("model.rerouted")
+        );
+        assert_eq!(
+            reset.payload.get("reason").and_then(Json::as_str),
+            Some("provider_drift")
+        );
+        assert_eq!(
+            reset
+                .payload
+                .get("trigger_event_ref")
+                .and_then(Json::as_str),
+            Some("ev-drift")
+        );
+        assert_eq!(
+            reset.payload.get("policy_ref").and_then(Json::as_str),
+            Some("bandit")
+        );
+        let decided = sink
+            .events
+            .iter()
+            .find(|e| e.class == "control.compute.decided")
+            .expect("a compute.decided row");
+        assert!(
+            decided.seq > reset.seq,
+            "the reset precedes the decided row it clears"
+        );
+        // The declared seed reads zeroed — n = 0, no mean — and the
+        // rules fallback fired.
+        let used = match decided.payload.get("priors_used") {
+            Some(Json::Arr(u)) => u,
+            _ => panic!("priors_used present"),
+        };
+        let cell = used
+            .iter()
+            .find(|u| {
+                u.get("cell").and_then(Json::as_str)
+                    == Some("profile/a|snap/1|task/coding|extend_search")
+            })
+            .expect("the declared cell appears zeroed");
+        assert_eq!(cell.get("n").and_then(Json::as_int), Some(0));
+        assert!(
+            cell.get("mean_ppm").is_none()
+                || cell.get("mean_ppm") == Some(&Json::Null),
+            "a cleared cell's mean renders absent/null (the unknown read)"
+        );
+        let fired: Vec<&str> = match decided.payload.get("rules_fired") {
+            Some(Json::Arr(f)) => f.iter().filter_map(Json::as_str).collect(),
+            _ => vec![],
+        };
+        assert!(
+            fired.iter().any(|f| *f == "bandit.cold_start"),
+            "the cleared bandit falls back to rules"
+        );
+        assert_eq!(
+            decided
+                .payload
+                .get("estimator_ref")
+                .and_then(|e| e.get("variant_ref"))
+                .and_then(Json::as_str),
+            Some("rules")
+        );
     }
 }

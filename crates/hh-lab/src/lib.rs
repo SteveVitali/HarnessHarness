@@ -39,6 +39,7 @@
 //! HIR-facing debt record lives in `hh-hir`; this crate composes them into the
 //! Lab-facing records.
 
+pub mod adaptive;
 pub mod analysis;
 pub mod assembly;
 pub mod bench;

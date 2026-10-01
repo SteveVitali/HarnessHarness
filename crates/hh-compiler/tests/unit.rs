@@ -870,7 +870,9 @@ fn profile_schema_refuses_closed_set_misses() {
 #[test]
 fn profile_rule_kind_set_is_closed_and_spellings_round_trip() {
     // The canonical §3.2.3 closed set — exactly thirteen kinds.
-    assert_eq!(ProfileRuleKind::ALL.len(), 13);
+    // 13 → 14 at S5.5: `belief_probe` (C2/Stage-5 per-step belief probes as
+        // profile-owned rules with debt records; AC-R-2.7.2b-6).
+        assert_eq!(ProfileRuleKind::ALL.len(), 14);
     for k in [
         "tool_shape",
         "naming",

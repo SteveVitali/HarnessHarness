@@ -59,6 +59,9 @@ pub mod class {
     pub const DRIFT_BRACKET: &str = "measurement.experiment.drift_bracket";
     /// `measurement.experiment.bundle_assembled` — `{bundle_id, kind}`.
     pub const BUNDLE_ASSEMBLED: &str = "measurement.experiment.bundle_assembled";
+    /// `measurement.experiment.inclusion_probabilities` — the adaptive
+    /// allocator recorded table (AC-F4-13).
+    pub const INCLUSION_PROBABILITIES: &str = "measurement.experiment.inclusion_probabilities";
     /// `measurement.analysis.recorded` — the producer contract's analysis
     /// record stamp on the experiment run (§6.5 §2.3 `record_analysis`;
     /// §6.4 §6 audit events — ADR-0162 D3/D6).
@@ -437,6 +440,19 @@ pub fn cell_completed(cell_id: &str, accepted: u32, planned: u32) -> Json {
         ("accepted", Json::Int(accepted as i64)),
         ("planned", Json::Int(planned as i64)),
     ])
+}
+
+/// `inclusion_probabilities{record_id, strategy, estimator, round,
+/// per_plan, picked, charged_to}` — the `voi_weighted` allocator's recorded
+/// table (AC-F4-13; the `charged_to: instrument` member is the allocator's
+/// own spend attribution — integer compute accounting, never money).
+pub fn inclusion_probabilities(rec: &hh_lab::adaptive::InclusionProbabilities) -> Json {
+    let mut m = match rec.to_json() {
+        Json::Obj(m) => m,
+        _ => unreachable!("InclusionProbabilities::to_json is an object"),
+    };
+    m.insert("charged_to".into(), Json::str("instrument"));
+    Json::Obj(m)
 }
 
 /// `paused{reason, node?, probe?}` — `node` names the exhausted budget
