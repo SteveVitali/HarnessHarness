@@ -1,0 +1,21 @@
+[package]
+name = "hh-fleet"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C4/Stage-4 human-agent organizational layer — the fleet reconciler (spec §5i.1, R-2.12.6; ticket S4.9): `run_kind = fleet` activations over durable `FleetSpec` records (`lifecycle.fleet.activated`), `WorkItem` lifecycle over the seven `control.work_item.*` rows, the deterministic fixture `WorkSourceAdapter`, trigger rules consuming the §5a.3 wakeup machinery (`external`/`manual` admissible at the fleet boundary only), the per-fleet ownership graph with durable ack/handoff, the RC-1…8 level-triggered reconciler (durable cursor + O(1) idempotence), the Π state map (narrowing only), durable escalation under `legitimate` resolution, and the matched-budget conditional accountability record. A projection/consumer layer — no second store, no second authority path; every decision folds from the durable prefix (CC3) and the whole tier is removable (CC6)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-provenance = { path = "../hh-provenance" }
+hh-ontology = { path = "../hh-ontology" }
+hh-hir = { path = "../hh-hir" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+hh-ledger = { path = "../hh-ledger" }
+hh-budget = { path = "../hh-budget" }
+hh-monitor = { path = "../hh-monitor" }

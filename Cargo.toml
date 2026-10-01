@@ -392,6 +392,21 @@ members = [
     # reference-harness fixture. NO hosted runtime, handshake, probes or
     # quarantine — those land with the service at S4.5a (§6.6 §726–727).
     "crates/hh-hosting",
+    # The C4/Stage-4 human-agent organizational layer (spec §5i.1, R-2.12.6;
+    # ticket S4.9). A PERSISTENT workspace member: the fleet reconciler —
+    # `run_kind = fleet` activations over durable `FleetSpec` records
+    # (`lifecycle.fleet.activated`), `WorkItem` lifecycle over the seven
+    # `control.work_item.*` rows, the deterministic fixture `WorkSourceAdapter`,
+    # trigger rules consuming the §5a.3 wakeup machinery (`external`/`manual`
+    # admissible at the fleet boundary only), the per-fleet ownership graph with
+    # durable ack/handoff, RC-1…8 level-triggered reconciliation, the Π state
+    # map (narrowing only), durable escalation under `legitimate` resolution,
+    # and the matched-budget accountability record. A projection/consumer
+    # layer: no second store, no second authority path — every decision folds
+    # from the durable prefix (CC3) and the whole tier is removable (CC6:
+    # nothing below C4 depends on this crate; `hh-embed` serves it under the
+    # optional `tier-c4` feature only).
+    "crates/hh-fleet",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired

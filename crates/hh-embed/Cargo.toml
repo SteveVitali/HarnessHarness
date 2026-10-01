@@ -35,3 +35,11 @@ hh-experiment = { path = "../hh-experiment" }
 hh-analysis = { path = "../hh-analysis" }
 hh-results = { path = "../hh-results" }
 hh-mcp = { path = "../hh-mcp" }
+# S4.9 (§5i.1, C4): the organizational layer is a removable tier — the
+# `fleet.*` ops stay in the schema (CC7 single source) and answer
+# `Unsupported{by: "tier-c4"}` on a `--no-default-features` build.
+hh-fleet = { path = "../hh-fleet", optional = true }
+
+[features]
+default = ["tier-c4"]
+tier-c4 = ["dep:hh-fleet"]
