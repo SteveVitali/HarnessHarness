@@ -15,11 +15,11 @@
 #[cfg(feature = "tier-c4")]
 use std::collections::BTreeMap;
 
-#[cfg(feature = "tier-c4")]
-use hh_ledger::store::Store;
 use hh_embed_schema::errors::EmbedError;
 #[cfg(feature = "tier-c4")]
 use hh_embed_schema::types::NarrowingLeaf;
+#[cfg(feature = "tier-c4")]
+use hh_ledger::store::Store;
 use hh_wire::json::Json;
 
 use crate::service::EmbedService;
@@ -132,9 +132,10 @@ fn item_json(it: &WorkItemView) -> Json {
 /// not resupply it).
 #[cfg(feature = "tier-c4")]
 fn adapter(params: &Json) -> Result<FixtureAdapter, EmbedError> {
-    let doc = params.get("source").cloned().unwrap_or_else(|| {
-        Json::obj([("schema_version", Json::str("hh.fleet.fixture/1"))])
-    });
+    let doc = params
+        .get("source")
+        .cloned()
+        .unwrap_or_else(|| Json::obj([("schema_version", Json::str("hh.fleet.fixture/1"))]));
     FixtureAdapter::from_doc(doc).map_err(fleet_err)
 }
 
@@ -178,8 +179,8 @@ fn fleet_engine<'a>(
     run_id: &str,
 ) -> Result<&'a mut FleetEngine, EmbedError> {
     if !engines.contains_key(run_id) {
-        let eng = FleetEngine::ensure(store, run_id, FLEET_HOLDER, WRITER_TTL_MS)
-            .map_err(fleet_err)?;
+        let eng =
+            FleetEngine::ensure(store, run_id, FLEET_HOLDER, WRITER_TTL_MS).map_err(fleet_err)?;
         engines.insert(run_id.to_string(), eng);
     }
     Ok(engines.get_mut(run_id).unwrap())
@@ -187,7 +188,6 @@ fn fleet_engine<'a>(
 
 #[cfg(feature = "tier-c4")]
 impl EmbedService {
-
     /// The `fleet.*` dispatch — one arm for the whole surface; the op
     /// names are the registry's (single source, CC7).
     pub(crate) fn fleet_dispatch(
@@ -213,9 +213,15 @@ impl EmbedService {
                 let run = req_str(params, "run")?.to_string();
                 let ad = adapter(params)?;
                 let now = now_ms(params, self.store.now_ms());
-                let (eng, report) =
-                    FleetEngine::restore(&mut self.store, &run, FLEET_HOLDER, WRITER_TTL_MS, &ad, now)
-                        .map_err(fleet_err)?;
+                let (eng, report) = FleetEngine::restore(
+                    &mut self.store,
+                    &run,
+                    FLEET_HOLDER,
+                    WRITER_TTL_MS,
+                    &ad,
+                    now,
+                )
+                .map_err(fleet_err)?;
                 self.fleet_engines.insert(run.clone(), eng);
                 Ok(report_json(&report))
             }
@@ -468,14 +474,20 @@ impl EmbedService {
             }
             "fleet.list" => {
                 let run = req_str(params, "run")?.to_string();
-                let items: Vec<Json> = fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
-                    .list()
-                    .iter()
-                    .map(item_json)
-                    .collect();
+                let items: Vec<Json> =
+                    fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                        .list()
+                        .iter()
+                        .map(item_json)
+                        .collect();
                 Ok(Json::obj([("items", Json::Arr(items))]))
             }
-            "fleet.fleet_view" => Ok(fleet_engine(&mut self.fleet_engines, &mut self.store, req_str(params, "run")?)?.fleet_view()),
+            "fleet.fleet_view" => Ok(fleet_engine(
+                &mut self.fleet_engines,
+                &mut self.store,
+                req_str(params, "run")?,
+            )?
+            .fleet_view()),
             "fleet.state_map" => {
                 let run = req_str(params, "run")?.to_string();
                 let item = opt_str(params, "item");
@@ -502,7 +514,8 @@ impl EmbedService {
                     Json::Arr(a) => a
                         .iter()
                         .map(|v| {
-                            NarrowingLeaf::from_json(v, "/candidate").map_err(|e| bad("/candidate", &format!("{e:?}")))
+                            NarrowingLeaf::from_json(v, "/candidate")
+                                .map_err(|e| bad("/candidate", &format!("{e:?}")))
                         })
                         .collect::<Result<_, _>>()?,
                     _ => return Err(bad("/candidate", "type_mismatch")),
