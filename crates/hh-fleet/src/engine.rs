@@ -445,9 +445,11 @@ impl FleetEngine {
         now_ms: u64,
     ) -> Result<ReconcileReport, FleetError> {
         self.bound(store)?;
-        let mut report = ReconcileReport::default();
         // 1. Observe + fire — the durable cue intake (§5i.1 #2).
-        report.observed = self.observe(store, adapter, now_ms)?;
+        let mut report = ReconcileReport {
+            observed: self.observe(store, adapter, now_ms)?,
+            ..ReconcileReport::default()
+        };
         // 2. RC-3 — source conflicts from the cue stream (before any
         //    dispatch decision consumes a contradictory item).
         self.reconcile_conflicts(store, adapter, &mut report)?;
@@ -905,22 +907,23 @@ impl FleetEngine {
                 let Some(child) = items.iter().find(|c| &c.item_id == child_id) else {
                     continue;
                 };
-                if child.watch_state == "dead" && !child.blocked.contains("blocked") {
-                    if !parent.blocked.contains("child_blocked") {
-                        self.emit(
-                            store,
-                            "control.work_item.blocked",
-                            payloads::block_add_payload(
-                                &parent.item_id,
-                                &parent.run_item_id,
-                                "child_blocked",
-                                None,
-                                None,
-                            ),
-                            vec![],
-                        )?;
-                        report.blocked.push(parent.item_id.clone());
-                    }
+                if child.watch_state == "dead"
+                    && !child.blocked.contains("blocked")
+                    && !parent.blocked.contains("child_blocked")
+                {
+                    self.emit(
+                        store,
+                        "control.work_item.blocked",
+                        payloads::block_add_payload(
+                            &parent.item_id,
+                            &parent.run_item_id,
+                            "child_blocked",
+                            None,
+                            None,
+                        ),
+                        vec![],
+                    )?;
+                    report.blocked.push(parent.item_id.clone());
                 }
             }
         }
@@ -1737,9 +1740,9 @@ impl FleetEngine {
 
     /// `fleet.escalate` — the durable raise (`lifecycle.escalation.raised`
     /// + `control.work_item.blocked{escalation}` + the deadline `timer`
-    /// subscription when `deadline_ms` is declared). `to` names the
-    /// escalation-target agent the raise hands off to (a `handoff` row
-    /// carrying the `lease_agent` surrogate — §5i.1 #5).
+    ///   subscription when `deadline_ms` is declared). `to` names the
+    ///   escalation-target agent the raise hands off to (a `handoff` row
+    ///   carrying the `lease_agent` surrogate — §5i.1 #5).
     pub fn escalate(
         &mut self,
         store: &mut Store,
@@ -2128,7 +2131,7 @@ impl FleetEngine {
         self.refresh(store)?;
         Ok(Json::obj([
             ("lease_id", Json::str(&rec.lease_id)),
-            ("scope", Json::str(&format!("run_item:{}", it.run_item_id))),
+            ("scope", Json::str(format!("run_item:{}", it.run_item_id))),
             ("holder", Json::str(&self.holder)),
             ("generation", Json::Int(rec.generation as i64)),
         ]))
@@ -2222,6 +2225,7 @@ impl FleetEngine {
     /// by)` — the ADR-0205 D7 annotation row (plane 5; the annotation is
     /// durable on the activation, never model-facing — a `HarnessRule`
     /// lifting it into a `ContextItem` is the only delivery path).
+    #[allow(clippy::too_many_arguments)] // the ADR-0205 D7 row carries the full member set
     pub fn annotate(
         &mut self,
         store: &mut Store,
@@ -2368,7 +2372,7 @@ impl FleetEngine {
                 m.insert("item_id".into(), Json::str(&it.item_id));
                 m.insert("run_item_id".into(), Json::str(&it.run_item_id));
                 m.insert("title".into(), Json::str(&it.title));
-                m.insert("state".into(), Json::str(&derive_state(it)));
+                m.insert("state".into(), Json::str(derive_state(it)));
                 m.insert("spec_ref".into(), Json::str(&it.spec_ref));
                 m.insert("source".into(), it.source.clone());
                 m.insert("idempotency_key".into(), Json::str(&it.idempotency_key));
@@ -2593,7 +2597,7 @@ impl FleetEngine {
                 m.insert("item_id".into(), Json::str(&it.item_id));
                 m.insert("run_item_id".into(), Json::str(&it.run_item_id));
                 m.insert("spec_ref".into(), Json::str(&it.spec_ref));
-                m.insert("state".into(), Json::str(&derive_state(it)));
+                m.insert("state".into(), Json::str(derive_state(it)));
                 if let Some(o) = &it.owner {
                     m.insert("owner".into(), Json::str(o));
                 }

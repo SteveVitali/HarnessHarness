@@ -49,6 +49,8 @@
 
 pub mod abi;
 pub mod adapter_a;
+pub mod adapter_b;
+pub mod adapter_c;
 pub mod adapter_zero;
 pub mod budget;
 pub mod compact;
@@ -68,6 +70,11 @@ pub use abi::{
 pub use adapter_a::{
     adapter_a_record, allow_all_decider, ask_then_allow_decider, deny_all_decider, AdapterA,
     LiftedObservation, PendingUpcall, PolicyDecider, SessionTransport,
+};
+pub use adapter_b::{adapter_b_record, AdapterB, GenParamPolicy, InterceptTransport, ADAPTER_B_ID};
+pub use adapter_c::{
+    adapter_c_record, AdapterC, ContainerDriver, EndStateSnapshot, LifterTable, LogLifter,
+    ADAPTER_C_ID,
 };
 pub use adapter_zero::{adapter_zero_descriptor, adapter_zero_record, project_native_run};
 pub use budget::{

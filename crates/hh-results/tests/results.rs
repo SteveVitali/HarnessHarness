@@ -2894,3 +2894,105 @@ fn catalog_epochs_fold_and_raise_configuration_drift() {
         .get("configuration_drift")
         .is_none());
 }
+
+// ── S5.3 — verifiable_by per reader set + the public tier (§6.5 §2.4/§4;
+// R-2.10.5 C2) ────────────────────────────────────────────────────────
+
+#[test]
+fn publish_reports_verifiable_by_per_reader_and_public_tier() {
+    let mut r = rig("verifiable", 14_500);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _e) = open(&mut r, &s);
+    let exp_run = run_to_close(&mut r, &eid, 1_300, true);
+    let subjects = launched_runs(&r, &exp_run);
+    // Subject 0's bundle claims R1; the rest claim R0 — the reader's
+    // verification ceiling is the admitted minimum (`R0`).
+    let bids: Vec<String> = subjects
+        .iter()
+        .enumerate()
+        .map(|(i, sr)| {
+            if i == 0 {
+                deposit_bundle_at(&mut r, sr, ReproLevel::R1)
+            } else {
+                deposit_bundle(&mut r, sr)
+            }
+        })
+        .collect();
+    emit_bundle_facts(&mut r, &bids);
+    r.results.catalogue_refresh(&r.store, None).unwrap();
+    for sr in &subjects {
+        r.results
+            .project_and_record(
+                &r.store,
+                Some(&r.docs),
+                sr,
+                None,
+                None,
+                DerivedReason::Initial,
+            )
+            .unwrap();
+    }
+
+    // The public tier — `LeaderboardDefinition::public` sets
+    // `min_status = reproduced` (R-2.10.5's `min_bundle_status`
+    // admission: independent reproduction, ADR-0140).
+    let pub_def = LeaderboardDefinition::public(exp_run.clone(), "wall_time_ms");
+    assert_eq!(pub_def.min_status, BundleStatus::Reproduced);
+    // `default` stays `validated`.
+    assert_eq!(
+        LeaderboardDefinition::new(exp_run.clone(), "wall_time_ms").min_status,
+        BundleStatus::Validated
+    );
+
+    // `publish` computes `verifiable_by[reader → level]` — the admitted
+    // entries' minimum claimed level (R0 here), per reader in the set.
+    let mut def = LeaderboardDefinition::new(exp_run.clone(), "wall_time_ms");
+    def.readers = vec!["public".to_string(), "operator".to_string()];
+    r.results.define_leaderboard(&def).unwrap();
+    let pubd = r
+        .results
+        .publish_leaderboard(&mut r.store, &r.docs, &def, None, &Json::obj([]))
+        .unwrap();
+    assert_eq!(
+        pubd.verifiable_by.get("public").map(String::as_str),
+        Some("R0")
+    );
+    assert_eq!(
+        pubd.verifiable_by.get("operator").map(String::as_str),
+        Some("R0")
+    );
+    // The publication row + persisted record carry the map.
+    let row = r
+        .store
+        .envelopes(&exp_run)
+        .unwrap()
+        .iter()
+        .find(|e| e.class == "measurement.leaderboard.published")
+        .expect("published row");
+    assert_eq!(
+        row.payload
+            .get("verifiable_by")
+            .and_then(|v| v.get("public"))
+            .and_then(Json::as_str),
+        Some("R0")
+    );
+
+    // A digest-only cut (`payload_protection = restricted_store` — the
+    // `content` class withheld) caps every reader at R0 and an empty
+    // snapshot's readers cap at R0 too (never fabricated).
+    let pubd2 = r
+        .results
+        .publish_leaderboard(
+            &mut r.store,
+            &r.docs,
+            &def,
+            None,
+            &Json::obj([("payload_protection", Json::str("restricted_store"))]),
+        )
+        .unwrap();
+    assert!(
+        pubd2.verifiable_by.values().all(|l| l == "R0"),
+        "{:?}",
+        pubd2.verifiable_by
+    );
+}

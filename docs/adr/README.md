@@ -103,3 +103,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0311](ADR-0311-s4.16c-c1c2-verification-depth-rulings.md) | S4.16c C1/C2 verification depth rulings | S4.16c | Accepted |
 | [ADR-0312](ADR-0312-s5.1-profile-compiler-and-router-rulings.md) | S5.1 Profile Compiler + router rulings | S5.1 | Accepted |
 | [ADR-0313](ADR-0313-s5.2-compaction-and-tool-surface-rulings.md) | S5.2 compaction-family + tool-surface rulings | S5.2 | Accepted |
+| [ADR-0314](ADR-0314-s5.3-analysis-c2-and-hosted-lifecycle-rulings.md) | S5.3 analysis-C2 + hosted-lifecycle rulings | S5.3 | Accepted |

@@ -54,7 +54,7 @@ use hh_budget::{BudgetEnforcement, MatchMode, MatchSpec};
 use hh_lab::expand::{order_key, ArmConfiguration, ExpandContext, ExpandError, ExpandTask};
 use hh_lab::experiment::{
     ArmSpec, BudgetRelevantParam, CancelPolicy, CellPlan, ExperimentRefusal, ExperimentSpec,
-    SpecContext,
+    RetirementDiffResolver, SpecContext,
 };
 use hh_ledger::event::{Event, Producer, Scope};
 use hh_ledger::leases::LeaseScope;
@@ -215,6 +215,10 @@ pub struct EngineContext<'a> {
     pub capability_drifted: Option<Box<FlagResolver<'a>>>,
     /// `kind = retirement` diff result (`Some(false)` ⇒ `NotARetirementDiff`).
     pub retirement_diff: Option<bool>,
+    /// `(candidate_arm, baseline_arm) → HirDiff classification view` — the
+    /// AC-R-2.10.3-13 check's input (`authority_delta`/`budget_delta`/`semantic_ops`,
+    /// `candidate_bound`). `None` = cannot classify at this layer.
+    pub retirement_diff_class: Option<Box<RetirementDiffResolver<'a>>>,
     /// The `replicates_per_cell` policy floor (register `InsufficientReplicates`).
     pub min_replicates: u32,
     /// `spec → suite task axis` (the `ExpandTask` rows the plan multiplies
@@ -260,6 +264,10 @@ impl EngineContext<'_> {
             resolve_budget: self.resolve_budget.as_deref(),
             artifact_sealed: self.artifact_sealed.as_deref(),
             retirement_diff: self.retirement_diff,
+            retirement_diff_class: self
+                .retirement_diff_class
+                .as_ref()
+                .map(|f| f.as_ref() as &RetirementDiffResolver),
             capability_drifted: self.capability_drifted.as_deref(),
             budget_enforcement: self
                 .budget_enforcement
