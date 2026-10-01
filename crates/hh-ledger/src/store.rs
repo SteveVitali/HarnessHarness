@@ -2202,10 +2202,15 @@ impl Store {
                     })
                     .ok_or_else(|| tampered(env.seq, TamperedKind::CheckpointInvalid))?;
                 if let Some(other) = self.runs.get(other_run) {
+                    // Anchor heads carry the *claim's* profile (§5g.6 §2) —
+                    // after an idp rotation the anchored head recomputes
+                    // under `claim_profile`, never the stored `idp/1`
+                    // hashes (stored ids are never rewritten).
                     let other_leaves: Vec<String> =
-                        other.events.iter().map(|e| e.hash.clone()).collect();
+                        crate::rotation::rehashed_leaves(claim_profile, other.events.iter());
                     if other_leaves.len() < size as usize
-                        || crate::tree::mth_prefix(&other_leaves, size as usize) != head
+                        || crate::tree::mth_prefix_in(claim_profile, &other_leaves, size as usize)
+                            != head
                     {
                         return Err(tampered(env.seq, TamperedKind::ForkEquivocation));
                     }

@@ -21,9 +21,13 @@
 //!   submission exists); `shared` only where the family record declares it;
 //! - every failure is typed (`AdapterError`), never a warning.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use hh_ontology::lab::{EnvironmentFamily, HandleCapability, Support};
+use hh_ontology::lab::{
+    EnvironmentFamily, HandleCapability, SubmissionKind, Support, VerifierIsolation,
+};
+use hh_ontology::participant::Granularity;
+use hh_provenance::ProvenanceRecord;
 use hh_wire::Json;
 
 use crate::records::{EnvironmentHandle, ExposedTask, Submission};
@@ -124,6 +128,27 @@ pub enum AdapterError {
         /// The capabilities the handle does not surface.
         missing: Vec<String>,
     },
+    /// I-5 (ADR-0142 D3): the declaration's `parity = none` admits only
+    /// `product`-granularity smoke runs — any finer granularity refuses,
+    /// never silently scopes down.
+    ParityAbsentProductOnly {
+        /// The refused granularity.
+        granularity: String,
+    },
+    /// The run's participant surface is not in
+    /// `hosting_surfaces_supported` — a hosted run is refused, never
+    /// silently downgraded to `native` (§5h.4 participant classes;
+    /// T-LCD-06).
+    HostingSurfaceUnsupported {
+        /// The refused surface.
+        surface: String,
+    },
+    /// `export` was asked for a format the adapter does not declare in
+    /// `export_formats[]`.
+    ExportFormatUnsupported {
+        /// The refused format.
+        format: String,
+    },
 }
 
 impl std::fmt::Display for AdapterError {
@@ -147,6 +172,15 @@ impl std::fmt::Display for AdapterError {
             AdapterError::SuiteInvalid(m) => write!(f, "SuiteInvalid: {m}"),
             AdapterError::FamilyUnsupported { missing } => {
                 write!(f, "FamilyUnsupported{{missing: {missing:?}}}")
+            }
+            AdapterError::ParityAbsentProductOnly { granularity } => {
+                write!(f, "ParityAbsentProductOnly({granularity})")
+            }
+            AdapterError::HostingSurfaceUnsupported { surface } => {
+                write!(f, "HostingSurfaceUnsupported({surface})")
+            }
+            AdapterError::ExportFormatUnsupported { format } => {
+                write!(f, "ExportFormatUnsupported({format})")
             }
         }
     }
@@ -189,6 +223,200 @@ pub fn is_pinned_image_digest(digest: &str) -> bool {
         && hexpart
             .bytes()
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+}
+
+/// `hosting_surface/1` — the participation surfaces an adapter may serve
+/// a participant over (§5h.4 §2.1 `declare().hosting_surfaces_supported`;
+/// AC-R-2.9.4-9/-10). `native_participant` is the in-process class; the
+/// hosted surfaces are the §6.6 mechanisms the external plane admits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum HostingSurface {
+    /// `native_participant` — the harness's own participant.
+    NativeParticipant,
+    /// `container_installed` — a participant installed inside the
+    /// environment container.
+    ContainerInstalled,
+    /// `session_abi` — a participant driven over the session ABI.
+    SessionAbi,
+}
+
+impl HostingSurface {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HostingSurface::NativeParticipant => "native_participant",
+            HostingSurface::ContainerInstalled => "container_installed",
+            HostingSurface::SessionAbi => "session_abi",
+        }
+    }
+
+    /// Parse; `None` on any other input.
+    pub fn parse(s: &str) -> Option<HostingSurface> {
+        [
+            HostingSurface::NativeParticipant,
+            HostingSurface::ContainerInstalled,
+            HostingSurface::SessionAbi,
+        ]
+        .into_iter()
+        .find(|x| x.as_str() == s)
+    }
+}
+
+/// `export_format/1` — the foreign formats `export` admits (§5h.4 §2.1;
+/// `adapter_export` is the native replayable set, `harbor_trial_dir` the
+/// foreign trial-directory lowering the original runner regrades —
+/// AC-R-2.9.4-10's round trip).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ExportFormat {
+    /// `adapter_export` — the native artifact set (lossless).
+    AdapterExport,
+    /// `harbor_trial_dir` — the foreign trial directory (lossy — the
+    /// `LoweringLossReport` names every dropped member).
+    HarborTrialDir,
+}
+
+impl ExportFormat {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ExportFormat::AdapterExport => "adapter_export",
+            ExportFormat::HarborTrialDir => "harbor_trial_dir",
+        }
+    }
+
+    /// Parse; `None` on any other input.
+    pub fn parse(s: &str) -> Option<ExportFormat> {
+        [ExportFormat::AdapterExport, ExportFormat::HarborTrialDir]
+            .into_iter()
+            .find(|x| x.as_str() == s)
+    }
+}
+
+/// `adapter_declaration/1` — the `declare()` output (§5h.4 §2.1;
+/// ADR-0142 D3). Every member is a claim the harness may check against —
+/// tri-state members are never coerced (T-LCD-07) and `parity = none`
+/// restricts the adapter to `product`-granularity smoke runs (I-5).
+#[derive(Debug, Clone, PartialEq)]
+pub struct AdapterDeclaration {
+    /// The adapter id.
+    pub adapter_id: String,
+    /// The adapter's version identity (the conditioned artefact's
+    /// version label — recorded, never inferred).
+    pub version_identity: String,
+    /// The suite family the adapter serves.
+    pub suite_family: EnvironmentFamily,
+    /// Every family the adapter declares supported.
+    pub families_supported: Vec<EnvironmentFamily>,
+    /// The suite's submission kind.
+    pub submission_kind: SubmissionKind,
+    /// The verifier isolations the adapter supports (`⊆ {separate,
+    /// shared}` at Stage 3).
+    pub verifier_isolation_supported: BTreeSet<VerifierIsolation>,
+    /// The export formats the adapter serves.
+    pub export_formats: Vec<ExportFormat>,
+    /// The participation surfaces the adapter serves a participant over.
+    pub hosting_surfaces_supported: BTreeSet<HostingSurface>,
+    /// The adapter's `ParityReport` ref — `None` spells `parity = none`
+    /// (the I-5 restriction: product-granularity smoke runs only).
+    pub parity: Option<String>,
+    /// The record's provenance.
+    pub provenance: ProvenanceRecord,
+}
+
+impl AdapterDeclaration {
+    /// I-5 — `parity = none` admits `product`-granularity runs only;
+    /// anything finer refuses `ParityAbsentProductOnly` (a smoke run is
+    /// flagged `parity = none` by the caller, never silently scoped).
+    pub fn admits_granularity(&self, g: Granularity) -> Result<(), AdapterError> {
+        if self.parity.is_none() && g != Granularity::ProductLevel {
+            return Err(AdapterError::ParityAbsentProductOnly {
+                granularity: g.as_str().into(),
+            });
+        }
+        Ok(())
+    }
+
+    /// The participant-surface gate — a run's surface must be declared;
+    /// an undeclared hosted surface refuses `HostingSurfaceUnsupported`
+    /// (never a silent native downgrade).
+    pub fn admits_surface(&self, s: HostingSurface) -> Result<(), AdapterError> {
+        if !self.hosting_surfaces_supported.contains(&s) {
+            return Err(AdapterError::HostingSurfaceUnsupported {
+                surface: s.as_str().into(),
+            });
+        }
+        Ok(())
+    }
+
+    /// The export-format gate — `export(format)` refuses formats the
+    /// declaration does not carry.
+    pub fn admits_export_format(&self, f: ExportFormat) -> Result<(), AdapterError> {
+        if !self.export_formats.contains(&f) {
+            return Err(AdapterError::ExportFormatUnsupported {
+                format: f.as_str().into(),
+            });
+        }
+        Ok(())
+    }
+
+    /// The canonical JSON (`adapter_declaration/1`; `parity` spells
+    /// `"none"` — never an absent member silently read as reported).
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("schema".into(), Json::str("adapter_declaration/1"));
+        m.insert("adapter_id".into(), Json::str(&self.adapter_id));
+        m.insert("version_identity".into(), Json::str(&self.version_identity));
+        m.insert("suite_family".into(), Json::str(self.suite_family.name()));
+        m.insert(
+            "families_supported".into(),
+            Json::Arr(
+                self.families_supported
+                    .iter()
+                    .map(|f| Json::str(f.name()))
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "submission_kind".into(),
+            Json::str(self.submission_kind.name()),
+        );
+        m.insert(
+            "verifier_isolation_supported".into(),
+            Json::Arr(
+                self.verifier_isolation_supported
+                    .iter()
+                    .map(|i| Json::str(i.name()))
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "export_formats".into(),
+            Json::Arr(
+                self.export_formats
+                    .iter()
+                    .map(|f| Json::str(f.as_str()))
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "hosting_surfaces_supported".into(),
+            Json::Arr(
+                self.hosting_surfaces_supported
+                    .iter()
+                    .map(|s| Json::str(s.as_str()))
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "parity".into(),
+            match &self.parity {
+                Some(r) => Json::str(r.clone()),
+                None => Json::str("none"),
+            },
+        );
+        m.insert("provenance".into(), self.provenance.to_json());
+        Json::Obj(m)
+    }
 }
 
 /// The `benchmark_adapter` trait — every adapter (fixture or real) is a
@@ -259,6 +487,45 @@ pub trait BenchmarkAdapter {
             vec!["R0", "R1", "R2", "R3"]
         } else {
             vec!["R0", "R1", "R3"]
+        }
+    }
+
+    /// The submission kind the suite's participants produce.
+    fn submission_kind(&self) -> SubmissionKind;
+
+    /// The verifier isolations the adapter supports (`⊆ {separate,
+    /// shared}` at Stage 3 — §5h.4 §2.1).
+    fn verifier_isolation_supported(&self) -> BTreeSet<VerifierIsolation>;
+
+    /// The export formats `export` admits.
+    fn export_formats(&self) -> Vec<ExportFormat>;
+
+    /// The participation surfaces the adapter serves (a hosted surface
+    /// absent here refuses `HostingSurfaceUnsupported`, never downgrades).
+    fn hosting_surfaces_supported(&self) -> BTreeSet<HostingSurface>;
+
+    /// The adapter's `ParityReport` ref — `None` spells `parity = none`
+    /// on the declaration (the I-5 product-only restriction).
+    fn parity_ref(&self) -> Option<String>;
+
+    /// The adapter's version identity (the conditioned artefact's label).
+    fn version_identity(&self) -> String;
+
+    /// `declare()` — the `AdapterDeclaration` record (§5h.4 §2.1). Every
+    /// member is composed from the adapter's declared facts — never
+    /// inferred.
+    fn declare(&self) -> AdapterDeclaration {
+        AdapterDeclaration {
+            adapter_id: self.adapter_id().to_string(),
+            version_identity: self.version_identity(),
+            suite_family: self.family(),
+            families_supported: vec![self.family()],
+            submission_kind: self.submission_kind(),
+            verifier_isolation_supported: self.verifier_isolation_supported(),
+            export_formats: self.export_formats(),
+            hosting_surfaces_supported: self.hosting_surfaces_supported(),
+            parity: self.parity_ref(),
+            provenance: ProvenanceRecord::kernel(format!("hh-bench/{}", self.adapter_id()), 0),
         }
     }
 

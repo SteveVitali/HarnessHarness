@@ -1,0 +1,36 @@
+{
+ "expected": "{\"resolved\":true,\"patch\":\"p3\"}",
+ "instruction": "Resolve the issue; write the patch payload {\"resolved\":true,\"patch\":\"p3\"} to submission.json.",
+ "model_io": [
+  {
+   "args": {
+    "path": "submission.json",
+    "text": "{\"resolved\":true,\"patch\":\"p3\"}"
+   },
+   "surface": "fs.write"
+  },
+  {
+   "args": {
+    "text": "{\"resolved\":true,\"patch\":\"p3\"}"
+   },
+   "surface": "hh.submit"
+  }
+ ],
+ "name": "b-resolve-3",
+ "original_runs": [
+  {
+   "model_calls": 2,
+   "reward_ppm": 1000000
+  },
+  {
+   "model_calls": 2,
+   "reward_ppm": 1000000
+  },
+  {
+   "model_calls": 2,
+   "reward_ppm": 1000000
+  }
+ ],
+ "schema": "benchset_task/1",
+ "split": "held_out"
+}

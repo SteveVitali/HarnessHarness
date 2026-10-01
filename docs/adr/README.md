@@ -97,3 +97,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0305](ADR-0305-s4.13-hosted-lineage-durability-rulings.md) | S4.13 hosted-lineage & durability rulings | S4.13 | Accepted |
 | [ADR-0306](ADR-0306-s4.14a-supply-chain-trust-rulings.md) | S4.14a supply-chain trust & third-party install rulings | S4.14a | Accepted |
 | [ADR-0307](ADR-0307-s4.14b-security-enrichments-rulings.md) | S4.14b security enrichments — backend, attestation, rotation, hosted composition and label-branch rulings | S4.14b | Accepted |
+| [ADR-0308](ADR-0308-s4.15-c1-measurement-depth-rulings.md) | S4.15 C1 measurement depth — adapter declaration, validity gating, foreign interchange and judge-oracle rulings | S4.15 | Accepted |

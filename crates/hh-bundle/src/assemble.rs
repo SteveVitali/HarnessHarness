@@ -543,6 +543,107 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
         .clone()
         .unwrap_or_else(|| rm.participant_class.as_str().to_string());
 
+    // ── C1/Stage-4 hosted additions (§8.3 C1 row; R-2.12.1¹; S4.15) ──
+    // A hosted participant's `participant_version` is a *claim* — never a
+    // native field (spec failure row: "no native field; DRIFT recorded as
+    // data"). The claim's value is the `lifecycle.hosted.attached` row's
+    // identity members verbatim; its provenance is `unverified` participant
+    // report, never the Lab's kernel mint (CC2 — content never vouches).
+    // `lifecycle.hosted.drift_observed` rows ride as `conformance_drift`
+    // claims — DRIFT is experimental data, not an admissibility verdict.
+    let mut claims = inputs.policy.claims.clone();
+    if participant_class == "hosted" {
+        for e in store.envelopes(run_id).unwrap_or_default() {
+            match e.class.as_str() {
+                "lifecycle.hosted.attached" => {
+                    let claim_prov = Json::obj([
+                        (
+                            "origin",
+                            Json::str(format!(
+                                "participant({})",
+                                e.payload
+                                    .get("participant_version_identity")
+                                    .and_then(Json::as_str)
+                                    .unwrap_or("unknown")
+                            )),
+                        ),
+                        ("authority", Json::str("unverified")),
+                        (
+                            "source_event",
+                            Json::str(format!("{run_id}:{}", e.event_id)),
+                        ),
+                    ]);
+                    claims.push(crate::manifest::Claim {
+                        role: "participant_version".into(),
+                        value: Json::obj([
+                            (
+                                "participant_version_identity",
+                                e.payload
+                                    .get("participant_version_identity")
+                                    .cloned()
+                                    .unwrap_or(Json::Null),
+                            ),
+                            (
+                                "participant_ref",
+                                e.payload
+                                    .get("participant_ref")
+                                    .cloned()
+                                    .unwrap_or(Json::Null),
+                            ),
+                            (
+                                "hosting_mechanism",
+                                e.payload
+                                    .get("hosting_mechanism")
+                                    .cloned()
+                                    .unwrap_or(Json::Null),
+                            ),
+                            (
+                                "session_ref",
+                                e.payload.get("session_ref").cloned().unwrap_or(Json::Null),
+                            ),
+                        ]),
+                        provenance: claim_prov,
+                    });
+                }
+                "lifecycle.hosted.drift_observed" => {
+                    claims.push(crate::manifest::Claim {
+                        role: "conformance_drift".into(),
+                        value: Json::obj([
+                            (
+                                "dimension",
+                                e.payload.get("dimension").cloned().unwrap_or(Json::Null),
+                            ),
+                            (
+                                "declared",
+                                e.payload.get("declared").cloned().unwrap_or(Json::Null),
+                            ),
+                            (
+                                "observed",
+                                e.payload.get("observed").cloned().unwrap_or(Json::Null),
+                            ),
+                            (
+                                "source_event",
+                                Json::str(format!("{run_id}:{}", e.event_id)),
+                            ),
+                        ]),
+                        // The Lab recorded the drift — kernel-minted data,
+                        // still never a fact about the participant's
+                        // conformance verdict (that's the probe plane's).
+                        provenance: Json::obj([
+                            ("origin", Json::str("kernel(hh-embed/hosting)")),
+                            ("authority", Json::str("environment")),
+                            (
+                                "source_event",
+                                Json::str(format!("{run_id}:{}", e.event_id)),
+                            ),
+                        ]),
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+
     // definition / results sections carry member refs.
     let definition_section = Json::obj([
         ("version_id", Json::str(def_ref.clone())),
@@ -590,7 +691,7 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
             .iter()
             .map(|l| l.as_str().to_string())
             .collect(),
-        claims: inputs.policy.claims.clone(),
+        claims,
         name_bindings: vec![],
         fetch_policy: if inputs.policy.materialize == "self_contained" {
             "self_contained".into()

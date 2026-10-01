@@ -16,7 +16,7 @@ use hh_hosting::{
         ensure_terminal, envelope_stamps, validate_event, validate_session, EventChannel,
         HostedError, HostedEvent, HostedOrigin, HostedProvenance, Mediation,
     },
-    proj::{lift, lift_stop_reason, project, LossClass, LossSeverity},
+    proj::{lift, lift_event_rows, lift_stop_reason, project, LossClass, LossSeverity},
     records::{
         AdapterRecord, HostingExt, ParticipantRecord, ProcessPlacement, RecordError,
         HOSTING_EXT_KEY,
@@ -966,4 +966,129 @@ fn s4_13_hosted_status_map_five_plus_unknown() {
         lifted.payload.get("kind").and_then(Json::as_str),
         Some("_vendor.heartbeat")
     );
+}
+
+// ── M18 — hosted usage ingestion (S4.15; spec §5h M18; ADR-0165 D5) ─────────
+//
+// `usage.reported` lowers to `measurement.cost.attributed` with
+// mechanism-derived provenance — `participant_reported` for a live
+// (`observed`) session-ABI report, `reconstructed_from_native_log` for a
+// post-hoc (`unobserved`) reconstruction — and, when the report names a
+// call, a `model.call.completed{usage, provenance}` carrier rides beside
+// it: "both rows appended when measured and reported coexist".
+
+#[test]
+fn m18_usage_reported_lowers_per_mediation_and_dual_carries() {
+    // A live participant report naming a call → the cost row AND the
+    // `model.call.completed{usage, provenance = participant_reported}`
+    // carrier.
+    let mut u = hosted("usage.reported", "s1", 0);
+    u.payload = Json::obj([
+        ("used", Json::Int(1200)),
+        ("size", Json::Int(40)),
+        ("model_call_id", Json::str("mc-1")),
+    ]);
+    let rows = lift_event_rows(&u);
+    assert_eq!(rows.len(), 2, "the reported + carrier rows both append");
+    assert_eq!(rows[0].class, "measurement.cost.attributed");
+    assert_eq!(
+        rows[0].payload.get("provenance"),
+        Some(&Json::str("participant_reported"))
+    );
+    assert_eq!(
+        rows[0].payload.get("provenance_class"),
+        Some(&Json::str("reported"))
+    );
+    assert_eq!(
+        rows[0].payload.get("confidence"),
+        Some(&Json::str("estimate"))
+    );
+    assert_eq!(rows[1].class, "model.call.completed");
+    assert_eq!(
+        rows[1].payload.get("provenance"),
+        Some(&Json::str("participant_reported"))
+    );
+    assert_eq!(
+        rows[1].payload.get("model_call_id"),
+        Some(&Json::str("mc-1"))
+    );
+
+    // A post-hoc reconstruction (`unobserved` — the container-installed
+    // leg) stamps `reconstructed_from_native_log` / `reconstructed`.
+    u.mediation = Mediation::Unobserved;
+    let rows = lift_event_rows(&u);
+    assert_eq!(
+        rows[0].payload.get("provenance"),
+        Some(&Json::str("reconstructed_from_native_log"))
+    );
+    assert_eq!(
+        rows[0].payload.get("provenance_class"),
+        Some(&Json::str("reconstructed"))
+    );
+    assert_eq!(
+        rows[1].payload.get("provenance"),
+        Some(&Json::str("reconstructed_from_native_log"))
+    );
+
+    // A report naming no call still lands the accounting row — never a
+    // zero, never dropped.
+    u.payload = Json::obj([("used", Json::Int(7)), ("size", Json::Int(1))]);
+    let rows = lift_event_rows(&u);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].class, "measurement.cost.attributed");
+}
+
+#[test]
+fn m18_measured_and_reported_coexist_as_distinct_provenance() {
+    // Interception (measured) and `usage.reported` coexist → the lift
+    // carries both `measurement.cost.attributed` rows' basis: the
+    // intercepted `model.call.completed` is the measured side; the
+    // reported cost row stays `participant_reported` — the agreement
+    // fold (`usage_report_agreement`) reads the pair (AC-R-2.10.6-9).
+    let mut mc = hosted("model.call.completed", "s1", 0);
+    mc.mediation = Mediation::Mediated;
+    mc.provenance.origin = HostedOrigin::Intercept;
+    mc.payload = Json::obj([
+        ("model_call_id", Json::str("mc-1")),
+        ("status", Json::str("completed")),
+        ("usage", Json::obj([("used", Json::Int(1200))])),
+    ]);
+    let mut u = hosted("usage.reported", "s1", 1);
+    u.payload = Json::obj([
+        ("used", Json::Int(1200)),
+        ("size", Json::Int(40)),
+        ("model_call_id", Json::str("mc-1")),
+    ]);
+    let rows = lift(&[mc, u]);
+    let cost_rows: Vec<_> = rows
+        .iter()
+        .filter(|r| r.class == "measurement.cost.attributed")
+        .collect();
+    assert_eq!(
+        cost_rows.len(),
+        1,
+        "the reported cost row coexists with the measured carrier"
+    );
+    assert_eq!(
+        cost_rows[0].payload.get("provenance"),
+        Some(&Json::str("participant_reported"))
+    );
+    // Both carriers of `mc-1`'s usage exist — the measured intercept row
+    // and the reported-usage carrier.
+    let call_rows: Vec<_> = rows
+        .iter()
+        .filter(|r| r.class == "model.call.completed")
+        .collect();
+    assert_eq!(call_rows.len(), 2);
+    assert!(call_rows
+        .iter()
+        .any(|r| r.payload.get("provenance") == Some(&Json::str("participant_reported"))));
+    // The measured row is verbatim passthrough — its authority/mediation
+    // stamps, not a payload provenance member.
+    let measured = call_rows
+        .iter()
+        .find(|r| r.payload.get("provenance").is_none())
+        .expect("measured carrier");
+    assert_eq!(measured.mediation, Mediation::Mediated);
+    assert_eq!(measured.origin, HostedOrigin::Intercept);
 }

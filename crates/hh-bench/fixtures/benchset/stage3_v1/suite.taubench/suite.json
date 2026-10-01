@@ -1,24 +1,29 @@
 {
-  "adapter_id": "adapter_d",
-  "contamination_stratum": "public_dated",
-  "episode_model": null,
-  "family": "structured_tool",
-  "flawed_task_ids": [],
-  "parity_subset": [
-    "d-tool",
-    "d-args",
-    "d-retry"
-  ],
-  "requires": {
-    "handle.file": "required"
-  },
-  "retired_for_headline": false,
-  "schema": "benchset_suite/1",
-  "suite_id": "suite.taubench",
-  "tasks": [
-    "d-tool",
-    "d-args",
-    "d-retry"
-  ],
-  "verifier_isolation": "separate"
+ "adapter_id": "adapter_d",
+ "audit": {
+  "audited_at": 0,
+  "dispatch_ref": "dispatch://benchset.stage3.v1/suite.taubench",
+  "epoch_seeded": true
+ },
+ "contamination_stratum": "public_dated",
+ "episode_model": null,
+ "family": "structured_tool",
+ "flawed_task_ids": [],
+ "parity_subset": [
+  "d-tool",
+  "d-args",
+  "d-retry"
+ ],
+ "requires": {
+  "handle.file": "required"
+ },
+ "retired_for_headline": false,
+ "schema": "benchset_suite/1",
+ "suite_id": "suite.taubench",
+ "tasks": [
+  "d-tool",
+  "d-args",
+  "d-retry"
+ ],
+ "verifier_isolation": "separate"
 }

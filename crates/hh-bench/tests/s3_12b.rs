@@ -335,14 +335,12 @@ fn round_trip(
         config(),
     )
     .expect("driver opens");
-    let r = loop {
-        match driver.run(&mut model, &mut gate, &mut asm, &mut sink) {
-            Ok(r) => break r,
-            Err(hh_control::driver::DriverError::Port { port, .. }) if port == "inbox" => {
-                panic!("corpus transcript parked the driver — a cue it cannot serve")
-            }
-            Err(e) => panic!("driver error on {}: {e:?}", task.name),
+    let r = match driver.run(&mut model, &mut gate, &mut asm, &mut sink) {
+        Ok(r) => r,
+        Err(hh_control::driver::DriverError::Port { port: "inbox", .. }) => {
+            panic!("corpus transcript parked the driver — a cue it cannot serve")
         }
+        Err(e) => panic!("driver error on {}: {e:?}", task.name),
     };
     assert!(
         matches!(

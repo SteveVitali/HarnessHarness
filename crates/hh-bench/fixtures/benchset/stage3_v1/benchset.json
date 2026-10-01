@@ -1,10 +1,12 @@
 {
-  "benchset_id": "benchset.stage3.v1",
-  "schema": "benchset/1",
-  "suites": {
-    "a": "suite.tb2",
-    "c": "suite.swebench",
-    "d": "suite.taubench",
-    "e": "suite.agentdojo"
-  }
+ "benchset_id": "benchset.stage3.v1",
+ "schema": "benchset/1",
+ "suites": {
+  "a": "suite.tb2",
+  "b": "suite.swe_fresh",
+  "c": "suite.swebench",
+  "d": "suite.taubench",
+  "e": "suite.agentdojo",
+  "g": "suite.harbor_index"
+ }
 }

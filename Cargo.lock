@@ -115,12 +115,14 @@ dependencies = [
 name = "hh-bundle"
 version = "0.0.1"
 dependencies = [
+ "hh-budget",
  "hh-identity",
  "hh-lab",
  "hh-ledger",
  "hh-ontology",
  "hh-provenance",
  "hh-secrets",
+ "hh-telemetry",
  "hh-wire",
 ]
 
@@ -299,6 +301,7 @@ dependencies = [
  "hh-ontology",
  "hh-provenance",
  "hh-telemetry",
+ "hh-verification",
  "hh-wire",
 ]
 
@@ -307,6 +310,7 @@ name = "hh-experiment"
 version = "0.0.1"
 dependencies = [
  "hh-budget",
+ "hh-eval",
  "hh-identity",
  "hh-lab",
  "hh-ledger",

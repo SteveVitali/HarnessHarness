@@ -1,31 +1,37 @@
 {
-  "adapter_id": "adapter_c",
-  "contamination_stratum": "contaminated_public",
-  "episode_model": null,
-  "family": "coding_terminal",
-  "flawed_task_ids": [
-    "c-flawed"
-  ],
-  "parity_subset": [
-    "c-patch-1",
-    "c-patch-2",
-    "c-patch-3",
-    "c-patch-4",
-    "c-patch-5"
-  ],
-  "requires": {
-    "handle.file": "required"
-  },
-  "retired_for_headline": true,
-  "schema": "benchset_suite/1",
-  "suite_id": "suite.swebench",
-  "tasks": [
-    "c-patch-1",
-    "c-patch-2",
-    "c-patch-3",
-    "c-patch-4",
-    "c-patch-5",
-    "c-flawed"
-  ],
-  "verifier_isolation": "separate"
+ "adapter_id": "adapter_c",
+ "audit": {
+  "audited_at": 0,
+  "dispatch_ref": "dispatch://benchset.stage3.v1/suite.swebench",
+  "epoch_seeded": true
+ },
+ "contamination_stratum": "contaminated_public",
+ "episode_model": null,
+ "family": "coding_terminal",
+ "flawed_task_ids": [
+  "c-flawed"
+ ],
+ "parity_subset": [
+  "c-patch-1",
+  "c-patch-2",
+  "c-patch-3",
+  "c-patch-4",
+  "c-patch-5"
+ ],
+ "requires": {
+  "handle.file": "required"
+ },
+ "retired_for_headline": true,
+ "retired_reason": "benchset.stage3.v1 control stratum",
+ "schema": "benchset_suite/1",
+ "suite_id": "suite.swebench",
+ "tasks": [
+  "c-patch-1",
+  "c-patch-2",
+  "c-patch-3",
+  "c-patch-4",
+  "c-patch-5",
+  "c-flawed"
+ ],
+ "verifier_isolation": "separate"
 }

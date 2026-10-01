@@ -1,0 +1,36 @@
+{
+ "expected": "{\"smoke\":\"s2\"}",
+ "instruction": "Smoke: write {\"smoke\":\"s2\"} to submission.json.",
+ "model_io": [
+  {
+   "args": {
+    "path": "submission.json",
+    "text": "{\"smoke\":\"s2\"}"
+   },
+   "surface": "fs.write"
+  },
+  {
+   "args": {
+    "text": "{\"smoke\":\"s2\"}"
+   },
+   "surface": "hh.submit"
+  }
+ ],
+ "name": "g-smoke-2",
+ "original_runs": [
+  {
+   "model_calls": 2,
+   "reward_ppm": 1000000
+  },
+  {
+   "model_calls": 2,
+   "reward_ppm": 1000000
+  },
+  {
+   "model_calls": 2,
+   "reward_ppm": 1000000
+  }
+ ],
+ "schema": "benchset_task/1",
+ "split": "held_out"
+}

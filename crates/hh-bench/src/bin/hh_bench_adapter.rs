@@ -106,6 +106,10 @@ fn dispatch(adapter: &impl BenchmarkAdapter, op: AdapterOp, req: &Json) -> i32 {
                             .collect(),
                     ),
                 ),
+                // S4.15 — the full `AdapterDeclaration` record
+                // (§5h.4 §2.1; the surfaces, formats and parity state the
+                // run-admission gates read).
+                ("declaration", adapter.declare().to_json()),
             ]))
         }
         AdapterOp::Discover => Ok(Json::obj([(
@@ -178,10 +182,41 @@ fn dispatch(adapter: &impl BenchmarkAdapter, op: AdapterOp, req: &Json) -> i32 {
                 .map_err(|e| AdapterError::MalformedRequest(format!("grade: {e}")))?;
             Ok(Json::obj([("grade", result.to_json())]))
         }
-        AdapterOp::Export | AdapterOp::Parity => Err(AdapterError::UnknownOp(format!(
-            "{} rides the export/parity driver, not this binary",
-            op.as_str()
-        ))),
+        AdapterOp::Export => {
+            // `export{format, handle, verdict?, reward_ppm?}` — the C1
+            // foreign-export leg (§5h.4 §2.1): the format must be one the
+            // adapter's declaration carries (`ExportFormatUnsupported`
+            // otherwise); the artifact + loss report travel together.
+            let format = req
+                .get("format")
+                .and_then(Json::as_str)
+                .and_then(hh_bench::adapter::ExportFormat::parse)
+                .ok_or_else(|| AdapterError::MalformedRequest("missing/unknown `format`".into()))?;
+            // The declaration gate runs before any environment work —
+            // an undeclared format refuses at admission.
+            adapter.declare().admits_export_format(format)?;
+            let env = env_from_json(
+                req.get("handle")
+                    .ok_or_else(|| AdapterError::MalformedRequest("missing `handle`".into()))?,
+            )
+            .map_err(AdapterError::MalformedRequest)?;
+            let sub = adapter
+                .collect_submission(&env)
+                .map_err(|e| AdapterError::MalformedRequest(format!("collect: {e}")))?;
+            let task = adapter.task(&env.task_id)?;
+            let reward_ppm = req.get("reward_ppm").and_then(Json::as_int).unwrap_or(0);
+            let verdict = req.get("verdict").cloned().unwrap_or(Json::obj([]));
+            let (artifact, loss) =
+                hh_bench::foreign::export(adapter, format, &task, &sub, &verdict, reward_ppm)?;
+            Ok(Json::obj([
+                ("artifact", artifact.body.clone()),
+                ("content_ref", Json::str(artifact.content_ref)),
+                ("loss_report", loss.to_json()),
+            ]))
+        }
+        AdapterOp::Parity => Err(AdapterError::UnknownOp(
+            "parity rides the parity driver, not this binary".into(),
+        )),
     })();
     match out {
         Ok(j) => {

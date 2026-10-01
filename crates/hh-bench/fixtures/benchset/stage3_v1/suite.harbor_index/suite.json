@@ -1,0 +1,25 @@
+{
+ "adapter_id": "adapter_g",
+ "audit": {
+  "audited_at": 0,
+  "dispatch_ref": "dispatch://benchset.stage3.v1/suite.harbor_index",
+  "epoch_seeded": true
+ },
+ "contamination_stratum": "public_dated",
+ "episode_model": null,
+ "family": "coding_terminal",
+ "flawed_task_ids": [],
+ "parity_subset": [],
+ "requires": {
+  "handle.file": "required"
+ },
+ "retired_for_headline": true,
+ "retired_reason": "provisional adapter-CI smoke suite \u2014 not a headline stratum",
+ "schema": "benchset_suite/1",
+ "suite_id": "suite.harbor_index",
+ "tasks": [
+  "g-smoke-1",
+  "g-smoke-2"
+ ],
+ "verifier_isolation": "separate"
+}
