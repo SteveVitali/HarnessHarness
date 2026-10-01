@@ -64,6 +64,12 @@ pub enum ViewKind {
     /// this run's fork record (when it is a child), its `rolled_back` rewind
     /// history, and its children. A pure WAL fold — rebuildable, never stored.
     BranchTree,
+    /// `effects_by_key` — the §5a.2 C0 dedup projection (`idempotency_key →
+    /// {effect_id, phase, outcome}`; R-2.2.4⁰ᵇ; ADR-0102 §10): the commit path's
+    /// durable-side consult — a repeated commit under a key that reached
+    /// `observed(applied)` serves the stored observation; a duplicate committed
+    /// key is a veto, never a counter (ADR-0047 §5).
+    EffectsByKey,
     /// `compact` — the **declared-lossy** CLI projection (§7.1; R-2.5.3¹;
     /// ADR-0169 D3): the durable prefix folded to `message`/`tool`/`effect`/
     /// `approval`/`cost` items only, shipped with a `loss_report` enumerating
@@ -88,6 +94,7 @@ impl ViewKind {
             ViewKind::MemoryStaleIndex => "memory_stale_index",
             ViewKind::MemoryUsage => "memory_usage",
             ViewKind::BranchTree => "branch_tree",
+            ViewKind::EffectsByKey => "effects_by_key",
             ViewKind::Compact => "compact",
         }
     }
@@ -107,6 +114,7 @@ impl ViewKind {
             "memory_stale_index" => Some(ViewKind::MemoryStaleIndex),
             "memory_usage" => Some(ViewKind::MemoryUsage),
             "branch_tree" => Some(ViewKind::BranchTree),
+            "effects_by_key" => Some(ViewKind::EffectsByKey),
             "compact" => Some(ViewKind::Compact),
             _ => None,
         }
@@ -440,6 +448,64 @@ pub fn effect_ledger(run_id: &str, events: &[EventEnvelope], until: Option<u64>)
         ),
     ]));
     View::build(run_id, ViewKind::EffectLedger, watermark, payload)
+}
+
+/// `project(effects_by_key)` — the §5a.2 dedup projection
+/// (`idempotency_key → {effect_id, phase, outcome}`; R-2.2.4⁰ᵇ; ADR-0102
+/// §10): the commit path's durable-side consult — a repeated commit under
+/// a key that reached `observed(applied)` serves the stored observation;
+/// a duplicate committed key is a veto, never a counter (ADR-0047 §5).
+pub fn effects_by_key_view(run_id: &str, events: &[EventEnvelope], until: Option<u64>) -> View {
+    let effects = fold_effects(events, until);
+    let watermark = events
+        .iter()
+        .rfind(|e| until.map(|u| e.seq <= u).unwrap_or(true))
+        .map(|e| e.seq);
+    let mut by_key = BTreeMap::new();
+    let mut duplicate_committed: Vec<String> = Vec::new();
+    let mut committed_keys: BTreeMap<String, u64> = BTreeMap::new();
+    for (effect_id, f) in &effects {
+        if let Some(key) = &f.idempotency_key {
+            by_key.insert(
+                key.clone(),
+                Json::obj([
+                    ("effect_id", Json::str(effect_id)),
+                    ("phase", Json::str(f.phase.as_str())),
+                    (
+                        "outcome",
+                        f.outcome
+                            .map(|o| Json::str(o.as_str()))
+                            .unwrap_or(Json::Null),
+                    ),
+                ]),
+            );
+            // The veto surface — a second durable `committed` under one key
+            // (per `commits[]`, the write-ahead records) is the duplicate the
+            // battery asserts never appears (AC-R-2.2.3-3).
+            for (_ev, seq) in f.commits.values() {
+                let n = committed_keys.entry(key.clone()).or_insert(0);
+                *n += 1;
+                if *n > 1 {
+                    duplicate_committed.push(format!("{key}@{seq}"));
+                }
+            }
+        }
+    }
+    let payload = Json::Obj(BTreeMap::from([
+        ("kind".to_string(), Json::str("effects_by_key")),
+        ("key_count".to_string(), Json::Int(by_key.len() as i64)),
+        ("effects".to_string(), Json::Obj(by_key)),
+        (
+            "duplicate_committed".to_string(),
+            Json::Arr(
+                duplicate_committed
+                    .iter()
+                    .map(|k| Json::str(k.clone()))
+                    .collect(),
+            ),
+        ),
+    ]));
+    View::build(run_id, ViewKind::EffectsByKey, watermark, payload)
 }
 
 /// `project(checkpoint)` — the deterministic restore input (AC-R-2.2.3-2): the

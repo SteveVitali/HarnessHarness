@@ -4089,3 +4089,272 @@ fn ac10_assembly_ops_run_out_of_process_over_group_l() {
     };
     assert_eq!(reports.len(), 1, "identical points validate once");
 }
+
+// ── S3.6 — `replay` + `counterfactual` (R-2.2.4⁰ᵇ; §5a.4; ADR-0135) ──────────
+
+/// A parseable `MatchSpec` (matched_cap over `model_calls`) — the arm design's
+/// `budget` member is this canonical document.
+fn match_spec_json() -> Json {
+    Json::obj(vec![
+        ("dimensions", Json::Arr(vec![Json::str("model_calls")])),
+        ("mode", Json::str("matched_cap")),
+        ("tolerance", Json::Int(0)),
+        ("model_scope", Json::str("same_snapshot")),
+        ("cache_policy", Json::str("cold_start")),
+    ])
+}
+
+fn counterfactual_params(session: &str, at_seq: i64, earliest: i64, design: Json) -> Json {
+    Json::obj(vec![
+        ("session_id", Json::str(session)),
+        ("at_seq", Json::Int(at_seq)),
+        (
+            "intervention",
+            Json::obj(vec![
+                ("kind", Json::str("response_substitution")),
+                ("target", Json::str("model")),
+                ("earliest_affected_seq", Json::Int(earliest)),
+            ]),
+        ),
+        ("design", design),
+        ("env", Json::str("trace_only")),
+    ])
+}
+
+fn valid_design() -> Json {
+    Json::obj(vec![
+        ("n_seeds", Json::Int(2)),
+        ("factual_arm", Json::Bool(true)),
+        ("budget", match_spec_json()),
+    ])
+}
+
+/// AC-R-2.2.4-7/-11 — `replay` mints the durable `lifecycle.replay.started`/
+/// `finished` pair on the target and lands the content-addressed
+/// `ReplayValidityReport` (`report_ref`) for both driver modes.
+#[test]
+fn s3_6_replay_lands_the_durable_pair_and_report() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("experimental", true)])),
+    );
+    assert!(r.get("result").is_some());
+    let s = open_new(&mut svc);
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+
+    // An unknown driver mode is a schema error, never a silent default.
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "replay",
+            Json::obj(vec![
+                ("session_id", Json::str(id.clone())),
+                ("driver_mode", Json::str("bogus")),
+            ]),
+        )),
+        "SchemaViolation"
+    );
+
+    for mode in ["reconstruct", "deterministic"] {
+        let out = ok(&call(
+            &mut svc,
+            "replay",
+            Json::obj(vec![
+                ("session_id", Json::str(id.clone())),
+                ("driver_mode", Json::str(mode)),
+            ]),
+        ));
+        assert_eq!(out.get("run_id").and_then(Json::as_str), Some(run.as_str()));
+        assert_eq!(out.get("driver_mode").and_then(Json::as_str), Some(mode));
+        assert!(
+            out.get("report_ref").and_then(Json::as_str).is_some(),
+            "{mode} lands the report blob: {out:?}"
+        );
+        let report = out.get("report").unwrap();
+        assert!(
+            report.get("mode").and_then(Json::as_str).is_some(),
+            "{mode} report carries a validity mode: {report:?}"
+        );
+    }
+    let classes: Vec<String> = svc
+        .store()
+        .envelopes(&run)
+        .unwrap()
+        .iter()
+        .map(|e| e.class.clone())
+        .collect();
+    assert_eq!(
+        classes
+            .iter()
+            .filter(|c| c.as_str() == "lifecycle.replay.started")
+            .count(),
+        2,
+        "one started row per replay call"
+    );
+    assert_eq!(
+        classes
+            .iter()
+            .filter(|c| c.as_str() == "lifecycle.replay.finished")
+            .count(),
+        2,
+        "one finished row per replay call"
+    );
+}
+
+/// AC-R-2.2.4-8 — the `counterfactual` hook refuses `UnbudgetedArm` without a
+/// parseable `MatchSpec`, refuses `at > earliest_affected_seq`, and requires
+/// the factual arm.
+#[test]
+fn s3_6_counterfactual_gates_unbudgeted_and_mistimed_arms() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("experimental", true)])),
+    );
+    assert!(r.get("result").is_some());
+    let s = open_new(&mut svc);
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    // `design.budget` absent → the schema layer refuses (`required`).
+    let no_budget = Json::obj(vec![
+        ("n_seeds", Json::Int(2)),
+        ("factual_arm", Json::Bool(true)),
+    ]);
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "counterfactual",
+            counterfactual_params(&id, 0, 0, no_budget)
+        )),
+        "SchemaViolation"
+    );
+    // `design.budget` present but unparseable → `UnbudgetedArm`.
+    let bad_budget = Json::obj(vec![
+        ("n_seeds", Json::Int(2)),
+        ("factual_arm", Json::Bool(true)),
+        ("budget", Json::obj(vec![])),
+    ]);
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "counterfactual",
+            counterfactual_params(&id, 0, 0, bad_budget)
+        )),
+        "UnbudgetedArm"
+    );
+    // `at_seq > earliest_affected_seq` — the intervention precedes the cut.
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "counterfactual",
+            counterfactual_params(&id, 5, 2, valid_design())
+        )),
+        "Refused"
+    );
+    // `factual_arm` is mandatory — the noise floor is never optional.
+    let no_factual = Json::obj(vec![
+        ("n_seeds", Json::Int(2)),
+        ("factual_arm", Json::Bool(false)),
+        ("budget", match_spec_json()),
+    ]);
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "counterfactual",
+            counterfactual_params(&id, 0, 0, no_factual)
+        )),
+        "Refused"
+    );
+    // n < k — the replicate axis needs n ≥ k ≥ 1.
+    let under = Json::obj(vec![
+        ("n_seeds", Json::Int(1)),
+        ("k", Json::Int(3)),
+        ("factual_arm", Json::Bool(true)),
+        ("budget", match_spec_json()),
+    ]);
+    assert_eq!(
+        err_kind(&call(
+            &mut svc,
+            "counterfactual",
+            counterfactual_params(&id, 0, 0, under)
+        )),
+        "Refused"
+    );
+}
+
+/// AC-R-2.2.4-8 — a valid `counterfactual` opens `n` factual + `n`
+/// counterfactual arms off one fork point; every arm carries `arm_role` and
+/// `charged_to = instrument`; the `ComparisonReport` blob lands the factual
+/// dispersion (`comparison_ref`).
+#[test]
+fn s3_6_counterfactual_opens_paired_arms_with_the_factual_floor() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("experimental", true)])),
+    );
+    assert!(r.get("result").is_some());
+    let s = open_new(&mut svc);
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    let out = ok(&call(
+        &mut svc,
+        "counterfactual",
+        counterfactual_params(&id, 0, 0, valid_design()),
+    ));
+    let arms = |key: &str| -> Vec<Json> {
+        match out.get(key) {
+            Some(Json::Arr(a)) => a.clone(),
+            other => panic!("{key} arms: {other:?}"),
+        }
+    };
+    let factual = arms("factual");
+    let counterfactual = arms("counterfactual");
+    assert_eq!(factual.len(), 2, "n_seeds factual arms");
+    assert_eq!(counterfactual.len(), 2, "n_seeds counterfactual arms");
+    for a in factual.iter().chain(counterfactual.iter()) {
+        assert!(a.get("run_id").and_then(Json::as_str).is_some());
+        assert!(a.get("seed").and_then(Json::as_str).is_some());
+        assert_eq!(
+            a.get("charged_to").and_then(Json::as_str),
+            Some("instrument"),
+            "arms charge to the instrument: {a:?}"
+        );
+    }
+    for a in &factual {
+        assert_eq!(a.get("arm_role").and_then(Json::as_str), Some("factual"));
+    }
+    for a in &counterfactual {
+        assert_eq!(
+            a.get("arm_role").and_then(Json::as_str),
+            Some("counterfactual")
+        );
+    }
+    // Distinct seeds per arm — the replicate axis.
+    let seeds: std::collections::BTreeSet<String> = factual
+        .iter()
+        .chain(counterfactual.iter())
+        .filter_map(|a| a.get("seed").and_then(Json::as_str).map(str::to_string))
+        .collect();
+    assert_eq!(seeds.len(), 4, "one seed per arm");
+    // The ComparisonReport blob is content-addressed — `comparison_ref` names it.
+    assert!(out.get("comparison_ref").and_then(Json::as_str).is_some());
+    assert!(out.get("intervention_ref").and_then(Json::as_str).is_some());
+}

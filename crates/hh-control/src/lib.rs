@@ -40,6 +40,7 @@ pub mod loops;
 pub mod output;
 pub mod policy;
 pub mod react;
+pub mod replay;
 pub mod retry;
 pub mod state;
 pub mod stop;

@@ -455,6 +455,50 @@ pub enum LedgerError {
         /// What the source provides.
         available: String,
     },
+
+    // ── replay / counterfactual (R-2.2.4⁰ᵇ; ADR-0135) ─────────────────────
+    /// `replay{driver_mode: deterministic}` — the re-driven stream disagreed
+    /// with the record at `at_seq` (`expected` vs `got`). The branch's
+    /// `ReplayValidityReport.mode` lands `invalid`; the divergence is never
+    /// silently reconciled (§5a.4 op table).
+    ReplayDiverged {
+        /// The recorded seq the replay first disagreed with.
+        at_seq: u64,
+        /// What the record carries there.
+        expected: String,
+        /// What the replay produced.
+        got: String,
+    },
+    /// A branch record claims `replay_mode = deterministic` while the
+    /// recorded control-variant declaration lacks `deterministic_replay` —
+    /// typed `VariantNotDeclaring` (§5a.4 op table; B5's gate means this is
+    /// reachable only on a record the fork path did not write).
+    VariantNotDeclaring {
+        /// The run whose variant lacks the declaration.
+        run_id: String,
+    },
+    /// `counterfactual`'s `design.match` is absent — the arms cannot be
+    /// budgeted; typed `UnbudgetedArm` (§5a.4; ADR-0135 §2).
+    UnbudgetedArm {
+        /// What is missing.
+        detail: String,
+    },
+    /// `counterfactual`'s `at` is at or after the earliest row the
+    /// intervention would have changed — no factual arm exists to compare;
+    /// typed `InterventionPrecedesForkPoint` (§5a.4 op table).
+    InterventionPrecedesForkPoint {
+        /// The requested cut.
+        at_seq: u64,
+        /// The earliest seq the intervention would have changed.
+        earliest_affected_seq: u64,
+    },
+    /// A fault-injection seam fired — the kill-point battery (R-2.2.3⁰ᶜ)
+    /// models runtime death *at* the named boundary: every row before it is
+    /// already durable, nothing after lands. Never a silent drop.
+    FaultInjected {
+        /// The kill point that fired.
+        at: String,
+    },
 }
 
 impl From<ProvenanceError> for LedgerError {

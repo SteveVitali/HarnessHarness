@@ -1128,6 +1128,7 @@ impl EmbedService {
                 .map(|(r, _)| r.snapshot_ref.clone()),
             snapshot_at_seq: snapshot_choice.as_ref().map(|(r, _)| r.at_seq),
             read_only: env == EnvBinding::TraceOnly,
+            ..Default::default()
         };
         // `snapshot_at_seq` goes in the record payload too — stash it on the
         // forked row (the ledger's `env_snapshots` fold is the row-side copy).

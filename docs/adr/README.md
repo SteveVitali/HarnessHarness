@@ -72,3 +72,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0280](ADR-0280-s3.4c-estimator-kernel-rulings.md) | S3.4c estimator-kernel rulings | S3.4c (`049_S3.4c__estimator-kernel.md`) | Accepted |
 | [ADR-0281](ADR-0281-s3.4d-hosting-abi-schema-rulings.md) | S3.4d Hosting-ABI schema rulings | S3.4d (`050_S3.4d__hosting-abi-schemas.md`) | Accepted |
 | [ADR-0282](ADR-0282-s3.5-assembly-service-rulings.md) | S3.5 Assembly-service rulings | S3.5 (`051_S3.5__assembly-service.md`) | Accepted |
+| [ADR-0283](ADR-0283-s3.6-replay-fault-counterfactual-rulings.md) | S3.6 Replay, fault-battery, and counterfactual rulings | S3.6 (`052_S3.6__replay-fault-and-counterfactual.md`) | Accepted |

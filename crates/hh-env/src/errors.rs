@@ -131,6 +131,14 @@ pub enum EnvError {
         /// The detail.
         detail: String,
     },
+    /// A kill-point fault fired (R-2.2.3⁰ᶜ; ADR-0132 §4) — the battery's
+    /// `inject(kill_point)` armed this boundary: every durable row before
+    /// it is already down, nothing after lands. Runtime death is modeled,
+    /// never a silent drop.
+    FaultInjected {
+        /// The kill point that fired.
+        at: String,
+    },
 }
 
 impl std::fmt::Display for EnvError {
@@ -195,6 +203,9 @@ impl std::fmt::Display for EnvError {
             EnvError::Transport { detail } => write!(f, "transport: {detail}"),
             EnvError::HelperRefused { class, detail } => {
                 write!(f, "helper refused: {class} ({detail})")
+            }
+            EnvError::FaultInjected { at } => {
+                write!(f, "fault injected at {at}")
             }
         }
     }

@@ -654,3 +654,195 @@ fn ac_e2_12_surface_rejection_rate_is_registered() {
         assert!(catalogue::metric(name).is_some(), "{name} registered");
     }
 }
+
+// ── AC-R-2.2.3-12 (§5a.3 §8; S3.6) ────────────────────────────────────────────
+// The five recovery metrics fold over the durable recovery rows:
+// `recovery_latency_ms` pairs the takeover `lease.acquired{scope: writer}` with
+// `lifecycle.run.resumed.resumed_at_ms`; `wasted_calls` counts calls the crash
+// left open at `from_seq`; `unknown_effects_per_resume` is the ppm rate of
+// recovery-emitted `unknown` rows; `heal_count` and `wakeups_skipped{reason}`
+// count theirs. Every value is computed — never fabricated.
+#[test]
+fn ac_r_2_2_3_12_recovery_metrics_fold_the_recovery_rows() {
+    let (mut s, run, lease) = open("recovery-metrics");
+    let rc = Json::obj([
+        ("class", Json::str("irreversible")),
+        ("reversibility", Json::str("irreversible")),
+        ("repeat_safety", Json::str("non_idempotent")),
+        ("scope", Json::str("external")),
+    ]);
+    let eff_scope = |eid: &str| Scope {
+        effect_id: Some(eid.to_string()),
+        ..Scope::default()
+    };
+    // The crash-wasted call — requested, never closed before `from_seq`.
+    // `ef-1` is committed but not dispatched when the worker dies.
+    s.append(
+        &run,
+        &lease,
+        vec![
+            ev(
+                "e-t1",
+                "lifecycle.turn.started",
+                TS,
+                Scope {
+                    turn_id: Some("turn-1".into()),
+                    ..Scope::default()
+                },
+                Json::obj([("turn_id", Json::str("turn-1"))]),
+            ),
+            ev(
+                "e-mc",
+                "model.call.requested",
+                TS,
+                Scope {
+                    turn_id: Some("turn-1".into()),
+                    model_call_id: Some("mc-1".into()),
+                    ..Scope::default()
+                },
+                Json::obj([
+                    ("model_call_id", Json::str("mc-1")),
+                    ("attempt_no", Json::Int(1)),
+                ]),
+            ),
+            ev(
+                "e-i1",
+                "action.effect.intended",
+                TS,
+                eff_scope("ef-1"),
+                Json::obj([
+                    ("effect_id", Json::str("ef-1")),
+                    ("effective_risk_class", rc.clone()),
+                ]),
+            ),
+            ev(
+                "e-a1",
+                "action.effect.authorized",
+                TS,
+                eff_scope("ef-1"),
+                Json::obj([("effective_risk_class", rc)]),
+            ),
+            ev(
+                "e-d1",
+                "security.permission.decided",
+                TS,
+                eff_scope("ef-1"),
+                Json::obj([
+                    ("effect_id", Json::str("ef-1")),
+                    ("attempt_no", Json::Int(1)),
+                    ("decision", Json::str("allow")),
+                ]),
+            ),
+            ev(
+                "e-p1",
+                "action.effect.prepared",
+                TS,
+                eff_scope("ef-1"),
+                Json::obj([("idempotency_key", Json::str("key-ef-1"))]),
+            ),
+            ev(
+                "e-c1",
+                "action.effect.committed",
+                TS,
+                eff_scope("ef-1"),
+                Json::obj([
+                    ("attempt_no", Json::Int(1)),
+                    ("fencing_token", Json::Int(1)),
+                ]),
+            ),
+        ],
+    )
+    .unwrap();
+    let from_seq = read_all(&s, &run).last().unwrap().seq;
+
+    // The takeover + resume + the restore's own resolution rows.
+    s.append(
+        &run,
+        &lease,
+        vec![
+            ev(
+                "e-la",
+                "lifecycle.lease.acquired",
+                TS,
+                Scope::default(),
+                Json::obj([
+                    ("scope", Json::str("writer")),
+                    ("lease_id", Json::str("lease-2")),
+                    ("holder", Json::str("writer-b")),
+                    ("generation", Json::Int(2)),
+                    ("acquired_at_ms", Json::Int(1000)),
+                    ("expires_at_ms", Json::Int(5000)),
+                ]),
+            ),
+            ev(
+                "e-rs",
+                "lifecycle.run.resumed",
+                TS,
+                Scope::default(),
+                Json::obj([
+                    ("generation", Json::Int(2)),
+                    ("from_seq", Json::Int(from_seq as i64)),
+                    ("resumed_at_ms", Json::Int(1250)),
+                ]),
+            ),
+            ev(
+                "e-u1",
+                "action.effect.unknown",
+                TS,
+                eff_scope("ef-1"),
+                Json::obj([
+                    ("cause", Json::str("worker_lost")),
+                    ("fencing_token", Json::Int(1)),
+                ]),
+            ),
+            ev(
+                "e-heal",
+                "action.environment.healed",
+                TS,
+                Scope::default(),
+                Json::obj([("restored", Json::Bool(true))]),
+            ),
+            ev(
+                "e-ws",
+                "control.wakeup.skipped",
+                TS,
+                Scope::default(),
+                Json::obj([("reason", Json::str("duplicate_occurrence"))]),
+            ),
+        ],
+    )
+    .unwrap();
+
+    let all = read_all(&s, &run);
+    let v = metric_view(&run, &run, &declared_all(), &all, None);
+    let m = v.payload.get("metrics").unwrap().clone();
+    // takeover at t=1000 → resume delivered at t=1250.
+    assert_eq!(m.get("recovery_latency_ms"), Some(&Json::Int(250)));
+    // mc-1 was open at from_seq and never closed.
+    assert_eq!(m.get("wasted_calls"), Some(&Json::Int(1)));
+    // one recovery-emitted `unknown` over one resume — ppm of 1.0.
+    assert_eq!(
+        m.get("unknown_effects_per_resume"),
+        Some(&Json::Int(1_000_000))
+    );
+    assert_eq!(m.get("heal_count"), Some(&Json::Int(1)));
+    assert_eq!(
+        m.get("wakeups_skipped"),
+        Some(&Json::obj([("duplicate_occurrence", Json::Int(1))]))
+    );
+    // The catalogue declarations carry the AC's shape (requires_observability
+    // ⊇ {events}, applies_to = {native}) — the T-LCD-15 row.
+    for name in [
+        "recovery_latency_ms",
+        "wasted_calls",
+        "unknown_effects_per_resume",
+        "heal_count",
+        "wakeups_skipped",
+    ] {
+        let d = catalogue::metric(name).unwrap_or_else(|| panic!("{name} registered"));
+        assert!(
+            d.requires_observability.contains(&Observability::Events),
+            "{name} requires {{events}}"
+        );
+    }
+}

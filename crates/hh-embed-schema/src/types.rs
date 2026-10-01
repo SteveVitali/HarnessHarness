@@ -2614,3 +2614,181 @@ impl ProveConsistencyParams {
         })
     }
 }
+
+/// `replay` params — `{session_id, run_id?, driver_mode, until_seq?,
+/// idempotency_key?}` (§5a.4; R-2.2.4⁰ᵇ). `run_id` absent = the session's
+/// own run; a branch run id replays the branch (the seed prefix below its
+/// fork point is already-executed state).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplayParams {
+    pub session_id: String,
+    /// The target run (default the session's).
+    pub run_id: Option<String>,
+    /// `reconstruct` | `deterministic`.
+    pub driver_mode: String,
+    /// Replay only through this seq (default the run's head).
+    pub until_seq: Option<i64>,
+    pub idempotency_key: Option<String>,
+}
+impl ReplayParams {
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "replay")?;
+        let session_id = s.req_str("session_id")?;
+        let run_id = s.opt_str("run_id")?;
+        let driver_mode = s.req_str("driver_mode")?;
+        let until_seq = s.opt_int("until_seq")?;
+        let idempotency_key = s.opt_str("idempotency_key")?;
+        s.finish()?;
+        Ok(ReplayParams {
+            session_id,
+            run_id,
+            driver_mode,
+            until_seq,
+            idempotency_key,
+        })
+    }
+}
+
+/// `InterventionRecord` (ADR-0135 §5) — the counterfactual intervention a
+/// `counterfactual` arm replays under: `{kind, target, payload_ref?,
+/// earliest_affected_seq, coupling_assumption?, hypothesis?}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterventionRecord {
+    /// `definition_diff` | `profile_diff` | `response_substitution` |
+    /// `observation_substitution` | `decision_override` | `budget_change`
+    /// | `permission_change` (the closed sum).
+    pub kind: String,
+    /// `EventRef` or `version_id` — what the intervention edits.
+    pub target: String,
+    /// The intervention payload ref (a `HirDiff` for definition/profile
+    /// kinds; the substitute response/observation otherwise).
+    pub payload_ref: Option<String>,
+    /// The earliest source seq the intervention could change — the fork
+    /// point must be ≤ it (`InterventionPrecedesForkPoint` otherwise).
+    pub earliest_affected_seq: i64,
+    /// `weak` | `declared_strong` (CF-435 — coupling_assumption, never
+    /// noise_coupling).
+    pub coupling_assumption: Option<String>,
+    /// The hypothesis the arm evaluates.
+    pub hypothesis: Option<String>,
+}
+impl InterventionRecord {
+    /// The canonical member form (the `intervention_ref` blob content).
+    pub fn to_json(&self) -> Json {
+        let mut m = vec![
+            ("kind", Json::str(self.kind.clone())),
+            ("target", Json::str(self.target.clone())),
+            (
+                "earliest_affected_seq",
+                Json::Int(self.earliest_affected_seq),
+            ),
+        ];
+        if let Some(p) = &self.payload_ref {
+            m.push(("payload_ref", Json::str(p.clone())));
+        }
+        if let Some(c) = &self.coupling_assumption {
+            m.push(("coupling_assumption", Json::str(c.clone())));
+        }
+        if let Some(h) = &self.hypothesis {
+            m.push(("hypothesis", Json::str(h.clone())));
+        }
+        Json::obj(m)
+    }
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let kind = s.req_str("kind")?;
+        let target = s.req_str("target")?;
+        let payload_ref = s.opt_str("payload_ref")?;
+        let earliest_affected_seq = s.req_int("earliest_affected_seq")?;
+        let coupling_assumption = s.opt_str("coupling_assumption")?;
+        let hypothesis = s.opt_str("hypothesis")?;
+        s.finish()?;
+        Ok(InterventionRecord {
+            kind,
+            target,
+            payload_ref,
+            earliest_affected_seq,
+            coupling_assumption,
+            hypothesis,
+        })
+    }
+}
+
+/// `counterfactual`'s `design` — `{n_seeds, k?, budget, factual_arm}`
+/// (§5a.4; the `budget` member is the MatchSpec's canonical JSON — the
+/// kernel parses it through `hh_budget::MatchSpec`, the schema crate
+/// stays dependency-free).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CounterfactualDesign {
+    /// `n_seeds ≥ k` — the replicate axis count per arm.
+    pub n_seeds: i64,
+    /// The minimum replicates per arm (default `n_seeds`).
+    pub k: Option<i64>,
+    /// The `MatchSpec` canonical document — required (`UnbudgetedArm`).
+    pub budget: Json,
+    /// `factual_arm` — mandatory `true` (the noise floor).
+    pub factual_arm: bool,
+}
+impl CounterfactualDesign {
+    pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, path)?;
+        let n_seeds = s.req_int("n_seeds")?;
+        let k = s.opt_int("k")?;
+        let budget = s
+            .take("budget")
+            .cloned()
+            .ok_or_else(|| EmbedError::SchemaViolation {
+                path: format!("{path}/budget"),
+                code: "required".to_string(),
+            })?;
+        let factual_arm = s.opt_bool("factual_arm")?.unwrap_or(false);
+        s.finish()?;
+        Ok(CounterfactualDesign {
+            n_seeds,
+            k,
+            budget,
+            factual_arm,
+        })
+    }
+}
+
+/// `counterfactual` params — `{session_id, run_id?, at_seq, intervention,
+/// design, env?, idempotency_key?}` (§5a.4; R-2.2.4⁰ᵇ).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CounterfactualParams {
+    pub session_id: String,
+    /// The source run (default the session's).
+    pub run_id: Option<String>,
+    /// The shared fork point.
+    pub at_seq: i64,
+    /// The intervention the counterfactual arms replay under.
+    pub intervention: InterventionRecord,
+    /// The arm design (seeds, match spec, mandatory factual arm).
+    pub design: CounterfactualDesign,
+    /// `env` — `snapshot` (default) | `trace_only` for the arm branches.
+    pub env: Option<String>,
+    pub idempotency_key: Option<String>,
+}
+impl CounterfactualParams {
+    pub fn from_json(v: &Json) -> Result<Self, EmbedError> {
+        let mut s = StrictObj::new(v, "counterfactual")?;
+        let session_id = s.req_str("session_id")?;
+        let run_id = s.opt_str("run_id")?;
+        let at_seq = s.req_int("at_seq")?;
+        let intervention =
+            InterventionRecord::from_json(s.req("intervention")?, "counterfactual/intervention")?;
+        let design = CounterfactualDesign::from_json(s.req("design")?, "counterfactual/design")?;
+        let env = s.opt_str("env")?;
+        let idempotency_key = s.opt_str("idempotency_key")?;
+        s.finish()?;
+        Ok(CounterfactualParams {
+            session_id,
+            run_id,
+            at_seq,
+            intervention,
+            design,
+            env,
+            idempotency_key,
+        })
+    }
+}

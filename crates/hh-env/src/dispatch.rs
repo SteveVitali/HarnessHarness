@@ -30,6 +30,7 @@ use hh_hir::records::{Grant, ScopeBindings, ToolCapabilityRecord};
 use hh_hir::risk::project_risk;
 use hh_ledger::effect::idempotency_key;
 use hh_ledger::errors::LedgerError;
+use hh_ledger::fault::KillPoint;
 use hh_ledger::store::{Lease, Store};
 use hh_monitor::args::CanonicalArgs;
 use hh_monitor::assess::{kernel_assessed, AssessmentInputs, ParseOutcome, Tri};
@@ -183,6 +184,10 @@ pub enum DispatchOutcome {
     Duplicate {
         /// The prior effect id.
         prior_effect_id: String,
+        /// The stored `action.effect.observed` payload when the prior
+        /// effect reached a terminal (`dedup_support ≠ none` serves the
+        /// recorded observation — §5a.2's second-attempt rule; AC-R-2.2.2-1).
+        stored_observation: Option<Json>,
     },
     /// `suspended` — the ask is a durable `security.permission.pending` and
     /// the run suspended `awaiting_approval` behind a `permission_decided`
@@ -246,6 +251,10 @@ pub struct Dispatcher<'a> {
     /// `Some(ms)` is recorded on the `pending` row (`ApprovalRequest.timeout`)
     /// and bounds `expire_permission`.
     permission_timeout_ms: Option<u64>,
+    /// The armed kill point (R-2.2.3⁰ᶜ; ADR-0132 §4) — the battery's
+    /// `inject(kill_point, target)`: armed once, fires once at the named
+    /// stage boundary. Production code never arms it.
+    fault: Option<KillPoint>,
 }
 
 impl<'a> Dispatcher<'a> {
@@ -270,7 +279,58 @@ impl<'a> Dispatcher<'a> {
                 &ProvenanceRecord::kernel("hir/kernel/diff_sanity", 0),
             )),
             permission_timeout_ms: None,
+            fault: None,
         }
+    }
+
+    /// Arm the dispatch-boundary kill point (R-2.2.3⁰ᶜ) — the next stage
+    /// boundary `at` names returns `FaultInjected`: every durable row
+    /// before it is already down, nothing after lands (the battery's
+    /// `inject` seam; KP-9 lives on `Store::inject_durability_faults`,
+    /// KP-13 on `arm_restore_kill`, KP-15 is the executor's own death —
+    /// the `executor_error` path, no seam needed).
+    pub fn inject_kill_point(&mut self, at: KillPoint) {
+        self.fault = Some(at);
+    }
+
+    /// Fire the armed fault when it names one of `at` (consumes the arm —
+    /// a fault fires once).
+    fn check_kill(&mut self, at: &[KillPoint]) -> Result<(), EnvError> {
+        if let Some(k) = self.fault {
+            if at.contains(&k) {
+                self.fault = None;
+                return Err(EnvError::FaultInjected {
+                    at: k.as_str().to_string(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// The durable-side dedup consult — the `effects_by_key` projection's
+    /// raw fold (§5a.2; ADR-0102 §10): a key the in-memory `DedupStore`
+    /// lost (a dispatcher rebuilt from the WAL alone after restore)
+    /// still vetoes the second commit — the ledger is the sole durable
+    /// source of truth, the in-memory store a hot cache over it.
+    fn durable_key_lookup(&self, key: &str) -> Option<String> {
+        self.store
+            .effect_folds(&self.run_id)
+            .ok()?
+            .iter()
+            .find(|(_, f)| f.idempotency_key.as_deref() == Some(key))
+            .map(|(id, _)| id.clone())
+    }
+
+    /// Rebuild the in-memory `DedupStore` from the durable prefix — the
+    /// post-restore warm path (the durable consult covers a cold
+    /// dispatcher regardless; this keeps the hot cache honest).
+    pub fn rebuild_dedup(&mut self) -> Result<(), EnvError> {
+        for (id, f) in self.store.effect_folds(&self.run_id)?.iter() {
+            if let Some(k) = &f.idempotency_key {
+                self.dedup.record(k, id);
+            }
+        }
+        Ok(())
     }
 
     /// Set the `TimeoutPolicy[permission]` deadline in ms (`None` = attended
@@ -491,8 +551,22 @@ impl<'a> Dispatcher<'a> {
             &args_canonical_hash,
             &input.capability_ref.version_id,
         );
-        if let Some(prior) = self.dedup.lookup(&key) {
-            let prior = prior.to_string();
+        // The dedup consult is two-tier (§5a.2): the in-memory store first,
+        // then the durable `effects_by_key` fold — a rebuilt dispatcher
+        // (post-restore, cold cache) still vetoes the second commit
+        // (AC-R-2.2.3-3's `duplicate_effect_count = 0` rests on the durable
+        // half, never on process memory).
+        let prior_hit = self
+            .dedup
+            .lookup(&key)
+            .map(str::to_string)
+            .or_else(|| self.durable_key_lookup(&key));
+        if let Some(prior) = prior_hit {
+            // The stored-observation serve (AC-R-2.2.2-1 — `dedup_support
+            // ≠ none` returns the recorded observation, never a re-run).
+            let stored = hh_ledger::replay::stored_observation(self.store, &self.run_id, &prior)
+                .ok()
+                .flatten();
             // The coordinate's `tool_call`/`effect_id` scopes are already
             // closed by the first dispatch's terminals — the dedup row is
             // anchored at the (still-open) turn/model_call chain only.
@@ -508,6 +582,7 @@ impl<'a> Dispatcher<'a> {
             self.store.append(&self.run_id, lease, vec![ev])?;
             return Ok(DispatchOutcome::Duplicate {
                 prior_effect_id: prior,
+                stored_observation: stored,
             });
         }
 
@@ -531,6 +606,8 @@ impl<'a> Dispatcher<'a> {
             self.store
                 .append(&self.run_id, lease, vec![proposed, intended])?;
         }
+        // KP-1 — runtime death after `intended`, before `decided`.
+        self.check_kill(&[KillPoint::Kp1])?;
 
         // ── 2 authorize ────────────────────────────────────────────────────
         // The containment gate — the recorded verdict `authorize` consumes.
@@ -976,6 +1053,9 @@ impl<'a> Dispatcher<'a> {
             &input.chain,
         )?;
         self.store.append(&self.run_id, lease, vec![authorized])?;
+        // KP-2 — runtime death after `decided{allow}`/`authorized`,
+        // before `prepared` (the cache-lookup and prepare stages follow).
+        self.check_kill(&[KillPoint::Kp2])?;
 
         // ── 2c E1 `state_requires`/`PreconditionDomain` gate at `prepare`
         // (§5d.1: "`state_requires` at `prepare`"; a violation is
@@ -1049,6 +1129,10 @@ impl<'a> Dispatcher<'a> {
         )?;
         self.store.append(&self.run_id, lease, vec![prepared])?;
         self.dedup.record(&key, &effect_id);
+        // KP-3 — runtime death after `prepared`, before `committed`
+        // (for `read_only` there is no commit phase: the kill lands at
+        // the same post-`prepared` boundary).
+        self.check_kill(&[KillPoint::Kp3])?;
 
         // ── 4 commit ───────────────────────────────────────────────────────
         // `read_only` has no write-ahead (observed may follow prepared);
@@ -1064,6 +1148,10 @@ impl<'a> Dispatcher<'a> {
             )?;
             let committed_event_id = committed.event_id.clone();
             let range = self.store.append(&self.run_id, lease, vec![committed])?;
+            // KP-4 — runtime death after durable `committed`, before the
+            // dispatch reached the executor (`read_only` never commits —
+            // the (KP-4, read_only) cell is `n/a` in the battery).
+            self.check_kill(&[KillPoint::Kp4])?;
             // The write-ahead evidence the helper recomputes `commit_proof`
             // over (S2.1 — the helper admits `exec` only when the durable
             // `committed` row's members prove prepare-before-execute).
@@ -1141,7 +1229,13 @@ impl<'a> Dispatcher<'a> {
             }
         };
         let report = match executor.execute(&request, &mut sink) {
-            Ok(r) => r,
+            Ok(r) => {
+                // KP-5/KP-6 — runtime death with the executor's work in
+                // flight or complete but `observed` never durable. The
+                // report is produced; the runtime dies before it lands.
+                self.check_kill(&[KillPoint::Kp5, KillPoint::Kp6])?;
+                r
+            }
             Err(e) => {
                 // The executor itself failed (transport-plane — helper crash /
                 // spawn refusal): `unknown{executor_error}` → probe.
@@ -1429,6 +1523,9 @@ impl<'a> Dispatcher<'a> {
         }
         batch.push(completed);
         self.store.append(&self.run_id, lease, batch)?;
+        // KP-7 — runtime death after durable `observed`, before the
+        // result is visible/charged (the deposit + verdict tails die with it).
+        self.check_kill(&[KillPoint::Kp7])?;
         // K4 deposit — "written by the kernel at `action.tool.completed`
         // when admissible" (§5b.4): only a successful (`ok`), admissible,
         // admission-free observation is written; a refused deposit leaves

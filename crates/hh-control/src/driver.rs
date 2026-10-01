@@ -219,6 +219,13 @@ pub enum DriverError {
         /// The decision kind that needed the port.
         kind: &'static str,
     },
+    /// A kill-point fault fired (R-2.2.3⁰ᶜ KP-8 — runtime death after the
+    /// settled cue was visible, before the next `control.decision`): the
+    /// battery's `inject` seam; every durable row before it is already down.
+    FaultInjected {
+        /// The kill point that fired.
+        at: String,
+    },
 }
 
 impl std::fmt::Display for DriverError {
@@ -230,6 +237,7 @@ impl std::fmt::Display for DriverError {
             DriverError::Port { port, detail } => write!(f, "port{{{port}:{detail}}}"),
             DriverError::Restore(e) => write!(f, "restore{{{e}}}"),
             DriverError::UnbackedPort { kind } => write!(f, "unbacked_port{{{kind}}}"),
+            DriverError::FaultInjected { at } => write!(f, "fault_injected{{{at}}}"),
         }
     }
 }
@@ -353,6 +361,15 @@ pub struct Driver<S: ControlStrategy> {
     /// The subject model ref (the claim provenance's `Origin::Model.model_ref`
     /// — read from the sealed profile projection, `model_ref` key).
     model_ref: String,
+    /// The armed kill point (R-2.2.3⁰ᶜ KP-8 — the battery's `inject`):
+    /// fires when the loop next pops the `effects_settled` cue — runtime
+    /// death after the observation is visible, before the decision it
+    /// would drive. Armed once, fires once; production never arms it.
+    kill_point: Option<hh_ledger::fault::KillPoint>,
+    /// The `control.random.read` draw ordinal — seeded from the durable
+    /// prefix at resume/replay (a recorded draw reproduces; a fresh draw
+    /// never collides with a pre-crash one).
+    random_draws: u64,
 }
 
 impl<S: ControlStrategy> Driver<S> {
@@ -414,6 +431,8 @@ impl<S: ControlStrategy> Driver<S> {
                 .and_then(Json::as_str)
                 .unwrap_or("model/subject")
                 .to_string(),
+            kill_point: None,
+            random_draws: 0,
         })
     }
 
@@ -461,9 +480,108 @@ impl<S: ControlStrategy> Driver<S> {
                 .and_then(Json::as_str)
                 .unwrap_or("model/subject")
                 .to_string(),
+            kill_point: None,
+            random_draws: sink
+                .prefix()
+                .iter()
+                .filter(|e| e.class == "control.random.read")
+                .count() as u64,
         };
         driver.resume(ctx, checkpoint, sink)?;
         Ok(driver)
+    }
+
+    /// **Replay constructor** (R-2.2.4⁰ᵇ; §5a.4; the `deterministic`
+    /// driver's branch half) — arm a driver over a *seeded* sink prefix:
+    /// `Envelope::arm` + `strategy.open` + `observe(seed)` (the same fold
+    /// `resume` applies to the durable tail — the deterministic-replay
+    /// claim is that the fold reproduces the live driver's state at the
+    /// cut), then the alloc watermark, decision refs and the submission
+    /// marker seeded from the recorded rows so a re-driven suffix mints
+    /// the same `d-N`/`mc-N` ids. The inbox starts empty — the replay
+    /// feeds the recorded cues; `run_opened`/`resumed` never re-mint.
+    /// A divergence from the record surfaces as a `control.decision`
+    /// mismatch the caller reports `invalid` — never a silent reconcile.
+    pub fn replay_from(
+        mut strategy: S,
+        ctx: &ControlContext,
+        policy: EnvelopePolicy,
+        sink: &mut dyn LedgerSink,
+        config: DriverConfig,
+    ) -> Result<Driver<S>, DriverError> {
+        let seed: &[EventEnvelope] = sink.prefix();
+        let (envelope, envelope_state) =
+            Envelope::arm(policy.clone(), seed).map_err(|e| DriverError::Arm(e.to_string()))?;
+        let mut state = strategy.open(ctx).map_err(DriverError::Open)?;
+        strategy.observe(&mut state, seed);
+        // The alloc watermark — `{tag}-{n}` ids share one counter; the
+        // seed's max `n` continues numbering so decision ids reproduce.
+        let mut next_id = 0u64;
+        for e in seed {
+            if let Some((_, n)) = e.event_id.rsplit_once('-') {
+                if let Ok(v) = n.parse::<u64>() {
+                    next_id = next_id.max(v);
+                }
+            }
+        }
+        let decision_events: Vec<String> = seed
+            .iter()
+            .filter(|e| e.class == "control.decision")
+            .map(|e| e.event_id.clone())
+            .collect();
+        let last_decision_ref = decision_events.last().map(|id| EventRef {
+            run_id: "run".into(),
+            event_id: id.clone(),
+        });
+        // The submission marker — a recorded `stop` decision carrying
+        // `submission_ref` is the `hh.submit` completion the seed reached.
+        let submission = seed
+            .iter()
+            .find(|e| e.class == "control.decision" && e.payload.get("submission_ref").is_some())
+            .and_then(|e| {
+                e.payload
+                    .get("submission_ref")
+                    .and_then(Json::as_str)
+                    .map(str::to_string)
+            });
+        let last_model_call_id = seed
+            .iter()
+            .rev()
+            .find(|e| e.class == "model.call.requested")
+            .and_then(|e| {
+                e.payload
+                    .get("model_call_id")
+                    .and_then(Json::as_str)
+                    .map(str::to_string)
+            });
+        Ok(Driver {
+            envelope,
+            envelope_state,
+            strategy,
+            state,
+            inbox: std::collections::VecDeque::new(),
+            now_ms: 0,
+            next_id,
+            decision_events,
+            last_decision_ref,
+            submission,
+            config,
+            stop_pending: None,
+            deadlines: std::collections::BTreeMap::new(),
+            run_id: ctx.process_ref.clone(),
+            last_model_call_id,
+            compaction_port: None,
+            verify_port: None,
+            pending_nudge: None,
+            model_ref: ctx
+                .profile
+                .get("model_ref")
+                .and_then(Json::as_str)
+                .unwrap_or("model/subject")
+                .to_string(),
+            kill_point: None,
+            random_draws: 0,
+        })
     }
 
     /// `submit(cue)` — enqueue a cue (the wakeup/ingress path; delivery is
@@ -543,6 +661,75 @@ impl<S: ControlStrategy> Driver<S> {
     /// passes).
     pub fn set_verify_port(&mut self, port: Box<dyn VerifyPort>) {
         self.verify_port = Some(port);
+    }
+
+    /// `clock_read(declaring)` — the runtime's wall-clock read seam
+    /// (R-2.2.4⁰ᵇ recording rules; ADR-0135 §2; OQ-322's ratified default:
+    /// durable only where the variant declares `deterministic_replay`).
+    /// A declaring variant's read lands a `control.clock.read{value}` row
+    /// the replay substitutes; a non-declaring variant's read is served
+    /// ephemerally — the run never claims determinism it didn't record.
+    /// The served value is the driver's logical working clock (the same
+    /// counter `time.*` gauges read — confined to the event stream by
+    /// construction, so a recorded read replays bit-for-bit).
+    pub fn clock_read(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        declaring: bool,
+    ) -> Result<u64, DriverError> {
+        let value = self.now_ms;
+        if declaring {
+            self.append(
+                sink,
+                "control.clock.read",
+                Json::obj([
+                    ("value", Json::Int(value as i64)),
+                    ("kind", Json::str("working_ms")),
+                ]),
+                None,
+            )?;
+        }
+        Ok(value)
+    }
+
+    /// `random_read(declaring)` — the runtime's randomness seam (the same
+    /// recording rule): the draw is `H("control.random.read" ∥ run ∥
+    /// ordinal)` — a deterministic stream a replay reproduces exactly —
+    /// recorded `control.random.read{ordinal, value}` for a declaring
+    /// variant, ephemeral otherwise.
+    pub fn random_read(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        declaring: bool,
+    ) -> Result<String, DriverError> {
+        let ordinal = self.random_draws;
+        self.random_draws += 1;
+        let value = format!(
+            "sha256:{}",
+            hh_wire::sha256::sha256_hex(
+                format!("control.random.read:{}:{}", self.run_id, ordinal).as_bytes()
+            )
+        );
+        if declaring {
+            self.append(
+                sink,
+                "control.random.read",
+                Json::obj([
+                    ("ordinal", Json::Int(ordinal as i64)),
+                    ("value", Json::str(&value)),
+                ]),
+                None,
+            )?;
+        }
+        Ok(value)
+    }
+
+    /// Arm the KP-8 kill point (R-2.2.3⁰ᶜ; the battery's `inject`) — the
+    /// next `effects_settled` pop returns `FaultInjected` instead of a
+    /// decision: runtime death after the observation is visible, before
+    /// the `control.decision` it would drive.
+    pub fn inject_kill_point(&mut self, at: hh_ledger::fault::KillPoint) {
+        self.kill_point = Some(at);
     }
 
     fn alloc(&mut self, tag: &str) -> String {
@@ -667,6 +854,18 @@ impl<S: ControlStrategy> Driver<S> {
                 }
             };
             self.tick(1);
+            // KP-8 — runtime death after the settled cue is visible,
+            // before the `control.decision` it would drive.
+            if let Some(kp) = self.kill_point {
+                if kp == hh_ledger::fault::KillPoint::Kp8
+                    && matches!(cue, Cue::EffectsSettled { .. })
+                {
+                    self.kill_point = None;
+                    return Err(DriverError::FaultInjected {
+                        at: kp.as_str().to_string(),
+                    });
+                }
+            }
             let decision = self.strategy.decide(&mut self.state, &cue);
             // The F2 seam — `envelope.check(d') → admitted | refused`.
             let verdict = self.envelope.check(
@@ -1016,14 +1215,18 @@ impl<S: ControlStrategy> Driver<S> {
                     .error_class
                     .clone()
                     .unwrap_or_else(|| "unknown".into());
+                let mut failed_members = vec![
+                    ("model_call_id", Json::str(&mc)),
+                    ("attempt_no", Json::Int(attempt as i64)),
+                    ("error", Json::obj([("class", Json::str(&class))])),
+                ];
+                if let Some(ms) = outcome.retry_after_ms {
+                    failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
+                }
                 self.append(
                     sink,
                     "model.call.failed",
-                    Json::obj([
-                        ("model_call_id", Json::str(&mc)),
-                        ("attempt_no", Json::Int(attempt as i64)),
-                        ("error", Json::obj([("class", Json::str(&class))])),
-                    ]),
+                    Json::obj(failed_members),
                     Some(&mc),
                 )?;
                 // The F2 seam — `schedule_retry` decides `retry` vs `give_up`.
@@ -1073,15 +1276,41 @@ impl<S: ControlStrategy> Driver<S> {
                 }
             }
             _ => {
+                // The ADR-0135 §2 recording rule — the completed row carries
+                // the parsed `calls`/`text_empty`/`retry_after_ms` so a
+                // deterministic replay feeds the *recorded* interpretation
+                // inputs (older runs without the member report
+                // `re_executed`, never a silent deterministic claim).
+                let mut completed_members = vec![
+                    ("model_call_id", Json::str(&mc)),
+                    ("attempt_no", Json::Int(attempt as i64)),
+                    ("stop_reason", Json::str(outcome.stop_reason.as_str())),
+                    ("response_ref", Json::str(&outcome.response_ref)),
+                    ("text_empty", Json::Bool(outcome.text_empty)),
+                    (
+                        "calls",
+                        Json::Arr(
+                            outcome
+                                .calls
+                                .iter()
+                                .map(|c| {
+                                    Json::obj([
+                                        ("tool_call_id", Json::str(&c.tool_call_id)),
+                                        ("surface", Json::str(&c.surface)),
+                                        ("args_raw", Json::str(&c.args_raw)),
+                                    ])
+                                })
+                                .collect(),
+                        ),
+                    ),
+                ];
+                if let Some(ms) = outcome.retry_after_ms {
+                    completed_members.push(("retry_after_ms", Json::Int(ms as i64)));
+                }
                 self.append(
                     sink,
                     "model.call.completed",
-                    Json::obj([
-                        ("model_call_id", Json::str(&mc)),
-                        ("attempt_no", Json::Int(attempt as i64)),
-                        ("stop_reason", Json::str(outcome.stop_reason.as_str())),
-                        ("response_ref", Json::str(&outcome.response_ref)),
-                    ]),
+                    Json::obj(completed_members),
                     Some(&mc),
                 )?;
                 self.inbox.push_back(Cue::ModelCompleted {

@@ -331,6 +331,18 @@ pub struct ForkOpts {
     pub snapshot_at_seq: Option<u64>,
     /// `read_only` — `trace_only` forces it; the record carries it.
     pub read_only: bool,
+    /// `arm_role` — `factual` | `counterfactual` (S3.6; ADR-0135 §6 — the
+    /// counterfactual hook's arm marking; absent on ordinary forks).
+    pub arm_role: Option<String>,
+    /// `intervention_ref` — the `InterventionRecord` blob id the
+    /// counterfactual arm replays under (absent on the factual arm).
+    pub intervention_ref: Option<String>,
+    /// `seed` — the arm's replicate-axis seed (`H(seed ∥ replicate_index ∥
+    /// fork_point)` under `noise_coupling = crn`; ADR-0135 §2).
+    pub seed: Option<String>,
+    /// `charged_to` — `instrument` for counterfactual arms (the hook's
+    /// spend posts to instrumentation, never the run's budget).
+    pub charged_to: Option<String>,
 }
 
 /// `BranchRecord` — the fork record (§5a.1 §5's `BranchRef`): folded from the
@@ -380,6 +392,14 @@ pub struct BranchRecord {
     pub head_event_id: String,
     /// The child's head hash at record time.
     pub head_hash: String,
+    /// `arm_role` — `factual` | `counterfactual` (S3.6).
+    pub arm_role: Option<String>,
+    /// The intervention the arm replays under.
+    pub intervention_ref: Option<String>,
+    /// The arm's seed (the replicate axis).
+    pub seed: Option<String>,
+    /// `charged_to` — `instrument` on counterfactual-hook arms.
+    pub charged_to: Option<String>,
 }
 
 impl BranchRecord {
@@ -414,6 +434,18 @@ impl BranchRecord {
         if let Some(s) = &self.snapshot_ref {
             m.insert("snapshot_ref".into(), Json::str(s));
         }
+        if let Some(a) = &self.arm_role {
+            m.insert("arm_role".into(), Json::str(a));
+        }
+        if let Some(i) = &self.intervention_ref {
+            m.insert("intervention_ref".into(), Json::str(i));
+        }
+        if let Some(sd) = &self.seed {
+            m.insert("seed".into(), Json::str(sd));
+        }
+        if let Some(c) = &self.charged_to {
+            m.insert("charged_to".into(), Json::str(c));
+        }
         m.insert("created_event_id".into(), Json::str(&self.created_event_id));
         m.insert("head_event_id".into(), Json::str(&self.head_event_id));
         m.insert("head_seq".into(), Json::Int(self.head_seq as i64));
@@ -438,7 +470,7 @@ impl BranchRecord {
     }
 
     /// Fold a record back out of a `lifecycle.run.forked` row's payload.
-    fn from_payload(run_id: &str, p: &Json) -> Option<BranchRecord> {
+    pub(crate) fn from_payload(run_id: &str, p: &Json) -> Option<BranchRecord> {
         let get = |k: &str| p.get(k).and_then(Json::as_str).map(str::to_string);
         Some(BranchRecord {
             branch_id: get("branch_id")?,
@@ -462,6 +494,10 @@ impl BranchRecord {
             head_seq: p.get("head_seq")?.as_int()? as u64,
             head_event_id: get("head_event_id")?,
             head_hash: String::new(),
+            arm_role: get("arm_role"),
+            intervention_ref: get("intervention_ref"),
+            seed: get("seed"),
+            charged_to: get("charged_to"),
         })
     }
 }
@@ -779,6 +815,10 @@ impl Store {
             head_seq: head.seq,
             head_event_id: head.event_id.clone(),
             head_hash: head.hash.clone(),
+            arm_role: opts.arm_role.clone(),
+            intervention_ref: opts.intervention_ref.clone(),
+            seed: opts.seed.clone(),
+            charged_to: opts.charged_to.clone(),
         };
         let env = self.commit_kernel_row(
             &child_id,

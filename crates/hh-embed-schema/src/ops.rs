@@ -479,8 +479,50 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
-        staged_exp("replay", "W", "ReplayParams", "Session"),
-        staged_exp("counterfactual", "W", "CounterfactualParams", "Session"),
+        // ── S3.6: `replay`/`counterfactual` land implemented
+        // (R-2.2.4⁰ᵇ; §5a.4) — the staged shape's `from_seq`/`edits`
+        // placeholders are replaced by the contract's params.
+        OpSpec {
+            implemented: true,
+            ..call(
+                "replay",
+                "W",
+                "ReplayParams",
+                "ReplayResult",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownRun",
+                    "EnvironmentUnavailable",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "counterfactual",
+                "W",
+                "CounterfactualParams",
+                "CounterfactualResult",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownRun",
+                    "UnbudgetedArm",
+                    "EnvironmentUnavailable",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
         staged_exp("archive", "S", "ArchiveParams", "Acknowledged"),
         staged_exp("grant", "S", "GrantParams", "Recorded"),
         staged_exp("revoke_lease", "S", "RevokeLeaseParams", "Acknowledged"),
