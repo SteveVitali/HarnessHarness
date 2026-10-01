@@ -1,8 +1,19 @@
-//! The C0 `ModelRouter` slice (§5b.2; ADR-0121 d.1–d.7; ADR-0122 d.2/d.3):
+//! The `ModelRouter` (§5b.2; ADR-0121 d.1–d.7; ADR-0122 d.1–d.4):
 //! `RoutingPolicy` as MUST-data with the closed kind enum, the
-//! `ModelRoleTable` role→`RoleBinding` map, `select` under the compatibility
-//! guard (the C0 arms are G-1/G-2/G-4), the closed `RoutingRefusal` sum, and
-//! the `RoutingDecision` record `model.route.decided` carries.
+//! `ModelRoleTable` role→`RoleBinding` map, `select`/`select_with` under the
+//! compatibility guard, `on_attempt_failed` (the retry-vs-reroute split —
+//! ADR-0122 d.1/d.2), the `HealthView` ledger projection (ADR-0122 d.4),
+//! `explain`, the closed `RoutingRefusal` sum, and the `RoutingDecision`
+//! record `model.route.decided` carries.
+//!
+//! C0 lands `static`/`role_table` under G-1/G-2/G-4; **C1 (this slice)** lands
+//! `fallback_chain`, `capability_filter`, `cost_cap`, `latency_cap`,
+//! `quality_target` and `health_aware`, guards G-3 (projected
+//! `TranscriptMigration` within `max_migration_loss`), G-5 (`NoPrice` when the
+//! policy reads cost) and G-6 (lifted-preference attenuation), the
+//! `HealthView` fold over `model.call.attempt.*`, and `on_attempt_failed`'s
+//! `Continue | Reroute | GiveUp` with the old reservation released before the
+//! new one is held (R-7). `learned` stays a declared C4 refusal (CC6).
 //!
 //! A refused route is a typed refusal — never a warning, never a silent
 //! fallback to the primary (AC-R-2.3.2-2). `error_actions` is data on the
@@ -22,9 +33,11 @@ use hh_wire::json::Json;
 use crate::plan::ModelRef;
 use crate::vocab::{ModelErrorClass, RerouteReason};
 
-/// `RoutingRequest{role, model_coordinate, required_capabilities[], budget_id,
-/// holder, model_call_id?, intent_ref?}` — what `select` consumes (§5b.2
-/// `select(RoutingRequest, profile_env, account, health, policy)`).
+/// `RoutingRequest{role, required_capabilities[], budget_id, holder,
+/// model_call_id?, intent_ref?, effort?, latency_target?, quality_prior_ref?,
+/// preferences?, source_profile_ref?, in_flight_effect}` — what `select`
+/// consumes (§5b.2 `select(RoutingRequest, profile_env, account, health,
+/// policy)`; the C1 members are additive — CC8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct RoutingRequest {
     /// `role` — the `ModelRole` spelling (`primary`, `utility`, …).
@@ -42,11 +55,73 @@ pub struct RoutingRequest {
     pub intent_ref: Option<String>,
     /// `effort?` — the requested effort rung (the `ModelRef.effort` member).
     pub effort: Option<String>,
+    /// `latency_target?{p95_ms}` — the call's declared latency target the
+    /// `latency_cap` policy reads against the health view's quantiles
+    /// (§5b.2 `RoutingRequest.latency_target`; C1).
+    pub latency_target_ms: Option<u64>,
+    /// `quality_prior_ref?` — the `QualityPrior` record a `quality_target`
+    /// policy reads (per-request override; `params.prior_ref` otherwise).
+    pub quality_prior_ref: Option<String>,
+    /// `preferences?` — lifted routing preferences (`authority ≤ external`;
+    /// G-6 attenuation only — they may exclude, never add, ADR-0034).
+    pub preferences: Option<LiftedPreferences>,
+    /// `source_profile_ref?` — the profile the logical call was previously
+    /// bound under; set on a reroute so G-3 can project the
+    /// `TranscriptMigration` (C1).
+    pub source_profile_ref: Option<String>,
+    /// `in_flight_effect` — a proposed effect is unresolved (ADR-0030);
+    /// G-3 refuses a cross-profile migration while it holds.
+    pub in_flight_effect: bool,
 }
 
-/// `RoutingPolicy.kind` — the closed kind enum (ADR-0121 d.4). C0 executes
-/// `static`/`role_table`; every other kind is `PolicyInvalid{reason:
-/// "kind … is C1"}` at C0 — a declared tier refusal, never a fall-through.
+/// `preferences{authority, cost_priority?, speed_priority?,
+/// intelligence_priority?, exclude[], hints[]}` — lifted routing preferences
+/// (MCP `ModelPreferences`/ACP model options ride `lift`; §5b.2).
+/// `authority ≤ external` is the minting ceiling — a preference claiming
+/// higher authority is `PolicyInvalid`, never silently trusted (CC2).
+/// `exclude[]` names `model_ref`/`provider_model_id` spellings the preference
+/// vetoes; G-6 admits exclusion only — a preference never adds a candidate
+/// outside the role's binding.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LiftedPreferences {
+    /// The minted authority — `unverified` for imported content,
+    /// `external` at most (ADR-0033 d.2).
+    pub authority: hh_provenance::authority::AuthorityClass,
+    /// `cost_priority` (ppm — higher prefers cheaper).
+    pub cost_priority: Option<i64>,
+    /// `speed_priority` (ppm — higher prefers lower latency).
+    pub speed_priority: Option<i64>,
+    /// `intelligence_priority` (ppm — higher prefers higher prior estimates).
+    pub intelligence_priority: Option<i64>,
+    /// `exclude[]` — `provider_model_id` or `model_ref` spellings the
+    /// preference vetoes (G-6 attenuation).
+    pub exclude: Vec<String>,
+    /// `hints[]` — advisory spellings; recorded on the request, never used to
+    /// admit a candidate outside the binding (G-6).
+    pub hints: Vec<String>,
+}
+
+impl LiftedPreferences {
+    /// G-6's legality check — the lifted authority must be `≤ external`
+    /// (anything above is a minting violation; the router refuses the record
+    /// rather than trusting it — CC2).
+    pub fn legal(&self) -> bool {
+        self.authority <= hh_provenance::authority::AuthorityClass::External
+    }
+
+    /// Whether the preference vetoes `spelling` (a `model_ref` spelling or a
+    /// bare `provider_model_id`).
+    pub fn excludes(&self, spelling: &str, provider_model_id: &str) -> bool {
+        self.exclude
+            .iter()
+            .any(|e| e == spelling || e == provider_model_id)
+    }
+}
+
+/// `RoutingPolicy.kind` — the closed kind enum (ADR-0121 d.4). C1 executes
+/// `static`, `role_table`, `fallback_chain`, `capability_filter`, `cost_cap`,
+/// `latency_cap`, `quality_target`, `health_aware`; `learned` is C4 — a
+/// declared tier refusal (`PolicyInvalid`), never a fall-through.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RoutingPolicyKind {
     /// `static` — one fixed candidate row.
@@ -108,23 +183,41 @@ impl RoutingPolicyKind {
             RoutingPolicyKind::Static | RoutingPolicyKind::RoleTable
         )
     }
+
+    /// Whether the kind executes at C1 (the full policy family minus
+    /// `learned` — C4 stays a declared tier refusal; ADR-0121 d.4/d.7).
+    pub fn c1(self) -> bool {
+        !matches!(self, RoutingPolicyKind::Learned)
+    }
 }
 
 /// `error_actions` value — the class → action table (ADR-0122 d.2):
-/// `{retry_same{max}, reroute, compact_then_retry, give_up}`. `GiveUp` closes
-/// `model.call.failed`.
+/// `{retry_same{max, then?}, reroute, compact_then_retry{then?}, give_up}`.
+/// `then` is the C1 sequencing member — the spec default table chains
+/// `retry_same{max}` → `reroute` and `compact_then_retry` → `reroute`
+/// (a retry policy is a bounded *sequence*, never a single verdict).
+/// `GiveUp` closes `model.call.failed`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ErrorAction {
-    /// Retry the same target, bounded.
+    /// Retry the same target, bounded; `then` applies once `max` is spent.
     RetrySame {
-        /// `max` — the same-target attempt bound.
+        /// `max` — the same-target attempt bound (total attempts, incl. the
+        /// first).
         max: u32,
+        /// `then` — the follow-on action once `max` attempts are spent;
+        /// `None` reads `give_up`.
+        then: Option<Box<ErrorAction>>,
     },
     /// Reroute to another target (`model.rerouted`).
     Reroute,
     /// Compact the transcript, then retry (`context.compaction.*` under the
-    /// old profile — ADR-0122 d.3 ordering).
-    CompactThenRetry,
+    /// old profile — ADR-0122 d.3 ordering); `then` applies when a
+    /// compaction already ran for this call.
+    CompactThenRetry {
+        /// `then` — the follow-on after one compaction (default `reroute`
+        /// under the spec table when chained; `None` reads `give_up`).
+        then: Option<Box<ErrorAction>>,
+    },
     /// Close the call `model.call.failed`.
     GiveUp,
 }
@@ -135,18 +228,40 @@ impl ErrorAction {
         match self {
             ErrorAction::RetrySame { .. } => "retry_same",
             ErrorAction::Reroute => "reroute",
-            ErrorAction::CompactThenRetry => "compact_then_retry",
+            ErrorAction::CompactThenRetry { .. } => "compact_then_retry",
             ErrorAction::GiveUp => "give_up",
         }
     }
 
-    /// Canonical JSON.
+    /// Canonical JSON (`then` chains as a nested `then: {…}` member; absent
+    /// `then` keeps the C0 spelling — CC8 additive).
     pub fn to_json(&self) -> Json {
         match self {
-            ErrorAction::RetrySame { max } => {
-                Json::obj([("retry_same", Json::obj([("max", Json::Int(*max as i64))]))])
+            ErrorAction::RetrySame { max, then } => {
+                let mut inner = vec![("max", Json::Int(*max as i64))];
+                if let Some(t) = then {
+                    inner.push(("then", t.to_json()));
+                }
+                Json::obj([(
+                    "retry_same",
+                    Json::Obj(inner.into_iter().map(|(k, v)| (k.to_string(), v)).collect()),
+                )])
             }
+            ErrorAction::CompactThenRetry { then: Some(t) } => {
+                Json::obj([("compact_then_retry", Json::obj([("then", t.to_json())]))])
+            }
+            ErrorAction::CompactThenRetry { then: None } => Json::str("compact_then_retry"),
             other => Json::str(other.as_str()),
+        }
+    }
+
+    /// `then` — the chained follow-on (`None` reads `GiveUp` — the closed
+    /// default for an absent action row).
+    pub fn then(&self) -> &ErrorAction {
+        match self {
+            ErrorAction::RetrySame { then: Some(t), .. }
+            | ErrorAction::CompactThenRetry { then: Some(t) } => t,
+            _ => &ErrorAction::GiveUp,
         }
     }
 }
@@ -274,6 +389,64 @@ impl RoutingPolicy {
             "routing_policy.1",
             self.to_json().to_canonical_string().as_bytes(),
         )
+    }
+
+    /// The spec `error_actions` default table (§5b.2 `error_actions`
+    /// defaults; ADR-0122 d.2): transient classes retry the same target then
+    /// reroute; `context_length_exceeded` compacts then retries then
+    /// reroutes; `auth`/`not_found`/`unsupported_feature`/
+    /// `transcript_incompatible` reroute and never retry the same target;
+    /// `invalid_request`, the budget classes, `refusal` and `unknown` give
+    /// up. The table is *data* — a policy document overrides per class.
+    pub fn default_error_actions() -> BTreeMap<String, ErrorAction> {
+        let mut m: BTreeMap<String, ErrorAction> = BTreeMap::new();
+        let transient_then_reroute = |max: u32| ErrorAction::RetrySame {
+            max,
+            then: Some(Box::new(ErrorAction::Reroute)),
+        };
+        for c in [
+            ModelErrorClass::Network,
+            ModelErrorClass::Timeout(crate::vocab::TimeoutKind::Attempt),
+            ModelErrorClass::Timeout(crate::vocab::TimeoutKind::Connect),
+            ModelErrorClass::Timeout(crate::vocab::TimeoutKind::StreamIdle),
+            ModelErrorClass::StreamDecode,
+            ModelErrorClass::ServerError,
+            ModelErrorClass::Overloaded,
+            ModelErrorClass::RateLimited,
+            ModelErrorClass::EmptyResponse,
+        ] {
+            m.insert(c.as_str().to_string(), transient_then_reroute(2));
+        }
+        m.insert(
+            ModelErrorClass::ContextLengthExceeded.as_str().to_string(),
+            ErrorAction::CompactThenRetry {
+                then: Some(Box::new(ErrorAction::Reroute)),
+            },
+        );
+        for c in [
+            ModelErrorClass::Auth,
+            ModelErrorClass::NotFound(crate::vocab::NotFoundKind::Model),
+            ModelErrorClass::NotFound(crate::vocab::NotFoundKind::Endpoint),
+            ModelErrorClass::UnsupportedFeature,
+            ModelErrorClass::TranscriptIncompatible,
+        ] {
+            m.insert(c.as_str().to_string(), ErrorAction::Reroute);
+        }
+        for c in [
+            ModelErrorClass::InvalidRequest,
+            ModelErrorClass::PermanentRequest,
+            ModelErrorClass::QuotaExhausted,
+            ModelErrorClass::CreditsExhausted,
+            ModelErrorClass::UsageNotIncluded,
+            ModelErrorClass::VerificationRequired,
+            ModelErrorClass::Forbidden,
+        ] {
+            m.insert(c.as_str().to_string(), ErrorAction::GiveUp);
+        }
+        // `content_policy`/`safety_blocked`/`refusal`/`served_model_mismatch`/
+        // control classes are deliberate policy choices — no default row; an
+        // absent row reads `GiveUp` (`error_action`'s closed default).
+        m
     }
 
     /// `link`-time validation (T-LCD-05 — AC-R-2.3.2-7): every family- or
@@ -606,7 +779,8 @@ pub struct ModelRoleTable {
 }
 
 /// The budget port — G-4's `reserve(budget_id, max_output(profile), holder)`
-/// (ADR-0040). `Err` carries the refused dimension's spelling
+/// (ADR-0040) and R-7's `release` (the old reservation is released before the
+/// reroute's new one is held). `Err` carries the refused dimension's spelling
 /// (`InsufficientBudget{dimension}`).
 pub trait BudgetPort {
     /// `reserve(budget_id, max_output_tokens, holder) → reservation_id`.
@@ -616,6 +790,11 @@ pub trait BudgetPort {
         max_output_tokens: u64,
         holder: &str,
     ) -> Result<String, String>;
+    /// `release(reservation_id)` — the reservation's unspent remainder returns
+    /// to its budget (ADR-0040's affine rule — never aliased, never dropped).
+    /// A failed release is a typed error the caller surfaces; the router never
+    /// proceeds to hold the new reservation while the old one is live.
+    fn release(&mut self, reservation_id: &str) -> Result<(), String>;
 }
 
 /// `AccountBudget` — the `hh_budget::Account` adapter (`AccountingHandle`):
@@ -650,14 +829,61 @@ impl BudgetPort for AccountBudget<'_> {
                 other => format!("{other}"),
             })
     }
+
+    fn release(&mut self, reservation_id: &str) -> Result<(), String> {
+        self.account
+            .release(self.lease, reservation_id)
+            .map(|_| ())
+            .map_err(|e| format!("{e}"))
+    }
 }
 
-/// `HealthView` — the ledger-derived cooldown projection (`project(ledger,
+/// `TargetHealth{attempts, failures, p95_ms?, cooldown_until_ms?}` — one
+/// `(provider_model_id, serving_route)` row of the `HealthView` projection
+/// (ADR-0122 d.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TargetHealth {
+    /// Attempts observed in the window.
+    pub attempts: u64,
+    /// Failed attempts observed in the window.
+    pub failures: u64,
+    /// The p95 completed-attempt latency in the window (ms).
+    pub p95_ms: Option<u64>,
+    /// `cooldown_until` (ms since epoch) when set — the candidate cools down
+    /// while `now < cooldown_until_ms`.
+    pub cooldown_until_ms: Option<u64>,
+}
+
+impl TargetHealth {
+    /// The observed failure rate (ppm; `None` with no attempts).
+    pub fn failure_rate_ppm(&self) -> Option<i64> {
+        if self.attempts == 0 {
+            None
+        } else {
+            Some(self.failures as i64 * hh_budget::quantity::PPM_SCALE / self.attempts as i64)
+        }
+    }
+}
+
+/// `HealthView` — the ledger-derived health projection (`project(ledger,
 /// view_kind = health, window)` — ADR-0122 d.4); a materialized view, never a
-/// store of truth.
+/// store of truth. `stats` carries the C1 quantiles/failure counts
+/// `latency_cap`/`health_aware` read; `cooldown` is the C0 predicate — it
+/// takes `now_ms` (a caller-supplied clock; `select` stays pure — AC-11).
 pub trait HealthView {
-    /// Whether the candidate is in cooldown (`cooldown_until` ahead).
-    fn cooldown(&self, candidate: &ModelRef) -> bool;
+    /// Whether the candidate is in cooldown at `now_ms` (`cooldown_until`
+    /// ahead of now — an expired cooldown is no cooldown).
+    fn cooldown(&self, candidate: &ModelRef, now_ms: u64) -> bool {
+        self.stats(candidate)
+            .and_then(|s| s.cooldown_until_ms)
+            .is_some_and(|until| now_ms < until)
+    }
+    /// The candidate's health row (`None` = unobserved — the candidate is
+    /// fresh, not refused; a projection that never observed an attempt has
+    /// nothing to say).
+    fn stats(&self, _candidate: &ModelRef) -> Option<TargetHealth> {
+        None
+    }
 }
 
 /// The empty view — no candidate cools down (the C0 default).
@@ -665,8 +891,350 @@ pub trait HealthView {
 pub struct NoHealth;
 
 impl HealthView for NoHealth {
-    fn cooldown(&self, _candidate: &ModelRef) -> bool {
+    fn cooldown(&self, _candidate: &ModelRef, _now_ms: u64) -> bool {
         false
+    }
+}
+
+/// `HealthConfig` — the projection's declared thresholds (OQ-295's MUST-data
+/// placeholder values are configuration, never hard-coded — the view is
+/// honest about which window/threshold it applies).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HealthConfig {
+    /// `429`/`rate_limited` cooldown length (ms).
+    pub rate_limited_cooldown_ms: u64,
+    /// Any-failure cooldown length (ms) once the rate threshold trips.
+    pub failure_cooldown_ms: u64,
+    /// Failure-rate threshold (ppm of attempts) that trips a cooldown.
+    pub failure_rate_threshold_ppm: i64,
+    /// Minimum attempts before the rate check applies.
+    pub min_attempts: u64,
+    /// The trailing window in seq terms (attempts counted).
+    pub window_attempts: usize,
+}
+
+impl Default for HealthConfig {
+    /// The OQ-295 placeholder defaults (MUST-data until the open question
+    /// ratifies values — recorded in the run doc).
+    fn default() -> HealthConfig {
+        HealthConfig {
+            rate_limited_cooldown_ms: 30_000,
+            failure_cooldown_ms: 60_000,
+            failure_rate_threshold_ppm: 500_000,
+            min_attempts: 4,
+            window_attempts: 64,
+        }
+    }
+}
+
+/// `TableHealth` — the materialized `HealthView` over
+/// `model.call.attempt.{started,completed,failed}` joined to each call's
+/// `model.route.decided`/`model.call.requested` target. A projection — it
+/// carries `derived_from` watermarks (the folded `seq` ceiling), never a
+/// store of truth (ADR-0042).
+#[derive(Debug, Clone, Default)]
+pub struct TableHealth {
+    /// `(provider_model_id, serving_route)` → health row.
+    pub rows: BTreeMap<(String, String), TargetHealth>,
+    /// The projection's watermark (the last folded seq).
+    pub watermark_seq: u64,
+}
+
+impl HealthView for TableHealth {
+    fn stats(&self, candidate: &ModelRef) -> Option<TargetHealth> {
+        self.rows
+            .get(&(
+                candidate.provider_model_id.clone(),
+                candidate.serving_route.clone().unwrap_or_default(),
+            ))
+            .copied()
+    }
+}
+
+/// `project_health(rows, cfg)` — the ADR-0122 d.4 fold. `rows` are the run's
+/// `(seq, ts_ms, class, payload)` projection inputs over
+/// `model.call.requested`/`model.route.decided` (the call→target join) and
+/// `model.call.attempt.{started,completed,failed}` (the observations):
+///
+/// - attempts/failures are counted per `(provider_model_id, serving_route)`
+///   (failures keep their `error.class` spelling);
+/// - `p95_ms` is the 95th-percentile `duration_ms` over completed attempts;
+/// - `429`/`rate_limited` ⇒ `cooldown_until = failed_at +
+///   cfg.rate_limited_cooldown_ms` (the spec default);
+/// - failure rate > `failure_rate_threshold_ppm` over ≥ `min_attempts` ⇒
+///   `cooldown_until = last_failed_at + cfg.failure_cooldown_ms`.
+///
+/// `single_candidate` carries the `(provider_model_id, serving_route)` keys
+/// of roles whose binding holds one candidate — the view never cools those
+/// down (the spec's "never for a role with one candidate").
+pub fn project_health(
+    rows: &[(u64, u64, &str, &Json)],
+    cfg: &HealthConfig,
+    single_candidate: &BTreeSet<(String, String)>,
+) -> TableHealth {
+    // model_call_id → target (the call→route join).
+    let mut target_of: BTreeMap<String, (String, String)> = BTreeMap::new();
+    for (_, _, class, p) in rows {
+        match *class {
+            "model.route.decided" => {
+                let id = p.get("model_call_id").and_then(Json::as_str);
+                let model = p
+                    .get("selected")
+                    .and_then(|s| s.get("provider_model_id"))
+                    .and_then(Json::as_str);
+                let route = p
+                    .get("selected")
+                    .and_then(|s| s.get("serving_route"))
+                    .and_then(Json::as_str)
+                    .unwrap_or("");
+                if let (Some(id), Some(m)) = (id, model) {
+                    target_of.insert(id.to_string(), (m.to_string(), route.to_string()));
+                }
+            }
+            "model.call.requested" => {
+                let id = p.get("model_call_id").and_then(Json::as_str);
+                let model = p
+                    .get("model_ref")
+                    .and_then(|s| s.get("provider_model_id"))
+                    .and_then(Json::as_str);
+                let route = p
+                    .get("model_ref")
+                    .and_then(|s| s.get("serving_route"))
+                    .and_then(Json::as_str)
+                    .unwrap_or("");
+                if let (Some(id), Some(m)) = (id, model) {
+                    target_of
+                        .entry(id.to_string())
+                        .or_insert_with(|| (m.to_string(), route.to_string()));
+                }
+            }
+            _ => {}
+        }
+    }
+    struct Agg {
+        /// `(seq, failed, duration_ms?, ts_ms)` per observed attempt outcome.
+        attempts: Vec<(u64, bool, Option<u64>, u64)>,
+        /// The largest `rate_limited`-stamped cooldown (ms).
+        rl_cooldown_until_ms: Option<u64>,
+        last_failed_at: u64,
+    }
+    let mut per_target: BTreeMap<(String, String), Agg> = BTreeMap::new();
+    let mut watermark = 0u64;
+    for (seq, ts_ms, class, p) in rows {
+        watermark = watermark.max(*seq);
+        let Some(id) = p.get("model_call_id").and_then(Json::as_str) else {
+            continue;
+        };
+        let Some(target) = target_of.get(id).cloned() else {
+            continue;
+        };
+        let agg = per_target.entry(target).or_insert_with(|| Agg {
+            attempts: vec![],
+            rl_cooldown_until_ms: None,
+            last_failed_at: 0,
+        });
+        match *class {
+            "model.call.attempt.started" => {
+                agg.attempts.push((*seq, false, None, *ts_ms));
+            }
+            "model.call.attempt.completed" => {
+                let d = p
+                    .get("duration_ms")
+                    .and_then(Json::as_int)
+                    .filter(|d| *d >= 0)
+                    .map(|d| d as u64);
+                // A completion supersedes the opened attempt's placeholder.
+                let attempt_no = p.get("attempt_no").and_then(Json::as_int);
+                if let Some(open) = agg
+                    .attempts
+                    .iter_mut()
+                    .rev()
+                    .find(|(_, failed, dur, _)| !*failed && dur.is_none())
+                {
+                    *open = (*seq, false, d, *ts_ms);
+                } else {
+                    agg.attempts.push((*seq, false, d, *ts_ms));
+                }
+                let _ = attempt_no;
+            }
+            "model.call.attempt.failed" => {
+                agg.attempts.push((*seq, true, None, *ts_ms));
+                agg.last_failed_at = *ts_ms;
+                let class_spelling = p
+                    .get("error")
+                    .and_then(|e| e.get("class"))
+                    .and_then(Json::as_str)
+                    .unwrap_or("");
+                if class_spelling == ModelErrorClass::RateLimited.as_str() {
+                    agg.rl_cooldown_until_ms = agg
+                        .rl_cooldown_until_ms
+                        .max(Some(*ts_ms + cfg.rate_limited_cooldown_ms));
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut table = TableHealth {
+        rows: BTreeMap::new(),
+        watermark_seq: watermark,
+    };
+    for (key, agg) in per_target {
+        let solo = single_candidate.contains(&key);
+        // The trailing window — the last `window_attempts` observations.
+        let window: Vec<(u64, bool, Option<u64>, u64)> = agg
+            .attempts
+            .iter()
+            .rev()
+            .take(cfg.window_attempts.max(1))
+            .cloned()
+            .collect();
+        let attempts = window.len() as u64;
+        let failures = window.iter().filter(|(_, f, _, _)| *f).count() as u64;
+        let mut latencies: Vec<u64> = window
+            .iter()
+            .filter_map(|(_, f, d, _)| if *f { None } else { *d })
+            .collect();
+        latencies.sort_unstable();
+        let p95 = if latencies.is_empty() {
+            None
+        } else {
+            let ix = (latencies.len() as u64 * 95)
+                .div_ceil(100)
+                .saturating_sub(1) as usize;
+            Some(latencies[ix.min(latencies.len() - 1)])
+        };
+        let mut cooldown = agg.rl_cooldown_until_ms;
+        if !solo
+            && attempts >= cfg.min_attempts
+            && failures as i64 * hh_budget::quantity::PPM_SCALE / attempts.max(1) as i64
+                > cfg.failure_rate_threshold_ppm
+        {
+            cooldown = cooldown.max(Some(agg.last_failed_at + cfg.failure_cooldown_ms));
+        }
+        // The "never for a role with one candidate" rule.
+        if solo {
+            cooldown = None;
+        }
+        table.rows.insert(
+            key,
+            TargetHealth {
+                attempts,
+                failures,
+                p95_ms: p95,
+                cooldown_until_ms: cooldown,
+            },
+        );
+    }
+    table
+}
+
+/// `PricingView` — the pricing-table lookup `cost_cap`/G-5 reads
+/// (ADR-0039's `record_kind:pricing_table` projected per `ModelRef`).
+/// `None` is `NoPrice` — never a zero-cost fallback (ADR-0121 d.5).
+pub trait PricingView {
+    /// The table's per-call cost estimate for `candidate` under
+    /// `pricing_table_ref` at `max_output_tokens` reserve size (the table's
+    /// smallest currency unit).
+    fn estimate_call_cost(
+        &self,
+        candidate: &RouteCandidate,
+        pricing_table_ref: &str,
+        max_output_tokens: u64,
+    ) -> Option<i64>;
+}
+
+/// The empty pricing view — every cost read is `NoPrice` (fail-closed).
+#[derive(Debug, Default)]
+pub struct NoPricing;
+
+impl PricingView for NoPricing {
+    fn estimate_call_cost(
+        &self,
+        _candidate: &RouteCandidate,
+        _pricing_table_ref: &str,
+        _max_output_tokens: u64,
+    ) -> Option<i64> {
+        None
+    }
+}
+
+/// `QualityPriorView` — the `QualityPrior`/`FittedSurfaceReport` lookup a
+/// `quality_target` policy reads (ADR-0160; read-only, never a score the
+/// router invents). Estimates are ppm-scale against the policy's `metric`.
+pub trait QualityPriorView {
+    /// The prior's estimate (ppm) for `candidate` under `prior_ref`/`metric`;
+    /// `None` when no covering prior exists (`unknown` levels refused —
+    /// ADR-0012).
+    fn estimate_ppm(
+        &self,
+        candidate: &RouteCandidate,
+        prior_ref: &str,
+        metric: &str,
+    ) -> Option<i64>;
+}
+
+/// The empty prior view — no estimate exists (fail-closed).
+#[derive(Debug, Default)]
+pub struct NoQualityPrior;
+
+impl QualityPriorView for NoQualityPrior {
+    fn estimate_ppm(
+        &self,
+        _candidate: &RouteCandidate,
+        _prior_ref: &str,
+        _metric: &str,
+    ) -> Option<i64> {
+        None
+    }
+}
+
+/// `MigrationView` — the projected `TranscriptMigration` a G-3 check reads
+/// (ADR-0019 `relower`). `Some(d)` is the projected dropped-item count;
+/// `None` is *unprojectable* — fail-closed, the candidate verdicts
+/// `migration_loss` (a migration the router cannot bound is never admitted).
+pub trait MigrationView {
+    /// Project the dropped-item count of a relower from `from_profile_ref` to
+    /// the candidate's leaf profile.
+    fn projected_dropped(&self, from_profile_ref: &str, to_profile_ref: &str) -> Option<u64>;
+}
+
+/// The empty migration view — `Some(0)` for a same-profile move (no
+/// migration), `None` across profiles (unprojectable ⇒ fail-closed).
+#[derive(Debug, Default)]
+pub struct NoMigration;
+
+impl MigrationView for NoMigration {
+    fn projected_dropped(&self, from_profile_ref: &str, to_profile_ref: &str) -> Option<u64> {
+        if from_profile_ref == to_profile_ref {
+            Some(0)
+        } else {
+            None
+        }
+    }
+}
+
+/// `RoutingViews` — the C1 view bundle `select_with` reads (the spec's
+/// `profile_env`/`account`/`health` are already parameters; these are the
+/// G-3/G-5/quality-prior projections the C1 kinds consult).
+#[derive(Default)]
+pub struct RoutingViews<'a> {
+    /// The pricing table view (G-5).
+    pub pricing: Option<&'a dyn PricingView>,
+    /// The quality-prior view (`quality_target`).
+    pub quality: Option<&'a dyn QualityPriorView>,
+    /// The migration projection (G-3).
+    pub migration: Option<&'a dyn MigrationView>,
+}
+
+impl RoutingViews<'_> {
+    /// No views — `NoPricing`/`NoQualityPrior`/`NoMigration` semantics
+    /// (fail-closed on the guard that reads them).
+    pub fn none() -> RoutingViews<'static> {
+        RoutingViews {
+            pricing: None,
+            quality: None,
+            migration: None,
+        }
     }
 }
 
@@ -682,25 +1250,406 @@ fn model_ref_spelling(m: &ModelRef) -> String {
     )
 }
 
+/// A candidate the guard admitted, before the budget reserve — the per-kind
+/// filters may still attach a `score` (the `quality_target`/`health_aware`
+/// ranking inputs; `policy_excluded`/`no_price`/`cooldown` verdicts carry the
+/// typed refuse already).
+struct Admitted {
+    /// The resolved leaf profile coordinate (post-G-1).
+    leaf_ref: String,
+    /// `max_output` the G-4 reserve sizes against.
+    max_output: u64,
+    /// The kind's score (`quality_target`'s prior estimate,
+    /// `health_aware`'s inverted failure rate — higher is better).
+    score: Option<i64>,
+}
+
+/// The admission pipeline's tri-state — a rejected candidate carries its
+/// closed reason + the refusal class for aggregation; `Fatal` is a guard
+/// failure that refuses the whole `select` (an ambiguous selector is a
+/// link-time invalidity — `PolicyInvalid` — never absorbed as a candidate
+/// verdict).
+enum Admit {
+    /// The candidate passed G-1…G-5 and the kind's filters.
+    Admitted(Admitted),
+    /// The candidate was rejected with a closed reason.
+    Rejected(CandidateRejectReason, RoutingRefusal),
+    /// The whole selection refuses (a policy/link invalidity).
+    Fatal(RoutingRefusal),
+}
+
+/// The per-candidate admission pipeline — G-1 → G-2 → G-3 → G-5 → kind
+/// filters — before the G-4 reserve (the reserve binds only the selected
+/// candidate; a rejected candidate never holds a reservation).
+#[allow(clippy::too_many_arguments)] // the arity is the guard's
+fn admit_candidate(
+    cand: &RouteCandidate,
+    required_capabilities: &[String],
+    request: &RoutingRequest,
+    profile_env: &dyn SelectorView,
+    health: &dyn HealthView,
+    now_ms: u64,
+    views: &RoutingViews,
+    policy: &RoutingPolicy,
+    extra_capabilities: &[String],
+) -> Admit {
+    let spelling = model_ref_spelling(&cand.model_ref);
+    let reject =
+        |reason: CandidateRejectReason, refusal: RoutingRefusal| Admit::Rejected(reason, refusal);
+    // Health — cooldown is a view verdict (ADR-0122 d.4).
+    if health.cooldown(&cand.model_ref, now_ms) {
+        return reject(
+            CandidateRejectReason::Cooldown,
+            RoutingRefusal::ChainExhausted { attempted: vec![] },
+        );
+    }
+    // G-1 — exactly one profile resolves, `active | expiring` admissible.
+    let chain = match resolve_profile(&cand.coordinate, profile_env) {
+        Ok(c) => c,
+        Err(ProfileResolveError::NoProfile { .. }) => {
+            return reject(
+                CandidateRejectReason::NoProfile,
+                RoutingRefusal::NoProfile {
+                    model_ref: spelling.clone(),
+                },
+            );
+        }
+        Err(ProfileResolveError::AmbiguousSelector { candidates }) => {
+            // A link-time invalidity — the whole `select` refuses, not just
+            // this candidate (T-LCD-05 class).
+            return Admit::Fatal(RoutingRefusal::PolicyInvalid {
+                rule_id: "selector".to_string(),
+                reason: format!("ambiguous_selector: {}", candidates.join(", ")),
+            });
+        }
+        Err(ProfileResolveError::RetiredProfile { profile_ref, .. }) => {
+            return reject(
+                CandidateRejectReason::ExpiredProfile,
+                RoutingRefusal::ExpiredProfile {
+                    profile_ref,
+                    status: "retired".to_string(),
+                },
+            );
+        }
+    };
+    let leaf = chain.profiles.last().expect("resolve_profile yields ≥1");
+    let status = profile_status(leaf);
+    let leaf_ref = hh_compiler::profile::profile_coordinate(leaf);
+    match status {
+        DebtStatus::Active | DebtStatus::Expiring => {}
+        DebtStatus::Expired => {
+            if request.intent_ref.is_none() {
+                return reject(
+                    CandidateRejectReason::ExpiredProfile,
+                    RoutingRefusal::ExpiredProfile {
+                        profile_ref: leaf_ref,
+                        status: "expired".to_string(),
+                    },
+                );
+            }
+        }
+        DebtStatus::Retired => {
+            return reject(
+                CandidateRejectReason::ExpiredProfile,
+                RoutingRefusal::ExpiredProfile {
+                    profile_ref: leaf_ref,
+                    status: "retired".to_string(),
+                },
+            );
+        }
+    }
+    // G-2 — `required_capabilities ∪ kind-declared ⊆ declared | probed`. The
+    // tri-state has no declared-negative at C1, so an unsatisfied axis reads
+    // `unknown` (`CapabilityUnmet` remains for measured-bound floors).
+    let mut unknown: Vec<String> = Vec::new();
+    for cap in required_capabilities
+        .iter()
+        .chain(extra_capabilities.iter())
+    {
+        match leaf.capabilities.capability_state(cap) {
+            Some(CapabilityState::Declared | CapabilityState::Probed) => {}
+            // `context_window`/`max_output` are measured bounds — a
+            // declared bound satisfies the axis.
+            None if cap == "context_window" || cap == "max_output" => {
+                let bound = if cap == "context_window" {
+                    leaf.capabilities.context_window
+                } else {
+                    leaf.capabilities.max_output
+                };
+                if bound.is_none() {
+                    unknown.push(cap.clone());
+                }
+            }
+            Some(CapabilityState::Unknown) | None => unknown.push(cap.clone()),
+        }
+    }
+    if !unknown.is_empty() && policy.allow_unknown.is_none() {
+        return reject(
+            CandidateRejectReason::CapabilityUnknown,
+            RoutingRefusal::CapabilityUnknown {
+                model_ref: spelling.clone(),
+                unknown,
+            },
+        );
+    }
+    // An undeclared `max_output` is a `capability_unknown` — the reservation
+    // can't be sized honestly.
+    let max_output = match leaf.capabilities.max_output {
+        Some(m) => m,
+        None => {
+            return reject(
+                CandidateRejectReason::CapabilityUnknown,
+                RoutingRefusal::CapabilityUnknown {
+                    model_ref: spelling.clone(),
+                    unknown: vec!["max_output".to_string()],
+                },
+            );
+        }
+    };
+    // G-3 — a cross-profile move is legal only under a projected migration
+    // within `max_migration_loss`, and never while a proposed effect is
+    // unresolved (ADR-0030).
+    if let Some(src) = &request.source_profile_ref {
+        if *src != leaf_ref {
+            if request.in_flight_effect && policy.max_migration_loss.no_in_flight_tool_call {
+                return reject(
+                    CandidateRejectReason::MigrationLoss,
+                    RoutingRefusal::MigrationLossExceeded {
+                        dropped: 0,
+                        bound: policy.max_migration_loss.dropped_items,
+                    },
+                );
+            }
+            let migration: &dyn MigrationView = views.migration.unwrap_or(&NoMigration);
+            match migration.projected_dropped(src, &leaf_ref) {
+                Some(d) if d <= policy.max_migration_loss.dropped_items => {}
+                Some(d) => {
+                    return reject(
+                        CandidateRejectReason::MigrationLoss,
+                        RoutingRefusal::MigrationLossExceeded {
+                            dropped: d,
+                            bound: policy.max_migration_loss.dropped_items,
+                        },
+                    );
+                }
+                // Unprojectable ⇒ the bound can't be shown — fail-closed.
+                None => {
+                    return reject(
+                        CandidateRejectReason::MigrationLoss,
+                        RoutingRefusal::MigrationLossExceeded {
+                            dropped: u64::MAX,
+                            bound: policy.max_migration_loss.dropped_items,
+                        },
+                    );
+                }
+            }
+        }
+    }
+    // G-5 + kind filters — the policy data decides which views are read.
+    let mut score: Option<i64> = None;
+    match policy.kind {
+        RoutingPolicyKind::CostCap => {
+            let table_ref = policy
+                .params
+                .get("pricing_table_ref")
+                .and_then(Json::as_str)
+                .unwrap_or("");
+            let cap = policy
+                .params
+                .get("max_spend_per_call")
+                .and_then(Json::as_int);
+            let pricing: &dyn PricingView = views.pricing.unwrap_or(&NoPricing);
+            match pricing.estimate_call_cost(cand, table_ref, max_output) {
+                None => {
+                    return reject(
+                        CandidateRejectReason::NoPrice,
+                        RoutingRefusal::NoPrice {
+                            model_ref: spelling.clone(),
+                        },
+                    );
+                }
+                Some(cost) => {
+                    if let Some(cap) = cap {
+                        if cost > cap {
+                            return reject(
+                                CandidateRejectReason::PolicyExcluded,
+                                RoutingRefusal::ChainExhausted { attempted: vec![] },
+                            );
+                        }
+                    }
+                    score = Some(-cost); // cheaper ranks higher
+                }
+            }
+        }
+        RoutingPolicyKind::LatencyCap => {
+            let cap_ms = policy
+                .params
+                .get("p95_ms")
+                .and_then(Json::as_int)
+                .or(request.latency_target_ms.map(|t| t as i64));
+            if let Some(cap) = cap_ms {
+                if let Some(stats) = health.stats(&cand.model_ref) {
+                    if let Some(p95) = stats.p95_ms {
+                        if p95 as i64 > cap {
+                            return reject(
+                                CandidateRejectReason::PolicyExcluded,
+                                RoutingRefusal::ChainExhausted { attempted: vec![] },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        RoutingPolicyKind::QualityTarget => {
+            let metric = policy
+                .params
+                .get("metric")
+                .and_then(Json::as_str)
+                .unwrap_or("quality");
+            let prior_ref = request
+                .quality_prior_ref
+                .as_deref()
+                .or_else(|| policy.params.get("prior_ref").and_then(Json::as_str))
+                .unwrap_or("");
+            let min_estimate = policy.params.get("min_estimate").and_then(Json::as_int);
+            let priors: &dyn QualityPriorView = views.quality.unwrap_or(&NoQualityPrior);
+            match priors.estimate_ppm(cand, prior_ref, metric) {
+                None => {
+                    // No covering prior — `unknown` levels refused (ADR-0012);
+                    // the floor can't be demonstrated. The verdict is
+                    // `policy_excluded`; the closed refusal sum names no
+                    // dedicated spelling, so the row carries the filtered
+                    // `chain_exhausted` marker (an all-excluded run surfaces
+                    // `ChainExhausted{attempted}` below).
+                    return reject(
+                        CandidateRejectReason::PolicyExcluded,
+                        RoutingRefusal::ChainExhausted { attempted: vec![] },
+                    );
+                }
+                Some(est) => {
+                    if let Some(min) = min_estimate {
+                        if est < min {
+                            return reject(
+                                CandidateRejectReason::PolicyExcluded,
+                                RoutingRefusal::ChainExhausted { attempted: vec![] },
+                            );
+                        }
+                    }
+                    score = Some(est);
+                }
+            }
+        }
+        RoutingPolicyKind::HealthAware => {
+            // Rank by observed failure rate (lower is better); unobserved
+            // candidates rank first (fresh is not failed — the view never
+            // penalises what it hasn't seen).
+            score = health
+                .stats(&cand.model_ref)
+                .and_then(|s| s.failure_rate_ppm())
+                .map(|r| -r);
+        }
+        _ => {}
+    }
+    Admit::Admitted(Admitted {
+        leaf_ref,
+        max_output,
+        score,
+    })
+}
+
+/// The per-kind candidate list — every kind binds its candidates from the
+/// role's `RoleBinding` (the sealed model set — G-6 never admits a candidate
+/// outside it) except `static` (`params.target`) and `fallback_chain`
+/// (`params.targets[]`, itself a binding of the role).
+fn candidate_list(
+    request: &RoutingRequest,
+    policy: &RoutingPolicy,
+    table: &ModelRoleTable,
+) -> Result<Vec<RouteCandidate>, RoutingRefusal> {
+    let malformed = |reason: &str| RoutingRefusal::PolicyInvalid {
+        rule_id: policy.policy_id.clone(),
+        reason: reason.to_string(),
+    };
+    let binding = || match table.roles.get(&request.role) {
+        Some(b) => Ok(std::iter::once(b.primary.clone())
+            .chain(b.alternates.iter().cloned())
+            .collect()),
+        None => Err(RoutingRefusal::NoProfile {
+            model_ref: format!("role:{}", request.role),
+        }),
+    };
+    match policy.kind {
+        RoutingPolicyKind::Static => {
+            let t = policy
+                .params
+                .get("target")
+                .ok_or_else(|| malformed("static policy without params.target"))?;
+            Ok(vec![candidate_from_json(t).ok_or_else(|| {
+                malformed("static params.target malformed")
+            })?])
+        }
+        RoutingPolicyKind::FallbackChain => {
+            // `fallback_chain{targets[], max_reroutes, allowed_classes[]}` —
+            // the chain is the binding (§5b.2 params).
+            let arr = match policy.params.get("targets") {
+                Some(Json::Arr(ts)) => ts.clone(),
+                Some(_) => return Err(malformed("fallback_chain params.targets must be an array")),
+                // An empty/absent chain binds the role's own row (fail_fast's
+                // degenerate case — the primary alone).
+                None => return binding(),
+            };
+            let mut out = Vec::new();
+            for t in &arr {
+                out.push(
+                    candidate_from_json(t)
+                        .ok_or_else(|| malformed("fallback_chain params.targets[] malformed"))?,
+                );
+            }
+            Ok(out)
+        }
+        RoutingPolicyKind::RoleTable
+        | RoutingPolicyKind::CapabilityFilter
+        | RoutingPolicyKind::CostCap
+        | RoutingPolicyKind::LatencyCap
+        | RoutingPolicyKind::QualityTarget
+        | RoutingPolicyKind::HealthAware => binding(),
+        RoutingPolicyKind::Learned => Err(RoutingRefusal::PolicyInvalid {
+            rule_id: policy.policy_id.clone(),
+            reason: "kind learned is C4 — not executable at this tier".to_string(),
+        }),
+    }
+}
+
+/// The `fallback_chain` policy params `{targets[], max_reroutes?,
+/// allowed_classes[]}` — `max_reroutes`/`allowed_classes` gate
+/// `on_attempt_failed`'s `Reroute` arm (absent members: unbounded reroutes
+/// within the chain, every class reroutable).
+fn chain_params(policy: &RoutingPolicy) -> (Option<u32>, Option<Vec<String>>) {
+    let max_reroutes = policy
+        .params
+        .get("max_reroutes")
+        .and_then(Json::as_int)
+        .map(|n| n.max(0) as u32);
+    let allowed = policy.params.get("allowed_classes").and_then(|a| {
+        if let Json::Arr(v) = a {
+            Some(
+                v.iter()
+                    .filter_map(|c| c.as_str().map(str::to_string))
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    });
+    (max_reroutes, allowed)
+}
+
 /// `select(request, profile_env, account, health, policy, table, decision_id)
-/// → RoutingDecision | RoutingRefusal` — the C0 guard composition
-/// (ADR-0121 d.1/d.5):
-///
-/// - **G-1** `resolve_profile` yields exactly one chain leaf with
-///   `expiry.status ∈ {active, expiring}` — `expired` only with a recorded
-///   `intent_ref`; `retired` never.
-/// - **G-2** `required_capabilities ⊆ {c : capabilities[c] ∈ {declared,
-///   probed}}` — `unknown` (or an unrecognised axis) ⇒ `CapabilityUnknown`
-///   unless a debt-recorded `allow_unknown` rule exists.
-/// - **G-4** `reserve(budget_id, max_output(profile), holder)` succeeds — the
-///   reservation exists before the decision returns; `amend` never.
-/// - Health: a candidate in cooldown is verdicted `rejected:cooldown` and
-///   skipped.
-///
-/// Candidates run in binding order (primary, then alternates); every
-/// candidate appears in `candidates_considered[]` with a verdict (R-3).
-/// Total failure surfaces the shared refusal class when every candidate
-/// failed identically, else `ChainExhausted{attempted[]}`.
+/// → RoutingDecision | RoutingRefusal` — the C0 entry: the guard composition
+/// (ADR-0121 d.1/d.5) with no C1 views (`RoutingViews::none()` — a `cost_cap`
+/// read without a pricing view is `NoPrice`, never zero-cost). Delegates to
+/// [`select_with`] at `now_ms = 0` (no declared cooldown can precede epoch —
+/// the view's `cooldown_until` is always ≥ a real `now`).
 pub fn select(
     request: &RoutingRequest,
     profile_env: &dyn SelectorView,
@@ -710,232 +1659,317 @@ pub fn select(
     table: &ModelRoleTable,
     decision_id: &str,
 ) -> Result<RoutingDecision, RoutingRefusal> {
-    // Policy validity first (T-LCD-05; a non-C0 kind at C0 is a declared
-    // tier refusal — CC6, never a fall-through).
+    select_with(
+        request,
+        profile_env,
+        account,
+        health,
+        &RoutingViews::none(),
+        policy,
+        table,
+        decision_id,
+        0,
+        &BTreeSet::new(),
+    )
+}
+
+/// `select_with(request, profile_env, account, health, views, policy, table,
+/// decision_id, now_ms, attempted) → RoutingDecision | RoutingRefusal` — the
+/// C1 guard composition (ADR-0121 d.1/d.5):
+///
+/// - **G-1** `resolve_profile` yields exactly one chain leaf with
+///   `expiry.status ∈ {active, expiring}` — `expired` only with a recorded
+///   `intent_ref`; `retired` never.
+/// - **G-2** `required_capabilities ∪ params.capabilities ⊆ {declared,
+///   probed}` — `unknown` ⇒ `CapabilityUnknown` unless a debt-recorded
+///   `allow_unknown` rule exists.
+/// - **G-3** `request.source_profile_ref` set and the candidate's leaf differs
+///   ⇒ the projected `TranscriptMigration` must satisfy `max_migration_loss`
+///   and no proposed effect may be in flight — `MigrationLossExceeded`.
+/// - **G-4** `reserve(budget_id, max_output(profile), holder)` succeeds — the
+///   reservation exists before the decision returns; `amend` never.
+/// - **G-5** a policy that reads cost finds a pricing row — `NoPrice`, never
+///   a zero-cost fallback.
+/// - **G-6** `request.preferences` may *exclude* candidates it names
+///   (`policy_excluded`) but never adds one outside the binding; a preference
+///   claiming `authority > external` is `PolicyInvalid`.
+/// - Health: a candidate in cooldown (`cooldown_until > now_ms`) is verdicted
+///   `rejected:cooldown` and skipped.
+///
+/// `attempted` holds `model_ref` spellings already tried under this call — a
+/// reroute never re-selects a tried target (the chain's forward-only
+/// consumption; verdict `policy_excluded`). Candidates run in binding order
+/// (primary, then alternates); `quality_target`/`health_aware` order
+/// admissible candidates by score descending, binding order breaking ties.
+/// Every candidate appears in `candidates_considered[]` with a verdict
+/// (R-3). Total failure surfaces the shared refusal class when every
+/// candidate failed identically, else `ChainExhausted{attempted[]}`.
+#[allow(clippy::too_many_arguments)] // the arity is the contract's (§5b.2)
+pub fn select_with(
+    request: &RoutingRequest,
+    profile_env: &dyn SelectorView,
+    account: &mut dyn BudgetPort,
+    health: &dyn HealthView,
+    views: &RoutingViews,
+    policy: &RoutingPolicy,
+    table: &ModelRoleTable,
+    decision_id: &str,
+    now_ms: u64,
+    attempted: &BTreeSet<String>,
+) -> Result<RoutingDecision, RoutingRefusal> {
+    // Policy validity first (T-LCD-05; a non-C1 kind is a declared tier
+    // refusal — CC6, never a fall-through).
     policy.link_check()?;
-    if !policy.kind.c0() {
+    if !policy.kind.c1() {
         return Err(RoutingRefusal::PolicyInvalid {
             rule_id: policy.policy_id.clone(),
-            reason: format!("kind {} is not a C0 kind", policy.kind.as_str()),
+            reason: format!("kind {} is not a C1 kind", policy.kind.as_str()),
         });
     }
-
-    // The candidate list — `static` reads `params.target`; `role_table` reads
-    // the role's binding (G-1's "no row" is `NoProfile` on the role —
-    // the binding names the model the profile must resolve for).
-    let candidates: Vec<RouteCandidate> = match policy.kind {
-        RoutingPolicyKind::Static => {
-            let t = policy
-                .params
-                .get("target")
-                .ok_or_else(|| RoutingRefusal::PolicyInvalid {
-                    rule_id: policy.policy_id.clone(),
-                    reason: "static policy without params.target".to_string(),
-                })?;
-            vec![
-                candidate_from_json(t).ok_or_else(|| RoutingRefusal::PolicyInvalid {
-                    rule_id: policy.policy_id.clone(),
-                    reason: "static params.target malformed".to_string(),
-                })?,
-            ]
+    // G-6 — the lifted preference's authority ceiling (CC2: authority is
+    // conferred; a record claiming more than `external` on a lifted
+    // preference is refused, not trusted).
+    if let Some(p) = &request.preferences {
+        if !p.legal() {
+            return Err(RoutingRefusal::PolicyInvalid {
+                rule_id: "preferences".to_string(),
+                reason: format!(
+                    "lifted preference authority `{}` exceeds external",
+                    p.authority.as_str()
+                ),
+            });
         }
-        RoutingPolicyKind::RoleTable => match table.roles.get(&request.role) {
-            Some(b) => std::iter::once(b.primary.clone())
-                .chain(b.alternates.iter().cloned())
-                .collect(),
-            None => {
-                return Err(RoutingRefusal::NoProfile {
-                    model_ref: format!("role:{}", request.role),
-                })
-            }
-        },
-        _ => unreachable!("non-C0 kinds refused above"),
+    }
+
+    let candidates = candidate_list(request, policy, table)?;
+    let kind_caps: Vec<String> = match policy.kind {
+        RoutingPolicyKind::CapabilityFilter => policy
+            .params
+            .get("capabilities")
+            .and_then(|c| {
+                if let Json::Arr(v) = c {
+                    Some(
+                        v.iter()
+                            .filter_map(|x| x.as_str().map(str::to_string))
+                            .collect(),
+                    )
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default(),
+        _ => vec![],
     };
 
-    let mut verdicts: Vec<Candidate> = Vec::new();
-    let mut refusals: Vec<RoutingRefusal> = Vec::new();
-    let mut selected: Option<(RouteCandidate, String, String)> = None; // (candidate, leaf profile_ref, reservation_id)
-
+    // Admission pass — every candidate gets a verdict (R-3); the binding's
+    // attempted targets are verdicted `policy_excluded` (never re-tried).
+    struct Row {
+        cand: RouteCandidate,
+        admitted: Option<Admitted>,
+        verdict: CandidateVerdict,
+        refusal: Option<RoutingRefusal>,
+    }
+    let mut rows: Vec<Row> = Vec::new();
     for cand in &candidates {
         let spelling = model_ref_spelling(&cand.model_ref);
-        // Cooldown — the health view's verdict (never for a role with one
-        // candidate per the view's own rule, but the view is the authority).
-        if health.cooldown(&cand.model_ref) {
-            verdicts.push(Candidate {
-                model_ref: spelling.clone(),
-                verdict: CandidateVerdict::Rejected(CandidateRejectReason::Cooldown),
-                score: None,
-            });
-            refusals.push(RoutingRefusal::ChainExhausted { attempted: vec![] });
-            continue;
-        }
-        // G-1 — exactly one profile resolves, `active | expiring` admissible.
-        let chain = match resolve_profile(&cand.coordinate, profile_env) {
-            Ok(c) => c,
-            Err(ProfileResolveError::NoProfile { .. }) => {
-                verdicts.push(Candidate {
-                    model_ref: spelling.clone(),
-                    verdict: CandidateVerdict::Rejected(CandidateRejectReason::NoProfile),
-                    score: None,
-                });
-                refusals.push(RoutingRefusal::NoProfile {
-                    model_ref: spelling.clone(),
-                });
-                continue;
-            }
-            Err(ProfileResolveError::AmbiguousSelector { candidates }) => {
-                return Err(RoutingRefusal::PolicyInvalid {
-                    rule_id: "selector".to_string(),
-                    reason: format!("ambiguous_selector: {}", candidates.join(", ")),
-                });
-            }
-            Err(ProfileResolveError::RetiredProfile { profile_ref, .. }) => {
-                verdicts.push(Candidate {
-                    model_ref: spelling.clone(),
-                    verdict: CandidateVerdict::Rejected(CandidateRejectReason::ExpiredProfile),
-                    score: None,
-                });
-                refusals.push(RoutingRefusal::ExpiredProfile {
-                    profile_ref,
-                    status: "retired".to_string(),
-                });
-                continue;
-            }
-        };
-        let leaf = chain.profiles.last().expect("resolve_profile yields ≥1");
-        let status = profile_status(leaf);
-        let leaf_ref = hh_compiler::profile::profile_coordinate(leaf);
-        match status {
-            DebtStatus::Active | DebtStatus::Expiring => {}
-            DebtStatus::Expired => {
-                if request.intent_ref.is_none() {
-                    verdicts.push(Candidate {
-                        model_ref: spelling.clone(),
-                        verdict: CandidateVerdict::Rejected(CandidateRejectReason::ExpiredProfile),
-                        score: None,
-                    });
-                    refusals.push(RoutingRefusal::ExpiredProfile {
-                        profile_ref: leaf_ref,
-                        status: "expired".to_string(),
-                    });
-                    continue;
-                }
-            }
-            DebtStatus::Retired => {
-                verdicts.push(Candidate {
-                    model_ref: spelling.clone(),
-                    verdict: CandidateVerdict::Rejected(CandidateRejectReason::ExpiredProfile),
-                    score: None,
-                });
-                refusals.push(RoutingRefusal::ExpiredProfile {
-                    profile_ref: leaf_ref,
-                    status: "retired".to_string(),
-                });
-                continue;
-            }
-        }
-        // G-2 — `required_capabilities ⊆ declared | probed`. The tri-state has
-        // no declared-negative at C0, so an unsatisfied axis reads `unknown`
-        // (`CapabilityUnmet` remains in the closed sum for the C1 arms — a
-        // measured bound below a required floor is *unmet*, not unknown).
-        let mut unknown: Vec<String> = Vec::new();
-        for cap in &request.required_capabilities {
-            match leaf.capabilities.capability_state(cap) {
-                Some(CapabilityState::Declared | CapabilityState::Probed) => {}
-                // `context_window`/`max_output` are measured bounds — a
-                // declared bound satisfies the axis.
-                None if cap == "context_window" || cap == "max_output" => {
-                    let bound = if cap == "context_window" {
-                        leaf.capabilities.context_window
-                    } else {
-                        leaf.capabilities.max_output
-                    };
-                    if bound.is_none() {
-                        unknown.push(cap.clone());
-                    }
-                }
-                Some(CapabilityState::Unknown) | None => unknown.push(cap.clone()),
-            }
-        }
-        if !unknown.is_empty() && policy.allow_unknown.is_none() {
-            verdicts.push(Candidate {
-                model_ref: spelling.clone(),
-                verdict: CandidateVerdict::Rejected(CandidateRejectReason::CapabilityUnknown),
-                score: None,
-            });
-            refusals.push(RoutingRefusal::CapabilityUnknown {
-                model_ref: spelling.clone(),
-                unknown,
+        if attempted.contains(&spelling) || attempted.contains(&cand.model_ref.provider_model_id) {
+            rows.push(Row {
+                cand: cand.clone(),
+                admitted: None,
+                verdict: CandidateVerdict::Rejected(CandidateRejectReason::PolicyExcluded),
+                refusal: Some(RoutingRefusal::ChainExhausted { attempted: vec![] }),
             });
             continue;
         }
-        // G-4 — `reserve(budget_id, max_output(profile), holder)` succeeds
-        // before the decision returns. An undeclared `max_output` is a
-        // `capability_unknown` — the reservation can't be sized honestly.
-        let max_output = match leaf.capabilities.max_output {
-            Some(m) => m,
-            None => {
-                verdicts.push(Candidate {
-                    model_ref: spelling.clone(),
-                    verdict: CandidateVerdict::Rejected(CandidateRejectReason::CapabilityUnknown),
-                    score: None,
-                });
-                refusals.push(RoutingRefusal::CapabilityUnknown {
-                    model_ref: spelling.clone(),
-                    unknown: vec!["max_output".to_string()],
+        if let Some(prefs) = &request.preferences {
+            if prefs.excludes(&spelling, &cand.model_ref.provider_model_id) {
+                rows.push(Row {
+                    cand: cand.clone(),
+                    admitted: None,
+                    verdict: CandidateVerdict::Rejected(CandidateRejectReason::PolicyExcluded),
+                    refusal: Some(RoutingRefusal::PolicyInvalid {
+                        rule_id: "preferences".to_string(),
+                        reason: "preference_excluded".to_string(),
+                    }),
                 });
                 continue;
             }
-        };
+        }
+        match admit_candidate(
+            cand,
+            &request.required_capabilities,
+            request,
+            profile_env,
+            health,
+            now_ms,
+            views,
+            policy,
+            &kind_caps,
+        ) {
+            Admit::Admitted(a) => rows.push(Row {
+                cand: cand.clone(),
+                admitted: Some(a),
+                verdict: CandidateVerdict::Selected, // provisional — fixed below
+                refusal: None,
+            }),
+            Admit::Rejected(reason, refusal) => rows.push(Row {
+                cand: cand.clone(),
+                admitted: None,
+                verdict: CandidateVerdict::Rejected(reason),
+                refusal: Some(refusal),
+            }),
+            Admit::Fatal(f) => return Err(f),
+        }
+    }
+
+    // Selection order — ranked kinds order admissible candidates by score
+    // (desc), binding order breaking ties; all others keep binding order
+    // (`cost_cap`/`latency_cap` are *filters* — the cap binds, the binding's
+    // order still selects; ranking by a filter's input would silently change
+    // the declared intent).
+    let ranked = matches!(
+        policy.kind,
+        RoutingPolicyKind::QualityTarget | RoutingPolicyKind::HealthAware
+    );
+    let order: Vec<usize> = {
+        let mut ix: Vec<usize> = (0..rows.len()).collect();
+        if ranked {
+            ix.sort_by(|&a, &b| {
+                let sa = rows[a].admitted.as_ref().and_then(|x| x.score);
+                let sb = rows[b].admitted.as_ref().and_then(|x| x.score);
+                sb.cmp(&sa)
+            });
+        }
+        ix
+    };
+
+    // Reserve the first admissible candidate in selection order (G-4); the
+    // reservation exists before the decision returns (R-2). An admissible
+    // candidate whose reserve fails verdicts `insufficient_budget` and the
+    // next admissible candidate is tried ("a cheaper candidate may be tried,
+    // amend never" — ADR-0040 d.6).
+    let mut chosen: Option<(usize, String)> = None;
+    for &i in &order {
+        if rows[i].admitted.is_none() {
+            continue;
+        }
+        let max_output = rows[i].admitted.as_ref().expect("admitted").max_output;
         match account.reserve(&request.budget_id, max_output, &request.holder) {
             Ok(reservation_id) => {
-                selected = Some((cand.clone(), leaf_ref, reservation_id));
-                verdicts.push(Candidate {
-                    model_ref: spelling.clone(),
-                    verdict: CandidateVerdict::Selected,
-                    score: None,
-                });
+                chosen = Some((i, reservation_id));
                 break;
             }
             Err(dimension) => {
-                verdicts.push(Candidate {
-                    model_ref: spelling.clone(),
-                    verdict: CandidateVerdict::Rejected(CandidateRejectReason::InsufficientBudget),
-                    score: None,
+                rows[i].verdict =
+                    CandidateVerdict::Rejected(CandidateRejectReason::InsufficientBudget);
+                rows[i].refusal = Some(RoutingRefusal::InsufficientBudget {
+                    dimension: dimension.clone(),
                 });
-                refusals.push(RoutingRefusal::InsufficientBudget { dimension });
             }
         }
     }
 
-    let (cand, leaf_ref, reservation_id) = match selected {
-        Some(t) => t,
-        None => {
-            // Every candidate failed — the shared class surfaces when the
-            // failures agree; distinct classes are `ChainExhausted`.
-            let first = refusals
-                .first()
-                .cloned()
-                .unwrap_or(RoutingRefusal::ChainExhausted { attempted: vec![] });
-            if refusals.iter().all(|r| r.as_str() == first.as_str())
-                && !matches!(first, RoutingRefusal::ChainExhausted { .. })
-            {
-                return Err(first);
-            }
-            return Err(RoutingRefusal::ChainExhausted {
-                attempted: candidates
-                    .iter()
-                    .map(|c| model_ref_spelling(&c.model_ref))
-                    .collect(),
-            });
+    let Some((chosen_ix, reservation_id)) = chosen else {
+        // Every candidate failed — the shared class surfaces when the
+        // failures agree; distinct classes are `ChainExhausted`.
+        let meaningful: Vec<RoutingRefusal> = rows
+            .iter()
+            .filter_map(|r| r.refusal.clone())
+            .filter(|r| {
+                !matches!(r, RoutingRefusal::ChainExhausted { attempted } if attempted.is_empty())
+            })
+            .collect();
+        let first = meaningful
+            .first()
+            .cloned()
+            .unwrap_or(RoutingRefusal::ChainExhausted { attempted: vec![] });
+        if !meaningful.is_empty()
+            && meaningful.iter().all(|r| r.as_str() == first.as_str())
+            && !matches!(first, RoutingRefusal::ChainExhausted { .. })
+        {
+            return Err(first);
         }
+        return Err(RoutingRefusal::ChainExhausted {
+            attempted: candidates
+                .iter()
+                .map(|c| model_ref_spelling(&c.model_ref))
+                .collect(),
+        });
     };
 
+    // Verdicts in binding order (R-3): the winner is `selected`; every other
+    // admissible-but-not-taken row verdicts `lower_score` when the kind scored
+    // it, `policy_excluded`… — the closed reason for "admissible, ranked
+    // below" is `lower_score` (an unscored admissible loser on a non-ranked
+    // kind simply was not reached: `lower_score` still names it — the
+    // candidate lost on order).
+    let mut verdicts: Vec<Candidate> = Vec::with_capacity(rows.len());
+    for (i, row) in rows.iter().enumerate() {
+        let spelling = model_ref_spelling(&row.cand.model_ref);
+        let verdict = if i == chosen_ix {
+            CandidateVerdict::Selected
+        } else {
+            match &row.verdict {
+                CandidateVerdict::Selected => {
+                    // Admissible but not selected.
+                    CandidateVerdict::Rejected(CandidateRejectReason::LowerScore)
+                }
+                v => v.clone(),
+            }
+        };
+        verdicts.push(Candidate {
+            model_ref: spelling,
+            verdict,
+            score: row.admitted.as_ref().and_then(|a| a.score),
+        });
+    }
+
+    let leaf_ref = rows[chosen_ix]
+        .admitted
+        .as_ref()
+        .expect("chosen is admitted")
+        .leaf_ref
+        .clone();
+    let cand = rows[chosen_ix].cand.clone();
     let mut selected_ref = cand.model_ref.clone();
-    selected_ref.profile_ref = leaf_ref;
+    selected_ref.profile_ref = leaf_ref.clone();
     if let Some(e) = &request.effort {
         selected_ref.effort = Some(e.clone());
     }
+
+    // `deviation` — the realized target differs from the role's configured
+    // primary (ADR-0121 d.6); `relower_required` — the choice crosses the
+    // source profile boundary (ADR-0122 d.3).
+    let primary_spelling = table
+        .roles
+        .get(&request.role)
+        .map(|b| model_ref_spelling(&b.primary.model_ref));
+    let deviation = primary_spelling
+        .as_deref()
+        .is_some_and(|p| p != model_ref_spelling(&cand.model_ref));
+    let relower_required = request
+        .source_profile_ref
+        .as_deref()
+        .is_some_and(|src| src != leaf_ref);
+
+    let mut inputs_read = vec![
+        "profile_resolver".to_string(),
+        "budget_account".to_string(),
+        "health_view".to_string(),
+        "role_table".to_string(),
+    ];
+    match policy.kind {
+        RoutingPolicyKind::CostCap => inputs_read.push("pricing_table".to_string()),
+        RoutingPolicyKind::QualityTarget => inputs_read.push("quality_prior".to_string()),
+        _ => {}
+    }
+    if request.source_profile_ref.is_some() {
+        inputs_read.push("migration_projection".to_string());
+    }
+    if request.preferences.is_some() {
+        inputs_read.push("lifted_preferences".to_string());
+    }
+
     Ok(RoutingDecision {
         decision_id: decision_id.to_string(),
         model_call_id: request.model_call_id.clone(),
@@ -950,18 +1984,201 @@ pub fn select(
             .map(|r| r.rule_id.clone())
             .collect(),
         candidates_considered: verdicts,
-        inputs_read: vec![
-            "profile_resolver".to_string(),
-            "budget_account".to_string(),
-            "health_view".to_string(),
-        ],
-        deviation: false,
-        relower_required: false,
+        inputs_read,
+        deviation,
+        relower_required,
     })
 }
 
-/// Decode a `RouteCandidate` from `params.target` (`{model_ref{…},
-/// coordinate{provider_api_family, model_family, model_version}}`).
+/// `AttemptState` — the per-logical-call retry/reroute cursor the control
+/// envelope carries across attempts (F2 owns the attempt count; the router
+/// tracks which targets the chain already tried and whether a compaction
+/// already ran — R-8's "chain exhausted" is a function of this state).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AttemptState {
+    /// `model_ref` spellings already tried under this call (never re-tried).
+    pub attempted: BTreeSet<String>,
+    /// Reroutes already taken under this call (`max_reroutes` bound).
+    pub reroutes_used: u32,
+    /// A `compact_then_retry` already ran for this call.
+    pub compact_tried: bool,
+}
+
+/// `GiveUpReason` — why `on_attempt_failed` closed the call (R-8's terminal;
+/// the envelope maps it onto `model.call.failed{error.class, attempts}`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum GiveUpReason {
+    /// The `error_actions` row says `give_up` (or no row — the closed
+    /// default).
+    PolicyGiveUp,
+    /// The class is not in `allowed_classes[]` — not reroutable under this
+    /// policy.
+    ClassNotReroutable,
+    /// Every chain target was tried or `max_reroutes` was spent.
+    ChainExhausted {
+        /// The attempted `model_ref` spellings.
+        attempted: Vec<String>,
+    },
+    /// The reroute `select` refused (e.g. `InsufficientBudget`,
+    /// `NoProfile` on the remaining candidates).
+    SelectRefused(RoutingRefusal),
+}
+
+impl GiveUpReason {
+    /// The canonical spelling.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GiveUpReason::PolicyGiveUp => "policy_give_up",
+            GiveUpReason::ClassNotReroutable => "class_not_reroutable",
+            GiveUpReason::ChainExhausted { .. } => "chain_exhausted",
+            GiveUpReason::SelectRefused(_) => "select_refused",
+        }
+    }
+}
+
+/// `on_attempt_failed → Continue | Reroute | GiveUp` (§5b.2; ADR-0122 d.1).
+#[derive(Debug, Clone, PartialEq)]
+#[allow(clippy::large_enum_variant)] // `Reroute` carries the fresh decision — the spec payload, not a hot-path alloc.
+pub enum AttemptDisposition {
+    /// Same target again — `not_before_ms` is the policy/`retry_after` delay;
+    /// `compact_first` marks the `compact_then_retry` arm (compaction under
+    /// the old profile runs before the retry — ADR-0122 d.3 ordering).
+    Continue {
+        /// `not_before` — the delay before the retry (ms; from
+        /// `error.retry_after_ms`/`Retry-After`, 0 otherwise).
+        not_before_ms: u64,
+        /// A compaction runs under the old profile before the retry.
+        compact_first: bool,
+    },
+    /// Reroute — the fresh `RoutingDecision` (its reservation is held; the
+    /// old one was released first — R-7).
+    Reroute(RoutingDecision),
+    /// `GiveUp{reason}` — the envelope closes `model.call.failed`.
+    GiveUp(GiveUpReason),
+}
+
+/// `on_attempt_failed(request, prior, error, attempts_on_target,
+/// retry_after_ms, state, account, health, views, policy, table,
+/// decision_id, now_ms)` — the ADR-0122 d.1–d.3 consult (R-5…R-8):
+///
+/// - R-6 — the action is read from the policy's closed `error_actions` table
+///   (`error_action`), never from message text;
+/// - `retry_same{max, then}` continues same-target while
+///   `attempts_on_target < max`, then walks `then`;
+/// - `compact_then_retry{then}` compacts once under the old profile
+///   (`state.compact_tried`), then walks `then`;
+/// - `reroute` (or a chain landing on it) releases `prior`'s reservation
+///   **before** the new `select_with` holds its own (R-7), skips
+///   `state.attempted` targets, obeys `fallback_chain`'s `max_reroutes` /
+///   `allowed_classes`, and marks the fresh decision `deviation` /
+///   `relower_required` (a cross-profile reroute needs `relower` first);
+/// - `give_up`, a non-reroutable class, an exhausted chain, or a refused
+///   re-select is `GiveUp` (R-8 — the envelope closes `model.call.failed`).
+#[allow(clippy::too_many_arguments)] // the arity is the contract's (§5b.2)
+pub fn on_attempt_failed(
+    request: &RoutingRequest,
+    prior: &RoutingDecision,
+    error: &ModelErrorClass,
+    attempts_on_target: u32,
+    retry_after_ms: Option<u64>,
+    state: &mut AttemptState,
+    profile_env: &dyn SelectorView,
+    account: &mut dyn BudgetPort,
+    health: &dyn HealthView,
+    views: &RoutingViews,
+    policy: &RoutingPolicy,
+    table: &ModelRoleTable,
+    decision_id: &str,
+    now_ms: u64,
+) -> AttemptDisposition {
+    state.attempted.insert(model_ref_spelling(&prior.selected));
+    state
+        .attempted
+        .insert(prior.selected.provider_model_id.clone());
+    let mut action = error_action(policy, error);
+    // Walk the action chain — `retry_same`/`compact_then_retry` resolve to
+    // `Continue` while their bound holds, else `then` (default `GiveUp`).
+    loop {
+        match action {
+            ErrorAction::RetrySame { max, ref then } => {
+                if attempts_on_target < max {
+                    return AttemptDisposition::Continue {
+                        not_before_ms: retry_after_ms.unwrap_or(0),
+                        compact_first: false,
+                    };
+                }
+                action = then.as_deref().cloned().unwrap_or(ErrorAction::GiveUp);
+            }
+            ErrorAction::CompactThenRetry { ref then } => {
+                if !state.compact_tried {
+                    state.compact_tried = true;
+                    return AttemptDisposition::Continue {
+                        not_before_ms: retry_after_ms.unwrap_or(0),
+                        compact_first: true,
+                    };
+                }
+                action = then.as_deref().cloned().unwrap_or(ErrorAction::GiveUp);
+            }
+            ErrorAction::GiveUp => return AttemptDisposition::GiveUp(GiveUpReason::PolicyGiveUp),
+            ErrorAction::Reroute => break,
+        }
+    }
+    // The `reroute` arm — `fallback_chain`'s bounds gate it; other kinds
+    // reroute within the role's binding.
+    let (max_reroutes, allowed_classes) = chain_params(policy);
+    if let Some(classes) = &allowed_classes {
+        if !classes.iter().any(|c| c == error.as_str()) {
+            return AttemptDisposition::GiveUp(GiveUpReason::ClassNotReroutable);
+        }
+    }
+    if let Some(max) = max_reroutes {
+        if state.reroutes_used >= max {
+            return AttemptDisposition::GiveUp(GiveUpReason::ChainExhausted {
+                attempted: state.attempted.iter().cloned().collect(),
+            });
+        }
+    }
+    // R-7 — the old reservation is released before the new one is held. A
+    // failed release is a typed `GiveUp{select_refused}`-class terminal —
+    // the router never holds two reservations for one call.
+    if let Some(res) = &prior.reservation_id {
+        if let Err(e) = account.release(res) {
+            return AttemptDisposition::GiveUp(GiveUpReason::SelectRefused(
+                RoutingRefusal::PolicyInvalid {
+                    rule_id: "reservation".to_string(),
+                    reason: format!("release failed: {e}"),
+                },
+            ));
+        }
+    }
+    // The reroute select — same request under the failed target's leaf
+    // profile (G-3 projects the migration; `relower_required` marks a
+    // cross-profile move), minus the tried targets.
+    let mut req = request.clone();
+    req.source_profile_ref = Some(prior.selected.profile_ref.clone());
+    match select_with(
+        &req,
+        profile_env,
+        account,
+        health,
+        views,
+        policy,
+        table,
+        decision_id,
+        now_ms,
+        &state.attempted,
+    ) {
+        Ok(d) => {
+            state.reroutes_used += 1;
+            AttemptDisposition::Reroute(d)
+        }
+        Err(r) => AttemptDisposition::GiveUp(GiveUpReason::SelectRefused(r)),
+    }
+}
+
+/// Decode a `RouteCandidate` from `params.target` / `params.targets[]`
+/// (`{model_ref{…}, coordinate{provider_api_family, model_family,
+/// model_version}}`).
 fn candidate_from_json(j: &Json) -> Option<RouteCandidate> {
     let m = j.get("model_ref")?;
     let c = j.get("coordinate")?;
@@ -1155,4 +2372,177 @@ pub fn check_reroute_order(
         }
     }
     Ok(())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `explain` (ADR-0121 d.1) + the lift/lower protocol round-trip (d.4;
+// AC-R-2.3.2-12)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `RoutingExplanation{decision?, reroutes[]}` — the trace viewer/Lab
+/// projection over `model.route.decided` + `model.rerouted` (a fold over
+/// ledger rows; no new state — §5b.2 interface table).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoutingExplanation {
+    /// The `model.route.decided` payload for `decision_ref` (`None` when the
+    /// fold didn't see it).
+    pub decision: Option<Json>,
+    /// The `model.rerouted` payloads linked to the decision (`decision_ref`
+    /// on each row), in seq order.
+    pub reroutes: Vec<Json>,
+}
+
+/// `explain(rows, decision_ref) → RoutingExplanation` — a pure fold over
+/// `(seq, class, payload)` rows (ADR-0121 d.1). A `model.rerouted` links to
+/// the decision it departed from via its `decision_ref` member.
+pub fn explain(rows: &[(u64, &str, &Json)], decision_ref: &str) -> RoutingExplanation {
+    let mut decision = None;
+    let mut reroutes = Vec::new();
+    let mut sorted: Vec<&(u64, &str, &Json)> = rows.iter().collect();
+    sorted.sort_by_key(|(s, _, _)| *s);
+    for (_, class, p) in sorted {
+        match *class {
+            "model.route.decided"
+                if p.get("decision_id").and_then(Json::as_str) == Some(decision_ref) =>
+            {
+                decision = Some((*p).clone());
+            }
+            "model.rerouted"
+                if p.get("decision_ref").and_then(Json::as_str) == Some(decision_ref) =>
+            {
+                reroutes.push((*p).clone());
+            }
+            _ => {}
+        }
+    }
+    RoutingExplanation { decision, reroutes }
+}
+
+/// `LoweringLossReport{no_slot[]}` — the members a protocol preference
+/// document cannot carry (T-LCD-11: `required_capabilities`, `budget_view`,
+/// `role` are `no_slot` on `mcp_model_preferences`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LoweringLossReport {
+    /// `no_slot[]` — request members with no slot in the protocol document.
+    pub no_slot: Vec<String>,
+}
+
+/// `lower(request, mcp_model_preferences) → document + LoweringLossReport`
+/// (ADR-0121 d.1; AC-R-2.3.2-12). The MCP shape carries `hints[]`,
+/// `costPriority`, `speedPriority`, `intelligencePriority` (0.0–1.0 doubles
+/// lower as ppm ints — canonical JSON carries integers only); the request's
+/// authority-bearing members are `no_slot` loss — declared, never silently
+/// dropped.
+pub fn lower(request: &RoutingRequest) -> (Json, LoweringLossReport) {
+    let mut m = BTreeMap::new();
+    if let Some(p) = &request.preferences {
+        if !p.hints.is_empty() {
+            m.insert(
+                "hints".to_string(),
+                Json::Arr(
+                    p.hints
+                        .iter()
+                        .map(|h| Json::obj([("name", Json::str(h.clone()))]))
+                        .collect(),
+                ),
+            );
+        }
+        if let Some(v) = p.cost_priority {
+            m.insert("costPriority".to_string(), Json::Int(v));
+        }
+        if let Some(v) = p.speed_priority {
+            m.insert("speedPriority".to_string(), Json::Int(v));
+        }
+        if let Some(v) = p.intelligence_priority {
+            m.insert("intelligencePriority".to_string(), Json::Int(v));
+        }
+        if !p.exclude.is_empty() {
+            m.insert(
+                "exclude".to_string(),
+                Json::Arr(p.exclude.iter().map(Json::str).collect()),
+            );
+        }
+    }
+    (
+        Json::Obj(m),
+        LoweringLossReport {
+            no_slot: vec![
+                "required_capabilities".to_string(),
+                "budget_view".to_string(),
+                "role".to_string(),
+            ],
+        },
+    )
+}
+
+/// `lift(document, origin_authority) → RoutingRequest.preferences +
+/// LoweringLossReport` (ADR-0121 d.4 — lifted preferences are consumable only
+/// by fields typed as *preferences*; `authority` is the *minted* class of the
+/// origin — `unverified` for imported content, `external` at most — never
+/// trusted from the document itself, CC2). A document claiming an authority
+/// member above `external` is `PolicyInvalid`.
+pub fn lift(
+    document: &Json,
+    origin_authority: hh_provenance::authority::AuthorityClass,
+) -> Result<(LiftedPreferences, LoweringLossReport), RoutingRefusal> {
+    if origin_authority > hh_provenance::authority::AuthorityClass::External {
+        return Err(RoutingRefusal::PolicyInvalid {
+            rule_id: "lift".to_string(),
+            reason: format!(
+                "lifted preference authority `{}` exceeds external",
+                origin_authority.as_str()
+            ),
+        });
+    }
+    let ppm = |k: &str| document.get(k).and_then(Json::as_int);
+    let hints = document
+        .get("hints")
+        .and_then(|h| {
+            if let Json::Arr(v) = h {
+                Some(
+                    v.iter()
+                        .filter_map(|e| {
+                            e.get("name")
+                                .and_then(Json::as_str)
+                                .or_else(|| e.as_str())
+                                .map(str::to_string)
+                        })
+                        .collect(),
+                )
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
+    let exclude = document
+        .get("exclude")
+        .and_then(|e| {
+            if let Json::Arr(v) = e {
+                Some(
+                    v.iter()
+                        .filter_map(|x| x.as_str().map(str::to_string))
+                        .collect(),
+                )
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
+    Ok((
+        LiftedPreferences {
+            authority: origin_authority,
+            cost_priority: ppm("costPriority"),
+            speed_priority: ppm("speedPriority"),
+            intelligence_priority: ppm("intelligencePriority"),
+            exclude,
+            hints,
+        },
+        LoweringLossReport {
+            no_slot: vec![
+                "required_capabilities".to_string(),
+                "budget_view".to_string(),
+                "role".to_string(),
+            ],
+        },
+    ))
 }

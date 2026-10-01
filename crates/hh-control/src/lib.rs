@@ -33,6 +33,7 @@
 
 pub mod compute;
 pub mod driver;
+pub mod ensemble;
 pub mod envelope;
 pub mod events;
 pub mod guards;

@@ -99,6 +99,7 @@ fn resolve_arms(
                     },
                     spend_confidence: None,
                     coverage_ppm: None,
+                    ensemble_k: a.ensemble_k,
                 },
             ))
         })

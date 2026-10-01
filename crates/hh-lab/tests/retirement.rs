@@ -113,6 +113,7 @@ fn retirement_arm(id: &str, lid: &str) -> ArmSpec {
         limits_enforced: "limits:declared".into(),
         model_role_table_ref: None,
         response_cache: None,
+        ensemble_k: None,
     }
 }
 

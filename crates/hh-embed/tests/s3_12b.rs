@@ -785,6 +785,7 @@ fn retirement_spec(rule_id: &str) -> ExperimentSpec {
         limits_enforced: "limits:declared".into(),
         model_role_table_ref: None,
         response_cache: None,
+        ensemble_k: None,
     };
     let level = |id: &str| LevelSpec {
         level_id: id.into(),

@@ -1583,6 +1583,7 @@ fn invalidation_drives_cold() {
         static_hash: "h".into(),
         request_sent_ms: 0,
         completed: true,
+        closed: true,
         model_call_id: "mc-0".into(),
     };
     // Warm inside the lease without invalidations (the baseline).
@@ -1662,6 +1663,7 @@ fn second_dialect_cache_path() {
         static_hash: "h".into(),
         request_sent_ms: 0,
         completed: true,
+        closed: true,
         model_call_id: "mc-0".into(),
     };
     let e = expect_cache_state(

@@ -60,11 +60,11 @@ pub use attempts::{
 };
 pub use cache::{
     cache_agreement, cold_start_scope, derive_affinity_key, expect_cache_state, observe_cache,
-    place_markers, AffinityKey, AffinitySupport, CacheCallFact, CacheKind, CacheObservation,
-    CacheOutcome, CacheSemantics, CacheTier, CarrierBlock, DropReason, DroppedMarker,
-    ExpectedBasis, ExpectedCacheState, ExpectedState, ImplicitStrictness, IsolationScope,
-    MarkerPlacement, MarkerPosition, MarkerPositionRule, MarkerSubstitution, MissReason,
-    ObservedState, PlacedMarker, RetentionClass,
+    place_markers, project_cache_view, AffinityKey, AffinitySupport, CacheCallFact, CacheKind,
+    CacheObservation, CacheOutcome, CacheSemantics, CacheTier, CacheView, CarrierBlock, DropReason,
+    DroppedMarker, ExpectedBasis, ExpectedCacheState, ExpectedState, ImplicitStrictness,
+    IsolationScope, MarkerPlacement, MarkerPosition, MarkerPositionRule, MarkerSubstitution,
+    MissReason, ObservedState, PlacedMarker, RetentionClass,
 };
 pub use codec::{
     classify_http_error, collect, decode_b64, detect_provider_usage, estimate_tokens,
@@ -105,11 +105,14 @@ pub use probes::{
     FingerprintProbeOutcome, FingerprintProbeSpec, TransportCapabilityDeclaration, ADAPTER_VERSION,
 };
 pub use router::{
-    check_reroute_order, error_action, reroute, select, AccountBudget, BudgetPort, Candidate,
-    CandidateRejectReason, CandidateVerdict, ErrorAction, HealthView, MigrationLossBound,
-    ModelRoleTable, NoHealth, PolicyConditionedRule, RerouteOrderError, RoleBinding,
-    RouteCandidate, RoutingDecision, RoutingPolicy, RoutingPolicyKind, RoutingRefusal,
-    RoutingRequest,
+    check_reroute_order, error_action, explain, lift, lower, on_attempt_failed, project_health,
+    reroute, select, select_with, AccountBudget, AttemptDisposition, AttemptState, BudgetPort,
+    Candidate, CandidateRejectReason, CandidateVerdict, ErrorAction, GiveUpReason, HealthConfig,
+    HealthView, LiftedPreferences, LoweringLossReport, MigrationLossBound, MigrationView,
+    ModelRoleTable, NoHealth, NoMigration, NoPricing, NoQualityPrior, PolicyConditionedRule,
+    PricingView, QualityPriorView, RerouteOrderError, RoleBinding, RouteCandidate, RoutingDecision,
+    RoutingExplanation, RoutingPolicy, RoutingPolicyKind, RoutingRefusal, RoutingRequest,
+    RoutingViews, TableHealth, TargetHealth,
 };
 pub use vocab::{
     AttemptPolicy, BlockKind, ErrorAttribution, InvalidResponseKind, ModelError, ModelErrorClass,
