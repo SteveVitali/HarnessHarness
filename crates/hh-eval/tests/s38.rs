@@ -191,8 +191,7 @@ fn context_metrics_fold_counts_the_compliance_chain() {
     // (delivered + withheld) = 2/3; P(activated|delivered) = 1/2.
     assert_eq!(m.memory_validity_rate, Some(666_666));
     assert_eq!(m.memory_activated_given_delivered, Some(500_000));
-    let emitted: std::collections::BTreeMap<_, _> =
-        context_metrics::emit(&m).into_iter().collect();
+    let emitted: std::collections::BTreeMap<_, _> = context_metrics::emit(&m).into_iter().collect();
     assert_eq!(emitted["memory.validity_rate"], 666_666);
     assert_eq!(emitted["memory.activated_given_delivered"], 500_000);
     // The catalogue declares every emitted row.
