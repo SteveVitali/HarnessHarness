@@ -27,12 +27,14 @@
 
 pub mod audit;
 pub mod branch;
+pub mod branch_ops;
 pub mod classes;
 pub mod effect;
 pub mod errors;
 pub mod event;
 pub mod export;
 pub mod fault;
+pub mod goal;
 pub mod hlc;
 pub mod hosted;
 pub mod ids;

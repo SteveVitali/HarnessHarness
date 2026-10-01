@@ -5805,3 +5805,262 @@ fn s44_repro_report_independent_and_leaderboard_snapshots() {
         "{snaps:?}"
     );
 }
+
+// ── S4.13 — hosted-lineage/durability boundary ops ──────────────────────────
+// The ledger/environment semantics are covered by `hh-ledger/tests/s4_13.rs`
+// and `hh-env/tests/s4_13.rs`; these pin the *boundary* contract — routing,
+// the experimental gate, param decoding, and the typed-refusal surface
+// (AC-R-2.2.4-10 containment; §5a.3/§5a.4 wakeup + inbox + continuation ops).
+
+fn hello_experimental(svc: &mut EmbedService) {
+    let r = call(
+        svc,
+        "hello",
+        hello_params(caps_json(&[
+            ("experimental", true),
+            ("serves_measurement", true),
+        ])),
+    );
+    assert!(r.get("result").is_some(), "hello: {r:?}");
+}
+
+fn writer_session(svc: &mut EmbedService) -> String {
+    let s = open_new(svc);
+    s.get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string()
+}
+
+#[test]
+fn s4_13_branch_lifecycle_over_the_boundary() {
+    let mut svc = service();
+    hello_experimental(&mut svc);
+    let id = writer_session(&mut svc);
+
+    // AC-R-2.2.4-10 — a widening `SpeculationPolicy` is `AuthorityViolation`
+    // at `fork`, never coerced (ADR-0134 §5's narrowing-only clause).
+    let w = call(
+        &mut svc,
+        "branch.open",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            (
+                "policy",
+                Json::obj(vec![("defer_irreversible", Json::Bool(false))]),
+            ),
+        ]),
+    );
+    assert_eq!(err_kind(&w), "AuthorityViolation", "{w:?}");
+
+    // Open a speculative branch at HEAD.
+    let b = ok(&call(
+        &mut svc,
+        "branch.open",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("kind", Json::str("speculative")),
+        ]),
+    ));
+    let bid = b
+        .get("branch_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    // The default `max_concurrent_branches` floor (1) refuses a second open.
+    let second = call(
+        &mut svc,
+        "branch.open",
+        Json::obj(vec![("session_id", Json::str(id.clone()))]),
+    );
+    assert_eq!(err_kind(&second), "SchemaViolation", "{second:?}");
+
+    // Promote with an empty deferred set lands `disposed{promoted}`.
+    let p = ok(&call(
+        &mut svc,
+        "promote",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("branch_id", Json::str(bid.clone())),
+        ]),
+    ));
+    assert_eq!(p.get("promoted"), Some(&Json::Bool(true)), "{p:?}");
+
+    // A disposed branch refuses a second disposition.
+    let again = call(
+        &mut svc,
+        "discard",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("branch_id", Json::str(bid.clone())),
+        ]),
+    );
+    assert_eq!(err_kind(&again), "Refused", "{again:?}");
+
+    // Open → discard: the disposition surfaces verbatim.
+    let b2 = ok(&call(
+        &mut svc,
+        "branch.open",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("kind", Json::str("parallel")),
+        ]),
+    ));
+    let bid2 = b2
+        .get("branch_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let d = ok(&call(
+        &mut svc,
+        "discard",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("branch_id", Json::str(bid2)),
+        ]),
+    ));
+    assert_eq!(
+        d.get("disposition").and_then(Json::as_str),
+        Some("discarded"),
+        "{d:?}"
+    );
+}
+
+#[test]
+fn s4_13_wakeup_subscribe_and_idempotent_occurrence() {
+    let mut svc = service();
+    hello_experimental(&mut svc);
+    let id = writer_session(&mut svc);
+
+    // `external` is admissible on every run kind at Stage 4 (§5a.3 — it left
+    // the fleet-only boundary at S4.13).
+    let sub = ok(&call(
+        &mut svc,
+        "subscribe",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            (
+                "trigger",
+                Json::obj(vec![
+                    ("type", Json::str("external")),
+                    ("kind", Json::str("webhook")),
+                    ("source_ref", Json::str("ing:ci")),
+                ]),
+            ),
+            (
+                "policy",
+                Json::obj(vec![("delivery_mode", Json::str("follow_up"))]),
+            ),
+        ]),
+    ));
+    let sub_id = sub
+        .get("subscription_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    // A schedule trigger with a malformed expression is a schema error at
+    // subscribe — the evaluator never sees a form it cannot decode.
+    let bad = call(
+        &mut svc,
+        "subscribe",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            (
+                "trigger",
+                Json::obj(vec![
+                    ("type", Json::str("schedule")),
+                    ("expr", Json::str("not a schedule")),
+                    ("kind", Json::str("interval")),
+                ]),
+            ),
+            (
+                "policy",
+                Json::obj(vec![("delivery_mode", Json::str("follow_up"))]),
+            ),
+        ]),
+    );
+    assert_eq!(err_kind(&bad), "SchemaViolation", "{bad:?}");
+
+    // `record_occurrence` — durable before delivery; a duplicate
+    // `occurrence_key` is audited `skipped`, never a second fire.
+    for (key, want) in [("k-1", "occurred"), ("k-1", "skipped"), ("k-2", "occurred")] {
+        let o = ok(&call(
+            &mut svc,
+            "record_occurrence",
+            Json::obj(vec![
+                ("session_id", Json::str(id.clone())),
+                ("subscription_id", Json::str(sub_id.clone())),
+                ("occurrence_key", Json::str(key)),
+            ]),
+        ));
+        assert_eq!(
+            o.get("outcome").and_then(Json::as_str),
+            Some(want),
+            "key {key}: {o:?}"
+        );
+    }
+}
+
+#[test]
+fn s4_13_inbox_and_continue_goal_over_the_boundary() {
+    let mut svc = service();
+    hello_experimental(&mut svc);
+    let id = writer_session(&mut svc);
+
+    // `open_inbox` is session-free (the holder is the service's) — the
+    // goal's `run_kind = inbox` run where goal-scoped subscriptions live.
+    let ib = ok(&call(
+        &mut svc,
+        "open_inbox",
+        Json::obj(vec![("goal_ref", Json::str("goal-77"))]),
+    ));
+    assert_eq!(
+        ib.get("run_kind").and_then(Json::as_str),
+        Some("inbox"),
+        "{ib:?}"
+    );
+    assert!(ib.get("run_id").and_then(Json::as_str).is_some());
+
+    // `continue_goal` against a run whose manifest carries no `goal_ref` is
+    // the ledger's typed refusal — the boundary maps it, never swallows it.
+    let cg = call(
+        &mut svc,
+        "continue_goal",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("goal_ref", Json::str("goal-77")),
+        ]),
+    );
+    assert_eq!(err_kind(&cg), "Refused", "{cg:?}");
+}
+
+#[test]
+fn s4_13_env_suspend_resume_over_the_boundary() {
+    let mut svc = service();
+    hello_experimental(&mut svc);
+    let id = writer_session(&mut svc);
+
+    // `local_host` never declared a suspend capability — `SuspendKind::
+    // Unknown` is the honest `Unsupported`, surfaced as
+    // `EnvironmentUnavailable` (never a silent no-op).
+    let s = call(
+        &mut svc,
+        "env.suspend",
+        Json::obj(vec![("session_id", Json::str(id.clone()))]),
+    );
+    assert_eq!(err_kind(&s), "EnvironmentUnavailable", "{s:?}");
+
+    // `resume` outside `suspended` is likewise a typed refusal, and an
+    // unknown `cause` never reaches the driver (schema rejection).
+    let bad_cause = call(
+        &mut svc,
+        "env.resume",
+        Json::obj(vec![
+            ("session_id", Json::str(id.clone())),
+            ("cause", Json::str("spooky")),
+        ]),
+    );
+    assert_eq!(err_kind(&bad_cause), "SchemaViolation", "{bad_cause:?}");
+}

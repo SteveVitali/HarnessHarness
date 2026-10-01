@@ -34,7 +34,9 @@ use hh_ledger::manifest::{EventRef, LineageLink, RunKind, RunManifest};
 use hh_ledger::saga::{compensating_effect_id, CompensationIntent};
 use hh_ledger::store::{Lease, Store, DEFAULT_BLOB_MAX_BYTES};
 use hh_ledger::suspend::SuspendReason;
-use hh_ledger::wakeup::{Coalesce, DeliveryMode, FireOutcome, OccurOutcome, Trigger, WakeupPolicy};
+use hh_ledger::wakeup::{
+    Coalesce, DeliveryMode, FireOutcome, OccurOutcome, ScheduleKind, Trigger, WakeupPolicy,
+};
 use hh_ledger::LedgerError;
 use hh_wire::json::Json;
 
@@ -802,12 +804,29 @@ fn ac_2_2_3_7_coalesce_latest_skips_older_pending() {
 #[test]
 fn ac_2_2_3_7_stage4_triggers_refuse_typed() {
     let (mut s, run, lease) = open("wakeup-stage4");
-    let err = s
+    // S4.13: `schedule`/`external` admit on every run kind — a well-formed
+    // cron subscription lands the durable `control.wakeup.scheduled` row.
+    let sub = s
         .wakeup_subscribe(
             &run,
             &lease,
             Trigger::Schedule {
-                expr: "* * * * *".into(),
+                expr: "*/5 * * * *".into(),
+                kind: ScheduleKind::Cron,
+                timezone: "UTC".into(),
+            },
+            WakeupPolicy::default_policy(),
+            &eref(&run),
+        )
+        .unwrap();
+    assert!(!sub.is_empty());
+    // `environment_ready` keeps the typed Stage-4 refusal.
+    let err = s
+        .wakeup_subscribe(
+            &run,
+            &lease,
+            Trigger::EnvironmentReady {
+                env_handle_id: "env-x".into(),
             },
             WakeupPolicy::default_policy(),
             &eref(&run),

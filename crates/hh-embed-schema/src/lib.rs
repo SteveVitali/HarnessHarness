@@ -798,6 +798,92 @@ fn types_schema() -> Json {
         ]),
     );
 
+    // ── S4.13 (C2) — the durability ops' typed params ───────────────
+    // `branch.open{session_id, kind?, read_only?, policy?,
+    // budget_slice_id?, env_binding?, evidence_path?, fork_seq?,
+    // permissions?}` — the intra-run branch (§5a.4 `fork` intra arm).
+    m.insert(
+        "BranchOpenParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("kind", "string", false),
+            ("read_only", "bool", false),
+            ("policy", "json", false),
+            ("budget_slice_id", "string", false),
+            ("env_binding", "string", false),
+            ("evidence_path", "string", false),
+            ("fork_seq", "integer", false),
+            ("permissions", "[string]", false),
+        ]),
+    );
+    // `promote{session_id, branch_id, releases?}` —
+    // `releases{effect_id → "allow"|"deny"|bool}` names every deferred
+    // effect (absent ⇒ `DeferredReleaseMissing`).
+    m.insert(
+        "PromoteParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("branch_id", "string", true),
+            ("releases", "json", false),
+        ]),
+    );
+    // `discard{session_id, branch_id}` — the boundary runs no
+    // compensator dispatch (the saga path stays with the orchestrator).
+    m.insert(
+        "DiscardParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("branch_id", "string", true),
+        ]),
+    );
+    // `continue_goal{session_id, goal_ref, carried?, manifest_delta?}` —
+    // `carried{resume_set_heads?, budget_id?}` is refs, never a
+    // transcript (§5a.3; ADR-0131 §5).
+    m.insert(
+        "ContinueCarried".into(),
+        strct(&[
+            ("resume_set_heads", "[string]", false),
+            ("budget_id", "string", false),
+        ]),
+    );
+    m.insert(
+        "ContinueGoalParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("goal_ref", "string", true),
+            ("carried", "ContinueCarried", false),
+            ("manifest_delta", "json", false),
+        ]),
+    );
+    // `open_inbox{goal_ref}` — session-free (the holder is the
+    // service's).
+    m.insert(
+        "OpenInboxParams".into(),
+        strct(&[("goal_ref", "string", true)]),
+    );
+    // `subscribe{session_id, trigger, policy?}` — `trigger`/`policy` are
+    // the §5a.4 wakeup records verbatim (schedule/external/peer_message).
+    m.insert(
+        "SubscribeParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("trigger", "json", true),
+            ("policy", "json", false),
+        ]),
+    );
+    // `record_occurrence{session_id, subscription_id, occurrence_key,
+    // payload_ref?, observed_at_ms?}`.
+    m.insert(
+        "RecordOccurrenceParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("subscription_id", "string", true),
+            ("occurrence_key", "string", true),
+            ("payload_ref", "string", false),
+            ("observed_at_ms", "integer", false),
+        ]),
+    );
+
     // ── close result + implemented staged/experimental signatures ──────
     m.insert(
         "RunSummaryRef".into(),

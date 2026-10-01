@@ -86,6 +86,19 @@ impl EnvironmentClass {
         self.stage1_supported() || matches!(self, EnvironmentClass::LocalContainer)
     }
 
+    /// Whether the class needs a registered `ProviderAdapter` to provision
+    /// (S4.13 — `remote_ephemeral` | `remote_persistent` | `provider_hosted`).
+    /// The gate is adapter registration, not this predicate alone: a
+    /// provider class with no adapter refuses `Unsupported` at `provision`.
+    pub fn needs_adapter(self) -> bool {
+        matches!(
+            self,
+            EnvironmentClass::RemoteEphemeral
+                | EnvironmentClass::RemotePersistent
+                | EnvironmentClass::ProviderHosted
+        )
+    }
+
     /// The `isolation_class` the *class name implies* before attach — the floor
     /// the handle reports when no `ContainmentReport` exists yet (e.g. a
     /// `declared`/`provisioning` handle, or `local_host` whose `none` is

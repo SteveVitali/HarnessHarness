@@ -426,6 +426,62 @@ pub enum LedgerError {
         /// The io detail.
         detail: String,
     },
+
+    // ── goals / continuation chains (§5a.3; ADR-0131 §5 — S4.13) ────────
+    /// `continue_goal` from a head that already has a continuation — the
+    /// non-diverging rule (a second `continued_from{run, at_seq}` is
+    /// refused, never silently forked).
+    AlreadyContinued {
+        /// The run continued from.
+        run_id: String,
+        /// The anchor seq.
+        at_seq: u64,
+        /// The activation that already continues this head.
+        existing: String,
+    },
+    /// `continue_goal` from a run that is not finished (or finished with
+    /// no `continue_to` outcome) — the goal has ended.
+    GoalFinished {
+        /// The run that cannot continue.
+        run_id: String,
+        /// Why (`not_finished` / `no_continue_outcome`).
+        detail: String,
+    },
+
+    // ── intra-run branches (§5a.4; ADR-0133/0134 — S4.13) ────────────────
+    /// A branch id the intra-run branch fold does not know (never opened,
+    /// or opened on another run).
+    UnknownBranch {
+        /// The branch.
+        branch_id: String,
+    },
+    /// An op on a branch that is already disposed (`promoted`/`discarded`)
+    /// or an event append under a disposed/absent branch scope.
+    BranchDisposed {
+        /// The branch.
+        branch_id: String,
+        /// Its recorded disposition.
+        disposition: String,
+    },
+    /// `promote`/`discard` with a branch whose deferred effects lack the
+    /// fresh authorizations the caller must supply (`promotion` re-authorizes
+    /// — a cached approval is never cited; §5a.4 deferred release).
+    DeferredReleaseMissing {
+        /// The branch.
+        branch_id: String,
+        /// The deferred effect ids still owed a decision.
+        effect_ids: Vec<String>,
+    },
+    /// An append under a speculative branch violated its declared
+    /// `SpeculationPolicy` (`read_only`, `allow_classes`,
+    /// `allow_effect_classes`, or the non-overridable `defer_irreversible`
+    /// floor) — typed refusal, never a silent write (CC3/CC9).
+    SpeculationViolation {
+        /// The branch.
+        branch_id: String,
+        /// What the policy forbids.
+        detail: String,
+    },
     /// `fork{env: snapshot}`/`rollback{env_restore_ref}` named a snapshot that is
     /// absent, unverifiable, or unrestorable — typed `SnapshotUnavailable`
     /// (§5a.1 table; DF-S2.9-3).

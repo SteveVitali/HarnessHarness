@@ -199,7 +199,7 @@ pub fn check_write(
             return Ok(WriteVerdict::NotOwner { owner: rec.holder });
         }
         // The cross-run scan — a live holder anywhere contends.
-        for (_run, rec) in store.scoped_lease_holders(&scope) {
+        if let Some((_run, rec)) = store.scoped_lease_holders(&scope).into_iter().next() {
             if rec.holder == writer_run_id || rec.holder == format!("subagent:{writer_run_id}") {
                 return Ok(WriteVerdict::Ok);
             }

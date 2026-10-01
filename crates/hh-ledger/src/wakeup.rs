@@ -20,9 +20,20 @@
 //! until the effect reaches a terminal, so the `Cue.woken` lands at a decision
 //! point, never mid-effect.
 //!
-//! Stage-4+ triggers (`schedule`, `external`, `manual`, `peer_message`,
-//! `environment_ready`) parse but are refused `TriggerUnsupported` at
-//! `subscribe` — honest, never silently swallowed (ADR-0131 §4 stage table).
+//! Stage-4 admission (S4.13; §5a.3 extension line "schedule and external
+//! triggers via registered ingress adapters"): `schedule` and `external` are
+//! admissible on every run kind. A `schedule` subscription synthesizes its own
+//! occurrences in [`Store::wakeup_due`] (`interval`/`cron` expressions — each
+//! due instant a distinct `occurred` key, durable before any fire); an
+//! `external` subscription receives occurrences through
+//! [`Store::wakeup_occurred`] — the registered ingress adapter *is* the
+//! caller (the durable `occurred` row is the boundary; nothing enters the
+//! record except through it). Both refuse `attendance = interactive` unless
+//! the policy names a reachable principal (`attendance_required`) — the
+//! unattended wakeups never park on a TTY that cannot answer (ADR-0131 §4).
+//! `manual` stays fleet-bound (S4.9's `run_kind = fleet` boundary) and
+//! `environment_ready` parses but is refused `TriggerUnsupported` — honest,
+//! never silently swallowed (ADR-0131 §4 stage table).
 
 use std::collections::BTreeMap;
 
@@ -39,8 +50,41 @@ use crate::store::{Lease, Store};
 /// surface is a resource; `SubscriptionLimit` is the refusal).
 pub const MAX_WAKEUP_SUBSCRIPTIONS: usize = 64;
 
-/// `Trigger` — the closed sum (§5a.3 wakeup row). The Stage-2 admissible set is
-/// the kernel-internal five; the rest parse and refuse typed at `subscribe`.
+/// `ScheduleKind` — the closed sum the `schedule` trigger admits
+/// (`{type: schedule, expr, kind, timezone}`; S4.13).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScheduleKind {
+    /// A fixed wall-clock interval — `expr` is `every:<uint>ms`, `<uint>ms`,
+    /// or a bare millisecond count.
+    Interval,
+    /// A five-field cron expression (`m h dom mon dow`; each field `*`,
+    /// `*/n`, `a`, `a-b`, `a-b/n` or a comma list) evaluated in `timezone`
+    /// (`"UTC"` or a fixed `±HH:MM` offset).
+    Cron,
+}
+
+impl ScheduleKind {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ScheduleKind::Interval => "interval",
+            ScheduleKind::Cron => "cron",
+        }
+    }
+    /// Parse the canonical spelling.
+    pub fn parse(s: &str) -> Option<ScheduleKind> {
+        match s {
+            "interval" => Some(ScheduleKind::Interval),
+            "cron" => Some(ScheduleKind::Cron),
+            _ => None,
+        }
+    }
+}
+
+/// `Trigger` — the closed sum (§5a.3 wakeup row). The admissible set is the
+/// kernel-internal five plus `peer_message` (S4.6) and — S4.13 — `schedule`
+/// and `external`; `manual` stays fleet-bound and `environment_ready` parses
+/// but refuses typed at `subscribe`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Trigger {
     /// A one-shot wall-clock timer (`{type: timer, at_ms}`).
@@ -48,10 +92,14 @@ pub enum Trigger {
         /// Fire at/after this wall-ms.
         at_ms: u64,
     },
-    /// A cron-like schedule (Stage 4 — refused at subscribe).
+    /// A recurring schedule (`{type: schedule, expr, kind, timezone}` — S4.13).
     Schedule {
-        /// The schedule expression.
+        /// The schedule expression (grammar per `kind`).
         expr: String,
+        /// `interval` | `cron`.
+        kind: ScheduleKind,
+        /// `"UTC"` or a fixed `±HH:MM` offset.
+        timezone: String,
     },
     /// A `security.permission.decided` for `permission_id` (the §05g `defer`
     /// resolution path).
@@ -80,10 +128,18 @@ pub enum Trigger {
         /// The scope the retry drives.
         scope_id: String,
     },
-    /// An external ingress occurrence (Stage 4).
+    /// An external ingress occurrence (S4.13 — admissible; occurrences enter
+    /// only through `record_occurrence` — the registered ingress adapter is
+    /// its caller, and `source_ref` names it).
     External {
         /// The ingress kind.
         kind: String,
+        /// The ingress adapter/source this subscription receives from
+        /// (§5a.3 `external{source_ref, filter}` — optional so the S4.9
+        /// fleet `{type: external, kind}` form still decodes).
+        source_ref: Option<String>,
+        /// The adapter-side filter expression, recorded verbatim.
+        filter: Option<String>,
     },
     /// A principal-initiated wakeup (Stage 4 — `resume` is its attended form).
     Manual {
@@ -105,9 +161,16 @@ impl Trigger {
                 ("type", Json::str("timer")),
                 ("at_ms", Json::Int(*at_ms as i64)),
             ]),
-            Trigger::Schedule { expr } => {
-                Json::obj([("type", Json::str("schedule")), ("expr", Json::str(expr))])
-            }
+            Trigger::Schedule {
+                expr,
+                kind,
+                timezone,
+            } => Json::obj([
+                ("type", Json::str("schedule")),
+                ("expr", Json::str(expr)),
+                ("kind", Json::str(kind.as_str())),
+                ("timezone", Json::str(timezone)),
+            ]),
             Trigger::PermissionDecided { permission_id } => Json::obj([
                 ("type", Json::str("permission_decided")),
                 ("permission_id", Json::str(permission_id)),
@@ -128,8 +191,22 @@ impl Trigger {
                 ("type", Json::str("retry_due")),
                 ("scope_id", Json::str(scope_id)),
             ]),
-            Trigger::External { kind } => {
-                Json::obj([("type", Json::str("external")), ("kind", Json::str(kind))])
+            Trigger::External {
+                kind,
+                source_ref,
+                filter,
+            } => {
+                let mut m = BTreeMap::from([
+                    ("type".to_string(), Json::str("external")),
+                    ("kind".to_string(), Json::str(kind)),
+                ]);
+                if let Some(s) = source_ref {
+                    m.insert("source_ref".to_string(), Json::str(s));
+                }
+                if let Some(f) = filter {
+                    m.insert("filter".to_string(), Json::str(f));
+                }
+                Json::Obj(m)
             }
             Trigger::Manual { principal } => Json::obj([
                 ("type", Json::str("manual")),
@@ -149,7 +226,27 @@ impl Trigger {
             "timer" => Trigger::Timer {
                 at_ms: j.get("at_ms")?.as_int()?.max(0) as u64,
             },
-            "schedule" => Trigger::Schedule { expr: s("expr")? },
+            "schedule" => {
+                let expr = s("expr")?;
+                // `kind`/`timezone` ship with the S4.13 form; the pre-S4.13
+                // `{type: schedule, expr}` shape decodes with the grammar
+                // the expression unambiguously names (`every:`/bare ms ⇒
+                // interval, else cron) and UTC.
+                let kind = s("kind")
+                    .and_then(|k| ScheduleKind::parse(&k))
+                    .unwrap_or_else(|| {
+                        if parse_interval_ms(&expr).is_some() {
+                            ScheduleKind::Interval
+                        } else {
+                            ScheduleKind::Cron
+                        }
+                    });
+                Trigger::Schedule {
+                    expr,
+                    kind,
+                    timezone: s("timezone").unwrap_or_else(|| "UTC".to_string()),
+                }
+            }
             "permission_decided" => Trigger::PermissionDecided {
                 permission_id: s("permission_id")?,
             },
@@ -165,7 +262,11 @@ impl Trigger {
             "retry_due" => Trigger::RetryDue {
                 scope_id: s("scope_id")?,
             },
-            "external" => Trigger::External { kind: s("kind")? },
+            "external" => Trigger::External {
+                kind: s("kind")?,
+                source_ref: s("source_ref"),
+                filter: s("filter"),
+            },
             "manual" => Trigger::Manual {
                 principal: s("principal")?,
             },
@@ -193,8 +294,10 @@ impl Trigger {
     /// Whether the trigger is admissible at this stage — the kernel-internal
     /// five plus `peer_message` (S4.6: the one peer-messaging mechanism —
     /// ADR-0191 D6–D8; `send_message` records an occurrence on the receiver's
-    /// `peer_message` subscription). `schedule`/`external`/`manual`/`healed`
-    /// still parse and refuse typed at `subscribe`.
+    /// `peer_message` subscription) plus `schedule`/`external` (S4.13:
+    /// registered ingress adapters; the `interactive` attendance refusal is
+    /// `wakeup_subscribe`'s). `manual`/`environment_ready` still parse and
+    /// refuse typed at `subscribe` (`manual` behind the S4.9 fleet boundary).
     pub fn admissible(&self) -> bool {
         matches!(
             self,
@@ -204,6 +307,8 @@ impl Trigger {
                 | Trigger::EffectTerminal { .. }
                 | Trigger::RetryDue { .. }
                 | Trigger::PeerMessage { .. }
+                | Trigger::Schedule { .. }
+                | Trigger::External { .. }
         )
     }
 }
@@ -420,6 +525,9 @@ pub struct WakeupSubscription {
     pub policy: WakeupPolicy,
     /// The subscribing event's coordinate.
     pub created_by: EventRef,
+    /// Wall-ms the `scheduled` row minted — the `schedule` trigger's
+    /// evaluation anchor (durable, so `wakeup_due` is restart-stable).
+    pub created_ms: u64,
     /// The folded state.
     pub state: SubscriptionState,
     /// `occurrence_key → fold` in arrival order.
@@ -464,7 +572,7 @@ pub struct WokenDelivery {
 impl Store {
     /// `subscribe(owner, trigger, policy, created_by)` — the durable
     /// `control.wakeup.scheduled` row; the subscription id is allocated.
-    /// Refusals: non-Stage-2 trigger ⇒ `TriggerUnsupported`; `steer` ⇒
+    /// Refusals: non-admitted trigger ⇒ `TriggerUnsupported`; `steer` ⇒
     /// `WakeupPolicyUnsupported`; over [`MAX_WAKEUP_SUBSCRIPTIONS`] ⇒
     /// `SubscriptionLimit`.
     pub fn wakeup_subscribe(
@@ -475,26 +583,84 @@ impl Store {
         policy: WakeupPolicy,
         created_by: &EventRef,
     ) -> Result<String, LedgerError> {
+        self.wakeup_subscribe_owned(run_id, lease, run_id, trigger, policy, created_by)
+    }
+
+    /// `subscribe` with a caller-named `owner` — S4.13's goal-scoped form
+    /// (`owner = goal:<ref>` on the inbox run; [`crate::goal`] is the only
+    /// caller — the admission + row discipline below is shared, CC1).
+    pub(crate) fn wakeup_subscribe_owned(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        owner: &str,
+        trigger: Trigger,
+        policy: WakeupPolicy,
+        created_by: &EventRef,
+    ) -> Result<String, LedgerError> {
         self.tier_c1("wakeup_subscribe")?;
         if !trigger.admissible() {
-            // S4.9 fleet boundary — `external`/`manual` are admissible
-            // *only* on a `run_kind = fleet` activation (§5i.1 #2; the
-            // fixture adapter's ingress occurrences ride `external`, the
-            // attended-`resume`/`escalate` surface rides `manual`). Every
-            // other run kind keeps the typed Stage-4 refusal unchanged —
-            // the boundary is checked against the durable manifest, never
-            // caller assertion (CC3).
-            let fleet_boundary = matches!(
-                trigger,
-                Trigger::External { .. } | Trigger::Manual { .. }
-            ) && self
-                .manifest(run_id)
-                .map(|m| m.run_kind == crate::manifest::RunKind::Fleet)
-                .unwrap_or(false);
+            // S4.9 fleet boundary — `manual` is admissible *only* on a
+            // `run_kind = fleet` activation (§5i.1 #2; the attended-
+            // `resume`/`escalate` surface rides `manual`). `external` left
+            // the boundary at S4.13 (admissible on every run kind). Every
+            // other unadmitted trigger keeps the typed Stage-4 refusal —
+            // checked against the durable manifest, never caller assertion
+            // (CC3).
+            let fleet_boundary = matches!(trigger, Trigger::Manual { .. })
+                && self
+                    .manifest(run_id)
+                    .map(|m| m.run_kind == crate::manifest::RunKind::Fleet)
+                    .unwrap_or(false);
             if !fleet_boundary {
                 return Err(LedgerError::TriggerUnsupported {
                     trigger: trigger.type_name().to_string(),
                     stage: 4,
+                });
+            }
+        }
+        // §5a.3 (S4.13): an unattended wakeup (`schedule`/`external`) on an
+        // `attendance = interactive` run refuses unless the policy names a
+        // reachable principal — the fire would park on a TTY that cannot
+        // answer; the refusal is typed, never a silent swallow.
+        if matches!(trigger, Trigger::Schedule { .. } | Trigger::External { .. }) {
+            let interactive = self
+                .manifest(run_id)
+                .map(|m| m.attendance.0 == crate::manifest::AttendanceValue::Interactive)
+                .unwrap_or(false);
+            if interactive && policy.attendance_required.is_none() {
+                return Err(LedgerError::WakeupPolicyUnsupported {
+                    detail: format!(
+                        "{} on attendance = interactive requires a reachable \
+                         principal (policy.attendance_required)",
+                        trigger.type_name()
+                    ),
+                });
+            }
+        }
+        // A malformed `schedule` expression/timezone is a schema error at
+        // subscribe — the evaluator must never see a form it cannot decode.
+        if let Trigger::Schedule {
+            expr,
+            kind,
+            timezone,
+        } = &trigger
+        {
+            if parse_tz_offset(timezone).is_none() {
+                return Err(LedgerError::SchemaViolation {
+                    detail: format!("schedule.timezone {timezone} — expected `UTC` or `±HH:MM`"),
+                });
+            }
+            let ok = match kind {
+                ScheduleKind::Interval => parse_interval_ms(expr).is_some(),
+                ScheduleKind::Cron => parse_cron(expr).is_some(),
+            };
+            if !ok {
+                return Err(LedgerError::SchemaViolation {
+                    detail: format!(
+                        "schedule.expr {expr} does not parse as kind = {}",
+                        kind.as_str()
+                    ),
                 });
             }
         }
@@ -533,9 +699,10 @@ impl Store {
                     "subscription",
                     Json::obj([
                         ("subscription_id", Json::str(&subscription_id)),
-                        ("owner", Json::str(run_id)),
+                        ("owner", Json::str(owner)),
                         ("trigger", trigger.to_json()),
                         ("policy", policy.to_json()),
+                        ("created_at_ms", Json::Int(self.now_ms() as i64)),
                     ]),
                 ),
                 ("created_by", crate::leases::event_ref_json(created_by)),
@@ -743,6 +910,32 @@ impl Store {
                             out.push((sub.subscription_id.clone(), key, None));
                             break;
                         }
+                    }
+                }
+                // S4.13 — `schedule` synthesizes its occurrences: every due
+                // instant is a distinct `occurrence_key` (`deliver_wakeup`
+                // materialises it durable before any fire); the set is
+                // bounded to the newest `max_pending` instants — the
+                // subscription's pending bound is the honest ceiling on a
+                // down-then-up catch-up window.
+                Trigger::Schedule {
+                    expr,
+                    kind,
+                    timezone,
+                } => {
+                    for instant in schedule_due_instants(
+                        expr,
+                        *kind,
+                        timezone,
+                        sub.created_ms,
+                        now_ms,
+                        sub.policy.max_pending,
+                    ) {
+                        out.push((
+                            sub.subscription_id.clone(),
+                            format!("schedule:{instant}"),
+                            None,
+                        ));
                     }
                 }
                 _ => {}
@@ -1066,6 +1259,11 @@ pub(crate) fn fold_wakeup_row(
                     trigger,
                     policy,
                     created_by,
+                    created_ms: sub
+                        .get("created_at_ms")
+                        .and_then(Json::as_int)
+                        .map(|n| n.max(0) as u64)
+                        .unwrap_or(0),
                     state: SubscriptionState::Active,
                     occurrences: BTreeMap::new(),
                 },
@@ -1146,4 +1344,222 @@ fn sub_event_ref(j: Option<&Json>, env: &crate::event::EventEnvelope) -> EventRe
         run_id: env.run_id.clone(),
         event_id: env.event_id.clone(),
     })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// S4.13 — `schedule` trigger evaluation (§5a.3; ADR-0131 §4)
+//
+// `schedule{expr, kind ∈ {cron, interval}, timezone}` materialises occurrence
+// keys `schedule:<instant_ms>` — one per due instant. `wakeup_due` is pure:
+// the same ledger answers the same set on every caller and after every
+// restart (the anchor `created_ms` is durable on the `scheduled` row). The
+// result is bounded to the newest `max_pending` instants — the declared
+// pending bound is the honest ceiling on catch-up; instants beyond it are
+// never asserted durable (they were never recorded).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The cron evaluator's look-back ceiling (7 days — bounds the
+/// down-then-up scan; the durable record never claims instants outside it).
+const CRON_LOOKBACK_MS: u64 = 7 * 24 * 60 * 60 * 1000;
+const MINUTE_MS: u64 = 60_000;
+
+/// `every:<n>ms` | `<n>ms` | `<n>` → the interval in milliseconds.
+fn parse_interval_ms(expr: &str) -> Option<u64> {
+    let e = expr.trim();
+    let digits = if let Some(rest) = e.strip_prefix("every:") {
+        rest.strip_suffix("ms").unwrap_or(rest)
+    } else {
+        e.strip_suffix("ms").unwrap_or(e)
+    };
+    let n: u64 = digits.trim().parse().ok()?;
+    (n > 0).then_some(n)
+}
+
+/// `"UTC"` or `±HH:MM` → the timezone's fixed offset from UTC, in minutes.
+fn parse_tz_offset(tz: &str) -> Option<i64> {
+    let t = tz.trim();
+    if t == "UTC" || t == "Z" || t.is_empty() {
+        return Some(0);
+    }
+    let t = t.strip_prefix("UTC").unwrap_or(t);
+    let (sign, rest) = match t.as_bytes().first()? {
+        b'+' => (1i64, &t[1..]),
+        b'-' => (-1i64, &t[1..]),
+        _ => return None,
+    };
+    let (h, m) = rest.split_once(':')?;
+    let h: i64 = h.parse().ok()?;
+    let m: i64 = m.parse().ok()?;
+    if !(0..=23).contains(&h) || !(0..=59).contains(&m) {
+        return None;
+    }
+    Some(sign * (h * 60 + m))
+}
+
+/// One cron field — `*`, `*/n`, `a`, `a-b`, `a-b/n`, or a comma list of
+/// those; each member is the inclusive (lo, hi, step) it admits.
+fn parse_cron_field(field: &str, lo: u32, hi: u32) -> Option<Vec<(u32, u32, u32)>> {
+    let mut out = Vec::new();
+    for part in field.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            return None;
+        }
+        let (range, step) = match part.split_once('/') {
+            Some((r, s)) => {
+                let step: u32 = s.parse().ok()?;
+                if step == 0 {
+                    return None;
+                }
+                (r, step)
+            }
+            None => (part, 1),
+        };
+        let (a, b) = if range == "*" {
+            (lo, hi)
+        } else if let Some((x, y)) = range.split_once('-') {
+            (x.trim().parse().ok()?, y.trim().parse().ok()?)
+        } else {
+            let v: u32 = range.trim().parse().ok()?;
+            (v, v)
+        };
+        if a < lo || b > hi || a > b {
+            return None;
+        }
+        out.push((a, b, step));
+    }
+    Some(out)
+}
+
+/// A parsed five-field cron expression.
+#[derive(Debug, Clone)]
+struct CronExpr {
+    /// minute ∈ [0,59], hour ∈ [0,23], dom ∈ [1,31], month ∈ [1,12], dow ∈ [0,6] (0=Sun).
+    fields: [Vec<(u32, u32, u32)>; 5],
+}
+
+/// Parse `"m h dom mon dow"` — five fields, whitespace separated.
+fn parse_cron(expr: &str) -> Option<CronExpr> {
+    let f: Vec<&str> = expr.split_whitespace().collect();
+    if f.len() != 5 {
+        return None;
+    }
+    let ranges = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 7)];
+    let mut fields: [Vec<(u32, u32, u32)>; 5] = Default::default();
+    for (i, fld) in f.iter().enumerate() {
+        let (lo, hi) = ranges[i];
+        let mut v = parse_cron_field(fld, lo, hi.min(59).max(lo))?;
+        // POSIX `dow` admits 7 as Sunday — fold it to 0.
+        if i == 4 {
+            for r in v.iter_mut() {
+                if r.0 == 7 {
+                    r.0 = 0;
+                }
+                if r.1 == 7 {
+                    r.1 = 6;
+                }
+            }
+        }
+        fields[i] = v;
+    }
+    Some(CronExpr { fields })
+}
+
+impl CronExpr {
+    /// Does the wall instant (minute-aligned, timezone-shifted) match?
+    fn matches(&self, instant_ms: u64, tz_offset_min: i64) -> bool {
+        let t = (instant_ms as i64) + tz_offset_min * MINUTE_MS as i64;
+        if t < 0 {
+            return false;
+        }
+        let days = t / 86_400_000;
+        let sod_ms = t - days * 86_400_000;
+        let minute = (sod_ms / MINUTE_MS as i64) % 60;
+        let hour = sod_ms / 3_600_000;
+        // Civil date from days since epoch (1970-01-01 — a Thursday).
+        let (dom, month, dow) = civil_from_days(days);
+        let hit = |ranges: &[(u32, u32, u32)], v: u32| {
+            ranges
+                .iter()
+                .any(|(a, b, s)| v >= *a && v <= *b && (v - *a).is_multiple_of(*s))
+        };
+        hit(&self.fields[0], minute as u32)
+            && hit(&self.fields[1], hour as u32)
+            && hit(&self.fields[2], dom)
+            && hit(&self.fields[3], month)
+            && hit(&self.fields[4], dow)
+    }
+}
+
+/// `(dom, month, dow)` for a days-since-1970 count — a compact civil
+/// conversion (no leap-second concerns; wall-ms inputs).
+fn civil_from_days(days: i64) -> (u32, u32, u32) {
+    let dow = ((days % 7 + 7 + 4) % 7) as u32; // 1970-01-01 = Thursday(4)
+    let mut z = days + 719_468;
+    if z < 0 {
+        z -= 146_096;
+    }
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let dom = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let _ = y;
+    (dom, month, dow)
+}
+
+/// The due instants in `(anchor_ms, now]` — newest-first bounded by
+/// `max_pending` (interval instants anchor at `created_ms`; cron instants
+/// scan back from `now` inside the look-back ceiling).
+fn schedule_due_instants(
+    expr: &str,
+    kind: ScheduleKind,
+    timezone: &str,
+    anchor_ms: u64,
+    now_ms: u64,
+    max_pending: u64,
+) -> Vec<u64> {
+    let cap = max_pending.max(1) as usize;
+    match kind {
+        ScheduleKind::Interval => {
+            let Some(every) = parse_interval_ms(expr) else {
+                return Vec::new();
+            };
+            if now_ms <= anchor_ms || every == 0 {
+                return Vec::new();
+            }
+            // instants = anchor + k*every ≤ now; take the newest `cap`.
+            let last_k = (now_ms - anchor_ms) / every;
+            let first_k = last_k.saturating_sub(cap as u64 - 1).max(1);
+            (first_k..=last_k).map(|k| anchor_ms + k * every).collect()
+        }
+        ScheduleKind::Cron => {
+            let Some(cron) = parse_cron(expr) else {
+                return Vec::new();
+            };
+            let Some(off) = parse_tz_offset(timezone) else {
+                return Vec::new();
+            };
+            let lo = anchor_ms.max(now_ms.saturating_sub(CRON_LOOKBACK_MS));
+            let hi_min = now_ms / MINUTE_MS;
+            let lo_min = lo.div_ceil(MINUTE_MS);
+            let mut out = Vec::new();
+            let mut m = hi_min;
+            while m >= lo_min && out.len() < cap {
+                let instant = m * MINUTE_MS;
+                if cron.matches(instant, off) {
+                    out.push(instant);
+                }
+                if m == 0 {
+                    break;
+                }
+                m -= 1;
+            }
+            out.reverse();
+            out
+        }
+    }
 }

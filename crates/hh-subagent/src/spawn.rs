@@ -1340,6 +1340,10 @@ fn finish_child_open(
         parent_run_id: Some(ctx.parent_run_id.to_string()),
         spawn_event: Some(spawn_event.clone()),
         forked_from: None,
+        // S4.13 — a spawned child carries no `goal_ref` unless a
+        // continuation set one (goals are a continuation-chain concern,
+        // not a spawn concern; `continue_goal` forces the member).
+        goal_ref: None,
         continued_from: None,
         overrides_layer_id: parent_manifest.overrides_layer_id.clone(),
         envelope_policy_ref: parent_manifest.envelope_policy_ref.clone(),
