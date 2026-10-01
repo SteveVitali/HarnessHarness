@@ -942,6 +942,17 @@ fn approvals_json(s: &ApprovalState) -> Json {
                     .collect(),
             ),
         ),
+        // S4.14a: the live `ApproverGrant` set — `grant_issued`/`revoked`
+        // rows fold it; a checkpoint round-trips it verbatim.
+        (
+            "grants",
+            Json::Obj(
+                s.grants
+                    .iter()
+                    .map(|(k, g)| (k.clone(), g.to_json()))
+                    .collect(),
+            ),
+        ),
     ])
 }
 
@@ -991,6 +1002,15 @@ fn approvals_from_json(j: &Json) -> Result<ApprovalState, String> {
             .collect::<Result<BTreeMap<_, _>, String>>()?,
         _ => return Err("approvals.decisions must be an object".to_string()),
     };
+    // `grants` is optional on decode — a pre-S4.14a checkpoint carries none
+    // (the fold re-derives the set from `grant_issued`/`grant_revoked` rows).
+    let grants = match j.get("grants") {
+        Some(Json::Obj(m)) => m
+            .iter()
+            .filter_map(|(k, v)| approval::ApproverGrant::from_json(v).map(|g| (k.clone(), g)))
+            .collect(),
+        _ => BTreeMap::new(),
+    };
     Ok(ApprovalState {
         pending,
         decisions,
@@ -1001,6 +1021,7 @@ fn approvals_from_json(j: &Json) -> Result<ApprovalState, String> {
             human_wait_ms: req_int(stats_j, "human_wait_ms")?.max(0) as u64,
         },
         denial_counts,
+        grants,
     })
 }
 

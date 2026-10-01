@@ -95,3 +95,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0303](ADR-0303-s4.11-mcp-lab-surface-rulings.md) | S4.11 `hh-mcp-lab` surface rulings | S4.11 | Accepted |
 | [ADR-0304](ADR-0304-s4.12-embed-sdk-cli-surface-rulings.md) | S4.12 `hh-embed/1` SDK + CLI surface rulings | S4.12 | Accepted |
 | [ADR-0305](ADR-0305-s4.13-hosted-lineage-durability-rulings.md) | S4.13 hosted-lineage & durability rulings | S4.13 | Accepted |
+| [ADR-0306](ADR-0306-s4.14a-supply-chain-trust-rulings.md) | S4.14a supply-chain trust & third-party install rulings | S4.14a | Accepted |

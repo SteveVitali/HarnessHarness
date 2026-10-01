@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:e84bc8ad732577c14290cd94b08ac503aab8403b0a9dd457a82448dd19f2c2d6";
+    "sha256:288bbf41a7659e1c05e7d4e4ca5bdc0aec636d890af6ccb790748f9b4e7a47ca";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -6968,6 +6968,60 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.extension.check_surface` → `json` (see the contract registry).
+    pub fn lab_extension_check_surface(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.check_surface", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.discover` → `json` (see the contract registry).
+    pub fn lab_extension_discover(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.discover", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.export_plugin` → `json` (see the contract registry).
+    pub fn lab_extension_export_plugin(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.export_plugin", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.import_plugin` → `json` (see the contract registry).
+    pub fn lab_extension_import_plugin(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.import_plugin", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.install` → `json` (see the contract registry).
+    pub fn lab_extension_install(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.install", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.resolve` → `json` (see the contract registry).
+    pub fn lab_extension_resolve(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.resolve", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.review` → `json` (see the contract registry).
+    pub fn lab_extension_review(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.review", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.revoke` → `json` (see the contract registry).
+    pub fn lab_extension_revoke(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.revoke", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.update` → `json` (see the contract registry).
+    pub fn lab_extension_update(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.update", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.hosting.attach` → `json` (see the contract registry).
     pub fn lab_hosting_attach(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.hosting.attach", params.clone())?;
@@ -7019,6 +7073,18 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.leaderboard.snapshots` → `json` (see the contract registry).
     pub fn lab_leaderboard_snapshots(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.leaderboard.snapshots", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.permission.grant_approver` → `json` (see the contract registry).
+    pub fn lab_permission_grant_approver(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.permission.grant_approver", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.permission.revoke_approver` → `json` (see the contract registry).
+    pub fn lab_permission_revoke_approver(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.permission.revoke_approver", params.clone())?;
         Ok(raw)
     }
 

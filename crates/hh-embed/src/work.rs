@@ -543,7 +543,10 @@ impl EmbedService {
             scope_ref: run_id.clone(),
             risk_ceiling: asked_risk.unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN),
             grant_authority: AuthorityClass::Principal,
-            grants: Vec::new(),
+            // S4.14a (§5g.7 §4): the live `ApproverGrant` set folds from the
+            // ledger (`grant_issued`/`grant_revoked` rows) — the respond
+            // legitimacy gate reads the record set, never a name.
+            grants: approvals.grants.values().cloned().collect(),
             denial_policy: None,
         };
         let outcome = approvals

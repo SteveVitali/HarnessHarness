@@ -644,6 +644,19 @@ impl EmbedService {
             "lab.registry.lineage" => self.lab_registry_lineage(&req.params),
             "lab.registry.sameness" => self.lab_registry_sameness(&req.params),
             "lab.registry.verify" => self.lab_registry_verify(&req.params),
+            // S4.14a (§5g.5/§6.2; R-2.8.5 C1, R-2.12.2¹) — the extension
+            // lifecycle surface + the `ApproverGrant` issuance ops.
+            "lab.extension.discover" => self.lab_extension_discover(&req.params),
+            "lab.extension.resolve" => self.lab_extension_resolve(&req.params),
+            "lab.extension.review" => self.lab_extension_review(&req.params),
+            "lab.extension.check_surface" => self.lab_extension_check_surface(&req.params),
+            "lab.extension.update" => self.lab_extension_update(&req.params),
+            "lab.extension.revoke" => self.lab_extension_revoke(&req.params),
+            "lab.extension.install" => self.lab_extension_install(&req.params),
+            "lab.extension.import_plugin" => self.lab_extension_import_plugin(&req.params),
+            "lab.extension.export_plugin" => self.lab_extension_export_plugin(&req.params),
+            "lab.permission.grant_approver" => self.lab_permission_grant_approver(&req.params),
+            "lab.permission.revoke_approver" => self.lab_permission_revoke_approver(&req.params),
             // ── S3.1: Group M measurement/bundle ops + Group L
             // `lab.serve` (R-2.9.3⁰/R-2.11.3⁰; ADR-0139…0141) ──
             "measurement.emit_metric" => self.emit_metric(&req.params),

@@ -23,6 +23,7 @@ use hh_env::helper::HelperClient;
 use hh_helper::protocol::{CommitProof, HelperRequest, OnKernelLoss};
 use hh_hir::refs::Ref;
 use hh_registry::extension::plugin::Requests;
+use hh_registry::kinds::Placement;
 use hh_wire::json::Json;
 
 use crate::channel::{AbiChannel, FrameIo, SocketIo};
@@ -87,6 +88,31 @@ pub struct VariantSession {
     /// Lowering losses (recorded at spawn, surfaced in `hello_ack`'s host
     /// view and the spawn report).
     pub losses: Vec<String>,
+    /// The placement the session was launched under — the isolation
+    /// report's subject (`isolation()` renders it honestly).
+    pub placement: Placement,
+}
+
+impl VariantSession {
+    /// The isolation report — what actually confines the plugin process
+    /// (never a claim stronger than the lane): `subprocess_confined`
+    /// reports its helper backend (`seatbelt`/`direct`); `container`
+    /// reports `container` (the podman lane); `remote` reports
+    /// `remote` — the *peer's* confinement is out of scope, the host
+    /// claims only the transport-attached channel.
+    pub fn isolation(&self) -> String {
+        match self.placement {
+            Placement::SubprocessConfined => self
+                .helper
+                .as_ref()
+                .map(|h| format!("subprocess_confined:{}", h.client.backend))
+                .unwrap_or_else(|| "subprocess_confined:attach".to_string()),
+            Placement::Container => "container".to_string(),
+            Placement::Remote => "remote".to_string(),
+            Placement::InProcess => "in_process".to_string(),
+            Placement::ComponentModel => "component_model".to_string(),
+        }
+    }
 }
 
 /// The live-helper half of a session — kept for `cancel(kill)`/teardown.
@@ -115,9 +141,22 @@ pub struct SpawnSpec {
     pub package: VariantPackage,
     /// The session id to assign (`host_id`).
     pub session_id: String,
+    /// The placement (§6.2's isolation vocabulary): `subprocess_confined`
+    /// spawns under `backend`; `container` spawns under the helper's
+    /// `local_container` lane with `helper_extra_args` carrying the
+    /// container spec (`--container/--image/--workspace` — the workspace
+    /// must bind the `socket_dir` or the channel never connects);
+    /// `remote` never `spawn`s — it `attach`es over a caller-connected
+    /// transport; `in_process`/`component_model`/`host_unconfined` are
+    /// refused typed (admission already refused them — this is the belt).
+    pub placement: Placement,
     /// The helper backend (`seatbelt` live; `direct` for the unsandboxed
-    /// test lane).
+    /// test lane; `container` selects the podman lane — forced under
+    /// `placement = container`).
     pub backend: String,
+    /// Extra argv to the helper (`--container/--image/--workspace` for
+    /// the `container` lane).
+    pub helper_extra_args: Vec<String>,
     /// The dir the listener + helper socket live in (per-session — V3).
     pub socket_dir: PathBuf,
     /// Extra argv after `--socket <path>` (mode flags).
@@ -178,12 +217,26 @@ impl VariantSession {
     }
 }
 
-/// `spawn(spec)` — the `subprocess_confined` launch: lower the requests,
-/// bind the channel listener, spawn the helper under the lowered policy,
-/// exec the variant with a cleared environment, accept its connection and
-/// run the `hello` handshake. On any failure nothing survives — the
-/// listener, the helper and the exec are all torn down (fail-closed).
+/// `spawn(spec)` — the `subprocess_confined`/`container` launch: lower the
+/// requests, bind the channel listener, spawn the helper under the lowered
+/// policy, exec the variant with a cleared environment, accept its
+/// connection and run the `hello` handshake. On any failure nothing
+/// survives — the listener, the helper and the exec are all torn down
+/// (fail-closed). `placement` routes the helper lane: `container` forces
+/// `--backend container` and passes `helper_extra_args` (the container
+/// spec) through; `remote`/`in_process`/`component_model` refuse typed —
+/// a remote placement `attach`es, never spawns a local process (S4.14a,
+/// R-2.12.2¹).
 pub fn spawn(spec: &SpawnSpec) -> Result<(VariantSession, LoweredRequests), HostError> {
+    let backend = match spec.placement {
+        Placement::SubprocessConfined => spec.backend.clone(),
+        Placement::Container => "container".to_string(),
+        other => {
+            return Err(HostError::Placement(format!(
+                "{other:?} does not spawn a local process — attach over a transport"
+            )))
+        }
+    };
     let pkg = &spec.package;
     let chan_sock = spec.socket_dir.join("variant.sock");
     let chan_sock_s = chan_sock.to_string_lossy().to_string();
@@ -211,7 +264,7 @@ pub fn spawn(spec: &SpawnSpec) -> Result<(VariantSession, LoweredRequests), Host
     let listener = UnixListener::bind(&chan_sock).map_err(|e| HostError::Io(e.to_string()))?;
 
     // 3. The helper under the lowered policy.
-    let mut client = HelperClient::spawn(&spec.socket_dir, &spec.backend, &[])
+    let mut client = HelperClient::spawn(&spec.socket_dir, &backend, &spec.helper_extra_args)
         .map_err(|e| HostError::Helper(format!("{e:?}")))?;
     let nonce = format!("vh-{}", spec.session_id);
     client
@@ -323,6 +376,7 @@ pub fn spawn(spec: &SpawnSpec) -> Result<(VariantSession, LoweredRequests), Host
         }),
         detached: false,
         losses: lowered.losses.clone(),
+        placement: spec.placement,
     };
     let grants: BTreeSet<String> = lowered
         .permission
@@ -340,8 +394,11 @@ pub fn spawn(spec: &SpawnSpec) -> Result<(VariantSession, LoweredRequests), Host
     Ok((session, lowered))
 }
 
-/// The in-memory spawn — a session over an already-connected channel (the
-/// protocol suite's lane; identical screening/handshake, no helper).
+/// The in-memory/transport spawn — a session over an already-connected
+/// channel (the protocol suite's lane *and* the `remote` placement: the
+/// caller dials the peer, hands the connected `FrameIo` in, and the
+/// session runs identical screening/handshake — the host never claims a
+/// local sandbox for it; `session.isolation()` reports `remote`).
 pub fn attach(io: Box<dyn FrameIo>, spec: &SpawnSpec) -> Result<VariantSession, HostError> {
     let mut session = VariantSession {
         session_id: spec.session_id.clone(),
@@ -361,6 +418,7 @@ pub fn attach(io: Box<dyn FrameIo>, spec: &SpawnSpec) -> Result<VariantSession, 
         helper: None,
         detached: false,
         losses: Vec::new(),
+        placement: spec.placement,
     };
     if let Err(e) = expect_hello(&mut session, spec) {
         session.detach();

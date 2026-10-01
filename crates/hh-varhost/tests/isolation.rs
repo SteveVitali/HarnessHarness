@@ -110,6 +110,8 @@ fn spec(
         package: pkg,
         session_id: format!("iso-{}", std::process::id()),
         backend: backend.into(),
+        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        helper_extra_args: vec![],
         socket_dir: dir,
         exec_args,
         cap,

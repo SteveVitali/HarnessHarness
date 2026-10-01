@@ -967,6 +967,33 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.registry.pin", "L", "json", "json"),
         labi("lab.registry.publisher_claims", "L", "json", "json"),
         labi("lab.registry.verify", "L", "json", "json"),
+        // S4.14a (§5g.5/§6.2; R-2.8.5 C1, R-2.12.2¹): the extension
+        // lifecycle surface — `discover`/`resolve` run the TrustView gate
+        // (source allowlists + attestation verification + the
+        // signature-required quarantine), `review` emits the review
+        // document, `check_surface` the pin-vs-live drift check,
+        // `update` the widening/label-regression assessment, `revoke` the
+        // revocation-propagation plan, `install` the model-install
+        // procedure. `import_plugin`/`export_plugin` are the three named
+        // foreign formats (`claude_plugin_json/1`, `gemini_extension/1`,
+        // `codex_agent_plugin/1`) — imports land quarantined with a
+        // LossReport, exports re-emit the verbatim substrate.
+        labi("lab.extension.discover", "L", "json", "json"),
+        labi("lab.extension.resolve", "L", "json", "json"),
+        labi("lab.extension.review", "L", "json", "json"),
+        labi("lab.extension.check_surface", "L", "json", "json"),
+        labi("lab.extension.update", "L", "json", "json"),
+        labi("lab.extension.revoke", "L", "json", "json"),
+        labi("lab.extension.install", "L", "json", "json"),
+        labi("lab.extension.import_plugin", "L", "json", "json"),
+        labi("lab.extension.export_plugin", "L", "json", "json"),
+        // §5g.7 §4 (ADR-0070; OQ-177's interim): the `ApproverGrant`
+        // lifecycle — `grant_approver` issues the durable
+        // `security.permission.grant_issued` row (principal+ or covered
+        // grantor; delegation never widens), `revoke_approver` the
+        // `grant_revoked` row. The respond path folds both.
+        labi("lab.permission.grant_approver", "L", "json", "json"),
+        labi("lab.permission.revoke_approver", "L", "json", "json"),
         // S3.3: the `lab.eval.*` eval-kernel boundary (R-2.9.2/R-2.9.4⁰ᵇ;
         // records-in/records-out).
         labi("lab.eval.catalogue", "L", "json", "json"),

@@ -442,9 +442,11 @@ impl WakeupPolicy {
     pub fn from_json(j: &Json) -> Option<WakeupPolicy> {
         Some(WakeupPolicy {
             delivery_mode: DeliveryMode::parse(
-                j.get("delivery_mode")?.as_str().unwrap_or("follow_up"),
+                j.get("delivery_mode")
+                    .and_then(Json::as_str)
+                    .unwrap_or("follow_up"),
             )?,
-            coalesce: Coalesce::parse(j.get("coalesce")?.as_str().unwrap_or("none"))?,
+            coalesce: Coalesce::parse(j.get("coalesce").and_then(Json::as_str).unwrap_or("none"))?,
             max_pending: j
                 .get("max_pending")
                 .and_then(Json::as_int)

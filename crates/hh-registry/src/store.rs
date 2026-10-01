@@ -27,8 +27,8 @@ use hh_identity::supersede::{
     Lineage, RevocationRecord, StaleEntry, SupersedeError, SupersedeReason,
 };
 use hh_provenance::{
-    verify_attestation, AttestationAnchor, AttestationKind, AuthorityClass, ContentKind,
-    EndorsementBasis, Label, Origin, ProvenanceRecord, TrustedAnchors,
+    verify_attestation, Attestation, AttestationAnchor, AttestationKind, AuthorityClass,
+    ContentKind, EndorsementBasis, Label, Origin, ProvenanceRecord, TrustedAnchors,
 };
 use hh_wire::json::Json;
 
@@ -1368,6 +1368,121 @@ impl RegistryStore {
         out
     }
 
+    /// The C1 trust view `extension::lifecycle::{discover, resolve_extension,
+    /// install_plan}` consult — derived, never stored (CC1; S4.14a).
+    pub fn trust_view(&self) -> crate::extension::lifecycle::TrustView {
+        use crate::extension::lifecycle::{strictest_install, TrustView};
+        let mut view = TrustView {
+            allowed_sources: BTreeSet::new(),
+            accepted_signers: BTreeSet::new(),
+            required_predicates: BTreeSet::new(),
+            require_signature_for: BTreeSet::new(),
+            hash_only_ceiling: AuthorityClass::External,
+            max_age: None,
+            model_install: crate::records::ModelInstallRule::AllowAttenuated,
+            live_policy_ids: Vec::new(),
+        };
+        let mut ceiling: Option<AuthorityClass> = None;
+        let mut install: Option<crate::records::ModelInstallRule> = None;
+        for (env, rec) in self.records.values() {
+            let RegistryRecord::TrustRootPolicy(t) = rec else {
+                continue;
+            };
+            if !matches!(env.admission, Admission::Resolved | Admission::Sealed)
+                || self.lineage.is_revoked(&env.version_id)
+            {
+                continue;
+            }
+            view.live_policy_ids.push(env.version_id.clone());
+            view.allowed_sources
+                .extend(t.allowed_sources.iter().cloned());
+            view.accepted_signers
+                .extend(t.accepted_signers.iter().cloned());
+            view.required_predicates
+                .extend(t.required_predicates.iter().cloned());
+            view.require_signature_for
+                .extend(t.require_signature_for.iter().cloned());
+            ceiling = Some(match ceiling {
+                Some(c) => c.min(t.hash_only_ceiling),
+                None => t.hash_only_ceiling,
+            });
+            if let Some(m) = t.max_age {
+                view.max_age = Some(view.max_age.map(|a: u64| a.min(m)).unwrap_or(m));
+            }
+            install = Some(match install {
+                Some(i) => strictest_install(i, t.model_install),
+                None => t.model_install,
+            });
+        }
+        view.live_policy_ids.sort();
+        view.live_policy_ids.dedup();
+        view.hash_only_ceiling = ceiling.unwrap_or(AuthorityClass::External);
+        view.model_install = install.unwrap_or(crate::records::ModelInstallRule::AllowAttenuated);
+        view
+    }
+
+    /// Signer-revocation propagation (S4.14a; R-2.8.5 AC-8): a
+    /// `TrustRootPolicy` supersession that drops signers from
+    /// `accepted_signers` marks every extension record whose verified
+    /// signature/pin attestation anchored on a dropped signer
+    /// stale-by-dependency — `mark_stale_derived` names the *superseded
+    /// policy* as the revoked member (the signer was never a registry
+    /// member — `revoke` cannot name it; the superseded policy is the
+    /// fact that confers staleness).
+    fn propagate_signer_drop(
+        &mut self,
+        old_policy_vid: &str,
+        new_policy: &crate::records::TrustRootPolicy,
+    ) {
+        let old_signers: BTreeSet<String> = match self.records.get(old_policy_vid) {
+            Some((_, RegistryRecord::TrustRootPolicy(old))) => {
+                old.accepted_signers.iter().cloned().collect()
+            }
+            _ => BTreeSet::new(),
+        };
+        let dropped: BTreeSet<String> = old_signers
+            .difference(&new_policy.accepted_signers)
+            .cloned()
+            .collect();
+        if dropped.is_empty() {
+            return;
+        }
+        let seq = self.seq;
+        let targets: Vec<String> = self
+            .records
+            .values()
+            .filter_map(|(env, rec)| {
+                let RegistryRecord::Extension(e) = rec else {
+                    return None;
+                };
+                let hit = e.trust.attestations.iter().any(|a| match &a.anchor {
+                    AttestationAnchor::Signer(s) => dropped.contains(s),
+                    AttestationAnchor::Chain(_) => false,
+                });
+                if hit {
+                    Some(env.version_id.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        for vid in targets {
+            self.lineage
+                .mark_stale_derived(&vid, old_policy_vid, SupersedeReason::Revocation, seq);
+            self.diagnostics.push(RegistryDiagnostic {
+                operation: "signer_revocation".to_string(),
+                reason: "StaleByDependency".to_string(),
+                subject: Some(vid),
+                registrar: ProvenanceRecord::minted(
+                    Origin::kernel("registry.trust_roots"),
+                    hh_provenance::PersistenceScope::Run,
+                    seq,
+                ),
+                seq,
+            });
+        }
+    }
+
     /// The `TrustedAnchors` view handed to `hh_provenance::verify_attestation`
     /// (accepted signers only — no chain heads are registered at this slice).
     fn trusted_anchors(&self) -> TrustedAnchors {
@@ -1486,7 +1601,7 @@ impl RegistryStore {
                 operation: op.to_string(),
             });
         }
-        let (env, _rec) = match self.records.get(version_id) {
+        let (env, rec) = match self.records.get(version_id) {
             Some(t) => t.clone(),
             None => bail!(RegistryError::UnknownVersion {
                 version_id: version_id.to_string(),
@@ -1504,7 +1619,25 @@ impl RegistryStore {
         }
         // The signature rides the registrar provenance that minted the record —
         // the registry endorses verified provenance, never a self-declared claim.
-        let att = match env.registrar.attestation.clone() {
+        // C1 (S4.14a): an extension record may carry the attestation on
+        // `trust.attestations` instead — subject-bound to the record's content
+        // pin (`subject_hash == content.id()`), `Signature|Pin`-kinded, anchored
+        // on an accepted signer.
+        let view = self.trust_view();
+        let record_attestation: Option<Attestation> = match &rec {
+            RegistryRecord::Extension(e) => e
+                .trust
+                .attestations
+                .iter()
+                .find(|a| {
+                    matches!(a.kind, AttestationKind::Signature | AttestationKind::Pin)
+                        && a.subject_hash == e.content.id()
+                        && verify_attestation(a, &view.anchors()).is_ok()
+                })
+                .cloned(),
+            _ => None,
+        };
+        let att = match env.registrar.attestation.clone().or(record_attestation) {
             Some(a) => a,
             None => bail!(RegistryError::AttestationFailed {
                 detail: "the record's registrar carries no signature/pin attestation".to_string(),
@@ -1522,6 +1655,46 @@ impl RegistryStore {
             bail!(RegistryError::AttestationFailed {
                 detail: format!("{pe:?}"),
             });
+        }
+        // C1 policy gates at the lift (S4.14a; §6.2): every live-policy
+        // `required_predicates` spelling must be covered by a *verified*
+        // attestation on the subject (registrar or record leg), and a
+        // signature-required record's attestation must be fresh under
+        // `max_age` (`StalePin` on expiry).
+        let mut verified_kinds: BTreeSet<String> = BTreeSet::new();
+        if verify_attestation(&att, &view.anchors()).is_ok() {
+            verified_kinds.insert(att.kind.as_str().to_string());
+        }
+        if let RegistryRecord::Extension(e) = &rec {
+            for a in &e.trust.attestations {
+                if a.subject_hash == e.content.id()
+                    && verify_attestation(a, &view.anchors()).is_ok()
+                {
+                    verified_kinds.insert(a.kind.as_str().to_string());
+                }
+            }
+        }
+        for p in &view.required_predicates {
+            if !verified_kinds.contains(p) {
+                bail!(RegistryError::AttestationFailed {
+                    detail: format!(
+                        "required predicate `{p}` not covered by a verified attestation"
+                    ),
+                });
+            }
+        }
+        if self.signature_required(&rec) {
+            if let Some(max_age) = view.max_age {
+                if self.seq.saturating_sub(att.verified_at) > max_age {
+                    bail!(RegistryError::StalePin {
+                        version_id: version_id.to_string(),
+                        detail: format!(
+                            "attestation verified_at {} is older than max_age {}ms at seq {}",
+                            att.verified_at, max_age, self.seq
+                        ),
+                    });
+                }
+            }
         }
         // The pin lifts the record's standing from its quarantined baseline
         // (`unverified` — the signature did not decide admission) to `principal`
@@ -1568,6 +1741,12 @@ impl RegistryStore {
         };
         if let Some((e, _)) = self.records.get_mut(version_id) {
             e.admission = Admission::Resolved;
+        }
+        // C1 (S4.14a): the pinned record now *depends on* every live policy —
+        // a later `revoke`/`supersede` of the root it verified under marks the
+        // pin stale-by-dependency (the lineage's declared-dependency fold).
+        for policy_vid in &view.live_policy_ids {
+            self.lineage.declare_dependency(version_id, policy_vid);
         }
         // The endorsement lands as the `pin_subject` anchor row (subject-side
         // provenance) + the `security.label.endorsed` row whose `subject_ref`
@@ -1874,6 +2053,12 @@ impl RegistryStore {
                             RegistryError::NotAncestorOrSibling
                         }
                     });
+                }
+                // C1 (S4.14a; R-2.8.5 AC-8): a `TrustRootPolicy` supersession
+                // is how a signer is revoked — the dropped signer's verified
+                // dependants go stale-by-dependency.
+                if let RegistryRecord::TrustRootPolicy(new_pol) = &rec {
+                    self.propagate_signer_drop(s, new_pol);
                 }
             }
         }
@@ -3846,7 +4031,7 @@ fn successor_widening(old: &RegistryRecord, new: &RegistryRecord) -> bool {
 /// predecessor's (`within_cap` inverted — a claim outside the old set is a
 /// growth), or a `hook` contribution appears that the old manifest did not
 /// carry (a required hook gains block power — conservative: any added hook).
-fn extension_widening(
+pub(crate) fn extension_widening(
     old: &crate::extension::ExtensionRecord,
     new: &crate::extension::ExtensionRecord,
 ) -> bool {
