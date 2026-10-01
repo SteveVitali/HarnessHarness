@@ -42,7 +42,7 @@ pub enum RuleCondition {
 }
 
 /// One conditioned rule + its debt record (§5c.1; ADR-0073 d3).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConditionedRule {
     /// The rule id.
     pub rule_id: String,
@@ -130,14 +130,27 @@ impl std::error::Error for RegistrationError {}
 /// required members per §3.2.9), and no rule is conditioned on a model
 /// identity.
 pub fn check(decl: &PolicyDeclaration) -> Result<(), RegistrationError> {
+    check_conditioned_rules(&decl.model_conditioned_rules, &decl.required_inputs)
+}
+
+/// The shared registration check every component class applies to its
+/// conditioned rules (§5c.1/§5c.2 — the `context_policy` and
+/// `compaction_strategy` registrations share it; one check, one vocabulary —
+/// CC7): `required_inputs ⊇ {ModelProfile, ResourceAccount}`, every
+/// conditioned rule carries a *complete* `AssumptionDebtRecord`, and no rule
+/// is conditioned on a literal model identity (T-LCD-01).
+pub fn check_conditioned_rules(
+    rules: &[ConditionedRule],
+    required_inputs: &BTreeSet<String>,
+) -> Result<(), RegistrationError> {
     for req in REQUIRED_POLICY_INPUTS {
-        if !decl.required_inputs.contains(*req) {
+        if !required_inputs.contains(*req) {
             return Err(RegistrationError::MissingRequiredInput {
                 input: req.to_string(),
             });
         }
     }
-    for rule in &decl.model_conditioned_rules {
+    for rule in rules {
         if let RuleCondition::ModelIdentity(_) = &rule.conditioned_on {
             return Err(RegistrationError::ModelIdentityCondition {
                 rule_id: rule.rule_id.clone(),

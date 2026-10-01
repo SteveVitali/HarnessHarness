@@ -51,6 +51,7 @@ use hh_provenance::origin::Origin;
 use hh_provenance::record::{DerivationKind, ProvenanceRecord};
 use hh_wire::json::Json;
 
+use crate::compact_family::{CheckpointExtractor, ProviderCompactInput, ProviderCompaction};
 use crate::events::EventSink;
 use crate::plan::{Candidate, ContextPlan, PlannedItem};
 use crate::vocab::{CandidateState, Retention, PRIORITY_CLASSES};
@@ -246,6 +247,20 @@ pub enum CompactionOp {
         /// The extractor's identity coordinate.
         extractor: String,
     },
+    /// `provider_compact{input_ids, capability_ref, insert_at}` — delegate
+    /// the compaction of `input_ids` to the profile-declared gateway
+    /// capability (ADR-0076 d8). Execution goes through the bound
+    /// `ProviderCompaction` port; the summary is `delegate`-derived and
+    /// admitted only into slots whose `min_authority ≤ delegate`
+    /// (I-NOWIDEN).
+    ProviderCompact {
+        /// The context item ids the provider compacts.
+        input_ids: Vec<String>,
+        /// The declared gateway capability ref.
+        capability_ref: String,
+        /// The flattened index the summary item occupies.
+        insert_at: u64,
+    },
 }
 
 impl CompactionOp {
@@ -256,6 +271,7 @@ impl CompactionOp {
             CompactionOp::Offload { .. } => "offload",
             CompactionOp::Summarize { .. } => "summarize",
             CompactionOp::Restructure { .. } => "restructure",
+            CompactionOp::ProviderCompact { .. } => "provider_compact",
         }
     }
 
@@ -266,6 +282,7 @@ impl CompactionOp {
             CompactionOp::Offload { item_ids } => item_ids,
             CompactionOp::Summarize { input_ids, .. } => input_ids,
             CompactionOp::Restructure { input_ids, .. } => input_ids,
+            CompactionOp::ProviderCompact { input_ids, .. } => input_ids,
         }
     }
 
@@ -306,6 +323,16 @@ impl CompactionOp {
                 ("inputs", ids(input_ids)),
                 ("extractor", Json::str(extractor.clone())),
             ]),
+            CompactionOp::ProviderCompact {
+                input_ids,
+                capability_ref,
+                insert_at,
+            } => Json::obj([
+                ("kind", Json::str("provider_compact")),
+                ("inputs", ids(input_ids)),
+                ("capability_ref", Json::str(capability_ref.clone())),
+                ("insert_at", Json::Int(*insert_at as i64)),
+            ]),
         }
     }
 }
@@ -339,6 +366,15 @@ pub struct CompactionProposal {
     /// `input_reduction` — the declared reduction applied on
     /// `SummarizerOverflow` and recorded `input_reduction_applied`.
     pub input_reduction: Option<InputReduction>,
+    /// `instructions_ref` — the variant's declared compaction-prompt `Text`
+    /// ref (§5c.2 `summarize{…, instructions_ref: Ref<Text>}` — an
+    /// opacity-counted leaf; the kernel never reads it).
+    pub instructions_ref: Option<String>,
+    /// The deterministic-restructure spec a `structured_checkpoint`
+    /// proposal carries (§5c.2 `structured_checkpoint{schema_ref,
+    /// section_order}` — variant parameters, additive: absent ⇒ the
+    /// proposal hashes identically to the C0 shape).
+    pub restructure: Option<RestructureSpec>,
 }
 
 /// The deterministic-fallback shape a model-call proposal must declare
@@ -346,8 +382,12 @@ pub struct CompactionProposal {
 /// op may appear in `fallback` — the fallback ladder is the last safety net
 /// and never needs a model call.
 fn fallback_deterministic(ops: &[CompactionOp]) -> bool {
-    !ops.iter()
-        .any(|o| matches!(o, CompactionOp::Summarize { .. }))
+    !ops.iter().any(|o| {
+        matches!(
+            o,
+            CompactionOp::Summarize { .. } | CompactionOp::ProviderCompact { .. }
+        )
+    })
 }
 
 impl CompactionProposal {
@@ -399,6 +439,27 @@ impl CompactionProposal {
         if let Some(ir) = &mc.input_reduction {
             members.push(("input_reduction", ir.to_json()));
         }
+        if let Some(i) = &mc.instructions_ref {
+            members.push(("instructions_ref", Json::str(i.clone())));
+        }
+        if let Some(r) = &mc.restructure {
+            members.push((
+                "restructure",
+                Json::obj([
+                    ("schema_ref", Json::str(r.schema_ref.clone())),
+                    (
+                        "section_order",
+                        Json::Arr(
+                            r.section_order
+                                .iter()
+                                .map(|s| Json::str(s.clone()))
+                                .collect(),
+                        ),
+                    ),
+                    ("insert_at", Json::Int(r.insert_at as i64)),
+                ]),
+            ));
+        }
         let preimage = Json::obj(members).to_canonical_string();
         CompactionProposal {
             proposal_id: hh_identity::idp::idp_id(COMPACTION_IDP, preimage.as_bytes()),
@@ -409,6 +470,8 @@ impl CompactionProposal {
             summarizer_profile: mc.summarizer_profile,
             max_summary_tokens: mc.max_summary_tokens,
             input_reduction: mc.input_reduction,
+            instructions_ref: mc.instructions_ref,
+            restructure: mc.restructure,
         }
     }
 }
@@ -422,6 +485,30 @@ pub struct ModelCallMembers {
     pub max_summary_tokens: Option<u64>,
     /// The declared input reduction.
     pub input_reduction: Option<InputReduction>,
+    /// The declared compaction prompt `Ref<Text>` (the
+    /// `instructions_ref` every `summarize` op in the proposal dispatches
+    /// with — §5c.2).
+    pub instructions_ref: Option<String>,
+    /// The `structured_checkpoint` spec (deterministic — not a model call;
+    /// it rides this channel because it is a variant parameter set, the
+    /// same home §5c.2's "three homes" gives it).
+    pub restructure: Option<RestructureSpec>,
+}
+
+/// `RestructureSpec{schema_ref, section_order, insert_at}` — the
+/// deterministic-checkpoint parameters a `Restructure{extractor:
+/// deterministic{projection_ref}}` proposal declares (§5c.2
+/// `structured_checkpoint{schema_ref, section_order}`; ADR-0076 d1–d3:
+/// kernel `Projection`, `authority = ⊔ inputs`, `Artifact{kind:
+/// compaction_checkpoint}`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestructureSpec {
+    /// The checkpoint schema's identity coordinate.
+    pub schema_ref: String,
+    /// The section order the extractor renders (closed list — the schema's).
+    pub section_order: Vec<String>,
+    /// The flattened index the checkpoint item occupies.
+    pub insert_at: u64,
 }
 
 /// `InputReduction` — the closed sum applied when the summariser's own
@@ -649,6 +736,22 @@ pub struct CompactInput<'a> {
     /// carry into the port call (the kernel never reads them; a missing
     /// body is `MissingBody`, never a silent empty string — CC3).
     pub item_texts: BTreeMap<String, String>,
+    /// `context_item_id → CandidateKind` spelling — the caller-joined kind
+    /// table `world_state_refresh` reads (`environment_state` items refresh
+    /// by re-observation; absent ⇒ no kind is assumed, CC3).
+    pub item_kinds: BTreeMap<String, String>,
+    /// The bound deterministic-restructure port (`structured_checkpoint`'s
+    /// `projection_ref` — a `restructure` op without a bound extractor
+    /// matching its ref is `UnsupportedOp`).
+    pub extractor: Option<&'a dyn CheckpointExtractor>,
+    /// The bound provider-compaction port (`provider_compaction`'s gateway
+    /// capability — the only other compaction surface that may call out;
+    /// its usage posts as the provider's own charge).
+    pub provider: Option<&'a dyn ProviderCompaction>,
+    /// `previous_summary_ref` — the last `summarize_rolling` output's
+    /// artifact ref an `incremental` proposal chains (§5c.2
+    /// `Summarize{…, previous_summary_ref}`).
+    pub previous_summary_ref: Option<String>,
 }
 
 impl<'a> CompactInput<'a> {
@@ -752,6 +855,19 @@ pub enum CompactError {
         /// The item.
         item_id: String,
     },
+    /// `provider_compact` with no bound [`ProviderCompaction`] port (the
+    /// gateway capability is unbound — never silently skipped, §5c.2
+    /// ADR-0076 d8).
+    ProviderUnavailable {
+        /// The capability the op named.
+        detail: String,
+    },
+    /// `provider_compact` when the provider port itself fails — a typed
+    /// failure, never a silent drop.
+    ProviderFailed {
+        /// The provider's typed detail.
+        detail: String,
+    },
     /// The terminal failure: every rung of the I-FALLBACK ladder exhausted
     /// without reclaiming the requirement. The caller stops
     /// `context_exhausted{required_tokens, cap}` (§5a.5's stop row).
@@ -798,6 +914,13 @@ pub trait CompactionStrategy {
         input: &CompactInput,
         assessment: &Assessment,
     ) -> Result<CompactionProposal, CompactError>;
+    /// `declare()` — the `VariantDeclaration` (§5c.2 row 4; C1). The default
+    /// is the minimal deterministic code-boundary declaration — C0
+    /// implementors (kernel, out-of-process plugins) inherit it; the C1
+    /// family members override it (`compact_family` module).
+    fn declare(&self) -> crate::compact_family::VariantDeclaration {
+        crate::compact_family::VariantDeclaration::minimal(self.variant_ref())
+    }
 }
 
 /// The kernel's own `evict_oldest` — the deterministic, model-call-free C0
@@ -1156,6 +1279,8 @@ impl CompactionStrategy for RelowerSummarize {
                 summarizer_profile: Some(self.summarizer_profile.clone()),
                 max_summary_tokens: self.max_summary_tokens,
                 input_reduction: self.input_reduction.clone(),
+                instructions_ref: None,
+                restructure: None,
             }),
         ))
     }
@@ -1226,6 +1351,8 @@ impl CompactionStrategy for FoldOnReturn {
                 summarizer_profile: Some(self.summarizer_profile.clone()),
                 max_summary_tokens: self.max_summary_tokens,
                 input_reduction: self.input_reduction.clone(),
+                instructions_ref: None,
+                restructure: None,
             }),
         ))
     }
@@ -1397,6 +1524,10 @@ pub struct CompactedView {
     /// The `InputReduction` applied on a `SummarizerOverflow` (recorded as
     /// `input_reduction_applied` — §5c.2).
     pub input_reduction_applied: Option<InputReduction>,
+    /// `forgotten = {range: all_prior}` — set when a `provider_compact` op's
+    /// port could not report the forgotten set (§5c.2 ADR-0076 d8; the loss
+    /// lands in the profile's lowering-loss report — T-LCD-11).
+    pub forgotten_range: Option<String>,
 }
 
 /// `execute(proposal, input)` — kernel-side application (C0). `evict` removes
@@ -1421,9 +1552,30 @@ pub fn execute(
                 }
             }
             CompactionOp::Restructure { extractor, .. } => {
-                return Err(CompactError::UnsupportedOp {
-                    detail: format!("extractor {extractor} not registered at C0"),
-                })
+                // §5c.2 `Restructure{extractor: deterministic{projection_ref}}`:
+                // executable when the bound extractor answers the op's ref
+                // *and* the proposal carries the `RestructureSpec` the
+                // checkpoint lands under (`structured_checkpoint`'s
+                // `schema_ref`/`section_order`/`insert_at`); otherwise the
+                // typed `UnsupportedOp` stands — never a silent skip.
+                let bound = input
+                    .extractor
+                    .is_some_and(|e| e.extractor_ref() == extractor.as_str());
+                if !bound || proposal.restructure.is_none() {
+                    return Err(CompactError::UnsupportedOp {
+                        detail: format!("extractor {extractor} not registered"),
+                    });
+                }
+            }
+            CompactionOp::ProviderCompact { capability_ref, .. } => {
+                // The provider-side boundary (ADR-0076 d8): the op is legal
+                // only against a bound port; its capability ref is the
+                // profile-declared gateway capability.
+                if input.provider.is_none() {
+                    return Err(CompactError::ProviderUnavailable {
+                        detail: format!("provider compaction capability {capability_ref} unbound"),
+                    });
+                }
             }
             _ => {}
         }
@@ -1491,9 +1643,11 @@ pub fn execute(
         let summarizer = input.summarizer.expect("gated above");
         let mut req = SummarizeInput {
             items: sitems,
-            instructions_ref: None,
+            instructions_ref: proposal.instructions_ref.clone(),
             max_summary_tokens: proposal.max_summary_tokens,
-            previous_summary_ref: None,
+            // `previous_summary_ref` — `summarize_rolling{incremental}`
+            // chains the last summary's artifact (§5c.2; caller-supplied).
+            previous_summary_ref: input.previous_summary_ref.clone(),
         };
         let out = match summarizer.summarize(&req) {
             Ok(o) => o,
@@ -1596,6 +1750,257 @@ pub fn execute(
             let f = by_item[id.as_str()];
             summarized_set.insert(f.flat_index as usize);
         }
+        summary_inserts.push((slot_of_insert, *insert_at as usize, summary.clone()));
+        summary_items.push(summary);
+    }
+
+    // ── restructure ops (§5c.2 `structured_checkpoint` — deterministic
+    // extractor, kernel `Projection` derivation, `authority = ⊔ inputs`,
+    // `Artifact{kind: compaction_checkpoint}`). Gated above on a bound
+    // extractor whose ref matches the op's and a carried `RestructureSpec`.
+    for op in &proposal.ops {
+        let CompactionOp::Restructure {
+            input_ids,
+            extractor,
+        } = op
+        else {
+            continue;
+        };
+        let spec = proposal.restructure.clone().expect("gated above");
+        let ext = input.extractor.expect("gated above");
+        let mut sitems: Vec<SummarizeItem> = Vec::new();
+        for id in input_ids {
+            let f = by_item[id.as_str()];
+            let text = input.item_texts.get(id.as_str()).cloned().ok_or_else(|| {
+                CompactError::MissingBody {
+                    item_id: id.clone(),
+                }
+            })?;
+            sitems.push(SummarizeItem {
+                context_item_id: id.clone(),
+                text,
+                tokens: f.item.tokens,
+            });
+        }
+        let out = ext
+            .extract(&sitems, &spec.schema_ref, &spec.section_order)
+            .map_err(|detail| CompactError::UnsupportedOp {
+                detail: format!("extractor {} failed: {detail}", ext.extractor_ref()),
+            })?;
+        // `⊔ inputs` — the kernel projection's authority is the join of its
+        // inputs (never capped: the deriver is the kernel; the checkpoint is
+        // `valid` when the projection is total — the port's contract).
+        let inputs: Vec<&FlatItem> = input_ids.iter().map(|id| by_item[id.as_str()]).collect();
+        let label = inputs.iter().fold(
+            Label::at(hh_provenance::AuthorityClass::Unverified),
+            |acc, f| acc.join(&f.item.label),
+        );
+        let authority = label.authority;
+        let insert_at = spec.insert_at;
+        let slot_of_insert = flat
+            .iter()
+            .find(|f| f.flat_index == insert_at)
+            .map(|f| f.slot_id.clone())
+            .or_else(|| inputs.first().map(|f| f.slot_id.clone()))
+            .ok_or_else(|| CompactError::PolicyViolation {
+                detail: format!("restructure insert_at {insert_at} names no view index"),
+            })?;
+        match input.slot_min_authority.get(&slot_of_insert) {
+            Some(floor) if *floor <= authority => {}
+            _ => {
+                return Err(CompactError::PolicyViolation {
+                    detail: format!(
+                        "checkpoint admitted only into slots with min_authority ≤ {} (slot {slot_of_insert})",
+                        authority.as_str()
+                    ),
+                })
+            }
+        }
+        let derived_from_id = hh_identity::idp::idp_id(
+            COMPACTION_IDP,
+            Json::obj([
+                ("kind", Json::str("compaction_checkpoint")),
+                ("extractor", Json::str(extractor.clone())),
+                ("schema_ref", Json::str(spec.schema_ref.clone())),
+                (
+                    "inputs",
+                    Json::Arr(input_ids.iter().map(|i| Json::str(i.clone())).collect()),
+                ),
+                ("body", Json::str(&out.body)),
+            ])
+            .to_canonical_string()
+            .as_bytes(),
+        );
+        let checkpoint = PlannedItem {
+            candidate_id: format!("compaction-checkpoint-{insert_at}"),
+            context_item_id: derived_from_id.clone(),
+            artefact_id: Some(derived_from_id.clone()),
+            delivery_id: hh_identity::idp::idp_id(
+                crate::plan::DELIVERY_IDP,
+                format!("compact-checkpoint:{}:{}", input.run_id, insert_at).as_bytes(),
+            ),
+            authority,
+            label,
+            tokens: out.tokens,
+            state: CandidateState::Expanded,
+            delivered_by_reference: false,
+            derived_from: Some(derived_from_id),
+        };
+        for id in input_ids {
+            let f = by_item[id.as_str()];
+            summarized_set.insert(f.flat_index as usize);
+        }
+        summary_inserts.push((slot_of_insert, insert_at as usize, checkpoint.clone()));
+        summary_items.push(checkpoint);
+    }
+
+    // ── provider_compact ops (§5c.2 ADR-0076 d8): the gateway capability
+    // the profile declared compacts provider-side; the returned summary is
+    // `delegate`-derived; an unreported forgotten set is `all_prior`.
+    let mut provider_all_prior = false;
+    let mut provider_forgotten: BTreeSet<usize> = BTreeSet::new();
+    for op in &proposal.ops {
+        let CompactionOp::ProviderCompact {
+            input_ids,
+            capability_ref,
+            insert_at,
+        } = op
+        else {
+            continue;
+        };
+        let provider = input.provider.expect("gated above");
+        let mut sitems: Vec<SummarizeItem> = Vec::new();
+        for id in input_ids {
+            let f = by_item[id.as_str()];
+            let text = input.item_texts.get(id.as_str()).cloned().ok_or_else(|| {
+                CompactError::MissingBody {
+                    item_id: id.clone(),
+                }
+            })?;
+            sitems.push(SummarizeItem {
+                context_item_id: id.clone(),
+                text,
+                tokens: f.item.tokens,
+            });
+        }
+        let out = provider
+            .provider_compact(&ProviderCompactInput {
+                items: sitems,
+                capability_ref: capability_ref.clone(),
+            })
+            .map_err(|detail| CompactError::ProviderFailed {
+                detail: format!("{capability_ref}: {detail}"),
+            })?;
+        summariser_usage = Some(out.usage.clone());
+        let inputs: Vec<&FlatItem> = input_ids.iter().map(|id| by_item[id.as_str()]).collect();
+        let join_auth = inputs
+            .iter()
+            .map(|f| f.item.authority)
+            .max()
+            .unwrap_or(hh_provenance::AuthorityClass::Unverified);
+        let authority = join_auth.min(hh_provenance::AuthorityClass::Delegate);
+        let mut label = inputs.iter().fold(
+            Label::at(hh_provenance::AuthorityClass::Unverified),
+            |acc, f| acc.join(&f.item.label),
+        );
+        label.authority = authority;
+        let slot_of_insert = flat
+            .iter()
+            .find(|f| f.flat_index == *insert_at)
+            .map(|f| f.slot_id.clone())
+            .or_else(|| inputs.first().map(|f| f.slot_id.clone()))
+            .ok_or_else(|| CompactError::PolicyViolation {
+                detail: format!("provider_compact insert_at {insert_at} names no view index"),
+            })?;
+        match input.slot_min_authority.get(&slot_of_insert) {
+            Some(floor) if *floor <= hh_provenance::AuthorityClass::Delegate => {}
+            _ => {
+                return Err(CompactError::PolicyViolation {
+                    detail: format!(
+                        "provider summary admitted only into slots with min_authority ≤ delegate (slot {slot_of_insert})"
+                    ),
+                })
+            }
+        }
+        // The forgotten set the provider reports must name the compacted
+        // blocks exactly; absent it, `forgotten = {range: all_prior}` —
+        // every view item before `insert_at` (§5c.2 failure row; the loss
+        // is the profile's lowering-loss entry).
+        match &out.forgotten_ids {
+            Some(ids) => {
+                for id in ids {
+                    let f = by_item
+                        .get(id.as_str())
+                        .ok_or_else(|| CompactError::UnknownItem {
+                            item_id: id.clone(),
+                        })?;
+                    provider_forgotten.insert(f.flat_index as usize);
+                }
+            }
+            None => {
+                provider_all_prior = true;
+                // The submitted blocks are forgotten at minimum — the
+                // provider consumed them whether or not it can enumerate
+                // the set (nothing the op consumed survives the view).
+                for id in input_ids {
+                    let f = by_item
+                        .get(id.as_str())
+                        .ok_or_else(|| CompactError::UnknownItem {
+                            item_id: id.clone(),
+                        })?;
+                    provider_forgotten.insert(f.flat_index as usize);
+                }
+                // `all_prior` additionally sweeps every view item before
+                // the insert point — except `required` items, which I-REQ
+                // keeps delivered even inside a provider-forgotten range
+                // (the range marker still records the unreported loss).
+                for f in flat.iter() {
+                    if f.flat_index < *insert_at
+                        && !f
+                            .candidate
+                            .as_ref()
+                            .is_some_and(|c| matches!(c.retention, Retention::Required))
+                    {
+                        provider_forgotten.insert(f.flat_index as usize);
+                    }
+                }
+            }
+        }
+        let derived_from_id = hh_identity::idp::idp_id(
+            COMPACTION_IDP,
+            Json::obj([
+                ("kind", Json::str("compaction_summary")),
+                ("provider", Json::str(capability_ref.clone())),
+                (
+                    "inputs",
+                    Json::Arr(
+                        provider_forgotten
+                            .iter()
+                            .map(|i| Json::str(flat[*i].item.context_item_id.clone()))
+                            .collect(),
+                    ),
+                ),
+                ("text", Json::str(&out.summary_text)),
+            ])
+            .to_canonical_string()
+            .as_bytes(),
+        );
+        let summary = PlannedItem {
+            candidate_id: format!("provider-compaction-{insert_at}"),
+            context_item_id: derived_from_id.clone(),
+            artefact_id: Some(derived_from_id.clone()),
+            delivery_id: hh_identity::idp::idp_id(
+                crate::plan::DELIVERY_IDP,
+                format!("compact-provider:{}:{}", input.run_id, insert_at).as_bytes(),
+            ),
+            authority,
+            label,
+            tokens: out.summary_tokens,
+            state: CandidateState::Expanded,
+            delivered_by_reference: false,
+            derived_from: Some(derived_from_id),
+        };
+        summarized_set.extend(provider_forgotten.iter().copied());
         summary_inserts.push((slot_of_insert, *insert_at as usize, summary.clone()));
         summary_items.push(summary);
     }
@@ -1706,6 +2111,11 @@ pub fn execute(
     Ok(CompactedView {
         slots,
         context_label_after,
+        forgotten_range: if provider_all_prior {
+            Some("all_prior".to_string())
+        } else {
+            None
+        },
         tokens_freed,
         forgotten,
         omission_items,
@@ -1823,6 +2233,10 @@ pub struct CompactionRecord {
     pub pipeline_index: u64,
     /// The `fallback_variant` that ran, when the primary couldn't.
     pub fallback_variant: Option<String>,
+    /// `forgotten{ids | range}` — `Some("all_prior")` when a
+    /// `provider_compact` op could not report the forgotten set (§5c.2
+    /// ADR-0076 d8); the ids still list what left the view.
+    pub forgotten_range: Option<String>,
     /// The record's provenance — `derive(compaction, forgotten, kernel)`.
     pub provenance: Option<ProvenanceRecord>,
 }
@@ -1973,20 +2387,7 @@ pub fn compact(
     let _ = &last_err;
 
     // The ladder exhausted. Record the failure; hard → CompactionImpossible.
-    let flat = input.flattened();
-    let unchanged = CompactedView {
-        slots: input.plan.slots.clone(),
-        context_label_after: flat
-            .iter()
-            .filter(|f| f.item.state == CandidateState::Expanded)
-            .fold(Label::top(), |acc, f| acc.join(&f.item.label)),
-        tokens_freed: 0,
-        forgotten: vec![],
-        omission_items: vec![],
-        summary_items: vec![],
-        summariser_usage: None,
-        input_reduction_applied: None,
-    };
+    let unchanged = unchanged_view(input);
     let record = mint_record(
         input,
         &assessment,
@@ -2011,6 +2412,27 @@ pub fn compact(
             record,
             view: unchanged,
         }),
+    }
+}
+
+/// `unchanged_view(input, flat)` — the view a refused/failed compaction
+/// returns (the I-LABEL recompute over the surviving expanded items; the C1
+/// model-owned refusal path and the exhausted ladder share it — CC7).
+pub fn unchanged_view(input: &CompactInput) -> CompactedView {
+    let flat = input.flattened();
+    CompactedView {
+        slots: input.plan.slots.clone(),
+        context_label_after: flat
+            .iter()
+            .filter(|f| f.item.state == CandidateState::Expanded)
+            .fold(Label::top(), |acc, f| acc.join(&f.item.label)),
+        tokens_freed: 0,
+        forgotten: vec![],
+        omission_items: vec![],
+        summary_items: vec![],
+        summariser_usage: None,
+        input_reduction_applied: None,
+        forgotten_range: None,
     }
 }
 
@@ -2039,7 +2461,7 @@ fn try_proposal(
 /// (I-LEDGER's `derived_from` lists every forgotten id); `compaction_id` is
 /// the idp of the canonical record minus its own id.
 #[allow(clippy::too_many_arguments)]
-fn mint_record(
+pub fn mint_record(
     input: &CompactInput,
     assessment: &Assessment,
     status: CompactionStatus,
@@ -2108,6 +2530,13 @@ fn mint_record(
             Json::Arr(ops.iter().map(CompactionOp::to_json).collect()),
         ),
         ("pipeline_index", Json::Int(pipeline_index as i64)),
+        (
+            "forgotten_range",
+            view.forgotten_range
+                .as_ref()
+                .map(|r| Json::str(r.clone()))
+                .unwrap_or(Json::Null),
+        ),
     ])
     .to_canonical_string();
     CompactionRecord {
@@ -2138,11 +2567,12 @@ fn mint_record(
         duration_ms: 0,
         pipeline_index,
         fallback_variant,
+        forgotten_range: view.forgotten_range.clone(),
         provenance,
     }
 }
 
-fn emit_completed(_input: &CompactInput, sink: &mut dyn EventSink, record: &CompactionRecord) {
+pub fn emit_completed(_input: &CompactInput, sink: &mut dyn EventSink, record: &CompactionRecord) {
     sink.emit(
         "context.compaction.completed",
         crate::events::compaction_completed(record),

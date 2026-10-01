@@ -235,6 +235,10 @@ fn compact_input<'a>(
         summarizer: None,
         slot_min_authority: BTreeMap::new(),
         item_texts: BTreeMap::new(),
+        previous_summary_ref: None,
+        extractor: None,
+        provider: None,
+        item_kinds: BTreeMap::new(),
     }
 }
 

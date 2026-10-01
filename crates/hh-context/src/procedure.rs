@@ -238,3 +238,90 @@ pub fn detect_followed(
         "procedure_invoked:{index_delivery_id}:{invoked_capability}"
     ))
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `procedure_target` rule consumption (§5c.5 profile conditioning; ADR-0085
+// d5 — the thirteenth `ProfileRule` kind; R-2.4.5 residual for Stage 5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A decoded `ProfileRule{kind: procedure_target}` — the model-conditioned
+/// target override's only legal home (§5c.5: "a per-skill model binding is
+/// refused (`ConditionedRuleIncomplete`) unless expressed as a
+/// `procedure_target` profile rule with a debt record").
+#[derive(Debug, Clone)]
+pub struct ProcedureTargetRule {
+    /// The rule id (`TargetDecision.rule_id` records it when it fires).
+    pub rule_id: String,
+    /// `params.selector` — `{procedures: [semantic_id]}` and/or
+    /// `{tags: [tag]}` (either membership admits).
+    pub selector: Json,
+    /// `params.compile_hint` — the requested `CompilationTarget`.
+    pub compile_hint: String,
+    /// The `AssumptionDebtRecord` — mandatory (a `None` is the
+    /// `ConditionedRuleIncomplete` refusal, never a silent admit).
+    pub debt: Option<hh_hir::records::AssumptionDebtRecord>,
+}
+
+/// `resolve_procedure_target(rules, proc_id, tags)` — the selector match:
+/// the first rule (canonical `rule_id` order) whose `selector` names
+/// `proc_id` in `procedures[]` or intersects `tags`. A matching rule
+/// without a complete debt record is `ConditionedRuleIncomplete` — the
+/// per-skill model binding refusal (ADR-0086 d4).
+pub fn resolve_procedure_target(
+    rules: &[ProcedureTargetRule],
+    proc_id: &str,
+    tags: &[String],
+) -> Result<Option<(String, String)>, ProcedureTargetError> {
+    let mut sorted: Vec<&ProcedureTargetRule> = rules.iter().collect();
+    sorted.sort_by(|a, b| a.rule_id.cmp(&b.rule_id));
+    for r in sorted {
+        let named = r
+            .selector
+            .get("procedures")
+            .and_then(|p| match p {
+                Json::Arr(a) => Some(a.iter().any(|x| x.as_str() == Some(proc_id))),
+                _ => None,
+            })
+            .unwrap_or(false);
+        let tagged = r
+            .selector
+            .get("tags")
+            .and_then(|p| match p {
+                Json::Arr(a) => Some(
+                    a.iter()
+                        .filter_map(|x| x.as_str())
+                        .any(|t| tags.iter().any(|x| x == t)),
+                ),
+                _ => None,
+            })
+            .unwrap_or(false);
+        if !named && !tagged {
+            continue;
+        }
+        // Debt-completeness — `removal_test_ref` + `owner` (the same two
+        // members `check_conditioned_rules` requires — T-LCD-05).
+        let complete = r
+            .debt
+            .as_ref()
+            .is_some_and(|d| !d.removal_test_ref.is_empty() && !d.owner.id.is_empty());
+        if !complete {
+            return Err(ProcedureTargetError::ConditionedRuleIncomplete {
+                rule_id: r.rule_id.clone(),
+            });
+        }
+        return Ok(Some((r.compile_hint.clone(), r.rule_id.clone())));
+    }
+    Ok(None)
+}
+
+/// The `procedure_target` resolution refusals.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProcedureTargetError {
+    /// `ConditionedRuleIncomplete` — a matching rule lacks a complete
+    /// `AssumptionDebtRecord` (ADR-0086 d4 — the per-skill model binding
+    /// must be a `procedure_target` rule *with* the record).
+    ConditionedRuleIncomplete {
+        /// The rule.
+        rule_id: String,
+    },
+}

@@ -112,6 +112,7 @@ fn error_json(e: &CompileError) -> Json {
         CompileError::UncheckableSurface { surface, reason } => {
             ("UncheckableSurface", format!("{surface}: {reason}"), vec![])
         }
+        CompileError::AuthorityWidening { detail } => ("AuthorityWidening", detail.clone(), vec![]),
         CompileError::DialectNarrowingUndeclared { detail } => {
             ("DialectNarrowingUndeclared", detail.clone(), vec![])
         }
