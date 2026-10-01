@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use hh_embed::service::{EmbedService, ServiceConfig};
-use hh_wire::jsonrpc::Request;
 use hh_wire::json::Json;
+use hh_wire::jsonrpc::Request;
 
 fn test_dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
@@ -62,9 +62,16 @@ fn hello_experimental(svc: &mut EmbedService) {
             ("contract_major", Json::Int(1)),
             (
                 "client",
-                Json::obj([("name", Json::str("t")), ("version", Json::str("1")), ("kind", Json::str("test"))]),
+                Json::obj([
+                    ("name", Json::str("t")),
+                    ("version", Json::str("1")),
+                    ("kind", Json::str("test")),
+                ]),
             ),
-            ("capabilities", Json::obj([("experimental", Json::Bool(true))])),
+            (
+                "capabilities",
+                Json::obj([("experimental", Json::Bool(true))]),
+            ),
         ]),
     );
     assert!(r.get("result").is_some(), "hello: {r:?}");
@@ -79,7 +86,10 @@ fn spec_json() -> Json {
             ("name", Json::str("observe")),
             (
                 "trigger",
-                Json::obj([("type", Json::str("external")), ("kind", Json::str("ticket.updated"))]),
+                Json::obj([
+                    ("type", Json::str("external")),
+                    ("kind", Json::str("ticket.updated")),
+                ]),
             ),
             (
                 "policy",
@@ -97,7 +107,15 @@ fn spec_json() -> Json {
         ("name", Json::str("triage")),
         ("purpose", Json::str("fleet_activation")),
         ("fixture_ref", Json::str("fixture:triage")),
-        ("agents", Json::Arr(["alice","bob","ops"].iter().map(|a| Json::str(*a)).collect())),
+        (
+            "agents",
+            Json::Arr(
+                ["alice", "bob", "ops"]
+                    .iter()
+                    .map(|a| Json::str(*a))
+                    .collect(),
+            ),
+        ),
         (
             "capacity",
             Json::obj([("activate_run", Json::Int(8)), ("items", Json::Int(64))]),
@@ -118,7 +136,10 @@ fn spec_json() -> Json {
                 ("stall_timeout_ms", Json::Int(300_000)),
             ]),
         ),
-        ("human_gate_states", Json::Arr(vec![Json::str("needs_human")])),
+        (
+            "human_gate_states",
+            Json::Arr(vec![Json::str("needs_human")]),
+        ),
     ])
 }
 
@@ -171,13 +192,21 @@ fn fleet_ops_require_experimental_optin() {
             ("contract_major", Json::Int(1)),
             (
                 "client",
-                Json::obj([("name", Json::str("t")), ("version", Json::str("1")), ("kind", Json::str("test"))]),
+                Json::obj([
+                    ("name", Json::str("t")),
+                    ("version", Json::str("1")),
+                    ("kind", Json::str("test")),
+                ]),
             ),
             ("capabilities", Json::Obj(BTreeMap::new())),
         ]),
     );
     assert!(r.get("result").is_some());
-    let r = call(&mut svc, "fleet.list", Json::obj([("run", Json::str("fleet-x"))]));
+    let r = call(
+        &mut svc,
+        "fleet.list",
+        Json::obj([("run", Json::str("fleet-x"))]),
+    );
     assert_eq!(err_kind(&r), "ExperimentalRequired", "{r:?}");
 }
 
@@ -190,11 +219,7 @@ fn fleet_surface_end_to_end() {
     hello_experimental(&mut svc);
 
     // open — the activation run is returned; the spec ref is durable.
-    let r = call(
-        &mut svc,
-        "fleet.open",
-        Json::obj([("spec", spec_json())]),
-    );
+    let r = call(&mut svc, "fleet.open", Json::obj([("spec", spec_json())]));
     let run = r
         .get("result")
         .and_then(|v| v.get("run_id"))
@@ -276,12 +301,14 @@ fn fleet_surface_end_to_end() {
     assert!(r.get("result").is_some(), "settle: {r:?}");
 
     // The projection + accountability records render (records out).
-    for op in ["fleet.fleet_view", "fleet.accountability_record", "fleet.audit_link", "fleet.state_map", "fleet.list"] {
-        let r = call(
-            &mut svc,
-            op,
-            Json::obj([("run", Json::str(&run))]),
-        );
+    for op in [
+        "fleet.fleet_view",
+        "fleet.accountability_record",
+        "fleet.audit_link",
+        "fleet.state_map",
+        "fleet.list",
+    ] {
+        let r = call(&mut svc, op, Json::obj([("run", Json::str(&run))]));
         assert!(r.get("result").is_some(), "{op}: {r:?}");
     }
 
@@ -347,7 +374,12 @@ fn fleet_restore_through_boundary() {
 fn fleet_ops_refuse_tier_unavailable() {
     let mut svc = service();
     hello_experimental(&mut svc);
-    for op in ["fleet.open", "fleet.reconcile", "fleet.list", "fleet.fleet_view"] {
+    for op in [
+        "fleet.open",
+        "fleet.reconcile",
+        "fleet.list",
+        "fleet.fleet_view",
+    ] {
         let r = call(&mut svc, op, Json::obj([("run", Json::str("x"))]));
         assert_eq!(
             err_kind(&r),
