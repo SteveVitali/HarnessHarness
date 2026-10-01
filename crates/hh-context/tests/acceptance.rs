@@ -1238,7 +1238,8 @@ fn ac_r_2_4_3_6_deterministic_retrieve_and_budget_cut() {
         retrieve(&mut store, &req, &mut s4, None, || 1),
         Err(RetrievalError::StaleStore { .. })
     ));
-    // Declared-but-not-executable kinds are typed refusals.
+    // `structural` is executable at Stage 3 (OQ-203's Stage-3 scope) — an
+    // empty query is a valid empty hit set, not a refusal.
     let req = retrieval_req(
         RetrievalQuery::Structural {
             anchors: vec![],
@@ -1248,10 +1249,8 @@ fn ac_r_2_4_3_6_deterministic_retrieve_and_budget_cut() {
         AuthorityClass::Unverified,
     );
     let mut s5 = CollectSink::default();
-    assert!(matches!(
-        retrieve(&mut store, &req, &mut s5, None, || 1),
-        Err(RetrievalError::IndexUnavailable { .. })
-    ));
+    let (items, _r) = retrieve(&mut store, &req, &mut s5, None, || 1).unwrap();
+    assert!(items.is_empty());
     let req = retrieval_req(
         RetrievalQuery::Similarity {
             text: "x".into(),

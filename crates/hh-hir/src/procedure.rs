@@ -1071,6 +1071,28 @@ fn check_loop_bounds(
 
 /// `$param:<name>` references inside the steps' structured members
 /// (`Invoke.args`, `Branch.condition`, `Delegate.spec`).
+/// The `$param:` refs in one Json value (args/condition/spec).
+fn collect_param_refs_json(j: &Json, out: &mut Vec<String>) {
+    match j {
+        Json::Str(s) => {
+            if let Some(name) = s.strip_prefix("$param:") {
+                out.push(name.to_string());
+            }
+        }
+        Json::Arr(items) => {
+            for i in items {
+                collect_param_refs_json(i, out);
+            }
+        }
+        Json::Obj(m) => {
+            for v in m.values() {
+                collect_param_refs_json(v, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn collect_param_refs(steps: &[ProcedureStep], out: &mut Vec<String>) {
     fn walk(j: &Json, out: &mut Vec<String>) {
         match j {
@@ -1177,35 +1199,105 @@ fn derived_effects(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// select_target — the C0 compilation target (§5c.5 row 8)
+// select_target — the full C1 rule (§5c.5 row 8; AC-R-2.4.5-4/-5)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// `CompilationTarget` — C0 lands `instruction` only (§5c.5 row 8);
-/// `workflow_node`/`subagent_task` are later dialect work.
+/// `CompilationTarget ∈ {instruction, workflow_node, subagent_task}` — the
+/// closed target sum (§5c.5). `subagent_task` is declared for the decision's
+/// honesty (`I(P)` may hold while the target itself is refused
+/// `DelegationUnavailable` before Stage 4 — the spec's Stage-3 degradation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompilationTarget {
     /// `instruction` — the procedure body is compiled to instruction text.
     Instruction,
+    /// `workflow_node` — the body lowers onto §3.2.4's plan-node kinds.
+    WorkflowNode,
+    /// `subagent_task` — declared; refused `DelegationUnavailable` < Stage 4.
+    SubagentTask,
 }
 
-/// The `select_target` refusals — typed, never silent (§5c.5 row 8;
-/// AC-R-2.4.5-3's `UnexpressibleAsWorkflow`/`DelegationUnavailable` spellings).
+impl CompilationTarget {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CompilationTarget::Instruction => "instruction",
+            CompilationTarget::WorkflowNode => "workflow_node",
+            CompilationTarget::SubagentTask => "subagent_task",
+        }
+    }
+}
+
+/// `B(P)`'s failure reasons — `UnexpressibleAsWorkflow`'s closed `reason`
+/// member (§5c.5 row 8: `{unbound_arg, uncheckable_branch, unbounded_loop,
+/// opaque_without_interface}`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkflowReason {
+    /// An `Invoke` arg references `$param:` the profile never declares.
+    UnboundArg,
+    /// A `Branch` condition no validator can check.
+    UncheckableBranch,
+    /// A `Loop` whose bound does not resolve to a `Budget` node.
+    UnboundedLoop,
+    /// An `Opaque` step without a declared interface.
+    OpaqueWithoutInterface,
+}
+
+impl WorkflowReason {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            WorkflowReason::UnboundArg => "unbound_arg",
+            WorkflowReason::UncheckableBranch => "uncheckable_branch",
+            WorkflowReason::UnboundedLoop => "unbounded_loop",
+            WorkflowReason::OpaqueWithoutInterface => "opaque_without_interface",
+        }
+    }
+}
+
+/// The `select_target` refusals — typed, never silent (§5c.5 row 8:
+/// `TargetInfeasible`, `UnexpressibleAsWorkflow{step, reason}`,
+/// `DelegationUnavailable`, `ProcedureUnverifiable`,
+/// `UnexpressibleSurface`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SelectError {
-    /// `target_override`/`compile_hint` named `workflow_node` — the C0 target
-    /// set has no workflow lowering.
+    /// `UnexpressibleAsWorkflow{step, reason}` — `B(P)` failed at `step`.
     UnexpressibleAsWorkflow {
         /// The procedure's semantic id.
         procedure: String,
+        /// The step that broke compilability.
+        step: String,
+        /// The closed reason.
+        reason: WorkflowReason,
     },
-    /// `target_override`/`compile_hint` named `subagent_task` — delegation is
-    /// unavailable at C0.
+    /// `DelegationUnavailable` — `subagent_task` is refused before Stage 4
+    /// (the honest refusal the degraded rule returns when `I(P)` holds and
+    /// the subagent path is bound).
     DelegationUnavailable {
         /// The procedure's semantic id.
         procedure: String,
     },
-    /// No target satisfies the procedure (`TargetInfeasible`).
+    /// No target satisfies the procedure (`TargetInfeasible`) — an
+    /// infeasible `target_override`, or every target refused.
     TargetInfeasible {
+        /// Why.
+        detail: String,
+    },
+    /// `UnexpressibleSurface` — `size(body) > procedure_inline_budget` with
+    /// no subagent path (rule iv).
+    UnexpressibleSurface {
+        /// The procedure's semantic id.
+        procedure: String,
+        /// The body size.
+        size: u64,
+        /// The budget.
+        budget: u64,
+    },
+    /// `ProcedureUnverifiable` — `R(P)` contains `irreversible` or
+    /// `scope = external` and `expected_evidence` is empty, or a risky
+    /// `Invoke` fails Π at the proposer's effective authority (rule v).
+    ProcedureUnverifiable {
+        /// The procedure's semantic id.
+        procedure: String,
         /// Why.
         detail: String,
     },
@@ -1214,42 +1306,488 @@ pub enum SelectError {
 impl std::fmt::Display for SelectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SelectError::UnexpressibleAsWorkflow { procedure } => {
-                write!(f, "UnexpressibleAsWorkflow: {procedure}")
-            }
+            SelectError::UnexpressibleAsWorkflow {
+                procedure,
+                step,
+                reason,
+            } => write!(
+                f,
+                "UnexpressibleAsWorkflow: {procedure} step {step} ({})",
+                reason.as_str()
+            ),
             SelectError::DelegationUnavailable { procedure } => {
                 write!(f, "DelegationUnavailable: {procedure}")
             }
             SelectError::TargetInfeasible { detail } => {
                 write!(f, "TargetInfeasible: {detail}")
             }
+            SelectError::UnexpressibleSurface {
+                procedure,
+                size,
+                budget,
+            } => write!(f, "UnexpressibleSurface: {procedure} ({size} > {budget})"),
+            SelectError::ProcedureUnverifiable { procedure, detail } => {
+                write!(f, "ProcedureUnverifiable: {procedure} ({detail})")
+            }
         }
     }
 }
 impl std::error::Error for SelectError {}
 
-/// `select_target(P, surface, params)` — §5c.5 row 8. The profile's
-/// `target_override` (authored with `reason`) wins over the surface
-/// `compile_hint`; both default to `instruction`. The C0 target set is
-/// `{instruction}` — `workflow_node`/`subagent_task` fail typed.
+/// The `def`/`profile` inputs `select_target` reads (§5c.5 row 8 — "the
+/// bound control strategy declares `workflow_execution`", "the definition
+/// binds subagents", "the profile declares `subagents`",
+/// `procedure_inline_budget`, the proposer's effective authority for Π).
+#[derive(Debug, Clone)]
+pub struct SelectCtx {
+    /// The bound control strategy declares `workflow_execution` (§05e).
+    pub workflow_execution_declared: bool,
+    /// The definition binds subagents (§05e binds them).
+    pub subagents_bound: bool,
+    /// The profile declares `subagents`.
+    pub profile_declares_subagents: bool,
+    /// `procedure_inline_budget` — the instruction target's size ceiling.
+    pub procedure_inline_budget: u64,
+    /// The capability refs the proposer's effective Π admits (rule v's
+    /// Π-pass — an `Invoke` on a risky tool must name a granted ref).
+    pub granted_capabilities: std::collections::BTreeSet<String>,
+}
+
+impl Default for SelectCtx {
+    /// The C0/Stage-2 defaults — no workflow execution, no subagents, a
+    /// generous inline budget (the C0 target set degenerates to
+    /// `{instruction}` with typed refusals for the rest).
+    fn default() -> Self {
+        SelectCtx {
+            workflow_execution_declared: false,
+            subagents_bound: false,
+            profile_declares_subagents: false,
+            procedure_inline_budget: 64 * 1024,
+            granted_capabilities: std::collections::BTreeSet::new(),
+        }
+    }
+}
+
+/// The decision record — `{target, predicates{B, R, I}, rule_id?}`
+/// (§5c.5 row 8; the `rule_id` names which rule clause produced the target —
+/// `override`, `b_workflow`, `i_subagent`, `default_instruction`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TargetDecision {
+    /// The selected target.
+    pub target: CompilationTarget,
+    /// `B(P)` — compilable to `workflow_node`.
+    pub b: bool,
+    /// `R(P)` — the derived risk set (`irreversible`, `scope:external` …).
+    pub r: Vec<String>,
+    /// `I(P)` — the isolation predicate (self-contained: no `Delegate` step,
+    /// every `Invoke` arg resolves to a declared parameter or a literal).
+    pub i: bool,
+    /// The rule clause that fired.
+    pub rule_id: String,
+}
+
+/// `B(P)` — the workflow-compilability predicate (§5c.5 row 8): every step
+/// lowers onto a §3.2.4 node kind. Failures carry `(step, reason)`.
+pub fn b_procedure(
+    steps: &[crate::records::ProcedureStep],
+    params: &BTreeMap<String, ProcedureParameter>,
+    index: &BTreeMap<String, &crate::document::Node>,
+    proc_id: &str,
+) -> Result<(), (String, WorkflowReason)> {
+    use crate::records::ProcedureStep as S;
+    for (i, step) in steps.iter().enumerate() {
+        let step_id = format!("{proc_id}.step[{i}]");
+        match step {
+            S::Instruction(_) | S::Verify { .. } | S::Delegate { .. } => {}
+            S::Invoke { args, .. } => {
+                // unbound_arg — every `$param:` ref must name a declared
+                // parameter (the invocation's own binding counts too: a
+                // `required` param with a default is bound).
+                let mut refs = Vec::new();
+                collect_param_refs_json(args, &mut refs);
+                for r in refs {
+                    if !params.contains_key(&r) {
+                        return Err((step_id, WorkflowReason::UnboundArg));
+                    }
+                }
+            }
+            S::Branch {
+                condition,
+                then_body,
+                else_body,
+            } => {
+                // uncheckable_branch — the condition must be validator-
+                // backed: `{validator: Ref}` or `{kind: "validator_passed"}`
+                // (a free-form condition cannot become branch-on-validator).
+                let checkable = condition.get("validator").is_some()
+                    || condition.get("validator_ref").is_some()
+                    || condition.get("kind").and_then(Json::as_str) == Some("validator_passed");
+                if !checkable {
+                    return Err((step_id, WorkflowReason::UncheckableBranch));
+                }
+                b_procedure(then_body, params, index, proc_id)
+                    .map_err(|(s, r)| (format!("{step_id}.then/{s}"), r))?;
+                b_procedure(else_body, params, index, proc_id)
+                    .map_err(|(s, r)| (format!("{step_id}.else/{s}"), r))?;
+            }
+            S::Loop { bound, body } => {
+                // unbounded_loop — the bound must resolve to a `Budget`
+                // node (I4's bounded-by-construction).
+                let bounded = index
+                    .get(bound.semantic_id.as_str())
+                    .map(|n| matches!(n.kind, crate::kinds::EntityKind::Budget))
+                    .unwrap_or(false);
+                if !bounded {
+                    return Err((step_id, WorkflowReason::UnboundedLoop));
+                }
+                b_procedure(body, params, index, proc_id)
+                    .map_err(|(s, r)| (format!("{step_id}.body/{s}"), r))?;
+            }
+            S::Opaque(payload) => {
+                if payload.declared_interface.is_none() {
+                    return Err((step_id, WorkflowReason::OpaqueWithoutInterface));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// `R(P)` — the derived risk set: `irreversible` when a derived effect's
+/// reversibility is `Irreversible`, `scope:external` when a derived effect's
+/// world is `Open` (§5c.5 row 8's `scope = external` spelling).
+pub fn r_procedure(
+    steps: &[crate::records::ProcedureStep],
+    index: &BTreeMap<String, &crate::document::Node>,
+) -> Vec<String> {
+    let mut effects = Vec::new();
+    derived_effects(steps, index, &mut effects);
+    let mut r = Vec::new();
+    for e in &effects {
+        if let Some(attrs) = &e.attributes {
+            if matches!(
+                attrs.reversibility,
+                crate::kinds::Reversibility::Irreversible
+            ) && !r.iter().any(|x| x == "irreversible")
+            {
+                r.push("irreversible".to_string());
+            }
+            if matches!(attrs.world, crate::kinds::World::Open)
+                && !r.iter().any(|x| x == "scope:external")
+            {
+                r.push("scope:external".to_string());
+            }
+        }
+    }
+    r
+}
+
+/// `I(P)` — the Stage-3 isolation predicate: the procedure is
+/// self-contained — no `Delegate` step, and every `Invoke`'s `$param:` refs
+/// resolve to declared parameters (nothing reaches outside the declared
+/// surface). A stricter predicate lands with subagents at Stage 4.
+pub fn i_procedure(
+    steps: &[crate::records::ProcedureStep],
+    params: &BTreeMap<String, ProcedureParameter>,
+) -> bool {
+    use crate::records::ProcedureStep as S;
+    for step in steps {
+        match step {
+            S::Delegate { .. } => return false,
+            S::Invoke { args, .. } => {
+                let mut refs = Vec::new();
+                collect_param_refs_json(args, &mut refs);
+                if refs.iter().any(|r| !params.contains_key(r)) {
+                    return false;
+                }
+            }
+            S::Branch {
+                then_body,
+                else_body,
+                ..
+            } => {
+                if !i_procedure(then_body, params) || !i_procedure(else_body, params) {
+                    return false;
+                }
+            }
+            S::Loop { body, .. } => {
+                if !i_procedure(body, params) {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+    true
+}
+
+/// The procedure body's serialized size (the `instruction` target's
+/// `size(body)` — canonical JSON bytes of the step sequence).
+pub fn procedure_body_size(steps: &[crate::records::ProcedureStep]) -> u64 {
+    Json::Arr(
+        steps
+            .iter()
+            .map(|s| crate::schema::step_json(s, true))
+            .collect(),
+    )
+    .to_canonical_string()
+    .len() as u64
+}
+
+/// `select_target(P, profile, def)` — the total, pure rule (§5c.5 row 8;
+/// AC-R-2.4.5-5: every outcome is a `TargetDecision` or one of the four
+/// typed refusals — never a silent fallback):
+///
+/// 1. `target_override` honoured when feasible else `TargetInfeasible`.
+/// 2. `workflow_node` when `B(P)` and the bound control strategy declares
+///    `workflow_execution`.
+/// 3. `subagent_task` when `I(P)` and the definition binds subagents and
+///    the profile declares `subagents` — refused `DelegationUnavailable`
+///    before Stage 4 (the spec's honest degradation).
+/// 4. `instruction` unless `size(body) > procedure_inline_budget` with no
+///    subagent path ⇒ `UnexpressibleSurface`.
+/// 5. Risk floor — evaluated before any choice lands: `R(P) ∋
+///    {irreversible, scope:external}` requires `expected_evidence ≠ ∅`
+///    (`ProcedureUnverifiable`) and every such `Invoke` names a capability
+///    the proposer's effective Π admits.
 pub fn select_target(
-    node: &Node,
+    node: &crate::document::Node,
     profile: Option<&ProcedureProfile>,
-) -> Result<CompilationTarget, SelectError> {
+    ctx: &SelectCtx,
+    index: &BTreeMap<String, &crate::document::Node>,
+) -> Result<TargetDecision, SelectError> {
     let proc_id = node.semantic_id();
+    let steps = match &node.semantic {
+        crate::records::KindRecord::Procedure(rec) => &rec.steps,
+        _ => {
+            return Err(SelectError::TargetInfeasible {
+                detail: format!("{proc_id}: not a Procedure node"),
+            })
+        }
+    };
+    let params: BTreeMap<String, ProcedureParameter> =
+        profile.map(|p| p.parameters.clone()).unwrap_or_default();
+    let b = b_procedure(steps, &params, index, &proc_id);
+    let r = r_procedure(steps, index);
+    let i_pred = i_procedure(steps, &params);
+    let predicates = |target: CompilationTarget, rule_id: &str| TargetDecision {
+        target,
+        b: b.is_ok(),
+        r: r.clone(),
+        i: i_pred,
+        rule_id: rule_id.to_string(),
+    };
+
+    // (v) — the risk floor binds whichever target wins.
+    let risky = r
+        .iter()
+        .any(|x| x == "irreversible" || x == "scope:external");
+    let risk_floor = |expected_evidence: &Json| -> Result<(), SelectError> {
+        if !risky {
+            return Ok(());
+        }
+        let has_evidence = !matches!(expected_evidence, Json::Null)
+            && !matches!(expected_evidence, Json::Obj(m) if m.is_empty())
+            && !matches!(expected_evidence, Json::Arr(a) if a.is_empty());
+        if !has_evidence {
+            return Err(SelectError::ProcedureUnverifiable {
+                procedure: proc_id.clone(),
+                detail: format!("R(P) = {r:?} but expected_evidence is empty"),
+            });
+        }
+        // Every Invoke on a risky capability must be Π-admitted at the
+        // proposer's effective authority — the ctx's granted set.
+        if !ctx.granted_capabilities.is_empty() {
+            let mut invokes = Vec::new();
+            collect_invokes(steps, &mut invokes);
+            for t in invokes {
+                let tref = t.semantic_id.as_str();
+                if !ctx.granted_capabilities.contains(tref) {
+                    return Err(SelectError::ProcedureUnverifiable {
+                        procedure: proc_id.clone(),
+                        detail: format!("Invoke {tref} fails Π at the proposer's authority"),
+                    });
+                }
+            }
+        }
+        Ok(())
+    };
+    let expected_evidence = match &node.semantic {
+        crate::records::KindRecord::Procedure(rec) => &rec.expected_evidence,
+        _ => &Json::Null,
+    };
+
+    // `instruction` is the default spelling — only a non-default surface
+    // hint (or a profile `target_override`) counts as an authored override.
     let hint = profile
         .and_then(|p| p.target_override)
         .or(match &node.surface {
-            Some(SurfaceRecord::Procedure(s)) => Some(s.compile_hint),
+            Some(SurfaceRecord::Procedure(s)) => match s.compile_hint {
+                crate::records::CompileHint::Instruction => None,
+                h => Some(h),
+            },
             _ => None,
         });
-    match hint {
-        None | Some(crate::records::CompileHint::Instruction) => Ok(CompilationTarget::Instruction),
-        Some(crate::records::CompileHint::WorkflowNode) => {
-            Err(SelectError::UnexpressibleAsWorkflow { procedure: proc_id })
-        }
-        Some(crate::records::CompileHint::SubagentTask) => {
-            Err(SelectError::DelegationUnavailable { procedure: proc_id })
+
+    // (i) — the authored override.
+    if let Some(h) = hint {
+        match h {
+            crate::records::CompileHint::Instruction => {
+                risk_floor(expected_evidence)?;
+                return Ok(predicates(CompilationTarget::Instruction, "override"));
+            }
+            crate::records::CompileHint::WorkflowNode => {
+                if !ctx.workflow_execution_declared {
+                    return Err(SelectError::TargetInfeasible {
+                        detail: format!(
+                            "{proc_id}: override workflow_node but no bound strategy declares workflow_execution"
+                        ),
+                    });
+                }
+                if let Err((step, reason)) = &b {
+                    return Err(SelectError::UnexpressibleAsWorkflow {
+                        procedure: proc_id,
+                        step: step.clone(),
+                        reason: *reason,
+                    });
+                }
+                risk_floor(expected_evidence)?;
+                return Ok(predicates(CompilationTarget::WorkflowNode, "override"));
+            }
+            crate::records::CompileHint::SubagentTask => {
+                return Err(SelectError::DelegationUnavailable { procedure: proc_id })
+            }
         }
     }
+    // (ii) — B(P) ∧ workflow_execution declared.
+    if ctx.workflow_execution_declared && b.is_ok() {
+        risk_floor(expected_evidence)?;
+        return Ok(predicates(CompilationTarget::WorkflowNode, "b_workflow"));
+    }
+    // (iii) — I(P) ∧ subagents bound ∧ declared → refused at Stage 3.
+    if i_pred && ctx.subagents_bound && ctx.profile_declares_subagents {
+        return Err(SelectError::DelegationUnavailable { procedure: proc_id });
+    }
+    // (iv) — instruction, bounded.
+    let size = procedure_body_size(steps);
+    if size > ctx.procedure_inline_budget
+        && !(ctx.subagents_bound && ctx.profile_declares_subagents)
+    {
+        return Err(SelectError::UnexpressibleSurface {
+            procedure: proc_id,
+            size,
+            budget: ctx.procedure_inline_budget,
+        });
+    }
+    risk_floor(expected_evidence)?;
+    Ok(predicates(
+        CompilationTarget::Instruction,
+        "default_instruction",
+    ))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hook bodies — the guard-output vocabulary (§5c.5 hooks; AC-R-2.4.5-12)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The closed guard-output vocabulary (§5c.5: a `ControlBoundary.guard`
+/// bound to a `workflow_node` procedure emits only `{narrow, additional_
+/// context?, replacement_proposal?}` — `allow` is never a guard output).
+pub const GUARD_OUTPUT_KEYS: &[&str] = &["narrow", "additional_context", "replacement_proposal"];
+
+/// The `narrow` member's closed value set.
+pub const GUARD_NARROW_VALUES: &[&str] = &["deny", "ask", "none"];
+
+/// `HookGuardError` — the hook-body validation failures (typed; a guard
+/// returning `allow` is refused here at `validate`, AC-R-2.4.5-12).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HookGuardError {
+    /// The guard's declared output names a key outside the closed
+    /// vocabulary.
+    GuardOutputOutOfVocabulary {
+        /// The offending key.
+        key: String,
+    },
+    /// The guard emits `allow` — refused at validate.
+    GuardReturnsAllow,
+    /// `narrow` carries a value outside `{deny, ask, none}`.
+    BadNarrow {
+        /// The value.
+        value: String,
+    },
+    /// The hook body performs world effects (a guard narrows or proposes —
+    /// it never acts): an `Invoke` on a non-`pure`/`read_only` tool.
+    GuardHasEffects {
+        /// The step.
+        step: String,
+    },
+}
+
+impl std::fmt::Display for HookGuardError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+impl std::error::Error for HookGuardError {}
+
+/// `validate_hook_guard(P, outputs)` — the Stage-3 half of AC-R-2.4.5-12.
+/// `outputs` is the procedure's declared guard-output object (the members
+/// its return value may carry — §5c.5's closed vocabulary). Checks:
+///
+/// - every output key ∈ `{narrow, additional_context, replacement_proposal}`;
+/// - `narrow` ∈ `{deny, ask, none}` (`allow` is never a guard output — a
+///   `narrow: allow` or an output key `allow` is refused);
+/// - no `Invoke` step targets a capability outside the proposer's granted
+///   set when the capability is effect-bearing (a guard proposes, never
+///   acts — the `replacement_proposal` re-enters `authorize`, it does not
+///   run).
+pub fn validate_hook_guard(
+    steps: &[crate::records::ProcedureStep],
+    outputs: &Json,
+    proposer_grants: &std::collections::BTreeSet<String>,
+) -> Result<(), HookGuardError> {
+    if let Json::Obj(m) = outputs {
+        for (k, v) in m {
+            if !GUARD_OUTPUT_KEYS.contains(&k.as_str()) {
+                if k == "allow" {
+                    return Err(HookGuardError::GuardReturnsAllow);
+                }
+                return Err(HookGuardError::GuardOutputOutOfVocabulary { key: k.clone() });
+            }
+            if k == "narrow" {
+                // `allow` is never a guard output — refuse it before the
+                // vocabulary check so the refusal reads `GuardReturnsAllow`.
+                if let Json::Str(sv) = v {
+                    if sv == "allow" {
+                        return Err(HookGuardError::GuardReturnsAllow);
+                    }
+                }
+                let ok = match v {
+                    Json::Str(s) => GUARD_NARROW_VALUES.contains(&s.as_str()),
+                    // A `narrow` schema object is fine (the emitted values
+                    // are still constrained downstream).
+                    Json::Obj(_) => true,
+                    _ => false,
+                };
+                if !ok {
+                    return Err(HookGuardError::BadNarrow {
+                        value: v.to_canonical_string(),
+                    });
+                }
+            }
+        }
+    }
+    // No effect-bearing Invoke — a guard's `Invoke` must name a granted
+    // (read-side) capability.
+    let mut invokes = Vec::new();
+    collect_invokes(steps, &mut invokes);
+    for (i, t) in invokes.iter().enumerate() {
+        let tref = t.semantic_id.as_str();
+        if !proposer_grants.contains(tref) {
+            return Err(HookGuardError::GuardHasEffects {
+                step: format!("step[{i}] invoke {tref}"),
+            });
+        }
+    }
+    Ok(())
 }

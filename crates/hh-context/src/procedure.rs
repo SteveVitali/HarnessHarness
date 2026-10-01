@@ -177,19 +177,37 @@ pub fn procedure_body_candidate(
 /// `procedure_body` candidate for the next assemble (the body never lands in
 /// the same call's plan — I-DET).
 pub fn activate(plan: &ContextPlan, delivery_id: &str, sink: &mut dyn EventSink) -> Option<String> {
-    let item = plan
-        .slots
-        .iter()
-        .flat_map(|s| s.items.iter())
-        .find(|i| i.delivery_id == delivery_id && i.delivered_by_reference)?;
-    let artefact_id = item.artefact_id.clone()?;
+    activate_expanded(plan, delivery_id, "loaded", sink)
+}
+
+/// The generalized deterministic activation (§5c.1/§5c.3): any
+/// `delivered_by_reference` (or `handle_only`) item — procedure index, memory
+/// manifest line or body, tool surface, artifact excerpt — expands through
+/// here. `signal` is the spec's per-kind spelling: `loaded` for handle-only
+/// deliveries expanded by name, `tool_used` when the expansion rode a tool
+/// call (AC-R-2.4.3-9's memory `activated{tool_used}`), `cited` when a
+/// `subject_key`-bearing kind was cited. Returns the activated artefact id.
+pub fn activate_expanded(
+    plan: &ContextPlan,
+    delivery_id: &str,
+    signal: &str,
+    sink: &mut dyn EventSink,
+) -> Option<String> {
+    let item = plan.slots.iter().flat_map(|s| s.items.iter()).find(|i| {
+        i.delivery_id == delivery_id
+            && (i.delivered_by_reference || i.state == crate::vocab::CandidateState::HandleOnly)
+    })?;
+    let artefact_id = item
+        .artefact_id
+        .clone()
+        .unwrap_or_else(|| item.context_item_id.clone());
     sink.emit(
         "context.artefact.activated",
         crate::events::artefact_activated_payload(
             &artefact_id,
             delivery_id,
             "deterministic",
-            "loaded",
+            signal,
         ),
     );
     artefact_id

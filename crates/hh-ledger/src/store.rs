@@ -2734,6 +2734,7 @@ impl Store {
             | ViewKind::CostView
             | ViewKind::MetricView
             | ViewKind::LexicalIndex
+            | ViewKind::StructuralIndex
             | ViewKind::MemoryStaleIndex
             | ViewKind::MemoryUsage => {
                 return Err(LedgerError::OwnerProjected {

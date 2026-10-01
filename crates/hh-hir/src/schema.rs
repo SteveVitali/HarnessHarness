@@ -632,7 +632,7 @@ pub fn debt_from_json(j: &Json, path: &str) -> Result<AssumptionDebtRecord, HirE
 // Per-kind semantic record (de)serialization
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn step_json(s: &ProcedureStep, semantic: bool) -> Json {
+pub(crate) fn step_json(s: &ProcedureStep, semantic: bool) -> Json {
     match s {
         ProcedureStep::Instruction(t) => Json::obj([
             ("kind", Json::str("instruction")),

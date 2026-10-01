@@ -286,3 +286,167 @@ fn control_matched_for_test() -> MatchSpec {
         .clone()
         .unwrap()
 }
+
+fn context_builder_pins() -> ContextBuilderPins {
+    ContextBuilderPins {
+        rp_on_ref: pinned("variant.rp_on"),
+        banner_only_ref: pinned("variant.banner_only"),
+        handle_only_ref: pinned("variant.handle_only"),
+        expanded_catalogs_ref: pinned("variant.expanded_catalogs"),
+        clearing_on_ref: pinned("variant.clearing_on"),
+        clearing_off_ref: pinned("variant.clearing_off"),
+        model_level_ref: pinned("model.fixed"),
+        environment_level_ref: pinned("env.tb2"),
+        artifacts: (0..8)
+            .map(|i| Ref::new("definition:context", pinned(&format!("artifact.cb.{i}"))))
+            .collect(),
+    }
+}
+
+fn compliance_pins() -> MemoryCompliancePins {
+    MemoryCompliancePins {
+        external_slot_ref: pinned("variant.external_slot"),
+        promotion_endorsed_ref: pinned("variant.promotion_endorsed"),
+        model_level_ref: pinned("model.fixed"),
+        environment_level_ref: pinned("env.tb2"),
+        artifacts: (
+            Ref::new("definition:memory", pinned("artifact.ext")),
+            Ref::new("definition:memory", pinned("artifact.promo")),
+        ),
+    }
+}
+
+fn validity_pins() -> MemoryValidityPins {
+    MemoryValidityPins {
+        validity_filter_refs: (pinned("variant.vf_off"), pinned("variant.vf_on")),
+        justification_scope_refs: (
+            pinned("variant.js_delivered"),
+            pinned("variant.js_subject_overlap"),
+        ),
+        conflict_policy_refs: (pinned("variant.cp_deliver"), pinned("variant.cp_withhold")),
+        model_level_ref: pinned("model.fixed"),
+        environment_level_ref: pinned("env.tb2"),
+        artifacts: (0..8)
+            .map(|i| Ref::new("definition:memory", pinned(&format!("artifact.mv.{i}"))))
+            .collect(),
+    }
+}
+
+fn procedure_pins() -> ProcedureExecutionPins {
+    ProcedureExecutionPins {
+        target_refs: (
+            pinned("variant.target.instruction"),
+            pinned("variant.target.workflow_node"),
+        ),
+        profile_refs: (pinned("variant.profile.p1"), pinned("variant.profile.p2")),
+        model_level_ref: pinned("model.fixed"),
+        environment_level_ref: pinned("env.tb2"),
+        artifacts: (
+            Ref::new("definition:procedure", pinned("artifact.i.p1")),
+            Ref::new("definition:procedure", pinned("artifact.i.p2")),
+            Ref::new("definition:procedure", pinned("artifact.w.p1")),
+            Ref::new("definition:procedure", pinned("artifact.w.p2")),
+        ),
+    }
+}
+
+fn retrieval_pins() -> RetrievalIndexPins {
+    RetrievalIndexPins {
+        deterministic_default_ref: pinned("variant.ranker.det_default"),
+        structural_pagerank_ref: pinned("variant.ranker.structural_pagerank"),
+        model_level_ref: pinned("model.fixed"),
+        environment_level_ref: pinned("env.tb2"),
+        artifacts: (
+            Ref::new("definition:retrieval", pinned("artifact.det")),
+            Ref::new("definition:retrieval", pinned("artifact.sp")),
+        ),
+    }
+}
+
+#[test]
+fn context_builder_v1_registers_and_expands() {
+    // AC-R-2.4.1-12 — utility under matched budget: rp × catalogs × clearing.
+    let spec = context_builder_v1(&pins(), &context_builder_pins(), 1);
+    assert_eq!(spec.design.id, "lab/context-builder-v1");
+    assert_eq!(spec.design.kind, DesignKind::FullFactorial);
+    assert_eq!(spec.arms.len(), 8);
+    assert!(spec
+        .arms
+        .iter()
+        .all(|a| a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedCap));
+    spec.register(&ctx()).unwrap();
+    assert_eq!(
+        spec.experiment_id,
+        context_builder_v1(&pins(), &context_builder_pins(), 1).experiment_id
+    );
+    let t = tasks(3);
+    let plan = expand(&spec, &t, &expand_ctx()).unwrap();
+    assert_eq!(plan.cells.len(), 8 * 3);
+    assert_eq!(plan.run_plans.len(), 8 * 3 * EXEMPLAR_REPLICATES as usize);
+}
+
+#[test]
+fn memory_compliance_v1_registers_and_expands() {
+    // AC-R-2.4.3-9 — external slot vs promotion-endorsed under matched budget.
+    let spec = memory_compliance_v1(&pins(), &compliance_pins(), 1);
+    assert_eq!(spec.design.id, "lab/memory-compliance-v1");
+    assert_eq!(spec.design.kind, DesignKind::Paired);
+    assert_eq!(spec.arms.len(), 2);
+    spec.register(&ctx()).unwrap();
+    let t = tasks(4);
+    let plan = expand(&spec, &t, &expand_ctx()).unwrap();
+    assert_eq!(plan.cells.len(), 8);
+    assert_eq!(plan.run_plans.len(), 40);
+}
+
+#[test]
+fn memory_validity_v1_registers_and_expands() {
+    // AC-R-2.4.4-12 — validity_filter × justification_scope × conflict_policy.
+    let spec = memory_validity_v1(&pins(), &validity_pins(), 1);
+    assert_eq!(spec.design.id, "lab/memory-validity-v1");
+    assert_eq!(spec.design.kind, DesignKind::FullFactorial);
+    assert_eq!(spec.arms.len(), 8);
+    spec.register(&ctx()).unwrap();
+    let t = tasks(2);
+    let plan = expand(&spec, &t, &expand_ctx()).unwrap();
+    assert_eq!(plan.cells.len(), 16);
+    assert_eq!(plan.run_plans.len(), 16 * EXEMPLAR_REPLICATES as usize);
+}
+
+#[test]
+fn procedure_execution_v1_registers_and_expands() {
+    // AC-R-2.4.5-10 — target × profile, interaction reported.
+    let spec = procedure_execution_v1(&pins(), &procedure_pins(), 1);
+    assert_eq!(spec.design.id, "lab/procedure-execution-v1");
+    assert_eq!(spec.design.kind, DesignKind::FullFactorial);
+    assert_eq!(spec.arms.len(), 4);
+    assert!(spec
+        .design
+        .pre_registration
+        .interactions
+        .contains(&"target:profile".to_string()));
+    spec.register(&ctx()).unwrap();
+    let t = tasks(3);
+    let plan = expand(&spec, &t, &expand_ctx()).unwrap();
+    assert_eq!(plan.cells.len(), 12);
+    assert_eq!(plan.run_plans.len(), 60);
+}
+
+#[test]
+fn retrieval_index_v1_registers_structural_index_arm() {
+    // §5c.3 — `structural_index` is a Lab arm: the structural_pagerank ranker
+    // level pairs against the deterministic default under MatchSpec.
+    let spec = retrieval_index_v1(&pins(), &retrieval_pins(), 1);
+    assert_eq!(spec.design.id, "lab/retrieval-index-v1");
+    assert_eq!(spec.arms.len(), 2);
+    let ranker = spec.factors.iter().find(|f| f.name == "ranker").unwrap();
+    assert!(ranker
+        .levels
+        .iter()
+        .any(|l| l.level_id == "structural_pagerank"));
+    spec.register(&ctx()).unwrap();
+    let t = tasks(2);
+    let plan = expand(&spec, &t, &expand_ctx()).unwrap();
+    assert_eq!(plan.cells.len(), 4);
+    assert_eq!(plan.run_plans.len(), 20);
+}

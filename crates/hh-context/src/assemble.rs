@@ -749,15 +749,39 @@ pub fn assemble(
     );
     for f in &plan.slots {
         for it in &f.items {
-            if let Some(a) = &it.artefact_id {
+            // §5c.1: "one `context.artefact.delivered{artefact_id,
+            // delivery_id, kind, rendering_ref, by_reference}` per admitted
+            // harness artifact" — the six artefact kinds (AC-R-2.4.1-10):
+            // procedure_index, procedure_body, tool_surface, memory,
+            // memory_index, artifact_excerpt. Handle-only deliveries are
+            // `by_reference: true`; the artefact id falls back to the
+            // context item id for kind-only deliveries (a `memory` body
+            // names its version; an index names the index entry).
+            let kind = cand_by_id
+                .get(it.candidate_id.as_str())
+                .map(|ac| ac.candidate.kind)
+                .and_then(|k| match k {
+                    crate::vocab::CandidateKind::ProcedureIndex => Some("procedure_index"),
+                    crate::vocab::CandidateKind::ProcedureBody => Some("procedure_body"),
+                    crate::vocab::CandidateKind::ToolSurface => Some("tool_surface"),
+                    crate::vocab::CandidateKind::Memory => Some("memory"),
+                    crate::vocab::CandidateKind::MemoryIndex => Some("memory_index"),
+                    crate::vocab::CandidateKind::ArtifactExcerpt => Some("artifact_excerpt"),
+                    _ => None,
+                });
+            if let Some(kind) = kind {
+                let artefact_id = it
+                    .artefact_id
+                    .clone()
+                    .unwrap_or_else(|| it.context_item_id.clone());
                 sink.emit(
                     "context.artefact.delivered",
                     events::artefact_delivered_payload(
-                        a,
+                        &artefact_id,
                         &it.delivery_id,
-                        "artifact_excerpt",
+                        kind,
                         None,
-                        it.delivered_by_reference,
+                        it.delivered_by_reference || it.state == CandidateState::HandleOnly,
                     ),
                 );
             }

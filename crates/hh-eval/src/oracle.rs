@@ -122,20 +122,25 @@ pub fn run_oracle(req: &OracleRequest) -> Result<OracleVerdict, OracleFailure> {
             }
         }
         OracleClass::TracePredicate | OracleClass::ProtocolCheck => {
-            // Predicate oracles read the transcript: the transcript is a
-            // canonical-JSON ledger tail; the predicate is the criterion id
-            // — the verdict is T when the transcript carries a verdict event
-            // for the criterion with `pass: true` (the contract is declared
-            // in the task's `oracle_contract`; the oracle evaluates it
-            // deterministically over bytes).
+            // Predicate oracles read the transcript. The §5c.2 Stage-3
+            // trace predicates (`reacquisition`, `repeated_action`,
+            // `recall_probe` — spelled bare or `trace_predicate:<name>`)
+            // evaluate the deterministic [`crate::context_metrics`] fold
+            // over the transcript's ledger rows (`LedgerFacts` decoded from
+            // a `ledger_facts/1` document or a raw `{seq,class,payload}`
+            // array). Any other criterion keeps the declared verdict-event
+            // contract: `"<criterion>":true` in the transcript bytes.
             let t = req
                 .transcript
                 .as_deref()
                 .ok_or(OracleFailure::MissingTranscript)?;
-            match serde_free_parse_bool(t, &req.criterion) {
-                Some(true) => LatticeValue::N,
-                Some(false) => LatticeValue::C,
-                None => LatticeValue::I,
+            match trace_predicate(&req.criterion, t) {
+                Some(v) => v,
+                None => match serde_free_parse_bool(t, &req.criterion) {
+                    Some(true) => LatticeValue::N,
+                    Some(false) => LatticeValue::C,
+                    None => LatticeValue::I,
+                },
             }
         }
         _ => LatticeValue::I,
@@ -149,6 +154,91 @@ pub fn run_oracle(req: &OracleRequest) -> Result<OracleVerdict, OracleFailure> {
             ("deterministic", Json::Bool(true)),
         ]),
     })
+}
+
+/// The §5c.2 Stage-3 trace predicates — `reacquisition` (no forgotten item
+/// was retrieved again), `repeated_action` (no `(capability, args)` pair
+/// completed twice across a compaction boundary), `recall_probe` (every
+/// probe assembly still contains a needed forgotten item). Returns `None`
+/// when `criterion` is not one of the three (the generic verdict-event
+/// contract then applies); `Some(I)` when the predicate's evidence class is
+/// absent from the transcript (inapplicable — never a false verdict).
+pub fn trace_predicate(criterion: &str, transcript: &[u8]) -> Option<LatticeValue> {
+    let name = criterion
+        .strip_prefix("trace_predicate:")
+        .unwrap_or(criterion);
+    if !matches!(name, "reacquisition" | "repeated_action" | "recall_probe") {
+        return None;
+    }
+    let facts = decode_facts(transcript)?;
+    let m = crate::context_metrics::fold(&facts);
+    let verdict = match name {
+        // N — the predicate holds (no damage); C — measured damage; I — the
+        // transcript carries no compaction evidence at all.
+        "reacquisition" => {
+            if facts.compactions.iter().all(|c| !c.completed) {
+                LatticeValue::I
+            } else if m.reacquisition_count == 0 {
+                LatticeValue::N
+            } else {
+                LatticeValue::C
+            }
+        }
+        "repeated_action" => {
+            if facts.compactions.iter().all(|c| !c.completed) {
+                LatticeValue::I
+            } else if m.repeated_action_count == 0 {
+                LatticeValue::N
+            } else {
+                LatticeValue::C
+            }
+        }
+        "recall_probe" => match m.recall_probe_hit_rate {
+            None => LatticeValue::I,
+            Some(r) if r >= 1_000_000 => LatticeValue::N,
+            Some(_) => LatticeValue::C,
+        },
+        _ => unreachable!(),
+    };
+    Some(verdict)
+}
+
+/// Decode a transcript into `LedgerFacts` — accepts a `ledger_facts/1`
+/// document or a raw array of `{"seq","class","payload"}` rows (both are
+/// canonical JSON; a malformed transcript is no evidence — `None`, which
+/// the caller treats as the generic-contract path, yielding `I`).
+fn decode_facts(bytes: &[u8]) -> Option<crate::facts::LedgerFacts> {
+    let text = std::str::from_utf8(bytes).ok()?;
+    let j = hh_wire::json::parse(text).ok()?;
+    // `ledger_facts/1` document.
+    if j.get("schema").and_then(Json::as_str) == Some("ledger_facts/1") {
+        return crate::facts::LedgerFacts::from_json(&j).ok();
+    }
+    // Raw row array: `[{"seq":…,"class":…,"payload":{…}}, …]` or
+    // `{"events":[…]}`.
+    let rows = match &j {
+        Json::Arr(rs) => Some(rs.clone()),
+        Json::Obj(_) => match j.get("events") {
+            Some(Json::Arr(v)) => Some(v.clone()),
+            _ => None,
+        },
+        _ => None,
+    }?;
+    let fact_rows: Vec<crate::facts::FactRow> = rows
+        .iter()
+        .filter_map(|r| {
+            Some(crate::facts::FactRow {
+                seq: r.get("seq").and_then(Json::as_int)? as u64,
+                event_id: r.get("event_id").and_then(Json::as_str).map(str::to_string),
+                class: r.get("class").and_then(Json::as_str)?.to_string(),
+                payload: r.get("payload").cloned().unwrap_or(Json::Null),
+            })
+        })
+        .collect();
+    if fact_rows.is_empty() {
+        return None;
+    }
+    Some(crate::facts::LedgerFacts::from_rows(&fact_rows))
 }
 
 /// A minimal canonical-JSON boolean member scan (the oracle needs no JSON

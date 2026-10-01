@@ -810,3 +810,178 @@ fn ac_cp_04_loss_report_shape_and_granularity_ceiling() {
         assert!(!e.hir_node_id.is_empty());
     }
 }
+
+// ── AC-R-2.4.5-4 — two profiles, two targets (§5c.5; S3.8) ───────────────────
+// The same Procedure compiles to `instruction` under two profiles with diffs
+// ⊆ profile-owned fields, and to `workflow_node` under a definition whose
+// control strategy declares `workflow_execution`; the permission/effect/
+// budget tables are identical across the bundles.
+
+#[test]
+fn ac_r_2_4_5_4_two_profiles_two_targets() {
+    let (store, sealed, _v) = sealed_doc_with("s454", reference_doc(unbound()), vec![], vec![]);
+    let (patch, string_replace) = minimal_profiles();
+    let patch = with_suite(&patch, patch_suite());
+    let string_replace = with_suite(&string_replace, string_replace_suite());
+
+    // instruction under both profiles — the compile-time product differs
+    // only in the profile-owned `procedure_render` prefix.
+    let proc = sealed
+        .document
+        .nodes
+        .iter()
+        .find(|n| n.semantic_id() == "test:proc")
+        .expect("the reference doc carries test:proc");
+    let d1 = hh_hir::procedure::select_target(
+        proc,
+        None,
+        &hh_hir::procedure::SelectCtx::default(),
+        &std::collections::BTreeMap::new(),
+    )
+    .unwrap();
+    assert_eq!(d1.target, hh_hir::procedure::CompilationTarget::Instruction);
+    let p1 = hh_compiler::plan::lower_procedure(
+        &sealed.document,
+        proc,
+        hh_hir::procedure::CompilationTarget::Instruction,
+        Some("profile:minimal-patch"),
+    )
+    .unwrap();
+    let p2 = hh_compiler::plan::lower_procedure(
+        &sealed.document,
+        proc,
+        hh_hir::procedure::CompilationTarget::Instruction,
+        Some("profile:minimal-string-replace"),
+    )
+    .unwrap();
+    let (
+        hh_compiler::plan::ProcedureProduct::Instruction { body: b1 },
+        hh_compiler::plan::ProcedureProduct::Instruction { body: b2 },
+    ) = (p1, p2)
+    else {
+        panic!("instruction product")
+    };
+    // The diff is exactly the profile-owned prefix — the typed step listing
+    // is identical.
+    let strip = |b: &str| b.lines().skip(1).collect::<Vec<_>>().join("\n");
+    assert_eq!(strip(&b1), strip(&b2), "diffs ⊆ profile-owned fields");
+    assert_ne!(b1, b2, "the profile prefix differs");
+
+    // workflow_node under a `workflow_execution` control strategy — the
+    // two Invoke steps lower to `step` plan nodes.
+    let wf_ctx = hh_hir::procedure::SelectCtx {
+        workflow_execution_declared: true,
+        ..Default::default()
+    };
+    let d2 =
+        hh_hir::procedure::select_target(proc, None, &wf_ctx, &std::collections::BTreeMap::new())
+            .unwrap();
+    assert_eq!(
+        d2.target,
+        hh_hir::procedure::CompilationTarget::WorkflowNode
+    );
+    let wf = hh_compiler::plan::lower_procedure(
+        &sealed.document,
+        proc,
+        hh_hir::procedure::CompilationTarget::WorkflowNode,
+        None,
+    )
+    .unwrap();
+    let hh_compiler::plan::ProcedureProduct::WorkflowNode { nodes } = wf else {
+        panic!("workflow product")
+    };
+    assert_eq!(nodes.len(), 2, "two Invoke steps → two step nodes");
+    assert!(nodes
+        .iter()
+        .all(|n| matches!(n.payload, hh_compiler::plan::PlanNodePayload::Step(_))));
+
+    // Permission/effect/budget tables identical across the two-profile
+    // bundles — they derive from the shared RuntimePlan.
+    let a = compile_with(&sealed, &store, &patch, vec!["mcp"]);
+    let b = compile_with(&sealed, &store, &string_replace, vec!["mcp"]);
+    assert_eq!(
+        a.runtime_plan.policies, b.runtime_plan.policies,
+        "permission/effect/budget tables identical across profiles"
+    );
+    // And the procedure's plan nodes are the same nodes lower_procedure
+    // emits under the workflow target.
+    assert!(a
+        .runtime_plan
+        .control
+        .iter()
+        .any(|n| n.hir_node_id == "test:proc"));
+}
+
+/// `subagent_task` never lowers — `DelegationUnavailable` propagates as a
+/// typed `PlanError`, never a silent instruction fallback.
+#[test]
+fn ac_r_2_4_5_4_subagent_target_never_falls_back() {
+    let (_store, sealed, _v) = sealed_doc_with("s454b", reference_doc(unbound()), vec![], vec![]);
+    let proc = sealed
+        .document
+        .nodes
+        .iter()
+        .find(|n| n.semantic_id() == "test:proc")
+        .unwrap();
+    assert!(matches!(
+        hh_compiler::plan::lower_procedure(
+            &sealed.document,
+            proc,
+            hh_hir::procedure::CompilationTarget::SubagentTask,
+            None,
+        ),
+        Err(hh_compiler::errors::CompileError::PlanError { .. })
+    ));
+}
+
+/// AC-R-2.4.1-13 — a mid-run profile switch re-renders the same plan;
+/// profile-opaque items land in `model.surface.relowered.dropped_items[]`
+/// with typed placeholders; `plan_id` unchanged (the runtime plan is equal).
+#[test]
+fn ac_r_2_4_1_13_relower_drops_stale_signature_and_keeps_plan() {
+    use hh_compiler::profile::ProfileRuleKind;
+    let (store, sealed, _v) =
+        sealed_doc_with("relower13", reference_doc(unbound()), vec![], vec![]);
+    let (patch, string_replace) = minimal_profiles();
+    let patch = with_suite(&patch, patch_suite());
+    let old = compile_with(&sealed, &store, &patch, vec!["mcp"]);
+    // The switched-to profile renders the transcript with
+    // `stale_signature = drop` — the old profile's rendered items are
+    // profile-opaque and land in `dropped_items`, never silently kept.
+    let mut dropped = with_suite(&string_replace, string_replace_suite());
+    let mut tr = dropped.rules[0].clone();
+    tr.rule_id = "minimal-string-replace.transcript_render".to_string();
+    tr.kind = ProfileRuleKind::TranscriptRender;
+    tr.owned_fields = vec!["transcript_render/stale_signature".to_string()];
+    tr.params = Json::obj([("stale_signature", Json::str("drop"))]);
+    dropped.rules.push(tr);
+    dropped.content_hash = profile_identity(&dropped);
+    let inputs = inputs_multi(&sealed, &dropped, vec!["mcp"]);
+    let profiles = MapProfileView::of(vec![dropped.clone()]);
+    let cat = hh_assembly::Stage1Catalog::stage1();
+    let (new, migration) = relower(
+        &old,
+        &inputs,
+        &profiles,
+        &store,
+        &cat,
+        &kernel(),
+        "profile_swap",
+    )
+    .expect("relower compiles under the drop signature");
+    // The plan is unchanged — stages 3–5 only re-ran.
+    assert_eq!(old.runtime_plan, new.runtime_plan);
+    assert!(migration
+        .dropped_items
+        .iter()
+        .any(|d| d.get("kind").and_then(Json::as_str) == Some("stale_signature")));
+    // The event carries the dropped items under
+    // `model.surface.relowered.dropped_items[]`.
+    let ev = hh_compiler::relowered_event(&migration);
+    match ev.get("dropped_items") {
+        Some(Json::Arr(items)) => assert!(items
+            .iter()
+            .any(|d| d.get("kind").and_then(Json::as_str) == Some("stale_signature"))),
+        other => panic!("dropped_items must be an array, got {other:?}"),
+    }
+}

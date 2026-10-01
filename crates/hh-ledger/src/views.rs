@@ -54,6 +54,13 @@ pub enum ViewKind {
     /// (§5c.3; S1.19). Folded by `hh-context`; `lexical` queries serve from it
     /// (`IndexUnavailable` until materialized).
     LexicalIndex,
+    /// `structural_index` — the `R-2.4.3` Stage-3 structural index over the
+    /// `MemoryStore` (§5c.3; OQ-203's Stage-3 scope: anchors and
+    /// `mentioned_idents` extracted from each item's `index_text` surface —
+    /// path-like tokens become anchors, identifier-like tokens become
+    /// idents; an AST-derived code index remains OQ-203). Folded by
+    /// `hh-context`; `structural` queries serve from it.
+    StructuralIndex,
     /// `memory_stale_index` — `MemoryStaleIndex[version_id] →
     /// [stale_member_ids]` (§5c.4; S1.19). Folded by `hh-context`.
     MemoryStaleIndex,
@@ -91,6 +98,7 @@ impl ViewKind {
             ViewKind::MetricView => "metric_view",
             ViewKind::AuditView => "audit_view",
             ViewKind::LexicalIndex => "lexical_index",
+            ViewKind::StructuralIndex => "structural_index",
             ViewKind::MemoryStaleIndex => "memory_stale_index",
             ViewKind::MemoryUsage => "memory_usage",
             ViewKind::BranchTree => "branch_tree",
@@ -111,6 +119,7 @@ impl ViewKind {
             "metric_view" => Some(ViewKind::MetricView),
             "audit_view" => Some(ViewKind::AuditView),
             "lexical_index" => Some(ViewKind::LexicalIndex),
+            "structural_index" => Some(ViewKind::StructuralIndex),
             "memory_stale_index" => Some(ViewKind::MemoryStaleIndex),
             "memory_usage" => Some(ViewKind::MemoryUsage),
             "branch_tree" => Some(ViewKind::BranchTree),

@@ -421,13 +421,35 @@ fn ac_r_2_4_5_11_malformed_precondition_is_schema_violation() {
     );
 }
 
-// ── select_target — C0 = instruction only ────────────────────────────────────
+// ── select_target — the full Stage-3 rule (§5c.5 row 8) ─────────────────────
+
+use hh_hir::procedure::{
+    b_procedure, i_procedure, validate_hook_guard, HookGuardError, SelectCtx, TargetDecision,
+    WorkflowReason,
+};
+use std::collections::BTreeMap;
+
+/// An empty resolution index (no `Loop` bounds to resolve).
+fn empty_index<'a>() -> BTreeMap<String, &'a Node> {
+    BTreeMap::new()
+}
+
+/// A ctx that declares `workflow_execution`.
+fn wf_ctx() -> SelectCtx {
+    SelectCtx {
+        workflow_execution_declared: true,
+        ..SelectCtx::default()
+    }
+}
 
 #[test]
 fn select_target_defaults_to_instruction() {
     let p = proc_node("test:proc", vec![], 5);
-    let t = select_target(&p, None).expect("instruction is the C0 target");
-    assert_eq!(t, CompilationTarget::Instruction);
+    let d = select_target(&p, None, &SelectCtx::default(), &empty_index())
+        .expect("instruction is the default target");
+    assert_eq!(d.target, CompilationTarget::Instruction);
+    assert_eq!(d.rule_id, "default_instruction");
+    assert!(d.i, "an empty body is self-contained");
 }
 
 #[test]
@@ -436,17 +458,349 @@ fn select_target_refuses_unavailable_targets_typed() {
     p.surface = Some(SurfaceRecord::Procedure(ProcedureSurface {
         compile_hint: CompileHint::WorkflowNode,
     }));
+    // An override whose strategy isn't bound is `TargetInfeasible`, not a
+    // silent fallback to `instruction`.
     assert!(matches!(
-        select_target(&p, None),
-        Err(SelectError::UnexpressibleAsWorkflow { .. })
+        select_target(&p, None, &SelectCtx::default(), &empty_index()),
+        Err(SelectError::TargetInfeasible { .. })
     ));
+    // With the strategy bound and an empty (compilable) body the override
+    // is honoured.
+    assert_eq!(
+        select_target(&p, None, &wf_ctx(), &empty_index())
+            .unwrap()
+            .target,
+        CompilationTarget::WorkflowNode
+    );
     p.surface = Some(SurfaceRecord::Procedure(ProcedureSurface {
         compile_hint: CompileHint::SubagentTask,
     }));
     assert!(matches!(
-        select_target(&p, None),
+        select_target(&p, None, &SelectCtx::default(), &empty_index()),
         Err(SelectError::DelegationUnavailable { .. })
     ));
+}
+
+#[test]
+fn b_procedure_typed_failure_reasons() {
+    let params = BTreeMap::new();
+    // unbound_arg
+    let steps = vec![ProcedureStep::Invoke {
+        tool: sel("test:tool"),
+        args: Json::obj([("path", Json::str("$param:missing"))]),
+    }];
+    let (step, reason) = b_procedure(&steps, &params, &empty_index(), "test:proc").unwrap_err();
+    assert!(step.contains("step[0]"));
+    assert_eq!(reason, WorkflowReason::UnboundArg);
+    // uncheckable_branch — a free-form condition no validator backs.
+    let steps = vec![ProcedureStep::Branch {
+        condition: Json::str("whenever it feels right"),
+        then_body: vec![],
+        else_body: vec![],
+    }];
+    let (_, reason) = b_procedure(&steps, &params, &empty_index(), "p").unwrap_err();
+    assert_eq!(reason, WorkflowReason::UncheckableBranch);
+    // unbounded_loop — the bound doesn't resolve to a Budget.
+    let steps = vec![ProcedureStep::Loop {
+        bound: sel("test:tool"),
+        body: vec![],
+    }];
+    let (_, reason) = b_procedure(&steps, &params, &empty_index(), "p").unwrap_err();
+    assert_eq!(reason, WorkflowReason::UnboundedLoop);
+    // opaque_without_interface
+    let payload = hh_hir::leaves::CompiledPayload {
+        format_tag: "script".into(),
+        bytes_hash: "sha256:deadbeef".into(),
+        declared_interface: None,
+        owner: "test".into(),
+        provenance: prov(5),
+    };
+    let steps = vec![ProcedureStep::Opaque(payload)];
+    let (_, reason) = b_procedure(&steps, &params, &empty_index(), "p").unwrap_err();
+    assert_eq!(reason, WorkflowReason::OpaqueWithoutInterface);
+}
+
+#[test]
+fn select_target_workflow_node_when_b_and_strategy_declared() {
+    // A validator-conditioned branch is compilable — `workflow_node` wins
+    // under a `workflow_execution` control strategy.
+    let p = proc_node(
+        "test:proc",
+        vec![ProcedureStep::Branch {
+            condition: Json::obj([("kind", Json::str("validator_passed"))]),
+            then_body: vec![ProcedureStep::Instruction(text("yes", 6))],
+            else_body: vec![ProcedureStep::Instruction(text("no", 7))],
+        }],
+        5,
+    );
+    let d = select_target(&p, None, &wf_ctx(), &empty_index()).unwrap();
+    assert_eq!(d.target, CompilationTarget::WorkflowNode);
+    assert_eq!(d.rule_id, "b_workflow");
+    assert!(d.b);
+    // The same procedure under the default ctx is `instruction` — the
+    // decision record explains why (`B` true, no declared strategy).
+    let d = select_target(&p, None, &SelectCtx::default(), &empty_index()).unwrap();
+    assert_eq!(d.target, CompilationTarget::Instruction);
+    assert!(d.b, "B(P) holds — the ctx refused the workflow path");
+}
+
+#[test]
+fn select_target_unexpressible_as_workflow_falls_through_to_instruction() {
+    // An uncheckable branch: `B(P)` fails typed, and under the default ctx
+    // the procedure still compiles to `instruction` (rule ordering — the
+    // typed reason is only a refusal when workflow is the only path).
+    let p = proc_node(
+        "test:proc",
+        vec![ProcedureStep::Branch {
+            condition: Json::str("vibes"),
+            then_body: vec![],
+            else_body: vec![],
+        }],
+        5,
+    );
+    let d = select_target(&p, None, &SelectCtx::default(), &empty_index()).unwrap();
+    assert_eq!(d.target, CompilationTarget::Instruction);
+    assert!(!d.b);
+    // With the strategy declared, B fails so workflow is skipped — still
+    // instruction (rule iv), never a silent WorkflowNode.
+    let d = select_target(&p, None, &wf_ctx(), &empty_index()).unwrap();
+    assert_eq!(d.target, CompilationTarget::Instruction);
+}
+
+#[test]
+fn select_target_subagent_path_is_delegation_unavailable() {
+    // I(P) ∧ subagents bound ∧ declared → `DelegationUnavailable` (the
+    // honest Stage-3 refusal — subagent_task never silently lands).
+    let p = proc_node("test:proc", vec![], 5);
+    let ctx = SelectCtx {
+        subagents_bound: true,
+        profile_declares_subagents: true,
+        ..SelectCtx::default()
+    };
+    assert!(matches!(
+        select_target(&p, None, &ctx, &empty_index()),
+        Err(SelectError::DelegationUnavailable { .. })
+    ));
+}
+
+#[test]
+fn select_target_unexpressible_surface_when_body_exceeds_budget() {
+    let p = proc_node(
+        "test:proc",
+        vec![ProcedureStep::Instruction(text(&"x".repeat(200), 5))],
+        5,
+    );
+    let ctx = SelectCtx {
+        procedure_inline_budget: 16,
+        ..SelectCtx::default()
+    };
+    assert!(matches!(
+        select_target(&p, None, &ctx, &empty_index()),
+        Err(SelectError::UnexpressibleSurface { .. })
+    ));
+}
+
+#[test]
+fn select_target_risk_floor_requires_expected_evidence() {
+    // An Opaque step with an open-world irreversible effect: `R(P)` holds,
+    // `expected_evidence` empty → `ProcedureUnverifiable` on every path.
+    let mut e = hh_hir::kinds::EffectClass::domain_only(hh_hir::kinds::EffectDomain::Exec);
+    e.attributes = Some(hh_hir::kinds::EffectAttributes {
+        mutability: hh_hir::kinds::Mutability::Destructive,
+        repeat_safety: hh_hir::kinds::RepeatSafety::NonIdempotent,
+        world: hh_hir::kinds::World::Open,
+        reversibility: hh_hir::kinds::Reversibility::Irreversible,
+    });
+    let payload = hh_hir::leaves::CompiledPayload {
+        format_tag: "script".into(),
+        bytes_hash: "sha256:deadbeef".into(),
+        declared_interface: Some(hh_hir::leaves::DeclaredInterface {
+            inputs: Json::Null,
+            outputs: Json::Null,
+            effects: [e].into_iter().collect(),
+            deterministic: false,
+            target: "subprocess_confined".into(),
+        }),
+        owner: "test".into(),
+        provenance: prov(5),
+    };
+    let mut p = proc_node("test:proc", vec![ProcedureStep::Opaque(payload)], 5);
+    proc_mut(&mut p).expected_evidence = Json::Null;
+    assert!(matches!(
+        select_target(&p, None, &SelectCtx::default(), &empty_index()),
+        Err(SelectError::ProcedureUnverifiable { .. })
+    ));
+    // Declaring expected_evidence discharges the floor.
+    proc_mut(&mut p).expected_evidence = Json::Arr(vec![Json::str("exit-code")]);
+    let d = select_target(&p, None, &SelectCtx::default(), &empty_index()).unwrap();
+    assert_eq!(d.target, CompilationTarget::Instruction);
+    assert!(d.r.contains(&"irreversible".to_string()));
+    assert!(d.r.contains(&"scope:external".to_string()));
+}
+
+#[test]
+fn i_procedure_isolation_predicate() {
+    let params = BTreeMap::new();
+    // A Delegate step breaks isolation.
+    let steps = vec![ProcedureStep::Delegate {
+        spec: Json::Null,
+        budget: sel("test:budget"),
+        permission: sel("test:perm"),
+    }];
+    assert!(!i_procedure(&steps, &params));
+    // A self-contained body isolates.
+    let steps = vec![ProcedureStep::Instruction(text("self-contained", 5))];
+    assert!(i_procedure(&steps, &params));
+    // A body referencing an undeclared param reaches outside its surface.
+    let steps = vec![ProcedureStep::Invoke {
+        tool: sel("test:tool"),
+        args: Json::obj([("x", Json::str("$param:undeclared"))]),
+    }];
+    assert!(!i_procedure(&steps, &params));
+}
+
+#[test]
+fn ac_r_2_4_5_5_select_target_total_on_corpus() {
+    // ≥50 procedures, every outcome a `TargetDecision` or one of the four
+    // typed refusals — never a panic, never a silent fallback.
+    let ctxs = [
+        SelectCtx::default(),
+        wf_ctx(),
+        SelectCtx {
+            subagents_bound: true,
+            profile_declares_subagents: true,
+            ..SelectCtx::default()
+        },
+        SelectCtx {
+            procedure_inline_budget: 4,
+            ..SelectCtx::default()
+        },
+    ];
+    let mut outcomes = 0usize;
+    for i in 0..64u64 {
+        let steps = match i % 4 {
+            0 => vec![ProcedureStep::Instruction(text(&format!("body {i}"), 5))],
+            1 => vec![ProcedureStep::Branch {
+                condition: Json::obj([("kind", Json::str("validator_passed"))]),
+                then_body: vec![ProcedureStep::Instruction(text("t", 6))],
+                else_body: vec![],
+            }],
+            2 => vec![ProcedureStep::Loop {
+                bound: sel("test:budget"),
+                body: vec![],
+            }],
+            _ => vec![ProcedureStep::Invoke {
+                tool: sel("test:tool"),
+                args: Json::obj([("p", Json::str("$param:x"))]),
+            }],
+        };
+        let p = proc_node(&format!("test:proc-{i}"), steps, 5);
+        for ctx in &ctxs {
+            match select_target(&p, None, ctx, &empty_index()) {
+                Ok(TargetDecision {
+                    target,
+                    b,
+                    i,
+                    rule_id,
+                    ..
+                }) => {
+                    // Every non-instruction result is explained by {B, I}.
+                    if target == CompilationTarget::WorkflowNode {
+                        assert!(b, "workflow_node without B(P): {rule_id}");
+                    }
+                    if target == CompilationTarget::SubagentTask {
+                        assert!(i, "subagent_task without I(P)");
+                    }
+                    outcomes += 1;
+                }
+                Err(e) => {
+                    assert!(
+                        matches!(
+                            e,
+                            SelectError::TargetInfeasible { .. }
+                                | SelectError::UnexpressibleAsWorkflow { .. }
+                                | SelectError::DelegationUnavailable { .. }
+                                | SelectError::ProcedureUnverifiable { .. }
+                                | SelectError::UnexpressibleSurface { .. }
+                        ),
+                        "a typed refusal, never a panic: {e:?}"
+                    );
+                    outcomes += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(outcomes, 64 * 4, "total: every (P, ctx) decides");
+}
+
+// ── AC-R-2.4.5-12: hook bodies — the closed guard-output vocabulary ─────────
+
+#[test]
+fn ac_r_2_4_5_12_guard_allow_is_refused() {
+    let steps: Vec<ProcedureStep> = vec![];
+    let grants = std::collections::BTreeSet::new();
+    // `allow` as an output key is refused.
+    let outputs = Json::obj([("allow", Json::Bool(true))]);
+    assert_eq!(
+        validate_hook_guard(&steps, &outputs, &grants),
+        Err(HookGuardError::GuardReturnsAllow)
+    );
+    // `narrow: allow` is refused too — `allow` is never a guard output.
+    let outputs = Json::obj([("narrow", Json::str("allow"))]);
+    assert_eq!(
+        validate_hook_guard(&steps, &outputs, &grants),
+        Err(HookGuardError::GuardReturnsAllow)
+    );
+}
+
+#[test]
+fn ac_r_2_4_5_12_guard_vocabulary_is_closed() {
+    let steps: Vec<ProcedureStep> = vec![];
+    let grants = ["test:tool".to_string()].into_iter().collect();
+    // `{narrow, additional_context?, replacement_proposal?}` validates.
+    let outputs = Json::obj([
+        ("narrow", Json::str("deny")),
+        (
+            "additional_context",
+            Json::obj([("max_tokens", Json::Int(64))]),
+        ),
+        (
+            "replacement_proposal",
+            Json::obj([("reenters", Json::str("authorize"))]),
+        ),
+    ]);
+    validate_hook_guard(&steps, &outputs, &grants).expect("the closed vocabulary validates");
+    // A foreign key is refused typed.
+    let outputs = Json::obj([("side_effect", Json::Bool(true))]);
+    assert!(matches!(
+        validate_hook_guard(&steps, &outputs, &grants),
+        Err(HookGuardError::GuardOutputOutOfVocabulary { .. })
+    ));
+    // `narrow` outside {deny, ask, none}.
+    let outputs = Json::obj([("narrow", Json::str("maybe"))]);
+    assert!(matches!(
+        validate_hook_guard(&steps, &outputs, &grants),
+        Err(HookGuardError::BadNarrow { .. })
+    ));
+}
+
+#[test]
+fn ac_r_2_4_5_12_guard_invokes_must_be_granted_reads() {
+    // A guard narrows or proposes — an Invoke on an ungranted capability is
+    // an effect the guard may not perform (a `replacement_proposal`
+    // re-enters `authorize`; it never runs directly).
+    let steps = vec![ProcedureStep::Invoke {
+        tool: sel("test:ungranted"),
+        args: Json::Null,
+    }];
+    let grants = std::collections::BTreeSet::new();
+    let outputs = Json::obj([("narrow", Json::str("none"))]);
+    assert!(matches!(
+        validate_hook_guard(&steps, &outputs, &grants),
+        Err(HookGuardError::GuardHasEffects { .. })
+    ));
+    let grants = ["test:ungranted".to_string()].into_iter().collect();
+    validate_hook_guard(&steps, &outputs, &grants).expect("a granted read is fine");
 }
 
 // ── check_preconditions — the run-side evaluation ────────────────────────────

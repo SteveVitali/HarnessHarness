@@ -298,6 +298,10 @@ mod tests {
             detector: None,
             rule_id: None,
             predicate_ref: None,
+            kind: None,
+            by_reference: None,
+            signal: None,
+            evidence_ref: None,
         }
     }
 

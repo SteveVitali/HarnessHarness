@@ -74,3 +74,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0282](ADR-0282-s3.5-assembly-service-rulings.md) | S3.5 Assembly-service rulings | S3.5 (`051_S3.5__assembly-service.md`) | Accepted |
 | [ADR-0283](ADR-0283-s3.6-replay-fault-counterfactual-rulings.md) | S3.6 Replay, fault-battery, and counterfactual rulings | S3.6 (`052_S3.6__replay-fault-and-counterfactual.md`) | Accepted |
 | [ADR-0284](ADR-0284-s3.7-model-plane-eval-rulings.md) | S3.7 model-plane evaluation rulings | S3.7 (`053_S3.7__model-plane-eval.md`) | Accepted |
+| [ADR-0285](ADR-0285-s3.8-context-memory-eval-rulings.md) | S3.8 context/memory evaluation rulings | S3.8 (`054_S3.8__context-memory-eval.md`) | Accepted |
