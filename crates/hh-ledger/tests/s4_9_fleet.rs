@@ -17,8 +17,7 @@ use hh_wire::json::Json;
 fn dir(tag: &str) -> PathBuf {
     static N: AtomicU64 = AtomicU64::new(0);
     let n = N.fetch_add(1, Ordering::Relaxed);
-    let p =
-        std::env::temp_dir().join(format!("hh-ledger-s49-{}-{tag}-{n}", std::process::id()));
+    let p = std::env::temp_dir().join(format!("hh-ledger-s49-{}-{tag}-{n}", std::process::id()));
     let _ = std::fs::remove_dir_all(&p);
     p
 }
@@ -51,12 +50,8 @@ fn fleet_manifest() -> RunManifest {
 #[test]
 fn fleet_boundary_trigger_admissibility() {
     let mut s = store("trig", 1_000);
-    let (agent_run, agent_lease) = s
-        .open_run(agent_manifest(), "writer-a")
-        .unwrap();
-    let (fleet_run, fleet_lease) = s
-        .open_run(fleet_manifest(), "writer-f")
-        .unwrap();
+    let (agent_run, agent_lease) = s.open_run(agent_manifest(), "writer-a").unwrap();
+    let (fleet_run, fleet_lease) = s.open_run(fleet_manifest(), "writer-f").unwrap();
 
     // Agent run — external/manual refuse typed (the Stage-4 gate's
     // unchanged member; fleet admissibility never leaks downward, CC6).

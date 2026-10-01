@@ -220,9 +220,7 @@ pub fn derive_state(v: &WorkItemView) -> String {
         // `human_gate` alone is the handoff *state* (§5i.1 #4's
         // `blocked → handoff → terminal` ordering; an item carrying any
         // other live cause — or an open escalation — reports `blocked`).
-        if v.blocked.iter().all(|c| c == "human_gate")
-            && v.escalation.is_none()
-        {
+        if v.blocked.iter().all(|c| c == "human_gate") && v.escalation.is_none() {
             return "handoff".into();
         }
         return "blocked".into();
@@ -257,7 +255,10 @@ impl ItemOn {
     pub fn to_json(&self) -> Json {
         let mut m = BTreeMap::new();
         if let Some(t) = self.stuck_after_ms {
-            m.insert("stuck".into(), Json::obj([("after_ms", Json::Int(t as i64))]));
+            m.insert(
+                "stuck".into(),
+                Json::obj([("after_ms", Json::Int(t as i64))]),
+            );
         }
         if let Some(e) = &self.blocked_escalate {
             let mut esc = BTreeMap::new();
@@ -265,10 +266,7 @@ impl ItemOn {
             if let Some(d) = e.deadline_ms {
                 esc.insert("deadline_ms".into(), Json::Int(d as i64));
             }
-            m.insert(
-                "blocked".into(),
-                Json::obj([("escalate", Json::Obj(esc))]),
-            );
+            m.insert("blocked".into(), Json::obj([("escalate", Json::Obj(esc))]));
         }
         if let Some(e) = &self.dispatched_escalate {
             let mut esc = BTreeMap::new();
@@ -297,10 +295,7 @@ impl ItemOn {
             if let Some(d) = e.deadline_ms {
                 esc.insert("deadline_ms".into(), Json::Int(d as i64));
             }
-            m.insert(
-                "stall".into(),
-                Json::obj([("escalate", Json::Obj(esc))]),
-            );
+            m.insert("stall".into(), Json::obj([("escalate", Json::Obj(esc))]));
         }
         if self.ack_required {
             m.insert("ack_required".into(), Json::Bool(true));
@@ -357,9 +352,9 @@ impl ItemOn {
                 }
             }
         };
-        let retry = o.get("retry").or_else(|| {
-            o.get("dispatch_error").and_then(|d| d.get("retry"))
-        });
+        let retry = o
+            .get("retry")
+            .or_else(|| o.get("dispatch_error").and_then(|d| d.get("retry")));
         let (max_attempts, backoff) = match retry {
             None | Some(Json::Null) => (None, None),
             Some(r) => (
@@ -376,13 +371,11 @@ impl ItemOn {
             Some(Json::Arr(a)) => {
                 let mut out = Vec::new();
                 for v in a {
-                    out.push(
-                        NarrowingLeaf::from_json(v, "/on/narrowing").map_err(|e| {
-                            FleetError::SchemaViolation {
-                                detail: format!("item narrowing leaf: {e:?}"),
-                            }
-                        })?,
-                    );
+                    out.push(NarrowingLeaf::from_json(v, "/on/narrowing").map_err(|e| {
+                        FleetError::SchemaViolation {
+                            detail: format!("item narrowing leaf: {e:?}"),
+                        }
+                    })?);
                 }
                 out
             }
@@ -460,10 +453,7 @@ impl WorkItemInit {
                 &s("item_id")?,
                 o.get("idempotency_key").and_then(Json::as_str),
             ),
-            owner: o
-                .get("owner")
-                .and_then(Json::as_str)
-                .map(str::to_string),
+            owner: o.get("owner").and_then(Json::as_str).map(str::to_string),
             blocking: match o.get("blocking") {
                 None | Some(Json::Null) => Vec::new(),
                 Some(Json::Arr(a)) => a

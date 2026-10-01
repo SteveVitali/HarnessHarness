@@ -212,11 +212,8 @@ pub const OBLIGATIONS: &[AuditObligation] = &[
 /// `control.work_item.dispatched{verb:"run"}` rows anchor the child's
 /// `lifecycle.run.created` in `causes[]`, and the child's own seq-0 row
 /// carries the same `spawn_event` link in its `causes` (§5i.1 #11).
-pub const DEFERRED_OBLIGATIONS: &[&str] = &[
-    "subagent_anchor",
-    "evolution_link",
-    "producer_resolution",
-];
+pub const DEFERRED_OBLIGATIONS: &[&str] =
+    &["subagent_anchor", "evolution_link", "producer_resolution"];
 
 // ── checkpoint signing (R-2.8.6 Stage 2; ADR-0050 §8(a) C0) ──────────────
 
