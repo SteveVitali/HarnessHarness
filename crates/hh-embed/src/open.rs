@@ -490,6 +490,17 @@ impl EmbedService {
         manifest.configuration_id = Some(configuration_id.clone());
         manifest.configuration_version_id = Some(configuration_version_id.clone());
         manifest.harness_def_ref = Some(manifest_ref.clone());
+        // §6.2's one-snapshot rule: the manifest pins the registry snapshot
+        // the definition resolved against (§3.3.6 `resolved.registry_snapshot_id`)
+        // so `kernel.bundle` emits it on every bundle, experiment-bound or not.
+        manifest.registry_snapshot_id = sealed
+            .document
+            .assembly
+            .as_ref()
+            .and_then(|a| a.get("resolved"))
+            .and_then(|r| r.get("registry_snapshot_id"))
+            .and_then(Json::as_str)
+            .map(str::to_string);
         manifest.attendance = (
             AttendanceValue::parse(&attendance.value).unwrap_or(AttendanceValue::Async),
             AttendanceSource::parse(&attendance.source).unwrap_or(AttendanceSource::Declared),

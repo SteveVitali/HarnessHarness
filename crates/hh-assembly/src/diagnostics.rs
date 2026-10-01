@@ -178,6 +178,10 @@ pub enum Code {
     /// family predicate reference anywhere in the definition (7-L2; ADR-0143 D2 —
     /// **error, never warning**).
     LcdBenchmarkConditionedRule,
+    /// `C-LCD-5 RegistryOperationBound` — a `ToolCapability` bound to a registry
+    /// operation (ADR-0151 R6 — the registry is never model-facing; a definition
+    /// binding one fails `validate_assembly`; AC-R-2.10.2-6).
+    LcdRegistryOperationBound,
     // ── instantiate ──────────────────────────────────────────────────────────────
     /// `C-LOC-1 LocalityUnsupported` — the variant's `implementation.placement` is not
     /// bindable in this runtime (S1: in-process only).
@@ -284,6 +288,7 @@ impl Code {
             LcdIdentityIncludesSurface => "C-LCD-2".into(),
             LcdInheritanceContract => "C-LCD-3".into(),
             LcdBenchmarkConditionedRule => "C-LCD-4".into(),
+            LcdRegistryOperationBound => "C-LCD-5".into(),
             LocUnsupported => "C-LOC-1".into(),
             TrustDenied => "C-TRUST-1".into(),
             SecInlineSecret => "C-SEC-1".into(),
@@ -346,6 +351,7 @@ impl Code {
             LcdIdentityIncludesSurface => "IdentityIncludesSurface",
             LcdInheritanceContract => "InheritanceContract",
             LcdBenchmarkConditionedRule => "BenchmarkConditionedRule",
+            LcdRegistryOperationBound => "RegistryOperationBound",
             LocUnsupported => "LocalityUnsupported",
             TrustDenied => "TrustDenied",
             SecInlineSecret => "InlineSecret",
@@ -408,6 +414,7 @@ impl Code {
             LcdIdentityIncludesSurface,
             LcdInheritanceContract,
             LcdBenchmarkConditionedRule,
+            LcdRegistryOperationBound,
             LocUnsupported,
             TrustDenied,
             SecInlineSecret,
@@ -586,6 +593,7 @@ impl Code {
             "C-LCD-2" => LcdIdentityIncludesSurface,
             "C-LCD-3" => LcdInheritanceContract,
             "C-LCD-4" => LcdBenchmarkConditionedRule,
+            "C-LCD-5" => LcdRegistryOperationBound,
             "C-LOC-1" => LocUnsupported,
             "C-TRUST-1" => TrustDenied,
             "C-SEC-1" => SecInlineSecret,

@@ -201,6 +201,7 @@ dependencies = [
  "hh-embed-schema",
  "hh-env",
  "hh-eval",
+ "hh-experiment",
  "hh-gateway",
  "hh-hir",
  "hh-identity",
@@ -260,6 +261,19 @@ dependencies = [
  "hh-compiler",
  "hh-identity",
  "hh-lab",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-experiment"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-identity",
+ "hh-lab",
+ "hh-ledger",
  "hh-ontology",
  "hh-provenance",
  "hh-wire",

@@ -21,6 +21,13 @@
 //!   `ReattemptPolicy`, `ValidationStrategy`, `CellPlan`/`RunPlan`/`OrderPlan`,
 //!   `run_plan_id`, and the closed `ExperimentRefusal` register set over a
 //!   `SpecContext` view.
+//! - [`expand`] — the pure `expand(spec) → CellPlan` (S3.4a): cells `arm ×
+//!   task`, the two-level `l^(k−p)` generator algebra (defining subgroup,
+//!   resolution, aliasing table), deterministic `seed_material`/
+//!   `cache_scope_salt`, and the `OrderPlan`/`order_key` scheduling helpers.
+//! - [`exemplars`] — the two canonical `ExperimentSpec` documents
+//!   (ADR-0156 D1/D2) instantiated at Stage-3 size:
+//!   `lab/compaction-family-v1` and `lab/control-strategy-family-v1`.
 //! - [`analysis`] — `AnalysisSpec`, `AnalysisRecord`, `AnalysisReport`,
 //!   `QuerySpec`, `WatermarkSet`, `CellRecord`, `RenderSpec`, and the amended
 //!   `ComparisonReport` (ADR-0046 as amended).
@@ -35,6 +42,8 @@
 pub mod analysis;
 pub mod bench;
 pub mod debt;
+pub mod exemplars;
+pub mod expand;
 pub mod experiment;
-mod json_util;
+pub mod json_util;
 pub mod model;

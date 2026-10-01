@@ -24,6 +24,7 @@
 pub(crate) mod bundle_ops;
 pub mod envops;
 pub(crate) mod eval_ops;
+pub(crate) mod experiment_ops;
 pub mod frames;
 pub mod inject;
 pub mod open;

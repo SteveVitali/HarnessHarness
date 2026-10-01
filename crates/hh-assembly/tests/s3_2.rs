@@ -464,3 +464,56 @@ fn stage_6a_compatible_profile_and_declarations_pass() {
             .collect::<Vec<_>>()
     );
 }
+
+/// AC-R-2.10.2-6 / ADR-0151 R6 — a `ToolCapability` bound to a registry
+/// operation refuses at `validate_assembly` (C-LCD-5): the registry is
+/// never model-facing; the model-facing registry is the tool catalog.
+#[test]
+fn registry_operation_bound_as_tool_capability_refuses() {
+    let mut doc = doc_with(&stage1_assembly());
+    let mut n = tool_node("test:regtool", 5);
+    if let hh_hir::records::KindRecord::ToolCapability(t) = &mut n.semantic {
+        t.source = Json::obj([
+            ("kind", Json::str("registry")),
+            ("operation", Json::str("lab.registry.query")),
+        ]);
+    }
+    doc.nodes.push(n);
+    let r = hh_assembly::validate_assembly(
+        hh_assembly::Subject::Authored(&doc),
+        &Stage1Catalog::stage1(),
+        None,
+        &kernel(),
+    );
+    assert!(
+        r.diagnostics
+            .iter()
+            .any(|d| d.code == Code::LcdRegistryOperationBound && d.stage == Stage::Validate(7)),
+        "C-LCD-5 fires: {:?}",
+        r.diagnostics
+            .iter()
+            .map(|d| d.code.code())
+            .collect::<Vec<_>>()
+    );
+
+    // A catalog-bound tool stays silent — the check is source-scoped.
+    let mut doc2 = doc_with(&stage1_assembly());
+    let mut n2 = tool_node("test:tool", 5);
+    if let hh_hir::records::KindRecord::ToolCapability(t) = &mut n2.semantic {
+        t.source = Json::obj([
+            ("kind", Json::str("catalog_tool")),
+            ("name", Json::str("grep")),
+        ]);
+    }
+    doc2.nodes.push(n2);
+    let r2 = hh_assembly::validate_assembly(
+        hh_assembly::Subject::Authored(&doc2),
+        &Stage1Catalog::stage1(),
+        None,
+        &kernel(),
+    );
+    assert!(!r2
+        .diagnostics
+        .iter()
+        .any(|d| d.code == Code::LcdRegistryOperationBound));
+}

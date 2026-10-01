@@ -286,6 +286,11 @@ pub struct ExperimentBinding {
     pub match_spec_ref: Option<String>,
     /// `suite_manifest_ref` — the pinned suite manifest.
     pub suite_manifest_ref: Option<String>,
+    /// `registry_snapshot_id` — the one snapshot the `Design` resolved against
+    /// (§6.2 "one snapshot per `Design`"; §6.3 consumes it for
+    /// `DependsOnDriftedCapability`). Propagated onto subject runs' bindings so
+    /// the row's `experiment?` member carries it.
+    pub registry_snapshot_id: Option<String>,
     /// `leaderboard_targets[]` — the leaderboards the experiment feeds.
     pub leaderboard_targets: Vec<String>,
     /// `experiment_run_id` — the parent experiment run (subject runs).
@@ -402,6 +407,14 @@ pub struct RunManifest {
     pub task_ref: Option<TaskRef>,
     /// The experiment binding (experiment + subject runs; §6.3/§6.5 row keys).
     pub experiment: Option<ExperimentBinding>,
+    /// `registry_snapshot_id` — the registry snapshot the run's definition
+    /// resolved against (§3.3.6 `resolved.registry_snapshot_id`; §6.2
+    /// "`registry_snapshot_id` in every bundle and `Design`"). Experiment
+    /// runs additionally pin it inside `experiment.registry_snapshot_id`
+    /// (the `Design`'s snapshot); the top-level member covers every other
+    /// `run_kind` so `kernel.bundle` never emits the field absent.
+    /// Optional: absent on manifests written before S3.4a.
+    pub registry_snapshot_id: Option<String>,
     /// The spec's trailing `…` — additional manifest facts preserved verbatim.
     pub extra: BTreeMap<String, Json>,
 }
@@ -444,6 +457,7 @@ impl RunManifest {
             grace_ms: 0,
             task_ref: None,
             experiment: None,
+            registry_snapshot_id: None,
             extra: BTreeMap::new(),
         }
     }
@@ -513,6 +527,7 @@ impl RunManifest {
             ("envelope_policy_ref", &self.envelope_policy_ref),
             ("healing_policy_ref", &self.healing_policy_ref),
             ("audit_policy_ref", &self.audit_policy_ref),
+            ("registry_snapshot_id", &self.registry_snapshot_id),
         ] {
             if let Some(v) = value {
                 if !is_pinned_id(v) {
@@ -584,6 +599,7 @@ impl RunManifest {
                 ("experiment.pre_registration_ref", &e.pre_registration_ref),
                 ("experiment.match_spec_ref", &e.match_spec_ref),
                 ("experiment.suite_manifest_ref", &e.suite_manifest_ref),
+                ("experiment.registry_snapshot_id", &e.registry_snapshot_id),
             ] {
                 if let Some(v) = value {
                     if !is_pinned_id(v) {
@@ -675,6 +691,7 @@ impl RunManifest {
             ("envelope_policy_ref", &self.envelope_policy_ref),
             ("healing_policy_ref", &self.healing_policy_ref),
             ("audit_policy_ref", &self.audit_policy_ref),
+            ("registry_snapshot_id", &self.registry_snapshot_id),
         ] {
             if let Some(v) = v {
                 put(k, Json::str(v));
@@ -709,6 +726,7 @@ impl RunManifest {
                 ("pre_registration_ref", &e.pre_registration_ref),
                 ("match_spec_ref", &e.match_spec_ref),
                 ("suite_manifest_ref", &e.suite_manifest_ref),
+                ("registry_snapshot_id", &e.registry_snapshot_id),
                 ("experiment_run_id", &e.experiment_run_id),
                 ("arm_id", &e.arm_id),
                 ("cell_id", &e.cell_id),
@@ -890,6 +908,7 @@ impl RunManifest {
                     pre_registration_ref: e_str("pre_registration_ref"),
                     match_spec_ref: e_str("match_spec_ref"),
                     suite_manifest_ref: e_str("suite_manifest_ref"),
+                    registry_snapshot_id: e_str("registry_snapshot_id"),
                     leaderboard_targets: match e.get("leaderboard_targets") {
                         None | Some(Json::Null) => Vec::new(),
                         Some(Json::Arr(items)) => items
@@ -948,6 +967,7 @@ impl RunManifest {
             "overrides_layer_id",
             "parent_run_id",
             "participant_class",
+            "registry_snapshot_id",
             "run_kind",
             "seed",
             "signer_key_ids",
@@ -998,6 +1018,7 @@ impl RunManifest {
             signer_key_ids,
             task_ref,
             experiment,
+            registry_snapshot_id: opt_str("registry_snapshot_id"),
             extra,
         })
     }
