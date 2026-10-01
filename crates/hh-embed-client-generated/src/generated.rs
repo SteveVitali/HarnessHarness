@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:cb50dcde26c5e52fb3ca213b313b8fa9fae138d4601b7c13801b045430676132";
+    "sha256:ef8321565c198d635775a128e6721ff6dae04705a427af114344437588fe80f0";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -586,6 +586,73 @@ impl ClassFilter {
     pub fn from_json(v: &Json) -> Result<ClassFilter, String> {
         Ok(ClassFilter {
             classes: match v.get("classes") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .ok_or_else(|| "expected string".to_string())?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClientDecl {
+    pub kind: String,
+    pub sink: Option<Json>,
+    pub surface_ref: Option<String>,
+    pub ui_caps: Vec<String>,
+}
+
+impl ClientDecl {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("kind", Json::str(self.kind.clone())));
+        if let Some(v) = &self.sink {
+            pairs.push(("sink", v.clone()));
+        }
+        if let Some(v) = &self.surface_ref {
+            pairs.push(("surface_ref", Json::str(v.clone())));
+        }
+        pairs.push((
+            "ui_caps",
+            Json::Arr(self.ui_caps.iter().map(|x| Json::str(x.clone())).collect()),
+        ));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ClientDecl, String> {
+        Ok(ClientDecl {
+            kind: {
+                let f = v
+                    .get("kind")
+                    .ok_or_else(|| format!("missing '{}'", "kind"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            sink: match v.get("sink") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
+            surface_ref: match v.get("surface_ref") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            ui_caps: match v.get("ui_caps") {
                 Some(f) => match f {
                     Json::Arr(a) => a
                         .iter()
@@ -2798,6 +2865,7 @@ pub struct OpenSessionParams {
     pub spec: OpenSpec,
     pub idempotency_key: String,
     pub invocation: Option<InvocationRecord>,
+    pub client: Option<ClientDecl>,
 }
 
 impl OpenSessionParams {
@@ -2807,6 +2875,9 @@ impl OpenSessionParams {
         pairs.push(("idempotency_key", Json::str(self.idempotency_key.clone())));
         if let Some(v) = &self.invocation {
             pairs.push(("invocation", v.to_json()));
+        }
+        if let Some(v) = &self.client {
+            pairs.push(("client", v.to_json()));
         }
         Json::obj(pairs)
     }
@@ -2829,6 +2900,10 @@ impl OpenSessionParams {
             },
             invocation: match v.get("invocation") {
                 Some(f) => Some(InvocationRecord::from_json(f).map_err(|e| e)?),
+                None => None,
+            },
+            client: match v.get("client") {
+                Some(f) => Some(ClientDecl::from_json(f).map_err(|e| e)?),
                 None => None,
             },
         })
@@ -4075,6 +4150,7 @@ pub struct RespondPermissionParams {
     pub permission_id: String,
     pub outcome: PermissionOutcome,
     pub idempotency_key: String,
+    pub responder: Option<ResponderDecl>,
 }
 
 impl RespondPermissionParams {
@@ -4084,6 +4160,9 @@ impl RespondPermissionParams {
         pairs.push(("permission_id", Json::str(self.permission_id.clone())));
         pairs.push(("outcome", self.outcome.to_json()));
         pairs.push(("idempotency_key", Json::str(self.idempotency_key.clone())));
+        if let Some(v) = &self.responder {
+            pairs.push(("responder", v.to_json()));
+        }
         Json::obj(pairs)
     }
 
@@ -4118,6 +4197,48 @@ impl RespondPermissionParams {
                 f.as_str()
                     .map(|s| s.to_string())
                     .ok_or_else(|| "expected string".to_string())?
+            },
+            responder: match v.get("responder") {
+                Some(f) => Some(ResponderDecl::from_json(f).map_err(|e| e)?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResponderDecl {
+    pub subject_ref: String,
+    pub surface_session_ref: Option<String>,
+}
+
+impl ResponderDecl {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("subject_ref", Json::str(self.subject_ref.clone())));
+        if let Some(v) = &self.surface_session_ref {
+            pairs.push(("surface_session_ref", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ResponderDecl, String> {
+        Ok(ResponderDecl {
+            subject_ref: {
+                let f = v
+                    .get("subject_ref")
+                    .ok_or_else(|| format!("missing '{}'", "subject_ref"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            surface_session_ref: match v.get("surface_session_ref") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
             },
         })
     }
@@ -4256,6 +4377,265 @@ impl RollbackParams {
                         .map(|s| s.to_string())
                         .ok_or_else(|| "expected string".to_string())?,
                 ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunIndexEntry {
+    pub run_id: String,
+    pub run_kind: String,
+    pub participant_class: String,
+    pub status: String,
+    pub head_seq: i64,
+    pub outcome_class: Option<String>,
+    pub configuration_id: Option<String>,
+    pub experiment_ref: Option<String>,
+    pub opened_ts: Option<String>,
+}
+
+impl RunIndexEntry {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("run_id", Json::str(self.run_id.clone())));
+        pairs.push(("run_kind", Json::str(self.run_kind.clone())));
+        pairs.push((
+            "participant_class",
+            Json::str(self.participant_class.clone()),
+        ));
+        pairs.push(("status", Json::str(self.status.clone())));
+        pairs.push(("head_seq", Json::Int(self.head_seq.clone())));
+        if let Some(v) = &self.outcome_class {
+            pairs.push(("outcome_class", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.configuration_id {
+            pairs.push(("configuration_id", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.experiment_ref {
+            pairs.push(("experiment_ref", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.opened_ts {
+            pairs.push(("opened_ts", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RunIndexEntry, String> {
+        Ok(RunIndexEntry {
+            run_id: {
+                let f = v
+                    .get("run_id")
+                    .ok_or_else(|| format!("missing '{}'", "run_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            run_kind: {
+                let f = v
+                    .get("run_kind")
+                    .ok_or_else(|| format!("missing '{}'", "run_kind"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            participant_class: {
+                let f = v
+                    .get("participant_class")
+                    .ok_or_else(|| format!("missing '{}'", "participant_class"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            status: {
+                let f = v
+                    .get("status")
+                    .ok_or_else(|| format!("missing '{}'", "status"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            head_seq: {
+                let f = v
+                    .get("head_seq")
+                    .ok_or_else(|| format!("missing '{}'", "head_seq"))?;
+                f.as_int().ok_or_else(|| "expected integer".to_string())?
+            },
+            outcome_class: match v.get("outcome_class") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            configuration_id: match v.get("configuration_id") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            experiment_ref: match v.get("experiment_ref") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            opened_ts: match v.get("opened_ts") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunIndexFilter {
+    pub run_kind: Option<String>,
+    pub participant_class: Option<String>,
+    pub status: Option<String>,
+    pub outcome_class: Option<String>,
+    pub configuration_id: Option<String>,
+    pub experiment_ref: Option<String>,
+    pub text: Option<String>,
+}
+
+impl RunIndexFilter {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        if let Some(v) = &self.run_kind {
+            pairs.push(("run_kind", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.participant_class {
+            pairs.push(("participant_class", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.status {
+            pairs.push(("status", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.outcome_class {
+            pairs.push(("outcome_class", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.configuration_id {
+            pairs.push(("configuration_id", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.experiment_ref {
+            pairs.push(("experiment_ref", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.text {
+            pairs.push(("text", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RunIndexFilter, String> {
+        Ok(RunIndexFilter {
+            run_kind: match v.get("run_kind") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            participant_class: match v.get("participant_class") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            status: match v.get("status") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            outcome_class: match v.get("outcome_class") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            configuration_id: match v.get("configuration_id") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            experiment_ref: match v.get("experiment_ref") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            text: match v.get("text") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunIndexParams {
+    pub filters: Option<RunIndexFilter>,
+    pub cursor: Option<String>,
+    pub limit: Option<i64>,
+}
+
+impl RunIndexParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        if let Some(v) = &self.filters {
+            pairs.push(("filters", v.to_json()));
+        }
+        if let Some(v) = &self.cursor {
+            pairs.push(("cursor", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.limit {
+            pairs.push(("limit", Json::Int(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RunIndexParams, String> {
+        Ok(RunIndexParams {
+            filters: match v.get("filters") {
+                Some(f) => Some(RunIndexFilter::from_json(f).map_err(|e| e)?),
+                None => None,
+            },
+            cursor: match v.get("cursor") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            limit: match v.get("limit") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
                 None => None,
             },
         })
@@ -4874,6 +5254,10 @@ pub enum ViewKind {
     ContextView,
     RunSummary,
     Checkpoint,
+    TraceView,
+    CostView,
+    EffectLedger,
+    BranchTree,
 }
 
 impl ViewKind {
@@ -4882,6 +5266,10 @@ impl ViewKind {
             ViewKind::ContextView => "context_view",
             ViewKind::RunSummary => "run_summary",
             ViewKind::Checkpoint => "checkpoint",
+            ViewKind::TraceView => "trace_view",
+            ViewKind::CostView => "cost_view",
+            ViewKind::EffectLedger => "effect_ledger",
+            ViewKind::BranchTree => "branch_tree",
         }
     }
 
@@ -4894,6 +5282,10 @@ impl ViewKind {
             Some("context_view") => Ok(ViewKind::ContextView),
             Some("run_summary") => Ok(ViewKind::RunSummary),
             Some("checkpoint") => Ok(ViewKind::Checkpoint),
+            Some("trace_view") => Ok(ViewKind::TraceView),
+            Some("cost_view") => Ok(ViewKind::CostView),
+            Some("effect_ledger") => Ok(ViewKind::EffectLedger),
+            Some("branch_tree") => Ok(ViewKind::BranchTree),
             other => Err(format!("unknown ViewKind variant {other:?}")),
         }
     }
@@ -6483,6 +6875,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `rollback` → `json` (see the contract registry).
     pub fn rollback(&mut self, params: &RollbackParams) -> Result<Json, ClientError> {
         let raw = self.call("rollback", params.to_json())?;
+        Ok(raw)
+    }
+
+    /// `run_index` → `json` (see the contract registry).
+    pub fn run_index(&mut self, params: &RunIndexParams) -> Result<Json, ClientError> {
+        let raw = self.call("run_index", params.to_json())?;
         Ok(raw)
     }
 

@@ -7,6 +7,7 @@
 //! schema source (CC7).
 
 pub mod canonical;
+pub mod http;
 pub mod json;
 pub mod jsonrpc;
 pub mod sha256;

@@ -271,7 +271,7 @@ impl EmbedService {
         };
         match replay {
             Replay::Verbatim(hit) => return Ok(hit),
-            Replay::AttachOf(run_id) => return self.open_attach(&run_id),
+            Replay::AttachOf(run_id) => return self.open_attach(&run_id, p.client.as_ref()),
             Replay::None => {}
         }
         let session = match &p.spec {
@@ -307,8 +307,17 @@ impl EmbedService {
                 definition,
                 ..
             } => self.open_resume(run_id, mode, definition.as_ref(), p.invocation.as_ref())?,
-            OpenSpec::Attach { run_id } => self.open_attach(run_id)?,
+            OpenSpec::Attach { run_id } => self.open_attach(run_id, p.client.as_ref())?,
         };
+        // S4.10 (§7.2 P8): a declared `client` rides on every opened
+        // session — the delivery mint + responder stamping key off it.
+        if p.client.is_some() {
+            if let Some(sid) = session.get("session_id").and_then(Json::as_str) {
+                if let Some(s) = self.sessions.get_mut(sid) {
+                    s.client = p.client.clone();
+                }
+            }
+        }
         self.open_idem
             .insert(p.idempotency_key.clone(), session.clone());
         Ok(session)
@@ -660,6 +669,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            client: None,
         };
         self.sessions.insert(session_id.clone(), sess);
         // Persist the resume-by-leaf pair (S2.3) — a resume right
@@ -1256,6 +1266,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            client: None,
         };
         self.sessions.insert(session_id.clone(), sess);
         Ok(session_json(
@@ -1275,7 +1286,17 @@ impl EmbedService {
 
     /// `open_session{kind:"attach"}` — read-only always: no writer
     /// lease, no appends, no driver (I6).
-    fn open_attach(&mut self, run_id: &str) -> Result<Json, EmbedError> {
+    /// `open_session{attach}` — the read-only session (no lease, no driver,
+    /// no append path). A declared `client{kind}` mints
+    /// `lifecycle.session.attached{binding, client{kind}}` on the subject
+    /// run — the durable surface-session record §7.2 P12/§6.6 require and
+    /// the V10 accountability view reads (ADR-0301 D2; kernel-origin row via
+    /// `commit_kernel_row_for` — an attach session holds no lease).
+    fn open_attach(
+        &mut self,
+        run_id: &str,
+        client: Option<&hh_embed_schema::ClientDecl>,
+    ) -> Result<Json, EmbedError> {
         // `max_in_flight_sessions` bounds *live* sessions — a fenced or
         // detached session is residue, not in-flight (the negotiated
         // cap would otherwise deadlock the parked-run workflow: a
@@ -1332,8 +1353,32 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            client: client.cloned(),
         };
         self.sessions.insert(session_id.clone(), sess);
+        // The surface-session record (§7.2 §6.6) — minted only for
+        // sessions that declare a client so CLI attach reads stay
+        // byte-identical (CC8: additive, never a silent shape change).
+        // Post-finish attaches append anyway: the `commit_kernel_row_for`
+        // path rides the WAL tip like `measurement.export.delivered`
+        // (kernel-origin facts, never a client lease).
+        if let Some(c) = client {
+            let binding = self.binding_label.clone();
+            self.store
+                .commit_kernel_row_for(
+                    "kernel:surface",
+                    run_id,
+                    "lifecycle.session.attached",
+                    Json::obj([
+                        ("session_id", Json::str(session_id.clone())),
+                        ("binding", Json::str(binding)),
+                        ("client", c.to_json()),
+                    ]),
+                    vec![],
+                    vec![],
+                )
+                .map_err(ledger_err)?;
+        }
         Ok(session_json(
             &session_id,
             run_id,
@@ -1355,7 +1400,12 @@ impl EmbedService {
     pub(crate) fn close(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let p = CloseParams::from_json(params)?;
         let s = self.live_session(&p.session_id)?;
-        let (run_id, attach, lease) = (s.run_id.clone(), s.attach, s.lease.clone());
+        let (run_id, attach, lease, client) = (
+            s.run_id.clone(),
+            s.attach,
+            s.lease.clone(),
+            s.client.clone(),
+        );
         if !attach {
             let lease = lease.ok_or(EmbedError::Refused {
                 reason: "session_is_read_only".to_string(),
@@ -1409,6 +1459,27 @@ impl EmbedService {
             } else {
                 self.store.release(&lease, &p.reason).map_err(ledger_err)?;
             }
+        } else if let Some(c) = &client {
+            // S4.10 (§7.2 §6.6) — the attach-side session record, the
+            // declared-client pair of `lifecycle.session.attached`:
+            // `detached{session_id, reason, binding, client{kind}}` rides
+            // the same kernel-origin path (attach holds no lease).
+            let binding = self.binding_label.clone();
+            self.store
+                .commit_kernel_row_for(
+                    "kernel:surface",
+                    &run_id,
+                    "lifecycle.session.detached",
+                    Json::obj([
+                        ("session_id", Json::str(p.session_id.clone())),
+                        ("reason", Json::str(p.reason.clone())),
+                        ("binding", Json::str(binding)),
+                        ("client", c.to_json()),
+                    ]),
+                    vec![],
+                    vec![],
+                )
+                .map_err(ledger_err)?;
         }
         let fin = self.summary_ref(&run_id);
         self.sessions.remove(&p.session_id);

@@ -244,6 +244,7 @@ dependencies = [
  "hh-registry",
  "hh-results",
  "hh-secrets",
+ "hh-telemetry",
  "hh-verification",
  "hh-wire",
 ]
@@ -612,6 +613,19 @@ dependencies = [
  "hh-identity",
  "hh-ontology",
  "hh-provenance",
+ "hh-telemetry",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-web"
+version = "0.0.1"
+dependencies = [
+ "hh-embed",
+ "hh-embed-client-generated",
+ "hh-embed-schema",
+ "hh-ledger",
+ "hh-secrets",
  "hh-telemetry",
  "hh-wire",
 ]

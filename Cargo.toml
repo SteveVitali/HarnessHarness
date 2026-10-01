@@ -305,6 +305,14 @@ members = [
     # (AC-R-2.11.1-1); no kernel semantics live here (K-2) — every command is one typed
     # boundary operation sequence.
     "crates/hh-cli",
+    # The C1 read-only web instrument (spec §7.2, R-2.11.2¹; ticket S4.10;
+    # ADR-0301/0302). A PERSISTENT workspace member: the `hh-web` surface —
+    # a pure projection client over binding (c) (`local_network` JSON-RPC)
+    # with the P1–P13 security posture, the declared SinkPolicy (P8), the
+    # V1–V11 view catalogue, and zero state of record. Every consequential
+    # write is a named kernel op with responder provenance (P10/P12). The
+    # instrument is a leaf: nothing in the workspace depends on it (CC6).
+    "crates/hh-web",
     # The C0/Stage-3 evaluation-first slice (spec §5h.2, R-2.9.2; ticket S3.3). A
     # PERSISTENT workspace member: the metric catalogue as distributions over the
     # typed n/a{reason} lattice, the compliance-chain metrics, the loss-report
