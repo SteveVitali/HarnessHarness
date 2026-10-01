@@ -1745,8 +1745,7 @@ impl EmbedService {
         // plan surface (S3.10 — `plan_execute` resumes `model_emitted`);
         // the `TaskContract` re-projects from the persisted sealed
         // definition (`manifest.harness_def_ref`), never from a side file.
-        let is_plan_execute =
-            arm.control_variant.trim_end_matches("@1") == "hh/plan-execute";
+        let is_plan_execute = arm.control_variant.trim_end_matches("@1") == "hh/plan-execute";
         let boundary = if is_plan_execute {
             hh_control::plan_exec::PlanExecute::new()
                 .capabilities()
