@@ -320,6 +320,12 @@ impl HirDiff {
     }
 }
 
+/// The canonical JSON of one `DiffOp` (CC7 — the schema source owns the
+/// encoding; re-exported for the assembly service's drift key).
+pub fn op_json(op: &DiffOp) -> Json {
+    crate::schema::diff_op_json(op)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // diff
 // ─────────────────────────────────────────────────────────────────────────────
@@ -989,6 +995,22 @@ pub fn classify_pair(base: &HirDocument, target: &HirDocument) -> DiffClassifica
     diff_edges(base, target, &mut ops);
     ops.sort_by_key(|op| crate::schema::diff_op_json(op).to_canonical_string());
     classify(base, target, &ops)
+}
+
+/// `ops_between(base, target) → (ops, classification)` — the gate-free op
+/// computation `classify_pair` performs, retaining the ops. The assembly
+/// service's `plan`/`drift` projections read ops this way (§6.1 T-1/T-2:
+/// `AssemblyDiff = project(HirDiff)` is a view over sealed definitions, never
+/// a stored fact — no §3.1.7 provenance gate applies to a read). A diff that
+/// will be *applied* still goes through `diff` and its gates.
+pub fn ops_between(base: &HirDocument, target: &HirDocument) -> (Vec<DiffOp>, DiffClassification) {
+    let mut ops = Vec::new();
+    diff_doc_members(base, target, &mut ops);
+    diff_nodes(base, target, &mut ops);
+    diff_edges(base, target, &mut ops);
+    ops.sort_by_key(|op| crate::schema::diff_op_json(op).to_canonical_string());
+    let classification = classify(base, target, &ops);
+    (ops, classification)
 }
 
 pub fn classify(base: &HirDocument, target: &HirDocument, ops: &[DiffOp]) -> DiffClassification {

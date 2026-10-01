@@ -885,6 +885,30 @@ impl RegistryStore {
                     bail!(e);
                 }
             }
+            RegistryRecord::SealedDefinition(s) => {
+                // The body's self-consistency is the admission gate: the
+                // declared `definition_ref` must reproduce from the document
+                // (the codec's read-direction check, run on the typed arm so
+                // a program-built record faces the same gate as the wire).
+                let body = hh_hir::wire::sealed_definition_json(s);
+                if let Err(e) = hh_hir::wire::sealed_definition_from_json(&body) {
+                    bail!(RegistryError::SchemaViolation {
+                        path: "record".to_string(),
+                        detail: format!("sealed_definition body: {e}"),
+                    });
+                }
+                // A registered sealed form carries no unresolved members —
+                // `resolve`/`seal` own that refusal; the registry re-asserts
+                // the pin rule at admission (N5: selectors never store).
+                if let Some(a) = &s.document.assembly {
+                    if a.to_canonical_string().contains("version_selector") {
+                        bail!(RegistryError::SchemaViolation {
+                            path: "record.document.assembly".to_string(),
+                            detail: "a registered sealed_definition carries a selector".to_string(),
+                        });
+                    }
+                }
+            }
             RegistryRecord::Capability(c) => {
                 if let Err(e) = check_capability(c) {
                     bail!(e);
@@ -2731,36 +2755,69 @@ impl RegistryStore {
         let vb = self.to_versioned_ref(eb, rb);
         let same_lineage = self.same_lineage(a, b);
         let class = if same_lineage {
-            let widening = successor_widening(ra, rb) || successor_widening(rb, ra);
-            let dialect_change = match (ra, rb) {
-                (RegistryRecord::Variant(x), RegistryRecord::Variant(y)) => {
-                    x.dialect_range != y.dialect_range
-                }
-                _ => ea.dialect_range != eb.dialect_range,
-            };
-            Some(DiffClassification {
-                semantic_ops_nonempty: schema::body_json(ra, false) != schema::body_json(rb, false),
-                authority_delta: if widening {
-                    Delta::Widening
-                } else {
-                    Delta::None
-                },
-                budget_delta: match (ra, rb) {
+            if let (RegistryRecord::SealedDefinition(sa), RegistryRecord::SealedDefinition(sb)) =
+                (ra, rb)
+            {
+                // The real §3.1.7 classification over the two sealed documents —
+                // `classify_pair` is the gate-free reading of `diff`; the
+                // registry forwards it rather than approximating over the body.
+                let ca = hh_hir::diff::classify_pair(&sa.document, &sb.document);
+                let cb = hh_hir::diff::classify_pair(&sb.document, &sa.document);
+                Some(DiffClassification {
+                    semantic_ops_nonempty: ca.semantic_ops > 0 || cb.semantic_ops > 0,
+                    authority_delta: if ca.authority_delta == hh_hir::diff::AuthorityDelta::Widening
+                        || cb.authority_delta == hh_hir::diff::AuthorityDelta::Widening
+                    {
+                        Delta::Widening
+                    } else {
+                        Delta::None
+                    },
+                    budget_delta: if ca.budget_delta == hh_hir::diff::Delta::Loosening
+                        || cb.budget_delta == hh_hir::diff::Delta::Loosening
+                    {
+                        Delta::Loosening
+                    } else if ca.budget_delta == hh_hir::diff::Delta::Tightening
+                        || cb.budget_delta == hh_hir::diff::Delta::Tightening
+                    {
+                        Delta::Tightening
+                    } else {
+                        Delta::None
+                    },
+                    dialect_change: sa.document.hir_version != sb.document.hir_version,
+                })
+            } else {
+                let widening = successor_widening(ra, rb) || successor_widening(rb, ra);
+                let dialect_change = match (ra, rb) {
                     (RegistryRecord::Variant(x), RegistryRecord::Variant(y)) => {
-                        let xc = x.declared_costs.as_ref().unwrap_or(&NULL_JSON);
-                        let yc = y.declared_costs.as_ref().unwrap_or(&NULL_JSON);
-                        if budget_loosened(xc, yc) {
-                            Delta::Loosening
-                        } else if budget_loosened(yc, xc) {
-                            Delta::Tightening
-                        } else {
-                            Delta::None
-                        }
+                        x.dialect_range != y.dialect_range
                     }
-                    _ => Delta::None,
-                },
-                dialect_change,
-            })
+                    _ => ea.dialect_range != eb.dialect_range,
+                };
+                Some(DiffClassification {
+                    semantic_ops_nonempty: schema::body_json(ra, false)
+                        != schema::body_json(rb, false),
+                    authority_delta: if widening {
+                        Delta::Widening
+                    } else {
+                        Delta::None
+                    },
+                    budget_delta: match (ra, rb) {
+                        (RegistryRecord::Variant(x), RegistryRecord::Variant(y)) => {
+                            let xc = x.declared_costs.as_ref().unwrap_or(&NULL_JSON);
+                            let yc = y.declared_costs.as_ref().unwrap_or(&NULL_JSON);
+                            if budget_loosened(xc, yc) {
+                                Delta::Loosening
+                            } else if budget_loosened(yc, xc) {
+                                Delta::Tightening
+                            } else {
+                                Delta::None
+                            }
+                        }
+                        _ => Delta::None,
+                    },
+                    dialect_change,
+                })
+            }
         } else {
             None
         };
@@ -3242,6 +3299,15 @@ fn budget_loosened(old: &Json, new: &Json) -> bool {
 /// publish (§8.3 #6; AC-R-2.12.2-13).
 fn successor_widening(old: &RegistryRecord, new: &RegistryRecord) -> bool {
     match (old, new) {
+        (RegistryRecord::SealedDefinition(o), RegistryRecord::SealedDefinition(n)) => {
+            // The definition-level gate is the document diff's classification
+            // (§3.1.7/§6.1 S-6): authority widening or budget loosening on the
+            // superseded pair — the registry forwards `classify_pair`, never
+            // re-derives its own widening rule.
+            let c = hh_hir::diff::classify_pair(&o.document, &n.document);
+            c.authority_delta == hh_hir::diff::AuthorityDelta::Widening
+                || c.budget_delta == hh_hir::diff::Delta::Loosening
+        }
         (RegistryRecord::Variant(o), RegistryRecord::Variant(n)) => {
             placement_rank(n.implementation.placement) > placement_rank(o.implementation.placement)
                 || budget_loosened(

@@ -425,7 +425,7 @@ fn stage2_class_conformance(
         if let Some(c) = catalog.class(&class_id) {
             if c.cardinality == Cardinality::ExactlyOne && !effective.contains_key(&c.slot_key) {
                 diags.push(diag(
-                    Code::ClassCardinality,
+                    Code::ClassSlotUnbound,
                     "/assembly/slots",
                     &c.slot_key,
                     &format!("mandatory exactly-one slot `{}` is unbound", c.slot_key),

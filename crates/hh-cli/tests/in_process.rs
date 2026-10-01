@@ -2792,6 +2792,57 @@ fn write_lab_definition(tag: &str) -> String {
     path.to_string_lossy().to_string()
 }
 
+/// The `document_json()` scaffold re-authored as an `AssemblySource`
+/// (`{dialect, root_kind, document{root, nodes, edges}, layers[]}`) —
+/// the assembly section rides the one `user` layer's fragment (D4: the
+/// assembly grammar lives inside layers, never on the document).
+fn lab_source_json() -> Json {
+    let doc = document_json();
+    Json::obj([
+        ("dialect", Json::str("hir/1")),
+        ("root_kind", Json::str("native")),
+        (
+            "document",
+            Json::obj([
+                ("root", Json::str("test:agent")),
+                ("nodes", doc.get("nodes").cloned().unwrap_or(Json::Null)),
+                (
+                    "edges",
+                    doc.get("edges").cloned().unwrap_or(Json::Arr(vec![])),
+                ),
+            ]),
+        ),
+        (
+            "layers",
+            Json::Arr(vec![Json::obj([
+                (
+                    "provenance",
+                    Json::obj([
+                        ("source_kind", Json::str("user")),
+                        ("id", Json::str("user:main")),
+                        ("version", Json::str("1")),
+                        ("precedence", Json::Int(0)),
+                    ]),
+                ),
+                (
+                    "fragment",
+                    doc.get("assembly").cloned().unwrap_or(Json::Null),
+                ),
+            ])]),
+        ),
+    ])
+}
+
+/// Write the `AssemblySource` fixture to a unique temp file — the
+/// `definition` verbs take a source path.
+fn write_lab_source(tag: &str) -> String {
+    let dir = test_dir(&format!("def-{tag}"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("def.source.json");
+    std::fs::write(&path, lab_source_json().to_canonical_string()).unwrap();
+    path.to_string_lossy().to_string()
+}
+
 /// `run start` → finished run_id (the bundle subject).
 fn started_run(b: &mut dyn Boundary, tag: &str) -> String {
     let def = write_definition(&format!("run-{tag}"));
@@ -3058,12 +3109,12 @@ fn s31_lab_nouns_route_to_group_l_and_dry_run_is_the_planning_half() {
 fn s31_pending_lab_ops_surface_typed_stage_pending() {
     let mut b = ServiceBoundary::new("s31-pending");
     let def = write_lab_definition("pend");
-    // The assembly service lands at S3.5 — `definition plan` forwards to
-    // the registered op and surfaces `Refused{stage_pending}` verbatim
-    // (the Lab noun adds no semantics — N-3).
+    // `lab.assembly.compile` stays staged at S3.5 — `definition compile`
+    // forwards to the registered op and surfaces `Refused{stage_pending}`
+    // verbatim (the Lab noun adds no semantics — N-3).
     let (class, out, _) = hh(
         &mut b,
-        &["definition", "plan", &def, "--format", "json"],
+        &["definition", "compile", &def, "--format", "json"],
         NO_TTY,
         None,
         &[],
@@ -3077,6 +3128,25 @@ fn s31_pending_lab_ops_surface_typed_stage_pending() {
     assert!(out.contains("stage_pending"), "{out}");
     let (class, out, _) = hh(&mut b, &["bundle", "verify", "x"], NO_TTY, None, &[]);
     assert_eq!(class, ExitClass::InvocationError, "{out}");
+}
+
+#[test]
+fn s35_definition_plan_over_an_assembly_source() {
+    let mut b = ServiceBoundary::new("s35-defplan");
+    let src = write_lab_source("plan");
+    // The S3.5 assembly service is live: `definition plan` forwards the
+    // file as `source` and returns the `AssemblyPlan` (the Lab noun adds
+    // no semantics — N-3; the plan exits `changes` or `no_changes`,
+    // never a refusal, for a valid source).
+    let (class, out, _) = hh(
+        &mut b,
+        &["definition", "plan", &src, "--format", "json"],
+        NO_TTY,
+        None,
+        &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    assert!(out.contains("\"exit\""), "{out}");
 }
 
 #[test]

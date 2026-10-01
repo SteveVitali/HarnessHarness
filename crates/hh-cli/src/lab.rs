@@ -75,6 +75,17 @@ fn file_text(p: &crate::cli::Parsed, io: &Io, i: usize, name: &str) -> Result<St
     })
 }
 
+/// A positional definition file parsed as canonical JSON — the
+/// `definition` verbs take an `AssemblySource` (`hir/1` source JSON;
+/// landed at S3.5). Malformed bytes are an invocation error, never
+/// forwarded to the service.
+fn source_json(p: &crate::cli::Parsed, io: &Io, i: usize, name: &str) -> Result<Json, CliError> {
+    let text = file_text(p, io, i, name)?;
+    hh_wire::json::parse(&text).map_err(|e| {
+        CliError::Invocation(InvocationError::at("malformed_json", name, &format!("{e}")))
+    })
+}
+
 /// The CLI principal's `ProvenanceRecord` as a `registrar` argument —
 /// `human(author_ref = principal, role = author)` mints at `principal`
 /// (§8.1 #3 `default_authority`); `created_at` is the surface's
@@ -126,20 +137,24 @@ fn idem(p: &crate::cli::Parsed) -> Json {
 // ── definition (Harness Definition) — Group L `lab.assembly.*` ─────────
 
 /// `definition plan <file>` → `lab.assembly.plan` — the planning half
-/// of apply (the `--dry-run` target; ADR-0147 S-1).
+/// of apply (the `--dry-run` target; ADR-0147 S-1). The file is an
+/// `AssemblySource` (`hir/1` source JSON); `--snapshot-id` pins the
+/// snapshot the plan resolves against (`head`/absent → a fresh cut).
 pub fn cmd_definition_plan(
     b: &mut dyn Boundary,
     io: &mut Io,
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
-    let path = require_pos(p, 0, "<definition-file>")?;
-    let text = file_text(p, io, 0, "<definition-file>")?;
+    let source = source_json(p, io, 0, "<definition-file>")?;
     let r = call(
         b,
         "lab.assembly.plan",
         Json::obj([
-            ("definition", Json::str(text)),
-            ("source_path", Json::str(path)),
+            ("source", source),
+            (
+                "snapshot",
+                p.flag("snapshot-id").map(Json::str).unwrap_or(Json::Null),
+            ),
         ]),
     )?;
     ok_outcome("definition_plan", r, fmt(p, io)?)
@@ -147,20 +162,25 @@ pub fn cmd_definition_plan(
 
 /// `definition apply <file>` → `lab.assembly.apply`; `--dry-run` lowers
 /// to `lab.assembly.plan` (byte-equal minus retention — ADR-0147 S-1).
+/// `--publish <name>` publishes the sealed definition under
+/// `namespace/name` (`--namespace`, default `local`; `--label`,
+/// `--supersedes`).
 pub fn cmd_definition_apply(
     b: &mut dyn Boundary,
     io: &mut Io,
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
-    let path = require_pos(p, 0, "<definition-file>")?;
-    let text = file_text(p, io, 0, "<definition-file>")?;
+    let source = source_json(p, io, 0, "<definition-file>")?;
     if dry(p) {
         let r = call(
             b,
             "lab.assembly.plan",
             Json::obj([
-                ("definition", Json::str(text)),
-                ("source_path", Json::str(path)),
+                ("source", source),
+                (
+                    "snapshot",
+                    p.flag("snapshot-id").map(Json::str).unwrap_or(Json::Null),
+                ),
             ]),
         )?;
         return ok_outcome(
@@ -169,27 +189,45 @@ pub fn cmd_definition_apply(
             fmt(p, io)?,
         );
     }
-    let r = call(
-        b,
-        "lab.assembly.apply",
-        Json::obj([
-            ("definition", Json::str(text)),
-            ("source_path", Json::str(path)),
-            ("idempotency_key", idem(p)),
-        ]),
-    )?;
+    let mut members: Vec<(&'static str, Json)> = vec![
+        ("source", source),
+        ("registrar", registrar(io)),
+        ("idempotency_key", idem(p)),
+    ];
+    if let Some(name) = p.flag("publish") {
+        members.push((
+            "publish",
+            Json::obj([
+                (
+                    "namespace",
+                    Json::str(p.flag("namespace").unwrap_or_else(|| "local".into())),
+                ),
+                ("name", Json::str(name)),
+                (
+                    "label",
+                    p.flag("label").map(Json::str).unwrap_or(Json::Null),
+                ),
+                (
+                    "supersedes",
+                    p.flag("supersedes").map(Json::str).unwrap_or(Json::Null),
+                ),
+            ]),
+        ));
+    }
+    let r = call(b, "lab.assembly.apply", Json::obj(members))?;
     ok_outcome("definition_apply", r, fmt(p, io)?)
 }
 
-/// `definition diff <a> <b>` → `lab.assembly.diff` — the
-/// `AssemblyDiff` over two definition files.
+/// `definition diff <version-id-a> <version-id-b>` → `lab.assembly.diff`
+/// — the `AssemblyDiff` over two sealed definitions (T-2: the diff's
+/// endpoints are sealed definitions, never loose files).
 pub fn cmd_definition_diff(
     b: &mut dyn Boundary,
     io: &mut Io,
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
-    let a = file_text(p, io, 0, "<definition-a>")?;
-    let bb = file_text(p, io, 1, "<definition-b>")?;
+    let a = require_pos(p, 0, "<version-id-a>")?;
+    let bb = require_pos(p, 1, "<version-id-b>")?;
     let r = call(
         b,
         "lab.assembly.diff",
@@ -198,18 +236,19 @@ pub fn cmd_definition_diff(
     ok_outcome("definition_diff", r, fmt(p, io)?)
 }
 
-/// `definition explain <path>` → `lab.assembly.explain`.
+/// `definition explain <file>` → `lab.assembly.explain` — the layer
+/// attribution for an `AssemblySource`; `--sealed <version-id>` explains
+/// a sealed definition instead.
 pub fn cmd_definition_explain(
     b: &mut dyn Boundary,
     io: &mut Io,
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
-    let path = require_pos(p, 0, "<explain-path>")?;
-    let r = call(
-        b,
-        "lab.assembly.explain",
-        Json::obj([("path", Json::str(path))]),
-    )?;
+    let params = match p.flag("sealed") {
+        Some(vid) => Json::obj([("sealed", Json::str(vid))]),
+        None => Json::obj([("source", source_json(p, io, 0, "<definition-file>")?)]),
+    };
+    let r = call(b, "lab.assembly.explain", params)?;
     ok_outcome("definition_explain", r, fmt(p, io)?)
 }
 
@@ -227,53 +266,42 @@ pub fn cmd_definition_validate(
             "usage: hh definition validate <file>…",
         )));
     }
-    let mut defs = Vec::new();
+    let mut sources = Vec::new();
     for i in 0..p.positional.len() {
-        let path = require_pos(p, i, "<definition-file>")?;
-        let text = file_text(p, io, i, "<definition-file>")?;
-        defs.push(Json::obj([
-            ("definition", Json::str(text)),
-            ("source_path", Json::str(path)),
-        ]));
+        sources.push(source_json(p, io, i, "<definition-file>")?);
     }
-    let r = if defs.len() == 1 {
+    let r = if sources.len() == 1 {
         call(
             b,
             "lab.assembly.assemble",
-            Json::obj([
-                ("mode", Json::str("plan")),
-                (
-                    "definition",
-                    defs[0].get("definition").cloned().unwrap_or(Json::Null),
-                ),
-                (
-                    "source_path",
-                    defs[0].get("source_path").cloned().unwrap_or(Json::Null),
-                ),
-            ]),
+            Json::obj([("mode", Json::str("plan")), ("source", sources.remove(0))]),
         )?
     } else {
+        let points = sources
+            .into_iter()
+            .map(|s| Json::obj([("source", s)]))
+            .collect();
         call(
             b,
             "lab.assembly.validate_batch",
-            Json::obj([("definitions", Json::Arr(defs))]),
+            Json::obj([("points", Json::Arr(points))]),
         )?
     };
     ok_outcome("definition_validate", r, fmt(p, io)?)
 }
 
-/// `definition identity <file>` → `lab.assembly.identity` — the sealed
-/// definition's `DefinitionIdentity`/refs.
+/// `definition identity <version-id>` → `lab.assembly.identity` — the
+/// sealed definition's `DefinitionIdentity`/refs.
 pub fn cmd_definition_identity(
     b: &mut dyn Boundary,
     io: &mut Io,
     p: &crate::cli::Parsed,
 ) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
-    let text = file_text(p, io, 0, "<definition-file>")?;
+    let vid = require_pos(p, 0, "<version-id>")?;
     let r = call(
         b,
         "lab.assembly.identity",
-        Json::obj([("definition", Json::str(text))]),
+        Json::obj([("sealed", Json::str(vid))]),
     )?;
     ok_outcome("definition_identity", r, fmt(p, io)?)
 }

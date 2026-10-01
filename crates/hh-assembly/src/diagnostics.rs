@@ -119,9 +119,12 @@ pub enum Code {
     // ── class conformance (validate:2) ───────────────────────────────────────────
     /// `C-CLASS-1 UnknownClass` — a slot key no catalog class owns.
     ClassUnknown,
-    /// `C-CLASS-2 VariantClassMismatch` — the bound variant's `class_ref` ≠ the slot's
-    /// class.
-    ClassVariantMismatch,
+    /// `C-CLASS-2 SlotUnbound` — a mandatory (`exactly-one`) slot carries no
+    /// binding (the spec-pinned spelling: §6.1 V-7 names `C-CLASS-2
+    /// SlotUnbound`; AC-R-2.10.1-4). `VariantClassMismatch` moved to
+    /// `C-CLASS-8` — the family's interior numbering is this crate's
+    /// (ADR-0240); the spec pins only `C-CLASS-2`/`C-CLASS-6` by number.
+    ClassSlotUnbound,
     /// `C-CLASS-3 CardinalityViolation` — the slot's binding count breaks the class's
     /// `cardinality`.
     ClassCardinality,
@@ -137,6 +140,11 @@ pub enum Code {
     /// `C-CLASS-7 DialectIncompatible` — the class/variant record's dialect range
     /// excludes the document dialect.
     ClassDialectIncompatible,
+    /// `C-CLASS-8 VariantClassMismatch` — the bound variant's `class_ref` ≠ the
+    /// slot's class (renumbered from `C-CLASS-2` at S3.5 — the spec pins
+    /// `C-CLASS-2` to `SlotUnbound`, §6.1 V-7; interior numbering is this
+    /// crate's assignment, ADR-0240).
+    ClassVariantMismatch,
     // ── parameter space (validate:3; stage-2's unknown-param lands here too) ──────
     /// `C-PARAM-1 UnknownParameter` — a `values` key, a `$param:` target or a slot-param
     /// name no declared schema covers.
@@ -268,12 +276,13 @@ impl Code {
             RefDenyListNoop => "C-REF-5".into(),
             RefSnapshotDrift => "C-REF-6".into(),
             ClassUnknown => "C-CLASS-1".into(),
-            ClassVariantMismatch => "C-CLASS-2".into(),
+            ClassSlotUnbound => "C-CLASS-2".into(),
             ClassCardinality => "C-CLASS-3".into(),
             ClassContractMalformed => "C-CLASS-4".into(),
             ClassRequiredInputs => "C-CLASS-5".into(),
             ClassSlotsOnHosted => "C-CLASS-6".into(),
             ClassDialectIncompatible => "C-CLASS-7".into(),
+            ClassVariantMismatch => "C-CLASS-8".into(),
             ParamUnknown => "C-PARAM-1".into(),
             ParamMissingDomain => "C-PARAM-2".into(),
             ParamUndeclaredRef => "C-PARAM-3".into(),
@@ -331,12 +340,13 @@ impl Code {
             RefDenyListNoop => "DenyListNoop",
             RefSnapshotDrift => "SnapshotDrift",
             ClassUnknown => "UnknownClass",
-            ClassVariantMismatch => "VariantClassMismatch",
+            ClassSlotUnbound => "SlotUnbound",
             ClassCardinality => "CardinalityViolation",
             ClassContractMalformed => "ContractMalformed",
             ClassRequiredInputs => "RequiredInputsMissing",
             ClassSlotsOnHosted => "SlotsOnHosted",
             ClassDialectIncompatible => "DialectIncompatible",
+            ClassVariantMismatch => "VariantClassMismatch",
             ParamUnknown => "UnknownParameter",
             ParamMissingDomain => "MissingDomain",
             ParamUndeclaredRef => "UndeclaredParamRef",
@@ -574,12 +584,13 @@ impl Code {
             "C-REF-5" => RefDenyListNoop,
             "C-REF-6" => RefSnapshotDrift,
             "C-CLASS-1" => ClassUnknown,
-            "C-CLASS-2" => ClassVariantMismatch,
+            "C-CLASS-2" => ClassSlotUnbound,
             "C-CLASS-3" => ClassCardinality,
             "C-CLASS-4" => ClassContractMalformed,
             "C-CLASS-5" => ClassRequiredInputs,
             "C-CLASS-6" => ClassSlotsOnHosted,
             "C-CLASS-7" => ClassDialectIncompatible,
+            "C-CLASS-8" => ClassVariantMismatch,
             "C-PARAM-1" => ParamUnknown,
             "C-PARAM-2" => ParamMissingDomain,
             "C-PARAM-3" => ParamUndeclaredRef,
@@ -870,4 +881,231 @@ impl ValidationReport {
             outcome.infos = count(Severity::Info);
         }
     }
+}
+
+// ── ValidationReport canonical form (§3.3.8; CC7 — the schema source owns the
+// encoding; consumed by `lab.assembly.*` op results — S3.5).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The canonical JSON of a `StageOutcome`: `{stage, ran, na?, errors, warnings, infos}`.
+pub fn stage_outcome_json(o: &StageOutcome) -> hh_wire::json::Json {
+    use hh_wire::json::Json;
+    let mut pairs = vec![
+        ("stage", Json::Int(o.stage as i64)),
+        ("ran", Json::Bool(o.ran)),
+    ];
+    if let Some(na) = &o.na {
+        pairs.push(("na", Json::str(na.as_str())));
+    }
+    pairs.push(("errors", Json::Int(o.errors as i64)));
+    pairs.push(("warnings", Json::Int(o.warnings as i64)));
+    pairs.push(("infos", Json::Int(o.infos as i64)));
+    Json::obj(pairs)
+}
+
+fn stage_outcome_from_json(j: &hh_wire::json::Json, path: &str) -> Result<StageOutcome, HirError> {
+    use hh_wire::json::Json;
+    let get = |k: &str| -> Result<&Json, HirError> {
+        j.get(k).ok_or_else(|| HirError::SchemaViolation {
+            detail: format!("{path}.{k} missing"),
+        })
+    };
+    let int_at = |k: &str| -> Result<i64, HirError> {
+        get(k)?.as_int().ok_or_else(|| HirError::SchemaViolation {
+            detail: format!("{path}.{k} must be an int"),
+        })
+    };
+    let na = match j.get("na").and_then(Json::as_str) {
+        Some("not_run") => Some(NaReason::NotRun),
+        Some("class") => Some(NaReason::Class),
+        Some(other) => {
+            return Err(HirError::SchemaViolation {
+                detail: format!("{path}.na: {other}"),
+            })
+        }
+        None => None,
+    };
+    Ok(StageOutcome {
+        stage: int_at("stage")? as u8,
+        ran: match get("ran")? {
+            Json::Bool(b) => *b,
+            _ => {
+                return Err(HirError::SchemaViolation {
+                    detail: format!("{path}.ran must be a bool"),
+                })
+            }
+        },
+        na,
+        errors: int_at("errors")? as usize,
+        warnings: int_at("warnings")? as usize,
+        infos: int_at("infos")? as usize,
+    })
+}
+
+/// The canonical JSON of a `ValidationReport`:
+/// `{status, diagnostics[], derived{opacity?, identity_stability?, hosting_edges[],
+/// benchmark_conditioned_rules[]}, stages[]}`.
+pub fn report_json(r: &ValidationReport) -> hh_wire::json::Json {
+    use hh_wire::json::Json;
+    let status = match r.status {
+        ReportStatus::Pass => "pass",
+        ReportStatus::PassWithWarnings => "pass_with_warnings",
+        ReportStatus::Fail => "fail",
+    };
+    let mut derived = vec![];
+    if let Some(o) = &r.derived.opacity {
+        derived.push((
+            "opacity",
+            Json::obj([
+                (
+                    "by_class",
+                    Json::Obj(
+                        o.by_class
+                            .iter()
+                            .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                            .collect(),
+                    ),
+                ),
+                ("total", Json::Int(o.total as i64)),
+                ("opaque_ratio_num", Json::Int(o.opaque_ratio_num as i64)),
+            ]),
+        ));
+    }
+    if let Some(s) = r.derived.identity_stability {
+        derived.push(("identity_stability", Json::Bool(s)));
+    }
+    derived.push((
+        "hosting_edges",
+        Json::Arr(
+            r.derived
+                .hosting_edges
+                .iter()
+                .map(|e| Json::str(e.clone()))
+                .collect(),
+        ),
+    ));
+    derived.push((
+        "benchmark_conditioned_rules",
+        Json::Arr(
+            r.derived
+                .benchmark_conditioned_rules
+                .iter()
+                .map(|e| Json::str(e.clone()))
+                .collect(),
+        ),
+    ));
+    Json::obj([
+        ("status", Json::str(status)),
+        (
+            "diagnostics",
+            Json::Arr(r.diagnostics.iter().map(diagnostic_json).collect()),
+        ),
+        ("derived", Json::obj(derived)),
+        (
+            "stages",
+            Json::Arr(r.stages.iter().map(stage_outcome_json).collect()),
+        ),
+    ])
+}
+
+/// Parse a `ValidationReport` (the codec's read direction — complete reports
+/// round-trip; AC-R-2.10.1-2's diagnostic-serialisation property).
+pub fn report_from_json(j: &hh_wire::json::Json) -> Result<ValidationReport, HirError> {
+    use hh_wire::json::Json;
+    let get = |k: &str| -> Result<&Json, HirError> {
+        j.get(k).ok_or_else(|| HirError::SchemaViolation {
+            detail: format!("report.{k} missing"),
+        })
+    };
+    let status = match get("status")?.as_str().unwrap_or("") {
+        "pass" => ReportStatus::Pass,
+        "pass_with_warnings" => ReportStatus::PassWithWarnings,
+        "fail" => ReportStatus::Fail,
+        other => {
+            return Err(HirError::SchemaViolation {
+                detail: format!("report.status: {other}"),
+            })
+        }
+    };
+    let diagnostics = match get("diagnostics")? {
+        Json::Arr(items) => items
+            .iter()
+            .enumerate()
+            .map(|(i, d)| diagnostic_from_json(d, &format!("report.diagnostics[{i}]")))
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => {
+            return Err(HirError::SchemaViolation {
+                detail: "report.diagnostics must be an array".into(),
+            })
+        }
+    };
+    let str_list = |j: &Json, path: &str| -> Result<Vec<String>, HirError> {
+        match j {
+            Json::Arr(items) => items
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    v.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| HirError::SchemaViolation {
+                            detail: format!("{path}[{i}] must be a string"),
+                        })
+                })
+                .collect(),
+            _ => Err(HirError::SchemaViolation {
+                detail: format!("{path} must be an array"),
+            }),
+        }
+    };
+    let mut derived = DerivedResults::default();
+    if let Json::Obj(_) = get("derived")? {
+        let d = get("derived")?;
+        if let Some(o) = d.get("opacity") {
+            let mut by_class = std::collections::BTreeMap::new();
+            if let Json::Obj(m) = o.get("by_class").cloned().unwrap_or(Json::Null) {
+                for (k, v) in &m {
+                    by_class.insert(k.clone(), v.as_int().unwrap_or(0) as usize);
+                }
+            }
+            derived.opacity = Some(OpacitySummary {
+                by_class,
+                total: o.get("total").and_then(Json::as_int).unwrap_or(0) as usize,
+                opaque_ratio_num: o
+                    .get("opaque_ratio_num")
+                    .and_then(Json::as_int)
+                    .unwrap_or(0) as usize,
+            });
+        }
+        derived.identity_stability = match d.get("identity_stability") {
+            Some(Json::Bool(b)) => Some(*b),
+            _ => None,
+        };
+        derived.hosting_edges = str_list(
+            d.get("hosting_edges").unwrap_or(&Json::Arr(vec![])),
+            "report.derived.hosting_edges",
+        )?;
+        derived.benchmark_conditioned_rules = str_list(
+            d.get("benchmark_conditioned_rules")
+                .unwrap_or(&Json::Arr(vec![])),
+            "report.derived.benchmark_conditioned_rules",
+        )?;
+    }
+    let stages = match get("stages")? {
+        Json::Arr(items) => items
+            .iter()
+            .enumerate()
+            .map(|(i, s)| stage_outcome_from_json(s, &format!("report.stages[{i}]")))
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => {
+            return Err(HirError::SchemaViolation {
+                detail: "report.stages must be an array".into(),
+            })
+        }
+    };
+    Ok(ValidationReport {
+        status,
+        diagnostics,
+        derived,
+        stages,
+    })
 }

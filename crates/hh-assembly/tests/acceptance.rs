@@ -173,7 +173,10 @@ fn validation_is_never_fail_fast() {
 }
 
 #[test]
-fn stage2_missing_mandatory_slot_is_class_cardinality() {
+fn stage2_missing_mandatory_slot_is_slot_unbound() {
+    // S3.5 renumber (ADR-0240 note): §6.1 V-7 pins `C-CLASS-2 SlotUnbound` to an
+    // unbound `exactly-one` slot; `C-CLASS-3 CardinalityViolation` now names only
+    // bound-shape mismatches.
     let mut a = Assembly::empty();
     a.slots.insert(
         "control_strategy".into(),
@@ -186,8 +189,8 @@ fn stage2_missing_mandatory_slot_is_class_cardinality() {
     let doc = doc_with(&a);
     let r = validate_authored(&doc, &Stage1Catalog::stage1());
     assert!(
-        has_code(&r, "C-CLASS-3"),
-        "context_policy absent → cardinality"
+        has_code(&r, "C-CLASS-2"),
+        "context_policy absent → SlotUnbound"
     );
 }
 
@@ -326,6 +329,7 @@ fn resolve_env<'a>(
         mode,
         registrar: kernel(),
         resolved_at: 7,
+        notices: None,
     }
 }
 

@@ -29,6 +29,11 @@ pub fn version_id(r: &RegistryRecord) -> String {
     if let RegistryRecord::Capability(c) = r {
         return hh_hir::identity::version_id(&c.node);
     }
+    // A sealed definition's `version_id` is the definition's own — the root's
+    // sealed coordinate (one coordinate wherever the definition is pinned).
+    if let RegistryRecord::SealedDefinition(s) = r {
+        return s.definition_ref.version_id.clone();
+    }
     let body = schema::body_json(r, false);
     let tag = r.kind().domain_tag();
     let digest = body.to_canonical_string();
@@ -53,6 +58,11 @@ pub fn semantic_id(r: &RegistryRecord) -> Option<String> {
             "environment#semantic",
             proj.to_canonical_string().as_bytes(),
         ));
+    }
+    // The definition's `semantic_id` is the root's own — never re-minted under a
+    // `semantic.*` tag (one coordinate wherever the definition is pinned).
+    if let RegistryRecord::SealedDefinition(s) = r {
+        return Some(s.definition_ref.semantic_id.clone());
     }
     let proj = schema::semantic_projection_json(r)?;
     let tag = format!("semantic.{}", r.kind().domain_tag());
@@ -84,6 +94,25 @@ pub fn verify_body(r: &RegistryRecord, claimed_version_id: &str) -> Result<(), R
             Err(RegistryError::SchemaViolation {
                 path: "version_id".to_string(),
                 detail: format!("snapshot id mismatch: {recomputed} != {claimed_version_id}"),
+            })
+        };
+    }
+    if let RegistryRecord::SealedDefinition(s) = r {
+        // Recompute the root's `version_id` from the stored document — the
+        // claimed coordinate is `definition_ref.version_id` (the root's own).
+        let recomputed = s
+            .document
+            .node(&s.document.root.semantic_id)
+            .map(hh_hir::identity::version_id);
+        return if recomputed.as_deref() == Some(claimed_version_id) {
+            Ok(())
+        } else {
+            Err(RegistryError::SchemaViolation {
+                path: "version_id".to_string(),
+                detail: format!(
+                    "sealed_definition id mismatch: recomputed {:?} != {claimed_version_id}",
+                    recomputed
+                ),
             })
         };
     }

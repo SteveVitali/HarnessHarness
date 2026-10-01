@@ -55,6 +55,7 @@ fn resolve_env<'a>(
         mode: ResolveMode::Audit,
         registrar: kernel(),
         resolved_at: 7,
+        notices: None,
     }
 }
 

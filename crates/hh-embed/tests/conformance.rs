@@ -3896,3 +3896,196 @@ fn lab_analysis_analyze_refusals() {
     let e = call(&mut svc, "lab.analysis.analyze", params(s));
     assert_eq!(err_kind(&e), "Refused", "{e:?}");
 }
+
+// ── S3.5: `lab.assembly.*` over Group L (AC-R-2.10.1-10) ─────────────────────
+// The service runs at the embedding boundary exchanging only ADR-0050 D2
+// records; binding (a) `handle()` and binding (b) the stdio codec produce
+// byte-identical responses over the same dispatch.
+
+/// The `AssemblySource` for the standard fixture: the authored scaffold
+/// (`{root, nodes, edges}`) plus one `user` layer carrying the Stage-1 slot
+/// bindings.
+fn assembly_source_json() -> Json {
+    let doc = document_json();
+    let nodes = doc.get("nodes").cloned().unwrap_or(Json::Arr(vec![]));
+    let edges = doc.get("edges").cloned().unwrap_or(Json::Arr(vec![]));
+    let mut assembly = Assembly::empty();
+    assembly.slots.insert(
+        "control_strategy".into(),
+        SlotBindings::One(SlotBinding::of(ComponentVariantRef::selected(
+            "control_strategy",
+            "hh/round_robin",
+            "latest",
+        ))),
+    );
+    assembly.slots.insert(
+        "context_policy".into(),
+        SlotBindings::One(SlotBinding::of(ComponentVariantRef::selected(
+            "context_policy",
+            "hh/full_window",
+            "latest",
+        ))),
+    );
+    let prov = hh_assembly::grammar::LayerProvenance {
+        source_kind: hh_assembly::grammar::LayerSourceKind::User,
+        id: "user:main".into(),
+        version: "1".into(),
+        precedence: 0,
+    };
+    Json::obj([
+        ("dialect", Json::str("hir/1")),
+        ("root_kind", Json::str("native")),
+        (
+            "document",
+            Json::obj([
+                ("root", Json::str("test:agent")),
+                ("nodes", nodes),
+                ("edges", edges),
+            ]),
+        ),
+        (
+            "layers",
+            Json::Arr(vec![Json::obj([
+                ("provenance", hh_assembly::grammar::layer_json(&prov)),
+                ("fragment", assembly.to_json()),
+            ])]),
+        ),
+        ("ext", Json::obj([])),
+    ])
+}
+
+#[test]
+fn ac10_assembly_ops_run_out_of_process_over_group_l() {
+    let source = assembly_source_json();
+    let reqs: Vec<(String, Json)> = vec![
+        (
+            "lab.assembly.assemble".to_string(),
+            Json::obj([("source", source.clone()), ("mode", Json::str("seal"))]),
+        ),
+        (
+            "lab.assembly.plan".to_string(),
+            Json::obj([("source", source.clone())]),
+        ),
+        (
+            "lab.assembly.explain".to_string(),
+            Json::obj([("source", source.clone())]),
+        ),
+        (
+            "lab.assembly.validate_batch".to_string(),
+            Json::obj([(
+                "points",
+                Json::Arr(vec![
+                    Json::obj([("source", source.clone())]),
+                    Json::obj([("source", source.clone())]),
+                ]),
+            )]),
+        ),
+    ];
+    let mut tape: Vec<String> = vec![Json::obj([
+        ("jsonrpc", Json::str("2.0")),
+        ("id", Json::str("h")),
+        ("method", Json::str("hello")),
+        (
+            "params",
+            hello_params(caps_json(&[
+                ("experimental", true),
+                ("serves_measurement", true),
+            ])),
+        ),
+    ])
+    .to_canonical_string()];
+    tape.extend(reqs.iter().enumerate().map(|(i, (m, p))| {
+        Json::obj([
+            ("jsonrpc", Json::str("2.0")),
+            ("id", Json::str(format!("a{i}"))),
+            ("method", Json::str(m.clone())),
+            ("params", p.clone()),
+        ])
+        .to_canonical_string()
+    }));
+
+    // Binding (b): the stdio loop (the separate-process boundary).
+    let dir_b = test_dir("asm-b");
+    let mut out_b = Vec::new();
+    {
+        let mut svc = service_in(&dir_b);
+        let input = tape.join("\n") + "\n";
+        let mut r = std::io::BufReader::new(input.as_bytes());
+        hh_embed::stdio::serve(&mut svc, &mut r, &mut out_b).unwrap();
+    }
+    // Binding (a): in-process `handle()`.
+    let dir_a = test_dir("asm-a");
+    let mut out_a = Vec::new();
+    {
+        let mut svc = service_in(&dir_a);
+        for line in &tape {
+            let req = hh_wire::jsonrpc::parse_request(line).unwrap();
+            let resp = svc.handle(&req);
+            out_a.extend_from_slice(resp.to_canonical_string().as_bytes());
+            out_a.push(b'\n');
+            for n in svc.drain_notifications() {
+                out_a.extend_from_slice(n.to_canonical_string().as_bytes());
+                out_a.push(b'\n');
+            }
+        }
+    }
+    let a = String::from_utf8(out_a).unwrap();
+    let b = String::from_utf8(out_b).unwrap();
+
+    // Byte parity across *instances* can't hold for snapshot-cutting ops —
+    // `resolved_at`/`verified_at` stamps enter `version_id` (§3.3.6 keeps
+    // `semantic_id` stamp-free). The parity claim is over the stable
+    // members: status, report.status, plan.exit, identity.semantic_id.
+    let lines_a: Vec<&str> = a.lines().collect();
+    let lines_b: Vec<&str> = b.lines().collect();
+    assert_eq!(lines_a.len(), 5, "{a}");
+    assert_eq!(lines_b.len(), 5, "{b}");
+    for (i, (la, lb)) in lines_a.iter().zip(lines_b.iter()).enumerate() {
+        let (ja, jb) = (parse(la).unwrap(), parse(lb).unwrap());
+        assert!(
+            ja.get("result").is_some() && jb.get("result").is_some(),
+            "line {i} is a result, not a boundary error: {la} | {lb}"
+        );
+        let (ra, rb) = (ja.get("result").unwrap(), jb.get("result").unwrap());
+        assert_eq!(
+            ra.get("status").and_then(Json::as_str),
+            rb.get("status").and_then(Json::as_str),
+            "line {i}: status agrees across bindings"
+        );
+        assert_eq!(
+            ra.get("report")
+                .and_then(|r| r.get("status"))
+                .and_then(Json::as_str),
+            rb.get("report")
+                .and_then(|r| r.get("status"))
+                .and_then(Json::as_str),
+            "line {i}: report.status agrees"
+        );
+        assert_eq!(
+            ra.get("plan").and_then(|p| p.get("exit")),
+            rb.get("plan").and_then(|p| p.get("exit")),
+            "line {i}: plan.exit agrees"
+        );
+        assert_eq!(
+            ra.get("identity").and_then(|i| i.get("semantic_id")),
+            rb.get("identity").and_then(|i| i.get("semantic_id")),
+            "line {i}: semantic_id agrees (stamp-free identity)"
+        );
+    }
+
+    // And assemble seals through the stdio boundary.
+    let assemble = parse(lines_b[1]).unwrap();
+    let result = assemble.get("result").unwrap();
+    assert_eq!(
+        result.get("status").and_then(Json::as_str),
+        Some("ok"),
+        "assemble seals through the stdio boundary: {result:?}"
+    );
+    assert!(result.get("sealed").is_some());
+    let batch = parse(lines_b[4]).unwrap();
+    let reports = match batch.get("result") {
+        Some(Json::Arr(v)) => v,
+        other => panic!("validate_batch returns an array: {other:?}"),
+    };
+    assert_eq!(reports.len(), 1, "identical points validate once");
+}

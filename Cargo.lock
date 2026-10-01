@@ -366,11 +366,14 @@ dependencies = [
 name = "hh-lab"
 version = "0.0.1"
 dependencies = [
+ "hh-assembly",
  "hh-budget",
+ "hh-compiler",
  "hh-hir",
  "hh-identity",
  "hh-ontology",
  "hh-provenance",
+ "hh-registry",
  "hh-wire",
 ]
 

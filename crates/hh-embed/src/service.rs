@@ -611,6 +611,18 @@ impl EmbedService {
             // A12 + transfer rows; the remaining `lab.analysis.*` /
             // `lab.results.*` ops land with their own tickets).
             "lab.analysis.analyze" => self.lab_analysis_analyze(&req.params),
+            // ── S3.5: `lab.assembly.*` — the assembly service boundary
+            // (R-2.10.1; §6.1). Semantics-free: records-in/records-out over
+            // the one kernel resolver via `hh_lab::assembly`.
+            "lab.assembly.assemble" => self.lab_assembly_assemble(&req.params),
+            "lab.assembly.plan" => self.lab_assembly_plan(&req.params),
+            "lab.assembly.apply" => self.lab_assembly_apply(&req.params),
+            "lab.assembly.validate_batch" => self.lab_assembly_validate_batch(&req.params),
+            "lab.assembly.explain" => self.lab_assembly_explain(&req.params),
+            "lab.assembly.diff" => self.lab_assembly_diff(&req.params),
+            "lab.assembly.drift" => self.lab_assembly_drift(&req.params),
+            "lab.assembly.identity" => self.lab_assembly_identity(&req.params),
+            "lab.assembly.adopt" => self.lab_assembly_adopt(&req.params),
             _ => Err(EmbedError::SchemaViolation {
                 path: "/method".to_string(),
                 code: "unknown_method".to_string(),
