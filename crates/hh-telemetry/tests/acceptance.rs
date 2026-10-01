@@ -1086,10 +1086,17 @@ fn genai_verdict_lowering_roundtrips_and_names_loss_classes() {
         ("response_ref", Json::str("resp-77")),
     ]);
     let (event, loss) = lower_verdict(9, &verdict);
-    assert_eq!(event.get("name").unwrap().as_str().unwrap(), "gen_ai.evaluation.result");
+    assert_eq!(
+        event.get("name").unwrap().as_str().unwrap(),
+        "gen_ai.evaluation.result"
+    );
     let attrs = event.get("attributes").unwrap();
     assert_eq!(
-        attrs.get("gen_ai.evaluation.name").unwrap().as_str().unwrap(),
+        attrs
+            .get("gen_ai.evaluation.name")
+            .unwrap()
+            .as_str()
+            .unwrap(),
         "crit:loop-guard"
     );
     assert_eq!(
@@ -1109,7 +1116,11 @@ fn genai_verdict_lowering_roundtrips_and_names_loss_classes() {
         "loop_guard_passed"
     );
     assert_eq!(
-        attrs.get("gen_ai.evaluation.status").unwrap().as_str().unwrap(),
+        attrs
+            .get("gen_ai.evaluation.status")
+            .unwrap()
+            .as_str()
+            .unwrap(),
         "decided"
     );
     assert_eq!(
@@ -1119,11 +1130,11 @@ fn genai_verdict_lowering_roundtrips_and_names_loss_classes() {
     // The five named loss classes are all named on the loss report.
     let details: Vec<String> = loss.iter().map(|l| l.detail.clone()).collect();
     for named in [
-        "validator_ref",         // judge identity
-        "evidence_refs",         // evidence
-        "calibration_ref",       // calibration
-        "independence_vector",   // independence
-        "cost_ppm",              // cost
+        "validator_ref",       // judge identity
+        "evidence_refs",       // evidence
+        "calibration_ref",     // calibration
+        "independence_vector", // independence
+        "cost_ppm",            // cost
     ] {
         assert!(
             details
@@ -1146,7 +1157,10 @@ fn genai_verdict_lowering_roundtrips_and_names_loss_classes() {
     ]);
     let (e2, _) = lower_verdict(10, &v2);
     let a2 = e2.get("attributes").unwrap();
-    assert_eq!(a2.get("gen_ai.evaluation.score.value").unwrap().as_int(), Some(85));
+    assert_eq!(
+        a2.get("gen_ai.evaluation.score.value").unwrap().as_int(),
+        Some(85)
+    );
     assert_eq!(
         a2.get("gen_ai.evaluation.name").unwrap().as_str().unwrap(),
         "task:cap-2"

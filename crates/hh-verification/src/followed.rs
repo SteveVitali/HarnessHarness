@@ -55,17 +55,13 @@ pub enum FollowedResolution {
 /// class, an `instruction`'s `validates` edge. `tool_surface` and the
 /// kernel-executed rule kinds are unconditional — the surface schema /
 /// the ledger postcondition *is* the referenced validator.
-pub fn deterministic_detector(
-    kind: &str,
-    references_validator: bool,
-) -> FollowedResolution {
+pub fn deterministic_detector(kind: &str, references_validator: bool) -> FollowedResolution {
     match kind {
         "tool_surface" => FollowedResolution::Deterministic(detector::ARGS_CONFORM),
         "procedure" | "procedure_index" if references_validator => {
             FollowedResolution::Deterministic(detector::PROCEDURE_INVOKED)
         }
-        "rule" | "kernel_rule" | "soft_budget_rule" | "loop_nudge"
-        | "continue_nudge" => {
+        "rule" | "kernel_rule" | "soft_budget_rule" | "loop_nudge" | "continue_nudge" => {
             FollowedResolution::Deterministic(detector::RULE_POSTCONDITION)
         }
         "memory" | "memory_index" | "recovery" if references_validator => {
