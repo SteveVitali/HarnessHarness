@@ -82,10 +82,7 @@ pub fn plan_validate(
         let Json::Obj(m) = s else {
             return Err("step_not_object");
         };
-        let kind = m
-            .get("kind")
-            .and_then(Json::as_str)
-            .ok_or("step_no_kind")?;
+        let kind = m.get("kind").and_then(Json::as_str).ok_or("step_no_kind")?;
         if !PLAN_STEP_KINDS.contains(&kind) {
             return Err("step_kind_unknown");
         }
@@ -105,20 +102,16 @@ pub fn plan_validate(
                     .ok_or("act_no_surface")?;
                 // The closed-world check — a plan step names only declared
                 // surfaces (a `hh.plan` self-call is refused too).
-                if !declared_surfaces
-                    .iter()
-                    .any(|s| s.surface_id == surface)
+                if !declared_surfaces.iter().any(|s| s.surface_id == surface)
                     || surface == PLAN_SURFACE_ID
                 {
                     return Err("surface_undeclared");
                 }
             }
-            "verify" => {
-                match m.get("validator_refs") {
-                    Some(Json::Arr(a)) if !a.is_empty() && a.iter().all(|v| v.as_str().is_some()) => {}
-                    _ => return Err("verify_no_refs"),
-                }
-            }
+            "verify" => match m.get("validator_refs") {
+                Some(Json::Arr(a)) if !a.is_empty() && a.iter().all(|v| v.as_str().is_some()) => {}
+                _ => return Err("verify_no_refs"),
+            },
             _ => {}
         }
         steps.push(s.clone());
@@ -141,14 +134,8 @@ pub fn plan_emitted_payload(
         ("schema_validator_ref", Json::str(schema_validator_ref)),
         ("valid", Json::Bool(valid)),
         ("detector", Json::str("deterministic")),
-        (
-            "steps",
-            Json::Arr(steps.to_vec()),
-        ),
-        (
-            "reject_reason",
-            reject_reason.map_or(Json::Null, Json::str),
-        ),
+        ("steps", Json::Arr(steps.to_vec())),
+        ("reject_reason", reject_reason.map_or(Json::Null, Json::str)),
     ])
 }
 
@@ -292,10 +279,7 @@ impl PlanExecute {
                 let args = step.get("args").cloned().unwrap_or(Json::Null);
                 let plan_ref = Self::ext_str(state, ext::PLAN_REF).unwrap_or("plan");
                 let intent = Json::obj([
-                    (
-                        "tool_call_id",
-                        Json::str(format!("{plan_ref}-step-{idx}")),
-                    ),
+                    ("tool_call_id", Json::str(format!("{plan_ref}-step-{idx}"))),
                     ("surface", Json::str(surface)),
                     ("args", args),
                     (
@@ -328,9 +312,7 @@ impl PlanExecute {
                     stamp: stamp_for(state, DecisionPoint::Verify, None),
                     kind: DecisionKind::Verify {
                         validator_refs: refs,
-                        subject: Json::str(
-                            Self::ext_str(state, ext::PLAN_REF).unwrap_or("plan"),
-                        ),
+                        subject: Json::str(Self::ext_str(state, ext::PLAN_REF).unwrap_or("plan")),
                     },
                 }
             }
@@ -338,10 +320,7 @@ impl PlanExecute {
                 stamp: stamp_for(state, DecisionPoint::Plan, None),
                 kind: DecisionKind::Propose {
                     decision_point: DecisionPoint::Act,
-                    context_request: step
-                        .get("context_request")
-                        .cloned()
-                        .unwrap_or(Json::Null),
+                    context_request: step.get("context_request").cloned().unwrap_or(Json::Null),
                     expected_output: ExpectedOutput::Free,
                 },
             },
@@ -351,7 +330,11 @@ impl PlanExecute {
 
     /// Advance past the current step and emit the next decision.
     fn advance(&self, state: &mut ControlState) -> ControlDecision {
-        Self::set_ext(state, ext::IDX, Json::Int(Self::ext_u64(state, ext::IDX) as i64 + 1));
+        Self::set_ext(
+            state,
+            ext::IDX,
+            Json::Int(Self::ext_u64(state, ext::IDX) as i64 + 1),
+        );
         self.step_decision(state)
     }
 }
@@ -571,9 +554,7 @@ impl ControlStrategy for PlanExecute {
                                 kind: DecisionKind::Act {
                                     intents: pending
                                         .iter()
-                                        .map(|tc| {
-                                            Json::obj([("tool_call_id", Json::str(tc))])
-                                        })
+                                        .map(|tc| Json::obj([("tool_call_id", Json::str(tc))]))
                                         .collect(),
                                     mode: ActMode::Sequential,
                                     on_partial: OnPartial::FailBatch,
@@ -587,9 +568,7 @@ impl ControlStrategy for PlanExecute {
                 }
             }
 
-            Cue::EffectsSettled {
-                submission_ref, ..
-            } => {
+            Cue::EffectsSettled { submission_ref, .. } => {
                 if let Some(s) = submission_ref {
                     Self::set_ext(state, ext::SUBMISSION, Json::str(s));
                 }
