@@ -18,6 +18,7 @@ hh-wire = { path = "../hh-wire" }
 hh-identity = { path = "../hh-identity" }
 hh-provenance = { path = "../hh-provenance" }
 hh-ledger = { path = "../hh-ledger" }
+hh-registry = { path = "../hh-registry" }
 hh-budget = { path = "../hh-budget" }
 hh-telemetry = { path = "../hh-telemetry" }
 hh-secrets = { path = "../hh-secrets" }

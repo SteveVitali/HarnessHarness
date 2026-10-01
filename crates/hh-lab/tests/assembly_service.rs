@@ -1177,21 +1177,42 @@ fn minimal_profile(id: &str, version: &str) -> ModelProfile {
     p
 }
 
-struct MapProfileView(BTreeMap<String, ModelProfile>);
+struct MapProfileView {
+    profiles: BTreeMap<String, ModelProfile>,
+    reports: BTreeMap<String, hh_compiler::profile_test::ProfileTestReport>,
+}
 
 impl ProfileView for MapProfileView {
     fn profile(&self, coordinate: &str) -> Option<ModelProfile> {
-        self.0.get(coordinate).cloned()
+        self.profiles.get(coordinate).cloned()
+    }
+
+    fn test_report(
+        &self,
+        coordinate: &str,
+    ) -> Option<hh_compiler::profile_test::ProfileTestReport> {
+        self.reports.get(coordinate).cloned()
     }
 }
 
 fn profiles_of(ps: &[ModelProfile]) -> MapProfileView {
     let mut m = BTreeMap::new();
+    let mut reports = BTreeMap::new();
     for p in ps {
-        m.insert(hh_compiler::profile::profile_coordinate(p), p.clone());
+        let coord = hh_compiler::profile::profile_coordinate(p);
+        // Fixture plumbing: a fabricated *passing* ProfileTestReport per bound
+        // profile so the AC-R-2.3.3-13 link gate admits the (tested) chain.
+        let report =
+            hh_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
+        reports.insert(coord.clone(), report.clone());
+        reports.insert(p.content_hash.clone(), report);
+        m.insert(coord, p.clone());
         m.insert(p.content_hash.clone(), p.clone());
     }
-    MapProfileView(m)
+    MapProfileView {
+        profiles: m,
+        reports,
+    }
 }
 
 #[test]

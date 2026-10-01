@@ -128,8 +128,12 @@ pub struct BoundProfile {
     /// The chain, base first.
     pub chain: Vec<ModelProfile>,
     /// `true` when the chain was bound as the explicit `fallback_profile` escape
-    /// (ADR-0124 §5).
+    /// (ADR-0124 §5) — the bundle records it as `fallback_used` (AC-R-2.3.3-2).
     pub is_fallback: bool,
+    /// The leaf profile's `ProfileTestReport` ref — the gate product
+    /// `CompiledBundle.profile_test_report_ref` carries (AC-R-2.3.3-13;
+    /// `None` for the kernel null profile, whose validity is this suite).
+    pub test_report_ref: Option<String>,
 }
 
 /// The linked graph — stage 1's output.
@@ -666,9 +670,76 @@ pub fn link(
     }
     diagnostics.extend(expired);
 
+    // ── Profile test gate (AC-R-2.3.3-13; ADR-0125 d.1/d.3) ──────────────────
+    // Every bound non-null profile must carry a `ProfileTestReport` with all
+    // validity sections passing; a `DRIFT`/`UNSUPPORTED` conformance record on
+    // a capability in a bound rule's dependency set refuses `capability_drift`
+    // unless a recorded intent is present. The kernel null profile is exempt —
+    // compiling under it is the compiler's own removal test (AC-R-2.3.3-14).
+    let mut test_report_ref: Option<String> = None;
+    for p in &chain {
+        if p.profile_id == "null" {
+            continue;
+        }
+        let coord = profile_coordinate(p);
+        let report = profiles
+            .test_report(&coord)
+            .or_else(|| profiles.test_report(&p.content_hash));
+        let Some(report) = report else {
+            return Err(CompileError::LinkError {
+                kind: LinkErrorKind::ProfileUntested,
+                detail: format!("bound profile {coord} carries no ProfileTestReport"),
+                diagnostics: Vec::new(),
+            });
+        };
+        if !report.validity_ok() {
+            let failed: Vec<&str> = report
+                .validity
+                .iter()
+                .filter(|s| !matches!(s.verdict, crate::profile_test::ValidityVerdict::Pass))
+                .map(|s| s.id.name())
+                .collect();
+            return Err(CompileError::LinkError {
+                kind: LinkErrorKind::ProfileInvalid,
+                detail: format!(
+                    "bound profile {coord} fails validity section(s) {}",
+                    failed.join(",")
+                ),
+                diagnostics: Vec::new(),
+            });
+        }
+        for r in &p.rules {
+            for dep in crate::profile_test::capability_dependencies(r.kind) {
+                let drifted = report.probes.iter().any(|rec| {
+                    rec.capability == *dep
+                        && matches!(
+                            rec.verdict,
+                            crate::profile_test::ConformanceVerdict::Drift
+                                | crate::profile_test::ConformanceVerdict::Unsupported
+                        )
+                });
+                if drifted && !compile_for_expired {
+                    return Err(CompileError::LinkError {
+                        kind: LinkErrorKind::CapabilityDrift,
+                        detail: format!(
+                            "profile {coord} rule {} depends on capability {dep} with a DRIFT/UNSUPPORTED conformance record and no recorded intent",
+                            r.rule_id
+                        ),
+                        diagnostics: Vec::new(),
+                    });
+                }
+            }
+        }
+        test_report_ref = Some(report.report_ref.clone());
+    }
+
     Ok(LinkedGraph {
         sealed: sealed.clone(),
-        profile: BoundProfile { chain, is_fallback },
+        profile: BoundProfile {
+            chain,
+            is_fallback,
+            test_report_ref,
+        },
         targets: target_refs.to_vec(),
         conditioned_rules: conditioned,
         diagnostics,

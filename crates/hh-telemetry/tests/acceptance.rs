@@ -846,3 +846,195 @@ fn ac_r_2_2_3_12_recovery_metrics_fold_the_recovery_rows() {
         );
     }
 }
+
+// ── AC-R-2.3.4-13 — the GenAI semantic-convention lowering (S3.7) ──────────
+
+use hh_telemetry::genai::{attr, lower_run};
+
+fn completed_payload() -> Json {
+    Json::obj([
+        ("model_call_id", Json::str("c1")),
+        ("served_model", Json::str("m-a")),
+        (
+            "surface_ids",
+            Json::obj([
+                ("response_id", Json::str("resp-1")),
+                ("request_id", Json::str("req-1")),
+            ]),
+        ),
+        ("stop_reason", Json::str("stop")),
+        (
+            "usage",
+            Json::obj([
+                ("arrival", Json::str("provider_reported")),
+                (
+                    "record",
+                    Json::obj([
+                        ("raw", Json::obj([("prompt_tokens", Json::Int(210))])),
+                        ("normalizer_ref", Json::str("norm:1")),
+                        (
+                            "view",
+                            Json::obj([
+                                ("input_total", Json::Int(200)),
+                                ("output_total", Json::Int(50)),
+                                ("cache_read", Json::Int(120)),
+                                ("cache_write", Json::Int(30)),
+                                ("provider_extra", Json::Int(7)),
+                            ]),
+                        ),
+                    ]),
+                ),
+            ]),
+        ),
+        (
+            "timing",
+            Json::obj([("latency_ms", Json::Int(42)), ("ttft_ms", Json::Int(9))]),
+        ),
+        (
+            "cache_observation",
+            Json::obj([
+                ("expected_state", Json::str("warm")),
+                ("observed_state", Json::str("hit")),
+                ("affinity_key", Json::str("aff-1")),
+                ("static_hash", Json::str("sha256:ab")),
+                ("hit_ratio_ppm", Json::Int(600_000)),
+                ("miss_reason", Json::str("none")),
+            ]),
+        ),
+        ("served_from_cache", Json::str("entry:1")),
+        ("substitution", Json::obj([("declared", Json::str("m-b"))])),
+        ("snapshot_id", Json::str("snap:1")),
+    ])
+}
+
+fn resolved_payload() -> Json {
+    Json::obj([
+        ("cache_kind", Json::str("k4")),
+        ("key", Json::str("sha256:k4key")),
+        ("scope", Json::str("run")),
+        ("outcome", Json::str("hit")),
+        ("reason", Json::str("expired")),
+        ("entry_ref", Json::str("entry:1")),
+        (
+            "avoided",
+            Json::obj([
+                ("spend", Json::obj([("micro_units", Json::Int(5))])),
+                ("provenance", Json::str("estimated_from_pricing")),
+            ]),
+        ),
+        ("attribution", Json::str("subject")),
+        ("purpose", Json::str("main")),
+        ("lookup_duration_ms", Json::Int(1)),
+        ("served_by", Json::str("c2")),
+    ])
+}
+
+#[test]
+fn genai_lowering_carries_cache_roles_and_names_every_loss() {
+    let completed = completed_payload();
+    let resolved = resolved_payload();
+    let reroute = Json::obj([("model_call_id", Json::str("c1"))]);
+    let other = Json::obj([("x", Json::Int(1))]);
+    let events: Vec<(u64, &str, &Json)> = vec![
+        (1, "model.call.completed", &completed),
+        (2, "model.cache.resolved", &resolved),
+        (3, "model.rerouted", &reroute),
+        (4, "run.started", &other), // outside the model-plane projection
+    ];
+    let out = lower_run(&events);
+
+    // One span for the terminal; the resolved row is a named event loss.
+    assert_eq!(out.spans.len(), 1);
+    let span = &out.spans[0];
+    assert_eq!(span.get("name"), Some(&Json::str("gen_ai.chat")));
+    assert_eq!(span.get("span_id"), Some(&Json::str("c1")));
+    assert_eq!(span.get("duration_ms"), Some(&Json::Int(42)));
+    let a = span.get("attributes").expect("attributes");
+    assert_eq!(a.get(attr::OPERATION), Some(&Json::str("chat")));
+    assert_eq!(a.get(attr::RESPONSE_MODEL), Some(&Json::str("m-a")));
+    assert_eq!(a.get(attr::RESPONSE_ID), Some(&Json::str("resp-1")));
+    assert_eq!(
+        a.get(attr::FINISH_REASONS),
+        Some(&Json::Arr(vec![Json::str("stop")]))
+    );
+    assert_eq!(a.get(attr::INPUT_TOKENS), Some(&Json::Int(200)));
+    assert_eq!(a.get(attr::OUTPUT_TOKENS), Some(&Json::Int(50)));
+    // The cache roles lower to the GenAI spellings (§5b.4).
+    assert_eq!(a.get(attr::CACHE_READ), Some(&Json::Int(120)));
+    assert_eq!(a.get(attr::CACHE_WRITE), Some(&Json::Int(30)));
+
+    // Every unrepresentable member is a named loss — nothing silently drops.
+    let details: BTreeSet<&str> = out.loss.iter().map(|l| l.detail.as_str()).collect();
+    for expected in [
+        "model.call.completed.surface_ids.request_id",
+        "model.call.completed.usage.arrival",
+        "model.call.completed.usage.record.raw",
+        "model.call.completed.usage.record.normalizer_ref",
+        "model.call.completed.usage.record.view.provider_extra",
+        "model.call.completed.timing.ttft_ms",
+        "model.call.completed.cache_observation.expected_state",
+        "model.call.completed.cache_observation.affinity_key",
+        "model.call.completed.cache_observation.static_hash",
+        "model.call.completed.cache_observation.observed_state",
+        "model.call.completed.cache_observation.hit_ratio_ppm",
+        "model.call.completed.cache_observation.miss_reason",
+        "model.call.completed.served_from_cache",
+        "model.call.completed.substitution",
+        "model.call.completed.snapshot_id",
+        "model.cache.resolved",               // unrepresentable_event
+        "model.cache.resolved.miss_reason",   // `reason` spelled per the AC
+        "model.cache.resolved.avoided.spend", // avoided cost is declared loss
+        "model.cache.resolved.key",
+        "model.rerouted", // unrepresentable_event
+    ] {
+        assert!(
+            details.contains(expected),
+            "missing loss entry `{expected}`"
+        );
+    }
+    assert!(out
+        .loss
+        .iter()
+        .all(|l| l.kind == "unrepresentable_member" || l.kind == "unrepresentable_event"));
+    // The loss report ref is present and deterministic.
+    let r1 = out.loss_report_ref().expect("losses produce a report ref");
+    assert_eq!(r1, lower_run(&events).loss_report_ref().unwrap());
+    assert!(r1.starts_with("sha256:"));
+    assert_eq!(out.seq_range, (1, 3), "non-model rows are out of scope");
+}
+
+#[test]
+fn genai_lowering_failed_call_and_empty_run() {
+    let failed = Json::obj([
+        ("model_call_id", Json::str("c9")),
+        (
+            "error",
+            Json::obj([
+                ("class", Json::str("infrastructure_failure")),
+                ("detail", Json::str("boom")),
+            ]),
+        ),
+        ("timing", Json::obj([("latency_ms", Json::Int(3))])),
+        (
+            "usage",
+            Json::obj([("input_total", Json::Int(10)), ("cache_read", Json::Int(4))]),
+        ),
+        ("served_model", Json::str("m-a")), // unrepresentable on a failed call
+    ]);
+    let out = lower_run(&[(7, "model.call.failed", &failed)]);
+    assert_eq!(out.spans.len(), 1);
+    let a = out.spans[0].get("attributes").unwrap();
+    assert_eq!(
+        a.get(attr::ERROR_TYPE),
+        Some(&Json::str("infrastructure_failure"))
+    );
+    assert_eq!(a.get(attr::CACHE_READ), Some(&Json::Int(4)));
+    let details: BTreeSet<&str> = out.loss.iter().map(|l| l.detail.as_str()).collect();
+    assert!(details.contains("model.call.failed.error.detail"));
+    assert!(details.contains("model.call.failed.served_model"));
+
+    // An empty/zero-loss run has no report ref (never an empty list).
+    let empty = lower_run(&[]);
+    assert_eq!(empty.seq_range, (0, 0));
+    assert!(empty.loss_report_ref().is_none());
+}

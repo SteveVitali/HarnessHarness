@@ -50,6 +50,7 @@ pub mod grammar;
 pub mod layout;
 pub mod message;
 pub mod plan;
+pub mod probes;
 pub mod router;
 pub mod snapshot;
 pub mod vocab;
@@ -77,8 +78,8 @@ pub use dialect::{
 };
 pub use errors::{CodecError, GatewayError};
 pub use gateway::{
-    CallHandle, CredentialHandle, CredentialPort, EndpointAllowlist, ModelGateway, NoCredentials,
-    Transport,
+    charge_model, stamp_participant, CallHandle, CredentialHandle, CredentialPort,
+    EndpointAllowlist, ModelGateway, NoCredentials, Transport,
 };
 pub use grammar::{
     decode_frame, DecodeState, Delta, GrammarViolation, ModelEvent, ModelEventKind, Timing,
@@ -98,11 +99,17 @@ pub use plan::{
     PlanBlock, PlanMessage, PlanTool, ProviderRequestPlan, RequestClass, RequestSpec, Sampling,
     EFFORT_RUNGS,
 };
+pub use probes::{
+    canonical_probe_request, describe, discovery_claims, discovery_conformance,
+    fingerprint_probe_verdict, run_fingerprint_probe, run_transport_probes,
+    FingerprintProbeOutcome, FingerprintProbeSpec, TransportCapabilityDeclaration, ADAPTER_VERSION,
+};
 pub use router::{
-    error_action, reroute, select, AccountBudget, BudgetPort, Candidate, CandidateRejectReason,
-    CandidateVerdict, ErrorAction, HealthView, MigrationLossBound, ModelRoleTable, NoHealth,
-    PolicyConditionedRule, RoleBinding, RouteCandidate, RoutingDecision, RoutingPolicy,
-    RoutingPolicyKind, RoutingRefusal, RoutingRequest,
+    check_reroute_order, error_action, reroute, select, AccountBudget, BudgetPort, Candidate,
+    CandidateRejectReason, CandidateVerdict, ErrorAction, HealthView, MigrationLossBound,
+    ModelRoleTable, NoHealth, PolicyConditionedRule, RerouteOrderError, RoleBinding,
+    RouteCandidate, RoutingDecision, RoutingPolicy, RoutingPolicyKind, RoutingRefusal,
+    RoutingRequest,
 };
 pub use vocab::{
     AttemptPolicy, BlockKind, ErrorAttribution, InvalidResponseKind, ModelError, ModelErrorClass,

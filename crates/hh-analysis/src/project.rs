@@ -288,6 +288,10 @@ pub fn eval_run(
         model_snapshots: row.coordinates.model_snapshots.clone(),
         stratum,
         eval_search_spend: 0,
+        routing_deviation: false,
+        replayed_trajectory: false,
+        served_from_cache_count: 0,
+        cache_prefix_hit_ratio: None,
         split_hash,
         facts,
     })

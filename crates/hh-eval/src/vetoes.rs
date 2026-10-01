@@ -516,6 +516,8 @@ mod tests {
             artefact_id: "secret-fixture".into(),
             delivery_id: None,
             detector: None,
+            rule_id: None,
+            predicate_ref: None,
         });
         let ctx = VetoContext {
             held_out_refs: ["secret-fixture".to_string()].into_iter().collect(),

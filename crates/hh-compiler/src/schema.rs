@@ -2257,6 +2257,11 @@ pub fn bundle_to_json(b: &CompiledBundle) -> Json {
             "profile_chain",
             Json::Arr(b.profile_chain.iter().map(Json::str).collect()),
         ),
+        (
+            "profile_test_report_ref",
+            opt_or_null(b.profile_test_report_ref.as_ref().map(Json::str)),
+        ),
+        ("fallback_used", Json::Bool(b.fallback_used)),
         ("runtime_plan", plan_to_json(&b.runtime_plan)),
         ("schema", Json::str("CompiledBundle/1")),
         (
@@ -2339,6 +2344,11 @@ pub fn bundle_from_json(j: &Json) -> Result<CompiledBundle, CompileError> {
             _ => return Err(schema_err(path, "diagnostics must be an array")),
         },
         profile_chain: str_vec(j, "profile_chain", path)?,
+        profile_test_report_ref: j
+            .get("profile_test_report_ref")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        fallback_used: matches!(j.get("fallback_used"), Some(Json::Bool(true))),
     })
 }
 
@@ -2383,6 +2393,10 @@ pub struct WireCompileInputs {
     pub targets: Vec<TargetSpec>,
     /// The recorded intent flag.
     pub compile_for_expired: bool,
+    /// The `ProfileTestReport` records the registry holds beside the carried
+    /// profiles — the link gate (AC-R-2.3.3-13) reads them; a bound profile
+    /// without a carried report is `profile_untested` out-of-process too.
+    pub test_reports: Vec<crate::profile_test::ProfileTestReport>,
 }
 
 /// The canonical JSON of a `WireCompileInputs`.
@@ -2401,6 +2415,15 @@ pub fn compile_inputs_json(i: &WireCompileInputs) -> Json {
         (
             "targets",
             Json::Arr(i.targets.iter().map(target_spec_json).collect()),
+        ),
+        (
+            "test_reports",
+            Json::Arr(
+                i.test_reports
+                    .iter()
+                    .map(crate::profile_test::test_report_json)
+                    .collect(),
+            ),
         ),
         (
             "variants",
@@ -2475,5 +2498,14 @@ pub fn compile_inputs_from_json(j: &Json) -> Result<WireCompileInputs, CompileEr
             _ => return Err(schema_err(path, "targets must be an array")),
         },
         compile_for_expired: matches!(j.get("compile_for_expired"), Some(Json::Bool(true))),
+        test_reports: match j.get("test_reports") {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .map(crate::profile_test::test_report_from_json)
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| schema_err(path, "test_reports contains a malformed report"))?,
+            Some(Json::Null) | None => Vec::new(),
+            _ => return Err(schema_err(path, "test_reports must be an array")),
+        },
     })
 }

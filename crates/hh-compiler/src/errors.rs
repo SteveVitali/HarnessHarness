@@ -18,6 +18,15 @@ pub enum LinkErrorKind {
     MissingDebtRecord,
     /// A `target_ref` naming no registered target.
     UnknownTarget,
+    /// A bound profile carries no `ProfileTestReport` (AC-R-2.3.3-13;
+    /// ADR-0125 d.1).
+    ProfileUntested,
+    /// A bound profile's `ProfileTestReport` has a failing validity section
+    /// (AC-R-2.3.3-13).
+    ProfileInvalid,
+    /// A `DRIFT`/`UNSUPPORTED` conformance record on a capability in a bound
+    /// rule's dependency set, without a recorded intent (ADR-0125 d.3).
+    CapabilityDrift,
 }
 
 impl LinkErrorKind {
@@ -28,6 +37,9 @@ impl LinkErrorKind {
             LinkErrorKind::VersionConflict => "version_conflict",
             LinkErrorKind::MissingDebtRecord => "missing_debt_record",
             LinkErrorKind::UnknownTarget => "unknown_target",
+            LinkErrorKind::ProfileUntested => "profile_untested",
+            LinkErrorKind::ProfileInvalid => "profile_invalid",
+            LinkErrorKind::CapabilityDrift => "capability_drift",
         }
     }
 }

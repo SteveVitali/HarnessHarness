@@ -53,6 +53,7 @@ pub mod link;
 pub mod lower;
 pub mod plan;
 pub mod profile;
+pub mod profile_test;
 pub mod regex;
 pub mod relower;
 pub mod retrieval;

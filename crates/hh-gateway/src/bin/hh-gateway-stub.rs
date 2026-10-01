@@ -190,6 +190,8 @@ fn main() {
         request_class: hh_gateway::plan::RequestClass::Interactive,
         deferred_deadline_ms: None,
         stream: true,
+        substitution_allowed: None,
+        participant_class: None,
         identity: None,
     };
     let mut transport = FakeTransport { frames };

@@ -310,6 +310,7 @@ pub fn validator_node(id: &str, seq: u64) -> Node {
 /// an `Invoke` may reference — §5c.5) and `failure_handlers` covers every
 /// reachable failure class with `abort` (handlers are total over the
 /// declared ∪ derivable classes).
+#[allow(dead_code)] // not every test target uses every fixture
 pub fn procedure_node(id: &str, steps: Vec<ProcedureStep>, seq: u64) -> Node {
     fn collect_caps(steps: &[ProcedureStep], out: &mut Vec<Ref>) {
         for s in steps {
@@ -673,22 +674,78 @@ pub fn rule(
 }
 
 /// A `ProfileView` over a map (coordinate or content-hash lookup — the bound view).
-pub struct MapProfileView(pub BTreeMap<String, ModelProfile>);
+pub struct MapProfileView {
+    profiles: BTreeMap<String, ModelProfile>,
+    reports: BTreeMap<String, hh_compiler::profile_test::ProfileTestReport>,
+}
 
 impl MapProfileView {
+    /// A view whose profiles each carry a fabricated *passing*
+    /// `ProfileTestReport` — the registry record the link gate reads
+    /// (AC-R-2.3.3-13). This is fixture plumbing: it exists so tests that are
+    /// not about the gate can bind profiles; the gate itself is exercised by
+    /// `untested`/`with_report` views and the `test_profile` suite.
     pub fn of(profiles: Vec<ModelProfile>) -> MapProfileView {
+        let mut m = BTreeMap::new();
+        let mut reports = BTreeMap::new();
+        for p in profiles {
+            let coord = hh_compiler::profile::profile_coordinate(&p);
+            let report =
+                hh_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
+            reports.insert(coord.clone(), report.clone());
+            reports.insert(p.content_hash.clone(), report);
+            m.insert(coord, p.clone());
+            m.insert(p.content_hash.clone(), p);
+        }
+        MapProfileView {
+            profiles: m,
+            reports,
+        }
+    }
+
+    /// A view carrying profiles but **no** test reports — the
+    /// `profile_untested` leg of the link gate.
+    #[allow(dead_code)] // exercised by `profile_test.rs` only
+    pub fn untested(profiles: Vec<ModelProfile>) -> MapProfileView {
         let mut m = BTreeMap::new();
         for p in profiles {
             m.insert(hh_compiler::profile::profile_coordinate(&p), p.clone());
             m.insert(p.content_hash.clone(), p);
         }
-        MapProfileView(m)
+        MapProfileView {
+            profiles: m,
+            reports: BTreeMap::new(),
+        }
+    }
+
+    /// Register a specific report (e.g. a `test_profile` output — failing
+    /// sections and DRIFT probes included) under its profile's coordinate and
+    /// content hash.
+    #[allow(dead_code)] // exercised by `profile_test.rs` only
+    pub fn with_report(
+        mut self,
+        report: hh_compiler::profile_test::ProfileTestReport,
+        profile: &ModelProfile,
+    ) -> MapProfileView {
+        self.reports.insert(
+            hh_compiler::profile::profile_coordinate(profile),
+            report.clone(),
+        );
+        self.reports.insert(profile.content_hash.clone(), report);
+        self
     }
 }
 
 impl ProfileView for MapProfileView {
     fn profile(&self, coordinate: &str) -> Option<ModelProfile> {
-        self.0.get(coordinate).cloned()
+        self.profiles.get(coordinate).cloned()
+    }
+
+    fn test_report(
+        &self,
+        coordinate: &str,
+    ) -> Option<hh_compiler::profile_test::ProfileTestReport> {
+        self.reports.get(coordinate).cloned()
     }
 }
 

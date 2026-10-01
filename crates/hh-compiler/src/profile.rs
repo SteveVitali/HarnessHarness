@@ -555,6 +555,14 @@ pub trait ProfileView {
     /// Read a `ModelProfile/1` record by its coordinate (`profile_id@version` or
     /// `content_hash`); `None` when the coordinate names nothing in the view.
     fn profile(&self, coordinate: &str) -> Option<ModelProfile>;
+
+    /// Read the `ProfileTestReport` the registry holds beside the profile
+    /// (ADR-0125 d.1 — "immutable registry record beside the profile"). `None`
+    /// means *no report* — the link gate spells that `profile_untested`
+    /// (AC-R-2.3.3-13); it is never coerced into a pass.
+    fn test_report(&self, _coordinate: &str) -> Option<crate::profile_test::ProfileTestReport> {
+        None
+    }
 }
 
 /// A `ProfileView` that admits nothing — the S3.1 bundle-compile path's
@@ -972,7 +980,7 @@ pub fn resolve_profile(
 /// record itself is complete. It is a *fixture*, never a silent default —
 /// binding it still goes through `resolve_profile`/`fallback_profile`.
 pub fn null_profile() -> ModelProfile {
-    ModelProfile {
+    let mut p = ModelProfile {
         profile_id: "null".to_string(),
         version: "0".to_string(),
         content_hash: String::new(),
@@ -1031,7 +1039,12 @@ pub fn null_profile() -> ModelProfile {
             min_compiler_version: "0".to_string(),
         },
         tests: Json::obj([]),
-    }
+    };
+    // The kernel-defined baseline still carries its own content address — V1
+    // counts it (the record minus `content_hash` is hashed, same as every
+    // profile).
+    p.content_hash = profile_identity(&p);
+    p
 }
 
 /// The **two minimal profiles** (§3.2.8 C0 scope; ADR-0020 §8; T-LCD-01/-04):
@@ -1138,7 +1151,14 @@ pub fn minimal_profiles() -> (ModelProfile, ModelProfile) {
                 roles_admitted: vec![ModelRole::Primary],
             },
             extends: None,
-            capabilities: ProfileCapabilities::default(),
+            // The minimal profiles *declare* the capabilities their rules
+            // assume (V4: a rule may not assume an unestablished
+            // capability — `unknown` is the C0 spelling of `unsupported`).
+            capabilities: ProfileCapabilities {
+                native_function_calling: CapabilityState::Declared,
+                strict_schema_dialect: CapabilityState::Declared,
+                ..Default::default()
+            },
             rules,
             ext: BTreeMap::new(),
             expiry: debt(&format!("{profile_id}.expiry")),
@@ -1232,4 +1252,128 @@ pub fn expiry_transition(from: DebtStatus, trigger: ExpiryTrigger) -> Option<Deb
         (Expired, RetirePassed) => Retired,
         _ => return None,
     })
+}
+
+/// The `retire_rule` refusal set (ADR-0124 d.4 `RuleRequired{rule_id, reason}`
+/// — a typed error, never a warning, never a silent drop).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RetireError {
+    /// The rule id names no rule in the profile.
+    RuleNotFound {
+        /// The missing id.
+        rule_id: String,
+    },
+    /// `RuleRequired{rule_id, reason}` — `profile − R` would not be a valid
+    /// profile (the spec's own spelling).
+    RuleRequired {
+        /// The rule that cannot be removed.
+        rule_id: String,
+        /// Why `profile − R` fails the closure check.
+        reason: String,
+    },
+}
+
+/// The `ProfileDiff` `retire_rule` returns beside `profile − R` — what the
+/// removal dropped and what remains, as data. The removal-test `Design`'s
+/// `P − R` arm and the `relower(bundle, profile − R)` one call away both read
+/// this record; the removal experiment's `RemovalTest{rule_id, design_ref}`
+/// join reads `removal_test_ref`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProfileDiff {
+    /// The retired rule id.
+    pub removed_rule: String,
+    /// `owned_fields(R) ∖ owned_fields(profile − R)` — the field paths the
+    /// removal drops from the profile's owned set (a non-empty diff here is
+    /// exactly what the removal experiment is for; it is not itself an error).
+    pub dropped_owned_fields: Vec<String>,
+    /// The rule ids that remain, in profile order.
+    pub remaining_rules: Vec<String>,
+    /// The removed rule's `debt.removal_test_ref` — the removal experiment's
+    /// join key.
+    pub removal_test_ref: String,
+}
+
+/// `retire_rule(profile, rule_id) → (profile − R, ProfileDiff)` (ADR-0124 d.4;
+/// ADR-0020 d.4) — the "delete this rule" arm of the removal experiment. Pure:
+/// it produces the `P − R` profile the `retirement`-kind `Design` compares
+/// against `P`; the `expired → retired` status transition is a *separate*
+/// human-sealed step (`expiry_transition(Expired, RetirePassed)` with a passed
+/// `ComparisonReport`) and never happens here.
+///
+/// `profile − R` must itself be a valid profile — the owned-field closure is
+/// re-checked:
+/// - a remaining rule whose `supersedes` names `R` refuses `RuleRequired`
+///   (the supersession anchor may not dangle);
+/// - `member_diff(null_profile(), profile − R) ⊆ owned_fields(profile − R)`
+///   is re-verified (V2's own predicate on the reduced document);
+/// - the result's `content_hash` is recomputed (identity = content).
+///
+/// A rule with no `debt.removal_test` refuses `RuleRequired` — removal without
+/// a declared test is not a retirement arm, it is just deletion (§3.2.8: every
+/// debt names the test that would discharge it).
+pub fn retire_rule(
+    profile: &ModelProfile,
+    rule_id: &str,
+) -> Result<(ModelProfile, ProfileDiff), RetireError> {
+    let Some(rule) = profile.rules.iter().find(|r| r.rule_id == rule_id) else {
+        return Err(RetireError::RuleNotFound {
+            rule_id: rule_id.to_string(),
+        });
+    };
+    if rule.debt.removal_test.is_none() {
+        return Err(RetireError::RuleRequired {
+            rule_id: rule_id.to_string(),
+            reason: "the rule's debt record names no removal_test — removal \
+                     without a declared test is deletion, not retirement"
+                .to_string(),
+        });
+    }
+    if let Some(dependent) = profile
+        .rules
+        .iter()
+        .find(|r| r.rule_id != rule_id && r.supersedes.as_deref() == Some(rule_id))
+    {
+        return Err(RetireError::RuleRequired {
+            rule_id: rule_id.to_string(),
+            reason: format!(
+                "rule {} declares supersedes = {rule_id}; retire the dependent first",
+                dependent.rule_id
+            ),
+        });
+    }
+    let mut reduced = profile.clone();
+    reduced.rules.retain(|r| r.rule_id != rule_id);
+    // `content_hash` is the content address of the record minus `content_hash`
+    // — recompute so `profile − R` is addressable as itself.
+    reduced.content_hash = String::new();
+    reduced.content_hash = profile_identity(&reduced);
+    // Owned-field closure re-check (V2's own predicate): the reduced profile
+    // may only differ from the null baseline on members it still owns.
+    let unowned: Vec<String> = member_diff(&null_profile(), &reduced)
+        .into_iter()
+        .filter(|m| !owned_fields(&reduced).contains(m))
+        .collect();
+    if !unowned.is_empty() {
+        return Err(RetireError::RuleRequired {
+            rule_id: rule_id.to_string(),
+            reason: format!(
+                "owned-field closure violated: profile − R sets members it no \
+                 longer owns: {}",
+                unowned.join(", ")
+            ),
+        });
+    }
+    let remaining_owned = owned_fields(&reduced);
+    let diff = ProfileDiff {
+        removed_rule: rule_id.to_string(),
+        dropped_owned_fields: rule
+            .owned_fields
+            .iter()
+            .filter(|f| !remaining_owned.contains(*f))
+            .cloned()
+            .collect(),
+        remaining_rules: reduced.rules.iter().map(|r| r.rule_id.clone()).collect(),
+        removal_test_ref: rule.debt.removal_test_ref.clone(),
+    };
+    Ok((reduced, diff))
 }

@@ -394,6 +394,12 @@ fn ac_cp_11_hh_compile_produces_identical_bytes() {
         variants,
         targets: vec![mcp_target()],
         compile_for_expired: false,
+        // The registry's report for the bound profile travels with the inputs
+        // (the binary has no registry — AC-CP-11 carries the bound views).
+        test_reports: vec![hh_compiler::profile_test::ProfileTestReport::passing_for(
+            &profile_coordinate(&p),
+            &p.content_hash,
+        )],
     };
     let stdin_bytes = compile_inputs_json(&wire).to_canonical_string();
 
@@ -449,6 +455,7 @@ fn ac_cp_11_hh_compile_refuses_canonically() {
         variants,
         targets: vec![],
         compile_for_expired: false,
+        test_reports: vec![],
     };
     let stdin_bytes = compile_inputs_json(&wire).to_canonical_string();
     let exe = env!("CARGO_BIN_EXE_hh-compile");

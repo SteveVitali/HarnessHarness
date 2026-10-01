@@ -51,6 +51,7 @@ pub mod codec;
 pub mod compact;
 pub mod events;
 pub mod k4;
+pub mod k5;
 pub mod lifecycle;
 pub mod memory;
 pub mod plan;
@@ -69,6 +70,11 @@ pub use k4::{
     capability_dep_ref, declared_cacheable, epoch_dep_ref, K4Cache, K4Entry, K4EntryView, K4Error,
     K4Key, K4Resolution, K4Write, NotCacheable, K4_CACHE_KIND, K4_KEY_IDP, K4_SCHEMA_REF,
     MUTATION_DOMAINS,
+};
+pub use k5::{
+    admit as admit_k5, definition_dep_ref, k5_dependencies, profile_dep_ref, snapshot_dep_ref,
+    K5Cache, K5Context, K5Entry, K5Key, K5Resolution, PreRegistrationInvalid, K5_CACHE_KIND,
+    K5_KEY_IDP, K5_SCHEMA_REF,
 };
 pub use lifecycle::{
     check_contract, check_revoke_authority, check_supersede_authority, dependants, filter_for_slot,

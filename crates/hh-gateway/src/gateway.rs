@@ -49,6 +49,23 @@ pub trait Transport {
         ))
     }
 
+    /// `probe_capability(capability, endpoint_ref)` — the §5b.3 transport
+    /// probe: a request that elicits the named claim. The returned Json is
+    /// the endpoint's *observed* value for the capability
+    /// (`run_transport_probes` folds it against the pin). The default
+    /// `UnsupportedFeature` means "no probe primitive" — the conformance
+    /// row's observed is `skipped`, never fabricated.
+    fn probe_capability(
+        &mut self,
+        _capability: &str,
+        _endpoint_ref: &str,
+    ) -> Result<Json, ModelError> {
+        Err(ModelError::new(
+            ModelErrorClass::UnsupportedFeature,
+            "transport has no probe primitive",
+        ))
+    }
+
     /// `cancel(call_id)` — a best-effort cancel signal.
     fn cancel(&mut self, _call_id: &str) {}
 }
@@ -210,14 +227,17 @@ impl<'a> ModelGateway<'a> {
         let estimate = codec::estimate_tokens(dialect, &plan);
         sink.emit(
             "model.call.requested",
-            events::call_requested(
-                &request,
-                &dialect.cache_semantics,
-                credential.binding_id.as_deref(),
-                Some(plan_hash),
-                None,
-                Some(estimate.count),
-                None,
+            stamp_participant(
+                events::call_requested(
+                    &request,
+                    &dialect.cache_semantics,
+                    credential.binding_id.as_deref(),
+                    Some(plan_hash),
+                    None,
+                    Some(estimate.count),
+                    None,
+                ),
+                request.participant_class.as_deref(),
             ),
         )
         .map_err(|detail| GatewayError::Ledger { detail })?;
@@ -324,10 +344,15 @@ impl<'a> ModelGateway<'a> {
         )
         .map_err(|detail| GatewayError::Ledger { detail })?;
         // Drain the interleaved attempt/delta events into the caller's sink —
-        // the emitted order is the cell's order.
+        // the emitted order is the cell's order. Every row carries the
+        // participant stamp (AC-R-2.3.1-15 — a hosted call's *stream* rows are
+        // hosted rows too, not just the request/terminal pair).
         for (class, payload) in cell.borrow_mut().events.drain(..) {
-            sink.emit(&class, payload)
-                .map_err(|detail| GatewayError::Ledger { detail })?;
+            sink.emit(
+                &class,
+                stamp_participant(payload, handle.request.participant_class.as_deref()),
+            )
+            .map_err(|detail| GatewayError::Ledger { detail })?;
         }
         // The terminal row — `model.call.completed` carries usage; `failed`
         // carries the classified error.
@@ -341,24 +366,66 @@ impl<'a> ModelGateway<'a> {
         };
         match &outcome.result {
             Ok(message) => {
+                // AC-R-2.3.1-9 — the substitution gate: `served_model ≠
+                // provider_model_id` under `substitution_allowed = false` is a
+                // terminal `failed{served_model_mismatch}`, never a silent
+                // route. Allowed substitutions complete with the served-model
+                // stamps (`served_model`, `substitution`) on `completed`.
+                let served = message.served_model.as_deref();
+                let requested = handle.request.model_ref.provider_model_id.as_str();
+                if served.is_some()
+                    && served != Some(requested)
+                    && handle.request.substitution_allowed == Some(false)
+                {
+                    let error = ModelError::new(
+                        ModelErrorClass::ServedModelMismatch,
+                        format!(
+                            "served {} but {} was requested and substitution is not allowed",
+                            served.unwrap_or("<none>"),
+                            requested
+                        ),
+                    );
+                    sink.emit(
+                        "model.call.failed",
+                        stamp_participant(
+                            events::call_failed(
+                                &handle.call_id,
+                                &error,
+                                state.final_usage.as_ref(),
+                                &timing,
+                                handle.credential.binding_id.as_deref(),
+                            ),
+                            handle.request.participant_class.as_deref(),
+                        ),
+                    )
+                    .map_err(|detail| GatewayError::Ledger { detail })?;
+                    return Ok(crate::attempts::AttemptOutcome {
+                        result: Err(error),
+                        attempts: outcome.attempts,
+                        delays_ms: outcome.delays_ms,
+                    });
+                }
                 let observed = state
                     .final_usage
                     .as_ref()
                     .map(|u| crate::cache::observe_cache(Some(u)));
                 sink.emit(
                     "model.call.completed",
-                    events::call_completed(
-                        &handle.call_id,
-                        message,
-                        state.final_usage.as_ref(),
-                        state.raw_usage.as_ref(),
-                        Some(dialect.usage_arrival.as_str()),
-                        None,
-                        None,
-                        &timing,
-                        Some(&handle.plan.cache),
-                        observed.as_ref(),
-                        handle.credential.binding_id.as_deref(),
+                    stamp_participant(
+                        events::call_completed(
+                            &handle.call_id,
+                            message,
+                            state.final_usage.as_ref(),
+                            state.raw_usage.as_ref(),
+                            Some(dialect.usage_arrival.as_str()),
+                            None,
+                            None,
+                            &timing,
+                            Some(&handle.plan.cache),
+                            observed.as_ref(),
+                            handle.credential.binding_id.as_deref(),
+                        ),
+                        handle.request.participant_class.as_deref(),
                     ),
                 )
                 .map_err(|detail| GatewayError::Ledger { detail })?;
@@ -366,12 +433,15 @@ impl<'a> ModelGateway<'a> {
             Err(error) => {
                 sink.emit(
                     "model.call.failed",
-                    events::call_failed(
-                        &handle.call_id,
-                        error,
-                        state.final_usage.as_ref(),
-                        &timing,
-                        handle.credential.binding_id.as_deref(),
+                    stamp_participant(
+                        events::call_failed(
+                            &handle.call_id,
+                            error,
+                            state.final_usage.as_ref(),
+                            &timing,
+                            handle.credential.binding_id.as_deref(),
+                        ),
+                        handle.request.participant_class.as_deref(),
                     ),
                 )
                 .map_err(|detail| GatewayError::Ledger { detail })?;
@@ -412,12 +482,15 @@ impl<'a> ModelGateway<'a> {
         };
         sink.emit(
             "model.call.failed",
-            events::call_failed(
-                &handle.call_id,
-                &error,
-                None,
-                &timing,
-                handle.credential.binding_id.as_deref(),
+            stamp_participant(
+                events::call_failed(
+                    &handle.call_id,
+                    &error,
+                    None,
+                    &timing,
+                    handle.credential.binding_id.as_deref(),
+                ),
+                handle.request.participant_class.as_deref(),
             ),
         )
         .map_err(|detail| GatewayError::Ledger { detail })
@@ -449,4 +522,39 @@ impl<'a> ModelGateway<'a> {
             .discover(endpoint_ref)
             .map_err(GatewayError::ModelError)
     }
+}
+
+/// Stamp `participant_class` onto an emitted payload — the hosted
+/// normalization's only observable member (AC-R-2.3.1-15). `None`/`"native"`
+/// leaves the payload untouched; `"hosted"` (or any other class spelling) is
+/// carried verbatim so the ledger row records how the bytes were reached.
+pub fn stamp_participant(payload: Json, participant_class: Option<&str>) -> Json {
+    match participant_class {
+        Some(c) if c != "native" => {
+            if let Json::Obj(mut m) = payload {
+                m.insert("participant_class".to_string(), Json::str(c));
+                Json::Obj(m)
+            } else {
+                payload
+            }
+        }
+        _ => payload,
+    }
+}
+
+/// `charge_model(message, request)` — the model coordinate the terminal's
+/// charge keys at (AC-R-2.3.1-9): the *served* model when the provider
+/// substituted, the requested `model_ref` otherwise. `profile_ref` is the
+/// request's own (the binding never changes mid-call).
+pub fn charge_model(
+    message: &crate::message::ModelMessage,
+    request: &crate::plan::InferenceRequest,
+) -> crate::plan::ModelRef {
+    let mut m = request.model_ref.clone();
+    if let Some(served) = &message.served_model {
+        if *served != request.model_ref.provider_model_id {
+            m.provider_model_id = served.clone();
+        }
+    }
+    m
 }

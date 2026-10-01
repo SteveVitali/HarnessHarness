@@ -21,6 +21,7 @@
 
 mod json_util;
 
+pub mod accounting;
 pub mod benefits;
 pub mod catalogue;
 pub mod compare;

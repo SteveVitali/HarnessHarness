@@ -344,6 +344,18 @@ pub struct InferenceRequest {
     pub deferred_deadline_ms: Option<u64>,
     /// `stream` — whether the caller wants a stream.
     pub stream: bool,
+    /// `substitution_allowed?` — the binding's substitution clause
+    /// (AC-R-2.3.1-9): `Some(false)` makes a `served_model ≠
+    /// provider_model_id` outcome a terminal `failed{served_model_mismatch}`
+    /// — never a silent route. `None`/`Some(true)` lets the completed row
+    /// carry `served_model`/`substitution` and keys the charge at the
+    /// served model.
+    pub substitution_allowed: Option<bool>,
+    /// `participant_class?` — `Some("hosted")` stamps the emitted
+    /// `model.call.*` payloads (the interception normalization's only
+    /// observable member, AC-R-2.3.1-15); `None`/`Some("native")` is the
+    /// unmarked path.
+    pub participant_class: Option<String>,
     /// `identity` — the caller's `Identity` record coordinate.
     pub identity: Option<String>,
 }

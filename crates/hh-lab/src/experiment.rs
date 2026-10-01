@@ -18,8 +18,8 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use hh_budget::{
-    validate_match, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, MatchError, MatchMode,
-    MatchRefusal, MatchSpec,
+    validate_match, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, CachePolicy,
+    MatchError, MatchMode, MatchRefusal, MatchSpec,
 };
 use hh_identity::idp::{identify_bytes, idp_id};
 use hh_identity::kinds::RecordKind;
@@ -228,6 +228,25 @@ impl FactorSpec {
 /// §8.2-owned bodies live on the budget plane); `match_spec` is the
 /// `hh-budget` `MatchSpec` (with `cache_policy`); `limits_enforced` is the
 /// derived enforced-limit stamp (`full | partial | none` — data at C0).
+/// `response_cache` — the arm's response-cache declaration (ADR-0129 d.2).
+/// A closed sum: `k5` is the exact-match response cache (the only kind the
+/// dialect admits at C0; K6's semantic cache is C2 and never lands here).
+/// Absent member = no response cache enabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResponseCacheDecl {
+    /// `k5` — the exact-match response cache (ADR-0129 d.2).
+    K5,
+}
+
+impl ResponseCacheDecl {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ResponseCacheDecl::K5 => "k5",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArmSpec {
     /// The arm id.
@@ -252,6 +271,11 @@ pub struct ArmSpec {
     pub limits_enforced: String,
     /// The model role table the arm binds, where any.
     pub model_role_table_ref: Option<String>,
+    /// `response_cache` — `k5` when the arm enables the K5 response cache
+    /// (ADR-0129 d.2). Absent = no response cache. A K5-enabled arm on a
+    /// non-`reproduction` spec requires `cache` declared as a factor
+    /// (`PreRegistrationInvalid`; AC-R-2.3.4-11).
+    pub response_cache: Option<ResponseCacheDecl>,
 }
 
 impl ArmSpec {
@@ -281,6 +305,9 @@ impl ArmSpec {
         if let Some(r) = &self.model_role_table_ref {
             m.insert("model_role_table_ref".into(), Json::str(r));
         }
+        if let Some(rc) = self.response_cache {
+            m.insert("response_cache".into(), Json::str(rc.as_str()));
+        }
         Json::Obj(m)
     }
 
@@ -300,6 +327,7 @@ impl ArmSpec {
                 "artifact_ref",
                 "limits_enforced",
                 "model_role_table_ref",
+                "response_cache",
             ],
             REC,
         )?;
@@ -335,6 +363,16 @@ impl ArmSpec {
             ),
             limits_enforced: str_at(m, "limits_enforced", REC)?.to_string(),
             model_role_table_ref: opt_str_at(m, "model_role_table_ref")?.map(str::to_string),
+            response_cache: match opt_str_at(m, "response_cache")? {
+                None => None,
+                Some("k5") => Some(ResponseCacheDecl::K5),
+                Some(other) => {
+                    return Err(SchemaError::v(
+                        "response_cache",
+                        format!("unknown response-cache kind `{other}`"),
+                    ))
+                }
+            },
         })
     }
 }
@@ -903,6 +941,21 @@ pub enum ExperimentRefusal {
         /// The failure detail.
         detail: String,
     },
+    /// `kind = retirement` and an arm's `MatchSpec` is not the removal test's
+    /// required `{mode: matched_cap, cache_policy: cold_start}`
+    /// (AC-R-2.3.3-8 — the removal experiment is defined only under that
+    /// match shape).
+    NotARetirementMatch {
+        /// The offending arm and what it declared.
+        detail: String,
+    },
+    /// `PreRegistrationInvalid` — a K5-enabled arm on a non-`reproduction`
+    /// spec without `cache` declared as a factor (AC-R-2.3.4-11;
+    /// ADR-0129 d.2 — the same refusal name `hh_context::k5` uses).
+    PreRegistrationInvalid {
+        /// The failure detail.
+        detail: String,
+    },
     /// `validation_strategy ≠ full_set` while `design.kind ≠
     /// adaptive_search`, or over non-`search|dev` split labels, or before the
     /// `SplitAssignmentRecord` exists (ADR-0156/0190).
@@ -953,6 +1006,12 @@ pub struct SpecContext<'a> {
     pub budget_relevant_params: Option<&'a BudgetRelevantResolver<'a>>,
     /// The `replicates_per_cell` policy floor (default 1).
     pub min_replicates: u32,
+    /// The arm's bound dialect's `cache_state_visible` view (ADR-0119 d.3;
+    /// resolved through the arm's `model_role_table_ref`/artifact at the
+    /// engine's E-1 gate). `Some(false)` = `cache_state_visible =
+    /// unsupported`; `None` (resolver absent or arm unresolvable) = the
+    /// AC-R-2.3.4-10 visibility check defers to a context that can run it.
+    pub cache_state_visible: Option<&'a CacheVisibilityResolver<'a>>,
 }
 
 /// A `budget_relevant` parameter's bound value and the dimensions it drives
@@ -971,6 +1030,11 @@ pub struct BudgetRelevantParam {
 /// The `budget_relevant` resolver — `level ref → {param → {value, affects[]}}`.
 pub type BudgetRelevantResolver<'a> = dyn Fn(&str) -> BTreeMap<String, BudgetRelevantParam> + 'a;
 
+/// The `cache_state_visible` resolver — `arm → the bound dialect's
+/// visibility` (`Some(false)` = `unsupported`; `None` = unresolvable — the
+/// AC-R-2.3.4-10 check defers to a context that can).
+pub type CacheVisibilityResolver<'a> = dyn Fn(&ArmSpec) -> Option<bool> + 'a;
+
 /// A level's bound `budget_relevant` parameters — `{param → (value,
 /// affects)}` (the check_match working map).
 type BoundParams = BTreeMap<String, (Json, BTreeSet<DimensionId>)>;
@@ -987,6 +1051,7 @@ impl SpecContext<'_> {
             budget_enforcement: None,
             budget_relevant_params: None,
             min_replicates: 1,
+            cache_state_visible: None,
         }
     }
 }
@@ -1049,11 +1114,83 @@ impl ExperimentSpec {
         // 7. The resolved-body `validate_match` projection (when the context
         //    can resolve budget bodies).
         self.check_match(ctx)?;
+        // 7.5. The cache-policy checks — AC-R-2.3.4-10 (`natural` on a
+        //      cache-invisible dialect without the design's `n/a`
+        //      stratification), AC-R-2.3.4-11 (K5 without a declared `cache`
+        //      factor), AC-R-2.3.3-8 (the retirement match shape).
+        self.check_cache(ctx)?;
         // 8. `kind`-specific context checks.
         if self.kind == ExperimentKind::Retirement && ctx.retirement_diff == Some(false) {
             return Err(ExperimentRefusal::NotARetirementDiff {
                 detail: "arms are not a single-rule removal diff".to_string(),
             });
+        }
+        Ok(())
+    }
+
+    /// The cache-policy half of the `register` refusal set (T-LCD-14 —
+    /// refusal, never a warning).
+    fn check_cache(&self, ctx: &SpecContext<'_>) -> Result<(), ExperimentRefusal> {
+        for arm in &self.arms {
+            // AC-R-2.3.4-10 — a `natural` arm on a dialect with
+            // `cache_state_visible = unsupported` needs the design's declared
+            // `n/a` stratification (`cache_na_stratified`); the warm cache
+            // may never silently contaminate a matched comparison. An absent
+            // resolver or an unresolvable arm defers the check to the engine
+            // layer that can see the dialect.
+            let natural = arm
+                .match_spec
+                .as_ref()
+                .is_some_and(|ms| ms.cache_policy == CachePolicy::Natural);
+            if natural && !self.design.cache_na_stratified {
+                if let Some(visible) = ctx.cache_state_visible {
+                    if visible(arm) == Some(false) {
+                        return Err(ExperimentRefusal::IncommensurableMatch {
+                            detail: format!(
+                                "arm `{}` declares cache_policy = natural on a dialect \
+                                 with cache_state_visible = unsupported without the \
+                                 design's cache_na_stratified n/a stratification",
+                                arm.arm_id
+                            ),
+                        });
+                    }
+                }
+            }
+            // AC-R-2.3.4-11 — a K5-enabled arm on a non-`reproduction` spec
+            // requires `cache` declared as a factor of the pre-registered
+            // design (the same `PreRegistrationInvalid` `hh_context::k5`'s
+            // `admit` reports).
+            if arm.response_cache.is_some() && self.kind != ExperimentKind::Reproduction {
+                let declared = self.factors.iter().any(|f| f.name == "cache");
+                if !declared {
+                    return Err(ExperimentRefusal::PreRegistrationInvalid {
+                        detail: format!(
+                            "arm `{}` enables the K5 response cache without `cache` \
+                             declared as a factor of the design",
+                            arm.arm_id
+                        ),
+                    });
+                }
+            }
+        }
+        // AC-R-2.3.3-8 — a `retirement` design's arms must carry the removal
+        // test's match shape: `MatchSpec{mode: matched_cap, cache_policy:
+        // cold_start}` (equal eval_budget is the `validate_match` half).
+        if self.kind == ExperimentKind::Retirement {
+            for arm in &self.arms {
+                let Some(ms) = &arm.match_spec else {
+                    continue; // `MissingMatchSpec` (check_arms) owns absence
+                };
+                if ms.mode != MatchMode::MatchedCap || ms.cache_policy != CachePolicy::ColdStart {
+                    return Err(ExperimentRefusal::NotARetirementMatch {
+                        detail: format!(
+                            "arm `{}`: a retirement design requires \
+                             MatchSpec{{mode: matched_cap, cache_policy: cold_start}}",
+                            arm.arm_id
+                        ),
+                    });
+                }
+            }
         }
         Ok(())
     }
