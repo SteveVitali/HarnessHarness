@@ -1,0 +1,24 @@
+[package]
+name = "hh-results"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C0/Stage-3 results store slice (spec §6.5, R-2.10.5⁰; ticket S3.4b; ADR-0161/0162/0163): ResultsRow/1 + project_row, row versions under the fixed key with head resolution, build_cells/CellTable, get_row/query_rows/cells/distribution reads at a watermark_set, the header-only bundle catalogue + bundle_refs annotation, verify_row/verify_citation, and the lab-internal leaderboard() with L1–L5 (no publication). A projection layer, never a store of record — every derived object is rebuildable, watermark-stamped and view-hashed (ADR-0161)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-ontology = { path = "../hh-ontology" }
+hh-ledger = { path = "../hh-ledger" }
+hh-budget = { path = "../hh-budget" }
+hh-eval = { path = "../hh-eval" }
+hh-bundle = { path = "../hh-bundle" }
+hh-lab = { path = "../hh-lab" }
+hh-experiment = { path = "../hh-experiment" }
+
+[dev-dependencies]
+hh-provenance = { path = "../hh-provenance" }
