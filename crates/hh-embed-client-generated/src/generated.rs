@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:288bbf41a7659e1c05e7d4e4ca5bdc0aec636d890af6ccb790748f9b4e7a47ca";
+    "sha256:4e47676381eceffc189fcf25205bed3c2b701e46c55e6a7fa35b36d95fc81ef8";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -6800,6 +6800,18 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.analysis.attribution_design` → `json` (see the contract registry).
+    pub fn lab_analysis_attribution_design(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.analysis.attribution_design", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.analysis.component_targets` → `json` (see the contract registry).
+    pub fn lab_analysis_component_targets(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.analysis.component_targets", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.analysis.diff_reports` → `json` (see the contract registry).
     pub fn lab_analysis_diff_reports(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.analysis.diff_reports", params.clone())?;
@@ -6875,6 +6887,24 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.assembly.validate_batch` → `json` (see the contract registry).
     pub fn lab_assembly_validate_batch(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.assembly.validate_batch", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.debt.evaluate` → `json` (see the contract registry).
+    pub fn lab_debt_evaluate(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.evaluate", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.debt.index` → `json` (see the contract registry).
+    pub fn lab_debt_index(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.index", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.debt.report` → `json` (see the contract registry).
+    pub fn lab_debt_report(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.report", params.clone())?;
         Ok(raw)
     }
 
@@ -7073,6 +7103,18 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.leaderboard.snapshots` → `json` (see the contract registry).
     pub fn lab_leaderboard_snapshots(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.leaderboard.snapshots", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.model.regression` → `json` (see the contract registry).
+    pub fn lab_model_regression(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.model.regression", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.model.snapshot_claim` → `json` (see the contract registry).
+    pub fn lab_model_snapshot_claim(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.model.snapshot_claim", params.clone())?;
         Ok(raw)
     }
 

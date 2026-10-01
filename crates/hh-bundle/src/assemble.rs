@@ -34,6 +34,10 @@ pub struct CompileOutcome {
     /// `resolved_dependencies.validators[]` names this set so an R2
     /// `reproduce` verdict reports it (AC-R-2.12.1-13; S3.12).
     pub validators: Vec<Json>,
+    /// The pinned `profile_ref` coordinates the sealed definition bound
+    /// (S5.4 — `resolved_dependencies.profile_refs[]` +
+    /// `configuration.profile`; R-2.12.1¹).
+    pub profile_refs: Vec<String>,
 }
 
 /// Everything `assemble` needs from its caller's planes.
@@ -80,6 +84,17 @@ pub struct AssembleInputs<'a> {
     pub budget: Json,
     /// The run's bound profile document (`profile:none` when none).
     pub profile: Json,
+    /// `resolved_dependencies.profile_refs[]` — the pinned
+    /// `{profile_ref, pinned}` rows the sealed definition binds (S5.4:
+    /// `B-R2-profile` gates R2 on every bound ref being pinned;
+    /// R-2.12.1¹).
+    pub profile_refs: Vec<Json>,
+    /// `resolved_dependencies.images[]` — the image refs the run's
+    /// environment/tools bind, `{ref, digest?}` rows (S5.4:
+    /// `B-R2-images` gates R2 on every image carrying a digest pin;
+    /// R-2.12.1¹). A bound image without a digest is declared —
+    /// never silently absent.
+    pub images: Vec<Json>,
     /// Extra `nondeterminism` declarations (beyond env/model).
     pub nondeterminism: Vec<Json>,
     /// `participant_class` override — the run manifest's class is the
@@ -386,7 +401,13 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
         ("variants", Json::Arr(inputs.variants.clone())),
         ("tools", Json::Arr(vec![])),
         ("text_leaves", Json::Arr(vec![])),
-        ("images", Json::Arr(vec![])),
+        // S5.4 (R-2.12.1¹): the bound image refs — `{ref, digest?}` rows
+        // (`B-R2-images` gates on the digest member; declared, never
+        // silently absent — CC3).
+        ("images", Json::Arr(inputs.images.clone())),
+        // S5.4 (R-2.12.1¹): the pinned profile refs the sealed definition
+        // binds (`B-R2-profile` gates on `pinned: true`).
+        ("profile_refs", Json::Arr(inputs.profile_refs.clone())),
         // §5g.5 §3 `resolved_dependencies.extensions[]` (CF-145) — the
         // definition's bound extensions: `{extension_id, content,
         // trust_record, attestation_refs[], surface_pin?}` (S3.11b).

@@ -30,6 +30,7 @@
 pub(crate) mod analysis_ops;
 mod assembly_ops;
 pub(crate) mod bundle_ops;
+pub(crate) mod debt_ops;
 pub(crate) mod durability_ops;
 pub mod envops;
 pub(crate) mod eval_ops;
