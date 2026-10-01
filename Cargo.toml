@@ -247,6 +247,18 @@ members = [
     # served only from a bundle's compiled target member - the server is
     # a pure function of (artifact, binding) with no ledger access.
     "crates/hh-mcp",
+    # The C1 `hh-lab/1` MCP server slice (spec §7.3, R-2.11.3¹; ticket S4.11;
+    # ADR-0173/0174/0175, ADR-0184 D2, ADR-0303). A PERSISTENT workspace
+    # member: the kernel-side Lab surface over stdio + Streamable HTTP —
+    # the read/launch/experiment/results groups over existing Group-L/S
+    # operation records (one tool = one op, never a second schema),
+    # `CallerBinding`s, the `run_kind = surface` surface-session ledger,
+    # charges against `binding.budget_node`, `ExposurePolicy` sink reads,
+    # supply-surface Π evaluation for hosted participants, and the
+    # `surface_ids` handle carrier. Sits above hh-mcp (protocol edge) +
+    # hh-embed (the binding-(a) dispatch + the narrow surface_* write
+    # seam) — the direction never inverts (hh-mcp stays ledger-free).
+    "crates/hh-mcp-lab",
     # The ACP session boundary (spec §5d.4, R-2.5.4 C1; ticket S4.5b) — the
     # hh-acp-target/1 session artefact consumed from hh-compiler (v2 pin + v1
     # compatibility profile), render_session over the single-source lowering

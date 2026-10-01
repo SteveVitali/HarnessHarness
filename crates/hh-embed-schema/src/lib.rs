@@ -452,6 +452,10 @@ fn types_schema() -> Json {
     );
     m.insert("ResumeMode".into(), str_enum(&["continue", "takeover"]));
     m.insert(
+        "SpawnEventRef".into(),
+        strct(&[("run_id", "string", true), ("event_id", "string", true)]),
+    );
+    m.insert(
         "OpenSpec".into(),
         tagged(&[
             (
@@ -466,6 +470,7 @@ fn types_schema() -> Json {
                     ("supplies", "Supplies", false),
                     ("attendance", "AttendanceDeclaration", true),
                     ("approval_mode", "string", false),
+                    ("spawn_event", "SpawnEventRef", false),
                 ],
             ),
             (

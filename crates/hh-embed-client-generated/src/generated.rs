@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:ef8321565c198d635775a128e6721ff6dae04705a427af114344437588fe80f0";
+    "sha256:5a15adfa116205368e5f8153f71816a7542e05320ec38eaed29fef0d3766f2c9";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -2922,6 +2922,7 @@ pub enum OpenSpec {
         supplies: Option<Supplies>,
         attendance: AttendanceDeclaration,
         approval_mode: Option<String>,
+        spawn_event: Option<SpawnEventRef>,
     },
     Resume {
         run_id: String,
@@ -2949,6 +2950,7 @@ impl OpenSpec {
                 supplies,
                 attendance,
                 approval_mode,
+                spawn_event,
             } => {
                 pairs.push(("kind", Json::str("new")));
                 pairs.push(("definition", definition.to_json()));
@@ -2972,6 +2974,9 @@ impl OpenSpec {
                 pairs.push(("attendance", attendance.to_json()));
                 if let Some(v) = approval_mode {
                     pairs.push(("approval_mode", Json::str(v.clone())));
+                }
+                if let Some(v) = spawn_event {
+                    pairs.push(("spawn_event", v.to_json()));
                 }
             }
             OpenSpec::Resume {
@@ -3060,6 +3065,10 @@ impl OpenSpec {
                             .map(|s| s.to_string())
                             .ok_or_else(|| "expected string".to_string())?,
                     ),
+                    None => None,
+                },
+                spawn_event: match v.get("spawn_event") {
+                    Some(f) => Some(SpawnEventRef::from_json(f).map_err(|e| e)?),
                     None => None,
                 },
             }),
@@ -4852,6 +4861,42 @@ impl SetCoordinateParams {
                         .ok_or_else(|| "expected string".to_string())?,
                 ),
                 None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpawnEventRef {
+    pub run_id: String,
+    pub event_id: String,
+}
+
+impl SpawnEventRef {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("run_id", Json::str(self.run_id.clone())));
+        pairs.push(("event_id", Json::str(self.event_id.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<SpawnEventRef, String> {
+        Ok(SpawnEventRef {
+            run_id: {
+                let f = v
+                    .get("run_id")
+                    .ok_or_else(|| format!("missing '{}'", "run_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            event_id: {
+                let f = v
+                    .get("event_id")
+                    .ok_or_else(|| format!("missing '{}'", "event_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
             },
         })
     }

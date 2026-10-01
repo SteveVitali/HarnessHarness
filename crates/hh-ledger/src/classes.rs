@@ -1079,6 +1079,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("lifecycle.session.attached", "none"),
     ("lifecycle.session.detached", "none"),
     // ── lifecycle:surface ──
+    ("lifecycle.surface.call.minted", "none"),
     ("lifecycle.surface.invoked", "none"),
     // ── lifecycle:turn ──
     ("lifecycle.turn.finished", "turn.finished"),
@@ -1284,6 +1285,17 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("lifecycle.component.invoked",     Led, O::Events, false, true,  None, None),
     row("lifecycle.definition.changed",    Led, O::Events, false, true,  None, None),
     row("lifecycle.surface.invoked",       Led, O::Events, false, true,  None, None),
+    // `lifecycle.surface.call.minted` — the MCP surface's durable mint rows
+    // (ADR-0303; R-2.11.3¹ §2.4): `{handle, kind, target_id,
+    // owner_binding, minted_by, session_id?, idempotency_key?, ...}` —
+    // the handle carrier's records + the `launched` resume row. Lives in
+    // the `lifecycle` family beside `lifecycle.surface.invoked` (the
+    // family table is the §2.2.3-closed set — a C1 class gets no new
+    // family). Kernel-origin (the seam is `commit_kernel_row_for`), open
+    // payload (the minted row may carry the caller's recorded answer —
+    // members are ids/refs/integers by construction). Hosted lowering
+    // "none" — kernel bookkeeping, never in the hosted presentation.
+    row("lifecycle.surface.call.minted",   Led, O::Events, false, true,  None, None),
     row("lifecycle.session.attached",      Led, O::Events, false, true,  None, None),
     row("lifecycle.session.detached",      Led, O::Events, false, true,  None, None),
     row("lifecycle.contract.deprecated_use", Led, O::Events, false, true, None, None),

@@ -440,6 +440,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-mcp-lab"
+version = "0.0.1"
+dependencies = [
+ "hh-assembly",
+ "hh-budget",
+ "hh-embed",
+ "hh-embed-schema",
+ "hh-env",
+ "hh-hir",
+ "hh-identity",
+ "hh-ledger",
+ "hh-mcp",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-telemetry",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-monitor"
 version = "0.0.1"
 dependencies = [
