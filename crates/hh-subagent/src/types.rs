@@ -1240,11 +1240,32 @@ pub enum MergePolicy {
     /// `ask` — conflicts surface as `MergeConflict` records the parent
     /// resolves by `control.merge.resolved{resolution: choose{side}}` (G-2).
     ParentDecides,
-    /// `three_way_text{line}` — declared (the S4.8/R-2.6.5 arm).
+    /// `three_way_text{line}` — the line-tokenized diff3 (S4.8).
     ThreeWayText,
+    /// `three_way_text{ast(grammar_ref)}` — the CST-tokenized diff3
+    /// (S5.5). A token-level merge, *not* a semantic one: the canonical
+    /// `(class, depth, span)` stream means a comment-only write cannot
+    /// collide with a code write on the same line, but disjoint
+    /// statement insertions can still interleave into unparseable text —
+    /// merged bytes land as the merge's own effect and a reading checker
+    /// reports honestly (a parse-and-merge semantic arm is a later
+    /// slice). Only [`TAGGED_CST_GRAMMAR`] is registered; any other
+    /// `grammar_ref` is a `PolicyUnsupported` veto — never a silent
+    /// fall-back to `line` (the declared tokenizer is a policy member).
+    ThreeWayTextAst {
+        /// The declared grammar/tokenizer ref.
+        grammar_ref: String,
+    },
     /// `validator_selected` — declared (the S4.8/R-2.6.5 arm).
     ValidatorSelected,
 }
+
+/// The one registered `three_way_text{ast}` grammar — a deterministic
+/// tagged-CST stream `(class, depth, span)` over `()[]{}` balance with
+/// classes `open|close|comment|str|ident|num|punct|ws` (S5.5; the
+/// grammar is a declaration member so a new tokenizer registers a new
+/// ref, never a silent reinterpretation).
+pub const TAGGED_CST_GRAMMAR: &str = "grammar/tagged-cst";
 
 impl MergePolicy {
     /// The canonical spelling.
@@ -1253,26 +1274,57 @@ impl MergePolicy {
             MergePolicy::SingleWriter => "single_writer",
             MergePolicy::ParentDecides => "parent_decides",
             MergePolicy::ThreeWayText => "three_way_text",
+            MergePolicy::ThreeWayTextAst { .. } => "three_way_text{ast}",
             MergePolicy::ValidatorSelected => "validator_selected",
+        }
+    }
+
+    /// The full canonical spelling — the registered policy *with* its
+    /// declared members (`three_way_text{ast(grammar/tagged-cst)}`), for
+    /// rows and `merge_policy_ref`s where the member is audit material.
+    pub fn spelling(&self) -> String {
+        match self {
+            MergePolicy::ThreeWayTextAst { grammar_ref } => {
+                format!("three_way_text{{ast({grammar_ref})}}")
+            }
+            other => other.as_str().to_string(),
         }
     }
 
     /// Parse a canonical spelling (the `refuse`/`ask` CoordinationPolicy
     /// spellings lower here — ADR-0192 D1's equivalence).
     pub fn parse(s: &str) -> Option<MergePolicy> {
+        if let Some(inner) = s
+            .strip_prefix("three_way_text{ast(")
+            .and_then(|r| r.strip_suffix(")}"))
+        {
+            if inner.is_empty() {
+                return None;
+            }
+            return Some(MergePolicy::ThreeWayTextAst {
+                grammar_ref: inner.to_string(),
+            });
+        }
         Some(match s {
             "single_writer" | "refuse" => MergePolicy::SingleWriter,
             "parent_decides" | "ask" => MergePolicy::ParentDecides,
             "three_way_text" | "three_way_text{line}" => MergePolicy::ThreeWayText,
+            "three_way_text{ast}" => MergePolicy::ThreeWayTextAst {
+                grammar_ref: TAGGED_CST_GRAMMAR.to_string(),
+            },
             "validator_selected" => MergePolicy::ValidatorSelected,
             _ => return None,
         })
     }
 
-    /// Whether this slice implements the arm (all four — the S4.8 slice
-    /// added `three_way_text{line}` + `validator_selected`).
+    /// Whether this slice implements the arm — an `ast` policy with an
+    /// unregistered `grammar_ref` is declared but not implementable
+    /// (`PolicyUnsupported`, never a silent `line` fall-back).
     pub fn implemented(&self) -> bool {
-        true
+        match self {
+            MergePolicy::ThreeWayTextAst { grammar_ref } => grammar_ref == TAGGED_CST_GRAMMAR,
+            _ => true,
+        }
     }
 }
 

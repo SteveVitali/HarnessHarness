@@ -158,7 +158,7 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
             merge_id: String::new(),
             report: None,
             veto: Some(MergeVeto::PolicyUnsupported {
-                policy: ctx.policy.as_str().to_string(),
+                policy: ctx.policy.spelling(),
             }),
         });
     }
@@ -181,7 +181,7 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                 "children",
                 Json::Arr(children.iter().map(|c| Json::str(c.clone())).collect()),
             ),
-            ("policy", Json::str(ctx.policy.as_str())),
+            ("policy", Json::str(ctx.policy.spelling())),
             ("parent_run_id", Json::str(ctx.parent_run_id)),
         ]),
         vec![ctx.decision.clone()],
@@ -288,20 +288,27 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                         MergePolicy::ParentDecides => {
                             report.conflicts.push(conflict);
                         }
-                        MergePolicy::ThreeWayText => {
+                        MergePolicy::ThreeWayText | MergePolicy::ThreeWayTextAst { .. } => {
+                            let tok = match &ctx.policy {
+                                MergePolicy::ThreeWayTextAst { grammar_ref } => {
+                                    TextTokenizer::TaggedCst(grammar_ref.clone())
+                                }
+                                _ => TextTokenizer::Line,
+                            };
                             match three_way_merge_path(
                                 ctx.store,
                                 path,
                                 baseline.as_deref(),
                                 parent_now.as_deref(),
                                 after.as_deref(),
+                                &tok,
                             )? {
                                 TextMerge::Merged(new_ref) => {
                                     let entry = Json::obj([
                                         ("child_run_id", Json::str(input.child_run_id.clone())),
                                         ("path", Json::str(path.clone())),
                                         ("after_ref", Json::str(new_ref.clone())),
-                                        ("merged_by", Json::str("three_way_text{line}")),
+                                        ("merged_by", Json::str(tok.merged_by())),
                                     ]);
                                     report.merged.push(entry.clone());
                                     applied.insert(path.clone(), entry);
@@ -312,7 +319,7 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                                     // the recorded conflict — never a
                                     // picked side (G-2).
                                     let mut c = conflict;
-                                    c.detector = Some("deterministic{three_way_text}".to_string());
+                                    c.detector = Some(tok.detector_label());
                                     report.conflicts.push(c);
                                 }
                                 TextMerge::MissingBlob => {
@@ -407,7 +414,7 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
                                 .map(|a| Json::str(a.clone()))
                                 .unwrap_or(Json::Null),
                         ),
-                        ("merged_by", Json::str(ctx.policy.as_str())),
+                        ("merged_by", Json::str(ctx.policy.spelling())),
                     ]);
                     report.merged.push(entry.clone());
                     applied.insert(path.clone(), entry);
@@ -452,7 +459,7 @@ pub fn merge(ctx: &mut MergeCtx) -> Result<MergeOutcome, SpawnError> {
     report.merge_hash = hh_identity::idp::idp_id(
         "hh.subagent.merge_hash",
         Json::obj([
-            ("policy", Json::str(ctx.policy.as_str())),
+            ("policy", Json::str(ctx.policy.spelling())),
             (
                 "merged",
                 Json::Arr(
@@ -777,7 +784,8 @@ pub fn report_from_json(j: &Json) -> Option<MergeReport> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// `three_way_text{line}` — the line-tokenized diff3 (§5e.5; ADR-0192 D2)
+// `three_way_text{line}` / `three_way_text{ast(grammar)}` — the
+// tokenizer-parameterized diff3 (§5e.5; ADR-0192 D2; S5.5)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// The textual-merge outcome for one path.
@@ -791,16 +799,46 @@ enum TextMerge {
     MissingBlob,
 }
 
-/// `three_way_merge_path(store, path, base_ref, parent_ref, child_ref)` —
-/// fetch the three text heads from the blob pool and run
-/// [`merge_lines`]; a clean merge commits the merged text as a parent
-/// blob (the merge's own effect, `merged_by: three_way_text{line}`).
+/// The `three_way_text` tokenizer member — `line` (S4.8) or the
+/// registered tagged-CST stream (S5.5, §5e.5's `ast(grammar_ref)`).
+/// Carries the grammar ref so the `merged_by`/`detector` row members
+/// spell the declared arm verbatim.
+enum TextTokenizer {
+    /// `three_way_text{line}` — byte lines.
+    Line,
+    /// `three_way_text{ast(grammar_ref)}` — the tagged-CST stream.
+    TaggedCst(String),
+}
+
+impl TextTokenizer {
+    /// The `merged_by` report member.
+    fn merged_by(&self) -> String {
+        match self {
+            TextTokenizer::Line => "three_way_text{line}".to_string(),
+            TextTokenizer::TaggedCst(g) => format!("three_way_text{{ast({g})}}"),
+        }
+    }
+
+    /// The `MergeConflict.detector` member.
+    fn detector_label(&self) -> String {
+        match self {
+            TextTokenizer::Line => "deterministic{three_way_text}".to_string(),
+            TextTokenizer::TaggedCst(_) => "deterministic{three_way_text{ast}}".to_string(),
+        }
+    }
+}
+
+/// `three_way_merge_path(store, path, base_ref, parent_ref, child_ref,
+/// tok)` — fetch the three text heads from the blob pool and run the
+/// tokenizer's diff3; a clean merge commits the merged text as a parent
+/// blob (the merge's own effect, `merged_by` spelling the arm).
 fn three_way_merge_path(
     store: &mut Store,
     path: &str,
     base_ref: Option<&str>,
     parent_ref: Option<&str>,
     child_ref: Option<&str>,
+    tok: &TextTokenizer,
 ) -> Result<TextMerge, SpawnError> {
     let fetch = |id: Option<&str>| -> Result<Option<String>, SpawnError> {
         let Some(id) = id else { return Ok(None) };
@@ -825,7 +863,11 @@ fn three_way_merge_path(
     else {
         return Ok(TextMerge::MissingBlob);
     };
-    match merge_lines(&base, &parent, &child) {
+    let merged = match tok {
+        TextTokenizer::Line => merge_lines(&base, &parent, &child),
+        TextTokenizer::TaggedCst(_) => merge_cst(&base, &parent, &child),
+    };
+    match merged {
         Ok(text) => {
             let addr = store
                 .put_blob(text.as_bytes(), "text/plain")
@@ -846,9 +888,19 @@ fn merge_lines(base: &str, ours: &str, theirs: &str) -> Result<String, Vec<Strin
     let b: Vec<&str> = base.split('\n').collect();
     let o: Vec<&str> = ours.split('\n').collect();
     let t: Vec<&str> = theirs.split('\n').collect();
-    let mo = lcs_match(&b, &o);
-    let mt = lcs_match(&b, &t);
-    let mut out: Vec<&str> = Vec::new();
+    merge_seq(&b, &o, &t).map(|v| v.join("\n"))
+}
+
+/// `merge_seq(base, ours, theirs) → merged | conflicted` — the classic
+/// diff3 chunked over `T` items (the merge algorithm is
+/// tokenizer-agnostic — `line` and `ast(grammar_ref)` differ only in the
+/// item stream). Deterministic: LCS matches are canonically tie-broken,
+/// hunks are maximal, and a both-changed-differently hunk is a conflict
+/// — `seq`/arrival order never selects a side (G-6).
+fn merge_seq<T: PartialEq + Clone>(b: &[T], o: &[T], t: &[T]) -> Result<Vec<T>, Vec<String>> {
+    let mo = lcs_match(b, o);
+    let mt = lcs_match(b, t);
+    let mut out: Vec<T> = Vec::new();
     let mut conflicts: Vec<String> = Vec::new();
     let (mut ib, mut io, mut it) = (0usize, 0usize, 0usize);
     while ib < b.len() {
@@ -884,7 +936,7 @@ fn merge_lines(base: &str, ours: &str, theirs: &str) -> Result<String, Vec<Strin
         } else {
             conflicts.push(format!("hunk@{}", ib));
         }
-        out.push(b[j]);
+        out.push(b[j].clone());
         ib = j + 1;
         io = oj + 1;
         it = tj + 1;
@@ -894,14 +946,14 @@ fn merge_lines(base: &str, ours: &str, theirs: &str) -> Result<String, Vec<Strin
     if !conflicts.is_empty() {
         return Err(conflicts);
     }
-    Ok(out.join("\n"))
+    Ok(out)
 }
 
 /// `lcs_match(a, b) → for each `a` index the matched `b` index` — the
 /// longest-common-subsequence monotone matching (classic DP, canonical
 /// backtrack: on ties prefer consuming `b` first — deterministic under
 /// any input order).
-fn lcs_match(a: &[&str], b: &[&str]) -> Vec<Option<usize>> {
+fn lcs_match<T: PartialEq>(a: &[T], b: &[T]) -> Vec<Option<usize>> {
     let (n, m) = (a.len(), b.len());
     // dp[i][j] = lcs length of a[i..], b[j..].
     let mut dp = vec![vec![0usize; m + 1]; n + 1];
@@ -928,6 +980,137 @@ fn lcs_match(a: &[&str], b: &[&str]) -> Vec<Option<usize>> {
         }
     }
     out
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `three_way_text{ast(grammar/tagged-cst)}` — the tagged-CST tokenizer (S5.5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `CstToken{class, depth, text}` — the `grammar/tagged-cst` stream
+/// member: a deterministic partition of the byte stream into tagged
+/// spans (no parse, no tree — `depth` is `()[]{}` balance at the
+/// token's start). Two regions compare equal only when their tagged
+/// streams match exactly, so a comment-only write never collides with a
+/// code write sharing the line — the `ast` arm's semantic over `line`.
+/// It is still a *token* merge: it does not parse, so two safe-ordering
+/// insertions can interleave into text a later parser would reject; the
+/// merged bytes land as the merge's own effect (a semantic merge that
+/// parses and rewrites is a later slice).
+#[derive(Debug, Clone, PartialEq)]
+struct CstToken {
+    /// The class — `open|close|comment|str|ident|num|punct|ws`.
+    class: &'static str,
+    /// The `()[]{}` balance at the token's start (open → emitted at the
+    /// pre-depth then incremented; close → decremented first,
+    /// saturating at 0 — matched pairs compare at equal depth).
+    depth: u32,
+    /// The source bytes.
+    text: String,
+}
+
+/// `tokenize_tagged_cst(src) → Vec<CstToken>` — the registered
+/// `grammar/tagged-cst` tokenizer (canonical, byte-deterministic, total):
+///
+/// - `//` … up to (excluding) the next `\n` is a `comment` span;
+/// - `"` … `"` with `\` escapes is a `str` span (an unterminated quote
+///   runs to EOF — tokenization never fails);
+/// - `[0-9]+` is `num`; `[A-Za-z_][A-Za-z0-9_]*` is `ident`;
+/// - `(` `[` `{` are `open`, `)` `]` `}` are `close` (depth saturates);
+/// - whitespace runs are `ws`; every other byte is a single-byte `punct`.
+fn tokenize_tagged_cst(src: &str) -> Vec<CstToken> {
+    let b = src.as_bytes();
+    let mut out: Vec<CstToken> = Vec::new();
+    let mut depth: u32 = 0;
+    let mut i = 0usize;
+    let push = |out: &mut Vec<CstToken>, class: &'static str, depth: u32, lo: usize, hi: usize| {
+        out.push(CstToken {
+            class,
+            depth,
+            text: String::from_utf8_lossy(&src.as_bytes()[lo..hi]).into_owned(),
+        });
+    };
+    while i < b.len() {
+        let c = b[i];
+        if c == b'/' && i + 1 < b.len() && b[i + 1] == b'/' {
+            // `//` line comment — the newline stays a `ws` token.
+            let start = i;
+            while i < b.len() && b[i] != b'\n' {
+                i += 1;
+            }
+            push(&mut out, "comment", depth, start, i);
+        } else if c == b'"' {
+            // `"` … `"` with `\` escapes; unterminated runs to EOF.
+            let start = i;
+            i += 1;
+            while i < b.len() {
+                if b[i] == b'\\' {
+                    i += 2;
+                } else if b[i] == b'"' {
+                    i += 1;
+                    break;
+                } else {
+                    i += 1;
+                }
+            }
+            push(&mut out, "str", depth, start, i.min(b.len()));
+        } else if c.is_ascii_digit() {
+            let start = i;
+            while i < b.len() && b[i].is_ascii_digit() {
+                i += 1;
+            }
+            push(&mut out, "num", depth, start, i);
+        } else if c.is_ascii_alphabetic() || c == b'_' {
+            let start = i;
+            while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
+                i += 1;
+            }
+            push(&mut out, "ident", depth, start, i);
+        } else if c == b'(' || c == b'[' || c == b'{' {
+            push(&mut out, "open", depth, i, i + 1);
+            depth = depth.saturating_add(1);
+            i += 1;
+        } else if c == b')' || c == b']' || c == b'}' {
+            depth = depth.saturating_sub(1);
+            push(&mut out, "close", depth, i, i + 1);
+            i += 1;
+        } else if c.is_ascii_whitespace() {
+            let start = i;
+            while i < b.len() && b[i].is_ascii_whitespace() {
+                i += 1;
+            }
+            push(&mut out, "ws", depth, start, i);
+        } else {
+            push(&mut out, "punct", depth, i, i + 1);
+        }
+    }
+    out
+}
+
+/// `merge_cst(base, ours, theirs)` — the `ast` arm's diff3 over the
+/// tagged-CST stream; a clean merge re-concatenates token bytes (the
+/// token partition is a cover — the merged text is always well-formed
+/// bytes, though not necessarily well-formed syntax).
+fn merge_cst(base: &str, ours: &str, theirs: &str) -> Result<String, Vec<String>> {
+    let b = tokenize_tagged_cst(base);
+    let o = tokenize_tagged_cst(ours);
+    let t = tokenize_tagged_cst(theirs);
+    merge_seq(&b, &o, &t).map(|v| v.iter().map(|x| x.text.as_str()).collect::<String>())
+}
+
+/// `tokenize_tagged_cst` exposed for the test seam.
+#[cfg(test)]
+pub(crate) fn tokenize_tagged_cst_pub(src: &str) -> Vec<(String, u32, String)> {
+    tokenize_tagged_cst(src)
+        .into_iter()
+        .map(|t| (t.class.to_string(), t.depth, t.text))
+        .collect()
+}
+
+/// `merge_cst` exposed for the test seam.
+#[cfg(test)]
+pub(crate) fn merge_cst_pub(base: &str, ours: &str, theirs: &str) -> Result<String, Vec<String>> {
+    merge_cst(base, ours, theirs)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1032,6 +1215,67 @@ fn emit_validator_rows(
 pub(crate) fn merge_lines_pub(base: &str, ours: &str, theirs: &str) -> Result<String, Vec<String>> {
     merge_lines(base, ours, theirs)
 }
+
+#[cfg(test)]
+mod ast_tests {
+    use super::{merge_cst_pub, tokenize_tagged_cst_pub};
+
+    /// The tokenizer partitions into the documented classes at the
+    /// documented depths — canonical, byte-deterministic.
+    #[test]
+    fn tagged_cst_tokenizer_classes_and_depth() {
+        let toks = tokenize_tagged_cst_pub("fn f() { // hi\n  let x = 42;\n}");
+        let classes: Vec<&str> = toks.iter().map(|t| t.0.as_str()).collect();
+        assert!(classes.contains(&"comment"));
+        assert!(classes.contains(&"num"));
+        assert!(classes.contains(&"open"));
+        assert!(classes.contains(&"close"));
+        assert!(classes.contains(&"ident"));
+        // `fn`/`f`/`()` sit at depth 0; `let` inside the braces at 1.
+        let let_tok = toks.iter().find(|t| t.2 == "let").expect("let token");
+        assert_eq!(let_tok.1, 1);
+        // Re-concatenating the token bytes is a lossless cover.
+        let joined: String = toks.iter().map(|t| t.2.clone()).collect();
+        assert_eq!(joined, "fn f() { // hi\n  let x = 42;\n}");
+    }
+
+    /// The AC-R-2.6.5-3 semantic: a comment-only write on the parent
+    /// side does not collide with the child's code write on the same
+    /// line — `ast` merges where `line` would conflict.
+    #[test]
+    fn ast_comment_vs_code_same_line_merges() {
+        let base = "fn f() { work(); }\n";
+        let parent = "fn f() { /* note */ work(); }\n";
+        let child = "fn f() { work(); log(); }\n";
+        let merged = merge_cst_pub(base, parent, child).expect("ast merge");
+        assert_eq!(merged, "fn f() { /* note */ work(); log(); }\n");
+        // Under `line` this is a conflict (both sides rewrote the line).
+        assert!(super::merge_lines_pub(base, parent, child).is_err());
+    }
+
+    /// Both sides rewriting the *same* token is still a typed conflict —
+    /// the ast tokenizer narrows collision granularity, never picks a
+    /// side.
+    #[test]
+    fn ast_same_token_conflict_records() {
+        let base = "let x = 1;\n";
+        let parent = "let x = 2;\n";
+        let child = "let x = 3;\n";
+        assert!(merge_cst_pub(base, parent, child).is_err());
+    }
+
+    /// Disjoint code edits at the same depth merge — the stream carries
+    /// nesting so inserts inside different scopes do not collide.
+    #[test]
+    fn ast_disjoint_scope_inserts_merge() {
+        let base = "fn a() { }\nfn b() { }\n";
+        let parent = "fn a() { pa(); }\nfn b() { }\n";
+        let child = "fn a() { }\nfn b() { pb(); }\n";
+        let merged = merge_cst_pub(base, parent, child).expect("ast merge");
+        assert_eq!(merged, "fn a() { pa(); }\nfn b() { pb(); }\n");
+    }
+}
+
 
 #[cfg(test)]
 mod line_engine_tests {
