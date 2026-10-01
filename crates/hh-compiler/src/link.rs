@@ -153,6 +153,11 @@ pub struct LinkedGraph {
     /// The bound variants the link resolved-by-lookup: `{slot → (class_id, variant_id,
     /// version_id)}` — for the derivation key.
     pub variant_pins: BTreeMap<String, (String, String, String)>,
+    /// `model.profile.expired_used{profile_ref, intent_ref}` payloads — one row
+    /// per bound profile whose rules/ext blocks linked under `expired` debt
+    /// (§5b.3; the run that opens against this bundle appends them).
+    /// `[]` unless `expired` rules were admitted under a recorded intent.
+    pub expired_used: Vec<Json>,
 }
 
 fn diag(
@@ -192,7 +197,7 @@ pub fn link(
     profiles: &dyn ProfileView,
     variants: &dyn VariantView,
     kernel: &ProvenanceRecord,
-    compile_for_expired: bool,
+    intent_ref: Option<&str>,
 ) -> Result<LinkedGraph, CompileError> {
     let mut diagnostics: Vec<AssemblyDiagnostic> = Vec::new();
 
@@ -378,9 +383,13 @@ pub fn link(
     let mut conditioned: Vec<ConditionedRule> = Vec::new();
     let mut missing_debt: Vec<AssemblyDiagnostic> = Vec::new();
     let mut expired: Vec<AssemblyDiagnostic> = Vec::new();
+    // Bound profiles whose rules/ext blocks link under `expired` debt — the
+    // `model.profile.expired_used{profile_ref, intent_ref}` rows (§5b.3).
+    let mut expired_profiles: Vec<String> = Vec::new();
 
     // (a) profile rules — each needs a complete ProfileDebtRecord.
     for p in &chain {
+        let before = expired.len();
         for r in &p.rules {
             check_profile_rule_debt(r, p, kernel, &mut missing_debt, &mut expired);
             conditioned.push(ConditionedRule {
@@ -404,6 +413,9 @@ pub fn link(
                 evidence_grade: Some(ext.debt.evidence_grade().name().to_string()),
                 removal_test_executable: ext.debt.removal_test.as_ref().map(|t| t.instantiates()),
             });
+        }
+        if expired.len() > before {
+            expired_profiles.push(profile_coordinate(p));
         }
     }
 
@@ -656,11 +668,12 @@ pub fn link(
         });
     }
 
-    // Expired rules: admissible only under an explicit recorded intent (ADR-0020 §7) —
-    // otherwise an error.
-    if !expired.is_empty() && !compile_for_expired {
+    // Expired rules: admissible only under an explicit recorded intent (§5b.3
+    // — the intent *is* a record: a Design or operator ref carried on the
+    // compile inputs; `LinkError{expired_without_intent}` otherwise).
+    if !expired.is_empty() && intent_ref.is_none() {
         return Err(CompileError::LinkError {
-            kind: LinkErrorKind::MissingDebtRecord,
+            kind: LinkErrorKind::ExpiredWithoutIntent,
             detail: format!(
                 "{} conditioned rule(s) carry expired/violated debt and no recorded intent was supplied",
                 expired.len()
@@ -718,7 +731,7 @@ pub fn link(
                                 | crate::profile_test::ConformanceVerdict::Unsupported
                         )
                 });
-                if drifted && !compile_for_expired {
+                if drifted && intent_ref.is_none() {
                     return Err(CompileError::LinkError {
                         kind: LinkErrorKind::CapabilityDrift,
                         detail: format!(
@@ -744,6 +757,22 @@ pub fn link(
         conditioned_rules: conditioned,
         diagnostics,
         variant_pins,
+        expired_used: match intent_ref {
+            // Expired rules admitted under a recorded intent — one row per
+            // bound profile whose conditioned rules carried expired debt
+            // (definition/variant-side expired debt is compile debt, not a
+            // profile expiry, so it names no `profile_ref`).
+            Some(intent) if !expired_profiles.is_empty() => expired_profiles
+                .iter()
+                .map(|p| {
+                    Json::obj([
+                        ("profile_ref", Json::str(p.clone())),
+                        ("intent_ref", Json::str(intent)),
+                    ])
+                })
+                .collect(),
+            _ => Vec::new(),
+        },
     })
 }
 

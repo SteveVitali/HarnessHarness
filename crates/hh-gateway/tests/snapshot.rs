@@ -164,3 +164,55 @@ fn observe_silent_when_consistent_or_unobserved() {
     assert!(claim.is_none());
     assert_eq!(obs.observed_fingerprint, pinned.observed_fingerprint);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// S5.1 — AC-R-2.3.3-9 / §5b.3 observable (ii): `capabilities.compatibility_token`
+// change is a `SnapshotClaim{compatibility_token_changed}` — the same claim
+// shape, its own kind; absence/unchanged never claims.
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn compatibility_token_change_raises_claim() {
+    use hh_wire::json::Json;
+    let pinned = Json::obj([("value", Json::str("tok-v1"))]);
+    let descriptor = Json::obj([(
+        "capabilities",
+        Json::obj([(
+            "compatibility_token",
+            Json::obj([("value", Json::str("tok-v2"))]),
+        )]),
+    )]);
+    let claim = compatibility_token_claim(Some(&pinned), &descriptor, "claude-opus-4")
+        .expect("a changed token claims");
+    assert_eq!(
+        claim.claim_kind,
+        SnapshotClaimKind::CompatibilityTokenChanged
+    );
+    assert_eq!(claim.claim_kind.as_str(), "compatibility_token_changed");
+    assert_eq!(claim.pinned_model_id, "claude-opus-4");
+    // The observed token spelling rides `observed`/`snapshot_id`.
+    assert!(claim.observed.contains("tok-v2"));
+}
+
+#[test]
+fn compatibility_token_unchanged_or_absent_is_silent() {
+    use hh_wire::json::Json;
+    let pinned = Json::obj([("value", Json::str("tok-v1"))]);
+    let same = Json::obj([(
+        "capabilities",
+        Json::obj([("compatibility_token", pinned.clone())]),
+    )]);
+    assert!(
+        compatibility_token_claim(Some(&pinned), &same, "m-1").is_none(),
+        "unchanged token never claims"
+    );
+    // No claim member in the descriptor → no claim (absence is not drift).
+    let bare = Json::obj([("capabilities", Json::obj([]))]);
+    assert!(compatibility_token_claim(Some(&pinned), &bare, "m-1").is_none());
+    // No pinned token → nothing to contradict.
+    let changed = Json::obj([(
+        "capabilities",
+        Json::obj([("compatibility_token", Json::str("tok-x"))]),
+    )]);
+    assert!(compatibility_token_claim(None, &changed, "m-1").is_none());
+}

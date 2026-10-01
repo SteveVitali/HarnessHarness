@@ -72,6 +72,10 @@ pub struct RoutingRequest {
     /// `in_flight_effect` — a proposed effect is unresolved (ADR-0030);
     /// G-3 refuses a cross-profile migration while it holds.
     pub in_flight_effect: bool,
+    /// `task_class?` — the `bandit` policy's cell axis (ADR-0312 d.1:
+    /// reward cells key `(task_class, model_ref)`; absent reads the
+    /// `untagged` cell — never pooled with a tagged one).
+    pub task_class: Option<String>,
 }
 
 /// `preferences{authority, cost_priority?, speed_priority?,
@@ -118,9 +122,11 @@ impl LiftedPreferences {
     }
 }
 
-/// `RoutingPolicy.kind` — the closed kind enum (ADR-0121 d.4). C1 executes
-/// `static`, `role_table`, `fallback_chain`, `capability_filter`, `cost_cap`,
-/// `latency_cap`, `quality_target`, `health_aware`; `learned` is C4 — a
+/// `RoutingPolicy.kind` — the closed kind enum (ADR-0121 d.4; extended by
+/// ADR-0312 d.1 with `bandit`). C1 executes `static`, `role_table`,
+/// `fallback_chain`, `capability_filter`, `cost_cap`, `latency_cap`,
+/// `quality_target`, `health_aware`; the `bandit` family (C1/Stage-5)
+/// ranks candidates by ledger-projected reward cells; `learned` is C4 — a
 /// declared tier refusal (`PolicyInvalid`), never a fall-through.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RoutingPolicyKind {
@@ -140,6 +146,10 @@ pub enum RoutingPolicyKind {
     QualityTarget,
     /// `health_aware` (C1).
     HealthAware,
+    /// `bandit` (C1/Stage-5; ADR-0312 d.1) — rank by
+    /// `reward = success_ppm − λ_ppm·cost_millis` over the projected
+    /// `(task_class, model_ref)` cell view.
+    Bandit,
     /// `learned` (C4).
     Learned,
 }
@@ -156,6 +166,7 @@ impl RoutingPolicyKind {
             RoutingPolicyKind::LatencyCap => "latency_cap",
             RoutingPolicyKind::QualityTarget => "quality_target",
             RoutingPolicyKind::HealthAware => "health_aware",
+            RoutingPolicyKind::Bandit => "bandit",
             RoutingPolicyKind::Learned => "learned",
         }
     }
@@ -171,6 +182,7 @@ impl RoutingPolicyKind {
             "latency_cap" => RoutingPolicyKind::LatencyCap,
             "quality_target" => RoutingPolicyKind::QualityTarget,
             "health_aware" => RoutingPolicyKind::HealthAware,
+            "bandit" => RoutingPolicyKind::Bandit,
             "learned" => RoutingPolicyKind::Learned,
             _ => return None,
         })
@@ -483,6 +495,23 @@ impl RoutingPolicy {
                 }
             }
         }
+        // ADR-0312 d.1 — a `bandit` policy's estimator is itself a
+        // conditioned rule (ADR-0189: every non-`static` estimator carries
+        // the debt record): at least one `conditioned_rules[]` entry must
+        // hold a complete record. `link` refuses an incomplete one.
+        if self.kind == RoutingPolicyKind::Bandit
+            && !self
+                .conditioned_rules
+                .iter()
+                .any(|r| r.debt.as_ref().is_some_and(|d| d.is_complete()))
+        {
+            return Err(RoutingRefusal::PolicyInvalid {
+                rule_id: self.policy_id.clone(),
+                reason: "bandit estimator requires a conditioned rule with \
+                         a complete AssumptionDebtRecord (missing_debt_record)"
+                    .to_string(),
+            });
+        }
         Ok(())
     }
 }
@@ -776,6 +805,160 @@ pub struct RoleBinding {
 pub struct ModelRoleTable {
     /// `roles` — role spelling → binding.
     pub roles: BTreeMap<String, RoleBinding>,
+}
+
+/// The canonical `{provider_api_family, model_family, model_version}` member —
+/// one codec shared by `RouteCandidate`/`RoleBinding`/`ModelRoleTable` (CC1).
+fn coordinate_json(c: &ModelCoordinate) -> Json {
+    Json::obj([
+        (
+            "provider_api_family",
+            Json::str(c.provider_api_family.clone()),
+        ),
+        ("model_family", Json::str(c.model_family.clone())),
+        ("model_version", Json::str(c.model_version.clone())),
+    ])
+}
+
+/// Decode a `ModelCoordinate` — `None` on any missing/malformed member (the
+/// closed grammar refuses coerced defaults).
+fn coordinate_from_json(j: &Json) -> Option<ModelCoordinate> {
+    Some(ModelCoordinate {
+        provider_api_family: j.get("provider_api_family")?.as_str()?.to_string(),
+        model_family: j.get("model_family")?.as_str()?.to_string(),
+        model_version: j.get("model_version")?.as_str()?.to_string(),
+    })
+}
+
+/// Decode a `ModelRef` — `None` on a missing required member
+/// (`profile_ref`/`provider_model_id`); optionals decode when present.
+fn model_ref_from_json(j: &Json) -> Option<ModelRef> {
+    Some(ModelRef {
+        profile_ref: j.get("profile_ref")?.as_str()?.to_string(),
+        provider_model_id: j.get("provider_model_id")?.as_str()?.to_string(),
+        snapshot_id: j
+            .get("snapshot_id")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        serving_route: j
+            .get("serving_route")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        effort: j.get("effort").and_then(Json::as_str).map(str::to_string),
+    })
+}
+
+impl RouteCandidate {
+    /// Canonical JSON — `{model_ref, coordinate}`.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("model_ref", self.model_ref.to_json()),
+            ("coordinate", coordinate_json(&self.coordinate)),
+        ])
+    }
+}
+
+impl RoleBinding {
+    /// Canonical JSON — `{model_ref, alternates[], policy_ref, profile_ref}`
+    /// (the ADR-0121 d.2-amended row shape: `model_ref` is the primary
+    /// candidate, `profile_ref` the bound `ModelProfile` coordinate).
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("model_ref", self.primary.model_ref.to_json()),
+            ("coordinate", coordinate_json(&self.primary.coordinate)),
+            (
+                "alternates",
+                Json::Arr(self.alternates.iter().map(|a| a.to_json()).collect()),
+            ),
+            ("policy_ref", Json::str(self.policy_ref.clone())),
+            ("profile_ref", Json::str(self.profile_ref.clone())),
+        ])
+    }
+
+    /// Decode — `None` on any malformed member (never a partial binding).
+    pub fn from_json(j: &Json) -> Option<RoleBinding> {
+        Some(RoleBinding {
+            primary: RouteCandidate {
+                model_ref: model_ref_from_json(j.get("model_ref")?)?,
+                coordinate: coordinate_from_json(j.get("coordinate")?)?,
+            },
+            alternates: match j.get("alternates") {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .map(candidate_from_json)
+                    .collect::<Option<Vec<_>>>()?,
+                Some(_) => return None,
+                None => Vec::new(),
+            },
+            policy_ref: j.get("policy_ref")?.as_str()?.to_string(),
+            profile_ref: j.get("profile_ref")?.as_str()?.to_string(),
+        })
+    }
+}
+
+impl ModelRoleTable {
+    /// Canonical JSON — `{roles: {role → RoleBinding}}` (BTreeMap ordering is
+    /// the canonical order — the id is stable across processes, CC3).
+    pub fn to_json(&self) -> Json {
+        Json::obj([(
+            "roles",
+            Json::Obj(
+                self.roles
+                    .iter()
+                    .map(|(r, b)| (r.clone(), b.to_json()))
+                    .collect(),
+            ),
+        )])
+    }
+
+    /// Decode — role keys are the closed `ModelRole` set (CF-468: the older
+    /// `summarizer`/`shim_interpreter`/`subagent(class)` spellings never
+    /// decode — `compaction`/`utility`/`subagent` are the ratified names).
+    pub fn from_json(j: &Json) -> Option<ModelRoleTable> {
+        let mut roles = BTreeMap::new();
+        match j.get("roles") {
+            Some(Json::Obj(m)) => {
+                for (role, b) in m {
+                    // The role key must name a ratified `ModelRole`.
+                    hh_compiler::profile::ModelRole::parse(role)?;
+                    roles.insert(role.clone(), RoleBinding::from_json(b)?);
+                }
+            }
+            Some(_) | None => return None,
+        }
+        Some(ModelRoleTable { roles })
+    }
+
+    /// `semantic_id` — the idp/1 address of the canonical record (CF-313:
+    /// `configuration_id.model_ref` names *this* id, never a surface alias —
+    /// the model set is a factor coordinate, `bundle_id` never is).
+    pub fn semantic_id(&self) -> String {
+        hh_identity::idp_id(
+            "model_role_table.1",
+            self.to_json().to_canonical_string().as_bytes(),
+        )
+    }
+
+    /// The `profile_binding` projection — `map<ModelRole, ProfileRef>`
+    /// (`{role → {profile_ref, pinned: true}}`; CF-313: the sealed table's
+    /// profile view; the manifest carries this member, `native.profile` is
+    /// the `primary` row).
+    pub fn profile_binding(&self) -> Json {
+        Json::Obj(
+            self.roles
+                .iter()
+                .map(|(r, b)| {
+                    (
+                        r.clone(),
+                        Json::obj([
+                            ("profile_ref", Json::str(b.profile_ref.clone())),
+                            ("pinned", Json::Bool(true)),
+                        ]),
+                    )
+                })
+                .collect(),
+        )
+    }
 }
 
 /// The budget port — G-4's `reserve(budget_id, max_output(profile), holder)`
@@ -1213,9 +1396,53 @@ impl MigrationView for NoMigration {
     }
 }
 
+/// `BanditCell` — one projected reward cell keyed `(task_class,
+/// model_ref)` (ADR-0312 d.1). The view is a kernel-derived projection of
+/// the ledger's `model.call.completed` rows — never hidden mutable state
+/// the router owns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BanditCell {
+    /// `n` — observations in the cell. Below the policy's `min_n` the cell
+    /// reads `unknown` (ADR-0189 D6 applied at the router family).
+    pub n: u64,
+    /// Mean task-success rate in ppm (the deterministic-oracle /
+    /// validator-verdict fold the view computes).
+    pub success_ppm: i64,
+    /// Mean realized call cost in milli-units of the pinned pricing
+    /// table's currency (the λ·cost operand — `estimated_from_pricing`
+    /// rows never feed a reward).
+    pub cost_millis: i64,
+}
+
+/// `BanditView` — the projected reward store a `bandit` policy reads
+/// (ADR-0312 d.1). Cells are keyed `(task_class, model_ref_spelling)`;
+/// there is no cross-cell pooling — an unobserved key is `None` and reads
+/// as `unknown` under `min_n`.
+pub trait BanditView {
+    /// The cell for `(task_class, model_ref)`, `None` when unobserved.
+    fn cell(&self, task_class: &str, model_ref: &str) -> Option<BanditCell>;
+    /// The total observation count across a task_class's cells — the
+    /// exploration bonus's `N` term.
+    fn total_n(&self, task_class: &str) -> u64;
+}
+
+/// The empty bandit view — every cell `unknown` (the `cold_start` prior
+/// ranks; nothing is invented).
+#[derive(Debug, Default)]
+pub struct NoBandit;
+
+impl BanditView for NoBandit {
+    fn cell(&self, _task_class: &str, _model_ref: &str) -> Option<BanditCell> {
+        None
+    }
+    fn total_n(&self, _task_class: &str) -> u64 {
+        0
+    }
+}
+
 /// `RoutingViews` — the C1 view bundle `select_with` reads (the spec's
 /// `profile_env`/`account`/`health` are already parameters; these are the
-/// G-3/G-5/quality-prior projections the C1 kinds consult).
+/// G-3/G-5/quality-prior/reward projections the C1 kinds consult).
 #[derive(Default)]
 pub struct RoutingViews<'a> {
     /// The pricing table view (G-5).
@@ -1224,18 +1451,39 @@ pub struct RoutingViews<'a> {
     pub quality: Option<&'a dyn QualityPriorView>,
     /// The migration projection (G-3).
     pub migration: Option<&'a dyn MigrationView>,
+    /// The reward-cell projection (`bandit`; ADR-0312 d.1).
+    pub bandit: Option<&'a dyn BanditView>,
 }
 
 impl RoutingViews<'_> {
-    /// No views — `NoPricing`/`NoQualityPrior`/`NoMigration` semantics
-    /// (fail-closed on the guard that reads them).
+    /// No views — `NoPricing`/`NoQualityPrior`/`NoMigration`/`NoBandit`
+    /// semantics (fail-closed on the guard that reads them).
     pub fn none() -> RoutingViews<'static> {
         RoutingViews {
             pricing: None,
             quality: None,
             migration: None,
+            bandit: None,
         }
     }
+}
+
+/// `⌊√(total·10⁶/n)⌋` — the `bandit` exploration bonus's √ratio spelled
+/// in milli-units so `c_ppm·isqrt_ppm(N,n)/1000` reads `c_ppm·√(N/n)`.
+/// Pure integer Newton — deterministic, no floats (ADR-0312 d.1).
+fn isqrt_ppm(total: u64, n: u64) -> i64 {
+    let n = n.max(1) as u128;
+    let v = (total as u128).saturating_mul(1_000_000) / n;
+    if v == 0 {
+        return 0;
+    }
+    let mut x = v;
+    let mut y = x.div_ceil(2);
+    while y < x {
+        x = y;
+        y = (x + v / x) / 2;
+    }
+    (x.min(i64::MAX as u128)) as i64
 }
 
 fn model_ref_spelling(m: &ModelRef) -> String {
@@ -1548,6 +1796,50 @@ fn admit_candidate(
                 .and_then(|s| s.failure_rate_ppm())
                 .map(|r| -r);
         }
+        RoutingPolicyKind::Bandit => {
+            // ADR-0312 d.1 — `score = reward_ppm + bonus`:
+            //   reward_ppm = cell.success_ppm − λ_ppm·cell.cost_millis/1000
+            //   bonus      = c_ppm·√(N/n)         (declared `explore_ppm`)
+            // A cell below `min_n` is `unknown` and scores the declared
+            // `cold_start_ppm` prior (default 0) — no pooling, no
+            // interpolation (ADR-0012). The whole fold is integer ppm;
+            // equal inputs select identically every time.
+            let bandit: &dyn BanditView = views.bandit.unwrap_or(&NoBandit);
+            let task_class = request.task_class.as_deref().unwrap_or("untagged");
+            let min_n = policy
+                .params
+                .get("min_n")
+                .and_then(Json::as_int)
+                .unwrap_or(0)
+                .max(0) as u64;
+            let lambda_ppm = policy
+                .params
+                .get("lambda_ppm")
+                .and_then(Json::as_int)
+                .unwrap_or(0);
+            let cold_start = policy
+                .params
+                .get("cold_start_ppm")
+                .and_then(Json::as_int)
+                .unwrap_or(0);
+            let cell = bandit.cell(task_class, &spelling);
+            let base = match cell {
+                Some(c) if c.n >= min_n => c.success_ppm - lambda_ppm * c.cost_millis / 1000,
+                _ => cold_start,
+            };
+            let bonus = policy
+                .params
+                .get("explore_ppm")
+                .and_then(Json::as_int)
+                .map(|c_ppm| {
+                    let n = cell.map(|c| c.n).unwrap_or(0).max(1);
+                    let total = bandit.total_n(task_class).max(n);
+                    // c_ppm·√(N/n) — isqrt(N·10⁶/n)/1000 = √ratio.
+                    c_ppm * isqrt_ppm(total, n) / 1000
+                })
+                .unwrap_or(0);
+            score = Some(base + bonus);
+        }
         _ => {}
     }
     Admit::Admitted(Admitted {
@@ -1612,7 +1904,8 @@ fn candidate_list(
         | RoutingPolicyKind::CostCap
         | RoutingPolicyKind::LatencyCap
         | RoutingPolicyKind::QualityTarget
-        | RoutingPolicyKind::HealthAware => binding(),
+        | RoutingPolicyKind::HealthAware
+        | RoutingPolicyKind::Bandit => binding(),
         RoutingPolicyKind::Learned => Err(RoutingRefusal::PolicyInvalid {
             rule_id: policy.policy_id.clone(),
             reason: "kind learned is C4 — not executable at this tier".to_string(),
@@ -1829,7 +2122,9 @@ pub fn select_with(
     // the declared intent).
     let ranked = matches!(
         policy.kind,
-        RoutingPolicyKind::QualityTarget | RoutingPolicyKind::HealthAware
+        RoutingPolicyKind::QualityTarget
+            | RoutingPolicyKind::HealthAware
+            | RoutingPolicyKind::Bandit
     );
     let order: Vec<usize> = {
         let mut ix: Vec<usize> = (0..rows.len()).collect();
@@ -1961,6 +2256,7 @@ pub fn select_with(
     match policy.kind {
         RoutingPolicyKind::CostCap => inputs_read.push("pricing_table".to_string()),
         RoutingPolicyKind::QualityTarget => inputs_read.push("quality_prior".to_string()),
+        RoutingPolicyKind::Bandit => inputs_read.push("bandit_view".to_string()),
         _ => {}
     }
     if request.source_profile_ref.is_some() {
@@ -2180,33 +2476,9 @@ pub fn on_attempt_failed(
 /// (`{model_ref{…}, coordinate{provider_api_family, model_family,
 /// model_version}}`).
 fn candidate_from_json(j: &Json) -> Option<RouteCandidate> {
-    let m = j.get("model_ref")?;
-    let c = j.get("coordinate")?;
     Some(RouteCandidate {
-        model_ref: ModelRef {
-            profile_ref: m.get("profile_ref").and_then(Json::as_str)?.to_string(),
-            provider_model_id: m
-                .get("provider_model_id")
-                .and_then(Json::as_str)?
-                .to_string(),
-            snapshot_id: m
-                .get("snapshot_id")
-                .and_then(Json::as_str)
-                .map(str::to_string),
-            serving_route: m
-                .get("serving_route")
-                .and_then(Json::as_str)
-                .map(str::to_string),
-            effort: m.get("effort").and_then(Json::as_str).map(str::to_string),
-        },
-        coordinate: ModelCoordinate {
-            provider_api_family: c
-                .get("provider_api_family")
-                .and_then(Json::as_str)?
-                .to_string(),
-            model_family: c.get("model_family").and_then(Json::as_str)?.to_string(),
-            model_version: c.get("model_version").and_then(Json::as_str)?.to_string(),
-        },
+        model_ref: model_ref_from_json(j.get("model_ref")?)?,
+        coordinate: coordinate_from_json(j.get("coordinate")?)?,
     })
 }
 

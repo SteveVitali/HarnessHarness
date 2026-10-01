@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use hh_assembly::compose::compose;
-use hh_assembly::diagnostics::{Code, NaReason};
+use hh_assembly::diagnostics::{Code, NaReason, Severity, Stage};
 use hh_assembly::grammar::{Assembly, LayerProvenance, LayerSourceKind};
 use hh_assembly::resolve::{resolve, ResolveEnv};
 use hh_assembly::Stage1Catalog;
@@ -605,7 +605,16 @@ fn ac3_invalid_fixtures_per_owned_code() {
 #[test]
 fn ac5_plan_seal_parity() {
     let (mut store, catalog) = seeded_store("ac5");
-    let s = valid_source();
+    // S-1 parity is asserted over a *resolvable* bound profile — the
+    // plan-mode stage-6b pass-through runs clean for it, so plan and
+    // seal still yield identical reports (the unresolvable-pin warning
+    // leg is `s5_1_stage6b_unresolvable_coordinate_warns`'s case).
+    let prof = minimal_profile("test:ac5-prof", "1.0");
+    admit_profile(&mut store, &prof);
+    let mut s = valid_source();
+    s.document = Some(scaffold_with_profile(
+        &hh_compiler::profile::profile_coordinate(&prof),
+    ));
     let snap = store.snapshot(&kernel()).unwrap().snapshot_id;
     let p = svc(&mut store, &catalog).assemble(&s, Some(&snap), AssembleMode::Plan);
     let e = svc(&mut store, &catalog).assemble(&s, Some(&snap), AssembleMode::Seal);
@@ -1008,7 +1017,15 @@ fn hosted_parameter_space_populates_and_gates() {
 #[test]
 fn validate_batch_dedupes_identical_points() {
     let (mut store, catalog) = seeded_store("batch");
-    let s = valid_source();
+    // A resolvable, expressible bound profile — stage 6b runs clean so
+    // the identical-point dedup asserts `Pass` (not `PassWithWarnings`)
+    // for the un-broken point.
+    let prof = minimal_profile("test:batch-prof", "1.0");
+    admit_profile(&mut store, &prof);
+    let mut s = valid_source();
+    s.document = Some(scaffold_with_profile(
+        &hh_compiler::profile::profile_coordinate(&prof),
+    ));
     let mut bad = valid_source();
     bad.layers[0].fragment = Json::str("broken");
     let points = vec![
@@ -1388,12 +1405,276 @@ fn ac11_anchor_compiles_under_minimal_profiles() {
                 content_hash: "sha256:target-mcp".to_string(),
             }],
             compile_for_expired: false,
+            intent_ref: None,
         };
         let bundle = svc(&mut store, &catalog)
             .compile(&inputs, &view)
             .unwrap_or_else(|e| panic!("compiles under {}: {e:?}", p.profile_id));
         assert!(!bundle.bundle_id.is_empty());
     }
+}
+
+// ── S5.1: stage 6b — `C-PROF-2` at plan time (R-2.1.4¹ᵇ; CF-323; ADR-0025 as
+// amended; ADR-0312) — the service's `plan` runs the compiler pass-through
+// over the bound profile coordinates and `UnexpressibleSurface` lands as a
+// plan-time **error** diagnostic, never a warning and never deferred to the
+// seal/compile boundary. ────────────────────────────────────────────────────
+
+/// The scaffold with the root's `native.profile` pinned to a real coordinate —
+/// `profile_binding`/native pins carry identity coordinates §3.2.2 admits
+/// (`profile_id@version` here), and the registry view resolves the record the
+/// coordinate names.
+fn scaffold_with_profile(coordinate: &str) -> SourceDocument {
+    let nodes = [
+        rule_node("test:rule", 1),
+        budget_node("test:budget", &[("tokens.blended", 1000)], 2),
+        perm_node("test:perm", "test:agent", 3),
+        {
+            let mut n = agent_node("test:agent", "test:budget", "test:perm", 4);
+            if let KindRecord::AgentProcess(ap) = &mut n.semantic {
+                if let AgentProcessBody::Native(nat) = &mut ap.body {
+                    nat.profile.profile = coordinate.to_string();
+                }
+            }
+            n
+        },
+    ];
+    SourceDocument {
+        root: "test:agent".into(),
+        nodes: nodes.iter().map(hh_hir::wire::node_to_json).collect(),
+        edges: Vec::new(),
+    }
+}
+
+/// Admit a profile + its passing `ProfileTestReport` into the store the way the
+/// C1 registry would (opaque `{kind, profile}` / `{kind, report}` bodies —
+/// the compiler owns the payload schemas).
+fn admit_profile(store: &mut RegistryStore, p: &ModelProfile) {
+    store
+        .register(
+            RegistryRecord::ModelProfile(Json::obj([
+                ("kind", Json::str("model_profile")),
+                ("profile", hh_compiler::schema::profile_to_json(p)),
+            ])),
+            &kernel(),
+            None,
+        )
+        .expect("model_profile registers");
+    let coord = hh_compiler::profile::profile_coordinate(p);
+    let report = hh_compiler::profile_test::ProfileTestReport::passing_for(&coord, &p.content_hash);
+    store
+        .register(
+            RegistryRecord::ProfileTestReport(Json::obj([
+                ("kind", Json::str("profile_test_report")),
+                (
+                    "report",
+                    hh_compiler::profile_test::test_report_json(&report),
+                ),
+            ])),
+            &kernel(),
+            None,
+        )
+        .expect("profile_test_report registers");
+}
+
+#[test]
+fn s5_1_stage6b_unexpressible_surface_is_c_prof_2_at_plan_time() {
+    let (mut store, catalog) = seeded_store("s5_1-prof2");
+    // `interaction_mode.freeform` is outside the C0 surface family — link's
+    // expressibility gate raises `UnexpressibleSurface` (AC-CP-05's shape).
+    let mut p = minimal_profile("test:prof6b", "1.0");
+    p.rules.push(hh_compiler::profile::ProfileRule {
+        rule_id: "r-mode".into(),
+        kind: hh_compiler::profile::ProfileRuleKind::InteractionMode,
+        owned_fields: vec![],
+        params: Json::obj([("mode", Json::str("freeform"))]),
+        debt: profile_debt("r-mode", DebtStatus::Active),
+        scope: None,
+        supersedes: None,
+        compliance: hh_compiler::profile::Compliance {
+            detector_class: hh_compiler::profile::ComplianceDetector::None,
+            followed_predicate_ref: None,
+        },
+    });
+    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    admit_profile(&mut store, &p);
+    let coord = hh_compiler::profile::profile_coordinate(&p);
+
+    let mut s = valid_source();
+    s.document = Some(scaffold_with_profile(&coord));
+    let r = svc(&mut store, &catalog).assemble(&s, None, AssembleMode::Plan);
+    assert_eq!(r.status, "error", "C-PROF-2 fails the plan");
+    let d = r
+        .report
+        .diagnostics
+        .iter()
+        .find(|d| d.code == Code::ProfUnexpressible)
+        .unwrap_or_else(|| {
+            panic!(
+                "expected C-PROF-2, got {:?}",
+                r.report
+                    .diagnostics
+                    .iter()
+                    .map(|d| (d.code.code(), d.detail.content.clone()))
+                    .collect::<Vec<_>>()
+            )
+        });
+    assert!(matches!(d.stage, Stage::Validate(6)), "stage 6b");
+    assert_eq!(d.severity, Severity::Error, "an error, never a warning");
+    let detail = d.detail.content.clone().unwrap_or_default();
+    assert!(
+        detail.contains("freeform"),
+        "the reason names the offending member: {detail}"
+    );
+    assert_eq!(d.subject, coord, "the diagnostic's subject is the profile");
+    assert!(
+        r.report
+            .stages
+            .iter()
+            .any(|o| o.stage == 6 && o.ran && o.errors > 0),
+        "stage 6 reports the error count"
+    );
+}
+
+#[test]
+fn s5_1_stage6b_expressible_profile_leaves_plan_clean() {
+    let (mut store, catalog) = seeded_store("s5_1-prof2-ok");
+    // The C0-admissible mode compiles — `plan` stays `ok` and no C-PROF-*
+    // diagnostic appears.
+    let mut p = minimal_profile("test:prof6b", "1.0");
+    p.rules.push(hh_compiler::profile::ProfileRule {
+        rule_id: "r-mode".into(),
+        kind: hh_compiler::profile::ProfileRuleKind::InteractionMode,
+        owned_fields: vec![],
+        params: Json::obj([("mode", Json::str("native_fc"))]),
+        debt: profile_debt("r-mode", DebtStatus::Active),
+        scope: None,
+        supersedes: None,
+        compliance: hh_compiler::profile::Compliance {
+            detector_class: hh_compiler::profile::ComplianceDetector::None,
+            followed_predicate_ref: None,
+        },
+    });
+    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    admit_profile(&mut store, &p);
+    let coord = hh_compiler::profile::profile_coordinate(&p);
+
+    let mut s = valid_source();
+    s.document = Some(scaffold_with_profile(&coord));
+    let r = svc(&mut store, &catalog).assemble(&s, None, AssembleMode::Plan);
+    assert_eq!(
+        r.status,
+        "ok",
+        "the plan assembles: {:?}",
+        r.report
+            .diagnostics
+            .iter()
+            .map(|d| (d.code.code(), d.detail.content.clone()))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        !r.report
+            .diagnostics
+            .iter()
+            .any(|d| d.code == Code::ProfUnexpressible),
+        "no C-PROF-2 for an expressible surface"
+    );
+}
+
+#[test]
+fn s5_1_stage6b_skips_unbound_and_seal_mode() {
+    let (mut store, catalog) = seeded_store("s5_1-prof2-skip");
+    // The default scaffold's unresolvable fixture pin is not 6b's verdict —
+    // coordinate readability belongs to link at the compile boundary — so an
+    // unresolvable pin reports a stage-6 *warning* (the check could not run),
+    // never a `C-PROF-2` error and never a silent pass (ADR-0312 D5).
+    let r = svc(&mut store, &catalog).assemble(&valid_source(), None, AssembleMode::Plan);
+    assert_eq!(r.status, "ok");
+    assert!(!r
+        .report
+        .diagnostics
+        .iter()
+        .any(|d| d.code == Code::ProfUnexpressible),);
+    // And seal mode never runs the plan-time pass-through — the compile
+    // boundary (`lab.assembly.compile`) owns the sealed pipeline's verdict.
+    let p = {
+        let mut p = minimal_profile("test:prof6b", "1.0");
+        p.rules.push(hh_compiler::profile::ProfileRule {
+            rule_id: "r-mode".into(),
+            kind: hh_compiler::profile::ProfileRuleKind::InteractionMode,
+            owned_fields: vec![],
+            params: Json::obj([("mode", Json::str("freeform"))]),
+            debt: profile_debt("r-mode", DebtStatus::Active),
+            scope: None,
+            supersedes: None,
+            compliance: hh_compiler::profile::Compliance {
+                detector_class: hh_compiler::profile::ComplianceDetector::None,
+                followed_predicate_ref: None,
+            },
+        });
+        p.content_hash = hh_compiler::profile::profile_identity(&p);
+        p
+    };
+    admit_profile(&mut store, &p);
+    let coord = hh_compiler::profile::profile_coordinate(&p);
+    let mut s = valid_source();
+    s.document = Some(scaffold_with_profile(&coord));
+    let r = svc(&mut store, &catalog).assemble(&s, None, AssembleMode::Seal);
+    assert_eq!(
+        r.status,
+        "ok",
+        "seal does not run stage 6b — {:?}",
+        r.report
+            .diagnostics
+            .iter()
+            .map(|d| (d.code.code(), d.detail.content.clone()))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        !r.report
+            .diagnostics
+            .iter()
+            .any(|d| d.code == Code::ProfUnexpressible),
+        "no C-PROF-2 at seal — the compile boundary owns the verdict"
+    );
+}
+
+/// An unresolvable bound profile coordinate means 6b's check cannot run —
+/// the verdict is a stage-6 *warning* carrying the typed link kind
+/// (`version_conflict`), never a silent pass (CC3; the refusal itself
+/// belongs to the compile boundary — ADR-0312 D5).
+#[test]
+fn s5_1_stage6b_unresolvable_coordinate_warns() {
+    let (mut store, catalog) = seeded_store("s5_1-prof2-warn");
+    let mut s = valid_source();
+    s.document = Some(scaffold_with_profile("sha256:no_such_profile"));
+    let r = svc(&mut store, &catalog).assemble(&s, None, AssembleMode::Plan);
+    assert_eq!(
+        r.status,
+        "ok",
+        "a warning does not fail the plan: {:?}",
+        r.report
+            .diagnostics
+            .iter()
+            .map(|d| (d.code.code(), d.detail.content.clone()))
+            .collect::<Vec<_>>()
+    );
+    let w = r
+        .report
+        .diagnostics
+        .iter()
+        .find(|d| d.stage == Stage::Validate(6) && d.severity == Severity::Warning)
+        .expect("the unresolved binding warns — nothing silently lost");
+    assert_eq!(w.code, Code::LinkVersionConflict);
+    assert!(
+        w.detail
+            .content
+            .as_deref()
+            .unwrap_or("")
+            .contains("version_conflict"),
+        "the typed kind names the failure: {:?}",
+        w.detail.content
+    );
 }
 
 // ── AC-6 (rest): apply/invert over the flattened projection + surface rename ──

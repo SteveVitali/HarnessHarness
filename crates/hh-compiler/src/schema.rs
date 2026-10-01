@@ -2213,7 +2213,7 @@ fn model_surface_from_json(j: &Json, path: &str) -> Result<ModelSurfaceState, Co
 
 /// The canonical JSON of a `CompiledBundle`.
 pub fn bundle_to_json(b: &CompiledBundle) -> Json {
-    Json::obj([
+    let mut j = Json::obj([
         ("bundle_id", Json::str(b.bundle_id.clone())),
         ("derivation_key", Json::str(b.derivation_key.clone())),
         (
@@ -2274,7 +2274,16 @@ pub fn bundle_to_json(b: &CompiledBundle) -> Json {
             ),
         ),
         ("trace_map", trace_map_json(&b.trace_map)),
-    ])
+    ]);
+    // `expired_used[]` rides the bundle only when an expired compile happened
+    // — a clean bundle keeps its §3.2.8 shape and `bundle_id` (additive
+    // member; §5b.3 `model.profile.expired_used` rows).
+    if !b.expired_used.is_empty() {
+        if let Json::Obj(m) = &mut j {
+            m.insert("expired_used".into(), Json::Arr(b.expired_used.clone()));
+        }
+    }
+    j
 }
 
 /// Parse a `CompiledBundle`.
@@ -2349,6 +2358,10 @@ pub fn bundle_from_json(j: &Json) -> Result<CompiledBundle, CompileError> {
             .and_then(Json::as_str)
             .map(str::to_string),
         fallback_used: matches!(j.get("fallback_used"), Some(Json::Bool(true))),
+        expired_used: match j.get("expired_used") {
+            Some(Json::Arr(items)) => items.clone(),
+            _ => Vec::new(),
+        },
     })
 }
 
@@ -2393,6 +2406,9 @@ pub struct WireCompileInputs {
     pub targets: Vec<TargetSpec>,
     /// The recorded intent flag.
     pub compile_for_expired: bool,
+    /// `intent_ref?` — the Design/operator record an expired compile rides
+    /// (§5b.3 `LinkError{expired_without_intent}` leg).
+    pub intent_ref: Option<String>,
     /// The `ProfileTestReport` records the registry holds beside the carried
     /// profiles — the link gate (AC-R-2.3.3-13) reads them; a bound profile
     /// without a carried report is `profile_untested` out-of-process too.
@@ -2449,6 +2465,9 @@ pub fn compile_inputs_json(i: &WireCompileInputs) -> Json {
     if let Some(f) = &i.fallback_profile {
         pairs.push(("fallback_profile", Json::str(f.clone())));
     }
+    if let Some(r) = &i.intent_ref {
+        pairs.push(("intent_ref", Json::str(r.clone())));
+    }
     Json::obj(pairs)
 }
 
@@ -2498,6 +2517,7 @@ pub fn compile_inputs_from_json(j: &Json) -> Result<WireCompileInputs, CompileEr
             _ => return Err(schema_err(path, "targets must be an array")),
         },
         compile_for_expired: matches!(j.get("compile_for_expired"), Some(Json::Bool(true))),
+        intent_ref: opt_str(j, "intent_ref"),
         test_reports: match j.get("test_reports") {
             Some(Json::Arr(items)) => items
                 .iter()

@@ -1582,14 +1582,18 @@ pub fn cmd_acp(
         }
     }
     // `--profile` binds the run's profile coordinate — the same
-    // coordinate the `lab.serve` compile resolved (the manifest's
-    // `profile_binding` member; the canonical `{profile_ref:{profile}}`
-    // spelling `set_coordinate`/`profile_binding` share).
+    // coordinate the `lab.serve` compile resolved. `profile_binding` is
+    // the role→entry map (AC-R-2.3.3-11): a `--profile` override names
+    // the `primary` row under the canonical `{profile_ref:{profile}}`
+    // spelling `set_coordinate`/`profile_binding` entries share.
     if let Some(prof) = p.flag("profile") {
         if let Json::Obj(m) = &mut spec {
             m.insert(
                 "profile_binding".to_string(),
-                Json::obj([("profile_ref", Json::obj([("profile", Json::str(prof))]))]),
+                Json::obj([(
+                    "primary",
+                    Json::obj([("profile_ref", Json::obj([("profile", Json::str(prof))]))]),
+                )]),
             );
         }
     }

@@ -135,6 +135,14 @@ pub enum GatewayError {
         /// The probe kind.
         kind: String,
     },
+    /// A `compatibility_token` change (or another `model_version_change`
+    /// observable) marked this profile `pending_relower` — the surface must
+    /// re-lower before the next call (AC-R-2.3.3-9). Refused pre-dispatch,
+    /// before `model.call.requested`.
+    ReLowerRequired {
+        /// The profile coordinate whose surface is stale.
+        profile_ref: String,
+    },
     /// The call failed in transport/normalization — the classified error.
     ModelError(crate::vocab::ModelError),
     /// A wire frame or event violated the closed grammar/schema.
@@ -173,6 +181,9 @@ impl std::fmt::Display for GatewayError {
             }
             GatewayError::ProbeBudgetExhausted { kind } => {
                 write!(f, "ProbeBudgetExhausted: {kind}")
+            }
+            GatewayError::ReLowerRequired { profile_ref } => {
+                write!(f, "ReLowerRequired: {profile_ref}")
             }
             GatewayError::ModelError(e) => write!(f, "{e}"),
             GatewayError::Codec(c) => write!(f, "{c}"),

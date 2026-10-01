@@ -37,6 +37,7 @@ fn inputs_for(
         fallback_profile: None,
         targets: vec![mcp_target()],
         compile_for_expired: false,
+        intent_ref: None,
     }
 }
 
@@ -239,7 +240,21 @@ fn ac_cp_06_incomplete_debt_refuses_expired_lands_in_lcd_report() {
     );
     let p = profile_with("sha256:profile", "1.0", vec![r]);
     let mut inputs = inputs_for(&sealed, &p);
+    // §5b.3: the flag alone is not intent — `intent_ref` carries the record.
     inputs.compile_for_expired = true;
+    match compile(
+        &inputs,
+        &MapProfileView::of(vec![p.clone()]),
+        &store,
+        &cat,
+        &kernel(),
+    ) {
+        Err(CompileError::LinkError { kind, .. }) => {
+            assert_eq!(kind, hh_compiler::LinkErrorKind::ExpiredWithoutIntent);
+        }
+        other => panic!("expected expired_without_intent, got {other:?}"),
+    }
+    inputs.intent_ref = Some("design/expired-intent".to_string());
     let profiles = MapProfileView::of(vec![p.clone()]);
     let bundle = compile(&inputs, &profiles, &store, &cat, &kernel()).expect("compile");
     assert!(bundle
@@ -253,6 +268,31 @@ fn ac_cp_06_incomplete_debt_refuses_expired_lands_in_lcd_report() {
         .any(|c| c.rule_id == "r-exp"
             && c.home == hh_compiler::link::ConditionedRuleHome::Profile
             && c.status == "expired"));
+    // §5b.3 — `model.profile.expired_used{profile_ref, intent_ref}` rows ride
+    // the bundle for the opening run to append.
+    let coord = hh_compiler::profile::profile_coordinate(&p);
+    assert!(bundle.expired_used.iter().any(|row| {
+        row.get("profile_ref").and_then(Json::as_str) == Some(coord.as_str())
+            && row.get("intent_ref").and_then(Json::as_str) == Some("design/expired-intent")
+    }));
+    // The member round-trips the canonical codec (and only exists for an
+    // expired compile — a clean bundle emits no `expired_used` member).
+    let j = hh_compiler::schema::bundle_to_json(&bundle);
+    assert!(j.get("expired_used").is_some());
+    let mut clean_inputs = inputs_for(&sealed, &profile_with("sha256:profile", "1.0", vec![]));
+    clean_inputs.compile_for_expired = false;
+    let clean_p = profile_with("sha256:profile", "1.0", vec![]);
+    if let Ok(clean) = compile(
+        &clean_inputs,
+        &MapProfileView::of(vec![clean_p]),
+        &store,
+        &cat,
+        &kernel(),
+    ) {
+        assert!(hh_compiler::schema::bundle_to_json(&clean)
+            .get("expired_used")
+            .is_none());
+    }
 }
 
 // ── AC-CP-10 — per-surface equivalence evidence ───────────────────────────────
@@ -394,6 +434,7 @@ fn ac_cp_11_hh_compile_produces_identical_bytes() {
         variants,
         targets: vec![mcp_target()],
         compile_for_expired: false,
+        intent_ref: None,
         // The registry's report for the bound profile travels with the inputs
         // (the binary has no registry — AC-CP-11 carries the bound views).
         test_reports: vec![hh_compiler::profile_test::ProfileTestReport::passing_for(
@@ -455,6 +496,7 @@ fn ac_cp_11_hh_compile_refuses_canonically() {
         variants,
         targets: vec![],
         compile_for_expired: false,
+        intent_ref: None,
         test_reports: vec![],
     };
     let stdin_bytes = compile_inputs_json(&wire).to_canonical_string();

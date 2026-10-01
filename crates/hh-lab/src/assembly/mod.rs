@@ -9,5 +9,6 @@ pub mod desugar;
 pub mod diff_view;
 pub mod drift;
 pub mod plan;
+pub mod profiles;
 pub mod service;
 pub mod source;

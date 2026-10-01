@@ -181,6 +181,12 @@ pub struct ModelGateway<'a> {
     /// The `normalizer_ref` stamped on usage vectors (the Model Profile's
     /// `usage_mapping` ref).
     pub normalizer_ref: String,
+    /// Profiles whose bound surface must re-lower before the next call — a
+    /// `compatibility_token` change (or any `model_version_change`
+    /// observable) marks the profile here and `open_call` refuses
+    /// `ReLowerRequired` until `mark_relowered` clears it (AC-R-2.3.3-9;
+    /// §5b.3 "re-lowering *before the next call*").
+    pub pending_relower: std::collections::BTreeSet<String>,
 }
 
 impl<'a> ModelGateway<'a> {
@@ -194,6 +200,42 @@ impl<'a> ModelGateway<'a> {
     pub fn load_dialect(&mut self, d: WireDialect) {
         self.dialects
             .insert(Self::key(&d.dialect_id, &d.version), d);
+    }
+
+    /// `check_compatibility_token(endpoint_ref, pinned_token, profile_ref,
+    /// model_id)` — run `discover` and compare the claim's
+    /// `capabilities.compatibility_token` against the profile's pinned token
+    /// (§5b.3 observable (ii), AC-R-2.3.3-9). A change mints the synthetic
+    /// `SnapshotClaim{kind: compatibility_token_changed}` *and* marks the
+    /// profile `pending_relower` — the next `open_call` under it refuses
+    /// `ReLowerRequired` until [`Self::mark_relowered`] clears the gate (the
+    /// caller runs `hh_compiler::relower` and mints
+    /// `model.surface.relowered{reason: compatibility_token_changed}` —
+    /// `runtime_plan` unchanged, asserted inside `relower`).
+    pub fn check_compatibility_token(
+        &mut self,
+        endpoint_ref: &str,
+        pinned_token: Option<&Json>,
+        profile_ref: &str,
+        model_id: &str,
+    ) -> Result<Option<crate::snapshot::SnapshotClaim>, GatewayError> {
+        let descriptor = self.transport.discover(endpoint_ref).map_err(|_| {
+            GatewayError::EndpointUnavailable {
+                endpoint: endpoint_ref.to_string(),
+            }
+        })?;
+        let claim = crate::snapshot::compatibility_token_claim(pinned_token, &descriptor, model_id);
+        if claim.is_some() {
+            self.pending_relower.insert(profile_ref.to_string());
+        }
+        Ok(claim)
+    }
+
+    /// `mark_relowered(profile_ref)` — clear the pending gate after the
+    /// compiler's `relower` produced the new surface (the `model.surface.
+    /// relowered{reason}` row is the caller's to mint).
+    pub fn mark_relowered(&mut self, profile_ref: &str) {
+        self.pending_relower.remove(profile_ref);
     }
 
     /// `open_call(request)` — validate → credential → endpoint →
@@ -212,6 +254,18 @@ impl<'a> ModelGateway<'a> {
                 dialect: Self::key(&plan.dialect_id, &plan.dialect_version),
             })?;
         codec::validate_plan(dialect, &plan)?;
+        // §5b.3/AC-R-2.3.3-9 — a `model_version_change` observable against the
+        // bound profile gates dispatch: the surface re-lowers *before the next
+        // call*, so a call under a pending profile refuses pre-dispatch (no
+        // `model.call.requested` mints — the call never happened).
+        if self
+            .pending_relower
+            .contains(&request.model_ref.profile_ref)
+        {
+            return Err(GatewayError::ReLowerRequired {
+                profile_ref: request.model_ref.profile_ref.clone(),
+            });
+        }
         self.endpoints.admit(&plan.endpoint_ref)?;
         let credential = self.credentials.bind(
             request.credential_ref.as_deref(),

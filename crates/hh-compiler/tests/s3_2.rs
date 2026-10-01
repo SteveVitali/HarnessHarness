@@ -191,6 +191,7 @@ fn inputs_multi(
             })
             .collect(),
         compile_for_expired: false,
+        intent_ref: None,
     }
 }
 

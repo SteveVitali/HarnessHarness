@@ -303,6 +303,9 @@ impl EmbedService {
         let fallback_profile = opt_str(params, "fallback_profile");
         let compile_for_expired =
             matches!(params.get("compile_for_expired"), Some(Json::Bool(true)));
+        // `intent_ref` — the Design/operator record an expired compile rides
+        // (§5b.3: `expired` requires it, else `LinkError{expired_without_intent}`).
+        let intent_ref = opt_str(params, "intent_ref");
         let kernel = self.kernel_prov.clone();
         let out = hh_compiler::compile(
             &hh_compiler::CompileInputs {
@@ -311,6 +314,7 @@ impl EmbedService {
                 fallback_profile,
                 targets,
                 compile_for_expired,
+                intent_ref,
             },
             &crate::bundle_ops::RegistryProfiles(&self.registry),
             &self.registry,

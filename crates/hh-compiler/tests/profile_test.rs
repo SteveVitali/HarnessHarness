@@ -56,6 +56,7 @@ fn compile_with(
             fallback_profile: None,
             targets: vec![mcp_target()],
             compile_for_expired: false,
+            intent_ref: None,
         },
         view,
         store,
@@ -232,6 +233,7 @@ fn ac_2_3_3_5_probe_verdicts_and_drift_gate() {
             fallback_profile: None,
             targets: vec![mcp_target()],
             compile_for_expired: true, // the recorded intent
+            intent_ref: Some("design/expired-intent".to_string()),
         },
         &drifted,
         &store,
@@ -259,6 +261,7 @@ fn ac_2_3_3_2_fallback_used_recorded() {
             fallback_profile: Some(profile_coordinate(&p)),
             targets: vec![mcp_target()],
             compile_for_expired: false,
+            intent_ref: None,
         },
         &view,
         &store,
