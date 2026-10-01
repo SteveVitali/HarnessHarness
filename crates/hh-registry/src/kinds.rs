@@ -175,6 +175,13 @@ impl RecordKind {
                 // The typed sealed-definition record (R-2.10.1/S3.5 — `hh-hir`
                 // owns the schema; `hh_hir::wire::sealed_*` is the one codec).
                 | RecordKind::SealedDefinition
+                // Opaque bodies whose schemas live in `hh-compiler` (above this
+                // crate — the same layering as `Participant`): the registry
+                // stores the canonical Json verbatim and gates the `kind` tag
+                // (R-2.11.4/S4.12 — `profile show/status` resolve through the
+                // same `resolve`/`query` machinery as every other record).
+                | RecordKind::ModelProfile
+                | RecordKind::ProfileTestReport
         )
     }
 

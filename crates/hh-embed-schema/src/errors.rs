@@ -109,6 +109,9 @@ pub enum EmbedError {
     EnvironmentUnavailable { reason: String },
     /// The named capability is not bound in this run.
     UnknownCapability { capability: String },
+    /// `set_coordinate` named a coordinate outside the session's declared
+    /// coordinate space — never silently ignored (ADR-0177 D10; S4.12).
+    UnknownCoordinate { coordinate: String },
     // ── Transport (binding-level; may be added, never removed) ──────────
     /// A bounded in-process queue saturated (binding (a)).
     Overloaded,
@@ -159,6 +162,7 @@ impl EmbedError {
             EmbedError::Fenced { .. } => 1504,
             EmbedError::EnvironmentUnavailable { .. } => 1600,
             EmbedError::UnknownCapability { .. } => 1601,
+            EmbedError::UnknownCoordinate { .. } => 1602,
             EmbedError::Overloaded => 1700,
             EmbedError::Disconnected => 1701,
             EmbedError::Timeout => 1702,
@@ -204,6 +208,7 @@ impl EmbedError {
             EmbedError::Fenced { .. } => "Fenced",
             EmbedError::EnvironmentUnavailable { .. } => "EnvironmentUnavailable",
             EmbedError::UnknownCapability { .. } => "UnknownCapability",
+            EmbedError::UnknownCoordinate { .. } => "UnknownCoordinate",
             EmbedError::Overloaded => "Overloaded",
             EmbedError::Disconnected => "Disconnected",
             EmbedError::Timeout => "Timeout",
@@ -310,6 +315,9 @@ impl EmbedError {
             }
             EmbedError::UnknownCapability { capability } => {
                 format!("unknown capability {capability}")
+            }
+            EmbedError::UnknownCoordinate { coordinate } => {
+                format!("unknown coordinate {coordinate}")
             }
             EmbedError::Overloaded => "binding overloaded".into(),
             EmbedError::Disconnected => "binding disconnected".into(),
@@ -432,6 +440,9 @@ impl EmbedError {
             EmbedError::EnvironmentUnavailable { reason } => {
                 put(&mut m, "reason", Json::str(reason.clone()));
             }
+            EmbedError::UnknownCoordinate { coordinate } => {
+                put(&mut m, "coordinate", Json::str(coordinate.clone()));
+            }
             EmbedError::NotInitialized
             | EmbedError::SecretInPayload
             | EmbedError::UnknownSession
@@ -487,6 +498,7 @@ pub const ALL_ERROR_KINDS: &[&str] = &[
     "Fenced",
     "EnvironmentUnavailable",
     "UnknownCapability",
+    "UnknownCoordinate",
     "Overloaded",
     "Disconnected",
     "Timeout",

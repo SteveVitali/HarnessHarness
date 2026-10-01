@@ -1493,7 +1493,12 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         // registry stores the canonical Json verbatim (same layering).
         RegistryRecord::Participant(b)
         | RegistryRecord::Adapter(b)
-        | RegistryRecord::LeaderboardDefinition(b) => b.clone(),
+        | RegistryRecord::LeaderboardDefinition(b)
+        // The opaque compiler-owned bodies (`ModelProfile/1` view /
+        // `ProfileTestReport`) — `hh-compiler` owns the schemas (same
+        // layering); the registry stores the canonical Json verbatim.
+        | RegistryRecord::ModelProfile(b)
+        | RegistryRecord::ProfileTestReport(b) => b.clone(),
         // The sealed-definition body — `hh-hir` owns the schema
         // (`sealed_definition_json`; like `Capability`, the `semantic` flag is
         // irrelevant: the document's own codec splits identity).
@@ -1636,9 +1641,14 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
             }
             Ok(RegistryRecord::EnvironmentRecord(j.clone()))
         }
-        RecordKind::Participant | RecordKind::Adapter | RecordKind::LeaderboardDefinition => {
+        RecordKind::Participant
+        | RecordKind::Adapter
+        | RecordKind::LeaderboardDefinition
+        | RecordKind::ModelProfile
+        | RecordKind::ProfileTestReport => {
             // Opaque body, structural gate only — `hh-hosting` owns the §6.6
-            // schemas, `hh-results` the §6.5 `LeaderboardDefinition` schema
+            // schemas, `hh-results` the §6.5 `LeaderboardDefinition` schema,
+            // `hh-compiler` the `ModelProfile/1` + `ProfileTestReport` schemas
             // (same layering as `EnvironmentRecord`). The registry requires
             // the body's `kind` tag to match the record kind so a mistagged
             // body can never register under the wrong kind.
@@ -1658,9 +1668,26 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
                     })
                 }
             }
+            // The payload member — the owner-schema document the body wraps.
+            // A record whose payload is absent/not-an-object is refused at the
+            // gate (CC3 — the registry never stores a profile shell the owner
+            // could not have produced).
+            let payload_member = match kind {
+                RecordKind::ModelProfile => "profile",
+                RecordKind::ProfileTestReport => "report",
+                _ => "",
+            };
+            if !payload_member.is_empty() && !matches!(j.get(payload_member), Some(Json::Obj(_))) {
+                return Err(RegistryError::SchemaViolation {
+                    path: format!("record.{payload_member}"),
+                    detail: format!("{want} body must carry a {payload_member} object"),
+                });
+            }
             match kind {
                 RecordKind::Participant => Ok(RegistryRecord::Participant(j.clone())),
                 RecordKind::Adapter => Ok(RegistryRecord::Adapter(j.clone())),
+                RecordKind::ModelProfile => Ok(RegistryRecord::ModelProfile(j.clone())),
+                RecordKind::ProfileTestReport => Ok(RegistryRecord::ProfileTestReport(j.clone())),
                 _ => Ok(RegistryRecord::LeaderboardDefinition(j.clone())),
             }
         }

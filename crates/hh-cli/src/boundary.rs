@@ -182,3 +182,41 @@ impl Drop for ProcessBoundary {
         let _ = self.child.wait();
     }
 }
+
+/// `BoundaryEmbedCall` — the `hh-acp` `EmbedCall` seam over the CLI's
+/// one `Boundary` (S4.12; §7.4): the ACP `EmbedDriver` rides the same
+/// binding every other verb does — `op`/`params` in, `result` out;
+/// a typed kernel refusal (`CliError::Kernel`) maps back to the
+/// contract's error envelope `{kind, code, message, data}`, and a
+/// transport failure maps to `kind:"transport"` (the driver only ever
+/// reads `kind` — never a CLI-specific error type, CC5).
+pub struct BoundaryEmbedCall<'a> {
+    /// The live boundary the command opened.
+    b: &'a mut dyn Boundary,
+}
+
+impl<'a> BoundaryEmbedCall<'a> {
+    /// `new(b)` — borrow the command's boundary for the serve loop's
+    /// lifetime (one `hh` invocation, one live channel).
+    pub fn new(b: &'a mut dyn Boundary) -> Self {
+        Self { b }
+    }
+}
+
+impl hh_acp::EmbedCall for BoundaryEmbedCall<'_> {
+    fn call(&mut self, op: &str, params: Json) -> Result<Json, Json> {
+        self.b.call(op, &params).map_err(|e| match e {
+            CliError::Kernel(k) => Json::obj([
+                ("kind", Json::str(k.kind.clone())),
+                ("code", Json::Int(k.code)),
+                ("message", Json::str(k.message.clone())),
+                ("data", k.data.clone()),
+            ]),
+            other => Json::obj([
+                ("kind", Json::str("transport")),
+                ("code", Json::Int(-32000)),
+                ("message", Json::str(format!("{other:?}"))),
+            ]),
+        })
+    }
+}

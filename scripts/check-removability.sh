@@ -203,3 +203,49 @@ print('hh-mcp-lab is edge-free upward; removing the crate removes the feature')
 "
 
 echo "check-removability: S4.11 mcp-lab surface boundary verified"
+
+
+echo "== removability(S4.12): C1 embedding/SDK surface — hh-cli + hh-acp are leaf consumers =="
+# §7.1/§7.4 CC6: the CLI + ACP surface family is a removable slice — the
+# only normal consumers of `hh-acp`/`hh-cli` are the surfaces themselves
+# (dev-deps don't ship); both consume only kernel-side crates and drive
+# `hh-embed/1` through the declared boundary, never the reverse. The
+# schema (CC7 single source) is unchanged by the surfaces' absence:
+# `hh-embed/1` ops stay declared regardless of who fronts them.
+cargo metadata --format-version 1 --no-deps | python3 -c "
+import json,sys
+meta=json.load(sys.argv[1]) if len(sys.argv)>1 else json.load(sys.stdin)
+normal=lambda d: d.get('kind') in (None,'normal')
+bad=[]
+surfaces={'hh-acp','hh-cli'}
+for pkg in meta['packages']:
+    name=pkg['name']
+    for d in pkg['dependencies']:
+        if not normal(d):
+            continue
+        if d['name'] in surfaces and name not in surfaces:
+            bad.append(name + ' -> ' + d['name'] + ' (a kernel/base crate may not consume the surface)')
+        if name in surfaces and d['name'] == name:
+            bad.append(name + ' self-edge')
+# The surfaces may only sit ABOVE the kernel boundary — they never reach
+# into another surface/extension tier crate.
+allowed_deps = {
+    'hh-wire','hh-identity','hh-ledger','hh-embed','hh-embed-schema',
+    'hh-embed-client-generated','hh-mcp','hh-env','hh-budget','hh-telemetry',
+    'hh-ontology','hh-provenance','hh-hir','hh-assembly','hh-compiler',
+    'hh-bundle','hh-registry','hh-acp',
+}
+for pkg in meta['packages']:
+    if pkg['name'] not in surfaces:
+        continue
+    for d in pkg['dependencies']:
+        if normal(d) and d['name'] not in allowed_deps:
+            bad.append(pkg['name'] + ' -> ' + d['name'] + ' (surface depends on a non-kernel crate)')
+if bad:
+    print('cli/acp removability violations:')
+    for b in bad: print('  ' + b)
+    sys.exit(1)
+print('hh-cli + hh-acp are edge-free upward; removing the pair removes the feature')
+"
+
+echo "check-removability: S4.12 cli/acp surface boundary verified"

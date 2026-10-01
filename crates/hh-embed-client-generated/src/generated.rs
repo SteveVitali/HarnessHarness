@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:5a15adfa116205368e5f8153f71816a7542e05320ec38eaed29fef0d3766f2c9";
+    "sha256:9fe947f38bf344f954ebb09f236c2489aa5e1bb4de3e53c402e7a3e0e4d2a413";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -2866,6 +2866,7 @@ pub struct OpenSessionParams {
     pub idempotency_key: String,
     pub invocation: Option<InvocationRecord>,
     pub client: Option<ClientDecl>,
+    pub contract_json: Option<Json>,
 }
 
 impl OpenSessionParams {
@@ -2878,6 +2879,9 @@ impl OpenSessionParams {
         }
         if let Some(v) = &self.client {
             pairs.push(("client", v.to_json()));
+        }
+        if let Some(v) = &self.contract_json {
+            pairs.push(("contract_json", v.clone()));
         }
         Json::obj(pairs)
     }
@@ -2906,6 +2910,10 @@ impl OpenSessionParams {
                 Some(f) => Some(ClientDecl::from_json(f).map_err(|e| e)?),
                 None => None,
             },
+            contract_json: match v.get("contract_json") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
         })
     }
 }
@@ -2923,6 +2931,7 @@ pub enum OpenSpec {
         attendance: AttendanceDeclaration,
         approval_mode: Option<String>,
         spawn_event: Option<SpawnEventRef>,
+        notification_sink: Option<String>,
     },
     Resume {
         run_id: String,
@@ -2951,6 +2960,7 @@ impl OpenSpec {
                 attendance,
                 approval_mode,
                 spawn_event,
+                notification_sink,
             } => {
                 pairs.push(("kind", Json::str("new")));
                 pairs.push(("definition", definition.to_json()));
@@ -2977,6 +2987,9 @@ impl OpenSpec {
                 }
                 if let Some(v) = spawn_event {
                     pairs.push(("spawn_event", v.to_json()));
+                }
+                if let Some(v) = notification_sink {
+                    pairs.push(("notification_sink", Json::str(v.clone())));
                 }
             }
             OpenSpec::Resume {
@@ -3069,6 +3082,14 @@ impl OpenSpec {
                 },
                 spawn_event: match v.get("spawn_event") {
                     Some(f) => Some(SpawnEventRef::from_json(f).map_err(|e| e)?),
+                    None => None,
+                },
+                notification_sink: match v.get("notification_sink") {
+                    Some(f) => Some(
+                        f.as_str()
+                            .map(|s| s.to_string())
+                            .ok_or_else(|| "expected string".to_string())?,
+                    ),
                     None => None,
                 },
             }),
@@ -5796,6 +5817,7 @@ pub fn error_code_for(kind: &str) -> Option<i64> {
         "Fenced" => 1504,
         "EnvironmentUnavailable" => 1600,
         "UnknownCapability" => 1601,
+        "UnknownCoordinate" => 1602,
         "Overloaded" => 1700,
         "Disconnected" => 1701,
         "Timeout" => 1702,
@@ -6422,6 +6444,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.assembly.compile` → `json` (see the contract registry).
+    pub fn lab_assembly_compile(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.assembly.compile", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.assembly.diff` → `json` (see the contract registry).
     pub fn lab_assembly_diff(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.assembly.diff", params.clone())?;
@@ -6927,6 +6955,15 @@ impl<R: BufRead, W: Write> Client<R, W> {
     pub fn run_index(&mut self, params: &RunIndexParams) -> Result<Json, ClientError> {
         let raw = self.call("run_index", params.to_json())?;
         Ok(raw)
+    }
+
+    /// `set_coordinate` → `Recorded` (see the contract registry).
+    pub fn set_coordinate(
+        &mut self,
+        params: &SetCoordinateParams,
+    ) -> Result<Recorded, ClientError> {
+        let raw = self.call("set_coordinate", params.to_json())?;
+        Recorded::from_json(&raw).map_err(ClientError::Transport)
     }
 
     /// `steer` → `Accepted` (see the contract registry).

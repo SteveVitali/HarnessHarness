@@ -93,3 +93,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0301](ADR-0301-s4.10-binding-c-local-network-rulings.md) | S4.10 binding (c) `local_network` rulings | S4.10 | Accepted |
 | [ADR-0302](ADR-0302-s4.10-web-surface-rulings.md) | S4.10 `hh-web` surface rulings | S4.10 | Accepted |
 | [ADR-0303](ADR-0303-s4.11-mcp-lab-surface-rulings.md) | S4.11 `hh-mcp-lab` surface rulings | S4.11 | Accepted |
+| [ADR-0304](ADR-0304-s4.12-embed-sdk-cli-surface-rulings.md) | S4.12 `hh-embed/1` SDK + CLI surface rulings | S4.12 | Accepted |

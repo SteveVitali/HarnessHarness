@@ -149,6 +149,11 @@ fn launch_run(
             .get("approval_mode")
             .and_then(Json::as_str)
             .map(String::from),
+        // Launch-spawned children have no sink at C1 — an `async`
+        // attendance defers to nothing and its asks deny under
+        // `unattended_deny` (ADR-0304 D-2's honest refusal, never a
+        // fabricated sink).
+        notification_sink: None,
         workspace_trust: None,
         narrowing_leaves: vec![],
         // THE CAUSAL CARRIER — the child's `RunManifest.spawn_event` =

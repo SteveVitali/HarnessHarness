@@ -448,7 +448,32 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
-        staged_exp("set_coordinate", "W", "SetCoordinateParams", "Recorded"),
+        // `set_coordinate` is implemented (S4.12; §7.4; ADR-0177 D10;
+        // AC-R-2.11.4-14): `model` re-lowers the bound profile
+        // (`relower` + `model.surface.relowered` before the coordinate
+        // applies); a name outside the run's coordinate space is
+        // `UnknownCoordinate` — never silently ignored (T-13).
+        OpSpec {
+            tier: Tier::Experimental,
+            implemented: true,
+            ..call(
+                "set_coordinate",
+                "W",
+                "SetCoordinateParams",
+                "Recorded",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownCoordinate",
+                    "UnresolvedRef",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
         // `coherent_fork_points` is implemented (S2.9) — the pure
         // coherence projection over the run's WAL (AC-R-2.2.4-1).
         OpSpec {
@@ -761,7 +786,10 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.assembly.drift", "L", "json", "json"),
         labi("lab.assembly.adopt", "L", "json", "json"),
         labi("lab.assembly.identity", "L", "json", "json"),
-        lab("lab.assembly.compile", "L", "json", "json"),
+        // `lab.assembly.compile` is implemented (S4.12) — the
+        // definition→bundle compile `lab.serve`'s on-demand arm and
+        // external tooling share; records-in/records-out, no lift.
+        labi("lab.assembly.compile", "L", "json", "json"),
         labi("lab.registry.register", "L", "json", "json"),
         labi("lab.registry.publish", "L", "json", "json"),
         labi("lab.registry.resolve", "L", "json", "json"),

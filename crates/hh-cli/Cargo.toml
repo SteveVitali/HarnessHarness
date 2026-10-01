@@ -19,6 +19,10 @@ path = "src/main.rs"
 hh-embed-client-generated = { path = "../hh-embed-client-generated" }
 hh-wire = { path = "../hh-wire" }
 hh-identity = { path = "../hh-identity" }
+# S4.12 — the `hh acp` verb: the ACP artefact + `serve_session`/`EmbedDriver`
+# are surface records-in/records-out code (no kernel reach — the driver
+# speaks `hh-embed/1` through the same `Boundary` every verb uses, K-2).
+hh-acp = { path = "../hh-acp" }
 
 [dev-dependencies]
 # The in-process service, for the binding-(a) conformance suite — the same
@@ -33,3 +37,7 @@ hh-ontology = { path = "../hh-ontology" }
 hh-bundle = { path = "../hh-bundle" }
 hh-mcp = { path = "../hh-mcp" }
 hh-provenance = { path = "../hh-provenance" }
+# Test-only — the S4.12 `profile`/`serve`/`acp` tests mint
+# `ModelProfile/1` records whose `content_hash` recomputes; `hh` itself
+# never links the compiler (K-2: lowering is the service's job).
+hh-compiler = { path = "../hh-compiler" }
