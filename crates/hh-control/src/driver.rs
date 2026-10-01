@@ -2739,6 +2739,84 @@ mod tests {
         }
     }
 
+    /// S3.9 / AC-R-2.5.2-7 (run half): a parser-detected `SurfaceFailure`
+    /// (`unparseable`) lands **both** rows — the §5e.2 control-plane
+    /// `control.output.rejected` (drives `format_failures_running`) and the
+    /// §5d.2 action-plane `action.tool.surface_rejected` with the full
+    /// payload — and no `Effect`/`action.tool.{started,completed}` exists.
+    #[test]
+    fn ac_e2_7_unparseable_call_dual_emits_surface_rejected() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver = Driver::open_react(
+            &ctx(),
+            policy,
+            &mut sink,
+            DriverConfig {
+                surfaces: vec![fs_read_surface()],
+                ..DriverConfig::default()
+            },
+        )
+        .unwrap();
+        let mut model = ScriptedModel {
+            script: [
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-bad".into(),
+                        surface: "fs.read".into(),
+                        args_raw: "{not json".into(),
+                    }],
+                ),
+                outcome(hh_gateway::vocab::StopReason::EndTurn, vec![]),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let r = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        let _ = r;
+        let sr: Vec<_> = sink
+            .events
+            .iter()
+            .filter(|e| e.class == "action.tool.surface_rejected")
+            .collect();
+        assert_eq!(sr.len(), 1, "exactly one surface_rejected row: {sr:?}");
+        let p = &sr[0].payload;
+        assert_eq!(
+            p.get("failure_class").and_then(Json::as_str),
+            Some("unparseable")
+        );
+        assert_eq!(p.get("surface_id").and_then(Json::as_str), Some("fs.read"));
+        assert_eq!(p.get("binding_ref").and_then(Json::as_str), Some("fs.read"));
+        assert!(p.get("raw_call_hash").and_then(Json::as_str).is_some());
+        assert!(p.get("model_call_id").and_then(Json::as_str).is_some());
+        assert!(p.get("rendering_ref").is_some(), "member present (null)");
+        // No rejected bytes ride the row (ADR-0066 Rule C).
+        assert!(p.get("args").is_none() && p.get("args_raw").is_none());
+        // The control-plane row still lands beside it.
+        assert!(sink
+            .events
+            .iter()
+            .any(|e| e.class == "control.output.rejected"
+                && e.payload.get("failure_class").and_then(Json::as_str) == Some("unparseable")));
+        // No `Effect` record, no tool-call execution rows.
+        assert!(sink
+            .events
+            .iter()
+            .all(|e| !e.class.starts_with("action.effect.")));
+        assert!(sink
+            .events
+            .iter()
+            .all(|e| e.class != "action.tool.started" && e.class != "action.tool.completed"));
+    }
+
     #[test]
     fn ac5c_identical_calls_stop_loop_detected() {
         let mut sink = MemSink {

@@ -50,6 +50,9 @@ pub enum MetricUnit {
     CountMap,
     /// A `Money`/attribution structure.
     Attribution,
+    /// An integer-millisecond distribution `{stratum: {n, min, p50, p95,
+    /// max}}` (nearest-rank; a realised value, never an interpolated one).
+    DistributionMs,
 }
 
 impl MetricUnit {
@@ -63,6 +66,7 @@ impl MetricUnit {
             MetricUnit::Tokens => "tokens",
             MetricUnit::CountMap => "count_map",
             MetricUnit::Attribution => "attribution",
+            MetricUnit::DistributionMs => "ms",
         }
     }
 }
@@ -103,9 +107,10 @@ impl ProcessMetric {
     /// the single complete form of ADR-0045 D1, CF-094).
     pub fn declaration(&self) -> MetricDeclaration {
         let value_type = match self.unit {
-            MetricUnit::Tokens | MetricUnit::CountMap | MetricUnit::Attribution => {
-                MetricValueType::Vector
-            }
+            MetricUnit::Tokens
+            | MetricUnit::CountMap
+            | MetricUnit::Attribution
+            | MetricUnit::DistributionMs => MetricValueType::Vector,
             _ => MetricValueType::Decimal,
         };
         MetricDeclaration {
@@ -181,6 +186,14 @@ pub const PROCESS_METRICS: &[ProcessMetric] = &[
         unit: MetricUnit::Tokens, fold: N(NA::Capability) }, // tokens_before/after fields are §05c's
     ProcessMetric { name: "harness_overhead_share", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["measurement.cost.attributed"], unit: MetricUnit::Ppm, fold: C },
+    // `harness_overhead.execution_ms` — the helper-boundary M-point
+    // (AC-R-2.5.5-11; S3.9): per-effect `execution_ms` stamped on
+    // `action.tool.completed`, folded into a distribution stratified on
+    // `(executor_class, isolation_class)`. §5d.5 §8 renders hosted rows
+    // `n/a{observability}` — the declaration requires `ledger` (a hosted
+    // participant never produces dispatch-plane rows).
+    ProcessMetric { name: "harness_overhead.execution_ms", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: BOTH,
+        computed_from: &["action.tool.completed"], unit: MetricUnit::DistributionMs, fold: C },
     ProcessMetric { name: "model_calls", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["model.call.requested"], unit: MetricUnit::Count, fold: C },
     ProcessMetric { name: "tool_calls", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
@@ -494,6 +507,7 @@ mod tests {
             "tool_calls",
             "retries",
             "harness_overhead_share",
+            "harness_overhead.execution_ms",
             "latency_e2e_ms",
             "ttft_ms",
             "ttfm_ms",

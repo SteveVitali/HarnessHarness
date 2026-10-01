@@ -2747,8 +2747,9 @@ fn lab_registry_gates_still_hold() {
     let e = call(&mut svc, "lab.registry.query", Json::Obj(BTreeMap::new()));
     assert_eq!(err_kind(&e), "NotInitialized");
     lab_hello(&mut svc);
-    // import/export remain stage-pending — declared, unrouted to a body.
-    let e = call(&mut svc, "lab.registry.import", Json::Obj(BTreeMap::new()));
+    // export remains stage-pending — declared, unrouted to a body.
+    // (`import`/`refresh` are live at S3.9 — exercised below.)
+    let e = call(&mut svc, "lab.registry.export", Json::Obj(BTreeMap::new()));
     assert_eq!(err_kind(&e), "Refused");
     assert_eq!(
         e.get("error")
@@ -2756,6 +2757,160 @@ fn lab_registry_gates_still_hold() {
             .and_then(|d| d.get("reason"))
             .and_then(Json::as_str),
         Some("stage_pending")
+    );
+}
+
+/// A `hh-mcp-listing/1` document over one wire `Tool`.
+fn mcp_listing(server_ref: &str, tools: Vec<Json>) -> Json {
+    Json::obj([
+        ("schema", Json::str("hh-mcp-listing/1")),
+        ("server_ref", Json::str(server_ref)),
+        (
+            "listing_hash",
+            Json::str(hh_identity::idp_id(
+                "mcp.listing",
+                Json::Arr(tools.clone()).to_canonical_string().as_bytes(),
+            )),
+        ),
+        (
+            "tools",
+            Json::Arr(
+                tools
+                    .into_iter()
+                    .map(|t| Json::obj([("tool", t)]))
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+fn wire_tool(name: &str, desc: &str) -> Json {
+    Json::obj([
+        ("name", Json::str(name)),
+        ("description", Json::str(desc)),
+        (
+            "inputSchema",
+            Json::obj([
+                ("type", Json::str("object")),
+                (
+                    "properties",
+                    Json::obj([("path", Json::obj([("type", Json::str("string"))]))]),
+                ),
+            ]),
+        ),
+    ])
+}
+
+/// AC-R-2.5.1-11 — the live `lab.registry.import`/`refresh` boundary:
+/// a `hh-mcp-listing/1` document registers one `ToolCapabilityRecord`
+/// per wire tool (`unverified`, quarantined — the `mcp_listing`
+/// admission rule), publishes `local/mcp/{server_ref}/{name}` and
+/// `refresh` diffs name-keyed with `surface_only | semantic`
+/// classification.
+#[test]
+fn lab_registry_import_refresh_round_trip() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+
+    let listing = mcp_listing("srv:lab", vec![wire_tool("search", "v1")]);
+    let r = call(
+        &mut svc,
+        "lab.registry.import",
+        Json::obj([("listing", listing), ("registrar", registrar())]),
+    );
+    let out = ok(&r);
+    assert_eq!(
+        out.get("declared_unverified").and_then(|v| match v {
+            Json::Arr(l) => l.first().and_then(Json::as_str),
+            _ => None,
+        }),
+        Some("search"),
+        "foreign tool lifts unverified"
+    );
+    assert_eq!(
+        out.get("losses").and_then(|v| match v {
+            Json::Arr(l) => Some(l.len()),
+            _ => None,
+        }),
+        Some(3),
+        "the exact AC-R-2.5.1-5 loss list"
+    );
+    let vid = out
+        .get("refs")
+        .and_then(|v| match v {
+            Json::Arr(l) => l.first().cloned(),
+            _ => None,
+        })
+        .and_then(|v| {
+            v.get("version_id")
+                .and_then(Json::as_str)
+                .map(str::to_string)
+        })
+        .expect("import returns refs");
+    // The publish row is on the lineage view.
+    let r = call(
+        &mut svc,
+        "lab.registry.lineage",
+        Json::obj([("version_id", Json::str(vid.clone()))]),
+    );
+    let view = ok(&r);
+    assert!(
+        view.get("name_history").is_some(),
+        "the publish row is on the lineage view"
+    );
+
+    // refresh — an identical listing is a no-op.
+    let listing = mcp_listing("srv:lab", vec![wire_tool("search", "v1")]);
+    let r = call(
+        &mut svc,
+        "lab.registry.refresh",
+        Json::obj([("listing", listing), ("registrar", registrar())]),
+    );
+    let out = ok(&r);
+    assert_eq!(
+        out.get("unchanged").and_then(|v| match v {
+            Json::Arr(l) => l.first().and_then(Json::as_str),
+            _ => None,
+        }),
+        Some("search")
+    );
+
+    // refresh — a semantic change (inputSchema) supersedes as `semantic`.
+    let changed = Json::obj([
+        ("name", Json::str("search")),
+        ("description", Json::str("v1")),
+        (
+            "inputSchema",
+            Json::obj([
+                ("type", Json::str("object")),
+                (
+                    "properties",
+                    Json::obj([("other", Json::obj([("type", Json::str("string"))]))]),
+                ),
+            ]),
+        ),
+    ]);
+    let listing = mcp_listing("srv:lab", vec![changed]);
+    let r = call(
+        &mut svc,
+        "lab.registry.refresh",
+        Json::obj([("listing", listing), ("registrar", registrar())]),
+    );
+    let out = ok(&r);
+    let sup = out
+        .get("superseded")
+        .and_then(|v| match v {
+            Json::Arr(l) => l.first().cloned(),
+            _ => None,
+        })
+        .expect("superseded row");
+    assert_eq!(
+        sup.get("classification").and_then(Json::as_str),
+        Some("semantic")
+    );
+    assert_eq!(
+        sup.get("prev_version_id").and_then(Json::as_str),
+        Some(vid.as_str())
     );
 }
 

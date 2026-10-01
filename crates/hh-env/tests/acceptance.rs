@@ -463,6 +463,10 @@ struct MockExecutor {
     fail: Option<String>,
     verdict: ProbeVerdict,
     writes: Vec<(String, String)>,
+    /// When set, `execute` advances the store's `ManualClock` 42 ms — the
+    /// measured execution window the `harness_overhead.execution_ms` M-point
+    /// reads (deterministic; never wall time).
+    clock: Option<ManualClock>,
 }
 
 fn report_ok() -> TerminalReport {
@@ -525,6 +529,7 @@ impl MockExecutor {
             fail: None,
             verdict: ProbeVerdict::Undeterminable,
             writes: vec![],
+            clock: None,
         }
     }
 }
@@ -539,6 +544,9 @@ impl ToolExecutor for MockExecutor {
         sink: &mut dyn FnMut(ExecutorSignal),
     ) -> Result<TerminalReport, EnvError> {
         self.calls.set(self.calls.get() + 1);
+        if let Some(c) = &self.clock {
+            c.advance(42);
+        }
         for (path, bytes) in &self.writes {
             std::fs::write(path, bytes).unwrap();
         }
@@ -2174,4 +2182,138 @@ fn ac_r_2_8_2_admission_stamps_observed_and_recorded() {
         .find(|e| e.class == "action.effect.observed")
         .unwrap();
     assert!(observed2.payload.get("admission").is_none());
+}
+
+// ── AC-R-2.5.5-11 (S3.9 slice) — the helper-overhead M-point ─────────────────
+//
+// `harness_overhead.execution_ms` per effect: the dispatcher stamps
+// `{execution_ms, executor_class, isolation_class}` on `action.tool.completed`
+// — the `started → completed` window measured on the store's clock
+// (deterministic under `ManualClock`), stratified on the capability record's
+// own `execution_requirement` declaration (never the executor's self-report).
+#[test]
+fn ac_r_2_5_5_11_completed_carries_execution_ms_overhead_members() {
+    let (mut store, run, lease, clock) = open("overhead");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("overhead");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let mut cap = capability(EffectDomain::FsWrite, reversible_attrs(), scope_bindings());
+    cap.execution_requirement = Json::obj([
+        ("environment_class", Json::str("sandbox_helper")),
+        ("isolation_min", Json::str("process")),
+    ]);
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [11u8; 32], DetectorSet::default());
+    // The executor's clock advance is the measured window — 42 ms exactly.
+    let mut exec = MockExecutor {
+        clock: Some(clock),
+        ..MockExecutor::ok()
+    };
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        Json::obj([
+            ("path", Json::str(format!("{}/a.txt", ws.display()))),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::FsWrite,
+            attributes: Some(reversible_attrs()),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(matches!(out, DispatchOutcome::Observed(_)), "{out:?}");
+    let envs = read_all(disp.store_mut(), &run);
+    let completed = envs
+        .iter()
+        .find(|e| e.class == "action.tool.completed")
+        .expect("a completed row");
+    assert_eq!(
+        completed.payload.get("execution_ms").and_then(Json::as_int),
+        Some(42)
+    );
+    assert_eq!(
+        completed
+            .payload
+            .get("executor_class")
+            .and_then(Json::as_str),
+        Some("sandbox_helper")
+    );
+    assert_eq!(
+        completed
+            .payload
+            .get("isolation_class")
+            .and_then(Json::as_str),
+        Some("process")
+    );
+}
+
+// ── AC-R-2.5.2-7 (run half) — an unparseable/unmapped call yields ─────────
+// `action.tool.surface_rejected` and no `Effect` record (§5d.2; ADR-0092 D5).
+
+#[test]
+fn ac_e2_7_unmapped_call_is_surface_rejected_never_an_effect() {
+    let (mut store, run, lease, _clock) = open("surf-rej");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("surf-rej");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(EffectDomain::FsRead, read_only_attrs(), scope_bindings());
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [9u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    // `bogus` is absent from the binding's `arg_map` — `UnmappedArgument`.
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        Json::obj([("bogus", Json::Int(1))]),
+        EffectClass {
+            domain: EffectDomain::FsRead,
+            attributes: Some(read_only_attrs()),
+        },
+    );
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(
+        matches!(out, DispatchOutcome::Refused { ref reason } if reason.contains("arg_eval")),
+        "{out:?}"
+    );
+    assert_eq!(exec.calls.get(), 0, "a surface failure never executes");
+    let envs = read_all(disp.store_mut(), &run);
+    let sr = envs
+        .iter()
+        .find(|e| e.class == "action.tool.surface_rejected")
+        .expect("the surface_rejected row");
+    let p = &sr.payload;
+    assert_eq!(
+        p.get("failure_class").and_then(Json::as_str),
+        Some("unmapped_argument")
+    );
+    assert_eq!(p.get("model_call_id").and_then(Json::as_str), Some("mc-1"));
+    assert!(p.get("surface_id").and_then(Json::as_str).is_some());
+    assert!(p.get("binding_ref").and_then(Json::as_str).is_some());
+    assert!(p.get("raw_call_hash").and_then(Json::as_str).is_some());
+    // The call bytes are never ledgered — content by hash only.
+    assert!(p.get("args").is_none() && p.get("surface_args").is_none());
+    // No `Effect` record, no `action.tool.rejected` — the failure is a
+    // `SurfaceFailure`, closed by `surface_rejected` alone.
+    assert!(
+        envs.iter().all(|e| !e.class.starts_with("action.effect.")),
+        "{envs:?}"
+    );
+    assert!(envs.iter().all(|e| e.class != "action.tool.rejected"));
 }

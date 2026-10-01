@@ -1286,6 +1286,92 @@ pub fn adopt(
     }
 }
 
+// ── sync_source (§5d.3 §2; R-2.5.4⁰ — ticket S3.9) ───────────────────────────
+
+/// The `sync_source` result: the emitted `action.tool.catalog.delta`
+/// payload (always produced — empty deltas included), the
+/// drift-policy outcome and, on `adopt`, the `action.tool.catalog.epoch`
+/// payload. The caller appends both rows to the run ledger.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SyncOutcome {
+    /// The computed delta.
+    pub delta: CatalogDelta,
+    /// The `action.tool.catalog.delta` payload (`delta.to_json()`).
+    pub delta_event: Json,
+    /// `Frozen`/`Adopted` (or `Refused` under `drift_policy = ask`) —
+    /// the source row's `snapshot_hash`/`ttl`/`listened` are updated on
+    /// either catalog (`catalog_id` is over the entry set, so a source
+    /// refresh never rewrites it under freeze — I-EPOCH).
+    pub outcome: Result<AdoptOutcome, CatalogDriftError>,
+    /// The `action.tool.catalog.epoch` payload, when adopted.
+    pub epoch_event: Option<Json>,
+}
+
+/// `sync_source(catalog, source_ref, cause, listing, source_state,
+/// drift_policy, adopted_by)` (§5d.3 §2): all six `SyncTrigger`s drive
+/// the same path — `catalog_delta` against the source's current entries,
+/// then `adopt`/`freeze`. The listing arrives already lowered to
+/// `CatalogEntry`s (the MCP edge's `import_listing`/`lift` half is
+/// R-2.5.4/S3.9's `hh-mcp` + `hh-registry` work). `source_state` is the
+/// post-refresh row (`snapshot_hash` = the new `listing_hash`).
+///
+/// Every call emits `action.tool.catalog.delta` — including the empty
+/// delta (a refresh that changes nothing is still a synchronization
+/// record).
+pub fn sync_source(
+    catalog: &Catalog,
+    source_ref: &str,
+    cause: SyncTrigger,
+    listing: &[CatalogEntry],
+    source_state: &SourceState,
+    drift_policy: DriftPolicy,
+    adopted_by: &str,
+) -> SyncOutcome {
+    let delta = catalog_delta(catalog, source_ref, cause, listing);
+    let delta_event = delta.to_json();
+    let outcome = adopt(catalog, &delta, drift_policy, adopted_by);
+    let epoch_event = match &outcome {
+        Ok(AdoptOutcome::Adopted { epoch, .. }) => Some(Json::obj([
+            ("epoch", Json::Int(epoch.epoch as i64)),
+            ("catalog_id_prev", Json::str(epoch.catalog_id_prev.clone())),
+            ("catalog_id", Json::str(epoch.catalog_id.clone())),
+            ("bundle_delta", epoch.bundle_delta.clone()),
+            (
+                "loss_report",
+                epoch.loss_report.clone().unwrap_or(Json::Null),
+            ),
+            ("adopted_by", Json::str(epoch.adopted_by.clone())),
+        ])),
+        _ => None,
+    };
+    // Update the source row on whichever catalog survived (freeze keeps
+    // `catalog_id`; the row is run state, not identity).
+    let outcome = outcome.map(|o| {
+        let (mut catalog, epoch) = match o {
+            AdoptOutcome::Frozen { catalog } => (catalog, None),
+            AdoptOutcome::Adopted { catalog, epoch } => (catalog, Some(epoch)),
+        };
+        match catalog
+            .sources
+            .iter_mut()
+            .find(|s| s.source_ref == source_ref)
+        {
+            Some(row) => *row = source_state.clone(),
+            None => catalog.sources.push(source_state.clone()),
+        }
+        match epoch {
+            Some(epoch) => AdoptOutcome::Adopted { catalog, epoch },
+            None => AdoptOutcome::Frozen { catalog },
+        }
+    });
+    SyncOutcome {
+        delta,
+        delta_event,
+        outcome,
+        epoch_event,
+    }
+}
+
 // ── Errors (the spec's error column) ─────────────────────────────────────────
 
 /// `CatalogBuildError` — `source_unavailable | IndexOverflow{pages | bytes}`.

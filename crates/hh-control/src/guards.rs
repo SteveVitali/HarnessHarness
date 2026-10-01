@@ -533,6 +533,50 @@ fn interpret(
             ),
             scope_id: Some(model_call_id.to_string()),
         }];
+        // §5d.2 (ADR-0092 D5; S3.9): a *parser-detected* `SurfaceFailure`
+        // (`unparseable`, `unknown_surface` — the spellings the two closed
+        // sums share) is the tool-call span's action-plane terminal beside
+        // the control-plane `control.output.rejected` (§5e.2 owns the
+        // format-failure accounting — `stop{format_failure}` folds it). The
+        // §5e.2-only classes (`schema_violation`, `constraint_violation`,
+        // `precondition_violation`, `truncated`, `refusal`, `empty`) are not
+        // §5d.2 `SurfaceFailure` spellings and emit the control row alone.
+        // `binding_ref` carries the surface name the model attempted — no
+        // `SurfaceBinding` exists for a call that never bound (the member
+        // is mandatory; the attempted name is the honest would-be ref).
+        if matches!(
+            failure,
+            crate::output::OutputFailure::Unparseable
+                | crate::output::OutputFailure::UnknownSurface
+        ) {
+            let attempted = surface_id.clone().unwrap_or_default();
+            let raw_call_hash = tool_call_id
+                .as_ref()
+                .and_then(|tc| calls.iter().find(|c| &c.tool_call_id == tc))
+                .map(|c| {
+                    hh_identity::idp::idp_id(
+                        "raw_call",
+                        format!("{}\n{}", c.surface, c.args_raw).as_bytes(),
+                    )
+                })
+                .unwrap_or_else(|| "sha256:unavailable".to_string());
+            let mut sr = std::collections::BTreeMap::from([
+                ("surface_id".to_string(), Json::str(attempted.clone())),
+                ("binding_ref".to_string(), Json::str(attempted)),
+                ("failure_class".to_string(), Json::str(failure.as_str())),
+                ("raw_call_hash".to_string(), Json::str(raw_call_hash)),
+                ("model_call_id".to_string(), Json::str(model_call_id)),
+                ("rendering_ref".to_string(), Json::Null),
+            ]);
+            if let Some(tc) = tool_call_id {
+                sr.insert("tool_call_id".to_string(), Json::str(tc.clone()));
+            }
+            evs.push(GuardEvent {
+                class: "action.tool.surface_rejected".into(),
+                payload: Json::Obj(sr),
+                scope_id: Some(model_call_id.to_string()),
+            });
+        }
         if crate::output::exhaustion_trips(&policy.output_validation, running) {
             return GuardVerdict::Stop {
                 reason: StopReason::FormatFailure { count: running },

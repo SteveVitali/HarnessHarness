@@ -280,6 +280,7 @@ dependencies = [
  "hh-lab",
  "hh-ontology",
  "hh-provenance",
+ "hh-telemetry",
  "hh-wire",
 ]
 

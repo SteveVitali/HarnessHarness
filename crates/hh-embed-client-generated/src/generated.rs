@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:bf545dcf163c46d3d0cddffe2e1b8dd5ef91060d71a2d8d8d289eead8822c4ef";
+    "sha256:b16270b50c59f7c80387cabd7d2a6cfe27088c409cdd6f8b1c4901aa9332ebae";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5859,6 +5859,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.registry.import` → `json` (see the contract registry).
+    pub fn lab_registry_import(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.import", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.registry.lineage` → `json` (see the contract registry).
     pub fn lab_registry_lineage(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.registry.lineage", params.clone())?;
@@ -5880,6 +5886,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.registry.record_conformance` → `json` (see the contract registry).
     pub fn lab_registry_record_conformance(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.registry.record_conformance", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.registry.refresh` → `json` (see the contract registry).
+    pub fn lab_registry_refresh(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.registry.refresh", params.clone())?;
         Ok(raw)
     }
 

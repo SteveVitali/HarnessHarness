@@ -34,7 +34,7 @@ pub const SNAPSHOTTED: &str = "lifecycle.registry.snapshotted";
 /// `lifecycle.registry.conformance_recorded`.
 pub const CONFORMANCE_RECORDED: &str = "lifecycle.registry.conformance_recorded";
 /// `lifecycle.capability.registered{version_id, semantic_id, source_kind,
-/// registrar}` — the kind-specific class for capability registration
+/// registrar_origin}` — the kind-specific class for capability registration
 /// (ADR-0088 D8; CF-327 — kind-specific classes under ADR-0151 D9).
 pub const CAPABILITY_REGISTERED: &str = "lifecycle.capability.registered";
 
@@ -83,7 +83,7 @@ impl RegistryEvent {
                 ("version_id", Json::str(version_id)),
                 ("semantic_id", semantic_id.map_or(Json::Null, Json::str)),
                 ("source_kind", Json::str(source_kind)),
-                ("registrar", Json::str(registrar_origin)),
+                ("registrar_origin", Json::str(registrar_origin)),
             ]),
         }
     }

@@ -46,6 +46,7 @@ pub mod errors;
 pub mod events;
 pub mod extension;
 pub mod identity;
+pub mod import;
 pub mod kinds;
 pub mod records;
 pub mod schema;

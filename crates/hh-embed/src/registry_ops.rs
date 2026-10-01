@@ -113,6 +113,51 @@ fn parse_floor(j: &Json, k: &str) -> Result<Option<RequireConformance>, EmbedErr
     }
 }
 
+/// The `lab.registry.import` result — refs, the D6 name map, the
+/// recovered/declared-unverified split, the exact loss list and the
+/// preserved foreign `_meta` members.
+fn import_outcome_json(out: &hh_registry::import::ImportOutcome) -> Json {
+    Json::obj([
+        ("refs", Json::Arr(out.refs.iter().map(vref_json).collect())),
+        (
+            "name_map",
+            Json::Obj(
+                out.name_map
+                    .iter()
+                    .map(|(name, (sref, sid))| {
+                        (
+                            name.clone(),
+                            Json::obj([
+                                ("server_ref", Json::str(sref.clone())),
+                                ("semantic_id", Json::str(sid.clone())),
+                            ]),
+                        )
+                    })
+                    .collect(),
+            ),
+        ),
+        (
+            "recovered",
+            Json::Arr(out.recovered.iter().map(|s| Json::str(s.clone())).collect()),
+        ),
+        (
+            "declared_unverified",
+            Json::Arr(
+                out.declared_unverified
+                    .iter()
+                    .map(|s| Json::str(s.clone()))
+                    .collect(),
+            ),
+        ),
+        (
+            "losses",
+            Json::Arr(out.losses.iter().map(|s| Json::str(s.clone())).collect()),
+        ),
+        ("ext_meta", Json::Arr(out.ext_meta.clone())),
+        ("listing_hash", Json::str(out.listing_hash.clone())),
+    ])
+}
+
 fn vref_json(v: &VersionedRef) -> Json {
     Json::obj([
         ("version_id", Json::str(v.version_id.clone())),
@@ -630,6 +675,63 @@ impl EmbedService {
         Ok(Json::obj([
             ("level", Json::str(format!("{:?}", s.level))),
             ("used_classification", Json::Bool(s.used_classification)),
+        ]))
+    }
+
+    /// `lab.registry.import` — `{listing, registrar}` (S3.9; §5d.1 §2;
+    /// AC-R-2.5.1-11's live boundary half): a `hh-mcp-listing/1` document
+    /// is lifted and registered — one `ToolCapabilityRecord` per wire
+    /// tool, `unverified` + `quarantined` for `mcp_listing` sources,
+    /// published under `local/mcp/{server_ref}/{name}`.
+    pub(crate) fn lab_registry_import(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let listing = req(params, "listing")?;
+        let registrar = registrar_of(params)?;
+        let out = hh_registry::import::import_listing(&mut self.registry, listing, &registrar)
+            .map_err(reg_err)?;
+        self.flush_registry_events()?;
+        Ok(import_outcome_json(&out))
+    }
+
+    /// `lab.registry.refresh` — `{listing, registrar}` (S3.9): re-lift and
+    /// diff name-keyed — unchanged `listing_hash` is a no-op, a changed
+    /// tool registers a new version published `supersedes{edit}` with a
+    /// `surface_only | semantic` classification, a removed name's
+    /// versions stay addressable.
+    pub(crate) fn lab_registry_refresh(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let listing = req(params, "listing")?;
+        let registrar = registrar_of(params)?;
+        let out = hh_registry::import::refresh(&mut self.registry, listing, &registrar)
+            .map_err(reg_err)?;
+        self.flush_registry_events()?;
+        Ok(Json::obj([
+            (
+                "unchanged",
+                Json::Arr(out.unchanged.iter().map(|s| Json::str(s.clone())).collect()),
+            ),
+            (
+                "added",
+                Json::Arr(out.added.iter().map(|s| Json::str(s.clone())).collect()),
+            ),
+            (
+                "removed",
+                Json::Arr(out.removed.iter().map(|s| Json::str(s.clone())).collect()),
+            ),
+            (
+                "superseded",
+                Json::Arr(
+                    out.superseded
+                        .iter()
+                        .map(|s| {
+                            Json::obj([
+                                ("name", Json::str(s.name.clone())),
+                                ("prev_version_id", Json::str(s.prev_version_id.clone())),
+                                ("version_id", Json::str(s.version_id.clone())),
+                                ("classification", Json::str(s.classification.clone())),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
         ]))
     }
 
