@@ -23,8 +23,8 @@ use std::collections::BTreeSet;
 use hh_wire::Json;
 
 use crate::bind::{fold_verdicts, RowView};
-use crate::vocab::SeverityLevel;
 use crate::vocab::DivergenceClass;
+use crate::vocab::SeverityLevel;
 
 /// `Observability` — the run's attribution level (R-ATTRIB; hosted runs
 /// bound at `partial`/`opaque` degrade local metrics to `n/a`).
@@ -199,8 +199,7 @@ pub fn compute(rows: &[RowView]) -> Vec<MetricRow> {
             .map(|(k, den)| {
                 (
                     k.clone(),
-                    (share_num.get(k).copied().unwrap_or(0) as i64) * 1_000_000
-                        / (*den as i64),
+                    (share_num.get(k).copied().unwrap_or(0) as i64) * 1_000_000 / (*den as i64),
                 )
             })
             .collect(),
@@ -218,8 +217,12 @@ pub fn compute(rows: &[RowView]) -> Vec<MetricRow> {
 
     // false_completion_rate — the veto metric (ADR-0114 D1).
     let fcr = match gate_verdict.as_deref() {
-        Some("veto") if tripped.iter().any(|i| i == "false_completion") => MetricValue::Ppm(1_000_000),
-        Some(_) | None if claims == 0 && decision.is_none() => MetricValue::NA("no_evidence".into()),
+        Some("veto") if tripped.iter().any(|i| i == "false_completion") => {
+            MetricValue::Ppm(1_000_000)
+        }
+        Some(_) | None if claims == 0 && decision.is_none() => {
+            MetricValue::NA("no_evidence".into())
+        }
         _ => {
             if decision_is("succeeded") && diverges.values().sum::<u64>() > 0 {
                 MetricValue::Ppm(1_000_000)
@@ -385,8 +388,6 @@ pub fn na_observability(rows: Vec<MetricRow>, obs: Observability) -> Vec<MetricR
         .collect()
 }
 
-
-
 /// Severity histogram for the divergence corpus — `{severity: count}` over
 /// the reconciled rows' severities. Pure and order-insensitive.
 pub fn severity_histogram(records: &[SeverityLevel]) -> BTreeMap<String, u64> {
@@ -418,7 +419,10 @@ mod tests {
     fn folds_gate_and_completion() {
         let gate = Json::obj([
             ("verdict", Json::str("veto")),
-            ("vetoed_invariants", Json::Arr(vec![Json::str("false_completion")])),
+            (
+                "vetoed_invariants",
+                Json::Arr(vec![Json::str("false_completion")]),
+            ),
         ]);
         let decided = Json::obj([("decision", Json::str("succeeded_with_veto"))]);
         let rows = [

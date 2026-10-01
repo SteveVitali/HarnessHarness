@@ -863,13 +863,10 @@ impl LedgerFacts {
                             let raw = c.get("args_raw").and_then(Json::as_str);
                             if let Some(raw) = raw {
                                 if let Ok(a) = hh_wire::json::parse(raw) {
-                                    for m in [
-                                        "path", "resource", "uri", "target", "file",
-                                        "file_path",
-                                    ] {
-                                        if let Some(v) =
-                                            a.get(m).and_then(Json::as_str)
-                                        {
+                                    for m in
+                                        ["path", "resource", "uri", "target", "file", "file_path"]
+                                    {
+                                        if let Some(v) = a.get(m).and_then(Json::as_str) {
                                             f.metadata_accesses.push(v.to_string());
                                         }
                                     }

@@ -702,7 +702,10 @@ mod tests {
                 ("validator_ref", Json::str("v1")),
                 ("criterion_ref", Json::str("crit-1")),
                 ("status", Json::str("decided")),
-                ("value", Json::obj([("kind", Json::str("boolean")), ("value", Json::Bool(true))])),
+                (
+                    "value",
+                    Json::obj([("kind", Json::str("boolean")), ("value", Json::Bool(true))]),
+                ),
                 ("inputs_digest", Json::str("sha256:edited")),
             ]),
         )];
@@ -714,7 +717,9 @@ mod tests {
             ..VetoContext::default()
         };
         let trips = evaluate_vetoes(&f, &ctx);
-        assert!(trips.iter().any(|t| t.veto_id == veto_id::EVIDENCE_TAMPERED));
+        assert!(trips
+            .iter()
+            .any(|t| t.veto_id == veto_id::EVIDENCE_TAMPERED));
         // A matching pin is clean.
         let ctx = VetoContext {
             pinned_evidence: [("crit-1".to_string(), "sha256:edited".to_string())]
