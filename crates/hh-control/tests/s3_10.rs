@@ -232,7 +232,6 @@ fn ctx() -> ControlContext {
     }
 }
 
-
 /// The `hh.plan` plan surface — `steps` is the closed-schema plan arg.
 fn plan_surface() -> SurfaceSpec {
     SurfaceSpec {
@@ -309,7 +308,9 @@ fn submit_call() -> ModelOutcome {
 
 /// The contract fixture — `criteria`/`invariants` are `AcceptanceCriterion`
 /// records; `validator_ref` is what `require_validator(…)` actions name.
-fn contract(criteria: Vec<hh_verification::gate::AcceptanceCriterion>) -> hh_verification::gate::TaskContract {
+fn contract(
+    criteria: Vec<hh_verification::gate::AcceptanceCriterion>,
+) -> hh_verification::gate::TaskContract {
     hh_verification::gate::TaskContract {
         contract_id: hh_verification::gate::TaskContract::compute_contract_id("goal-1", &criteria),
         goal_ref: "goal-1".into(),
@@ -330,7 +331,10 @@ fn criterion(id: &str, validator: &str) -> hh_verification::gate::AcceptanceCrit
     }
 }
 
-fn decided_pass_verdict(criterion_ref: &str, validator: &str) -> hh_verification::validators::Verdict {
+fn decided_pass_verdict(
+    criterion_ref: &str,
+    validator: &str,
+) -> hh_verification::validators::Verdict {
     use hh_verification::vocab::*;
     hh_verification::validators::Verdict {
         verdict_id: format!("verdict:{criterion_ref}"),
@@ -387,7 +391,9 @@ fn gate_pass_emits_the_full_verification_chain() {
     let mut gate = ScriptedGate::observed().with_submit();
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert_eq!(r.report.stop_reason, StopReason::Completed);
 
     let classes = sink.classes();
@@ -474,7 +480,9 @@ fn gate_hold_loops_then_exhausts_reconciliation_holds() {
     );
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert_eq!(
         r.report.stop_reason,
         StopReason::BudgetExhausted {
@@ -553,7 +561,9 @@ fn gate_honest_failure_on_unachievable_claim() {
         ("reason", Json::str("capability_absent")),
     ]));
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert_eq!(r.report.stop_reason, StopReason::Completed);
     let cd = sink.find("verification.completion.decided")[0];
     assert_eq!(
@@ -570,10 +580,11 @@ fn gate_honest_failure_on_unachievable_claim() {
         Some("failed_honest")
     );
     // Never held, never succeeded.
-    assert!(sink
-        .find("verification.gate.evaluated")
-        .iter()
-        .all(|e| e.payload.get("verdict").and_then(Json::as_str) == Some("pass")));
+    assert!(sink.find("verification.gate.evaluated").iter().all(|e| e
+        .payload
+        .get("verdict")
+        .and_then(Json::as_str)
+        == Some("pass")));
 }
 
 /// AC-R-2.7.1-7 — the `unverifiable` completion policy decides
@@ -604,9 +615,16 @@ fn gate_unverifiable_policy_decides_succeeded_unverified() {
     let mut gate = ScriptedGate::observed().with_submit();
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     for e in &sink.events {
-        eprintln!("seq={} class={} payload={}", e.seq, e.class, e.payload.to_canonical_string());
+        eprintln!(
+            "seq={} class={} payload={}",
+            e.seq,
+            e.class,
+            e.payload.to_canonical_string()
+        );
     }
     assert_eq!(r.report.stop_reason, StopReason::Completed);
     // The unverifiable criterion is `Unrun` but declares
@@ -667,7 +685,12 @@ fn gate_unmet_criterion_holds_then_verify_repairs() {
     let mut asm = NullAssembler;
     let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
     for e in &sink.events {
-        eprintln!("seq={} class={} payload={}", e.seq, e.class, e.payload.to_canonical_string());
+        eprintln!(
+            "seq={} class={} payload={}",
+            e.seq,
+            e.class,
+            e.payload.to_canonical_string()
+        );
     }
     let r = r.unwrap();
     assert_eq!(r.report.stop_reason, StopReason::Completed);
@@ -692,7 +715,10 @@ fn gate_unmet_criterion_holds_then_verify_repairs() {
     let verdicts = sink.find("verification.validator.verdict");
     assert_eq!(verdicts.len(), 1);
     assert_eq!(
-        verdicts[0].payload.get("criterion_ref").and_then(Json::as_str),
+        verdicts[0]
+            .payload
+            .get("criterion_ref")
+            .and_then(Json::as_str),
         Some("crit-1")
     );
     // …and the second evaluation passed → `succeeded`.
@@ -701,10 +727,11 @@ fn gate_unmet_criterion_holds_then_verify_repairs() {
         cd.payload.get("status").and_then(Json::as_str),
         Some("succeeded")
     );
-    assert!(sink
-        .find("verification.gate.evaluated")
-        .iter()
-        .any(|e| e.payload.get("verdict").and_then(Json::as_str) == Some("pass")));
+    assert!(sink.find("verification.gate.evaluated").iter().any(|e| e
+        .payload
+        .get("verdict")
+        .and_then(Json::as_str)
+        == Some("pass")));
 }
 
 /// F2(b) — an `abandoned` effect at an `achieved` claim is success-with-
@@ -739,7 +766,9 @@ fn gate_abandoned_effect_is_success_with_veto() {
     );
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert_eq!(r.report.stop_reason, StopReason::Completed);
     assert_eq!(
         sink.find("verification.completion.decided")[0]
@@ -768,11 +797,7 @@ fn plan_execute_valid_plan_executes_and_completes() {
         policy,
         &mut sink,
         DriverConfig {
-            surfaces: vec![
-                fs_read(),
-                submit_surface(),
-                plan_surface(),
-            ],
+            surfaces: vec![fs_read(), submit_surface(), plan_surface()],
             plan_surface_id: Some(PLAN_SURFACE_ID.into()),
             ..DriverConfig::default()
         },
@@ -786,7 +811,9 @@ fn plan_execute_valid_plan_executes_and_completes() {
     let mut gate = ScriptedGate::observed().with_submit();
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert_eq!(r.report.stop_reason, StopReason::Completed);
     assert_eq!(
         r.report.submission_ref.as_deref(),
@@ -828,10 +855,7 @@ fn plan_execute_invalid_plan_replans_then_format_failure() {
         policy,
         &mut sink,
         DriverConfig {
-            surfaces: vec![
-                submit_surface(),
-                plan_surface(),
-            ],
+            surfaces: vec![submit_surface(), plan_surface()],
             plan_surface_id: Some(PLAN_SURFACE_ID.into()),
             ..DriverConfig::default()
         },
@@ -847,7 +871,9 @@ fn plan_execute_invalid_plan_replans_then_format_failure() {
     };
     let mut gate = ScriptedGate::observed().with_submit();
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert!(matches!(
         r.report.stop_reason,
         StopReason::FormatFailure { .. }
@@ -855,9 +881,14 @@ fn plan_execute_invalid_plan_replans_then_format_failure() {
     // `valid:false` rows ledger the rejections — `surface_undeclared`.
     let emitted = sink.find("control.plan.emitted");
     assert!(!emitted.is_empty());
-    assert!(emitted.iter().all(|e| e.payload.get("valid") == Some(&Json::Bool(false))));
+    assert!(emitted
+        .iter()
+        .all(|e| e.payload.get("valid") == Some(&Json::Bool(false))));
     assert_eq!(
-        emitted[0].payload.get("reject_reason").and_then(Json::as_str),
+        emitted[0]
+            .payload
+            .get("reject_reason")
+            .and_then(Json::as_str),
         Some("surface_undeclared")
     );
     // No effect was ever intended off a rejected plan.
@@ -878,9 +909,15 @@ fn plan_validate_closed_schema_and_closed_world() {
     .is_ok());
     // Unknown member / kind / undeclared surface / self-call / empty.
     for (raw, reason) in [
-        (r#"{"steps":[{"kind":"act","surface":"fs.read","bogus":1}]}"#, "step_member_unknown"),
+        (
+            r#"{"steps":[{"kind":"act","surface":"fs.read","bogus":1}]}"#,
+            "step_member_unknown",
+        ),
         (r#"{"steps":[{"kind":"teleport"}]}"#, "step_kind_unknown"),
-        (r#"{"steps":[{"kind":"act","surface":"exec.shell"}]}"#, "surface_undeclared"),
+        (
+            r#"{"steps":[{"kind":"act","surface":"exec.shell"}]}"#,
+            "surface_undeclared",
+        ),
         (
             r#"{"steps":[{"kind":"act","surface":"hh.plan","args":{}}]}"#,
             "surface_undeclared",
@@ -945,11 +982,7 @@ fn assert_replay_reproduces(
         "replay",
     )
     .unwrap();
-    assert!(
-        out.reproduced(),
-        "replay diverged: {:?}",
-        out.diverged
-    );
+    assert!(out.reproduced(), "replay diverged: {:?}", out.diverged);
     assert!(out.run_result.is_some() || out.parked);
 }
 
@@ -958,18 +991,21 @@ fn assert_replay_reproduces(
 /// the decision sequence exactly (deterministic guards, ADR-0106).
 #[test]
 fn ac_f2_01_loop_ladder_replays_identically() {
-    let script: Vec<ModelOutcome> = std::iter::repeat_with(|| {
-        call("fs.read", r#"{"path":"/same"}"#)
-    })
-    .take(30)
-    .collect();
+    let script: Vec<ModelOutcome> =
+        std::iter::repeat_with(|| call("fs.read", r#"{"path":"/same"}"#))
+            .take(30)
+            .collect();
     let cfg = || {
         let mut cfg = DriverConfig {
             surfaces: vec![fs_read()],
             ..DriverConfig::default()
         };
         cfg.budget_ceiling.insert("model_calls".into(), 40);
-        (ctx(), EnvelopePolicy::stage1_default("b-1").seal().unwrap(), cfg)
+        (
+            ctx(),
+            EnvelopePolicy::stage1_default("b-1").seal().unwrap(),
+            cfg,
+        )
     };
     let (c, p, config) = cfg();
     let mut sink = MemSink::new();
@@ -980,8 +1016,13 @@ fn ac_f2_01_loop_ladder_replays_identically() {
     };
     let mut gate = ScriptedGate::observed();
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
-    assert!(matches!(r.report.stop_reason, StopReason::LoopDetected { .. }));
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
+    assert!(matches!(
+        r.report.stop_reason,
+        StopReason::LoopDetected { .. }
+    ));
     assert_replay_reproduces(&cfg, &sink.events);
 }
 
@@ -989,18 +1030,20 @@ fn ac_f2_01_loop_ladder_replays_identically() {
 /// `budget_exhausted{model_calls}` and the replay reproduces it.
 #[test]
 fn ac_f2_02_budget_ceiling_replays_identically() {
-    let script: Vec<ModelOutcome> = std::iter::repeat_with(|| {
-        call("fs.read", r#"{"path":"/a"}"#)
-    })
-    .take(20)
-    .collect();
+    let script: Vec<ModelOutcome> = std::iter::repeat_with(|| call("fs.read", r#"{"path":"/a"}"#))
+        .take(20)
+        .collect();
     let cfg = || {
         let mut cfg = DriverConfig {
             surfaces: vec![fs_read()],
             ..DriverConfig::default()
         };
         cfg.budget_ceiling.insert("model_calls".into(), 4);
-        (ctx(), EnvelopePolicy::stage1_default("b-1").seal().unwrap(), cfg)
+        (
+            ctx(),
+            EnvelopePolicy::stage1_default("b-1").seal().unwrap(),
+            cfg,
+        )
     };
     let (c, p, config) = cfg();
     let mut sink = MemSink::new();
@@ -1011,7 +1054,9 @@ fn ac_f2_02_budget_ceiling_replays_identically() {
     };
     let mut gate = ScriptedGate::observed();
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert!(matches!(
         r.report.stop_reason,
         StopReason::BudgetExhausted { .. } | StopReason::LoopDetected { .. }
@@ -1053,7 +1098,9 @@ fn ac_f2_05_empty_call_ladder_replays_identically() {
     };
     let mut gate = ScriptedGate::observed();
     let mut asm = NullAssembler;
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert!(matches!(
         r.report.stop_reason,
         StopReason::FormatFailure { .. }
@@ -1069,10 +1116,7 @@ fn ac_f2_05_empty_call_ladder_replays_identically() {
 #[test]
 fn t_lcd_03_paired_replay_reproduces_identically() {
     // A two-call submission run — the recorded prefix is the corpus.
-    let script = vec![
-        call("fs.read", r#"{"path":"/a"}"#),
-        submit_call(),
-    ];
+    let script = vec![call("fs.read", r#"{"path":"/a"}"#), submit_call()];
     let (_r, prefix) = drive(
         script,
         ScriptedGate::observed().with_submit(),
@@ -1134,7 +1178,6 @@ fn t_lcd_03_paired_replay_reproduces_identically() {
     assert_eq!(a.model_calls_served, b.model_calls_served);
     assert_eq!(a.dispatches, b.dispatches);
 }
-
 
 // ── the deterministic followed detector (AC-R-2.7.1-9) ──────────────────
 
@@ -1257,12 +1300,9 @@ fn followed_deterministic_rows_and_per_profile_share() {
         )
         .unwrap();
         let mut model = ScriptedModel {
-            script: [
-                call("fs.read", r#"{"path":"/a"}"#),
-                submit_call(),
-            ]
-            .into_iter()
-            .collect(),
+            script: [call("fs.read", r#"{"path":"/a"}"#), submit_call()]
+                .into_iter()
+                .collect(),
             calls: 0,
         };
         let mut gate = ScriptedGate::observed().with_submit();
@@ -1271,15 +1311,15 @@ fn followed_deterministic_rows_and_per_profile_share() {
             // Both deliveries rode the call's context — the cause set.
             delivery_ids: vec!["d-surf".into(), "d-proc".into(), "d-inst".into()],
         };
-        let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+        let r = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
         assert_eq!(r.report.stop_reason, StopReason::Completed);
 
         let followed = sink.find("verification.artefact.followed");
         let deterministic: Vec<&&EventEnvelope> = followed
             .iter()
-            .filter(|e| {
-                e.payload.get("detector").and_then(Json::as_str) == Some("deterministic")
-            })
+            .filter(|e| e.payload.get("detector").and_then(Json::as_str) == Some("deterministic"))
             .collect();
         // tool_surface + procedure followed deterministically; the prose
         // instruction produced no deterministic row.
@@ -1287,8 +1327,14 @@ fn followed_deterministic_rows_and_per_profile_share() {
             .iter()
             .filter_map(|e| e.payload.get("kind").and_then(Json::as_str))
             .collect();
-        assert!(kinds.contains(&"tool_surface"), "profile {profile_ref}: {kinds:?}");
-        assert!(kinds.contains(&"procedure"), "profile {profile_ref}: {kinds:?}");
+        assert!(
+            kinds.contains(&"tool_surface"),
+            "profile {profile_ref}: {kinds:?}"
+        );
+        assert!(
+            kinds.contains(&"procedure"),
+            "profile {profile_ref}: {kinds:?}"
+        );
         assert!(!kinds.contains(&"instruction"));
         let detector_refs: Vec<&str> = deterministic
             .iter()
@@ -1327,7 +1373,6 @@ fn followed_deterministic_rows_and_per_profile_share() {
         }
     }
 }
-
 
 // ── AC-F2-03…10 — the remaining deterministic battery (§5e.2) ───────────
 
@@ -1419,7 +1464,9 @@ fn ac_f2_03_invariant_faults_stop_and_quarantine() {
         };
         let mut gate = ScriptedGate::observed().with_submit();
         let mut asm = NullAssembler;
-        let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+        let r = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
         assert!(
             matches!(r.report.stop_reason, StopReason::InvariantViolation { .. }),
             "{label}: {:?}",
@@ -1473,7 +1520,11 @@ fn ac_f2_04_timeouts_record_and_replay() {
             ..DriverConfig::default()
         };
         c.budget_ceiling.insert("model_calls".into(), 8);
-        (ctx(), EnvelopePolicy::stage1_default("b-1").seal().unwrap(), c)
+        (
+            ctx(),
+            EnvelopePolicy::stage1_default("b-1").seal().unwrap(),
+            c,
+        )
     };
     // Arm 1 — stalled stream: timeout errors retry then the call fails.
     let script = vec![
@@ -1494,7 +1545,9 @@ fn ac_f2_04_timeouts_record_and_replay() {
     let mut gate = ScriptedGate::observed().with_submit();
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
     let mut asm = NullAssembler;
-    let _r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let _r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert!(sink.count("model.call.failed") >= 1);
     let failed = sink.find("model.call.failed")[0];
     let err = failed.payload.get("error").and_then(|e| e.get("class"));
@@ -1563,7 +1616,9 @@ fn ac_f2_06_retries_share_call_id_and_post() {
     let mut gate = ScriptedGate::observed().with_submit();
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
     let mut asm = NullAssembler;
-    let _r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let _r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     // Shared attempt identity — the retried call reuses `model_call_id`
     // with `attempt_no` increasing.
     let scheduled = sink.find("control.retry.scheduled");
@@ -1592,18 +1647,20 @@ fn ac_f2_06_retries_share_call_id_and_post() {
 /// threshold — the run still stops at its objective ceiling.
 #[test]
 fn ac_f2_07_termination_poisoning_changes_nothing() {
-    let script: Vec<ModelOutcome> = std::iter::repeat_with(|| {
-        call("fs.read", r#"{"path":"/a"}"#)
-    })
-    .take(20)
-    .collect();
+    let script: Vec<ModelOutcome> = std::iter::repeat_with(|| call("fs.read", r#"{"path":"/a"}"#))
+        .take(20)
+        .collect();
     let cfg = || {
         let mut c = DriverConfig {
             surfaces: vec![fs_read(), submit_surface()],
             ..DriverConfig::default()
         };
         c.budget_ceiling.insert("model_calls".into(), 6);
-        (ctx(), EnvelopePolicy::stage1_default("b-1").seal().unwrap(), c)
+        (
+            ctx(),
+            EnvelopePolicy::stage1_default("b-1").seal().unwrap(),
+            c,
+        )
     };
     let mut gate = ScriptedGate::observed();
     // The poisoned tool output — data in the observed payload, never a
@@ -1698,7 +1755,9 @@ fn ac_f2_08_kill_at_kp8_resumes_identically() {
     // envelope over the prefix (G-RESUME).
     let checkpoint = driver.checkpoint();
     driver.resume(&ctx(), &checkpoint, &mut sink).unwrap();
-    let r = driver.run(&mut model, &mut gate, &mut asm, &mut sink).unwrap();
+    let r = driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
     assert_eq!(r.report.stop_reason, StopReason::Completed);
     // The decision sequence equals the uninterrupted run's.
     let resumed_decisions: Vec<&EventEnvelope> = sink
@@ -1746,10 +1805,7 @@ fn ac_f2_09_beta_independence_guard_verdicts_identical() {
                 } else if e.class == "control.decision" {
                     Some(format!(
                         "decision:{}:{}",
-                        e.payload
-                            .get("kind")
-                            .and_then(Json::as_str)
-                            .unwrap_or(""),
+                        e.payload.get("kind").and_then(Json::as_str).unwrap_or(""),
                         e.payload
                             .get("verdict")
                             .and_then(Json::as_str)
@@ -1821,10 +1877,8 @@ fn ac_f2_10_envelope_rebuild_equality() {
         None,
     );
     let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
-    let (env_a, state_a) =
-        hh_control::envelope::Envelope::arm(policy.clone(), &prefix).unwrap();
-    let (_env_b, state_b) =
-        hh_control::envelope::Envelope::arm(policy.clone(), &prefix).unwrap();
+    let (env_a, state_a) = hh_control::envelope::Envelope::arm(policy.clone(), &prefix).unwrap();
+    let (_env_b, state_b) = hh_control::envelope::Envelope::arm(policy.clone(), &prefix).unwrap();
     assert_eq!(state_a, state_b, "rebuild equality over the prefix");
     // Guard purity — two evaluations at the same seq, same verdict.
     let ctx_g = hh_control::guards::GuardContext {

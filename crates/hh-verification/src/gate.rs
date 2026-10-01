@@ -747,7 +747,10 @@ impl std::fmt::Display for ProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ProjectError::NoGoal { goal_ref } => write!(f, "no_goal{{{goal_ref}}}"),
-            ProjectError::BadCriterionKind { criterion_ref, kind } => {
+            ProjectError::BadCriterionKind {
+                criterion_ref,
+                kind,
+            } => {
                 write!(f, "bad_criterion_kind{{{criterion_ref}:{kind}}}")
             }
             ProjectError::MissingCriterion { criterion_ref } => {
@@ -823,9 +826,7 @@ pub fn project_contract(
     }
     let policy = match &goal.unverifiable_reason {
         Some(t) => CompletionPolicy::Unverifiable(
-            t.content
-                .clone()
-                .unwrap_or_else(|| t.content_hash.clone()),
+            t.content.clone().unwrap_or_else(|| t.content_hash.clone()),
         ),
         None => CompletionPolicy::AllRequired,
     };
