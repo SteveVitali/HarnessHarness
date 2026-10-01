@@ -357,6 +357,9 @@ fn comparison() -> ComparisonReport {
         multiplicity: Multiplicity {
             family_size: 2,
             adjusted: "holm".into(),
+            raw_ppm: None,
+            adjusted_ppm: None,
+            label: None,
         },
         label: ReportLabelKind::Headlined,
         estimator_selection: estimator(),
@@ -977,7 +980,10 @@ fn analysis_records_round_trip() {
     };
     let spec = AnalysisSpec {
         spec_id: String::new(),
+        kind: "compare".into(),
         query: query.clone(),
+        spec_ref: Some("exp:1".into()),
+        label: Some("exploratory".into()),
         estimator_selection: estimator(),
         resample: Some(ResamplePlan {
             kind: ResampleKind::Bootstrap,

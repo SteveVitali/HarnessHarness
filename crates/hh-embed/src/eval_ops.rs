@@ -32,29 +32,29 @@ use hh_wire::json::Json;
 use crate::service::EmbedService;
 use hh_embed_schema::errors::EmbedError;
 
-fn bad(path: &str, code: &str) -> EmbedError {
+pub(crate) fn bad(path: &str, code: &str) -> EmbedError {
     EmbedError::SchemaViolation {
         path: path.to_string(),
         code: code.to_string(),
     }
 }
 
-fn req<'a>(j: &'a Json, k: &str) -> Result<&'a Json, EmbedError> {
+pub(crate) fn req<'a>(j: &'a Json, k: &str) -> Result<&'a Json, EmbedError> {
     j.get(k)
         .ok_or_else(|| bad(&format!("/{k}"), "missing_field"))
 }
 
-fn req_str<'a>(j: &'a Json, k: &str) -> Result<&'a str, EmbedError> {
+pub(crate) fn req_str<'a>(j: &'a Json, k: &str) -> Result<&'a str, EmbedError> {
     req(j, k)?
         .as_str()
         .ok_or_else(|| bad(&format!("/{k}"), "type_mismatch"))
 }
 
-fn opt_str(j: &Json, k: &str) -> Option<String> {
+pub(crate) fn opt_str(j: &Json, k: &str) -> Option<String> {
     j.get(k).and_then(Json::as_str).map(str::to_string)
 }
 
-fn arr<'a>(j: &'a Json, k: &str) -> Result<&'a Vec<Json>, EmbedError> {
+pub(crate) fn arr<'a>(j: &'a Json, k: &str) -> Result<&'a Vec<Json>, EmbedError> {
     match req(j, k)? {
         Json::Arr(a) => Ok(a),
         _ => Err(bad(&format!("/{k}"), "type_mismatch")),
@@ -77,7 +77,7 @@ fn decode_runs(j: &Json) -> Result<Vec<EvalRun>, EmbedError> {
 
 /// Decode `task_context` params (`{task_id, suite_id, split_label,
 /// split_hash, stratum}`).
-fn decode_tasks(j: &Json) -> Result<Vec<TaskContext>, EmbedError> {
+pub(crate) fn decode_tasks(j: &Json) -> Result<Vec<TaskContext>, EmbedError> {
     arr(j, "tasks")?
         .iter()
         .map(|t| {
@@ -95,7 +95,7 @@ fn decode_tasks(j: &Json) -> Result<Vec<TaskContext>, EmbedError> {
 }
 
 /// Decode `suite_context` params.
-fn decode_suites(j: &Json) -> Result<Vec<SuiteContext>, EmbedError> {
+pub(crate) fn decode_suites(j: &Json) -> Result<Vec<SuiteContext>, EmbedError> {
     arr(j, "suites")?
         .iter()
         .map(|s| {
@@ -192,7 +192,7 @@ fn compare_input<'a>(
 
 /// Resolve metric names against the catalogue (a name with no row is a
 /// refusal, never a silent skip).
-fn decls_for(
+pub(crate) fn decls_for(
     metrics: &[String],
 ) -> Result<Vec<hh_ontology::compliance::MetricDeclaration>, EmbedError> {
     metrics

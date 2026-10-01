@@ -187,13 +187,28 @@ impl WatermarkSet {
 
 // ── AnalysisSpec / AnalysisRecord / AnalysisReport ──────────────────────────
 
-/// `AnalysisSpec` — what the analysis computes (§6.4).
+/// `AnalysisSpec` — what the analysis computes (§6.4). The `kind` /
+/// `spec_ref` / `label` members were added at S3.4c (CC8 additive; absent
+/// decodes to `summarize` / `None` / `None` — the only shape the pre-S3.4c
+/// schema could express was the A1 record).
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnalysisSpec {
     /// The spec's id (content-addressed — `analysis_record` domain).
     pub spec_id: String,
+    /// The analysis kind — `summarize` | `compare` | `interaction` |
+    /// `transfer` | `equivalence` at C0/Stage 3 (the A1/A2/A3-contrast/A8 +
+    /// transfer-row set; A12 `multiplicity` rides every comparison report,
+    /// never a standalone kind).
+    pub kind: String,
     /// The selection.
     pub query: QuerySpec,
+    /// The experiment/design spec ref this analysis reads (a LabDocs
+    /// `experiment` doc id — resolves `Design`, arms and pre-registration).
+    /// `None` for design-free `summarize` analyses.
+    pub spec_ref: Option<String>,
+    /// The requested report label (`confirmatory` requires a matching
+    /// pre-registration ref — ADR-0157 D5).
+    pub label: Option<String>,
     /// The estimator selection (the CF-337 record — `declared`, `floors`,
     /// `fallback_chain`, `substituted?`).
     pub estimator_selection: EstimatorSelection,
@@ -220,7 +235,14 @@ impl AnalysisSpec {
     pub fn to_json(&self) -> Json {
         let mut m = BTreeMap::new();
         m.insert("spec_id".into(), Json::str(&self.spec_id));
+        m.insert("kind".into(), Json::str(&self.kind));
         m.insert("query".into(), self.query.to_json());
+        if let Some(r) = &self.spec_ref {
+            m.insert("spec_ref".into(), Json::str(r));
+        }
+        if let Some(l) = &self.label {
+            m.insert("label".into(), Json::str(l));
+        }
         m.insert(
             "estimator_selection".into(),
             self.estimator_selection.to_json(),
@@ -243,7 +265,10 @@ impl AnalysisSpec {
             m,
             &[
                 "spec_id",
+                "kind",
                 "query",
+                "spec_ref",
+                "label",
                 "estimator_selection",
                 "resample",
                 "outputs",
@@ -252,7 +277,12 @@ impl AnalysisSpec {
         )?;
         Ok(AnalysisSpec {
             spec_id: str_at(m, "spec_id", REC)?.to_string(),
+            kind: opt_str_at(m, "kind")?
+                .map(str::to_string)
+                .unwrap_or_else(|| "summarize".to_string()),
             query: QuerySpec::from_json(member_at(m, "query", REC)?)?,
+            spec_ref: opt_str_at(m, "spec_ref")?.map(str::to_string),
+            label: opt_str_at(m, "label")?.map(str::to_string),
             estimator_selection: EstimatorSelection::from_json(member_at(
                 m,
                 "estimator_selection",
@@ -676,14 +706,22 @@ impl OutcomeBoundsVerdict {
     }
 }
 
-/// `multiplicity{family, adjusted}` — the family-size and correction record
-/// (§6.4 A2).
+/// `multiplicity{family, raw?, adjusted, label?}` — the family-size and
+/// correction record (§6.4 A2/A12). `raw_ppm`/`adjusted_ppm`/`label` were
+/// added at S3.4c (CC8 additive; absent on pre-S3.4c encodings) so A12's
+/// Holm/BH correction is a report fact, never a side-channel.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Multiplicity {
     /// The family size (number of comparisons the correction covers).
     pub family_size: u32,
-    /// The correction method (`holm`, `none`, …).
+    /// The correction method (`holm`, `benjamini_hochberg`, `none`, …).
     pub adjusted: String,
+    /// The raw sign-flip permutation p-value (ppm) before correction.
+    pub raw_ppm: Option<i64>,
+    /// The corrected p/q-value (ppm) after `adjusted`.
+    pub adjusted_ppm: Option<i64>,
+    /// The cell's multiplicity label (`confirmatory` | `exploratory`).
+    pub label: Option<String>,
 }
 
 /// `label` — the report's label (ADR-0157 D4–D6: every "X beats Y" is a
@@ -846,13 +884,24 @@ impl ComparisonReport {
                 ("verdict", Json::str(self.outcome_bounds.verdict.name())),
             ]),
         );
-        m.insert(
-            "multiplicity".into(),
-            Json::obj([
-                ("family", Json::Int(self.multiplicity.family_size as i64)),
-                ("adjusted", Json::str(&self.multiplicity.adjusted)),
-            ]),
-        );
+        {
+            let mut mult = BTreeMap::new();
+            mult.insert(
+                "family".into(),
+                Json::Int(self.multiplicity.family_size as i64),
+            );
+            mult.insert("adjusted".into(), Json::str(&self.multiplicity.adjusted));
+            if let Some(r) = self.multiplicity.raw_ppm {
+                mult.insert("raw".into(), Json::Int(r));
+            }
+            if let Some(a) = self.multiplicity.adjusted_ppm {
+                mult.insert("adjusted_ppm".into(), Json::Int(a));
+            }
+            if let Some(l) = &self.multiplicity.label {
+                mult.insert("label".into(), Json::str(l));
+            }
+            m.insert("multiplicity".into(), Json::Obj(mult));
+        }
         m.insert("label".into(), Json::str(self.label.name()));
         m.insert(
             "estimator_selection".into(),
@@ -909,7 +958,11 @@ impl ComparisonReport {
         let ob = expect_obj(member_at(m, "outcome_bounds", REC)?, "OutcomeBounds")?;
         reject_unknown(ob, &["lower", "upper", "verdict"], "OutcomeBounds")?;
         let mult = expect_obj(member_at(m, "multiplicity", REC)?, "Multiplicity")?;
-        reject_unknown(mult, &["family", "adjusted"], "Multiplicity")?;
+        reject_unknown(
+            mult,
+            &["family", "adjusted", "raw", "adjusted_ppm", "label"],
+            "Multiplicity",
+        )?;
         Ok(ComparisonReport {
             arm_a: str_at(m, "arm_a", REC)?.to_string(),
             arm_b: str_at(m, "arm_b", REC)?.to_string(),
@@ -968,6 +1021,9 @@ impl ComparisonReport {
             multiplicity: Multiplicity {
                 family_size: int_at(mult, "family", "Multiplicity")? as u32,
                 adjusted: str_at(mult, "adjusted", "Multiplicity")?.to_string(),
+                raw_ppm: opt_int_at(mult, "raw")?,
+                adjusted_ppm: opt_int_at(mult, "adjusted_ppm")?,
+                label: opt_str_at(mult, "label")?.map(str::to_string),
             },
             label: ReportLabelKind::parse(str_at(m, "label", REC)?)
                 .ok_or_else(|| SchemaError::v("label", "unknown report label"))?,

@@ -391,7 +391,7 @@ fn park(leases: &mut BTreeMap<String, Lease>, mut eng: ExperimentEngine<'_>) {
 
 impl EmbedService {
     /// The `LabDocs` view over this store root.
-    fn lab_docs(&self) -> Result<LabDocs, EmbedError> {
+    pub(crate) fn lab_docs(&self) -> Result<LabDocs, EmbedError> {
         LabDocs::open(self.store.root()).map_err(xerr)
     }
 

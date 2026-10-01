@@ -437,6 +437,108 @@ pub fn pass_at_k(c: u64, n: u64, k: u64) -> Option<i64> {
 
 // ── sign profile / multiplicity helpers ─────────────────────────────────────
 
+/// The exact-enumeration ceiling for the sign-flip permutation test —
+/// `2^n` assignments enumerated in full up to this many paired deltas.
+pub const SIGNFLIP_EXACT_MAX_N: usize = 20;
+
+/// `permutation_signflip(deltas, confidence-independent)` — the two-sided
+/// sign-flip permutation p-value for the paired differences `deltas`
+/// (ADR-0158: `permutation_signflip` is the default test; p-values are
+/// reported *with* the effect and interval, never alone).
+///
+/// For `n ≤ SIGNFLIP_EXACT_MAX_N` the `2^n` sign assignments are enumerated
+/// exactly; above that a deterministic `draws`-sized sign-flip Monte-Carlo
+/// under `XorShift64::seeded(seed)` approximates the tail mass. The p-value
+/// is returned in ppm (`0..=PPM`), smoothed by +1 hit / +1 draw so it is
+/// never reported as an impossible exact zero.
+pub fn permutation_signflip_p(deltas: &[i64], draws: u64, seed: &str) -> Option<i64> {
+    if deltas.is_empty() {
+        return None;
+    }
+    let observed: i128 = deltas.iter().map(|&d| d as i128).sum::<i128>().abs();
+    let n = deltas.len();
+    if n <= SIGNFLIP_EXACT_MAX_N {
+        // Exact: enumerate every sign assignment (gray-code walk keeps it
+        // O(2^n) without per-assignment resummation).
+        let mut hits: u64 = 0;
+        let total: u64 = 1u64 << n;
+        for mask in 0..total {
+            let mut sum: i128 = 0;
+            for (i, &d) in deltas.iter().enumerate() {
+                sum += if (mask >> i) & 1 == 1 {
+                    -(d as i128)
+                } else {
+                    d as i128
+                };
+            }
+            if sum.abs() >= observed {
+                hits += 1;
+            }
+        }
+        // The enumeration is complete — no +1 smoothing needed (the observed
+        // assignment itself is always a hit).
+        return Some((hits as i128 * PPM as i128 / total as i128) as i64);
+    }
+    let mut rng = XorShift64::seeded(seed);
+    let mut hits: u64 = 0;
+    for _ in 0..draws {
+        let mut sum: i128 = 0;
+        for &d in deltas {
+            sum += if rng.below(2) == 1 {
+                -(d as i128)
+            } else {
+                d as i128
+            };
+        }
+        if sum.abs() >= observed {
+            hits += 1;
+        }
+    }
+    Some(((hits + 1) as i128 * PPM as i128 / (draws + 1) as i128) as i64)
+}
+
+/// Benjamini–Hochberg adjusted q-values over `raw_p_ppm` — returns
+/// `q[i] = min_{j: p_(j) ≥ p_(i)} (m / rank(j)) · p_(j)` (ppm; monotone in
+/// the input order). `m = raw_p_ppm.len()`.
+pub fn benjamini_hochberg(raw_p_ppm: &[i64]) -> Vec<i64> {
+    let m = raw_p_ppm.len() as i128;
+    if m == 0 {
+        return Vec::new();
+    }
+    let mut order: Vec<usize> = (0..raw_p_ppm.len()).collect();
+    order.sort_by_key(|&i| raw_p_ppm[i]);
+    let mut q = vec![0i64; raw_p_ppm.len()];
+    let mut prev = PPM;
+    for (rank_desc, &i) in order.iter().enumerate().rev() {
+        let rank = (rank_desc + 1) as i128;
+        let adj = (m * raw_p_ppm[i] as i128 / rank).min(PPM as i128);
+        prev = prev.min(adj as i64);
+        q[i] = prev;
+    }
+    q
+}
+
+/// Holm adjusted p-values over `raw_p_ppm` (ppm; family-wise control):
+/// `adj_(i) = max_{j ≤ i} min(1, (m − j + 1) · p_(j))` over the ascending
+/// order, returned in the input order.
+pub fn holm(raw_p_ppm: &[i64]) -> Vec<i64> {
+    let m = raw_p_ppm.len() as i128;
+    if m == 0 {
+        return Vec::new();
+    }
+    let mut order: Vec<usize> = (0..raw_p_ppm.len()).collect();
+    order.sort_by_key(|&i| raw_p_ppm[i]);
+    let mut adj = vec![0i64; raw_p_ppm.len()];
+    let mut running = 0i64;
+    for (rank0, &i) in order.iter().enumerate() {
+        let mult = m - rank0 as i128;
+        let a = (mult * raw_p_ppm[i] as i128).min(PPM as i128) as i64;
+        running = running.max(a);
+        adj[i] = running;
+    }
+    adj
+}
+
 /// The two-sided sign profile over paired deltas: `(pos, zero, neg)` counts
 /// and the empirical sign-flip mass `min(pos,neg)/n` in ppm.
 pub fn sign_profile(deltas: &[i64]) -> (u64, u64, u64, i64) {

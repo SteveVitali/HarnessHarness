@@ -706,7 +706,9 @@ pub fn registry() -> Vec<OpSpec> {
         lab("lab.producer.exclude", "L", "json", "json"),
         lab("lab.producer.amend", "L", "json", "json"),
         lab("lab.producer.record_analysis", "L", "json", "json"),
-        lab("lab.analysis.analyze", "L", "json", "json"),
+        // `lab.analysis.analyze` is implemented at S3.4c (the estimator
+        // kernel over the results store — R-2.10.4⁰ᵇ).
+        labi("lab.analysis.analyze", "L", "json", "json"),
         lab("lab.analysis.render", "L", "json", "json"),
         lab("lab.analysis.diff_reports", "L", "json", "json"),
         lab("lab.analysis.power", "L", "json", "json"),

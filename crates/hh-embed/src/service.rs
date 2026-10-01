@@ -606,6 +606,11 @@ impl EmbedService {
             "lab.experiment.pause" => self.lab_experiment_pause(&req.params),
             "lab.experiment.resume" => self.lab_experiment_resume(&req.params),
             "lab.experiment.close" => self.lab_experiment_close(&req.params),
+            // ── S3.4c: `lab.analysis.analyze` — the estimator kernel over
+            // the durable results store (R-2.10.4⁰ᵇ; A1/A2/A3-contrast/A8/
+            // A12 + transfer rows; the remaining `lab.analysis.*` /
+            // `lab.results.*` ops land with their own tickets).
+            "lab.analysis.analyze" => self.lab_analysis_analyze(&req.params),
             _ => Err(EmbedError::SchemaViolation {
                 path: "/method".to_string(),
                 code: "unknown_method".to_string(),

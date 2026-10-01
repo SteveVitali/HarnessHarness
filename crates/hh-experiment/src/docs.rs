@@ -31,6 +31,12 @@ pub mod kind {
     /// `budgets.experiment` refs resolve here when no richer resolver is
     /// wired).
     pub const BUDGET: &str = "budget";
+    /// A persisted `AnalysisRecord` (§6.4/§6.5 — written by the estimator
+    /// kernel's `analyze_and_record`; S3.4c).
+    pub const ANALYSIS: &str = "analysis";
+    /// A persisted `analysis_report_body/1` — the full report payload an
+    /// `AnalysisReport.result_ref` addresses (S3.4c).
+    pub const ANALYSIS_REPORT: &str = "analysis_report";
 }
 
 /// The durable Lab document store rooted at `<store_root>/lab_docs`.
