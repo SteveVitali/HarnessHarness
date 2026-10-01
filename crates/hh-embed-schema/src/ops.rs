@@ -845,36 +845,366 @@ pub fn registry() -> Vec<OpSpec> {
         // in `hh-embed`'s `tier-c4` feature; a `--no-default-features`
         // build answers `Unsupported{by: "tier-c4"}` (typed refusal,
         // never silent degrade — CC6).
-        OpSpec { implemented: true, ..call("fleet.open", "S", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.ensure", "S", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.restore", "S", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.observe", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.reconcile", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.create_work_item", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.bind_source", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.claim", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.dispatch", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.dispatch_note", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.settle", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.handoff", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.resume_from_handoff", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.transfer_owner", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.acknowledge_owner", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.cancel", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.annotate", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.block", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.unblock", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.stop", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.set_owner", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.escalate", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.resolve_escalation", "W", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.work_item", "R", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.list", "R", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.fleet_view", "R", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.state_map", "R", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.accountability_record", "R", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.audit_link", "R", "json", "json", FLEET_ERR, Tier::Experimental, true) },
-        OpSpec { implemented: true, ..call("fleet.check_activation_delta", "R", "json", "json", FLEET_ERR, Tier::Experimental, true) },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.open",
+                "S",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.ensure",
+                "S",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.restore",
+                "S",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.observe",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.reconcile",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.create_work_item",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.bind_source",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.claim",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.dispatch",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.dispatch_note",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.settle",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.handoff",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.resume_from_handoff",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.transfer_owner",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.acknowledge_owner",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.cancel",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.annotate",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.block",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.unblock",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.stop",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.set_owner",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.escalate",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.resolve_escalation",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.work_item",
+                "R",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.list",
+                "R",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.fleet_view",
+                "R",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.state_map",
+                "R",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.accountability_record",
+                "R",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.audit_link",
+                "R",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.check_activation_delta",
+                "R",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
     ];
 
     // ── Group U — upcalls (kernel→host signatures) ────────────────────

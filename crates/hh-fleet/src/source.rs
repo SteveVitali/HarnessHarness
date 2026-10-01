@@ -162,15 +162,14 @@ impl FixtureAdapter {
         };
         let trigger_kind = s("trigger")?;
         if !matches!(trigger_kind.as_str(), "external" | "manual" | "timer") {
-            return Err(FleetError::UnsupportedTrigger { trigger: trigger_kind });
+            return Err(FleetError::UnsupportedTrigger {
+                trigger: trigger_kind,
+            });
         }
         Ok(SourceOccurrence {
             occurrence_id: s("occurrence_id")?,
             trigger_kind,
-            external_kind: o
-                .get("kind")
-                .and_then(Json::as_str)
-                .map(str::to_string),
+            external_kind: o.get("kind").and_then(Json::as_str).map(str::to_string),
             item: WorkItemInit::from_json(o.get("item").ok_or_else(|| {
                 FleetError::SchemaViolation {
                     detail: "fixture occurrence item required".into(),
