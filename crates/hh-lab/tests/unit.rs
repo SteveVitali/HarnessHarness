@@ -1134,6 +1134,17 @@ fn debt_views_round_trip_and_project() {
         },
         created_at: 0,
         expiry_at: None,
+        home: None,
+        version_id: None,
+        debt_class: None,
+        stored_status: None,
+        evidence_grade: None,
+        deficiency_class: None,
+        last_trigger: None,
+        removal_test_state: None,
+        used_by: vec![],
+        expired_used_runs: 0,
+        staleness_reasons: vec![],
     };
     let back = DebtIndexRow::from_json(&row.to_json()).unwrap();
     assert_eq!(back, row);

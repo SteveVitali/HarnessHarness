@@ -459,6 +459,17 @@ fn minimal_debt_report_buckets_and_round_trip() {
                 },
                 created_at: 0,
                 expiry_at: until,
+                home: None,
+                version_id: None,
+                debt_class: None,
+                stored_status: None,
+                evidence_grade: None,
+                deficiency_class: None,
+                last_trigger: None,
+                removal_test_state: None,
+                used_by: vec![],
+                expired_used_runs: 0,
+                staleness_reasons: vec![],
             }
         };
     let index = vec![

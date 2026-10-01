@@ -1050,6 +1050,21 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.hosting.describe", "L", "json", "json"),
         labi("lab.hosting.probe", "L", "json", "json"),
         labi("lab.hosting.attach", "L", "json", "json"),
+        // ── S5.4 (R-2.9.6¹/R-2.9.8¹/R-2.9.7¹): the debt-manager surface
+        // (`evaluate` = the live all-home trigger fold; `index`/`report` =
+        // the DebtIndex + DebtReport/notifier projections — records-in/
+        // records-out, the manager is out-of-process by construction,
+        // AC-R-2.9.6-10), the model-compat surface (`snapshot_claim` =
+        // the synthetic provider-drift claim; `regression` =
+        // `run_regression_suite`), and the M1 design surface
+        // (`component_targets`, `attribution_design`).
+        labi("lab.debt.evaluate", "L", "json", "json"),
+        labi("lab.debt.index", "L", "json", "json"),
+        labi("lab.debt.report", "L", "json", "json"),
+        labi("lab.model.snapshot_claim", "L", "json", "json"),
+        labi("lab.model.regression", "L", "json", "json"),
+        labi("lab.analysis.component_targets", "L", "json", "json"),
+        labi("lab.analysis.attribution_design", "L", "json", "json"),
         // S3.1 (R-2.11.3⁰; ADR-0097 D7/ADR-0173): `serve(bundle)` — the
         // Stage-3 fixture MCP server over stdio. The op decodes the
         // bundle, extracts its compiled `target:mcp` member and returns

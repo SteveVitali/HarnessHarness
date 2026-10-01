@@ -109,6 +109,8 @@ fn run_inputs<'a>(
         extensions: vec![],
         budget,
         profile: Json::str("none"),
+        profile_refs: vec![],
+        images: vec![],
         nondeterminism: vec![],
         participant_class: None,
     }

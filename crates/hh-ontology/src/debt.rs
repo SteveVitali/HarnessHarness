@@ -1880,3 +1880,124 @@ impl DebtRef {
         })
     }
 }
+
+impl DebtPolicy {
+    /// The canonical JSON (S5.4 — the manager reads the policy across the
+    /// `hh-embed/1` boundary; CC7 one-schema).
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        if !self.required_fields_by_home.is_empty() {
+            m.insert(
+                "required_fields_by_home".into(),
+                Json::Obj(
+                    self.required_fields_by_home
+                        .iter()
+                        .map(|(h, fs)| (h.clone(), Json::Arr(fs.iter().map(Json::str).collect())))
+                        .collect(),
+                ),
+            );
+        }
+        m.insert("min_runway_ms".into(), Json::Int(self.min_runway_ms as i64));
+        m.insert(
+            "hypothesized_max_age_ms".into(),
+            Json::Int(self.hypothesized_max_age_ms as i64),
+        );
+        m.insert(
+            "evidence_max_age_ms".into(),
+            Json::Int(self.evidence_max_age_ms as i64),
+        );
+        m.insert(
+            "warn_within_ms".into(),
+            Json::Int(self.warn_within_ms as i64),
+        );
+        m.insert(
+            "grace_period_ms".into(),
+            Json::Int(self.grace_period_ms as i64),
+        );
+        m.insert(
+            "max_open_removal_tests".into(),
+            Json::Int(self.max_open_removal_tests as i64),
+        );
+        m.insert("priority".into(), Json::str(self.priority.clone()));
+        m.insert(
+            "notice_sinks".into(),
+            Json::Arr(self.notice_sinks.iter().map(Json::str).collect()),
+        );
+        m.insert("schedule".into(), Json::str(self.schedule.clone()));
+        m.insert(
+            "dead_weight_designs_allowed".into(),
+            Json::Bool(self.dead_weight_designs_allowed),
+        );
+        Json::Obj(m)
+    }
+
+    /// Strict decode — every member optional (`{}` decodes to the
+    /// proposed defaults; an unknown member refuses).
+    pub fn from_json(j: &Json, path: &str) -> Result<DebtPolicy, DebtSchemaError> {
+        let m = match j {
+            Json::Obj(m) => m,
+            _ => return Err(bad(format!("{path} is not an object"))),
+        };
+        let known = [
+            "required_fields_by_home",
+            "min_runway_ms",
+            "hypothesized_max_age_ms",
+            "evidence_max_age_ms",
+            "warn_within_ms",
+            "grace_period_ms",
+            "max_open_removal_tests",
+            "priority",
+            "notice_sinks",
+            "schedule",
+            "dead_weight_designs_allowed",
+        ];
+        for k in m.keys() {
+            if !known.contains(&k.as_str()) {
+                return Err(bad(format!("{path}.{k} unknown member")));
+            }
+        }
+        let d = DebtPolicy::default();
+        let mut required = d.required_fields_by_home.clone();
+        if let Some(Json::Obj(hm)) = m.get("required_fields_by_home") {
+            required = BTreeMap::new();
+            for (h, v) in hm {
+                let fields = match v {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|f| {
+                            f.as_str().map(str::to_string).ok_or_else(|| {
+                                bad(format!("{path}.required_fields_by_home strings only"))
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err(bad(format!("{path}.required_fields_by_home arrays only"))),
+                };
+                required.insert(h.clone(), fields);
+            }
+        }
+        Ok(DebtPolicy {
+            required_fields_by_home: required,
+            min_runway_ms: opt_u64(j, "min_runway_ms", path)?.unwrap_or(d.min_runway_ms),
+            hypothesized_max_age_ms: opt_u64(j, "hypothesized_max_age_ms", path)?
+                .unwrap_or(d.hypothesized_max_age_ms),
+            evidence_max_age_ms: opt_u64(j, "evidence_max_age_ms", path)?
+                .unwrap_or(d.evidence_max_age_ms),
+            warn_within_ms: opt_u64(j, "warn_within_ms", path)?.unwrap_or(d.warn_within_ms),
+            grace_period_ms: opt_u64(j, "grace_period_ms", path)?.unwrap_or(d.grace_period_ms),
+            max_open_removal_tests: opt_u64(j, "max_open_removal_tests", path)?
+                .unwrap_or(d.max_open_removal_tests as u64)
+                as u32,
+            priority: opt_str(j, "priority", path)?.unwrap_or(d.priority),
+            notice_sinks: opt(j, "notice_sinks")
+                .map(|_| str_arr(j, "notice_sinks", path))
+                .transpose()?
+                .unwrap_or(d.notice_sinks),
+            schedule: opt_str(j, "schedule", path)?.unwrap_or(d.schedule),
+            dead_weight_designs_allowed: if m.contains_key("dead_weight_designs_allowed") {
+                opt_bool(j, "dead_weight_designs_allowed")
+            } else {
+                d.dead_weight_designs_allowed
+            },
+        })
+    }
+}

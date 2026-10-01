@@ -362,7 +362,38 @@ impl EmbedService {
         match v {
             Ok(v) => {
                 self.flush_registry_events()?;
-                Ok(vref_json(&v))
+                // S5.4 live trigger wiring (§5h.6 §2): a superseding publish
+                // auto-evaluates the superseded record's debt member — the
+                // `profile_change{kind: superseded_l2}` family; emitted
+                // transitions append as `lifecycle.debt.status.changed` and
+                // ride the op result.
+                let transitions = match opt_str(params, "supersedes") {
+                    Some(sup) => self.evaluate_debt_on_lifecycle(
+                        &sup,
+                        hh_lab::debt::ProfileChangeKind::SupersededL2,
+                    )?,
+                    None => Vec::new(),
+                };
+                let out = vref_json(&v);
+                let out = match out {
+                    Json::Obj(mut m) => {
+                        if !transitions.is_empty() {
+                            m.insert(
+                                "debt_transitions".into(),
+                                Json::Arr(transitions.iter().map(|t| t.to_json()).collect()),
+                            );
+                        }
+                        Json::Obj(m)
+                    }
+                    other => Json::obj([
+                        ("result", other),
+                        (
+                            "debt_transitions",
+                            Json::Arr(transitions.iter().map(|t| t.to_json()).collect()),
+                        ),
+                    ]),
+                };
+                Ok(out)
             }
             Err(e) => {
                 self.flush_registry_events()?;
@@ -575,7 +606,40 @@ impl EmbedService {
         );
         self.flush_registry_events()?;
         r.map_err(reg_err)?;
-        Ok(Json::obj([("ok", Json::Bool(true))]))
+        // S5.4 live trigger wiring: a deprecate/yank is the
+        // `profile_change{kind: retired}` observable on the name's
+        // published versions' debt members (`grace_elapsed` starts false —
+        // the caller's re-evaluation at grace expiry supplies the hard
+        // leg).
+        let mut transitions = Vec::new();
+        let retired_target = self
+            .registry
+            .resolve(
+                &ResolveInput::Selector {
+                    namespace: req_str(params, "namespace")?.to_string(),
+                    name: req_str(params, "name")?.to_string(),
+                    label: None,
+                    snapshot_id: None,
+                },
+                ResolveMode::Audit,
+                &ResolveRequest::default(),
+            )
+            .map(|r| r.envelope.version_id.clone())
+            .ok()
+            .or_else(|| opt_str(params, "version_id"));
+        if let Some(vid) = retired_target {
+            transitions =
+                self.evaluate_debt_on_lifecycle(&vid, hh_lab::debt::ProfileChangeKind::Retired)?;
+        }
+        let mut out = BTreeMap::new();
+        out.insert("ok".into(), Json::Bool(true));
+        if !transitions.is_empty() {
+            out.insert(
+                "debt_transitions".into(),
+                Json::Arr(transitions.iter().map(|t| t.to_json()).collect()),
+            );
+        }
+        Ok(Json::Obj(out))
     }
 
     /// `lab.registry.revoke` — `{version_id, reason, registrar, replacement?}`.

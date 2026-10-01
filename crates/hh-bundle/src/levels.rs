@@ -216,6 +216,16 @@ pub fn derive(manifest: &BundleManifest, replay_declared: bool) -> (ReproLevel, 
             "B-R2-nondeterminism",
             BasisSatisfaction::NotApplicable("hosted".into()),
         );
+        push(
+            ReproLevel::R2,
+            "B-R2-profile",
+            BasisSatisfaction::NotApplicable("hosted".into()),
+        );
+        push(
+            ReproLevel::R2,
+            "B-R2-images",
+            BasisSatisfaction::NotApplicable("hosted".into()),
+        );
         // Hosted R2 exists only with `end_state` — the member is absent
         // at this stage.
         push(ReproLevel::R2, "B-R2-end_state", BasisSatisfaction::Missing);
@@ -263,6 +273,51 @@ pub fn derive(manifest: &BundleManifest, replay_declared: bool) -> (ReproLevel, 
                 member(member_addr(manifest, roles::NONDETERMINISM))
             } else {
                 BasisSatisfaction::Missing
+            },
+        );
+        // S5.4 (R-2.12.1¹): `B-R2-profile` — every bound profile ref must
+        // be pinned (`resolved_dependencies.profile_refs[].pinned =
+        // true`); an unbound profile (`[]`) satisfies by the section
+        // member — the declaration, never an implied pin.
+        let profile_refs_unpinned = manifest
+            .resolved_dependencies
+            .get("profile_refs")
+            .and_then(|r| match r {
+                Json::Arr(rs) => Some(rs.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+            .iter()
+            .any(|r| r.get("pinned") != Some(&Json::Bool(true)));
+        push(
+            ReproLevel::R2,
+            "B-R2-profile",
+            if profile_refs_unpinned {
+                BasisSatisfaction::Missing
+            } else {
+                member(member_addr(manifest, roles::RESOLVED_DEPENDENCIES))
+            },
+        );
+        // `B-R2-images` — every bound image ref must carry a `digest`
+        // pin (`resolved_dependencies.images[].digest`); `[]` satisfies
+        // by the section member (nothing to pin).
+        let image_unpinned = manifest
+            .resolved_dependencies
+            .get("images")
+            .and_then(|r| match r {
+                Json::Arr(rs) => Some(rs.clone()),
+                _ => None,
+            })
+            .unwrap_or_default()
+            .iter()
+            .any(|i| i.get("digest").and_then(Json::as_str).is_none());
+        push(
+            ReproLevel::R2,
+            "B-R2-images",
+            if image_unpinned {
+                BasisSatisfaction::Missing
+            } else {
+                member(member_addr(manifest, roles::RESOLVED_DEPENDENCIES))
             },
         );
     }

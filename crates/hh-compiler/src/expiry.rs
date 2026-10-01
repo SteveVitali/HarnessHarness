@@ -274,6 +274,22 @@ pub fn evaluate_profile_expiry(
     out
 }
 
+/// `evaluate_debt_record(record, rule_id, rule, observables, now)` — the
+/// record-level form of [`evaluate_expiry`], exported for the non-profile
+/// debt homes (R-2.9.6¹'s `evaluate_debt` merges these transitions with the
+/// manager-level trigger families; §5h.6 §2). `rule` supplies the
+/// dependency set a `probe_failure` intersects (`None` = a rule-free
+/// record, where every named capability counts as in-scope).
+pub fn evaluate_debt_record(
+    debt: &crate::profile::ProfileDebtRecord,
+    rule_id: Option<&str>,
+    rule: Option<&ProfileRule>,
+    obs: &ExpiryObservables,
+    now_ms: u64,
+) -> Vec<StatusTransition> {
+    evaluate_record(debt, rule_id, rule, obs, now_ms)
+}
+
 /// The shared evaluator. `rule` supplies the dependency set a `probe_failure`
 /// intersects (`None` for a rule-free record — the profile's own `expiry` —
 /// where every named capability counts as in-scope).

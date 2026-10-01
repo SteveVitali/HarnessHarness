@@ -409,6 +409,44 @@ impl EmbedService {
         };
         let environment = environment_doc(&self.store, &run_id);
         let budget = Json::Null;
+        // S5.4 (R-2.12.1¹): the bound profile pins + image refs the R2
+        // gate reads — `resolved_dependencies.profile_refs[]`/`images[]`,
+        // and the `configuration.profile` member that names what was
+        // bound (never `profile:none` while pinned refs exist — CC3).
+        let pinned_refs: Vec<String> = compiled
+            .as_ref()
+            .map(|c| c.profile_refs.clone())
+            .unwrap_or_default();
+        let profile = if pinned_refs.is_empty() {
+            Json::str("none")
+        } else {
+            Json::obj([
+                ("resolution", Json::str("pinned")),
+                (
+                    "refs",
+                    Json::Arr(pinned_refs.iter().map(Json::str).collect()),
+                ),
+            ])
+        };
+        let profile_refs: Vec<Json> = pinned_refs
+            .iter()
+            .map(|r| Json::obj([("profile_ref", Json::str(r)), ("pinned", Json::Bool(true))]))
+            .collect();
+        let images: Vec<Json> = environment
+            .get("image")
+            .and_then(Json::as_str)
+            .map(|img| {
+                // `ref@sha256:<digest>` splits; a bare ref is declared
+                // without a digest pin (the R2 gate reports it).
+                match img.split_once("@sha256:") {
+                    Some((r, d)) => vec![Json::obj([
+                        ("ref", Json::str(r)),
+                        ("digest", Json::str(format!("sha256:{d}"))),
+                    ])],
+                    None => vec![Json::obj([("ref", Json::str(img))])],
+                }
+            })
+            .unwrap_or_default();
         let kernel_prov = ProvenanceRecord::kernel(BUNDLE_COMPONENT, self.store.now_ms());
         let inputs = AssembleInputs {
             store: &self.store,
@@ -441,7 +479,9 @@ impl EmbedService {
             // never silently drops (CC3).
             extensions: self.extension_entries(&run_manifest)?,
             budget,
-            profile: Json::str("none"),
+            profile,
+            profile_refs,
+            images,
             nondeterminism: vec![],
             participant_class: None,
         };
@@ -1093,6 +1133,7 @@ impl EmbedService {
                 reason: format!("compile_accept: {e:?}"),
             })?;
         let profile_refs = pinned_profile_refs(&sealed.document);
+        let profile_refs_out = profile_refs.clone();
         let bundle = hh_compiler::compile(
             &hh_compiler::CompileInputs {
                 sealed,
@@ -1132,6 +1173,7 @@ impl EmbedService {
             lcd_report: doc.get("lcd_report").cloned().unwrap_or(Json::Null),
             opacity_report: doc.get("opacity_report").cloned().unwrap_or(Json::Null),
             validators,
+            profile_refs: profile_refs_out,
         }))
     }
 

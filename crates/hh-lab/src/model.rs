@@ -637,3 +637,197 @@ impl CompatibilityRecord {
         }
     }
 }
+
+// ── S5.4: the regression suite + provider-drift path — R-2.9.8¹ ─────────────
+
+/// `HarnessRegressionSuite{suite_id, checks[], provenance}` — the suite a
+/// `run_regression_suite` executes (§5h.8; R-2.9.8¹). `checks[]` names the
+/// rules the suite guards (`{rule_id, capability?}` rows — a capability
+/// narrows the check to one capability of the rule's dependency set).
+#[derive(Debug, Clone, PartialEq)]
+pub struct HarnessRegressionSuite {
+    /// The suite's id (a registry ref or content address).
+    pub suite_id: String,
+    /// The checks the suite runs — `{rule_id, capability?}` rows.
+    pub checks: Vec<RegressionCheck>,
+    /// The suite's provenance (mandatory — a suite is a claim-bearing record).
+    pub provenance: ProvenanceRecord,
+}
+
+/// One `HarnessRegressionSuite.checks[]` row.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RegressionCheck {
+    /// The conditioned rule's id.
+    pub rule_id: String,
+    /// The capability the check narrows to, when it does.
+    pub capability: Option<String>,
+}
+
+/// `run_regression_suite` verdict input — the probe/scorer outcome rows the
+/// caller projects (`{rule_id, verdict}`; the closed spellings `pass`,
+/// `drift`, `fail`, `unsupported` — an inconclusive row carries `fail`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegressionVerdict {
+    /// The check held.
+    Pass,
+    /// The check observed drift (a fingerprint/`model_version_change` row).
+    Drift,
+    /// The check failed outright.
+    Fail,
+    /// The check could not run — `unknown` territory.
+    Unsupported,
+}
+
+impl RegressionVerdict {
+    /// The canonical spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            RegressionVerdict::Pass => "pass",
+            RegressionVerdict::Drift => "drift",
+            RegressionVerdict::Fail => "fail",
+            RegressionVerdict::Unsupported => "unsupported",
+        }
+    }
+
+    /// Parse; `None` on any other input.
+    pub fn parse(s: &str) -> Option<RegressionVerdict> {
+        match s {
+            "pass" => Some(RegressionVerdict::Pass),
+            "drift" => Some(RegressionVerdict::Drift),
+            "fail" => Some(RegressionVerdict::Fail),
+            "unsupported" => Some(RegressionVerdict::Unsupported),
+            _ => None,
+        }
+    }
+}
+
+/// `run_regression_suite(suite, results, evidence_ref) → CompatibilityStatus`
+/// — the pure verdict fold (§5h.8; R-2.9.8¹): every check `pass` ⇒
+/// `verified`; any `drift` ⇒ `drifted{rules}` (the rules are the drifted
+/// check ids, sorted/deduped — the `regression_drifted_rules` observable);
+/// any `fail`/`unsupported` with no drift ⇒ `broken{report_ref =
+/// evidence_ref}`; no results at all ⇒ `unknown`. Nothing runs a trainer —
+/// the results rows are the caller's projection (AC-R-2.9.8-10's
+/// provider-drift path feeds `drift` rows from fingerprint `DRIFT` records).
+pub fn run_regression_suite(
+    suite: &HarnessRegressionSuite,
+    results: &[(String, RegressionVerdict)],
+    evidence_ref: &str,
+) -> CompatibilityStatus {
+    if results.is_empty() {
+        return CompatibilityStatus::Unknown;
+    }
+    let mut drifted: Vec<String> = Vec::new();
+    let mut hard = false;
+    for (rule_id, v) in results {
+        match v {
+            RegressionVerdict::Drift => drifted.push(rule_id.clone()),
+            RegressionVerdict::Fail | RegressionVerdict::Unsupported => hard = true,
+            RegressionVerdict::Pass => {}
+        }
+    }
+    drifted.sort();
+    drifted.dedup();
+    if !drifted.is_empty() {
+        CompatibilityStatus::Drifted { rules: drifted }
+    } else if hard {
+        CompatibilityStatus::Broken {
+            report_ref: evidence_ref.to_string(),
+        }
+    } else {
+        CompatibilityStatus::Verified
+    }
+    .then_with_suite(suite)
+}
+
+/// The suite ref stamp — internal: attaches nothing to the status (the
+/// `regression_suite_ref` member rides the [`CompatibilityRecord`] the
+/// caller mints); kept as an extension point so the fold stays pure.
+trait SuiteStamp {
+    fn then_with_suite(self, _suite: &HarnessRegressionSuite) -> Self;
+}
+impl SuiteStamp for CompatibilityStatus {
+    fn then_with_suite(self, _suite: &HarnessRegressionSuite) -> Self {
+        self
+    }
+}
+
+/// `synthetic_snapshot_claim(provider, model_id, drift_ref)` — the synthetic
+/// `SnapshotClaim` a fingerprint `DRIFT` record mints (AC-R-2.9.8-10): a
+/// provider-side drift observation produces a claim row with
+/// `policy_version_exposed = unknown`, no `weights_digest` (the DRIFT record
+/// claims a *change*, not a digest — I-2), and `serving_route` unset. The
+/// DRIFT row's provenance rides the *containing* ledger record the caller
+/// mints (`SnapshotClaim` has no provenance member — claims inside records
+/// carry it there). The claim feeds `run_regression_suite` without a
+/// trainer present.
+pub fn synthetic_snapshot_claim(provider: &str, model_id: &str, drift_ref: &str) -> SnapshotClaim {
+    SnapshotClaim {
+        provider: provider.to_string(),
+        model_id: model_id.to_string(),
+        snapshot_id: format!("drift:{drift_ref}"),
+        serving_route: None,
+        base_snapshot_ref: None,
+        training_lineage: None,
+        trained_under: Vec::new(),
+        training_cutoff_claim: Some(TrainingCutoffClaim {
+            value: None,
+            provenance: CutoffProvenance::Unknown,
+        }),
+        weights_digest: None,
+        policy_version_exposed: PolicyVersionExposed::Unknown,
+    }
+}
+
+/// `guard_at_bind` — the unknown-snapshot guard (§5h.8; R-2.9.8¹): a bind
+/// that selects a model with no `SnapshotClaim` on record refuses; a claim
+/// with `policy_version_exposed = unsupported` binds (the policy pin is a
+/// property, not a precondition). Returns the typed refusal the embed
+/// surface maps to `UnpinnedSnapshot`.
+pub fn guard_at_bind(claim: Option<&SnapshotClaim>) -> Result<(), GuardAtBindError> {
+    match claim {
+        Some(_) => Ok(()),
+        None => Err(GuardAtBindError::UnpinnedSnapshot),
+    }
+}
+
+/// The `guard_at_bind` refusal kinds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuardAtBindError {
+    /// No `SnapshotClaim` covers the selected model (`UnpinnedSnapshot`).
+    UnpinnedSnapshot,
+}
+
+impl GuardAtBindError {
+    /// The canonical spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            GuardAtBindError::UnpinnedSnapshot => "UnpinnedSnapshot",
+        }
+    }
+}
+
+/// `snapshot_span{first, last, drift}` — the span member a report carries
+/// (§5h.8): the first/last snapshot refs the evidence spans and whether a
+/// `DRIFT` row lands inside it.
+pub fn snapshot_span(first: &str, last: &str, drift: bool) -> Json {
+    Json::obj([
+        ("first", Json::str(first)),
+        ("last", Json::str(last)),
+        ("drift", Json::Bool(drift)),
+    ])
+}
+
+/// `drifted ⇒ expiring` — the debt bridge (§5h.8 §4; ADR-0203): a
+/// `drifted{rules[]}` verdict projects onto
+/// [`hh_compiler::expiry::ExpiryObservables::regression_drifted_rules`]; the
+/// `model_version_change`-conditioned debts whose `rule_id` is named
+/// transition `expiring` under [`crate::debt::evaluate_debt`]. Other
+/// statuses project empty — `verified`/`broken`/`unknown` are not
+/// drift rows.
+pub fn regression_drifted_rules(status: &CompatibilityStatus) -> Vec<String> {
+    match status {
+        CompatibilityStatus::Drifted { rules } => rules.clone(),
+        _ => Vec::new(),
+    }
+}
