@@ -306,6 +306,11 @@ members = [
     # (spec §5c R-2.4.2, §8.4; ADR-0075/0146), shipped as a `subprocess_confined`
     # plugin under `plugins/hh-compact-evict-oldest`.
     "crates/hh-compact-evict-oldest",
+    # The packaged `memory_store` variant (spec §5c.3, R-2.4.3¹; ADR-0078 d2;
+    # ticket S4.16b) — a deterministic `MemoryStore` served out of process over
+    # `plugin_abi/1` through the ONE `hh_context::memory_abi` codec; shipped as a
+    # `subprocess_confined` plugin under `plugins/hh-memory-store`.
+    "crates/hh-memory-store",
     "crates/hh-codegen",
     "crates/hh-embed-client-generated",
     # The C0 attended CLI slice (spec §7.1, R-2.11.1⁰ᵇ; ticket S1.26;

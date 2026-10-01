@@ -99,3 +99,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0307](ADR-0307-s4.14b-security-enrichments-rulings.md) | S4.14b security enrichments — backend, attestation, rotation, hosted composition and label-branch rulings | S4.14b | Accepted |
 | [ADR-0308](ADR-0308-s4.15-c1-measurement-depth-rulings.md) | S4.15 C1 measurement depth — adapter declaration, validity gating, foreign interchange and judge-oracle rulings | S4.15 | Accepted |
 | [ADR-0309](ADR-0309-s4.16a-c1-router-and-cache-depth-rulings.md) | S4.16a C1 router depth and cache-projection rulings | S4.16a | Accepted |
+| [ADR-0310](ADR-0310-s4.16b-c1c2-retrieval-and-memory-rulings.md) | S4.16b C1/C2 retrieval and memory depth rulings | S4.16b | Accepted |

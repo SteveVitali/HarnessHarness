@@ -22,11 +22,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use hh_compiler::exposure::{
-    adopt, catalog_delta, catalog_id_of, check_callable, discover, evict, expire_reveals,
-    index_query, index_ref, AdoptOutcome, Availability, CallProposal, CallRefusal, Catalog,
-    CatalogDriftError, CatalogEntry, CatalogIndex, CatalogSource, DiscoveryForm, DiscoveryQuery,
-    DiscoveryQueryInvalid, DriftPolicy, EvictCause, IndexForm, PermissionCoverage, Retention,
-    RevealBoundary, RevealCause, RevealedSet, SearchTextField, StructuredQuery, SyncTrigger,
+    adopt, adopt_with, catalog_delta, catalog_id_of, check_callable, discover, evict,
+    expire_reveals, index_query, index_ref, AdoptOutcome, Availability, CallProposal, CallRefusal,
+    Catalog, CatalogDriftError, CatalogEntry, CatalogIndex, CatalogSource, DiscoveryForm,
+    DiscoveryQuery, DiscoveryQueryInvalid, DriftPolicy, EvictCause, IndexForm, PermissionCoverage,
+    Retention, RevealBoundary, RevealCause, RevealedSet, SearchTextField, StructuredQuery,
+    SyncTrigger,
 };
 use hh_compiler::retrieval::{retrieval_eval, LabelledQuery};
 use hh_hir::tools::ExposureMode;
@@ -795,4 +796,79 @@ fn hidden_never_in_any_variant_result() {
             .iter()
             .all(|h| h.surface_id != "surf:hidden.secret_probe"));
     }
+}
+
+// ── S4.16b — `adopt_with` incremental lowering (§5d.3 §2; ADR-0095 D2) ────
+
+#[test]
+fn adopt_with_carries_loss_report_and_recomputes_coverage() {
+    let mut cat = fixture_catalog();
+    cat.entries
+        .push(mcp_listing_entry("surf:mcp.old_tool", "old_tool"));
+    cat.entries.sort_by(|a, b| a.surface_id.cmp(&b.surface_id));
+    cat.catalog_id = catalog_id_of(&cat.entries, 0, &cat.bundle_id);
+
+    let listing = vec![mcp_listing_entry("surf:mcp.new_tool", "new_tool")];
+    let delta = catalog_delta(&cat, "mcp:src", SyncTrigger::ListChanged, &listing);
+
+    let loss = hh_compiler::lcd::LoweringLossReport {
+        target: "catalog".into(),
+        target_version: "1.0".into(),
+        entries: vec![hh_compiler::lcd::LossEntry {
+            hir_node_id: "cap:new_tool".into(),
+            field: "timeout_hint".into(),
+            class: hh_compiler::lcd::LossKind::NoSlot,
+            severity: hh_compiler::lcd::LossSeverity::Info,
+            detail: "catalog entries carry no timeout field".into(),
+            debt_ref: None,
+        }],
+        granularity_ceiling: hh_compiler::lcd::GranularityCeiling::Component,
+    };
+    // The coverage oracle is the only permission_coverage authority — the
+    // compiler never resolves grants (I-CLOSED); ADR-0095 D2's typical
+    // verdict is `uncovered` until a grant exists.
+    let oracle = |_: &CatalogEntry| PermissionCoverage::Uncovered;
+    let inputs = hh_compiler::exposure::AdoptInputs {
+        loss_report: Some(loss),
+        coverage: Some(&oracle),
+    };
+    let out = adopt_with(&cat, &delta, DriftPolicy::Adopt, "run:test", &inputs).expect("adopt");
+    let AdoptOutcome::Adopted { catalog, epoch } = out else {
+        panic!("adopt returns Adopted")
+    };
+    // The epoch carries the declared loss report (CC3 — a lift that loses
+    // declares it on the epoch row).
+    let lr = epoch.loss_report.expect("the declared loss report lands");
+    assert_eq!(lr.get("target").and_then(|t| t.as_str()), Some("catalog"));
+    let entries = match lr.get("entries") {
+        Some(hh_wire::json::Json::Arr(a)) => a,
+        other => panic!("loss_report.entries is an array, got {other:?}"),
+    };
+    assert_eq!(entries.len(), 1);
+    assert_eq!(
+        entries[0].get("field").and_then(|f| f.as_str()),
+        Some("timeout_hint")
+    );
+    // Coverage recomputed on the adopted entry only.
+    let adopted = catalog
+        .entries
+        .iter()
+        .find(|e| e.surface_id == "surf:mcp.new_tool")
+        .unwrap();
+    assert_eq!(adopted.permission_coverage, PermissionCoverage::Uncovered);
+    // Untouched entries keep their coverage.
+    let other = catalog
+        .entries
+        .iter()
+        .find(|e| e.surface_id == "surf:kernel.pinned_tool")
+        .unwrap();
+    assert_ne!(other.permission_coverage, PermissionCoverage::Uncovered);
+
+    // Without inputs the epoch's loss_report is absent (a lift that loses
+    // nothing declares nothing — never a fabricated report).
+    let out2 = adopt(&cat, &delta, DriftPolicy::Adopt, "run:test").expect("adopt");
+    let AdoptOutcome::Adopted { epoch: e2, .. } = out2 else {
+        panic!("adopt returns Adopted")
+    };
+    assert!(e2.loss_report.is_none());
 }

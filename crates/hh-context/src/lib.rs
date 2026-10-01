@@ -49,11 +49,13 @@
 pub mod assemble;
 pub mod codec;
 pub mod compact;
+pub mod consolidate;
 pub mod events;
 pub mod k4;
 pub mod k5;
 pub mod lifecycle;
 pub mod memory;
+pub mod memory_abi;
 pub mod plan;
 pub mod policy;
 pub mod procedure;
@@ -65,6 +67,10 @@ pub use assemble::{
     CompactionRequired, Stage01Outcome, OMISSION_ITEM_TOKENS,
 };
 pub use codec::CodecError;
+pub use consolidate::{
+    consolidate, ConsolidateError, ConsolidationBind, ConsolidationCadence, ConsolidationGuards,
+    ConsolidationRecord, ConsolidationRule, ConsolidatorKind,
+};
 pub use events::{CollectSink, EventSink};
 pub use k4::{
     capability_dep_ref, declared_cacheable, epoch_dep_ref, K4Cache, K4Entry, K4EntryView, K4Error,
@@ -84,9 +90,9 @@ pub use lifecycle::{
 };
 pub use memory::{
     ArtifactVersion, ConflictSet, DependencyStamp, Freshness, InvalidationContract, Justification,
-    JustificationKind, KindPolicy, MemoryDraft, MemoryError, MemoryManifest, MemoryPolicy,
-    MemoryRevocation, MemoryStore, MemoryVersion, NameBinding, PutOutcome, ResolveOutcome,
-    SupersedeClaim, SupersedeClaimReason, WriteContext,
+    JustificationKind, JustificationScope, KindPolicy, MemoryDraft, MemoryError, MemoryManifest,
+    MemoryPolicy, MemoryRevocation, MemoryStore, MemoryStorePort, MemoryVersion, NameBinding,
+    PutOutcome, ResolveOutcome, SupersedeClaim, SupersedeClaimReason, WriteContext,
 };
 pub use plan::{
     default_layout, excerpt, link_layout, offload, Candidate, Cardinality, ContextBudget,

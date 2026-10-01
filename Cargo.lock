@@ -465,6 +465,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-memory-store"
+version = "0.0.1"
+dependencies = [
+ "hh-context",
+ "hh-embed-schema",
+ "hh-plugin-fixture",
+ "hh-varhost",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-monitor"
 version = "0.0.1"
 dependencies = [
@@ -614,6 +625,7 @@ name = "hh-varhost"
 version = "0.0.1"
 dependencies = [
  "hh-containment",
+ "hh-context",
  "hh-embed-schema",
  "hh-env",
  "hh-helper",

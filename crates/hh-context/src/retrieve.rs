@@ -24,6 +24,8 @@ use hh_provenance::record::ProvenanceRecord;
 use hh_provenance::AuthorityClass;
 use hh_wire::json::Json;
 
+use crate::vocab::MemoryContent;
+
 use crate::events::{self, EventSink};
 use crate::lifecycle;
 use crate::memory::{ArtifactVersion, MemoryStore, MemoryVersion};
@@ -39,6 +41,166 @@ pub const DETERMINISTIC_DEFAULT: &str = "deterministic_default";
 /// `structural_pagerank` — the Stage-3 structural ranker ref (§5c.3; the
 /// deterministic PageRank over the `structural_index` anchor graph).
 pub const STRUCTURAL_PAGERANK: &str = "structural_pagerank";
+
+/// `lexical_weighted` — the C1 lexical-family ranker (§5c.3): weighted term
+/// coverage (idf over the `lexical_index` postings) + exact-phrase boost.
+pub const LEXICAL_WEIGHTED: &str = "lexical_weighted";
+
+/// `recency_importance` — the C1 recency×importance ranker (§5c.3): the
+/// declared `importance` hint dominates, then recency (`last_read` ∨
+/// `created`), then `read_count`.
+pub const RECENCY_IMPORTANCE: &str = "recency_importance";
+
+/// `similarity_rerank` — the declared-but-unbound C2 ranker (§5c.3;
+/// `EmbedderUnpinned` until a pinned `ModelProfile` + `ResourceAccount`
+/// bind it — `deterministic = false` by declaration).
+pub const SIMILARITY_RERANK: &str = "similarity_rerank";
+
+/// §5c.3's closed `features_used` vocabulary for the `retrieval_ranker`
+/// component class (`{lexical_hits_meta, lexical_hits_body, recency_created,
+/// recency_last_read, read_count, importance, structural_rank, similarity,
+/// kind, scope}` — extension only by `_`-prefixed registered spellings).
+/// `authority`, `validity`, `readers` and `retention` are **not** features —
+/// a ranker cannot read or set them (the filter stage owns them; a ranker
+/// that needs one is a typed refusal, never a read).
+pub const RANKER_FEATURES: &[&str] = &[
+    "lexical_hits_meta",
+    "lexical_hits_body",
+    "recency_created",
+    "recency_last_read",
+    "read_count",
+    "importance",
+    "structural_rank",
+    "similarity",
+    "kind",
+    "scope",
+];
+
+/// `declare() → {variant_id, deterministic, features_used, required_inputs,
+/// model_conditioned_rules}` — the `retrieval_ranker` component-class
+/// declaration (§5c.3). `required_inputs ⊇ {ModelProfile, ResourceAccount}`
+/// for model-conditioned variants (the member is empty for deterministic
+/// rankers — they need nothing but the request + the views).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RankerDeclaration {
+    /// The component variant id.
+    pub variant_id: &'static str,
+    /// Whether the ranker is deterministic (drives `report.deterministic`
+    /// and the `require_deterministic` slot guard — declared, never
+    /// inferred from behaviour).
+    pub deterministic: bool,
+    /// The features the ranker consumes — ⊆ [`RANKER_FEATURES`] ∪ `_` ext.
+    pub features_used: &'static [&'static str],
+    /// The declared required inputs (`{ModelProfile, ResourceAccount}` for
+    /// model-conditioned variants).
+    pub required_inputs: &'static [&'static str],
+    /// The model-conditioned rules (each carries an `AssumptionDebtRecord`
+    /// at bind time — the ids are declared here).
+    pub model_conditioned_rules: &'static [&'static str],
+}
+
+/// The kernel-registered ranker family — the one declaration table (CC7).
+/// C0 `deterministic_default`; C1 `structural_pagerank`, `lexical_weighted`,
+/// `recency_importance`; C2 `similarity_rerank` (declared; unbound).
+pub const RANKER_DECLARATIONS: &[RankerDeclaration] = &[
+    RankerDeclaration {
+        variant_id: DETERMINISTIC_DEFAULT,
+        deterministic: true,
+        features_used: &["lexical_hits_meta", "lexical_hits_body", "recency_created"],
+        required_inputs: &[],
+        model_conditioned_rules: &[],
+    },
+    RankerDeclaration {
+        variant_id: STRUCTURAL_PAGERANK,
+        deterministic: true,
+        features_used: &["structural_rank"],
+        required_inputs: &[],
+        model_conditioned_rules: &[],
+    },
+    RankerDeclaration {
+        variant_id: LEXICAL_WEIGHTED,
+        deterministic: true,
+        features_used: &["lexical_hits_meta", "lexical_hits_body", "recency_created"],
+        required_inputs: &[],
+        model_conditioned_rules: &[],
+    },
+    RankerDeclaration {
+        variant_id: RECENCY_IMPORTANCE,
+        deterministic: true,
+        features_used: &[
+            "importance",
+            "recency_created",
+            "recency_last_read",
+            "read_count",
+        ],
+        required_inputs: &[],
+        model_conditioned_rules: &[],
+    },
+    RankerDeclaration {
+        variant_id: SIMILARITY_RERANK,
+        deterministic: false,
+        features_used: &["similarity"],
+        required_inputs: &["ModelProfile", "ResourceAccount"],
+        model_conditioned_rules: &[
+            "rerank_requires_pinned_embedder_snapshot",
+            "embedder_calls_charge_to_caller_account",
+        ],
+    },
+];
+
+/// `ranker_declared(id)` — the declaration for a registered variant.
+pub fn ranker_declared(id: &str) -> Option<&'static RankerDeclaration> {
+    RANKER_DECLARATIONS.iter().find(|d| d.variant_id == id)
+}
+
+/// `ranker_declaration_valid(d)` — declaration-time checks: every
+/// `features_used` member ∈ the closed vocabulary (or a `_`-prefixed
+/// registered extension); a `deterministic` variant declares no model
+/// inputs/rules; a non-deterministic variant carries the full
+/// `{ModelProfile, ResourceAccount}` input contract plus ≥1 rule.
+pub fn ranker_declaration_valid(d: &RankerDeclaration) -> Result<(), String> {
+    for f in d.features_used {
+        if !RANKER_FEATURES.contains(f) && !f.starts_with('_') {
+            return Err(format!("{f}: outside the closed ranker feature vocabulary"));
+        }
+    }
+    if d.deterministic && !(d.required_inputs.is_empty() && d.model_conditioned_rules.is_empty()) {
+        return Err(format!(
+            "{}: a deterministic ranker declares no required inputs or model rules",
+            d.variant_id
+        ));
+    }
+    if !d.deterministic {
+        for req in ["ModelProfile", "ResourceAccount"] {
+            if !d.required_inputs.contains(&req) {
+                return Err(format!(
+                    "{}: a model-conditioned ranker requires {{{req}}} in required_inputs",
+                    d.variant_id
+                ));
+            }
+        }
+        if d.model_conditioned_rules.is_empty() {
+            return Err(format!(
+                "{}: a model-conditioned ranker declares ≥1 model_conditioned_rules",
+                d.variant_id
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// `require_deterministic` slot guard — the ranker ref must be a declared
+/// variant whose declaration is `deterministic = true`; an undeclared or
+/// model-conditioned ref refuses `RankerNotDeterministic` (fail closed —
+/// an unknown ranker cannot prove determinism).
+pub fn check_ranker_deterministic(ranker_ref: &str, slot: &str) -> Result<(), RetrievalError> {
+    match ranker_declared(ranker_ref) {
+        Some(d) if d.deterministic => Ok(()),
+        _ => Err(RetrievalError::RankerNotDeterministic {
+            slot: slot.to_string(),
+        }),
+    }
+}
 
 /// `request_hash` domain — `retrieval_request/1`.
 pub const REQUEST_IDP: &str = "retrieval_request.1";
@@ -279,6 +441,13 @@ pub enum RetrievalError {
     IndexUnavailable {
         /// The view kind.
         view_kind: String,
+    },
+    /// `UnknownRanker` — a `ranker: RankerRef` naming no registered
+    /// `retrieval_ranker` variant (fail closed — an unknown ranker can
+    /// prove neither determinism nor declared features).
+    UnknownRanker {
+        /// The ref.
+        ranker: String,
     },
 }
 
@@ -678,11 +847,19 @@ pub fn retrieve_indexed(
             requested: req.at.1,
         });
     }
-    if req.ranker != DETERMINISTIC_DEFAULT {
-        // C0 admits only `deterministic_default` — a non-default ranker is a
-        // declared `RankerRef`; the deterministic-marker check is the
-        // caller's `RankerNotDeterministic` guard (the store refuses nothing
-        // here — the registry owns ranker vetting).
+    // The ranker must be a registered deterministic variant — the one
+    // declaration table vets it here (CC7): the declared-but-unbound
+    // `similarity_rerank` refuses `EmbedderUnpinned` until its pinned
+    // `ModelProfile`/`ResourceAccount` inputs bind; an undeclared ref
+    // refuses `UnknownRanker` (fail closed, never a silent default).
+    match ranker_declared(&req.ranker) {
+        Some(d) if d.deterministic => {}
+        Some(_) => return Err(RetrievalError::EmbedderUnpinned),
+        None => {
+            return Err(RetrievalError::UnknownRanker {
+                ranker: req.ranker.clone(),
+            })
+        }
     }
     let request_hash =
         hh_identity::idp::idp_id(REQUEST_IDP, req_json(req).to_canonical_string().as_bytes());
@@ -706,6 +883,7 @@ pub fn retrieve_indexed(
                 version_id: id.clone(),
                 authority: v.label.authority,
                 readers: v.label.readers.clone(),
+                scope: v.scope,
                 state: state.kind(),
                 stale_since: match &state {
                     LifecycleState::StaleByDependency { .. } => Some(v.created_at),
@@ -718,7 +896,8 @@ pub fn retrieve_indexed(
                 version_id: id.clone(),
                 authority: a.label.authority,
                 readers: a.label.readers.clone(),
-                state: LifecycleStateKind::Valid, // artifacts carry no contract at C0
+                scope: hh_provenance::PersistenceScope::Run, // layer-A artifacts are run-scoped
+                state: LifecycleStateKind::Valid,            // artifacts carry no contract at C0
                 stale_since: None,
                 conflict_set_ref: None,
             });
@@ -733,6 +912,7 @@ pub fn retrieve_indexed(
         req.mode,
         req.at.1,
         store.conflicts(),
+        req.constraints.readers_required.as_ref(),
     );
     let withheld = filtered.withheld.clone();
     let f_validity = withheld.iter().filter(|w| w.reason == "validity").count() as u64;
@@ -793,10 +973,9 @@ pub fn retrieve_indexed(
                 rank_evidence: RankEvidence {
                     ranker_ref: req.ranker.clone(),
                     score: score.clone(),
-                    features: vec![
-                        "lexical_hits_body".to_string(),
-                        "recency_created".to_string(),
-                    ],
+                    features: ranker_declared(&req.ranker)
+                        .map(|d| d.features_used.iter().map(|f| f.to_string()).collect())
+                        .unwrap_or_default(),
                 },
                 tokens: estimate_tokens(&v),
                 index_text: v.content.index_text(),
@@ -816,7 +995,9 @@ pub fn retrieve_indexed(
                 rank_evidence: RankEvidence {
                     ranker_ref: req.ranker.clone(),
                     score: score.clone(),
-                    features: vec!["lexical_hits_body".to_string()],
+                    features: ranker_declared(&req.ranker)
+                        .map(|d| d.features_used.iter().map(|f| f.to_string()).collect())
+                        .unwrap_or_default(),
                 },
                 tokens: a.tokens,
                 index_text: a.index_text.clone(),
@@ -839,7 +1020,9 @@ pub fn retrieve_indexed(
         no_authoritative_items: no_auth,
         ranker_ref: req.ranker.clone(),
         deterministic: req.query.deterministic()
-            && (req.ranker == DETERMINISTIC_DEFAULT || req.ranker == STRUCTURAL_PAGERANK),
+            && ranker_declared(&req.ranker)
+                .map(|d| d.deterministic)
+                .unwrap_or(false),
         cost: RetrievalCost {
             tokens_estimated: tokens_used,
             index_ms: elapsed_ms(),
@@ -1235,6 +1418,40 @@ fn score_of(
         let pr = pr_scores.and_then(|m| m.get(id)).copied().unwrap_or(0);
         return (format!("1.{pr:012}"), created);
     }
+    // `recency_importance` — the declared `importance` hint dominates; the
+    // recency signal (`last_read` ∨ `created`, scaled) then `read_count`
+    // break ties (§5c.3's C1 recency family — reads `recency_*`,
+    // `read_count`, `importance` only).
+    if req.ranker == RECENCY_IMPORTANCE {
+        let importance = store
+            .version(id)
+            .and_then(|v| match &v.content {
+                MemoryContent::Structured(j) => j
+                    .get("importance")
+                    .and_then(Json::as_int)
+                    .map(|i: i64| i.max(0) as u64),
+                _ => None,
+            })
+            .unwrap_or(0);
+        let reads = store.reads_of(id);
+        let last_read = reads.last().copied().unwrap_or(0);
+        let recency = last_read.max(created) % 1000;
+        let read_count = (reads.len() as u64).min(999);
+        return (
+            format!("{}.{:03}.{:03}", importance.min(9), recency, read_count),
+            created,
+        );
+    }
+    // `lexical_weighted` — idf-weighted term coverage over the `lexical`
+    // query + an exact-phrase class boost; non-lexical queries keep the C0
+    // meta-match scoring (a ranker is total — its family shapes the score,
+    // never which items are served).
+    if req.ranker == LEXICAL_WEIGHTED {
+        return (
+            lexical_weighted_score(store, req, indexes, id, created),
+            created,
+        );
+    }
     let (exact, glob, hits) = match &req.query {
         RetrievalQuery::ByAddress { address } => (id == address, false, 1),
         RetrievalQuery::ByName { name, .. } => {
@@ -1269,6 +1486,96 @@ fn score_of(
         _ => (false, false, 1),
     };
     (rank_score(hits, exact, glob, created), created)
+}
+
+/// `lexical_weighted` — the C1 lexical-family score (§5c.3): over a
+/// `Lexical{terms}` query, idf-weighted distinct-term coverage
+/// (`idf(t) = SCALE·N_docs/(1+df(t))` — integer math over the `lexical_index`
+/// postings; a rare term outweighs a common one) plus an exact-phrase class
+/// boost (the lowered terms occurring consecutively in the item's token
+/// stream). Score = `{class}.{idf_sum:09}.{recency:03}` — class 2 exact
+/// phrase, 1 all-terms, 0 partial; ties break on `version_id` ascending.
+/// Non-lexical queries keep the C0 meta-match scoring (the family shapes
+/// the score, never the served set). Deterministic — same postings fold,
+/// same scores, every host.
+fn lexical_weighted_score(
+    store: &MemoryStore,
+    req: &RetrievalRequest,
+    indexes: &RetrievalIndexes<'_>,
+    id: &str,
+    created: u64,
+) -> String {
+    const SCALE: u64 = 1_000_000_000;
+    let text = store
+        .version(id)
+        .map(|v| v.content.index_text())
+        .or_else(|| store.artifacts().get(id).map(|a| a.index_text.clone()))
+        .unwrap_or_default();
+    let RetrievalQuery::Lexical { terms, .. } = &req.query else {
+        // Meta-match fallback — same classes as `deterministic_default`.
+        let (exact, glob, hits) = match &req.query {
+            RetrievalQuery::ByAddress { address } => (id == address, false, 1),
+            RetrievalQuery::ByName { name, .. } => {
+                let named = store
+                    .version(id)
+                    .map(|v| v.semantic_id == *name)
+                    .unwrap_or(false);
+                (named, false, if named { 1 } else { 0 })
+            }
+            RetrievalQuery::ByPathGlob { pattern } => {
+                let g = store
+                    .artifacts()
+                    .get(id)
+                    .map(|a| glob_match(pattern)(&a.path))
+                    .unwrap_or(false);
+                (false, g, if g { 1 } else { 0 })
+            }
+            _ => (false, false, 1),
+        };
+        return rank_score(hits, exact, glob, created);
+    };
+    let owned_idx;
+    let idx = match indexes.lexical {
+        Some(i) => i,
+        None => {
+            owned_idx = lexical_index(store, req.at.1);
+            &owned_idx
+        }
+    };
+    let n_docs = (idx.token_counts.len() as u64).max(1);
+    let lowered: Vec<String> = terms.iter().map(|t| t.to_lowercase()).collect();
+    let toks = tokenize(&text);
+    // Distinct-term coverage, idf-weighted.
+    let mut matched = 0u64;
+    let mut idf_sum: u128 = 0;
+    for t in &lowered {
+        let in_item = toks.iter().any(|x| x == t);
+        if !in_item {
+            continue;
+        }
+        matched += 1;
+        let df = idx.postings.get(t).map(|ids| ids.len() as u64).unwrap_or(0);
+        idf_sum += (SCALE as u128) * (n_docs as u128) / (1 + df as u128);
+    }
+    // Exact-phrase — the lowered terms consecutive in the token stream.
+    let phrase_hit = !lowered.is_empty()
+        && lowered.len() <= toks.len()
+        && toks
+            .windows(lowered.len())
+            .any(|w| w.iter().zip(lowered.iter()).all(|(a, b)| a == b));
+    let class = if phrase_hit {
+        2
+    } else if matched as usize == lowered.len() {
+        1
+    } else {
+        0
+    };
+    format!(
+        "{}.{:09}.{:03}",
+        class,
+        idf_sum.min(u64::MAX as u128) as u64,
+        created % 1000
+    )
 }
 
 /// `as_candidate` — project a `RetrievedItem` into a `Candidate` the
@@ -1345,6 +1652,17 @@ pub fn retrieve_naive(
             applied_seq: store.applied_seq(),
             requested: req.at.1,
         });
+    }
+    // The same ranker gate — declared deterministic variants serve; the
+    // unbound C2 arm and undeclared refs refuse identically.
+    match ranker_declared(&req.ranker) {
+        Some(d) if d.deterministic => {}
+        Some(_) => return Err(RetrievalError::EmbedderUnpinned),
+        None => {
+            return Err(RetrievalError::UnknownRanker {
+                ranker: req.ranker.clone(),
+            })
+        }
     }
     // Enumerate — the independent per-kind scan (not `enumerate_query`).
     let mut hits: Vec<String> = Vec::new();
@@ -1570,6 +1888,37 @@ pub fn retrieve_naive(
                 .map(|v| v.created_at)
                 .or_else(|| store.artifacts().get(id).map(|a| a.created_at))
                 .unwrap_or(0);
+            // The new C1 rankers score through the same formats — the
+            // pipeline differs, the spelling is shared.
+            if req.ranker == RECENCY_IMPORTANCE {
+                let importance = store
+                    .version(id)
+                    .and_then(|v| match &v.content {
+                        MemoryContent::Structured(j) => j
+                            .get("importance")
+                            .and_then(Json::as_int)
+                            .map(|i: i64| i.max(0) as u64),
+                        _ => None,
+                    })
+                    .unwrap_or(0);
+                let reads = store.reads_of(id);
+                let recency = reads.last().copied().unwrap_or(0).max(created) % 1000;
+                return (
+                    id.clone(),
+                    format!(
+                        "{}.{:03}.{:03}",
+                        importance.min(9),
+                        recency,
+                        (reads.len() as u64).min(999)
+                    ),
+                );
+            }
+            if req.ranker == LEXICAL_WEIGHTED {
+                return (
+                    id.clone(),
+                    lexical_weighted_score(store, req, &RetrievalIndexes::default(), id, created),
+                );
+            }
             let (exact, glob, hc) = match &req.query {
                 RetrievalQuery::ByAddress { address } => (id == address, false, 1),
                 RetrievalQuery::ByName { name, .. } => {

@@ -1219,16 +1219,54 @@ pub enum AdoptOutcome {
     },
 }
 
+/// `AdoptInputs` — the C1 incremental-lowering inputs `adopt` consumes
+/// (§5d.3 §2; ADR-0095 D2): the `LoweringLossReport` the delta's lift
+/// produced (populated on `CatalogEpoch.loss_report`, never invented —
+/// `None` only when the lift declared no loss) and the coverage oracle
+/// recomputing `permission_coverage` on adopted entries. The compiler
+/// never resolves grants (I-CLOSED — coverage is the caller's verdict;
+/// `None` keeps the listing-stamped coverage).
+#[derive(Default)]
+pub struct AdoptInputs<'a> {
+    /// The adopted lowering's `LoweringLossReport` (target `catalog`).
+    pub loss_report: Option<crate::lcd::LoweringLossReport>,
+    /// `permission_coverage` recompute — `entry → coverage` applied to
+    /// every added/changed entry *after* it joins the catalog (ADR-0095
+    /// D2: "typically `uncovered` until a grant exists").
+    pub coverage: Option<&'a dyn Fn(&CatalogEntry) -> PermissionCoverage>,
+}
+
 /// `adopt(catalog, delta, drift_policy, adopted_by)` (§5d.3 §2; ADR-0095
-/// D2). The `freeze` half is the S2.10 slice; `adopt`'s incremental
-/// lowering lands fully at Stage 4 — this implements the epoch mechanics
-/// (membership, id, delta record) with the `unverified` authority stamp
-/// carried on the `bundle_delta` descriptors.
+/// D2) — the C1 signature; delegates to [`adopt_with`] with no incremental
+/// inputs (the listing-only path: no declared loss, listing-stamped
+/// coverage).
 pub fn adopt(
     catalog: &Catalog,
     delta: &CatalogDelta,
     drift_policy: DriftPolicy,
     adopted_by: &str,
+) -> Result<AdoptOutcome, CatalogDriftError> {
+    adopt_with(
+        catalog,
+        delta,
+        drift_policy,
+        adopted_by,
+        &AdoptInputs::default(),
+    )
+}
+
+/// `adopt_with(catalog, delta, drift_policy, adopted_by, inputs)` — the
+/// incremental-lowering `adopt`: on `adopt` the delta's added/changed
+/// entries join with `permission_coverage` recomputed through the declared
+/// oracle and the epoch record carries the lowering's `loss_report`
+/// (both folded into `action.tool.catalog.epoch` — CC3: a lift that loses
+/// declares it on the epoch, never silently).
+pub fn adopt_with(
+    catalog: &Catalog,
+    delta: &CatalogDelta,
+    drift_policy: DriftPolicy,
+    adopted_by: &str,
+    inputs: &AdoptInputs,
 ) -> Result<AdoptOutcome, CatalogDriftError> {
     match drift_policy {
         DriftPolicy::Ask => Err(CatalogDriftError::Refused),
@@ -1260,6 +1298,23 @@ pub fn adopt(
                     None => entries.push(e.clone()),
                 }
             }
+            // `permission_coverage` recomputes on the adopted entries —
+            // the caller's oracle is the only coverage authority (the
+            // compiler never resolves grants; a missing oracle keeps the
+            // listing stamp, declared, never widened).
+            if let Some(coverage) = inputs.coverage {
+                let adopted: BTreeSet<&str> = delta
+                    .added
+                    .iter()
+                    .chain(delta.changed.iter())
+                    .map(|e| e.surface_id.as_str())
+                    .collect();
+                for e in entries.iter_mut() {
+                    if adopted.contains(e.surface_id.as_str()) {
+                        e.permission_coverage = coverage(e);
+                    }
+                }
+            }
             entries.sort_by(|a, b| a.surface_id.cmp(&b.surface_id));
             let new_epoch = catalog.epoch + 1;
             let new_id = catalog_id_of(&entries, new_epoch, &catalog.bundle_id);
@@ -1268,7 +1323,7 @@ pub fn adopt(
                 catalog_id_prev: catalog.catalog_id.clone(),
                 catalog_id: new_id.clone(),
                 bundle_delta: delta.to_json(),
-                loss_report: None,
+                loss_report: inputs.loss_report.as_ref().map(crate::schema::loss_json),
                 adopted_by: adopted_by.to_string(),
             };
             Ok(AdoptOutcome::Adopted {

@@ -29,4 +29,8 @@ hh-embed-schema = { path = "../hh-embed-schema" }
 # standard pattern and adds no production edge.
 hh-plugin-fixture = { path = "../hh-plugin-fixture" }
 hh-ontology = { path = "../hh-ontology" }
+# S4.16b — the `hh-memory-store` packaged-variant test drives the shared
+# `memory_store` conformance battery + `RemoteStore` binding (dev-only;
+# hh-context has no varhost edge — no cycle).
+hh-context = { path = "../hh-context" }
 tempfile = "3"

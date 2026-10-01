@@ -1203,16 +1203,18 @@ fn derived_effects(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// `CompilationTarget ∈ {instruction, workflow_node, subagent_task}` — the
-/// closed target sum (§5c.5). `subagent_task` is declared for the decision's
-/// honesty (`I(P)` may hold while the target itself is refused
-/// `DelegationUnavailable` before Stage 4 — the spec's Stage-3 degradation).
+/// closed target sum (§5c.5). `subagent_task` is the C2/Stage-4 target —
+/// admitted when `I(P)` holds, the definition binds subagents and the
+/// profile declares `subagents`; `DelegationUnavailable` remains the honest
+/// refusal when the path is demanded but cannot bind (spec's Stage-3
+/// degradation shape, now reachable only on an infeasible demand).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompilationTarget {
     /// `instruction` — the procedure body is compiled to instruction text.
     Instruction,
     /// `workflow_node` — the body lowers onto §3.2.4's plan-node kinds.
     WorkflowNode,
-    /// `subagent_task` — declared; refused `DelegationUnavailable` < Stage 4.
+    /// `subagent_task` — the child-through-`spawn` target (Stage 4).
     SubagentTask,
 }
 
@@ -1269,9 +1271,11 @@ pub enum SelectError {
         /// The closed reason.
         reason: WorkflowReason,
     },
-    /// `DelegationUnavailable` — `subagent_task` is refused before Stage 4
-    /// (the honest refusal the degraded rule returns when `I(P)` holds and
-    /// the subagent path is bound).
+    /// `DelegationUnavailable` — the subagent path is demanded (a
+    /// `subagent_task` override, or the rule would select it) but the
+    /// runtime cannot delegate: `I(P)` fails, the definition binds no
+    /// subagents, or the profile declares none. Honest typed refusal —
+    /// never a silent `instruction` fallback.
     DelegationUnavailable {
         /// The procedure's semantic id.
         procedure: String,
@@ -1542,8 +1546,8 @@ pub fn procedure_body_size(steps: &[crate::records::ProcedureStep]) -> u64 {
 /// 2. `workflow_node` when `B(P)` and the bound control strategy declares
 ///    `workflow_execution`.
 /// 3. `subagent_task` when `I(P)` and the definition binds subagents and
-///    the profile declares `subagents` — refused `DelegationUnavailable`
-///    before Stage 4 (the spec's honest degradation).
+///    the profile declares `subagents` (Stage 4 — the child-through-`spawn`
+///    target; `DelegationUnavailable` when the demand cannot bind).
 /// 4. `instruction` unless `size(body) > procedure_inline_budget` with no
 ///    subagent path ⇒ `UnexpressibleSurface`.
 /// 5. Risk floor — evaluated before any choice lands: `R(P) ∋
@@ -1655,7 +1659,13 @@ pub fn select_target(
                 return Ok(predicates(CompilationTarget::WorkflowNode, "override"));
             }
             crate::records::CompileHint::SubagentTask => {
-                return Err(SelectError::DelegationUnavailable { procedure: proc_id })
+                // Stage 4: the override is feasible only when the subagent
+                // path can bind — else the honest `DelegationUnavailable`.
+                if i_pred && ctx.subagents_bound && ctx.profile_declares_subagents {
+                    risk_floor(expected_evidence)?;
+                    return Ok(predicates(CompilationTarget::SubagentTask, "override"));
+                }
+                return Err(SelectError::DelegationUnavailable { procedure: proc_id });
             }
         }
     }
@@ -1664,9 +1674,12 @@ pub fn select_target(
         risk_floor(expected_evidence)?;
         return Ok(predicates(CompilationTarget::WorkflowNode, "b_workflow"));
     }
-    // (iii) — I(P) ∧ subagents bound ∧ declared → refused at Stage 3.
+    // (iii) — I(P) ∧ subagents bound ∧ declared → `subagent_task` (Stage 4;
+    // AC-R-2.4.5-8's entry point — the lowering produces the DelegateSpec
+    // the kernel `spawn` consumes).
     if i_pred && ctx.subagents_bound && ctx.profile_declares_subagents {
-        return Err(SelectError::DelegationUnavailable { procedure: proc_id });
+        risk_floor(expected_evidence)?;
+        return Ok(predicates(CompilationTarget::SubagentTask, "i_subagent"));
     }
     // (iv) — instruction, bounded.
     let size = procedure_body_size(steps);

@@ -530,12 +530,34 @@ pub fn expand(
                             Json::Int(derive_u64("experiment.seed.sampling", &rpid) as i64),
                         );
                     }
+                    // `environment_derivation` — the spec's ext marker
+                    // names the C2 derivation (`fork_snapshot` for the
+                    // boundary companion, `fork_by_reference` task
+                    // coordinates at each `context.compaction.started`;
+                    // absent ⇒ the C0 `fresh_from_image`). An unknown
+                    // spelling is a schema violation, never a silent
+                    // default.
+                    let derivation = match spec.ext.get("environment_derivation") {
+                        None => EnvironmentDerivation::FreshFromImage,
+                        Some(hh_wire::json::Json::Str(v)) => EnvironmentDerivation::parse(v)
+                            .ok_or_else(|| {
+                                ExpandError::Refusal(ExperimentRefusal::Schema(SchemaError::v(
+                                    "environment_derivation",
+                                    "unknown derivation",
+                                )))
+                            })?,
+                        Some(_) => {
+                            return Err(ExpandError::Refusal(ExperimentRefusal::Schema(
+                                SchemaError::v("environment_derivation", "must be a string"),
+                            )))
+                        }
+                    };
                     run_plans.push(RunPlan {
                         run_plan_id: rpid.clone(),
                         cell_id: cell_id.clone(),
                         replicate_index: r,
                         seed_material: Json::Obj(seed_material),
-                        environment_derivation: EnvironmentDerivation::FreshFromImage,
+                        environment_derivation: derivation,
                         // ADR-0128 `cold_start`: every run is its own cache
                         // scope — the salt is content-derived from the plan id.
                         cache_scope_salt: idp_id("experiment.cache_scope", rpid.as_bytes()),

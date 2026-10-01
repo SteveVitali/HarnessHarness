@@ -824,7 +824,10 @@ fn lift_event_primary(e: &HostedEvent) -> LiftedRow {
             } else {
                 "context.compaction.completed"
             };
-            row(class, e.payload.clone(), tid())
+            // AC-R-2.4.2-11's lift shape — absent members fill to the honest
+            // defaults (`applied_ops = []`, `components` to the typed `n/a`
+            // block); reported members pass through verbatim (idempotent).
+            row(class, crate::compact::complete_payload(&e.payload), tid())
         }
         "coordinate.changed" => row("lifecycle.hosted.coordinate_set", e.payload.clone(), tid()),
         // Known kinds with no native class, unknown kinds, `_`-prefixed kinds —

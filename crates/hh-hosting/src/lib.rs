@@ -51,6 +51,7 @@ pub mod abi;
 pub mod adapter_a;
 pub mod adapter_zero;
 pub mod budget;
+pub mod compact;
 pub mod events;
 pub mod fixture;
 pub mod hosted_status;

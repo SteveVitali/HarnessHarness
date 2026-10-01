@@ -2792,3 +2792,101 @@ fn leaderboard_define_snapshot_verify_publish_and_pins() {
         .iter()
         .any(|(c, add, _)| c == &cfg0 && add.iter().any(|f| f == "retracted")));
 }
+
+// ── S4.16b — catalog epochs fold into annotations_from_ledger ────────────────
+
+#[test]
+fn catalog_epochs_fold_and_raise_configuration_drift() {
+    let mut r = rig("catalog-epoch", 1_000);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _exp_run) = open(&mut r, &s);
+    let run_id = {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        let run_plan_id = match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected plan, got {other:?}"),
+        };
+        let ticket = eng.claim(&run_plan_id, "driver").unwrap();
+        let launched = eng.launch(&ticket, "subject").unwrap();
+        drop(eng);
+        // A mid-run catalog adopt lands `action.tool.catalog.epoch` —
+        // §5d.3 §2 / ADR-0161 D5 (OQ-239): the row folds it into
+        // `annotations_from_ledger.catalog_epochs[]` and raises the
+        // `configuration_drift` flag; `configuration_version_id` is fixed.
+        finish_subject(
+            &mut r.store,
+            &launched.run_id,
+            &launched.subject_writer,
+            StopReason::Completed,
+            &[],
+            vec![(
+                "action.tool.catalog.epoch".to_string(),
+                Json::obj([
+                    ("epoch", Json::Int(1)),
+                    ("catalog_id_prev", Json::str("cat:prev")),
+                    ("catalog_id", Json::str("cat:new")),
+                    ("bundle_delta", Json::obj([("added", Json::Arr(vec![]))])),
+                    ("loss_report", Json::Null),
+                    ("adopted_by", Json::str("run:test")),
+                ]),
+            )],
+        );
+        launched.run_id
+    };
+    let row = r
+        .results
+        .project_row(&r.store, Some(&r.docs), &run_id, None, None)
+        .unwrap();
+    let epochs = row
+        .annotations_from_ledger
+        .get("catalog_epochs")
+        .and_then(|e| match e {
+            Json::Arr(a) => Some(a.clone()),
+            _ => None,
+        })
+        .expect("catalog_epochs folded");
+    assert_eq!(epochs.len(), 1);
+    assert_eq!(
+        epochs[0].get("catalog_id").and_then(|c| c.as_str()),
+        Some("cat:new")
+    );
+    assert_eq!(
+        row.annotations_from_ledger.get("configuration_drift"),
+        Some(&Json::Bool(true)),
+        "an adopted epoch raises the configuration_drift flag"
+    );
+
+    // A run with no adoption emits neither member.
+    let mut r2 = rig("catalog-epoch-clean", 1_000);
+    let (eid2, _e2) = open(&mut r2, &s);
+    let run_id2 = {
+        let mut eng = ExperimentEngine::new(&mut r2.store, r2.docs.clone(), ctx());
+        eng.attach(&eid2).unwrap();
+        let run_plan_id = match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected plan, got {other:?}"),
+        };
+        let ticket = eng.claim(&run_plan_id, "driver").unwrap();
+        let launched = eng.launch(&ticket, "subject").unwrap();
+        drop(eng);
+        finish_subject(
+            &mut r2.store,
+            &launched.run_id,
+            &launched.subject_writer,
+            StopReason::Completed,
+            &[],
+            vec![],
+        );
+        launched.run_id
+    };
+    let row2 = r2
+        .results
+        .project_row(&r2.store, Some(&r2.docs), &run_id2, None, None)
+        .unwrap();
+    assert!(row2.annotations_from_ledger.get("catalog_epochs").is_none());
+    assert!(row2
+        .annotations_from_ledger
+        .get("configuration_drift")
+        .is_none());
+}

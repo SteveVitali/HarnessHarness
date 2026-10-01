@@ -139,18 +139,21 @@ pub fn k5_dependencies(
             ref_: snapshot_dep_ref(snapshot_id),
             stamp: snapshot_ref.to_string(),
             granularity: Granularity::Row,
+            validator_ref: None,
         },
         DependencyStamp {
             kind: DependencyKind::ProfileVersion,
             ref_: profile_dep_ref(profile_ref),
             stamp: profile_version_id.to_string(),
             granularity: Granularity::Row,
+            validator_ref: None,
         },
         DependencyStamp {
             kind: DependencyKind::DefinitionVersion,
             ref_: definition_dep_ref(definition_version_id),
             stamp: definition_version_id.to_string(),
             granularity: Granularity::Row,
+            validator_ref: None,
         },
     ]
 }

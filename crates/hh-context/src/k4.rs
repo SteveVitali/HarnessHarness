@@ -616,12 +616,14 @@ impl K4Cache {
                 ref_: cap_dep,
                 stamp: key.capability_version_id.clone(),
                 granularity: Granularity::Row,
+                validator_ref: None,
             },
             DependencyStamp {
                 kind: DependencyKind::EnvironmentEpoch,
                 ref_: epoch_dep,
                 stamp: epoch.to_string(),
                 granularity: Granularity::Row,
+                validator_ref: None,
             },
         ];
         let mut validator_ref = None;

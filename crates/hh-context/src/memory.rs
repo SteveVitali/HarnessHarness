@@ -47,10 +47,13 @@ pub const CONFLICT_IDP: &str = "memory_conflict.1";
 // Records (§5c.3 data model)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// `DependencyStamp{kind, ref, stamp, granularity}` (§5c.4): `ref` names a
-/// versioned kernel/registry record (a `RecordId`/`VersionedRef` — never a
-/// display name); `stamp` is the version id / revision / snapshot hash the
-/// write pinned.
+/// `DependencyStamp{kind, ref, stamp, granularity, validator_ref?}` (§5c.4):
+/// `ref` names a versioned kernel/registry record (a `RecordId`/
+/// `VersionedRef` — never a display name); `stamp` is the version id /
+/// revision / snapshot hash the write pinned. For
+/// `external_resource{validator_ref}` deps (C2) `validator_ref` names the
+/// `Validator` whose last verdict gates the stamp — the kernel-side stamp
+/// table can't answer an external resource, so the verdict is the truth.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DependencyStamp {
     /// The closed kind.
@@ -61,6 +64,46 @@ pub struct DependencyStamp {
     pub stamp: String,
     /// `row | table`.
     pub granularity: Granularity,
+    /// `validator_ref` — required on `external_resource` deps (C2); absent
+    /// elsewhere.
+    pub validator_ref: Option<String>,
+}
+
+impl DependencyStamp {
+    /// Construct a kernel/registry stamp (no validator).
+    pub fn stamped(
+        kind: DependencyKind,
+        ref_: impl Into<String>,
+        stamp: impl Into<String>,
+        granularity: Granularity,
+    ) -> DependencyStamp {
+        DependencyStamp {
+            kind,
+            ref_: ref_.into(),
+            stamp: stamp.into(),
+            granularity,
+            validator_ref: None,
+        }
+    }
+
+    /// Construct an `external_resource` dep (C2): the declared `Validator`
+    /// gates the stamp — `None` fails closed at `check_contract` and the
+    /// write-side `UnvalidatedExternalDependency` refusal covers a missing
+    /// member (never a silent pass — CC3).
+    pub fn external(
+        ref_: impl Into<String>,
+        stamp: impl Into<String>,
+        granularity: Granularity,
+        validator_ref: Option<String>,
+    ) -> DependencyStamp {
+        DependencyStamp {
+            kind: DependencyKind::ExternalResource,
+            ref_: ref_.into(),
+            stamp: stamp.into(),
+            granularity,
+            validator_ref,
+        }
+    }
 }
 
 /// `Freshness` — `valid_until(at)` | `max_age(n, from)` (§5c.4).
@@ -328,7 +371,7 @@ impl MemoryVersion {
     }
 }
 
-fn contract_json(c: &InvalidationContract) -> Json {
+pub(crate) fn contract_json(c: &InvalidationContract) -> Json {
     let mut v = vec![
         (
             "dependencies",
@@ -336,12 +379,16 @@ fn contract_json(c: &InvalidationContract) -> Json {
                 c.dependencies
                     .iter()
                     .map(|d| {
-                        Json::obj([
+                        let mut m = vec![
                             ("kind", Json::str(d.kind.as_str())),
                             ("ref", Json::str(d.ref_.clone())),
                             ("stamp", Json::str(d.stamp.clone())),
                             ("granularity", Json::str(d.granularity.as_str())),
-                        ])
+                        ];
+                        if let Some(vr) = &d.validator_ref {
+                            m.push(("validator_ref", Json::str(vr.clone())));
+                        }
+                        Json::obj(m)
                     })
                     .collect(),
             ),
@@ -419,7 +466,7 @@ pub struct ArtifactVersion {
 
 /// `NameBinding{scope, name, version_id, bound_at, supersedes?, reason}` —
 /// one entry of the name history (`bind` appends, never edits).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameBinding {
     /// The scope.
     pub scope: PersistenceScope,
@@ -484,6 +531,22 @@ pub struct MemoryRevocation {
     pub at_seq: u64,
 }
 
+/// `MemoryPolicy.justification_scope` (§5c.4; ADR-0083 d4): which
+/// justifications J1's `stale_by_dependency` walk propagates through.
+/// `delivered` (the default — every kernel-stamped `delivered_memory` /
+/// `expanded_handle` justification counts) or `subject_overlap` (the C2
+/// narrowing — only justifications whose target shares the dependent
+/// version's `subject_key` count; admissible in a sealed definition only
+/// after AC-R-2.4.4-12's `ComparisonReport`; `declared_only` is *never*
+/// admissible and is not represented here).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JustificationScope {
+    /// Every delivered/expanded justification propagates (the default).
+    Delivered,
+    /// Only subject-overlapping justifications propagate (C2).
+    SubjectOverlap,
+}
+
 /// `MemoryPolicy` — the runtime record holding write ceilings, per-kind
 /// defaults and escalation rules (§5c.3/§5c.4; ADR-0078 d4).
 #[derive(Debug, Clone)]
@@ -501,6 +564,8 @@ pub struct MemoryPolicy {
     pub escalate_on_unresolved: bool,
     /// The principal ref escalation targets.
     pub escalation_principal: String,
+    /// `justification_scope ∈ {delivered (default), subject_overlap (C2)}`.
+    pub justification_scope: JustificationScope,
 }
 
 /// `KindPolicy` — the per-kind defaults record.
@@ -523,6 +588,7 @@ impl Default for MemoryPolicy {
             per_kind_defaults: BTreeMap::new(),
             escalate_on_unresolved: true,
             escalation_principal: "principal".to_string(),
+            justification_scope: JustificationScope::Delivered,
         }
     }
 }
@@ -685,9 +751,21 @@ pub enum MemoryError {
         /// Why.
         detail: String,
     },
-    /// `OriginOriginForbidden` — an `origin(origin_k)` ref reached the store.
-    OriginForbidden {
-        /// Detail.
+    /// `UnvalidatedExternalDependency` — an `external_resource` dep without
+    /// a declared `validator_ref` (C2: the kernel stamp table cannot answer
+    /// an external resource; a missing validator refuses, never passes —
+    /// §5c.4 `UnknownDependencyKind` validation at write).
+    UnvalidatedExternalDependency {
+        /// The dep's `ref`.
+        ref_: String,
+    },
+    /// `Channel` — the store backend faulted at the transport level (the
+    /// `hh-memory-store` plugin's session died or diverged from the client's
+    /// deterministic mirror; `memory_abi::RemoteStore` surfaces it). A
+    /// transport fault is a typed refusal like any domain refusal — never a
+    /// silent fallback, never a panic (S4.16b).
+    Channel {
+        /// The fault (`transport:`/`decode:`/`refusal:`/`divergence:`).
         detail: String,
     },
 }
@@ -868,6 +946,30 @@ impl MemoryStore {
             .unwrap_or(&[])
     }
 
+    /// `writes_by(writer_ref)` — the version ids whose provenance origin's
+    /// primary coordinate matches `writer_ref` (the `writer` half of the
+    /// usage index the contract enumerates — §5c.3; out-of-process stores
+    /// answer it over the port).
+    pub fn writes_by(&self, writer_ref: &str) -> Vec<String> {
+        self.order
+            .iter()
+            .filter(|vid| {
+                self.versions
+                    .get(*vid)
+                    .map(|v| v.provenance.origin.primary_ref() == writer_ref)
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// `enumerate(layer)` — the public spelling of the layer enumerator the
+    /// port and the out-of-process binding use (same fold order as
+    /// `raw_ids`).
+    pub fn enumerate(&self, layer: Layer) -> Vec<String> {
+        self.raw_ids(layer)
+    }
+
     // ── put / write ──────────────────────────────────────────────────────
 
     /// `put(draft, ctx)` — the write op (§5c.3). Order: provenance → scope →
@@ -979,6 +1081,20 @@ impl MemoryStore {
             return Err(MemoryError::ScopeCeilingExceeded {
                 scope: draft.scope,
                 writer: format!("kind:{} granularity:table", draft.kind.as_str()),
+            });
+        }
+        // An `external_resource` dep without a declared `validator_ref`
+        // refuses at write (C2 — §5c.4: stamps read from kernel/registry
+        // records, never from the memory's text; an external resource's
+        // truth lives behind its declared Validator — a missing member is
+        // the `UnknownDependencyKind`-class write validation, never a pass).
+        if let Some(d) = contract
+            .dependencies
+            .iter()
+            .find(|d| d.kind == DependencyKind::ExternalResource && d.validator_ref.is_none())
+        {
+            return Err(MemoryError::UnvalidatedExternalDependency {
+                ref_: d.ref_.clone(),
             });
         }
         // (4) Label — join(context_label, writer_label), then the store caps.
@@ -1549,4 +1665,212 @@ pub fn vref_str(vr: &VersionedRef) -> String {
 
 fn vref_json_str(vr: &VersionedRef) -> Json {
     Json::str(vref_str(vr))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The MemoryStorePort (§5c.3 — the class contract's binding surface)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `MemoryStorePort` — the `memory_store` class contract's op surface,
+/// object-safe so the same contract binds in-process ([`MemoryStore`]) and
+/// out-of-process (the `hh-memory-store` plugin over `plugin_abi/1` —
+/// T-LCD-12: every op is implementable across the boundary over canonical
+/// encodings; ADR-0078 d2; §8.4 `implementation.placement`).
+///
+/// The op list is the contract's (§5c.3 `MemoryStore` table): `put`, `bind`,
+/// `revoke`, `resolve`, `manifest`, `enumerate`, `stale_candidates`,
+/// `reads_of`, `writes_by`, `record_read`, plus the environment ports the
+/// contract names (`set_stamp`, `set_validator_verdict`,
+/// `mark_scope_ended`, `publish_replacement`) and the lease pair
+/// (`take_lease`, `lease`) — a fenced writer holds the lease the write
+/// validates against. Read accessors needed to *check* the contract's
+/// invariants out-of-process (`version`, `version_order`, `edges`,
+/// `revocations`, `conflicts`, `applied_seq`, `drain_events`) are part of
+/// the surface too — a conformance suite binds them identically on both
+/// placements.
+pub trait MemoryStorePort {
+    /// `put(draft, ctx)` — the write op (lease-fenced, ceiling-checked).
+    fn put(&mut self, draft: MemoryDraft, ctx: &WriteContext) -> Result<PutOutcome, MemoryError>;
+    /// `bind(scope, name, version_id, supersedes?, reason)` — name-history
+    /// append (`supersedes{reason: consolidation}` for consolidation binds).
+    fn bind(
+        &mut self,
+        scope: PersistenceScope,
+        name: &str,
+        version_id: &str,
+        supersedes: Option<&str>,
+        reason: &str,
+        at_seq: u64,
+    ) -> Result<NameBinding, MemoryError>;
+    /// `revoke(version_id, reason, revoker, replacement?, at_seq)` — the E4
+    /// op (authority-checked, `AlreadyRevoked`-refusing).
+    fn revoke(
+        &mut self,
+        version_id: &str,
+        reason: crate::vocab::RevocationReason,
+        revoker: &ProvenanceRecord,
+        replacement: Option<String>,
+        at_seq: u64,
+    ) -> Result<hh_identity::supersede::RevocationRecord, crate::lifecycle::LifecycleError>;
+    /// `resolve(scope, name?, version_id?, mode)` — `Execute` refuses
+    /// revoked/stale/superseded heads; `Audit` annotates.
+    fn resolve(
+        &self,
+        scope: PersistenceScope,
+        name: Option<&str>,
+        version_id: Option<&str>,
+        mode: hh_identity::names::ResolveMode,
+    ) -> Result<ResolveOutcome, MemoryError>;
+    /// `manifest(scope, at)` — the folded name history.
+    fn manifest(&self, scope: PersistenceScope, at: u64) -> MemoryManifest;
+    /// `enumerate(layer)` — the layer member ids in fold order.
+    fn enumerate(&self, layer: Layer) -> Vec<String>;
+    /// `stale_candidates(scope, policy)` — the stale-index view the
+    /// consolidation driver consumes.
+    fn stale_candidates(&self, scope: PersistenceScope) -> Vec<String>;
+    /// `reads_of(version_id)` — the read seqs (`memory_usage.last_read_at`).
+    fn reads_of(&self, version_id: &str) -> Vec<u64>;
+    /// `writes_by(writer_ref)` — versions written by the writer whose
+    /// origin primary coordinate is `writer_ref`.
+    fn writes_by(&self, writer_ref: &str) -> Vec<String>;
+    /// `record_read(version_id, seq)` — the retrieval-side read stamp.
+    fn record_read(&mut self, version_id: &str, seq: u64);
+    /// `set_stamp(dep_ref, stamp)` — the dependency-stamp port.
+    fn set_stamp(&mut self, dep_ref: &str, stamp: &str);
+    /// `set_validator_verdict(version_id, validator_ref, ok)` — the
+    /// validator port the external-resource dep and `validator_fails`
+    /// checks read.
+    fn set_validator_verdict(&mut self, version_id: &str, validator_ref: &str, ok: bool);
+    /// `mark_scope_ended(scope)` — `scope_ended` fires for every version in
+    /// the scope.
+    fn mark_scope_ended(&mut self, scope: PersistenceScope);
+    /// `publish_replacement(name)` — `replacement_published{name}` fires.
+    fn publish_replacement(&mut self, name: &str);
+    /// `version(version_id)` — the stored record (clone at the boundary).
+    fn version(&self, version_id: &str) -> Option<MemoryVersion>;
+    /// `version_order()` — write order (the deterministic fold order).
+    fn version_order(&self) -> Vec<String>;
+    /// `edges()` — the supersedes edges (lineage fold input).
+    fn edges(&self) -> Vec<SupersedesEdge>;
+    /// `revocations()` — the memory revocations.
+    fn revocations(&self) -> Vec<MemoryRevocation>;
+    /// `applied_seq()` — the store's watermark.
+    fn applied_seq(&self) -> u64;
+    /// `drain_events()` — the pending emitted `(class, payload)` rows.
+    fn drain_events(&mut self) -> Vec<(String, Json)>;
+    /// `take_lease(scope, holder)` — mint/bump the writer lease generation.
+    fn take_lease(&mut self, scope: PersistenceScope, holder: &str) -> u64;
+    /// `lease(scope)` — the current lease generation (fencing token).
+    fn lease(&self, scope: PersistenceScope) -> u64;
+}
+
+impl MemoryStorePort for MemoryStore {
+    fn put(&mut self, draft: MemoryDraft, ctx: &WriteContext) -> Result<PutOutcome, MemoryError> {
+        MemoryStore::put(self, draft, ctx)
+    }
+
+    fn bind(
+        &mut self,
+        scope: PersistenceScope,
+        name: &str,
+        version_id: &str,
+        supersedes: Option<&str>,
+        reason: &str,
+        at_seq: u64,
+    ) -> Result<NameBinding, MemoryError> {
+        MemoryStore::bind(self, scope, name, version_id, supersedes, reason, at_seq)
+    }
+
+    fn revoke(
+        &mut self,
+        version_id: &str,
+        reason: crate::vocab::RevocationReason,
+        revoker: &ProvenanceRecord,
+        replacement: Option<String>,
+        at_seq: u64,
+    ) -> Result<hh_identity::supersede::RevocationRecord, crate::lifecycle::LifecycleError> {
+        crate::lifecycle::revoke(self, version_id, reason, revoker, replacement, at_seq)
+    }
+
+    fn resolve(
+        &self,
+        scope: PersistenceScope,
+        name: Option<&str>,
+        version_id: Option<&str>,
+        mode: hh_identity::names::ResolveMode,
+    ) -> Result<ResolveOutcome, MemoryError> {
+        MemoryStore::resolve(self, scope, name, version_id, mode)
+    }
+
+    fn manifest(&self, scope: PersistenceScope, at: u64) -> MemoryManifest {
+        MemoryStore::manifest(self, scope, at)
+    }
+
+    fn enumerate(&self, layer: Layer) -> Vec<String> {
+        MemoryStore::enumerate(self, layer)
+    }
+
+    fn stale_candidates(&self, scope: PersistenceScope) -> Vec<String> {
+        MemoryStore::stale_candidates(self, scope)
+    }
+
+    fn reads_of(&self, version_id: &str) -> Vec<u64> {
+        MemoryStore::reads_of(self, version_id).to_vec()
+    }
+
+    fn writes_by(&self, writer_ref: &str) -> Vec<String> {
+        MemoryStore::writes_by(self, writer_ref)
+    }
+
+    fn record_read(&mut self, version_id: &str, seq: u64) {
+        MemoryStore::record_read(self, version_id, seq)
+    }
+
+    fn set_stamp(&mut self, dep_ref: &str, stamp: &str) {
+        MemoryStore::set_stamp(self, dep_ref, stamp)
+    }
+
+    fn set_validator_verdict(&mut self, version_id: &str, validator_ref: &str, ok: bool) {
+        MemoryStore::set_validator_verdict(self, version_id, validator_ref, ok)
+    }
+
+    fn mark_scope_ended(&mut self, scope: PersistenceScope) {
+        MemoryStore::mark_scope_ended(self, scope)
+    }
+
+    fn publish_replacement(&mut self, name: &str) {
+        MemoryStore::publish_replacement(self, name)
+    }
+
+    fn version(&self, version_id: &str) -> Option<MemoryVersion> {
+        MemoryStore::version(self, version_id).cloned()
+    }
+
+    fn version_order(&self) -> Vec<String> {
+        MemoryStore::version_order(self).to_vec()
+    }
+
+    fn edges(&self) -> Vec<SupersedesEdge> {
+        MemoryStore::edges(self).to_vec()
+    }
+
+    fn revocations(&self) -> Vec<MemoryRevocation> {
+        MemoryStore::revocations(self).to_vec()
+    }
+
+    fn applied_seq(&self) -> u64 {
+        MemoryStore::applied_seq(self)
+    }
+
+    fn drain_events(&mut self) -> Vec<(String, Json)> {
+        MemoryStore::drain_events(self)
+    }
+
+    fn take_lease(&mut self, scope: PersistenceScope, holder: &str) -> u64 {
+        MemoryStore::take_lease(self, scope, holder)
+    }
+
+    fn lease(&self, scope: PersistenceScope) -> u64 {
+        MemoryStore::lease(self, scope)
+    }
 }

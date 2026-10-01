@@ -190,6 +190,27 @@ impl Origin {
         )
     }
 
+    /// The origin's primary identity coordinate — the ref a `writes_by`
+    /// query or a producer audit matches on: `author_ref`, `model_ref`,
+    /// `capability`, `candidate_id`, `source_system`, `migration_ref`,
+    /// `component_ref`, `participant_ref`, `entry_ref` per variant (the
+    /// stable, ref-keyed spelling — never a display name).
+    pub fn primary_ref(&self) -> &str {
+        match self {
+            Origin::Human { author_ref, .. } => author_ref,
+            Origin::Model { model_ref, .. } => model_ref,
+            Origin::Tool { capability, .. } => capability,
+            Origin::Evolution { candidate_id, .. } => candidate_id,
+            Origin::Import { source_system, .. } => source_system,
+            Origin::Migration { from_dialect } => from_dialect,
+            Origin::Kernel { component_ref } => component_ref,
+            Origin::Participant {
+                participant_ref, ..
+            } => participant_ref,
+            Origin::Cache { entry_ref } => entry_ref,
+        }
+    }
+
     /// The variant tag — the `kind` spelling used in the canonical JSON and in lowered
     /// carriers that keep only the discriminant (P7).
     pub fn tag(&self) -> &'static str {

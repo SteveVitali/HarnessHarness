@@ -1718,7 +1718,7 @@ fn conditioned_from_json(j: &Json, path: &str) -> Result<ConditionedRule, Compil
     })
 }
 
-fn loss_json(l: &LoweringLossReport) -> Json {
+pub(crate) fn loss_json(l: &LoweringLossReport) -> Json {
     Json::obj([
         (
             "entries",
