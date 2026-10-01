@@ -197,9 +197,7 @@ impl FleetError {
             FleetError::MissingBudgetRef => "missing_budget_ref".to_string(),
             FleetError::StaleLease { .. } => "stale_lease".to_string(),
             FleetError::NoOpenEscalation { .. } => "no_open_escalation".to_string(),
-            FleetError::IllegitimateResolution { .. } => {
-                "illegitimate_resolution".to_string()
-            }
+            FleetError::IllegitimateResolution { .. } => "illegitimate_resolution".to_string(),
             FleetError::NotStoppable { .. } => "not_stoppable".to_string(),
             FleetError::SettlePrecondition { .. } => "settle_precondition".to_string(),
             FleetError::StaleDispatchNote { .. } => "stale_dispatch".to_string(),
@@ -225,10 +223,9 @@ impl fmt::Display for FleetError {
         match self {
             FleetError::Store(e) => write!(f, "store: {e}"),
             FleetError::Account(e) => write!(f, "account: {e}"),
-            FleetError::StaleSpec { expected, seen } => write!(
-                f,
-                "StaleSpec: cursor {seen} vs durable spec {expected}"
-            ),
+            FleetError::StaleSpec { expected, seen } => {
+                write!(f, "StaleSpec: cursor {seen} vs durable spec {expected}")
+            }
             FleetError::NotOwner { run, item } => {
                 write!(f, "NotOwner: {item} under {run}")
             }
