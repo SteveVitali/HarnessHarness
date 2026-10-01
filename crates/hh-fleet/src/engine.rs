@@ -25,7 +25,7 @@ use crate::identity;
 use crate::payloads;
 use crate::source::{SourceOccurrence, WorkSourceAdapter};
 use crate::spec::FleetSpec;
-use crate::view::{FleetView, Cursor};
+use crate::view::{Cursor, FleetView};
 use crate::work_item::{derive_state, WorkItemInit, WorkItemView};
 
 /// The kernel producer spelling for fleet-authored rows.
@@ -137,18 +137,15 @@ impl FleetEngine {
         manifest.configuration_id = None;
         manifest.configuration_version_id = None;
         manifest.budget = spec.budget_ref.clone();
-        manifest.extra.insert(
-            "fleet_spec_ref".to_string(),
-            Json::str(&spec_ref),
-        );
-        manifest.extra.insert(
-            "policy_ref".to_string(),
-            Json::str(&spec.policy_ref),
-        );
-        manifest.extra.insert(
-            "fleet_spec".to_string(),
-            spec.to_json(),
-        );
+        manifest
+            .extra
+            .insert("fleet_spec_ref".to_string(), Json::str(&spec_ref));
+        manifest
+            .extra
+            .insert("policy_ref".to_string(), Json::str(&spec.policy_ref));
+        manifest
+            .extra
+            .insert("fleet_spec".to_string(), spec.to_json());
         if !spec.narrowing.is_empty() {
             manifest.extra.insert(
                 "narrowing_leaves".to_string(),
@@ -269,7 +266,8 @@ impl FleetEngine {
         payload: Json,
         causes: Vec<EventRef>,
     ) -> Result<EventEnvelope, FleetError> {
-        let env = store.commit_kernel_row_for(COMPONENT, &self.run_id, class, payload, vec![], causes)?;
+        let env =
+            store.commit_kernel_row_for(COMPONENT, &self.run_id, class, payload, vec![], causes)?;
         self.view.fold_tail(store.events(&self.run_id)?)?;
         Ok(env)
     }
@@ -614,11 +612,7 @@ impl FleetEngine {
                 self.emit(
                     store,
                     "control.work_item.dispatched",
-                    payloads::source_update_payload(
-                        &it.item_id,
-                        &it.run_item_id,
-                        &new_state,
-                    ),
+                    payloads::source_update_payload(&it.item_id, &it.run_item_id, &new_state),
                     vec![],
                 )?;
             }
@@ -639,11 +633,7 @@ impl FleetEngine {
                 (
                     i.item_id.clone(),
                     i.run_item_id.clone(),
-                    self.view
-                        .spec
-                        .human_gate_states
-                        .iter()
-                        .any(|g| g == st),
+                    self.view.spec.human_gate_states.iter().any(|g| g == st),
                 )
             })
             .collect();
@@ -658,13 +648,7 @@ impl FleetEngine {
                 self.emit(
                     store,
                     "control.work_item.blocked",
-                    payloads::block_add_payload(
-                        &item_id,
-                        &run_item_id,
-                        "human_gate",
-                        None,
-                        None,
-                    ),
+                    payloads::block_add_payload(&item_id, &run_item_id, "human_gate", None, None),
                     vec![],
                 )?;
                 report.blocked.push(item_id);
@@ -678,11 +662,7 @@ impl FleetEngine {
                 self.emit(
                     store,
                     "control.work_item.blocked",
-                    payloads::block_remove_payload(
-                        &item_id,
-                        &run_item_id,
-                        "human_gate",
-                    ),
+                    payloads::block_remove_payload(&item_id, &run_item_id, "human_gate"),
                     vec![],
                 )?;
             }
@@ -725,7 +705,13 @@ impl FleetEngine {
                 self.emit(
                     store,
                     "control.work_item.blocked",
-                    payloads::block_add_payload(&item_id, &run_item_id, "suspended_source", None, None),
+                    payloads::block_add_payload(
+                        &item_id,
+                        &run_item_id,
+                        "suspended_source",
+                        None,
+                        None,
+                    ),
                     vec![],
                 )?;
                 report.blocked.push(item_id);
@@ -807,9 +793,7 @@ impl FleetEngine {
                     )?;
                     self.view.fold_tail(store.events(&self.run_id)?)?;
                     self.ensure_retry_sub(store, &it.item_id, &sched.event_id)?;
-                } else if it.retry.attempts >= max
-                    && !it.blocked.contains("retry_exhausted")
-                {
+                } else if it.retry.attempts >= max && !it.blocked.contains("retry_exhausted") {
                     // Retry bound reached — `blocked{retry_exhausted}` and
                     // escalate (bound declared, never silent).
                     self.emit(
@@ -1029,9 +1013,7 @@ impl FleetEngine {
             // RC-6 capacity — `activate_run` is the bound; a full fleet
             // leaves the item queued (the bound is durable data, not a
             // refusal — the `fleet.dispatch` op surfaces `capacity`).
-            if self.view.active_dispatch_count() as u64
-                >= self.view.spec.capacity.activate_run
-            {
+            if self.view.active_dispatch_count() as u64 >= self.view.spec.capacity.activate_run {
                 continue;
             }
             self.dispatch(store, adapter, &it.item_id, now_ms, report)?;
@@ -1074,7 +1056,6 @@ impl FleetEngine {
             _ => false,
         }
     }
-
 
     /// `dispatch(item)` — RC-2's lease+mark under RC-1's stale check +
     /// RC-6's capacity/budget gates. `dispatch_note` then stamps
@@ -1178,9 +1159,7 @@ impl FleetEngine {
             .view
             .pending_schedules
             .iter()
-            .filter(|(_, p)| {
-                p.get("scope_id").and_then(Json::as_str) == Some(it.item_id.as_str())
-            })
+            .filter(|(_, p)| p.get("scope_id").and_then(Json::as_str) == Some(it.item_id.as_str()))
             .map(|(id, _)| id.clone())
             .collect();
         for sid in pending {
@@ -1240,13 +1219,7 @@ impl FleetEngine {
             self.emit(
                 store,
                 "control.work_item.blocked",
-                payloads::block_add_payload(
-                    &it.item_id,
-                    &it.run_item_id,
-                    "budget",
-                    None,
-                    None,
-                ),
+                payloads::block_add_payload(&it.item_id, &it.run_item_id, "budget", None, None),
                 vec![],
             )?;
             report.blocked.push(it.item_id.clone());
@@ -1281,13 +1254,7 @@ impl FleetEngine {
                 self.emit(
                     store,
                     "control.work_item.blocked",
-                    payloads::block_add_payload(
-                        &it.item_id,
-                        &it.run_item_id,
-                        "budget",
-                        None,
-                        None,
-                    ),
+                    payloads::block_add_payload(&it.item_id, &it.run_item_id, "budget", None, None),
                     vec![],
                 )?;
                 report.blocked.push(it.item_id.clone());
@@ -1339,14 +1306,7 @@ impl FleetEngine {
                 if !top.is_empty() && it.owner.as_deref() != Some(top.as_str()) {
                     self.state_handoff(store, &it, &top, "escalation")?;
                 }
-                self.raise_escalation(
-                    store,
-                    &it,
-                    "overdue",
-                    "overdue",
-                    "reconciler",
-                    None,
-                )?;
+                self.raise_escalation(store, &it, "overdue", "overdue", "reconciler", None)?;
                 report.escalated.push(it.item_id.clone());
             }
         }
@@ -1418,9 +1378,12 @@ impl FleetEngine {
         item_id: &str,
         created_by: &str,
     ) -> Result<(), FleetError> {
-        if self.view.sub_triggers.values().any(
-            |t| matches!(t, Trigger::RetryDue { scope_id } if scope_id == item_id),
-        ) {
+        if self
+            .view
+            .sub_triggers
+            .values()
+            .any(|t| matches!(t, Trigger::RetryDue { scope_id } if scope_id == item_id))
+        {
             return Ok(());
         }
         store.wakeup_subscribe(
@@ -1572,8 +1535,7 @@ impl FleetEngine {
                 let spawn = child_manifest.spawn_event.as_ref();
                 let dispatch_ev = it.dispatch_event_id.clone();
                 match (spawn, &dispatch_ev) {
-                    (Some(sp), Some(ev))
-                        if sp.run_id == self.run_id && &sp.event_id == ev => {}
+                    (Some(sp), Some(ev)) if sp.run_id == self.run_id && &sp.event_id == ev => {}
                     _ => {
                         return Err(FleetError::StaleDispatchNote {
                             item: item_id.to_string(),
@@ -1595,12 +1557,7 @@ impl FleetEngine {
                 self.emit(
                     store,
                     "control.work_item.dispatched",
-                    payloads::run_note_payload(
-                        &it.item_id,
-                        &it.run_item_id,
-                        spec_ref,
-                        run,
-                    ),
+                    payloads::run_note_payload(&it.item_id, &it.run_item_id, spec_ref, run),
                     vec![
                         EventRef {
                             run_id: run.to_string(),
@@ -1617,12 +1574,7 @@ impl FleetEngine {
                 self.emit(
                     store,
                     "control.work_item.dispatched",
-                    payloads::error_note_payload(
-                        &it.item_id,
-                        &it.run_item_id,
-                        spec_ref,
-                        err,
-                    ),
+                    payloads::error_note_payload(&it.item_id, &it.run_item_id, spec_ref, err),
                     vec![],
                 )?;
             }
@@ -1650,9 +1602,7 @@ impl FleetEngine {
             .ownership
             .validate_set_owner(&self.view.spec, agent, owner)
             .map_err(|mut e| {
-                if let FleetError::CrossFleet { run, .. }
-                | FleetError::Cycle { run, .. } = &mut e
-                {
+                if let FleetError::CrossFleet { run, .. } | FleetError::Cycle { run, .. } = &mut e {
                     *run = self.run_id.clone();
                 }
                 e
@@ -1702,12 +1652,7 @@ impl FleetEngine {
         self.emit(
             store,
             "control.work_item.owner_acknowledged",
-            payloads::owner_acknowledged_payload(
-                &it.item_id,
-                &it.run_item_id,
-                agent,
-                &lease_agent,
-            ),
+            payloads::owner_acknowledged_payload(&it.item_id, &it.run_item_id, agent, &lease_agent),
             vec![],
         )?;
         Ok(())
@@ -1751,13 +1696,7 @@ impl FleetEngine {
         self.emit(
             store,
             "control.work_item.owner_changed",
-            payloads::transfer_owner_payload(
-                &it.item_id,
-                &it.run_item_id,
-                &from,
-                new_owner,
-                basis,
-            ),
+            payloads::transfer_owner_payload(&it.item_id, &it.run_item_id, &from, new_owner, basis),
             vec![],
         )?;
         Ok(())
@@ -1778,8 +1717,7 @@ impl FleetEngine {
     ) -> Result<(), FleetError> {
         let from = it.owner.clone().unwrap_or_else(|| "none".to_string());
         let href = identity::handoff_ref(&from, to, &it.item_id);
-        let lease_agent =
-            identity::lease_agent_ref(&identity::agent_ref(to), &self.lease.lease_id);
+        let lease_agent = identity::lease_agent_ref(&identity::agent_ref(to), &self.lease.lease_id);
         self.emit(
             store,
             "control.work_item.handoff",
@@ -1905,9 +1843,7 @@ impl FleetEngine {
                 cause,
                 deadline_ms,
                 deadline_sub.as_deref(),
-                handoff
-                    .as_ref()
-                    .map(|(t, l)| (t.as_str(), l.as_str())),
+                handoff.as_ref().map(|(t, l)| (t.as_str(), l.as_str())),
             ),
             vec![EventRef {
                 run_id: self.run_id.clone(),
@@ -2171,11 +2107,7 @@ impl FleetEngine {
     /// concurrent claim is `WouldBlock`; the lease replays at restore).
     /// `reconcile`'s dispatch path does lease+mark atomically; this op
     /// serves the explicit `claim → dispatch(lease)` surface.
-    pub fn claim(
-        &mut self,
-        store: &mut Store,
-        item_id: &str,
-    ) -> Result<Json, FleetError> {
+    pub fn claim(&mut self, store: &mut Store, item_id: &str) -> Result<Json, FleetError> {
         self.bound(store)?;
         let it = self.view.item(item_id)?.clone();
         if it.watch_state == "dead" || it.settlement.is_some() {
@@ -2236,9 +2168,7 @@ impl FleetEngine {
                     .collect();
                 let blocked_children: Vec<String> = children
                     .iter()
-                    .filter(|c| {
-                        c.watch_state == "watching" && !c.blocked.is_empty()
-                    })
+                    .filter(|c| c.watch_state == "watching" && !c.blocked.is_empty())
                     .map(|c| c.item_id.clone())
                     .collect();
                 if !blocked_children.is_empty() {
@@ -2275,9 +2205,7 @@ impl FleetEngine {
             }
             other => {
                 return Err(FleetError::SchemaViolation {
-                    detail: format!(
-                        "cascade {other} (closed set foreground|background|orphan)"
-                    ),
+                    detail: format!("cascade {other} (closed set foreground|background|orphan)"),
                 })
             }
         }
@@ -2342,9 +2270,7 @@ impl FleetEngine {
             .unwrap_or_default();
         if !matches!(role, "origin" | "mirror" | "subscription") {
             return Err(FleetError::SchemaViolation {
-                detail: format!(
-                    "binding.role {role} (closed set origin|mirror|subscription)"
-                ),
+                detail: format!("binding.role {role} (closed set origin|mirror|subscription)"),
             });
         }
         // Durable dedup — the binding set already carrying it is `known`.
@@ -2446,10 +2372,19 @@ impl FleetEngine {
                 m.insert("spec_ref".into(), Json::str(&it.spec_ref));
                 m.insert("source".into(), it.source.clone());
                 m.insert("idempotency_key".into(), Json::str(&it.idempotency_key));
-                m.insert("owner".into(), it.owner.as_ref().map(Json::str).unwrap_or(Json::Null));
+                m.insert(
+                    "owner".into(),
+                    it.owner.as_ref().map(Json::str).unwrap_or(Json::Null),
+                );
                 m.insert("owner_ack".into(), Json::Bool(it.owner_ack));
-                m.insert("blocking".into(), Json::Arr(it.blocking.iter().map(Json::str).collect()));
-                m.insert("blocked".into(), Json::Arr(it.blocked.iter().map(Json::str).collect()));
+                m.insert(
+                    "blocking".into(),
+                    Json::Arr(it.blocking.iter().map(Json::str).collect()),
+                );
+                m.insert(
+                    "blocked".into(),
+                    Json::Arr(it.blocked.iter().map(Json::str).collect()),
+                );
                 m.insert("suspended".into(), Json::Bool(it.suspended));
                 m.insert("watch_state".into(), Json::str(&it.watch_state));
                 if let Some(s) = &it.settlement {
@@ -2466,9 +2401,7 @@ impl FleetEngine {
             .ownership
             .edges
             .iter()
-            .map(|(a, o)| {
-                Json::obj([("agent", Json::str(a)), ("owner", Json::str(o))])
-            })
+            .map(|(a, o)| Json::obj([("agent", Json::str(a)), ("owner", Json::str(o))]))
             .collect();
         let cues: Vec<Json> = self
             .view
@@ -2493,13 +2426,7 @@ impl FleetEngine {
             ("cues", Json::Arr(cues)),
             (
                 "suspended_sources",
-                Json::Arr(
-                    self.view
-                        .suspended_sources
-                        .iter()
-                        .map(Json::str)
-                        .collect(),
-                ),
+                Json::Arr(self.view.suspended_sources.iter().map(Json::str).collect()),
             ),
             ("annotations", Json::Arr(self.view.annotations.clone())),
             (
@@ -2582,10 +2509,7 @@ impl FleetEngine {
             ("narrowing_leaves", Json::Arr(leaves)),
             ("delta", Json::str("narrowing")),
             ("policy_fingerprint", Json::str(&fingerprint)),
-            (
-                "spec_ref",
-                Json::str(&self.view.spec_ref),
-            ),
+            ("spec_ref", Json::str(&self.view.spec_ref)),
         ]))
     }
 
@@ -2598,7 +2522,9 @@ impl FleetEngine {
         candidate: &[hh_embed_schema::types::NarrowingLeaf],
     ) -> Result<Json, FleetError> {
         use hh_hir::EffectDomain;
-        use hh_monitor::policy::{default_table, policy_delta, Mode, Cond, PiVerdict, PolicyDelta, PolicyRow};
+        use hh_monitor::policy::{
+            default_table, policy_delta, Cond, Mode, PiVerdict, PolicyDelta, PolicyRow,
+        };
         use hh_ontology::risk::RiskScope;
         let base = default_table(&self.view.spec.policy_ref, Mode::Attended);
         // Leaves → narrowing rows appended to the base table — `deny` /
@@ -2606,11 +2532,10 @@ impl FleetEngine {
         // catches anything that would widen.
         let mut narrowed = base.clone();
         for leaf in candidate {
-            let domain = EffectDomain::parse(&leaf.domain).map_err(|_| {
-                FleetError::SchemaViolation {
+            let domain =
+                EffectDomain::parse(&leaf.domain).map_err(|_| FleetError::SchemaViolation {
                     detail: format!("narrowing leaf domain {}", leaf.domain),
-                }
-            })?;
+                })?;
             let verdict = match leaf.disposition.as_str() {
                 "deny" => PiVerdict::Deny,
                 "ask" => PiVerdict::Ask,
@@ -2628,7 +2553,10 @@ impl FleetEngine {
                 }
             }
             narrowed.rows.push(PolicyRow {
-                id: format!("narrow_{}", leaf.leaf_id().chars().take(12).collect::<String>()),
+                id: format!(
+                    "narrow_{}",
+                    leaf.leaf_id().chars().take(12).collect::<String>()
+                ),
                 conditions,
                 verdict,
             });
@@ -2641,10 +2569,7 @@ impl FleetEngine {
             ])),
             PolicyDelta::Widening { cells } => Ok(Json::obj([
                 ("delta", Json::str("widening")),
-                (
-                    "cells",
-                    Json::Arr(cells.iter().map(Json::str).collect()),
-                ),
+                ("cells", Json::Arr(cells.iter().map(Json::str).collect())),
             ])),
         }
     }
@@ -2657,8 +2582,7 @@ impl FleetEngine {
     /// external_effect_account, dispatches[]}`. Rule-O: every
     /// dispatched-run and external-effect member links through `spec_ref`.
     pub fn accountability_record(&self, store: &mut Store) -> Result<Json, FleetError> {
-        let account = Account::open(store, &self.run_id)
-            .map_err(FleetError::Account)?;
+        let account = Account::open(store, &self.run_id).map_err(FleetError::Account)?;
         let report = account.accountability_report();
         let items: Vec<Json> = self
             .view
@@ -2700,10 +2624,7 @@ impl FleetEngine {
             .iter()
             .map(|r| {
                 Json::obj([
-                    (
-                        "item_id",
-                        r.get("item_id").cloned().unwrap_or(Json::Null),
-                    ),
+                    ("item_id", r.get("item_id").cloned().unwrap_or(Json::Null)),
                     ("issue", r.get("issue").cloned().unwrap_or(Json::Null)),
                     (
                         "issue_ref",
@@ -2711,9 +2632,7 @@ impl FleetEngine {
                     ),
                     (
                         "escalation_ref",
-                        r.get("escalation_ref")
-                            .cloned()
-                            .unwrap_or(Json::Null),
+                        r.get("escalation_ref").cloned().unwrap_or(Json::Null),
                     ),
                 ])
             })
@@ -2747,12 +2666,10 @@ impl FleetEngine {
             .map(|i| {
                 Json::Obj(BTreeMap::from([
                     ("item_id".into(), Json::str(&i.item_id)),
-                    ("spec_ref".into(), Json::str(
-                        i.dispatch
-                            .spec_ref
-                            .clone()
-                            .unwrap_or_default(),
-                    )),
+                    (
+                        "spec_ref".into(),
+                        Json::str(i.dispatch.spec_ref.clone().unwrap_or_default()),
+                    ),
                     (
                         "run_ref".into(),
                         i.dispatch
@@ -2763,10 +2680,7 @@ impl FleetEngine {
                     ),
                     (
                         "declared".into(),
-                        i.dispatch
-                            .declared
-                            .clone()
-                            .unwrap_or(Json::Null),
+                        i.dispatch.declared.clone().unwrap_or(Json::Null),
                     ),
                 ]))
             })
@@ -2801,17 +2715,17 @@ impl FleetEngine {
             let ok = spawn
                 .as_ref()
                 .map(|s| {
-                    s.run_id == self.run_id
-                        && Some(&s.event_id) == it.dispatch_event_id.as_ref()
+                    s.run_id == self.run_id && Some(&s.event_id) == it.dispatch_event_id.as_ref()
                 })
                 .unwrap_or(false);
             out.push(Json::obj([
                 ("obligation", Json::str("fleet_anchor")),
                 ("item_id", Json::str(&it.item_id)),
                 ("run_ref", Json::str(run_ref)),
-                ("dispatch_event_id", Json::str(
-                    it.dispatch_event_id.clone().unwrap_or_default(),
-                )),
+                (
+                    "dispatch_event_id",
+                    Json::str(it.dispatch_event_id.clone().unwrap_or_default()),
+                ),
                 ("status", Json::str(if ok { "verified" } else { "failed" })),
             ]));
         }
@@ -2898,5 +2812,3 @@ fn field_value_init(init: &WorkItemInit, field: &str) -> String {
         _ => String::new(),
     }
 }
-
-

@@ -134,10 +134,7 @@ impl FleetView {
             }
         }
         v.ok_or_else(|| FleetError::ActivationNotFound {
-            run: events
-                .first()
-                .map(|e| e.run_id.clone())
-                .unwrap_or_default(),
+            run: events.first().map(|e| e.run_id.clone()).unwrap_or_default(),
         })
     }
 
@@ -221,8 +218,7 @@ impl FleetView {
                 }
             }
             "control.wakeup.occurred" => {
-                self.occurred
-                    .insert(e.event_id.clone(), e.payload.clone());
+                self.occurred.insert(e.event_id.clone(), e.payload.clone());
             }
             "control.wakeup.fired" => {
                 let p = &e.payload;
@@ -236,13 +232,11 @@ impl FleetView {
                     .and_then(Json::as_str)
                     .unwrap_or_default()
                     .to_string();
-                let trigger = self
-                    .sub_triggers
-                    .get(&sub_id)
-                    .cloned()
-                    .unwrap_or(hh_ledger::wakeup::Trigger::Manual {
+                let trigger = self.sub_triggers.get(&sub_id).cloned().unwrap_or(
+                    hh_ledger::wakeup::Trigger::Manual {
                         principal: "unknown".into(),
-                    });
+                    },
+                );
                 self.cues.push(FleetCue {
                     subscription_id: sub_id.clone(),
                     occurrence_key: p
@@ -265,13 +259,8 @@ impl FleetView {
             }
             "control.wakeup.skipped" | "control.wakeup.cancelled" => {}
             "context.observation.recorded" => {
-                self.obs_index
-                    .insert(e.event_id.clone(), e.payload.clone());
-                if let Some(s) = e
-                    .payload
-                    .get("suspended_source")
-                    .and_then(Json::as_str)
-                {
+                self.obs_index.insert(e.event_id.clone(), e.payload.clone());
+                if let Some(s) = e.payload.get("suspended_source").and_then(Json::as_str) {
                     self.suspended_sources.insert(s.to_string());
                 }
                 if let Some(id) = e
@@ -296,37 +285,24 @@ impl FleetView {
                 // the item itself (the `verb:retry` dispatched row is the
                 // item's durable retry state; the retry.* pair is the
                 // timer machinery's own accounting).
-                if let Some(id) = e
-                    .payload
-                    .get("schedule_event_id")
-                    .and_then(Json::as_str)
-                {
+                if let Some(id) = e.payload.get("schedule_event_id").and_then(Json::as_str) {
                     self.consumed_schedules.insert(id.to_string());
                     self.pending_schedules.remove(id);
                 }
             }
             "lifecycle.lease.acquired" | "lifecycle.lease.renewed" => {
-                if let Some(item) = e
-                    .payload
-                    .get("scope")
-                    .and_then(Json::as_str)
-                    .and_then(|s| s.strip_prefix("run_item:").or_else(|| {
-                        s.strip_prefix("resource:run_item:")
-                    }))
-                {
-                    self.item_leases
-                        .insert(item.to_string(), e.payload.clone());
+                if let Some(item) = e.payload.get("scope").and_then(Json::as_str).and_then(|s| {
+                    s.strip_prefix("run_item:")
+                        .or_else(|| s.strip_prefix("resource:run_item:"))
+                }) {
+                    self.item_leases.insert(item.to_string(), e.payload.clone());
                 }
             }
             "lifecycle.lease.released" | "lifecycle.lease.fenced" => {
-                if let Some(item) = e
-                    .payload
-                    .get("scope")
-                    .and_then(Json::as_str)
-                    .and_then(|s| s.strip_prefix("run_item:").or_else(|| {
-                        s.strip_prefix("resource:run_item:")
-                    }))
-                {
+                if let Some(item) = e.payload.get("scope").and_then(Json::as_str).and_then(|s| {
+                    s.strip_prefix("run_item:")
+                        .or_else(|| s.strip_prefix("resource:run_item:"))
+                }) {
                     self.item_leases.remove(item);
                 }
             }
@@ -368,8 +344,7 @@ impl FleetView {
         match verb.as_str() {
             "admit" => {
                 let init = payloads::init_from_admit(&e.payload)?;
-                let run_item_id =
-                    crate::identity::run_item_id(&e.run_id, &init.item_id);
+                let run_item_id = crate::identity::run_item_id(&e.run_id, &init.item_id);
                 let spec_ref = e
                     .payload
                     .get("spec_ref")
@@ -388,10 +363,7 @@ impl FleetView {
                     source: init.source.clone(),
                     occurrence: init.occurrence.clone(),
                     idempotency_key: init.idempotency_key.clone(),
-                    work_item_ref: crate::identity::work_item_ref(
-                        &e.run_id,
-                        &init.item_id,
-                    ),
+                    work_item_ref: crate::identity::work_item_ref(&e.run_id, &init.item_id),
                     owner: init.owner.clone(),
                     owner_ack: false,
                     lease_agent_ref: None,
@@ -709,11 +681,7 @@ impl FleetView {
             .get("ack")
             .map(|a| a == &Json::Bool(true))
             .unwrap_or(true);
-        if let Some(l) = e
-            .payload
-            .get("lease_agent_ref")
-            .and_then(Json::as_str)
-        {
+        if let Some(l) = e.payload.get("lease_agent_ref").and_then(Json::as_str) {
             it.lease_agent_ref = Some(l.to_string());
         }
     }
