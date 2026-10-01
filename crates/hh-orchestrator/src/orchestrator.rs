@@ -81,6 +81,8 @@ impl ParentBinding {
             holder: &self.holder,
             coords: self.coords.clone(),
             reserve_ttl_ms: self.reserve_ttl_ms,
+            branch_ctx: None,
+            hosted_plane: None,
             hook,
         }
     }

@@ -1335,41 +1335,96 @@ impl EnvDriver {
             });
         }
         // The sealed schedule lives on the policy's `ext` — a phase the
-        // schedule does not name is the same fail-closed refusal.
+        // schedule does not name is the same fail-closed refusal. The
+        // entry is a sealed `policy_rule` artifact (§5g.4 §2.2's phase row;
+        // S4.14b): it carries either the Stage-1 `net_mode` shorthand or a
+        // full `layer` policy document; `basis` (when spelled) must be
+        // `policy_rule` — any other basis is a `basis_not_allowed`
+        // refusal, never a silent swap (CF-318).
         let policy = match &mut h.containment {
             hh_containment::attach::PolicySlot::Inline(p) => &mut **p,
             hh_containment::attach::PolicySlot::ResolvedRef { policy, .. } => &mut **policy,
         };
-        let net_mode = policy
+        let entry = policy
             .ext
             .get("phase_schedule")
             .and_then(|s| s.get(phase))
-            .and_then(|e| e.get("net_mode"))
-            .and_then(Json::as_str)
-            .map(str::to_string)
+            .cloned()
             .ok_or_else(|| EnvError::Unsupported {
                 capability: "phase_schedule",
                 detail: format!("no sealed phase_schedule entry for `{phase}`"),
             })?;
-        policy.net.mode = match net_mode.as_str() {
-            "none" => hh_containment::policy::NetMode::None,
-            "mediated" => hh_containment::policy::NetMode::Mediated,
-            "public" => hh_containment::policy::NetMode::Public,
-            other => {
+        if let Some(basis) = entry.get("basis").and_then(Json::as_str) {
+            if basis != "policy_rule" {
                 return Err(EnvError::Unsupported {
-                    capability: "phase_schedule.net_mode",
-                    detail: format!("unknown net_mode {other} in phase_schedule"),
-                })
+                    capability: "phase_schedule.basis",
+                    detail: format!(
+                        "basis_not_allowed: a sealed phase layer is endorsed                          `policy_rule`, not `{basis}`"
+                    ),
+                });
             }
+        }
+        // The layer the schedule names: an explicit `layer`
+        // `ContainmentPolicy` document (whose own `provenance.authority`
+        // the meet enforces), or the `net_mode` shorthand minted into a
+        // layer at the entry's declared `authority` (default
+        // `definition` — a sealed design's level; a *loosening* schedule
+        // entry must name `principal`).
+        let layer = if let Some(layer_j) = entry.get("layer") {
+            hh_containment::policy::ContainmentPolicy::from_json(layer_j).map_err(|e| {
+                EnvError::Unsupported {
+                    capability: "phase_schedule.layer",
+                    detail: format!("phase_schedule layer does not decode: {e}"),
+                }
+            })?
+        } else {
+            let net_mode = entry
+                .get("net_mode")
+                .and_then(Json::as_str)
+                .ok_or_else(|| EnvError::Unsupported {
+                    capability: "phase_schedule",
+                    detail: format!(
+                        "phase_schedule entry for `{phase}` carries neither `layer` nor `net_mode`"
+                    ),
+                })?;
+            let mut l = policy.clone();
+            l.net.mode = match net_mode {
+                "none" => hh_containment::policy::NetMode::None,
+                "mediated" => hh_containment::policy::NetMode::Mediated,
+                "public" => hh_containment::policy::NetMode::Public,
+                other => {
+                    return Err(EnvError::Unsupported {
+                        capability: "phase_schedule.net_mode",
+                        detail: format!("unknown net_mode {other} in phase_schedule"),
+                    })
+                }
+            };
+            l.provenance.authority = entry
+                .get("authority")
+                .and_then(Json::as_str)
+                .and_then(hh_provenance::AuthorityClass::parse)
+                .unwrap_or(hh_provenance::AuthorityClass::Definition);
+            l.compute_ids();
+            l
         };
-        policy.compute_ids();
+        // Re-derive the effective policy through the layered meet — the
+        // sealed layer narrows or (with entitlement) loosens against the
+        // live policy; a `ContainmentWidening`/`ProtectedPathExemption`/
+        // invalid layer refuses, never silently swaps (R-2.8.4¹).
+        let next = hh_containment::meet::effective(&[policy.clone(), layer], store.now_ms())
+            .map_err(|e| EnvError::Unsupported {
+                capability: "phase_schedule.layer",
+                detail: format!("phase layer refused by the meet: {e}"),
+            })?;
+        let net_mode = next.net.mode;
+        *policy = next;
         h.phase = Some(phase.to_string());
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.phase.changed",
             Json::obj([
                 ("env_handle_id", Json::str(h.env_handle_id.clone())),
                 ("phase", Json::str(phase.to_string())),
-                ("net_mode", Json::str(net_mode.to_string())),
+                ("net_mode", Json::str(net_mode.as_str())),
             ]),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;

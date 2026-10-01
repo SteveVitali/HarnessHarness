@@ -139,8 +139,20 @@ pub fn run_battery(
     backend: &dyn ContainmentBackend,
     policy: &ContainmentPolicy,
 ) -> Vec<ProbeResult> {
+    // Plane-awareness (S4.14b; ADR-0307): a hosted `external` boundary is
+    // opaque to kernel probes — the battery does not run (the group's
+    // evidence is the participant's `reported` declaration); the
+    // transparent-redirect plane carries no bridged `AF_UNIX` channel, so
+    // that probe is inapplicable (skipped, never failed).
+    if backend.hosted_external() {
+        return Vec::new();
+    }
     BATTERY
         .iter()
+        .filter(|&&kind| {
+            !(kind == ProbeKind::BridgedUnixSocket
+                && backend.net_plane() == crate::backend::NetPlane::TransparentRedirect)
+        })
         .map(|&kind| {
             let observed = match backend.run_probe(kind, policy) {
                 GateVerdict::Allow => ProbeOutcome::Allow,

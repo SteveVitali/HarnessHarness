@@ -242,23 +242,40 @@ fn group_evidence_at_attach(
     backend: &dyn ContainmentBackend,
     probes_out: &[crate::report::ProbeResult],
 ) -> EnforcementEvidence {
-    let covered = probes_out.iter().any(|p| p.kind.group() == group);
-    if covered {
-        return probes::group_evidence(group, probes_out);
-    }
-    // No battery coverage — the backend's declared cap is the only
-    // evidence, and it is `reported`, never `probed`.
+    // The declared cap is the floor either way.
     let enforced = match group {
         FieldGroup::Fs => backend.caps().enforce_fs && backend.caps().enforce_exec,
         FieldGroup::Net => backend.caps().enforce_net,
         FieldGroup::Proc => backend.caps().enforce_proc,
         FieldGroup::Resources => backend.caps().enforce_resources,
     };
-    if enforced {
+    // Hosted `external` (AC-R-2.8.4-13): kernel probes cannot observe the
+    // participant-supplied boundary — the participant's declaration is
+    // `reported`, never `probed`/`attested`; undeclared ⇒ `unknown`.
+    if backend.hosted_external() {
+        return if enforced {
+            EnforcementEvidence::Reported
+        } else {
+            EnforcementEvidence::Unknown
+        };
+    }
+    let covered = probes_out.iter().any(|p| p.kind.group() == group);
+    let base = if covered {
+        probes::group_evidence(group, probes_out)
+    } else if enforced {
+        // No battery coverage — the backend's declared cap is the only
+        // evidence, and it is `reported`, never `probed`.
         EnforcementEvidence::Reported
     } else {
         EnforcementEvidence::Unknown
+    };
+    // Substrate attestation lifts a *substantiated* group to `attested`
+    // (C1 — `user_space_kernel`/`microvm`). It never rescues a failed or
+    // unenforced group: `unknown` stays `unknown`.
+    if base != EnforcementEvidence::Unknown && backend.attestation(group).is_some() {
+        return EnforcementEvidence::Attested;
     }
+    base
 }
 
 /// `attach(input) → AttachOutcome | AttachError` — apply + probe + report,

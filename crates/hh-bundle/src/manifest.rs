@@ -355,6 +355,86 @@ pub struct LedgerExport {
     pub head: Json,
     /// `[{run_id, up_to_seq, head_hash}]`.
     pub lineage_prefixes: Vec<Json>,
+    /// `audit_tree_head` — the bundle's attestation member (ADR-0038;
+    /// ADR-0067 D5; R-2.8.6¹): the newest *signed* checkpoint's
+    /// `{checkpoint_ref, tree_size, tree_head, signatures}` — what an
+    /// auditor independently verifies the bundle's claim against.
+    /// `None` when the run minted no signed checkpoint (honest absence,
+    /// never a fabricated head).
+    pub audit_tree_head: Option<AuditTreeHead>,
+}
+
+/// `AuditTreeHead` — the `traces.<run>.audit_tree_head` record
+/// (ADR-0067 D5's `(run_id, checkpoint_ref, tree_size, tree_head,
+/// signatures)` tuple): the checkpoint *ref* it cites plus the signed
+/// claim's covered state, verbatim — the bundle attests to what the
+/// writer signed, the auditor re-verifies against its own record.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AuditTreeHead {
+    /// The `security.audit.checkpoint` event coordinate
+    /// `{run_id, event_id, seq}` the head is pinned to.
+    pub checkpoint_ref: Json,
+    /// The claim's covered tree size.
+    pub tree_size: u64,
+    /// The claim's `MTH(leaves[0..tree_size))`.
+    pub tree_head: String,
+    /// The claim's `[{key_id, alg_ref, sig}]` — preserved verbatim.
+    pub signatures: Vec<Json>,
+    /// The claim's attestation binding, when it carried one (§5g.6 §2).
+    pub attestation_ref: Option<String>,
+}
+
+impl AuditTreeHead {
+    /// Build from a parsed `security.audit.checkpoint` claim and its event
+    /// coordinate. `None` when the claim carries no `tree_head` — a
+    /// checkpoint the verifier would fault is never attested into the
+    /// bundle.
+    pub fn from_claim(
+        checkpoint_ref: Json,
+        claim: &hh_ledger::tree::CheckpointClaim,
+    ) -> Option<AuditTreeHead> {
+        Some(AuditTreeHead {
+            checkpoint_ref,
+            tree_size: claim.tree_size?,
+            tree_head: claim.tree_head.clone()?,
+            signatures: claim.signatures.clone(),
+            attestation_ref: claim.attestation_ref.clone(),
+        })
+    }
+
+    /// Canonical JSON (`audit_tree_head` member value).
+    pub fn to_json(&self) -> Json {
+        let mut m = vec![
+            ("checkpoint_ref", self.checkpoint_ref.clone()),
+            (
+                "tree_size",
+                Json::Int(self.tree_size.min(i64::MAX as u64) as i64),
+            ),
+            ("tree_head", Json::str(self.tree_head.clone())),
+            ("signatures", Json::Arr(self.signatures.clone())),
+        ];
+        if let Some(r) = &self.attestation_ref {
+            m.push(("attestation_ref", Json::str(r.clone())));
+        }
+        Json::obj(m)
+    }
+
+    /// Decode (structural; verification re-checks the cited checkpoint).
+    pub fn from_json(j: &Json) -> Option<AuditTreeHead> {
+        Some(AuditTreeHead {
+            checkpoint_ref: j.get("checkpoint_ref")?.clone(),
+            tree_size: j.get("tree_size")?.as_int()? as u64,
+            tree_head: j.get("tree_head")?.as_str()?.to_string(),
+            signatures: match j.get("signatures") {
+                Some(Json::Arr(v)) => v.clone(),
+                _ => Vec::new(),
+            },
+            attestation_ref: j
+                .get("attestation_ref")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+        })
+    }
 }
 
 impl LedgerExport {
@@ -387,6 +467,10 @@ impl LedgerExport {
             "lineage_prefixes".into(),
             Json::Arr(self.lineage_prefixes.clone()),
         );
+        // Additive (S4.14b): absent on bundles assembled before it.
+        if let Some(h) = &self.audit_tree_head {
+            m.insert("audit_tree_head".into(), h.to_json());
+        }
         Json::Obj(m)
     }
     /// Decode (structural — validation re-checks the tree).
@@ -435,6 +519,7 @@ impl LedgerExport {
                 Some(Json::Arr(ls)) => ls.clone(),
                 _ => Vec::new(),
             },
+            audit_tree_head: j.get("audit_tree_head").and_then(AuditTreeHead::from_json),
         })
     }
 }

@@ -11,6 +11,7 @@ pub mod http;
 pub mod json;
 pub mod jsonrpc;
 pub mod sha256;
+pub mod sha512;
 
 pub use json::{parse, Json, JsonError};
 pub use sha256::sha256_hex;

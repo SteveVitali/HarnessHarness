@@ -477,6 +477,7 @@ mod tests {
                         blob_index: vec![],
                         head: Json::Null,
                         lineage_prefixes: vec![],
+                        audit_tree_head: None,
                     },
                 );
                 t

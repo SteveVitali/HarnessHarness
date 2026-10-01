@@ -194,6 +194,17 @@ pub enum NetMode {
     Public,
 }
 
+impl NetMode {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NetMode::None => "none",
+            NetMode::Mediated => "mediated",
+            NetMode::Public => "public",
+        }
+    }
+}
+
 /// `default_unmatched ∈ {deny, ask}`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DefaultUnmatched {

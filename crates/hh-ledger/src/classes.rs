@@ -860,10 +860,31 @@ const CHECKPOINT_FIELDS: &[AuditField] = &[
     afb("consistency_proof", AUDIT_FIELD_LIST_BYTES),
     afb("cross_run_anchors", AUDIT_FIELD_LIST_BYTES),
     af("idp"),
+    // S4.14b (R-2.8.6; §5g.6 §2) — the claim's digest profile plus the
+    // rotation members a `kind = rotation` claim carries.
+    af("identity_profile"),
     afb("rehash", AUDIT_FIELD_LIST_BYTES),
+    af("bridge_record_ref"),
+    af("attestation_ref"),
     afb("signatures", AUDIT_FIELD_LIST_BYTES),
     afb("witness_cosignatures", AUDIT_FIELD_LIST_BYTES),
     af("audit_policy_ref"),
+];
+
+/// `security.audit.bridge` — the sealed `BridgeRecord` row an identity
+/// rotation mints before its checkpoint (§5g.6 §2; R-2.8.6): the
+/// `{bridge_id, run_id, from_idp, to_idp, rotations[]}` id-migration
+/// binding old→new under the profile pair, chained through
+/// `prev_bridge_ref`.
+const BRIDGE_FIELDS: &[AuditField] = &[
+    af("bridge_id"),
+    af("run_id"),
+    af("from_idp"),
+    af("to_idp"),
+    afb("rotations", AUDIT_FIELD_LIST_BYTES),
+    afb("links_run_ids", AUDIT_FIELD_LIST_BYTES),
+    af("prev_bridge_ref"),
+    af("at_ms"),
 ];
 
 /// `context.memory.written` / `invalidated` / `read` — the structural members
@@ -1068,6 +1089,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("control.retry.scheduled", "hint"),
     ("control.retry.skipped", "hint"),
     // ── control:subagent ──
+    ("control.subagent.branch_exited", "none"),
     ("control.subagent.cancelled", "none"),
     ("control.subagent.detached", "none"),
     ("control.subagent.result", "none"),
@@ -1225,6 +1247,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── model:surface ──
     ("model.surface.relowered", "hint"),
     // ── security:audit ──
+    ("security.audit.bridge", "none"),
     ("security.audit.checkpoint", "none"),
     // ── security:containment ──
     ("security.containment.amended", "hint"),
@@ -1614,6 +1637,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // `security.audit.checkpoint` — the signed-checkpoint row (emitter at
     // Stage 2); the enumerated §5g.6 §3 partition — nothing offloaded.
     row_audit("security.audit.checkpoint",    O::Events, true,  CHECKPOINT_FIELDS, &[], None, None),
+    // `security.audit.bridge` — the identity-rotation bridge record
+    // (S4.14b; R-2.8.6): kernel-origin, audit-grade, no content refs —
+    // the `rotations` member is the id-migration list.
+    row_audit("security.audit.bridge",        O::Events, true,  BRIDGE_FIELDS, &[], None, None),
     // The containment rows (§5g.4 §3; ADR-0061 D5) — audit-grade, kernel-origin,
     // provenance-mandatory, content-free payloads (`lowering_loss_ref`/`probes_ref`
     // are blob refs; `subject` is a path/host spelling). `security.containment.
@@ -1723,6 +1750,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // now (the class list is dialect schema); their emitters land with the
     // subagent (S2.x/§05e F3) and fleet (§05i) machinery. `spawned`'s child_run
     // scope opener lands with the spawn path (§5a.1 defers it to Stage 4).
+    // `control.subagent.branch_exited{child_run_id, exit ∈ {abandon,
+    // labeled_return, attested_return}, subject_ref?, validator_ref?}` —
+    // the label-branch exit record (§5g.2 `return_from_branch`; S4.14b).
+    row_audit("control.subagent.branch_exited", O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.subagent.spawned",      O::Events, true,  OPEN_AUDIT, &[], Some(ScopeKind::ChildRun), None),
     row_audit("control.subagent.result",       O::Events, true,  OPEN_AUDIT, &[], None, Some(ScopeKind::ChildRun)),
     row_audit("control.subagent.cancelled",    O::Events, true,  OPEN_AUDIT, &[], None, Some(ScopeKind::ChildRun)),

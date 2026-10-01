@@ -224,6 +224,7 @@ fn stage_spec(tag: &str) -> SubagentSpec {
             ],
         ),
         budget_mode: BudgetMode::Slice,
+        context: ContextIsolation::Fresh,
         environment: EnvIsolation::None,
         supplies: Supplies::default(),
         return_contract: ReturnContract::default(),

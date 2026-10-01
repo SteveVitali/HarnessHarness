@@ -199,6 +199,53 @@ pub struct UnsupportedBackend {
     pub reason: String,
 }
 
+/// The net enforcement plane a backend realizes (§5g.4 C1/Stage-4 row —
+/// the transparent-redirect backend class). `BridgedChannel` is the EP2
+/// model (the namespace is gone; the one `AF_UNIX` channel reaches the
+/// mediator); `TransparentRedirect` intercepts connect-class syscalls at
+/// L4 into the mediator — no bridged channel exists to probe, and a
+/// rule-allowed destination completes *through* the redirect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetPlane {
+    /// The EP2 model — removed namespace + one bridged helper channel.
+    BridgedChannel,
+    /// L4 transparent redirection into the mediator.
+    TransparentRedirect,
+}
+
+impl NetPlane {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            NetPlane::BridgedChannel => "bridged_channel",
+            NetPlane::TransparentRedirect => "transparent_redirect",
+        }
+    }
+
+    /// Parse the canonical spelling.
+    pub fn parse(s: &str) -> Option<NetPlane> {
+        match s {
+            "bridged_channel" => Some(NetPlane::BridgedChannel),
+            "transparent_redirect" => Some(NetPlane::TransparentRedirect),
+            _ => None,
+        }
+    }
+}
+
+/// A substrate attestation binding (§5g.4 C1/Stage-4 — the `attested`
+/// evidence kind's only source): `user_space_kernel`/`microvm` backends
+/// carry the guest measurement/sealing certificate ref the report's
+/// `attested` verdict leans on. A backend that cannot produce one never
+/// reports `attested` — the `attach` fold degrades to `probed`/`reported`
+/// instead (never coerced upward — T-LCD-07).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Attestation {
+    /// The attestation method (`guest_quote`, `sev_snp_report`, …).
+    pub method: String,
+    /// The attestation record ref (content address).
+    pub attestation_ref: String,
+}
+
 /// The backend contract (ADR-0062 D2): apply the policy, run the probe
 /// battery, declare losses. `apply` + `gate` + `lowering_loss` are pure —
 /// real backends wrap the out-of-process helper (§05a B5, S1.16).
@@ -228,6 +275,27 @@ pub trait ContainmentBackend {
     /// The relied-on losses — a [`LossItem`] for every field the policy
     /// configures that the backend cannot enforce.
     fn lowering_loss(&self, policy: &ContainmentPolicy) -> Vec<LossItem>;
+    /// The net enforcement plane (default [`NetPlane::BridgedChannel`] —
+    /// the EP2 model). The battery is plane-aware: a
+    /// `transparent_redirect` backend holds no bridged `AF_UNIX` channel,
+    /// so the bridged-socket probe is inapplicable (skipped, never failed).
+    fn net_plane(&self) -> NetPlane {
+        NetPlane::BridgedChannel
+    }
+    /// The substrate attestation covering `group` — `Some` only on the C1
+    /// attesting backends (`user_space_kernel`, `microvm`) for groups the
+    /// substrate's measurement actually covers. Default `None`: no
+    /// backend silently claims `attested`.
+    fn attestation(&self, _group: FieldGroup) -> Option<Attestation> {
+        None
+    }
+    /// Whether the boundary is a *hosted* (participant-supplied) one —
+    /// `isolation_class = external`. Kernel probes cannot observe inside
+    /// it: the battery is skipped and declared caps report `reported`,
+    /// never `probed`/`attested` (AC-R-2.8.4-13).
+    fn hosted_external(&self) -> bool {
+        false
+    }
 }
 
 /// The Stage-1 reference backend — an in-process **model** of the EP2
@@ -241,6 +309,9 @@ pub struct Ep2Model {
     links: BTreeMap<String, String>,
     /// The bridged helper channel's socket path.
     bridged_socket: String,
+    /// The strongest `isolation_class` this model hosts (the delegate
+    /// models raise it; the reference is `process_sandbox`).
+    max_class: IsolationClass,
 }
 
 impl Ep2Model {
@@ -265,6 +336,7 @@ impl Ep2Model {
             },
             links: BTreeMap::new(),
             bridged_socket: "hh-helper.sock".to_string(),
+            max_class: IsolationClass::ProcessSandbox,
         }
     }
 
@@ -359,9 +431,10 @@ impl ContainmentBackend for Ep2Model {
             backend: self.name().to_string(),
             reason: reason.to_string(),
         };
-        // The model is a process-sandbox boundary; a stronger class or the
-        // hosted `external` claim cannot be applied here.
-        if policy.proc.isolation_class.strength() > IsolationClass::ProcessSandbox.strength() {
+        // The model is a process-sandbox boundary (or the ceiling the
+        // delegate declares); a stronger class or the hosted `external`
+        // claim cannot be applied here.
+        if policy.proc.isolation_class.strength() > self.max_class.strength() {
             return Err(fail("isolation_class_above_backend"));
         }
         if policy.proc.isolation_class == IsolationClass::External {
@@ -578,4 +651,428 @@ pub fn syscall_group(sys: &Syscall) -> FieldGroup {
             FieldGroup::Proc
         }
     }
+}
+
+// ── the C1 backend models (S4.14b; R-2.8.4¹) ──────────────────────────────
+
+/// The backend class spellings — the `backend` member's closed set plus the
+/// caller-facing selector [`for_class`]/[`for_policy`] consumes. `Ep2` is
+/// the Stage-1 process-sandbox reference; the rest are the Stage-4 classes
+/// (§5g.4 C1 row; ADR-0307).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackendClass {
+    /// `process_sandbox` — the EP2 model boundary.
+    ProcessSandbox,
+    /// `namespaces` — kernel namespaces.
+    Namespaces,
+    /// `user_space_kernel` — attested user-space kernel.
+    UserSpaceKernel,
+    /// `microvm` — attested microVM.
+    Microvm,
+    /// `transparent_redirect` — the transparent-redirect backend class
+    /// (net plane [`NetPlane::TransparentRedirect`] over a namespaces
+    /// boundary).
+    TransparentRedirect,
+    /// `external` — the hosted participant-supplied boundary (evidence is
+    /// `reported`, never `probed`/`attested` — the kernel does not
+    /// observe inside it).
+    External,
+}
+
+impl BackendClass {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            BackendClass::ProcessSandbox => "process_sandbox",
+            BackendClass::Namespaces => "namespaces",
+            BackendClass::UserSpaceKernel => "user_space_kernel",
+            BackendClass::Microvm => "microvm",
+            BackendClass::TransparentRedirect => "transparent_redirect",
+            BackendClass::External => "external",
+        }
+    }
+
+    /// Parse the canonical spelling.
+    pub fn parse(s: &str) -> Option<BackendClass> {
+        Some(match s {
+            "process_sandbox" | "ep2_model" => BackendClass::ProcessSandbox,
+            "namespaces" => BackendClass::Namespaces,
+            "user_space_kernel" => BackendClass::UserSpaceKernel,
+            "microvm" => BackendClass::Microvm,
+            "transparent_redirect" => BackendClass::TransparentRedirect,
+            "external" => BackendClass::External,
+            _ => return None,
+        })
+    }
+}
+
+/// `ModelBackend` — the Stage-4 backend models: the same syscall-gate
+/// semantics as [`Ep2Model`] (the boundary contract is the policy's, not
+/// the mechanism's), parameterised by the declared [`IsolationClass`], the
+/// [`NetPlane`] and (for the attesting classes) the substrate
+/// [`Attestation`]. `hosted` is the `external` boundary — the kernel's
+/// probes cannot observe it, so `gate` honestly reports `Unenforced` and
+/// the attach fold reports `reported`/`unknown`, never `probed`.
+#[derive(Debug, Clone)]
+pub struct ModelBackend {
+    inner: Ep2Model,
+    /// The declared isolation class this model implements.
+    class: IsolationClass,
+    /// The report's `backend` member.
+    backend_name: &'static str,
+    /// The net plane.
+    plane: NetPlane,
+    /// The substrate attestation (attesting classes only).
+    attestation: Option<Attestation>,
+    /// `true` for the hosted `external` boundary.
+    hosted: bool,
+}
+
+impl ModelBackend {
+    /// `namespaces` — kernel namespaces over the bridged-channel plane.
+    pub fn namespaces() -> ModelBackend {
+        Self::model(
+            "namespaces_model",
+            IsolationClass::Namespaces,
+            NetPlane::BridgedChannel,
+            None,
+            false,
+        )
+    }
+
+    /// `user_space_kernel` — attested (the guest-kernel measurement binds
+    /// the boundary; `attested` evidence for the covered groups). The
+    /// substrate enforces `resources.*` inside the guest — the cap the
+    /// `reported` (never `attested`) resources group leans on.
+    pub fn user_space_kernel(attestation: Attestation) -> ModelBackend {
+        let mut m = Self::model(
+            "user_space_kernel_model",
+            IsolationClass::UserSpaceKernel,
+            NetPlane::BridgedChannel,
+            Some(attestation),
+            false,
+        );
+        m.inner.caps.enforce_resources = true;
+        m
+    }
+
+    /// `microvm` — attested (the microVM's measurement report binds the
+    /// boundary; resource bounds land via the hypervisor's caps).
+    pub fn microvm(attestation: Attestation) -> ModelBackend {
+        let mut m = Self::model(
+            "microvm_model",
+            IsolationClass::Microvm,
+            NetPlane::BridgedChannel,
+            Some(attestation),
+            false,
+        );
+        m.inner.caps.enforce_resources = true;
+        m
+    }
+
+    /// `transparent_redirect` — the transparent-redirect backend class:
+    /// a namespaces-strength boundary whose net plane is L4 redirection
+    /// into the mediator. Under `mediated` a connect-class syscall to a
+    /// rule-allowed destination completes *through* the redirect (the
+    /// mediator enforces); every unmatched destination still denies.
+    pub fn transparent_redirect() -> ModelBackend {
+        Self::model(
+            "transparent_redirect_model",
+            IsolationClass::Namespaces,
+            NetPlane::TransparentRedirect,
+            None,
+            false,
+        )
+    }
+
+    /// `external` — the hosted participant-supplied boundary (AC-R-2.8.4-13):
+    /// enforcement evidence is `reported` (the participant's own
+    /// declaration), never `probed`/`attested`.
+    pub fn external() -> ModelBackend {
+        let mut m = Self::model(
+            "external_model",
+            IsolationClass::External,
+            NetPlane::BridgedChannel,
+            None,
+            true,
+        );
+        // The hosted boundary enforces nothing the kernel can observe —
+        // the caps are the participant's *declaration* (defaulted to the
+        // full honest surface so a hosted policy relying on a group
+        // reports `reported`, not `unknown`).
+        m.inner.caps = BackendCaps::full();
+        m
+    }
+
+    /// A hosted boundary carrying the participant's *declared* cap subset
+    /// — groups not declared report `unknown` (never coerced).
+    pub fn external_declaring(caps: BackendCaps) -> ModelBackend {
+        let mut m = Self::external();
+        m.inner.caps = caps;
+        m
+    }
+
+    fn model(
+        backend_name: &'static str,
+        class: IsolationClass,
+        plane: NetPlane,
+        attestation: Option<Attestation>,
+        hosted: bool,
+    ) -> ModelBackend {
+        let mut inner = Ep2Model::reference();
+        inner.max_class = class;
+        ModelBackend {
+            inner,
+            class,
+            backend_name,
+            plane,
+            attestation,
+            hosted,
+        }
+    }
+
+    /// The caps the delegate gate consults.
+    fn caps_ref(&self) -> &BackendCaps {
+        self.inner.caps_ref()
+    }
+
+    /// The connect-class verdict under the transparent-redirect plane:
+    /// `none` denies, `public` allows, `mediated` resolves the rule set
+    /// (deny rules first — I-C1; an allow rule covering the normalised
+    /// host admits through the redirect).
+    fn redirect_gate(&self, target: &str, policy: &ContainmentPolicy) -> GateVerdict {
+        if !self.caps_ref().enforce_net {
+            return GateVerdict::Unenforced;
+        }
+        match policy.net.mode {
+            NetMode::None => GateVerdict::Deny {
+                kind: ViolationKind::Net,
+                subject: target.to_string(),
+            },
+            NetMode::Public => GateVerdict::Allow,
+            NetMode::Mediated => {
+                let host = crate::policy::normalize_host(target);
+                let mut allowed = false;
+                for r in &policy.net.rules {
+                    if r.host.matches(&host) {
+                        match r.decision {
+                            crate::policy::RuleDecision::Deny => {
+                                return GateVerdict::Deny {
+                                    kind: ViolationKind::Net,
+                                    subject: target.to_string(),
+                                };
+                            }
+                            crate::policy::RuleDecision::Allow => allowed = true,
+                        }
+                    }
+                }
+                if allowed {
+                    GateVerdict::Allow
+                } else {
+                    GateVerdict::Deny {
+                        kind: ViolationKind::Net,
+                        subject: target.to_string(),
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Ep2Model {
+    /// The caps the gate consults (model delegates share this view).
+    pub(crate) fn caps_ref(&self) -> &BackendCaps {
+        &self.caps
+    }
+}
+
+impl ContainmentBackend for ModelBackend {
+    fn name(&self) -> &'static str {
+        self.backend_name
+    }
+
+    fn isolation_class(&self) -> IsolationClass {
+        self.class
+    }
+
+    fn caps(&self) -> &BackendCaps {
+        self.caps_ref()
+    }
+
+    fn bridged_channel(&self) -> &str {
+        self.inner.bridged_channel()
+    }
+
+    fn net_plane(&self) -> NetPlane {
+        self.plane
+    }
+
+    fn hosted_external(&self) -> bool {
+        self.hosted
+    }
+
+    fn attestation(&self, group: FieldGroup) -> Option<Attestation> {
+        if !self.attesting_group(group) {
+            return None;
+        }
+        self.attestation.clone()
+    }
+
+    fn apply(&self, policy: &ContainmentPolicy) -> Result<(), UnsupportedBackend> {
+        if self.hosted {
+            // The hosted boundary carries `isolation_class = external`
+            // only — a stronger claim it cannot evidence is refused, never
+            // silently downgraded.
+            if policy.proc.isolation_class != IsolationClass::External {
+                return Err(UnsupportedBackend {
+                    backend: self.backend_name.to_string(),
+                    reason: "isolation_class_not_external".to_string(),
+                });
+            }
+            return Ok(());
+        }
+        if policy.proc.isolation_class == IsolationClass::External {
+            return Err(UnsupportedBackend {
+                backend: self.backend_name.to_string(),
+                reason: "isolation_class_external".to_string(),
+            });
+        }
+        if policy.proc.isolation_class.strength() > self.class.strength() {
+            return Err(UnsupportedBackend {
+                backend: self.backend_name.to_string(),
+                reason: "isolation_class_above_backend".to_string(),
+            });
+        }
+        if self.plane == NetPlane::TransparentRedirect
+            && matches!(policy.net.mode, NetMode::Mediated | NetMode::None)
+        {
+            // The redirect plane hosts `mediated`/`none` natively — the
+            // L4 intercept IS the enforcement. `public` needs no plane.
+            return Ok(());
+        }
+        self.inner.apply(policy)
+    }
+
+    fn gate(&self, sys: &Syscall, policy: &ContainmentPolicy) -> GateVerdict {
+        if self.hosted {
+            // The kernel does not observe inside a participant-supplied
+            // boundary — every class reports Unenforced, honestly.
+            return GateVerdict::Unenforced;
+        }
+        if self.plane == NetPlane::TransparentRedirect {
+            match sys {
+                Syscall::Connect { target }
+                | Syscall::SendTo { target }
+                | Syscall::NameResolve { host: target } => {
+                    return self.redirect_gate(target, policy);
+                }
+                // The redirect carries no raw/ICMP channels and no
+                // bridged AF_UNIX socket.
+                Syscall::RawSocket | Syscall::Icmp => {
+                    if !self.caps_ref().enforce_net {
+                        return GateVerdict::Unenforced;
+                    }
+                    return match policy.net.mode {
+                        NetMode::Public => GateVerdict::Allow,
+                        _ => GateVerdict::Deny {
+                            kind: ViolationKind::Net,
+                            subject: sys_kind(sys).to_string(),
+                        },
+                    };
+                }
+                Syscall::UnixConnect { .. } => {
+                    if !self.caps_ref().enforce_net {
+                        return GateVerdict::Unenforced;
+                    }
+                    return GateVerdict::Deny {
+                        kind: ViolationKind::UnixSocket,
+                        subject: sys_kind(sys).to_string(),
+                    };
+                }
+                _ => {}
+            }
+        }
+        self.inner.gate(sys, policy)
+    }
+
+    fn run_probe(&self, kind: crate::report::ProbeKind, policy: &ContainmentPolicy) -> GateVerdict {
+        if self.hosted {
+            return GateVerdict::Unenforced;
+        }
+        if self.plane == NetPlane::TransparentRedirect && kind.group() == FieldGroup::Net {
+            // The net probes gate against the redirect plane (the bridged
+            // channel probe is skipped by the battery — no channel exists).
+            let sys = crate::probes::probe_syscall(kind, policy, self.bridged_channel());
+            return self.gate(&sys, policy);
+        }
+        // fs/proc probes (including the backend-owned
+        // `WriteSymlinkEscape` fixture) delegate unchanged.
+        self.inner.run_probe(kind, policy)
+    }
+
+    fn lowering_loss(&self, policy: &ContainmentPolicy) -> Vec<LossItem> {
+        self.inner.lowering_loss(policy)
+    }
+}
+
+impl ModelBackend {
+    /// The groups the substrate attestation covers — fs/net/proc (the
+    /// boundary surface); `resources` accounting is never attested (the
+    /// substrate measures the boundary, not the counters).
+    fn attesting_group(&self, group: FieldGroup) -> bool {
+        self.attestation.is_some()
+            && match group {
+                FieldGroup::Fs => self.caps_ref().enforce_fs && self.caps_ref().enforce_exec,
+                FieldGroup::Net => self.caps_ref().enforce_net,
+                FieldGroup::Proc => self.caps_ref().enforce_proc,
+                FieldGroup::Resources => false,
+            }
+    }
+}
+
+/// `for_class(class, attestation)` — select the backend model for a
+/// declared class. `user_space_kernel`/`microvm` *require* a substrate
+/// [`Attestation`]: a stronger-class claim without one is a fail-closed
+/// `attestation_missing` refusal, never a silent degrade (I-C4).
+pub fn for_class(
+    class: BackendClass,
+    attestation: Option<Attestation>,
+) -> Result<Box<dyn ContainmentBackend>, UnsupportedBackend> {
+    let needs_attestation = |class: BackendClass| UnsupportedBackend {
+        backend: class.as_str().to_string(),
+        reason: "attestation_missing".to_string(),
+    };
+    Ok(match class {
+        BackendClass::ProcessSandbox => Box::new(Ep2Model::reference()),
+        BackendClass::Namespaces => Box::new(ModelBackend::namespaces()),
+        BackendClass::UserSpaceKernel => Box::new(ModelBackend::user_space_kernel(
+            attestation.ok_or_else(|| needs_attestation(class))?,
+        )),
+        BackendClass::Microvm => Box::new(ModelBackend::microvm(
+            attestation.ok_or_else(|| needs_attestation(class))?,
+        )),
+        BackendClass::TransparentRedirect => Box::new(ModelBackend::transparent_redirect()),
+        BackendClass::External => Box::new(ModelBackend::external()),
+    })
+}
+
+/// `for_policy(policy, attestation)` — the backend selection the open
+/// path drives (ADR-0307): the policy's `proc.isolation_class` names the
+/// boundary the policy requires, and the returned backend implements it.
+/// `external` selects the hosted boundary; the attesting classes require
+/// `attestation` (`attestation_missing` refuses). The
+/// transparent-redirect class is a *net-plane* choice — select it through
+/// [`for_class`] and confirm `apply` accepts the policy.
+pub fn for_policy(
+    policy: &ContainmentPolicy,
+    attestation: Option<Attestation>,
+) -> Result<Box<dyn ContainmentBackend>, UnsupportedBackend> {
+    let class = match policy.proc.isolation_class {
+        IsolationClass::None | IsolationClass::ProcessSandbox => BackendClass::ProcessSandbox,
+        IsolationClass::Namespaces => BackendClass::Namespaces,
+        IsolationClass::UserSpaceKernel => BackendClass::UserSpaceKernel,
+        IsolationClass::Microvm => BackendClass::Microvm,
+        IsolationClass::External => BackendClass::External,
+    };
+    for_class(class, attestation)
 }

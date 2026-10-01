@@ -11,7 +11,6 @@
 //!   under `idp/1` domain `ledger.event` (the one hasher — CC1; leaf byte `0x00` is the
 //!   RFC-6962 leaf/domain separator; the node side arrives with the audit tree heads).
 
-use hh_identity::idp::idp_id;
 use hh_identity::idp::ContentAddress;
 use hh_identity::rowkeys::IrRef;
 use hh_provenance::ProvenanceRecord;
@@ -56,11 +55,24 @@ pub const DEPRECATIONS: &[FieldDeprecation] = &[];
 /// `hash = H(leaf_tag ∥ canonical(envelope − {hash}) ∥ prev_hash)` — rendered as an
 /// idp/1 id (`sha256:<hex>`) under the `ledger.event` domain.
 pub fn event_hash(envelope_without_hash: &Json, prev_hash: &str) -> String {
+    event_hash_in(&hh_identity::idp::IDP_1, envelope_without_hash, prev_hash)
+}
+
+/// `event_hash` under an explicit identity profile — the rotation slice's
+/// rehash path (§5g.6 §2, R-2.8.6): the preimage is *frozen* (the stored
+/// `prev_hash` member is data, bound verbatim); the appended `prev_hash`
+/// argument is the recomputed predecessor under `profile`, so the result
+/// is a self-consistent parallel chain — `event_hash_in(p, ev_i, chain'_{i-1})`.
+pub fn event_hash_in(
+    profile: &hh_identity::idp::IdentityProfile,
+    envelope_without_hash: &Json,
+    prev_hash: &str,
+) -> String {
     let mut preimage = Vec::with_capacity(256);
     preimage.push(LEAF_TAG);
     preimage.extend_from_slice(envelope_without_hash.to_canonical_string().as_bytes());
     preimage.extend_from_slice(prev_hash.as_bytes());
-    idp_id(EVENT_HASH_DOMAIN, &preimage)
+    hh_identity::idp::idp_id_in(profile, EVENT_HASH_DOMAIN, &preimage)
 }
 
 fn envelope_json(e: &EventEnvelope, with_hash: bool) -> Json {
@@ -180,6 +192,19 @@ impl EventEnvelope {
     /// Recompute this envelope's `hash` (the `verify` check).
     pub fn recompute_hash(&self) -> String {
         event_hash(&self.preimage_json(), &self.prev_hash)
+    }
+
+    /// `recompute_hash` under an explicit profile — the recomputation the
+    /// rotation `rehash` claim and the auditor's cross-profile check use.
+    /// `prev_hash` here is the *recomputed* predecessor (`chain'_{i-1}`);
+    /// the envelope's own `prev_hash` member stays frozen inside the
+    /// preimage (bound as data, not as the link — see `event_hash_in`).
+    pub fn recompute_hash_in(
+        &self,
+        profile: &hh_identity::idp::IdentityProfile,
+        chain_prev: &str,
+    ) -> String {
+        event_hash_in(profile, &self.preimage_json(), chain_prev)
     }
 
     /// The stored canonical bytes.
