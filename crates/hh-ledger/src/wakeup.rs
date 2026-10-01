@@ -484,13 +484,12 @@ impl Store {
             // other run kind keeps the typed Stage-4 refusal unchanged —
             // the boundary is checked against the durable manifest, never
             // caller assertion (CC3).
-            let fleet_boundary = matches!(
-                trigger,
-                Trigger::External { .. } | Trigger::Manual { .. }
-            ) && self
-                .manifest(run_id)
-                .map(|m| m.run_kind == crate::manifest::RunKind::Fleet)
-                .unwrap_or(false);
+            let fleet_boundary =
+                matches!(trigger, Trigger::External { .. } | Trigger::Manual { .. })
+                    && self
+                        .manifest(run_id)
+                        .map(|m| m.run_kind == crate::manifest::RunKind::Fleet)
+                        .unwrap_or(false);
             if !fleet_boundary {
                 return Err(LedgerError::TriggerUnsupported {
                     trigger: trigger.type_name().to_string(),
