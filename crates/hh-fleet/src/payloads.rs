@@ -38,10 +38,7 @@ pub fn activated_payload(spec: &FleetSpec, spec_ref: &str) -> Json {
         ("policy_ref", js(&spec.policy_ref)),
         (
             "budget_ref",
-            spec.budget_ref
-                .as_ref()
-                .map(js)
-                .unwrap_or(Json::Null),
+            spec.budget_ref.as_ref().map(js).unwrap_or(Json::Null),
         ),
         ("purpose", js(&spec.purpose)),
     ])
@@ -49,11 +46,14 @@ pub fn activated_payload(spec: &FleetSpec, spec_ref: &str) -> Json {
 
 /// Decode a `lifecycle.fleet.activated` payload → `(spec, spec_ref)`.
 pub fn spec_from_activated(payload: &Json) -> Result<(FleetSpec, String), FleetError> {
-    let spec = FleetSpec::from_json(payload.get("spec").ok_or_else(|| {
-        FleetError::InvalidPayload {
-            detail: "lifecycle.fleet.activated missing spec".into(),
-        }
-    })?)?;
+    let spec =
+        FleetSpec::from_json(
+            payload
+                .get("spec")
+                .ok_or_else(|| FleetError::InvalidPayload {
+                    detail: "lifecycle.fleet.activated missing spec".into(),
+                })?,
+        )?;
     let spec_ref = payload
         .get("spec_ref")
         .and_then(Json::as_str)
@@ -119,11 +119,7 @@ pub fn item_init_json(init: &WorkItemInit) -> Json {
 // ── control.work_item.dispatched ─────────────────────────────────────────
 
 /// The `admit` row — the full dossier at `state = queued`.
-pub fn admit_payload(
-    run_id: &str,
-    init: &WorkItemInit,
-    spec_ref: &str,
-) -> Json {
+pub fn admit_payload(run_id: &str, init: &WorkItemInit, spec_ref: &str) -> Json {
     let run_item_id = crate::identity::run_item_id(run_id, &init.item_id);
     Json::obj([
         ("schema", js(PAYLOAD_SCHEMA)),
@@ -132,19 +128,13 @@ pub fn admit_payload(
         ("run_item_id", js(&run_item_id)),
         ("title", js(&init.title)),
         ("source", init.source.clone()),
-        (
-            "occurrence",
-            init.occurrence.clone().unwrap_or(Json::Null),
-        ),
+        ("occurrence", init.occurrence.clone().unwrap_or(Json::Null)),
         ("idempotency_key", js(&init.idempotency_key)),
         (
             "work_item_ref",
             js(crate::identity::work_item_ref(run_id, &init.item_id)),
         ),
-        (
-            "owner",
-            init.owner.as_ref().map(js).unwrap_or(Json::Null),
-        ),
+        ("owner", init.owner.as_ref().map(js).unwrap_or(Json::Null)),
         (
             "blocking",
             Json::Arr(init.blocking.iter().map(js).collect()),
@@ -329,10 +319,7 @@ pub fn block_add_payload(
         ("item_id", js(item_id)),
         ("run_item_id", js(run_item_id)),
         ("code", js(code)),
-        (
-            "issue_ref",
-            issue_ref.map(js).unwrap_or(Json::Null),
-        ),
+        ("issue_ref", issue_ref.map(js).unwrap_or(Json::Null)),
         (
             "escalation_ref",
             escalation_ref.map(js).unwrap_or(Json::Null),
@@ -415,12 +402,7 @@ pub fn handoff_payload(
 
 /// `owner_changed{item, agent, owner}` — a graph edge landed (the `item_id`
 /// is the calling context; `agent`/`owner` are the edge's vertices).
-pub fn owner_changed_payload(
-    item_id: &str,
-    run_item_id: &str,
-    agent: &str,
-    owner: &str,
-) -> Json {
+pub fn owner_changed_payload(item_id: &str, run_item_id: &str, agent: &str, owner: &str) -> Json {
     Json::obj([
         ("schema", js(PAYLOAD_SCHEMA)),
         ("item_id", js(item_id)),
@@ -537,10 +519,7 @@ pub fn escalation_resolved_payload(
         "resolution".into(),
         Json::Obj(BTreeMap::from([
             ("kind".into(), js(resolution_kind)),
-            (
-                "note".into(),
-                note.map(js).unwrap_or(Json::Null),
-            ),
+            ("note".into(), note.map(js).unwrap_or(Json::Null)),
         ])),
     );
     m.insert(
@@ -581,7 +560,10 @@ pub fn annotated_payload(
 /// default — `dispatched` rows without `verb` are `admit`-shaped only at
 /// parse time; every fleet row carries it explicitly).
 pub fn verb(payload: &Json) -> &str {
-    payload.get("verb").and_then(Json::as_str).unwrap_or("admit")
+    payload
+        .get("verb")
+        .and_then(Json::as_str)
+        .unwrap_or("admit")
 }
 
 /// The `item_id` of a work-item payload — every row names it.
