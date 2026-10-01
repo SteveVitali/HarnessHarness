@@ -178,10 +178,7 @@ impl FleetSpec {
         );
         m.insert(
             "budget_ref".into(),
-            self.budget_ref
-                .as_ref()
-                .map(js)
-                .unwrap_or(Json::Null),
+            self.budget_ref.as_ref().map(js).unwrap_or(Json::Null),
         );
         m.insert("out_of_scope".into(), Json::Bool(self.out_of_scope));
         m.insert(
@@ -211,7 +208,10 @@ impl FleetSpec {
                         .map(|t| Json::Int(t as i64))
                         .unwrap_or(Json::Null),
                 ),
-                ("max_retries".into(), Json::Int(self.defaults.max_retries as i64)),
+                (
+                    "max_retries".into(),
+                    Json::Int(self.defaults.max_retries as i64),
+                ),
                 (
                     "retry_backoff_ms".into(),
                     Json::Int(self.defaults.retry_backoff_ms as i64),
@@ -257,9 +257,21 @@ impl FleetSpec {
                 })
         };
         const KNOWN: &[&str] = &[
-            "schema", "version", "name", "purpose", "fixture_ref", "agents",
-            "capacity", "ownership", "policy_ref", "narrowing", "budget",
-            "budget_ref", "out_of_scope", "triggers", "defaults",
+            "schema",
+            "version",
+            "name",
+            "purpose",
+            "fixture_ref",
+            "agents",
+            "capacity",
+            "ownership",
+            "policy_ref",
+            "narrowing",
+            "budget",
+            "budget_ref",
+            "out_of_scope",
+            "triggers",
+            "defaults",
             "human_gate_states",
         ];
         for k in o.keys() {
@@ -298,9 +310,7 @@ impl FleetSpec {
         let ownership = match req("ownership")? {
             Json::Obj(m) => m
                 .iter()
-                .map(|(k, v)| {
-                    str_of(v, "ownership[]").map(|s| (k.clone(), s))
-                })
+                .map(|(k, v)| str_of(v, "ownership[]").map(|s| (k.clone(), s)))
                 .collect::<Result<BTreeMap<_, _>, _>>()?,
             _ => {
                 return Err(FleetError::SchemaViolation {
@@ -312,11 +322,11 @@ impl FleetSpec {
             Json::Arr(a) => {
                 let mut out = Vec::new();
                 for v in a {
-                    out.push(NarrowingLeaf::from_json(v, "/narrowing").map_err(
-                        |e| FleetError::SchemaViolation {
+                    out.push(NarrowingLeaf::from_json(v, "/narrowing").map_err(|e| {
+                        FleetError::SchemaViolation {
                             detail: format!("narrowing leaf: {e:?}"),
-                        },
-                    )?);
+                        }
+                    })?);
                 }
                 out
             }
@@ -339,11 +349,10 @@ impl FleetSpec {
                             trigger: trigger.type_name().to_string(),
                         });
                     }
-                    let policy =
-                        WakeupPolicy::from_json(v.get("policy").unwrap_or(&Json::Null))
-                            .ok_or_else(|| FleetError::SchemaViolation {
-                                detail: format!("trigger {k} policy malformed"),
-                            })?;
+                    let policy = WakeupPolicy::from_json(v.get("policy").unwrap_or(&Json::Null))
+                        .ok_or_else(|| FleetError::SchemaViolation {
+                            detail: format!("trigger {k} policy malformed"),
+                        })?;
                     triggers.insert(
                         k.clone(),
                         TriggerRule {
@@ -365,22 +374,19 @@ impl FleetSpec {
             let i = |k: &str, def: u64| -> Result<u64, FleetError> {
                 match d.get(k) {
                     None | Some(Json::Null) => Ok(def),
-                    Some(v) => v
-                        .as_int()
-                        .map(|x| x.max(0) as u64)
-                        .ok_or_else(|| FleetError::SchemaViolation {
+                    Some(v) => v.as_int().map(|x| x.max(0) as u64).ok_or_else(|| {
+                        FleetError::SchemaViolation {
                             detail: format!("fleet spec defaults.{k} must be an int"),
-                        }),
+                        }
+                    }),
                 }
             };
             let esc = match d.get("escalation_timeout_ms") {
                 None | Some(Json::Null) => None,
                 Some(v) => {
-                    let t = v
-                        .as_int()
-                        .ok_or_else(|| FleetError::SchemaViolation {
-                            detail: "defaults.escalation_timeout_ms must be an int".into(),
-                        })?;
+                    let t = v.as_int().ok_or_else(|| FleetError::SchemaViolation {
+                        detail: "defaults.escalation_timeout_ms must be an int".into(),
+                    })?;
                     Some(t.max(0) as u64)
                 }
             };
@@ -408,11 +414,11 @@ impl FleetSpec {
             narrowing,
             budget: match req("budget")? {
                 Json::Null => None,
-                v => Some(BudgetSpec::from_json(v).ok_or_else(|| {
-                    FleetError::SchemaViolation {
+                v => Some(
+                    BudgetSpec::from_json(v).ok_or_else(|| FleetError::SchemaViolation {
                         detail: "fleet spec budget malformed".into(),
-                    }
-                })?),
+                    })?,
+                ),
             },
             budget_ref: match req("budget_ref")? {
                 Json::Null => None,
