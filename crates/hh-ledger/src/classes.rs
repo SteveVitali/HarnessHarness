@@ -12,12 +12,18 @@
 //! `security.label.*`/`security.policy.evaluated`/`context.observation.recorded` rows the
 //! §5a.1 append invariants and the `context_view` projection need to be executable. The
 //! `control.*`/`measurement.*` families and the wildcard families land with their owning
-//! producers (additive rows — CC8). The `action.tool.*` classes that ADR-0212's OQ-235
-//! deferral leaves unregistered (`exposure.planned`, `discovery.searched`,
-//! `surface.evicted`, `call.refused`, `catalog.*`) are deliberately absent.
+//! producers (additive rows — CC8).
 //!
-//! Hosting-ABI lowering is `none` for every row — the hosted lowering lands with
-//! R-2.10.6/ADR-0164.
+//! The Hosting-ABI lowering column lands with R-2.10.6⁰/ADR-0164: [`HOSTED_LOWERING`]
+//! names, per class, how a native row presents on the hosted side — a typed
+//! `hh-hosting/1` kind spelling, `"passthrough"` (the native spelling carries
+//! verbatim — the `security.egress.*`/`security.credential.*` families),
+//! `"hint"` (a Lab-side claim, never authority — the row travels
+//! through `ext`/`raw_ref`, never the typed surface), or `"none"` (kernel
+//! bookkeeping that never leaves the native presentation — declared `no_slot`
+//! in the mechanism's `LoweringLossReport`). The table is **data**: naming a
+//! hosted kind here creates no dependency edge to the hosting tier (CC6 —
+//! `hh-hosting` consumes this column; nothing in the base consumes `hh-hosting`).
 
 #[cfg(test)]
 use hh_provenance::ProvenanceEventKind;
@@ -771,6 +777,375 @@ use crate::manifest::ObservabilityLevel as O;
 use Durability::{Ephemeral as Eph, Ledger as Led};
 use ScopeKind::{Effect, ModelCall, ToolCall, Turn};
 
+/// The hosted-lowering column (ADR-0164 D4/D5; R-2.10.6⁰). Every registered class
+/// appears exactly once; the value is one of:
+///
+/// * a typed `hh-hosting/1` kind spelling (`"session.opened"`, `"tool.completed"`, …)
+///   — the row lowers to the closed hosted event vocabulary;
+/// * `"passthrough"` — the native class spelling carries verbatim as the hosted
+///   kind (the §6.6 passthrough families: `security.egress.*`,
+///   `security.credential.*`);
+/// * `"hint"` — `hint_only`: the row is observable in the Lab's `ext`/`raw_ref`
+///   surface but carries no authority over the participant (ADR-0164 D5);
+/// * `"none"` — kernel bookkeeping; never appears in the hosted presentation
+///   (declared `no_slot`/`lost` in the projection's `LoweringLossReport`).
+///
+/// Missing entries would be a silent `"none"` — the table is therefore exhaustive
+/// by construction: [`hosted_lowering`] is the lookup the `row*` constructors call,
+/// and any class not listed here is `"none"`.
+const HOSTED_LOWERING: &[(&str, &str)] = &[
+    // ── action:effect ──
+    ("action.effect.abandoned", "hint"),
+    ("action.effect.authorized", "hint"),
+    ("action.effect.committed", "hint"),
+    ("action.effect.compensated", "hint"),
+    ("action.effect.deferred", "hint"),
+    ("action.effect.intended", "hint"),
+    ("action.effect.observed", "hint"),
+    ("action.effect.prepared", "hint"),
+    ("action.effect.probed", "hint"),
+    ("action.effect.refused", "hint"),
+    ("action.effect.reverted", "hint"),
+    ("action.effect.unattributed", "hint"),
+    ("action.effect.unknown", "hint"),
+    // ── action:environment ──
+    ("action.environment.attached", "hint"),
+    ("action.environment.declared", "hint"),
+    ("action.environment.derived", "hint"),
+    ("action.environment.detached", "hint"),
+    ("action.environment.drift.detected", "hint"),
+    ("action.environment.evidence.attached", "hint"),
+    ("action.environment.failed", "hint"),
+    ("action.environment.fenced", "hint"),
+    ("action.environment.healed", "hint"),
+    ("action.environment.lost", "hint"),
+    ("action.environment.meters_sampled", "hint"),
+    ("action.environment.phase.changed", "hint"),
+    ("action.environment.probe.completed", "hint"),
+    ("action.environment.probe.started", "hint"),
+    ("action.environment.provision.requested", "hint"),
+    ("action.environment.provisioned", "hint"),
+    ("action.environment.provisioning", "hint"),
+    ("action.environment.ready", "hint"),
+    ("action.environment.reattached", "hint"),
+    ("action.environment.release.requested", "hint"),
+    ("action.environment.released", "hint"),
+    ("action.environment.replaced", "hint"),
+    ("action.environment.restored", "hint"),
+    ("action.environment.resume.requested", "hint"),
+    ("action.environment.resumed", "hint"),
+    ("action.environment.selected", "hint"),
+    ("action.environment.snapshot", "hint"),
+    ("action.environment.snapshot.listed", "hint"),
+    ("action.environment.snapshot.uploaded", "hint"),
+    ("action.environment.suspend.requested", "hint"),
+    ("action.environment.suspended", "hint"),
+    ("action.environment.torn_down", "hint"),
+    ("action.environment.unreachable", "hint"),
+    ("action.environment.verdict.recorded", "hint"),
+    ("action.environment.verified", "hint"),
+    // ── action:tool ──
+    ("action.tool.call.refused", "tool.completed"),
+    ("action.tool.catalog.built", "hint"),
+    ("action.tool.catalog.delta", "hint"),
+    ("action.tool.catalog.epoch", "hint"),
+    ("action.tool.completed", "tool.completed"),
+    ("action.tool.discovery.searched", "hint"),
+    ("action.tool.exposure.planned", "hint"),
+    ("action.tool.output_chunk", "hint"),
+    ("action.tool.progress", "hint"),
+    ("action.tool.proposed", "tool.proposed"),
+    ("action.tool.rejected", "tool.completed"),
+    ("action.tool.started", "hint"),
+    ("action.tool.surface.evicted", "hint"),
+    ("action.tool.surface.revealed", "hint"),
+    ("action.tool.surface_rejected", "tool.completed"),
+    // ── action:world_state ──
+    ("action.world_state.discontinuity", "hint"),
+    ("action.world_state.patch", "hint"),
+    ("action.world_state.snapshot", "hint"),
+    // ── context:artefact ──
+    ("context.artefact.activated", "hint"),
+    ("context.artefact.delivered", "artefact.delivered"),
+    // ── context:assembled ──
+    ("context.assembled", "hint"),
+    // ── context:compaction ──
+    ("context.compaction.completed", "compaction.observed"),
+    ("context.compaction.started", "compaction.observed"),
+    // ── context:memory ──
+    ("context.memory.invalidated", "hint"),
+    ("context.memory.read", "hint"),
+    ("context.memory.written", "hint"),
+    // ── context:observation ──
+    ("context.observation.recorded", "hint"),
+    // ── context:procedure ──
+    ("context.procedure.selected", "hint"),
+    // ── context:retrieval ──
+    ("context.retrieval.completed", "hint"),
+    // ── control:approval_mode ──
+    ("control.approval_mode.amended", "none"),
+    // ── control:attendance ──
+    ("control.attendance.amended", "none"),
+    // ── control:budget ──
+    ("control.budget.allocated", "hint"),
+    ("control.budget.amended", "hint"),
+    ("control.budget.consumed", "hint"),
+    ("control.budget.exceeded", "hint"),
+    ("control.budget.released", "hint"),
+    ("control.budget.reserved", "hint"),
+    // ── control:compute ──
+    ("control.compute.decided", "none"),
+    // ── control:decision ──
+    ("control.decision", "none"),
+    // ── control:guard ──
+    ("control.guard.fired", "hint"),
+    // ── control:invariant ──
+    ("control.invariant.violated", "hint"),
+    // ── control:loop ──
+    ("control.loop.detected", "hint"),
+    // ── control:merge ──
+    ("control.merge.resolved", "none"),
+    // ── control:output ──
+    ("control.output.rejected", "hint"),
+    // ── control:ownership ──
+    ("control.ownership.transferred", "none"),
+    // ── control:plan ──
+    ("control.plan.emitted", "none"),
+    // ── control:retry ──
+    ("control.retry.fired", "hint"),
+    ("control.retry.scheduled", "hint"),
+    ("control.retry.skipped", "hint"),
+    // ── control:subagent ──
+    ("control.subagent.cancelled", "none"),
+    ("control.subagent.detached", "none"),
+    ("control.subagent.result", "none"),
+    ("control.subagent.spawned", "none"),
+    // ── control:timeout ──
+    ("control.timeout.fired", "hint"),
+    // ── control:wakeup ──
+    ("control.wakeup.cancelled", "none"),
+    ("control.wakeup.fired", "none"),
+    ("control.wakeup.occurred", "none"),
+    ("control.wakeup.scheduled", "none"),
+    ("control.wakeup.skipped", "none"),
+    // ── control:work_item ──
+    ("control.work_item.blocked", "none"),
+    ("control.work_item.cancelled", "none"),
+    ("control.work_item.dispatched", "none"),
+    ("control.work_item.handoff", "none"),
+    ("control.work_item.owner_acknowledged", "none"),
+    ("control.work_item.owner_changed", "none"),
+    ("control.work_item.stopped", "none"),
+    // ── lifecycle:branch ──
+    ("lifecycle.branch.disposed", "none"),
+    ("lifecycle.branch.opened", "none"),
+    // ── lifecycle:capability ──
+    ("lifecycle.capability.registered", "none"),
+    // ── lifecycle:component ──
+    ("lifecycle.component.bound", "none"),
+    ("lifecycle.component.invoked", "hint"),
+    // ── lifecycle:contract ──
+    ("lifecycle.contract.deprecated_use", "none"),
+    // ── lifecycle:debt ──
+    ("lifecycle.debt.expired_used", "none"),
+    ("lifecycle.debt.removal_test.scheduled", "none"),
+    ("lifecycle.debt.removal_test.settled", "none"),
+    ("lifecycle.debt.status.changed", "none"),
+    // ── lifecycle:definition ──
+    ("lifecycle.definition.changed", "none"),
+    // ── lifecycle:escalation ──
+    ("lifecycle.escalation.raised", "none"),
+    ("lifecycle.escalation.resolved", "none"),
+    // ── lifecycle:head ──
+    ("lifecycle.head.moved", "none"),
+    // ── lifecycle:hosted ──
+    ("lifecycle.hosted.attached", "none"),
+    ("lifecycle.hosted.coordinate_set", "none"),
+    ("lifecycle.hosted.detached", "none"),
+    ("lifecycle.hosted.drift_observed", "none"),
+    ("lifecycle.hosted.native_record", "none"),
+    // ── lifecycle:lease ──
+    ("lifecycle.lease.acquired", "none"),
+    ("lifecycle.lease.fenced", "hint"),
+    ("lifecycle.lease.released", "none"),
+    ("lifecycle.lease.renewed", "none"),
+    // ── lifecycle:ledger ──
+    ("lifecycle.ledger.gc", "none"),
+    ("lifecycle.ledger.redacted", "none"),
+    // ── lifecycle:registry ──
+    ("lifecycle.registry.admission_refused", "none"),
+    ("lifecycle.registry.conformance_recorded", "none"),
+    ("lifecycle.registry.name_deprecated", "none"),
+    ("lifecycle.registry.name_yanked", "none"),
+    ("lifecycle.registry.published", "none"),
+    ("lifecycle.registry.registered", "none"),
+    ("lifecycle.registry.snapshotted", "none"),
+    ("lifecycle.registry.version_revoked", "none"),
+    // ── lifecycle:replay ──
+    ("lifecycle.replay.finished", "none"),
+    ("lifecycle.replay.started", "none"),
+    // ── lifecycle:run ──
+    ("lifecycle.run.created", "session.opened"),
+    ("lifecycle.run.finished", "session.closed"),
+    ("lifecycle.run.forked", "none"),
+    ("lifecycle.run.imported", "none"),
+    ("lifecycle.run.resumed", "hint"),
+    ("lifecycle.run.rolled_back", "hint"),
+    ("lifecycle.run.suspended", "hint"),
+    // ── lifecycle:session ──
+    ("lifecycle.session.attached", "none"),
+    ("lifecycle.session.detached", "none"),
+    // ── lifecycle:surface ──
+    ("lifecycle.surface.invoked", "none"),
+    // ── lifecycle:turn ──
+    ("lifecycle.turn.finished", "turn.finished"),
+    ("lifecycle.turn.started", "turn.started"),
+    // ── measurement:analysis ──
+    ("measurement.analysis.recorded", "none"),
+    ("measurement.analysis.superseded", "none"),
+    // ── measurement:cost ──
+    ("measurement.cost.attributed", "hint"),
+    // ── measurement:evolution ──
+    ("measurement.evolution.candidate.transitioned", "hint"),
+    // ── measurement:experiment ──
+    ("measurement.experiment.amended", "none"),
+    ("measurement.experiment.bound", "none"),
+    ("measurement.experiment.bundle_assembled", "none"),
+    ("measurement.experiment.cell_completed", "none"),
+    ("measurement.experiment.claim_expired", "none"),
+    ("measurement.experiment.closed", "none"),
+    ("measurement.experiment.declared", "none"),
+    ("measurement.experiment.drift_bracket", "none"),
+    ("measurement.experiment.paused", "none"),
+    ("measurement.experiment.resumed", "none"),
+    ("measurement.experiment.run_bound", "none"),
+    ("measurement.experiment.run_claimed", "none"),
+    ("measurement.experiment.run_excluded", "none"),
+    ("measurement.experiment.run_launched", "none"),
+    ("measurement.experiment.run_planned", "none"),
+    ("measurement.experiment.run_replanned", "none"),
+    ("measurement.experiment.run_settled", "none"),
+    // ── measurement:export ──
+    ("measurement.export.delivered", "none"),
+    // ── measurement:harness_edit ──
+    ("measurement.harness_edit.applied", "none"),
+    // ── measurement:leaderboard ──
+    ("measurement.leaderboard.entry_retracted", "none"),
+    ("measurement.leaderboard.published", "none"),
+    // ── measurement:metric ──
+    ("measurement.metric.emitted", "none"),
+    // ── model:cache ──
+    ("model.cache.resolved", "hint"),
+    // ── model:call ──
+    ("model.call.attempt.completed", "hint"),
+    ("model.call.attempt.failed", "hint"),
+    ("model.call.attempt.started", "hint"),
+    ("model.call.completed", "model.call.completed"),
+    ("model.call.failed", "model.call.completed"),
+    ("model.call.requested", "model.call.started"),
+    // ── model:profile ──
+    ("model.profile.expired_used", "hint"),
+    // ── model:rerouted ──
+    ("model.rerouted", "hint"),
+    // ── model:route ──
+    ("model.route.decided", "hint"),
+    // ── model:stream ──
+    ("model.stream.delta", "message.delta"),
+    // ── model:surface ──
+    ("model.surface.relowered", "hint"),
+    // ── security:audit ──
+    ("security.audit.checkpoint", "none"),
+    // ── security:containment ──
+    ("security.containment.amended", "hint"),
+    ("security.containment.applied", "hint"),
+    ("security.containment.unverified", "hint"),
+    ("security.containment.violated", "hint"),
+    // ── security:credential ──
+    ("security.credential.bound", "passthrough"),
+    ("security.credential.denied", "passthrough"),
+    ("security.credential.revoked", "passthrough"),
+    ("security.credential.rotated", "passthrough"),
+    ("security.credential.used", "passthrough"),
+    // ── security:egress ──
+    ("security.egress.decided", "passthrough"),
+    ("security.egress.requested", "passthrough"),
+    // ── security:extension ──
+    ("security.extension.drift", "hint"),
+    ("security.extension.install_completed", "hint"),
+    ("security.extension.install_requested", "hint"),
+    ("security.extension.loaded", "none"),
+    ("security.extension.quarantined", "hint"),
+    ("security.extension.resolved", "hint"),
+    ("security.extension.revoked", "none"),
+    ("security.extension.sealed", "hint"),
+    ("security.extension.violation", "none"),
+    // ── security:label ──
+    ("security.label.applied", "hint"),
+    ("security.label.declassified", "hint"),
+    ("security.label.endorsed", "hint"),
+    // ── security:permission ──
+    ("security.permission.decided", "permission.decided"),
+    ("security.permission.escalated", "hint"),
+    ("security.permission.granted", "hint"),
+    ("security.permission.lease.expired", "hint"),
+    ("security.permission.lease.granted", "hint"),
+    ("security.permission.lease.revoked", "hint"),
+    ("security.permission.lease.used", "hint"),
+    ("security.permission.pending", "permission.requested"),
+    ("security.permission.requested", "permission.requested"),
+    ("security.permission.revoked", "hint"),
+    // ── security:policy ──
+    ("security.policy.evaluated", "none"),
+    // ── security:secret ──
+    ("security.secret.leak_detected", "hint"),
+    ("security.secret.redacted", "hint"),
+    // ── verification:artefact ──
+    ("verification.artefact.followed", "hint"),
+    // ── verification:claim ──
+    ("verification.claim.reconciled", "hint"),
+    ("verification.claim.recorded", "hint"),
+    // ── verification:completion ──
+    ("verification.completion.decided", "hint"),
+    ("verification.completion.proposed", "hint"),
+    // ── verification:gate ──
+    ("verification.gate.evaluated", "hint"),
+    // ── verification:validator ──
+    ("verification.validator.invoked", "hint"),
+    ("verification.validator.verdict", "hint"),
+];
+
+/// `str` equality usable in `const` contexts (the lowering lookup below).
+const fn str_eq(a: &str, b: &str) -> bool {
+    let (a, b) = (a.as_bytes(), b.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != b[i] {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// The hosted-lowering lookup: `"none"` for anything not listed in
+/// [`HOSTED_LOWERING`] — the default is "does not cross to the hosted
+/// presentation", so a new class is opt-in for hosted visibility (ADR-0164 D5:
+/// the loss record is declared, not silent — the projection reports `"none"`
+/// classes as `no_slot` entries).
+pub const fn hosted_lowering(class: &str) -> &'static str {
+    let mut i = 0;
+    while i < HOSTED_LOWERING.len() {
+        if str_eq(HOSTED_LOWERING[i].0, class) {
+            return HOSTED_LOWERING[i].1;
+        }
+        i += 1;
+    }
+    "none"
+}
+
 /// The one table (CC7). Order is irrelevant; `lookup` is exact-match.
 #[rustfmt::skip]
 pub const CLASS_TABLE: &[ClassSpec] = &[
@@ -799,6 +1174,16 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // `lifecycle.hosted.native_record` — the hosted adapter's appended leaf
     // (§5g.6 §3; the adapter is a kernel component — Rule P holds).
     row_audit("lifecycle.hosted.native_record", O::Events, true, OPEN_AUDIT, &[], None, None),
+    // `lifecycle.hosted.{attached,detached,coordinate_set,drift_observed}` —
+    // the §6.6 "Ledger classes added" rows (ADR-0053 D6 family): kernel-emitted
+    // at attach/detach and on coordinate/drift facts. Emitters land with the
+    // hosting service (S4.5a); the dialect declares them now (the class list
+    // is the dialect schema — CC7). Audit-grade (session boundary facts are
+    // consequential acts).
+    row_audit("lifecycle.hosted.attached",        O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("lifecycle.hosted.detached",        O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("lifecycle.hosted.coordinate_set",  O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("lifecycle.hosted.drift_observed",  O::Events, true, OPEN_AUDIT, &[], None, None),
     // Non-audit lifecycle rows — still kernel-origin + provenance-bearing.
     row("lifecycle.turn.started",          Led, O::Events, false, true,  Some(Turn), None),
     row("lifecycle.turn.finished",         Led, O::Events, false, true,  None, Some(Turn)),
@@ -1276,7 +1661,7 @@ const fn row(
         ephemeral_fields: &[],
         opens_scope,
         closes_scope,
-        lowering: "none",
+        lowering: hosted_lowering(class),
     }
 }
 
@@ -1306,7 +1691,7 @@ const fn row_audit(
         ephemeral_fields: &[],
         opens_scope,
         closes_scope,
-        lowering: "none",
+        lowering: hosted_lowering(class),
     }
 }
 
@@ -1335,7 +1720,7 @@ const fn row_prov(
         ephemeral_fields: &[],
         opens_scope,
         closes_scope,
-        lowering: "none",
+        lowering: hosted_lowering(class),
     }
 }
 
@@ -1363,7 +1748,7 @@ const fn row_eph(
         ephemeral_fields,
         opens_scope: None,
         closes_scope: None,
-        lowering: "none",
+        lowering: hosted_lowering(class),
     }
 }
 
@@ -1382,6 +1767,7 @@ pub fn registered_classes() -> impl Iterator<Item = &'static ClassSpec> {
 mod tests {
     use super::*;
     use hh_ontology::planes::EventFamily;
+    use std::collections::BTreeSet;
 
     #[test]
     fn every_registered_class_has_a_known_family_prefix() {
@@ -1588,5 +1974,38 @@ mod tests {
             lookup("action.effect.observed").unwrap().closes_scope,
             Some(ScopeKind::Effect)
         );
+    }
+
+    /// R-2.10.6⁰ (ADR-0164 D4): `HOSTED_LOWERING` covers every registered
+    /// class exactly once — an unlisted class would silently lower to
+    /// `"none"` at the projection (CC3: never a silent drop).
+    #[test]
+    fn hosted_lowering_covers_every_class_exactly_once() {
+        let table: BTreeSet<&str> = HOSTED_LOWERING.iter().map(|(c, _)| *c).collect();
+        assert_eq!(
+            table.len(),
+            HOSTED_LOWERING.len(),
+            "duplicate class in HOSTED_LOWERING"
+        );
+        for spec in CLASS_TABLE {
+            assert!(
+                table.contains(spec.class),
+                "{} missing from HOSTED_LOWERING",
+                spec.class
+            );
+            // The row's stamped lowering is the table's answer (CC7 — one
+            // class list, one lowering column).
+            assert_eq!(spec.lowering, hosted_lowering(spec.class));
+            // The disposition vocabulary is closed: `"none"`/`"hint"`/
+            // `"passthrough"` or a typed `hh-hosting/1` kind spelling
+            // (a kind may share a native class's spelling — e.g.
+            // `model.call.completed` is both — the `hh-hosting` crate owns
+            // the closed kind list).
+            let _ = hosted_lowering(spec.class);
+        }
+        // …and no table entry names an unregistered class.
+        for (c, _) in HOSTED_LOWERING {
+            assert!(lookup(c).is_some(), "{c} is not a registered class");
+        }
     }
 }

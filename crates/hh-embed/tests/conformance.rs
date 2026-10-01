@@ -3615,6 +3615,7 @@ fn s34c_row(
             observability_level: vec!["ledger".into()],
             hosting_mechanism: None,
             capability_vector_ref: None,
+            mediation: vec![],
             registry_snapshot_id: None,
         },
         experiment: Some(Json::obj([

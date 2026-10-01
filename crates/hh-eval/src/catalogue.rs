@@ -19,8 +19,9 @@ use std::collections::BTreeSet;
 
 use hh_ontology::compliance::{Detector, MetricDeclaration, MetricError};
 use hh_ontology::eval::{
-    ChargedTo, IntervalMethod, MediationRequirement, MetricLevel, MetricValueType, OracleClass,
-    OracleDeclaration, OracleError, OutcomeClassPolicy, ReplicateReducer, VerdictType,
+    ChargedTo, IntervalMethod, MediationChannel, MediationRequirement, MetricLevel,
+    MetricValueType, OracleClass, OracleDeclaration, OracleError, OutcomeClassPolicy,
+    ReplicateReducer, VerdictType,
 };
 use hh_ontology::lab::EnvironmentFamily;
 use hh_ontology::participant::{Granularity, Observability, ParticipantClass};
@@ -295,7 +296,13 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
             }
         },
     ];
-    // The veto metrics (the C0/Stage-3 veto tier — §5h.2 §2.3 + §5h.4).
+    // The veto metrics (the C0/Stage-3 veto tier — §5h.2 §2.3 + §5h.4). Per-veto
+    // applicability overrides (ADR-0165 D6–D8; §6.6 §2.4): a hosted row never
+    // claims a security property the Lab did not mediate —
+    // `veto.permission_violation` requires `mediated(effects)`; the
+    // duplicate-effect/audit-completeness vetoes are `n/a{class}` on hosted
+    // rows (participant-reported tool events never enter the effect lifecycle
+    // and a hosted ledger carries no audit surface to complete).
     for (id, dim) in [
         (veto_id::DUPLICATE_EFFECT, Dimension::Compliance),
         (veto_id::AUDIT_COMPLETENESS, Dimension::Compliance),
@@ -311,7 +318,43 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
         (veto_id::SUITE_NOT_RUN, Dimension::Reliability),
         (veto_id::HELD_OUT_SKIPPED, Dimension::Reliability),
     ] {
-        metrics.push(veto_metric(&format!("veto.{id}"), dim));
+        let mut m = veto_metric(&format!("veto.{id}"), dim);
+        match id {
+            veto_id::PERMISSION_VIOLATION => {
+                m.requires_mediation = MediationRequirement::Mediated(MediationChannel::Effects);
+            }
+            veto_id::DUPLICATE_EFFECT | veto_id::AUDIT_COMPLETENESS => {
+                m.applies_to_classes = [ParticipantClass::Native].into_iter().collect();
+            }
+            _ => {}
+        }
+        metrics.push(m);
+    }
+    // The hosted-specific declarations (§6.6 §2.4 — `applies_to_classes =
+    // {hosted}`, non-veto). Schema-only at C0/Stage 3: the folds land with the
+    // hosting service (S4.5a); a declared row renders `n/a{class}` on native
+    // arms and is never coerced to a value a fold did not produce.
+    for name in [
+        "hosted_observation_completeness",
+        "mediation_coverage",
+        "usage_report_agreement",
+        "conformance_drift_count",
+        "synthesized_terminal_rate",
+        "observed_duplicate_action_rate",
+        "observed_blast_radius",
+    ] {
+        metrics.push(MetricDeclaration {
+            name: name.into(),
+            dimension: Dimension::Reliability,
+            level: MetricLevel::Run,
+            unit: "ppm".into(),
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                applies_to_classes: [ParticipantClass::Hosted].into_iter().collect(),
+                ..base()
+            }
+        });
     }
     metrics
 }

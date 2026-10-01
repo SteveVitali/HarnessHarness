@@ -326,6 +326,16 @@ impl EnforcementLevel {
             EnforcementLevel::Unenforceable => "unenforceable",
         }
     }
+
+    /// Parse a canonical spelling (`Option` — unknown spellings refuse).
+    pub fn parse(s: &str) -> Option<EnforcementLevel> {
+        Some(match s {
+            "enforced" => EnforcementLevel::Enforced,
+            "advisory" => EnforcementLevel::Advisory,
+            "unenforceable" => EnforcementLevel::Unenforceable,
+            _ => return None,
+        })
+    }
 }
 
 impl fmt::Display for MatchRefusal {

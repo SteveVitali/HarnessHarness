@@ -127,6 +127,29 @@ pub enum HostingMechanism {
     ContainerInstalled,
 }
 
+impl HostingMechanism {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HostingMechanism::None => "none",
+            HostingMechanism::SessionAbi => "session_abi",
+            HostingMechanism::ModelBoundaryIntercept => "model_boundary_intercept",
+            HostingMechanism::ContainerInstalled => "container_installed",
+        }
+    }
+
+    /// Parse a canonical spelling (`Option` — unknown spellings are never coerced).
+    pub fn parse(s: &str) -> Option<HostingMechanism> {
+        Some(match s {
+            "none" => HostingMechanism::None,
+            "session_abi" => HostingMechanism::SessionAbi,
+            "model_boundary_intercept" => HostingMechanism::ModelBoundaryIntercept,
+            "container_installed" => HostingMechanism::ContainerInstalled,
+            _ => return None,
+        })
+    }
+}
+
 /// A per-dimension capability-vector verdict (§2.7.3). `Unknown` is never coerced.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CapabilityVerdict {
@@ -144,6 +167,36 @@ pub enum CapabilityVerdict {
     Skipped,
     /// Declaration/probe disagree (both concrete).
     Drift,
+}
+
+impl CapabilityVerdict {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CapabilityVerdict::Supported => "supported",
+            CapabilityVerdict::Unsupported => "unsupported",
+            CapabilityVerdict::Partial => "partial",
+            CapabilityVerdict::NotApplicable => "not_applicable",
+            CapabilityVerdict::Unknown => "unknown",
+            CapabilityVerdict::Skipped => "skipped",
+            CapabilityVerdict::Drift => "drift",
+        }
+    }
+
+    /// Parse a canonical spelling (`Option` — unknown spellings are never coerced;
+    /// an unrecognised spelling is `None`, not `Unknown`).
+    pub fn parse(s: &str) -> Option<CapabilityVerdict> {
+        Some(match s {
+            "supported" => CapabilityVerdict::Supported,
+            "unsupported" => CapabilityVerdict::Unsupported,
+            "partial" => CapabilityVerdict::Partial,
+            "not_applicable" => CapabilityVerdict::NotApplicable,
+            "unknown" => CapabilityVerdict::Unknown,
+            "skipped" => CapabilityVerdict::Skipped,
+            "drift" => CapabilityVerdict::Drift,
+            _ => return None,
+        })
+    }
 }
 
 /// A raw, as-supplied participant record — `class` may be absent, which `describe` rejects.

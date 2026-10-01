@@ -504,6 +504,11 @@ pub enum InfraErrorFamily {
     Env,
     /// A [`KernelInfraCause`] spelling (CF-479).
     Kernel,
+    /// A participant-side failure (§6.6 `participant_unclassified` — the
+    /// hosted stop-reason lift for an `other`/`_`-prefixed terminal: the raw
+    /// spelling is preserved and the failure is charged to the participant's
+    /// side of the boundary, never to the Lab).
+    Participant,
 }
 
 impl InfraErrorFamily {
@@ -513,6 +518,7 @@ impl InfraErrorFamily {
             InfraErrorFamily::Model => "model_error",
             InfraErrorFamily::Env => "env_error",
             InfraErrorFamily::Kernel => "kernel_internal",
+            InfraErrorFamily::Participant => "participant_unclassified",
         }
     }
 
@@ -522,6 +528,7 @@ impl InfraErrorFamily {
             "model_error" => InfraErrorFamily::Model,
             "env_error" => InfraErrorFamily::Env,
             "kernel_internal" => InfraErrorFamily::Kernel,
+            "participant_unclassified" => InfraErrorFamily::Participant,
             _ => return None,
         })
     }

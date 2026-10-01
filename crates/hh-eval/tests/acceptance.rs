@@ -10,16 +10,17 @@ use hh_budget::spec::{BudgetMode, BudgetSpec};
 use hh_eval::benefits::{artifact_benefit, equivalence_run, split_hash_agrees, BenefitError};
 use hh_eval::compare::{compare, CompareError, CompareInput};
 use hh_eval::runs::{CacheState, EvalRun, TaskContext};
-use hh_eval::scorecard::{render_scorecard, ScorecardError, ScorecardInput};
+use hh_eval::scorecard::{render_cell, render_scorecard, ScorecardError, ScorecardInput};
 use hh_eval::{catalogue, stats};
 use hh_ontology::compliance::{Detector, MetricDeclaration, NaReason};
 use hh_ontology::control::OutcomeClass;
 use hh_ontology::dimensions::{DimensionId, DimensionKey};
 use hh_ontology::eval::{
-    Design, DesignKind, MetricValue, MetricValueKind, Pairing, PreRegistration, SeedPolicy,
+    Design, DesignKind, MediationChannel, MetricValue, MetricValueKind, Pairing, PreRegistration,
+    SeedPolicy,
 };
 use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::{Observability, ParticipantClass};
+use hh_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
 use hh_wire::Json;
 
 const ORACLE_BIN: &str = env!("CARGO_BIN_EXE_hh-eval-oracle");
@@ -849,4 +850,84 @@ fn compare_refuses_cross_mode_match() {
         )),
         other => panic!("expected Match refusal, got {other}"),
     }
+}
+
+/// S3.4d (R-2.10.6⁰; ADR-0165 D6) — `applicability_at` on the scorecard path:
+/// a hosted row without the required mediation renders `n/a{mediation}`,
+/// native-only vetoes render `n/a{class}` on hosted rows, and a
+/// `requires_capabilities` metric is `n/a{capability}` absent a `supported`
+/// verdict (`unknown`/absent never coerced — T-LCD-07/T-LCD-15).
+#[test]
+fn hosted_applicability_mediation_and_capability_na() {
+    let mut hosted = run("h", "t1", 0, 1, "task_success");
+    hosted.participant_class = ParticipantClass::Hosted;
+    hosted.observability_level = [Observability::Events, Observability::EndState]
+        .into_iter()
+        .collect();
+    hosted.mediation = BTreeSet::new();
+
+    // `veto.permission_violation` requires `mediated(effects)` (ADR-0165 D7):
+    // an unmediated hosted row is `n/a{mediation}`, never 0.
+    let veto = metric("veto.permission_violation");
+    let cell = render_cell(&veto, &[&hosted], None, &BTreeMap::new(), 950_000, "cfg-h");
+    assert_eq!(cell.point, MetricValueKind::Na(NaReason::Mediation));
+    assert_eq!(cell.excluded.get("n/a:mediation"), Some(&1));
+    // With `effects` mediated the metric applies (not n/a{mediation}).
+    hosted.mediation.insert(MediationChannel::Effects);
+    let cell = render_cell(&veto, &[&hosted], None, &BTreeMap::new(), 950_000, "cfg-h");
+    assert_ne!(cell.point, MetricValueKind::Na(NaReason::Mediation));
+
+    // `veto.duplicate_effect`/`veto.audit_completeness` are native-only —
+    // `n/a{class}` on the hosted row (ADR-0165 D8).
+    for name in ["veto.duplicate_effect", "veto.audit_completeness"] {
+        let decl = metric(name);
+        let cell = render_cell(&decl, &[&hosted], None, &BTreeMap::new(), 950_000, "cfg-h");
+        assert_eq!(
+            cell.point,
+            MetricValueKind::Na(NaReason::Class),
+            "{name} must be n/a{{class}} on a hosted row"
+        );
+    }
+
+    // `requires_capabilities`: absent/`unknown` → `n/a{capability}`;
+    // `supported` applies.
+    let mut cap_decl = metric("task_success");
+    cap_decl.requires_capabilities = ["subagents".to_string()].into_iter().collect();
+    let cell = render_cell(
+        &cap_decl,
+        &[&hosted],
+        None,
+        &BTreeMap::new(),
+        950_000,
+        "cfg-h",
+    );
+    assert_eq!(cell.point, MetricValueKind::Na(NaReason::Capability));
+    hosted
+        .capability_vector
+        .insert("subagents".into(), CapabilityVerdict::Unknown);
+    let cell = render_cell(
+        &cap_decl,
+        &[&hosted],
+        None,
+        &BTreeMap::new(),
+        950_000,
+        "cfg-h",
+    );
+    assert_eq!(
+        cell.point,
+        MetricValueKind::Na(NaReason::Capability),
+        "unknown never coerces to supported"
+    );
+    hosted
+        .capability_vector
+        .insert("subagents".into(), CapabilityVerdict::Supported);
+    let cell = render_cell(
+        &cap_decl,
+        &[&hosted],
+        None,
+        &BTreeMap::new(),
+        950_000,
+        "cfg-h",
+    );
+    assert_ne!(cell.point, MetricValueKind::Na(NaReason::Capability));
 }

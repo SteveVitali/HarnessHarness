@@ -827,6 +827,23 @@ impl RegistryStore {
                         });
                     }
                 }
+                // §6.6: hosted conformance entries pin a `participant` subject —
+                // the subject_ref must resolve to a registered participant
+                // record (the codec gate already refuses them on non-
+                // participant reports).
+                if !r.hosted_entries.is_empty()
+                    && !matches!(
+                        self.records.get(&r.subject_ref),
+                        Some((_, RegistryRecord::Participant(_)))
+                    )
+                {
+                    bail!(RegistryError::SchemaViolation {
+                        path: "subject_ref".to_string(),
+                        detail:
+                            "hosted_entries requires the subject pin to resolve to a participant record"
+                                .to_string(),
+                    });
+                }
             }
             RegistryRecord::Namespace(ns) => {
                 if !matches!(ns.namespace.as_str(), "hh" | "local") {
@@ -851,6 +868,14 @@ impl RegistryStore {
                 }
             }
             RegistryRecord::ForeignImport(_) | RegistryRecord::Snapshot(_) => {}
+            RegistryRecord::Participant(body) | RegistryRecord::Adapter(body) => {
+                // Same opaque-body gate as `EnvironmentRecord` — `hh-hosting`
+                // owns the §6.6 schema; the registry re-runs the structural
+                // decode (the `kind` tag must match the record kind).
+                if let Err(e) = schema::record_from_json(record.kind(), body) {
+                    bail!(e);
+                }
+            }
             RegistryRecord::EnvironmentRecord(body) => {
                 // The structural half of the decode gate (`record_from_json`
                 // does the same for the wire path): the `canonical_full()`

@@ -41,7 +41,7 @@ use hh_eval::runs::{CacheState, EvalRun, SuiteContext, TaskContext};
 use hh_ledger::manifest::RunManifest;
 use hh_ontology::control::OutcomeClass;
 use hh_ontology::dimensions::DimensionId;
-use hh_ontology::eval::MetricValue;
+use hh_ontology::eval::{MediationChannel, MetricValue};
 use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
 use hh_ontology::participant::{Observability, ParticipantClass};
 use hh_results::row::ResultsRow;
@@ -239,7 +239,28 @@ pub fn eval_run(
             .unwrap_or_else(|| row.key.configuration_version_id.clone()),
         participant_class,
         observability_level,
-        mediation: BTreeSet::new(),
+        // §6.6 / ADR-0165 D6 — the row's mediation channels + capability vector
+        // feed `applicability_at` (a native row's surface is fully mediated —
+        // the kernel owns every channel; a hosted row carries the row's
+        // declared spellings, never defaulted, T-LCD-07). The capability
+        // vector resolves through `capability_vector_ref` (Stage 4 binding —
+        // absent = empty, and `requires_capabilities` metrics render
+        // `n/a{capability}` rather than a coerced verdict).
+        mediation: if participant_class == ParticipantClass::Native {
+            [
+                MediationChannel::Effects,
+                MediationChannel::Egress,
+                MediationChannel::ModelCalls,
+            ]
+            .into_iter()
+            .collect()
+        } else {
+            row.coordinates
+                .mediation
+                .iter()
+                .filter_map(|s| MediationChannel::parse(s))
+                .collect()
+        },
         capability_vector: BTreeMap::new(),
         task_id,
         suite_id,

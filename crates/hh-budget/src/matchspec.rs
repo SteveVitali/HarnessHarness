@@ -798,6 +798,64 @@ mod tests {
     }
 
     #[test]
+    fn ac_r_2_10_6_6_tokens_matched_cap_refusal_and_interception_accept() {
+        // AC-R-2.10.6-6: `MatchSpec{dimensions: [tokens], mode: matched_cap}`
+        // over an arm whose `budget_enforcement[tokens] ≠ enforced` refuses
+        // `IncommensurableMatch`; the same design with interception enabled
+        // (the adapter derives `enforced` for the token dimensions) accepts.
+        let tok = DimensionId::TokensOutputVisible;
+        let spec = || MatchSpec::matched_cap(&[tok]);
+        let budget = caps(&[(tok, 10_000)]);
+
+        let mut hosted = arm();
+        hosted.match_spec = Some(spec());
+        hosted.search_budget = Some(budget.clone());
+        hosted.eval_budget = Some(caps(&[(tok, 1_000)]));
+        // Without interception the adapter cannot bound tokens →
+        // `unenforceable` → refused (the naming carries the level).
+        hosted.enforcement = BudgetEnforcement::hosted(&[(tok, EnforcementLevel::Unenforceable)]);
+        let e = validate_match(&[
+            {
+                let mut n = arm();
+                n.match_spec = Some(spec());
+                n.search_budget = Some(budget.clone());
+                n.eval_budget = Some(caps(&[(tok, 1_000)]));
+                n
+            },
+            hosted.clone(),
+        ])
+        .unwrap_err();
+        assert!(matches!(
+            e.refusal,
+            MatchRefusal::IncommensurableMatch {
+                reason: RefusalReason::Unenforceable,
+                dimension: Some(DimensionId::TokensOutputVisible),
+                enforceability: Some(EnforcementLevel::Unenforceable),
+            }
+        ));
+        // `advisory` is not `enforced` either — refused the same way.
+        hosted.enforcement = BudgetEnforcement::hosted(&[(tok, EnforcementLevel::Advisory)]);
+        let mut n = arm();
+        n.match_spec = Some(spec());
+        n.search_budget = Some(budget.clone());
+        n.eval_budget = Some(caps(&[(tok, 1_000)]));
+        assert!(matches!(
+            validate_match(&[n.clone(), hosted.clone()])
+                .unwrap_err()
+                .refusal,
+            MatchRefusal::IncommensurableMatch {
+                reason: RefusalReason::Unenforceable,
+                enforceability: Some(EnforcementLevel::Advisory),
+                ..
+            }
+        ));
+        // With interception enabled the adapter derives `enforced` — the same
+        // design is accepted.
+        hosted.enforcement = BudgetEnforcement::hosted(&[(tok, EnforcementLevel::Enforced)]);
+        assert!(validate_match(&[n, hosted]).is_ok());
+    }
+
+    #[test]
     fn unenforceable_refuses_matched_total() {
         let mut a = arm();
         a.enforcement = BudgetEnforcement::hosted(&[(

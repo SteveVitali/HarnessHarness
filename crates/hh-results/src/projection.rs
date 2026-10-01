@@ -476,6 +476,23 @@ pub fn project_row(
             .collect(),
         hosting_mechanism: manifest.hosting_mechanism.clone(),
         capability_vector_ref: manifest.capability_declaration_ref.clone(),
+        // §6.6 — the mediation channels the arm's hosting declaration covered,
+        // stamped at bind time into `manifest.extra["mediation"]` (Stage 4
+        // producer); absent/empty = no mediated channels claimed (the scorecard
+        // reads it through `EvalRun.mediation` — never defaulted, T-LCD-07).
+        mediation: manifest
+            .extra
+            .get("mediation")
+            .and_then(|m| match m {
+                Json::Arr(items) => Some(
+                    items
+                        .iter()
+                        .filter_map(|i| i.as_str().map(String::from))
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .unwrap_or_default(),
         registry_snapshot_id: manifest
             .registry_snapshot_id
             .clone()

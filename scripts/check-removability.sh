@@ -57,3 +57,28 @@ print('extension tier is edge-free into the base (removable)')
 " "$EXT"
 
 echo "check-removability: extension tier verified removable"
+
+echo "== removability(hosting): no crate depends on hh-hosting =="
+# S3.4d (§6.6; AC-R-2.10.6-5): the Hosting ABI schema crate is a removable
+# tier — `hosting_edges = []`: no HIR entity, C0 contract or other workspace
+# crate names hh-hosting as a normal dependency (the projection's class data
+# lives in hh-ledger's `hosted_lowering` column — data, not a dependency —
+# so removing the crate removes the whole tier; T-LCD-06).
+cargo metadata --format-version 1 --no-deps | python3 -c "
+import json,sys
+meta=json.load(sys.stdin)
+bad=[]
+for pkg in meta['packages']:
+    if pkg['name'] == 'hh-hosting':
+        continue
+    for d in pkg['dependencies']:
+        if d['name'] == 'hh-hosting' and d['kind'] == 'normal':
+            bad.append(pkg['name'] + ' -> ' + d['name'])
+if bad:
+    print('hosting-tier edges into the base:')
+    for b in bad: print('  ' + b)
+    sys.exit(1)
+print('hosting tier is edge-free (hosting_edges = [], removable)')
+"
+
+echo "check-removability: hosting tier verified removable"

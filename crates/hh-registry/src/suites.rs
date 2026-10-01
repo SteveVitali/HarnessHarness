@@ -702,5 +702,6 @@ pub fn run_suite(
         probed_declaration: probed,
         run_id: run_id.to_string(),
         stale: false,
+        hosted_entries: Vec::new(),
     }
 }

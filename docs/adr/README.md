@@ -70,3 +70,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0278](ADR-0278-s3.4a-experiment-engine-rulings.md) | S3.4a experiment-engine rulings | S3.4a (`047_S3.4a__experiment-engine.md`) | Accepted |
 | [ADR-0279](ADR-0279-s3.4b-results-store-rulings.md) | S3.4b results-store rulings | S3.4b (`048_S3.4b__results-store.md`) | Accepted |
 | [ADR-0280](ADR-0280-s3.4c-estimator-kernel-rulings.md) | S3.4c estimator-kernel rulings | S3.4c (`049_S3.4c__estimator-kernel.md`) | Accepted |
+| [ADR-0281](ADR-0281-s3.4d-hosting-abi-schema-rulings.md) | S3.4d Hosting-ABI schema rulings | S3.4d (`050_S3.4d__hosting-abi-schemas.md`) | Accepted |

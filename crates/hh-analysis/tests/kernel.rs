@@ -190,6 +190,7 @@ fn row(arm: &str, task_id: &str, rep: u64, value: i64, metric: &str) -> ResultsR
             ],
             hosting_mechanism: None,
             capability_vector_ref: None,
+            mediation: vec![],
             registry_snapshot_id: None,
         },
         experiment: Some(Json::obj([

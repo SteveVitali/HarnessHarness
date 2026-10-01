@@ -348,6 +348,16 @@ members = [
     # oracle. The C1 surfaces (A4/A5-full/A6/A7/A9/A10/A11/A13/A14/A15/A16)
     # land at S4.3+.
     "crates/hh-analysis",
+    # The C0/Stage-3 Hosting ABI schema slice (spec §6.6, R-2.10.6⁰; ticket
+    # S3.4d; ADR-0164/0165/0166 (e)). A PERSISTENT workspace member: the
+    # `HostedEvent` envelope + closed kind vocabulary with I-1…I-5 validation,
+    # `proj_ABI` (the native-ledger → hosted-presentation projection driven by
+    # `hh-ledger`'s `hosted_lowering` column) + `lift` (hosted → lifted rows)
+    # + the `LoweringLossReport`, the `ParticipantRecord`/`AdapterRecord`
+    # schemas (`hh.hosting/1` ext block), and adapter zero — the deterministic
+    # reference-harness fixture. NO hosted runtime, handshake, probes or
+    # quarantine — those land with the service at S4.5a (§6.6 §726–727).
+    "crates/hh-hosting",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired

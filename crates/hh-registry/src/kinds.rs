@@ -152,6 +152,11 @@ impl RecordKind {
                 | RecordKind::Extension
                 | RecordKind::EnvironmentFamily
                 | RecordKind::EnvironmentRecord
+                // Opaque bodies whose schemas land with R-2.10.6⁰ — `hh-hosting`
+                // owns the schema; the registry stores the canonical Json
+                // verbatim (same layering as `EnvironmentRecord`).
+                | RecordKind::Participant
+                | RecordKind::Adapter
         )
     }
 
