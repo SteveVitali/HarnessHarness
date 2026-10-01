@@ -459,7 +459,7 @@ fn sandboxed_env(
 #[test]
 fn ac_s2_live_exec_streams_and_settles_observed() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP ac_s2_live_exec_streams_and_settles_observed: seatbelt backend unavailable on this host");
+        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-exec");
@@ -523,9 +523,7 @@ fn ac_s2_live_exec_streams_and_settles_observed() {
 #[test]
 fn ac_s2_deadline_is_helper_enforced() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!(
-            "SKIP ac_s2_deadline_is_helper_enforced: seatbelt backend unavailable on this host"
-        );
+        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-deadline");
@@ -673,6 +671,7 @@ fn ac_s2_token_echo_is_verbatim() {
     );
     // Drain the journal — every frame echoes `att-token-xyz`.
     let mut saw_chunk = false;
+    let mut polls_after_exit = 0;
     loop {
         let r = client
             .request(&hh_helper::protocol::HelperRequest::Read {
@@ -699,7 +698,16 @@ fn ac_s2_token_echo_is_verbatim() {
             }
         }
         if matches!(r.get("exited"), Some(Json::Bool(true))) {
-            break;
+            // The stdout chunk can be journaled just after the process is
+            // reaped, so `exited` may lead the last `Chunk` frame. Keep
+            // draining (after_seq:0 re-reads every frame) until it lands or a
+            // bounded budget elapses — the assertion below still requires a
+            // real chunk, this only removes the exit/journal race (flaky on
+            // fast Linux runners).
+            if saw_chunk || polls_after_exit >= 25 {
+                break;
+            }
+            polls_after_exit += 1;
         }
     }
     assert!(saw_chunk, "the echo check ran on real frames");
@@ -803,9 +811,7 @@ fn ac_s2_malformed_frame_is_protocol_error() {
 #[test]
 fn ac_s2_helper_crash_lands_unknown() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!(
-            "SKIP ac_s2_helper_crash_lands_unknown: seatbelt backend unavailable on this host"
-        );
+        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-crash");
@@ -860,7 +866,7 @@ fn ac_s2_helper_crash_lands_unknown() {
 #[test]
 fn ac_s2_unreachable_heal_live_reattaches() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP ac_s2_unreachable_heal_live_reattaches: seatbelt backend unavailable on this host");
+        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-heal");
@@ -912,7 +918,7 @@ fn ac_s2_unreachable_heal_live_reattaches() {
 #[test]
 fn ac_s2_replace_lands_successor() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP ac_s2_replace_lands_successor: seatbelt backend unavailable on this host");
+        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-replace");
@@ -962,7 +968,7 @@ fn ac_s2_replace_lands_successor() {
 #[test]
 fn ac_s2_derive_modes() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP ac_s2_derive_modes: seatbelt backend unavailable on this host");
+        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-derive");
@@ -1036,9 +1042,7 @@ fn ac_s2_derive_modes() {
 #[test]
 fn ac_s2_fs_tree_snapshot_verify_restore() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!(
-            "SKIP ac_s2_fs_tree_snapshot_verify_restore: seatbelt backend unavailable on this host"
-        );
+        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-fstree");
