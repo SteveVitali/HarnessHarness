@@ -503,3 +503,94 @@ fn minimal_debt_report_buckets_and_round_trip() {
         "minimal DebtReport round-trips losslessly"
     );
 }
+
+// ── S5.3 — AC-R-2.10.3-13: the classified-diff refusal ───────────────────────
+//
+// A `retirement` candidate refuses unless the diff classifies
+// `authority_delta = none`, `budget_delta = none`, and `semantic_ops = 1`
+// — unless the diff is candidate-bound (the amendment's exemption;
+// authority/budget deltas never exempt). The classification view is
+// records-in (`RetirementDiffView` — `hh-hir::diff` computes, the Lab
+// reads).
+
+use hh_lab::experiment::RetirementDiffView;
+
+fn classified_ctx(
+    candidate: &str,
+    baseline: &str,
+    view: RetirementDiffView,
+) -> SpecContext<'static> {
+    let cand = candidate.to_string();
+    let base = baseline.to_string();
+    SpecContext {
+        retirement_diff: Some(true),
+        retirement_diff_class: Some(Box::leak(Box::new(move |c: &ArmSpec, b: &ArmSpec| {
+            (c.arm_id == cand && b.arm_id == base).then(|| view.clone())
+        }))),
+        ..SpecContext::member_level()
+    }
+}
+
+fn view(authority: &str, budget: &str, ops: u64, bound: bool) -> RetirementDiffView {
+    RetirementDiffView {
+        authority_delta: authority.into(),
+        budget_delta: budget.into(),
+        semantic_ops: ops,
+        candidate_bound: bound,
+    }
+}
+
+#[test]
+fn retirement_diff_classification_refusals() {
+    let s = retirement_spec("r.test");
+
+    // Clean single-op removal — registers.
+    let clean = classified_ctx("a-minus-r", "a", view("none", "none", 1, false));
+    s.register(&clean).expect("a clean removal diff registers");
+
+    // `authority_delta ≠ none` refuses — never exempt, even
+    // candidate-bound.
+    for bound in [false, true] {
+        let ctx = classified_ctx("a-minus-r", "a", view("widening", "none", 1, bound));
+        match s.register(&ctx) {
+            Err(ExperimentRefusal::NotARetirementDiff { detail }) => {
+                assert!(detail.contains("authority_delta"), "{detail}");
+            }
+            other => panic!("authority_delta widening must refuse: {other:?}"),
+        }
+    }
+
+    // `budget_delta ≠ none` refuses — never exempt.
+    for bound in [false, true] {
+        let ctx = classified_ctx("a-minus-r", "a", view("none", "loosening", 1, bound));
+        match s.register(&ctx) {
+            Err(ExperimentRefusal::NotARetirementDiff { detail }) => {
+                assert!(detail.contains("budget_delta"), "{detail}");
+            }
+            other => panic!("budget_delta loosening must refuse: {other:?}"),
+        }
+    }
+
+    // `semantic_ops ≠ 1` refuses — unless the diff is candidate-bound.
+    let ctx = classified_ctx("a-minus-r", "a", view("none", "none", 3, false));
+    match s.register(&ctx) {
+        Err(ExperimentRefusal::NotARetirementDiff { detail }) => {
+            assert!(detail.contains("semantic_ops"), "{detail}");
+        }
+        other => panic!("semantic_ops = 3 must refuse: {other:?}"),
+    }
+    let bound = classified_ctx("a-minus-r", "a", view("none", "none", 3, true));
+    s.register(&bound)
+        .expect("a candidate-bound multi-op diff is the amendment's exemption");
+
+    // `None` from the resolver defers — the check cannot classify, the
+    // other gates still run (the pair `(a → a-minus-r)` resolves nothing
+    // here: the view only binds the `a-minus-r → a` direction).
+    let defer = SpecContext {
+        retirement_diff: Some(true),
+        retirement_diff_class: Some(Box::leak(Box::new(|_: &ArmSpec, _: &ArmSpec| None))),
+        ..SpecContext::member_level()
+    };
+    s.register(&defer)
+        .expect("an unresolvable classification defers to the other gates");
+}

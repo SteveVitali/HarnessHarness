@@ -152,7 +152,13 @@ pub fn content_class(role: &str) -> &'static str {
         return "content";
     }
     match role {
-        "traces" | "results" | "model" | "model_io" | "task_data" | "checkpoint" => "content",
+        "traces"
+        | "results"
+        | "model"
+        | "model_io"
+        | "task_data"
+        | "checkpoint"
+        | "hosted_native_records" => "content",
         "budget" | "accounting" => "accounting",
         "nondeterminism" | "lcd_report" | "opacity_report" | "reproducibility" => "diagnostic",
         _ => "structural",

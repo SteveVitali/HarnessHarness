@@ -421,6 +421,7 @@ fn monologue(
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)] // test module precedes the S4.16b judged port
 mod tests {
     use super::*;
     use hh_ledger::classes::Durability;
@@ -627,15 +628,16 @@ mod tests {
     }
 
     fn judged_policy(after_turns: u32, interval: u32, threshold_ppm: u64) -> LoopPolicy {
-        let mut p = LoopPolicy::default();
-        p.judged = Some(crate::policy::JudgedSpec {
-            validator_ref: "validator:judge-v1".into(),
-            after_turns,
-            interval,
-            confidence_threshold_ppm: threshold_ppm,
-            charged_to: "budget:root".into(),
-        });
-        p
+        LoopPolicy {
+            judged: Some(crate::policy::JudgedSpec {
+                validator_ref: "validator:judge-v1".into(),
+                after_turns,
+                interval,
+                confidence_threshold_ppm: threshold_ppm,
+                charged_to: "budget:root".into(),
+            }),
+            ..LoopPolicy::default()
+        }
     }
 
     #[test]
@@ -766,7 +768,7 @@ pub fn detect_with_judge(
         .iter()
         .filter(|e| e.class == "model.call.completed")
         .count() as u32;
-    if turns < spec.after_turns || (turns - spec.after_turns) % spec.interval != 0 {
+    if turns < spec.after_turns || !(turns - spec.after_turns).is_multiple_of(spec.interval) {
         return hits;
     }
     let last_judged_pos = events

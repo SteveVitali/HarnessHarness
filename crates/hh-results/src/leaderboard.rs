@@ -182,6 +182,16 @@ impl LeaderboardDefinition {
         }
     }
 
+    /// The C2/Stage-5 **public** tier (§6.5 §4; R-2.10.5's
+    /// `min_bundle_status = reproduced` admission — independent
+    /// reproduction per ADR-0140): same fields as `new` but admission
+    /// requires a `reproduced` covering bundle.
+    pub fn public(experiment_run_id: impl Into<String>, metric_ref: impl Into<String>) -> Self {
+        let mut d = LeaderboardDefinition::new(experiment_run_id, metric_ref);
+        d.min_status = BundleStatus::Reproduced;
+        d
+    }
+
     /// Canonical `LeaderboardDefinition/1` JSON — what
     /// `define_leaderboard` persists and `leaderboard_definition`
     /// reads back.
@@ -1460,6 +1470,10 @@ pub struct PublishedLeaderboard {
     pub event_ref: String,
     /// The addresses the publication pins against `gc`.
     pub pinned_addresses: Vec<String>,
+    /// `verifiable_by[reader → level]` — the reader set's verification
+    /// ceiling (§6.5 §2.4; OQ-331 J5): `R0` for a digest-only cut, else
+    /// the admitted entries' minimum claimed level.
+    pub verifiable_by: std::collections::BTreeMap<String, String>,
 }
 
 impl ResultsStore {
@@ -1821,6 +1835,51 @@ impl ResultsStore {
                 .collect(),
             _ => definition.readers.clone(),
         };
+        // `verifiable_by[reader → level]` (§6.5 §2.4 — the publish
+        // contract computes it for the reader set; a digest-only L2
+        // index yields `R0`). A reader whose cut withholds the payload
+        // (`payload_protection = restricted_store`, or a listed
+        // `content_classes` that omits `content`) sees the index only.
+        let digest_only = policy.get("payload_protection").and_then(Json::as_str)
+            == Some("restricted_store")
+            || match policy.get("content_classes") {
+                Some(Json::Arr(cs)) => {
+                    !cs.is_empty() && !cs.iter().any(|c| c.as_str() == Some("content"))
+                }
+                _ => false,
+            };
+        // The admitted entries' minimum claimed level — the catalogue
+        // resolves each `bundle_refs` id's `claimed_level`; an entry
+        // with no resolved level contributes `R0` (never fabricated).
+        let catalogue = self.catalogue()?;
+        let mut min_level = hh_bundle::manifest::ReproLevel::R3;
+        for e in &snap.entries {
+            let mut best = hh_bundle::manifest::ReproLevel::R0;
+            for b in &e.bundle_refs {
+                if let Some(c) = catalogue
+                    .entries
+                    .iter()
+                    .find(|c| &c.bundle_id == b)
+                    .and_then(|c| c.claimed_level)
+                {
+                    if c > best {
+                        best = c;
+                    }
+                }
+            }
+            if best < min_level {
+                min_level = best;
+            }
+        }
+        let reader_level = if digest_only || snap.entries.is_empty() {
+            hh_bundle::manifest::ReproLevel::R0.name().to_string()
+        } else {
+            min_level.name().to_string()
+        };
+        let verifiable_by: std::collections::BTreeMap<String, String> = readers
+            .iter()
+            .map(|r| (r.clone(), reader_level.clone()))
+            .collect();
         let payload = Json::obj([
             ("definition_ref", Json::str(&def_ref)),
             ("snapshot_id", Json::str(&snap.snapshot_id)),
@@ -1832,6 +1891,15 @@ impl ResultsStore {
             (
                 "pinned_addresses",
                 Json::Arr(pinned.iter().map(Json::str).collect()),
+            ),
+            (
+                "verifiable_by",
+                Json::Obj(
+                    verifiable_by
+                        .iter()
+                        .map(|(r, l)| (r.clone(), Json::str(l)))
+                        .collect(),
+                ),
             ),
         ]);
         // The pins are real, not just recorded: the publication event's
@@ -1940,6 +2008,15 @@ impl ResultsStore {
                     "pinned_addresses",
                     Json::Arr(pinned.iter().map(Json::str).collect()),
                 ),
+                (
+                    "verifiable_by",
+                    Json::Obj(
+                        verifiable_by
+                            .iter()
+                            .map(|(r, l)| (r.clone(), Json::str(l)))
+                            .collect(),
+                    ),
+                ),
                 ("loss_report_ref", Json::str(loss_ref.id())),
             ]),
         )?;
@@ -1954,6 +2031,7 @@ impl ResultsStore {
             view_hash,
             event_ref: env.event_id,
             pinned_addresses: pinned.into_iter().collect(),
+            verifiable_by,
         })
     }
 

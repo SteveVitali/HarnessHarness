@@ -303,6 +303,24 @@ pub fn validate_removal_test(
                 }
             }
         }
+        // `refit{min_design}` (§6.4 §2.3) — the template is the analysis
+        // design the refit re-runs; it resolves through the same template
+        // resolver, but a `match_spec` is not mandatory (the re-fit owns
+        // its own design minimum, declared in `criteria`).
+        RemovalTestKind::Refit => {
+            if let Some(resolve) = ctx.resolve_template {
+                let resolved = test.template_ref.as_deref().and_then(resolve);
+                if resolved.is_none() {
+                    return Err(DebtError::UnexecutableRemovalTest {
+                        reason: UnexecutableReason::UnresolvedTemplate,
+                        detail: format!(
+                            "refit template_ref {} does not resolve to a design template",
+                            test.template_ref.as_deref().unwrap_or("<absent>")
+                        ),
+                    });
+                }
+            }
+        }
         _ => {}
     }
     if let Some(false) = ctx.artifact_sealed {

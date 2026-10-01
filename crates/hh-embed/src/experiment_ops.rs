@@ -29,7 +29,7 @@ use hh_experiment::engine::{
 use hh_experiment::errors::ExperimentError;
 use hh_experiment::events::PauseReason;
 use hh_lab::expand::{ArmConfiguration, ExpandError, ExpandTask};
-use hh_lab::experiment::{ArmSpec, BudgetRelevantParam, ExperimentSpec};
+use hh_lab::experiment::{ArmSpec, BudgetRelevantParam, ExperimentSpec, RetirementDiffView};
 use hh_ledger::store::{Lease, Store};
 use hh_ontology::compliance::NaReason;
 use hh_ontology::lab::SplitLabel;
@@ -88,6 +88,10 @@ pub(crate) struct Bag {
     drifted: BTreeSet<String>,
     sealed: Option<BTreeSet<String>>,
     retirement_diff: Option<bool>,
+    /// `(candidate_arm, baseline_arm) → HirDiff classification` — the
+    /// AC-R-2.10.3-13 view (`{candidate_arm, baseline_arm, authority_delta,
+    /// budget_delta, semantic_ops, candidate_bound}` rows, records-in).
+    retirement_diff_class: BTreeMap<(String, String), RetirementDiffView>,
     min_replicates: u32,
     /// `arm_id → BudgetEnforcement` — the E-1 `matched_cap` enforcement
     /// check's per-dimension view (`{arm → {dimension → level}}`; absent
@@ -216,6 +220,32 @@ impl Bag {
             Json::Bool(b) => Some(*b),
             _ => None,
         });
+        // `retirement_diff_class[]` — the AC-R-2.10.3-13 classification
+        // rows the host classified through `hh-hir::diff` (records-in;
+        // the engine never diffs at this boundary).
+        let mut retirement_diff_class = BTreeMap::new();
+        if let Some(v) = p.get("retirement_diff_class") {
+            let Json::Arr(items) = v else {
+                return Err(bad("/retirement_diff_class", "type_mismatch"));
+            };
+            for it in items {
+                let s = |k: &str| -> Result<String, EmbedError> {
+                    it.get(k)
+                        .and_then(Json::as_str)
+                        .map(str::to_string)
+                        .ok_or_else(|| bad(&format!("/retirement_diff_class.{k}"), "missing_field"))
+                };
+                let view = RetirementDiffView {
+                    authority_delta: s("authority_delta")?,
+                    budget_delta: s("budget_delta")?,
+                    semantic_ops: it.get("semantic_ops").and_then(Json::as_int).ok_or_else(
+                        || bad("/retirement_diff_class.semantic_ops", "missing_field"),
+                    )? as u64,
+                    candidate_bound: matches!(it.get("candidate_bound"), Some(Json::Bool(true))),
+                };
+                retirement_diff_class.insert((s("candidate_arm")?, s("baseline_arm")?), view);
+            }
+        }
         let min_replicates = p
             .get("min_replicates")
             .and_then(Json::as_int)
@@ -408,6 +438,7 @@ impl Bag {
             drifted,
             sealed,
             retirement_diff,
+            retirement_diff_class,
             min_replicates,
             enforcement,
             budget_params,
@@ -430,6 +461,11 @@ impl Bag {
             }),
             capability_drifted: Some(Box::new(move |r: &str| self.drifted.contains(r))),
             retirement_diff: self.retirement_diff,
+            retirement_diff_class: Some(Box::new(move |c: &ArmSpec, b: &ArmSpec| {
+                self.retirement_diff_class
+                    .get(&(c.arm_id.clone(), b.arm_id.clone()))
+                    .cloned()
+            })),
             min_replicates: self.min_replicates,
             suite_tasks: Some(Box::new(move |_: &ExperimentSpec| self.suite_tasks.clone())),
             arm_config: Some(Box::new(move |a: &ArmSpec| match &self.arm_configs {

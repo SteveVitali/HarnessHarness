@@ -79,6 +79,14 @@ pub enum AnalysisError {
         /// The detail.
         detail: String,
     },
+    /// A14 asked for an aggregate-without-annotation (`filters.aggregate
+    /// = pooled`) — strata are never silently pooled (ADR-0012 D6; the
+    /// same refusal name `hh_eval::scorecard` raises on the scorecard
+    /// side).
+    StrataPooledUnannotated {
+        /// The detail.
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for AnalysisError {
@@ -120,6 +128,9 @@ impl std::fmt::Display for AnalysisError {
                 f,
                 "factor {factor} is inadmissible for run {run_id}: {detail}"
             ),
+            AnalysisError::StrataPooledUnannotated { detail } => {
+                write!(f, "StrataPooledUnannotated: {detail}")
+            }
         }
     }
 }

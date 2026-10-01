@@ -657,7 +657,7 @@ pub fn diagnostics(runs: &[EvalRun], metric: &str) -> Json {
     ])
 }
 
-// ── A7 fit_surface (contrast form) ────────────────────────────────────
+// ── A7 fit_surface (C2 — §6.4 §2.3; ADR-0160; S5.3) ───────────────────
 
 /// A run's bound level on one factor — the coordinate projection the
 /// factorial grid reads (categorical axes only at C1).
@@ -684,33 +684,299 @@ fn level_of(r: &EvalRun, factor: &str) -> String {
     }
 }
 
-/// A7 `fit_surface(rows, factors[], metric, model_form = contrast)` →
-/// `FittedSurfaceReport` (§6.4 §2.3; ADR-0160): the probed-grid contrast
-/// surface — main effects per factor level against the baseline level,
-/// `unknown_cells` for every unprobed level tuple (**never**
-/// interpolated — ADR-0012 D7), `status = expired` when any
-/// `configuration_ids` member landed a registry expiry event (the
-/// `expired_refs` the caller resolved — the report stays readable;
-/// AC-R-2.10.4-10).
+/// `model_form ∈ {contrast (C1 default), factorial_glmm (C2; shrinkage
+/// reported), curve_on_ordered_axis (≥ 3 probed levels; re-estimated per
+/// resample)}` (§6.4 §2.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceModelForm {
+    /// `contrast` — cell means against the baseline level.
+    Contrast,
+    /// `factorial_glmm` — fixed effects per (factor, level) plus a random
+    /// task intercept estimated method-of-moments, with the task-effect
+    /// shrinkage table reported.
+    FactorialGlmm,
+    /// `curve_on_ordered_axis` — a monotone (pool-adjacent-violators)
+    /// curve per ordered axis, re-estimated per resample by the caller.
+    CurveOnOrderedAxis,
+}
+
+impl SurfaceModelForm {
+    /// The canonical spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            SurfaceModelForm::Contrast => "contrast",
+            SurfaceModelForm::FactorialGlmm => "factorial_glmm",
+            SurfaceModelForm::CurveOnOrderedAxis => "curve_on_ordered_axis",
+        }
+    }
+
+    /// Parse; `None` on any other input.
+    pub fn parse(s: &str) -> Option<SurfaceModelForm> {
+        match s {
+            "contrast" => Some(SurfaceModelForm::Contrast),
+            "factorial_glmm" => Some(SurfaceModelForm::FactorialGlmm),
+            "curve_on_ordered_axis" => Some(SurfaceModelForm::CurveOnOrderedAxis),
+            _ => None,
+        }
+    }
+}
+
+/// The records-in expiry observables a fitted surface reads (§6.4 §2.3 —
+/// the caller resolves the registry lifecycle events, suite-validity
+/// supersessions, environment-image supersessions and profile
+/// `semantic_id` changes into ref sets; the kernel never reads a store).
+#[derive(Debug, Clone, Default)]
+pub struct SurfaceExpiry {
+    /// `fitted_at` (ms epoch) — the fit instant the `max_age` trigger and
+    /// the debt record's `created_at`/`expiry.params.until` read. `None`
+    /// → the report's `fitted_at` is `null` (never fabricated).
+    pub fitted_at: Option<i64>,
+    /// `now_ms` — the evaluation instant the `max_age` trigger fires
+    /// against.
+    pub now_ms: Option<i64>,
+    /// Refs that fired a supersede/retire/semantic-change event — any
+    /// member of the report's tracked refs (configuration ids, model
+    /// snapshots, environment images, design ref, suite ids) hitting
+    /// fires `expired`.
+    pub superseded: BTreeSet<String>,
+    /// Refs inside their warn window → `expiring` (never `expired`).
+    pub expiring: BTreeSet<String>,
+    /// `max_age` ms — the `fitted_at + max_age` trigger (OQ-368's 90-day
+    /// placeholder; `None` = the trigger is unbound).
+    pub max_age_ms: Option<i64>,
+    /// The debt record's owner (records-in — `principal{id}`; absent →
+    /// `lab-analysis`, the kernel's own identity coordinate).
+    pub owner: Option<String>,
+}
+
+/// The `fit_surface` request (the filter bundle the kernel decodes).
+pub struct FitRequest<'a> {
+    /// The factor axes.
+    pub factors: &'a [String],
+    /// The fitted metric.
+    pub metric: &'a str,
+    /// The model form (default `contrast`).
+    pub model_form: SurfaceModelForm,
+    /// The interval confidence (ppm).
+    pub confidence_ppm: i64,
+    /// Axes treated as ordered beyond the design's `budget`-kind
+    /// factors (`filters.ordered[]`) — the curve axes.
+    pub ordered_axes: &'a [String],
+    /// `adjust_for[]` — nuisance coordinates whose level effects are
+    /// partialled out before the surface is fit (records-in).
+    pub adjust_for: &'a [String],
+    /// The expiry observables.
+    pub expiry: &'a SurfaceExpiry,
+    /// The design ref (`spec.spec_ref`).
+    pub design_ref: Option<&'a str>,
+    /// The one `MatchSpec` content address the fit ran under (the caller
+    /// computes it after `validate_match`).
+    pub match_spec_ref: Option<&'a str>,
+    /// The report's `report_id` — the debt record's `evidence_refs`
+    /// member binds it.
+    pub report_id: &'a str,
+    /// The report's `generated_from` (the record repeats it).
+    pub generated_from: &'a Json,
+}
+
+/// The `n/a`/`unknown` JSON spellings used inside the report — cell
+/// records carry `unknown{reason, n}` (a typed unknown, never a number;
+/// T-LCD-15).
+fn unknown_cell(reason: &str, n: Option<i64>) -> Json {
+    let mut u = BTreeMap::new();
+    u.insert("reason".into(), Json::str(reason));
+    if let Some(n) = n {
+        u.insert("n".into(), Json::Int(n));
+    }
+    Json::obj([("unknown", Json::Obj(u))])
+}
+
+/// Whether `axis` is ordered — a `budget`-kind design factor, or named in
+/// `ordered[]` (the caller's declaration; the axis order is the declared
+/// `levels[]` order).
+fn ordered_axis(factor: &str, design: Option<&Design>, ordered: &[String]) -> bool {
+    if ordered.iter().any(|a| a == factor) {
+        return true;
+    }
+    design
+        .and_then(|d| d.factors.iter().find(|f| f.name == factor))
+        .map(|f| f.kind == FactorKind::Budget)
+        .unwrap_or(false)
+}
+
+/// Pool-adjacent-violators (non-decreasing) over `points` — the monotone
+/// curve's deterministic estimator (integer ppm arithmetic).
+fn pava_nondecreasing(points: &[i64]) -> Vec<i64> {
+    // (sum, count) blocks; merge while a block's mean exceeds its
+    // successor's.
+    let mut blocks: Vec<(i128, u64)> = points.iter().map(|p| (*p as i128, 1u64)).collect();
+    let mut i = 0;
+    while i + 1 < blocks.len() {
+        let (s0, n0) = blocks[i];
+        let (s1, n1) = blocks[i + 1];
+        if s0 * n1 as i128 > s1 * n0 as i128 {
+            blocks[i] = (s0 + s1, n0 + n1);
+            blocks.remove(i + 1);
+            i = i.saturating_sub(1);
+        } else {
+            i += 1;
+        }
+    }
+    let mut fitted = Vec::with_capacity(points.len());
+    for (s, n) in blocks {
+        let mean = (s / n.max(1) as i128) as i64;
+        for _ in 0..n {
+            fitted.push(mean);
+        }
+    }
+    fitted
+}
+
+/// `fit_surface(rows, design, request)` → `FittedSurfaceReport` (§6.4
+/// §2.3; ADR-0160; AC-R-2.10.4-10):
+///
+/// - the declared ∪ probed grid; unprobed tuples land in
+///   `unknown_cells` (**never** interpolated — ADR-0012 D7);
+/// - the minimum design per cell: ≥ 2 levels per included factor,
+///   `replicates_per_cell ≥ 3`, `n_tasks ≥ 30` — cells below the
+///   minimum are `unknown{reason = insufficient, n}` (kept, never
+///   dropped, never estimated);
+/// - `model_form` — `contrast` (default) | `factorial_glmm` (fixed
+///   effects + task random intercepts + `shrinkage` + two-factor
+///   `interactions[]`, method-of-moments) | `curve_on_ordered_axis`
+///   (a monotone PAVA curve per ordered axis);
+/// - hosted coordinates — a component-level axis makes the surface
+///   native-only (hosted runs listed `n/a{class}`, never fitted);
+///   a hosted run on a varied configuration-level axis without a
+///   `supported`/`partial` capability verdict on that coordinate is
+///   listed `n/a{capability}` (T-LCD-07 — never coerced);
+/// - expiry wiring — the report carries `status ∈ {active, expiring,
+///   expired}` evaluated from the `SurfaceExpiry` observables plus the
+///   minted home-11 `AssumptionDebtRecord` (`refit{min_design}`) whose
+///   `debt_record_ref` the report names; an expired report stays
+///   readable.
 pub fn fit_surface(
     runs: &[EvalRun],
     design: Option<&Design>,
-    factors: &[String],
-    metric: &str,
-    confidence_ppm: i64,
-    expired_refs: &BTreeSet<String>,
+    req: &FitRequest<'_>,
 ) -> Result<Json, AnalysisError> {
+    let factors = req.factors;
+    let metric = req.metric;
     if factors.is_empty() {
         return Err(AnalysisError::BadSpec {
             member: "query.filters.factors".into(),
             detail: "fit_surface requires ≥ 1 factor".into(),
         });
     }
-    // The design space — the declared `FactorDeclaration.levels[].id` set
-    // where the design declares the factor (the unknown-cells grid is the
-    // *declared* grid minus the probed tuples — AC-R-2.10.4-10), union
-    // the observed levels (a probed row carrying an undeclared level is
-    // still a probed cell — never silently dropped).
+    // ── Hosted coordinates (§2.3/§2.5) ────────────────────────────────
+    // A component-level axis makes the surface native-only — the hosted
+    // rows are listed `n/a{class}`, never fitted. On a varied
+    // configuration-level axis a hosted row needs a `supported|partial`
+    // verdict on that coordinate — `unknown` is never coerced; mixed
+    // verdicts across participants on the same varied coordinate are
+    // `InadmissibleFactor` (T-LCD-07).
+    let mut na_rows = Vec::new();
+    let mut eligible: Vec<&EvalRun> = Vec::new();
+    let component_level = factors.iter().any(|f| {
+        design
+            .and_then(|d| d.factors.iter().find(|fd| &fd.name == f))
+            .map(|fd| {
+                matches!(fd.kind, FactorKind::Harness)
+                    || matches!(
+                        fd.granularity,
+                        Some(hh_ontology::participant::Granularity::ComponentLevel)
+                    )
+            })
+            == Some(true)
+            || (design
+                .map(|d| !d.factors.iter().any(|fd| &fd.name == f))
+                .unwrap_or(true)
+                && ![
+                    "model",
+                    "model_snapshot",
+                    "environment",
+                    "task_family",
+                    "suite",
+                    "participant_class",
+                ]
+                .contains(&f.as_str()))
+    });
+    for r in runs {
+        if !is_hosted(r) {
+            eligible.push(r);
+            continue;
+        }
+        if component_level {
+            na_rows.push(Json::obj([
+                ("run_id", Json::str(&r.run_id)),
+                ("n/a", Json::str("class")),
+            ]));
+            continue;
+        }
+        // Configuration-level axes — the hosted row joins only where its
+        // declared coordinate is a `supported`/`partial` verdict on that
+        // axis when the vector speaks to it; a `model`-axis join needs
+        // `model_override` (the §2.5 A5/A7 rule).
+        let mut blocked = false;
+        for f in factors {
+            let verdict = r.capability_vector.get(f).copied();
+            let model_axis = f == "model" || f == "model_snapshot";
+            let needs = model_axis
+                || design
+                    .and_then(|d| d.factors.iter().find(|fd| &fd.name == f))
+                    .map(|fd| fd.kind == FactorKind::ModelSnapshot)
+                    .unwrap_or(false);
+            let v = if needs && verdict.is_none() {
+                r.capability_vector.get("model_override").copied()
+            } else {
+                verdict
+            };
+            if let Some(v) = v {
+                use hh_ontology::participant::CapabilityVerdict as Cv;
+                if matches!(v, Cv::Unknown | Cv::Unsupported | Cv::Drift) {
+                    na_rows.push(Json::obj([
+                        ("run_id", Json::str(&r.run_id)),
+                        ("n/a", Json::str("capability")),
+                        ("factor", Json::str(f)),
+                    ]));
+                    blocked = true;
+                    break;
+                }
+            }
+        }
+        if !blocked {
+            eligible.push(r);
+        }
+    }
+    // T-LCD-07 — comparisons across participants with different
+    // `unknown`/`SUPPORTED` entries on a varied coordinate refuse.
+    for f in factors {
+        let verdicts: BTreeSet<String> = eligible
+            .iter()
+            .filter(|r| is_hosted(r))
+            .map(|r| {
+                r.capability_vector
+                    .get(f)
+                    .map(|v| format!("{v:?}").to_lowercase())
+                    .unwrap_or_else(|| "absent".into())
+            })
+            .collect();
+        if verdicts.len() > 1 {
+            return Err(AnalysisError::InadmissibleFactor {
+                factor: f.clone(),
+                run_id: eligible
+                    .iter()
+                    .find(|r| is_hosted(r))
+                    .map(|r| r.run_id.clone())
+                    .unwrap_or_default(),
+                detail: format!(
+                    "hosted rows disagree on the varied coordinate {f} ({verdicts:?}) — never coerced"
+                ),
+            });
+        }
+    }
+
+    // ── The grid: declared levels ∪ probed levels ─────────────────────
     let mut levels: Vec<BTreeSet<String>> = factors
         .iter()
         .map(|f| {
@@ -725,18 +991,16 @@ pub fn fit_surface(
             s
         })
         .collect();
-    for r in runs {
+    for r in &eligible {
         for (i, f) in factors.iter().enumerate() {
             levels[i].insert(level_of(r, f));
         }
     }
-    // Probed cells — the observed level tuples.
     let mut probed: BTreeMap<Vec<String>, Vec<&EvalRun>> = BTreeMap::new();
-    for r in runs {
+    for r in &eligible {
         let key: Vec<String> = factors.iter().map(|f| level_of(r, f)).collect();
-        probed.entry(key).or_default().push(r);
+        probed.entry(key).or_default().push(*r);
     }
-    // `unknown_cells` — the full grid minus the probed tuples.
     let mut grid: Vec<Vec<String>> = vec![Vec::new()];
     for l in &levels {
         let mut next = Vec::new();
@@ -755,44 +1019,151 @@ pub fn fit_surface(
         .filter(|k| !probed_keys.contains(k))
         .map(|k| Json::Arr(k.iter().map(Json::str).collect()))
         .collect();
-    // Main effects — per factor, each level's mean Δ against the
-    // factor's first (baseline) level, clustered by task.
+
+    // ── The minimum design (§2.3) ─────────────────────────────────────
+    // ≥ 2 levels per included factor; `replicates_per_cell ≥ 3`;
+    // `n_tasks ≥ 30`. A below-minimum cell is `unknown{insufficient, n}`
+    // — kept, never dropped, never estimated.
+    const MIN_LEVELS: usize = 2;
+    const MIN_REPLICATES: i64 = 3;
+    const MIN_TASKS: i64 = 30;
+    let levels_ok = levels.iter().all(|l| l.len() >= MIN_LEVELS);
+    let declared_reps = design.map(|d| d.replicates_per_cell).unwrap_or(0) as i64;
+    let replicates_ok = design.map(|d| d.replicates_per_cell >= 3).unwrap_or(false);
+    let n_tasks: i64 = {
+        let t: BTreeSet<&str> = eligible.iter().map(|r| r.task_id.as_str()).collect();
+        t.len() as i64
+    };
+    let tasks_ok = n_tasks >= MIN_TASKS;
+    let design_met = levels_ok && replicates_ok && tasks_ok;
+    // A probed cell is estimable iff the design minimum is met and its
+    // landed replicate count reaches the floor.
+    let estimable: BTreeSet<Vec<String>> = if design_met {
+        probed
+            .iter()
+            .filter(|(_, rs)| rs.len() as i64 >= MIN_REPLICATES)
+            .map(|(k, _)| k.clone())
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
+    let insufficient_cells: Vec<Json> = probed
+        .iter()
+        .filter(|(k, _)| !estimable.contains(*k))
+        .map(|(k, rs)| {
+            Json::obj([
+                ("cell", Json::Arr(k.iter().map(Json::str).collect())),
+                ("reason", Json::str("insufficient")),
+                ("n", Json::Int(rs.len() as i64)),
+            ])
+        })
+        .collect();
+
+    // `adjust_for` — nuisance coordinates partialled out before the fit:
+    // each run's point shifts by `−(level_mean − grand_mean)` per named
+    // axis (the additive projection; the adjusted points feed every
+    // estimator below).
+    let adjusted: BTreeMap<String, i64> = {
+        let mut out = BTreeMap::new();
+        let raw: Vec<(String, i64)> = eligible
+            .iter()
+            .filter_map(|r| point(r, metric).map(|v| (r.run_id.clone(), v)))
+            .collect();
+        let grand = stats::mean(&raw.iter().map(|(_, v)| *v).collect::<Vec<_>>()).unwrap_or(0);
+        for r in &eligible {
+            if let Some(v) = point(r, metric) {
+                let mut adj = v;
+                for axis in req.adjust_for {
+                    let lv = level_of(r, axis);
+                    let lvs: Vec<i64> = eligible
+                        .iter()
+                        .filter(|x| level_of(x, axis) == lv)
+                        .filter_map(|x| point(x, metric))
+                        .collect();
+                    if let Some(m) = stats::mean(&lvs) {
+                        adj = adj.saturating_sub(m.saturating_sub(grand));
+                    }
+                }
+                out.insert(r.run_id.clone(), adj);
+            }
+        }
+        out
+    };
+    let adj_point = |r: &EvalRun| -> Option<i64> {
+        if req.adjust_for.is_empty() {
+            point(r, metric)
+        } else {
+            adjusted.get(&r.run_id).copied()
+        }
+    };
+
+    // ── Estimates ─────────────────────────────────────────────────────
+    // Per (factor, level ≠ baseline): the paired per-task Δ of that
+    // level's sufficient cells against the baseline's sufficient cells,
+    // clustered by task. Only estimable cells contribute (a below-min
+    // cell never feeds an estimate).
     let mut main_effects = Vec::new();
     for (i, f) in factors.iter().enumerate() {
+        if levels[i].len() < MIN_LEVELS {
+            main_effects.push(Json::obj([
+                ("factor", Json::str(f)),
+                (
+                    "estimate",
+                    unknown_cell("insufficient", Some(levels[i].len() as i64)),
+                ),
+            ]));
+            continue;
+        }
         let baseline = levels[i].iter().next().cloned().unwrap_or_default();
         for lv in &levels[i] {
             if *lv == baseline {
                 continue;
             }
-            // Paired over shared tasks.
             let a: Vec<&EvalRun> = probed
                 .iter()
-                .filter(|(k, _)| k[i] == baseline)
+                .filter(|(k, _)| k[i] == baseline && estimable.contains(*k))
                 .flat_map(|(_, rs)| rs.iter().copied())
                 .collect();
             let b: Vec<&EvalRun> = probed
                 .iter()
-                .filter(|(k, _)| k[i] == *lv)
+                .filter(|(k, _)| k[i] == *lv && estimable.contains(*k))
                 .flat_map(|(_, rs)| rs.iter().copied())
                 .collect();
-            let am = per_task_points(&a, metric);
-            let bm = per_task_points(&b, metric);
+            let am: BTreeMap<String, Vec<i64>> = {
+                let mut m: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+                for r in &a {
+                    if let Some(v) = adj_point(r) {
+                        m.entry(r.task_id.clone()).or_default().push(v);
+                    }
+                }
+                m.into_iter()
+                    .map(|(t, vs)| (t, vec![stats::mean(&vs).unwrap_or(0)]))
+                    .collect()
+            };
+            let bm: BTreeMap<String, Vec<i64>> = {
+                let mut m: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+                for r in &b {
+                    if let Some(v) = adj_point(r) {
+                        m.entry(r.task_id.clone()).or_default().push(v);
+                    }
+                }
+                m.into_iter()
+                    .map(|(t, vs)| (t, vec![stats::mean(&vs).unwrap_or(0)]))
+                    .collect()
+            };
             let deltas: Vec<(String, i64)> = am
                 .iter()
                 .filter_map(|(t, av)| bm.get(t).map(|bv| (t.clone(), bv[0] - av[0])))
                 .collect();
             let est = stats::mean(&deltas.iter().map(|(_, d)| *d).collect::<Vec<_>>());
-            let iv = stats::clustered_clt(&deltas, confidence_ppm);
+            let iv = stats::clustered_clt(&deltas, req.confidence_ppm);
             main_effects.push(Json::obj([
                 ("factor", Json::str(f)),
                 ("level", Json::str(lv)),
                 ("baseline_level", Json::str(&baseline)),
                 (
                     "estimate",
-                    est.map_or(
-                        Json::obj([("n/a", Json::str("estimator_undefined"))]),
-                        Json::Int,
-                    ),
+                    est.map_or(unknown_cell("insufficient", None), Json::Int),
                 ),
                 (
                     "interval",
@@ -805,22 +1176,574 @@ pub fn fit_surface(
             ]));
         }
     }
-    // `status` — a registry expiry on any contributing configuration
-    // flips the surface to `expired` (the report stays readable —
-    // AC-R-2.10.4-10; the debt record carries the refit obligation).
-    let mut configuration_ids: Vec<String> =
-        runs.iter().map(|r| r.configuration_id.clone()).collect();
+
+    // `factorial_glmm` — the additive fit's residuals decompose into the
+    // task random intercept (`u_t`) and the task × model-axis term;
+    // `shrinkage` reports the per-task `var_u/(var_u + var_e/n_t)`
+    // factor the posterior mean applies (method-of-moments, integer
+    // ppm — the estimator is declared in `method`).
+    let mut random_effects = Json::Null;
+    let mut interactions = Vec::new();
+    if req.model_form == SurfaceModelForm::FactorialGlmm {
+        // The fitted fixed part per run: grand mean + Σ level effects.
+        let level_effect = |f: &str, lv: &str| -> i64 {
+            main_effects
+                .iter()
+                .find(|e| {
+                    e.get("factor").and_then(Json::as_str) == Some(f)
+                        && e.get("level").and_then(Json::as_str) == Some(lv)
+                })
+                .and_then(|e| e.get("estimate").and_then(Json::as_int))
+                .unwrap_or(0)
+        };
+        let all_pts: Vec<i64> = eligible.iter().filter_map(|r| adj_point(r)).collect();
+        let grand = stats::mean(&all_pts).unwrap_or(0);
+        let mut task_resid: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+        for r in &eligible {
+            if !estimable.contains(&factors.iter().map(|f| level_of(r, f)).collect::<Vec<_>>()) {
+                continue;
+            }
+            if let Some(v) = adj_point(r) {
+                let fitted: i64 = grand
+                    + factors
+                        .iter()
+                        .map(|f| level_effect(f, &level_of(r, f)))
+                        .sum::<i64>();
+                task_resid
+                    .entry(r.task_id.clone())
+                    .or_default()
+                    .push(v.saturating_sub(fitted));
+            }
+        }
+        // `u_t` = the task's mean residual; `var_u` the across-task
+        // spread; `var_e` the within-task residual spread.
+        let mut task_rows = Vec::new();
+        let mut u_sq: i128 = 0;
+        let mut e_sq: i128 = 0;
+        let mut e_n: i128 = 0;
+        let n_tasks_r = task_resid.len() as i128;
+        for (t, vs) in &task_resid {
+            let u = stats::mean(vs).unwrap_or(0);
+            u_sq += u as i128 * u as i128;
+            for v in vs {
+                e_sq += (*v as i128 - u as i128).pow(2);
+            }
+            e_n += vs.len() as i128;
+            task_rows.push((t.clone(), u, vs.len() as i64));
+        }
+        let var_u = if n_tasks_r > 0 { u_sq / n_tasks_r } else { 0 };
+        let var_e = if e_n > 0 { e_sq / e_n } else { 0 };
+        let shrinkage_rows: Vec<Json> = task_rows
+            .iter()
+            .map(|(t, u, n)| {
+                // shrinkage_t = var_u / (var_u + var_e / n_t) — the BLUP
+                // factor, ppm.
+                let denom = var_u + var_e / (*n).max(1) as i128;
+                let s = if denom > 0 {
+                    (var_u * stats::PPM as i128 / denom) as i64
+                } else {
+                    0
+                };
+                Json::obj([
+                    ("task_id", Json::str(t)),
+                    ("u_hat", Json::Int(*u)),
+                    (
+                        "shrunk_u_hat",
+                        Json::Int((*u as i128 * s as i128 / stats::PPM as i128) as i64),
+                    ),
+                    ("shrinkage_ppm", Json::Int(s)),
+                ])
+            })
+            .collect();
+        // task × model-axis residuals — the second random term.
+        let model_axis = factors.iter().enumerate().find(|(i, f)| {
+            let _ = i;
+            f.as_str() == "model"
+                || f.as_str() == "model_snapshot"
+                || design
+                    .and_then(|d| d.factors.iter().find(|fd| &fd.name == *f))
+                    .map(|fd| fd.kind == FactorKind::ModelSnapshot)
+                    .unwrap_or(false)
+        });
+        let mut txm_sq: i128 = 0;
+        let mut txm_n: i128 = 0;
+        if let Some((mi, _)) = model_axis {
+            let mut by_tl: BTreeMap<(String, String), Vec<i64>> = BTreeMap::new();
+            for r in &eligible {
+                if let Some(v) = adj_point(r) {
+                    by_tl
+                        .entry((r.task_id.clone(), level_of(r, factors[mi].as_str())))
+                        .or_default()
+                        .push(v);
+                }
+            }
+            // w_{t,l} = cell mean − (task mean + level effect).
+            let task_mean: BTreeMap<String, i64> = eligible
+                .iter()
+                .filter_map(|r| adj_point(r).map(|v| (r.task_id.clone(), v)))
+                .fold(BTreeMap::<String, Vec<i64>>::new(), |mut m, (t, v)| {
+                    m.entry(t).or_default().push(v);
+                    m
+                })
+                .into_iter()
+                .map(|(t, vs)| (t, stats::mean(&vs).unwrap_or(0)))
+                .collect();
+            for ((t, l), vs) in &by_tl {
+                let m = stats::mean(vs).unwrap_or(0);
+                let fitted =
+                    task_mean.get(t).copied().unwrap_or(0) + level_effect(factors[mi].as_str(), l);
+                let w = m - fitted;
+                txm_sq += w as i128 * w as i128;
+                txm_n += 1;
+            }
+        }
+        let var_txm = if txm_n > 0 { txm_sq / txm_n } else { 0 };
+        random_effects = Json::obj([
+            ("method", Json::str("method_of_moments")),
+            ("task_variance_ppm", Json::Int(var_u as i64)),
+            ("task_x_model_variance_ppm", Json::Int(var_txm as i64)),
+            ("shrinkage", Json::Arr(shrinkage_rows)),
+        ]);
+        // Two-factor interactions — per factor pair, the probed level
+        // pairs' residual against the additive fit (the `interactions[]`
+        // member the GLMM form reports).
+        for i in 0..factors.len() {
+            for j in (i + 1)..factors.len() {
+                for la in &levels[i] {
+                    for lb in &levels[j] {
+                        let cell_runs: Vec<&EvalRun> = probed
+                            .iter()
+                            .filter(|(k, _)| k[i] == *la && k[j] == *lb && estimable.contains(*k))
+                            .flat_map(|(_, rs)| rs.iter().copied())
+                            .collect();
+                        if cell_runs.is_empty() {
+                            continue;
+                        }
+                        let pts: Vec<i64> = cell_runs.iter().filter_map(|r| adj_point(r)).collect();
+                        let cm = stats::mean(&pts).unwrap_or(0);
+                        let inter = cm
+                            - (grand
+                                + level_effect(factors[i].as_str(), la)
+                                + level_effect(factors[j].as_str(), lb));
+                        let iv = stats::bootstrap(
+                            &pts,
+                            req.confidence_ppm,
+                            &format!("{}:{}:{}:{}", factors[i], la, factors[j], lb),
+                        );
+                        interactions.push(Json::obj([
+                            (
+                                "factors",
+                                Json::Arr(vec![
+                                    Json::str(factors[i].as_str()),
+                                    Json::str(factors[j].as_str()),
+                                ]),
+                            ),
+                            ("levels", Json::Arr(vec![Json::str(la), Json::str(lb)])),
+                            ("estimate", Json::Int(inter)),
+                            (
+                                "interval",
+                                iv.map_or(
+                                    Json::obj([("n/a", Json::str("estimator_undefined"))]),
+                                    |i| {
+                                        Json::obj([
+                                            ("lo", Json::Int(i.lo)),
+                                            ("hi", Json::Int(i.hi)),
+                                        ])
+                                    },
+                                ),
+                            ),
+                        ]));
+                    }
+                }
+            }
+        }
+    }
+
+    // `curve_on_ordered_axis` — a monotone curve per ordered axis (the
+    // design's `budget`-kind factors + `ordered[]`); < 3 probed levels
+    // renders `n/a{estimator_undefined}` on the axis's entry.
+    let mut curves = Vec::new();
+    let wants_curves =
+        req.model_form == SurfaceModelForm::CurveOnOrderedAxis || !req.ordered_axes.is_empty();
+    if wants_curves {
+        for (i, f) in factors.iter().enumerate() {
+            if !ordered_axis(f, design, req.ordered_axes) {
+                continue;
+            }
+            // Axis order — the declared `levels[]` order; undeclared
+            // probed levels append in sorted order.
+            let declared_order: Vec<String> = design
+                .and_then(|d| d.factors.iter().find(|fd| &fd.name == f))
+                .map(|fd| fd.levels.iter().map(|l| l.id.clone()).collect())
+                .unwrap_or_default();
+            let mut axis_levels = declared_order;
+            for lv in &levels[i] {
+                if !axis_levels.contains(lv) {
+                    axis_levels.push(lv.clone());
+                }
+            }
+            let probed_lv: Vec<String> = axis_levels
+                .iter()
+                .filter(|lv| {
+                    probed
+                        .iter()
+                        .any(|(k, _)| &k[i] == *lv && estimable.contains(k))
+                })
+                .cloned()
+                .collect();
+            if probed_lv.len() < 3 {
+                curves.push(Json::obj([
+                    ("factor", Json::str(f)),
+                    (
+                        "curve",
+                        unknown_cell("insufficient", Some(probed_lv.len() as i64)),
+                    ),
+                ]));
+                continue;
+            }
+            let mut means = Vec::new();
+            let mut fitted_rows = Vec::new();
+            for lv in &probed_lv {
+                let lruns: Vec<&EvalRun> = probed
+                    .iter()
+                    .filter(|(k, _)| &k[i] == lv && estimable.contains(*k))
+                    .flat_map(|(_, rs)| rs.iter().copied())
+                    .collect();
+                let pts: Vec<i64> = lruns.iter().filter_map(|r| adj_point(r)).collect();
+                let m = stats::mean(&pts).unwrap_or(0);
+                means.push(m);
+                let by_task: Vec<(String, i64)> = {
+                    let mut t: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+                    for r in &lruns {
+                        if let Some(v) = adj_point(r) {
+                            t.entry(r.task_id.clone()).or_default().push(v);
+                        }
+                    }
+                    t.into_iter()
+                        .map(|(k, vs)| (k, stats::mean(&vs).unwrap_or(0)))
+                        .collect()
+                };
+                let iv = stats::clustered_clt(&by_task, req.confidence_ppm);
+                fitted_rows.push((lv.clone(), m, iv));
+            }
+            // Direction — the observed trend's sign (non-decreasing when
+            // last ≥ first, else non-increasing, folded through PAVA).
+            let increasing = means.last().copied().unwrap_or(0) >= means[0];
+            let fitted = if increasing {
+                pava_nondecreasing(&means)
+            } else {
+                let mut flipped: Vec<i64> = means.iter().map(|m| -*m).collect();
+                flipped = pava_nondecreasing(&flipped);
+                flipped.iter().map(|m| -*m).collect()
+            };
+            curves.push(Json::obj([
+                ("factor", Json::str(f)),
+                ("form", Json::str("monotone")),
+                (
+                    "direction",
+                    Json::str(if increasing {
+                        "nondecreasing"
+                    } else {
+                        "nonincreasing"
+                    }),
+                ),
+                (
+                    "fitted",
+                    Json::Arr(
+                        fitted_rows
+                            .iter()
+                            .zip(fitted.iter())
+                            .map(|((lv, obs, iv), fv)| {
+                                Json::obj([
+                                    ("level", Json::str(lv)),
+                                    ("observed", Json::Int(*obs)),
+                                    ("fitted", Json::Int(*fv)),
+                                    (
+                                        "interval",
+                                        iv.map_or(
+                                            Json::obj([("n/a", Json::str("estimator_undefined"))]),
+                                            |i| {
+                                                Json::obj([
+                                                    ("lo", Json::Int(i.lo)),
+                                                    ("hi", Json::Int(i.hi)),
+                                                ])
+                                            },
+                                        ),
+                                    ),
+                                ])
+                            })
+                            .collect(),
+                    ),
+                ),
+            ]));
+        }
+    }
+
+    // ── conditionality / portability ─────────────────────────────────
+    // `conditionality_region` — the level tuples whose cells met the
+    // minimum (the region the estimates hold on). `portability` reports
+    // on the model axis only: ≥ 2 families + ≥ 1 held-out level, and any
+    // `unknown` model-axis cell ⇒ `inconclusive` (§2.3).
+    let conditionality_region: Vec<Json> = estimable
+        .iter()
+        .map(|k| Json::Arr(k.iter().map(Json::str).collect()))
+        .collect();
+    let portability = {
+        let model_axis = factors.iter().enumerate().find(|(_, f)| {
+            f.as_str() == "model"
+                || f.as_str() == "model_snapshot"
+                || design
+                    .and_then(|d| d.factors.iter().find(|fd| &fd.name == *f))
+                    .map(|fd| fd.kind == FactorKind::ModelSnapshot)
+                    .unwrap_or(false)
+        });
+        match model_axis {
+            None => Json::obj([("n/a", Json::str("no_model_axis"))]),
+            Some((mi, _)) => {
+                let mut families: BTreeSet<String> = BTreeSet::new();
+                for r in &eligible {
+                    for s in r.model_snapshots.values() {
+                        families.insert(s.clone());
+                    }
+                }
+                let unknown_model_cells = grid
+                    .iter()
+                    .filter(|k| !probed_keys.contains(k) || !estimable.contains(*k))
+                    .count();
+                let held_out = unknown_model_cells;
+                if families.len() < 2 {
+                    Json::obj([
+                        ("n/a", Json::str("insufficient")),
+                        ("n_families", Json::Int(families.len() as i64)),
+                    ])
+                } else if held_out == 0 {
+                    Json::obj([
+                        ("n/a", Json::str("insufficient")),
+                        ("n_families", Json::Int(families.len() as i64)),
+                        ("held_out_levels", Json::Int(0)),
+                    ])
+                } else if unknown_model_cells > 0 {
+                    // An `unknown` cell on the model axis renders the
+                    // verdict `inconclusive` (§2.3).
+                    Json::obj([
+                        ("verdict", Json::str("inconclusive")),
+                        ("n_families", Json::Int(families.len() as i64)),
+                        ("unknown_model_cells", Json::Int(unknown_model_cells as i64)),
+                    ])
+                } else {
+                    // sign_stability — the ppm share of probed model-axis
+                    // levels whose per-level effect sign agrees with the
+                    // axis's first main effect's sign.
+                    let main_sign = main_effects
+                        .iter()
+                        .find(|e| {
+                            e.get("factor").and_then(Json::as_str) == Some(factors[mi].as_str())
+                        })
+                        .and_then(|e| e.get("estimate").and_then(Json::as_int))
+                        .map(|v| v >= 0)
+                        .unwrap_or(true);
+                    let axis_effects: Vec<i64> = main_effects
+                        .iter()
+                        .filter(|e| {
+                            e.get("factor").and_then(Json::as_str) == Some(factors[mi].as_str())
+                        })
+                        .filter_map(|e| e.get("estimate").and_then(Json::as_int))
+                        .collect();
+                    let agreeing = axis_effects
+                        .iter()
+                        .filter(|v| (**v >= 0) == main_sign)
+                        .count();
+                    let stability = if axis_effects.is_empty() {
+                        Json::obj([("n/a", Json::str("estimator_undefined"))])
+                    } else {
+                        Json::Int(agreeing as i64 * stats::PPM / axis_effects.len() as i64)
+                    };
+                    Json::obj([
+                        (
+                            "verdict",
+                            Json::str(
+                                if agreeing == axis_effects.len() && !axis_effects.is_empty() {
+                                    "portable"
+                                } else {
+                                    "not_portable"
+                                },
+                            ),
+                        ),
+                        ("sign_stability_ppm", stability),
+                        ("n_families", Json::Int(families.len() as i64)),
+                    ])
+                }
+            }
+        }
+    };
+
+    // ── Expiry wiring (§2.3; AC-R-2.10.4-10) ──────────────────────────
+    // The tracked refs = configuration ids ∪ model snapshot ids ∪
+    // environment images ∪ design_ref ∪ suite ids — a `superseded` hit
+    // fires `expired`; an `expiring` hit (warn window) or an unexpired
+    // `max_age` leaves `active`/`expiring`; `fitted_at + max_age ≤ now`
+    // fires `expired`.
+    let mut tracked: BTreeSet<String> = BTreeSet::new();
+    for r in &eligible {
+        tracked.insert(r.configuration_id.clone());
+        for s in r.model_snapshots.values() {
+            tracked.insert(s.clone());
+        }
+        if let Some(e) = &r.environment_version_id {
+            tracked.insert(e.clone());
+        }
+        tracked.insert(r.suite_id.clone());
+    }
+    if let Some(d) = req.design_ref {
+        tracked.insert(d.to_string());
+    }
+    let mut configuration_ids: Vec<String> = eligible
+        .iter()
+        .map(|r| r.configuration_id.clone())
+        .collect();
     configuration_ids.sort();
     configuration_ids.dedup();
-    let expired_hit: Vec<&String> = configuration_ids
+    let expired_hit: Vec<String> = req
+        .expiry
+        .superseded
         .iter()
-        .filter(|c| expired_refs.contains(*c))
+        .filter(|s| tracked.contains(*s))
+        .cloned()
         .collect();
-    let status = if expired_hit.is_empty() {
-        "active"
-    } else {
-        "expired"
+    let expiring_hit: Vec<String> = req
+        .expiry
+        .expiring
+        .iter()
+        .filter(|s| tracked.contains(*s))
+        .cloned()
+        .collect();
+    let aged = match (
+        req.expiry.fitted_at,
+        req.expiry.now_ms,
+        req.expiry.max_age_ms,
+    ) {
+        (Some(f), Some(n), Some(m)) => n.saturating_sub(f) >= m,
+        _ => false,
     };
+    let status = if !expired_hit.is_empty() || aged {
+        "expired"
+    } else if !expiring_hit.is_empty() {
+        "expiring"
+    } else {
+        "active"
+    };
+
+    // The home-11 debt record (ADR-0197; CF-429): `refit{min_design}`
+    // discharges; `evidence_refs` binds the report id; the expiry
+    // condition names the full trigger union.
+    let owner = req
+        .expiry
+        .owner
+        .clone()
+        .unwrap_or_else(|| "lab-analysis".to_string());
+    let min_design = Json::obj([
+        ("min_levels_per_factor", Json::Int(MIN_LEVELS as i64)),
+        ("replicates_per_cell", Json::Int(MIN_REPLICATES)),
+        ("min_tasks", Json::Int(MIN_TASKS)),
+    ]);
+    let debt_body = Json::obj([
+        ("kind", Json::str("assumption_debt_record")),
+        ("record_kind", Json::str("fitted_surface_report")),
+        ("field", Json::str("debt_record_ref")),
+        ("rule_id", Json::str(req.report_id)),
+        ("hypothesis", Json::str("Ψ_θ over these levels is stable")),
+        ("debt_class", Json::str("empirical")),
+        (
+            "evidence_refs",
+            Json::Arr(vec![Json::obj([
+                ("kind", Json::str("fitted_surface_report")),
+                ("ref", Json::str(req.report_id)),
+            ])]),
+        ),
+        ("owner", Json::obj([("principal", Json::str(&owner))])),
+        (
+            "expiry_condition",
+            Json::obj([
+                ("kind", Json::str("evidence_refresh_due")),
+                (
+                    "triggers",
+                    Json::Arr(vec![
+                        Json::str("model_snapshot_superseded_or_retired"),
+                        Json::str("profile_semantic_id_changed"),
+                        Json::str("suite_validity_superseded"),
+                        Json::str("environment_image_superseded"),
+                        Json::str("fitted_at_plus_max_age"),
+                    ]),
+                ),
+            ]),
+        ),
+        (
+            "expiry",
+            Json::obj([
+                ("condition", Json::str("evidence_refresh_due")),
+                (
+                    "params",
+                    Json::obj([
+                        (
+                            "until",
+                            req.expiry
+                                .fitted_at
+                                .zip(req.expiry.max_age_ms)
+                                .map(|(f, m)| Json::Int(f + m))
+                                .unwrap_or(Json::Null),
+                        ),
+                        (
+                            "design_ref",
+                            req.design_ref.map(Json::str).unwrap_or(Json::Null),
+                        ),
+                        ("min_design", min_design.clone()),
+                    ]),
+                ),
+            ]),
+        ),
+        (
+            "removal_test",
+            Json::obj([
+                ("kind", Json::str("refit")),
+                (
+                    "template_ref",
+                    req.design_ref.map(Json::str).unwrap_or(Json::Null),
+                ),
+                ("criteria", Json::str(min_design.to_canonical_string())),
+            ]),
+        ),
+        ("status", Json::str(status)),
+        (
+            "created_by",
+            Json::obj([
+                ("origin", Json::str("kernel")),
+                ("component_ref", Json::str("hh-analysis/fit_surface")),
+            ]),
+        ),
+        (
+            "created_at",
+            req.expiry.fitted_at.map(Json::Int).unwrap_or(Json::Null),
+        ),
+        (
+            "revalidation",
+            Json::obj([
+                (
+                    "on",
+                    Json::Arr(vec![
+                        Json::str("evidence_stale"),
+                        Json::str("model_change"),
+                        Json::str("schedule"),
+                    ]),
+                ),
+                ("action", Json::str("re_experiment")),
+            ]),
+        ),
+    ]);
+    let debt_record_ref = hh_identity::idp_id(
+        "debt.assumption",
+        debt_body.to_canonical_string().as_bytes(),
+    );
+
     Ok(Json::obj([
         ("schema", Json::str("hh-fitted-surface/1")),
         ("metric", Json::str(metric)),
@@ -837,7 +1760,33 @@ pub fn fit_surface(
                     .collect(),
             ),
         ),
-        ("model_form", Json::str("contrast")),
+        (
+            "design_ref",
+            req.design_ref.map(Json::str).unwrap_or(Json::Null),
+        ),
+        ("model_form", Json::str(req.model_form.name())),
+        (
+            "match_spec_ref",
+            req.match_spec_ref.map(Json::str).unwrap_or(Json::Null),
+        ),
+        (
+            "adjust_for",
+            Json::Arr(req.adjust_for.iter().map(Json::str).collect()),
+        ),
+        (
+            "design_minimum",
+            Json::obj([
+                ("min_levels_per_factor", Json::Int(MIN_LEVELS as i64)),
+                ("replicates_per_cell", Json::Int(MIN_REPLICATES)),
+                ("min_tasks", Json::Int(MIN_TASKS)),
+                ("declared_replicates_per_cell", Json::Int(declared_reps)),
+                ("n_tasks", Json::Int(n_tasks)),
+                ("levels_ok", Json::Bool(levels_ok)),
+                ("replicates_ok", Json::Bool(replicates_ok)),
+                ("tasks_ok", Json::Bool(tasks_ok)),
+                ("met", Json::Bool(design_met)),
+            ]),
+        ),
         (
             "sample_sizes",
             Json::Arr(
@@ -852,24 +1801,60 @@ pub fn fit_surface(
                     .collect(),
             ),
         ),
+        ("insufficient_cells", Json::Arr(insufficient_cells)),
         (
             "estimates_with_ci",
-            Json::obj([("main_effects", Json::Arr(main_effects))]),
+            Json::obj([
+                ("main_effects", Json::Arr(main_effects)),
+                ("interactions", Json::Arr(interactions)),
+                ("curves", Json::Arr(curves)),
+                ("random_effects", random_effects),
+            ]),
         ),
+        ("conditionality_region", Json::Arr(conditionality_region)),
+        ("portability", portability),
         ("unknown_cells", Json::Arr(unknown_cells)),
+        ("na_rows", Json::Arr(na_rows)),
         (
             "configuration_ids",
             Json::Arr(configuration_ids.iter().map(Json::str).collect()),
         ),
-        ("status", Json::str(status)),
         (
-            "expired_refs",
-            Json::Arr(expired_hit.iter().map(|r| Json::str(*r)).collect()),
+            "fitted_at",
+            req.expiry.fitted_at.map(Json::Int).unwrap_or(Json::Null),
         ),
         (
             "expiry_condition",
-            Json::str("registry expiry on any member of configuration_ids"),
+            Json::obj([
+                ("kind", Json::str("evidence_refresh_due")),
+                (
+                    "triggers",
+                    Json::Arr(vec![
+                        Json::str("model_snapshot_superseded_or_retired"),
+                        Json::str("profile_semantic_id_changed"),
+                        Json::str("suite_validity_superseded"),
+                        Json::str("environment_image_superseded"),
+                        Json::str("fitted_at_plus_max_age"),
+                    ]),
+                ),
+                (
+                    "max_age_ms",
+                    req.expiry.max_age_ms.map(Json::Int).unwrap_or(Json::Null),
+                ),
+            ]),
         ),
+        ("status", Json::str(status)),
+        (
+            "expired_refs",
+            Json::Arr(expired_hit.iter().map(Json::str).collect()),
+        ),
+        (
+            "expiring_refs",
+            Json::Arr(expiring_hit.iter().map(Json::str).collect()),
+        ),
+        ("debt_record_ref", Json::str(&debt_record_ref)),
+        ("debt_record", debt_body),
+        ("generated_from", req.generated_from.clone()),
     ]))
 }
 
@@ -1034,5 +2019,471 @@ pub fn diff_reports(a: &Json, b: &Json) -> Json {
             "changed",
             Json::Arr(changed.iter().map(Json::str).collect()),
         ),
+    ])
+}
+
+// ── A14 strata_view (C2 — §2.3/§2.5; ADR-0012 D6; S5.3) ───────────────
+
+/// The A14 stratum axis (`filters.by` — §2.3's closed set).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrataAxis {
+    /// `contamination_stratum` (the C1 default).
+    ContaminationStratum,
+    /// `capability_vector` — the hosted strata axis (the participant's
+    /// reconciled vector, canonical-spelling key); native rows land in
+    /// the `native` stratum.
+    CapabilityVector,
+    /// `cost_confidence` — the run's spend-confidence class
+    /// (`exact | bounded | estimate | unknown`, the *minimum* over its
+    /// `measurement.cost.attributed` rows — the §8.2 reporting rule).
+    CostConfidence,
+    /// `suite_validity` — the suite's validity state the run's task sits
+    /// in (`{suite_id}:{valid|retired}`).
+    SuiteValidity,
+    /// `mediation` — the participant's declared mediation channel set.
+    Mediation,
+}
+
+impl StrataAxis {
+    /// The canonical spelling.
+    pub fn name(self) -> &'static str {
+        match self {
+            StrataAxis::ContaminationStratum => "contamination_stratum",
+            StrataAxis::CapabilityVector => "capability_vector",
+            StrataAxis::CostConfidence => "cost_confidence",
+            StrataAxis::SuiteValidity => "suite_validity",
+            StrataAxis::Mediation => "mediation",
+        }
+    }
+
+    /// Parse; `None` on any other spelling (the caller refuses with
+    /// `unknown stratum`).
+    pub fn parse(s: &str) -> Option<StrataAxis> {
+        match s {
+            "contamination_stratum" => Some(StrataAxis::ContaminationStratum),
+            "capability_vector" => Some(StrataAxis::CapabilityVector),
+            "cost_confidence" => Some(StrataAxis::CostConfidence),
+            "suite_validity" => Some(StrataAxis::SuiteValidity),
+            "mediation" => Some(StrataAxis::Mediation),
+            _ => None,
+        }
+    }
+}
+
+/// The stratum key a run lands in for `axis` (hosted strata by
+/// `capability_vector`/`mediation`/cost `confidence` per §2.5 — a hosted
+/// run's vector is canonicalised, never pooled into a neighbour).
+fn stratum_key(r: &EvalRun, axis: StrataAxis, suites: &[hh_eval::runs::SuiteContext]) -> String {
+    match axis {
+        StrataAxis::ContaminationStratum => r.stratum.name().to_string(),
+        StrataAxis::CapabilityVector => {
+            if !is_hosted(r) {
+                "native".to_string()
+            } else {
+                // The canonical `{coordinate:verdict}` spelling — two
+                // runs with equal vectors share a stratum; a differing
+                // `unknown`/`SUPPORTED` entry is a *different* stratum
+                // (never coerced — T-LCD-07).
+                let mut parts: Vec<String> = r
+                    .capability_vector
+                    .iter()
+                    .map(|(k, v)| format!("{k}:{v:?}").to_lowercase())
+                    .collect();
+                parts.sort();
+                format!("{{{}}}", parts.join(","))
+            }
+        }
+        StrataAxis::CostConfidence => {
+            // The minimum spend-row confidence on the run (the §8.2
+            // "report the minimum" rule); no spend rows → `unknown`.
+            let mut best = "unknown";
+            let mut best_rank = 0u8;
+            let mut seen = false;
+            for s in &r.facts.spend_rows {
+                let (rank, label) = match &s.confidence {
+                    Some(hh_budget::pricing::Confidence::Exact) => (3, "exact"),
+                    Some(hh_budget::pricing::Confidence::Bounded { .. }) => (2, "bounded"),
+                    Some(hh_budget::pricing::Confidence::Estimate) => (1, "estimate"),
+                    _ => (0, "unknown"),
+                };
+                if !seen || rank < best_rank {
+                    best_rank = rank;
+                    best = label;
+                    seen = true;
+                }
+            }
+            // A `reconstructed`/`participant_reported` provenance class
+            // is a distinct stratum label (never folded into `exact`).
+            let recon = r
+                .facts
+                .spend_rows
+                .iter()
+                .any(|s| s.provenance_class.as_deref() == Some("reconstructed"));
+            if recon {
+                "reconstructed".to_string()
+            } else {
+                best.to_string()
+            }
+        }
+        StrataAxis::SuiteValidity => {
+            let retired = suites
+                .iter()
+                .find(|s| s.suite_id == r.suite_id)
+                .map(|s| s.retired_for_headline)
+                .unwrap_or(false);
+            format!(
+                "{}:{}",
+                r.suite_id,
+                if retired { "retired" } else { "valid" }
+            )
+        }
+        StrataAxis::Mediation => {
+            if r.mediation.is_empty() {
+                "none".to_string()
+            } else {
+                let mut parts: Vec<&str> = r.mediation.iter().map(|m| m.as_str()).collect();
+                parts.sort();
+                parts.join("+")
+            }
+        }
+    }
+}
+
+/// A14 `strata_view(rows, metric, by)` — the strata table: per-stratum
+/// run counts, per-stratum metric means, hosted rows split by the named
+/// axis. Strata are **never silently pooled** — the report carries
+/// `pooled: never` and the kernel refuses `aggregate = pooled` requests
+/// with `StrataPooledUnannotated` before calling (ADR-0012 D6).
+pub fn strata_view(
+    runs: &[EvalRun],
+    metric: &str,
+    by: StrataAxis,
+    suites: &[hh_eval::runs::SuiteContext],
+) -> Json {
+    let mut strata: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+    let mut stratum_runs: BTreeMap<String, u64> = BTreeMap::new();
+    let mut stratum_classes: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for r in runs {
+        let s = stratum_key(r, by, suites);
+        *stratum_runs.entry(s.clone()).or_default() += 1;
+        stratum_classes
+            .entry(s.clone())
+            .or_default()
+            .insert(r.participant_class.as_str().to_string());
+        if let MetricValueKind::Decimal(v) = r.value_for(metric) {
+            strata.entry(s).or_default().push(v);
+        } else if let MetricValueKind::Bool(b) = r.value_for(metric) {
+            strata
+                .entry(s)
+                .or_default()
+                .push(if b { 1_000_000 } else { 0 });
+        }
+    }
+    Json::obj([
+        ("schema", Json::str("hh-strata-view/1")),
+        ("metric", Json::str(metric)),
+        ("by", Json::str(by.name())),
+        ("pooled", Json::str("never")),
+        (
+            "strata",
+            Json::Arr(
+                stratum_runs
+                    .iter()
+                    .map(|(s, n)| {
+                        let vals = strata.get(s).cloned().unwrap_or_default();
+                        Json::obj([
+                            ("stratum", Json::str(s)),
+                            (
+                                "classes",
+                                Json::Arr(
+                                    stratum_classes
+                                        .get(s)
+                                        .map(|c| c.iter().map(Json::str).collect())
+                                        .unwrap_or_default(),
+                                ),
+                            ),
+                            ("runs", Json::Int(*n as i64)),
+                            (
+                                "mean_ppm",
+                                stats::mean(&vals).map_or(
+                                    Json::obj([("n/a", Json::str("estimator_undefined"))]),
+                                    Json::Int,
+                                ),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+// ── A6 realized-benefit stages (C2 — §2.3/§5h.2 §2.1; S5.3) ──────────
+
+/// The four-stage realized-benefit decomposition (§2.3:
+/// `P(valid)·P(activated|delivered,valid)·P(followed|activated)·
+/// E[Δ|followed]`, per detector) plus the zeroth `delivered` observability
+/// row. Every stage renders a confidence-band row (`wilson` for the
+/// proportions, clustered-CLT for the conditional Δ — no point without a
+/// band at C2). A hosted row's stages beyond `delivered` render
+/// `n/a{observability}` (§2.5); an `end_state`-only hosted row's
+/// `delivered` row is `n/a{observability}` too; a judged stage on a row
+/// without `model_io` is `n/a{observability}` — never 0, never a proxy.
+pub fn realized_stages(
+    arm_runs: &[&EvalRun],
+    baseline_runs: &[&EvalRun],
+    metric: &str,
+    confidence_ppm: i64,
+) -> Json {
+    use hh_ontology::participant::Observability as Obs;
+    let native: Vec<&&EvalRun> = arm_runs.iter().filter(|r| !is_hosted(r)).collect();
+    let hosted: Vec<&&EvalRun> = arm_runs.iter().filter(|r| is_hosted(r)).collect();
+    let mut rows = Vec::new();
+    let na_obs = || Json::obj([("n/a", Json::str("observability"))]);
+    // `delivered` — runs with ≥ 1 `context.artefact.delivered` row
+    // (observable wherever `events` is).
+    let delivered = |rs: &[&&EvalRun]| -> Json {
+        let n = rs.len() as i64;
+        if n == 0 {
+            return na_obs();
+        }
+        if rs
+            .iter()
+            .all(|r| !r.observability_level.contains(&Obs::Events))
+        {
+            return na_obs();
+        }
+        let c = rs
+            .iter()
+            .filter(|r| !r.facts.artefacts_delivered.is_empty())
+            .count() as i64;
+        stats::wilson(c, n, confidence_ppm).map_or(na_obs(), |iv| {
+            Json::obj([
+                ("point_ppm", Json::Int(c * stats::PPM / n)),
+                ("n", Json::Int(n)),
+                (
+                    "interval",
+                    Json::obj([("lo", Json::Int(iv.lo)), ("hi", Json::Int(iv.hi))]),
+                ),
+            ])
+        })
+    };
+    rows.push(Json::obj([
+        ("stage", Json::str("delivered")),
+        ("detector", Json::Null),
+        ("native", delivered(&native)),
+        (
+            "hosted",
+            if hosted.is_empty() {
+                Json::Null
+            } else {
+                delivered(&hosted)
+            },
+        ),
+    ]));
+    // The hosted-side stage rows — `n/a{observability}` beyond
+    // `delivered` (§2.5); container-installed rows (no `events`) mark
+    // even `delivered` `n/a` above.
+    let hosted_stage = |detector: &str| -> Json {
+        if hosted.is_empty() {
+            return Json::Null;
+        }
+        // A `judged` stage on rows lacking `model_io` is `n/a` — and the
+        // §2.5 rule marks every post-`delivered` hosted stage `n/a`.
+        let _ = detector;
+        na_obs()
+    };
+    // `valid` per detector — the pass rate over `verification.validator.
+    // verdict` rows (a row with no detector lands in `deterministic`).
+    let mut by_detector: BTreeMap<String, Vec<(bool,)>> = BTreeMap::new();
+    for r in &native {
+        for v in &r.facts.verdicts {
+            let d = v.detector.clone().unwrap_or_else(|| "deterministic".into());
+            by_detector
+                .entry(d)
+                .or_default()
+                .push((v.status == "pass",));
+        }
+    }
+    for (det, vs) in &by_detector {
+        let n = vs.len() as i64;
+        let c = vs.iter().filter(|(p,)| *p).count() as i64;
+        let row = stats::wilson(c, n, confidence_ppm).map_or(
+            Json::obj([("n/a", Json::str("estimator_undefined"))]),
+            |iv| {
+                Json::obj([
+                    ("point_ppm", Json::Int(c * stats::PPM / n)),
+                    ("n", Json::Int(n)),
+                    (
+                        "interval",
+                        Json::obj([("lo", Json::Int(iv.lo)), ("hi", Json::Int(iv.hi))]),
+                    ),
+                ])
+            },
+        );
+        rows.push(Json::obj([
+            ("stage", Json::str("valid")),
+            ("detector", Json::str(det)),
+            ("native", row),
+            ("hosted", hosted_stage(det)),
+        ]));
+    }
+    if by_detector.is_empty() {
+        rows.push(Json::obj([
+            ("stage", Json::str("valid")),
+            ("detector", Json::Null),
+            (
+                "native",
+                Json::obj([("n/a", Json::str("estimator_undefined"))]),
+            ),
+            ("hosted", hosted_stage("")),
+        ]));
+    }
+    // `activated | delivered ∧ valid` — the activated artefact ids
+    // meeting a delivered one, per detector of the *activated* row.
+    let mut act_by_det: BTreeMap<String, (u64, u64)> = BTreeMap::new();
+    for r in &native {
+        let delivered_ids: BTreeSet<&str> = r
+            .facts
+            .artefacts_delivered
+            .iter()
+            .map(|a| a.artefact_id.as_str())
+            .collect();
+        for a in &r.facts.artefacts_activated {
+            let d = a.detector.clone().unwrap_or_else(|| "deterministic".into());
+            let e = act_by_det.entry(d).or_default();
+            e.1 += 1;
+            if delivered_ids.contains(a.artefact_id.as_str()) {
+                e.0 += 1;
+            }
+        }
+    }
+    let mut fol_by_det: BTreeMap<String, (u64, u64)> = BTreeMap::new();
+    for r in &native {
+        let activated_ids: BTreeSet<&str> = r
+            .facts
+            .artefacts_activated
+            .iter()
+            .map(|a| a.artefact_id.as_str())
+            .collect();
+        for a in &r.facts.artefacts_followed {
+            let d = a.detector.clone().unwrap_or_else(|| "deterministic".into());
+            let e = fol_by_det.entry(d).or_default();
+            e.1 += 1;
+            if activated_ids.contains(a.artefact_id.as_str()) {
+                e.0 += 1;
+            }
+        }
+    }
+    let stage_row = |stage: &str, det: &str, c: u64, n: u64| -> Json {
+        let cell = if n == 0 {
+            Json::obj([("n/a", Json::str("estimator_undefined"))])
+        } else {
+            stats::wilson(c as i64, n as i64, confidence_ppm).map_or(
+                Json::obj([("n/a", Json::str("estimator_undefined"))]),
+                |iv| {
+                    Json::obj([
+                        ("point_ppm", Json::Int(c as i64 * stats::PPM / n as i64)),
+                        ("n", Json::Int(n as i64)),
+                        (
+                            "interval",
+                            Json::obj([("lo", Json::Int(iv.lo)), ("hi", Json::Int(iv.hi))]),
+                        ),
+                    ])
+                },
+            )
+        };
+        Json::obj([
+            ("stage", Json::str(stage)),
+            ("detector", Json::str(det)),
+            ("native", cell),
+            ("hosted", hosted_stage(det)),
+        ])
+    };
+    for (det, (c, n)) in &act_by_det {
+        rows.push(stage_row("activated_given_delivered_valid", det, *c, *n));
+    }
+    if act_by_det.is_empty() {
+        rows.push(Json::obj([
+            ("stage", Json::str("activated_given_delivered_valid")),
+            ("detector", Json::Null),
+            (
+                "native",
+                Json::obj([("n/a", Json::str("estimator_undefined"))]),
+            ),
+            ("hosted", hosted_stage("")),
+        ]));
+    }
+    for (det, (c, n)) in &fol_by_det {
+        rows.push(stage_row("followed_given_activated", det, *c, *n));
+    }
+    if fol_by_det.is_empty() {
+        rows.push(Json::obj([
+            ("stage", Json::str("followed_given_activated")),
+            ("detector", Json::Null),
+            (
+                "native",
+                Json::obj([("n/a", Json::str("estimator_undefined"))]),
+            ),
+            ("hosted", hosted_stage("")),
+        ]));
+    }
+    // `E[Δ | followed]` — the per-task paired delta restricted to arm
+    // runs carrying ≥ 1 `followed` row (per detector when the followed
+    // rows carry one); a clustered-CLT band, never a bare point.
+    let mut det_set: BTreeSet<String> = fol_by_det.keys().cloned().collect();
+    det_set.insert("deterministic".into());
+    for det in &det_set {
+        let mut deltas: Vec<(String, i64)> = Vec::new();
+        let mut a_map: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+        for r in &native {
+            let has = r
+                .facts
+                .artefacts_followed
+                .iter()
+                .any(|a| a.detector.as_deref().unwrap_or("deterministic") == det);
+            if has {
+                if let Some(v) = point(r, metric) {
+                    a_map.entry(r.task_id.clone()).or_default().push(v);
+                }
+            }
+        }
+        let mut b_map: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+        for r in baseline_runs {
+            if let Some(v) = point(r, metric) {
+                b_map.entry(r.task_id.clone()).or_default().push(v);
+            }
+        }
+        for (t, avs) in &a_map {
+            if let Some(bvs) = b_map.get(t) {
+                if let (Some(a), Some(b)) = (stats::mean(avs), stats::mean(bvs)) {
+                    deltas.push((t.clone(), a - b));
+                }
+            }
+        }
+        let est = stats::mean(&deltas.iter().map(|(_, d)| *d).collect::<Vec<_>>());
+        let iv = stats::clustered_clt(&deltas, confidence_ppm);
+        let cell = match (est, iv) {
+            (Some(e), Some(iv)) => Json::obj([
+                ("point_ppm", Json::Int(e)),
+                ("n_tasks", Json::Int(deltas.len() as i64)),
+                (
+                    "interval",
+                    Json::obj([("lo", Json::Int(iv.lo)), ("hi", Json::Int(iv.hi))]),
+                ),
+            ]),
+            _ => Json::obj([("n/a", Json::str("estimator_undefined"))]),
+        };
+        rows.push(Json::obj([
+            ("stage", Json::str("delta_given_followed")),
+            ("detector", Json::str(det)),
+            ("native", cell),
+            ("hosted", hosted_stage(det)),
+        ]));
+    }
+    Json::obj([
+        ("schema", Json::str("hh-realized-stages/1")),
+        ("metric", Json::str(metric)),
+        ("stages", Json::Arr(rows)),
     ])
 }

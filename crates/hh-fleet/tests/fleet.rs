@@ -127,16 +127,16 @@ fn spec_matched() -> FleetSpec {
 fn item(id: &str, owner: Option<&str>) -> Json {
     Json::obj([
         ("item_id", Json::str(id)),
-        ("title", Json::str(&format!("ticket {id}"))),
+        ("title", Json::str(format!("ticket {id}"))),
         (
             "source",
             Json::obj([
                 ("source_id", Json::str("tickets")),
                 ("kind", Json::str("ticket")),
-                ("source_ref", Json::str(&format!("src:{id}"))),
+                ("source_ref", Json::str(format!("src:{id}"))),
             ]),
         ),
-        ("idempotency_key", Json::str(&format!("idem:{id}"))),
+        ("idempotency_key", Json::str(format!("idem:{id}"))),
         ("owner", owner.map(Json::str).unwrap_or(Json::Null)),
     ])
 }
@@ -643,7 +643,7 @@ fn unsupported_trigger_variants_refuse() {
         },
     );
     let r = FleetEngine::open(&mut s, HOLDER, TTL, sp);
-    assert!(matches!(r, Err(_)), "peer trigger must refuse");
+    assert!(r.is_err(), "peer trigger must refuse");
 }
 
 // ── The handoff state — human-gate block + resume ─────────────────────────

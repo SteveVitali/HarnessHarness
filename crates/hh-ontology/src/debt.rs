@@ -650,6 +650,10 @@ pub enum RemovalTestKind {
     Documentation,
     /// `evidence_superseded` — the evidence refs were superseded/refreshed.
     EvidenceSuperseded,
+    /// `refit` — re-fit the surface under the declared minimum design
+    /// (`refit{min_design}` — §6.4 §2.3's fitted-surface discharge; home
+    /// 11's typed form).
+    Refit,
 }
 
 impl RemovalTestKind {
@@ -668,6 +672,7 @@ impl RemovalTestKind {
             RemovalTestKind::Schema => "schema",
             RemovalTestKind::Documentation => "documentation",
             RemovalTestKind::EvidenceSuperseded => "evidence_superseded",
+            RemovalTestKind::Refit => "refit",
         }
     }
 
@@ -686,6 +691,7 @@ impl RemovalTestKind {
             "schema" => Some(RemovalTestKind::Schema),
             "documentation" => Some(RemovalTestKind::Documentation),
             "evidence_superseded" => Some(RemovalTestKind::EvidenceSuperseded),
+            "refit" => Some(RemovalTestKind::Refit),
             _ => None,
         }
     }
@@ -761,6 +767,9 @@ impl RemovalTest {
             | RemovalTestKind::Schema
             | RemovalTestKind::Documentation => self.criteria.is_some(),
             RemovalTestKind::EvidenceSuperseded => !self.supersedes_refs.is_empty(),
+            // `refit{min_design}` — the re-fit template ref (the design the
+            // refit re-runs against) plus the minimum-design criteria text.
+            RemovalTestKind::Refit => self.template_ref.is_some() && self.criteria.is_some(),
         }
     }
 }

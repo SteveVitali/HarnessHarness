@@ -552,6 +552,12 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
     // `lifecycle.hosted.drift_observed` rows ride as `conformance_drift`
     // claims — DRIFT is experimental data, not an admissibility verdict.
     let mut claims = inputs.policy.claims.clone();
+    // C2 hosted-export members (§6.6 §5; R-2.10.6): the run's
+    // `lifecycle.hosted.native_record` leaves ride as a first-class
+    // `hosted_native_records` member so a reader can reach the raw
+    // evidence without a page scan — and so a withholding policy lists
+    // them in the loss report rather than dropping them silently.
+    let mut hosted_native_records: Vec<Json> = Vec::new();
     if participant_class == "hosted" {
         for e in store.envelopes(run_id).unwrap_or_default() {
             match e.class.as_str() {
@@ -604,6 +610,83 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
                         ]),
                         provenance: claim_prov,
                     });
+                    // The descriptor coordinate — the negotiated
+                    // `abi_version`/`mediation`/`placement` on the
+                    // attach row is the descriptor's version identity
+                    // for the export (kernel-minted, `environment`
+                    // authority — the Lab recorded it).
+                    claims.push(crate::manifest::Claim {
+                        role: "descriptor_version".into(),
+                        value: Json::obj([
+                            (
+                                "abi_version",
+                                e.payload.get("abi_version").cloned().unwrap_or(Json::Null),
+                            ),
+                            (
+                                "mediation",
+                                e.payload.get("mediation").cloned().unwrap_or(Json::Null),
+                            ),
+                            (
+                                "placement",
+                                e.payload.get("placement").cloned().unwrap_or(Json::Null),
+                            ),
+                            (
+                                "hosting_mechanism",
+                                e.payload
+                                    .get("hosting_mechanism")
+                                    .cloned()
+                                    .unwrap_or(Json::Null),
+                            ),
+                        ]),
+                        provenance: Json::obj([
+                            ("origin", Json::str("kernel(hh-embed/hosting)")),
+                            ("authority", Json::str("environment")),
+                            (
+                                "source_event",
+                                Json::str(format!("{run_id}:{}", e.event_id)),
+                            ),
+                        ]),
+                    });
+                }
+                // `lifecycle.component.bound{class_id = hosting_adapter}`
+                // — the adapter version ID the hosted rows were lifted
+                // under (C2 hosted export: the bundle names its lifting
+                // machinery).
+                "lifecycle.component.bound"
+                    if e.payload.get("class_id").and_then(Json::as_str)
+                        == Some("hosting_adapter") =>
+                {
+                    claims.push(crate::manifest::Claim {
+                        role: "adapter_version".into(),
+                        value: Json::obj([
+                            (
+                                "adapter_version_id",
+                                e.payload
+                                    .get("component_ref")
+                                    .cloned()
+                                    .unwrap_or(Json::Null),
+                            ),
+                            (
+                                "session_ref",
+                                e.payload.get("session_ref").cloned().unwrap_or(Json::Null),
+                            ),
+                        ]),
+                        provenance: Json::obj([
+                            ("origin", Json::str("kernel(hh-embed/hosting)")),
+                            ("authority", Json::str("environment")),
+                            (
+                                "source_event",
+                                Json::str(format!("{run_id}:{}", e.event_id)),
+                            ),
+                        ]),
+                    });
+                }
+                "lifecycle.hosted.native_record" => {
+                    hosted_native_records.push(Json::obj([
+                        ("seq", Json::Int(e.seq as i64)),
+                        ("event_id", Json::str(&e.event_id)),
+                        ("payload", e.payload.clone()),
+                    ]));
                 }
                 "lifecycle.hosted.drift_observed" => {
                     claims.push(crate::manifest::Claim {
@@ -641,6 +724,13 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
                 }
                 _ => {}
             }
+        }
+        if !hosted_native_records.is_empty() {
+            let doc = Json::obj([
+                ("run_id", Json::str(run_id)),
+                ("records", Json::Arr(hosted_native_records)),
+            ]);
+            doc_member(&mut members, "hosted_native_records", &doc, &mut index);
         }
     }
 
