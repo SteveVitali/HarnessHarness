@@ -31,6 +31,7 @@ pub mod critic_experiment;
 pub mod facts;
 pub mod faults;
 pub mod hosted_metrics;
+pub mod interventions;
 pub mod judge;
 pub mod loss;
 pub mod opacity;

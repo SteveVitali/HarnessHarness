@@ -23,7 +23,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use hh_ontology::compliance::{MetricDeclaration, NaReason};
+use hh_ontology::compliance::{Detector, MetricDeclaration, NaReason};
 use hh_ontology::eval::{
     BootstrapPairedMethod, EstimatorSelection, IntervalMethod, MetricValueKind, OutcomePolicy,
     ReplicateReducer, Substitution,
@@ -436,6 +436,7 @@ pub fn render_cell(
             excluded: BTreeMap::new(),
             vetoed: 0,
             stratum,
+            judged: None,
         };
     }
     // Per-run applicability (class ∧ observability ∧ capabilities ∧ mediation
@@ -473,6 +474,7 @@ pub fn render_cell(
             excluded,
             vetoed: 0,
             stratum,
+            judged: None,
         };
     }
     // Vetoed runs are excluded from the headline cell and counted beside.
@@ -582,6 +584,29 @@ pub fn render_cell(
                 / flat.len().max(1) as i128) as i64,
         })
     };
+    // The judged-cell label — `Some` iff any folded value ran under a judged
+    // detector; `exploratory` when any folded judged value was uncalibrated
+    // (AC-R-2.7.3-8 — an exploratory cell is report-only, never headline).
+    let mut calibration_refs = std::collections::BTreeSet::new();
+    let mut exploratory = false;
+    let mut saw_judged = false;
+    for r in &clean {
+        if let Some(v) = r.metric_value(&decl.name) {
+            if v.detector == Detector::Judged {
+                saw_judged = true;
+                if let Some(c) = &v.calibration_ref {
+                    calibration_refs.insert(c.clone());
+                }
+                if v.exploratory == Some(true) {
+                    exploratory = true;
+                }
+            }
+        }
+    }
+    let judged = saw_judged.then(|| hh_lab::analysis::JudgedCellLabel {
+        calibration_refs: calibration_refs.into_iter().collect(),
+        exploratory,
+    });
     MetricCell {
         metric: decl.name.clone(),
         point,
@@ -593,5 +618,6 @@ pub fn render_cell(
         excluded,
         vetoed,
         stratum,
+        judged,
     }
 }

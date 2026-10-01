@@ -47,6 +47,7 @@
 
 pub mod bind;
 pub mod claims;
+pub mod critic_rt;
 pub mod critics;
 pub mod evalfold;
 pub mod events;
@@ -54,6 +55,7 @@ pub mod evidence;
 pub mod followed;
 pub mod gate;
 pub mod metrics;
+pub mod reconciler;
 pub mod validators;
 pub mod vocab;
 

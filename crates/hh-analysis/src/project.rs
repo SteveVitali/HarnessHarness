@@ -272,6 +272,8 @@ pub fn eval_run(
                 .unwrap_or(hh_ontology::compliance::Detector::Deterministic),
             confidence: c.confidence,
             evidence_ref: c.evidence.first().map(|e| e.hash.clone()),
+            calibration_ref: None,
+            exploratory: None,
         })
         .collect();
 

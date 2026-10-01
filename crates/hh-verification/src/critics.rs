@@ -139,13 +139,29 @@ pub struct CriticDeclaration {
     pub deterministic_coverage_at_placement: bool,
 }
 
-/// A declared probe capability (`read_only ∩ parent` — checked at declare).
+/// A declared probe capability (`read_only ∧ closed_world` — checked at
+/// declare; the reconciler's `probe` mode and critic probes share the
+/// contract — R-2.7.2b/R-2.7.3).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProbeCapability {
     /// The capability ref.
     pub capability_ref: String,
     /// The declared read-only flag.
     pub read_only: bool,
+    /// The declared closed-world flag (a probe must not widen ordinary
+    /// effect permissions — it runs inside the declared world).
+    pub closed_world: bool,
+}
+
+impl ProbeCapability {
+    /// A declared `read_only ∧ closed_world` probe (the canonical shape).
+    pub fn read_only(capability_ref: impl Into<String>) -> Self {
+        ProbeCapability {
+            capability_ref: capability_ref.into(),
+            read_only: true,
+            closed_world: true,
+        }
+    }
 }
 
 /// The rubric ref + the rubric's minted authority (the
@@ -207,6 +223,35 @@ pub enum CriticError {
         /// The misuse.
         reason: String,
     },
+    /// An `artifact_benefit`/evolution candidate produced inside the
+    /// `held_out_from` closure consumed the judge's verdict
+    /// (`JudgeLeakedIntoArtifact` — the held-out judge's verdict may not
+    /// select its own beneficiaries; AC-R-2.7.3-6).
+    JudgeLeakedIntoArtifact {
+        /// The beneficiary inside the held-out closure.
+        producer: String,
+    },
+    /// A probe request refused at admission (`ProbeDenied` — the
+    /// `{refused, class, reason}` payload feeds
+    /// `action.effect.refused`/`security.permission.reviewed`;
+    /// AC-R-2.7.3-4).
+    ProbeDenied {
+        /// The denied capability.
+        capability_ref: String,
+        /// The closed refusal class.
+        class: String,
+        /// The reason.
+        reason: String,
+    },
+    /// A comparative verdict ran only one order (`ComparativeIncomplete` —
+    /// two orders are mandatory).
+    ComparativeIncomplete,
+    /// A spawned critic's isolation declaration is violated
+    /// (`IsolationViolation` — a kernel-enforced refusal).
+    IsolationViolation {
+        /// The violated domain/budget.
+        domain: String,
+    },
     /// The declaration's `deterministic` flag contradicts `critic_kind`/
     /// `oracle_class`.
     DetectorConflict {
@@ -236,6 +281,23 @@ impl std::fmt::Display for CriticError {
                 write!(f, "GroundingInsufficient: {}", grounding.as_str())
             }
             CriticError::VerdictMisuse { reason } => write!(f, "VerdictMisuse: {reason}"),
+            CriticError::JudgeLeakedIntoArtifact { producer } => {
+                write!(f, "JudgeLeakedIntoArtifact: {producer}")
+            }
+            CriticError::ProbeDenied {
+                capability_ref,
+                class,
+                reason,
+            } => write!(f, "ProbeDenied: {capability_ref} ({class}): {reason}"),
+            CriticError::ComparativeIncomplete => {
+                write!(
+                    f,
+                    "ComparativeIncomplete: comparative verdict needs both orders"
+                )
+            }
+            CriticError::IsolationViolation { domain } => {
+                write!(f, "IsolationViolation: {domain}")
+            }
             CriticError::DetectorConflict { reason } => {
                 write!(f, "DetectorConflict: {reason}")
             }
@@ -396,14 +458,46 @@ pub fn check_independence(decl: &CriticDeclaration) -> Result<(), CriticError> {
 }
 
 /// `consume(verdict, use)` — the consumption admissibility (ADR-0115 D4/D6,
-/// ADR-0116 D5): headline and every `use = gate` consumption require
-/// `grounding ∈ {measured, reconciled}`; a gate verdict is never the
-/// reported success.
+/// ADR-0116 D5; AC-R-2.7.3-5/6): headline and every `use = gate`
+/// consumption require `grounding ∈ {measured, reconciled}`; a gate verdict
+/// is never the reported success *and never `task_success`*; an
+/// evolution/`artifact_benefit` consume refuses a producer inside the
+/// critic's `held_out_from` closure (`JudgeLeakedIntoArtifact`); a
+/// veto-only kind's (`emulated`/`monitor`) affirmative verdict never gates.
 pub fn consume(verdict: &CriticVerdict, use_: ConsumeUse) -> Result<(), CriticError> {
-    // A gate verdict is never the reported success.
-    if use_ == ConsumeUse::Headline && verdict.use_ == CriticUse::Gate {
+    // A gate verdict is never the reported success, and never `task_success`
+    // (AC-R-2.7.3-5 — a runtime completion critic cannot be the success
+    // signal).
+    if matches!(use_, ConsumeUse::Headline | ConsumeUse::TaskSuccess)
+        && verdict.use_ == CriticUse::Gate
+    {
         return Err(CriticError::VerdictMisuse {
             reason: "a gate verdict is never the reported success".into(),
+        });
+    }
+    // Held-out: an artifact produced inside the critic's `held_out_from`
+    // closure may not consume its verdict (JudgeLeakedIntoArtifact).
+    if let ConsumeUse::Evolution { producer } = &use_ {
+        if let Some(held_out) = &verdict.held_out_from {
+            if held_out.iter().any(|p| p == producer) {
+                return Err(CriticError::JudgeLeakedIntoArtifact {
+                    producer: producer.clone(),
+                });
+            }
+        }
+    }
+    // Veto-only kinds (`emulated`/`monitor`): an affirmative verdict never
+    // gates — the kind exists to veto, not to pass (AC-R-2.7.3-11).
+    if use_ == ConsumeUse::Gate
+        && matches!(
+            verdict.critic_kind,
+            CriticKind::Emulated | CriticKind::Monitor
+        )
+        && verdict.status == crate::vocab::VerdictStatus::Decided
+        && verdict.verdict.is_affirmative()
+    {
+        return Err(CriticError::VerdictMisuse {
+            reason: "veto-only critic's affirmative verdict cannot gate".into(),
         });
     }
     // Headline and every gate use require measured/reconciled grounding.
@@ -421,16 +515,27 @@ pub fn consume(verdict: &CriticVerdict, use_: ConsumeUse) -> Result<(), CriticEr
     Ok(())
 }
 
-/// The `consume` use axis (`report`/`headline` vs `gate` — the report/gate
-/// separation).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// The `consume` use axis (`report`/`headline`/`task_success` vs `gate` vs
+/// `evolution` — the report/gate separation plus the held-out evolution
+/// channel).
+#[derive(Debug, Clone, PartialEq)]
 pub enum ConsumeUse {
     /// Feed a reported metric.
     Report,
     /// Feed the headline number (the strictest report use).
     Headline,
+    /// Feed `task_success` — the completion headline channel a runtime
+    /// completion critic may never enter (AC-R-2.7.3-5).
+    TaskSuccess,
     /// Feed a gate (authorize / stop / verify / evolution selector).
     Gate,
+    /// Feed an evolution/`artifact_benefit` selection — `producer` is the
+    /// candidate's producing artifact; refused inside `held_out_from`
+    /// (`JudgeLeakedIntoArtifact`, AC-R-2.7.3-6).
+    Evolution {
+        /// The producing artifact/critic ref.
+        producer: String,
+    },
 }
 
 // ── CriticVerdict / CalibrationRecord ───────────────────────────────────────
@@ -475,10 +580,42 @@ pub struct CriticVerdict {
     pub charged_to: ChargedTo,
     /// The trigger reason, when the critic was rule-invoked.
     pub trigger_reason: Option<String>,
+    /// The critic kind (`programmatic | judge | agentic_judge | emulated |
+    /// monitor` — `emulated`/`monitor` are veto-only: an affirmative verdict
+    /// from one is refused for `gate` consumption — AC-R-2.7.3-11).
+    pub critic_kind: CriticKind,
+    /// `position_calibrated` — whether the comparative two-order run agreed
+    /// (AC-R-2.7.3-6; `Some` only on a comparative verdict).
+    pub position_calibrated: Option<bool>,
+    /// `position_consistency` — the two-order agreement (ppm).
+    pub position_consistency_ppm: Option<u64>,
+    /// `panel` — the panel-decision record a `panel` critic's aggregate
+    /// carries (`{members[], withheld[], decision_rule, dissent}`).
+    pub panel: Option<PanelRecord>,
+    /// `held_out_from` — the closure the critic is held out from (stamped
+    /// from the declaration at production; `consume(Evolution)` refuses a
+    /// producer inside it — `JudgeLeakedIntoArtifact`).
+    pub held_out_from: Option<Vec<String>>,
     /// The verdict's provenance (`kernel` deterministic / `delegate` judged).
     pub provenance: ProvenanceRecord,
     /// The seq the verdict was produced at.
     pub at_seq: u64,
+}
+
+/// `PanelRecord` — the panel-decision metadata an aggregate verdict carries
+/// (AC-R-2.7.3-11): the member verdict ids, the withheld members (a member
+/// with an unparseable status withholds, never guesses), the decision rule,
+/// and the dissent share.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PanelRecord {
+    /// The member verdict refs.
+    pub members: Vec<String>,
+    /// The withheld member refs (unparseable/oracle_failure members).
+    pub withheld: Vec<String>,
+    /// The decision rule (`majority`).
+    pub decision_rule: String,
+    /// The dissent share (ppm — dissenting decided members ÷ decided).
+    pub dissent_ppm: u64,
 }
 
 /// `CriticSubject` — `{run_id, scope, until_seq}`.
@@ -687,6 +824,15 @@ impl ProgrammaticCritic for ReconciliationAgreementCritic {
             calibration_ref: self.declaration.calibration_ref.clone(),
             charged_to: self.declaration.charged_to,
             trigger_reason: None,
+            critic_kind: self.declaration.critic_kind,
+            position_calibrated: None,
+            position_consistency_ppm: None,
+            panel: None,
+            held_out_from: if self.declaration.held_out_from.is_empty() {
+                None
+            } else {
+                Some(self.declaration.held_out_from.clone())
+            },
             provenance,
             at_seq,
         }
@@ -775,6 +921,7 @@ mod tests {
         d.probe_capabilities.push(ProbeCapability {
             capability_ref: "cap:fs_write".into(),
             read_only: false,
+            closed_world: false,
         });
         assert!(matches!(
             declare_critic(&d),
@@ -859,6 +1006,11 @@ mod tests {
             calibration_ref: None,
             charged_to: ChargedTo::Instrument,
             trigger_reason: None,
+            critic_kind: CriticKind::Judge,
+            position_calibrated: None,
+            position_consistency_ppm: None,
+            panel: None,
+            held_out_from: None,
             provenance: ProvenanceRecord::minted(
                 Origin::model("m", "r", "call"),
                 PersistenceScope::Run,
@@ -878,6 +1030,44 @@ mod tests {
             consume(&v, ConsumeUse::Headline),
             Err(CriticError::VerdictMisuse { .. })
         ));
+        // AC-R-2.7.3-5: a completion critic's verdict never lands as
+        // `task_success` — same refusal as the headline channel.
+        assert!(matches!(
+            consume(&v, ConsumeUse::TaskSuccess),
+            Err(CriticError::VerdictMisuse { .. })
+        ));
+        // AC-R-2.7.3-5: an evolution critic held out from a producing
+        // artifact is refused on the `artifact_benefit` channel
+        // (`JudgeLeakedIntoArtifact`); an outside producer is admitted.
+        v.use_ = CriticUse::Report;
+        v.held_out_from = Some(vec!["artifact:a".into()]);
+        assert!(matches!(
+            consume(
+                &v,
+                ConsumeUse::Evolution {
+                    producer: "artifact:a".into()
+                }
+            ),
+            Err(CriticError::JudgeLeakedIntoArtifact { .. })
+        ));
+        assert!(consume(
+            &v,
+            ConsumeUse::Evolution {
+                producer: "artifact:b".into()
+            }
+        )
+        .is_ok());
+        // AC-R-2.7.3-11: an affirmative verdict from a veto-only kind
+        // (`emulated`) is refused for `gate` consumption — it vetoes,
+        // never passes.
+        v.critic_kind = CriticKind::Emulated;
+        assert!(matches!(
+            consume(&v, ConsumeUse::Gate),
+            Err(CriticError::VerdictMisuse { .. })
+        ));
+        // The same verdict as `report` is fine — veto-only means
+        // raise-only, not unread.
+        assert!(consume(&v, ConsumeUse::Report).is_ok());
     }
 
     #[test]
@@ -936,6 +1126,11 @@ mod tests {
             calibration_ref: None,
             charged_to: ChargedTo::Instrument,
             trigger_reason: None,
+            critic_kind: CriticKind::Programmatic,
+            position_calibrated: None,
+            position_consistency_ppm: None,
+            panel: None,
+            held_out_from: None,
             provenance: prov(PersistenceScope::Run),
             at_seq: 9,
         };

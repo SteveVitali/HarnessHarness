@@ -236,6 +236,8 @@ fn finish_subject(
             detector: hh_ontology::compliance::Detector::Deterministic,
             confidence: None,
             evidence_ref: None,
+            calibration_ref: None,
+            exploratory: None,
         }
         .to_json(),
     ));

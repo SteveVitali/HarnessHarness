@@ -3098,3 +3098,226 @@ pub fn summary_fidelity_judged() -> hh_ontology::compliance::MetricDeclaration {
         ..MetricDeclaration::default()
     }
 }
+
+// ── lab/interventions-v1 (AC-R-2.7.2b-4/5; H-G2-1; ADR-0114 D5) ──────────
+
+/// The level pins `lab/interventions-v1` binds, beyond [`ExemplarPins`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct InterventionsPins {
+    /// The interventions-on harness variant ref (Γ table + probe rules
+    /// enabled — the `interventions` factor's `on` level).
+    pub interventions_on_ref: String,
+    /// The interventions-off variant ref (the same sealed configuration
+    /// with the Γ/probe/notice fabric disabled — the `off` level).
+    pub interventions_off_ref: String,
+    /// The lower-capability model tier's snapshot ref (H-G2-1's
+    /// lower-tier operand).
+    pub model_lower_ref: String,
+    /// The higher-capability model tier's snapshot ref.
+    pub model_higher_ref: String,
+    /// The single environment level ref.
+    pub environment_level_ref: String,
+    /// The sealed artifacts the four product arms bind, keyed
+    /// `(off×lower, off×higher, on×lower, on×higher)`.
+    pub artifacts: (Ref, Ref, Ref, Ref),
+}
+
+/// The matched dims — the intervention-cost MatchSpec AC-R-2.7.2b-4
+/// requires: `{model_calls, tokens.output.visible}` carry the probe and
+/// notice tokens, `evaluator_calls` the validator-run cost,
+/// `reconciliation_holds` the hold spend, `time.wall_ms` the wall cost.
+fn interventions_match() -> MatchSpec {
+    use hh_ontology::dimensions::DimensionId::*;
+    MatchSpec {
+        dimensions: vec![
+            ModelCalls,
+            TokensOutputVisible,
+            EvaluatorCalls,
+            ReconciliationHolds,
+            TimeWallMs,
+        ],
+        mode: MatchMode::MatchedCap,
+        tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
+        pricing_table_ref: None,
+        model_scope: ModelScope::SameSnapshot,
+        cache_policy: CachePolicy::ColdStart,
+        utilization_floor_ppm: None,
+    }
+}
+
+/// `lab/interventions-v1` (AC-R-2.7.2b-4/5; S4.16c): `comparative`,
+/// `full_factorial` over `interventions ∈ {off, on}` × `model_snapshot ∈
+/// {lower, higher}` (the H-G2-1 model × harness interaction is
+/// pre-registered — "interventions reduce `false_completion_rate` more
+/// for lower-tier models and the gap shrinks with capability"), one
+/// environment level, suite held-out split, the intervention-cost
+/// `MatchSpec{matched_cap, tolerance 0.10, same_snapshot, cold_start}`
+/// (probe/notice tokens ride `tokens.output.visible`/`model_calls`;
+/// validator-run cost is `evaluator_calls`; holds are
+/// `reconciliation_holds`), `replicates_per_cell: 5`, `search_budget: 0`.
+/// Primaries `{task_success, false_completion_rate, gate_hold_count,
+/// reconciliation_cost}`; the interaction term
+/// `interventions:model_snapshot` is the H-G2-1 contrast
+/// `hh_eval::interventions::interventions_experiment` computes. Every Γ
+/// row and probe rule's `removal_test` points at
+/// `interventions_experiment:{subject}` (T-LCD-05/CC9).
+///
+/// `registered_at` is the transaction seq the pre-registration commits at
+/// (a `seq`, never a wall clock).
+pub fn interventions_v1(
+    pins: &ExemplarPins,
+    own: &InterventionsPins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "H-G2-1 — interventions reduce false_completion_rate more for lower-tier models \
+         and the gap shrinks with capability (the model × harness interaction)",
+        &[
+            "task_success",
+            "false_completion_rate",
+            "gate_hold_count",
+            "reconciliation_cost",
+        ],
+        &["interventions:model_snapshot"],
+        pins,
+    );
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/interventions-v1".to_string(),
+            kind: DesignKind::FullFactorial,
+            factors: vec![
+                FactorDeclaration {
+                    name: "interventions".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: vec![
+                        decl_level("off", &own.interventions_off_ref, "interventions off"),
+                        decl_level("on", &own.interventions_on_ref, "interventions on"),
+                    ],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "model_snapshot".to_string(),
+                    kind: FactorKind::ModelSnapshot,
+                    granularity: None,
+                    levels: vec![
+                        decl_level("lower", &own.model_lower_ref, "lower-tier model"),
+                        decl_level("higher", &own.model_higher_ref, "higher-tier model"),
+                    ],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "environment".to_string(),
+                    kind: FactorKind::Environment,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "env:fixed",
+                        &own.environment_level_ref,
+                        "fixed environment",
+                    )],
+                    role: None,
+                },
+            ],
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: vec![
+            FactorSpec {
+                name: "interventions".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: vec![
+                    level("off", &own.interventions_off_ref, "interventions off"),
+                    level("on", &own.interventions_on_ref, "interventions on"),
+                ],
+            },
+            FactorSpec {
+                name: "model_snapshot".to_string(),
+                kind: FactorKind::ModelSnapshot,
+                granularity: None,
+                role: Some("interaction".to_string()),
+                levels: vec![
+                    level("lower", &own.model_lower_ref, "lower-tier model"),
+                    level("higher", &own.model_higher_ref, "higher-tier model"),
+                ],
+            },
+            FactorSpec {
+                name: "environment".to_string(),
+                kind: FactorKind::Environment,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level(
+                    "env:fixed",
+                    &own.environment_level_ref,
+                    "fixed environment",
+                )],
+            },
+        ],
+        arms: vec![
+            arm(
+                "arm:interventions_off.lower",
+                "off baseline, lower tier",
+                &[("interventions", "off"), ("model_snapshot", "lower")],
+                interventions_match(),
+                &own.artifacts.0,
+                pins,
+            ),
+            arm(
+                "arm:interventions_off.higher",
+                "off baseline, higher tier",
+                &[("interventions", "off"), ("model_snapshot", "higher")],
+                interventions_match(),
+                &own.artifacts.1,
+                pins,
+            ),
+            arm(
+                "arm:interventions_on.lower",
+                "on, lower tier",
+                &[("interventions", "on"), ("model_snapshot", "lower")],
+                interventions_match(),
+                &own.artifacts.2,
+                pins,
+            ),
+            arm(
+                "arm:interventions_on.higher",
+                "on, higher tier",
+                &[("interventions", "on"), ("model_snapshot", "higher")],
+                interventions_match(),
+                &own.artifacts.3,
+                pins,
+            ),
+        ],
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.interventions-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/interventions-v1".to_string(),
+        },
+        ext: BTreeMap::new(),
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}

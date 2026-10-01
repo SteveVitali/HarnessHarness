@@ -298,6 +298,18 @@ pub struct Verdict {
     pub charged_to: ChargedTo,
     /// The veto invariants this verdict tripped.
     pub veto_tripped: Vec<String>,
+    /// The bundle the verdict grounds on (`Some` iff the check ran over a
+    /// built `EvidenceBundle` — the R-2.7.1² judge/hosted checks carry it).
+    pub bundle_id: Option<String>,
+    /// `calibration_ref` — the `CalibrationRecord` a `detector = judged`
+    /// check ran under (`Some` iff judged — mandatory there).
+    pub calibration_ref: Option<String>,
+    /// `independence_summary` — the independence dimensions a judged check
+    /// relied on.
+    pub independence_summary: Option<String>,
+    /// `uncited_findings` — the count of dropped uncited findings
+    /// (ADR-0115 D5's shape, shared with critic verdicts).
+    pub uncited_findings: u64,
     /// The verdict's provenance (`origin ∈ kernel(validator_ref) |
     /// model(judge) | human(rater)`).
     pub provenance: ProvenanceRecord,
@@ -1087,6 +1099,10 @@ fn local_verdict(
         cost_ppm: 0,
         charged_to: ChargedTo::Subject,
         veto_tripped: vec![],
+        bundle_id: None,
+        calibration_ref: None,
+        independence_summary: None,
+        uncited_findings: 0,
         provenance,
         measured_at,
     }
@@ -1123,6 +1139,10 @@ pub fn oracle_failure(
         cost_ppm: 0,
         charged_to: ChargedTo::Subject,
         veto_tripped: vec![],
+        bundle_id: None,
+        calibration_ref: None,
+        independence_summary: None,
+        uncited_findings: 0,
         provenance,
         measured_at,
     }
@@ -1202,6 +1222,10 @@ pub fn run_declared_postcondition(
                 cost_ppm: 0,
                 charged_to: ChargedTo::Subject,
                 veto_tripped: vec![],
+                bundle_id: None,
+                calibration_ref: None,
+                independence_summary: None,
+                uncited_findings: 0,
                 provenance,
                 measured_at,
             });
@@ -1289,6 +1313,256 @@ pub fn run_verify_steps(
             _ => None,
         })
         .collect()
+}
+
+// ── C2 — judged validators + hosted `end_state` (S4.16c; R-2.7.1²) ────────
+
+/// `admit_hosted(decl, available)` — hosted-participant admission
+/// (ADR-0111 D6; AC-R-2.7.1-10): a hosted participant receives **global
+/// `end_state` criteria only** — a validator whose `requires_observability`
+/// the hosted surface cannot supply is inadmissible (the caller renders
+/// `n/a{observability}` — typed, never coerced). Returns the missing
+/// observability kinds as a typed refusal; `Ok` admits.
+pub fn admit_hosted(
+    decl: &ValidatorDeclaration,
+    available: &BTreeSet<Observability>,
+) -> Result<(), ValidatorError> {
+    let missing: Vec<String> = decl
+        .requires_observability
+        .difference(available)
+        .map(|o| format!("{o:?}").to_lowercase())
+        .collect();
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(ValidatorError::IncompleteDeclaration {
+            reason: format!(
+                "n/a{{observability}} — hosted surface lacks {}",
+                missing.join(",")
+            ),
+        })
+    }
+}
+
+/// `check_judged(decl, bundle, outcome)` — the judged-validator `check`
+/// (§5f.1 C2; ADR-0110 D3; ADR-0115): constructs the `detector = judged`
+/// `Verdict` for a `kind = judge` declaration. The judge call itself is an
+/// instrument (offline-only: the caller supplies the judged `value`/`status`/
+/// `findings` and the judge-run provenance — `origin = model(judge)`,
+/// `authority = delegate`); this fold stamps the contract members and enforces
+/// the judge invariants:
+///
+/// - `kind = Judge` declarations only (`DetectorConflict`-shaped refusal via
+///   `IncompleteDeclaration` — a deterministic verdict minted `judged` is
+///   refused at `validate`).
+/// - `calibration_ref` mandatory (the verdict names the `CalibrationRecord`
+///   it ran under — AC-R-2.7.3-8's validator half).
+/// - `independence_summary` mandatory (ADR-0116 D1).
+/// - findings without an `evidence_ref` citing a bundle member are dropped
+///   and counted (`uncited_findings` — ADR-0115 D5, shared with critics).
+///
+/// The verdict mints at `delegate` authority (`Verdict::expected_authority`
+/// enforces) and is **never** hold/veto-admissible on its own.
+#[allow(clippy::too_many_arguments)]
+pub fn check_judged(
+    decl: &ValidatorDeclaration,
+    bundle: &EvidenceBundle,
+    target: &str,
+    criterion_ref: Option<String>,
+    contract_id: Option<String>,
+    phase: VerdictPhase,
+    role: CriterionRole,
+    value: VerdictValue,
+    status: VerdictStatus,
+    findings: Vec<Finding>,
+    independence_summary: String,
+    judge_provenance: ProvenanceRecord,
+    measured_at: u64,
+) -> Result<Verdict, ValidatorError> {
+    if !matches!(decl.kind, ValidatorKind::Judge(_)) {
+        return Err(ValidatorError::IncompleteDeclaration {
+            reason: "check_judged requires kind = judge".into(),
+        });
+    }
+    let calibration_ref =
+        decl.calibration_ref
+            .clone()
+            .ok_or_else(|| ValidatorError::IncompleteDeclaration {
+                reason: "a judged check requires an active calibration_ref".into(),
+            })?;
+    // A judged detector reads `model_io` — the bundle must carry at least
+    // one `model_io` member (I-V4's check-side half).
+    let has_model_io = bundle
+        .handles
+        .iter()
+        .any(|h| h.kind == EvidenceKind::ModelIo)
+        || bundle
+            .items
+            .iter()
+            .any(|i| i.evidence_class == crate::vocab::EvidenceClass::Claimed);
+    if !has_model_io {
+        return Err(ValidatorError::IncompleteDeclaration {
+            reason: "a judged check requires model_io evidence (I-V4)".into(),
+        });
+    }
+    // Cite-or-drop (ADR-0115 D5): findings without a bundle-cited
+    // `evidence_ref` are dropped and counted.
+    let cited: BTreeSet<String> = bundle
+        .items
+        .iter()
+        .map(|i| i.item_ref.clone())
+        .chain(bundle.handles.iter().map(|h| h.handle_ref.clone()))
+        .collect();
+    let mut kept = Vec::new();
+    let mut uncited = 0u64;
+    for f in findings {
+        if f.evidence_ref.as_ref().is_some_and(|r| cited.contains(r)) {
+            kept.push(f);
+        } else {
+            uncited += 1;
+        }
+    }
+    let verdict = Verdict {
+        verdict_id: format!(
+            "verdict:judged:{}:{}",
+            decl.validator_ref.version_id, target
+        ),
+        validator_ref: decl.validator_ref.clone(),
+        oracle_class: OracleClass::Judge,
+        target: target.to_string(),
+        criterion_ref,
+        contract_id,
+        phase,
+        role,
+        value,
+        status,
+        detector: Detector::Judged,
+        evidence_refs: bundle
+            .handles
+            .iter()
+            .map(|h| h.handle_ref.clone())
+            .collect(),
+        inputs_digest: bundle.inputs_digest.clone(),
+        evidence_head_seq: 0,
+        freshness_ok: true,
+        findings: kept,
+        cost_ppm: 0,
+        charged_to: decl.charged_to,
+        veto_tripped: vec![],
+        bundle_id: Some(bundle.bundle_id.clone()),
+        calibration_ref: Some(calibration_ref),
+        independence_summary: Some(independence_summary),
+        uncited_findings: uncited,
+        provenance: judge_provenance,
+        measured_at,
+    };
+    verdict.validate()?;
+    Ok(verdict)
+}
+
+/// `EndStateCheck` — the hosted `end_state` criterion evaluation input
+/// (ADR-0111 D6; AC-R-2.7.1-10; the validator-side half of the reconciler's
+/// `EndStateAssertion`): `{assertion_ref, expected, observed?}` — the
+/// declared end-state value and the environment's measured `end_state` read
+/// (`None` = the hosted surface never produced the read).
+#[derive(Debug, Clone, PartialEq)]
+pub struct EndStateCheck {
+    /// The declared assertion ref.
+    pub assertion_ref: String,
+    /// The declared expected end-state value.
+    pub expected: Json,
+    /// The measured end state (`None` = unread — the check is
+    /// `inconclusive{missing_evidence}`, never a guess).
+    pub observed: Option<Json>,
+}
+
+/// `check_end_state(decl, checks, …)` — the hosted participant's global
+/// `end_state` verdicts (§5f.1 C2; `oracle_class = end_state`, `detector =
+/// deterministic`, `phase = global`): one `Verdict` per declared
+/// `EndStateCheck`, pass iff `observed == expected` (canonical equality —
+/// never a guess); an unread assertion is `inconclusive{missing_evidence}`.
+/// A declaration whose `requires_observability` exceeds `{end_state}` is
+/// refused — hosted runs never mint a native-surface verdict
+/// (`n/a{observability}` belongs to the caller's rendering).
+pub fn check_end_state(
+    decl: &ValidatorDeclaration,
+    checks: &[EndStateCheck],
+    criterion_ref: Option<String>,
+    contract_id: Option<String>,
+    provenance: ProvenanceRecord,
+    evidence_head_seq: u64,
+    measured_at: u64,
+) -> Result<Vec<Verdict>, ValidatorError> {
+    let mut allowed = BTreeSet::new();
+    allowed.insert(Observability::EndState);
+    admit_hosted(decl, &allowed)?;
+    Ok(checks
+        .iter()
+        .map(|c| {
+            let (status, value, findings) = match &c.observed {
+                Some(observed) => {
+                    let pass = observed == &c.expected;
+                    (
+                        VerdictStatus::Decided,
+                        VerdictValue::Bool(pass),
+                        if pass {
+                            vec![]
+                        } else {
+                            vec![Finding {
+                                code: "end_state_mismatch".into(),
+                                severity: SeverityLevel::Medium,
+                                location: None,
+                                message: format!(
+                                    "end_state assertion {} unsatisfied",
+                                    c.assertion_ref
+                                ),
+                                evidence_ref: Some(c.assertion_ref.clone()),
+                            }]
+                        },
+                    )
+                }
+                None => (
+                    VerdictStatus::Inconclusive(InconclusiveReason::MissingEvidence),
+                    VerdictValue::ThreeValued(crate::vocab::ThreeValued::Inconclusive),
+                    vec![],
+                ),
+            };
+            Verdict {
+                verdict_id: format!(
+                    "verdict:end_state:{}:{}",
+                    decl.validator_ref.version_id, c.assertion_ref
+                ),
+                validator_ref: decl.validator_ref.clone(),
+                oracle_class: OracleClass::EndState,
+                target: c.assertion_ref.clone(),
+                criterion_ref: criterion_ref.clone(),
+                contract_id: contract_id.clone(),
+                phase: VerdictPhase::Global,
+                role: CriterionRole::Acceptance,
+                value,
+                status,
+                detector: Detector::Deterministic,
+                evidence_refs: vec![c.assertion_ref.clone()],
+                inputs_digest: inputs_digest(
+                    std::slice::from_ref(&c.assertion_ref),
+                    &c.assertion_ref,
+                    &decl.validator_ref.version_id,
+                ),
+                evidence_head_seq,
+                freshness_ok: c.observed.is_some(),
+                findings,
+                cost_ppm: 0,
+                charged_to: decl.charged_to,
+                veto_tripped: vec![],
+                bundle_id: None,
+                calibration_ref: None,
+                independence_summary: None,
+                uncited_findings: 0,
+                provenance: provenance.clone(),
+                measured_at,
+            }
+        })
+        .collect())
 }
 
 #[cfg(test)]
@@ -1683,5 +1957,274 @@ mod tests {
             v.status,
             VerdictStatus::OracleFailure(OracleCause::Timeout)
         ));
+    }
+
+    // ── S4.16c — judged validators + hosted end_state (R-2.7.1²) ─────────
+
+    fn judge_decl() -> ValidatorDeclaration {
+        let mut d = decl(ValidatorKind::Judge(Box::new(
+            hh_hir::kinds::JudgeProfile {
+                rubric: hh_hir::leaves::Text::new(
+                    "rubric",
+                    "test",
+                    ProvenanceRecord::minted(
+                        Origin::kernel("hir/kernel/check"),
+                        PersistenceScope::Definition,
+                        1,
+                    ),
+                ),
+                profile: hh_hir::refs::ProfileRef::unbound(),
+                calibration_ref: None,
+                charged_to: hh_hir::kinds::ChargedTo::Instrument,
+            },
+        )));
+        d.deterministic = false;
+        d.oracle_class = OracleClass::Judge;
+        d.profile_ref = Some("profile:j".into());
+        d.calibration_ref = Some("cal:1".into());
+        d.assumption_debt = Some("debt:j".into());
+        d.requires_observability.insert(Observability::ModelIo);
+        d.charged_to = ChargedTo::Instrument;
+        d
+    }
+
+    fn judge_prov() -> ProvenanceRecord {
+        ProvenanceRecord::minted(
+            Origin::Model {
+                model_ref: "m".into(),
+                run_ref: "r".into(),
+                response_id: "x".into(),
+            },
+            PersistenceScope::Run,
+            1,
+        )
+    }
+
+    fn model_io_bundle() -> EvidenceBundle {
+        EvidenceBundle {
+            bundle_id: "b:j".into(),
+            handles: vec![crate::evidence::EvidenceHandle {
+                kind: EvidenceKind::ModelIo,
+                handle_ref: "h:io".into(),
+                authority: AuthorityClass::Environment,
+                provenance: kernel_prov(),
+                produced_at_seq: 3,
+                integrity: Integrity::ChainVerified,
+            }],
+            items: vec![],
+            omitted: vec![],
+            task_contract_ref: None,
+            reference_ref: None,
+            inputs_digest: "dig".into(),
+        }
+    }
+
+    #[test]
+    fn check_judged_stamps_contract_members() {
+        let d = judge_decl();
+        let bundle = model_io_bundle();
+        let v = check_judged(
+            &d,
+            &bundle,
+            "t",
+            Some("crit:1".into()),
+            Some("c:1".into()),
+            VerdictPhase::Global,
+            CriterionRole::Acceptance,
+            VerdictValue::Bool(true),
+            VerdictStatus::Decided,
+            vec![
+                Finding {
+                    code: "f".into(),
+                    severity: SeverityLevel::Medium,
+                    location: None,
+                    message: "cited".into(),
+                    evidence_ref: Some("h:io".into()),
+                },
+                Finding {
+                    code: "f2".into(),
+                    severity: SeverityLevel::Medium,
+                    location: None,
+                    message: "uncited".into(),
+                    evidence_ref: Some("h:nowhere".into()),
+                },
+            ],
+            "kernel-independent".into(),
+            judge_prov(),
+            9,
+        )
+        .unwrap();
+        assert_eq!(v.detector, Detector::Judged);
+        assert_eq!(v.calibration_ref.as_deref(), Some("cal:1"));
+        assert_eq!(
+            v.independence_summary.as_deref(),
+            Some("kernel-independent")
+        );
+        assert_eq!(v.bundle_id.as_deref(), Some("b:j"));
+        assert_eq!(v.uncited_findings, 1); // the uncited finding dropped
+        assert_eq!(v.findings.len(), 1);
+        assert_eq!(v.provenance.authority, AuthorityClass::Delegate);
+        v.validate().unwrap();
+    }
+
+    #[test]
+    fn check_judged_refusals() {
+        // A non-judge kind refuses.
+        assert!(check_judged(
+            &decl(ValidatorKind::Schema),
+            &model_io_bundle(),
+            "t",
+            None,
+            None,
+            VerdictPhase::Global,
+            CriterionRole::Acceptance,
+            VerdictValue::Bool(true),
+            VerdictStatus::Decided,
+            vec![],
+            "ind".into(),
+            judge_prov(),
+            9,
+        )
+        .is_err());
+        // A judge without calibration_ref refuses (AC-R-2.7.3-8's
+        // validator half — uncalibrated ⇒ the metric renders exploratory,
+        // never a gate verdict).
+        let mut d = judge_decl();
+        d.calibration_ref = None;
+        assert!(check_judged(
+            &d,
+            &model_io_bundle(),
+            "t",
+            None,
+            None,
+            VerdictPhase::Global,
+            CriterionRole::Acceptance,
+            VerdictValue::Bool(true),
+            VerdictStatus::Decided,
+            vec![],
+            "ind".into(),
+            judge_prov(),
+            9,
+        )
+        .is_err());
+        // A bundle without model_io refuses (I-V4).
+        let empty = EvidenceBundle {
+            bundle_id: "b:e".into(),
+            handles: vec![],
+            items: vec![],
+            omitted: vec![],
+            task_contract_ref: None,
+            reference_ref: None,
+            inputs_digest: "d".into(),
+        };
+        assert!(check_judged(
+            &judge_decl(),
+            &empty,
+            "t",
+            None,
+            None,
+            VerdictPhase::Global,
+            CriterionRole::Acceptance,
+            VerdictValue::Bool(true),
+            VerdictStatus::Decided,
+            vec![],
+            "ind".into(),
+            judge_prov(),
+            9,
+        )
+        .is_err());
+        // A judged verdict minted at kernel authority fails validation.
+        let d = judge_decl();
+        let v = check_judged(
+            &d,
+            &model_io_bundle(),
+            "t",
+            None,
+            None,
+            VerdictPhase::Global,
+            CriterionRole::Acceptance,
+            VerdictValue::Bool(true),
+            VerdictStatus::Decided,
+            vec![],
+            "ind".into(),
+            kernel_prov(),
+            9,
+        );
+        assert!(matches!(
+            v,
+            Err(ValidatorError::VerdictAuthorityMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn admit_hosted_observability_gate() {
+        // An end_state-only declaration admits on the hosted surface.
+        let mut d = decl(ValidatorKind::Schema);
+        d.requires_observability.insert(Observability::EndState);
+        let hosted: BTreeSet<Observability> = [Observability::EndState].into_iter().collect();
+        assert!(admit_hosted(&d, &hosted).is_ok());
+        // A model_io requirement renders n/a{observability} — refused.
+        d.requires_observability.insert(Observability::ModelIo);
+        assert!(admit_hosted(&d, &hosted).is_err());
+        // Native surface admits.
+        let native: BTreeSet<Observability> = [
+            Observability::Events,
+            Observability::ModelIo,
+            Observability::EndState,
+            Observability::Ledger,
+        ]
+        .into_iter()
+        .collect();
+        assert!(admit_hosted(&d, &native).is_ok());
+    }
+
+    #[test]
+    fn check_end_state_verdicts() {
+        // A hosted end_state declaration (oracle_class = end_state,
+        // requires_observability = {end_state}).
+        let mut d = decl(ValidatorKind::Schema);
+        d.oracle_class = OracleClass::EndState;
+        d.requires_observability.insert(Observability::EndState);
+        let checks = vec![
+            EndStateCheck {
+                assertion_ref: "a:pass".into(),
+                expected: Json::Bool(true),
+                observed: Some(Json::Bool(true)),
+            },
+            EndStateCheck {
+                assertion_ref: "a:fail".into(),
+                expected: Json::Bool(true),
+                observed: Some(Json::Bool(false)),
+            },
+            EndStateCheck {
+                assertion_ref: "a:unread".into(),
+                expected: Json::Bool(true),
+                observed: None,
+            },
+        ];
+        let vs = check_end_state(
+            &d,
+            &checks,
+            Some("crit:1".into()),
+            Some("c:1".into()),
+            kernel_prov(),
+            9,
+            9,
+        )
+        .unwrap();
+        assert_eq!(vs.len(), 3);
+        assert!(vs[0].is_pass());
+        assert_eq!(vs[0].oracle_class, OracleClass::EndState);
+        assert_eq!(vs[0].phase, VerdictPhase::Global);
+        assert!(!vs[1].is_pass());
+        assert_eq!(vs[1].status, VerdictStatus::Decided);
+        assert!(matches!(
+            vs[2].status,
+            VerdictStatus::Inconclusive(InconclusiveReason::MissingEvidence)
+        ));
+        // A declaration requiring more than end_state is refused — hosted
+        // rows never mint a native-surface verdict (n/a{observability}).
+        d.requires_observability.insert(Observability::Events);
+        assert!(check_end_state(&d, &checks, None, None, kernel_prov(), 9, 9,).is_err());
     }
 }
