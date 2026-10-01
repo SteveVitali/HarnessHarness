@@ -392,10 +392,7 @@ pub fn bind_claim(
             }
             HandleKind::EffectState => {
                 for r in &claim.evidence_refs {
-                    let id = r
-                        .strip_prefix("effect:")
-                        .unwrap_or(r.as_str())
-                        .to_string();
+                    let id = r.strip_prefix("effect:").unwrap_or(r.as_str()).to_string();
                     if let Some(st) = effects.get(&id) {
                         push(
                             HandleKind::EffectState,
@@ -475,21 +472,17 @@ pub fn bind_claim(
 mod tests {
     use super::*;
     use crate::claims::{reconcile_ledger_only, Claim};
+    use crate::gate::{AcceptanceCriterion, ValidatesRecord};
     use crate::vocab::{
         Agreement, ClaimKind, CompletionPolicy, DivergenceClass, ExtractedBy, SubjectRef,
     };
-    use crate::gate::{AcceptanceCriterion, ValidatesRecord};
     use crate::vocab::{CriterionRole, VerdictPhase, Visibility};
+    use hh_provenance::authority::PersistenceScope;
     use hh_provenance::origin::Origin;
     use hh_provenance::record::ProvenanceRecord;
-    use hh_provenance::authority::PersistenceScope;
 
     fn prov() -> ProvenanceRecord {
-        ProvenanceRecord::minted(
-            Origin::model("m", "r", "call:1"),
-            PersistenceScope::Run,
-            1,
-        )
+        ProvenanceRecord::minted(Origin::model("m", "r", "call:1"), PersistenceScope::Run, 1)
     }
 
     fn kprov() -> ProvenanceRecord {
@@ -765,7 +758,13 @@ mod tests {
         );
         // (b) `assumption` claim — unbindable ⇒ unverifiable, never diverge.
         let c = claim(ClaimKind::Assumption, vec![]);
-        let r = reconcile_ledger_only(&c, &bind_claim(&rows, &c, None), "hir/kernel/reconcile:0", 20, kprov());
+        let r = reconcile_ledger_only(
+            &c,
+            &bind_claim(&rows, &c, None),
+            "hir/kernel/reconcile:0",
+            20,
+            kprov(),
+        );
         assert_eq!(r.agreement, Agreement::Unverifiable);
         // (c) honest `unachievable` — no contradiction ⇒ not diverge.
         let c = claim(ClaimKind::Unachievable, vec![]);

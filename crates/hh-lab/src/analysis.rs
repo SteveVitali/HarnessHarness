@@ -500,8 +500,7 @@ impl AnalysisRecord {
                 None | Some(Json::Null) => None,
                 Some(i) => Some(i.clone()),
             },
-            metric_registry_version: opt_str_at(m, "metric_registry_version")?
-                .map(str::to_string),
+            metric_registry_version: opt_str_at(m, "metric_registry_version")?.map(str::to_string),
             price_table_version: opt_str_at(m, "price_table_version")?.map(str::to_string),
             oracle_ids: match m.get("oracle_ids") {
                 None | Some(Json::Null) => Vec::new(),
@@ -529,8 +528,7 @@ impl AnalysisRecord {
             },
             report: opt_str_at(m, "report")?.map(str::to_string),
             pre_registered: opt_bool_at(m, "pre_registered")?.unwrap_or(false),
-            registered_analysis_ref: opt_str_at(m, "registered_analysis_ref")?
-                .map(str::to_string),
+            registered_analysis_ref: opt_str_at(m, "registered_analysis_ref")?.map(str::to_string),
             post_amendment: opt_bool_at(m, "post_amendment")?.unwrap_or(false),
             provenance: match m.get("provenance") {
                 None | Some(Json::Null) => None,
