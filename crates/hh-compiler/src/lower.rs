@@ -260,7 +260,11 @@ pub fn lower_profile(
         }
 
         // tool_shape — `{capability_class → SurfaceFamilyRef}`; the rule applies
-        // to the capabilities it names (the map key scopes it).
+        // to the capabilities it names (the map key scopes it). A `split`
+        // family yields several surfaces off one capability (ADR-0090 D7 —
+        // the expanding half of the family set).
+        let mut shaped: Vec<SurfaceBinding> = Vec::new();
+        let mut saw_split = false;
         for (r, _) in shape_rules.iter() {
             let Json::Obj(m) = &r.params else {
                 continue;
@@ -269,7 +273,19 @@ pub fn lower_profile(
                 if *cap_key != cap_name && *cap_key != tb.capability.semantic_id {
                     continue;
                 }
-                apply_tool_shape(&mut b, family_ref, node, &tb.capability.semantic_id)?;
+                let family = family_ref
+                    .get("family_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or("native_fc");
+                if family == "split" {
+                    saw_split = true;
+                    shaped.extend(crate::family::split_bindings(
+                        &b,
+                        family_ref.get("splits").unwrap_or(&Json::Null),
+                    )?);
+                } else {
+                    apply_tool_shape(&mut b, family_ref, node, &tb.capability.semantic_id)?;
+                }
                 applied.push(r.rule_id.clone());
             }
         }
@@ -280,24 +296,26 @@ pub fn lower_profile(
             applied.extend(rule_ids(chain, ProfileRuleKind::SchemaDialect));
         }
 
-        b.rule_ids = {
-            let mut ids = b.rule_ids.clone();
-            ids.extend(applied);
-            ids.sort();
-            ids.dedup();
-            ids
-        };
-        b.surface_id = crate::surface::surface_id(&b);
-
-        // The surface-side input schema — the capability's `input_schema` projected
-        // over the arg map (properties keyed by surface field; `project`/`parse`
-        // sub-paths take the leaf schema).
-        let schema = surface_input_schema(node, &b)?;
+        let mut bindings_out: Vec<SurfaceBinding> = Vec::new();
+        if saw_split {
+            bindings_out.append(&mut shaped);
+        }
+        bindings_out.push(b);
+        for b in bindings_out.iter_mut() {
+            b.rule_ids = {
+                let mut ids = b.rule_ids.clone();
+                ids.extend(applied.clone());
+                ids.sort();
+                ids.dedup();
+                ids
+            };
+            b.surface_id = crate::surface::surface_id(b);
+        }
 
         // description — `description_template` Text leaf content, `{purpose}`
         // substituted with the capability's purpose text (the template is the leaf;
         // the profile's `description_template` rule supplies a replacement template
-        // string when declared).
+        // string when declared). Binding-independent — computed once.
         let ts = match &node.surface {
             Some(SurfaceRecord::Tool(ts)) => ts,
             _ => {
@@ -333,14 +351,24 @@ pub fn lower_profile(
                 .filter(|j| !matches!(j, Json::Null)),
         )?;
 
-        tools.push(CompiledToolSurface {
-            binding: b,
-            schema,
-            description,
-            error_format,
-            result_render,
-            equivalence: None,
-        });
+        // Every produced binding (the primary + the `split` expansion) is its
+        // own compiled surface — each mints its own `surface_id` and carries
+        // the same rule provenance (E7: renaming a split changes its
+        // `surface_id` only).
+        for b in bindings_out {
+            // The surface-side input schema — the capability's `input_schema`
+            // projected over the arg map (properties keyed by surface field;
+            // `project`/`parse` sub-paths take the leaf schema).
+            let schema = surface_input_schema(node, &b)?;
+            tools.push(CompiledToolSurface {
+                binding: b,
+                schema,
+                description: description.clone(),
+                error_format: error_format.clone(),
+                result_render: result_render.clone(),
+                equivalence: None,
+            });
+        }
     }
 
     // ── layout — `prompt_layout` rule, else the C0 default single `system` section ──
@@ -352,6 +380,11 @@ pub fn lower_profile(
         ("sampling", ProfileRuleKind::SamplingDefaults),
         ("caching", ProfileRuleKind::CachingMarkers),
         ("compaction_reminder", ProfileRuleKind::CompactionReminder),
+        // `prompt_layout` — the C1 members the runtime reads:
+        // `demotion_wrappers[]`, `reminder_placement`, the profile's slot
+        // families (§5c.1 C1 row; the sections lower separately — this is
+        // the verbatim rule-params channel, same as `compaction_reminder`).
+        ("prompt_layout", ProfileRuleKind::PromptLayout),
     ] {
         if let Some(p) = rule_params(chain, kind) {
             params_pairs.push((member, p.clone()));
@@ -470,12 +503,67 @@ fn apply_tool_shape(
             }
             b.arg_map = arg_map;
         }
+        // C1 static composites — the canonical `PlanMap` fixtures
+        // (AC-R-2.5.2-3; §5d.2 admissibility row).
+        "str_replace_editor" => {
+            let map = crate::family::str_replace_editor_plan();
+            b.exposure_mode = crate::surface::CompileExposureMode::Composite;
+            b.mapping = crate::surface::BindingMapping::PlanMap(
+                crate::family::plan_map_ref(&map),
+            );
+            b.capability_refs = crate::family::capabilities_invoked(&map)
+                .into_iter()
+                .collect();
+            b.arg_map = BTreeMap::new();
+        }
+        "unified_exec" => {
+            let map = crate::family::unified_exec_plan();
+            b.exposure_mode = crate::surface::CompileExposureMode::Composite;
+            b.mapping = crate::surface::BindingMapping::PlanMap(
+                crate::family::plan_map_ref(&map),
+            );
+            b.capability_refs = crate::family::capabilities_invoked(&map)
+                .into_iter()
+                .collect();
+            b.arg_map = BTreeMap::new();
+        }
+        // C2 kinds — declared records, admissibility per §5d.2.
+        "freeform" => {
+            let grammar_ref = params
+                .get("grammar_ref")
+                .and_then(Json::as_str)
+                .ok_or_else(|| CompileError::UnexpressibleSurface {
+                    entity: cap_sid.to_string(),
+                    profile: String::new(),
+                    reason: "tool_shape `freeform` variant requires `grammar_ref`".to_string(),
+                })?
+                .to_string();
+            let capability_param = params
+                .get("param")
+                .and_then(Json::as_str)
+                .unwrap_or("input")
+                .to_string();
+            b.exposure_mode = crate::surface::CompileExposureMode::Freeform;
+            b.arg_map = crate::family::freeform_map(&crate::family::FreeformSpec {
+                grammar_ref,
+                capability_param,
+                surface_arg: "input".to_string(),
+            });
+        }
+        "code_mode" => {
+            b.exposure_mode = crate::surface::CompileExposureMode::CodeMode;
+            b.admitted_modes
+                .insert(hh_hir::tools::ExposureMode::CodeMode);
+        }
+        "shim" => {
+            b.exposure_mode = crate::surface::CompileExposureMode::Shim;
+        }
         other => {
             return Err(CompileError::UnexpressibleSurface {
                 entity: cap_sid.to_string(),
                 profile: String::new(),
                 reason: format!(
-                    "tool_shape variant {other} is outside the C0 set {{reference, patch, string_replace}}"
+                    "tool_shape variant {other} is outside the registered set {{reference, patch, string_replace, str_replace_editor, unified_exec, freeform, code_mode, shim}}"
                 ),
             })
         }

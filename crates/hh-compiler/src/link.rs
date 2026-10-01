@@ -47,7 +47,18 @@ pub const REGISTERED_TARGETS: &[&str] = &["a2a", "acp", "agent_spec", "mcp", "pr
 /// only compiled shape is the primitive `native_fc` family — `SurfaceFamily` records are
 /// C1/Stage-5 registry kinds; a family id outside this set is `UnexpressibleSurface`,
 /// never a warning — AC-CP-05).
-pub const C0_SURFACE_FAMILIES: &[&str] = &["native_fc"];
+pub const C0_SURFACE_FAMILIES: &[&str] = &[
+    "native_fc",
+    // C1/C2 (Stage 5; ADR-0090 D7): `split` surfaces, the static
+    // composites (`str_replace_editor`, `unified_exec`), and the C2
+    // freeform/code_mode/shim kinds — named by id, never inline.
+    "split",
+    "str_replace_editor",
+    "unified_exec",
+    "freeform",
+    "code_mode",
+    "shim",
+];
 
 /// The pinned-`version_id`-only variant read seam (DF-S1.9-3's "zero resolutions": the
 /// signature carries no resolver — a `VariantView` reads by *pinned* `version_id` and

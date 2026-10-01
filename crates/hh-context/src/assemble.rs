@@ -86,6 +86,11 @@ pub struct AssemblyRequest {
     pub estimator_ref: String,
     /// `policy params` — profile data the policy reads (opaque JSON).
     pub policy_params: Json,
+    /// `demotion_wrappers[]` — the profile-declared `prompt_layout` member
+    /// (§5c.1 I-RP): an item admissible nowhere on authority/kind grounds
+    /// enters the `external` slot through a wrapper; absent wrappers the
+    /// `Omission{authority}` path stands (C0 default — the field is `[]`).
+    pub demotion_wrappers: Vec<crate::policy_family::DemotionWrapper>,
 }
 
 /// The `assemble` error sum (§5c.1 "errors") — `LayoutError` folds into
@@ -242,6 +247,27 @@ pub fn stage01_disposition(err: &AssemblyError) -> Option<Stage01Outcome> {
 pub struct AssemblyOutcome {
     /// The plan.
     pub plan: ContextPlan,
+    /// `demotions[]` — the wrapper admissions this assembly performed
+    /// (§5c.1 I-RP; each records the wrapper id, the target slot and the
+    /// `text_ref` of the demotion-annotation `Text` leaf — profile-owned
+    /// content, kernel-recorded).
+    pub demotions: Vec<Demotion>,
+}
+
+/// `Demotion{candidate_id, wrapper_id, target_slot, text_ref}` — one
+/// wrapper admission (I-RP's `external` path; the annotation leaf renders
+/// under the profile's `prompt_layout`, never an authority).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Demotion {
+    /// The demoted candidate.
+    pub candidate_id: String,
+    /// The wrapper that admitted it.
+    pub wrapper_id: String,
+    /// The slot it entered (`external`-floored only — decode refuses
+    /// otherwise).
+    pub target_slot: String,
+    /// The demotion annotation `Text` leaf ref.
+    pub text_ref: String,
 }
 
 /// `assemble(req, policy)` — the kernel (§5c.1). `layout_ref`/`policy_ref`/
@@ -287,6 +313,7 @@ pub fn assemble(
     // ── admit ────────────────────────────────────────────────────────────
     let mut admitted: Vec<AdmittedCandidate> = Vec::new();
     let mut omitted: Vec<Omission> = Vec::new();
+    let mut demotions: Vec<Demotion> = Vec::new();
     let mut advisories = req.advisories.clone();
     for c in &mut advisories {
         // The kernel sets `required` on its reserved-slot advisories
@@ -359,12 +386,37 @@ pub fn assemble(
                     candidate_id: c.candidate_id.clone(),
                 });
             }
-            omitted.push(Omission {
-                candidate_id: c.candidate_id.clone(),
-                reason,
-                evidence: "I-RP/I-ORDER".to_string(),
-            });
-            continue;
+            // I-RP's demotion path (§5c.1 C1): a profile-declared
+            // `DemotionWrapper` whose `applies_to` names the kind admits the
+            // candidate into the `external` slot — the wrapper waives *kind*
+            // admission only; the authority floor still stands (the builder
+            // never promotes). The demotion is recorded on the outcome.
+            if reason == OmissionReason::Authority {
+                if let Some(slot) =
+                    crate::policy_family::demotion_slot(c, &req.demotion_wrappers, &req.layout)
+                {
+                    let wrapper = req
+                        .demotion_wrappers
+                        .iter()
+                        .find(|w| w.applies_to.contains(&c.kind) && w.target_slot == slot)
+                        .expect("demotion_slot returned a wrapper's slot");
+                    demotions.push(Demotion {
+                        candidate_id: c.candidate_id.clone(),
+                        wrapper_id: wrapper.wrapper_id.clone(),
+                        target_slot: slot.clone(),
+                        text_ref: wrapper.text_ref.clone(),
+                    });
+                    admissible.push(slot);
+                }
+            }
+            if admissible.is_empty() {
+                omitted.push(Omission {
+                    candidate_id: c.candidate_id.clone(),
+                    reason,
+                    evidence: "I-RP/I-ORDER".to_string(),
+                });
+                continue;
+            }
         }
         admitted.push(AdmittedCandidate {
             candidate: c.clone(),
@@ -787,5 +839,5 @@ pub fn assemble(
             }
         }
     }
-    Ok(AssemblyOutcome { plan })
+    Ok(AssemblyOutcome { plan, demotions })
 }

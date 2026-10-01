@@ -29,6 +29,7 @@ use hh_ontology::eval::{
 use hh_ontology::lab::SplitLabel;
 use hh_ontology::participant::{Granularity, ParticipantClass};
 use hh_ontology::FactorKind;
+use hh_wire::Json;
 
 use crate::experiment::{
     ArmSpec, Backoff, BundlePolicy, CancelPolicy, ExperimentBudgets, ExperimentKind,
@@ -379,6 +380,436 @@ pub fn compaction_family_v1(
             name: "lab/compaction-family-v1".to_string(),
         },
         ext: BTreeMap::new(),
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}
+
+// ── lab/compaction-family-v1 full family (ADR-0156 D1 C1/Stage 5; ADR-0077) ──
+
+/// One strategy level the full family binds (`level_id`, `content_ref`,
+/// `label`) plus the sealed definition version its arms instantiate.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompactionStrategyLevel {
+    /// The level id (`evict_oldest`, `clear_tool_results`,
+    /// `summarize_rolling`, `structured_checkpoint`,
+    /// `offload_then_summarize`).
+    pub level_id: String,
+    /// The variant's content ref (the `FactorLevel`/`LevelSpec` ref).
+    pub content_ref: String,
+    /// The level's display label.
+    pub label: String,
+    /// The sealed artifact (definition version) every arm at this level
+    /// binds.
+    pub artifact: Ref,
+}
+
+/// The level pins the **full-family** `lab/compaction-family-v1` (C1/Stage
+/// 5) binds, beyond [`ExemplarPins`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompactionFamilyFullPins {
+    /// The five primary strategies (§10.5.1 C1 column: `evict_oldest`,
+    /// `clear_tool_results`, `summarize_rolling`, `structured_checkpoint`,
+    /// `offload_then_summarize` — `fresh_window_with_notes` and
+    /// `provider_compaction` ride the boundary/hosted companions).
+    pub strategies: Vec<CompactionStrategyLevel>,
+    /// The `window_ceiling` reference-only level (`(content_ref,
+    /// artifact)`) — its arm stands **outside the primary contrast**
+    /// (§10.5.1), so it carries its own `MatchSpec` and never enters a
+    /// paired Δ against the strategy levels.
+    pub window_ceiling: (String, Ref),
+    /// The two model-family level refs (`model_family ∈ {a, b}`).
+    pub model_family_refs: [String; 2],
+    /// The two model-tier level refs (`model_tier ∈ {1, 2}` — the
+    /// tier-conditioned interaction H1 pre-registers, T-LCD-09).
+    pub model_tier_refs: [String; 2],
+    /// The three environment-family level refs (Terminal-Bench 2.0 plus
+    /// two further families, `fault_profile = none`).
+    pub environment_refs: [String; 3],
+    /// The two `summarizer_profile` level refs — `summarizer_profile` is a
+    /// component-level factor and a member of the run's model set (§5c.2;
+    /// ADR-0012): `{subject_snapshot, small_fixed}`.
+    pub summarizer_profile_refs: [String; 2],
+}
+
+/// `lab/compaction-family-v1` at its Stage-5 size (ADR-0156 D1 C1 column;
+/// §10.5.1): `comparative`, `full_factorial` over `compaction_strategy` (5
+/// primary levels) × `model_family` (2) × `model_tier` (2) × `environment`
+/// (3) × `summarizer_profile` (2) — plus the `window_ceiling`
+/// reference-only arm outside the primary contrast. `MatchSpec` unchanged
+/// (`matched_cap`, tolerance 0.10, same-snapshot, cold-start);
+/// `replicates_per_cell: 5`, `search_budget: 0`, suite-A held-out split;
+/// pre-registration carries H1 (the tier-conditioned interaction —
+/// T-LCD-09's canned analysis), H3, H4 with primaries
+/// `{capability.task_success, grounding.reacquisition_rate,
+/// reliability.repeated_action_rate}`; `interactions` pre-registers
+/// `model × strategy` (the only contrast a `fractional_factorial{IV}`
+/// reduction may keep). The C1 `grounding.summary_fidelity_judged` metric
+/// is declared on `ext` (`headline = false`, calibrated/independent/
+/// instrument-charged — §10.5.1 C1).
+pub fn compaction_family_v1_full(
+    pins: &ExemplarPins,
+    own: &CompactionFamilyFullPins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "H1 — model_tier × compaction_strategy interaction is non-zero (T-LCD-09);          H3 — model_family × strategy interaction; H4 — strategy moves          grounding.reacquisition_rate / reliability.repeated_action_rate          where capability.task_success does not separate (margins per OQ-113)",
+        &[
+            "capability.task_success",
+            "grounding.reacquisition_rate",
+            "reliability.repeated_action_rate",
+        ],
+        &[
+            "model_family:compaction_strategy",
+            "model_tier:compaction_strategy",
+        ],
+        pins,
+    );
+
+    // The declared factor levels — `window_ceiling` is declared on the
+    // strategy factor (the reference arm assigns it) but labelled
+    // reference-only: it never joins a primary Δ.
+    let mut strategy_decl: Vec<FactorLevel> = own
+        .strategies
+        .iter()
+        .map(|s| decl_level(&s.level_id, &s.content_ref, &s.label))
+        .collect();
+    strategy_decl.push(decl_level(
+        "window_ceiling",
+        &own.window_ceiling.0,
+        "window ceiling (reference-only)",
+    ));
+    let mut strategy_levels: Vec<LevelSpec> = own
+        .strategies
+        .iter()
+        .map(|s| level(&s.level_id, &s.content_ref, &s.label))
+        .collect();
+    strategy_levels.push(level(
+        "window_ceiling",
+        &own.window_ceiling.0,
+        "window ceiling (reference-only)",
+    ));
+
+    let families = ["family:a", "family:b"];
+    let tiers = ["tier:1", "tier:2"];
+    let envs = ["env:terminal-bench-2.0", "env:b", "env:c"];
+    let summarizers = ["summarizer:subject", "summarizer:fixed_small"];
+
+    let design_factors = vec![
+        FactorDeclaration {
+            name: "compaction_strategy".to_string(),
+            kind: FactorKind::Harness,
+            granularity: Some(Granularity::ComponentLevel),
+            levels: strategy_decl,
+            role: None,
+        },
+        FactorDeclaration {
+            name: "model_family".to_string(),
+            kind: FactorKind::ModelSnapshot,
+            granularity: None,
+            levels: families
+                .iter()
+                .zip(own.model_family_refs.iter())
+                .map(|(id, r)| decl_level(id, r, id))
+                .collect(),
+            role: None,
+        },
+        FactorDeclaration {
+            name: "model_tier".to_string(),
+            kind: FactorKind::ModelSnapshot,
+            granularity: None,
+            levels: tiers
+                .iter()
+                .zip(own.model_tier_refs.iter())
+                .map(|(id, r)| decl_level(id, r, id))
+                .collect(),
+            role: None,
+        },
+        FactorDeclaration {
+            name: "environment".to_string(),
+            kind: FactorKind::Environment,
+            granularity: None,
+            levels: envs
+                .iter()
+                .zip(own.environment_refs.iter())
+                .map(|(id, r)| decl_level(id, r, id))
+                .collect(),
+            role: None,
+        },
+        FactorDeclaration {
+            name: "summarizer_profile".to_string(),
+            kind: FactorKind::ModelSnapshot,
+            granularity: Some(Granularity::ComponentLevel),
+            levels: summarizers
+                .iter()
+                .zip(own.summarizer_profile_refs.iter())
+                .map(|(id, r)| decl_level(id, r, id))
+                .collect(),
+            role: None,
+        },
+    ];
+    let spec_factors = vec![
+        FactorSpec {
+            name: "compaction_strategy".to_string(),
+            kind: FactorKind::Harness,
+            granularity: Some(Granularity::ComponentLevel),
+            role: Some("primary".to_string()),
+            levels: strategy_levels,
+        },
+        FactorSpec {
+            name: "model_family".to_string(),
+            kind: FactorKind::ModelSnapshot,
+            granularity: None,
+            role: Some("blocking".to_string()),
+            levels: families
+                .iter()
+                .zip(own.model_family_refs.iter())
+                .map(|(id, r)| level(id, r, id))
+                .collect(),
+        },
+        FactorSpec {
+            name: "model_tier".to_string(),
+            kind: FactorKind::ModelSnapshot,
+            granularity: None,
+            role: Some("blocking".to_string()),
+            levels: tiers
+                .iter()
+                .zip(own.model_tier_refs.iter())
+                .map(|(id, r)| level(id, r, id))
+                .collect(),
+        },
+        FactorSpec {
+            name: "environment".to_string(),
+            kind: FactorKind::Environment,
+            granularity: None,
+            role: Some("blocking".to_string()),
+            levels: envs
+                .iter()
+                .zip(own.environment_refs.iter())
+                .map(|(id, r)| level(id, r, id))
+                .collect(),
+        },
+        FactorSpec {
+            name: "summarizer_profile".to_string(),
+            kind: FactorKind::ModelSnapshot,
+            granularity: Some(Granularity::ComponentLevel),
+            role: Some("blocking".to_string()),
+            levels: summarizers
+                .iter()
+                .zip(own.summarizer_profile_refs.iter())
+                .map(|(id, r)| level(id, r, id))
+                .collect(),
+        },
+    ];
+
+    // The primary contrast — the 5×2×2×3×2 full factorial as explicit
+    // arms (cells are arm × task; `expand` enumerates the replicates).
+    let mut arms = Vec::new();
+    for s in &own.strategies {
+        for (fam, _fr) in families.iter().zip(own.model_family_refs.iter()) {
+            for (tier, _tr) in tiers.iter().zip(own.model_tier_refs.iter()) {
+                for (env, _er) in envs.iter().zip(own.environment_refs.iter()) {
+                    for (summ, _sr) in summarizers.iter().zip(own.summarizer_profile_refs.iter()) {
+                        arms.push(arm(
+                            &format!("arm:{}.{fam}.{tier}.{env}.{summ}", s.level_id),
+                            &format!("{} at {fam}/{tier}/{env}/{summ}", s.label),
+                            &[
+                                ("compaction_strategy", s.level_id.as_str()),
+                                ("model_family", fam),
+                                ("model_tier", tier),
+                                ("environment", env),
+                                ("summarizer_profile", summ),
+                            ],
+                            compaction_match(),
+                            &s.artifact,
+                            pins,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    // The `window_ceiling` reference-only arm — outside the primary
+    // contrast (a fixed ceiling, no strategy variance; its MatchSpec pins
+    // the same budget shape but the arm is `role: reference` by
+    // construction: it never appears in a paired Δ on
+    // `compaction_strategy`).
+    let mut ceiling = arm(
+        "arm:window_ceiling.reference",
+        "reference-only ceiling — outside the primary contrast",
+        &[
+            ("compaction_strategy", "window_ceiling"),
+            ("model_family", "family:a"),
+            ("model_tier", "tier:1"),
+            ("environment", "env:terminal-bench-2.0"),
+            ("summarizer_profile", "summarizer:subject"),
+        ],
+        compaction_match(),
+        &own.window_ceiling.1,
+        pins,
+    );
+    ceiling.hypothesis = "reference-only: no primary contrast".to_string();
+    arms.push(ceiling);
+
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/compaction-family-v1".to_string(),
+            kind: DesignKind::FullFactorial,
+            factors: design_factors,
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: spec_factors,
+        arms,
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.compaction-family-v1.full"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/compaction-family-v1".to_string(),
+        },
+        ext: BTreeMap::from([
+            (
+                "reference_arm".to_string(),
+                Json::str("arm:window_ceiling.reference"),
+            ),
+            (
+                "optional_metrics".to_string(),
+                Json::Arr(vec![Json::str("grounding.summary_fidelity_judged")]),
+            ),
+            (
+                "retirement_companion".to_string(),
+                Json::str("lab/compaction-rule-retirement-v1"),
+            ),
+            (
+                "fractional_reduction".to_string(),
+                Json::str(
+                    "fractional_factorial{resolution: IV} admitted over the                      experiment ceiling — main effects + model × strategy only",
+                ),
+            ),
+        ]),
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}
+
+/// `lab/compaction-rule-retirement-v1` — the "retire rule R" companion arm
+/// §10.5.1 assigns the full family: a `retirement`-kind spec (T-LCD-05's
+/// "delete this rule" recipe) — `A` (the conditioned harness with rule R)
+/// vs `A − R` (the same definition minus R) under
+/// `MatchSpec{matched_cap, cold_start}` on the held-out split. The rule's
+/// `retirement_experiment` removal test instantiates it; `ext.debt_rule_id`
+/// names the `AssumptionDebtRecord` the diff settles.
+pub fn compaction_rule_retirement_v1(
+    pins: &ExemplarPins,
+    rule_id: &str,
+    with_rule: (&str, &Ref),
+    without_rule: (&str, &Ref),
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "the conditioned rule's benefit survives on the held-out split          (H0: no difference — H0 holding retires the assumption debt)",
+        &["capability.task_success"],
+        &[],
+        pins,
+    );
+    let factor = "conditioned_rule";
+    let level_pair = |id: &str, r: &Ref| LevelSpec {
+        level_id: id.to_string(),
+        ref_: r.version_id.clone(),
+        overrides: None,
+        label: id.to_string(),
+        class: ParticipantClass::Native,
+        non_portable: false,
+    };
+    let arm_of = |id: &str, lid: &str, artifact: &Ref| ArmSpec {
+        arm_id: id.to_string(),
+        hypothesis: "the removal diff".to_string(),
+        level_assignment: [(factor.to_string(), lid.to_string())]
+            .into_iter()
+            .collect(),
+        eval_budget: pins.eval_budget.clone(),
+        search_budget: Some(pins.search_budget.clone()),
+        inference_budget: None,
+        match_spec: Some(compaction_match()),
+        artifact_ref: artifact.clone(),
+        limits_enforced: "full".to_string(),
+        model_role_table_ref: None,
+        response_cache: None,
+        ensemble_k: None,
+    };
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Retirement,
+        design: Design {
+            id: "lab/compaction-rule-retirement-v1".to_string(),
+            kind: DesignKind::Paired,
+            factors: vec![],
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: vec![FactorSpec {
+            name: factor.to_string(),
+            kind: FactorKind::Harness,
+            granularity: Some(Granularity::ComponentLevel),
+            role: Some("primary".to_string()),
+            levels: vec![
+                level_pair("with-rule", with_rule.1),
+                level_pair("without-rule", without_rule.1),
+            ],
+        }],
+        arms: vec![
+            arm_of("a", "with-rule", with_rule.1),
+            arm_of("a-minus-r", "without-rule", without_rule.1),
+        ],
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.compaction-rule-retirement-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/compaction-rule-retirement-v1".to_string(),
+        },
+        ext: BTreeMap::from([("debt_rule_id".to_string(), Json::str(rule_id.to_string()))]),
     };
     spec.experiment_id = spec.experiment_id();
     spec
@@ -1564,6 +1995,214 @@ pub fn retrieval_index_v1(
             name: "lab/retrieval-index-v1".to_string(),
         },
         ext: BTreeMap::new(),
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}
+
+// ── lab/retrieval-ranker-v1 (AC-R-2.4.3-10; ADR-0080 executed) ──────────────
+
+/// The level pins `lab/retrieval-ranker-v1` binds, beyond [`ExemplarPins`]
+/// (AC-R-2.4.3-10 — deterministic vs similarity under matched budget).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RetrievalRankerPins {
+    /// `deterministic_default` ranker level ref.
+    pub deterministic_default_ref: String,
+    /// `lexical_weighted` ranker level ref.
+    pub lexical_weighted_ref: String,
+    /// `structural_pagerank` ranker level ref.
+    pub structural_pagerank_ref: String,
+    /// `similarity_rerank` ranker level ref — the pinned `Embedder` port's
+    /// `ModelProfile`/`ResourceAccount` binding lives inside the level's
+    /// sealed definition (the C2 arm refuses `EmbedderUnpinned` without
+    /// it — never a silent fallback).
+    pub similarity_rerank_ref: String,
+    /// The single model level ref.
+    pub model_level_ref: String,
+    /// The single environment level ref — a **memory-dependent** family
+    /// (the suite binds the memory-dependent tasks).
+    pub environment_level_ref: String,
+    /// The sealed artifacts the four arms bind, in ranker order.
+    pub artifacts: (Ref, Ref, Ref, Ref),
+}
+
+/// `lab/retrieval-ranker-v1` (AC-R-2.4.3-10): `comparative`, `paired` on
+/// task over `ranker ∈ {deterministic_default, lexical_weighted,
+/// structural_pagerank, similarity_rerank}` on a memory-dependent family —
+/// `eval_budget` equality (`MatchSpec{matched_cap}`) with embedder
+/// `model_call`s counted into the arm's `model_calls` constituent (the
+/// `embedder_calls` column on the `RetrievalReport` — never off-ledger);
+/// reports the per-configuration distributions and
+/// `harness_overhead.retrieval`. `similarity_rerank` is the declared C2
+/// arm (`deterministic = false` — its runs carry the drift annotation the
+/// pinned-embedder record produces).
+pub fn retrieval_ranker_v1(
+    pins: &ExemplarPins,
+    own: &RetrievalRankerPins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "similarity_rerank vs the deterministic rankers on grounding.         reacquisition_rate at matched budget — embedder model calls counted          (AC-R-2.4.3-10)",
+        &[
+            "grounding.reacquisition_rate",
+            "capability.task_success",
+            "efficiency.tokens_total",
+            "harness_overhead.retrieval",
+        ],
+        &[],
+        pins,
+    );
+    let rankers = [
+        (
+            "deterministic_default",
+            own.deterministic_default_ref.as_str(),
+            "deterministic default",
+        ),
+        (
+            "lexical_weighted",
+            own.lexical_weighted_ref.as_str(),
+            "lexical weighted",
+        ),
+        (
+            "structural_pagerank",
+            own.structural_pagerank_ref.as_str(),
+            "structural pagerank",
+        ),
+        (
+            "similarity_rerank",
+            own.similarity_rerank_ref.as_str(),
+            "similarity rerank (C2)",
+        ),
+    ];
+    let levels: Vec<FactorLevel> = rankers
+        .iter()
+        .map(|(id, r, l)| decl_level(id, r, l))
+        .collect();
+    let artifacts = [
+        &own.artifacts.0,
+        &own.artifacts.1,
+        &own.artifacts.2,
+        &own.artifacts.3,
+    ];
+    let arms: Vec<ArmSpec> = rankers
+        .iter()
+        .zip(artifacts.iter())
+        .map(|((id, _, label), artifact)| {
+            arm(
+                &format!("arm:{id}"),
+                label,
+                &[
+                    ("ranker", id),
+                    ("model_snapshot", "model:fixed"),
+                    ("environment", "memory_dependent"),
+                ],
+                context_builder_match(),
+                artifact,
+                pins,
+            )
+        })
+        .collect();
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/retrieval-ranker-v1".to_string(),
+            kind: DesignKind::Paired,
+            factors: vec![
+                FactorDeclaration {
+                    name: "ranker".to_string(),
+                    kind: FactorKind::Harness,
+                    granularity: Some(Granularity::ComponentLevel),
+                    levels: levels.clone(),
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "model_snapshot".to_string(),
+                    kind: FactorKind::ModelSnapshot,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "model:fixed",
+                        &own.model_level_ref,
+                        "fixed model",
+                    )],
+                    role: None,
+                },
+                FactorDeclaration {
+                    name: "environment".to_string(),
+                    kind: FactorKind::Environment,
+                    granularity: None,
+                    levels: vec![decl_level(
+                        "memory_dependent",
+                        &own.environment_level_ref,
+                        "memory-dependent family",
+                    )],
+                    role: None,
+                },
+            ],
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors: vec![
+            FactorSpec {
+                name: "ranker".to_string(),
+                kind: FactorKind::Harness,
+                granularity: Some(Granularity::ComponentLevel),
+                role: Some("primary".to_string()),
+                levels: levels
+                    .iter()
+                    .map(|l| level(&l.id, &l.content_ref, &l.label))
+                    .collect(),
+            },
+            FactorSpec {
+                name: "model_snapshot".to_string(),
+                kind: FactorKind::ModelSnapshot,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level("model:fixed", &own.model_level_ref, "fixed model")],
+            },
+            FactorSpec {
+                name: "environment".to_string(),
+                kind: FactorKind::Environment,
+                granularity: None,
+                role: Some("blocking".to_string()),
+                levels: vec![level(
+                    "memory_dependent",
+                    &own.environment_level_ref,
+                    "memory-dependent family",
+                )],
+            },
+        ],
+        arms,
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.retrieval-ranker-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/retrieval-ranker-v1".to_string(),
+        },
+        ext: BTreeMap::from([(
+            "embedder_calls_charged_to".to_string(),
+            Json::str("subject"),
+        )]),
     };
     spec.experiment_id = spec.experiment_id();
     spec

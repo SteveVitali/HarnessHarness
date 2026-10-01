@@ -458,12 +458,18 @@ pub fn compaction_completed(record: &crate::compact::CompactionRecord) -> Json {
             Json::obj([
                 ("charged_to", Json::str("subject")),
                 ("attribution", Json::str("harness_overhead.compaction")),
-                ("model_calls", Json::Int(0)),
+                (
+                    "model_calls",
+                    Json::Int(i64::from(record.summariser_usage.is_some())),
+                ),
             ]),
         ),
     ];
     if let Some(s) = &record.summary_ref {
         v.push(("summary_ref", Json::str(s.clone())));
+    }
+    if let Some(r) = &record.forgotten_range {
+        v.push(("forgotten_range", Json::str(r.clone())));
     }
     if let Some(f) = &record.fallback_variant {
         v.push(("fallback_variant", Json::str(f.clone())));

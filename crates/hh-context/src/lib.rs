@@ -49,6 +49,7 @@
 pub mod assemble;
 pub mod codec;
 pub mod compact;
+pub mod compact_family;
 pub mod consolidate;
 pub mod events;
 pub mod k4;
@@ -59,6 +60,7 @@ pub mod memory;
 pub mod memory_abi;
 pub mod plan;
 pub mod policy;
+pub mod policy_family;
 pub mod procedure;
 pub mod retrieve;
 pub mod vocab;

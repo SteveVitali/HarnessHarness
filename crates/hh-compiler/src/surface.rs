@@ -380,6 +380,17 @@ pub fn surface_id(b: &crate::equiv::SurfaceBinding) -> String {
         ("pinned", Json::Bool(b.pinned)),
         ("hidden", Json::Bool(b.hidden)),
         ("arg_map", crate::schema::arg_map_json_pub(&b.arg_map)),
+        // The `mapping` kind + the PlanMap's pin belong in the basis — a
+        // PlanMap composite and an ArgMap surface of the same name/args are
+        // different surfaces (CC1; ADR-0090 D6).
+        ("mapping", Json::str(b.mapping.as_str())),
+        (
+            "plan_ref",
+            match &b.mapping {
+                BindingMapping::PlanMap(p) => Json::str(p.clone()),
+                BindingMapping::SurfaceArgMap => Json::Null,
+            },
+        ),
     ]);
     idp_id(
         RecordKind::ToolSurface.domain_tag(),
