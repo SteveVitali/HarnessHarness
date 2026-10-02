@@ -143,6 +143,12 @@ pub enum RecordKind {
     /// the address identifies *this* binding record, never replays).
     /// Version-only.
     ComputeDecisionRecord,
+    /// An `InclusionProbabilities` record (§6.3 §2.5/§5e.4 "Lab-side
+    /// value-of-information"; ADR-0190 D7, AC-F4-13) — the adaptive
+    /// allocator's recorded per-plan inclusion table for one allocation
+    /// round. Every adaptive `run_launched`/`analysis` row under a
+    /// `voi_weighted` strategy names this record by ref. Version-only.
+    InclusionProbabilities,
 }
 
 impl RecordKind {
@@ -188,6 +194,7 @@ impl RecordKind {
             RecordKind::AnalysisRecord => "analysis_record",
             RecordKind::ModelSnapshot => "model_snapshot",
             RecordKind::ComputeDecisionRecord => "compute_decision",
+            RecordKind::InclusionProbabilities => "inclusion_probabilities",
         }
     }
 
@@ -301,6 +308,7 @@ mod tests {
             RecordKind::AnalysisRecord,
             RecordKind::ModelSnapshot,
             RecordKind::ComputeDecisionRecord,
+            RecordKind::InclusionProbabilities,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for k in kinds {

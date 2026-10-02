@@ -1209,6 +1209,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("measurement.experiment.closed", "none"),
     ("measurement.experiment.declared", "none"),
     ("measurement.experiment.drift_bracket", "none"),
+    ("measurement.experiment.inclusion_probabilities", "none"),
     ("measurement.experiment.paused", "none"),
     ("measurement.experiment.resumed", "none"),
     ("measurement.experiment.run_bound", "none"),
@@ -1300,6 +1301,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("security.secret.redacted", "hint"),
     // ── verification:artefact ──
     ("verification.artefact.followed", "hint"),
+    // ── verification:belief ──
+    ("verification.belief.probe", "hint"),
     // ── verification:claim ──
     ("verification.claim.reconciled", "hint"),
     ("verification.claim.recorded", "hint"),
@@ -1898,6 +1901,13 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_prov("measurement.experiment.resumed",          Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.drift_bracket",    Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.bundle_assembled", Led, O::Events, false, false, true,  None, None),
+    // S5.5 (§5e.3; ADR-0190 D7): the `voi_weighted` allocator's per-round
+    // inclusion table — `{record_id, strategy, estimator, round, per_plan,
+    // picked, charged_to: instrument}`. Durable + provenance-mandatory like
+    // the rest of the run family (the pick is replay-sensitive: the same
+    // table must re-derive the same plan under `rebuild`).
+    row_prov("measurement.experiment.inclusion_probabilities",
+                                                    Led, O::Events, false, false, true,  None, None),
 
     // ── measurement.analysis / measurement.leaderboard (§6.4/§9.2; R-2.10.4⁰ᵃ;
     // S1.24) — analysis records and leaderboard publications. The leaderboard
@@ -1926,6 +1936,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_prov("verification.claim.reconciled",   Led, O::Events, false, false, true,  None, None),
     row_prov("verification.completion.proposed",Led, O::Events, false, false, true,  None, None),
     row_prov("verification.artefact.followed",  Led, O::Events, false, false, true,  None, None),
+    // S5.5 (§5f.3; ADR-0114 D1): the per-step belief-probe record the
+    // `belief_probe` ProfileRule emits (C2; `requires_observability =
+    // model_io`, every reading `provisional`). Declared now so the dialect
+    // table is complete — the runtime emitter lands with the reconciler.
+    row_prov("verification.belief.probe",     Led, O::Events, false, false, true,  None, None),
     // `verification.gate.evaluated` / `verification.completion.decided` are
     // audit-grade (§5g.6 §3) — the gate verdicts are consequential decisions.
     row_audit("verification.gate.evaluated",      O::Events, true,  OPEN_AUDIT, &[], None, None),
@@ -2214,6 +2229,7 @@ mod tests {
             "measurement.experiment.resumed",
             "measurement.experiment.drift_bracket",
             "measurement.experiment.bundle_assembled",
+            "measurement.experiment.inclusion_probabilities",
         ];
         for c in experiment_rows {
             let spec = lookup(c).unwrap_or_else(|| panic!("{c} not registered"));

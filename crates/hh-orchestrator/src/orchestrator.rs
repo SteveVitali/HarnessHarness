@@ -131,6 +131,16 @@ impl Orchestrator {
                 ),
             }));
         }
+        // T3 admits `depth ≥ 1` — a `depth = 0` `recursive` preset has no
+        // arm (the caller's `depth_cap ≥ 2` carries the ticket's bound;
+        // depth-1 leaves are still well-formed).
+        if let TopologyPreset::T3Recursive { depth } = preset {
+            if *depth == 0 {
+                return Err(SpawnError::Refused(SpawnRefused::ModeUnsupported {
+                    detail: "topology t3 binds depth ≥ 1".to_string(),
+                }));
+            }
+        }
         let expected = match preset {
             TopologyPreset::T0Single => Some(0),
             TopologyPreset::T1OrchestratorWorker { fan_out } => Some(*fan_out as usize),
@@ -162,6 +172,31 @@ impl Orchestrator {
                     "wait {wait_label} cannot be satisfied by {stage_count} child stage(s)"
                 ),
             }));
+        }
+        // T3 (§5e.3; R-2.6.3 Stage 5) — `depth` is the declared recursion
+        // bound, not commentary: a `depth = d` arm's children are
+        // full-harness runs that may themselves orchestrate to `d − 1`,
+        // so each child spec's `budget_spec` must carry a
+        // `delegation_depth` ceiling ≥ `d − 1` — the spawn kernel's
+        // `delegation_depth + 1 ≤ cap` gauge enforces per level from
+        // there (attenuation does the rest; no rule is re-checked here).
+        if let TopologyPreset::T3Recursive { depth } = preset {
+            let needed = u64::from(*depth - 1);
+            for s in &stages {
+                let cap = s
+                    .budget_spec
+                    .hard(hh_ontology::dimensions::DimensionKey::Primary(
+                        hh_ontology::dimensions::DimensionId::DelegationDepth,
+                    ))
+                    .unwrap_or(0)
+                    .max(0) as u64;
+                if cap < needed {
+                    return Err(SpawnError::Refused(SpawnRefused::Depth {
+                        depth: u64::from(*depth),
+                        cap,
+                    }));
+                }
+            }
         }
         let declared = preset.delegation_reason();
         for (i, s) in stages.iter_mut().enumerate() {

@@ -194,6 +194,10 @@ pub struct ExperimentView {
     pub plans: BTreeMap<String, PlanState>,
     /// `cell_id → accepted count` (completed cells).
     pub cells_completed: BTreeMap<String, u32>,
+    /// The recorded `voi_weighted` allocation rounds (the next round's
+    /// replayable ordinal — `measurement.experiment.inclusion_probabilities`
+    /// rows only ever append; AC-F4-13).
+    pub inclusion_rounds: u64,
     /// The live pause reason (`paused` minus `resumed`).
     pub paused: Option<String>,
     /// The `closed` payload (`Some` = closed).
@@ -421,6 +425,9 @@ impl ExperimentView {
                     let n = i(p, "accepted").unwrap_or(0) as u32;
                     self.cells_completed.insert(cid, n);
                 }
+            }
+            c if c == class::INCLUSION_PROBABILITIES => {
+                self.inclusion_rounds += 1;
             }
             c if c == class::PAUSED => {
                 self.paused = Some(s(p, "reason").unwrap_or_else(|| "operator".to_string()));

@@ -95,7 +95,7 @@ impl CoordinationFactors {
     pub fn to_json(&self) -> Json {
         Json::obj([
             ("topology", Json::str(self.topology.as_str())),
-            ("merge_policy", Json::str(self.merge_policy.as_str())),
+            ("merge_policy", Json::str(self.merge_policy.spelling())),
             ("default_isolation", Json::str(&self.default_isolation)),
         ])
     }

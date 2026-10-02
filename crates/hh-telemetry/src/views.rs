@@ -369,6 +369,65 @@ fn parent_scope(
     None
 }
 
+/// One `explains[]` row — the decided record's explain projection:
+/// `{seq, event_id, record_id, decision_id, decision_point, variant,
+/// chosen, rules_fired[], priors_used[], binding, rationale,
+/// fallback}` (the `rules` fallback spelling shows as
+/// `variant = rules` + a `*.cold_start` marker in `rules_fired` — the
+/// decided row's own record, never a re-fold).
+fn explain_row(env: &EventEnvelope) -> Json {
+    let p = &env.payload;
+    let variant = p
+        .get("estimator_ref")
+        .and_then(|e| e.get("variant_ref"))
+        .and_then(Json::as_str)
+        .unwrap_or("");
+    let chosen = p
+        .get("chosen")
+        .and_then(|c| c.get("kind"))
+        .and_then(Json::as_str)
+        .unwrap_or("");
+    let fired: Vec<&str> = match p.get("rules_fired") {
+        Some(Json::Arr(a)) => a.iter().filter_map(Json::as_str).collect(),
+        _ => vec![],
+    };
+    let fallback = fired.iter().any(|f| f.ends_with(".cold_start"));
+    Json::obj([
+        ("seq", Json::Int(env.seq as i64)),
+        ("event_id", Json::str(env.event_id.as_str())),
+        (
+            "record_id",
+            p.get("record_id")
+                .and_then(Json::as_str)
+                .map(Json::str)
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "decision_id",
+            p.get("decision_id")
+                .and_then(Json::as_str)
+                .map(Json::str)
+                .unwrap_or(Json::Null),
+        ),
+        ("variant", Json::str(variant)),
+        ("chosen", Json::str(chosen)),
+        (
+            "rules_fired",
+            Json::Arr(fired.iter().map(|f| Json::str(*f)).collect()),
+        ),
+        (
+            "priors_used",
+            p.get("priors_used").cloned().unwrap_or(Json::Arr(vec![])),
+        ),
+        ("cell", p.get("cell").cloned().unwrap_or(Json::Null)),
+        ("fallback", Json::Bool(fallback)),
+        (
+            "rationale",
+            p.get("rationale").cloned().unwrap_or(Json::Null),
+        ),
+    ])
+}
+
 /// `trace_view` — the §5h.1 §3 span projection. `events` is the prefix to fold
 /// (ordinarily `Store::read`'s durable vector); `until_seq` bounds it.
 /// `clock_tolerance_ms` is the manifest's `clock_tolerance_ms`
@@ -516,6 +575,18 @@ pub fn trace_view(
         .iter()
         .filter(|s| s.status == SpanStatus::Closed)
         .count();
+    // S5.5/AC-F4-8 (#963) — the scheduler's `explain` surface rides the
+    // trace view: one row per `control.compute.decided` carrying the
+    // record's explain members (the ranked rules — fired, skipped-unknown,
+    // skipped-infeasible — plus the `rules` fallback spelling a
+    // `bandit`/`surface_prior` cold-start records). Additive view member;
+    // the §5h.1 scope taxonomy stays the spec sixteen.
+    let explains: Vec<Json> = events
+        .iter()
+        .filter(|e| until_seq.is_none_or(|u| e.seq <= u))
+        .filter(|e| e.class == "control.compute.decided")
+        .map(explain_row)
+        .collect();
     let payload = Json::obj([
         ("kind", Json::str("trace_view")),
         ("run_id", Json::str(run_id)),
@@ -528,6 +599,7 @@ pub fn trace_view(
         ("span_count", Json::Int(rendered.len() as i64)),
         ("closed_count", Json::Int(closed as i64)),
         ("open_count", Json::Int((rendered.len() - closed) as i64)),
+        ("explains", Json::Arr(explains)),
     ]);
     View::stamped(run_id, ViewKind::TraceView, watermark, payload)
 }
@@ -1089,6 +1161,14 @@ pub fn metric_view(
                 FoldStatus::Computable => compute_metric(m.name, &ev),
             }
         };
+        // AC-R-2.7.2b-6 — `belief_divergence` renders `provisional` on every
+        // report (single-origin until corroborated; the label rides the
+        // cell even when the reading is `n/a{observability}`).
+        let cell = if m.name == "belief_divergence" {
+            Json::obj([("provisional", Json::Bool(true)), ("value", cell)])
+        } else {
+            cell
+        };
         metrics.insert(m.name.to_string(), cell);
     }
 
@@ -1276,6 +1356,21 @@ fn compute_metric(name: &str, ev: &[&EventEnvelope]) -> Json {
         // static run's share cells stay honest `n/a`-less zeros only where
         // the metric is a count; share/rate over an empty set is
         // `n/a{estimator_undefined}`, never a fabricated 0).
+        "belief_divergence" => {
+            // Project envelopes to `RowView` and call the one fold
+            // (hh-verification owns the probe record — CC7).
+            let rows: Vec<hh_verification::bind::RowView<'_>> = ev
+                .iter()
+                .map(|e| hh_verification::bind::RowView {
+                    seq: e.seq,
+                    class: &e.class,
+                    payload: &e.payload,
+                    authority: hh_provenance::authority::AuthorityClass::Kernel,
+                    scope_effect_id: None,
+                })
+                .collect();
+            hh_verification::belief_probe::belief_divergence(&rows)
+        }
         "scheduling.decision_count" => Json::Int(count(&["control.compute.decided"])),
         "scheduling.option_share" => {
             let mut kinds: BTreeMap<String, i64> = BTreeMap::new();

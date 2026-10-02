@@ -54,7 +54,7 @@ use hh_budget::{BudgetEnforcement, MatchMode, MatchSpec};
 use hh_lab::expand::{order_key, ArmConfiguration, ExpandContext, ExpandError, ExpandTask};
 use hh_lab::experiment::{
     ArmSpec, BudgetRelevantParam, CancelPolicy, CellPlan, ExperimentRefusal, ExperimentSpec,
-    RetirementDiffResolver, SpecContext,
+    RetirementDiffResolver, SpecContext, ValidationStrategy,
 };
 use hh_ledger::event::{Event, Producer, Scope};
 use hh_ledger::leases::LeaseScope;
@@ -778,9 +778,76 @@ impl<'a> ExperimentEngine<'a> {
                 None => NextVerdict::Wait,
             });
         }
+        // §5e.4 / AC-F4-13 — a `voi_weighted` strategy re-weights the
+        // dispatchable set by value of information and records the
+        // inclusion table before the pick (`full_set` never reaches this
+        // arm; the recorded `order_pos` list is untouched — V-4).
+        let mut head_idx = 0usize;
+        if let Some(sp) = &spec {
+            if let ValidationStrategy::VoiWeighted {
+                estimator,
+                lambda,
+                min_inclusion_fraction_ppm,
+                min_replicates,
+            } = &sp.validation_strategy
+            {
+                let params = hh_lab::adaptive::VoiParams {
+                    estimator: match estimator.as_str() {
+                        "expected_information_gain" => "expected_information_gain",
+                        _ => "disagreement",
+                    },
+                    lambda: *lambda,
+                    min_inclusion_fraction_ppm: *min_inclusion_fraction_ppm,
+                    min_replicates: *min_replicates,
+                };
+                // Per-cell settled-outcome statistics — the estimator's
+                // `p̄` is the scored fraction of settled attempts.
+                let mut stats: BTreeMap<String, hh_lab::adaptive::CellStats> = BTreeMap::new();
+                for ps in view.plans.values() {
+                    let st = stats.entry(ps.cell_id.clone()).or_default();
+                    for a in &ps.attempts {
+                        if a.superseded {
+                            continue;
+                        }
+                        if let Some(oc) = &a.outcome {
+                            st.completed += 1;
+                            if *oc == OutcomeClass::Scored {
+                                st.scored += 1;
+                            }
+                        }
+                    }
+                }
+                let candidates: Vec<(String, String)> = dispatchable
+                    .iter()
+                    .map(|ps| (ps.run_plan_id.clone(), ps.cell_id.clone()))
+                    .collect();
+                let stats_of = |cell: &str| stats.get(cell).copied().unwrap_or_default();
+                if let Some(rec) = hh_lab::adaptive::voi_allocate(
+                    &params,
+                    &candidates,
+                    &stats_of,
+                    &sp.scheduling.permutation_seed,
+                    view.inclusion_rounds,
+                ) {
+                    head_idx = dispatchable
+                        .iter()
+                        .position(|ps| ps.run_plan_id == rec.picked)
+                        .unwrap_or(0);
+                    self.append_chained(
+                        &run_id,
+                        &lease,
+                        vec![self.mint(
+                            &run_id,
+                            class::INCLUSION_PROBABILITIES,
+                            ev::inclusion_probabilities(&rec),
+                        )?],
+                    )?;
+                }
+            }
+        }
         // The pool must fund the next slice — else pause `budget_exhausted`
         // (E-2; the experiment never trims a run mid-flight).
-        let head = dispatchable[0];
+        let head = dispatchable[head_idx];
         if let Err(e) = self.slice_affordable(&run_id, &lease, &view, head) {
             return match e {
                 ExperimentError::InsufficientBudget { .. } => {
