@@ -41,7 +41,7 @@ fn req_str<'a>(j: &'a Json, k: &str) -> Result<&'a str, EmbedError> {
 }
 
 #[cfg(feature = "tier-c4")]
-mod imp {
+pub(crate) mod imp {
     use super::{bad, req, req_str};
     use hh_embed_schema::errors::EmbedError;
     use hh_evolution::campaign::{doc_kind, EvolutionCampaign};
@@ -83,7 +83,7 @@ mod imp {
 
     /// The campaign engine for `run` — cached engine or `ensure` from the
     /// durable prefix (the writer lease re-acquires under the fence).
-    fn campaign<'m>(
+    pub(crate) fn campaign<'m>(
         engines: &'m mut BTreeMap<String, EvolutionCampaign>,
         store: &mut Store,
         docs: hh_experiment::docs::LabDocs,
@@ -299,6 +299,22 @@ mod imp {
                     Some(Json::Arr(a)) => a.clone(),
                     _ => vec![],
                 };
+                // S6.4 (R-2.9.5 6d): `retrained_pin` — the SnapshotClaim
+                // the candidate's S6 profile pins when it names a
+                // retrained policy; its presence switches on the
+                // `model_version_change`-scoped debt check
+                // (policy-conditioned expiry; ADR-0194 D6).
+                let retrained_pin = match params.get("retrained_pin") {
+                    Some(j) if !matches!(j, Json::Null) => Some(
+                        hh_lab::model::SnapshotClaim::from_json(j).map_err(|e| {
+                            EmbedError::SchemaViolation {
+                                path: "/retrained_pin".into(),
+                                code: format!("{e:?}"),
+                            }
+                        })?,
+                    ),
+                    _ => None,
+                };
                 let docs = svc.lab_docs()?;
                 let eng = campaign(&mut svc.evolution_campaigns, &mut svc.store, docs, &run)?;
                 eng.canary_settle(
@@ -307,6 +323,7 @@ mod imp {
                     &status,
                     &reason,
                     &conditioned_debts,
+                    retrained_pin.as_ref(),
                 )
                 .map_err(evo_err)?;
                 Ok(Json::obj([("status", Json::str(&status))]))

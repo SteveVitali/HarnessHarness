@@ -1509,7 +1509,7 @@ fn pipeline_walks_s0_to_s10_happy_path() {
     eng.canary(&mut store, &cid, "shadow", "int:counterfactual-1")
         .unwrap_or_else(|e| panic!("canary: {e}"));
     assert_eq!(eng.view.state_of(&cid), Some("canary"));
-    eng.canary_settle(&mut store, &cid, "clean", "", &[])
+    eng.canary_settle(&mut store, &cid, "clean", "", &[], None)
         .unwrap_or_else(|e| panic!("canary_settle: {e}"));
     assert_eq!(eng.view.state_of(&cid), Some("active"));
 
@@ -1628,7 +1628,7 @@ fn stage_kind_admission_refuses_mismatched_specs() {
     let cid = propose_ok(&mut store, &mut eng, &base, &target);
     advance_to_sealed(&mut store, &docs, &mut eng, &cid, "b");
     eng.canary(&mut store, &cid, "shadow", "int:1").unwrap();
-    eng.canary_settle(&mut store, &cid, "clean", "", &[])
+    eng.canary_settle(&mut store, &cid, "clean", "", &[], None)
         .unwrap();
     eng.expire(&mut store, &cid, "deadline").unwrap();
     let eval = stage_spec(
@@ -1661,7 +1661,7 @@ fn canary_abort_withdraw_and_revert_land_terminal_rows() {
     advance_to_sealed(&mut store, &docs, &mut eng, &cid, "c");
     eng.canary(&mut store, &cid, "shadow", "int:1").unwrap();
     let e = eng
-        .canary_settle(&mut store, &cid, "veto", "safety regression", &[])
+        .canary_settle(&mut store, &cid, "veto", "safety regression", &[], None)
         .unwrap_err();
     assert!(matches!(refusal(&e), Refusal::CanaryAborted { .. }));
     assert_eq!(eng.view.state_of(&cid), Some("reverted"));

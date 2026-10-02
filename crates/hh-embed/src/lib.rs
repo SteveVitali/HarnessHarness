@@ -31,6 +31,7 @@ pub(crate) mod analysis_ops;
 mod assembly_ops;
 pub(crate) mod attribution_ops;
 pub(crate) mod bundle_ops;
+pub(crate) mod coevolution_ops;
 pub(crate) mod debt_manager_ops;
 pub(crate) mod debt_ops;
 pub(crate) mod durability_ops;

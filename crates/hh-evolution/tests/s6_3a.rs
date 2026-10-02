@@ -1786,7 +1786,7 @@ fn rebase_replays_the_same_edit_onto_a_moved_head() {
         .unwrap_or_else(|e| panic!("seal A: {e}"));
     eng.canary(&mut store, &a, "shadow", "int:1")
         .unwrap_or_else(|e| panic!("canary A: {e}"));
-    eng.canary_settle(&mut store, &a, "clean", "", &[])
+    eng.canary_settle(&mut store, &a, "clean", "", &[], None)
         .unwrap_or_else(|e| panic!("settle A: {e}"));
     let head = eng.view.head_ref().expect("A is active — head moved");
 
@@ -1875,7 +1875,7 @@ fn rebase_refuses_a_changed_edit_and_earlier_states() {
     eng.seal(&mut store, &a, &acceptance(true), &human_seal())
         .unwrap();
     eng.canary(&mut store, &a, "shadow", "int:1").unwrap();
-    eng.canary_settle(&mut store, &a, "clean", "", &[]).unwrap();
+    eng.canary_settle(&mut store, &a, "clean", "", &[], None).unwrap();
     let head = eng.view.head_ref().unwrap();
 
     // A rebase naming the wrong base → StaleBase, candidate rejected.
@@ -1934,7 +1934,7 @@ fn rebase_folds_identically_through_ensure() {
     eng.seal(&mut store, &a, &acceptance(true), &human_seal())
         .unwrap();
     eng.canary(&mut store, &a, "shadow", "int:1").unwrap();
-    eng.canary_settle(&mut store, &a, "clean", "", &[]).unwrap();
+    eng.canary_settle(&mut store, &a, "clean", "", &[], None).unwrap();
     let head = eng.view.head_ref().unwrap();
     eng.rebase(
         &mut store,

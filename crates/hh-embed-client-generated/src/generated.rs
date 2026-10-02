@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:6d66d2c18e53f110c878c2f8f815ee43204514091dcc7b001fd522a8804d92f5";
+    "sha256:95be8e853aa18b90efaa19374e51d25c4c7fb15ceacf7d99b5aaee697ccd9848";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -6977,6 +6977,114 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.coevolution.consolidation_candidates` → `json` (see the contract registry).
+    pub fn lab_coevolution_consolidation_candidates(
+        &mut self,
+        params: &Json,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.consolidation_candidates", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.consolidation_retirement_record` → `json` (see the contract registry).
+    pub fn lab_coevolution_consolidation_retirement_record(
+        &mut self,
+        params: &Json,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call(
+            "lab.coevolution.consolidation_retirement_record",
+            params.clone(),
+        )?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.cycle_begin_phase` → `json` (see the contract registry).
+    pub fn lab_coevolution_cycle_begin_phase(
+        &mut self,
+        params: &Json,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.cycle_begin_phase", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.cycle_complete_phase` → `json` (see the contract registry).
+    pub fn lab_coevolution_cycle_complete_phase(
+        &mut self,
+        params: &Json,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.cycle_complete_phase", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.cycle_next` → `json` (see the contract registry).
+    pub fn lab_coevolution_cycle_next(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.cycle_next", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.cycle_open` → `json` (see the contract registry).
+    pub fn lab_coevolution_cycle_open(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.cycle_open", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.cycle_record` → `json` (see the contract registry).
+    pub fn lab_coevolution_cycle_record(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.cycle_record", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.cycle_stop` → `json` (see the contract registry).
+    pub fn lab_coevolution_cycle_stop(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.cycle_stop", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.export_compatibility_tags` → `json` (see the contract registry).
+    pub fn lab_coevolution_export_compatibility_tags(
+        &mut self,
+        params: &Json,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.export_compatibility_tags", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.export_regression_suite` → `json` (see the contract registry).
+    pub fn lab_coevolution_export_regression_suite(
+        &mut self,
+        params: &Json,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.export_regression_suite", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.export_training` → `json` (see the contract registry).
+    pub fn lab_coevolution_export_training(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.export_training", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.guard_at_bind` → `json` (see the contract registry).
+    pub fn lab_coevolution_guard_at_bind(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.guard_at_bind", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.import_snapshot` → `json` (see the contract registry).
+    pub fn lab_coevolution_import_snapshot(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.import_snapshot", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.coevolution.propose_consolidation` → `json` (see the contract registry).
+    pub fn lab_coevolution_propose_consolidation(
+        &mut self,
+        params: &Json,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("lab.coevolution.propose_consolidation", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.debt.evaluate` → `json` (see the contract registry).
     pub fn lab_debt_evaluate(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.debt.evaluate", params.clone())?;
@@ -6992,6 +7100,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.debt.manager_open` → `json` (see the contract registry).
     pub fn lab_debt_manager_open(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.debt.manager_open", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.debt.post_import_sweep` → `json` (see the contract registry).
+    pub fn lab_debt_post_import_sweep(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.post_import_sweep", params.clone())?;
         Ok(raw)
     }
 
@@ -7388,6 +7502,21 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.model.snapshot_claim` → `json` (see the contract registry).
     pub fn lab_model_snapshot_claim(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.model.snapshot_claim", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.org_policy.default_removal_tests` → `json` (see the contract registry).
+    pub fn lab_org_policy_default_removal_tests(
+        &mut self,
+        params: &Json,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("lab.org_policy.default_removal_tests", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.org_policy.recipe` → `json` (see the contract registry).
+    pub fn lab_org_policy_recipe(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.org_policy.recipe", params.clone())?;
         Ok(raw)
     }
 

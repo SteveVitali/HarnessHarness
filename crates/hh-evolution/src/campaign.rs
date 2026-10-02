@@ -2743,6 +2743,13 @@ impl EvolutionCampaign {
     ////`veto` reverts (`reverted{from: canary}` — the revert landing is
     /// the pipeline's own transition; the sealed-ancestor restore rides
     /// `hh-hir`'s `invert` on the caller's side).
+    ///
+    /// `retrained_pin` (S6.4; R-2.9.5 6d — the *policy-conditioned
+    /// expiry* leg): when the candidate's S6 profile pins a retrained
+    /// snapshot, every conditioned rule's debt must carry
+    /// `expiry.condition = model_version_change` scoped to the pin —
+    /// `ConditionedRuleIncomplete` otherwise (records-in; `None` =
+    /// no retrained pin, the leg is vacuous).
     pub fn canary_settle(
         &mut self,
         store: &mut Store,
@@ -2750,6 +2757,7 @@ impl EvolutionCampaign {
         status: &str,
         reason: &str,
         conditioned_debts: &[Json],
+        retrained_pin: Option<&hh_lab::model::SnapshotClaim>,
     ) -> Res<()> {
         self.require_open()?;
         self.bound(store)?;
@@ -2776,6 +2784,20 @@ impl EvolutionCampaign {
                             None,
                         ));
                     }
+                }
+                // S6.4 — the retrained-policy expiry leg: a pin to a
+                // retrained snapshot needs the version-scoped debt
+                // (records-in; the refusal rides the same
+                // `ConditionedRuleIncomplete` code).
+                if let Err(e) = crate::consolidation::check_retrained_pin_scope(
+                    &touched,
+                    conditioned_debts,
+                    retrained_pin,
+                ) {
+                    if let EvolutionError::Refusal(r) = e {
+                        return Err(self.reject(store, candidate_id, &from, r, None));
+                    }
+                    return Err(e);
                 }
                 self.transitioned(
                     store,

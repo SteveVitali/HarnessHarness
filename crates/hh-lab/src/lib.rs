@@ -43,6 +43,7 @@ pub mod adaptive;
 pub mod analysis;
 pub mod assembly;
 pub mod bench;
+pub mod coevolution;
 pub mod debt;
 pub mod exemplars;
 pub mod expand;
