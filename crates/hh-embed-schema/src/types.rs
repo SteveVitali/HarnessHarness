@@ -731,17 +731,24 @@ pub enum OpenSpec {
         /// row remains the authority.
         notification_sink: Option<String>,
     },
-    /// `{kind:"resume", run_id, mode, from_seq?, definition?}` — `mode` ∈
-    /// {continue (WouldBlock while the writer lives), takeover
+    /// `{kind:"resume", run_id, mode, from_seq?, definition?, cause?}` —
+    /// `mode` ∈ {continue (WouldBlock while the writer lives), takeover
     /// (fence the old writer)}. `definition` is the resume-time
     /// re-presentation (S2.3; AC-R-2.2.3-11): identical ⇒ continue,
     /// add-only ⇒ `lifecycle.definition.changed` + continue, otherwise
-    /// `DefinitionChanged`.
+    /// `DefinitionChanged`. `cause` ∈ {crash, takeover, wakeup,
+    /// operator, continuation} selects the
+    /// `lifecycle.run.resumed{recovery_decision.cause}` member the
+    /// durable resume mints (S5.8; AC-R-2.2.3-13 — a hosted
+    /// `session/resume` following a wakeup-fired suspension reports
+    /// `wakeup`, an operator-initiated resume `operator`); absent ⇒
+    /// `operator`, the pre-S5.8 spelling.
     Resume {
         run_id: String,
         mode: String,
         from_seq: Option<i64>,
         definition: Option<DefinitionInput>,
+        cause: Option<String>,
     },
     /// `{kind:"attach", run_id, read_only:true}` — read-only always;
     /// `read_only:false` is a `SchemaViolation`.
@@ -812,6 +819,7 @@ impl OpenSpec {
                 mode,
                 from_seq,
                 definition,
+                cause,
             } => {
                 let mut m = BTreeMap::new();
                 m.insert("kind".into(), Json::str("resume"));
@@ -822,6 +830,9 @@ impl OpenSpec {
                 }
                 if let Some(d) = definition {
                     m.insert("definition".into(), d.to_json());
+                }
+                if let Some(c) = cause {
+                    m.insert("cause".into(), Json::str(c.clone()));
                 }
                 Json::Obj(m)
             }
@@ -942,11 +953,24 @@ impl OpenSpec {
                     .take("definition")
                     .map(|d| DefinitionInput::from_json(d, &format!("{path}/definition")))
                     .transpose()?;
+                // S5.8 (AC-R-2.2.3-13) — the closed cause set lands on
+                // `lifecycle.run.resumed{recovery_decision.cause}`.
+                let cause = s
+                    .take("cause")
+                    .map(|c| {
+                        closed_str(
+                            c,
+                            &["crash", "takeover", "wakeup", "operator", "continuation"],
+                            &format!("{path}/cause"),
+                        )
+                    })
+                    .transpose()?;
                 OpenSpec::Resume {
                     run_id,
                     mode,
                     from_seq,
                     definition,
+                    cause,
                 }
             }
             _ => {

@@ -108,3 +108,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0316](ADR-0316-s5.5-orchestration-c3-depth-rulings.md) | S5.5 C3-orchestration-depth rulings | S5.5 | Accepted |
 | [ADR-0317](ADR-0317-s5.6-fleet-adapter-rulings.md) | S5.6 fleet-adapter rulings | S5.6 | Accepted |
 | [ADR-0318](ADR-0318-s5.7-c2-web-surface-and-mcp-group-rulings.md) | S5.7 C2 web-surface and MCP write/analysis-group rulings | S5.7 | Accepted |
+| [ADR-0319](ADR-0319-s5.8-surface-ecosystem-and-compat-rulings.md) | S5.8 surface-ecosystem and compatibility rulings | S5.8 | Accepted |

@@ -18,6 +18,7 @@ use hh_embed_schema::ops::{self, Direction, Tier};
 use hh_embed_schema::types::*;
 use hh_env::driver::EnvDriver;
 use hh_env::events::EventMinter;
+use hh_ledger::manifest::{RunKind, RunManifest};
 use hh_ledger::store::{rfc3339_ms, Lease, Store, Subscription};
 use hh_ledger::wakeup::{Trigger as LedgerTrigger, WokenDelivery};
 use hh_provenance::ProvenanceRecord;
@@ -72,6 +73,16 @@ pub struct EmbedService {
     /// The kernel-internal ledger run carrying `lifecycle.registry.*` rows for
     /// Group L ops (`registry_ops::ensure_registry_run` — created lazily).
     pub(crate) registry_run: Option<(String, Lease)>,
+    /// The kernel-internal ledger run carrying
+    /// `lifecycle.contract.deprecated_use` rows a sessionless or read-only
+    /// caller's deprecated-op use lands on (`ensure_contract_run` — lazily
+    /// created like `registry_run`; the session-scoped path mints into the
+    /// caller's own run under its writer lease instead).
+    pub(crate) contract_run: Option<(String, Lease)>,
+    /// The negotiated `ClientDescriptor` `hello` carried (the `client` member
+    /// of every `lifecycle.contract.deprecated_use` row — kernel-recorded at
+    /// handshake, never authored by call params; CC2).
+    pub(crate) client_desc: Option<ClientDescriptor>,
     /// Experiment-run writer leases held across `lab.experiment.*` calls
     /// (`experiment_run_id → Lease`; the fence still lives in the ledger —
     /// this map only avoids release/re-acquire churn per call).
@@ -318,6 +329,8 @@ impl EmbedService {
             workspace_root: config.workspace_root,
             holder: config.holder,
             registry_run: None,
+            contract_run: None,
+            client_desc: None,
             hosting_plane: None,
             experiment_engines: BTreeMap::new(),
             #[cfg(feature = "tier-c4")]
@@ -784,6 +797,17 @@ impl EmbedService {
                 code: "unknown_method".to_string(),
             }),
         };
+        // §7.4 rule 5 (ADR-0178 D5; S5.8): a *deprecated* op stays callable
+        // for the rest of its major, but every admitted use is ledgered —
+        // `lifecycle.contract.deprecated_use{method, client}` under the
+        // caller's own run (or the contract bookkeeping run for a
+        // session-less/read-only caller). The kernel mints the row; the
+        // client descriptor is the `hello`-negotiated one — call params
+        // never author it (CC2). The mint precedes the result: a use the
+        // ledger cannot account is a refusal, never a silent pass (CC3).
+        if result.is_ok() && op.deprecated.is_some() {
+            self.note_deprecated_use(req, &op)?;
+        }
         // §7.1 D-2 (ADR-0304 D1): a successful session call sweeps the
         // run's newly-durable `security.permission.*`/`suspended` rows
         // to its declared `notification_sink` — the deferred-ask
@@ -804,6 +828,7 @@ impl EmbedService {
         let p = HelloParams::from_json(params)?;
         let result = negotiate(&p, &self.kernel_version)?;
         self.hello_done = true;
+        self.client_desc = Some(p.client.clone());
         self.experimental = result.negotiated.experimental;
         self.client_caps = result.negotiated.clone();
         Ok(result.to_json())
@@ -839,6 +864,115 @@ impl EmbedService {
             .append(run_id, lease, vec![ev])
             .map_err(ledger_err)?;
         Ok(())
+    }
+
+    /// `note_deprecated_use(req, op)` — append the kernel-origin
+    /// `lifecycle.contract.deprecated_use{method, client}` row for an
+    /// admitted deprecated-op call (§7.4 rule 5; ADR-0178 D5). The row lands
+    /// on the caller session's run under its writer lease; a session-less or
+    /// `attach` (lease-less) caller's use lands on the contract bookkeeping
+    /// run so no use goes unaccounted (CC3). The `client` member is the
+    /// `hello`-negotiated `ClientDescriptor` — a call parameter can never
+    /// author or widen it (CC2); the request's `session_id`/`run_id` are
+    /// recorded as context members only.
+    pub(crate) fn note_deprecated_use(
+        &mut self,
+        req: &Request,
+        op: &hh_embed_schema::ops::OpSpec,
+    ) -> Result<(), EmbedError> {
+        let dep = op
+            .deprecated
+            .clone()
+            .expect("note_deprecated_use called on an undeprecated op");
+        let session_id = req
+            .params
+            .get("session_id")
+            .and_then(Json::as_str)
+            .map(str::to_string);
+        let run_id = req
+            .params
+            .get("run_id")
+            .or_else(|| req.params.get("run"))
+            .and_then(Json::as_str)
+            .map(str::to_string)
+            .or_else(|| {
+                session_id
+                    .as_deref()
+                    .and_then(|s| self.sessions.get(s))
+                    .map(|s| s.run_id.clone())
+            });
+        let session_lease = session_id
+            .as_deref()
+            .and_then(|s| self.sessions.get(s))
+            .and_then(|s| s.lease.clone());
+        let client = match &self.client_desc {
+            Some(c) => c.to_json(),
+            None => Json::Null,
+        };
+        let payload = Json::obj([
+            ("method", Json::str(op.name)),
+            ("client", client),
+            ("deprecated", dep.to_json()),
+            (
+                "session_id",
+                session_id.map(Json::str).unwrap_or(Json::Null),
+            ),
+            (
+                "run_id",
+                run_id.clone().map(Json::str).unwrap_or(Json::Null),
+            ),
+        ]);
+        match (run_id, session_lease) {
+            (Some(r), Some(l)) => self.mint(&r, &l, "lifecycle.contract.deprecated_use", payload),
+            _ => {
+                let (run_id, lease) = self.ensure_contract_run()?;
+                self.mint(
+                    &run_id,
+                    &lease,
+                    "lifecycle.contract.deprecated_use",
+                    payload,
+                )
+            }
+        }
+    }
+
+    /// The kernel-internal ledger run that carries
+    /// `lifecycle.contract.deprecated_use` rows for callers holding no writer
+    /// lease (session-less and `attach` calls) — created lazily, re-leased on
+    /// expiry exactly like `ensure_registry_run` (one fenced writer for
+    /// contract-usage bookkeeping; the purpose member labels it).
+    pub(crate) fn ensure_contract_run(&mut self) -> Result<(String, Lease), EmbedError> {
+        if let Some((run_id, lease)) = &self.contract_run {
+            match self.store.renew(lease) {
+                Ok(l) => {
+                    let out = (run_id.clone(), l.clone());
+                    self.contract_run = Some(out.clone());
+                    return Ok(out);
+                }
+                Err(_) => {
+                    let l = self
+                        .store
+                        .acquire_writer(&self.holder, run_id, LEASE_TTL_MS)
+                        .map_err(ledger_err)?;
+                    let out = (run_id.clone(), l);
+                    self.contract_run = Some(out.clone());
+                    return Ok(out);
+                }
+            }
+        }
+        let mut manifest = RunManifest::minimal(RunKind::Fleet);
+        manifest.configuration_id = None;
+        manifest.configuration_version_id = None;
+        manifest
+            .extra
+            .insert("purpose".to_string(), Json::str("contract"));
+        let (run_id, lease) = self
+            .store
+            .open_run(manifest, &self.holder)
+            .map_err(ledger_err)?;
+        let out = (run_id, lease);
+        self.contract_run = Some(out.clone());
+        Ok(out)
     }
 
     /// Mint an effect-scoped event (the terminal row for a host-reported
@@ -1660,5 +1794,171 @@ pub(crate) fn ledger_err(e: hh_ledger::errors::LedgerError) -> EmbedError {
         other => EmbedError::Refused {
             reason: format!("ledger: {other:?}"),
         },
+    }
+}
+
+// ── S5.8 unit tests — deprecation machinery (§7.4 rule 5; ADR-0178 D5) ──────
+// No live op is deprecated in contract major 1, so these legs drive
+// `note_deprecated_use` with a *fabricated* deprecated `OpSpec` — the same
+// function the dispatch hook calls for a real one. The dispatch hook itself
+// is a two-clause guard (`result.is_ok() && op.deprecated.is_some()`) checked
+// by review; the durable-fold legs live in `hh-ledger/tests/s5_8.rs`.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use hh_embed_schema::ops::{registry, OpDeprecation};
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    fn test_dir(tag: &str) -> PathBuf {
+        static N: AtomicU64 = AtomicU64::new(0);
+        let d = std::env::temp_dir().join(format!(
+            "hh-embed-s58-{}-{tag}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::SeqCst)
+        ));
+        let _ = std::fs::remove_dir_all(&d);
+        d
+    }
+
+    fn service() -> EmbedService {
+        let root = test_dir("svc");
+        EmbedService::open(ServiceConfig {
+            store_root: root.join("store"),
+            kernel_version_id: "hh-kernel/0.1.0".into(),
+            workspace_root: root.join("ws"),
+            holder: "s58".into(),
+        })
+        .unwrap()
+    }
+
+    /// A deprecated `OpSpec` fabricated off a live registry row — the same
+    /// members `deprecated{…}` would carry on a real declaration.
+    fn deprecated_spec() -> hh_embed_schema::ops::OpSpec {
+        let mut op = registry()
+            .into_iter()
+            .find(|o| o.name == "env.resume")
+            .unwrap();
+        op.deprecated = Some(OpDeprecation {
+            since: "1.0",
+            removal_major: 2,
+            replacement: Some("read"),
+        });
+        op
+    }
+
+    fn req(params: Json) -> Request {
+        Request {
+            id: Json::str("t-dep"),
+            method: "env.resume".into(),
+            params,
+        }
+    }
+
+    fn hello(svc: &mut EmbedService, name: &str, kind: &str) {
+        let resp = svc.handle(&Request {
+            id: Json::str("t-hello"),
+            method: "hello".into(),
+            params: Json::obj([
+                ("contract_major", Json::Int(1)),
+                (
+                    "client",
+                    Json::obj([
+                        ("name", Json::str(name)),
+                        ("version", Json::str("2.1")),
+                        ("kind", Json::str(kind)),
+                    ]),
+                ),
+                ("capabilities", Json::Obj(BTreeMap::new())),
+            ]),
+        });
+        assert!(resp.get("result").is_some(), "hello refused: {resp:?}");
+    }
+
+    #[test]
+    fn deprecated_use_sessionless_lands_on_contract_run() {
+        let mut svc = service();
+        // No `hello` — no negotiated client, no session. The use is still
+        // accounted: the kernel mints onto the contract bookkeeping run
+        // rather than dropping the count (CC3).
+        svc.note_deprecated_use(&req(Json::obj([])), &deprecated_spec())
+            .unwrap();
+        let (crun, _) = svc.contract_run.as_ref().unwrap();
+        let events = svc.store.events(crun).unwrap();
+        let row = events
+            .iter()
+            .find(|e| e.class == "lifecycle.contract.deprecated_use")
+            .expect("deprecated_use row durable");
+        assert_eq!(row.payload.get("method"), Some(&Json::str("env.resume")));
+        // Client unknown without a negotiated hello — folded as "unknown".
+        assert_eq!(
+            svc.store.deprecated_use_totals()[&("env.resume".into(), "unknown".into())],
+            1
+        );
+        // A second use re-uses the bookkeeping run and increments.
+        svc.note_deprecated_use(&req(Json::obj([])), &deprecated_spec())
+            .unwrap();
+        assert_eq!(
+            svc.store.deprecated_use_totals()[&("env.resume".into(), "unknown".into())],
+            2
+        );
+    }
+
+    #[test]
+    fn deprecated_use_records_hello_negotiated_client() {
+        let mut svc = service();
+        hello(&mut svc, "web-frontend", "web");
+        svc.note_deprecated_use(&req(Json::obj([])), &deprecated_spec())
+            .unwrap();
+        // The count key is the kernel-recorded negotiated descriptor
+        // (`name@version:kind`) — a call parameter can never author it (CC2).
+        let totals = svc.store.deprecated_use_totals();
+        assert_eq!(
+            totals[&("env.resume".into(), "web-frontend@2.1:web".into())],
+            1
+        );
+        assert_eq!(totals.len(), 1);
+    }
+
+    #[test]
+    fn deprecated_use_panics_on_undeprecated_spec() {
+        // The dispatch hook guards `op.deprecated.is_some()`; the mint
+        // itself asserts the invariant rather than minting a lie.
+        let mut svc = service();
+        let op = registry()
+            .into_iter()
+            .find(|o| o.name == "env.resume")
+            .unwrap();
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            svc.note_deprecated_use(&req(Json::obj([])), &op)
+        }));
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn stability_entry_emits_deprecation_member() {
+        // The map entry and the schema export share `deprecated` member
+        // form via `OpDeprecation::to_json` — assert both carriers here.
+        let op = deprecated_spec();
+        let entry = hh_embed_schema::ops::stability_entry(&op);
+        let dep = entry.get("deprecated").expect("deprecated member");
+        assert_eq!(dep.get("since"), Some(&Json::str("1.0")));
+        assert_eq!(dep.get("removal_major"), Some(&Json::Int(2)));
+        assert_eq!(dep.get("replacement"), Some(&Json::str("read")));
+        // Live contract: nothing deprecated today — no stability entry and
+        // no exported method carries the member (CC8 additive discipline).
+        let map = hh_embed_schema::ops::stability_map();
+        if let Json::Obj(m) = &map {
+            assert!(m.values().all(|e| e.get("deprecated").is_none()));
+        } else {
+            panic!("stability_map is not an object");
+        }
+        let schema = hh_embed_schema::export_schema();
+        let Json::Obj(methods) = schema.get("methods").unwrap() else {
+            panic!("methods member is not an object");
+        };
+        for m in methods.values() {
+            assert!(m.get("deprecated").is_none());
+        }
     }
 }

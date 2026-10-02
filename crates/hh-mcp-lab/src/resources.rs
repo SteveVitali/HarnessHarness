@@ -286,15 +286,11 @@ pub fn notify_after_call(
     arguments: &Json,
     result: &Json,
 ) {
-    let Some(subs) = srv.subscriptions.get(&binding.binding_id) else {
-        return;
-    };
-    if subs.is_empty() {
-        return;
-    }
     // The run ids this call touched — the `run`/`run_id`/`run_handle`
     // argument spellings plus any `run_id`/`run:<id>` members the
-    // result payload carries.
+    // result payload carries. Computed before the subscription gate —
+    // the tasks carrier and the wakeup drain consume the same set and
+    // are independent of `resources/subscribe`.
     let mut touched: BTreeSet<String> = BTreeSet::new();
     if let Json::Obj(m) = arguments {
         for (k, v) in m {
@@ -306,31 +302,33 @@ pub fn notify_after_call(
         }
     }
     collect_run_ids(result, &mut touched);
-    if touched.is_empty() {
-        return;
-    }
-    let subs = subs.clone();
-    for uri in subs {
-        if let Some((kind, key)) = parse_uri(&uri) {
-            let named = key.clone();
-            let hit = touched.iter().any(|t| {
-                t == &named
-                    || format!("run:{t}") == named
-                    || t.strip_prefix("run:") == Some(named.as_str())
-                    || crate::handles::handle_alias(crate::handles::HandleKind::Run, t) == named
-            });
-            if hit && kind.starts_with("run-") {
-                srv.pending.push_back(Json::obj([
-                    ("method", Json::str("notifications/resources/updated")),
-                    ("params", Json::obj([("uri", Json::str(uri.clone()))])),
-                ]));
-                // A run the tasks carrier tracks also notifies
-                // `notifications/tasks` — same durability rule.
-                let bare = named.strip_suffix("/ledger").unwrap_or(&named);
-                let _ = bare;
+    if let Some(subs) = srv.subscriptions.get(&binding.binding_id) {
+        let subs = subs.clone();
+        for uri in subs {
+            if let Some((kind, key)) = parse_uri(&uri) {
+                let named = key.clone();
+                let hit = touched.iter().any(|t| {
+                    t == &named
+                        || format!("run:{t}") == named
+                        || t.strip_prefix("run:") == Some(named.as_str())
+                        || crate::handles::handle_alias(crate::handles::HandleKind::Run, t) == named
+                });
+                if hit && kind.starts_with("run-") {
+                    srv.pending.push_back(Json::obj([
+                        ("method", Json::str("notifications/resources/updated")),
+                        ("params", Json::obj([("uri", Json::str(uri.clone()))])),
+                    ]));
+                }
             }
         }
     }
+    // A run the tasks carrier tracks also notifies `notifications/tasks`
+    // — the same narrowed/durable-first rule (S5.8; R-2.2.3²).
+    crate::tasks::push_for_runs(srv, binding, &touched);
+    // `control.wakeup.*` → `notifications/tasks` — drain due wakeups on
+    // the binding's task-bound runs; a fresh `fired` delivery pushes the
+    // task's narrowed notification (the client re-reads `tasks/get`).
+    crate::tasks::drain_due_wakeups(srv, binding);
 }
 
 /// Depth-first `run_id`/`launched.run_id` member scan on a result.

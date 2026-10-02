@@ -71,6 +71,13 @@ pub fn generate(root: &Path) -> Result<Vec<PathBuf>, String> {
     let plugin_abi_body = format!("{}\n", embed::plugin_abi::canonical_plugin_abi_bytes());
     write(&plugin_abi_path, &plugin_abi_body)?;
 
+    // 1c. The compatibility matrix (ADR-0178 D8; AC-R-2.11.4-8/-11) — the
+    // `(contract_major, schema_hash) → negotiate outcome` fixture set the
+    // schema source owns; drift-checked like the export (CC7).
+    let matrix_path = root.join("schema").join("compat-1.matrix.json");
+    let matrix_body = format!("{}\n", embed::compat_matrix_bytes());
+    write(&matrix_path, &matrix_body)?;
+
     // 2. The generated client bindings.
     let client_path = root
         .join("crates")
@@ -84,7 +91,7 @@ pub fn generate(root: &Path) -> Result<Vec<PathBuf>, String> {
     // disagree. rustfmt is a pinned toolchain component (rust-toolchain.toml).
     rustfmt(&client_path)?;
 
-    Ok(vec![schema_path, plugin_abi_path, client_path])
+    Ok(vec![schema_path, plugin_abi_path, matrix_path, client_path])
 }
 
 fn rustfmt(path: &Path) -> Result<(), String> {

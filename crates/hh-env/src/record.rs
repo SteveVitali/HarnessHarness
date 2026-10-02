@@ -219,6 +219,32 @@ impl ResolvedImage {
     }
 }
 
+/// `ImageAttestation` — `{method, attestation_ref}`: the substrate's image
+/// measurement binding (S5.8; R-2.2.5² — "attested microVM images with
+/// §05g E1 evidence"; ADR-0137 (e)). The members are the `Attestation`
+/// pair `connection_info.substrate_attestation` carries across the
+/// `hh-embed/1` boundary — the record holds them verbatim so the
+/// attestation is *identity-bearing* on the environment record, and
+/// [`EnvironmentRecord::verify_attested`] is the resolve-time check the
+/// attesting isolation classes (`user_space_kernel`/`microvm`) require.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageAttestation {
+    /// The attestation method (`guest_quote`, `sev_snp_report`, …).
+    pub method: String,
+    /// The attestation record's content address.
+    pub attestation_ref: String,
+}
+
+impl ImageAttestation {
+    /// The canonical member form (the record's `image_attestation`).
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("method", Json::str(self.method.clone())),
+            ("attestation_ref", Json::str(self.attestation_ref.clone())),
+        ])
+    }
+}
+
 /// `ProvisioningRecipe` — MUST-data (a recipe is data; its `hooks` are
 /// `Procedure` refs the provisioning path runs, keyed by the lifecycle
 /// transition they hook).
@@ -265,6 +291,12 @@ pub struct EnvironmentRecord {
     /// The declared resource bounds (the policy's `resources` member —
     /// re-recorded here so the definition's claim is self-contained).
     pub limits: hh_containment::policy::ResourceLimits,
+    /// The image attestation (S5.8; R-2.2.5²) — `Some` only when the
+    /// binding declared `substrate_attestation`; an attesting isolation
+    /// class without one refuses at `verify_attested` (the resolve-time
+    /// leg — `backend::for_policy`'s `attestation_missing` is the same
+    /// refusal at backend selection).
+    pub image_attestation: Option<ImageAttestation>,
     /// The declared nondeterminism.
     pub nondeterminism: Vec<NondeterminismDeclaration>,
     /// The `unpinned[]` context — the member names a `tag` selector the run
@@ -345,6 +377,9 @@ impl EnvironmentRecord {
         // The limits member is the policy's own canonical form (one schema —
         // the ResourceLimits member spelling is hh-containment's).
         r = r.semantic("limits", self.limits_json());
+        if let Some(a) = &self.image_attestation {
+            r = r.semantic("image_attestation", a.to_json());
+        }
         // The pinned image address is a `refs` member (content-addressed —
         // the ref-by-content form) so a bundle sealing the record pins it.
         if let ImageRef::ContentAddress(ca) = &self.image {
@@ -384,6 +419,35 @@ impl EnvironmentRecord {
                     Err(EnvError::UnresolvedRef { tag: t.clone() })
                 }
             }
+        }
+    }
+
+    /// `verify_attested(isolation_class)` — the attested-image leg of
+    /// record resolution (S5.8; R-2.2.5²): an `isolation_class` in the
+    /// attesting set (`user_space_kernel`/`microvm`) resolves only when
+    /// the record carries a well-formed `image_attestation`; anything
+    /// else is `AttestationMissing` — fail-closed, never a silent
+    /// degrade (I-C4; `for_policy`'s `attestation_missing` is the same
+    /// refusal at backend selection). Non-attesting classes pass
+    /// unconditionally — a declared attestation on a weaker class is a
+    /// recorded claim, not a requirement.
+    pub fn verify_attested(
+        &self,
+        isolation: hh_containment::policy::IsolationClass,
+    ) -> Result<(), EnvError> {
+        let attesting = matches!(
+            isolation,
+            hh_containment::policy::IsolationClass::UserSpaceKernel
+                | hh_containment::policy::IsolationClass::Microvm
+        );
+        if !attesting {
+            return Ok(());
+        }
+        match &self.image_attestation {
+            Some(a) if !a.method.is_empty() && !a.attestation_ref.is_empty() => Ok(()),
+            _ => Err(EnvError::AttestationMissing {
+                isolation_class: isolation.as_str().to_string(),
+            }),
         }
     }
 

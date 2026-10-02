@@ -50,6 +50,42 @@ pub struct OpDebt {
     pub detail: &'static str,
 }
 
+/// `OpDeprecation` — the deprecation metadata a `stable` op carries for the
+/// rest of its `contract_major` (§7.4 rule 5; ADR-0178 D5). A deprecated op
+/// stays callable for the remainder of its major; every admitted use mints a
+/// kernel-origin `lifecycle.contract.deprecated_use{method, client}` row the
+/// store folds into per-`{method, client}` counts (the removal gate's
+/// zero-uses evidence — removal only at the next major, only at zero uses).
+#[derive(Debug, Clone, PartialEq)]
+pub struct OpDeprecation {
+    /// The minor the deprecation was declared at (`"1.3"` form).
+    pub since: &'static str,
+    /// The `contract_major` at which removal is admissible.
+    pub removal_major: i64,
+    /// The replacement method, when one exists.
+    pub replacement: Option<&'static str>,
+}
+
+impl OpDeprecation {
+    /// The canonical member form — `stability` map + schema export share it.
+    pub fn to_json(&self) -> hh_wire::json::Json {
+        hh_wire::json::Json::obj([
+            ("since", hh_wire::json::Json::str(self.since)),
+            (
+                "removal_major",
+                hh_wire::json::Json::Int(self.removal_major),
+            ),
+            (
+                "replacement",
+                match self.replacement {
+                    Some(r) => hh_wire::json::Json::str(r),
+                    None => hh_wire::json::Json::Null,
+                },
+            ),
+        ])
+    }
+}
+
 /// One registry row.
 #[derive(Debug, Clone)]
 pub struct OpSpec {
@@ -74,6 +110,12 @@ pub struct OpSpec {
     /// without it → `CapabilityNotDeclared{capability}`.
     pub requires_capability: Option<&'static str>,
     pub debt: Option<OpDebt>,
+    /// Deprecation metadata (§7.4 rule 5) — `Some` marks a `stable` op
+    /// deprecated for the rest of its major: still callable, every use
+    /// is ledgered `lifecycle.contract.deprecated_use{method, client}`.
+    /// Nothing in this contract is deprecated today — the member is the
+    /// machinery, not a live claim.
+    pub deprecated: Option<OpDeprecation>,
 }
 
 const SHAPE: &[&str] = &["UnknownField", "SchemaViolation"];
@@ -128,6 +170,7 @@ const fn call(
         implemented,
         requires_capability: None,
         debt: None,
+        deprecated: None,
     }
 }
 
@@ -1516,31 +1559,41 @@ pub fn lookup(name: &str) -> Option<OpSpec> {
 }
 
 /// The machine-readable stability map `hello` returns:
-/// `method → {tier, deprecated?, debt?}` (§7.4 §2.3, §7.4 §6; the
-/// `deprecated` member is reserved — nothing in this contract is
-/// deprecated).
+/// `method → {tier, deprecated?, debt?}` (§7.4 §2.3, §7.4 §6; `deprecated`
+/// emits `{since, removal_major, replacement}` — nothing in this contract is
+/// deprecated today, so no entry carries the member).
 pub fn stability_map() -> hh_wire::json::Json {
     let mut m = std::collections::BTreeMap::new();
     for op in registry() {
-        let mut entry = std::collections::BTreeMap::new();
-        entry.insert(
-            "tier".to_string(),
-            hh_wire::json::Json::str(op.tier.as_str()),
-        );
-        if let Some(d) = &op.debt {
-            entry.insert(
-                "debt".to_string(),
-                hh_wire::json::Json::obj([
-                    ("assumption_id", hh_wire::json::Json::str(d.assumption_id)),
-                    ("debt_id", hh_wire::json::Json::str(d.debt_id)),
-                    ("owner_layer", hh_wire::json::Json::str(d.owner_layer)),
-                    ("stage_gate", hh_wire::json::Json::str(d.stage_gate)),
-                    ("status", hh_wire::json::Json::str("open")),
-                    ("detail", hh_wire::json::Json::str(d.detail)),
-                ]),
-            );
-        }
-        m.insert(op.name.to_string(), hh_wire::json::Json::Obj(entry));
+        m.insert(op.name.to_string(), stability_entry(&op));
     }
     hh_wire::json::Json::Obj(m)
+}
+
+/// One op's stability-map entry — `{tier, deprecated?, debt?}`. Factored out
+/// so a fabricated `OpSpec` (a test's deprecation fixture) exercises the same
+/// emission path the registry iterates.
+pub fn stability_entry(op: &OpSpec) -> hh_wire::json::Json {
+    let mut entry = std::collections::BTreeMap::new();
+    entry.insert(
+        "tier".to_string(),
+        hh_wire::json::Json::str(op.tier.as_str()),
+    );
+    if let Some(dep) = &op.deprecated {
+        entry.insert("deprecated".to_string(), dep.to_json());
+    }
+    if let Some(d) = &op.debt {
+        entry.insert(
+            "debt".to_string(),
+            hh_wire::json::Json::obj([
+                ("assumption_id", hh_wire::json::Json::str(d.assumption_id)),
+                ("debt_id", hh_wire::json::Json::str(d.debt_id)),
+                ("owner_layer", hh_wire::json::Json::str(d.owner_layer)),
+                ("stage_gate", hh_wire::json::Json::str(d.stage_gate)),
+                ("status", hh_wire::json::Json::str("open")),
+                ("detail", hh_wire::json::Json::str(d.detail)),
+            ]),
+        );
+    }
+    hh_wire::json::Json::Obj(entry)
 }
