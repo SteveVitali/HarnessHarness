@@ -400,10 +400,7 @@ fn ka_i7_5_locus_names_the_commitment_point() {
         Some("point_of_commitment")
     );
     assert_eq!(locus.get("seq").and_then(Json::as_int), Some(12));
-    assert_eq!(
-        locus.get("target").and_then(Json::as_str),
-        Some("run-1:12")
-    );
+    assert_eq!(locus.get("target").and_then(Json::as_str), Some("run-1:12"));
     // `earliest_direct` rides beside — the first seq with a non-zero
     // point — and disagreement is reported, never resolved.
     let ed = locus.get("earliest_direct").expect("earliest_direct");
@@ -422,10 +419,7 @@ fn ka_i7_6_mediation_split_and_exclusion() {
         method: "M5".into(),
         claim_kind: "outcome".into(),
         k: 4,
-        ..design_m2_crn(
-            vec![target("decision_point", "run-1:5")],
-            None,
-        )
+        ..design_m2_crn(vec![target("decision_point", "run-1:5")], None)
     };
     assert_eq!(attribution::validate_design(&d), Ok(()));
     let plan = attribution::attribution_plan(&d, &[]).expect("plan");
@@ -476,11 +470,10 @@ fn ka_i7_6_mediation_split_and_exclusion() {
     let te = e.get("TE_crn").and_then(Json::as_int).expect("TE");
     assert!((de > 0 && te < 0) || (de < 0 && te > 0), "opposite-signed");
     assert_eq!(
-        e.get("mediated_share_excluded")
-            .and_then(|j| match j {
-                Json::Bool(b) => Some(*b),
-                _ => None,
-            }),
+        e.get("mediated_share_excluded").and_then(|j| match j {
+            Json::Bool(b) => Some(*b),
+            _ => None,
+        }),
         Some(true)
     );
     assert_eq!(
@@ -500,7 +493,7 @@ fn ka_i7_7_known_effect_suite_recovers_pivots() {
     // World 1 — a single pivotal rule: the suite must name it and the
     // interval must exclude 0.
     let d = design_m2_crn(vec![target("rule", "pivotal")], None);
-    let plan = attribution::attribution_plan(&d, &[]).expect("plan");
+    let _plan = attribution::attribution_plan(&d, &[]).expect("plan");
     let mut recovered = 0usize;
     let runs = 4usize;
     for r in 0..runs {
@@ -531,10 +524,7 @@ fn ka_i7_7_known_effect_suite_recovers_pivots() {
     // World 2 — the AND-interaction: neither single target moves the
     // outcome alone; the pair does. M2's single-target effects are
     // ~0 (the honest single-target answer — the interaction rides M3).
-    let d_and = design_m2_crn(
-        vec![target("slot", "a"), target("slot", "b")],
-        None,
-    );
+    let d_and = design_m2_crn(vec![target("slot", "a"), target("slot", "b")], None);
     let plan = attribution::attribution_plan(&d_and, &[]).expect("plan");
     let outcomes = execute_multi(
         &d_and,
@@ -571,7 +561,7 @@ fn ka_i7_7_known_effect_suite_recovers_pivots() {
         .map(|cell| {
             let p = match (cell.role.as_str(), cell.target.as_str()) {
                 ("factual", _) => 1_000_000,
-                (_, "r:3") => 1_000_000,           // inert
+                (_, "r:3") => 1_000_000,                 // inert
                 (_, "r:9") if cell.fork_point == 9 => 0, // pivotal (cf − fact)
                 _ => 1_000_000,
             };
@@ -615,10 +605,13 @@ fn ka_i7_8_shapley_recovers_additive_and_enforces_v11() {
     assert_eq!(attribution::validate_design(&d), Ok(()));
     let plan = attribution::attribution_plan(&d, &[]).expect("plan");
     // The additive world — v(S) = Σ w_t over the held coalition.
-    let w: std::collections::BTreeMap<String, i64> =
-        [("a".to_string(), 200_000i64), ("b".to_string(), 300_000), ("c".to_string(), 50_000)]
-            .into_iter()
-            .collect();
+    let w: std::collections::BTreeMap<String, i64> = [
+        ("a".to_string(), 200_000i64),
+        ("b".to_string(), 300_000),
+        ("c".to_string(), 50_000),
+    ]
+    .into_iter()
+    .collect();
     let outcomes: Vec<attribution::ArmOutcome> = plan
         .iter()
         .map(|cell| {
@@ -748,10 +741,7 @@ fn ka_i7_13_hosted_rows_carry_na_class() {
     // attribution_quality on hosted ⇒ n/a{class}; without reports ⇒
     // n/a{not_run}; Δ's interval through 0 ⇒ n/a{estimator_undefined}.
     let q = attribution::attribution_quality(&Json::obj([("point", Json::Int(1))]), &[], true);
-    assert_eq!(
-        q.get("n/a").and_then(Json::as_str),
-        Some("class")
-    );
+    assert_eq!(q.get("n/a").and_then(Json::as_str), Some("class"));
     let q = attribution::attribution_quality(&Json::obj([("point", Json::Int(1))]), &[], false);
     assert_eq!(q.get("n/a").and_then(Json::as_str), Some("not_run"));
     let zero_iv = Json::obj([
@@ -842,16 +832,10 @@ fn ka_i7_14_label_ceiling_and_widening_refusals() {
         "model_swap",
     ];
     for k in kinds {
-        let rec = attribution::intervention_for(
-            &t,
-            &Json::obj([("kind", Json::str(k))]),
-            None,
-        )
-        .unwrap_or_else(|e| panic!("{k}: {e}"));
-        assert!(
-            attribution::INTERVENTION_KINDS
-                .contains(&rec.get("kind").and_then(Json::as_str).unwrap_or(""))
-        );
+        let rec = attribution::intervention_for(&t, &Json::obj([("kind", Json::str(k))]), None)
+            .unwrap_or_else(|e| panic!("{k}: {e}"));
+        assert!(attribution::INTERVENTION_KINDS
+            .contains(&rec.get("kind").and_then(Json::as_str).unwrap_or("")));
     }
 }
 
@@ -963,10 +947,7 @@ fn s6_3b_v_legs_and_rollout_estimate() {
         Some("exploratory")
     );
     // estimate_rollouts — the scheduler's pre-reservation price.
-    let mut m3 = design_m2_crn(
-        vec![target("slot", "a"), target("slot", "b")],
-        None,
-    );
+    let mut m3 = design_m2_crn(vec![target("slot", "a"), target("slot", "b")], None);
     m3.method = "M3".into();
     m3.n_permutations = 6;
     m3.samples_per_eval = 4;
@@ -977,10 +958,7 @@ fn s6_3b_v_legs_and_rollout_estimate() {
         "n_permutations · antithetic · (|T|+1) · samples_per_eval"
     );
     let m2 = design_m2_crn(vec![target("slot", "a")], None);
-    assert_eq!(
-        attribution::estimate_rollouts(&m2, 5),
-        (1 * 5 + 1) * 2 * 4
-    );
+    assert_eq!(attribution::estimate_rollouts(&m2, 5), (5 + 1) * 2 * 4);
     // Budget truncation — the plan caps at the reservation and the
     // report carries `budget_truncated` (I4, never an overspend).
     let capped = AttributionDesign {
@@ -1003,10 +981,7 @@ fn s6_3b_v_legs_and_rollout_estimate() {
     );
     // The design codec round-trips.
     let j = design_m2_crn(vec![target("rule", "r")], None).to_json();
-    assert_eq!(
-        j.get("schema").and_then(Json::as_str),
-        Some(DESIGN_SCHEMA)
-    );
+    assert_eq!(j.get("schema").and_then(Json::as_str), Some(DESIGN_SCHEMA));
     let back = AttributionDesign::from_json(&j).expect("decode");
     assert_eq!(back.method, "M2");
     // The M0 hypothesis is observational — never a value.

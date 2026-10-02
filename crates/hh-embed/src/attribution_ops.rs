@@ -48,49 +48,36 @@ impl EmbedService {
     /// content-address the `hh-attribution-design/1` and return the
     /// scheduler's rollout price *before* any reservation (§05e;
     /// AC-R-2.9.7-14).
-    pub(crate) fn lab_attribution_design(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
-        let design =
-            hh_analysis::attribution::AttributionDesign::from_json(req(params, "design")?)
-                .map_err(attr_err)?;
+    pub(crate) fn lab_attribution_design(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let design = hh_analysis::attribution::AttributionDesign::from_json(req(params, "design")?)
+            .map_err(attr_err)?;
         hh_analysis::attribution::validate_design(&design).map_err(attr_err)?;
         let n_fp = params
             .get("n_fork_points")
             .and_then(Json::as_int)
             .unwrap_or(1) as usize;
         let mut dj = design.to_json();
-        let design_ref = hh_identity::idp_id(
-            "attribution.design",
-            dj.to_canonical_string().as_bytes(),
-        );
+        let design_ref =
+            hh_identity::idp_id("attribution.design", dj.to_canonical_string().as_bytes());
         if let Json::Obj(m) = &mut dj {
             m.insert("design_ref".into(), Json::str(&design_ref));
         }
-        let design = hh_analysis::attribution::AttributionDesign::from_json(&dj)
-            .map_err(attr_err)?;
+        let design =
+            hh_analysis::attribution::AttributionDesign::from_json(&dj).map_err(attr_err)?;
         let fps: Vec<i64> = params
             .get("fork_points")
             .and_then(|f| match f {
-                Json::Arr(a) => Some(
-                    a.iter()
-                        .filter_map(|v| v.as_int())
-                        .collect::<Vec<i64>>(),
-                ),
+                Json::Arr(a) => Some(a.iter().filter_map(|v| v.as_int()).collect::<Vec<i64>>()),
                 _ => None,
             })
             .unwrap_or_default();
-        let plan = hh_analysis::attribution::attribution_plan(&design, &fps)
-            .map_err(attr_err)?;
+        let plan = hh_analysis::attribution::attribution_plan(&design, &fps).map_err(attr_err)?;
         Ok(Json::obj([
             ("design_ref", Json::str(&design_ref)),
             ("design", dj),
             (
                 "estimate_rollouts",
-                Json::Int(hh_analysis::attribution::estimate_rollouts(
-                    &design, n_fp,
-                )),
+                Json::Int(hh_analysis::attribution::estimate_rollouts(&design, n_fp)),
             ),
             (
                 "plan",
@@ -106,26 +93,17 @@ impl EmbedService {
     /// instrument-charged Group W legs — then fold the supplied
     /// `ArmOutcome` records. Unexecuted cells report `n.not_run`
     /// honestly (V6's cousin — never a fabricated outcome).
-    pub(crate) fn lab_attribution_attribute(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
-        let design =
-            hh_analysis::attribution::AttributionDesign::from_json(req(params, "design")?)
-                .map_err(attr_err)?;
+    pub(crate) fn lab_attribution_attribute(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let design = hh_analysis::attribution::AttributionDesign::from_json(req(params, "design")?)
+            .map_err(attr_err)?;
         let fps: Vec<i64> = params
             .get("fork_points")
             .and_then(|f| match f {
-                Json::Arr(a) => Some(
-                    a.iter()
-                        .filter_map(|v| v.as_int())
-                        .collect::<Vec<i64>>(),
-                ),
+                Json::Arr(a) => Some(a.iter().filter_map(|v| v.as_int()).collect::<Vec<i64>>()),
                 _ => None,
             })
             .unwrap_or_default();
-        let plan = hh_analysis::attribution::attribution_plan(&design, &fps)
-            .map_err(attr_err)?;
+        let plan = hh_analysis::attribution::attribution_plan(&design, &fps).map_err(attr_err)?;
         // `open_arms` — the real Group W execution half: one
         // `counterfactual` call per distinct (target, fork_point) with
         // the design's replicate count and noise coupling; the arm
@@ -149,10 +127,7 @@ impl EmbedService {
             // factual arm rides inside every call; M5's `direct` arm is
             // the second call's counterfactual.
             let mut seen: BTreeSet<(String, i64, String)> = BTreeSet::new();
-            for cell in plan
-                .iter()
-                .filter(|c| c.intervention_kind != "do_resample")
-            {
+            for cell in plan.iter().filter(|c| c.intervention_kind != "do_resample") {
                 if !seen.insert((
                     cell.target.clone(),
                     cell.fork_point,
@@ -181,10 +156,7 @@ impl EmbedService {
                             ("k", Json::Int(design.k as i64)),
                             ("budget", design.match_spec.clone()),
                             ("factual_arm", Json::Bool(true)),
-                            (
-                                "noise_coupling",
-                                Json::str(design.noise_coupling.clone()),
-                            ),
+                            ("noise_coupling", Json::str(design.noise_coupling.clone())),
                             ("target", Json::str(cell.target.clone())),
                         ]),
                     ),
@@ -214,10 +186,7 @@ impl EmbedService {
                         arm_records.push(Json::obj([
                             ("target", Json::str(cell.target.clone())),
                             ("fork_point", Json::Int(cell.fork_point)),
-                            (
-                                "refused",
-                                Json::str(format!("{e:?}")),
-                            ),
+                            ("refused", Json::str(format!("{e:?}"))),
                         ]));
                     }
                 }
@@ -231,8 +200,8 @@ impl EmbedService {
                 .map_err(attr_err)?,
             _ => return Err(bad("/outcomes", "type_mismatch")),
         };
-        let report = hh_analysis::attribution::attribute(&design, &outcomes, &plan)
-            .map_err(attr_err)?;
+        let report =
+            hh_analysis::attribution::attribute(&design, &outcomes, &plan).map_err(attr_err)?;
         let mut out = Json::obj([("report", report)]);
         if !arm_records.is_empty() {
             if let Json::Obj(m) = &mut out {
@@ -257,10 +226,7 @@ impl EmbedService {
     /// `{metric}` — the `attribution_quality` MetricValue shape
     /// (ADR-0201 D3; `n/a{not_run}`/`n/a{estimator_undefined}`/
     /// `n/a{class}`).
-    pub(crate) fn lab_attribution_quality(
-        &mut self,
-        params: &Json,
-    ) -> Result<Json, EmbedError> {
+    pub(crate) fn lab_attribution_quality(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let delta = req(params, "delta")?;
         let reports: Vec<Json> = match params.get("reports") {
             Some(Json::Arr(a)) => a.clone(),

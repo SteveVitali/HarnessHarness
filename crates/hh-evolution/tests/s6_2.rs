@@ -1268,10 +1268,13 @@ fn g7_undeclared_selector_and_honeypot_floor() {
             kind: "judge".into(),
             calibration_ref: "cal:a".into(),
             independent_of: vec!["def:base".into()],
+            adversarial: None,
+            held_out_from: Vec::new(),
         }],
         audit_budget_ref: "budget:audit".into(),
         audited_share_ppm: 100_000,
         min_honeypots: 3,
+        artifact_benefit_selector: None,
     });
     let (_r, _c, mut store, _docs, mut eng) = open_with("g7b", s);
     let cid = propose_with(
@@ -1622,6 +1625,7 @@ fn hypothesis() -> FailureHypothesis {
         },
         semantic_op_targets: vec![],
         reference_trajectories: Vec::new(),
+        attribution_ref: None,
     }
 }
 
@@ -1920,6 +1924,9 @@ fn drive_to_sealed(store: &mut Store, docs: &LabDocs, eng: &mut EvolutionCampaig
         "rep:held",
         &Json::obj([("regressed_tasks", Json::Arr(vec![]))]),
         &BTreeMap::from([("metric:safety".to_string(), false)]),
+        None,
+        None,
+        false,
     )
     .unwrap_or_else(|e| panic!("held_out_eval: {e}"));
     eng.transfer(

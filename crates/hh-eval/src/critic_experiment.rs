@@ -140,3 +140,135 @@ pub fn critic_experiment(
         outcome_counts: out.outcome_counts,
     })
 }
+
+// ── the value-of-compute row (R-2.10.4⁴; S6.3b) ────────────────────────────
+
+use hh_ontology::eval::MetricValueKind;
+use hh_wire::json::Json;
+
+/// `CriticPlacementRow` — the value-of-compute row `critic_experiment`
+/// feeds (§6.4 §2.1's value table; ADR-0188's `PlacementFact` member
+/// set — the boundary's `PlacementDecision`/`ComputeDecisionRecord`
+/// consumers decode it records-in; the critic experiment is its only
+/// producer, so the row never fabricates rates the {on,off} comparison
+/// did not measure).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CriticPlacementRow {
+    /// The critic ref (the experiment's `definition`).
+    pub critic_ref: String,
+    /// The placement's decision point.
+    pub placement: String,
+    /// The critic's calibration status (`≠ active` ⇒ `infeasible{
+    /// calibration_inactive}` at the placement decision).
+    pub calibration_status: String,
+    /// `missed_failure_rate` under the critic-on arm (ppm).
+    pub missed_failure_rate_ppm: i64,
+    /// `false_stop_rate` under the critic-on arm (ppm).
+    pub false_stop_rate_ppm: i64,
+    /// `harness_overhead.verification` the critic adds (ppm — the
+    /// on−off delta, never the off arm's total).
+    pub verification_overhead: i64,
+    /// `cost(uncaught)` — the task's declared failure cost.
+    pub uncaught_cost: i64,
+    /// The `placement.removal_test` handle the experiment minted.
+    pub removal_test: String,
+}
+
+impl CriticPlacementRow {
+    /// The canonical JSON — the `PlacementFact` member set verbatim
+    /// plus `placement`/`removal_test` (the experiment's own handle).
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("schema", Json::str("hh-critic-placement-row/1")),
+            ("critic_ref", Json::str(&self.critic_ref)),
+            ("placement", Json::str(&self.placement)),
+            ("calibration_status", Json::str(&self.calibration_status)),
+            (
+                "missed_failure_rate",
+                Json::Int(self.missed_failure_rate_ppm),
+            ),
+            ("false_stop_rate", Json::Int(self.false_stop_rate_ppm)),
+            (
+                "verification_overhead",
+                Json::Int(self.verification_overhead),
+            ),
+            ("uncaught_cost", Json::Int(self.uncaught_cost)),
+            ("removal_test", Json::str(&self.removal_test)),
+        ])
+    }
+}
+
+/// The arm scalar — `Decimal` verbatim, `Bool` as ppm (n/a and
+/// non-scalar cells never fabricate a number).
+fn arm_scalar(v: &MetricValueKind) -> Option<i64> {
+    match v {
+        MetricValueKind::Decimal(d) => Some(*d),
+        MetricValueKind::Bool(b) => Some(if *b { 1_000_000 } else { 0 }),
+        _ => None,
+    }
+}
+
+/// `placement_row(outcome, critic_ref, placement, uncaught_cost,
+/// calibration_status)` — fold the experiment's per-task effects into
+/// the value-of-compute row: rates come from the critic-**on** arm's
+/// absolute cells (the on arm is what the placement ships), the
+/// verification overhead is the on−off delta (the critic's marginal
+/// cost), `calibration_status`/`uncaught_cost` are declarations the
+/// placement records (the experiment never invents them).
+pub fn placement_row(
+    outcome: &CriticExperimentOutcome,
+    critic_ref: &str,
+    placement: &str,
+    uncaught_cost: i64,
+    calibration_status: &str,
+) -> Option<CriticPlacementRow> {
+    let mut missed: Vec<i64> = Vec::new();
+    let mut false_stop: Vec<i64> = Vec::new();
+    let mut overhead_deltas: Vec<i64> = Vec::new();
+    for (report, tasks) in outcome.reports.iter().zip(outcome.per_task.iter()) {
+        match report.metric.as_str() {
+            "missed_failure_rate" => {
+                for t in tasks {
+                    if let Some(v) = arm_scalar(&t.a) {
+                        missed.push(v);
+                    }
+                }
+            }
+            "false_stop_rate" => {
+                for t in tasks {
+                    if let Some(v) = arm_scalar(&t.a) {
+                        false_stop.push(v);
+                    }
+                }
+            }
+            "harness_overhead.verification" => {
+                for t in tasks {
+                    if let Some(d) = t.delta {
+                        overhead_deltas.push(d);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    if missed.is_empty() && false_stop.is_empty() && overhead_deltas.is_empty() {
+        return None;
+    }
+    let mean = |xs: &[i64]| -> i64 {
+        if xs.is_empty() {
+            0
+        } else {
+            xs.iter().sum::<i64>() / xs.len() as i64
+        }
+    };
+    Some(CriticPlacementRow {
+        critic_ref: critic_ref.to_string(),
+        placement: placement.to_string(),
+        calibration_status: calibration_status.to_string(),
+        missed_failure_rate_ppm: mean(&missed),
+        false_stop_rate_ppm: mean(&false_stop),
+        verification_overhead: mean(&overhead_deltas),
+        uncaught_cost,
+        removal_test: outcome.removal_test.clone(),
+    })
+}

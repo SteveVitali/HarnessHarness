@@ -96,10 +96,7 @@ fn hello(svc: &mut EmbedService, caps: &[(&str, bool)]) {
 }
 
 fn hello_attr(svc: &mut EmbedService) {
-    hello(
-        svc,
-        &[("experimental", true), ("serves_measurement", true)],
-    );
+    hello(svc, &[("experimental", true), ("serves_measurement", true)]);
 }
 
 /// A parseable `matched_total` MatchSpec document.
@@ -231,10 +228,7 @@ fn s6_3b_attribution_design_validates_and_prices() {
     let out = ok(&call(
         &mut svc,
         "lab.attribution.design",
-        Json::obj([
-            ("design", design_json()),
-            ("n_fork_points", Json::Int(3)),
-        ]),
+        Json::obj([("design", design_json()), ("n_fork_points", Json::Int(3))]),
     ));
     assert!(out.get("design_ref").and_then(Json::as_str).is_some());
     // (1 target · 3 forks + 1) · 2 arms · k=4 = 32.
@@ -246,7 +240,11 @@ fn s6_3b_attribution_design_validates_and_prices() {
         Some(Json::Arr(a)) => a.clone(),
         _ => panic!("plan"),
     };
-    assert_eq!(plan.len(), 8, "run_start ⇒ 1 fork — 1 target · 2 arms · k=4");
+    assert_eq!(
+        plan.len(),
+        8,
+        "run_start ⇒ 1 fork — 1 target · 2 arms · k=4"
+    );
     // The typed refusal surface — MissingMatchSpec is a Refused, never
     // a coerced default (T-LCD-14).
     let mut bad = design_json();
@@ -358,10 +356,7 @@ fn s6_3b_attribution_attribute_folds_the_report() {
                     ("point", Json::Int(1_000_000)),
                     (
                         "interval",
-                        Json::obj([
-                            ("lo", Json::Int(800_000)),
-                            ("hi", Json::Int(1_000_000)),
-                        ]),
+                        Json::obj([("lo", Json::Int(800_000)), ("hi", Json::Int(1_000_000))]),
                     ),
                 ]),
             ),
@@ -384,7 +379,9 @@ fn s6_3b_attribution_attribute_folds_the_report() {
         ]),
     ));
     assert_eq!(
-        q.get("metric").and_then(|m| m.get("n/a")).and_then(Json::as_str),
+        q.get("metric")
+            .and_then(|m| m.get("n/a"))
+            .and_then(Json::as_str),
         Some("class")
     );
 }
@@ -407,10 +404,7 @@ fn s6_3b_attribution_v_legs_at_the_boundary() {
     let r = call(
         &mut svc,
         "lab.attribution.attribute",
-        Json::obj([
-            ("design", design_json()),
-            ("outcomes", collapsed),
-        ]),
+        Json::obj([("design", design_json()), ("outcomes", collapsed)]),
     );
     assert_eq!(err_kind(&r), "Refused", "{r:?}");
     assert_eq!(err_reason(&r), "policy_collapsed");
@@ -429,10 +423,7 @@ fn s6_3b_attribution_v_legs_at_the_boundary() {
     let r = call(
         &mut svc,
         "lab.attribution.attribute",
-        Json::obj([
-            ("design", design_json()),
-            ("outcomes", uncoupled),
-        ]),
+        Json::obj([("design", design_json()), ("outcomes", uncoupled)]),
     );
     assert_eq!(err_reason(&r), "coupling_unavailable");
     // ReplayInvalid — an invalid branch.
@@ -445,10 +436,7 @@ fn s6_3b_attribution_v_legs_at_the_boundary() {
     let r = call(
         &mut svc,
         "lab.attribution.attribute",
-        Json::obj([
-            ("design", design_json()),
-            ("outcomes", invalid),
-        ]),
+        Json::obj([("design", design_json()), ("outcomes", invalid)]),
     );
     assert_eq!(err_reason(&r), "replay_invalid");
     // A cell outside the plan refuses (join integrity).
@@ -463,10 +451,7 @@ fn s6_3b_attribution_v_legs_at_the_boundary() {
     let r = call(
         &mut svc,
         "lab.attribution.attribute",
-        Json::obj([
-            ("design", design_json()),
-            ("outcomes", extra),
-        ]),
+        Json::obj([("design", design_json()), ("outcomes", extra)]),
     );
     assert_eq!(err_reason(&r), "cell_out_of_plan");
 }

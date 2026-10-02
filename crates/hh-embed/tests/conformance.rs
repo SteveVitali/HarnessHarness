@@ -5040,7 +5040,10 @@ fn s6_3b_counterfactual_crn_pairs_share_the_exogenous_draw() {
     // The CRN property — replicate i's two arms carry the same seed.
     for i in 0..2 {
         let fs = factual[i].get("seed").and_then(Json::as_str).unwrap();
-        let cs = counterfactual[i].get("seed").and_then(Json::as_str).unwrap();
+        let cs = counterfactual[i]
+            .get("seed")
+            .and_then(Json::as_str)
+            .unwrap();
         assert_eq!(fs, cs, "crn shares the exogenous draw per replicate");
         assert_eq!(
             factual[i].get("replicate_index").and_then(Json::as_int),
@@ -5053,10 +5056,7 @@ fn s6_3b_counterfactual_crn_pairs_share_the_exogenous_draw() {
         factual[1].get("seed").and_then(Json::as_str)
     );
     for a in factual.iter().chain(counterfactual.iter()) {
-        assert_eq!(
-            a.get("noise_coupling").and_then(Json::as_str),
-            Some("crn")
-        );
+        assert_eq!(a.get("noise_coupling").and_then(Json::as_str), Some("crn"));
         assert_eq!(a.get("fork_point").and_then(Json::as_int), Some(0));
         assert_eq!(
             a.get("target").and_then(Json::as_str),
@@ -5110,13 +5110,16 @@ fn s6_3b_attribution_open_arms_rides_group_w() {
         ("k", Json::Int(4)),
         ("replay_mode_requested", Json::str("deterministic")),
         ("noise_coupling", Json::str("crn")),
-        ("match", Json::obj(vec![
-            ("dimensions", Json::Arr(vec![Json::str("model_calls")])),
-            ("mode", Json::str("matched_total")),
-            ("tolerance", Json::Int(0)),
-            ("model_scope", Json::str("same_snapshot")),
-            ("cache_policy", Json::str("cold_start")),
-        ])),
+        (
+            "match",
+            Json::obj(vec![
+                ("dimensions", Json::Arr(vec![Json::str("model_calls")])),
+                ("mode", Json::str("matched_total")),
+                ("tolerance", Json::Int(0)),
+                ("model_scope", Json::str("same_snapshot")),
+                ("cache_policy", Json::str("cold_start")),
+            ]),
+        ),
         ("outcome", Json::str("task_success")),
         ("budget", Json::obj(vec![("reserved", Json::Int(0))])),
         ("seed", Json::Int(7)),
@@ -5145,11 +5148,14 @@ fn s6_3b_attribution_open_arms_rides_group_w() {
                 ("replicate_index", Json::Int(i)),
                 ("outcome", Json::Int(p)),
                 ("validity", Json::str("deterministic")),
-                ("change_rate_ppm", if role == "factual" {
-                    Json::Int(1_000_000)
-                } else {
-                    Json::Null
-                }),
+                (
+                    "change_rate_ppm",
+                    if role == "factual" {
+                        Json::Int(1_000_000)
+                    } else {
+                        Json::Null
+                    },
+                ),
                 ("spend", Json::Int(1)),
             ]));
         }
@@ -5169,7 +5175,11 @@ fn s6_3b_attribution_open_arms_rides_group_w() {
         Some(Json::Arr(a)) => a.clone(),
         other => panic!("arms: {other:?}"),
     };
-    assert_eq!(arms.len(), 1, "one (target, fork_point) counterfactual call");
+    assert_eq!(
+        arms.len(),
+        1,
+        "one (target, fork_point) counterfactual call"
+    );
     let opened = arms[0]
         .get("result")
         .unwrap_or_else(|| panic!("opened: {:?}", arms[0]));
@@ -5184,10 +5194,7 @@ fn s6_3b_attribution_open_arms_rides_group_w() {
                 a.get("charged_to").and_then(Json::as_str),
                 Some("instrument")
             );
-            assert_eq!(
-                a.get("noise_coupling").and_then(Json::as_str),
-                Some("crn")
-            );
+            assert_eq!(a.get("noise_coupling").and_then(Json::as_str), Some("crn"));
         }
     }
     let report = out.get("report").expect("report");

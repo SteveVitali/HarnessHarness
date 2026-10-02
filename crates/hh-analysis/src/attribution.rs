@@ -248,8 +248,14 @@ impl std::fmt::Display for AttributionError {
             AttributionError::OutcomeOracleUndeclared { outcome } => {
                 write!(f, "OutcomeOracleUndeclared: {outcome}")
             }
-            AttributionError::BudgetExceeded { reserved, requested } => {
-                write!(f, "BudgetExceeded: requested {requested} > reserved {reserved}")
+            AttributionError::BudgetExceeded {
+                reserved,
+                requested,
+            } => {
+                write!(
+                    f,
+                    "BudgetExceeded: requested {requested} > reserved {reserved}"
+                )
             }
             AttributionError::ReplayInvalid { reason } => {
                 write!(f, "ReplayInvalid: {reason}")
@@ -372,10 +378,7 @@ impl CoupledSource {
     pub fn to_json(&self) -> Json {
         Json::obj([
             ("source", Json::str(&self.source)),
-            (
-                "coupling_agreement",
-                Json::Bool(self.coupling_agreement),
-            ),
+            ("coupling_agreement", Json::Bool(self.coupling_agreement)),
         ])
     }
 
@@ -489,10 +492,7 @@ impl AttributionDesign {
         m.insert(
             "subject".into(),
             Json::obj([
-                (
-                    "configuration_id",
-                    Json::str(&self.configuration_id),
-                ),
+                ("configuration_id", Json::str(&self.configuration_id)),
                 (
                     "run_ids",
                     Json::Arr(self.run_ids.iter().map(Json::str).collect()),
@@ -517,10 +517,7 @@ impl AttributionDesign {
             "replay_mode_requested".into(),
             Json::str(&self.replay_mode_requested),
         );
-        m.insert(
-            "noise_coupling".into(),
-            Json::str(&self.noise_coupling),
-        );
+        m.insert("noise_coupling".into(), Json::str(&self.noise_coupling));
         m.insert(
             "coupling_assumption".into(),
             Json::str(&self.coupling_assumption),
@@ -551,10 +548,7 @@ impl AttributionDesign {
                 "shapley".into(),
                 Json::obj([
                     ("n_permutations", Json::Int(self.n_permutations as i64)),
-                    (
-                        "samples_per_eval",
-                        Json::Int(self.samples_per_eval as i64),
-                    ),
+                    ("samples_per_eval", Json::Int(self.samples_per_eval as i64)),
                     ("antithetic", Json::Bool(self.antithetic)),
                 ]),
             );
@@ -676,12 +670,8 @@ impl AttributionDesign {
             fork_policy: str_at(m, "fork_policy", "attribution_design")?.to_string(),
             fork_kind: opt_str_at(m, "fork_kind")?.map(str::to_string),
             k: int_at(m, "k", "attribution_design")? as u32,
-            replay_mode_requested: str_at(
-                m,
-                "replay_mode_requested",
-                "attribution_design",
-            )?
-            .to_string(),
+            replay_mode_requested: str_at(m, "replay_mode_requested", "attribution_design")?
+                .to_string(),
             noise_coupling: str_at(m, "noise_coupling", "attribution_design")?.to_string(),
             coupling_assumption: opt_str_at(m, "coupling_assumption")?
                 .unwrap_or("weak")
@@ -691,15 +681,14 @@ impl AttributionDesign {
                 Some(j) => j.clone(),
             },
             outcome: str_at(m, "outcome", "attribution_design")?.to_string(),
-            outcome_oracle_class: opt_str_at(m, "outcome_oracle_class")?
-                .map(str::to_string),
-            outcome_calibration_ref: opt_str_at(m, "outcome_calibration_ref")?
-                .map(str::to_string),
+            outcome_oracle_class: opt_str_at(m, "outcome_oracle_class")?.map(str::to_string),
+            outcome_calibration_ref: opt_str_at(m, "outcome_calibration_ref")?.map(str::to_string),
             budget_reserved: int_at(bm, "reserved", "budget")?,
             seed: int_at(m, "seed", "attribution_design")?,
-            claim_kind: opt_str_at(m, "claim_kind")?.unwrap_or("outcome").to_string(),
-            pre_registration_ref: opt_str_at(m, "pre_registration_ref")?
-                .map(str::to_string),
+            claim_kind: opt_str_at(m, "claim_kind")?
+                .unwrap_or("outcome")
+                .to_string(),
+            pre_registration_ref: opt_str_at(m, "pre_registration_ref")?.map(str::to_string),
             coupled_sources: coupled,
             n_permutations,
             samples_per_eval,
@@ -794,9 +783,7 @@ pub fn validate_design(d: &AttributionDesign) -> Result<(), AttributionError> {
     if let Some(mode) = d.match_spec.get("mode").and_then(Json::as_str) {
         if mode != "matched_total" && d.method != "M1" {
             return Err(AttributionError::UnmatchedBudget {
-                detail: format!(
-                    "match mode `{mode}` — attribution claims ride matched_total"
-                ),
+                detail: format!("match mode `{mode}` — attribution claims ride matched_total"),
             });
         }
     }
@@ -873,9 +860,7 @@ pub fn validate_design(d: &AttributionDesign) -> Result<(), AttributionError> {
     }
     // V5's judged path — a judged outcome oracle names its active
     // calibration (the effect then never confirms).
-    if d.outcome_oracle_class.as_deref() == Some("judge")
-        && d.outcome_calibration_ref.is_none()
-    {
+    if d.outcome_oracle_class.as_deref() == Some("judge") && d.outcome_calibration_ref.is_none() {
         return Err(AttributionError::OutcomeOracleUndeclared {
             outcome: d.outcome.clone(),
         });
@@ -1068,7 +1053,14 @@ pub fn attribution_plan(
                 for &fp in &fps {
                     for i in 0..d.k {
                         push(level, fp, "factual", i, Vec::new(), "do_resample");
-                        push(level, fp, "counterfactual", i, Vec::new(), "definition_diff");
+                        push(
+                            level,
+                            fp,
+                            "counterfactual",
+                            i,
+                            Vec::new(),
+                            "definition_diff",
+                        );
                     }
                 }
             }
@@ -1252,7 +1244,9 @@ impl ArmOutcome {
             role: str_at(m, "role", "arm_outcome")?.to_string(),
             replicate_index: int_at(m, "replicate_index", "arm_outcome")? as u32,
             outcome: opt_int_at(m, "outcome")?,
-            validity: opt_str_at(m, "validity")?.unwrap_or("re_executed").to_string(),
+            validity: opt_str_at(m, "validity")?
+                .unwrap_or("re_executed")
+                .to_string(),
             change_rate_ppm: opt_int_at(m, "change_rate_ppm")?,
             deferred_paused: opt_bool_at(m, "deferred_paused")?.unwrap_or(false),
             consumed_sources: match m.get("consumed_sources") {
@@ -1331,8 +1325,7 @@ pub fn attribute(
     // is a reported fact, never an overspend.
     let truncated = {
         let distinct_fps: BTreeSet<i64> = planned.iter().map(|c| c.fork_point).collect();
-        d.budget_reserved > 0
-            && estimate_rollouts(d, distinct_fps.len().max(1)) > planned_rollouts
+        d.budget_reserved > 0 && estimate_rollouts(d, distinct_fps.len().max(1)) > planned_rollouts
     };
     let mut by_cell: BTreeMap<String, &ArmOutcome> = BTreeMap::new();
     for o in outcomes {
@@ -1355,7 +1348,11 @@ pub fn attribute(
             }
         }
     };
-    let mut label_ceiling = if estimand == "TE_marg" { "exploratory" } else { d.label.as_str() };
+    let mut label_ceiling = if estimand == "TE_marg" {
+        "exploratory"
+    } else {
+        d.label.as_str()
+    };
     if d.method == "M5" || d.outcome_oracle_class.as_deref() == Some("judge") {
         label_ceiling = "exploratory";
     }
@@ -1464,8 +1461,7 @@ pub fn attribute(
         }
         // The per-cell interval: binary ⇒ Newcombe–Wilson on the two
         // proportions; unit ⇒ CLT over the per-replicate paired diffs.
-        let iv = if is_binary(&fact_vals) && is_binary(&cf_vals) && !fact_vals.is_empty()
-        {
+        let iv = if is_binary(&fact_vals) && is_binary(&cf_vals) && !fact_vals.is_empty() {
             let c1 = cf_vals.iter().filter(|&&v| v == PPM).count() as i64;
             let c0 = fact_vals.iter().filter(|&&v| v == PPM).count() as i64;
             newcombe_diff(
@@ -1514,10 +1510,7 @@ pub fn attribute(
             ]),
         );
         e.insert("replay_mode".into(), Json::str(&d.replay_mode_requested));
-        e.insert(
-            "validity_mode".into(),
-            Json::str(order[min_validity_rank]),
-        );
+        e.insert("validity_mode".into(), Json::str(order[min_validity_rank]));
         e.insert(
             "change_rate".into(),
             stats::mean(&rates).map(Json::Int).unwrap_or(Json::Null),
@@ -1546,9 +1539,9 @@ pub fn attribute(
     // `per_target_effect` — the pooled form M5 needs (its three-arm
     // fold recomputes DE/ME below).
     let mut per_target_effect = |t: &ComponentTarget,
-                             fps: &[i64],
-                             roles: &[&str],
-                             outcomes: &BTreeMap<String, &ArmOutcome>|
+                                 fps: &[i64],
+                                 roles: &[&str],
+                                 outcomes: &BTreeMap<String, &ArmOutcome>|
      -> (Json, Vec<i64>, bool) {
         let mut fork_diffs: Vec<i64> = Vec::new();
         let mut effects_rows: Vec<Json> = Vec::new();
@@ -1642,22 +1635,13 @@ pub fn attribute(
                     Json::obj([
                         ("factual_branches", Json::Int(n_fact)),
                         ("counterfactual_branches", Json::Int(n_cf)),
-                        (
-                            "fork_points",
-                            Json::Int(fork_points_seen.len() as i64),
-                        ),
+                        ("fork_points", Json::Int(fork_points_seen.len() as i64)),
                         ("not_run", Json::Int(not_run)),
                     ]),
                 );
                 e.insert("replay_mode".into(), Json::str(&d.replay_mode_requested));
-                e.insert(
-                    "validity_mode".into(),
-                    Json::str(order[min_validity_rank]),
-                );
-                e.insert(
-                    "cells".into(),
-                    Json::Arr(effects_rows),
-                );
+                e.insert("validity_mode".into(), Json::str(order[min_validity_rank]));
+                e.insert("cells".into(), Json::Arr(effects_rows));
                 if collapsed {
                     e.insert("policy_collapsed".into(), Json::Bool(true));
                 }
@@ -1787,12 +1771,8 @@ pub fn attribute(
                                 } else {
                                     (t.clone(), prev.clone())
                                 };
-                                pairs
-                                    .entry(key)
-                                    .or_default()
-                                    .push(dv - c - b + a);
+                                pairs.entry(key).or_default().push(dv - c - b + a);
                             }
-                
                         }
                     }
                     held = next;
@@ -1813,13 +1793,8 @@ pub fn attribute(
                     ("point", Json::Int(point)),
                     (
                         "interval",
-                        iv.map(|i| {
-                            Json::obj([
-                                ("lo", Json::Int(i.lo)),
-                                ("hi", Json::Int(i.hi)),
-                            ])
-                        })
-                        .unwrap_or(Json::Null),
+                        iv.map(|i| Json::obj([("lo", Json::Int(i.lo)), ("hi", Json::Int(i.hi))]))
+                            .unwrap_or(Json::Null),
                     ),
                     ("n_walks", Json::Int(diffs.len() as i64)),
                 ]));
@@ -1841,10 +1816,7 @@ pub fn attribute(
                 ("values", Json::Arr(values)),
                 ("efficiency_check", Json::Int(efficiency_check)),
                 ("interaction_index", Json::Arr(interaction)),
-                (
-                    "permutations_completed",
-                    Json::Int(permutations_completed),
-                ),
+                ("permutations_completed", Json::Int(permutations_completed)),
                 ("permutations_requested", Json::Int(walks.len() as i64)),
                 ("antithetic", Json::Bool(d.antithetic)),
                 ("budget_truncated", Json::Bool(budget_truncated)),
@@ -1864,10 +1836,7 @@ pub fn attribute(
             if let Json::Obj(m) = &mut report {
                 m.insert("shapley".into(), shapley);
                 if let Some(dt) = d.delta_total {
-                    m.insert(
-                        "unattributed_share".into(),
-                        Json::Int(dt - phi_sum),
-                    );
+                    m.insert("unattributed_share".into(), Json::Int(dt - phi_sum));
                 }
                 m.insert("effects".into(), Json::Arr(effects));
             }
@@ -1952,7 +1921,10 @@ pub fn attribute(
                             "factor_b",
                             Json::str(d.m4_factor.as_deref().unwrap_or("environment")),
                         ),
-                        ("levels", Json::Arr(d.m4_levels.iter().map(Json::str).collect())),
+                        (
+                            "levels",
+                            Json::Arr(d.m4_levels.iter().map(Json::str).collect()),
+                        ),
                         (
                             "point",
                             stats::mean(&interaction_diffs)
@@ -1962,10 +1934,7 @@ pub fn attribute(
                         (
                             "interval",
                             iv.map(|i| {
-                                Json::obj([
-                                    ("lo", Json::Int(i.lo)),
-                                    ("hi", Json::Int(i.hi)),
-                                ])
+                                Json::obj([("lo", Json::Int(i.lo)), ("hi", Json::Int(i.hi))])
                             })
                             .unwrap_or(Json::Null),
                         ),
@@ -1986,8 +1955,12 @@ pub fn attribute(
             let mut excluded = 0usize;
             let mut total = 0usize;
             for t in &d.targets {
-                let (effect, diffs, collapsed) =
-                    per_target_effect(t, &all_fps, &["factual", "counterfactual", "direct"], &by_cell);
+                let (effect, diffs, collapsed) = per_target_effect(
+                    t,
+                    &all_fps,
+                    &["factual", "counterfactual", "direct"],
+                    &by_cell,
+                );
                 let mut e = effect;
                 // Recompute DE/ME from the three-arm fold.
                 let mut de_vals: Vec<i64> = Vec::new();
@@ -2116,18 +2089,12 @@ pub fn attribute(
                 }
                 let mut diffs: Vec<i64> = Vec::new();
                 for &fp in &all_fps {
-                    let (mut row, diff, _collapsed) = per_fork_effect(
-                        t,
-                        fp,
-                        &["factual", "counterfactual"],
-                        &by_cell,
-                    );
+                    let (mut row, diff, _collapsed) =
+                        per_fork_effect(t, fp, &["factual", "counterfactual"], &by_cell);
                     if let Json::Obj(m) = &mut row {
                         m.insert(
                             "coupled_sources".into(),
-                            Json::Arr(
-                                d.coupled_sources.iter().map(|c| c.to_json()).collect(),
-                            ),
+                            Json::Arr(d.coupled_sources.iter().map(|c| c.to_json()).collect()),
                         );
                     }
                     if let Some(x) = diff {
@@ -2172,12 +2139,8 @@ pub fn attribute(
         .iter()
         .enumerate()
         .map(|(i, diffs)| {
-            stats::permutation_signflip_p(
-                diffs,
-                500,
-                &format!("attr.mult:{}:{i}", d.seed),
-            )
-            .unwrap_or(PPM)
+            stats::permutation_signflip_p(diffs, 500, &format!("attr.mult:{}:{i}", d.seed))
+                .unwrap_or(PPM)
         })
         .collect();
     let adjusted = if d.pre_registration_ref.is_some() {
@@ -2185,7 +2148,15 @@ pub fn attribute(
     } else {
         stats::benjamini_hochberg(&raw_ps)
     };
-    let mut report = base_report(d, estimand, label_ceiling, &reasons, spend, planned_rollouts, truncated);
+    let mut report = base_report(
+        d,
+        estimand,
+        label_ceiling,
+        &reasons,
+        spend,
+        planned_rollouts,
+        truncated,
+    );
     if let Json::Obj(m) = &mut report {
         m.insert("effects".into(), Json::Arr(effects));
         if let Some(u) = unattributed {
@@ -2194,10 +2165,7 @@ pub fn attribute(
         m.insert(
             "multiplicity".into(),
             Json::obj([
-                (
-                    "family",
-                    Json::Int(d.targets.len() as i64),
-                ),
+                ("family", Json::Int(d.targets.len() as i64)),
                 (
                     "adjusted",
                     Json::str(if d.pre_registration_ref.is_some() {
@@ -2248,10 +2216,7 @@ fn base_report(
     m.insert(
         "subject".into(),
         Json::obj([
-            (
-                "configuration_id",
-                Json::str(&d.configuration_id),
-            ),
+            ("configuration_id", Json::str(&d.configuration_id)),
             (
                 "run_ids",
                 Json::Arr(d.run_ids.iter().map(Json::str).collect()),
@@ -2277,23 +2242,14 @@ fn base_report(
             ("rollouts", Json::Int(rollouts)),
             ("spend", Json::Int(spend)),
             ("charged_to", Json::str("instrument")),
-            (
-                "budget_truncated",
-                Json::Bool(truncated),
-            ),
+            ("budget_truncated", Json::Bool(truncated)),
         ]),
     );
     m.insert(
         "assumptions".into(),
         Json::obj([
-            (
-                "coupling_assumption",
-                Json::str(&d.coupling_assumption),
-            ),
-            (
-                "fork_policy",
-                Json::str(effective_fork_policy(d)),
-            ),
+            ("coupling_assumption", Json::str(&d.coupling_assumption)),
+            ("fork_policy", Json::str(effective_fork_policy(d))),
             ("noise_coupling", Json::str(&d.noise_coupling)),
         ]),
     );
@@ -2315,10 +2271,7 @@ fn base_report(
 fn finish_report(mut report: Json) -> Json {
     if let Json::Obj(m) = &report {
         let body = Json::Obj(m.clone());
-        let id = idp_id(
-            "attribution.report",
-            body.to_canonical_string().as_bytes(),
-        );
+        let id = idp_id("attribution.report", body.to_canonical_string().as_bytes());
         if let Json::Obj(mm) = &mut report {
             mm.insert("report_id".into(), Json::str(id));
         }
@@ -2396,10 +2349,7 @@ pub fn locus(report: &Json) -> Option<Json> {
         if let Json::Obj(mm) = &mut m {
             mm.insert(
                 "earliest_direct".into(),
-                Json::obj([
-                    ("seq", Json::Int(es)),
-                    ("target", Json::str(&et)),
-                ]),
+                Json::obj([("seq", Json::Int(es)), ("target", Json::str(&et))]),
             );
             mm.insert("disagreement".into(), Json::Bool(es != seq || et != target));
         }
@@ -2442,19 +2392,11 @@ pub fn attribution_quality(delta: &Json, reports: &[Json], hosted: bool) -> Json
     for r in reports {
         if let Some(Json::Arr(values)) = r.get("shapley").and_then(|s| s.get("values")) {
             for v in values {
-                share += v
-                    .get("point")
-                    .and_then(Json::as_int)
-                    .unwrap_or(0)
-                    .abs();
+                share += v.get("point").and_then(Json::as_int).unwrap_or(0).abs();
             }
         } else if let Some(Json::Arr(effects)) = r.get("effects") {
             for e in effects {
-                share += e
-                    .get("point")
-                    .and_then(Json::as_int)
-                    .unwrap_or(0)
-                    .abs();
+                share += e.get("point").and_then(Json::as_int).unwrap_or(0).abs();
             }
         }
     }

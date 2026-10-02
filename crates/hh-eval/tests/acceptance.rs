@@ -1598,3 +1598,110 @@ fn critic_experiment_reports_five_deltas_under_matchspec() {
     .unwrap_err();
     assert!(matches!(err, CompareError::UnknownMetric { .. }));
 }
+
+// S6.3b (R-2.10.4⁴) — the value-of-compute row `critic_experiment`
+// feeds: `placement_row` folds the {on,off} outcome into the
+// `PlacementFact` member set (the boundary's placement decision decodes
+// it records-in; §6.4 §2.1's value table + ADR-0188's uncaught-cost
+// floor).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn critic_experiment_placement_row_folds_the_value_of_compute_row() {
+    use hh_eval::critic_experiment::{
+        critic_experiment, placement_row, CriticExperimentInput, ARM_OFF, ARM_ON,
+        CRITIC_EXPERIMENT_METRICS,
+    };
+    let decls: Vec<MetricDeclaration> = CRITIC_EXPERIMENT_METRICS
+        .iter()
+        .map(|m| metric(m))
+        .collect();
+    let mut runs = Vec::new();
+    for m in CRITIC_EXPERIMENT_METRICS {
+        for rep in 0..2u64 {
+            for task in ["t1", "t2"] {
+                for arm in [ARM_OFF, ARM_ON] {
+                    let mut r = run(arm, task, rep, 1, m);
+                    r.run_id = format!("r-{arm}-{task}-{rep}-{m}");
+                    r.values[0].value = match m {
+                        "task_success" => MetricValueKind::Bool(!(arm == ARM_OFF && task == "t2")),
+                        "harness_overhead.verification" => {
+                            MetricValueKind::Decimal(if arm == ARM_ON { 120_000 } else { 100_000 })
+                        }
+                        "evaluator_calls" => {
+                            MetricValueKind::Decimal(if arm == ARM_ON { 3 } else { 1 })
+                        }
+                        "false_stop_rate" => {
+                            MetricValueKind::Decimal(if arm == ARM_ON { 0 } else { 200_000 })
+                        }
+                        _ => MetricValueKind::Decimal(if arm == ARM_ON { 50_000 } else { 300_000 }),
+                    };
+                    runs.push(r);
+                }
+            }
+        }
+    }
+    let arms = vec![
+        arm_spec(DimensionId::ModelCalls),
+        arm_spec(DimensionId::ModelCalls),
+    ];
+    let ts = tasks();
+    let d = design();
+    let out = critic_experiment(&CriticExperimentInput {
+        critic_ref: "deterministic:reconciliation@1",
+        placement: "completion_gate",
+        design: &d,
+        arm_specs: &arms,
+        runs: &runs,
+        tasks: &ts,
+        declarations: &decls,
+        confidence_ppm: 950_000,
+        benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
+        held_out: true,
+    })
+    .unwrap();
+    let row = placement_row(
+        &out,
+        "deterministic:reconciliation@1",
+        "completion_gate",
+        500_000,
+        "active",
+    )
+    .expect("placement row");
+    // The member set is the `PlacementFact` spelling verbatim — the
+    // value-of-compute consumer decodes it records-in.
+    let j = row.to_json();
+    assert_eq!(
+        j.get("schema").and_then(Json::as_str),
+        Some("hh-critic-placement-row/1")
+    );
+    for m in [
+        "critic_ref",
+        "placement",
+        "calibration_status",
+        "missed_failure_rate",
+        "false_stop_rate",
+        "verification_overhead",
+        "uncaught_cost",
+        "removal_test",
+    ] {
+        assert!(j.get(m).is_some(), "missing member {m}");
+    }
+    // Rates come from the critic-on arm's absolute cells.
+    assert_eq!(
+        j.get("missed_failure_rate").and_then(Json::as_int),
+        Some(50_000)
+    );
+    assert_eq!(j.get("false_stop_rate").and_then(Json::as_int), Some(0));
+    // The verification overhead is the on−off delta (20_000 ppm), never
+    // the off arm's total.
+    assert_eq!(
+        j.get("verification_overhead").and_then(Json::as_int),
+        Some(20_000)
+    );
+    assert_eq!(j.get("uncaught_cost").and_then(Json::as_int), Some(500_000));
+    assert_eq!(
+        j.get("removal_test").and_then(Json::as_str),
+        Some("critic_experiment:deterministic:reconciliation@1:completion_gate")
+    );
+}

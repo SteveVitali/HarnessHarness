@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:055c2468cecdff1435d863cbadb41bbfef25da205683a39c3c16cca1d56183ef";
+    "sha256:6d66d2c18e53f110c878c2f8f815ee43204514091dcc7b001fd522a8804d92f5";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -7109,9 +7109,27 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.evolution.lineage` → `json` (see the contract registry).
+    pub fn lab_evolution_lineage(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.lineage", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.evolution.matched_eval` → `json` (see the contract registry).
     pub fn lab_evolution_matched_eval(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.evolution.matched_eval", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.monitor_assign` → `json` (see the contract registry).
+    pub fn lab_evolution_monitor_assign(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.monitor_assign", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.monitor_veto` → `json` (see the contract registry).
+    pub fn lab_evolution_monitor_veto(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.monitor_veto", params.clone())?;
         Ok(raw)
     }
 

@@ -1478,6 +1478,47 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
+        // ── S6.3b (§8.1 R-2.7.3⁴ + R-2.12.1⁴): the monitor-selector
+        // protocols (deterministic-first `assigned` before `veto` —
+        // veto-only, never a vote) and the lineage-DAG surface
+        // (`lineage` returns the DAG; `attribution` folds the deposited
+        // `hh-attribution/1` reports over it).
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.monitor_assign",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.monitor_veto",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.lineage",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
         // S3.1 (R-2.11.3⁰; ADR-0097 D7/ADR-0173): `serve(bundle)` — the
         // Stage-3 fixture MCP server over stdio. The op decodes the
         // bundle, extracts its compiled `target:mcp` member and returns
