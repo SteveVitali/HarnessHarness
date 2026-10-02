@@ -161,6 +161,23 @@ pub enum FleetError {
         /// The reason code.
         reason: String,
     },
+    /// The work-source adapter faulted — `SourceUnavailable{source_ref}`
+    /// (§5i.1 #5's failure row: the faulting `source_ref` is carried, the
+    /// reason itself stays adapter-side).
+    SourceUnavailable {
+        /// The faulting source's ref.
+        source: String,
+    },
+    /// The dispatch would exceed the owner pool's
+    /// `ext.effects.external_irreversible` hard bound —
+    /// `deny{irreversibility_ceiling}` (ADR-0207 D5 as amended; optional —
+    /// unset dimension changes nothing).
+    IrreversibilityCeiling {
+        /// The work item.
+        item: String,
+        /// The pool's declared hard bound.
+        hard: i64,
+    },
     /// A malformed durable record — `Refused{invalid_payload}` (panic-free
     /// surface for boundary tests; the in-process fold still panics).
     InvalidPayload {
@@ -207,6 +224,8 @@ impl FleetError {
                 format!("unsupported_trigger{{trigger:{trigger}}}")
             }
             FleetError::Unsupported { reason, .. } => reason.clone(),
+            FleetError::SourceUnavailable { .. } => "source_unavailable".to_string(),
+            FleetError::IrreversibilityCeiling { .. } => "irreversibility_ceiling".to_string(),
             FleetError::InvalidPayload { .. } => "invalid_payload".to_string(),
             FleetError::SchemaViolation { .. } => "schema_violation".to_string(),
         }
@@ -272,6 +291,12 @@ impl fmt::Display for FleetError {
             }
             FleetError::Unsupported { op, reason } => {
                 write!(f, "Unsupported: {op} — {reason}")
+            }
+            FleetError::SourceUnavailable { source } => {
+                write!(f, "SourceUnavailable: {source}")
+            }
+            FleetError::IrreversibilityCeiling { item, hard } => {
+                write!(f, "IrreversibilityCeiling: {item} over pool hard {hard}")
             }
             FleetError::InvalidPayload { detail } => {
                 write!(f, "InvalidPayload: {detail}")

@@ -240,7 +240,7 @@ fn ac1_open_activates_fleet_run() {
 fn ac2_rc8_observe_admit_dispatch_idempotent() {
     let (mut s, clock) = store("ac2", 1_000);
     let (run, mut eng) = open_engine(&mut s, spec());
-    let ad = fixture(
+    let mut ad = fixture(
         Json::Arr(vec![occ(
             "occ-1",
             "external",
@@ -252,7 +252,7 @@ fn ac2_rc8_observe_admit_dispatch_idempotent() {
         &["i1"],
     );
     clock.advance(100);
-    let r = eng.reconcile(&mut s, &ad, 1_100).unwrap();
+    let r = eng.reconcile(&mut s, &mut ad, 1_100).unwrap();
     assert_eq!(r.dispatched, vec!["i1".to_string()]);
     let it = eng.work_item("i1").unwrap();
     // RC-2's lease+mark lands `dispatching`; the launcher's durable
@@ -276,7 +276,7 @@ fn ac2_rc8_observe_admit_dispatch_idempotent() {
     // Replay the same fixture — level-triggered idempotence: no new
     // admits, no double-fire (RC-8).
     let n_events = s.events(&run).unwrap().len();
-    let r2 = eng.reconcile(&mut s, &ad, 1_100).unwrap();
+    let r2 = eng.reconcile(&mut s, &mut ad, 1_100).unwrap();
     assert!(r2.dispatched.is_empty());
     assert!(r2.observed.is_empty());
     let evs = s.events(&run).unwrap();
@@ -319,7 +319,7 @@ fn ac3_blocked_escalate_resolve() {
     });
     eng.admit(&mut s, init).unwrap();
     eng.block(&mut s, "i1", "dependency").unwrap();
-    let r = eng.reconcile(&mut s, &empty_adapter(), 1_100).unwrap();
+    let r = eng.reconcile(&mut s, &mut empty_adapter(), 1_100).unwrap();
     assert!(r.escalated.contains(&"i1".to_string()));
     let it = eng.work_item("i1").unwrap();
     let esc = it.escalation.clone().expect("open escalation");
@@ -373,7 +373,7 @@ fn ac4_settle_terminal() {
 fn ac5_restore_equivalence() {
     let (mut s, _c, d) = store_at("ac5", 1_000);
     let (run, mut eng) = open_engine(&mut s, spec());
-    let ad = fixture(
+    let mut ad = fixture(
         Json::Arr(vec![occ(
             "occ-1",
             "external",
@@ -384,8 +384,8 @@ fn ac5_restore_equivalence() {
         &[],
         &["i1"],
     );
-    eng.reconcile(&mut s, &ad, 1_100).unwrap();
-    let before = eng.fleet_view();
+    eng.reconcile(&mut s, &mut ad, 1_100).unwrap();
+    let before = eng.fleet_view(&mut s);
     // Process crash — drop the engine+store, reopen over the same root
     // (the WAL is the record; process memory is gone).
     drop(eng);
@@ -394,7 +394,7 @@ fn ac5_restore_equivalence() {
     // holder takeovers only after expiry (fenced, audited).
     let mut s2 = reopen(&d, 1_000 + 2 * TTL);
     let (eng2, report) =
-        FleetEngine::restore(&mut s2, &run, "restored", TTL, &ad, 1_000 + 2 * TTL).unwrap();
+        FleetEngine::restore(&mut s2, &run, "restored", TTL, &mut ad, 1_000 + 2 * TTL).unwrap();
     assert!(report.observed.is_empty(), "restore must not re-fire cues");
     assert!(
         report.dispatched.is_empty(),
@@ -405,12 +405,16 @@ fn ac5_restore_equivalence() {
     // takeover legitimately advance the folded prefix — durable, never
     // hidden).
     let mut a = before;
-    let mut b = eng2.fleet_view();
+    let mut b = eng2.fleet_view(&mut s2);
+    // `watermark` aliases `derived_from` — the same cursor (the fenced
+    // takeover rows legitimately advance it on the restored fold).
     if let Json::Obj(ref mut m) = a {
         m.remove("derived_from");
+        m.remove("watermark");
     }
     if let Json::Obj(ref mut m) = b {
         m.remove("derived_from");
+        m.remove("watermark");
     }
     assert_eq!(a, b);
 }
@@ -472,16 +476,17 @@ fn ac8_ownership_ack_handoff() {
     init.on.ack_required = true;
     eng.admit(&mut s, init).unwrap();
     // ack-required blocks dispatch until the owner acknowledges.
-    let ad = fixture(Json::Arr(vec![]), &[], &["i1"]);
+    let mut ad = fixture(Json::Arr(vec![]), &[], &["i1"]);
     let mut rep = ReconcileReport::default();
-    let r = eng.dispatch(&mut s, &ad, "i1", 1_100, &mut rep);
+    let r = eng.dispatch(&mut s, &mut ad, "i1", 1_100, &mut rep);
     assert!(
         matches!(r, Err(FleetError::OwnerAckRequired { .. })),
         "{r:?}"
     );
     eng.ack_owner(&mut s, "i1", "alice").unwrap();
     let mut rep2 = ReconcileReport::default();
-    eng.dispatch(&mut s, &ad, "i1", 1_100, &mut rep2).unwrap();
+    eng.dispatch(&mut s, &mut ad, "i1", 1_100, &mut rep2)
+        .unwrap();
     // Ownership transfer → ack resets; only the NEW owner can ack.
     eng.transfer_owner(&mut s, "i1", "bob", "policy_rule")
         .unwrap();
@@ -518,9 +523,9 @@ fn rc1_stale_spec_refuses() {
     // durable check is the gate.
     eng.admit(&mut s, item_init("i1", Some("alice"))).unwrap();
     eng.view.spec_ref = "spec:other".into();
-    let ad = fixture(Json::Arr(vec![]), &[], &["i1"]);
+    let mut ad = fixture(Json::Arr(vec![]), &[], &["i1"]);
     let mut rep = ReconcileReport::default();
-    let r = eng.dispatch(&mut s, &ad, "i1", 1_100, &mut rep);
+    let r = eng.dispatch(&mut s, &mut ad, "i1", 1_100, &mut rep);
     assert!(matches!(r, Err(FleetError::StaleSpec { .. })), "{r:?}");
 }
 
@@ -555,8 +560,8 @@ fn rc4_source_suspension_blocks_dispatch() {
     let (mut s, _c) = store("rc4", 1_000);
     let (_run, mut eng) = open_engine(&mut s, spec());
     eng.admit(&mut s, item_init("i1", Some("alice"))).unwrap();
-    let suspended = fixture(Json::Arr(vec![]), &["tickets"], &["i1"]);
-    let r = eng.reconcile(&mut s, &suspended, 1_100).unwrap();
+    let mut suspended = fixture(Json::Arr(vec![]), &["tickets"], &["i1"]);
+    let r = eng.reconcile(&mut s, &mut suspended, 1_100).unwrap();
     let it = eng.work_item("i1").unwrap();
     assert!(
         it.suspended || it.blocked.iter().any(|b| b.contains("suspended")),
@@ -575,8 +580,8 @@ fn rc5_dispatch_error_schedules_retry() {
     init.on.retry_max_attempts = Some(3);
     init.on.retry_backoff_ms = Some(60_000);
     eng.admit(&mut s, init).unwrap();
-    let ad = fixture(Json::Arr(vec![]), &[], &["i1"]);
-    let r = eng.reconcile(&mut s, &ad, 1_100).unwrap();
+    let mut ad = fixture(Json::Arr(vec![]), &[], &["i1"]);
+    let r = eng.reconcile(&mut s, &mut ad, 1_100).unwrap();
     assert!(r.dispatched.contains(&"i1".to_string()));
     let it = eng.work_item("i1").unwrap();
     let spec_ref = it
@@ -612,8 +617,8 @@ fn rc7_capacity_fan_out_bound() {
     let (_run, mut eng) = open_engine(&mut s, sp);
     eng.admit(&mut s, item_init("i1", Some("alice"))).unwrap();
     eng.admit(&mut s, item_init("i2", Some("bob"))).unwrap();
-    let ad = fixture(Json::Arr(vec![]), &[], &["i1", "i2"]);
-    let r = eng.reconcile(&mut s, &ad, 1_100).unwrap();
+    let mut ad = fixture(Json::Arr(vec![]), &[], &["i1", "i2"]);
+    let r = eng.reconcile(&mut s, &mut ad, 1_100).unwrap();
     // Deterministic order (item_id) — only i1 fits the bound; i2 stays
     // queued (the bound refuses the NEXT dispatch — a skip, not a trim).
     assert_eq!(r.dispatched, vec!["i1".to_string()]);
@@ -666,19 +671,20 @@ fn reads_render_records() {
     let (mut s, _c) = store("reads", 1_000);
     let (_run, mut eng) = open_engine(&mut s, spec());
     eng.admit(&mut s, item_init("i1", Some("alice"))).unwrap();
-    let view = eng.fleet_view();
+    let view = eng.fleet_view(&mut s);
     assert_eq!(
         view.get("schema").and_then(Json::as_str),
-        Some("hh.fleet.view/1")
+        Some("hh.fleet.view/2")
     );
     let items = eng.list();
     assert_eq!(items.len(), 1);
     // `audit_link` rows exist per *dispatched* item (the fleet_anchor
     // obligation joins `run_ref`); a pre-dispatch item carries none.
     assert!(eng.audit_link(&s).unwrap().is_empty());
-    let ad = fixture(Json::Arr(vec![]), &[], &["i1"]);
+    let mut ad = fixture(Json::Arr(vec![]), &[], &["i1"]);
     let mut rep = ReconcileReport::default();
-    eng.dispatch(&mut s, &ad, "i1", 1_100, &mut rep).unwrap();
+    eng.dispatch(&mut s, &mut ad, "i1", 1_100, &mut rep)
+        .unwrap();
     stamp_note(&mut eng, &mut s, "i1");
     let links = eng.audit_link(&s).unwrap();
     assert_eq!(links.len(), 1);

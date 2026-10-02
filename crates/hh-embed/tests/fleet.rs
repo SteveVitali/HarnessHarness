@@ -379,6 +379,9 @@ fn fleet_ops_refuse_tier_unavailable() {
         "fleet.reconcile",
         "fleet.list",
         "fleet.fleet_view",
+        "fleet.webhook_ingress",
+        "fleet.source_capabilities",
+        "fleet.source_records",
     ] {
         let r = call(&mut svc, op, Json::obj([("run", Json::str("x"))]));
         assert_eq!(
@@ -395,4 +398,165 @@ fn fleet_ops_refuse_tier_unavailable() {
             "{op}: {r:?}"
         );
     }
+}
+
+/// S5.6 — the adapter surface through the boundary (AC-R-2.12.6-9's
+/// embed leg): signed-webhook ingress → reconcile admits; the capability
+/// probe + source read minimum; FleetView's `metrics` member.
+#[cfg(feature = "tier-c4")]
+#[test]
+fn fleet_adapter_surface_through_the_boundary() {
+    let mut svc = service();
+    hello_experimental(&mut svc);
+    let r = call(&mut svc, "fleet.open", Json::obj([("spec", spec_json())]));
+    let run = r
+        .get("result")
+        .and_then(|r| r.get("run_id"))
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    // The `hh.fleet.webhook_source/1` doc — `webhook` is the IngressPolicy
+    // verbatim; `key_ref` names the broker coordinate (never the bytes).
+    let source = Json::obj([
+        ("schema_version", Json::str("hh.fleet.webhook_source/1")),
+        (
+            "webhook",
+            Json::obj([
+                ("source_id", Json::str("tickets")),
+                ("key_ref", Json::str("vault:hh/test/webhook")),
+                ("replay_window_ms", Json::Int(3_600_000)),
+                ("volatile_fields", Json::Arr(vec![Json::str("etag")])),
+                ("external_kind", Json::str("ticket.updated")),
+            ]),
+        ),
+        (
+            "records",
+            Json::Arr(vec![Json::obj([
+                ("native_id", Json::str("T-1")),
+                ("state", Json::str("open")),
+            ])]),
+        ),
+    ]);
+    // A signed delivery — `hmac-sha256:<hex>` over the canonical form;
+    // the boundary hands the broker-resolved key (verification only).
+    let key = b"boundary-webhook-key";
+    let delivery = Json::obj([
+        ("schema_version", Json::str("hh.fleet.webhook/1")),
+        ("delivery_id", Json::str("d-1")),
+        ("item", item_json("i1", "alice")),
+    ]);
+    let sig = format!(
+        "hmac-sha256:{}",
+        hh_wire::sha256::hmac_sha256_hex(key, delivery.to_canonical_string().as_bytes())
+    );
+    let r = call(
+        &mut svc,
+        "fleet.webhook_ingress",
+        Json::obj([
+            ("run", Json::str(&run)),
+            ("source", source.clone()),
+            ("delivery", delivery.clone()),
+            ("signature", Json::str(&sig)),
+            ("key", Json::str(std::str::from_utf8(key).unwrap())),
+        ]),
+    );
+    let status = r
+        .get("result")
+        .and_then(|r| r.get("status"))
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_string();
+    assert_eq!(status, "received", "webhook_ingress: {r:?}");
+    // A bad signature refuses — closed fail set, never a silent drop.
+    let r = call(
+        &mut svc,
+        "fleet.webhook_ingress",
+        Json::obj([
+            ("run", Json::str(&run)),
+            ("source", source.clone()),
+            ("delivery", delivery.clone()),
+            ("signature", Json::str("hmac-sha256:deadbeef")),
+            ("key", Json::str(std::str::from_utf8(key).unwrap())),
+        ]),
+    );
+    assert_eq!(err_kind(&r), "Refused", "bad signature must refuse: {r:?}");
+    // The capability probe + source records through the boundary —
+    // `push_delivery_id` declared, the records member verbatim.
+    let r = call(
+        &mut svc,
+        "fleet.source_capabilities",
+        Json::obj([("run", Json::str(&run)), ("source", source.clone())]),
+    );
+    let caps = r.get("result").and_then(|r| r.get("capabilities"));
+    assert_eq!(
+        caps.and_then(|c| c.get("push_delivery_id"))
+            .and_then(Json::as_str),
+        Some("declared"),
+        "capabilities: {r:?}"
+    );
+    let r = call(
+        &mut svc,
+        "fleet.source_records",
+        Json::obj([("run", Json::str(&run)), ("source", source.clone())]),
+    );
+    assert_eq!(
+        r.get("result")
+            .and_then(|r| r.get("records"))
+            .and_then(|rs| rs.as_str().map(|_| ()))
+            .or_else(|| { r.get("result").and_then(|r| r.get("records")).map(|_| ()) })
+            .map(|_| ()),
+        Some(()),
+        "source_records: {r:?}"
+    );
+    // The signed delivery lands in the activation on the next reconcile —
+    // the WebhookAdapter the boundary built holds the queued occurrence;
+    // a second `webhook_ingress` carrying the same delivery is a
+    // `duplicate` label (process-side; the durable skip audits at fold).
+    let r = call(
+        &mut svc,
+        "fleet.webhook_ingress",
+        Json::obj([
+            ("run", Json::str(&run)),
+            ("source", source.clone()),
+            ("delivery", delivery),
+            ("signature", Json::str(&sig)),
+            ("key", Json::str(std::str::from_utf8(key).unwrap())),
+        ]),
+    );
+    // Note: each `fleet.*` call rebuilds the adapter from the pinned doc —
+    // a repeated delivery is fresh at the process boundary; the durable
+    // dedup is the ledger's (`occurrence_id` namespacing keeps it so).
+    let status2 = r
+        .get("result")
+        .and_then(|r| r.get("status"))
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_string();
+    assert!(status2 == "received" || status2 == "duplicate", "{r:?}");
+
+    // `fleet.fleet_view` carries the S5.6 `metrics` member — the
+    // catalogue's fleet rows in `MetricDeclaration` form.
+    let r = call(
+        &mut svc,
+        "fleet.fleet_view",
+        Json::obj([("run", Json::str(&run))]),
+    );
+    let metrics = r
+        .get("result")
+        .and_then(|v| v.get("metrics"))
+        .cloned()
+        .unwrap_or(Json::Null);
+    let names: Vec<String> = match &metrics {
+        Json::Arr(a) => a
+            .iter()
+            .filter_map(|d| d.get("name").and_then(Json::as_str).map(str::to_string))
+            .collect(),
+        _ => Vec::new(),
+    };
+    assert!(
+        names.contains(&"unowned_dispatch_count".to_string())
+            && names.contains(&"reconcile_latency_ms".to_string()),
+        "fleet_view.metrics missing fleet declarations: {names:?}"
+    );
 }

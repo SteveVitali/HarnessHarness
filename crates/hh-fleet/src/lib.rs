@@ -15,9 +15,11 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+pub mod capabilities;
 pub mod engine;
 pub mod errors;
 pub mod identity;
+pub mod ingress;
 pub mod ownership;
 pub mod payloads;
 pub mod source;
@@ -25,6 +27,7 @@ pub mod spec;
 pub mod view;
 pub mod work_item;
 
+pub use capabilities::{AdapterCapabilities, CapState, CAPABILITY_NAMES};
 pub use engine::{
     AdmitOutcome, FleetEngine, ReconcileReport, COMPONENT, ISSUES, OUTCOMES, RESOLUTION_KINDS,
     RUN_KIND,
@@ -34,6 +37,10 @@ pub use identity::{
     agent_ref, budget_ref, escalation_ref, handoff_ref, idempotency_key, issue_ref,
     lease_agent_ref, occurrence_key, rule_ref, run_item_id, source_ref, spec_ref, work_item_ref,
     FIXTURE_SCHEMA, PAYLOAD_SCHEMA, SPEC_SCHEMA,
+};
+pub use ingress::{
+    poll_occurrence_id, push_occurrence_id, IngressError, IngressOutcome, IngressPolicy,
+    SignedWebhookIngress, WebhookAdapter, DEFAULT_REPLAY_WINDOW_MS, SIG_ALG, WEBHOOK_SCHEMA,
 };
 pub use ownership::{owner_chain, OwnershipGraph};
 pub use source::{FixtureAdapter, SourceOccurrence, WorkSourceAdapter};

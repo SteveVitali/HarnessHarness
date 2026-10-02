@@ -9,7 +9,9 @@
 //! path; Rule-P keeps them kernel-produced through
 //! `commit_kernel_row_for`).
 
-use hh_budget::account::Account;
+use hh_budget::account::{Account, TotalsGroupBy, TotalsScope};
+use hh_budget::errors::BudgetError;
+use hh_budget::quantity::ResourceVector;
 use hh_budget::spec::{BudgetScope, BudgetScopeKind};
 use hh_ledger::errors::LedgerError;
 use hh_ledger::event::EventEnvelope;
@@ -17,6 +19,7 @@ use hh_ledger::leases::LeaseScope;
 use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
 use hh_ledger::store::{Lease, Store};
 use hh_ledger::wakeup::{Trigger, WakeupPolicy};
+use hh_ontology::dimensions::{DimensionId, DimensionKey};
 use hh_wire::json::Json;
 use std::collections::BTreeMap;
 
@@ -48,6 +51,11 @@ pub struct FleetEngine {
     /// fresh `FleetView::fold` of the same prefix; `ensure` rebuilds it
     /// wholesale so restart equality is *structural*).
     pub view: FleetView,
+    /// The requester stamp for the *next* writes — set by the boundary
+    /// (`set_requester`) so a surface-initiated `reconcile`/`observe`
+    /// lands rows carrying the declared requester member (P12 — the
+    /// ledgered refresh names who asked; process state, never folded).
+    pub requester: Option<Json>,
 }
 
 /// `reconcile` outcome — the surface report `{dispatched, blocked,
@@ -66,6 +74,10 @@ pub struct ReconcileReport {
     pub observed: Vec<String>,
     /// Wakeup cues fired this pass.
     pub fired: Vec<String>,
+    /// `SourceUnavailable{source_ref}` — set when the adapter faulted this
+    /// pass (§5i.1 #5's failure row): the adapter-reading passes were
+    /// skipped, activations kept, no synthetic state invented.
+    pub source_unavailable: Option<String>,
     /// The durable cursor after the pass.
     pub cursor: Cursor,
 }
@@ -101,6 +113,7 @@ pub const ISSUES: &[&str] = &[
     "conflict",
     "overdue",
     "manual",
+    "irreversibility_ceiling",
 ];
 
 impl FleetEngine {
@@ -206,6 +219,7 @@ impl FleetEngine {
                 writer_ttl_ms,
                 lease,
                 view,
+                requester: None,
             },
         ))
     }
@@ -237,6 +251,7 @@ impl FleetEngine {
             writer_ttl_ms,
             lease,
             view,
+            requester: None,
         })
     }
 
@@ -258,7 +273,17 @@ impl FleetEngine {
         Ok(())
     }
 
+    /// `set_requester` — the boundary stamps who asked before driving an
+    /// op (P12: a surface-initiated `reconcile`/`observe` lands rows
+    /// carrying the declared `requester` member). Process state only —
+    /// never folded, never durable authority.
+    pub fn set_requester(&mut self, requester: Option<Json>) {
+        self.requester = requester;
+    }
+
     /// Append one kernel row + fold it — the engine's write primitive.
+    /// When `requester` is set the row payload carries the declared
+    /// requester member verbatim (P12).
     fn emit(
         &mut self,
         store: &mut Store,
@@ -266,6 +291,10 @@ impl FleetEngine {
         payload: Json,
         causes: Vec<EventRef>,
     ) -> Result<EventEnvelope, FleetError> {
+        let mut payload = payload;
+        if let (Json::Obj(m), Some(req)) = (&mut payload, &self.requester) {
+            m.insert("requester".to_string(), req.clone());
+        }
         let env =
             store.commit_kernel_row_for(COMPONENT, &self.run_id, class, payload, vec![], causes)?;
         self.view.fold_tail(store.events(&self.run_id)?)?;
@@ -297,10 +326,16 @@ impl FleetEngine {
     pub fn observe<A: WorkSourceAdapter>(
         &mut self,
         store: &mut Store,
-        adapter: &A,
+        adapter: &mut A,
         now_ms: u64,
     ) -> Result<Vec<String>, FleetError> {
         self.bound(store)?;
+        // `SourceUnavailable{source_ref}` — a faulted adapter refuses
+        // `observe` with the typed failure (§5i.1 #5; keep activations —
+        // the reconcile seam degrades per-pass instead).
+        if let Some(source) = adapter.fault() {
+            return Err(FleetError::SourceUnavailable { source });
+        }
         let mut observed = Vec::new();
         for occ in adapter.occurrences(None) {
             if self
@@ -308,7 +343,24 @@ impl FleetEngine {
                 .observed_occurrence_ids
                 .contains(&occ.occurrence_id)
             {
-                continue; // durable dedup — replayed snapshot, no second row
+                // Duplicate delivery inside the replay window (OQ-313) —
+                // route through `wakeup_occurred` so the audited
+                // `skipped{duplicate_occurrence}` row lands (never a
+                // silent drop, never a second fire — CC3).
+                let key = identity::occurrence_key(&occ.trigger_kind, &occ.occurrence_id);
+                let trigger = self.trigger_for_occurrence(&occ);
+                if let Some(sub_id) = self.subscription_for(store, &trigger)? {
+                    store.wakeup_occurred(
+                        &self.run_id,
+                        &self.lease,
+                        &sub_id,
+                        &key,
+                        None,
+                        occ.observed_at_ms.max(now_ms),
+                    )?;
+                    self.refresh(store)?;
+                }
+                continue;
             }
             let trigger = self.trigger_for_occurrence(&occ);
             let Some(sub_id) = self.subscription_for(store, &trigger)? else {
@@ -323,7 +375,7 @@ impl FleetEngine {
                         &occ.occurrence_id,
                         &occ.item,
                         occ.observed_at_ms,
-                        "fixture",
+                        &occ.actor,
                         &identity::source_ref(&self.run_id, source_id_of(&occ.item)),
                     ),
                     vec![],
@@ -339,7 +391,7 @@ impl FleetEngine {
                     &occ.occurrence_id,
                     &occ.item,
                     occ.observed_at_ms,
-                    "fixture",
+                    &occ.actor,
                     &identity::source_ref(&self.run_id, source_id_of(&occ.item)),
                 ),
                 vec![],
@@ -441,15 +493,25 @@ impl FleetEngine {
     pub fn reconcile<A: WorkSourceAdapter>(
         &mut self,
         store: &mut Store,
-        adapter: &A,
+        adapter: &mut A,
         now_ms: u64,
     ) -> Result<ReconcileReport, FleetError> {
         self.bound(store)?;
-        // 1. Observe + fire — the durable cue intake (§5i.1 #2).
+        // `SourceUnavailable{source_ref}` (§5i.1 #5's failure row): a
+        // faulted adapter skips the adapter-reading passes (observation
+        // intake, suspensions, dispatch) this tick — activations are
+        // kept, no synthetic state is invented; the ledger-pure passes
+        // (conflicts, admits, source updates, stalls, children,
+        // escalations) still run over the folded prefix.
+        let source_down = adapter.fault();
         let mut report = ReconcileReport {
-            observed: self.observe(store, adapter, now_ms)?,
+            source_unavailable: source_down.clone(),
             ..ReconcileReport::default()
         };
+        // 1. Observe + fire — the durable cue intake (§5i.1 #2).
+        if source_down.is_none() {
+            report.observed = self.observe(store, adapter, now_ms)?;
+        }
         // 2. RC-3 — source conflicts from the cue stream (before any
         //    dispatch decision consumes a contradictory item).
         self.reconcile_conflicts(store, adapter, &mut report)?;
@@ -461,16 +523,23 @@ impl FleetEngine {
         //     human-gate state entry is `blocked{human_gate}` (the
         //     `handoff` state), exits only on a human act.
         self.reconcile_source_updates(store, &mut report)?;
-        // 4. RC-4 — source suspension exemptions.
-        self.reconcile_suspensions(store, adapter, &mut report)?;
+        // 4. RC-4 — source suspension exemptions (skipped while the
+        //    source is down — a faulted adapter's `suspended` answer is
+        //    no evidence either way).
+        if source_down.is_none() {
+            self.reconcile_suspensions(store, adapter, &mut report)?;
+        }
         // 5. RC-5 — stalls, retry scheduling, escalation deadlines.
         self.reconcile_stalls(store, adapter, now_ms, &mut report)?;
         // 6. RC-7 — child-terminal → parent `child_blocked`; terminal
         //    parents cascade-stop unblocked children.
         self.reconcile_children(store, &mut report)?;
         // 7. RC-2 + RC-6 — the dispatch pass (capacity + budget + lease +
-        //    mark; `stale_dispatch` on the re-fire).
-        self.reconcile_dispatches(store, adapter, now_ms, &mut report)?;
+        //    mark; `stale_dispatch` on the re-fire). Skipped while the
+        //    source is down — keep activations, dispatch nothing.
+        if source_down.is_none() {
+            self.reconcile_dispatches(store, adapter, now_ms, &mut report)?;
+        }
         // 8. RC-5's overdue escalations (deadline-fired cues).
         self.reconcile_escalations(store, now_ms, &mut report)?;
         report.cursor = self.cursor();
@@ -483,7 +552,7 @@ impl FleetEngine {
     fn reconcile_conflicts<A: WorkSourceAdapter>(
         &mut self,
         store: &mut Store,
-        _adapter: &A,
+        _adapter: &mut A,
         report: &mut ReconcileReport,
     ) -> Result<(), FleetError> {
         // Collect cue→item dossier joins first (borrow discipline).
@@ -679,7 +748,7 @@ impl FleetEngine {
     fn reconcile_suspensions<A: WorkSourceAdapter>(
         &mut self,
         store: &mut Store,
-        adapter: &A,
+        adapter: &mut A,
         report: &mut ReconcileReport,
     ) -> Result<(), FleetError> {
         let items: Vec<(String, bool, String)> = self
@@ -736,7 +805,7 @@ impl FleetEngine {
     fn reconcile_stalls<A: WorkSourceAdapter>(
         &mut self,
         store: &mut Store,
-        adapter: &A,
+        _adapter: &mut A,
         now_ms: u64,
         report: &mut ReconcileReport,
     ) -> Result<(), FleetError> {
@@ -878,11 +947,6 @@ impl FleetEngine {
                     report.escalated.push(it.item_id.clone());
                 }
             }
-            // `suspended` surface — the adapter flag folds onto the item
-            // (the durable `suspended_source` block is the authoritative
-            // member; the flag is presentation).
-            let sid = source_id_of_view(&it);
-            let _ = adapter.suspended(&sid);
         }
         Ok(())
     }
@@ -969,7 +1033,7 @@ impl FleetEngine {
     fn reconcile_dispatches<A: WorkSourceAdapter>(
         &mut self,
         store: &mut Store,
-        adapter: &A,
+        adapter: &mut A,
         now_ms: u64,
         report: &mut ReconcileReport,
     ) -> Result<(), FleetError> {
@@ -1009,8 +1073,21 @@ impl FleetEngine {
             .cloned()
             .collect();
         items.sort_by(|a, b| a.item_id.cmp(&b.item_id)); // deterministic order
+                                                         // `activate.run` — the adapter's reconcile verb intersects the
+                                                         // dispatch candidates with the source-declared dispatchable set
+                                                         // (§5i.1 #2: "the dispatch is the fixture adapter's `reconcile
+                                                         // activate.run`"). The fixture's empty `activate_run` admits all
+                                                         // candidates (back-compat); a plugin adapter answers from the
+                                                         // tracker's own queue.
+        let candidates: Vec<String> = items
+            .iter()
+            .filter(|it| self.dispatch_candidate(it, now_ms))
+            .map(|it| it.item_id.clone())
+            .collect();
+        let admitted: std::collections::BTreeSet<String> =
+            adapter.activate_run(&candidates).into_iter().collect();
         for it in items {
-            if !self.dispatch_candidate(&it, now_ms) {
+            if !admitted.contains(&it.item_id) {
                 continue;
             }
             // RC-6 capacity — `activate_run` is the bound; a full fleet
@@ -1068,7 +1145,7 @@ impl FleetEngine {
     pub fn dispatch<A: WorkSourceAdapter>(
         &mut self,
         store: &mut Store,
-        _adapter: &A,
+        _adapter: &mut A,
         item_id: &str,
         now_ms: u64,
         report: &mut ReconcileReport,
@@ -1235,6 +1312,78 @@ impl FleetEngine {
             None => return Ok(None),
         };
         spec.mode = hh_budget::spec::BudgetMode::Slice;
+        // The `ext.effects.external_irreversible` bound never rides the
+        // slice spec — the ceiling's accounting is the pool reservation
+        // below; a mirrored cap would refuse every declared item
+        // (reserve 1 ⇒ remaining < cap) instead of the N+1th.
+        spec.dimensions.remove(&DimensionKey::Primary(
+            DimensionId::ExtEffectsExternalIrreversible,
+        ));
+        // The optional irreversibility ceiling (ADR-0207 D5; AC-11): an
+        // item whose `on.external_irreversible` declares an external
+        // irreversible effect reserves one unit of the registered
+        // `ext.effects.external_irreversible` dimension at the owner pool
+        // (root-first) before the slice is allocated. Exhaustion converts
+        // the marginal effect to `deny{irreversibility_ceiling}` + an
+        // escalation; an unset dimension changes nothing (the pool simply
+        // carries no bound — `reserve` succeeds). The reserve runs under
+        // a scoped `Account` so the refusal path may emit + escalate.
+        if it.on.external_irreversible {
+            let dim = DimensionKey::Primary(DimensionId::ExtEffectsExternalIrreversible);
+            let mut quantity = ResourceVector::zero();
+            quantity.add(DimensionId::ExtEffectsExternalIrreversible, 1);
+            let reserved = {
+                let mut account =
+                    Account::open(store, &self.run_id).map_err(FleetError::Account)?;
+                account.reserve(
+                    &self.lease,
+                    &root,
+                    &quantity,
+                    &self.holder,
+                    self.view.spec.defaults.dispatch_lease_ms,
+                )
+            };
+            match reserved {
+                Ok(_reservation) => {}
+                Err(BudgetError::InsufficientBudget { .. }) => {
+                    // The pool's bound — the slice spec no longer carries
+                    // the dim (the reservation is the accounting).
+                    let hard = self
+                        .view
+                        .spec
+                        .budget
+                        .as_ref()
+                        .and_then(|b| b.hard(dim))
+                        .unwrap_or(0);
+                    self.emit(
+                        store,
+                        "control.work_item.blocked",
+                        payloads::block_add_payload(
+                            &it.item_id,
+                            &it.run_item_id,
+                            "irreversibility_ceiling",
+                            None,
+                            None,
+                        ),
+                        vec![],
+                    )?;
+                    report.blocked.push(it.item_id.clone());
+                    self.raise_escalation(
+                        store,
+                        it,
+                        "irreversibility_ceiling",
+                        "ext.effects.external_irreversible",
+                        "reconciler",
+                        None,
+                    )?;
+                    return Err(FleetError::IrreversibilityCeiling {
+                        item: it.item_id.clone(),
+                        hard,
+                    });
+                }
+                Err(e) => return Err(FleetError::Account(e)),
+            }
+        }
         let mut account = Account::open(store, &self.run_id).map_err(FleetError::Account)?;
         let scope = BudgetScope {
             kind: BudgetScopeKind::Goal,
@@ -2347,7 +2496,7 @@ impl FleetEngine {
         run_id: &str,
         holder: &str,
         writer_ttl_ms: u64,
-        adapter: &A,
+        adapter: &mut A,
         now_ms: u64,
     ) -> Result<(FleetEngine, ReconcileReport), FleetError> {
         let mut eng = Self::ensure(store, run_id, holder, writer_ttl_ms)?;
@@ -2362,19 +2511,61 @@ impl FleetEngine {
     /// rebuild equality). One document over the folded prefix: spec
     /// coordinates, items, escalations, ownership, cue/suspension state,
     /// annotations, and the durable cursor.
-    pub fn fleet_view(&self) -> Json {
+    ///
+    /// S5.6 lands the §7.1 `FleetView` member set on every item —
+    /// `{work_item_id, source_state, activation, activation_no, blocked,
+    /// handoff?, escalations_open, budget{consumed, remaining},
+    /// last_activity, external_effects_count, children_open}` — plus the
+    /// `capacity`, `escalations{open, by_owner}`, `totals{by_owner,
+    /// by_source, by_state}` and `watermark` members. `budget` reads the
+    /// item's matched slice through the run's `Account` (the same ledger
+    /// — V-1 nothing sampled); a hosted activation whose manifest
+    /// declares no `events` observability renders `n/a{observability}`
+    /// on the child-reading members (V-3), never a fabricated 0.
+    pub fn fleet_view(&self, store: &mut Store) -> Json {
+        // The child-manifest join is resolved *before* the account opens
+        // (the `Account` holds the store borrow; the manifest reads are
+        // immutable).
+        let child_manifests: BTreeMap<String, Option<Json>> = self
+            .view
+            .items
+            .values()
+            .filter_map(|it| it.dispatch.run_ref.clone())
+            .map(|r| {
+                let j = store.manifest(&r).ok().map(|man| {
+                    let hosted = matches!(
+                        man.participant_class,
+                        hh_ledger::manifest::ParticipantClass::Hosted
+                    );
+                    let has_events = man
+                        .observability_level
+                        .contains(&hh_ledger::manifest::ObservabilityLevel::Events);
+                    Json::obj([
+                        ("hosted", Json::Bool(hosted)),
+                        ("events_observability", Json::Bool(has_events)),
+                    ])
+                });
+                (r, j)
+            })
+            .collect();
+        let account = Account::open(store, &self.run_id).ok();
         let items: Vec<Json> = self
             .view
             .items
             .values()
             .map(|it| {
                 let mut m = BTreeMap::new();
+                m.insert("work_item_id".into(), Json::str(&it.item_id));
                 m.insert("item_id".into(), Json::str(&it.item_id));
                 m.insert("run_item_id".into(), Json::str(&it.run_item_id));
                 m.insert("title".into(), Json::str(&it.title));
                 m.insert("state".into(), Json::str(derive_state(it)));
                 m.insert("spec_ref".into(), Json::str(&it.spec_ref));
                 m.insert("source".into(), it.source.clone());
+                m.insert(
+                    "source_state".into(),
+                    it.source.get("state").cloned().unwrap_or(Json::Null),
+                );
                 m.insert("idempotency_key".into(), Json::str(&it.idempotency_key));
                 m.insert(
                     "owner".into(),
@@ -2389,13 +2580,118 @@ impl FleetEngine {
                     "blocked".into(),
                     Json::Arr(it.blocked.iter().map(Json::str).collect()),
                 );
+                if it.blocked.contains("human_gate") {
+                    // The handoff member — present only while the item is
+                    // gated on a human (V-2: `handoff` is distinct from
+                    // `active`, never a decorated `blocked`).
+                    m.insert(
+                        "handoff".into(),
+                        Json::obj([(
+                            "lease_agent_ref",
+                            it.lease_agent_ref
+                                .as_ref()
+                                .map(Json::str)
+                                .unwrap_or(Json::Null),
+                        )]),
+                    );
+                }
+                m.insert(
+                    "escalations_open".into(),
+                    Json::Int(it.escalation.is_some() as i64),
+                );
                 m.insert("suspended".into(), Json::Bool(it.suspended));
                 m.insert("watch_state".into(), Json::str(&it.watch_state));
+                // `activation` — the child activation run ref (the
+                // dispatch_note's answer); `activation_no` — the folded
+                // dispatch-mark count (T-LCD-13: a durable member, never
+                // model-facing).
+                m.insert(
+                    "activation".into(),
+                    it.dispatch
+                        .run_ref
+                        .as_ref()
+                        .map(Json::str)
+                        .unwrap_or(Json::Null),
+                );
+                m.insert("activation_no".into(), Json::Int(it.activation_no as i64));
+                // `budget{consumed, remaining}` — the item's matched
+                // slice read through the run's account; absent slice ⇒
+                // `matched:false` (the out_of_scope arm recorded it).
+                m.insert(
+                    "budget".into(),
+                    item_budget_json(account.as_ref(), &self.view, it),
+                );
+                // `last_activity` — the newest folded `ts` naming the
+                // item (RC-3: ledger-derived, never a clock).
+                m.insert(
+                    "last_activity".into(),
+                    if it.last_activity.is_empty() {
+                        Json::Null
+                    } else {
+                        Json::str(&it.last_activity)
+                    },
+                );
+                // `external_effects_count` — the durable count of
+                // dispatches the item committed under the declared
+                // `external_irreversible` class (each mark required the
+                // ceiling reservation — the ledgered precondition).
+                m.insert(
+                    "external_effects_count".into(),
+                    Json::Int(if it.on.external_irreversible {
+                        it.activation_no as i64
+                    } else {
+                        0
+                    }),
+                );
+                // `children_open` — the item's `blocking` children still
+                // live (queued/dispatching/dispatched/blocked/handoff).
+                let children_open = it
+                    .blocking
+                    .iter()
+                    .filter(|c| {
+                        self.view
+                            .items
+                            .get(*c)
+                            .map(|k| derive_state(k) != "terminal")
+                            .unwrap_or(false)
+                    })
+                    .count() as i64;
+                m.insert("children_open".into(), Json::Int(children_open));
                 if let Some(s) = &it.settlement {
                     m.insert("outcome".into(), Json::str(&s.outcome));
                 }
+                // V-3 — a hosted activation's child-reading members carry
+                // `n/a{observability}` when the manifest declares no
+                // `events` level (the fleet ledger's own members above
+                // stay ledger-true).
                 if let Some(r) = &it.dispatch.run_ref {
                     m.insert("run_ref".into(), Json::str(r));
+                    match child_manifests.get(r) {
+                        Some(Some(man)) => {
+                            let hosted = matches!(man.get("hosted"), Some(Json::Bool(true)));
+                            m.insert(
+                                "participant_class".into(),
+                                Json::str(if hosted { "hosted" } else { "native" }),
+                            );
+                            let has_events =
+                                matches!(man.get("events_observability"), Some(Json::Bool(true)));
+                            if hosted && !has_events {
+                                m.insert(
+                                    "activation_progress".into(),
+                                    Json::obj([("na", Json::str("observability"))]),
+                                );
+                            }
+                        }
+                        Some(None) => {
+                            // The ref is durable but the child manifest
+                            // is unreachable — honest n/a, never a guess.
+                            m.insert(
+                                "participant_class".into(),
+                                Json::obj([("na", Json::str("observability"))]),
+                            );
+                        }
+                        None => {}
+                    }
                 }
                 Json::Obj(m)
             })
@@ -2419,13 +2715,89 @@ impl FleetEngine {
                 ])
             })
             .collect();
+        // `capacity{max_concurrent, running, by_state, retries_due[],
+        // suspended}` — the RC-7 pool read.
+        let mut by_state: BTreeMap<String, i64> = BTreeMap::new();
+        let mut retries_due: Vec<Json> = Vec::new();
+        let mut suspended_items = 0i64;
+        for it in self.view.items.values() {
+            let st = derive_state(it);
+            *by_state.entry(st.to_string()).or_insert(0) += 1;
+            if it.retry.next_attempt_at_ms.is_some() && it.watch_state == "watching" {
+                retries_due.push(Json::obj([
+                    ("work_item_id", Json::str(&it.item_id)),
+                    (
+                        "next_attempt_at_ms",
+                        Json::Int(it.retry.next_attempt_at_ms.unwrap_or(0) as i64),
+                    ),
+                ]));
+            }
+            if it.suspended {
+                suspended_items += 1;
+            }
+        }
+        let capacity = Json::obj([
+            (
+                "max_concurrent",
+                Json::Int(self.view.spec.capacity.activate_run as i64),
+            ),
+            (
+                "running",
+                Json::Int(self.view.active_dispatch_count() as i64),
+            ),
+            (
+                "by_state",
+                Json::Obj(
+                    by_state
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Int(*v)))
+                        .collect(),
+                ),
+            ),
+            ("retries_due", Json::Arr(retries_due)),
+            ("suspended", Json::Int(suspended_items)),
+        ]);
+        // `escalations{open, by_owner}` — the live escalation count and
+        // the per-owner histogram (the item's owner, "none" when unset).
+        let mut esc_open = 0i64;
+        let mut esc_by_owner: BTreeMap<String, i64> = BTreeMap::new();
+        for it in self.view.items.values() {
+            if it.escalation.is_some() {
+                esc_open += 1;
+                *esc_by_owner
+                    .entry(it.owner.clone().unwrap_or_else(|| "none".into()))
+                    .or_insert(0) += 1;
+            }
+        }
+        let escalations = Json::obj([
+            ("open", Json::Int(esc_open)),
+            (
+                "by_owner",
+                Json::Obj(
+                    esc_by_owner
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Int(*v)))
+                        .collect(),
+                ),
+            ),
+        ]);
+        // `totals{by_owner, by_source, by_state}` — items + the summed
+        // slice vectors (TokenVector + Money{confidence} + time/env dims
+        // all ride `consumed`; the spend micro-map rides `spend`).
+        let totals = fleet_totals_json(account.as_ref(), &self.view);
         Json::obj([
-            ("schema", Json::str("hh.fleet.view/1")),
+            ("schema", Json::str("hh.fleet.view/2")),
             ("run", Json::str(&self.run_id)),
             ("spec_ref", Json::str(&self.view.spec_ref)),
             ("policy_ref", Json::str(&self.view.spec.policy_ref)),
             ("items", Json::Arr(items)),
-            ("escalations", Json::Arr(self.view.escalation_rows.clone())),
+            ("capacity", capacity),
+            ("escalations", escalations),
+            (
+                "escalation_rows",
+                Json::Arr(self.view.escalation_rows.clone()),
+            ),
+            ("totals", totals),
             ("ownership", Json::Arr(ownership)),
             ("cues", Json::Arr(cues)),
             (
@@ -2433,6 +2805,16 @@ impl FleetEngine {
                 Json::Arr(self.view.suspended_sources.iter().map(Json::str).collect()),
             ),
             ("annotations", Json::Arr(self.view.annotations.clone())),
+            (
+                "watermark",
+                Json::obj([
+                    ("event_count", Json::Int(self.view.event_count as i64)),
+                    (
+                        "observed_at_ms",
+                        Json::Int(self.view.observed_watermark as i64),
+                    ),
+                ]),
+            ),
             (
                 "derived_from",
                 Json::obj([
@@ -2815,4 +3197,149 @@ fn field_value_init(init: &WorkItemInit, field: &str) -> String {
         "source" => init.source.to_canonical_string(),
         _ => String::new(),
     }
+}
+
+/// The item's `budget{consumed, remaining}` member — the matched slice's
+/// account view (`consumed` = the slice subtree's charged vector +
+/// spend micro-map; `remaining` = per-bound-key headroom). No slice ⇒
+/// `matched:false` (the `out_of_scope` arm lands `declared:null`; a
+/// budget member of zeroes would be a fabricated number — V-3).
+fn item_budget_json(account: Option<&Account>, view: &FleetView, it: &WorkItemView) -> Json {
+    let Some(slice) = view.slice_ids.get(&it.run_item_id) else {
+        return Json::obj([
+            ("matched", Json::Bool(false)),
+            ("consumed", Json::obj([("na", Json::str("capability"))])),
+            ("remaining", Json::obj([("na", Json::str("capability"))])),
+        ]);
+    };
+    let Some(account) = account else {
+        return Json::obj([
+            ("matched", Json::Bool(true)),
+            ("slice", Json::str(slice)),
+            ("consumed", Json::obj([("na", Json::str("observability"))])),
+            ("remaining", Json::obj([("na", Json::str("observability"))])),
+        ]);
+    };
+    let t = account.totals(
+        &TotalsScope::Budget(slice.clone()),
+        &TotalsGroupBy::default(),
+    );
+    let mut remaining = BTreeMap::new();
+    if let Some(node) = account.tree.node(slice) {
+        for key in node.node.spec.dimensions.keys() {
+            if let Some(r) = account.remaining(slice, *key) {
+                remaining.insert(key.as_str().to_string(), Json::Int(r));
+            }
+        }
+    }
+    Json::obj([
+        ("matched", Json::Bool(true)),
+        ("slice", Json::str(slice)),
+        ("consumed", t.by_dimension.to_json()),
+        (
+            "spend",
+            Json::Obj(
+                t.spend_by_currency
+                    .iter()
+                    .map(|(c, v)| (c.clone(), Json::Int(*v)))
+                    .collect(),
+            ),
+        ),
+        (
+            "confidence",
+            t.min_confidence
+                .as_ref()
+                .map(|c| c.to_json())
+                .unwrap_or(Json::Null),
+        ),
+        ("remaining", Json::Obj(remaining)),
+    ])
+}
+
+/// `totals{by_owner, by_source, by_state}` — the fleet's grouped sums.
+/// Each cell: `{items, consumed{dim}, spend{currency}, confidence}` —
+/// the slice vectors of the group's items summed (TokenVector + Money +
+/// time/env dims all ride `consumed`).
+fn fleet_totals_json(account: Option<&Account>, view: &FleetView) -> Json {
+    let mut groups: BTreeMap<String, BTreeMap<String, Vec<&WorkItemView>>> = BTreeMap::new();
+    for it in view.items.values() {
+        groups
+            .entry("by_owner".to_string())
+            .or_default()
+            .entry(it.owner.clone().unwrap_or_else(|| "none".into()))
+            .or_default()
+            .push(it);
+        groups
+            .entry("by_source".to_string())
+            .or_default()
+            .entry(
+                it.source
+                    .get("source_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or("none")
+                    .to_string(),
+            )
+            .or_default()
+            .push(it);
+        groups
+            .entry("by_state".to_string())
+            .or_default()
+            .entry(derive_state(it).to_string())
+            .or_default()
+            .push(it);
+    }
+    let mut out = BTreeMap::new();
+    for (group_name, cells) in groups {
+        let mut gm = BTreeMap::new();
+        for (k, items) in cells {
+            let mut consumed = ResourceVector::zero();
+            let mut spend: BTreeMap<String, i64> = BTreeMap::new();
+            let mut confidence: Option<hh_budget::pricing::Confidence> = None;
+            for it in &items {
+                if let (Some(acc), Some(slice)) = (account, view.slice_ids.get(&it.run_item_id)) {
+                    let t = acc.totals(
+                        &TotalsScope::Budget(slice.clone()),
+                        &TotalsGroupBy::default(),
+                    );
+                    for (d, n) in t.by_dimension.iter() {
+                        consumed.add(d, n);
+                    }
+                    for (c, v) in &t.spend_by_currency {
+                        *spend.entry(c.clone()).or_insert(0) += v;
+                    }
+                    if let Some(c) = t.min_confidence {
+                        confidence = Some(match confidence {
+                            Some(x) if x.rank() <= c.rank() => x,
+                            _ => c,
+                        });
+                    }
+                }
+            }
+            gm.insert(
+                k,
+                Json::obj([
+                    ("items", Json::Int(items.len() as i64)),
+                    ("consumed", consumed.to_json()),
+                    (
+                        "spend",
+                        Json::Obj(
+                            spend
+                                .iter()
+                                .map(|(c, v)| (c.clone(), Json::Int(*v)))
+                                .collect(),
+                        ),
+                    ),
+                    (
+                        "confidence",
+                        confidence
+                            .as_ref()
+                            .map(|c| c.to_json())
+                            .unwrap_or(Json::Null),
+                    ),
+                ]),
+            );
+        }
+        out.insert(group_name, Json::Obj(gm));
+    }
+    Json::Obj(out)
 }

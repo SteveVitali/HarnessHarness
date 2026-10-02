@@ -28,7 +28,7 @@ use crate::service::EmbedService;
 use hh_fleet::{
     engine::FleetEngine,
     errors::FleetError,
-    source::FixtureAdapter,
+    source::{FixtureAdapter, WorkSourceAdapter},
     spec::FleetSpec,
     work_item::{derive_state, WorkItemInit, WorkItemView},
 };
@@ -127,16 +127,85 @@ fn item_json(it: &WorkItemView) -> Json {
     Json::Obj(m)
 }
 
-/// The boundary adapter — the pinned fixture document each call carries
-/// (`{run, source?}`; absent = the empty fixture, so driver-only ops do
-/// not resupply it).
+/// `BoundaryAdapter` — the S5.6 two-lane source selection (§5i.1 #3;
+/// ADR-0205 D5). A `source` doc carrying the `webhook` member builds the
+/// [`WebhookAdapter`] (the signed-webhook lane — `webhook` is the
+/// [`IngressPolicy`] verbatim); anything else is the `hh.fleet.fixture/1`
+/// pull lane. One enum, one delegation — the engine's generic
+/// `A: WorkSourceAdapter` seam never sees the split.
 #[cfg(feature = "tier-c4")]
-fn adapter(params: &Json) -> Result<FixtureAdapter, EmbedError> {
+pub enum BoundaryAdapter {
+    /// The pull lane — the pinned fixture document.
+    Fixture(FixtureAdapter),
+    /// The push lane — signed-webhook ingress plus the shared
+    /// suspended/activate_run/records members.
+    Webhook(hh_fleet::ingress::WebhookAdapter),
+}
+
+#[cfg(feature = "tier-c4")]
+impl hh_fleet::source::WorkSourceAdapter for BoundaryAdapter {
+    fn occurrences(&mut self, since: Option<u64>) -> Vec<hh_fleet::source::SourceOccurrence> {
+        match self {
+            BoundaryAdapter::Fixture(a) => a.occurrences(since),
+            BoundaryAdapter::Webhook(a) => a.occurrences(since),
+        }
+    }
+    fn suspended(&mut self, source_id: &str) -> bool {
+        match self {
+            BoundaryAdapter::Fixture(a) => a.suspended(source_id),
+            BoundaryAdapter::Webhook(a) => a.suspended(source_id),
+        }
+    }
+    fn activate_run(&mut self, candidates: &[String]) -> Vec<String> {
+        match self {
+            BoundaryAdapter::Fixture(a) => a.activate_run(candidates),
+            BoundaryAdapter::Webhook(a) => a.activate_run(candidates),
+        }
+    }
+    fn list(&mut self, states: &[String]) -> Vec<Json> {
+        match self {
+            BoundaryAdapter::Fixture(a) => a.list(states),
+            BoundaryAdapter::Webhook(a) => a.list(states),
+        }
+    }
+    fn get(&mut self, native_ids: &[String]) -> Vec<Json> {
+        match self {
+            BoundaryAdapter::Fixture(a) => a.get(native_ids),
+            BoundaryAdapter::Webhook(a) => a.get(native_ids),
+        }
+    }
+    fn capabilities(&self) -> hh_fleet::capabilities::AdapterCapabilities {
+        match self {
+            BoundaryAdapter::Fixture(a) => a.capabilities(),
+            BoundaryAdapter::Webhook(a) => a.capabilities(),
+        }
+    }
+    fn fault(&self) -> Option<String> {
+        match self {
+            BoundaryAdapter::Fixture(a) => a.fault(),
+            BoundaryAdapter::Webhook(a) => a.fault(),
+        }
+    }
+}
+
+/// The boundary adapter — the pinned source document each call carries
+/// (`{run, source?}`; absent = the empty fixture, so driver-only ops do
+/// not resupply it). `source.webhook` selects the signed-webhook lane.
+#[cfg(feature = "tier-c4")]
+fn adapter(params: &Json, fleet_run: &str) -> Result<BoundaryAdapter, EmbedError> {
     let doc = params
         .get("source")
         .cloned()
         .unwrap_or_else(|| Json::obj([("schema_version", Json::str("hh.fleet.fixture/1"))]));
-    FixtureAdapter::from_doc(doc).map_err(fleet_err)
+    if doc.get("webhook").is_some() {
+        hh_fleet::ingress::WebhookAdapter::from_doc(&doc, fleet_run)
+            .map(BoundaryAdapter::Webhook)
+            .map_err(fleet_err)
+    } else {
+        FixtureAdapter::from_doc(doc)
+            .map(BoundaryAdapter::Fixture)
+            .map_err(fleet_err)
+    }
 }
 
 /// `FleetError` → the closed `EmbedError` sum — `Refused{reason}` is the
@@ -177,13 +246,19 @@ fn fleet_engine<'a>(
     engines: &'a mut BTreeMap<String, FleetEngine>,
     store: &mut Store,
     run_id: &str,
+    params: &Json,
 ) -> Result<&'a mut FleetEngine, EmbedError> {
     if !engines.contains_key(run_id) {
         let eng =
             FleetEngine::ensure(store, run_id, FLEET_HOLDER, WRITER_TTL_MS).map_err(fleet_err)?;
         engines.insert(run_id.to_string(), eng);
     }
-    Ok(engines.get_mut(run_id).unwrap())
+    let eng = engines.get_mut(run_id).unwrap();
+    // P12 — a boundary-initiated op stamps the declared `requester`
+    // member on the rows it writes (`params.requester`, verbatim;
+    // absent = no stamp). Process state, never authority.
+    eng.set_requester(params.get("requester").cloned());
+    Ok(eng)
 }
 
 #[cfg(feature = "tier-c4")]
@@ -206,19 +281,19 @@ impl EmbedService {
             }
             "fleet.ensure" => {
                 let run = req_str(params, "run")?;
-                fleet_engine(&mut self.fleet_engines, &mut self.store, run)?;
+                fleet_engine(&mut self.fleet_engines, &mut self.store, run, params)?;
                 Ok(Json::obj([("run_id", Json::str(run))]))
             }
             "fleet.restore" => {
                 let run = req_str(params, "run")?.to_string();
-                let ad = adapter(params)?;
+                let mut ad = adapter(params, &run)?;
                 let now = now_ms(params, self.store.now_ms());
                 let (eng, report) = FleetEngine::restore(
                     &mut self.store,
                     &run,
                     FLEET_HOLDER,
                     WRITER_TTL_MS,
-                    &ad,
+                    &mut ad,
                     now,
                 )
                 .map_err(fleet_err)?;
@@ -227,11 +302,12 @@ impl EmbedService {
             }
             "fleet.observe" => {
                 let run = req_str(params, "run")?.to_string();
-                let ad = adapter(params)?;
+                let mut ad = adapter(params, &run)?;
                 let now = now_ms(params, self.store.now_ms());
-                let observed = fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
-                    .observe(&mut self.store, &ad, now)
-                    .map_err(fleet_err)?;
+                let observed =
+                    fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
+                        .observe(&mut self.store, &mut ad, now)
+                        .map_err(fleet_err)?;
                 Ok(Json::obj([(
                     "observed",
                     Json::Arr(observed.iter().map(Json::str).collect()),
@@ -239,17 +315,17 @@ impl EmbedService {
             }
             "fleet.reconcile" => {
                 let run = req_str(params, "run")?.to_string();
-                let ad = adapter(params)?;
+                let mut ad = adapter(params, &run)?;
                 let now = now_ms(params, self.store.now_ms());
-                let report = fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
-                    .reconcile(&mut self.store, &ad, now)
+                let report = fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
+                    .reconcile(&mut self.store, &mut ad, now)
                     .map_err(fleet_err)?;
                 Ok(report_json(&report))
             }
             "fleet.create_work_item" => {
                 let run = req_str(params, "run")?.to_string();
                 let init = WorkItemInit::from_json(req(params, "item")?).map_err(fleet_err)?;
-                match fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                match fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .admit(&mut self.store, init)
                     .map_err(fleet_err)?
                 {
@@ -270,7 +346,7 @@ impl EmbedService {
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
                 let binding = req(params, "binding")?.clone();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .bind_source(&mut self.store, &item, binding)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -278,18 +354,18 @@ impl EmbedService {
             "fleet.claim" => {
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .claim(&mut self.store, &item)
                     .map_err(fleet_err)
             }
             "fleet.dispatch" => {
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
-                let ad = adapter(params)?;
+                let mut ad = adapter(params, &run)?;
                 let now = now_ms(params, self.store.now_ms());
                 let mut report = hh_fleet::engine::ReconcileReport::default();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
-                    .dispatch(&mut self.store, &ad, &item, now, &mut report)
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
+                    .dispatch(&mut self.store, &mut ad, &item, now, &mut report)
                     .map_err(fleet_err)?;
                 Ok(report_json(&report))
             }
@@ -299,7 +375,7 @@ impl EmbedService {
                 let spec_ref = req_str(params, "spec_ref")?.to_string();
                 let run_ref = opt_str(params, "run_ref");
                 let error = opt_str(params, "error");
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .dispatch_note(
                         &mut self.store,
                         &item,
@@ -315,7 +391,7 @@ impl EmbedService {
                 let item = req_str(params, "item")?.to_string();
                 let outcome = req_str(params, "outcome")?.to_string();
                 let evidence = str_list(params, "evidence_refs")?;
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .settle(&mut self.store, &item, &outcome, evidence)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -326,7 +402,7 @@ impl EmbedService {
                 // grant resumes it — `resume_from_handoff`).
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .block(&mut self.store, &item, "human_gate")
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -335,7 +411,7 @@ impl EmbedService {
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
                 let by = req_str(params, "by")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .resume_from_handoff(&mut self.store, &item, &by)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -345,7 +421,7 @@ impl EmbedService {
                 let item = req_str(params, "item")?.to_string();
                 let to = req_str(params, "to")?.to_string();
                 let basis = req_str(params, "basis")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .transfer_owner(&mut self.store, &item, &to, &basis)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -354,7 +430,7 @@ impl EmbedService {
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
                 let agent = req_str(params, "agent")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .ack_owner(&mut self.store, &item, &agent)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -364,7 +440,7 @@ impl EmbedService {
                 let item = req_str(params, "item")?.to_string();
                 let by = req_str(params, "by")?.to_string();
                 let cascade = opt_str(params, "cascade").unwrap_or_else(|| "self".into());
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .cancel(&mut self.store, &item, &by, &cascade)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -377,7 +453,7 @@ impl EmbedService {
                 let text_ref = req_str(params, "text_ref")?.to_string();
                 let readers = str_list(params, "readers")?;
                 let by = req_str(params, "by")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .annotate(
                         &mut self.store,
                         &item,
@@ -394,7 +470,7 @@ impl EmbedService {
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
                 let code = req_str(params, "code")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .block(&mut self.store, &item, &code)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -403,7 +479,7 @@ impl EmbedService {
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
                 let code = req_str(params, "code")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .unblock(&mut self.store, &item, &code)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -411,7 +487,7 @@ impl EmbedService {
             "fleet.stop" => {
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .stop(&mut self.store, &item)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -421,7 +497,7 @@ impl EmbedService {
                 let item = req_str(params, "item")?.to_string();
                 let agent = req_str(params, "agent")?.to_string();
                 let owner = req_str(params, "owner")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .set_owner(&mut self.store, &item, &agent, &owner)
                     .map_err(fleet_err)?;
                 Ok(Json::obj([("ok", Json::Bool(true))]))
@@ -433,16 +509,17 @@ impl EmbedService {
                 let by = req_str(params, "by")?.to_string();
                 let to = opt_str(params, "to");
                 let deadline = params.get("deadline_ms").and_then(Json::as_int);
-                let issue_ref = fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
-                    .escalate(
-                        &mut self.store,
-                        &item,
-                        &issue,
-                        &by,
-                        to.as_deref(),
-                        deadline.map(|d| d as u64),
-                    )
-                    .map_err(fleet_err)?;
+                let issue_ref =
+                    fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
+                        .escalate(
+                            &mut self.store,
+                            &item,
+                            &issue,
+                            &by,
+                            to.as_deref(),
+                            deadline.map(|d| d as u64),
+                        )
+                        .map_err(fleet_err)?;
                 Ok(Json::obj([("issue_ref", Json::str(&issue_ref))]))
             }
             "fleet.resolve_escalation" => {
@@ -452,7 +529,7 @@ impl EmbedService {
                 let by = req_str(params, "by")?.to_string();
                 let resolution = req_str(params, "resolution")?.to_string();
                 let note = opt_str(params, "note");
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .resolve_escalation(
                         &mut self.store,
                         &item,
@@ -467,7 +544,7 @@ impl EmbedService {
             "fleet.work_item" => {
                 let run = req_str(params, "run")?.to_string();
                 let item = req_str(params, "item")?.to_string();
-                let view = fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                let view = fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .work_item(&item)
                     .map_err(fleet_err)?;
                 Ok(item_json(&view))
@@ -475,38 +552,134 @@ impl EmbedService {
             "fleet.list" => {
                 let run = req_str(params, "run")?.to_string();
                 let items: Vec<Json> =
-                    fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                    fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                         .list()
                         .iter()
                         .map(item_json)
                         .collect();
                 Ok(Json::obj([("items", Json::Arr(items))]))
             }
-            "fleet.fleet_view" => Ok(fleet_engine(
-                &mut self.fleet_engines,
-                &mut self.store,
-                req_str(params, "run")?,
-            )?
-            .fleet_view()),
+            "fleet.fleet_view" => {
+                let run = req_str(params, "run")?.to_string();
+                let eng = fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?;
+                let mut v = eng.fleet_view(&mut self.store);
+                // S5.6 — the `metrics` member is the catalogue's fleet
+                // rows in §5h.1 `MetricDeclaration` form (§5i.1 §6's
+                // "the FleetView metrics member — every row …"). Cells
+                // fold with the telemetry slice; each row's fold status
+                // is declared, never estimated.
+                if let Json::Obj(ref mut m) = v {
+                    m.insert(
+                        "metrics".into(),
+                        Json::Arr(
+                            hh_telemetry::catalogue::FLEET_METRICS
+                                .iter()
+                                .map(|fm| fm.declaration().to_json())
+                                .collect(),
+                        ),
+                    );
+                }
+                Ok(v)
+            }
             "fleet.state_map" => {
                 let run = req_str(params, "run")?.to_string();
                 let item = opt_str(params, "item");
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .state_map(item.as_deref())
                     .map_err(fleet_err)
             }
             "fleet.accountability_record" => {
                 let run = req_str(params, "run")?.to_string();
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .accountability_record(&mut self.store)
                     .map_err(fleet_err)
             }
             "fleet.audit_link" => {
                 let run = req_str(params, "run")?.to_string();
-                let obligations = fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
-                    .audit_link(&self.store)
-                    .map_err(fleet_err)?;
+                let obligations =
+                    fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
+                        .audit_link(&self.store)
+                        .map_err(fleet_err)?;
                 Ok(Json::obj([("obligations", Json::Arr(obligations))]))
+            }
+            // ── S5.6: the adapter surface — signed-webhook ingress, the
+            // capability probe, and the source read minimum (§5i.1 #3;
+            // ADR-0205 D5).
+            "fleet.webhook_ingress" => {
+                // `{run, source{webhook{…policy…}}, delivery, signature,
+                // key, now_ms?}` → `{status, occurrence_id}`. The
+                // signature is `hmac-sha256:<hex>` over the delivery's
+                // canonical form; `key` is the broker-resolved secret for
+                // the policy's `key_ref` — verification only, never
+                // copied into a ledger row or a reply record.
+                let run = req_str(params, "run")?.to_string();
+                let mut ad = adapter(params, &run)?;
+                let BoundaryAdapter::Webhook(wh) = &mut ad else {
+                    return Err(bad("/source", "webhook_lane_required"));
+                };
+                let delivery = req(params, "delivery")?;
+                let signature = req_str(params, "signature")?;
+                let key = req_str(params, "key")?;
+                let now = now_ms(params, self.store.now_ms());
+                match wh.receive(delivery, signature, key.as_bytes(), now) {
+                    Ok(hh_fleet::ingress::IngressOutcome::Received { occurrence_id }) => {
+                        Ok(Json::obj([
+                            ("status", Json::str("received")),
+                            ("occurrence_id", Json::str(&occurrence_id)),
+                        ]))
+                    }
+                    Ok(hh_fleet::ingress::IngressOutcome::Duplicate { occurrence_id }) => {
+                        Ok(Json::obj([
+                            ("status", Json::str("duplicate")),
+                            ("occurrence_id", Json::str(&occurrence_id)),
+                        ]))
+                    }
+                    Err(e) => Err(EmbedError::Refused {
+                        reason: e.code().to_string(),
+                    }),
+                }
+            }
+            "fleet.source_capabilities" => {
+                // The capability probe record — the adapter's declared/
+                // probed capability set verbatim (tri-state — `unknown`
+                // is never coerced).
+                let run = req_str(params, "run")?.to_string();
+                let ad = adapter(params, &run)?;
+                Ok(Json::obj([
+                    ("run", Json::str(&run)),
+                    ("capabilities", ad.capabilities().to_json()),
+                ]))
+            }
+            "fleet.source_records" => {
+                // The adapter read minimum — `list{states[]}` or
+                // `get{native_ids[]}` (`list` wins when both are
+                // present); a latched fault rides `source_unavailable`.
+                let run = req_str(params, "run")?.to_string();
+                let mut ad = adapter(params, &run)?;
+                let records = if let Some(Json::Arr(states)) = params.get("states") {
+                    let states: Vec<String> = states
+                        .iter()
+                        .filter_map(Json::as_str)
+                        .map(str::to_string)
+                        .collect();
+                    ad.list(&states)
+                } else if let Some(Json::Arr(ids)) = params.get("native_ids") {
+                    let ids: Vec<String> = ids
+                        .iter()
+                        .filter_map(Json::as_str)
+                        .map(str::to_string)
+                        .collect();
+                    ad.get(&ids)
+                } else {
+                    ad.list(&[])
+                };
+                let mut m = BTreeMap::new();
+                m.insert("run".into(), Json::str(&run));
+                m.insert("records".into(), Json::Arr(records));
+                if let Some(f) = ad.fault() {
+                    m.insert("source_unavailable".into(), Json::str(f));
+                }
+                Ok(Json::Obj(m))
             }
             "fleet.check_activation_delta" => {
                 let run = req_str(params, "run")?.to_string();
@@ -520,7 +693,7 @@ impl EmbedService {
                         .collect::<Result<_, _>>()?,
                     _ => return Err(bad("/candidate", "type_mismatch")),
                 };
-                fleet_engine(&mut self.fleet_engines, &mut self.store, &run)?
+                fleet_engine(&mut self.fleet_engines, &mut self.store, &run, params)?
                     .check_activation_delta(&candidate)
                     .map_err(fleet_err)
             }
@@ -563,6 +736,15 @@ fn report_json(r: &hh_fleet::engine::ReconcileReport) -> Json {
                 ("event_count", Json::Int(r.cursor.event_count as i64)),
                 ("observed_at_ms", Json::Int(r.cursor.observed_at_ms as i64)),
             ]),
+        ),
+        // S5.6 — a faulted source reports itself (`source_unavailable`
+        // naming the adapter fault); absent = healthy (null when none).
+        (
+            "source_unavailable",
+            r.source_unavailable
+                .as_ref()
+                .map(Json::str)
+                .unwrap_or(Json::Null),
         ),
     ])
 }

@@ -1,0 +1,18 @@
+[package]
+name = "hh-tracker-fixture"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The packaged `work_source_adapter` reference variant (§5i.1, R-2.12.6; ticket S5.6) — a `hh_fleet_adapter::tracker::FixtureTracker` served out of process under `plugin_abi/1` via the shared plugin-side runtime in hh-plugin-fixture. The fixture document arrives as the `bind` parameter `fixture_doc` (records-in/records-out — T-LCD-12); every op dispatches through the ONE canonical codec in `hh_fleet_adapter::tracker::dispatch` (CC7). This is the L5 lane's honest fixture half — the real tracker variant (HUMAN-H2, deferred) implements the same `TrackerLogic` ops against its own client; nothing here simulates it. Packaged at `plugins/hh-tracker-fixture`."
+
+[[bin]]
+name = "hh-tracker-fixture"
+path = "src/main.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+hh-plugin-fixture = { path = "../hh-plugin-fixture" }
+hh-varhost = { path = "../hh-varhost" }
+hh-fleet-adapter = { path = "../hh-fleet-adapter" }
