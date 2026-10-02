@@ -111,3 +111,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0319](ADR-0319-s5.8-surface-ecosystem-and-compat-rulings.md) | S5.8 surface-ecosystem and compatibility rulings | S5.8 | Accepted |
 | [ADR-0320](ADR-0320-s6.1a-evolution-pipeline-rulings.md) | S6.1a evolution-pipeline rulings | S6.1a | Accepted |
 | [ADR-0321](ADR-0321-s6.1b-assumption-debt-manager-rulings.md) | S6.1b assumption-debt-manager rulings | S6.1b | Accepted |
+| [ADR-0322](ADR-0322-s6.2-automated-family-one-class-rulings.md) | S6.2 automated-family / one-class rulings | S6.2 | Accepted |
