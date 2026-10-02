@@ -16,7 +16,7 @@ use hh_embed_schema::errors::EmbedError;
 /// Decode a `DebtObservables` doc (`{expiry{…}, profile_change?,
 /// evidence_superseded[]?, revalidation_grade?}` — every member optional;
 /// `{}` is the empty observable set).
-fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservables, EmbedError> {
+pub(crate) fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservables, EmbedError> {
     let mut obs = hh_lab::debt::DebtObservables::default();
     let Some(j) = j else { return Ok(obs) };
     let m = match j {
@@ -124,6 +124,32 @@ fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservables, EmbedE
             _ => return Err(bad("/observables/revalidation_grade", "unknown_grade")),
         };
     }
+    // S6.1b (DF-S5.4-1): `probation` — an already-ledgered probation entry
+    // the caller passes through when the evaluation runs outside the
+    // manager's fold (`lab.debt.evaluate`'s records-in path; the
+    // `lab.debt.sweep` fold derives this member itself).
+    if let Some(Json::Obj(pm)) = m.get("probation") {
+        let u64_at = |k: &str| {
+            pm.get(k)
+                .and_then(Json::as_int)
+                .map(|v| v.max(0) as u64)
+                .unwrap_or(0)
+        };
+        obs.probation = Some(hh_lab::debt::LedgeredProbation {
+            debt_ref: pm
+                .get("debt_ref")
+                .and_then(Json::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            opened_at_ms: u64_at("opened_at_ms"),
+            due_at_ms: u64_at("due_at_ms"),
+            source_ref: pm
+                .get("source_ref")
+                .and_then(Json::as_str)
+                .unwrap_or_default()
+                .to_string(),
+        });
+    }
     Ok(obs)
 }
 
@@ -137,7 +163,7 @@ fn policy_of(j: Option<&Json>) -> Result<DebtPolicy, EmbedError> {
 
 /// Decode an `AssumptionDebtRecord` member (`hh_hir::debt_from_json` —
 /// the one codec, CC1).
-fn debt_record(j: &Json) -> Result<hh_hir::records::AssumptionDebtRecord, EmbedError> {
+pub(crate) fn debt_record(j: &Json) -> Result<hh_hir::records::AssumptionDebtRecord, EmbedError> {
     hh_hir::debt_from_json(j, "/record").map_err(|e| bad("/record", &format!("{e:?}")))
 }
 

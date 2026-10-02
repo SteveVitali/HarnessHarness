@@ -939,6 +939,25 @@ pub struct ProfileChange {
     pub profile_ref: String,
 }
 
+/// `LedgeredProbation` — the durable probation record a
+/// `lifecycle.debt.probation.opened` row projects (S6.1b; DF-S5.4-1 — the
+/// append→consume seam): the ledger, not the caller's clock, carries the
+/// probation book. The transition that fires on it names the ledgered row as
+/// its evidence (`evidence_ref = source_ref`), so a downstream gate resolves
+/// the record, not a caller-supplied assertion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LedgeredProbation {
+    /// The debt the probation entry tracks.
+    pub debt_ref: String,
+    /// When the probation window opened (transaction time).
+    pub opened_at_ms: u64,
+    /// When probation lapses (`due_at_ms <= now` ⇒ `probation_overrun`).
+    pub due_at_ms: u64,
+    /// The ledgered row the transition cites as evidence (the
+    /// `probation.opened` event ref — `event:<id>`).
+    pub source_ref: String,
+}
+
 /// `DebtObservables` — the closed observable set `evaluate_debt` reads
 /// (§5h.6 §2). The per-home *beneficiary* observables ride
 /// [`hh_compiler::expiry::ExpiryObservables`] (one source — CC1); the
@@ -962,6 +981,13 @@ pub struct DebtObservables {
     /// grades it — `revalidated` on a `model_conditioned` record requires
     /// ≥ `evidenced`, §5h.6 §2's revalidation rule).
     pub revalidation_grade: Option<hh_ontology::debt::EvidenceGrade>,
+    /// `probation` — the ledgered probation entry for this debt (S6.1b;
+    /// DF-S5.4-1). When present it is the probation book of record: the
+    /// `probation_overrun` leg fires on `due_at_ms <= now` and cites the
+    /// ledgered row as `evidence_ref`. When absent the record-derived
+    /// fallback (`created_at + hypothesized_max_age`) applies — the S5.4
+    /// injected-observable path stays valid for callers without a ledger.
+    pub probation: Option<LedgeredProbation>,
 }
 
 /// `evaluate_debt(record, home, observables, registry_snapshot,
@@ -1079,10 +1105,29 @@ pub fn evaluate_debt(
     }
 
     // ── (4) probation (hypothesized records past the probation bound) ───────
+    // The ledgered probation row is the book of record when present
+    // (DF-S5.4-1): `due_at_ms` lapses ⇒ `probation_overrun`, and the
+    // transition cites the ledgered row as its evidence so a downstream
+    // (§5h.7 removal/attribution) gate resolves the durable record. Without
+    // a ledgered entry the record-derived bound is the fallback.
     if record.evidence_grade() == hh_ontology::debt::EvidenceGrade::Hypothesized {
-        if let Some(created) = record.created_at {
-            if created.saturating_add(policy.hypothesized_max_age_ms) <= now_ms {
-                warn_causes.push("probation_overrun".into());
+        match &obs.probation {
+            Some(p) if p.debt_ref == debt_ref => {
+                if p.due_at_ms <= now_ms {
+                    warn_causes.push("probation_overrun".into());
+                    if evidence_ref.is_none() {
+                        evidence_ref = Some(p.source_ref.clone());
+                    }
+                }
+            }
+            // A row for a *different* `debt_ref` is not this debt's
+            // book — the record-derived fallback still governs.
+            Some(_) | None => {
+                if let Some(created) = record.created_at {
+                    if created.saturating_add(policy.hypothesized_max_age_ms) <= now_ms {
+                        warn_causes.push("probation_overrun".into());
+                    }
+                }
             }
         }
     }

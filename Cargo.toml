@@ -451,6 +451,23 @@ members = [
     # experiment engine is the sole substrate; §05h §4). Removable
     # (CC6: nothing below this layer depends on it).
     "crates/hh-evolution",
+    # `crates/hh-debt` — the §5h.6 assumption-debt manager service
+    # (R-2.9.6; ticket S6.1b; ADR-0197/0198, ADR-0209 D2): the
+    # `DebtManagerRecord` service record (maturity + the home-16 reflexive
+    # debt + `DebtPolicy.schedule`), the durable-prefix `ManagerView` fold
+    # over `lifecycle.debt.*` rows (probation book, scheduled/settled
+    # tests, sweep watermarks — kernel producer `hh-debt`, one authority
+    # path through `commit_kernel_row_for`), `schedule_removal_test`
+    # under `DebtPolicy` (priority, `max_open_removal_tests`,
+    # instrument-budget reservation, `Deferred{reason}`), the
+    # `retirement_batch` design, the reflexive `no_dead_weight_found`
+    # evaluation, `propose_retirement` + the human-sealed retirement gate,
+    # and the ledgered probation trigger (DF-S5.4-1's append→consume
+    # seam). A projection/consumer layer like `hh-evolution`: the manager
+    # never opens a run and never applies a diff to a subject (D-2) — it
+    # authors specs and proposals. Removable (CC6: only `hh-embed`
+    # consumes it, under `tier-c4`).
+    "crates/hh-debt",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired

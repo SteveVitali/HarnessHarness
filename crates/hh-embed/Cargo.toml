@@ -47,7 +47,12 @@ hh-fleet = { path = "../hh-fleet", optional = true }
 # `lab.evolution.*` ops stay in the schema (CC7) and answer
 # `Unsupported{by: "tier-c4"}` on a `--no-default-features` build.
 hh-evolution = { path = "../hh-evolution", optional = true }
+# S6.1b (§5h.6, C4): the assumption-debt manager is a removable tier too —
+# `lab.debt.{register,sweep,settle,retire,propose,manager_open}` ops stay
+# in the schema (CC7) and answer `Unsupported{by: "tier-c4"}` on a
+# `--no-default-features` build.
+hh-debt = { path = "../hh-debt", optional = true }
 
 [features]
 default = ["tier-c4"]
-tier-c4 = ["dep:hh-fleet", "dep:hh-evolution"]
+tier-c4 = ["dep:hh-fleet", "dep:hh-evolution", "dep:hh-debt"]
