@@ -313,8 +313,15 @@ impl EmbedService {
                 run_id,
                 mode,
                 definition,
+                cause,
                 ..
-            } => self.open_resume(run_id, mode, definition.as_ref(), p.invocation.as_ref())?,
+            } => self.open_resume(
+                run_id,
+                mode,
+                definition.as_ref(),
+                p.invocation.as_ref(),
+                cause.as_deref(),
+            )?,
             OpenSpec::Attach { run_id } => {
                 self.open_attach(run_id, p.client.as_ref(), p.contract_json.as_ref())?
             }
@@ -1087,7 +1094,12 @@ impl EmbedService {
         mode: &str,
         definition: Option<&DefinitionInput>,
         invocation: Option<&InvocationRecord>,
+        cause: Option<&str>,
     ) -> Result<Json, EmbedError> {
+        // S5.8 (AC-R-2.2.3-13) — the `lifecycle.run.resumed` row's
+        // `recovery_decision.cause` is the *caller's* claim over the
+        // closed set; absent ⇒ `operator` (the pre-S5.8 spelling).
+        let cause = cause.unwrap_or("operator");
         // Live sessions bound the cap; the target run's own writers are
         // excluded — `takeover` fences them below, `continue` answers
         // `WouldBlock` at the lease.
@@ -1251,7 +1263,7 @@ impl EmbedService {
         let (lease, restore_report) = if needs_durable_resume {
             let report = self
                 .store
-                .restore_caused(run_id, &holder, LEASE_TTL_MS, "operator")
+                .restore_caused(run_id, &holder, LEASE_TTL_MS, cause)
                 .map_err(ledger_err)?;
             (report.lease.clone(), Some(report))
         } else {
@@ -2835,7 +2847,7 @@ fn environment_spec(
             .collect::<Vec<_>>(),
         _ => vec![ws.clone()],
     };
-    let record = EnvironmentRecord {
+    let mut record = EnvironmentRecord {
         class: EnvironmentClass::LocalHost,
         image: ImageRef::ContentAddress(hh_identity::address(
             format!("hh-embed/local_host:{ws}").as_bytes(),
@@ -2849,6 +2861,7 @@ fn environment_spec(
         nondeterminism: vec![],
         unpinned: BTreeSet::new(),
         ext: BTreeMap::new(),
+        image_attestation: None,
     };
     let roots = Roots {
         workspace_roots: roots_json.clone(),
@@ -2908,6 +2921,20 @@ fn environment_spec(
         }),
     };
     policy.compute_ids();
+    // S5.8 (R-2.2.5²) — the `substrate_attestation` pair is also the
+    // record's `image_attestation` member (one attestation, one spelling
+    // — the binding declares it once); record-resolution verifies it
+    // against the policy's isolation class before the backend select's
+    // `attestation_missing` leg runs.
+    record.image_attestation = attestation
+        .as_ref()
+        .map(|a| hh_env::record::ImageAttestation {
+            method: a.method.clone(),
+            attestation_ref: a.attestation_ref.clone(),
+        });
+    record
+        .verify_attested(policy.proc.isolation_class)
+        .map_err(env_err)?;
     Ok((record, roots, policy, info, attestation))
 }
 
@@ -2996,8 +3023,18 @@ pub(crate) fn realized_settings(
 /// attach failures are `EnvironmentUnavailable` (the environment's
 /// words, carried in `reason`; never a stringy `Internal`).
 pub(crate) fn env_err(e: hh_env::errors::EnvError) -> EmbedError {
-    EmbedError::EnvironmentUnavailable {
-        reason: format!("{e:?}"),
+    match e {
+        // S5.8 (R-2.2.5²) — the attesting-class refusal keeps the
+        // containment spelling (`attestation_missing`) so a surface sees
+        // the same code at record resolution and backend selection.
+        hh_env::errors::EnvError::AttestationMissing { isolation_class } => {
+            EmbedError::EnvironmentUnavailable {
+                reason: format!("attestation_missing:{isolation_class}"),
+            }
+        }
+        other => EmbedError::EnvironmentUnavailable {
+            reason: format!("{other:?}"),
+        },
     }
 }
 

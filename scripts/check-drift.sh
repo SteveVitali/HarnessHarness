@@ -10,7 +10,7 @@ cd "$ROOT"
 echo "check-drift: regenerating artifacts from the single schema source…"
 cargo run -q -p hh-codegen -- --root "$ROOT"
 
-TARGETS=(schema/hh-embed-1.schema.json crates/hh-embed-client-generated/src/generated.rs)
+TARGETS=(schema/hh-embed-1.schema.json schema/compat-1.matrix.json crates/hh-embed-client-generated/src/generated.rs)
 
 if git diff --quiet -- "${TARGETS[@]}"; then
   echo "check-drift: ok — generated artifacts are in sync with the schema source."

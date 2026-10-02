@@ -96,6 +96,22 @@ impl EnvDriver {
             .map(move |a| a.as_mut())
     }
 
+    /// The capability declaration a provider class's handles carry — the
+    /// registered adapter's own claim ([`ProviderAdapter::
+    /// capability_declaration`]; S5.8), falling back to the conservative
+    /// `provider_class()` map when no adapter is registered yet (the
+    /// provision path refuses `no adapter` before a handle exists, so the
+    /// fallback never reaches a live handle).
+    fn declared_capabilities(
+        &self,
+        class: crate::record::EnvironmentClass,
+    ) -> crate::handle::EnvCapabilityDeclaration {
+        self.providers
+            .get(class.as_str())
+            .map(|a| a.capability_declaration())
+            .unwrap_or_else(crate::handle::EnvCapabilityDeclaration::provider_class)
+    }
+
     /// The live handle ids — `verify_environment` on resume iterates them
     /// (§5a.3 C0 — every handle in the checkpoint view is re-verified; S2.3).
     pub fn handle_ids(&self) -> Vec<String> {
@@ -187,7 +203,7 @@ impl EnvDriver {
             crate::record::EnvironmentClass::LocalHost => {
                 EnvCapabilityDeclaration::stage1_local_host()
             }
-            c if c.needs_adapter() => EnvCapabilityDeclaration::provider_class(),
+            c if c.needs_adapter() => self.declared_capabilities(c),
             _ => EnvCapabilityDeclaration::stage1_local_sandboxed(),
         };
         let handle = EnvHandle {
@@ -298,7 +314,7 @@ impl EnvDriver {
             state: HandleState::Declared,
             health: Health::Unknown,
             session: None,
-            capabilities: EnvCapabilityDeclaration::provider_class(),
+            capabilities: self.declared_capabilities(record.class),
             containment,
             report: None,
             credential_bindings: vec![],
@@ -720,6 +736,152 @@ impl EnvDriver {
         Ok(())
     }
 
+    /// `hibernate(env_handle_id) → SnapshotRecord` — the hibernation-aware
+    /// suspend (S5.8; R-2.2.3² "hibernation-aware environment leases with
+    /// R-2.2.5 snapshots"; spec §5a.3 `hibernated`). A hibernating suspend
+    /// is suspend-with-memory-checkpoint: the provider legs run *before*
+    /// any durable row (a failed checkpoint leaves the handle `ready`,
+    /// no torn state — `provider.resume` best-effort restores the
+    /// provider-side quiesce on a snapshot failure), then the batch
+    /// `[suspend.requested{on_idle:"hibernate"}, snapshot{kind:"memory"},
+    /// suspended{on_idle:"hibernate", hibernation_snapshot}]` lands in
+    /// one append — durable-before-visible across the pair.
+    ///
+    /// Capability honesty: `suspend = unknown` refuses
+    /// `UnknownCapability`; `snapshot{memory} = unsupported` refuses
+    /// `Unsupported`, `unknown`/undeclared refuses `UnknownCapability`;
+    /// a handle with no provider leg has no hibernation mechanism at
+    /// all (fs_tree alone is not hibernation — the memory image is the
+    /// point). The run-side counterpart is `SuspendReason::Hibernated`
+    /// and `env.suspended_ms` keeps accruing while `hibernated`
+    /// (hibernation is `reserved_ms` under the suspend meter — §5a.5's
+    /// accounting row, no third counter).
+    pub fn hibernate(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+    ) -> Result<SnapshotRecord, EnvError> {
+        let now = store.now_ms();
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        if h.capabilities.suspend == crate::handle::SuspendKind::Unknown {
+            return Err(EnvError::UnknownCapability {
+                capability: "suspend".to_string(),
+            });
+        }
+        // `snapshot{memory}` is the hibernation mechanism — the tri-state
+        // refusal is verbatim (S1 — never coerced).
+        match h
+            .capabilities
+            .snapshot
+            .get(crate::snapshot::SnapshotKind::Memory.as_str())
+        {
+            Some(crate::handle::Tri::Supported) => {}
+            Some(crate::handle::Tri::Unsupported) => {
+                return Err(EnvError::Unsupported {
+                    capability: "hibernate",
+                    detail: "class declared snapshot.memory unsupported".to_string(),
+                })
+            }
+            _ => {
+                return Err(EnvError::UnknownCapability {
+                    capability: "snapshot.memory".to_string(),
+                })
+            }
+        }
+        let Some(ph) = h.provider.clone() else {
+            return Err(EnvError::UnknownCapability {
+                capability: "hibernate".to_string(),
+            });
+        };
+        // Provider legs first — durable rows land only after both
+        // succeed; a checkpoint failure best-effort resumes the provider
+        // quiesce and the handle stays `ready`.
+        let adapter = self.provider_for(h.class).ok_or(EnvError::Unavailable {
+            env_handle_id: env_handle_id.to_string(),
+            state: "no_adapter",
+        })?;
+        adapter.suspend(&ph)?;
+        let remote_ref = match adapter.memory_snapshot(&ph) {
+            Ok(r) => r,
+            Err(e) => {
+                let _ = adapter.resume(&ph);
+                return Err(e);
+            }
+        };
+        let at_seq = store.head(&self.run_id).map(|x| x.seq).unwrap_or(0);
+        let base = match &h.image {
+            ResolvedImage::Address(ca) => Some(ca.id()),
+            _ => None,
+        };
+        let mut rec = SnapshotRecord {
+            snapshot_ref: String::new(),
+            env_handle_id: env_handle_id.to_string(),
+            at_seq,
+            kind: SnapshotKind::Memory,
+            base,
+            content: Json::obj([(
+                "foreign_digest",
+                Json::obj([
+                    ("scheme", Json::str("provider")),
+                    ("value", Json::str(remote_ref)),
+                    ("source", Json::str(h.class.as_str())),
+                ]),
+            )]),
+            roots_covered: h.roots.workspace_roots.clone(),
+            quiesced: true,
+            // The recovery/hygiene leg took this snapshot (OQ-318's
+            // interim accounting — recovery snapshots charge to the
+            // subject's instance).
+            taken_by: TakenBy::Subject,
+            size_bytes: 0,
+            expires_at_ms: None,
+        };
+        rec.snapshot_ref = rec.compute_ref();
+        let manifest_ref = store
+            .put_blob(
+                rec.to_json().to_canonical_string().as_bytes(),
+                "application/json",
+            )
+            .map_err(EnvError::Ledger)?
+            .id();
+        let h = self.handles.get_mut(env_handle_id).unwrap();
+        h.transition(HandleState::Suspended, now)?;
+        h.snapshots.push(rec.snapshot_ref.clone());
+        let requested = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.suspend.requested",
+            events::suspend_requested_payload(h, Some("hibernate")),
+        )?;
+        let snap = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.snapshot",
+            events::snapshot_payload(h, &rec.snapshot_ref, "memory", at_seq, Some(&manifest_ref)),
+        )?;
+        let mut suspended_j = events::suspended_payload(h, Some("hibernate"));
+        if let Json::Obj(m) = &mut suspended_j {
+            // The `hibernated` marker: `suspend_reason` names the §5a.3
+            // closed member and `hibernation_snapshot` pins the checkpoint
+            // the heal's snapshot-first leg restores.
+            m.insert("suspend_reason".to_string(), Json::str("hibernated"));
+            m.insert(
+                "hibernation_snapshot".to_string(),
+                Json::str(rec.snapshot_ref.clone()),
+            );
+        }
+        let suspended = EventMinter::new(store, &self.run_id)
+            .mint("action.environment.suspended", suspended_j)?;
+        // One append — the suspend pair + the snapshot row are durable
+        // together (request-then-state; nothing visible before durable).
+        store.append(&self.run_id, lease, vec![requested, snap, suspended])?;
+        Ok(rec)
+    }
+
     /// `resume(env_handle_id, cause)` — `suspended → ready` (S4.13). `cause`
     /// is `wakeup` | `operator` — the same vocabulary `lifecycle.run.resumed`
     /// uses (one cause enum, CC1); the suspended accrual lands on the row.
@@ -1114,13 +1276,47 @@ impl EnvDriver {
         let new_id = store.alloc_id("env");
         let ws = store.root().join("envs").join(&new_id).join("workspace");
         std::fs::create_dir_all(&ws).map_err(|e| EnvError::Blob(e.to_string()))?;
-        if matches!(mode, crate::handle::DeriveMode::ForkSnapshot) {
-            // Restore the parent's *current* tree into the child's
-            // workspace (the recorded snapshot ref is the `base` claim).
-            for root in &h.roots.workspace_roots {
-                copy_tree(root, &ws.to_string_lossy())?;
+        // S5.8 (R-2.2.3² — "snapshot-first restore in healing"): a
+        // `ReplaceFromSnapshot` successor restores the parent's newest
+        // *recorded* snapshot — `memory` first (the hibernation
+        // checkpoint, restored through the provider adapter's
+        // `restore_in_place`), then `fs_tree` (blob-pool restore, the
+        // same path `derive_from_snapshot` uses) — over the live tree:
+        // a crashed environment's workspace is itself suspect. A
+        // `memory` snapshot the child cannot restore refuses
+        // `Unsupported`, never silently degrades to the fs copy. Only
+        // when no snapshot row was recorded does the legacy live-tree
+        // copy run (the record is empty; the copy is all there is).
+        let newest = self.newest_snapshot(store, env_handle_id)?;
+        let memory_leg = if matches!(mode, crate::handle::DeriveMode::ForkSnapshot) {
+            match &newest {
+                Some((_, rec)) if rec.kind == SnapshotKind::Memory => Some(rec.clone()),
+                Some((_, rec)) => {
+                    // `fs_tree` — restore the recorded tree into the
+                    // successor's workspace (blob-pool content, never the
+                    // live tree).
+                    let snap = hh_helper::fstree::FsTreeSnapshot::from_manifest_json(&rec.content)
+                        .ok_or_else(|| {
+                            EnvError::Blob(format!(
+                                "snapshot {}: malformed manifest",
+                                rec.snapshot_ref
+                            ))
+                        })?;
+                    hh_helper::fstree::restore(&snap, &ws, &|ca| blob_by_id(store, ca))
+                        .map_err(|e| EnvError::Blob(format!("heal snapshot restore: {e}")))?;
+                    None
+                }
+                None => {
+                    // Nothing recorded — the pre-S5.8 live-tree copy.
+                    for root in &h.roots.workspace_roots {
+                        copy_tree(root, &ws.to_string_lossy())?;
+                    }
+                    None
+                }
             }
-        }
+        } else {
+            None
+        };
         let child = self.spawn_handle(
             store,
             lease,
@@ -1137,6 +1333,60 @@ impl EnvDriver {
             }),
             new_id,
         )?;
+        if let Some(rec) = memory_leg {
+            // The successor's provider leg restores the recorded
+            // checkpoint (the provider's opaque id is the record's
+            // `foreign_digest.value` — the kernel's `snapshot_ref` is
+            // what the durable `restored` row names).
+            let Some(ph) = child.provider.clone() else {
+                return Err(EnvError::UnknownCapability {
+                    capability: "heal.snapshot_first".to_string(),
+                });
+            };
+            match child.capabilities.restore_in_place {
+                crate::handle::Tri::Supported => {}
+                crate::handle::Tri::Unsupported => {
+                    return Err(EnvError::Unsupported {
+                        capability: "heal.snapshot_first",
+                        detail: "class declared restore_in_place unsupported".to_string(),
+                    })
+                }
+                crate::handle::Tri::Unknown => {
+                    return Err(EnvError::UnknownCapability {
+                        capability: "restore_in_place".to_string(),
+                    })
+                }
+            }
+            let remote_ref = rec
+                .content
+                .get("foreign_digest")
+                .and_then(|fd| fd.get("value"))
+                .and_then(Json::as_str)
+                .ok_or_else(|| {
+                    EnvError::Blob(format!(
+                        "memory snapshot {}: no foreign_digest leg",
+                        rec.snapshot_ref
+                    ))
+                })?
+                .to_string();
+            self.provider_for(h.class)
+                .ok_or(EnvError::Unavailable {
+                    env_handle_id: env_handle_id.to_string(),
+                    state: "no_adapter",
+                })?
+                .restore_in_place(&ph, &remote_ref)?;
+            let ev = EventMinter::new(store, &self.run_id).mint(
+                "action.environment.restored",
+                Json::obj([
+                    ("env_handle", Json::str(child.env_handle_id.clone())),
+                    ("snapshot_ref", Json::str(rec.snapshot_ref.clone())),
+                    ("kind", Json::str("memory")),
+                    ("mode", Json::str("snapshot_first")),
+                    ("reverts", Json::str(rec.snapshot_ref.clone())),
+                ]),
+            )?;
+            store.append(&self.run_id, lease, vec![ev])?;
+        }
         // The old handle lands `replaced` (terminal) — its session and
         // container are released.
         if let Some(mut client) = self.sessions.remove(env_handle_id) {
@@ -1713,6 +1963,227 @@ impl EnvDriver {
             }
         }
         Ok(recomputed)
+    }
+
+    /// `memory_snapshot(store, lease, env_handle_id, taken_by)` — the
+    /// `memory` snapshot kind (S5.8; R-2.2.5²; ADR-0137 §4 rules S1/S5):
+    /// the provider adapter's checkpoint of a *suspended* handle,
+    /// recorded as a `foreign_digest` claim — the provider owns the
+    /// bytes, the kernel owns the record. `memory` requires `quiesced`;
+    /// a `suspended` handle is the kernel's quiesced witness, any other
+    /// state is `InvalidState` (never a quietly-unquiesced capture).
+    /// An undeclared kind refuses `Unsupported`/`UnknownCapability` per
+    /// the handle's `EnvCapabilityDeclaration` (S1 — never coerced), and
+    /// a handle with no provider leg has no mechanism at all.
+    pub fn memory_snapshot(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        taken_by: TakenBy,
+    ) -> Result<SnapshotRecord, EnvError> {
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        h.capabilities.snapshot_supported(SnapshotKind::Memory)?;
+        if h.state != HandleState::Suspended {
+            return Err(EnvError::InvalidState {
+                op: "snapshot.memory",
+                state: h.state.as_str(),
+            });
+        }
+        let Some(ph) = h.provider.clone() else {
+            return Err(EnvError::UnknownCapability {
+                capability: "snapshot.memory".to_string(),
+            });
+        };
+        let remote_ref = self
+            .provider_for(h.class)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "no_adapter",
+            })?
+            .memory_snapshot(&ph)?;
+        let at_seq = store.head(&self.run_id).map(|h| h.seq).unwrap_or(0);
+        let base = match &h.image {
+            ResolvedImage::Address(ca) => Some(ca.id()),
+            _ => None,
+        };
+        let mut rec = SnapshotRecord {
+            snapshot_ref: String::new(),
+            env_handle_id: env_handle_id.to_string(),
+            at_seq,
+            kind: SnapshotKind::Memory,
+            base,
+            // The provider's opaque snapshot id recorded as a
+            // `foreign_digest` claim ({scheme, value, source}) — the
+            // kernel never invents a local content address for bytes it
+            // does not hold (S4 caps a `foreign_digest`/`memory` leg at
+            // R0/R1/R3 with `unpinned[]`).
+            content: Json::obj([(
+                "foreign_digest",
+                Json::obj([
+                    ("scheme", Json::str("provider")),
+                    ("value", Json::str(remote_ref)),
+                    ("source", Json::str(h.class.as_str())),
+                ]),
+            )]),
+            roots_covered: h.roots.workspace_roots.clone(),
+            quiesced: true,
+            taken_by,
+            // Byte size is the provider's claim — `0` here means
+            // "unreported" (the provider meter rows carry the real
+            // accounting; never a fabricated size).
+            size_bytes: 0,
+            expires_at_ms: None,
+        };
+        rec.snapshot_ref = rec.compute_ref();
+        let manifest_ref = store
+            .put_blob(
+                rec.to_json().to_canonical_string().as_bytes(),
+                "application/json",
+            )
+            .map_err(EnvError::Ledger)?
+            .id();
+        let h = self.handles.get_mut(env_handle_id).unwrap();
+        h.snapshots.push(rec.snapshot_ref.clone());
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.snapshot",
+            events::snapshot_payload(h, &rec.snapshot_ref, "memory", at_seq, Some(&manifest_ref)),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok(rec)
+    }
+
+    /// `restore_in_place(env_handle_id, snapshot_ref)` — the S5.8
+    /// in-place revert (R-2.2.5² S2): only where the class declares
+    /// `restore_in_place = supported`; `unsupported`/`unknown` stay the
+    /// distinct typed refusals (`Unsupported`/`UnknownCapability` —
+    /// never coerced, T-LCD-07). The mechanism is the provider
+    /// adapter's; the kernel's durable record is
+    /// `action.environment.restored{mode: "in_place", reverts}` — the
+    /// `reverts` member names the snapshot so the revert relation is
+    /// audit-visible like R-2.2.4's `revert` effect.
+    pub fn restore_in_place(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        snapshot_ref: &str,
+    ) -> Result<(), EnvError> {
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        use crate::handle::Tri;
+        match h.capabilities.restore_in_place {
+            Tri::Supported => {}
+            Tri::Unsupported => {
+                return Err(EnvError::Unsupported {
+                    capability: "restore_in_place",
+                    detail: format!(
+                        "class {} declared restore_in_place unsupported",
+                        h.class.as_str()
+                    ),
+                })
+            }
+            Tri::Unknown => {
+                return Err(EnvError::UnknownCapability {
+                    capability: "restore_in_place".to_string(),
+                })
+            }
+        }
+        let Some(ph) = h.provider.clone() else {
+            return Err(EnvError::UnknownCapability {
+                capability: "restore_in_place".to_string(),
+            });
+        };
+        self.provider_for(h.class)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "no_adapter",
+            })?
+            .restore_in_place(&ph, snapshot_ref)?;
+        let h = self.handles.get_mut(env_handle_id).unwrap();
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.restored",
+            Json::obj([
+                ("env_handle", Json::str(h.env_handle_id.clone())),
+                ("snapshot_ref", Json::str(snapshot_ref)),
+                ("mode", Json::str("in_place")),
+                ("reverts", Json::str(snapshot_ref)),
+            ]),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok(())
+    }
+
+    /// `newest_snapshot(store, env_handle_id) → Option<(at_seq,
+    /// SnapshotRecord)>` — the handle's newest recorded snapshot,
+    /// `memory` preferred over `fs_tree` (the hibernation checkpoint is
+    /// the fresher image; S5.8 snapshot-first healing's chooser). The
+    /// record reloads through its `manifest_ref` blob — a named-but-gone
+    /// blob is `SnapshotMissing` (the tombstone is the honest answer,
+    /// never a fabricated record).
+    fn newest_snapshot(
+        &self,
+        store: &Store,
+        env_handle_id: &str,
+    ) -> Result<Option<(u64, SnapshotRecord)>, EnvError> {
+        let rows = store
+            .env_snapshots(&self.run_id)
+            .map_err(EnvError::Ledger)?;
+        // (kind-rank, at_seq, record) — `memory` outranks `fs_tree` at
+        // equal recency; newest wins. The chooser is handle-scoped: the
+        // row's `env_handle` member lives on the record, so each
+        // candidate reloads through its `manifest_ref` blob — a
+        // named-but-gone blob is `SnapshotMissing`, a row for another
+        // handle is skipped (not this env's restore point).
+        let mut best: Option<(u8, u64, SnapshotRecord)> = None;
+        for (s, sr, kind, mr) in rows {
+            let rank = match kind.as_str() {
+                "memory" => 2u8,
+                "fs_tree" => 1u8,
+                _ => continue,
+            };
+            if best
+                .as_ref()
+                .map(|(br, bs, _)| (rank, s) <= (*br, *bs))
+                .unwrap_or(false)
+            {
+                continue;
+            }
+            let manifest_ref = mr.ok_or_else(|| EnvError::SnapshotMissing {
+                snapshot_ref: sr.clone(),
+            })?;
+            let bytes =
+                blob_by_id(store, &manifest_ref).ok_or_else(|| EnvError::SnapshotMissing {
+                    snapshot_ref: sr.clone(),
+                })?;
+            let text = String::from_utf8(bytes)
+                .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
+            let j = hh_wire::json::parse(&text)
+                .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
+            let rec = SnapshotRecord::from_json(&j).ok_or_else(|| {
+                EnvError::Blob(format!(
+                    "snapshot record {manifest_ref}: malformed member form"
+                ))
+            })?;
+            if rec.env_handle_id != env_handle_id {
+                continue;
+            }
+            best = Some((rank, s, rec));
+        }
+        Ok(best.map(|(_, _, rec)| (rec.at_seq, rec)))
     }
 
     /// `snapshot_for(store, env_handle_id, at_seq)` — the S2.9 snapshot chooser

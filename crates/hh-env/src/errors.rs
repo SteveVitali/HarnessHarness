@@ -26,6 +26,14 @@ pub enum EnvError {
         /// The tag that refused to pin.
         tag: String,
     },
+    /// An attesting isolation class (`user_space_kernel`/`microvm`)
+    /// resolved without a well-formed `image_attestation` on the
+    /// `EnvironmentRecord` — fail-closed, never a silent degrade (S5.8;
+    /// R-2.2.5²; I-C4).
+    AttestationMissing {
+        /// The isolation class that required the attestation.
+        isolation_class: String,
+    },
     /// A `foreign_digest`/`unpinned_tag` image cannot back an R2 (or higher)
     /// reproducibility claim — only an immutable `ContentAddress` can (N8).
     ReproClaimUnsupported {
@@ -153,6 +161,10 @@ impl std::fmt::Display for EnvError {
             EnvError::InvalidState { op, state } => {
                 write!(f, "InvalidState: {op} on a {state} handle")
             }
+            EnvError::AttestationMissing { isolation_class } => write!(
+                f,
+                "attestation missing for attesting isolation class {isolation_class}"
+            ),
             EnvError::UnresolvedRef { tag } => {
                 write!(
                     f,

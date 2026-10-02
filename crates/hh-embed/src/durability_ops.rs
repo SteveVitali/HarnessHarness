@@ -23,7 +23,7 @@ use hh_ledger::branch_ops::{OpenBranchSpec, ReleaseMap};
 use hh_ledger::goal::ContinueCarried;
 use hh_ledger::manifest::EventRef;
 use hh_ledger::store::Lease;
-use hh_ledger::wakeup::{Trigger, WakeupPolicy};
+use hh_ledger::wakeup::{Trigger, WakeupPolicy, WokenDelivery};
 use hh_wire::json::Json;
 
 use crate::service::{ledger_err, EmbedService};
@@ -344,6 +344,51 @@ impl EmbedService {
         ]))
     }
 
+    /// `deliver_due_wakeups(session_id) → Vec<WokenDelivery>` — the S5.8
+    /// surface drain seam (R-2.2.3²; §5a.3 wakeup table): runs the
+    /// kernel-internal trigger pass (`deliver_wakeup` — due occurrences
+    /// land `control.wakeup.occurred` durable-first, then `fired` under
+    /// the W-1 claim) under the session's writer lease, then returns the
+    /// deliveries this session has not yet consumed. `delivered_wokens`
+    /// is the same dedup key the run-loop drain uses — a surface poll
+    /// never re-delivers what a decision point already cued, and a
+    /// `fired` row a dead surface never read re-surfaces on the next
+    /// call (at-least-once; the durable `fired` row is the record, the
+    /// set is caller-side bookkeeping).
+    ///
+    /// Not a registered op — the seam is for surfaces holding the run's
+    /// writer session *in process* (binding (a): the MCP server's
+    /// `notifications/tasks`/`resources/updated` push pass); a remote
+    /// caller's view of the same fact is `read_ledger` over
+    /// `control.wakeup.fired` rows.
+    pub fn deliver_due_wakeups(
+        &mut self,
+        session_id: &str,
+    ) -> Result<Vec<WokenDelivery>, EmbedError> {
+        let (run_id, lease) = {
+            let s = self.writer_session(session_id)?;
+            (
+                s.run_id.clone(),
+                s.lease.clone().ok_or_else(|| EmbedError::Refused {
+                    reason: "session_is_read_only".to_string(),
+                })?,
+            )
+        };
+        let now = self.store.now_ms();
+        self.store
+            .deliver_wakeup(&run_id, &lease, now)
+            .map_err(ledger_err)?;
+        let drained = self.store.wakeup_drain(&run_id).map_err(ledger_err)?;
+        let mut fresh = Vec::new();
+        for w in drained {
+            let key = format!("{}\u{0}{}", w.subscription_id, w.occurrence_key);
+            if self.session_mut(session_id)?.delivered_wokens.insert(key) {
+                fresh.push(w);
+            }
+        }
+        Ok(fresh)
+    }
+
     // ── env suspend/resume (the session's handle; env_subject carries
     // the env_handle_id) ─────────────────────────────────────────────
 
@@ -358,6 +403,22 @@ impl EmbedService {
                 reason: "env_driver_absent".to_string(),
             }
         })?;
+        // S5.8 (R-2.2.3²) — `on_idle:"hibernate"` is the hibernation-aware
+        // suspend: the provider's memory checkpoint is taken inside the
+        // same durable batch (`hibernation_snapshot` on the `suspended`
+        // row); a class without `snapshot{memory}=supported` keeps the
+        // tri-state refusal verbatim.
+        if on_idle == Some("hibernate") {
+            let rec = driver
+                .hibernate(&mut self.store, &lease, &env_handle_id)
+                .map_err(crate::open::env_err)?;
+            return Ok(Json::obj([
+                ("state", Json::str("suspended")),
+                ("suspend_reason", Json::str("hibernated")),
+                ("hibernation_snapshot", Json::str(rec.snapshot_ref)),
+                ("suspended_ms_accruing", Json::Bool(true)),
+            ]));
+        }
         driver
             .suspend(&mut self.store, &lease, &env_handle_id, on_idle)
             .map_err(crate::open::env_err)?;

@@ -167,6 +167,7 @@ fn test_record() -> EnvironmentRecord {
         limits: ResourceLimits::default(),
         nondeterminism: vec![],
         unpinned: BTreeSet::new(),
+        image_attestation: None,
         ext: BTreeMap::new(),
     }
 }

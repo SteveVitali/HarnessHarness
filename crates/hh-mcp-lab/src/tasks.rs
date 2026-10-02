@@ -303,6 +303,110 @@ pub fn task_status_of(srv: &mut LabServer, binding: &CallerBinding, record: &Tas
     Json::Obj(task)
 }
 
+/// Push one narrowed `notifications/tasks` — the `taskId` only (the
+/// client re-reads `tasks/get`; the same `narrowed` discipline
+/// `notifications/resources/updated` follows, and the caller runs this
+/// only after the underlying row is durable — ADR-0175 D3).
+pub fn push_task_notification(srv: &mut LabServer, task_id: &str) {
+    srv.pending.push_back(Json::obj([
+        ("method", Json::str("notifications/tasks")),
+        ("params", Json::obj([("taskId", Json::str(task_id))])),
+    ]));
+}
+
+/// Push `notifications/tasks` for every task the calling binding owns
+/// whose target run is in `touched` — the run-state → tasks push arm of
+/// the §05d lowering (S5.8; R-2.2.3²). A binding that never declared
+/// `capabilities.tasks` has no sink and gets nothing (the rows stay
+/// durable; `tasks/get` re-reads them — never a fabricated push).
+pub fn push_for_runs(
+    srv: &mut LabServer,
+    binding: &CallerBinding,
+    touched: &std::collections::BTreeSet<String>,
+) {
+    if !srv.client_tasks.contains(&binding.binding_id) {
+        return;
+    }
+    let tids: Vec<String> = srv
+        .tasks
+        .iter()
+        .filter(|(_, rec)| {
+            rec.owner_binding == binding.binding_id
+                && rec.target_kind == "run"
+                && touched.contains(&rec.target_id)
+        })
+        .map(|(tid, _)| tid.clone())
+        .collect();
+    for tid in tids {
+        push_task_notification(srv, &tid);
+    }
+}
+
+/// The `control.wakeup.*` → `notifications/tasks` lowering pass
+/// (R-2.2.3²; ADR-0175 D3; §05d's push-notification config): for every
+/// run-bound task the binding owns, drain the target run's due wakeups
+/// through `EmbedService::deliver_due_wakeups` — the kernel-internal
+/// trigger pass lands `control.wakeup.occurred`/`fired` durable-first
+/// under the writer session the launch mint recorded, and each task
+/// with a *fresh* delivery gets one narrowed push (delivery dedup is
+/// the session's `delivered_wokens` set — the same key the run-loop
+/// drain uses, so a surface poll never double-delivers).
+///
+/// Recovery posture: an `unknown_session` — the recorded writer is
+/// provably gone — re-attaches `attach{mode:take_over}` once (the same
+/// documented recovery `control_passthrough` uses); a `SessionDetached`
+/// means a live writer holds the run and delivers on its own cadence
+/// (skipped, never double-delivered); any other refusal skips — the
+/// `fired` rows stay durable and deliverable, nothing is dropped.
+pub fn drain_due_wakeups(srv: &mut LabServer, binding: &CallerBinding) {
+    if !srv.client_tasks.contains(&binding.binding_id) {
+        return;
+    }
+    // (task_id, run_id, writer session) — collected before the mutable
+    // service borrow the drain needs.
+    let mut targets: Vec<(String, String, String)> = Vec::new();
+    if let Some(sess) = srv.sessions.get(&binding.binding_id) {
+        for (tid, rec) in &srv.tasks {
+            if rec.owner_binding != binding.binding_id || rec.target_kind != "run" {
+                continue;
+            }
+            let sid = sess.handles.by_alias.values().find_map(|e| {
+                if e.target_id != rec.target_id {
+                    return None;
+                }
+                e.payload
+                    .as_ref()
+                    .and_then(|p| p.get("session_id"))
+                    .and_then(Json::as_str)
+                    .map(String::from)
+            });
+            if let Some(sid) = sid {
+                targets.push((tid.clone(), rec.target_id.clone(), sid));
+            }
+        }
+    }
+    for (tid, run_id, sid) in targets {
+        let fresh = match srv.svc.deliver_due_wakeups(&sid) {
+            Ok(w) => w,
+            Err(hh_embed_schema::errors::EmbedError::UnknownSession) => {
+                // A wakeup-driven reattach reports `cause: "wakeup"` —
+                // the durable `lifecycle.run.resumed{recovery_decision.
+                // cause}` the hosted-resume mapping requires
+                // (AC-R-2.2.3-13).
+                match crate::launch::attach_take_over_caused(&mut srv.svc, &run_id, Some("wakeup"))
+                {
+                    Ok(new_sid) => srv.svc.deliver_due_wakeups(&new_sid).unwrap_or_default(),
+                    Err(_) => Vec::new(),
+                }
+            }
+            Err(_) => Vec::new(),
+        };
+        if !fresh.is_empty() {
+            push_task_notification(srv, &tid);
+        }
+    }
+}
+
 /// The `tasks/*` method dispatch — returns `(result_json, error)`.
 /// Callers wrap in `result_frame`/`error_frame` (`-32021` errors are
 /// produced by the caller on capability misses — these bodies assume
@@ -313,6 +417,12 @@ pub fn dispatch(
     method: &str,
     params: &Json,
 ) -> Result<Json, (i64, String)> {
+    // The tasks carrier is also the wakeup sink (R-2.2.3²): every
+    // `tasks/*` call drains the binding's task-bound runs first, so a
+    // `tasks/get` status read reflects `control.wakeup.fired` rows that
+    // materialised since the last call, and any *other* task that moved
+    // gets its narrowed `notifications/tasks` push.
+    drain_due_wakeups(srv, binding);
     if method == "tasks/list" {
         let records: Vec<TaskRecord> = srv
             .tasks

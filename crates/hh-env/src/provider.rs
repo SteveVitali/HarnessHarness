@@ -95,6 +95,46 @@ pub trait ProviderAdapter {
         let _ = handle;
         Ok(Vec::new())
     }
+
+    /// The capability declaration this adapter's handles carry (S5.8;
+    /// R-2.2.5²). Defaults to the conservative `provider_class()` map
+    /// (every `snapshot` kind + `restore_in_place` `unknown`); an adapter
+    /// overrides the members it genuinely backs — a declared `supported`
+    /// must be exercised by the mechanism methods below
+    /// (AC-R-2.2.5-10 capability honesty: supported ⇒ implemented).
+    fn capability_declaration(&self) -> crate::handle::EnvCapabilityDeclaration {
+        crate::handle::EnvCapabilityDeclaration::provider_class()
+    }
+
+    /// `memory_snapshot(handle)` — the provider's checkpoint mechanism for
+    /// the `memory` snapshot kind (a full-state/process capture the kernel
+    /// records as a `foreign_digest` claim — the provider owns the bytes;
+    /// the kernel owns the record). The default is the honest refusal:
+    /// an adapter that never declared `snapshot.memory = supported` fails
+    /// `UnknownCapability`, never a silent success (S1; T-LCD-07).
+    fn memory_snapshot(&mut self, handle: &ProviderHandle) -> Result<String, EnvError> {
+        let _ = handle;
+        Err(EnvError::UnknownCapability {
+            capability: "snapshot.memory".to_string(),
+        })
+    }
+
+    /// `restore_in_place(handle, snapshot_ref)` — revert the live remote
+    /// environment to a provider snapshot in place (S5.8; R-2.2.5² S2 —
+    /// distinct from successor-handle restore, which needs no special
+    /// capability). Refuses `UnknownCapability` unless the adapter
+    /// declared `restore_in_place = supported` via
+    /// [`ProviderAdapter::capability_declaration`].
+    fn restore_in_place(
+        &mut self,
+        handle: &ProviderHandle,
+        snapshot_ref: &str,
+    ) -> Result<(), EnvError> {
+        let _ = (handle, snapshot_ref);
+        Err(EnvError::UnknownCapability {
+            capability: "restore_in_place".to_string(),
+        })
+    }
 }
 
 impl std::fmt::Debug for dyn ProviderAdapter {

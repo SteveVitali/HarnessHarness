@@ -374,18 +374,32 @@ fn control_passthrough(
     }
 }
 
-/// `open_session{kind:"attach", mode:"take_over"}` → fresh writer
-/// session id for `run_id`.
+/// `open_session{kind:"resume", mode:"takeover"}` → fresh writer
+/// session id for `run_id` (the resume arm — `attach` is read-only by
+/// construction, and `mode` lives on `resume`; the `cause` member is
+/// the `lifecycle.run.resumed{recovery_decision.cause}` claim —
+/// `None` defaults `operator`).
 pub fn attach_take_over(svc: &mut EmbedService, run_id: &str) -> Result<String, SurfaceError> {
+    attach_take_over_caused(svc, run_id, None)
+}
+
+/// `attach_take_over` with an explicit resume `cause` (S5.8;
+/// AC-R-2.2.3-13) — the wakeup-drain recovery leg reports `wakeup`.
+pub fn attach_take_over_caused(
+    svc: &mut EmbedService,
+    run_id: &str,
+    cause: Option<&str>,
+) -> Result<String, SurfaceError> {
+    let mut spec = Json::obj([
+        ("kind", Json::str("resume")),
+        ("run_id", Json::str(run_id)),
+        ("mode", Json::str("takeover")),
+    ]);
+    if let (Json::Obj(m), Some(c)) = (&mut spec, cause) {
+        m.insert("cause".into(), Json::str(c));
+    }
     let params = Json::obj([
-        (
-            "spec",
-            Json::obj([
-                ("kind", Json::str("attach")),
-                ("run_id", Json::str(run_id)),
-                ("mode", Json::str("take_over")),
-            ]),
-        ),
+        ("spec", spec),
         (
             "idempotency_key",
             Json::str(format!("attach:{}:{}", run_id, svc.surface_now_ms())),
