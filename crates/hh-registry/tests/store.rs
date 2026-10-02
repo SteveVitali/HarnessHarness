@@ -210,33 +210,45 @@ fn third_party_register_requires_trust_record_and_confines_placement() {
     let d = dir("third-party");
     let mut s = RegistryStore::open(&d, &kernel()).unwrap();
     let c = register_class(&mut s, "c1");
+    // Third-party summaries mint at the registrar's own authority — a
+    // kernel-authority `Text` leaf under a third-party registrar is exactly
+    // what `hash_only_ceiling` refuses (S4.1; AC-R-2.10.2-9).
+    let tp_variant = |c: &str, placement: Placement| {
+        let mut v = variant(c, "v1", placement);
+        v.summary = text("v v1", &third_party());
+        v
+    };
     // No trust record → TrustRecordRequired.
-    let v = variant(&c, "v1", Placement::SubprocessConfined);
     let e = s
-        .register(RegistryRecord::Variant(v), &third_party(), None)
+        .register(
+            RegistryRecord::Variant(tp_variant(&c, Placement::SubprocessConfined)),
+            &third_party(),
+            None,
+        )
         .unwrap_err();
     assert_eq!(e, RegistryError::TrustRecordRequired);
     // With trust record, in_process third-party code → LocalityInadmissible.
-    let v = variant(&c, "v1", Placement::InProcess);
     let e = s
         .register(
-            RegistryRecord::Variant(v),
+            RegistryRecord::Variant(tp_variant(&c, Placement::InProcess)),
             &third_party(),
             Some("sha256:trust".to_string()),
         )
         .unwrap_err();
     assert!(matches!(e, RegistryError::LocalityInadmissible { .. }));
-    // Confined placement + trust → registers quarantined.
-    let v = variant(&c, "v1", Placement::SubprocessConfined);
+    // Confined placement + trust → registers resolved (S4.1; AC-R-2.10.2-9 —
+    // unsigned out-of-process third-party variants resolve at `external`
+    // standing; `quarantined` is now reserved for signature-required kinds,
+    // foreign imports, and the listing-lift admission rules).
     let r = s
         .register(
-            RegistryRecord::Variant(v),
+            RegistryRecord::Variant(tp_variant(&c, Placement::SubprocessConfined)),
             &third_party(),
             Some("sha256:trust".to_string()),
         )
         .unwrap();
     let (env, _) = s.get(&r.version_id).unwrap();
-    assert_eq!(env.admission, Admission::Quarantined);
+    assert_eq!(env.admission, Admission::Resolved);
 }
 
 #[test]
@@ -533,12 +545,21 @@ fn revoke_refuses_execute_resolves_audit_and_marks_dependants_stale() {
 fn quarantined_records_never_execute() {
     let d = dir("quarantine");
     let mut s = RegistryStore::open(&d, &kernel()).unwrap();
-    let c = register_class(&mut s, "c1");
+    // S4.1: third-party variants resolve at `external` (AC-R-2.10.2-9); the
+    // quarantine cell is exercised over a `foreign_import` — quarantined by
+    // `foreign_import_default_admission` under the Stage-1 policy.
     let v = s
         .register(
-            RegistryRecord::Variant(variant(&c, "v1", Placement::SubprocessConfined)),
-            &third_party(),
-            Some("sha256:trust".to_string()),
+            RegistryRecord::ForeignImport(ForeignImport {
+                system: "mcp_registry".to_string(),
+                locator: "mcp://server/x".to_string(),
+                digest: Some("sha256:abc".to_string()),
+                label: None,
+                lifted_record: Json::obj([("name", Json::str("x"))]),
+                loss_report: hh_registry::records::LossReport::default(),
+            }),
+            &kernel(),
+            None,
         )
         .unwrap();
     let e = s
@@ -809,7 +830,10 @@ fn foreign_import_registers_quarantined() {
         digest: Some("sha256:abc".to_string()),
         label: None,
         lifted_record: Json::obj([("name", Json::str("x"))]),
-        loss_report: vec!["digest".to_string()],
+        loss_report: hh_registry::records::LossReport {
+            digest: vec!["digest".to_string()],
+            ..Default::default()
+        },
     };
     let r = s
         .register(RegistryRecord::ForeignImport(fi), &kernel(), None)

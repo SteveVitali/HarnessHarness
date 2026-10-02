@@ -191,6 +191,38 @@ pub enum RegistryError {
         /// The label that was required to bump.
         detail: String,
     },
+    /// A publish into a `require_signature` namespace whose registrar carries no
+    /// verified signer attestation (§6.2; S4.1 — the namespace's signature gate).
+    SignatureRequired {
+        /// The namespace spelling.
+        namespace: String,
+    },
+    /// A signer attestation that fails `verify_attestation` under the registered
+    /// `TrustRootPolicy` anchors, or a `pin` lift attempt without one (S4.1).
+    AttestationFailed {
+        /// What verification reported.
+        detail: String,
+    },
+    /// `import` names a foreign system the registry policy does not admit
+    /// (§6.2 `allowed_foreign_systems` — fail closed).
+    ForeignSystemRefused {
+        /// The foreign-system spelling.
+        system: String,
+    },
+    /// `export` names a target the registry does not lower to (the closed export
+    /// target is `plugin_manifest/1` — §6.2 R7; S4.1).
+    UnknownExportTarget {
+        /// The requested target spelling.
+        target: String,
+    },
+    /// `export` names a record kind with no declared projection to the target
+    /// schema (refusal, never a silent projection — CC3).
+    UnsupportedExportKind {
+        /// The record kind spelling.
+        kind: String,
+        /// The export target spelling.
+        target: String,
+    },
 }
 
 impl RegistryError {
@@ -228,6 +260,11 @@ impl RegistryError {
             RegistryError::UnknownVersion { .. } => "UnknownVersion",
             RegistryError::RunNotDurable { .. } => "RunNotDurable",
             RegistryError::LabelBumpRequired { .. } => "LabelBumpRequired",
+            RegistryError::SignatureRequired { .. } => "SignatureRequired",
+            RegistryError::AttestationFailed { .. } => "AttestationFailed",
+            RegistryError::ForeignSystemRefused { .. } => "ForeignSystemRefused",
+            RegistryError::UnknownExportTarget { .. } => "UnknownExportTarget",
+            RegistryError::UnsupportedExportKind { .. } => "UnsupportedExportKind",
         }
     }
 }
@@ -277,6 +314,13 @@ impl std::fmt::Display for RegistryError {
             RegistryError::RunNotDurable { run_ref } => write!(f, ": {run_ref}"),
             RegistryError::LabelBumpRequired { name, detail } => {
                 write!(f, ": {name} ({detail})")
+            }
+            RegistryError::SignatureRequired { namespace } => write!(f, ": {namespace}"),
+            RegistryError::AttestationFailed { detail } => write!(f, ": {detail}"),
+            RegistryError::ForeignSystemRefused { system } => write!(f, ": {system}"),
+            RegistryError::UnknownExportTarget { target } => write!(f, ": {target}"),
+            RegistryError::UnsupportedExportKind { kind, target } => {
+                write!(f, ": {kind} -> {target}")
             }
             _ => Ok(()),
         }

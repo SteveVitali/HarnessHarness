@@ -45,6 +45,7 @@ pub mod corpus;
 pub mod errors;
 pub mod events;
 pub mod extension;
+pub mod foreign;
 pub mod identity;
 pub mod import;
 pub mod kinds;

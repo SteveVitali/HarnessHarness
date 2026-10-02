@@ -33,9 +33,10 @@ use crate::kinds::{
 };
 use crate::records::{
     AppliesTo, CapabilityRecord, ClassRecord, ConformanceRecord, ConformanceReport,
-    ConformanceSuite, ContractOperation, ForeignImport, Implementation, NamespaceRecord,
-    ObservedIn, ParamDecl, RegistryDiagnostic, RegistryEnvelope, RegistryPolicy, RegistryRecord,
-    RegistrySnapshot, ReportHost, ReportResult, SuiteTest, VariantRecord, REGISTRY_DIALECT,
+    ConformanceSuite, ContractOperation, ForeignImport, Implementation, LossReport,
+    ModelInstallRule, NamespaceRecord, ObservedIn, ParamDecl, RegistryDiagnostic, RegistryEnvelope,
+    RegistryPolicy, RegistryRecord, RegistrySnapshot, ReportHost, ReportResult, SuiteTest,
+    TrustRootPolicy, VariantRecord, REGISTRY_DIALECT,
 };
 
 fn obj(pairs: Vec<(&str, Json)>) -> Json {
@@ -236,7 +237,7 @@ fn param_from_json(j: &Json, path: &str) -> Result<ParamDecl, RegistryError> {
     })
 }
 
-fn params_json(p: &BTreeMap<String, ParamDecl>) -> Json {
+pub(crate) fn params_json(p: &BTreeMap<String, ParamDecl>) -> Json {
     let mut m = BTreeMap::new();
     for (k, v) in p {
         m.insert(k.clone(), param_json(v));
@@ -452,7 +453,7 @@ fn conditioned_rules_from_json(
 /// every declared field covered). `semantic = true` is the `semantic_id`
 /// projection: the tag and surface fields drop out (AC-7 — a rename or summary
 /// edit keeps the coordinate).
-fn variant_body_json(v: &VariantRecord, semantic: bool) -> Json {
+pub(crate) fn variant_body_json(v: &VariantRecord, semantic: bool) -> Json {
     let mut m = BTreeMap::new();
     if !semantic {
         m.insert(
@@ -495,7 +496,7 @@ fn variant_body_json(v: &VariantRecord, semantic: bool) -> Json {
     Json::Obj(m)
 }
 
-fn variant_from_json(j: &Json, path: &str) -> Result<VariantRecord, RegistryError> {
+pub(crate) fn variant_from_json(j: &Json, path: &str) -> Result<VariantRecord, RegistryError> {
     let summary =
         Text::from_json(req(j, "summary", path)?, &format!("{path}.summary")).map_err(|e| {
             RegistryError::SchemaViolation {
@@ -944,13 +945,61 @@ fn namespace_from_json(j: &Json, path: &str) -> Result<NamespaceRecord, Registry
     })
 }
 
+/// The partitioned `LossReport` encoding (S4.1 — `structured_loss` per §6.2 R7).
+pub fn loss_report_json(lr: &LossReport) -> Json {
+    obj(vec![
+        ("capabilities", str_vec(&lr.capabilities)),
+        ("conformance", str_vec(&lr.conformance)),
+        ("digest", str_vec(&lr.digest)),
+        ("other", str_vec(&lr.other)),
+        ("trust_legs", str_vec(&lr.trust_legs)),
+    ])
+}
+
+/// `LossReport` decode — the partitioned object; a legacy bare string array
+/// (pre-S4.1 encodings) decodes into `other` (CC8 additive discipline — the old
+/// shape carried one unnamed list, which is exactly what `other` names).
+pub fn loss_report_from_json(j: &Json, path: &str) -> Result<LossReport, RegistryError> {
+    match j {
+        Json::Arr(items) => {
+            let mut other = Vec::new();
+            for e in items {
+                match e {
+                    Json::Str(s) => other.push(s.clone()),
+                    _ => {
+                        return Err(RegistryError::SchemaViolation {
+                            path: path.to_string(),
+                            detail: "expected string".to_string(),
+                        })
+                    }
+                }
+            }
+            Ok(LossReport {
+                other,
+                ..LossReport::default()
+            })
+        }
+        Json::Obj(_) => Ok(LossReport {
+            capabilities: str_vec_dec(j, "capabilities", path)?,
+            conformance: str_vec_dec(j, "conformance", path)?,
+            digest: str_vec_dec(j, "digest", path)?,
+            trust_legs: str_vec_dec(j, "trust_legs", path)?,
+            other: str_vec_dec(j, "other", path)?,
+        }),
+        _ => Err(RegistryError::SchemaViolation {
+            path: format!("{path}.loss_report"),
+            detail: "expected a partitioned object or a legacy string array".to_string(),
+        }),
+    }
+}
+
 fn foreign_import_body_json(fi: &ForeignImport) -> Json {
     obj(vec![
         ("digest", fi.digest.clone().map_or(Json::Null, Json::Str)),
         ("label", fi.label.clone().map_or(Json::Null, Json::Str)),
         ("lifted_record", fi.lifted_record.clone()),
         ("locator", Json::str(fi.locator.clone())),
-        ("loss_report", str_vec(&fi.loss_report)),
+        ("loss_report", loss_report_json(&fi.loss_report)),
         ("system", Json::str(fi.system.clone())),
     ])
 }
@@ -962,7 +1011,99 @@ fn foreign_import_from_json(j: &Json, path: &str) -> Result<ForeignImport, Regis
         digest: opt_str(j, "digest"),
         label: opt_str(j, "label"),
         lifted_record: req(j, "lifted_record", path)?.clone(),
-        loss_report: str_vec_dec(j, "loss_report", path)?,
+        loss_report: loss_report_from_json(req(j, "loss_report", path)?, path)?,
+    })
+}
+
+/// The canonical `trust_root_policy` encoding (§6.2; S4.1).
+pub fn trust_root_policy_body_json(t: &TrustRootPolicy) -> Json {
+    let mut members = vec![
+        ("accepted_signers", strs(&t.accepted_signers)),
+        ("allowed_sources", strs(&t.allowed_sources)),
+        ("archive_policy", Json::str(t.archive_policy.clone())),
+        ("drift_policy", Json::str(t.drift_policy.clone())),
+        ("hash_only_ceiling", Json::str(t.hash_only_ceiling.as_str())),
+        (
+            "max_age",
+            t.max_age.map_or(Json::Null, |n| Json::Int(n as i64)),
+        ),
+        ("model_install", Json::str(t.model_install.as_str())),
+        ("required_predicates", strs(&t.required_predicates)),
+        ("require_signature_for", strs(&t.require_signature_for)),
+        ("scanner_policy", Json::str(t.scanner_policy.clone())),
+    ];
+    if !t.ext.is_empty() {
+        members.push(("ext", Json::Obj(t.ext.clone())));
+    }
+    obj(members)
+}
+
+/// `trust_root_policy` decode — path-strict: every member must be a declared
+/// one or live under `ext` (CC3/CC7).
+pub fn trust_root_policy_from_json(j: &Json, path: &str) -> Result<TrustRootPolicy, RegistryError> {
+    const KNOWN: &[&str] = &[
+        "accepted_signers",
+        "allowed_sources",
+        "archive_policy",
+        "drift_policy",
+        "hash_only_ceiling",
+        "max_age",
+        "model_install",
+        "required_predicates",
+        "require_signature_for",
+        "scanner_policy",
+        "ext",
+    ];
+    if let Json::Obj(m) = j {
+        for k in m.keys() {
+            if !KNOWN.contains(&k.as_str()) {
+                return Err(RegistryError::SchemaViolation {
+                    path: format!("{path}.{k}"),
+                    detail: "unknown member (extension members ride `ext`)".to_string(),
+                });
+            }
+        }
+    }
+    let hash_only_ceiling = match opt_str(j, "hash_only_ceiling") {
+        None => hh_provenance::AuthorityClass::External,
+        Some(s) => hh_provenance::AuthorityClass::parse(&s).ok_or_else(|| {
+            RegistryError::SchemaViolation {
+                path: format!("{path}.hash_only_ceiling"),
+                detail: format!("`{s}` is outside the closed AuthorityClass sum"),
+            }
+        })?,
+    };
+    let model_install =
+        ModelInstallRule::parse(&req_str(j, "model_install", path)?).ok_or_else(|| {
+            RegistryError::SchemaViolation {
+                path: format!("{path}.model_install"),
+                detail: "closed vocabulary: deny | ask | allow_attenuated".to_string(),
+            }
+        })?;
+    Ok(TrustRootPolicy {
+        allowed_sources: str_set(j, "allowed_sources", path)?,
+        accepted_signers: str_set(j, "accepted_signers", path)?,
+        required_predicates: str_set(j, "required_predicates", path)?,
+        require_signature_for: str_set(j, "require_signature_for", path)?,
+        hash_only_ceiling,
+        max_age: match j.get("max_age") {
+            Some(Json::Null) | None => None,
+            Some(Json::Int(i)) if *i >= 0 => Some(*i as u64),
+            _ => {
+                return Err(RegistryError::SchemaViolation {
+                    path: format!("{path}.max_age"),
+                    detail: "expected u64".to_string(),
+                })
+            }
+        },
+        drift_policy: req_str(j, "drift_policy", path)?,
+        scanner_policy: req_str(j, "scanner_policy", path)?,
+        model_install,
+        archive_policy: req_str(j, "archive_policy", path)?,
+        ext: match j.get("ext") {
+            Some(Json::Obj(m)) => m.clone(),
+            _ => BTreeMap::new(),
+        },
     })
 }
 
@@ -1331,6 +1472,7 @@ pub fn body_json(r: &RegistryRecord, semantic: bool) -> Json {
         RegistryRecord::Namespace(n) => namespace_body_json(n),
         RegistryRecord::Snapshot(s) => snapshot_body_json(s),
         RegistryRecord::ForeignImport(f) => foreign_import_body_json(f),
+        RegistryRecord::TrustRootPolicy(t) => trust_root_policy_body_json(t),
         // The capability body IS the canonical HIR node (V-E1-9 — the `semantic`
         // flag is irrelevant: the node's own codec already splits identity).
         RegistryRecord::Capability(c) => hh_hir::wire::node_to_json(&c.node),
@@ -1401,6 +1543,9 @@ pub fn record_from_json(kind: RecordKind, j: &Json) -> Result<RegistryRecord, Re
         RecordKind::ForeignImport => Ok(RegistryRecord::ForeignImport(foreign_import_from_json(
             j, path,
         )?)),
+        RecordKind::TrustRootPolicy => Ok(RegistryRecord::TrustRootPolicy(
+            trust_root_policy_from_json(j, path)?,
+        )),
         RecordKind::Capability => {
             let node =
                 hh_hir::wire::node_from_json(j).map_err(|e| RegistryError::SchemaViolation {

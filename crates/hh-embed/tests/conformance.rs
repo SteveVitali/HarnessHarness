@@ -2634,6 +2634,43 @@ fn lab_class_body(class_id: &str) -> Json {
     )
 }
 
+/// A minimal `variant` record body pinned to `class_ref` (S4.1 export path).
+fn lab_variant_body(class_ref: &str, variant_id: &str) -> Json {
+    use hh_registry::kinds::Placement;
+    use hh_registry::records::{AppliesTo, Implementation, RegistryRecord, VariantRecord};
+    use std::collections::{BTreeMap, BTreeSet};
+    hh_registry::schema::body_json(
+        &RegistryRecord::Variant(VariantRecord {
+            variant_id: variant_id.to_string(),
+            class_ref: class_ref.to_string(),
+            contract_range: "1.0".to_string(),
+            version_label: Some("1.0.0".to_string()),
+            param_schema: BTreeMap::new(),
+            implementation: Implementation {
+                content: hh_identity::idp::address(b"lab-variant-impl", "application/octet-stream"),
+                placement: Placement::SubprocessConfined,
+                host_requirements: Json::Null,
+            },
+            // `lab_class` declares `additionalProperties: false` — the
+            // capability map must stay empty.
+            capability_declaration: BTreeMap::new(),
+            conditioned_rules: vec![],
+            applies_to: AppliesTo {
+                participant_classes: BTreeSet::from(["native".to_string()]),
+                families: vec![],
+            },
+            declared_costs: None,
+            summary: hh_hir::leaves::Text::new(
+                "lab variant",
+                "test",
+                ProvenanceRecord::kernel("hh-embed", 0),
+            ),
+            dialect_range: "registry/1".to_string(),
+        }),
+        false,
+    )
+}
+
 fn lab_hello(svc: &mut EmbedService) {
     let r = call(
         svc,
@@ -2747,17 +2784,150 @@ fn lab_registry_gates_still_hold() {
     let e = call(&mut svc, "lab.registry.query", Json::Obj(BTreeMap::new()));
     assert_eq!(err_kind(&e), "NotInitialized");
     lab_hello(&mut svc);
-    // export remains stage-pending — declared, unrouted to a body.
-    // (`import`/`refresh` are live at S3.9 — exercised below.)
+    // `export` is live at S4.1 — a malformed call refuses with a typed
+    // boundary error (missing `/refs`, `/target`), never a stage_pending stub.
     let e = call(&mut svc, "lab.registry.export", Json::Obj(BTreeMap::new()));
+    assert_eq!(err_kind(&e), "SchemaViolation");
+}
+
+/// S4.1 (§6.2 R-2.10.2; AC-R-2.10.2-{9,11}) — the live boundary halves of the
+/// general `import`/`export`/`pin`/`publisher_claims` ops: a foreign
+/// `acp_registry` document imports quarantined with a structured loss report;
+/// a first-party variant exports a `plugin_manifest/1` document that
+/// re-decodes through the manifest codec.
+#[test]
+fn lab_registry_foreign_import_export_pin_round_trip() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+
+    // register the class + a variant (first-party, kernel registrar).
+    let r = call(
+        &mut svc,
+        "lab.registry.register",
+        Json::obj([
+            ("kind", Json::str("class")),
+            ("body", lab_class_body("lab_class")),
+            ("registrar", registrar()),
+        ]),
+    );
+    let class_vid = ok(&r)
+        .get("version_id")
+        .and_then(Json::as_str)
+        .expect("class version_id")
+        .to_string();
+    let r = call(
+        &mut svc,
+        "lab.registry.register",
+        Json::obj([
+            ("kind", Json::str("variant")),
+            ("body", lab_variant_body(&class_vid, "v1")),
+            ("registrar", registrar()),
+        ]),
+    );
+    let variant_vid = ok(&r)
+        .get("version_id")
+        .and_then(Json::as_str)
+        .expect("variant version_id")
+        .to_string();
+
+    // The general `import` — a `foreign_ref` head routes to the governed
+    // importer (never the listing path). The deployment policy's
+    // `allowed_foreign_systems` is empty by construction (fail-closed:
+    // the operator narrows the closed vocabulary by listing what this
+    // deployment reads), so the `acp_registry` head refuses typed —
+    // `ForeignSystemRefused`, never a silent lift. (The admitted,
+    // quarantined-import + loss-report legs are covered store-side in
+    // `hh-registry/tests/s4_1.rs`.)
+    let e = call(
+        &mut svc,
+        "lab.registry.import",
+        Json::obj([
+            (
+                "foreign_ref",
+                Json::obj([
+                    ("system", Json::str("acp_registry")),
+                    ("locator", Json::str("https://agents.example/a1")),
+                    ("digest", Json::str("sha256:abc")),
+                ]),
+            ),
+            (
+                "document",
+                Json::obj([
+                    ("name", Json::str("agent-a")),
+                    ("signature", Json::str("foreign-sig-blob")),
+                ]),
+            ),
+            ("registrar", registrar()),
+        ]),
+    );
     assert_eq!(err_kind(&e), "Refused");
-    assert_eq!(
+    assert!(
         e.get("error")
             .and_then(|x| x.get("data"))
             .and_then(|d| d.get("reason"))
-            .and_then(Json::as_str),
-        Some("stage_pending")
+            .and_then(Json::as_str)
+            .map(|r| r.contains("acp_registry"))
+            .unwrap_or(false),
+        "the refusal names the refused foreign system: {e:?}"
     );
+
+    // `pin` — the variant is `resolved` (first-party, admissible), and `pin`
+    // lifts only a `quarantined` record → a typed refusal, never a no-op lift.
+    let e = call(
+        &mut svc,
+        "lab.registry.pin",
+        Json::obj([
+            ("version_id", Json::str(variant_vid.clone())),
+            ("registrar", registrar()),
+        ]),
+    );
+    assert_eq!(err_kind(&e), "Refused");
+
+    // `publisher_claims` — the review projection over the variant.
+    let r = call(
+        &mut svc,
+        "lab.registry.publisher_claims",
+        Json::obj([("version_id", Json::str(variant_vid.clone()))]),
+    );
+    let out = ok(&r);
+    assert_eq!(
+        out.get("claims").and_then(|v| match v {
+            Json::Arr(l) => Some(l.len()),
+            _ => None,
+        }),
+        Some(0),
+        "no claims yet — an empty list, never a refusal"
+    );
+
+    // `export` — the variant lowers to a canonical `plugin_manifest/1`
+    // document that re-decodes through `manifest_from_json`.
+    let r = call(
+        &mut svc,
+        "lab.registry.export",
+        Json::obj([
+            ("refs", Json::Arr(vec![Json::str(variant_vid.clone())])),
+            ("target", Json::str("plugin_manifest/1")),
+        ]),
+    );
+    let out = ok(&r);
+    let docs = match out.get("documents") {
+        Some(Json::Arr(l)) => l.clone(),
+        other => panic!("export documents: {other:?}"),
+    };
+    assert_eq!(docs.len(), 1);
+    let manifest = docs[0].get("document").expect("document member").clone();
+    hh_registry::extension::plugin::manifest_from_json(&manifest, "test")
+        .expect("the emitted document re-decodes as plugin_manifest/1");
+    // And a foreign target refuses typed.
+    let e = call(
+        &mut svc,
+        "lab.registry.export",
+        Json::obj([
+            ("refs", Json::Arr(vec![Json::str(variant_vid)])),
+            ("target", Json::str("oci_image/1")),
+        ]),
+    );
+    assert_eq!(err_kind(&e), "Refused");
 }
 
 /// A `hh-mcp-listing/1` document over one wire `Tool`.

@@ -99,7 +99,7 @@ fn ac_r_2_12_1_3_rename_stability_and_pooling() {
     )
     .unwrap();
     assert_eq!(
-        idx.history(Namespace::Local, "tool/grep").len(),
+        idx.history(&Namespace::Local, "tool/grep").len(),
         2,
         "a new name-history entry"
     );

@@ -26,7 +26,10 @@ use hh_identity::sameness::{self, Delta, DiffClassification, Sameness};
 use hh_identity::supersede::{
     Lineage, RevocationRecord, StaleEntry, SupersedeError, SupersedeReason,
 };
-use hh_provenance::{AuthorityClass, Origin, ProvenanceRecord};
+use hh_provenance::{
+    verify_attestation, AttestationAnchor, AttestationKind, AuthorityClass, ContentKind,
+    EndorsementBasis, Label, Origin, ProvenanceRecord, TrustedAnchors,
+};
 use hh_wire::json::Json;
 
 use crate::errors::RegistryError;
@@ -101,6 +104,10 @@ pub struct ResolvedRecord {
     pub depends_on_revoked: Vec<StaleEntry>,
     /// The derived `variant_conformance_vector` (declared ∪ probed — ADR-0152 D6).
     pub conformance_vector: BTreeMap<String, crate::kinds::ConformanceVerdict>,
+    /// The `publisher_claim` conformance reports registered against this subject
+    /// — surfaced for review (§6.2 `publisher_claims(version_id)`; they never
+    /// count toward `probed` — ADR-0152 D3; S4.1).
+    pub publisher_claims: Vec<ConformanceReport>,
 }
 
 /// A `query` predicate — closed, quantifier-free, over declared fields only
@@ -846,13 +853,82 @@ impl RegistryStore {
                 }
             }
             RegistryRecord::Namespace(ns) => {
-                if !matches!(ns.namespace.as_str(), "hh" | "local") {
-                    bail!(RegistryError::SchemaViolation {
+                // §6.2 (S4.1): the multi-namespace grammar — `hh`/`local` are the
+                // administered spellings (kernel-owned records), `exp/<id>` is
+                // experiment-owned (a principal declares it), a shared
+                // reverse-DNS namespace is declared by an administering
+                // principal or an accepted signer.
+                let parsed = match Namespace::parse(&ns.namespace) {
+                    Some(p) => p,
+                    None => bail!(RegistryError::SchemaViolation {
                         path: "namespace".to_string(),
-                        detail: format!(
-                            "Stage-1 namespaces are hh/local (exp/ and shared are later): {}",
-                            ns.namespace
-                        ),
+                        detail: format!("`{}` is outside the namespace grammar", ns.namespace),
+                    }),
+                };
+                match &parsed {
+                    Namespace::Hh | Namespace::Local => {
+                        if registrar.authority != AuthorityClass::Kernel {
+                            bail!(RegistryError::AuthorityInsufficient {
+                                operation: "register_namespace".to_string(),
+                            });
+                        }
+                    }
+                    Namespace::Experiment(_) => {
+                        if registrar.authority < AuthorityClass::Principal {
+                            bail!(RegistryError::AuthorityInsufficient {
+                                operation: "register_namespace".to_string(),
+                            });
+                        }
+                    }
+                    Namespace::Shared(_) => {
+                        // C1: a shared namespace is owned by a principal or an
+                        // accepted signer. The declaring registrar is ≥
+                        // `principal` or a verified signer itself; declared
+                        // `Signer` owners must be accepted signers — or the
+                        // registrar's own verified signer (self-declaration
+                        // under a signature the trust root accepts).
+                        let verified = self.verify_signer(registrar);
+                        if registrar.authority < AuthorityClass::Principal && verified.is_none() {
+                            bail!(RegistryError::AuthorityInsufficient {
+                                operation: "register_namespace".to_string(),
+                            });
+                        }
+                        for o in &ns.owners {
+                            if let OwnerRef::Signer(s) = o {
+                                if !self.accepted_signers().contains(s)
+                                    && verified.as_deref() != Some(s.as_str())
+                                {
+                                    bail!(RegistryError::SchemaViolation {
+                                        path: "owners".to_string(),
+                                        detail: format!(
+                                            "signer owner `{s}` is not an accepted signer"
+                                        ),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                // Re-registration (a namespace record can be re-registered under
+                // a new body — e.g. to change publish rules): the *existing*
+                // record's owners gate the rewrite; `hh`/`local` stay kernel.
+                if let Some(existing) = self.namespaces.get(&ns.namespace) {
+                    let still = self.is_ns_owner(existing, registrar)
+                        || registrar.authority == AuthorityClass::Kernel;
+                    if !still {
+                        bail!(RegistryError::NamespaceForbidden {
+                            namespace: ns.namespace.clone(),
+                        });
+                    }
+                }
+            }
+            RegistryRecord::TrustRootPolicy(_) => {
+                // The trust anchor set itself is a principal act — registering
+                // one never admits below `principal` (a delegate can no more
+                // declare who signs than it can declare its own authority).
+                if registrar.authority < AuthorityClass::Principal {
+                    bail!(RegistryError::AuthorityInsufficient {
+                        operation: "register".to_string(),
                     });
                 }
             }
@@ -1002,7 +1078,13 @@ impl RegistryStore {
             });
         }
         // Admission: never authored — assigned from the registrar's conferred
-        // authority + policy (ADR-0063; `revoked` stays derived).
+        // authority + policy (ADR-0063; `revoked` stays derived). S4.1: a
+        // signature-required spelling (a `require_signature_for_kinds` record
+        // kind, or a `TrustRootPolicy.require_signature_for` entry naming this
+        // record's kind/extension spelling) registers `quarantined` until a
+        // `pin` endorsement lifts it — unsigned is admitted, never refused
+        // (AC-R-2.10.2-9).
+        let signature_required = self.signature_required(&record);
         let admission = if matches!(record, RegistryRecord::ForeignImport(_)) {
             self.policy.foreign_import_default_admission
         } else if let RegistryRecord::Capability(c) = &record {
@@ -1010,18 +1092,22 @@ impl RegistryStore {
             // `participant_supplied`) or a declaration carrying `effects` with
             // undeclared attribute vectors (`unknown_domain`) registers
             // `quarantined` — never model-visible until `seal`.
-            if capability_needs_quarantine(c)
-                || self.policy.require_signature_for_kinds.contains(&kind)
-            {
+            if capability_needs_quarantine(c) || signature_required {
                 Admission::Quarantined
             } else if first_party {
                 Admission::Resolved
             } else {
                 Admission::Quarantined
             }
-        } else if self.policy.require_signature_for_kinds.contains(&kind) {
+        } else if signature_required {
             Admission::Quarantined
         } else if first_party {
+            Admission::Resolved
+        } else if matches!(record, RegistryRecord::Variant(_)) {
+            // AC-R-2.10.2-9: a third-party component variant resolves when its
+            // invariants hold (the placement floor + external-authority summary
+            // checks live in `check_variant`) — signature-required kinds stay
+            // quarantined above; a `pin` lifts them.
             Admission::Resolved
         } else {
             Admission::Quarantined
@@ -1051,6 +1137,13 @@ impl RegistryStore {
         }
         self.records
             .insert(version_id.clone(), (env.clone(), record.clone()));
+        // A namespace record's policy becomes live at register — the map the
+        // publish/status/revoke gates read (bootstrap + replay populate it the
+        // same way; a re-registration replaces the body under the same key —
+        // the existing-record owner check above already gated the rewrite).
+        if let RegistryRecord::Namespace(ns) = &record {
+            self.namespaces.insert(ns.namespace.clone(), ns.clone());
+        }
         self.seq += 1;
         if let RegistryRecord::Capability(c) = &record {
             // ADR-0088 D8 / CF-327: capability registration emits the
@@ -1065,6 +1158,16 @@ impl RegistryStore {
                 &version_id,
                 env.semantic_id.as_deref(),
                 &source_kind,
+                registrar.origin.tag(),
+            ));
+        } else if let RegistryRecord::ForeignImport(fi) = &record {
+            // S4.1 (§6.2 event family): a foreign_import registration emits the
+            // kind-specific `lifecycle.registry.imported` class — the system
+            // spelling is the closed `ForeignSystem` value, never content.
+            self.ok_event(RegistryEvent::imported(
+                &version_id,
+                &fi.system,
+                admission.as_str(),
                 registrar.origin.tag(),
             ));
         } else {
@@ -1189,6 +1292,28 @@ impl RegistryStore {
                 placement: placement.as_str().to_string(),
             });
         }
+        // AC-R-2.10.2-9 (S4.1): a third-party variant's `summary` mints at most
+        // `external` unless a `Signature`/`Pin` attestation on the leaf verifies
+        // under the live trust roots — a hash-only pin is integrity and confers
+        // at most `hash_only_ceiling` (`external` by default); anything above is
+        // refused (a self-declared authority never decides — CC2).
+        if !first_party && v.summary.authority > self.hash_only_ceiling() {
+            let verified = v.summary.provenance.attestation.as_ref().is_some_and(|a| {
+                matches!(a.kind, AttestationKind::Signature | AttestationKind::Pin)
+                    && verify_attestation(a, &self.trusted_anchors()).is_ok()
+            });
+            if !verified {
+                return Err(RegistryError::SchemaViolation {
+                    path: "summary.authority".to_string(),
+                    detail: format!(
+                        "third-party summary authority {} exceeds `hash_only_ceiling` {} — \
+                         a verified signer attestation is required",
+                        v.summary.authority.as_str(),
+                        self.hash_only_ceiling().as_str()
+                    ),
+                });
+            }
+        }
         Ok(())
     }
 
@@ -1203,6 +1328,271 @@ impl RegistryStore {
             provenance: env.registrar.clone(),
             idp: identity::idp_profile(),
         }
+    }
+
+    // ── trust roots / signer ownership (S4.1; §6.2; ADR-0153 D3/D4) ────────
+
+    /// The `TrustRootPolicy` records whose anchors are live — registered at an
+    /// admissible admission (`resolved`/`sealed`) and not revoked. A quarantined
+    /// trust policy anchors nothing (fail closed).
+    fn live_trust_policies(&self) -> Vec<&crate::records::TrustRootPolicy> {
+        self.records
+            .values()
+            .filter_map(|(env, rec)| match rec {
+                RegistryRecord::TrustRootPolicy(t)
+                    if matches!(env.admission, Admission::Resolved | Admission::Sealed)
+                        && !self.lineage.is_revoked(&env.version_id) =>
+                {
+                    Some(t)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The union of `accepted_signers` over the live trust policies — the one
+    /// signer set `verify_attestation` anchors on (an attestation's anchor is
+    /// never read from the record's own claim — §8.1 #2).
+    pub fn accepted_signers(&self) -> BTreeSet<String> {
+        let mut out = BTreeSet::new();
+        for t in self.live_trust_policies() {
+            out.extend(t.accepted_signers.iter().cloned());
+        }
+        out
+    }
+
+    /// The `TrustedAnchors` view handed to `hh_provenance::verify_attestation`
+    /// (accepted signers only — no chain heads are registered at this slice).
+    fn trusted_anchors(&self) -> TrustedAnchors {
+        TrustedAnchors {
+            signers: self.accepted_signers(),
+            chain_heads: BTreeSet::new(),
+        }
+    }
+
+    /// The union of `require_signature_for` spellings over the live policies.
+    fn require_signature_spellings(&self) -> BTreeSet<String> {
+        let mut out = BTreeSet::new();
+        for t in self.live_trust_policies() {
+            out.extend(t.require_signature_for.iter().cloned());
+        }
+        out
+    }
+
+    /// The lowest `hash_only_ceiling` over the live trust policies (`external`
+    /// default — a hash-only pin is integrity, never endorsement).
+    fn hash_only_ceiling(&self) -> AuthorityClass {
+        self.live_trust_policies()
+            .iter()
+            .map(|t| t.hash_only_ceiling)
+            .min()
+            .unwrap_or(AuthorityClass::External)
+    }
+
+    /// Whether `record` registers signature-required: a `require_signature_for_kinds`
+    /// record kind on `RegistryPolicy`, or a live `TrustRootPolicy`'s
+    /// `require_signature_for` naming the record's kind spelling, its extension
+    /// kind (`plugin`, `mcp_server`, …), or `component_variant` for a variant.
+    pub fn signature_required(&self, record: &RegistryRecord) -> bool {
+        if self
+            .policy
+            .require_signature_for_kinds
+            .contains(&record.kind())
+        {
+            return true;
+        }
+        let rsf = self.require_signature_spellings();
+        if rsf.is_empty() {
+            return false;
+        }
+        match record {
+            RegistryRecord::Extension(e) => rsf.contains(e.kind.as_str()),
+            RegistryRecord::Variant(_) => {
+                rsf.contains("component_variant") || rsf.contains("variant")
+            }
+            other => rsf.contains(other.kind().as_str()),
+        }
+    }
+
+    /// The registrar's verified signer coordinate: the attestation is
+    /// self-consistent, `Signature`/`Pin`-kinded, `Signer`-anchored on an
+    /// accepted signer, and `verify_attestation`-clean. `None` otherwise —
+    /// signer ownership is proven, never claimed.
+    pub fn verify_signer(&self, registrar: &ProvenanceRecord) -> Option<String> {
+        let att = registrar.attestation.as_ref()?;
+        if !matches!(att.kind, AttestationKind::Signature | AttestationKind::Pin) {
+            return None;
+        }
+        if verify_attestation(att, &self.trusted_anchors()).is_err() {
+            return None;
+        }
+        match &att.anchor {
+            AttestationAnchor::Signer(s) => Some(s.clone()),
+            AttestationAnchor::Chain(_) => None,
+        }
+    }
+
+    /// `is_ns_owner` — `OwnerRef::Principal` matches the registrar's identity
+    /// coordinate; `OwnerRef::Signer` matches when the registrar carries a
+    /// verified attestation anchored on that signer (§6.2 — signer ownership is
+    /// conferred from provenance, never read from record content — CC2).
+    fn is_ns_owner(&self, ns: &NamespaceRecord, registrar: &ProvenanceRecord) -> bool {
+        let key = registrar_origin_tagged(registrar);
+        let verified = self.verify_signer(registrar);
+        ns.owners.iter().any(|o| match o {
+            OwnerRef::Principal(p) => *p == key,
+            OwnerRef::Signer(s) => verified.as_deref() == Some(s.as_str()),
+        })
+    }
+
+    /// `pin(version_id, endorser)` — the §6.2 hash-signature endorsement (S4.1;
+    /// ADR-0153 D4): lifts a `quarantined` record to `resolved` when the record's
+    /// registrar carries a `Signature`/`Pin` attestation that
+    /// `verify_attestation` anchors on an accepted signer. The `endorser` must
+    /// be ≥ `principal` (never a delegate). On success the admission lifts and a
+    /// `security.label.endorsed` audit row lands
+    /// (`{subject_ref, from, to, endorser, basis: "pin", basis_ref}`) — the
+    /// ledger re-verifies endorsement legitimacy at append (ADR-0035 §1).
+    pub fn pin(
+        &mut self,
+        version_id: &str,
+        endorser: &ProvenanceRecord,
+    ) -> Result<(), RegistryError> {
+        let op = "pin";
+        let subject = Some(version_id.to_string());
+        macro_rules! bail {
+            ($e:expr) => {
+                return Err(self.fail(op, subject.clone(), Some(endorser), $e))
+            };
+        }
+        if let Err(pe) = endorser.validate(None) {
+            bail!(RegistryError::SchemaViolation {
+                path: "endorser".to_string(),
+                detail: format!("{pe:?}"),
+            });
+        }
+        // The endorsement is a trust act — `pin` confers standing, so the
+        // endorser must be ≥ `principal` (a delegate can no more endorse a
+        // pin than declare its own authority — CC2).
+        if endorser.authority < AuthorityClass::Principal {
+            bail!(RegistryError::AuthorityInsufficient {
+                operation: op.to_string(),
+            });
+        }
+        let (env, _rec) = match self.records.get(version_id) {
+            Some(t) => t.clone(),
+            None => bail!(RegistryError::UnknownVersion {
+                version_id: version_id.to_string(),
+            }),
+        };
+        if env.admission != Admission::Quarantined {
+            bail!(RegistryError::SchemaViolation {
+                path: "admission".to_string(),
+                detail: format!(
+                    "pin lifts a `quarantined` record — {} is {}",
+                    version_id,
+                    env.admission.as_str()
+                ),
+            });
+        }
+        // The signature rides the registrar provenance that minted the record —
+        // the registry endorses verified provenance, never a self-declared claim.
+        let att = match env.registrar.attestation.clone() {
+            Some(a) => a,
+            None => bail!(RegistryError::AttestationFailed {
+                detail: "the record's registrar carries no signature/pin attestation".to_string(),
+            }),
+        };
+        if !matches!(att.kind, AttestationKind::Signature | AttestationKind::Pin) {
+            bail!(RegistryError::AttestationFailed {
+                detail: format!(
+                    "attestation kind {} is not signature|pin",
+                    att.kind.as_str()
+                ),
+            });
+        }
+        if let Err(pe) = verify_attestation(&att, &self.trusted_anchors()) {
+            bail!(RegistryError::AttestationFailed {
+                detail: format!("{pe:?}"),
+            });
+        }
+        // The pin lifts the record's standing from its quarantined baseline
+        // (`unverified` — the signature did not decide admission) to `principal`
+        // (a signature-verified record; `definition` stays a seal's reach).
+        // The subject-side provenance the ledger's append-time check resolves is
+        // the quarantined standing anchor (`pin_subject`) — an `import`-origin
+        // record at `unverified` carrying the registrar's taint/readers and the
+        // verified signature attestation (`EndorsementBasis::Pin` requires
+        // `Pin|Signature|Seal` on the subject).
+        let mut subject_anchor = ProvenanceRecord::minted_attested(
+            Origin::Import {
+                source_system: "registry".to_string(),
+                mapping_version: "registry/1".to_string(),
+            },
+            hh_provenance::PersistenceScope::Run,
+            env.registered_at,
+            att.clone(),
+        );
+        subject_anchor.taint = env.registrar.taint.clone();
+        subject_anchor.readers = env.registrar.readers.clone();
+        let from = subject_anchor.label();
+        let to = Label {
+            authority: AuthorityClass::Principal,
+            taint: from.taint.clone(),
+            readers: from.readers.clone(),
+        };
+        let basis_ref = match &att.anchor {
+            AttestationAnchor::Signer(s) => Some(s.clone()),
+            AttestationAnchor::Chain(c) => Some(c.clone()),
+        };
+        let ev = match hh_provenance::endorse(
+            &subject_anchor,
+            version_id.to_string(),
+            &to,
+            endorser,
+            EndorsementBasis::Pin,
+            basis_ref,
+            ContentKind::Other,
+        ) {
+            Ok(e) => e,
+            Err(ee) => bail!(RegistryError::AttestationFailed {
+                detail: format!("{ee:?}"),
+            }),
+        };
+        if let Some((e, _)) = self.records.get_mut(version_id) {
+            e.admission = Admission::Resolved;
+        }
+        // The endorsement lands as the `pin_subject` anchor row (subject-side
+        // provenance) + the `security.label.endorsed` row whose `subject_ref`
+        // `emit` rewrites to the anchor's allocated event id — the ledger's
+        // append-time `check_endorsement` re-verifies the whole chain.
+        let anchor_tag = version_id.to_string();
+        self.ok_event(RegistryEvent::pin_subject(
+            version_id,
+            &anchor_tag,
+            subject_anchor,
+        ));
+        self.ok_event(RegistryEvent::pin_endorsed(&anchor_tag, &ev));
+        self.seq += 1;
+        self.flush()
+    }
+
+    /// `publisher_claims(version_id)` — the §6.2 review projection: the
+    /// `publisher_claim` conformance reports registered against the subject
+    /// (review evidence — they never count toward `probed`; ADR-0152 D3).
+    pub fn publisher_claims(&self, version_id: &str) -> Vec<&ConformanceReport> {
+        self.records
+            .values()
+            .filter_map(|(_, rec)| match rec {
+                RegistryRecord::Report(r)
+                    if r.produced_by == ProducedBy::PublisherClaim
+                        && r.subject_ref == version_id =>
+                {
+                    Some(r)
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     // ── publish ──────────────────────────────────────────────────────────
@@ -1241,7 +1631,7 @@ impl RegistryStore {
                 namespace: namespace.to_string(),
             }),
         };
-        let ns_record = match self.namespaces.get(ns.as_str()) {
+        let ns_record = match self.namespaces.get(&ns.as_str()) {
             Some(n) => n.clone(),
             None => bail!(RegistryError::NamespaceForbidden {
                 namespace: namespace.to_string(),
@@ -1255,14 +1645,16 @@ impl RegistryStore {
         };
         let rec = rec.clone();
         // Namespace authority — `hh/` is kernel-owned (AC-8); `local/` admits the
-        // namespace owner or a principal-authority registrar.
+        // namespace owner or a principal-authority registrar; a shared namespace
+        // admits its owners — `OwnerRef::Signer` ownership is proven by a
+        // verified signer attestation on the registrar (§6.2, S4.1).
         let may = match ns_record.who_may_publish {
             PublishRule::KernelOnly => registrar.authority == AuthorityClass::Kernel,
             PublishRule::OwnersOrPrincipal => {
                 matches!(
                     registrar.authority,
                     AuthorityClass::Kernel | AuthorityClass::Principal
-                ) || is_namespace_owner(&ns_record, registrar)
+                ) || self.is_ns_owner(&ns_record, registrar)
             }
         };
         if !may {
@@ -1270,10 +1662,18 @@ impl RegistryStore {
                 namespace: namespace.to_string(),
             });
         }
+        // C1 (§6.2): a `require_signature` namespace admits only a publish whose
+        // registrar carries a verified signer attestation anchored on an
+        // accepted signer — the unsigned publish is refused, never relaxed.
+        if ns_record.require_signature && self.verify_signer(registrar).is_none() {
+            bail!(RegistryError::SignatureRequired {
+                namespace: namespace.to_string(),
+            });
+        }
         // `(namespace, name)` ownership: an existing history belongs to its first
         // publisher — a different principal publishing under it is NameCollision
         // (AC-8: "a publish em nome de outra entidade falha").
-        let history = self.names.history(ns, name);
+        let history = self.names.history(&ns, name);
         if let Some(first) = history.first() {
             let same_owner = publisher_key(&first.publisher) == publisher_key(registrar);
             if !same_owner && registrar.authority != AuthorityClass::Kernel {
@@ -1382,7 +1782,7 @@ impl RegistryStore {
             }
         }
         let entry = match self.names.publish(
-            ns,
+            ns.clone(),
             name,
             &vref,
             label.clone(),
@@ -1437,7 +1837,7 @@ impl RegistryStore {
             env.name_history_ref = Some(format!("{ns_str}/{name}", ns_str = ns.as_str()));
         }
         self.ok_event(RegistryEvent::published(
-            ns.as_str(),
+            &ns.as_str(),
             name,
             version_id,
             label.as_deref(),
@@ -1518,7 +1918,7 @@ impl RegistryStore {
                             let entry = self
                                 .names
                                 .history(
-                                    Namespace::parse(namespace).unwrap_or(Namespace::Local),
+                                    &Namespace::parse(namespace).unwrap_or(Namespace::Local),
                                     name,
                                 )
                                 .iter()
@@ -1664,6 +2064,11 @@ impl RegistryStore {
                 RegistryRecord::Variant(v) => self.conformance_vector(v, &env.version_id),
                 _ => BTreeMap::new(),
             },
+            publisher_claims: self
+                .publisher_claims(&env.version_id)
+                .into_iter()
+                .cloned()
+                .collect(),
         })
     }
 
@@ -1831,7 +2236,7 @@ impl RegistryStore {
         let ns = Namespace::parse(namespace).ok_or(RegistryError::NamespaceForbidden {
             namespace: namespace.to_string(),
         })?;
-        let ns_record = match self.namespaces.get(ns.as_str()) {
+        let ns_record = match self.namespaces.get(&ns.as_str()) {
             Some(n) => n.clone(),
             None => bail!(RegistryError::NamespaceForbidden {
                 namespace: namespace.to_string(),
@@ -1848,7 +2253,7 @@ impl RegistryStore {
                 matches!(
                     registrar.authority,
                     AuthorityClass::Kernel | AuthorityClass::Principal
-                ) || is_namespace_owner(&ns_record, registrar)
+                ) || self.is_ns_owner(&ns_record, registrar)
             }
         };
         if !may {
@@ -1856,7 +2261,7 @@ impl RegistryStore {
                 operation: op.to_string(),
             });
         }
-        let history = self.names.history(ns, name);
+        let history = self.names.history(&ns, name);
         let head = match history.last() {
             Some(h) => (*h).clone(),
             None => bail!(RegistryError::Unresolved {
@@ -1882,7 +2287,7 @@ impl RegistryStore {
         };
         self.names
             .publish(
-                ns,
+                ns.clone(),
                 name,
                 &vref,
                 None,
@@ -1932,7 +2337,7 @@ impl RegistryStore {
                 NameStatus::Yanked => crate::events::NAME_YANKED,
                 NameStatus::Active => crate::events::PUBLISHED,
             },
-            ns.as_str(),
+            &ns.as_str(),
             name,
             registrar.origin.tag(),
         ));
@@ -1981,6 +2386,30 @@ impl RegistryStore {
                             .map(|p| publisher_key(&p) == publisher_key(registrar))
                             .unwrap_or(false)
                 });
+        }
+        if !allowed {
+            // C1 (§6.2): an owner under the *version's* namespaces' revoke
+            // rule — `KernelOnly` keeps `hh/` kernel-only; `OwnersOrPrincipal`
+            // admits an `OwnerRef` match (a `Signer` owner is proven by the
+            // registrar's verified attestation — never claimed).
+            allowed = self.name_lines.iter().any(|l| {
+                if l.get("version_id").and_then(|v| v.as_str()) != Some(version_id) {
+                    return false;
+                }
+                let ns_name = l.get("namespace").and_then(|v| v.as_str()).unwrap_or("");
+                let Some(ns_rec) = self.namespaces.get(ns_name) else {
+                    return false;
+                };
+                match ns_rec.who_may_revoke {
+                    PublishRule::KernelOnly => registrar.authority == AuthorityClass::Kernel,
+                    PublishRule::OwnersOrPrincipal => {
+                        matches!(
+                            registrar.authority,
+                            AuthorityClass::Kernel | AuthorityClass::Principal
+                        ) || self.is_ns_owner(ns_rec, registrar)
+                    }
+                }
+            });
         }
         if !allowed {
             bail!(RegistryError::AuthorityInsufficient {
@@ -2238,7 +2667,7 @@ impl RegistryStore {
                     continue;
                 }
                 let name = l.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                for e in self.names.history(ns, name) {
+                for e in self.names.history(&ns, name) {
                     if e.version_id == version_id && !name_history.contains(e) {
                         name_history.push(e.clone());
                     }
@@ -2306,6 +2735,7 @@ impl RegistryStore {
                         RegistryRecord::Variant(v) => self.conformance_vector(v, vid),
                         _ => BTreeMap::new(),
                     },
+                    publisher_claims: self.publisher_claims(vid).into_iter().cloned().collect(),
                 });
             }
         }
@@ -2688,7 +3118,7 @@ impl RegistryStore {
                 }
                 if let Some(e) = self
                     .names
-                    .history(ns, &name)
+                    .history(&ns, &name)
                     .into_iter()
                     .rev()
                     .find(|e| e.version_id == *vid)
@@ -2978,7 +3408,7 @@ fn str_of<'a>(j: &'a Json, k: &str) -> &'a str {
     j.get(k).and_then(|v| v.as_str()).unwrap_or("")
 }
 
-fn reason_str(r: SupersedeReason) -> &'static str {
+pub(crate) fn reason_str(r: SupersedeReason) -> &'static str {
     match r {
         SupersedeReason::Edit => "edit",
         SupersedeReason::Revocation => "revocation",
@@ -3015,15 +3445,8 @@ fn publisher_key(p: &ProvenanceRecord) -> String {
     origin.to_canonical_string()
 }
 
-fn is_namespace_owner(ns: &NamespaceRecord, registrar: &ProvenanceRecord) -> bool {
-    let key = registrar_origin_tagged(registrar);
-    ns.owners.iter().any(|o| match o {
-        crate::kinds::OwnerRef::Principal(p) => *p == key,
-        crate::kinds::OwnerRef::Signer(s) => *s == key,
-    })
-}
-
-/// `author_ref`/`component_ref`-style coordinate for the ownership check.
+/// `author_ref`/`component_ref`-style coordinate for the `OwnerRef::Principal`
+/// ownership check — the origin's identity coordinate, never a tag (CC2).
 fn registrar_origin_tagged(p: &ProvenanceRecord) -> String {
     match &p.origin {
         Origin::Human { author_ref, .. } => author_ref.clone(),
@@ -3031,6 +3454,9 @@ fn registrar_origin_tagged(p: &ProvenanceRecord) -> String {
         Origin::Participant {
             participant_ref, ..
         } => participant_ref.clone(),
+        Origin::Model { model_ref, .. } => model_ref.clone(),
+        Origin::Tool { capability, .. } => capability.clone(),
+        Origin::Evolution { candidate_id, .. } => candidate_id.clone(),
         _ => p.origin.tag().to_string(),
     }
 }

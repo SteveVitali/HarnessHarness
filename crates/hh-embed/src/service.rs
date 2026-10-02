@@ -579,6 +579,9 @@ impl EmbedService {
                 self.lab_registry_name_status(&req.params, hh_identity::names::NameStatus::Yanked)
             }
             "lab.registry.revoke" => self.lab_registry_revoke(&req.params),
+            "lab.registry.export" => self.lab_registry_export(&req.params),
+            "lab.registry.pin" => self.lab_registry_pin(&req.params),
+            "lab.registry.publisher_claims" => self.lab_registry_publisher_claims(&req.params),
             "lab.registry.lineage" => self.lab_registry_lineage(&req.params),
             "lab.registry.sameness" => self.lab_registry_sameness(&req.params),
             "lab.registry.verify" => self.lab_registry_verify(&req.params),

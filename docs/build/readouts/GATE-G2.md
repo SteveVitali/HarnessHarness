@@ -106,3 +106,37 @@ already ran; residuals are later-phase or housekeeping.
 
 ### Disposition
 - [ ] PENDING — awaiting operator ruling on the five questions above (and any gap-closure ticket insertion)
+
+---
+
+## 2026-09-25 — Reading 2: post-S3.12b gap closure → awaiting operator disposition
+
+**Evidence sources:** `docs/build/runs/S3.12b.md`, PR #62 (`svitali/harnessharness-s3.12b`, head `95a9dea`),
+`docs/tickets/DEFERRALS.md` (post-sweep), `docs/build/LEDGER.md` (`benchmarkSet: benchset.stage3.v1`), ADR-0291.
+
+### Reading-1 gaps — disposition after the gap ticket
+
+| Gap | Status after S3.12b |
+|---|---|
+| **G2-1 benchmarkSet legs** | **CLOSED.** `benchset.stage3.v1` committed (`crates/hh-bench/fixtures/benchset/stage3_v1` — 4 strata A/C/D/E, recorded `model_io`, deterministic graders, strict loader refusals); ledger `benchmarkSet` flipped. T-LCD-03 stratum-C round-trip n=5 through the canonical `hh-control` Driver + replay; A/C/D/E adapter-parity legs through the corpus's own adapters; unbudgeted-arm compare refusal — `hh-bench/tests/s3_12b.rs` 3/3 + `benchset.rs` suite. |
+| **G2-2 exemplar→ComparisonReport** | **CLOSED.** Both exemplars (compaction 30 plans; control-strategy 50 incl. `iso_cost`) driven engine→`project_row`→`eval_run`→`analyze`→`hh_eval::compare`, asserting `ComparisonReport{budget_match.status=matched}`; cross-mode compare refuses `IncommensurableMatch` — ADR-0213's OQ-363 interim rule exercised and recorded **standing** for this reading. `hh-embed/tests/s3_12b.rs` 3/3. Retirement caveat closed: engine-driven runs→compare→`removal_verdict`→`settle_removal_test`→human-sealed `retire`, no fed-in verdict. |
+| **G2-3 hosting-absent run** | **CLOSED.** `cargo test --workspace --exclude hh-hosting`: exit 0 — 176 binaries / 2027 tests / 0 failed; `hh-hosting` never a target. Recorded in `runs/S3.12b.md`. AC-R-2.10.6-5 / AC-R-2.11.4-12 / AC-R-2.12.2-12 absent⇒unchanged halves now evidenced. |
+| **G2-4 Stage-3-scoped OPEN DEFERRALS** | **SWEPT — no bare-OPEN rows remain.** Five verify-candidates retain genuinely unmet cells (Stage-4 check-8, metric emission, per-image canary, sink fixtures, combined fault fixture) → stay OPEN with residuals named; eleven residual rows annotated; five foreign-toolchain rows carried forward; DF-S1.9-4 audit ran (29/74 ADRs carry the rung statement → new row DF-S3.12b-2). Two new discovered rows opened honestly: **DF-S3.12b-1** (`measurement.experiment.closed` audit-cap overrun at exemplar scale — asserted via `assert_close_audit_cap`, not worked around) and **DF-S3.12b-2** (rung-statement uniformity). |
+| **G2-5 §9.4 vs §10.7 authority** | Documented in the run ledger; **awaits the operator's ruling** (which list governs; esp. AC-R-2.5.3-7's deferred arm — a C0/S3 AC in §9.4's list, deferred to DF-S1.17-3). |
+
+### Residuals carried forward for this disposition (GATE-G1 precedent: accepted, tracked to GATE-ACCEPT)
+- **Foreign-toolchain rows** (cannot close hermetically): DF-S0.3-2, DF-S1.2-2, DF-S1.5-3, DF-S1.8-1, DF-S1.27-1 — cross-implementation/cross-ecosystem agreement cells needing E2/E3 toolchains.
+- **Human deliverable:** DF-S0.3-3's R2 cross-camp reviewer signature (carried forward from GATE-G1).
+- **Externally-bounded arms:** LT-03 live AgentDojo corpus arm (gate-deferred at S3.11b under the offline authorization); DF-S1.17-1's regex-vs-NL form arm (needs a non-`native_fc` family); DF-S1.21-2's OOP validator battery.
+- **Discovered defects:** DF-S3.12b-1 (close-event audit cap at exemplar scale), DF-S3.12b-2 (29/74 rung statements).
+- **Later-phase residuals** annotated in the sweep (S4/S6-scoped cells of Stage-3 rows): DF-S1.13-4, DF-S1.19-2, DF-S1.22-1, DF-S1.24-1, DF-S2.4-3, DF-S3.5-1, DF-S3.9-1, plus the earlier-phase carry set (DF-S1.5-1, DF-S1.12-1/-2, DF-S1.14-1, DF-S1.15-1, DF-S1.21-1, DF-S2.9-1).
+- **Spec-level items for the operator:** §9.4-vs-§10.7 scope ruling; OQ-363 interim rule standing (AC-J3-9); OQ-338/OQ-342 headline-eligibility blocks (spec: stratum A carries Stage-3 acceptance regardless).
+
+### Operator disposition — **PASSED** (2026-09-25)
+The operator ruled **PASS**: the Stage-3 suite is accepted on the recorded evidence. Carried forward as
+**accepted deviations** to GATE-ACCEPT: the five foreign-toolchain rows (DF-S0.3-2, DF-S1.2-2, DF-S1.5-3,
+DF-S1.8-1, DF-S1.27-1), the R2 cross-camp human signature (DF-S0.3-3 residual, carried from GATE-G1), the
+LT-03 live AgentDojo arm, DF-S1.17-1's non-`native_fc` form arm, DF-S1.21-2's OOP validator battery, the
+discovered defects DF-S3.12b-1/-2, and the annotated later-phase residuals. **Rulings bundled:** §10.7's
+Stage-3 row governs acceptance (§9.4's broader list noted; AC-R-2.5.3-7's deferred arm rides DF-S1.17-3);
+ADR-0213's OQ-363 interim rule stands for AC-J3-9. Stage 4 is released (nextTicket → HUMAN-H1).
