@@ -1081,6 +1081,7 @@ fn tokenize_tagged_cst(src: &str) -> Vec<CstToken> {
             push(&mut out, "ws", depth, start, i);
         } else {
             push(&mut out, "punct", depth, i, i + 1);
+            i += 1;
         }
     }
     out
