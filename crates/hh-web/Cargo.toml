@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 hh-wire = { path = "../hh-wire" }
 hh-embed-schema = { path = "../hh-embed-schema" }
+hh-identity = { path = "../hh-identity" }
 hh-embed-client-generated = { path = "../hh-embed-client-generated" }
 # The declared SinkPolicy is the hh-telemetry record (P8 — the surface is
 # a sink, not a store): content classes, redaction, field caps, consent.

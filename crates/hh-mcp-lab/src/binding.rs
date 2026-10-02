@@ -335,6 +335,26 @@ impl CallerBinding {
             .get("expires_at_ms")
             .and_then(Json::as_int)
             .map(|n| n.max(0) as u64);
+        // R-1 (ADR-0174 D2): a `subject_kind = client` issuer can bind
+        // only `caller_kind ∈ {service, provider_client}` — a client
+        // credential never mints a `human_principal` or `agent`
+        // identity (the client-credentials grant carries no user).
+        if let CallerCredential::OAuth {
+            subject_kind: SubjectKind::Client,
+            ..
+        } = &credential
+        {
+            if !matches!(
+                caller_kind,
+                CallerKind::Service | CallerKind::ProviderClient
+            ) {
+                return Err(bad(&format!(
+                    "subject_kind `client` binds only caller_kind `service|provider_client` \
+                     (caller_kind `{}` is a user-subject kind)",
+                    caller_kind.as_str()
+                )));
+            }
+        }
         Ok(CallerBinding {
             binding_id,
             credential,

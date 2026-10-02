@@ -9,7 +9,7 @@ pub const INDEX: &str = r#"<!doctype html>
 <title>hh-web — run observer</title>
 <link rel="stylesheet" href="/app.css"></head><body>
 <header>
-  <h1>hh-web <span class="tag">read-only instrument</span></h1>
+  <h1>hh-web <span class="tag">developer tooling</span></h1>
   <nav id="nav"></nav>
   <div id="tokbox"><input id="tok" type="password" placeholder="surface token" autocomplete="off"><button id="tokbtn">set</button></div>
 </header>
@@ -30,7 +30,7 @@ button{font:inherit}#tokbox{margin-left:auto}
 "#;
 
 pub const JS: &str = r#"let TOK=sessionStorage.getItem('hh-tok')||'';
-const views=[['v1_runs','runs'],['v11_run','run'],['v5_monitor','monitor'],['v3_context','context'],['v2_scorecard','scorecard'],['v6_comparison','compare'],['v7_traversal','traverse'],['v8_inbox','inbox'],['v9_delivery','delivery'],['v10_supervision','fleet']];
+const views=[['v1_runs','runs'],['v11_run','run'],['v5_monitor','monitor'],['v3_context','context'],['v3_timetravel','timetravel'],['v4_editor','editor'],['v5_launcher','launch'],['v2_scorecard','scorecard'],['v6_comparison','compare'],['v6_analysis','analysis'],['v7_traversal','traverse'],['v8_inbox','inbox'],['v9_delivery','delivery'],['v10_supervision','fleet'],['v11_bundle','bundle'],['v12_console','console']];
 const nav=document.getElementById('nav'),main=document.getElementById('main');
 document.getElementById('tok').value=TOK;
 document.getElementById('tokbtn').onclick=()=>{TOK=document.getElementById('tok').value;sessionStorage.setItem('hh-tok',TOK);};
@@ -52,6 +52,15 @@ function render(v,b){
  if(v==='v8_inbox'){const it=b.items||[];main.innerHTML='<h2>inbox '+esc(b.run_id)+'</h2>'+it.map(x=>inbox(x)).join('');wire();return;}
  if(v==='v9_delivery'){main.innerHTML='<h2>delivery '+esc(b.run_id)+'</h2>'+kv(b.lifecycle)+kv(b.kernel_status);return;}
  if(v==='v10_supervision'){main.innerHTML='<h2>fleet supervision</h2>'+kv(b.fleets)+fleetview(b.fleet_view)+kv(b.control||{})+kv(b.catalogue||{});return;}
+ // C2 (S5.7) — the operations views render their canonical members
+ // verbatim; refusals (op_not_admitted, fork_point_not_coherent with
+ // `nearest_coherent`, authority widenings) render typed in `show`.
+ if(v==='v3_timetravel'){main.innerHTML='<h2>time travel '+esc(b.run_id)+'</h2>'+kv(b.branch_tree)+kv(b.coherent_fork_points)+kv(b.branch_rows);return;}
+ if(v==='v4_editor'){main.innerHTML='<h2>assembly editor</h2>'+kv(b.resolve||{})+kv(b.identity||{})+kv(b.explain||{})+kv(b.plan||{})+kv(b.diff||{})+kv(b.debt_report||{});return;}
+ if(v==='v5_launcher'){main.innerHTML='<h2>launch pre-flight</h2>'+kv(b.expand||{})+kv(b.power||{})+kv(b.next||{});return;}
+ if(v==='v6_analysis'){main.innerHTML='<h2>analysis</h2>'+kv(b);return;}
+ if(v==='v11_bundle'){main.innerHTML='<h2>bundle</h2>'+kv(b.validate||{})+kv(b.status||{})+kv(b.completeness||{});return;}
+ if(v==='v12_console'){main.innerHTML='<h2>console '+esc(b.run_id)+'</h2>'+kv(b.head)+kv(b.account)+kv(b.describe)+kv(b.stream||{})+kv(b.tail);return;}
  main.innerHTML=kv(b);}
 function kv(j){return '<pre>'+esc(JSON.stringify(j,null,1))+'</pre>';}
 // V10's fleet lane — the canonical `hh.fleet.view/2` verbatim: items
@@ -69,8 +78,9 @@ function inbox(x){const id=x.permission_id||'',opts=x.options||x.offered_options
 function wire(){main.querySelectorAll('button[data-pid]').forEach(b=>b.onclick=()=>{
  const run_id=window.__run;api('respond_permission',{run_id,permission_id:b.dataset.pid,outcome:b.dataset.out}).then(({body})=>show('v8_inbox',{run_id}));});}
 window.__run=null;
+const runfree=['v1_runs','v10_supervision','v4_editor','v5_launcher','v6_analysis','v11_bundle'];
 for(const[id,label]of views){const a=document.createElement('a');a.textContent=label;a.onclick=()=>{
- if(id==='v1_runs'||id==='v10_supervision')show(id,{});
+ if(runfree.includes(id))show(id,{});
  else{const r=window.__run||prompt('run_id');if(!r)return;window.__run=r;show(id,{run_id:r});}};nav.appendChild(a);}
 show('v1_runs',{});
 "#;

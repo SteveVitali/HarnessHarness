@@ -107,3 +107,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0315](ADR-0315-s5.4-m1-ablation-and-live-debt-rulings.md) | S5.4 M1-ablation and live-debt rulings | S5.4 | Accepted |
 | [ADR-0316](ADR-0316-s5.5-orchestration-c3-depth-rulings.md) | S5.5 C3-orchestration-depth rulings | S5.5 | Accepted |
 | [ADR-0317](ADR-0317-s5.6-fleet-adapter-rulings.md) | S5.6 fleet-adapter rulings | S5.6 | Accepted |
+| [ADR-0318](ADR-0318-s5.7-c2-web-surface-and-mcp-group-rulings.md) | S5.7 C2 web-surface and MCP write/analysis-group rulings | S5.7 | Accepted |

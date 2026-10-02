@@ -28,6 +28,23 @@
 //!   work-item/debt classes + audit view).
 //! - `v11_run` — V11 run detail (run_summary + account + head +
 //!   describe + list_leases — the V1 row's expansion).
+//!
+//! C2 (S5.7) adds the operations-side catalogue (§7.2 §2.2):
+//! - `v3_timetravel` — V3 operations arm (branch_tree + coherent fork
+//!   points + the branch/replay/rollback partitions; the writes —
+//!   `fork`/`rollback`/`replay`/`counterfactual`/`branch.*` — ride
+//!   /api with the surface's injected provenance).
+//! - `v4_editor` — V4 assembly editor (resolve/explain/identity/diff/
+//!   plan/debt — `HirDiff` apply lands through `lab.assembly.apply`).
+//! - `v5_launcher` — V5 launcher pre-flight (`expand`/`power`/`next`
+//!   under the browser's sub-objects; registration refusals render
+//!   typed).
+//! - `v6_analysis` — V6 frontier/surface/strata (`lab.analysis.render`
+//!   verbatim — the render spec's `view` member selects the pane).
+//! - `v11_bundle` — V11 experiment bundles (`kernel.validate` +
+//!   `kernel.status` + `kernel.check_completeness` over the locator).
+//! - `v12_console` — V12 live console (head + account + describe +
+//!   tail + pending set; `stream` mints the `stream_events` ticket).
 
 use std::collections::BTreeMap;
 
@@ -49,6 +66,13 @@ pub const VIEW_IDS: &[&str] = &[
     "v9_delivery",
     "v10_supervision",
     "v11_run",
+    // C2 (S5.7) — the operations catalogue.
+    "v3_timetravel",
+    "v4_editor",
+    "v5_launcher",
+    "v6_analysis",
+    "v11_bundle",
+    "v12_console",
 ];
 
 fn obj(j: &Json) -> BTreeMap<String, Json> {
@@ -365,6 +389,219 @@ pub fn view(svc: &mut Sessions, id: &str, params: Json) -> Result<Json, ClientEr
             m.insert("describe".into(), describe);
             m.insert("leases".into(), leases);
             Ok(envelope("v11_run", Some(&rid), m))
+        }
+        // ── C2 (S5.7) — the operations catalogue ────────────────────
+        // V3 — the time-travel operations arm: `branch_tree`, the
+        // coherent fork points, and the branch/replay/rollback
+        // partitions. The viewer's fork confirmation reads
+        // `env_binding`/`coverage`/`uncaptured[]` off the canonical
+        // `fork` result (a write, via /api); the incoherent-cut
+        // refusal carries `nearest_coherent` (server.rs).
+        "v3_timetravel" => {
+            let rid = run_id.ok_or_else(bad_params)?;
+            let tree = svc.call_for_run(
+                &rid,
+                "project",
+                Json::obj([("view_kind", Json::str("branch_tree"))]),
+            )?;
+            let points =
+                svc.call_for_run(&rid, "coherent_fork_points", Json::Obj(BTreeMap::new()))?;
+            let branches = svc.call_for_run(
+                &rid,
+                "read",
+                Json::obj([
+                    ("cursor", Json::obj([("kind", Json::str("now"))])),
+                    ("direction", Json::str("rev")),
+                    ("limit", Json::Int(300)),
+                    (
+                        "filter",
+                        Json::obj([(
+                            "classes",
+                            Json::Arr(vec![
+                                Json::str("lifecycle.branch."),
+                                Json::str("lifecycle.run.forked"),
+                                Json::str("lifecycle.run.rolled_back"),
+                                Json::str("lifecycle.head.moved"),
+                                Json::str("lifecycle.replay."),
+                                Json::str("lifecycle.counterfactual."),
+                            ]),
+                        )]),
+                    ),
+                ]),
+            )?;
+            let mut m = BTreeMap::new();
+            m.insert("branch_tree".into(), tree);
+            m.insert("coherent_fork_points".into(), points);
+            m.insert("branch_rows".into(), branches);
+            Ok(envelope("v3_timetravel", Some(&rid), m))
+        }
+        // V4 — the assembly editor's landing read set: the resolved
+        // definition (`version_id` or `namespace`+`name`), its
+        // explanation, root coordinates and debt report; `plan` when
+        // the browser supplies `source` (the HirDiff candidate's dry
+        // run — `apply` is the write leg). Every member is a canonical
+        // result verbatim; a resolve refusal is the typed answer.
+        "v4_editor" => {
+            let mut m = BTreeMap::new();
+            let mut qp = p.clone();
+            for k in ["debt_report", "a", "b"] {
+                qp.remove(k);
+            }
+            if p.contains_key("version_id") || p.contains_key("namespace") {
+                let resolved = svc.call("lab.registry.resolve", Json::Obj(qp.clone()))?;
+                if let Some(vid) = str_of(&resolved, "version_id") {
+                    if let Ok(exp) = svc.call(
+                        "lab.assembly.explain",
+                        Json::obj([("sealed", Json::str(&vid))]),
+                    ) {
+                        m.insert("explain".into(), exp);
+                    }
+                    if let Ok(id) = svc.call(
+                        "lab.assembly.identity",
+                        Json::obj([("sealed", Json::str(&vid))]),
+                    ) {
+                        m.insert("identity".into(), id);
+                    }
+                }
+                m.insert("resolve".into(), resolved);
+            }
+            if let Some(sealed) = p.get("sealed").and_then(Json::as_str) {
+                if let Ok(exp) = svc.call(
+                    "lab.assembly.explain",
+                    Json::obj([("sealed", Json::str(sealed))]),
+                ) {
+                    m.insert("explain".into(), exp);
+                }
+            }
+            // The plan/diff arms — the editor's Terraform-class
+            // rendering source (AssemblyPlan/AssemblyDiff verbatim).
+            if p.contains_key("source") {
+                m.insert(
+                    "plan".into(),
+                    svc.call("lab.assembly.plan", Json::Obj(qp.clone()))?,
+                );
+            }
+            if let (Some(a), Some(b)) = (p.get("a"), p.get("b")) {
+                m.insert(
+                    "diff".into(),
+                    svc.call(
+                        "lab.assembly.diff",
+                        Json::obj([("a", a.clone()), ("b", b.clone())]),
+                    )?,
+                );
+            }
+            if let Some(drq) = p.get("debt_report") {
+                m.insert(
+                    "debt_report".into(),
+                    svc.call("lab.debt.report", drq.clone())?,
+                );
+            }
+            if m.is_empty() {
+                return Err(bad_params());
+            }
+            Ok(envelope("v4_editor", run_id.as_deref(), m))
+        }
+        // V5 — the launcher pre-flight: `expand` (the CellPlan/
+        // OrderPlan dry run), `power` (the PowerReport), `next` (the
+        // scheduler's next-cell answer) — each under its own canonical
+        // params object; refusals are typed, never warnings.
+        "v5_launcher" => {
+            let mut m = BTreeMap::new();
+            for (member, op) in [
+                ("expand", "lab.experiment.expand"),
+                ("power", "lab.analysis.power"),
+                ("next", "lab.experiment.next"),
+            ] {
+                if let Some(sub) = p.get(member) {
+                    m.insert(member.to_string(), svc.call(op, sub.clone())?);
+                }
+            }
+            if m.is_empty() {
+                return Err(bad_params());
+            }
+            Ok(envelope("v5_launcher", run_id.as_deref(), m))
+        }
+        // V6 — frontier/surface/strata/rank/reliability/transfer: the
+        // render spec's `view` member selects the pane; `diff_reports`
+        // when the browser asks for the diff. Values render verbatim
+        // (R-D-1…8 — no recomputation this side).
+        "v6_analysis" => {
+            let op = match str_of(&params, "op").as_deref() {
+                Some("diff_reports") => "lab.analysis.diff_reports",
+                Some("power") => "lab.analysis.power",
+                Some("component_targets") => "lab.analysis.component_targets",
+                Some("attribution_design") => "lab.analysis.attribution_design",
+                _ => "lab.analysis.render",
+            };
+            let mut qp = p.clone();
+            qp.remove("op");
+            let r = svc.call(op, Json::Obj(qp))?;
+            Ok(envelope("v6_analysis", run_id.as_deref(), obj(&r)))
+        }
+        // V11 — the bundle/reproducibility pane (run and experiment
+        // bundles share the pane): validate + status + completeness
+        // over the browser's locator (`path`/`container`/`bundle_ref`
+        // pass through verbatim).
+        "v11_bundle" => {
+            let mut qp = p.clone();
+            qp.remove("run_id");
+            if qp.is_empty() {
+                return Err(bad_params());
+            }
+            let validate = svc.call("kernel.validate", Json::Obj(qp.clone()))?;
+            let status = svc.call("kernel.status", Json::Obj(qp.clone()))?;
+            let completeness = svc.call("kernel.check_completeness", Json::Obj(qp))?;
+            let mut m = BTreeMap::new();
+            m.insert("validate".into(), validate);
+            m.insert("status".into(), status);
+            m.insert("completeness".into(), completeness);
+            Ok(envelope("v11_bundle", run_id.as_deref(), m))
+        }
+        // V12 — the live console: head + account + describe + the tail
+        // the browser polls; `stream:{from?}` mints the `stream_events`
+        // ticket (the canonical subscription handle — replay-from-
+        // cursor then live, dedupe by seq, ADR-0170 D6).
+        "v12_console" => {
+            let rid = run_id.ok_or_else(bad_params)?;
+            let head = svc.call_for_run(&rid, "head", Json::Obj(BTreeMap::new()))?;
+            let account = svc.call_for_run(&rid, "account", Json::Obj(BTreeMap::new()))?;
+            let describe = svc.call_for_run(&rid, "describe", Json::Obj(BTreeMap::new()))?;
+            let tail = svc.call_for_run(
+                &rid,
+                "read",
+                Json::obj([
+                    (
+                        "cursor",
+                        match p.get("from_seq") {
+                            Some(Json::Int(s)) => {
+                                Json::obj([("kind", Json::str("seq")), ("seq", Json::Int(*s))])
+                            }
+                            _ => Json::obj([("kind", Json::str("now"))]),
+                        },
+                    ),
+                    ("direction", Json::str("rev")),
+                    ("limit", Json::Int(50)),
+                ]),
+            )?;
+            let mut m = BTreeMap::new();
+            m.insert("head".into(), head);
+            m.insert("account".into(), account);
+            m.insert("describe".into(), describe);
+            m.insert("tail".into(), tail);
+            if let Some(Json::Obj(sp)) = p.get("stream") {
+                let mut sp = sp.clone();
+                if !sp.contains_key("from") {
+                    sp.insert(
+                        "from".into(),
+                        Json::obj([("kind", Json::str("seq")), ("seq", Json::Int(0))]),
+                    );
+                }
+                m.insert(
+                    "stream".into(),
+                    svc.call_for_run(&rid, "stream_events", Json::Obj(sp))?,
+                );
+            }
+            Ok(envelope("v12_console", Some(&rid), m))
         }
         _ => Err(bad_params()),
     }

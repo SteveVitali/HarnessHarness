@@ -322,32 +322,30 @@ fn ac7_inbox_fold_and_respond() {
     let _ = Duration::from_secs(0);
 }
 
-// AC-8 — no surface path opens a run: `open_session`, `submit`, `fork`,
-// `rollback`, `navigate`, `register`, `publish`, `close` are all
-// unlisted → `Refused{op_not_admitted}` — and the refusal never reaches
-// the kernel.
+// AC-8 — the admission table stays closed at C2: the session lifecycle
+// verbs and every unlisted op are `Refused{op_not_admitted}` and never
+// reach the kernel; the C2 write set (§7.2 §5.2) is admitted — those
+// pass the gate and fail only at transport against the dead kernel.
 #[test]
 fn ac8_op_admission_closed() {
     let (addr, rx, _jh) = stub_kernel(canned, 64);
     let _ = addr;
     let (gate, mut svc, det) = fixture(None);
     for op in [
+        // Session lifecycle — the surface's own, never the browser's.
         "open_session",
         "close",
-        "submit",
-        "fork",
-        "rollback",
-        "navigate",
-        "register",
-        "publish",
+        // Never-admitted kernel verbs.
         "kernel.export",
         "kernel.fetch",
         "lab.results.put_row",
-        "amend",
-    ]
-    .iter()
-    .take(11)
-    {
+        // `request_redaction` is a declared proposal the boundary does
+        // not yet serve — unadmitted until it exists (§7.2 V9).
+        "request_redaction",
+        // Unlisted entirely.
+        "nonsense.op",
+        "lab.fleet.dispatch",
+    ] {
         let s = serve_request(
             &gate,
             &mut svc,
@@ -356,15 +354,65 @@ fn ac8_op_admission_closed() {
             &api_body(op, Json::obj([("run_id", Json::str("r-1"))])),
         );
         let (c, j) = served_json(s);
-        if *op == "amend" {
-            // `amend` IS a declared write — it passes the gate and then
-            // fails transport to the dead kernel; assert separately.
-            assert_eq!(c, 200);
-            continue;
-        }
         assert_eq!(c, 403, "{op}");
         assert_eq!(jstr(&j, "error"), "Refused");
         assert_eq!(jstr(&j, "reason"), "op_not_admitted");
+    }
+    // The C2 write set is admitted — the gate passes them; the dead
+    // kernel answers transport `Unavailable` (a 200 error payload, the
+    // typed refusal passthrough).
+    for op in [
+        "submit",
+        "cancel",
+        "steer",
+        "respond_elicitation",
+        "subscribe",
+        "fork",
+        "navigate",
+        "rollback",
+        "replay",
+        "counterfactual",
+        "branch.open",
+        "branch.discard",
+        "branch.promote",
+        "respond_permission",
+        "amend",
+        "lab.assembly.assemble",
+        "lab.assembly.apply",
+        "lab.assembly.adopt",
+        "lab.registry.register",
+        "lab.registry.publish",
+        "lab.leaderboard.define",
+        "lab.leaderboard.publish",
+        "lab.leaderboard.retract_entry",
+        "lab.experiment.register",
+        "lab.experiment.open_experiment",
+        "lab.experiment.launch",
+        "lab.experiment.claim",
+        "lab.experiment.settle",
+        "lab.experiment.pause",
+        "lab.experiment.resume",
+        "lab.experiment.close",
+        "lab.analysis.analyze",
+        "lab.permission.grant_approver",
+        "lab.permission.revoke_approver",
+        "lab.debt.evaluate",
+        "lab.serve",
+        "kernel.reproduce",
+    ] {
+        let (c, j) = served_json(serve_request(
+            &gate,
+            &mut svc,
+            &det,
+            &api_head(),
+            &api_body(op, Json::obj([("run_id", Json::str("r-1"))])),
+        ));
+        assert_eq!(c, 200, "{op} admitted → passes the gate: {j:?}");
+        assert_eq!(
+            jstr(&j, "reason"),
+            "",
+            "{op} is admitted — no op_not_admitted refusal"
+        );
     }
     assert!(
         rx.try_recv().is_err(),
@@ -457,9 +505,11 @@ fn ac14_cli_parity_verbatim_result() {
     }
 }
 
-// AC-15 — the view catalogue is exactly the C1 set (V1,V2,V3,V5,V6,V7,
-// V8,V9,V10,V11 — nothing outside the catalogue is admitted, and every
-// served view labels its `view` member).
+// AC-15 — the view catalogue is exactly the C1 set plus the C2
+// operations catalogue (S5.7: `v3_timetravel`, `v4_editor`,
+// `v5_launcher`, `v6_analysis`, `v11_bundle`, `v12_console`) — nothing
+// outside the catalogue is admitted, and every served view labels its
+// `view` member.
 #[test]
 fn ac15_catalogue_closed_and_labelled() {
     assert_eq!(
@@ -475,6 +525,12 @@ fn ac15_catalogue_closed_and_labelled() {
             "v9_delivery",
             "v10_supervision",
             "v11_run",
+            "v3_timetravel",
+            "v4_editor",
+            "v5_launcher",
+            "v6_analysis",
+            "v11_bundle",
+            "v12_console",
         ]
     );
     let (gate, mut svc, det) = fixture(None);
@@ -483,7 +539,7 @@ fn ac15_catalogue_closed_and_labelled() {
         &mut svc,
         &det,
         &api_head(),
-        &api_body("view.v4_editor", Json::Null),
+        &api_body("view.v99_unlisted", Json::Null),
     ));
     assert_eq!(c, 403);
     assert_eq!(jstr(&j, "reason"), "op_not_admitted");
