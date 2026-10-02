@@ -105,3 +105,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0313](ADR-0313-s5.2-compaction-and-tool-surface-rulings.md) | S5.2 compaction-family + tool-surface rulings | S5.2 | Accepted |
 | [ADR-0314](ADR-0314-s5.3-analysis-c2-and-hosted-lifecycle-rulings.md) | S5.3 analysis-C2 + hosted-lifecycle rulings | S5.3 | Accepted |
 | [ADR-0315](ADR-0315-s5.4-m1-ablation-and-live-debt-rulings.md) | S5.4 M1-ablation and live-debt rulings | S5.4 | Accepted |
+| [ADR-0316](ADR-0316-s5.5-orchestration-c3-depth-rulings.md) | S5.5 C3-orchestration-depth rulings | S5.5 | Accepted |

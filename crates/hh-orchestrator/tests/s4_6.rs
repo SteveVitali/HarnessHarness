@@ -274,13 +274,17 @@ fn topology_catalogue_is_closed_and_parse_only() {
 }
 
 #[test]
-fn implemented_set_is_t0_t1_t2_t6() {
+fn implemented_set_admits_t3_at_stage_5() {
+    // S5.5 amended the admitted set — T3Recursive joined the executable
+    // presets (the recursion/depth gauge lives in `s5_5.rs`; under-capped
+    // children refuse `SpawnRefused::Depth` at `plan`, never
+    // `ModeUnsupported`).
     assert!(TopologyPreset::T0Single.implemented());
     assert!(TopologyPreset::T1OrchestratorWorker { fan_out: 2 }.implemented());
     assert!(TopologyPreset::T2Pipeline { stages: 2 }.implemented());
+    assert!(TopologyPreset::T3Recursive { depth: 2 }.implemented());
     assert!(TopologyPreset::T6BackgroundDetached.implemented());
     for p in [
-        TopologyPreset::T3Recursive { depth: 2 },
         TopologyPreset::T4JudgePanel,
         TopologyPreset::T5Ensemble,
         TopologyPreset::T7HostedPeer,

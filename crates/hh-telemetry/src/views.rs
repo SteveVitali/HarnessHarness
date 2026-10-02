@@ -391,9 +391,7 @@ fn explain_row(env: &EventEnvelope) -> Json {
         Some(Json::Arr(a)) => a.iter().filter_map(Json::as_str).collect(),
         _ => vec![],
     };
-    let fallback = fired
-        .iter()
-        .any(|f| f.ends_with(".cold_start"));
+    let fallback = fired.iter().any(|f| f.ends_with(".cold_start"));
     Json::obj([
         ("seq", Json::Int(env.seq as i64)),
         ("event_id", Json::str(env.event_id.as_str())),
@@ -421,12 +419,7 @@ fn explain_row(env: &EventEnvelope) -> Json {
             "priors_used",
             p.get("priors_used").cloned().unwrap_or(Json::Arr(vec![])),
         ),
-        (
-            "cell",
-            p.get("cell")
-                .cloned()
-                .unwrap_or(Json::Null),
-        ),
+        ("cell", p.get("cell").cloned().unwrap_or(Json::Null)),
         ("fallback", Json::Bool(fallback)),
         (
             "rationale",
@@ -592,7 +585,7 @@ pub fn trace_view(
         .iter()
         .filter(|e| until_seq.is_none_or(|u| e.seq <= u))
         .filter(|e| e.class == "control.compute.decided")
-        .map(|e| explain_row(e))
+        .map(explain_row)
         .collect();
     let payload = Json::obj([
         ("kind", Json::str("trace_view")),

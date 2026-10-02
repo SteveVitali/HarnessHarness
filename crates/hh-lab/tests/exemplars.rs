@@ -90,6 +90,9 @@ fn budget_map() -> BTreeMap<String, BudgetSpec> {
         ("budget:experiment".to_string(), caps(100_000)),
         ("budget:instrument".to_string(), caps(100_000)),
         ("budget:inference-zero".to_string(), caps(0)),
+        // The `bandit` warm-up — the searched arm's `search_budget > 0`,
+        // legal only under `matched_total` (M3).
+        ("budget:warmup".to_string(), caps(50)),
         // A searched arm's budget for the union-dims test — `model_calls`
         // matches the recipe's zero baseline while `tool_calls` (not a
         // declared match dim) carries positive headroom.
@@ -478,6 +481,7 @@ fn delegation_pins() -> DelegationPins {
         ),
         model_family_refs: (pinned("model.family_a"), pinned("model.family_b")),
         environment_level_ref: pinned("env.coding"),
+        research_environment_level_ref: pinned("env.research_longctx"),
         artifacts: (
             Ref::new("definition:delegation", pinned("artifact.t0")),
             Ref::new("definition:delegation", pinned("artifact.t1f2")),
@@ -501,13 +505,16 @@ fn voc_pins() -> ValueOfComputePins {
             pinned("policy.uniform"),
             pinned("policy.rules"),
         ),
+        bandit_policy_ref: pinned("policy.bandit"),
         model_family_refs: (pinned("model.family_a"), pinned("model.family_b")),
         environment_level_ref: pinned("env.coding"),
+        terminal_environment_level_ref: pinned("env.terminal"),
         artifacts: (
             Ref::new("definition:compute", pinned("artifact.static")),
             Ref::new("definition:compute", pinned("artifact.uniform")),
             Ref::new("definition:compute", pinned("artifact.rules")),
         ),
+        bandit_artifact: Ref::new("definition:compute", pinned("artifact.bandit")),
         iso_artifact: Ref::new("definition:compute", pinned("artifact.rules")),
         pricing_table_ref: PricingTableRef {
             table_id: "pricing:test".to_string(),
@@ -515,6 +522,8 @@ fn voc_pins() -> ValueOfComputePins {
             pin: Some(pinned("pricing.table")),
         },
         eval_budget_wide: "budget:eval".to_string(),
+        warmup_search_budget_ref: "budget:warmup".to_string(),
+        inference_budget_ref: "budget:inference-zero".to_string(),
     }
 }
 
@@ -553,8 +562,31 @@ fn delegation_v1_registers_and_expands() {
     let spec = delegation_v1(&pins(), &delegation_pins(), 1);
     assert_eq!(spec.design.id, "lab/delegation-v1");
     assert_eq!(spec.design.kind, DesignKind::FullFactorial);
-    // The full product: topology(5) × model_snapshot(2).
-    assert_eq!(spec.arms.len(), 10);
+    // Stage 5: the matched_total product topology(5) × model_snapshot(2)
+    // × environment(2 — coding + research/long-context) plus the
+    // recipe's second arm set (matched_cap on time.wall_ms) over the
+    // same points (ADR-0186 D6; §5e.3's recipe shape).
+    assert_eq!(spec.arms.len(), 40);
+    assert_eq!(
+        spec.arms
+            .iter()
+            .filter(|a| a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedTotal)
+            .count(),
+        20
+    );
+    assert_eq!(
+        spec.arms
+            .iter()
+            .filter(|a| a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedCap)
+            .count(),
+        20
+    );
+    assert!(spec
+        .arms
+        .iter()
+        .filter(|a| a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedCap)
+        .all(|a| a.match_spec.as_ref().unwrap().dimensions
+            == vec![hh_ontology::dimensions::DimensionId::TimeWallMs]));
     assert_eq!(spec.replicates_per_cell, EXEMPLAR_REPLICATES);
     let topo = spec
         .factors
@@ -566,18 +598,21 @@ fn delegation_v1_registers_and_expands() {
         Some(hh_ontology::participant::Granularity::ComponentLevel)
     );
     assert_eq!(topo.levels.len(), 5);
-    // Every arm matches under matched_total (ADR-0186 D6).
-    assert!(spec
-        .arms
+    let env = spec
+        .factors
         .iter()
-        .all(|a| a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedTotal));
+        .find(|f| f.name == "environment")
+        .expect("environment factor");
+    assert_eq!(env.levels.len(), 2);
+    // Every arm carries inference_budget so the M3 total is well-formed.
+    assert!(spec.arms.iter().all(|a| a.inference_budget.is_some()));
     spec.register(&ctx()).unwrap();
     let again = delegation_v1(&pins(), &delegation_pins(), 1);
     assert_eq!(spec.experiment_id, again.experiment_id);
     let t = tasks(3);
     let plan = expand(&spec, &t, &expand_ctx()).unwrap();
-    assert_eq!(plan.cells.len(), 10 * 3);
-    assert_eq!(plan.run_plans.len(), 10 * 3 * EXEMPLAR_REPLICATES as usize);
+    assert_eq!(plan.cells.len(), 40 * 3);
+    assert_eq!(plan.run_plans.len(), 40 * 3 * EXEMPLAR_REPLICATES as usize);
 }
 
 #[test]
@@ -585,9 +620,12 @@ fn value_of_compute_v1_registers_with_iso_companion() {
     let spec = value_of_compute_v1(&pins(), &voc_pins(), 1);
     assert_eq!(spec.design.id, "lab/value-of-compute-v1");
     assert_eq!(spec.design.kind, DesignKind::FullFactorial);
-    // The product (3 policies × 2 models × 2 budgets) + the iso_cost
-    // companion.
-    assert_eq!(spec.arms.len(), 13);
+    // Stage 5: the matched_cap product is the covering group —
+    // {static, uniform, rules, bandit} × 2 models × {coding, terminal}
+    // × {tight, wide} = 32 — plus the iso_cost companion and the
+    // searched `matched_total` arm set ({rules, bandit} × 2 models × 2
+    // suites at tight = 8, the H3 warm-up contrast).
+    assert_eq!(spec.arms.len(), 41);
     let modes: Vec<MatchMode> = spec
         .arms
         .iter()
@@ -598,12 +636,52 @@ fn value_of_compute_v1_registers_with_iso_companion() {
             .iter()
             .filter(|m| **m == MatchMode::MatchedCap)
             .count(),
-        12
+        32
+    );
+    assert_eq!(
+        modes
+            .iter()
+            .filter(|m| **m == MatchMode::MatchedTotal)
+            .count(),
+        8
     );
     assert_eq!(
         modes.iter().filter(|m| **m == MatchMode::IsoCost).count(),
         1
     );
+    // AC-R-2.6.4-12/13: a *searched* arm (`search_budget > 0`) binds
+    // `matched_total` only — every `matched_total` arm carries the
+    // funded warm-up; the `matched_cap` bandit rows carry the shared
+    // zero-cap search budget (an unfunded bandit is not searched).
+    for a in &spec.arms {
+        let searched = a.search_budget.as_deref() == Some("budget:warmup");
+        assert_eq!(
+            searched,
+            a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedTotal,
+            "arm {} — searched ⇒ matched_total, unsearched ⇒ not",
+            a.arm_id
+        );
+    }
+    assert!(spec
+        .arms
+        .iter()
+        .filter(|a| a.match_spec.as_ref().unwrap().mode == MatchMode::MatchedTotal)
+        .all(|a| ["rules", "bandit"].contains(&a.level_assignment["compute_policy"].as_str())));
+    // `bandit` is a declared factor level (the recipe's fourth value).
+    let policy = spec
+        .factors
+        .iter()
+        .find(|f| f.name == "compute_policy")
+        .expect("compute_policy factor");
+    assert_eq!(policy.levels.len(), 4);
+    assert!(policy.levels.iter().any(|l| l.level_id == "bandit"));
+    // The recipe's `{coding, terminal}` suite axis is declared.
+    let env = spec
+        .factors
+        .iter()
+        .find(|f| f.name == "environment")
+        .expect("environment factor");
+    assert_eq!(env.levels.len(), 2);
     // The budget factor is declared with both levels.
     let budget = spec
         .factors
@@ -616,7 +694,7 @@ fn value_of_compute_v1_registers_with_iso_companion() {
     assert_eq!(spec.experiment_id, again.experiment_id);
     let t = tasks(2);
     let plan = expand(&spec, &t, &expand_ctx()).unwrap();
-    assert_eq!(plan.cells.len(), 13 * 2);
+    assert_eq!(plan.cells.len(), 41 * 2);
 }
 
 #[test]

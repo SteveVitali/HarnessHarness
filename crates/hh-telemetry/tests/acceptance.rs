@@ -1418,3 +1418,150 @@ fn cost_view_run_tree_refuses_malformed_trees() {
         Err(CostTreeError::RootMissing { .. })
     ));
 }
+
+// ── S5.5 / AC-F4-8 — the scheduler `explain` surface in the trace view ──────
+
+/// A `control.compute.decided` payload in the `ComputeDecisionRecord`
+/// spelling (`estimator_ref{variant_ref}`, `chosen{kind}`,
+/// `rules_fired[]`, `priors_used[]`, `cell`, `rationale`).
+fn decided(id: &str, variant: &str, fired: &[&str]) -> Event {
+    ev(
+        id,
+        "control.compute.decided",
+        TS,
+        Scope::default(),
+        Json::obj([
+            ("record_id", Json::str(format!("rec:{id}"))),
+            ("decision_id", Json::str(format!("dec:{id}"))),
+            ("decision_point", Json::str("delegate")),
+            (
+                "estimator_ref",
+                Json::obj([
+                    ("estimator", Json::str("compute")),
+                    ("variant_ref", Json::str(variant)),
+                ]),
+            ),
+            (
+                "chosen",
+                Json::obj([
+                    ("kind", Json::str("delegate_subagent")),
+                    ("option", Json::str("opt:1")),
+                ]),
+            ),
+            (
+                "rules_fired",
+                Json::Arr(fired.iter().map(|f| Json::str(*f)).collect()),
+            ),
+            ("priors_used", Json::Arr(vec![Json::str("cell:prior:1")])),
+            ("cell", Json::str("cell:abc")),
+            ("binding", Json::obj([("owner", Json::str("code"))])),
+            (
+                "rationale",
+                Json::Arr(vec![Json::str("delta_p above threshold")]),
+            ),
+        ]),
+    )
+}
+
+#[test]
+fn trace_view_projects_explain_rows_for_compute_decisions() {
+    let (mut s, run, lease) = open("tv-explain");
+    // One `bandit` decision that scored, one that fell back to `rules`
+    // through the `.cold_start` marker — the explain row must show both.
+    s.append(
+        &run,
+        &lease,
+        vec![
+            decided("d1", "bandit", &["bandit.score", "threshold.met"]),
+            decided("d2", "rules", &["bandit.cold_start", "rules.default"]),
+        ],
+    )
+    .unwrap();
+    let all = read_all(&s, &run);
+    let view = trace_view(&run, &run, &all, None, DEFAULT_CLOCK_TOLERANCE_MS);
+    let Some(Json::Arr(explains)) = view.payload.get("explains") else {
+        panic!("trace_view carries explains[]")
+    };
+    assert_eq!(explains.len(), 2, "one explain row per decided event");
+
+    let first = &explains[0];
+    assert_eq!(first.get("variant").and_then(Json::as_str), Some("bandit"));
+    assert_eq!(
+        first.get("chosen").and_then(Json::as_str),
+        Some("delegate_subagent")
+    );
+    assert_eq!(
+        first.get("record_id").and_then(Json::as_str),
+        Some("rec:d1")
+    );
+    assert_eq!(first.get("fallback"), Some(&Json::Bool(false)));
+
+    let second = &explains[1];
+    assert_eq!(second.get("variant").and_then(Json::as_str), Some("rules"));
+    assert_eq!(
+        second.get("fallback"),
+        Some(&Json::Bool(true)),
+        "the `.cold_start` marker renders as the rules fallback"
+    );
+    // The rows carry the envelope's durable coords — never a re-fold.
+    assert!(first.get("seq").and_then(Json::as_int).is_some());
+    assert!(first.get("event_id").and_then(Json::as_str).is_some());
+}
+
+#[test]
+fn trace_view_explains_is_empty_without_decisions() {
+    // Removal-sensitive: the member exists (additive view member) and is
+    // empty when the prefix holds no `control.compute.decided`.
+    let (mut s, run, lease) = open("tv-explain-empty");
+    s.append(&run, &lease, model_call("x", "t1", (0, 50, 60, 200)))
+        .unwrap();
+    let all = read_all(&s, &run);
+    let view = trace_view(&run, &run, &all, None, DEFAULT_CLOCK_TOLERANCE_MS);
+    assert_eq!(
+        view.payload.get("explains"),
+        Some(&Json::Arr(vec![])),
+        "explains[] is present and empty with no decided events"
+    );
+}
+
+/// AC-R-2.7.2b-6 — `belief_divergence` renders `provisional` on every
+/// report (the label rides even the `n/a` cell) and `n/a{observability}`
+/// under a run that never declared `model_io` (the elicitation needs the
+/// model-io stream, §5f.3).
+#[test]
+fn belief_divergence_is_provisional_and_observability_gated() {
+    let (mut s, run, lease) = open("mv-belief");
+    s.append(&run, &lease, model_call("o", "t1", (0, 10, 20, 100)))
+        .unwrap();
+    let all = read_all(&s, &run);
+    let events_only: BTreeSet<Observability> = [Observability::Events].into_iter().collect();
+    let v = metric_view(&run, &run, &events_only, &all, None);
+    let cell = v
+        .payload
+        .get("metrics")
+        .and_then(|m| m.get("belief_divergence"))
+        .expect("the metric row exists");
+    assert_eq!(
+        cell.get("provisional"),
+        Some(&Json::Bool(true)),
+        "provisional rides even the n/a cell"
+    );
+    assert_eq!(
+        cell.get("value")
+            .and_then(|c| c.get("na"))
+            .and_then(Json::as_str),
+        Some("observability")
+    );
+    // Under {model_io} the vector computes — still provisional, strata
+    // disjoint (empty run → n = 0).
+    let v2 = metric_view(&run, &run, &declared_all(), &all, None);
+    let cell2 = v2
+        .payload
+        .get("metrics")
+        .and_then(|m| m.get("belief_divergence"))
+        .unwrap();
+    assert_eq!(cell2.get("provisional"), Some(&Json::Bool(true)));
+    let inner = cell2.get("value").unwrap();
+    assert_eq!(inner.get("probes"), Some(&Json::Int(0)));
+    assert_eq!(inner.get("provisional"), Some(&Json::Bool(true)));
+}

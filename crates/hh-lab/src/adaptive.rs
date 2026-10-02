@@ -106,7 +106,7 @@ fn isqrt(n: u64) -> u64 {
         return n;
     }
     let mut x = n;
-    let mut y = (x + 1) / 2;
+    let mut y = (x + 1).div_ceil(2);
     while y < x {
         x = y;
         y = (x + n / x) / 2;
@@ -166,8 +166,8 @@ pub fn voi_allocate(
     // cumulative walk in dispatchable order.
     let draw_bytes = format!("{seed}|{round}|{}", params.estimator);
     let draw_id = hh_identity::idp::idp_id("hh/voi_draw", draw_bytes.as_bytes());
-    let draw = u64::from_str_radix(&draw_id["sha256:".len().."sha256:".len() + 16], 16)
-        .unwrap_or(0) as u128;
+    let draw = u64::from_str_radix(&draw_id["sha256:".len().."sha256:".len() + 16], 16).unwrap_or(0)
+        as u128;
     let mut target = draw % total;
     let mut picked = candidates.len() - 1;
     for (i, w) in weights.iter().enumerate() {
@@ -290,7 +290,11 @@ mod tests {
         assert!(a.record_id.starts_with("sha256:"));
         // A different round is a different draw (weight-equal cells split).
         let rounds: BTreeMap<_, _> = (0..6)
-            .map(|r| voi_allocate(&params(), &cands(), &stats, "seed-x", r).unwrap().picked)
+            .map(|r| {
+                voi_allocate(&params(), &cands(), &stats, "seed-x", r)
+                    .unwrap()
+                    .picked
+            })
             .fold(BTreeMap::new(), |mut m, p| {
                 *m.entry(p).or_insert(0) += 1;
                 m

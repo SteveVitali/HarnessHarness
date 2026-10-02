@@ -2255,3 +2255,152 @@ fn disagreeing_env_levels_refuse_launch() {
     let e = eng.launch(&ticket, "subject").unwrap_err();
     assert_eq!(e.code(), "InadmissibleFactor", "got {e}");
 }
+
+// ── AC-F4-13 (S5.5; §5e.3) — `voi_weighted` over a real `Store` ────────────
+
+/// An `adaptive_search` comparative spec on {search, dev} labels with a
+/// `voi_weighted` strategy — the shape the allocator leg requires
+/// (ADR-0190 D7; `AdaptiveOutsideSearch` confines adaptive strategies to
+/// adaptive-search designs on search-admissible labels).
+fn adaptive_spec() -> ExperimentSpec {
+    let mut s = spec(ExperimentKind::Comparative);
+    s.design.kind = DesignKind::AdaptiveSearch;
+    s.suite.split_labels_used = vec![SplitLabel::Search, SplitLabel::Dev];
+    s.validation_strategy = ValidationStrategy::VoiWeighted {
+        estimator: "disagreement".to_string(),
+        lambda: 0,
+        min_inclusion_fraction_ppm: 10_000,
+        min_replicates: 1,
+    };
+    s.experiment_id = s.experiment_id();
+    s
+}
+
+#[test]
+fn voi_weighted_records_the_inclusion_table() {
+    let mut r = rig("voi", 0);
+    let s = adaptive_spec();
+    let (run_id, picked) = {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        let eid = eng.register(&s).unwrap();
+        eng.expand(&eid).unwrap();
+        let run_id = eng.open_experiment(&eid).unwrap();
+        let picked = match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected a plan, got {other:?}"),
+        };
+        (run_id, picked)
+    };
+    // The inclusion row landed on the experiment run before the pick —
+    // one row per `next` round, charged to `instrument` (CC8).
+    let evs = r.store.events(&run_id).unwrap();
+    let rows: Vec<_> = evs
+        .iter()
+        .filter(|e| e.class == "measurement.experiment.inclusion_probabilities")
+        .collect();
+    assert_eq!(rows.len(), 1, "one inclusion row per allocation round");
+    let p = &rows[0].payload;
+    assert_eq!(
+        p.get("strategy").and_then(Json::as_str),
+        Some("voi_weighted")
+    );
+    assert_eq!(p.get("round").and_then(Json::as_int), Some(0));
+    assert_eq!(
+        p.get("charged_to").and_then(Json::as_str),
+        Some("instrument")
+    );
+    assert_eq!(
+        p.get("picked").and_then(Json::as_str),
+        Some(picked.as_str()),
+        "the recorded pick is the dispatched plan (V-1)"
+    );
+    // Every dispatchable plan keeps a recorded probability at-or-above
+    // the floor — the published table is the draw's source of truth.
+    match p.get("per_plan") {
+        Some(Json::Obj(per_plan)) => {
+            assert_eq!(per_plan.len(), 4);
+            assert!(per_plan.contains_key(picked.as_str()));
+            for (pid, ppm) in per_plan {
+                let ppm = ppm.as_int().expect("int ppm");
+                assert!(ppm >= 10_000, "{pid} under the floor: {ppm}");
+            }
+        }
+        other => panic!("per_plan is an object, got {other:?}"),
+    }
+    // The fold sees the round; a re-fold over the same stream is
+    // byte-identical (INV-9 rebuild equality).
+    let v1 = ExperimentView::fold(r.store.events(&run_id).unwrap());
+    let v2 = ExperimentView::fold(r.store.events(&run_id).unwrap());
+    assert_eq!(v1, v2);
+    assert_eq!(v1.inclusion_rounds, 1);
+}
+
+#[test]
+fn voi_weighted_is_deterministic_across_rebuild() {
+    // The same seed + task set draws the same plan on a fresh store —
+    // the allocation is a pure function of (seed, round, strategy,
+    // dispatchable set), not of process state.
+    let mut r = rig("voi-det", 0);
+    let s = adaptive_spec();
+    let (run_id, first) = {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        let eid = eng.register(&s).unwrap();
+        eng.expand(&eid).unwrap();
+        let run_id = eng.open_experiment(&eid).unwrap();
+        let first = match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected a plan, got {other:?}"),
+        };
+        (run_id, first)
+    };
+    let evs = r.store.events(&run_id).unwrap();
+    let picked = evs
+        .iter()
+        .rfind(|e| e.class == "measurement.experiment.inclusion_probabilities")
+        .unwrap()
+        .payload
+        .get("picked")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    assert_eq!(picked, first);
+    // A second rig at the same seed/round draws the identical plan.
+    let mut r2 = rig("voi-det-b", 0);
+    let s2 = adaptive_spec();
+    let second = {
+        let mut eng = ExperimentEngine::new(&mut r2.store, r2.docs.clone(), ctx());
+        let eid = eng.register(&s2).unwrap();
+        eng.expand(&eid).unwrap();
+        eng.open_experiment(&eid).unwrap();
+        match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected a plan, got {other:?}"),
+        }
+    };
+    assert_eq!(second, first, "the voi draw is replay-stable");
+}
+
+#[test]
+fn voi_weighted_refused_outside_adaptive_search() {
+    // The confinement half of AC-F4-13 — `voi_weighted` on a
+    // `paired`/`full_factorial` design is `AdaptiveOutsideSearch`, never
+    // silently admitted.
+    let mut r = rig("voi-refused", 0);
+    let mut s = spec(ExperimentKind::Comparative);
+    s.validation_strategy = ValidationStrategy::VoiWeighted {
+        estimator: "disagreement".to_string(),
+        lambda: 0,
+        min_inclusion_fraction_ppm: 10_000,
+        min_replicates: 1,
+    };
+    s.experiment_id = s.experiment_id();
+    assert_eq!(register_err(&mut r, &s, ctx()), "AdaptiveOutsideSearch");
+
+    // Held-out leakage — an adaptive design touching `held_out` refuses
+    // `LeakedSplit` (the search side never sees the held-out labels).
+    let mut r = rig("voi-leaked", 0);
+    let mut s = adaptive_spec();
+    s.suite.split_labels_used = vec![SplitLabel::HeldOut];
+    s.experiment_id = s.experiment_id();
+    assert_eq!(register_err(&mut r, &s, ctx()), "AdaptiveOutsideSearch");
+}
