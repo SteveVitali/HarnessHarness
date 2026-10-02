@@ -65,6 +65,11 @@ pub enum BundleError {
     ProvenanceInvalid { detail: String },
     /// An IO failure at the directory/archive seam.
     Io { detail: String },
+    /// A `training_export` refusal — the §5h.8 closed refusal code rides
+    /// `reason` verbatim (`HeldOutInExport`, `InadmissibleRewardSource`,
+    /// `ReaderViolation`, `BundleNotValid`, …; S6.4 — the projection's
+    /// closed refusal set, never a warning).
+    CoevolutionRefused { reason: String },
     /// A malformed record decode.
     Malformed { detail: String },
 }
@@ -128,6 +133,9 @@ impl fmt::Display for BundleError {
             }
             BundleError::ProvenanceInvalid { detail } => {
                 write!(f, "provenance_invalid: {detail}")
+            }
+            BundleError::CoevolutionRefused { reason } => {
+                write!(f, "coevolution_refused: {reason}")
             }
             BundleError::Io { detail } => write!(f, "io: {detail}"),
             BundleError::Malformed { detail } => write!(f, "malformed: {detail}"),

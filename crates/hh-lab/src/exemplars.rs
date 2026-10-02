@@ -4108,3 +4108,220 @@ pub fn interventions_v1(
     spec.experiment_id = spec.experiment_id();
     spec
 }
+
+// ── lab/org-policy-v1 (ADR-0207 D6; §5i.1 6d; S6.4; ADR-0325) ────────────────
+
+/// The `lab/org-policy-v1` `MatchSpec` — `matched_cap` over the §5i.1
+/// matched dimensions `tokens.*` (all five constituents) +
+/// `approvals.requested` + `time.human_wait_ms` + `spend` +
+/// `message_human` (ADR-0207 D6; T-LCD-14 — `register` refuses an arm
+/// without it: the recipe's `kind: comparative` carries the
+/// `requires_match` enforcement, and `spend` matching needs the pinned
+/// pricing table).
+pub fn org_policy_match(pricing: &PricingTableRef) -> MatchSpec {
+    use hh_ontology::dimensions::DimensionId::*;
+    MatchSpec {
+        dimensions: vec![
+            TokensInputUncached,
+            TokensInputCacheRead,
+            TokensInputCacheWrite,
+            TokensOutputVisible,
+            TokensOutputReasoning,
+            ApprovalsRequested,
+            TimeHumanWaitMs,
+            Spend,
+            MessageHuman,
+        ],
+        mode: MatchMode::MatchedCap,
+        tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
+        pricing_table_ref: Some(pricing.clone()),
+        model_scope: ModelScope::SameSnapshot,
+        cache_policy: CachePolicy::ColdStart,
+        utilization_floor_ppm: None,
+    }
+}
+
+/// One declared `lab/org-policy-v1` factor level — the caller's pin for
+/// a `state_map`/`unattended_policy`/`escalation_policy`/`max_activations`/
+/// `attendance` level.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrgPolicyLevel {
+    /// The level id (`deny`, `defer`, `auto_review`, `interactive`,
+    /// `simulated`, `sm:v2`, `chain:ops`, `cap:4`, …).
+    pub level_id: String,
+    /// The level's content ref (the `FactorLevel`/`LevelSpec` ref).
+    pub content_ref: String,
+    /// The display label.
+    pub label: String,
+}
+
+/// One `lab/org-policy-v1` arm pin — the fleet-spec variant the arm
+/// binds plus its responder stratum.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrgPolicyArmPins {
+    /// The arm id.
+    pub arm_id: String,
+    /// The arm's hypothesis spelling.
+    pub hypothesis: String,
+    /// `(factor, level_id)` assignments — one per declared factor.
+    pub levels: Vec<(String, String)>,
+    /// The fleet-spec variant artifact the arm binds.
+    pub artifact: Ref,
+    /// The `CalibrationRecord` ref when this arm's responder is
+    /// simulated (`charged_to = instrument` rides `ext.simulated_responder`;
+    /// a human/interactive responder is subject work, never
+    /// instrument-charged).
+    pub simulated_responder_calibration_ref: Option<String>,
+}
+
+/// The level/arm pins `lab/org-policy-v1` binds, beyond [`ExemplarPins`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct OrgPolicyPins {
+    /// The declared factors as `(factor_name, levels)` — `state_map`,
+    /// `unattended_policy` (`deny`/`defer`/`auto_review`),
+    /// `escalation_policy`, `max_activations` at `configuration-level`;
+    /// `attendance` carries `role: responder_stratum` (results rows
+    /// stratify on it — ADR-0207 D6's responder stratum).
+    pub factors: Vec<(String, Vec<OrgPolicyLevel>)>,
+    /// The arm set (Stage-6 size; every arm carries the recipe's
+    /// `MatchSpec` — `register` refuses one without it, T-LCD-14).
+    pub arms: Vec<OrgPolicyArmPins>,
+    /// The pinned pricing table the `spend` matched dimension requires.
+    pub pricing_table_ref: PricingTableRef,
+}
+
+/// `lab/org-policy-v1` — the §5i.1 6d recipe and the removal test of
+/// every fleet default (ADR-0207 D6; AC-R-2.12.6-12): `comparative`,
+/// `full_factorial` over the configuration-level factors
+/// `state_map`/`unattended_policy`/`escalation_policy`/`max_activations`
+/// with `attendance` as the declared responder stratum; every arm
+/// `matched_cap` over `tokens.*`/`approvals.requested`/
+/// `time.human_wait_ms`/`spend`/`message_human`; a simulated responder
+/// is `charged_to = instrument` and named by its `CalibrationRecord`
+/// ref on `ext.simulated_responder` (the `CriticDeclaration.
+/// independence` obligation stays the registering context's check —
+/// records-in).
+///
+/// The headline metrics are the deterministic ledger counts
+/// (`time_to_first_handoff_ms`, `escalations_per_item`,
+/// `external_effects_per_item`, `human_wait_ms_per_item` — ADR-0207 D4);
+/// every claim is a `ComparisonReport`.
+pub fn org_policy_v1(
+    pins: &ExemplarPins,
+    own: &OrgPolicyPins,
+    registered_at: u64,
+) -> ExperimentSpec {
+    let prereg = pre_registration(
+        registered_at,
+        "the fleet default under test survives on the matched dimensions          (H0: no difference on the ledger-count primaries — H0 holding retains          the default; a regression retires it through R-2.9.6's gate)",
+        &[
+            "time_to_first_handoff_ms",
+            "escalations_per_item",
+            "external_effects_per_item",
+            "human_wait_ms_per_item",
+        ],
+        &[],
+        pins,
+    );
+    let match_spec = org_policy_match(&own.pricing_table_ref);
+    let factors: Vec<FactorSpec> = own
+        .factors
+        .iter()
+        .map(|(name, levels)| FactorSpec {
+            name: name.clone(),
+            kind: FactorKind::Harness,
+            granularity: Some(Granularity::ConfigurationLevel),
+            role: Some(
+                if name == "attendance" {
+                    "responder_stratum"
+                } else {
+                    "primary"
+                }
+                .to_string(),
+            ),
+            levels: levels
+                .iter()
+                .map(|l| level(&l.level_id, &l.content_ref, &l.label))
+                .collect(),
+        })
+        .collect();
+    let arms: Vec<ArmSpec> = own
+        .arms
+        .iter()
+        .map(|a| {
+            arm(
+                &a.arm_id,
+                &a.hypothesis,
+                &a.levels
+                    .iter()
+                    .map(|(f, l)| (f.as_str(), l.as_str()))
+                    .collect::<Vec<_>>(),
+                match_spec.clone(),
+                &a.artifact,
+                pins,
+            )
+        })
+        .collect();
+    let mut spec = ExperimentSpec {
+        experiment_id: String::new(),
+        kind: ExperimentKind::Comparative,
+        design: Design {
+            id: "lab/org-policy-v1".to_string(),
+            kind: DesignKind::FullFactorial,
+            factors: vec![],
+            blocking: vec!["task".to_string()],
+            replicates_per_cell: EXEMPLAR_REPLICATES,
+            pairing: Pairing::ByTask,
+            seed_policy: seed_policy(false),
+            held_out_split_ref: Some(pins.held_out_split_ref.clone()),
+            pre_registration: prereg.clone(),
+            registry_snapshot_id: Some(pins.registry_snapshot_id.clone()),
+            generators: None,
+            resolution: None,
+            routing_policy: RoutingPolicy::FailFast,
+            deviation_policy: None,
+            cache_na_stratified: false,
+        },
+        pre_registration: Some(prereg),
+        factors,
+        arms,
+        suite: SuiteBinding {
+            suite_ref: pins.suite_ref.clone(),
+            split_labels_used: vec![SplitLabel::Dev, SplitLabel::HeldOut],
+            split_assignment_ref: Some(pins.split_assignment_ref.clone()),
+        },
+        replicates_per_cell: EXEMPLAR_REPLICATES,
+        seed_policy: seed_policy(false),
+        validation_strategy: ValidationStrategy::FullSet,
+        scheduling: scheduling("perm:lab.org-policy-v1"),
+        reattempt: reattempt(),
+        budgets: budgets(pins),
+        bundle_policy: BundlePolicy::Named {
+            name: "lab/org-policy-v1".to_string(),
+        },
+        ext: BTreeMap::from([
+            ("recipe".to_string(), Json::str("lab/org-policy-v1")),
+            (
+                "simulated_responder".to_string(),
+                Json::Obj(
+                    own.arms
+                        .iter()
+                        .filter_map(|a| {
+                            a.simulated_responder_calibration_ref.as_ref().map(|c| {
+                                (
+                                    a.arm_id.clone(),
+                                    Json::obj([
+                                        ("calibration_ref", Json::str(c)),
+                                        ("charged_to", Json::str("instrument")),
+                                    ]),
+                                )
+                            })
+                        })
+                        .collect(),
+                ),
+            ),
+        ]),
+    };
+    spec.experiment_id = spec.experiment_id();
+    spec
+}

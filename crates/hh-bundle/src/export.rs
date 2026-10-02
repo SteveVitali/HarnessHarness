@@ -687,3 +687,138 @@ pub fn export_target(
         delivered_runs: decoded.manifest.subject.run_ids.clone(),
     })
 }
+
+// ── training_export/1 (S6.4; §5h.8 §2.1; ADR-0325) ────────────────────────────
+
+/// A `hh_lab::coevolution::CoEvolutionError` → the boundary's typed
+/// refusal (`CoevolutionRefused` carries the closed code verbatim —
+/// `HeldOutInExport`, `InadmissibleRewardSource`, `ReaderViolation`,
+/// `BundleNotValid`, …).
+fn coe_err(e: hh_lab::coevolution::CoEvolutionError) -> BundleError {
+    BundleError::CoevolutionRefused { reason: e.code() }
+}
+
+/// `export_training(bundle, TrainingExportPolicy, ctx) → ExportOutcome`
+/// — the `training_export/1` lowering target (§5h.8 §2.1; S6.4;
+/// ADR-0325). A *projection* of the bundle's ledger exports — the same
+/// bundle + policy + ctx ⇒ the byte-identical artefact (E-1).
+///
+/// - **E-0/E-2** — a ledger page the manifest names but the member set
+///   lacks is `BundleNotValid`; a task the ctx's `task_splits` labels
+///   `held_out`/`private` refuses `HeldOutInExport` before any sample
+///   projects.
+/// - **E-4** — `policy.readers ⊄ ctx.corpus_readers` refuses
+///   `ReaderViolation`.
+/// - **E-5/E-7** — every unavailable/narrowed member is a typed loss
+///   row in `loss_report` (and the export record's own `loss[]`).
+/// - **`files`** — `training_export.json` (the record), `samples.jsonl`
+///   (canonical one-sample-per-line), `exposure_record.json` (the
+///   `TrainingExposureRecord`), `manifest.json`, `loss_report.json`.
+///
+/// `granularity_ceiling = "model_call"` — the projection reads
+/// `model.call.*`/`tool.call.*`/oracle rows; token-level data is never
+/// fabricated (E-6). `delivered_runs` are the manifest's subject runs
+/// (the caller mints `measurement.export.delivered` per subject run).
+pub fn export_training(
+    decoded: &crate::codec::Decoded,
+    policy: &hh_lab::coevolution::TrainingExportPolicy,
+    ctx: &hh_lab::coevolution::TrainingExportCtx,
+) -> Result<ExportOutcome, BundleError> {
+    use hh_lab::coevolution as coe;
+
+    let mut samples = Vec::new();
+    let mut loss: Vec<coe::ExportLossEntry> = Vec::new();
+    let mut data_refs = Vec::new();
+    let mut reward_prov = Vec::new();
+    for (run, export) in &decoded.manifest.traces {
+        let mut envelopes = Vec::new();
+        for page_addr in &export.pages {
+            let bytes =
+                decoded
+                    .members
+                    .get(page_addr)
+                    .ok_or_else(|| BundleError::CoevolutionRefused {
+                        reason: format!("BundleNotValid: ledger page {page_addr} absent"),
+                    })?;
+            for ev in decode_page(bytes)? {
+                envelopes.push(ev.to_json());
+            }
+        }
+        let (exp, l) =
+            coe::project_training_export(run, &envelopes, policy, ctx).map_err(coe_err)?;
+        samples.extend(exp.samples);
+        loss.extend(l);
+        data_refs.extend(exp.exposure.data_refs);
+        reward_prov.extend(exp.exposure.reward_provenance);
+    }
+    let mut record = coe::TrainingExport {
+        export_id: String::new(),
+        policy: policy.clone(),
+        samples,
+        exposure: coe::TrainingExposureRecord {
+            export_id: String::new(),
+            data_refs,
+            reward_provenance: reward_prov,
+            provenance: ctx.provenance.clone(),
+        },
+        loss: loss.clone(),
+        harness_constraints: ctx.harness_constraints.clone(),
+        provenance: ctx.provenance.clone(),
+    };
+    record.seal();
+
+    let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    files.insert(
+        "training_export.json".into(),
+        record.to_json().to_canonical_string().into_bytes(),
+    );
+    let mut lines = String::new();
+    for s in &record.samples {
+        lines.push_str(&s.to_json().to_canonical_string());
+        lines.push('\n');
+    }
+    files.insert("samples.jsonl".into(), lines.into_bytes());
+    files.insert(
+        "exposure_record.json".into(),
+        record.exposure.to_json().to_canonical_string().into_bytes(),
+    );
+    files.insert(
+        "manifest.json".into(),
+        decoded
+            .manifest
+            .to_json()
+            .to_canonical_string()
+            .into_bytes(),
+    );
+    let loss_json: Vec<Json> = loss.iter().map(coe::ExportLossEntry::to_json).collect();
+    let loss_report = Json::obj([
+        ("schema", Json::str("hh-lowering-loss/1")),
+        ("bundle_id", Json::str(decoded.manifest.version_id.clone())),
+        ("target", Json::str("training_export")),
+        ("entries", Json::Arr(loss_json)),
+    ]);
+    files.insert(
+        "loss_report.json".into(),
+        loss_report.to_canonical_string().into_bytes(),
+    );
+    let artefact = hh_identity::idp_id(
+        "bundle.export",
+        Json::Obj(
+            crate::fetch::digest_index(&files)
+                .into_iter()
+                .map(|(k, v)| (k, Json::str(v)))
+                .collect(),
+        )
+        .to_canonical_string()
+        .as_bytes(),
+    );
+    Ok(ExportOutcome {
+        artefact,
+        files,
+        manifest: decoded.manifest.clone(),
+        members: decoded.members.clone(),
+        loss_report,
+        granularity_ceiling: "model_call".to_string(),
+        delivered_runs: decoded.manifest.subject.run_ids.clone(),
+    })
+}

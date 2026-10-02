@@ -20,6 +20,7 @@ pub mod engine;
 pub mod errors;
 pub mod identity;
 pub mod ingress;
+pub mod org_policy;
 pub mod ownership;
 pub mod payloads;
 pub mod source;

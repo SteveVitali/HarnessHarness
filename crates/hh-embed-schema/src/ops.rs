@@ -1209,6 +1209,23 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
+        // S6.4 (§5h.8 §2.3): the import-driven reverse sweep — the
+        // Lab's `post_import_sweep` partition minted into the book of
+        // record (covered → `model_version_change` transitions;
+        // scheduled → `removal_test.scheduled`; `sweep.completed`
+        // attributed `kind: post_import`).
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.debt.post_import_sweep",
+                "L",
+                "json",
+                "json",
+                DEBTMGR_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
         // ── S6.1a (§05h R-2.9.5): the evolution-pipeline surface —
         // `lab.evolution.*` drives the S0–S10 campaign driver
         // (`hh-evolution`; records-in/records-out like `lab.experiment.*`,
@@ -1511,6 +1528,216 @@ pub fn registry() -> Vec<OpSpec> {
             requires_capability: Some("serves_measurement"),
             ..call(
                 "lab.evolution.lineage",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        // ── S6.4 (§5h.8 R-2.9.8; §5h.5/§5h.6 6d): the co-evolution
+        // interface — `research-grade`/`experimental`/`preview`
+        // throughout (ADR-0204 D6). The training-stack exports/imports
+        // are records-in/records-out over the Lab's own record
+        // vocabulary (HarnessHarness never trains — the boundary is
+        // claims, exports and typed verdicts; ADR-0202 D1).
+        // `export_training` lowers the `training_export/1` target with
+        // its typed loss report; `import_snapshot` mints the
+        // `lifecycle.registry.imported` row + the compatibility set;
+        // the cycle ops drive the `CoEvolutionCycleRecord` sidecar;
+        // `consolidation_candidates` is the R-2.9.5 6d view;
+        // `propose_consolidation`/`consolidation_retirement_record`
+        // carry the proposal→human-seal path. C4-tier — a
+        // `--no-default-features` build answers
+        // `Unsupported{by: "tier-c4"}` (CC6; AC-R-2.9.8-11).
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.export_training",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.export_regression_suite",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.export_compatibility_tags",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.import_snapshot",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.guard_at_bind",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.consolidation_candidates",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.propose_consolidation",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.consolidation_retirement_record",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_open",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_begin_phase",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_complete_phase",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_next",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_stop",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_record",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        // §5i.1 6d (R-2.12.6; ADR-0207 D6): `lab/org-policy-v1` — the
+        // recipe every fleet default's removal test instantiates, and
+        // the defaults' conditioned debt records themselves.
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.org_policy.recipe",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.org_policy.default_removal_tests",
                 "L",
                 "json",
                 "json",

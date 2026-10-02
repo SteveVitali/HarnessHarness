@@ -210,6 +210,28 @@ pub fn validate_removal_test(
                 ),
             });
         }
+        // AC-R-2.9.8-12 (S6.4) — the same conditioning needs the
+        // `model_version_change` expiry: a rule whose claims are scoped
+        // to snapshots must expire when a new snapshot lands (the
+        // post-import sweep's trigger). Either the ratified
+        // `expiry_condition` or the additive `expiry.condition` member
+        // carrying the kind satisfies the leg.
+        let version_expiry = record
+            .expiry
+            .as_ref()
+            .map(|x| x.condition == hh_ontology::debt::ExpiryKind::ModelVersionChange)
+            .unwrap_or(false)
+            || record.expiry_condition.kind == hh_ontology::debt::ExpiryKind::ModelVersionChange;
+        if !version_expiry {
+            return Err(DebtError::UnexecutableRemovalTest {
+                reason: UnexecutableReason::MissingSnapshotScope,
+                detail: format!(
+                    "{}.{} is model-conditioned/evolution-origin but carries no \
+                     model_version_change expiry",
+                    home.record_kind, home.field
+                ),
+            });
+        }
     }
     let test = match &record.removal_test {
         Some(t) => t,

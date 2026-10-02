@@ -1059,7 +1059,7 @@ fn split_canary_commits_under_rollout_policy() {
         row.payload.get("assignment_seed"),
         Some(&Json::str("seed:test"))
     );
-    eng.canary_settle(&mut store, &cid, "clean", "", &[])
+    eng.canary_settle(&mut store, &cid, "clean", "", &[], None)
         .unwrap();
     assert_eq!(eng.view.state_of(&cid), Some("active"));
 }
@@ -1106,7 +1106,7 @@ fn split_canary_refuses_without_policy_and_veto_reverts() {
     drive_to_sealed(&mut store, &docs, &mut eng, &cid);
     eng.canary(&mut store, &cid, "split", "int:1").unwrap();
     let e = eng
-        .canary_settle(&mut store, &cid, "veto", "metric:safety tripped", &[])
+        .canary_settle(&mut store, &cid, "veto", "metric:safety tripped", &[], None)
         .unwrap_err();
     assert!(matches!(refusal(&e), Refusal::CanaryAborted { .. }));
     assert_eq!(eng.view.state_of(&cid), Some("reverted"));
@@ -1953,5 +1953,6 @@ fn drive_to_sealed(store: &mut Store, docs: &LabDocs, eng: &mut EvolutionCampaig
 fn drive_to_active(store: &mut Store, docs: &LabDocs, eng: &mut EvolutionCampaign, cid: &str) {
     drive_to_sealed(store, docs, eng, cid);
     eng.canary(store, cid, "shadow", "int:1").unwrap();
-    eng.canary_settle(store, cid, "clean", "", &[]).unwrap();
+    eng.canary_settle(store, cid, "clean", "", &[], None)
+        .unwrap();
 }

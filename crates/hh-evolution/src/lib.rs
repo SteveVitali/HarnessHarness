@@ -4,6 +4,8 @@
 //! refusal table, `view` for the durable-prefix fold.
 
 pub mod campaign;
+pub mod consolidation;
+pub mod cycle;
 pub mod errors;
 pub mod lineage;
 pub mod proposer;
