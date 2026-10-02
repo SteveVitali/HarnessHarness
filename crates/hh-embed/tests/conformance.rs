@@ -4054,6 +4054,7 @@ fn lab_eval_render_scorecard_records_in() {
 /// view inside the boundary's match-spec binding.
 fn s34c_arm(id: &str, level: &str, eval: &str) -> hh_lab::experiment::ArmSpec {
     hh_lab::experiment::ArmSpec {
+        inference_budget: None,
         arm_id: id.into(),
         hypothesis: format!("{id} does better"),
         level_assignment: BTreeMap::from([("model".to_string(), level.to_string())]),
@@ -5166,5 +5167,503 @@ fn s311b_kernel_bundle_carries_bound_extensions() {
                 && u.get("reason").and_then(Json::as_str) == Some("not_captured")
         }),
         "the uncaptured extension pin must be named: {unpinned:?}"
+    );
+}
+
+// ── S4.2 — the §5h.3 bundle lifecycle surface (kernel.validate/diff/
+// fetch/export/status/set_status/attest/audit_bundle/supersede/migrate/
+// lineage + the scoped `kernel.bundle{kind}`) ─────────────────────────
+
+/// An open+closed subject run with a delivered `run` bundle on disk —
+/// returns `(run_id, bundle_dir, manifest)`.
+fn delivered_run_bundle(svc: &mut EmbedService, tag: &str) -> (String, std::path::PathBuf, Json) {
+    let s = open_new(svc);
+    let session_id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    submit(svc, &session_id, text_input("bundle me"));
+    close(svc, &session_id);
+    let dir = test_dir(tag);
+    let r = deliver_bundle(svc, &run_id, &dir);
+    let manifest = r.get("manifest").cloned().unwrap();
+    (run_id, dir, manifest)
+}
+
+#[test]
+fn s42_scoped_bundle_validate_status_and_lifecycle() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let (run_id, run_dir, run_manifest) = delivered_run_bundle(&mut svc, "s42-run");
+    let run_bundle_id = run_manifest
+        .get("version_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    // The assembly gate (S1..S8) over the delivered directory.
+    let v = ok(&call(
+        &mut svc,
+        "kernel.validate",
+        Json::obj([("path", Json::str(run_dir.to_string_lossy().to_string()))]),
+    ));
+    assert_eq!(
+        v.get("report").and_then(|r| r.get("complete")).cloned(),
+        Some(Json::Bool(true)),
+        "{v:?}"
+    );
+
+    // The scoped assembly — `kind = arm` over the run bundle, then
+    // `kind = experiment` over the arm bundle.
+    let arm = ok(&call(
+        &mut svc,
+        "kernel.bundle",
+        Json::obj([
+            ("kind", Json::str("arm")),
+            (
+                "contains",
+                Json::Arr(vec![Json::obj([(
+                    "path",
+                    Json::str(run_dir.to_string_lossy().to_string()),
+                )])]),
+            ),
+            (
+                "arm",
+                Json::obj([
+                    ("arm_id", Json::str("arm:a")),
+                    ("definition_ref", Json::str("idp:def")),
+                ]),
+            ),
+            ("design", Json::obj([("design", Json::str("d1"))])),
+            (
+                "pre_registration",
+                Json::obj([("registered_at", Json::Int(0))]),
+            ),
+            (
+                "match_spec",
+                Json::obj([
+                    ("dimensions", Json::Arr(vec![Json::str("spend")])),
+                    ("mode", Json::str("matched_total")),
+                ]),
+            ),
+            ("search_budget", Json::obj([("trials", Json::Int(0))])),
+            ("subject_runs", Json::Arr(vec![Json::str(run_id.clone())])),
+            (
+                "arms",
+                Json::Arr(vec![Json::obj([("arm_id", Json::str("a"))])]),
+            ),
+        ]),
+    ));
+    let arm_manifest = arm.get("manifest").cloned().unwrap();
+    assert_eq!(
+        arm_manifest.get("bundle_kind").and_then(Json::as_str),
+        Some("arm")
+    );
+    let arm_id = arm_manifest
+        .get("version_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    // The derivation row landed on the covered subject run.
+    assert!(
+        svc.store()
+            .events(&run_id)
+            .unwrap()
+            .iter()
+            .any(|e| e.class == "measurement.experiment.bundle_assembled"
+                && e.payload.get("kind").and_then(Json::as_str) == Some("arm")),
+        "no scoped bundle_assembled row"
+    );
+
+    // Deliver the arm bundle to a directory for the experiment scope.
+    let arm_dir = test_dir("s42-arm-dir");
+    // Encode via kernel.export's ledger_native file tree? The arm
+    // manifest + members live in the pool — but `decode_dir` reads a
+    // directory layout; write it out by exporting the arm bundle we
+    // just assembled. `kernel.export{path}` needs a decoded dir — the
+    // scoped path returns the manifest only; reconstruct the directory
+    // via the container the caller holds? Instead, deliver through the
+    // assembly's own members: the pool holds them, and `encode_dir` is
+    // a layer-A concern exercised in hh-bundle's own tests. Here the
+    // experiment bundle's `contains` names the arm bundle by
+    // `{container}` — but the container file isn't persisted. The
+    // honest embed surface: `kernel.bundle{kind}` accepts `contains`
+    // decodes from caller-provided artifacts, so round-trip the arm
+    // bundle through a directory encode by way of `kernel.reproduce`?
+    // The simplest available artifact: re-assemble through the pool is
+    // not a decode source. Write the dir via the test's own decode of
+    // the run bundle + the returned manifest — `hh_bundle` is a dep of
+    // the test through the workspace.
+    let arm_members = hh_bundle::codec::Decoded {
+        manifest: hh_bundle::manifest::BundleManifest::from_json(&arm_manifest).unwrap(),
+        members: Default::default(),
+    };
+    // Materialize the members the arm manifest names from the blob pool.
+    let mut members = hh_bundle::export::MemberBytes::new();
+    for m in &arm_members.manifest.members {
+        let parsed = hh_identity::idp::parse_id(&m.address).unwrap();
+        if let Ok(bytes) = svc.store().get_blob(&hh_identity::idp::ContentAddress {
+            idp: "idp/1",
+            algorithm: "sha256",
+            digest: parsed.digest_hex,
+            media_type: String::new(),
+            size: 0,
+        }) {
+            members.insert(m.address.clone(), bytes);
+        }
+    }
+    let arm_decoded = hh_bundle::codec::Decoded {
+        manifest: arm_members.manifest.clone(),
+        members,
+    };
+    hh_bundle::codec::encode_dir(&arm_dir, &arm_decoded.manifest, &arm_decoded.members).unwrap();
+
+    let exp = ok(&call(
+        &mut svc,
+        "kernel.bundle",
+        Json::obj([
+            ("kind", Json::str("experiment")),
+            (
+                "contains",
+                Json::Arr(vec![Json::obj([(
+                    "path",
+                    Json::str(arm_dir.to_string_lossy().to_string()),
+                )])]),
+            ),
+            ("design", Json::obj([("design", Json::str("d1"))])),
+            (
+                "pre_registration",
+                Json::obj([("registered_at", Json::Int(0))]),
+            ),
+            (
+                "match_spec",
+                Json::obj([
+                    ("dimensions", Json::Arr(vec![Json::str("spend")])),
+                    ("mode", Json::str("matched_total")),
+                ]),
+            ),
+            ("search_budget", Json::obj([("trials", Json::Int(0))])),
+            ("subject_runs", Json::Arr(vec![Json::str(run_id.clone())])),
+            (
+                "arms",
+                Json::Arr(vec![Json::obj([("arm_id", Json::str("a"))])]),
+            ),
+        ]),
+    ));
+    let exp_manifest = exp.get("manifest").cloned().unwrap();
+    assert_eq!(
+        exp_manifest.get("bundle_kind").and_then(Json::as_str),
+        Some("experiment")
+    );
+
+    // The publication gate — the experiment manifest written to a dir,
+    // `kernel.validate{publication: true}` runs S9 over it.
+    let exp_dir = test_dir("s42-exp-dir");
+    let exp_manifest_t: hh_bundle::manifest::BundleManifest =
+        hh_bundle::manifest::BundleManifest::from_json(&exp_manifest).unwrap();
+    let mut exp_members = hh_bundle::export::MemberBytes::new();
+    for m in &exp_manifest_t.members {
+        let parsed = hh_identity::idp::parse_id(&m.address).unwrap();
+        if let Ok(bytes) = svc.store().get_blob(&hh_identity::idp::ContentAddress {
+            idp: "idp/1",
+            algorithm: "sha256",
+            digest: parsed.digest_hex,
+            media_type: String::new(),
+            size: 0,
+        }) {
+            exp_members.insert(m.address.clone(), bytes);
+        }
+    }
+    hh_bundle::codec::encode_dir(&exp_dir, &exp_manifest_t, &exp_members).unwrap();
+    let v9 = ok(&call(
+        &mut svc,
+        "kernel.validate",
+        Json::obj([
+            ("path", Json::str(exp_dir.to_string_lossy().to_string())),
+            ("publication", Json::Bool(true)),
+        ]),
+    ));
+    let report = v9.get("report").cloned().unwrap();
+    // S9 ran (the `cross_section` stage exists) — the experiment scope
+    // has no DeclarationMissing rows since every section materialized.
+    let s9 = report
+        .get("stages")
+        .and_then(|v| match v {
+            Json::Arr(a) => a
+                .iter()
+                .find(|s| s.get("stage").and_then(Json::as_int) == Some(9))
+                .cloned(),
+            _ => None,
+        })
+        .expect("S9 stage in publication report");
+    // The synthetic run carries no experiment binding — S9 reports the
+    // arm-binding ContainmentMismatch as a typed row (the bound-run clean
+    // pass is hh-bundle's own `s4_2` suite); assert only that every S9
+    // verdict is one of the closed code set, never a hidden check.
+    const S9_CODES: &[&str] = &[
+        "ContainmentMismatch",
+        "UnmatchedBudget",
+        "PreRegistrationLate",
+        "RowOrphan",
+        "DeclarationMissing",
+    ];
+    if let Some(Json::Arr(rows)) = s9.get("checks") {
+        for r in rows {
+            if r.get("status").and_then(Json::as_str) == Some("fail") {
+                let code = r.get("code").and_then(Json::as_str).unwrap_or("");
+                assert!(S9_CODES.contains(&code), "unknown S9 code {code}");
+            }
+        }
+    }
+
+    // ── the status surface ──────────────────────────────────────────
+    let st = ok(&call(
+        &mut svc,
+        "kernel.status",
+        Json::obj([("bundle_id", Json::str(arm_id.clone()))]),
+    ));
+    assert_eq!(st.get("status").and_then(Json::as_str), Some("assembled"));
+    let gated = call(
+        &mut svc,
+        "kernel.set_status",
+        Json::obj([
+            ("run_id", Json::str(run_id.clone())),
+            ("bundle_id", Json::str(arm_id.clone())),
+            ("to", Json::str("validated")),
+        ]),
+    );
+    assert_eq!(err_kind(&gated), "Refused"); // no validation evidence
+    let ok_status = ok(&call(
+        &mut svc,
+        "kernel.set_status",
+        Json::obj([
+            ("run_id", Json::str(run_id.clone())),
+            ("bundle_id", Json::str(arm_id.clone())),
+            ("to", Json::str("validated")),
+            (
+                "evidence",
+                Json::obj([(
+                    "validation_report",
+                    Json::obj([("status", Json::str("valid"))]),
+                )]),
+            ),
+        ]),
+    ));
+    assert_eq!(
+        ok_status
+            .get("record")
+            .and_then(|r| r.get("status"))
+            .and_then(Json::as_str),
+        Some("validated")
+    );
+    let st2 = ok(&call(
+        &mut svc,
+        "kernel.status",
+        Json::obj([("bundle_id", Json::str(arm_id.clone()))]),
+    ));
+    assert_eq!(st2.get("status").and_then(Json::as_str), Some("validated"));
+
+    // ── diff, audit, supersede, migrate, lineage ────────────────────
+    let d = ok(&call(
+        &mut svc,
+        "kernel.diff",
+        Json::obj([
+            (
+                "left",
+                Json::obj([("path", Json::str(run_dir.to_string_lossy().to_string()))]),
+            ),
+            (
+                "right",
+                Json::obj([("path", Json::str(run_dir.to_string_lossy().to_string()))]),
+            ),
+        ]),
+    ));
+    assert_eq!(
+        d.get("diff")
+            .and_then(|x| x.get("verdict"))
+            .and_then(Json::as_str),
+        Some("identical")
+    );
+
+    let au = ok(&call(
+        &mut svc,
+        "kernel.audit_bundle",
+        Json::obj([("path", Json::str(run_dir.to_string_lossy().to_string()))]),
+    ));
+    assert_eq!(au.get("ok"), Some(&Json::Bool(true)), "{au:?}");
+
+    // A superseded successor — mutate the run bundle's stamp on disk
+    // is a new derivation; `kernel.supersede` stamps the edge.
+    let sup = ok(&call(
+        &mut svc,
+        "kernel.supersede",
+        Json::obj([
+            (
+                "new",
+                Json::obj([("path", Json::str(run_dir.to_string_lossy().to_string()))]),
+            ),
+            (
+                "old",
+                Json::obj([("path", Json::str(run_dir.to_string_lossy().to_string()))]),
+            ),
+            ("reason", Json::str("correction")),
+        ]),
+    ));
+    let new_id = sup
+        .get("manifest")
+        .and_then(|m| m.get("version_id"))
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    assert_ne!(new_id, run_bundle_id);
+    let lin = ok(&call(
+        &mut svc,
+        "kernel.lineage",
+        Json::obj([(
+            "bundles",
+            Json::Arr(vec![
+                Json::obj([("path", Json::str(run_dir.to_string_lossy().to_string()))]),
+                // the superseded successor isn't on disk; lineage over the
+                // one supplied manifest yields no edges — the chain query
+                // still answers deterministically.
+            ]),
+        )]),
+    ));
+    assert_eq!(
+        lin.get("edges").and_then(|v| match v {
+            Json::Arr(a) => Some(a.len()),
+            _ => None,
+        }),
+        Some(0)
+    );
+
+    let mig = ok(&call(
+        &mut svc,
+        "kernel.migrate",
+        Json::obj([
+            ("path", Json::str(run_dir.to_string_lossy().to_string())),
+            ("to_schema", Json::str("hh-bundle/1")),
+        ]),
+    ));
+    assert_ne!(
+        mig.get("manifest")
+            .and_then(|m| m.get("version_id"))
+            .and_then(Json::as_str),
+        Some(run_bundle_id.as_str())
+    );
+
+    // ── export target + fetch refusal ───────────────────────────────
+    let out_dir = test_dir("s42-export");
+    let ex = ok(&call(
+        &mut svc,
+        "kernel.export",
+        Json::obj([
+            ("path", Json::str(run_dir.to_string_lossy().to_string())),
+            ("target", Json::str("ledger_native")),
+            ("dir", Json::str(out_dir.to_string_lossy().to_string())),
+        ]),
+    ));
+    assert!(ex
+        .get("files")
+        .and_then(|v| match v {
+            Json::Arr(a) => Some(a.iter().any(|f| { f.as_str() == Some("bundle.hhb1") })),
+            _ => None,
+        })
+        .unwrap_or(false));
+    assert!(out_dir.join("bundle.hhb1").exists());
+
+    // `kernel.fetch` on a member that is `present` reports it not
+    // fetchable (never fabricated).
+    let fx = ok(&call(
+        &mut svc,
+        "kernel.fetch",
+        Json::obj([("path", Json::str(run_dir.to_string_lossy().to_string()))]),
+    ));
+    // No fetch-status members → nothing materialized, nothing failed.
+    let fo = fx.get("outcome").cloned().unwrap();
+    assert_eq!(
+        fo.get("materialized").and_then(|v| match v {
+            Json::Arr(a) => Some(a.len()),
+            _ => None,
+        }),
+        Some(0)
+    );
+
+    // ── foreign import — our own `harbor_job_dir` export lifts back
+    // as a hosted bundle with `unverified` authority (AC-R-2.9.3-8/-9).
+    let harbor_dir = test_dir("s42-harbor");
+    let hx = ok(&call(
+        &mut svc,
+        "kernel.export",
+        Json::obj([
+            ("path", Json::str(run_dir.to_string_lossy().to_string())),
+            ("target", Json::str("harbor_job_dir")),
+            ("dir", Json::str(harbor_dir.to_string_lossy().to_string())),
+        ]),
+    ));
+    assert!(hx
+        .get("files")
+        .and_then(|v| match v {
+            Json::Arr(a) => Some(a.iter().any(|f| f.as_str() == Some("job.json"))),
+            _ => None,
+        })
+        .unwrap_or(false));
+    let imp = ok(&call(
+        &mut svc,
+        "kernel.import",
+        Json::obj([
+            ("path", Json::str(harbor_dir.to_string_lossy().to_string())),
+            ("format", Json::str("harbor_job_dir")),
+        ]),
+    ));
+    let foreign_bundle = imp
+        .get("bundle_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    assert_ne!(foreign_bundle, run_bundle_id);
+    // The receipt row is on the carrier run — coordinates only.
+    let carrier = imp.get("run_id").and_then(Json::as_str).unwrap();
+    assert!(svc
+        .store()
+        .events(carrier)
+        .unwrap()
+        .iter()
+        .any(|e| e.class == "lifecycle.run.imported"));
+    // An unknown format refuses typed.
+    let bad = call(
+        &mut svc,
+        "kernel.import",
+        Json::obj([
+            ("path", Json::str(harbor_dir.to_string_lossy().to_string())),
+            ("format", Json::str("bogus")),
+        ]),
+    );
+    assert_eq!(err_kind(&bad), "Refused");
+
+    // An unsigned attestation verifies as a statement.
+    let att = ok(&call(
+        &mut svc,
+        "kernel.attest",
+        Json::obj([
+            ("path", Json::str(run_dir.to_string_lossy().to_string())),
+            (
+                "attestation",
+                Json::obj([
+                    ("bundle_id", Json::str(run_bundle_id.clone())),
+                    ("statement", Json::obj([("kind", Json::str("release"))])),
+                    ("instrument", Json::str("s42.attester")),
+                    ("issued_ms", Json::Int(0)),
+                ]),
+            ),
+        ]),
+    ));
+    assert_eq!(
+        att.get("attestation")
+            .and_then(|a| a.get("bundle_id"))
+            .and_then(Json::as_str),
+        Some(run_bundle_id.as_str())
     );
 }

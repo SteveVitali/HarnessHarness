@@ -444,6 +444,7 @@ mod tests {
                 lineage: vec![],
                 watermarks: BTreeMap::new(),
                 status: "finished".into(),
+                experiment: BTreeMap::new(),
             },
             definition: Json::Null,
             configuration: Json::obj([
@@ -492,6 +493,7 @@ mod tests {
                 MemberRef::present(roles::NONDETERMINISM, "sha256:nd".into(), "", 1),
             ],
             unpinned: vec![],
+            composition: Json::Null,
             ext: BTreeMap::new(),
             version_id: String::new(),
         }

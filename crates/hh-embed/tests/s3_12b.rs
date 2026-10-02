@@ -769,6 +769,7 @@ fn retirement_spec(rule_id: &str) -> ExperimentSpec {
         interactions: vec![],
     };
     let arm = |id: &str, level: &str| ArmSpec {
+        inference_budget: None,
         arm_id: id.into(),
         hypothesis: "the arm holds".into(),
         level_assignment: [("model".to_string(), level.to_string())]

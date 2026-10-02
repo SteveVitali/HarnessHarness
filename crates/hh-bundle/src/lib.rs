@@ -24,21 +24,32 @@
 //! are never rewritten (supersession by new `version_id` only).
 
 pub mod assemble;
+pub mod attestation;
+pub mod audit;
 pub mod codec;
+pub mod diff;
 pub mod error;
 pub mod export;
+pub mod fetch;
 pub mod import;
 pub mod levels;
+pub mod lifecycle;
 pub mod manifest;
 pub mod repro;
 pub mod runrefs;
+pub mod scoped;
 pub mod validate;
 
 pub use assemble::{assemble, AssembleInputs, Assembled, CompileOutcome};
+pub use attestation::{attest, sign_attestation, BundleAttestation};
+pub use audit::{audit_bundle, AuditReport};
 pub use codec::{decode, decode_container, decode_dir, encode_container, encode_dir, Decoded};
+pub use diff::{bundle_diff, BundleDiff, MemberDelta};
 pub use error::BundleError;
-pub use export::build_ledger_export;
+pub use export::{build_ledger_export, export_target, ExportOutcome, PublicationPolicy};
+pub use fetch::{fetch, member_bytes_or_refused, FetchOutcome};
 pub use import::{lift, ImportEvent, ImportLift, NATIVE_FORMAT};
+pub use lifecycle::{lineage_edges, migrate_bundle, migrate_document, supersede_bundle};
 pub use manifest::{
     BasisSatisfaction, BlobIndexEntry, BundleManifest, BundlePolicy, Claim, FetchEntry,
     LedgerExport, LevelBasis, MemberRef, MemberStatus, ReproLevel, SubjectSection, Unpinned,
@@ -49,7 +60,10 @@ pub use repro::{
     REPRO_SCHEMA,
 };
 pub use runrefs::{declared_run_refs, manifest_refs, run_refs_index};
+pub use scoped::{
+    assemble_scoped, ChildBundle, ScopedInputs, KIND_ARM, KIND_EXPERIMENT, KIND_LINEAGE,
+};
 pub use validate::{
-    check_completeness, validate, BundleValidationReport, CheckRow, CheckStatus, StageReport,
-    REPORT_SCHEMA,
+    check_completeness, validate, validate_publication, BundleValidationReport, CheckRow,
+    CheckStatus, StageReport, REPORT_SCHEMA,
 };

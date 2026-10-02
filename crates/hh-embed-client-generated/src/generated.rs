@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:71b2a6900c56db3ba0a893556884d6109b1460a810dd8d7b77b5deb168858e1f";
+    "sha256:895eaa540b00f76311c47b3c34dccd200d40c0eb5ca84d0c49b5597f7232f128";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5673,6 +5673,18 @@ impl<R: BufRead, W: Write> Client<R, W> {
         }
     }
 
+    /// `kernel.attest` → `json` (see the contract registry).
+    pub fn kernel_attest(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.attest", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.audit_bundle` → `json` (see the contract registry).
+    pub fn kernel_audit_bundle(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.audit_bundle", params.clone())?;
+        Ok(raw)
+    }
+
     /// `kernel.bundle` → `json` (see the contract registry).
     pub fn kernel_bundle(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("kernel.bundle", params.clone())?;
@@ -5685,15 +5697,69 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `kernel.diff` → `json` (see the contract registry).
+    pub fn kernel_diff(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.diff", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.export` → `json` (see the contract registry).
+    pub fn kernel_export(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.export", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.fetch` → `json` (see the contract registry).
+    pub fn kernel_fetch(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.fetch", params.clone())?;
+        Ok(raw)
+    }
+
     /// `kernel.import` → `json` (see the contract registry).
     pub fn kernel_import(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("kernel.import", params.clone())?;
         Ok(raw)
     }
 
+    /// `kernel.lineage` → `json` (see the contract registry).
+    pub fn kernel_lineage(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.lineage", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.migrate` → `json` (see the contract registry).
+    pub fn kernel_migrate(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.migrate", params.clone())?;
+        Ok(raw)
+    }
+
     /// `kernel.reproduce` → `json` (see the contract registry).
     pub fn kernel_reproduce(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("kernel.reproduce", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.set_status` → `json` (see the contract registry).
+    pub fn kernel_set_status(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.set_status", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.status` → `json` (see the contract registry).
+    pub fn kernel_status(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.status", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.supersede` → `json` (see the contract registry).
+    pub fn kernel_supersede(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.supersede", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `kernel.validate` → `json` (see the contract registry).
+    pub fn kernel_validate(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("kernel.validate", params.clone())?;
         Ok(raw)
     }
 

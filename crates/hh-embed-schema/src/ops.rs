@@ -683,6 +683,23 @@ pub fn registry() -> Vec<OpSpec> {
         labi("kernel.check_completeness", "M", "json", "json"),
         labi("kernel.reproduce", "M", "json", "json"),
         labi("kernel.import", "M", "json", "json"),
+        // S4.2 (§5h.3 §2/§3/§6; AC-R-2.9.3-{7,10,12}): the scoped kinds
+        // ride `kernel.bundle{kind}`; `validate` is the staged gate
+        // (S1..S9 at `publication`), `diff`/`fetch`/`export` are the
+        // transport verbs, `status`/`set_status` are the status book,
+        // `attest`/`audit_bundle`/`supersede`/`migrate`/`lineage` the
+        // lifecycle surface.
+        labi("kernel.validate", "M", "json", "json"),
+        labi("kernel.diff", "M", "json", "json"),
+        labi("kernel.fetch", "M", "json", "json"),
+        labi("kernel.export", "M", "json", "json"),
+        labi("kernel.status", "M", "json", "json"),
+        labi("kernel.set_status", "M", "json", "json"),
+        labi("kernel.attest", "M", "json", "json"),
+        labi("kernel.audit_bundle", "M", "json", "json"),
+        labi("kernel.supersede", "M", "json", "json"),
+        labi("kernel.migrate", "M", "json", "json"),
+        labi("kernel.lineage", "M", "json", "json"),
         // The Group M environment ops (ADR-0137/0138; ADR-0177 D7) —
         // implemented at S2.10: `env.snapshot` (fs_tree, `instrument`-
         // charged), `env.derive` (fresh_from_image/fork_snapshot/

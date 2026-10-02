@@ -120,6 +120,7 @@ fn arm(arm_id: &str, level: &str, eval: &str, search: Option<&str>) -> ArmSpec {
         level_assignment: BTreeMap::from([("compaction_strategy".to_string(), level.to_string())]),
         eval_budget: eval.to_string(),
         search_budget: search.map(str::to_string),
+        inference_budget: None,
         match_spec: Some(MatchSpec::matched_cap(&[DimensionId::ModelCalls])),
         artifact_ref: Ref::new("artifact:x", pinned("artifact.x")),
         limits_enforced: "full".to_string(),

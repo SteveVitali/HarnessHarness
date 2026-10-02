@@ -102,6 +102,22 @@ fn bundle_err(e: BundleError) -> EmbedError {
     }
 }
 
+/// A displayable error → `Refused` (the results-store/status surfaces
+/// render as their typed detail).
+fn refused(e: impl std::fmt::Display) -> EmbedError {
+    EmbedError::Refused {
+        reason: format!("{e}"),
+    }
+}
+
+/// `Json::Arr` member access (no `as_arr` on `Json`).
+fn arr_at<'a>(j: &'a Json, k: &str) -> Option<&'a Vec<Json>> {
+    match j.get(k) {
+        Some(Json::Arr(a)) => Some(a),
+        _ => None,
+    }
+}
+
 /// Mint one kernel-origin `Event` for `run_id` — the same envelope shape
 /// `hh_env::events::EventMinter` produces, stamped `kernel(hh-embed)`
 /// (the boundary component — a Lab write is minted by the kernel, the
@@ -345,20 +361,20 @@ impl EmbedService {
     /// assembly is a distinct derivation (AC-R-2.9.3-2 is about the
     /// codec, not assembly).
     ///
-    /// `kind` other than `run` is `Refused{kind_pending}` — corpus and
-    /// profile bundles are later-stage kinds (ADR-0275 R-BUNDLE-1).
+    /// `kind ∈ {run, arm, experiment, lineage}` — the scoped kinds
+    /// assemble over `contains[]` child bundles (S4.2; AC-R-2.9.3-10).
+    /// Corpus and profile bundles remain `Refused{kind_pending}`
+    /// (ADR-0275 R-BUNDLE-1).
     pub(crate) fn kernel_bundle(&mut self, params: &Json) -> Result<Json, EmbedError> {
-        let run_id = str_at(params, "kernel.bundle", "run_id")?.to_string();
         let kind = params
             .get("kind")
             .and_then(Json::as_str)
             .unwrap_or("run")
             .to_string();
         if kind != "run" {
-            return Err(EmbedError::Refused {
-                reason: format!("kind_pending:{kind}"),
-            });
+            return self.kernel_bundle_scoped(params, &kind);
         }
+        let run_id = str_at(params, "kernel.bundle", "run_id")?.to_string();
         let policy = BundlePolicy::from_json(params.get("policy")).map_err(bundle_err)?;
         let deliver_sink = params
             .get("deliver_sink")
@@ -529,6 +545,530 @@ impl EmbedService {
             ("compile_error", compile_error),
         ]);
         Ok(out)
+    }
+
+    /// `kernel.bundle{kind ∈ {arm, experiment, lineage}}` — the scoped
+    /// assembly (S4.2; §5h.3 §3's `experiment ⊃ arm ⊃ run` DAG).
+    /// `contains[]` children arrive as `{path: dir}` or
+    /// `{container: file}` decodes; each child's canonical manifest
+    /// bytes deposit verbatim as a `contains:<bundle_id>` member (the
+    /// child is never rewritten — I1). `subject_runs` defaults to the
+    /// union of the children's `subject.run_ids` (an `arm`/`experiment`
+    /// bundle covers ≥ 1 run; `ScopeInvalid` refuses otherwise).
+    fn kernel_bundle_scoped(&mut self, params: &Json, kind: &str) -> Result<Json, EmbedError> {
+        if !matches!(
+            kind,
+            hh_bundle::scoped::KIND_ARM
+                | hh_bundle::scoped::KIND_EXPERIMENT
+                | hh_bundle::scoped::KIND_LINEAGE
+        ) {
+            return Err(EmbedError::Refused {
+                reason: format!("kind_pending:{kind}"),
+            });
+        }
+        let policy = BundlePolicy::from_json(params.get("policy")).map_err(bundle_err)?;
+
+        // Decode the contained bundles — each `contains` entry is the
+        // child's own `{path | container}` decode.
+        let mut children = Vec::new();
+        if let Some(Json::Arr(cs)) = params.get("contains") {
+            for c in cs {
+                let decoded = decode_bundle_arg(c, "kernel.bundle/contains")?;
+                children.push(hh_bundle::scoped::ChildBundle {
+                    bundle_id: decoded.manifest.version_id.clone(),
+                    kind: decoded.manifest.bundle_kind.clone(),
+                    manifest_bytes: decoded
+                        .manifest
+                        .to_json()
+                        .to_canonical_string()
+                        .into_bytes(),
+                });
+            }
+        }
+
+        let mut subject_runs: Vec<String> = arr_at(params, "subject_runs")
+            .map(|a| {
+                a.iter()
+                    .filter_map(|r| r.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let row_payloads: Vec<(String, Vec<u8>)> = Vec::new();
+        if subject_runs.is_empty() {
+            // Derive the coverage from the children's subject sections —
+            // the scope covers exactly what its members cover.
+            if let Some(Json::Arr(cs)) = params.get("contains") {
+                for c in cs {
+                    let decoded = decode_bundle_arg(c, "kernel.bundle/contains")?;
+                    for r in &decoded.manifest.subject.run_ids {
+                        if !subject_runs.contains(r) {
+                            subject_runs.push(r.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        let created_at = hh_ledger::store::rfc3339_ms(self.store.now_ms());
+        let producer = ProvenanceRecord::kernel(BUNDLE_COMPONENT, self.store.now_ms()).to_json();
+        let inputs = hh_bundle::scoped::ScopedInputs {
+            store: &self.store,
+            policy: &policy,
+            created_at,
+            producer,
+            contract_identity: self.contract_identity(),
+            kernel_version_id: self.kernel_version.clone(),
+            instrument_dirty: std::env::var("HH_KERNEL_DIRTY").ok().as_deref() == Some("1"),
+            kind: kind.to_string(),
+            experiment_run_id: params
+                .get("experiment_run_id")
+                .and_then(Json::as_str)
+                .map(String::from),
+            arm: params.get("arm").cloned(),
+            design: params.get("design").cloned(),
+            pre_registration: params.get("pre_registration").cloned(),
+            pre_registration_seq: params
+                .get("pre_registration_seq")
+                .and_then(Json::as_int)
+                .map(|v| v as u64),
+            first_plan_seq: params
+                .get("first_plan_seq")
+                .and_then(Json::as_int)
+                .map(|v| v as u64),
+            match_spec: params.get("match_spec").cloned(),
+            search_budget: params.get("search_budget").cloned(),
+            arms: arr_at(params, "arms").cloned().unwrap_or_default(),
+            subject_runs: subject_runs.clone(),
+            children,
+            row_refs: arr_at(params, "row_refs")
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|r| r.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            row_payloads,
+            participant_class: params
+                .get("participant_class")
+                .and_then(Json::as_str)
+                .map(String::from),
+        };
+        let assembled = hh_bundle::scoped::assemble_scoped(&inputs).map_err(bundle_err)?;
+
+        // Deposit every present member + the manifest — same pool rule
+        // as the `run` path.
+        for member in &assembled.manifest.members {
+            if let Some(bytes) = assembled.members.get(&member.address) {
+                self.store
+                    .put_blob(bytes, &member.media_type)
+                    .map_err(ledger_err)?;
+            }
+        }
+        let manifest_bytes = assembled
+            .manifest
+            .to_json()
+            .to_canonical_string()
+            .into_bytes();
+        self.store
+            .put_blob(&manifest_bytes, MEDIA_JSON)
+            .map_err(ledger_err)?;
+
+        // The derivation row lands on the experiment run when named,
+        // else the first covered subject run — a lineage bundle over no
+        // run still assembles (its record is the bundle itself).
+        let record_run = params
+            .get("experiment_run_id")
+            .and_then(Json::as_str)
+            .map(String::from)
+            .or_else(|| subject_runs.first().cloned());
+        if let Some(run) = &record_run {
+            let payload = Json::obj([
+                (
+                    "bundle_id",
+                    Json::str(assembled.manifest.version_id.clone()),
+                ),
+                (
+                    "version_id",
+                    Json::str(assembled.manifest.version_id.clone()),
+                ),
+                ("run_id", Json::str(run.clone())),
+                ("kind", Json::str(kind)),
+                (
+                    "member_count",
+                    Json::Int(assembled.manifest.members.len() as i64),
+                ),
+            ]);
+            self.store
+                .commit_kernel_row_for(
+                    BUNDLE_COMPONENT,
+                    run,
+                    "measurement.experiment.bundle_assembled",
+                    payload,
+                    vec![],
+                    vec![],
+                )
+                .map_err(ledger_err)?;
+        }
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-result/1")),
+            ("manifest", assembled.manifest.to_json()),
+            ("report_rows", Json::Arr(assembled.report_rows.clone())),
+        ]))
+    }
+
+    /// `kernel.validate{path | container, publication?}` — the staged
+    /// `validate_bundle` gate over a decoded bundle. `publication =
+    /// true` runs S1..S9 (the publication gate, with the scoped-kind
+    /// `cross_section` checks); otherwise S1..S8 (the assembly gate).
+    /// The report is the verdict — `status: invalid` returns the rows,
+    /// never a refusal (refusals are for unreadable input).
+    pub(crate) fn kernel_validate(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let decoded = decode_bundle_arg(params, "kernel.validate")?;
+        let publication = matches!(params.get("publication"), Some(Json::Bool(true)));
+        let report = if publication {
+            hh_bundle::validate::validate_publication(&decoded.manifest, &decoded.members)
+        } else {
+            hh_bundle::validate::validate(&decoded.manifest, &decoded.members)
+        };
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-validation-result/1")),
+            ("publication", Json::Bool(publication)),
+            ("report", report.to_json()),
+        ]))
+    }
+
+    /// `kernel.diff{left: {path | container}, right: {path | container}}`
+    /// — the bundle-diff surface (§5h.3's `diff`: member deltas,
+    /// configuration/level differences, `same_fact`/`same_result`, and
+    /// the varied-factor report over the two manifests' factor sets).
+    pub(crate) fn kernel_diff(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let left = params
+            .get("left")
+            .ok_or_else(|| missing("kernel.diff/left"))?;
+        let right = params
+            .get("right")
+            .ok_or_else(|| missing("kernel.diff/right"))?;
+        let a = decode_bundle_arg(left, "kernel.diff/left")?;
+        let b = decode_bundle_arg(right, "kernel.diff/right")?;
+        let diff = hh_bundle::diff::bundle_diff(&a, &b);
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-diff/1")),
+            ("diff", diff.to_json()),
+        ]))
+    }
+
+    /// `kernel.fetch{path | container, addresses[]}` — materialize the
+    /// manifest's `status = fetch` members. The kernel's fetcher
+    /// resolves bytes from the content-addressed blob pool (the same
+    /// pool member deposit writes); a member whose bytes the pool does
+    /// not hold reports `fetch_error:no_transport` — the kernel never
+    /// fabricates payload bytes and never trusts a location without the
+    /// `idp/1` digest re-check `fetch` performs. Materialized bytes
+    /// deposit into the pool and the bundle's `fetch[]` intent is
+    /// unchanged (the manifest is immutable — the reader's *view* gains
+    /// bytes).
+    pub(crate) fn kernel_fetch(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let decoded = decode_bundle_arg(params, "kernel.fetch")?;
+        let addresses: Vec<String> = arr_at(params, "addresses")
+            .map(|a| {
+                a.iter()
+                    .filter_map(|r| r.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_else(|| {
+                decoded
+                    .manifest
+                    .members
+                    .iter()
+                    .filter(|m| m.status == hh_bundle::manifest::MemberStatus::Fetch)
+                    .map(|m| m.address.clone())
+                    .collect()
+            });
+        let outcome = hh_bundle::fetch::fetch(
+            &decoded,
+            &addresses,
+            Some(&|entry: &hh_bundle::manifest::FetchEntry| {
+                // Pool-backed fetcher — `entry.address` is the
+                // content address the bytes must recompute to.
+                let parsed = hh_identity::idp::parse_id(&entry.address)
+                    .map_err(|e| format!("bad_address:{e:?}"))?;
+                self.store
+                    .get_blob(&hh_identity::idp::ContentAddress {
+                        idp: "idp/1",
+                        algorithm: "sha256",
+                        digest: parsed.digest_hex,
+                        media_type: String::new(),
+                        size: 0,
+                    })
+                    .map_err(|_| "no_transport:pool_miss".to_string())
+            }),
+        );
+        // Deposit the verified materializations.
+        for addr in &outcome.materialized {
+            if let Some(bytes) = outcome.bytes.get(addr) {
+                let media = decoded
+                    .manifest
+                    .members
+                    .iter()
+                    .find(|m| m.address == *addr)
+                    .map(|m| m.media_type.clone())
+                    .unwrap_or_else(|| MEDIA_JSON.to_string());
+                self.store.put_blob(bytes, &media).map_err(ledger_err)?;
+            }
+        }
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-fetch/1")),
+            ("outcome", outcome.to_json()),
+        ]))
+    }
+
+    /// `kernel.export{path | container, target, policy?, dir}` — the
+    /// export-target lowering (§5h.3 §6; AC-R-2.9.3-7). `target ∈
+    /// {ledger_native, harbor_job_dir, interchange_trajectory}`; the
+    /// `PublicationPolicy` gates member classes (withheld members land
+    /// `no_slot` loss rows — never silently absent). `dir` receives the
+    /// artefact's file tree; `measurement.export.delivered` rows land
+    /// on the export's subject runs.
+    pub(crate) fn kernel_export(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let decoded = decode_bundle_arg(params, "kernel.export")?;
+        let target = str_at(params, "kernel.export", "target")?;
+        let policy = hh_bundle::export::PublicationPolicy::from_json(params.get("policy"))
+            .map_err(bundle_err)?;
+        let out =
+            hh_bundle::export::export_target(&decoded, target, &policy).map_err(bundle_err)?;
+        if let Some(dir) = params.get("dir").and_then(Json::as_str) {
+            let root = Path::new(dir);
+            std::fs::create_dir_all(root).map_err(|e| EmbedError::Refused {
+                reason: format!("export_dir: {e}"),
+            })?;
+            for (rel, bytes) in &out.files {
+                let path = root.join(rel);
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| EmbedError::Refused {
+                        reason: format!("export_dir: {e}"),
+                    })?;
+                }
+                std::fs::write(&path, bytes).map_err(|e| EmbedError::Refused {
+                    reason: format!("export_write: {e}"),
+                })?;
+            }
+        }
+        for run in &out.delivered_runs {
+            let _ = self.store.commit_kernel_row_for(
+                BUNDLE_COMPONENT,
+                run,
+                "measurement.export.delivered",
+                Json::obj([
+                    ("sink_id", Json::str(format!("target:{target}"))),
+                    ("view_kind", Json::str("bundle_export")),
+                    ("content_classes", Json::Arr(vec![Json::str("structural")])),
+                    ("loss_report_ref", Json::Null),
+                ]),
+                vec![],
+                vec![],
+            );
+        }
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-export/1")),
+            ("artefact", Json::str(out.artefact)),
+            (
+                "files",
+                Json::Arr(out.files.keys().map(|k| Json::str(k.clone())).collect()),
+            ),
+            ("loss_report", out.loss_report),
+            ("granularity_ceiling", Json::str(out.granularity_ceiling)),
+        ]))
+    }
+
+    /// `kernel.status{bundle_id}` — the status book read (rebuilt from
+    /// the ledger's `bundle_status_changed` rows — the persisted book
+    /// is a cache of this fold).
+    pub(crate) fn kernel_status(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let bundle_id = str_at(params, "kernel.status", "bundle_id")?;
+        let book = hh_results::status::fold(&self.store);
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-status/1")),
+            ("bundle_id", Json::str(bundle_id)),
+            ("status", Json::str(book.status(bundle_id).as_str())),
+            (
+                "history",
+                Json::Arr(
+                    book.history(bundle_id)
+                        .iter()
+                        .map(|r| r.to_json())
+                        .collect(),
+                ),
+            ),
+        ]))
+    }
+
+    /// `kernel.set_status{run_id, bundle_id, to, reason?, readers?,
+    /// authority?, evidence?}` — the gated transition (§5h.3 §2's
+    /// monotone vocabulary + evidence gates). `run_id` is the subject
+    /// run the `bundle_status_changed` row lands on.
+    pub(crate) fn kernel_set_status(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let run_id = str_at(params, "kernel.set_status", "run_id")?.to_string();
+        let bundle_id = str_at(params, "kernel.set_status", "bundle_id")?.to_string();
+        let to_s = str_at(params, "kernel.set_status", "to")?;
+        let to =
+            hh_results::BundleStatus::parse(to_s).ok_or_else(|| EmbedError::SchemaViolation {
+                path: "kernel.set_status/to".to_string(),
+                code: format!("unknown_status:{to_s}"),
+            })?;
+        let reason = params
+            .get("reason")
+            .and_then(Json::as_str)
+            .unwrap_or("")
+            .to_string();
+        let readers: Vec<String> = arr_at(params, "readers")
+            .map(|a| {
+                a.iter()
+                    .filter_map(|r| r.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let authority = params.get("authority").cloned().unwrap_or(Json::Null);
+        let evidence = params.get("evidence").cloned().unwrap_or(Json::Null);
+        let results = hh_results::store::ResultsStore::open(self.store.root().join("results"))
+            .map_err(refused)?;
+        let record = hh_results::status::set_status(
+            &mut self.store,
+            &results,
+            &run_id,
+            &bundle_id,
+            to,
+            &reason,
+            readers,
+            authority,
+            evidence,
+        )
+        .map_err(refused)?;
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-status/1")),
+            ("record", record.to_json()),
+        ]))
+    }
+
+    /// `kernel.attest{path | container, attestation}` — verify a
+    /// `BundleAttestation` against the decoded bundle. Signed
+    /// attestations verify under the store's audit key resolver; an
+    /// unsigned attestation is admitted as a *statement* (the gate is
+    /// `set_status`'s, which requires the statement to exist).
+    pub(crate) fn kernel_attest(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let decoded = decode_bundle_arg(params, "kernel.attest")?;
+        let att_j = params
+            .get("attestation")
+            .ok_or_else(|| missing("kernel.attest/attestation"))?;
+        let attestation =
+            hh_bundle::attestation::BundleAttestation::from_json(att_j).map_err(bundle_err)?;
+        let empty = hh_ledger::audit::KeyTable::default();
+        let resolver: &dyn hh_ledger::audit::AuditKeyResolver =
+            self.store.audit_key_resolver().unwrap_or(&empty);
+        if attestation.sig.is_some() && self.store.audit_key_resolver().is_none() {
+            return Err(EmbedError::Refused {
+                reason: "attest_no_key_resolver".to_string(),
+            });
+        }
+        let doc =
+            hh_bundle::attestation::attest(&decoded, &attestation, resolver).map_err(bundle_err)?;
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-attestation/1")),
+            ("attestation", doc),
+        ]))
+    }
+
+    /// `kernel.audit_bundle{path | container, known_bundles?}` — the
+    /// member/link hygiene pass (`audit_bundle` — findings, never a
+    /// mutated manifest).
+    pub(crate) fn kernel_audit_bundle(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let decoded = decode_bundle_arg(params, "kernel.audit_bundle")?;
+        let known: std::collections::BTreeSet<String> = arr_at(params, "known_bundles")
+            .map(|a| {
+                a.iter()
+                    .filter_map(|r| r.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let report = hh_bundle::audit::audit_bundle(&decoded, &known);
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-audit/1")),
+            ("bundle_id", Json::str(report.bundle_id)),
+            ("ok", Json::Bool(report.ok)),
+            ("findings", Json::Arr(report.findings)),
+        ]))
+    }
+
+    /// `kernel.supersede{new: {path | container}, old: {path |
+    /// container}, reason}` — stamp the `derived_from` edge on the
+    /// successor manifest and recompute its `version_id` (§5h.3 §2;
+    /// supersession by new `version_id` — `old` is never touched). The
+    /// result carries the re-stamped manifest; the caller deposits
+    /// status via `kernel.set_status{to: superseded, evidence.successor}`.
+    pub(crate) fn kernel_supersede(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let new_p = params
+            .get("new")
+            .ok_or_else(|| missing("kernel.supersede/new"))?;
+        let old_p = params
+            .get("old")
+            .ok_or_else(|| missing("kernel.supersede/old"))?;
+        let reason = str_at(params, "kernel.supersede", "reason")?;
+        let mut new = decode_bundle_arg(new_p, "kernel.supersede/new")?;
+        let old = decode_bundle_arg(old_p, "kernel.supersede/old")?;
+        hh_bundle::lifecycle::supersede_bundle(&mut new.manifest, &old.manifest, reason)
+            .map_err(bundle_err)?;
+        let manifest_bytes = new.manifest.to_json().to_canonical_string().into_bytes();
+        self.store
+            .put_blob(&manifest_bytes, MEDIA_JSON)
+            .map_err(ledger_err)?;
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-result/1")),
+            ("manifest", new.manifest.to_json()),
+        ]))
+    }
+
+    /// `kernel.migrate{path | container, to_schema}` — the
+    /// migration-as-supersession path (AC-R-2.9.3-13). Only
+    /// `hh-bundle/1` exists — other spellings are `FormatUnknown`.
+    pub(crate) fn kernel_migrate(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let decoded = decode_bundle_arg(params, "kernel.migrate")?;
+        let to_schema = str_at(params, "kernel.migrate", "to_schema")?;
+        let producer = ProvenanceRecord::kernel(BUNDLE_COMPONENT, self.store.now_ms()).to_json();
+        let migrated = hh_bundle::lifecycle::migrate_bundle(
+            &decoded,
+            to_schema,
+            producer,
+            hh_ledger::store::rfc3339_ms(self.store.now_ms()),
+        )
+        .map_err(bundle_err)?;
+        let manifest_bytes = migrated
+            .manifest
+            .to_json()
+            .to_canonical_string()
+            .into_bytes();
+        self.store
+            .put_blob(&manifest_bytes, MEDIA_JSON)
+            .map_err(ledger_err)?;
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-result/1")),
+            ("manifest", migrated.manifest.to_json()),
+        ]))
+    }
+
+    /// `kernel.lineage{bundles: [{path | container}...]}` — the
+    /// supersession-chain edges over the supplied manifests
+    /// (`{bundle_id, derived_from, reason}`), deterministic order.
+    pub(crate) fn kernel_lineage(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let mut manifests = Vec::new();
+        if let Some(Json::Arr(bs)) = params.get("bundles") {
+            for b in bs {
+                manifests.push(decode_bundle_arg(b, "kernel.lineage")?.manifest);
+            }
+        }
+        let edges = hh_bundle::lifecycle::lineage_edges(&manifests);
+        Ok(Json::obj([
+            ("schema", Json::str("hh-bundle-lineage/1")),
+            ("edges", Json::Arr(edges)),
+        ]))
     }
 
     /// Re-run `compile` over the run's persisted sealed definition —
@@ -1044,6 +1584,14 @@ impl EmbedService {
             .and_then(Json::as_str)
             .unwrap_or("hh-cli")
             .to_string();
+        let format = params
+            .get("format")
+            .and_then(Json::as_str)
+            .unwrap_or(NATIVE_FORMAT)
+            .to_string();
+        if format != NATIVE_FORMAT {
+            return self.kernel_import_foreign(params, &format, &holder);
+        }
         let decoded = decode_bundle_arg(params, "kernel.import")?;
         // Only a complete bundle lifts — the staged gate's own verdict.
         let report = check_completeness(&decoded.manifest, &decoded.members);
@@ -1124,6 +1672,128 @@ impl EmbedService {
             ("schema", Json::str("hh-import-result/1")),
             ("run_id", Json::str(new_run_id)),
             ("mapping_report", lift.mapping_report.clone()),
+        ]))
+    }
+
+    /// `kernel.import{path: dir, format ∈ {harbor_trial_dir,
+    /// harbor_job_dir}, holder?}` — the foreign lift (§5h.3 §2;
+    /// AC-R-2.9.3-9). The caller's directory walks into the file map;
+    /// the kernel opens a hosted carrier run, `lift_foreign` stamps
+    /// every member `authority = unverified` under `origin =
+    /// import(format)` with the mandatory `ImportRecord` +
+    /// `MappingReport` (declared foreign digests that fail the supplied
+    /// bytes land as `ForeignIntegrityMismatch` conflicts — never
+    /// coerced). Unknown formats are `Refused{FormatUnknown}`.
+    fn kernel_import_foreign(
+        &mut self,
+        params: &Json,
+        format: &str,
+        holder: &str,
+    ) -> Result<Json, EmbedError> {
+        if !hh_bundle::import::FOREIGN_FORMATS.contains(&format) {
+            return Err(bundle_err(BundleError::FormatUnknown {
+                detail: format!(
+                    "{format} — supported: {} + {:?}",
+                    NATIVE_FORMAT,
+                    hh_bundle::import::FOREIGN_FORMATS
+                ),
+            }));
+        }
+        let dir = params
+            .get("path")
+            .and_then(Json::as_str)
+            .ok_or_else(|| missing("kernel.import/path"))?;
+        // Walk the directory — relpath → bytes (dirs skipped; symlinks
+        // not followed by `is_file`).
+        let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        let mut stack = vec![Path::new(dir).to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for entry in std::fs::read_dir(&d).map_err(|e| EmbedError::Refused {
+                reason: format!("import_dir: {e}"),
+            })? {
+                let entry = entry.map_err(|e| EmbedError::Refused {
+                    reason: format!("import_dir: {e}"),
+                })?;
+                let p = entry.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.is_file() {
+                    let rel = p
+                        .strip_prefix(dir)
+                        .unwrap_or(&p)
+                        .to_string_lossy()
+                        .to_string();
+                    files.insert(
+                        rel,
+                        std::fs::read(&p).map_err(|e| EmbedError::Refused {
+                            reason: format!("import_read: {e}"),
+                        })?,
+                    );
+                }
+            }
+        }
+        // The carrier run — a hosted-class run the lift's subject binds.
+        let (run_id, _lease) = self
+            .store
+            .open_run(
+                hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent),
+                holder,
+            )
+            .map_err(ledger_err)?;
+        let lift = hh_bundle::import::lift_foreign(
+            &self.store,
+            &run_id,
+            &files,
+            format,
+            ProvenanceRecord::kernel(IMPORT_COMPONENT, self.store.now_ms()).to_json(),
+            hh_ledger::store::rfc3339_ms(self.store.now_ms()),
+            &self.kernel_version,
+            self.store.now_ms(),
+        )
+        .map_err(bundle_err)?;
+        // Deposit member + record bytes into the pool.
+        for member in &lift.bundle.manifest.members {
+            if let Some(bytes) = lift.bundle.members.get(&member.address) {
+                self.store
+                    .put_blob(bytes, &member.media_type)
+                    .map_err(ledger_err)?;
+            }
+        }
+        let record_bytes = lift.import_record.to_canonical_string().into_bytes();
+        let record_addr = self
+            .store
+            .put_blob(&record_bytes, MEDIA_JSON)
+            .map_err(ledger_err)?;
+        let mapping_bytes = lift.mapping_report.to_canonical_string().into_bytes();
+        let mapping_addr = self
+            .store
+            .put_blob(&mapping_bytes, MEDIA_JSON)
+            .map_err(ledger_err)?;
+        // The receipt row — coordinates only (no foreign fact is
+        // re-asserted as kernel truth; ADR-0141 D1).
+        self.store
+            .commit_kernel_row_for(
+                IMPORT_COMPONENT,
+                &run_id,
+                "lifecycle.run.imported",
+                Json::obj([
+                    ("format", Json::str(format)),
+                    (
+                        "bundle_id",
+                        Json::str(lift.bundle.manifest.version_id.clone()),
+                    ),
+                    ("kind", Json::str("run")),
+                    ("participant_class", Json::str("hosted")),
+                ]),
+                vec![record_addr, mapping_addr],
+                vec![],
+            )
+            .map_err(ledger_err)?;
+        Ok(Json::obj([
+            ("schema", Json::str("hh-import-result/1")),
+            ("run_id", Json::str(run_id)),
+            ("bundle_id", Json::str(lift.bundle.manifest.version_id)),
+            ("mapping_report", lift.mapping_report),
         ]))
     }
 

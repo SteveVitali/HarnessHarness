@@ -22,7 +22,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use hh_budget::spec::BudgetSpec;
 use hh_budget::{BudgetEnforcement, DimensionId, EnforcementLevel};
 use hh_experiment::docs::{kind as doc_kind, LabDocs};
-use hh_experiment::engine::{ClaimTicket, EngineContext, ExperimentEngine, NextVerdict};
+use hh_experiment::engine::{
+    ClaimTicket, EngineContext, ExperimentEngine, HostedLaunchOutcome, HostedLaunchRequest,
+    NextVerdict,
+};
 use hh_experiment::errors::ExperimentError;
 use hh_experiment::events::PauseReason;
 use hh_lab::expand::{ArmConfiguration, ExpandError, ExpandTask};
@@ -96,6 +99,19 @@ struct Bag {
     /// `arm_id → cache_state_visible` — the arm's bound dialect visibility
     /// (AC-R-2.3.4-10; absent member = the check defers).
     cache_visibility: Option<BTreeMap<String, bool>>,
+    /// `participant ref → registry descriptor body` — the hosted-level
+    /// admissibility check's capability vector source (AC-R-2.10.3-3).
+    participant_descriptors: BTreeMap<String, Json>,
+    /// `environment level ref → environment class` — the
+    /// `environment_class:<class>` pool membership resolver.
+    environment_classes: BTreeMap<String, String>,
+    /// `hosted_session{session_ref?, hosting_mechanism, limits_enforced}` —
+    /// the adapter's session report (the caller ran the Hosting ABI verbs
+    /// on its plane and reports the outcome; AC-R-2.10.3-14). `error`
+    /// carries a session-open failure the launch must refuse with.
+    hosted_session: Option<HostedLaunchOutcome>,
+    /// `hosted_session.error` — the session-open failure.
+    hosted_session_error: Option<String>,
 }
 
 impl Bag {
@@ -305,6 +321,54 @@ impl Bag {
             }
             cache_visibility = Some(out);
         }
+        // `{participant_ref → descriptor}` — the registry's participant
+        // records (the hosted-level capability vector source).
+        let mut participant_descriptors = BTreeMap::new();
+        if let Some(Json::Obj(m)) = p.get("participant_descriptors") {
+            for (k, v) in m {
+                participant_descriptors.insert(k.clone(), v.clone());
+            }
+        }
+        // `{environment_level_ref → environment_class}` — the pool
+        // membership map (AC-R-2.10.3-10).
+        let mut environment_classes = BTreeMap::new();
+        if let Some(Json::Obj(m)) = p.get("environment_classes") {
+            for (k, v) in m {
+                if let Some(c) = v.as_str() {
+                    environment_classes.insert(k.clone(), c.to_string());
+                }
+            }
+        }
+        // `hosted_session{session_ref?, hosting_mechanism, limits_enforced}`
+        // — the Hosting ABI session verbs' report (the caller ran them on
+        // its plane; the engine stamps the reported outcome, never a
+        // guessed one). `hosted_session.error` is the session-open failure.
+        let hosted_session_error = p
+            .get("hosted_session")
+            .and_then(|h| h.get("error"))
+            .and_then(Json::as_str)
+            .map(str::to_string);
+        let hosted_session = p.get("hosted_session").and_then(|h| {
+            if hosted_session_error.is_some() {
+                return None;
+            }
+            Some(HostedLaunchOutcome {
+                hosting_mechanism: h
+                    .get("hosting_mechanism")
+                    .and_then(Json::as_str)
+                    .unwrap_or("session-abi")
+                    .to_string(),
+                session_ref: h
+                    .get("session_ref")
+                    .and_then(Json::as_str)
+                    .map(str::to_string),
+                limits_enforced: h
+                    .get("limits_enforced")
+                    .and_then(Json::as_str)
+                    .unwrap_or("partial")
+                    .to_string(),
+            })
+        });
         Ok(Bag {
             budgets,
             suite_tasks,
@@ -318,6 +382,10 @@ impl Bag {
             enforcement,
             budget_params,
             cache_visibility,
+            participant_descriptors,
+            environment_classes,
+            hosted_session,
+            hosted_session_error,
         })
     }
 
@@ -377,6 +445,27 @@ impl Bag {
                         .and_then(|m| m.get(&a.arm_id).copied())
                 }) as Box<dyn Fn(&ArmSpec) -> Option<bool> + '_>
             }),
+            participant_descriptor: Some(Box::new(move |r: &str| {
+                self.participant_descriptors.get(r).cloned()
+            })),
+            environment_class: Some(Box::new(move |r: &str| {
+                self.environment_classes.get(r).cloned()
+            })),
+            hosted_launcher: (self.hosted_session.is_some() || self.hosted_session_error.is_some())
+                .then(|| {
+                    Box::new(move |req: &HostedLaunchRequest| {
+                        if let Some(e) = &self.hosted_session_error {
+                            return Err(e.clone());
+                        }
+                        self.hosted_session.clone().ok_or_else(|| {
+                            format!("no hosted session established for {}", req.run_plan_id)
+                        })
+                    })
+                        as Box<
+                            dyn Fn(&HostedLaunchRequest) -> Result<HostedLaunchOutcome, String>
+                                + '_,
+                        >
+                }),
         }
     }
 }
@@ -648,11 +737,13 @@ impl EmbedService {
         Ok(Json::Obj(m))
     }
 
-    /// `lab.experiment.pause{experiment_id, reason?}` — the closed reason set.
+    /// `lab.experiment.pause{experiment_id, reason?, probe?}` — the closed
+    /// reason set; `probe` is the caller's audit tag (`paused{probe}`).
     pub(crate) fn lab_experiment_pause(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let reason = opt_str(params, "reason").unwrap_or_else(|| "operator".to_string());
         let reason =
             PauseReason::parse(&reason).ok_or_else(|| bad("/reason", "unknown_pause_reason"))?;
+        let probe = opt_str(params, "probe");
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
@@ -663,14 +754,15 @@ impl EmbedService {
             &bag,
             &run_id,
         )?;
-        let r = eng.pause(reason);
+        let r = eng.pause(reason, probe.as_deref());
         park(&mut self.experiment_engines, eng);
         r.map_err(xerr)?;
         Ok(Json::obj([("paused", Json::Bool(true))]))
     }
 
-    /// `lab.experiment.resume{experiment_id}`.
+    /// `lab.experiment.resume{experiment_id, probe?}` — `resumed{probe}`.
     pub(crate) fn lab_experiment_resume(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let probe = opt_str(params, "probe");
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
@@ -681,15 +773,20 @@ impl EmbedService {
             &bag,
             &run_id,
         )?;
-        let r = eng.resume();
+        let r = eng.resume(probe.as_deref());
         park(&mut self.experiment_engines, eng);
         r.map_err(xerr)?;
         Ok(Json::obj([("resumed", Json::Bool(true))]))
     }
 
-    /// `lab.experiment.close{experiment_id, partial?}` → `ExperimentReport`.
+    /// `lab.experiment.close{experiment_id, partial?, bundle_id?}` →
+    /// `ExperimentReport`. `bundle_id` names the experiment bundle the
+    /// caller assembled (`kernel.bundle{kind: experiment}` over the arm
+    /// bundles); the engine records it (`bundle_assembled`) so the
+    /// report's `bundle_id` names the close's bundle (AC-R-2.10.3-11).
     pub(crate) fn lab_experiment_close(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let partial = matches!(params.get("partial"), Some(Json::Bool(true)));
+        let bundle_id = opt_str(params, "bundle_id");
         let bag = Bag::from_params(params)?;
         let docs = self.lab_docs()?;
         let run_id = self.experiment_run_id(&docs, params)?;
@@ -700,7 +797,11 @@ impl EmbedService {
             &bag,
             &run_id,
         )?;
-        let r = eng.close(partial);
+        let r = bundle_id
+            .as_deref()
+            .map(|b| eng.record_bundle(b))
+            .transpose()
+            .and_then(|_| eng.close(partial));
         park(&mut self.experiment_engines, eng);
         let report = r.map_err(xerr)?;
         let mut m = BTreeMap::new();

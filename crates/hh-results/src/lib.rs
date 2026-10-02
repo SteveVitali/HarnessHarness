@@ -40,6 +40,7 @@ pub mod projection;
 pub mod query;
 pub mod row;
 pub mod scoring;
+pub mod status;
 pub mod store;
 pub mod verify;
 pub mod version;
@@ -53,6 +54,9 @@ pub use leaderboard::{LeaderboardDefinition, LeaderboardEntry, LeaderboardSnapsh
 pub use query::{Page, QuerySpec};
 pub use row::{ResultsRow, RowKey, ROW_SCHEMA};
 pub use scoring::ScoringContext;
+pub use status::{
+    fold as fold_status_book, load_book, set_status, BundleStatusRecord, StatusBook, STATUS_EVENT,
+};
 pub use store::{ResultsStore, VerifyVerdict};
 pub use version::{DerivedReason, RowVersion};
 pub use watermark::WatermarkSet;

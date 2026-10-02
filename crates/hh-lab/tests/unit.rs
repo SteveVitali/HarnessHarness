@@ -244,6 +244,7 @@ fn arm(id: &str, lid: &str) -> ArmSpec {
             .collect(),
         eval_budget: "budget:eval".into(),
         search_budget: Some("budget:search".into()),
+        inference_budget: None,
         match_spec: Some(MatchSpec::matched_cap(&[])),
         artifact_ref: Ref::new("def:x", "sha256:ee55"),
         limits_enforced: "limits:declared".into(),

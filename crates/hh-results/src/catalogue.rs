@@ -21,19 +21,32 @@ use crate::watermark::WatermarkSet;
 /// The catalogue schema tag.
 pub const CATALOGUE_SCHEMA: &str = "hh-bundle-catalogue/1";
 
-/// `status ∈ {assembled, validated, attested, reproduced}` — the admission
-/// ladder (`attested`/`reproduced` are Stage-4+ productions; the ordering is
-/// fixed so `status ≥ min` comparisons are total).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// `status ∈ {assembled, validated, attested, published, restricted,
+/// reproduced, superseded, retracted}` — the §5h.3 §2 `BundleStatusRecord`
+/// vocabulary (ADR-0141 D3; S4.2). Evidence rank is NOT the enum order:
+/// `satisfies` compares the *evidence ladder* `assembled < validated <
+/// attested < published ≈ restricted < reproduced`; `superseded` and
+/// `retracted` are lifecycle terminals that never satisfy an evidence
+/// gate (the successor carries the admission — rows annotate, never
+/// hide).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BundleStatus {
     /// Assembled, not (or not yet / no longer) validated.
     Assembled,
     /// `hh_bundle::validate` passes over materialized members.
     Validated,
-    /// Attested (Stage 4).
+    /// Attested — a verified attestation on the manifest exists (S4.2).
     Attested,
-    /// Independently reproduced (Stage 4+).
+    /// Published to the declared reader set (S4.2).
+    Published,
+    /// Published to a restricted reader set (S4.2).
+    Restricted,
+    /// Independently reproduced (`ReproReport{independent = true}`).
     Reproduced,
+    /// Superseded by a `derived_from` successor (lifecycle terminal).
+    Superseded,
+    /// Retracted (lifecycle terminal — never deletes, never satisfies).
+    Retracted,
 }
 
 impl BundleStatus {
@@ -43,7 +56,11 @@ impl BundleStatus {
             BundleStatus::Assembled => "assembled",
             BundleStatus::Validated => "validated",
             BundleStatus::Attested => "attested",
+            BundleStatus::Published => "published",
+            BundleStatus::Restricted => "restricted",
             BundleStatus::Reproduced => "reproduced",
+            BundleStatus::Superseded => "superseded",
+            BundleStatus::Retracted => "retracted",
         }
     }
 
@@ -53,9 +70,64 @@ impl BundleStatus {
             "assembled" => BundleStatus::Assembled,
             "validated" => BundleStatus::Validated,
             "attested" => BundleStatus::Attested,
+            "published" => BundleStatus::Published,
+            "restricted" => BundleStatus::Restricted,
             "reproduced" => BundleStatus::Reproduced,
+            "superseded" => BundleStatus::Superseded,
+            "retracted" => BundleStatus::Retracted,
             _ => return None,
         })
+    }
+
+    /// The evidence-ladder rank (`assembled < validated < attested <
+    /// published ≈ restricted < reproduced`); lifecycle terminals rank 0.
+    pub fn rank(self) -> u8 {
+        match self {
+            BundleStatus::Assembled => 0,
+            BundleStatus::Validated => 1,
+            BundleStatus::Attested => 2,
+            BundleStatus::Published | BundleStatus::Restricted => 3,
+            BundleStatus::Reproduced => 4,
+            BundleStatus::Superseded | BundleStatus::Retracted => 0,
+        }
+    }
+
+    /// `status ≥ min` on the evidence ladder — the `min_bundle_status`
+    /// gate (§5h.3 `min_bundle_status` reads; the leaderboard's
+    /// `min_status`). `superseded`/`retracted` never satisfy an evidence
+    /// gate: the record's `history` keeps the pre-terminal rung for
+    /// audit, and rows are annotated (`bundle_superseded` /
+    /// `bundle_retracted`), never hidden or deleted (AC-R-2.9.3-11).
+    pub fn satisfies(self, min: BundleStatus) -> bool {
+        !matches!(self, BundleStatus::Superseded | BundleStatus::Retracted)
+            && self.rank() >= min.rank()
+    }
+
+    /// A lifecycle terminal (`superseded`/`retracted`).
+    pub fn is_terminal(self) -> bool {
+        matches!(self, BundleStatus::Superseded | BundleStatus::Retracted)
+    }
+
+    /// Whether `self → to` is a legal transition: monotone on the
+    /// evidence ladder, except `published ↔ restricted` (audience
+    /// re-scoping, S4.2) and `any → {retracted, superseded}` (§5h.3 §2's
+    /// transition rule — both are lifecycle terminals the evidence gate
+    /// in `set_status` controls; a terminal never leaves).
+    pub fn may_transition_to(self, to: BundleStatus) -> bool {
+        if self.is_terminal() {
+            return false;
+        }
+        if matches!(to, BundleStatus::Retracted | BundleStatus::Superseded) {
+            return true;
+        }
+        if matches!(
+            (self, to),
+            (BundleStatus::Published, BundleStatus::Restricted)
+                | (BundleStatus::Restricted, BundleStatus::Published)
+        ) {
+            return true;
+        }
+        to.rank() >= self.rank()
     }
 }
 
@@ -386,6 +458,20 @@ pub fn refresh(
         }
     }
     entries.sort_by(|a, b| a.bundle_id.cmp(&b.bundle_id));
+
+    // The status book is authoritative over the computed admission
+    // floor (§5h.3 `BundleStatusRecord`; S4.2): a recorded transition
+    // — `attested`, `published`, `restricted`, `reproduced`,
+    // `superseded`, `retracted`, or an explicit `assembled`/`validated`
+    // — wins over the refresh's `assembled`/`validated` derivation.
+    // The fold is over `bundle_status_changed` ledger events so the
+    // merged view is rebuildable (the persisted book is its cache).
+    let book = crate::status::fold(store);
+    for e in &mut entries {
+        if let Some(rec) = book.records.get(&e.bundle_id).and_then(|rs| rs.last()) {
+            e.status = rec.status;
+        }
+    }
 
     let mut cat = BundleCatalogue {
         entries,

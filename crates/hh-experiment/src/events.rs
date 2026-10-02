@@ -119,13 +119,14 @@ pub mod exclude_reason {
 // ── Payload builders ────────────────────────────────────────────────────────
 
 /// `declared{experiment_id, plan_id, kind, comparable, suite_manifest_ref,
-/// registry_snapshot_id?, arms[], n_cells, n_run_plans}` — the declaration
-/// row. `experiment_id`/`plan_id` *are* the content addresses of the spec and
+/// registry_snapshot_id?, arms[], n_cells, n_run_plans, opened_ms}` — the
+/// declaration row. `opened_ms` is the open wall-clock stamp the
+/// `start_stagger_ms` schedule offsets from (a ledger fact — S-1). `experiment_id`/`plan_id` *are* the content addresses of the spec and
 /// `CellPlan` documents (LabDocs); the documents are not inlined — Rule C
 /// bounds audit members at 512 canonical bytes each / the class offload
 /// threshold in total, and a full `CellPlan` dwarfs that at scale. The fold
 /// keeps the refs; the engine reloads the documents from `LabDocs`.
-pub fn declared(spec: &ExperimentSpec, plan: &CellPlan) -> Json {
+pub fn declared(spec: &ExperimentSpec, plan: &CellPlan, opened_ms: u64) -> Json {
     let mut m = BTreeMap::new();
     m.insert("experiment_id".into(), Json::str(&spec.experiment_id));
     m.insert("plan_id".into(), Json::str(&plan.plan_id));
@@ -144,6 +145,7 @@ pub fn declared(spec: &ExperimentSpec, plan: &CellPlan) -> Json {
     );
     m.insert("n_cells".into(), Json::Int(plan.cells.len() as i64));
     m.insert("n_run_plans".into(), Json::Int(plan.run_plans.len() as i64));
+    m.insert("opened_ms".into(), Json::Int(opened_ms as i64));
     Json::Obj(m)
 }
 
@@ -193,14 +195,51 @@ pub fn claim_expired(run_plan_id: &str, lease_id: &str) -> Json {
     ])
 }
 
-/// `run_launched{run_plan_id, run_id, attempt_no, budget_id}`.
-pub fn run_launched(run_plan_id: &str, run_id: &str, attempt_no: u32, budget_id: &str) -> Json {
-    Json::obj([
-        ("run_plan_id", Json::str(run_plan_id)),
-        ("run_id", Json::str(run_id)),
-        ("attempt_no", Json::Int(attempt_no as i64)),
-        ("budget_id", Json::str(budget_id)),
-    ])
+/// The launch-time dispatch stamps `run_launched` records (§6.3 §2.2;
+/// AC-R-2.10.3-3/-10/-14) — the consumed `SchedulingPolicy` pool keys and
+/// the participant-class/`limits_enforced` stamps the bound run carries.
+#[derive(Debug, Clone, Default)]
+pub struct LaunchStamp<'a> {
+    /// The pool keys this dispatch consumes (`run_launched{pool_consumed}`).
+    pub pool_consumed: &'a [String],
+    /// `native | hosted` — the subject run's participant class.
+    pub participant_class: &'a str,
+    /// The derived `limits_enforced` stamp (`full | partial | none`) —
+    /// the enforcement the dispatch actually carries, never the spec's
+    /// unverified claim (ADR-0046 (d)).
+    pub limits_enforced: &'a str,
+    /// The hosting adapter's session record ref (hosted launches).
+    pub hosted_session_ref: Option<&'a str>,
+}
+
+/// `run_launched{run_plan_id, run_id, attempt_no, budget_id,
+/// pool_consumed[], participant_class, limits_enforced,
+/// hosted_session_ref?}` — additive members are the C1 dispatch record.
+pub fn run_launched(
+    run_plan_id: &str,
+    run_id: &str,
+    attempt_no: u32,
+    budget_id: &str,
+    stamp: &LaunchStamp<'_>,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("run_plan_id".into(), Json::str(run_plan_id));
+    m.insert("run_id".into(), Json::str(run_id));
+    m.insert("attempt_no".into(), Json::Int(attempt_no as i64));
+    m.insert("budget_id".into(), Json::str(budget_id));
+    m.insert(
+        "pool_consumed".into(),
+        Json::Arr(stamp.pool_consumed.iter().map(Json::str).collect()),
+    );
+    m.insert(
+        "participant_class".into(),
+        Json::str(stamp.participant_class),
+    );
+    m.insert("limits_enforced".into(), Json::str(stamp.limits_enforced));
+    if let Some(s) = stamp.hosted_session_ref {
+        m.insert("hosted_session_ref".into(), Json::str(s));
+    }
+    Json::Obj(m)
 }
 
 /// The subject run's binding row — `run_bound{experiment_id, arm_id,
@@ -216,6 +255,8 @@ pub fn subject_bound(
     replicate_index: u32,
     attempt_no: u32,
     budget_id: &str,
+    participant_class: &str,
+    limits_enforced: &str,
 ) -> Json {
     Json::obj([
         ("experiment_id", Json::str(experiment_id)),
@@ -229,12 +270,15 @@ pub fn subject_bound(
         ("replicate_index", Json::Int(replicate_index as i64)),
         ("attempt_no", Json::Int(attempt_no as i64)),
         ("budget_id", Json::str(budget_id)),
+        ("participant_class", Json::str(participant_class)),
+        ("limits_enforced", Json::str(limits_enforced)),
     ])
 }
 
 /// The experiment run's mirror — `run_bound{run_id, run_plan_id, cell_id,
 /// replicate_index, attempt_no, subject_head}` (§6.3 `bind`; the subject's own
 /// `bound` chain is the proof).
+#[allow(clippy::too_many_arguments)] // the mirror row's fields are the record's shape.
 pub fn run_bound_mirror(
     run_id: &str,
     run_plan_id: &str,
@@ -242,6 +286,8 @@ pub fn run_bound_mirror(
     replicate_index: u32,
     attempt_no: u32,
     subject_head: &str,
+    participant_class: &str,
+    limits_enforced: &str,
 ) -> Json {
     Json::obj([
         ("run_id", Json::str(run_id)),
@@ -250,6 +296,8 @@ pub fn run_bound_mirror(
         ("replicate_index", Json::Int(replicate_index as i64)),
         ("attempt_no", Json::Int(attempt_no as i64)),
         ("subject_head", Json::str(subject_head)),
+        ("participant_class", Json::str(participant_class)),
+        ("limits_enforced", Json::str(limits_enforced)),
     ])
 }
 
@@ -258,7 +306,7 @@ pub fn run_bound_mirror(
 /// record. `regrade = true` marks an `oracle_failure` settlement: the row is
 /// final for the plan but awaits a regrade overlay — the subject is never
 /// re-run (AC-R-2.10.3-6; ADR-0155 D5).
-pub fn run_settled(outcome: &RunOutcome) -> Json {
+pub fn run_settled(outcome: &RunOutcome, pool_released: &[String]) -> Json {
     Json::obj([
         ("run_plan_id", Json::str(&outcome.run_plan_id)),
         ("run_id", Json::str(&outcome.run_id)),
@@ -273,6 +321,10 @@ pub fn run_settled(outcome: &RunOutcome) -> Json {
             Json::Arr(outcome.veto_tripped.iter().map(Json::str).collect()),
         ),
         ("regrade", Json::Bool(outcome.regrade_pending)),
+        (
+            "pool_released",
+            Json::Arr(pool_released.iter().map(Json::str).collect()),
+        ),
     ])
 }
 
@@ -321,20 +373,27 @@ pub fn cell_completed(cell_id: &str, accepted: u32, planned: u32) -> Json {
     ])
 }
 
-/// `paused{reason, node?}` — `node` names the exhausted budget node for
-/// `budget_exhausted`.
-pub fn paused(reason: PauseReason, node: Option<&str>) -> Json {
+/// `paused{reason, node?, probe?}` — `node` names the exhausted budget
+/// node for `budget_exhausted`; `probe` is the boundary's pause tag (the
+/// §6.3 `pause{probe?}` member — a free-form audit label).
+pub fn paused(reason: PauseReason, node: Option<&str>, probe: Option<&str>) -> Json {
     let mut m = BTreeMap::new();
     m.insert("reason".into(), Json::str(reason.as_str()));
     if let Some(n) = node {
         m.insert("node".into(), Json::str(n));
     }
+    if let Some(t) = probe {
+        m.insert("probe".into(), Json::str(t));
+    }
     Json::Obj(m)
 }
 
-/// `resumed{}`.
-pub fn resumed() -> Json {
-    Json::obj([])
+/// `resumed{probe?}` — the boundary's resume tag.
+pub fn resumed(probe: Option<&str>) -> Json {
+    match probe {
+        Some(t) => Json::obj([("probe", Json::str(t))]),
+        None => Json::obj([]),
+    }
 }
 
 /// `drift_bracket{phase, fingerprints, provider_drift}` — `fingerprints` is
