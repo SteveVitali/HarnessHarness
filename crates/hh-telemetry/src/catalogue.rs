@@ -436,6 +436,166 @@ pub fn metric(name: &str) -> Option<&'static ProcessMetric> {
     PROCESS_METRICS.iter().find(|m| m.name == name)
 }
 
+/// One fleet-layer catalogue row — the §5i.1 heading-3 declarations in the
+/// §5h.1 `MetricDeclaration` form plus the fold status. The two named
+/// differences from [`ProcessMetric`]: a `level` (`work_item` | `fleet`,
+/// the C4 levels `MetricLevel` gained with this table) and `charged_to`
+/// (`reconcile_latency_ms` is charged to the instrument — the reconcile
+/// pass the meter measures is the meter).
+pub struct FleetMetric {
+    /// The metric name (§5i.1 §3's registered spellings).
+    pub name: &'static str,
+    /// The scorecard dimension (ADR-0045 D1).
+    pub dimension: Dimension,
+    /// Whether a higher or lower reading is better.
+    pub direction: Direction,
+    /// `work_item` | `fleet`.
+    pub level: MetricLevel,
+    /// The observability the metric requires.
+    pub requires_observability: &'static [Observability],
+    /// The participant classes the metric applies to.
+    pub applies_to: &'static [ParticipantClass],
+    /// The event classes the metric reads (`computed_from`).
+    pub computed_from: &'static [&'static str],
+    /// The unit.
+    pub unit: MetricUnit,
+    /// The fold status.
+    pub fold: FoldStatus,
+    /// `veto` — a trace predicate whose fire gates the scorecard
+    /// (`unowned_dispatch_count` only).
+    pub veto: bool,
+    /// The `charged_to` clause.
+    pub charged_to: hh_ontology::eval::ChargedTo,
+}
+
+impl FleetMetric {
+    /// The §5h.1 `MetricDeclaration` form — the registry record shape the
+    /// FleetView `metrics` member renders.
+    pub fn declaration(&self) -> MetricDeclaration {
+        let value_type = match self.unit {
+            MetricUnit::Tokens
+            | MetricUnit::CountMap
+            | MetricUnit::Attribution
+            | MetricUnit::DistributionMs => MetricValueType::Vector,
+            _ => MetricValueType::Decimal,
+        };
+        MetricDeclaration {
+            name: self.name.to_string(),
+            dimension: self.dimension,
+            level: self.level,
+            value_type,
+            direction: self.direction,
+            unit: self.unit.as_str().to_string(),
+            requires_observability: self.requires_observability.iter().copied().collect(),
+            applies_to_classes: self.applies_to.iter().copied().collect(),
+            detector_classes_allowed: [hh_ontology::compliance::Detector::Deterministic]
+                .into_iter()
+                .collect(),
+            outcome_class_policy: match self.dimension {
+                Dimension::Efficiency => OutcomeClassPolicy::for_efficiency(),
+                _ => OutcomeClassPolicy::for_capability(),
+            },
+            veto: self.veto,
+            charged_to: self.charged_to,
+            ..MetricDeclaration::default()
+        }
+    }
+}
+
+use hh_ontology::eval::{ChargedTo as CT, MetricLevel as ML};
+
+/// The fleet-layer declarations — §5i.1 §3's fourteen rows plus
+/// `unowned_dispatch_count` (the veto). Level `work_item` unless the fold
+/// is over the whole fleet. The classes each row reads are the ledgered
+/// work-item classes (`control.work_item.*`, `lifecycle.escalation.*`,
+/// `lifecycle.fleet.activated`); rows whose fold lands with a later
+/// telemetry slice are `NotRun` — declared, never estimated.
+#[rustfmt::skip]
+pub const FLEET_METRICS: &[FleetMetric] = &[
+    FleetMetric { name: "time_to_first_handoff_ms", dimension: Dimension::Reliability,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.created", "control.work_item.handoff"],
+        unit: MetricUnit::Milliseconds, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "human_wait_ms_per_item", dimension: Dimension::Reliability,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.blocked", "control.work_item.dispatched"],
+        unit: MetricUnit::Milliseconds, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "activations_per_item", dimension: Dimension::Reliability,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.dispatched"],
+        unit: MetricUnit::Count, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "escalations_per_item", dimension: Dimension::Reliability,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["lifecycle.escalation.raised"],
+        unit: MetricUnit::Count, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "escalation_ack_latency_ms{severity}", dimension: Dimension::Reliability,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["lifecycle.escalation.raised", "lifecycle.escalation.resolved"],
+        unit: MetricUnit::Milliseconds, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "blocked_ratio{reason}", dimension: Dimension::Reliability,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.blocked"],
+        unit: MetricUnit::Ppm, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "owner_acknowledge_latency_ms", dimension: Dimension::Reliability,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.owner_changed", "control.work_item.owner_acknowledged"],
+        unit: MetricUnit::Milliseconds, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "external_effects_per_item{effective_risk_class}", dimension: Dimension::Efficiency,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.dispatched"],
+        unit: MetricUnit::Count, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "message_human_per_item", dimension: Dimension::Efficiency,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.annotated"],
+        unit: MetricUnit::Count, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "source_conflict_rate", dimension: Dimension::Reliability,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.blocked"],
+        unit: MetricUnit::Ppm, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "spend_per_item{confidence}", dimension: Dimension::Efficiency,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["measurement.cost.attributed", "control.budget.allocated"],
+        unit: MetricUnit::MicroUnits, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "fleet_utilisation", dimension: Dimension::Efficiency,
+        direction: Direction::Higher, level: ML::Fleet,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.dispatched", "control.work_item.cancelled"],
+        unit: MetricUnit::Ppm, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    FleetMetric { name: "reconcile_latency_ms", dimension: Dimension::Efficiency,
+        direction: Direction::Lower, level: ML::Fleet,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.wakeup.occurred", "control.wakeup.skipped"],
+        unit: MetricUnit::Milliseconds, fold: N(NA::NotRun), veto: false, charged_to: CT::Instrument },
+    FleetMetric { name: "stale_dispatch_rate", dimension: Dimension::Reliability,
+        direction: Direction::Lower, level: ML::Fleet,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.dispatched", "control.work_item.blocked"],
+        unit: MetricUnit::Ppm, fold: N(NA::NotRun), veto: false, charged_to: CT::Subject },
+    // The veto — a dispatched item with an empty owner violates OQ-312's
+    // ownership obligation; the count is a trace predicate, never a 0 proxy.
+    FleetMetric { name: "unowned_dispatch_count", dimension: Dimension::Compliance,
+        direction: Direction::Lower, level: ML::WorkItem,
+        requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.work_item.dispatched"],
+        unit: MetricUnit::Count, fold: C, veto: true, charged_to: CT::Subject },
+];
+
+/// A fleet-metric lookup by name.
+pub fn fleet_metric(name: &str) -> Option<&'static FleetMetric> {
+    FLEET_METRICS.iter().find(|m| m.name == name)
+}
+
 /// The registry check (DF-S1.5-2 — AC-R-2.2.1-5's second half): resolve a
 /// metric's `requires_observability` against the declared `min_observability`
 /// of every class it reads.
@@ -451,11 +611,12 @@ pub struct RegistryCheck {
     pub violations: Vec<Observability>,
 }
 
-/// Run the check over one declaration.
-pub fn registry_check(m: &ProcessMetric) -> RegistryCheck {
+/// The shared check body — resolve `computed_from` against the class
+/// table and diff the resolved levels against `requires_observability`.
+fn check_parts(requires: &[Observability], computed_from: &[&'static str]) -> RegistryCheck {
     let mut resolved = BTreeMap::new();
     let mut pending = Vec::new();
-    for c in m.computed_from {
+    for c in computed_from {
         match hh_ledger::classes::lookup(c) {
             Some(spec) => {
                 resolved.insert(*c, to_ontology(spec.min_observability));
@@ -463,7 +624,7 @@ pub fn registry_check(m: &ProcessMetric) -> RegistryCheck {
             None => pending.push(*c),
         }
     }
-    let declared: BTreeSet<Observability> = m.requires_observability.iter().copied().collect();
+    let declared: BTreeSet<Observability> = requires.iter().copied().collect();
     let violations = resolved
         .values()
         .copied()
@@ -476,11 +637,32 @@ pub fn registry_check(m: &ProcessMetric) -> RegistryCheck {
     }
 }
 
+/// Run the check over one declaration.
+pub fn registry_check(m: &ProcessMetric) -> RegistryCheck {
+    check_parts(m.requires_observability, m.computed_from)
+}
+
+/// The fleet row of the same check.
+pub fn fleet_registry_check(m: &FleetMetric) -> RegistryCheck {
+    check_parts(m.requires_observability, m.computed_from)
+}
+
 /// The whole-catalogue sweep — every row must pass the resolved-union check
 /// (its `requires_observability` covers every registered class it reads).
 pub fn check_catalogue() -> Result<(), TelemetryError> {
     for m in PROCESS_METRICS {
         let check = registry_check(m);
+        if !check.violations.is_empty() {
+            return Err(TelemetryError::RegistryViolation {
+                detail: format!(
+                    "{}: requires_observability misses {:?} (reads {:?})",
+                    m.name, check.violations, check.resolved
+                ),
+            });
+        }
+    }
+    for m in FLEET_METRICS {
+        let check = fleet_registry_check(m);
         if !check.violations.is_empty() {
             return Err(TelemetryError::RegistryViolation {
                 detail: format!(

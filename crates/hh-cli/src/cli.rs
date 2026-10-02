@@ -287,6 +287,12 @@ const VALUE_FLAGS: &[&str] = &[
     "key",
     "scope",
     "on-parent-end",
+    // ── S5.6 — the `fleet` noun (§5i.1) ──
+    "source",
+    "delivery",
+    "signature",
+    "state",
+    "native-id",
     // ── S3.1 Lab nouns + bundle/run import-export (§7.1 verb table) ──
     "sink",
     "out",
@@ -1040,6 +1046,15 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         ("approval", "list") => go(cmd_approval_list(b, io, p, argv)),
         ("approval", "show") => go(cmd_approval_show(b, io, p, argv)),
         ("approval", "respond") => go(cmd_approval_respond(b, io, p, argv)),
+        // ── S5.6 — the `fleet` noun (R-2.12.6 C4; §5i.1). One named
+        // `fleet.*` op per verb (records-in/records-out — K-2; the CLI
+        // never re-derives the projection). The pinned source document
+        // is `--source <file>` (absent = the empty fixture lane; a doc
+        // with a `webhook` member selects the signed-webhook lane).
+        (
+            "fleet",
+            verb @ ("view" | "items" | "item" | "reconcile" | "observe" | "capabilities" | "records" | "webhook"),
+        ) => go(cmd_fleet(b, io, p, argv, verb)),
         // ── S3.1 — the Lab nouns + bundle/run import-export (§7.1;
         // every verb is one named Group L/M/R op — lab.rs) ──
         ("definition", "plan") => go(crate::lab::cmd_definition_plan(b, io, p)),
@@ -2573,6 +2588,125 @@ fn cmd_approval_respond(
     // No close — a decided ask on a live run leaves it driving or
     // parked; `close` would mint `cancelled{by: principal}`.
     ok_outcome("approval_respond", raw, r.format)
+}
+
+// ── S5.6 — the `fleet` noun (R-2.12.6 C4; §5i.1; ADR-0205 D5) ──────────
+
+/// `hh fleet <verb> <run_id> …` — one named `fleet.*` op per verb, the
+/// boundary's record verbatim (K-2). Verbs:
+///
+/// - `view` — `fleet.fleet_view` (the `hh.fleet.view/2` projection);
+/// - `items` / `item <run_id> <item_id>` — `fleet.list` /
+///   `fleet.work_item`;
+/// - `reconcile` / `observe` — `fleet.reconcile` / `fleet.observe`
+///   (Group W — the pinned `--source <file>` doc drives the pass;
+///   `webhook{…}` in it selects the signed-webhook lane);
+/// - `capabilities` — `fleet.source_capabilities` (the tri-state
+///   probe record verbatim);
+/// - `records [--state s]* [--native-id id]*` — `fleet.source_records`
+///   (the adapter read minimum);
+/// - `webhook --delivery <file> --signature <sig> --key <k>` —
+///   `fleet.webhook_ingress` (`key` is the broker-resolved secret for
+///   the policy's `key_ref` — verification only, never ledgered; the
+///   invocation records `credentials_provided`, never the value).
+fn cmd_fleet(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+    verb: &str,
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mut params = BTreeMap::new();
+    params.insert("run".into(), Json::str(run_id.clone()));
+    // The pinned source document — the fixture doc or the
+    // `hh.fleet.webhook_source/1` doc (the boundary selects the lane on
+    // the `webhook` member).
+    if let Some(src) = p.flag("source") {
+        let text = std::fs::read_to_string(&src).map_err(|e| {
+            inv(
+                "unreadable_file",
+                "--source",
+                &format!("cannot read {src}: {e}"),
+            )
+        })?;
+        let doc = hh_wire::json::parse(&text).map_err(|e| {
+            inv(
+                "invalid_json",
+                "--source",
+                &format!("{src} is not canonical JSON: {e}"),
+            )
+        })?;
+        params.insert("source".into(), doc);
+    }
+    let op = match verb {
+        "view" => "fleet.fleet_view",
+        "items" => "fleet.list",
+        "item" => {
+            let item = require_pos(p, 1, "<item_id>")?;
+            params.insert("item".into(), Json::str(item));
+            "fleet.work_item"
+        }
+        "reconcile" => "fleet.reconcile",
+        "observe" => "fleet.observe",
+        "capabilities" => "fleet.source_capabilities",
+        "records" => {
+            let states: Vec<Json> = p.flag_all("state").iter().map(Json::str).collect();
+            let ids: Vec<Json> = p.flag_all("native-id").iter().map(Json::str).collect();
+            if !states.is_empty() {
+                params.insert("states".into(), Json::Arr(states));
+            }
+            if !ids.is_empty() {
+                params.insert("native_ids".into(), Json::Arr(ids));
+            }
+            "fleet.source_records"
+        }
+        "webhook" => {
+            let delivery_path = p.flag("delivery").ok_or_else(|| {
+                inv(
+                    "missing_flag",
+                    "--delivery",
+                    "fleet webhook needs --delivery <file> (the delivery record)",
+                )
+            })?;
+            let text = std::fs::read_to_string(&delivery_path).map_err(|e| {
+                inv(
+                    "unreadable_file",
+                    "--delivery",
+                    &format!("cannot read {delivery_path}: {e}"),
+                )
+            })?;
+            let delivery = hh_wire::json::parse(&text).map_err(|e| {
+                inv(
+                    "invalid_json",
+                    "--delivery",
+                    &format!("{delivery_path} is not canonical JSON: {e}"),
+                )
+            })?;
+            let signature = p.flag("signature").ok_or_else(|| {
+                inv(
+                    "missing_flag",
+                    "--signature",
+                    "fleet webhook needs --signature hmac-sha256:<hex>",
+                )
+            })?;
+            let key = p.flag("key").ok_or_else(|| {
+                inv(
+                    "missing_flag",
+                    "--key",
+                    "fleet webhook needs --key <secret> (the broker-resolved key for the policy's key_ref — never ledgered)",
+                )
+            })?;
+            params.insert("delivery".into(), delivery);
+            params.insert("signature".into(), Json::str(signature));
+            params.insert("key".into(), Json::str(key));
+            "fleet.webhook_ingress"
+        }
+        _ => unreachable!("fleet verb {verb} is dispatched only for the admitted set"),
+    };
+    let out = b.call(op, &Json::Obj(params))?;
+    ok_outcome(&format!("fleet_{verb}"), out, r.format)
 }
 
 // ── program commands ───────────────────────────────────────────────────

@@ -33,4 +33,9 @@ hh-ontology = { path = "../hh-ontology" }
 # `memory_store` conformance battery + `RemoteStore` binding (dev-only;
 # hh-context has no varhost edge — no cycle).
 hh-context = { path = "../hh-context" }
+# S5.6 — the `hh-tracker-fixture` packaged-variant test drives the
+# `work_source_adapter` class end-to-end out of process (dev-only; the
+# fleet crates have no varhost edge — no cycle).
+hh-fleet = { path = "../hh-fleet" }
+hh-fleet-adapter = { path = "../hh-fleet-adapter" }
 tempfile = "3"

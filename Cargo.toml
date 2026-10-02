@@ -432,6 +432,13 @@ members = [
     # nothing below C4 depends on this crate; `hh-embed` serves it under the
     # optional `tier-c4` feature only).
     "crates/hh-fleet",
+    # `crates/hh-fleet-adapter` — S5.6's `work_source_adapter` L5 plugin
+    # boundary (the class codec, `PluginSourceAdapter`, `TrackerLogic`);
+    # removable with the C4 tier like `hh-fleet` itself (CC6).
+    "crates/hh-fleet-adapter",
+    # `crates/hh-tracker-fixture` — the packaged `work_source_adapter`
+    # reference variant binary (the L5 lane's fixture half; S5.6).
+    "crates/hh-tracker-fixture",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired

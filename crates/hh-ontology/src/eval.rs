@@ -377,6 +377,12 @@ pub enum MetricLevel {
     /// `suite` — a fold over the whole suite's runs (§5g.3 §4
     /// `secret_detector_miss_rate{level: suite}`; S3.11b — additive variant).
     Suite,
+    /// `work_item` — the C4 fleet layer's per-item level (§5i.1's metric
+    /// declarations; ADR-0207 D4; S5.6 — additive variant).
+    WorkItem,
+    /// `fleet` — the fleet-run fold (the fleet level above `work_item`;
+    /// same sources).
+    Fleet,
 }
 
 impl MetricLevel {
@@ -389,6 +395,8 @@ impl MetricLevel {
             MetricLevel::Arm => "arm",
             MetricLevel::Comparison => "comparison",
             MetricLevel::Suite => "suite",
+            MetricLevel::WorkItem => "work_item",
+            MetricLevel::Fleet => "fleet",
         }
     }
 
@@ -401,6 +409,8 @@ impl MetricLevel {
             "arm" => Some(MetricLevel::Arm),
             "comparison" => Some(MetricLevel::Comparison),
             "suite" => Some(MetricLevel::Suite),
+            "work_item" => Some(MetricLevel::WorkItem),
+            "fleet" => Some(MetricLevel::Fleet),
             _ => None,
         }
     }

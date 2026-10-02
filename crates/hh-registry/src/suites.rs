@@ -907,3 +907,103 @@ pub fn compute_estimator_class() -> ClassRecord {
         ],
     }
 }
+
+/// `work_source_adapter` — the C4/Stage-5 fleet work-source component
+/// class (§5i.1; R-2.12.6; ADR-0205 D4; S5.6). The `WorkSourceAdapter`
+/// seam as a registered class: `capabilities` (the tri-state probe),
+/// `occurrences(since)`/`suspended`/`activate_run` (the observation +
+/// reconcile verbs), and `list`/`get` (the read minimum). Out-of-process
+/// only (ADR-0180/0181 — L5): variants declare
+/// `placement = subprocess_confined`; the fixture reference variant is
+/// `hh/hh-tracker-fixture`.
+pub fn work_source_adapter_class() -> ClassRecord {
+    ClassRecord {
+        class_id: "work_source_adapter".to_string(),
+        contract: vec![
+            ContractOperation {
+                name: "capabilities".to_string(),
+                inputs: Json::obj([]),
+                outputs: Json::obj([("capabilities", Json::str("tri-state record"))]),
+                invariants: vec![
+                    "unknown is never coerced — a member that cannot be answered stays unknown"
+                        .to_string(),
+                ],
+                failure_modes: vec!["source_unavailable".to_string()],
+            },
+            ContractOperation {
+                name: "occurrences".to_string(),
+                inputs: Json::obj([("since", Json::str("ms | null"))]),
+                outputs: Json::obj([("occurrences", Json::str("SourceOccurrence[]"))]),
+                invariants: vec![
+                    "occurrence ids are the adapter's own — replays yield the same ids".to_string(),
+                    "occurrences carry actor provenance".to_string(),
+                ],
+                failure_modes: vec!["source_unavailable".to_string()],
+            },
+            ContractOperation {
+                name: "suspended".to_string(),
+                inputs: Json::obj([("source_id", Json::str("text"))]),
+                outputs: Json::obj([("suspended", Json::str("bool"))]),
+                invariants: vec!["a faulted source is unavailability, never false".to_string()],
+                failure_modes: vec!["source_unavailable".to_string()],
+            },
+            ContractOperation {
+                name: "activate_run".to_string(),
+                inputs: Json::obj([("candidates", Json::str("item_id[]"))]),
+                outputs: Json::obj([("dispatchable", Json::str("item_id[]"))]),
+                invariants: vec![
+                    "the answer intersects the source-declared dispatchable set".to_string()
+                ],
+                failure_modes: vec!["source_unavailable".to_string()],
+            },
+            ContractOperation {
+                name: "list".to_string(),
+                inputs: Json::obj([("states", Json::str("string[]"))]),
+                outputs: Json::obj([("records", Json::str("WorkSourceRecord[]"))]),
+                invariants: vec![
+                    "an omitted record means no longer visible — never a synthetic state"
+                        .to_string(),
+                ],
+                failure_modes: vec!["source_unavailable".to_string()],
+            },
+            ContractOperation {
+                name: "get".to_string(),
+                inputs: Json::obj([("native_ids", Json::str("string[]"))]),
+                outputs: Json::obj([("records", Json::str("WorkSourceRecord[]"))]),
+                invariants: vec![
+                    "a malformed requested record is a reported fault, never a silent omission"
+                        .to_string(),
+                ],
+                failure_modes: vec!["source_unavailable".to_string()],
+            },
+        ],
+        cardinality: crate::kinds::Cardinality::OrderedMany,
+        required_inputs: BTreeSet::new(),
+        base_param_schema: BTreeMap::new(),
+        hot_path: false,
+        dialect_introduced: "registry/1".to_string(),
+        contract_version: "1.0".to_string(),
+        home: "kernel".to_string(),
+        declaration_schema: Json::obj([
+            (
+                "properties",
+                Json::obj([
+                    ("deterministic", Json::Null),
+                    ("push_delivery_id", Json::Null),
+                    ("poll", Json::Null),
+                ]),
+            ),
+            ("additionalProperties", Json::Bool(false)),
+            ("required", Json::Arr(vec![Json::str("deterministic")])),
+        ]),
+        conformance_suite_ref: None,
+        decision_points: vec![],
+        metrics_declared: vec![],
+        slot_key: "work_source_adapter".to_string(),
+        tier: "C4".to_string(),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
+    }
+}

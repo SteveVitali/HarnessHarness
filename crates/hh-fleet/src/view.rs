@@ -326,6 +326,33 @@ impl FleetView {
             }
             _ => {}
         }
+        // `last_activity` — RC-3's ledger-derived stamp: any folded row
+        // naming the item (`item_id`, the retry family's `scope_id`, or a
+        // lease row's `scope = run_item:<rid>`) moves its activity stamp.
+        let named = payloads::item_id_of(&e.payload)
+            .map(str::to_string)
+            .or_else(|| {
+                e.payload
+                    .get("scope_id")
+                    .and_then(Json::as_str)
+                    .map(str::to_string)
+            })
+            .or_else(|| {
+                e.payload
+                    .get("scope")
+                    .and_then(Json::as_str)
+                    .and_then(|s| {
+                        s.strip_prefix("run_item:")
+                            .or_else(|| s.strip_prefix("resource:run_item:"))
+                            .map(str::to_string)
+                    })
+                    .and_then(|rid| self.by_run_item_id.get(&rid).cloned())
+            });
+        if let Some(id) = named {
+            if let Some(it) = self.items.get_mut(&id) {
+                it.last_activity = e.ts.clone();
+            }
+        }
         // The derived `state` is recomputed over the member set — never a
         // stored field (the fold derives it; a replay rebuilds identically).
         for it in self.items.values_mut() {
@@ -383,6 +410,8 @@ impl FleetView {
                     watch_state: "watching".into(),
                     admitted_event_id: e.event_id.clone(),
                     dispatch_event_id: None,
+                    activation_no: 0,
+                    last_activity: e.ts.clone(),
                 };
                 self.by_run_item_id
                     .insert(run_item_id, init.item_id.clone());
@@ -415,6 +444,7 @@ impl FleetView {
                 it.dispatch.status = "dispatching".into();
                 it.dispatch.declared = d.and_then(|d| d.get("declared")).cloned();
                 it.dispatch_event_id = Some(e.event_id.clone());
+                it.activation_no += 1;
             }
             "run" => {
                 let it = self.item_mut(&item_id)?;
