@@ -222,6 +222,52 @@ print('hh-evolution is edge-free upward; hh-embed (optional) is its only consume
 
 echo "check-removability: S6.1a evolution boundary verified"
 
+echo "== removability(S6.1b): C4 debt-manager tier — hh-debt optional; hh-embed is its only consumer =="
+# §5h.6 CC6: the assumption-debt manager is a removable C4 slice.
+# `hh-embed`'s `tier-c4` feature is the only consumer (an *optional*
+# dependency); absent ⇒ the `lab.debt.{register,sweep,settle,retire,
+# propose,manager_open}` ops stay in the schema (CC7) and answer
+# `Unsupported{by: "tier-c4"}` — a typed refusal, never silent degrade.
+# hh-debt consumes only kernel-side crates — never a surface, never its
+# consumer; it holds no authority handle over subject runs (D-2: it
+# authors specs and proposals; `commit_kernel_row_for` is the one write
+# path).
+cargo metadata --format-version 1 --no-deps | python3 -c "
+import json,sys
+meta=json.load(sys.stdin)
+normal=lambda d: d.get('kind') in (None,'normal')
+bad=[]
+consumers=[]
+allowed_deps={
+    'hh-wire','hh-identity','hh-ontology','hh-provenance','hh-hir',
+    'hh-ledger','hh-budget','hh-lab','hh-experiment','hh-compiler',
+}
+for pkg in meta['packages']:
+    name=pkg['name']
+    for d in pkg['dependencies']:
+        if not normal(d):
+            continue
+        if name == 'hh-debt':
+            if d['name'] == 'hh-embed':
+                bad.append('hh-debt -> hh-embed (C4 depends on its consumer)')
+            if d['name'] not in allowed_deps:
+                bad.append('hh-debt -> ' + d['name'] + ' (non-kernel dependency)')
+        if d['name'] == 'hh-debt' and name != 'hh-debt':
+            consumers.append((name, 'optional' if d.get('optional') else 'REQUIRED'))
+for name, kind in consumers:
+    if name != 'hh-embed':
+        bad.append(name + ' -> hh-debt (consumer outside the C4 boundary)')
+    elif kind == 'REQUIRED':
+        bad.append('hh-embed -> hh-debt must be OPTIONAL (tier-c4 feature)')
+if bad:
+    print('debt-manager removability violations:')
+    for b in bad: print('  ' + b)
+    sys.exit(1)
+print('hh-debt is edge-free upward; hh-embed (optional) is its only consumer')
+"
+
+echo "check-removability: S6.1b debt-manager boundary verified"
+
 echo "== removability(S4.11): C1 MCP-server surface — hh-mcp-lab is a leaf consumer =="
 # §7.3 CC6: the surface server is a removable slice — nothing below it
 # depends on it. Removing the feature = removing the crate: no workspace

@@ -569,7 +569,8 @@ pub struct DebtScope {
 }
 
 /// `HypothesisSubject` — what `hypothesis_typed.subject` names (§5h.6 §3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// `component{…}` carries its component id, so the sum is not `Copy`.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HypothesisSubject {
     /// `deficiency` — the hypothesis asserts a deficiency exists.
     Deficiency,
@@ -581,20 +582,26 @@ pub enum HypothesisSubject {
     /// `removal_benefit` — the hypothesis asserts removing the deficiency
     /// benefits the outcome.
     RemovalBenefit,
+    /// `component{component_id}` — the hypothesis asserts a deficiency on a
+    /// named component (§5h.6 §3's reflexive record spells it
+    /// `component(debt_manager)`).
+    Component(String),
 }
 
 impl HypothesisSubject {
     /// The canonical spelling.
-    pub fn name(self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         match self {
             HypothesisSubject::Deficiency => "deficiency",
             HypothesisSubject::Relevance => "relevance",
             HypothesisSubject::Association => "association",
             HypothesisSubject::RemovalBenefit => "removal_benefit",
+            HypothesisSubject::Component(_) => "component",
         }
     }
 
-    /// Parse the canonical spelling.
+    /// Parse the canonical spelling (bare members only — `component` carries
+    /// a payload and decodes through [`HypothesisSubject::from_json`]).
     pub fn parse(s: &str) -> Option<HypothesisSubject> {
         match s {
             "deficiency" => Some(HypothesisSubject::Deficiency),
@@ -602,6 +609,15 @@ impl HypothesisSubject {
             "association" => Some(HypothesisSubject::Association),
             "removal_benefit" => Some(HypothesisSubject::RemovalBenefit),
             _ => None,
+        }
+    }
+
+    /// The canonical JSON — a bare spelling for the closed members;
+    /// `{component: "…"}` for the payload-carrying arm.
+    pub fn to_json(&self) -> Json {
+        match self {
+            HypothesisSubject::Component(id) => Json::obj([("component", Json::str(id.clone()))]),
+            _ => Json::str(self.name()),
         }
     }
 }
@@ -618,6 +634,10 @@ pub struct HypothesisTyped {
     pub deficiency_class: DeficiencyClass,
     /// The predicted effect of the deficiency.
     pub predicted_effect: PredictedEffect,
+    /// `/1`: `predicted_effect.metric_ref` — the metric the prediction names
+    /// (`schedule_removal_test` binds it as the instantiated spec's primary
+    /// metric; §5h.6 §2/§3).
+    pub metric_ref: Option<String>,
 }
 
 /// `RemovalTestKind` — the closed removal-test sum (§5h.6 §3): how the debt's
@@ -654,6 +674,11 @@ pub enum RemovalTestKind {
     /// (`refit{min_design}` — §6.4 §2.3's fitted-surface discharge; home
     /// 11's typed form).
     Refit,
+    /// `no_dead_weight_found` — the manager's reflexive test (§5h.6 §3's
+    /// closed sum; ADR-0197 D10): `no_dead_weight_found{window}` passes when
+    /// no scheduled removal test passes across the window — the manager is
+    /// dead weight and `retired` is its honest end state (home 16).
+    NoDeadWeightFound,
 }
 
 impl RemovalTestKind {
@@ -673,6 +698,7 @@ impl RemovalTestKind {
             RemovalTestKind::Documentation => "documentation",
             RemovalTestKind::EvidenceSuperseded => "evidence_superseded",
             RemovalTestKind::Refit => "refit",
+            RemovalTestKind::NoDeadWeightFound => "no_dead_weight_found",
         }
     }
 
@@ -692,9 +718,20 @@ impl RemovalTestKind {
             "documentation" => Some(RemovalTestKind::Documentation),
             "evidence_superseded" => Some(RemovalTestKind::EvidenceSuperseded),
             "refit" => Some(RemovalTestKind::Refit),
+            "no_dead_weight_found" => Some(RemovalTestKind::NoDeadWeightFound),
             _ => None,
         }
     }
+}
+
+/// `DeadWeightWindow` — the window a `no_dead_weight_found` test measures
+/// over (§5h.6 §3's reflexive row — "window: N model-version changes").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeadWeightWindow {
+    /// The window length in model-version changes — the test reads the
+    /// settled removal-test verdicts since the N-th most recent
+    /// `model_version_change` trigger.
+    pub model_version_changes: u64,
 }
 
 /// `RemovalTest{kind, …}` — the typed removal test the `/1` record carries
@@ -728,6 +765,9 @@ pub struct RemovalTest {
     pub supersedes_refs: Vec<String>,
     /// The deadline the test must be scheduled by (transaction time), if bound.
     pub deadline: Option<u64>,
+    /// `no_dead_weight_found`: the window the reflexive test measures over
+    /// (`{model_version_changes}` — §5h.6 §3's reflexive row).
+    pub window: Option<DeadWeightWindow>,
 }
 
 impl RemovalTest {
@@ -745,6 +785,7 @@ impl RemovalTest {
             criteria: None,
             supersedes_refs: Vec::new(),
             deadline: None,
+            window: None,
         }
     }
 
@@ -770,6 +811,10 @@ impl RemovalTest {
             // `refit{min_design}` — the re-fit template ref (the design the
             // refit re-runs against) plus the minimum-design criteria text.
             RemovalTestKind::Refit => self.template_ref.is_some() && self.criteria.is_some(),
+            // `no_dead_weight_found{window}` — the reflexive test
+            // instantiates with its window bound (§5h.6 §3; the window is
+            // what makes "across the window" evaluable).
+            RemovalTestKind::NoDeadWeightFound => self.window.is_some(),
         }
     }
 }
@@ -1570,30 +1615,76 @@ impl DebtScope {
 }
 
 impl HypothesisTyped {
-    /// The canonical JSON.
+    /// The canonical JSON — `predicted_effect` emits the spec's
+    /// `{direction, metric_ref?}` shape when `metric_ref` is bound, the bare
+    /// direction spelling otherwise (CC8 — both decode).
     pub fn to_json(&self) -> Json {
         Json::obj([
-            ("subject", Json::str(self.subject.name())),
+            ("subject", self.subject.to_json()),
             ("deficiency_class", self.deficiency_class.to_json()),
-            ("predicted_effect", self.predicted_effect.to_json()),
+            (
+                "predicted_effect",
+                match &self.metric_ref {
+                    Some(mr) => Json::obj([
+                        ("direction", Json::str(self.predicted_effect.name())),
+                        ("metric_ref", Json::str(mr.clone())),
+                    ]),
+                    None => self.predicted_effect.to_json(),
+                },
+            ),
         ])
     }
 
-    /// Decode `{subject, deficiency_class, predicted_effect}`.
+    /// Decode `{subject, deficiency_class, predicted_effect}` —
+    /// `predicted_effect` accepts the bare direction spelling or
+    /// `{direction, metric_ref?}`.
     pub fn from_json(j: &Json, path: &str) -> Result<HypothesisTyped, DebtSchemaError> {
-        let ss = req_str(j, "subject", path)?;
+        let sj = req(j, "subject", path)?;
+        let subject = match sj {
+            Json::Str(s) => HypothesisSubject::parse(s)
+                .ok_or_else(|| bad(format!("{path}.subject: unknown subject {s}")))?,
+            Json::Obj(m) => match m.get("component").and_then(|v| v.as_str()) {
+                Some(id) => HypothesisSubject::Component(id.to_string()),
+                None => {
+                    return Err(bad(format!(
+                        "{path}.subject: object subjects carry {{component: id}}"
+                    )))
+                }
+            },
+            _ => return Err(bad(format!("{path}.subject is not a subject"))),
+        };
+        let pe = req(j, "predicted_effect", path)?;
+        let (predicted_effect, metric_ref) = match pe {
+            Json::Str(ps) => (
+                PredictedEffect::parse(ps)
+                    .ok_or_else(|| bad(format!("{path}.predicted_effect: unknown effect {ps}")))?,
+                None,
+            ),
+            Json::Obj(_) => (
+                {
+                    let ds = req_str(pe, "direction", &format!("{path}.predicted_effect"))?;
+                    PredictedEffect::parse(&ds).ok_or_else(|| {
+                        bad(format!(
+                            "{path}.predicted_effect.direction: unknown effect {ds}"
+                        ))
+                    })?
+                },
+                opt_str(pe, "metric_ref", &format!("{path}.predicted_effect"))?,
+            ),
+            _ => {
+                return Err(bad(format!(
+                    "{path}.predicted_effect is not a direction spelling or object"
+                )))
+            }
+        };
         Ok(HypothesisTyped {
-            subject: HypothesisSubject::parse(&ss)
-                .ok_or_else(|| bad(format!("{path}.subject: unknown subject {ss}")))?,
+            subject,
             deficiency_class: DeficiencyClass::from_json(
                 req(j, "deficiency_class", path)?,
                 &format!("{path}.deficiency_class"),
             )?,
-            predicted_effect: {
-                let ps = req_str(j, "predicted_effect", path)?;
-                PredictedEffect::parse(&ps)
-                    .ok_or_else(|| bad(format!("{path}.predicted_effect: unknown effect {ps}")))?
-            },
+            predicted_effect,
+            metric_ref,
         })
     }
 }
@@ -1757,6 +1848,15 @@ impl RemovalTest {
         if let Some(d) = self.deadline {
             m.insert("deadline".into(), Json::Int(d as i64));
         }
+        if let Some(w) = &self.window {
+            m.insert(
+                "window".into(),
+                Json::obj([(
+                    "model_version_changes",
+                    Json::Int(w.model_version_changes as i64),
+                )]),
+            );
+        }
         Json::Obj(m)
     }
 
@@ -1777,6 +1877,20 @@ impl RemovalTest {
             criteria: opt_str(j, "criteria", path)?,
             supersedes_refs: str_arr(j, "supersedes_refs", path)?,
             deadline: opt_u64(j, "deadline", path)?,
+            window: match opt(j, "window") {
+                None | Some(Json::Null) => None,
+                Some(Json::Obj(_)) => Some(DeadWeightWindow {
+                    model_version_changes: opt_u64(
+                        opt(j, "window").unwrap(),
+                        "model_version_changes",
+                        &format!("{path}.window"),
+                    )?
+                    .ok_or_else(|| bad(format!("{path}.window.model_version_changes missing")))?,
+                }),
+                Some(_) => {
+                    return Err(bad(format!("{path}.window is not an object")));
+                }
+            },
         })
     }
 }

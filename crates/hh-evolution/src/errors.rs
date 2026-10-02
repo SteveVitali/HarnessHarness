@@ -547,7 +547,7 @@ impl Refusal {
             | Refusal::RetirementSealRefused { .. } => "S10",
             // The stage label is the member the refusing stage stamped —
             // `check_stage_experiment` serves S4, S5, and S10.
-            Refusal::StageKindMismatch { stage, .. } => *stage,
+            Refusal::StageKindMismatch { stage, .. } => stage,
             _ => "structural",
         }
     }

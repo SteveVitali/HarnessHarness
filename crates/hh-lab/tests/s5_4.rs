@@ -182,6 +182,55 @@ fn probation_overrun_warns_on_hypothesized_records() {
     assert!(ts.is_empty());
 }
 
+/// DF-S5.4-1 — the *ledgered* probation leg (S6.1b): when
+/// `DebtObservables.probation` carries the `probation.opened` row's
+/// projection, the book of record decides — `due_at <= now` fires
+/// `probation_overrun` citing the ledgered `source_ref` as
+/// `evidence_ref`; `due_at > now` is quiet *even when* the record-derived
+/// fallback would fire (the ledger, not the caller's clock, is the book).
+#[test]
+fn ledgered_probation_overrun_cites_the_ledgered_row() {
+    let mut r = debt_record("r1", ExpiryKind::ModelVersionChange);
+    r.created_at = Some(0);
+    let mut p = policy();
+    p.hypothesized_max_age_ms = 100;
+    // Book of record says due at 5_000 — at 1_000 the record-derived
+    // bound (0 + 100) would already fire, but the ledgered entry wins.
+    let obs = DebtObservables {
+        probation: Some(hh_lab::debt::LedgeredProbation {
+            debt_ref: "debt:r1".into(),
+            opened_at_ms: 900,
+            due_at_ms: 5_000,
+            source_ref: "evt-ledgered-probation-1".into(),
+        }),
+        ..Default::default()
+    };
+    assert!(evaluate_debt("debt:r1", &r, Some(6), &obs, 1_000, &p).is_empty());
+    // Past `due_at` — the overrun cites the ledgered row.
+    let ts = evaluate_debt("debt:r1", &r, Some(6), &obs, 6_000, &p);
+    assert_eq!(ts.len(), 1);
+    assert!(causes(&ts[0]).contains(&"probation_overrun".to_string()));
+    assert_eq!(
+        ts[0].evidence_ref.as_deref(),
+        Some("evt-ledgered-probation-1")
+    );
+    // A probation row for *another* debt does not apply — the
+    // record-derived fallback governs.
+    let obs = DebtObservables {
+        probation: Some(hh_lab::debt::LedgeredProbation {
+            debt_ref: "debt:other".into(),
+            opened_at_ms: 0,
+            due_at_ms: u64::MAX,
+            source_ref: "evt:other".into(),
+        }),
+        ..Default::default()
+    };
+    let ts = evaluate_debt("debt:r1", &r, Some(6), &obs, 6_000, &p);
+    assert_eq!(ts.len(), 1);
+    assert!(causes(&ts[0]).contains(&"probation_overrun".to_string()));
+    assert_ne!(ts[0].evidence_ref.as_deref(), Some("evt:other"));
+}
+
 #[test]
 fn drifted_regression_rules_drive_expiring() {
     // ADR-0203's `drifted ⇒ expiring`: a `drifted{rules}` verdict naming

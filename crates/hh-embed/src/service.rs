@@ -104,6 +104,12 @@ pub struct EmbedService {
     /// ledger). Tier-gated like `fleet_engines` (CC6).
     #[cfg(feature = "tier-c4")]
     pub(crate) evolution_campaigns: BTreeMap<String, hh_evolution::campaign::EvolutionCampaign>,
+    /// Debt-manager services held across `lab.debt.{register,sweep,
+    /// settle,retire,propose,manager_open}` calls (S6.1b; `registry_run →
+    /// DebtManager` — the fold rebuilds from the durable prefix on `open`,
+    /// CC3). Tier-gated like `evolution_campaigns` (CC6).
+    #[cfg(feature = "tier-c4")]
+    pub(crate) debt_managers: BTreeMap<String, hh_debt::manager::DebtManager>,
     /// The removable Hosting Plane driver (S4.5a; `hosting_ops::HostingPlane`
     /// — a pure-Json seam keeping `hosting_edges = []`). `None` = the tier
     /// is absent; ops needing it refuse `hosting_plane_absent`, never fake.
@@ -343,6 +349,8 @@ impl EmbedService {
             fleet_engines: BTreeMap::new(),
             #[cfg(feature = "tier-c4")]
             evolution_campaigns: BTreeMap::new(),
+            #[cfg(feature = "tier-c4")]
+            debt_managers: BTreeMap::new(),
             results_subscriptions: BTreeMap::new(),
             binding_label: "embedded".to_string(),
         })
@@ -787,6 +795,16 @@ impl EmbedService {
             "lab.debt.evaluate" => self.lab_debt_evaluate(&req.params),
             "lab.debt.index" => self.lab_debt_index(&req.params),
             "lab.debt.report" => self.lab_debt_report(&req.params),
+            // ── S6.1b: the §5h.6 assumption-debt *manager* service ops
+            // (C4-tier — `hh-debt`; records-in/records-out; a
+            // `--no-default-features` build answers
+            // `Unsupported{by: "tier-c4"}` — CC6).
+            "lab.debt.manager_open"
+            | "lab.debt.register"
+            | "lab.debt.sweep"
+            | "lab.debt.settle"
+            | "lab.debt.retire"
+            | "lab.debt.propose" => self.debt_manager_dispatch(req.method.as_str(), &req.params),
             "lab.model.snapshot_claim" => self.lab_model_snapshot_claim(&req.params),
             "lab.model.regression" => self.lab_model_regression(&req.params),
             "lab.analysis.component_targets" => self.lab_analysis_component_targets(&req.params),

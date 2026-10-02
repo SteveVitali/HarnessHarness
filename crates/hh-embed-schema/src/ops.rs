@@ -156,6 +156,13 @@ const FLEET_ERR: &[&str] = &[
 /// build).
 const EVO_ERR: &[&str] = FLEET_ERR;
 
+/// The `lab.debt.{register,sweep,settle,retire,propose,manager_open}` op
+/// set's declared errors (S6.1b; §5h.6 R-2.9.6) — the fleet set verbatim
+/// (the manager surfaces the same store/refusal shape; `Refused{reason}`
+/// carries the closed `hh_debt::errors::Refusal` codes;
+/// `Unsupported{by}` covers the `tier-c4`-absent build).
+const DEBTMGR_ERR: &[&str] = FLEET_ERR;
+
 const fn call(
     name: &'static str,
     group: &'static str,
@@ -1114,6 +1121,83 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.model.regression", "L", "json", "json"),
         labi("lab.analysis.component_targets", "L", "json", "json"),
         labi("lab.analysis.attribution_design", "L", "json", "json"),
+        // ── S6.1b (§5h.6 R-2.9.6): the assumption-debt *manager*
+        // service — `hh-debt` over the registry run's `lifecycle.debt.*`
+        // book of record (records-in/records-out; C4-tier — a
+        // `--no-default-features` build answers
+        // `Unsupported{by: "tier-c4"}`).
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.debt.manager_open",
+                "L",
+                "json",
+                "json",
+                DEBTMGR_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.debt.register",
+                "L",
+                "json",
+                "json",
+                DEBTMGR_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.debt.sweep",
+                "L",
+                "json",
+                "json",
+                DEBTMGR_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.debt.settle",
+                "L",
+                "json",
+                "json",
+                DEBTMGR_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.debt.retire",
+                "L",
+                "json",
+                "json",
+                DEBTMGR_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.debt.propose",
+                "L",
+                "json",
+                "json",
+                DEBTMGR_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
         // ── S6.1a (§05h R-2.9.5): the evolution-pipeline surface —
         // `lab.evolution.*` drives the S0–S10 campaign driver
         // (`hh-evolution`; records-in/records-out like `lab.experiment.*`,
