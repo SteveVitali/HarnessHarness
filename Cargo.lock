@@ -327,6 +327,7 @@ version = "0.0.1"
 dependencies = [
  "hh-budget",
  "hh-context",
+ "hh-control",
  "hh-experiment",
  "hh-hir",
  "hh-identity",
@@ -334,6 +335,7 @@ dependencies = [
  "hh-ledger",
  "hh-ontology",
  "hh-provenance",
+ "hh-registry",
  "hh-wire",
 ]
 

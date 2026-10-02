@@ -37,6 +37,10 @@ pub enum Mode {
     Crash,
     /// Sleep `--delay-ms` per invoke/stream item.
     Slow,
+    /// The `evolution_proposer` class stub (S6.2): answers `declare` /
+    /// `propose` / `select_parent` over `invoke` — the out-of-process
+    /// lane the class suite drives through the variant host.
+    Proposer,
 }
 
 /// The verdict spelling `--verdict` takes (`allow` is the forged arm —
@@ -172,6 +176,7 @@ impl FixtureLogic {
                         "guard" => Mode::Guard,
                         "crash" => Mode::Crash,
                         "slow" => Mode::Slow,
+                        "proposer" => Mode::Proposer,
                         _ => Mode::Null,
                     };
                 }
@@ -220,6 +225,64 @@ impl FixtureLogic {
             i += 2;
         }
         f
+    }
+
+    /// The `evolution_proposer` ops (`--mode proposer`; §05h §2.4):
+    /// `declare` answers the canned first-party-shaped declaration;
+    /// `propose` answers the typed `NoAddressableFailure` outcome (never
+    /// an empty list — the typed outcome is the contract's own arm);
+    /// `select_parent` picks `lineage[0]`'s target ref (`null` on an
+    /// empty lineage — the pure function, over the handed inputs only).
+    fn proposer(&mut self, op: &str, inputs: &[Json]) -> Result<Vec<Json>, AbiError> {
+        match op {
+            "declare" => Ok(vec![Json::obj([
+                ("family", Json::str("ahe")),
+                (
+                    "op_classes_admissible",
+                    Json::Arr(vec![Json::str("instrument-grade")]),
+                ),
+                ("needs_reference_trajectories", Json::str("no")),
+                ("uses_judge", Json::str("no")),
+                ("judge_ref", Json::Null),
+                ("maturity", Json::str("instrument-grade")),
+                ("conditioned_rules", Json::Arr(vec![])),
+            ])]),
+            "propose" => Ok(vec![Json::obj([
+                ("kind", Json::str("no_addressable_failure")),
+                (
+                    "reason",
+                    Json::str("fixture: the corpus shows no addressable failure"),
+                ),
+            ])]),
+            "select_parent" => {
+                let picked = inputs
+                    .iter()
+                    .find_map(|i| i.get("lineage"))
+                    .and_then(|l| match l {
+                        Json::Arr(a) => a.first().cloned(),
+                        _ => None,
+                    })
+                    .and_then(|e| match e {
+                        Json::Obj(m) => Some(m),
+                        _ => None,
+                    })
+                    .map(|m| {
+                        Json::obj([
+                            (
+                                "semantic_id",
+                                m.get("semantic_id").cloned().unwrap_or(Json::Null),
+                            ),
+                            (
+                                "version_id",
+                                m.get("version_id").cloned().unwrap_or(Json::Null),
+                            ),
+                        ])
+                    })
+                    .unwrap_or(Json::Null);
+                Ok(vec![picked])
+            }
+            _ => Err(AbiError::UnhandledOperation),
+        }
     }
 
     fn maybe_crash(&self, phase: &str) {
@@ -579,6 +642,11 @@ impl VariantLogic for FixtureLogic {
             && self.probes_live
         {
             return self.violate(&params.operation, ctx);
+        }
+        // The `evolution_proposer` lane (S6.2) — `declare | propose |
+        // select_parent`, the class's contract operations.
+        if self.mode == Mode::Proposer {
+            return self.proposer(&params.operation, &params.inputs);
         }
         // The class surface — only declared operations are legal.
         if !matches!(

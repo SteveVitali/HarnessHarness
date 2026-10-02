@@ -154,17 +154,101 @@ pub fn voi_allocate(
     seed: &str,
     round: u64,
 ) -> Option<InclusionProbabilities> {
+    weighted_draw(
+        "voi_weighted",
+        params.estimator,
+        params.lambda,
+        params.min_inclusion_fraction_ppm,
+        params.min_replicates,
+        candidates,
+        stats_of,
+        seed,
+        round,
+    )
+}
+
+/// The `disagreement_weighted` parameter set (§6.3 §2.5; ADR-0156) —
+/// `{estimator ∈ {hajek, anchored_difference}, lambda}`. The disagreement
+/// weight is the realized outcome variance `p̄(1 − p̄)` (the
+/// `disagreement` estimator core) plus the `λ/√(n+1)` exploration bonus;
+/// the declared estimator spelling is *recorded* (the estimator is the
+/// disagreement statistic's estimator, not a second allocation rule).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DisagreementParams {
+    /// The declared disagreement estimator (`hajek | anchored_difference`).
+    pub estimator: &'static str,
+    /// λ — the exploration weight (ppm-scaled).
+    pub lambda: u64,
+    /// The inclusion-probability floor (ppm) — every dispatchable plan
+    /// keeps a non-zero recorded probability.
+    pub min_inclusion_fraction_ppm: u64,
+    /// Cells with fewer settled attempts are probed before weighting.
+    pub min_replicates: u32,
+}
+
+/// `disagreement_weighted_allocate` — the realized-disagreement arm
+/// (R-2.10.3⁴): same deterministic replayable draw as `voi_allocate`,
+/// weight = realized disagreement `p̄(1 − p̄)` + `λ/√(n+1)`. The recorded
+/// `strategy` is `disagreement_weighted`; the estimator spelling is the
+/// declared one (`hajek | anchored_difference`).
+pub fn disagreement_weighted_allocate(
+    params: &DisagreementParams,
+    candidates: &[(String, String)],
+    stats_of: &dyn Fn(&str) -> CellStats,
+    seed: &str,
+    round: u64,
+) -> Option<InclusionProbabilities> {
+    weighted_draw(
+        "disagreement_weighted",
+        params.estimator,
+        params.lambda,
+        params.min_inclusion_fraction_ppm,
+        params.min_replicates,
+        candidates,
+        stats_of,
+        seed,
+        round,
+    )
+}
+
+/// The shared deterministic weighted draw — `H(seed ‖ round ‖ strategy ‖
+/// estimator)` mod Σw, then a cumulative walk in dispatchable order; the
+/// recorded `per_plan` table is floored at `min_inclusion_fraction_ppm`.
+#[allow(clippy::too_many_arguments)]
+fn weighted_draw(
+    strategy: &'static str,
+    estimator: &'static str,
+    lambda: u64,
+    min_inclusion_fraction_ppm: u64,
+    min_replicates: u32,
+    candidates: &[(String, String)],
+    stats_of: &dyn Fn(&str) -> CellStats,
+    seed: &str,
+    round: u64,
+) -> Option<InclusionProbabilities> {
     if candidates.is_empty() {
         return None;
     }
+    let params = VoiParams {
+        // The recorded estimator is the declared spelling; the weight
+        // core reads `expected_information_gain` verbatim and treats
+        // every other declared estimator (`disagreement`, `hajek`,
+        // `anchored_difference`) as the realized-variance arm.
+        estimator: if estimator == "expected_information_gain" {
+            "expected_information_gain"
+        } else {
+            "disagreement"
+        },
+        lambda,
+        min_inclusion_fraction_ppm,
+        min_replicates,
+    };
     let weights: Vec<u64> = candidates
         .iter()
-        .map(|(_, cell)| weight(params, &stats_of(cell)))
+        .map(|(_, cell)| weight(&params, &stats_of(cell)))
         .collect();
     let total: u128 = weights.iter().map(|w| *w as u128).sum();
-    // The deterministic draw — `H(seed ‖ round ‖ strategy)` mod Σw, then a
-    // cumulative walk in dispatchable order.
-    let draw_bytes = format!("{seed}|{round}|{}", params.estimator);
+    let draw_bytes = format!("{seed}|{round}|{strategy}|{estimator}");
     let draw_id = hh_identity::idp::idp_id("hh/voi_draw", draw_bytes.as_bytes());
     let draw = u64::from_str_radix(&draw_id["sha256:".len().."sha256:".len() + 16], 16).unwrap_or(0)
         as u128;
@@ -177,33 +261,24 @@ pub fn voi_allocate(
         }
         target -= *w as u128;
     }
-    // Inclusion probabilities: `w_i/Σw` in ppm, floored at
-    // `min_inclusion_fraction` (V-1 — every dispatchable plan keeps a
-    // non-zero recorded probability). A probation cell (under
-    // `min_replicates`) records the full remaining mass split among
-    // probationers — the recorded table is the deterministic truth, not an
-    // approximation of `u64::MAX` overflow.
     let n_forced = weights.iter().filter(|w| **w == u64::MAX).count() as u64;
     let n_other = candidates.len() as u64 - n_forced;
     let mut per_plan = BTreeMap::new();
     for ((pid, _), w) in candidates.iter().zip(weights.iter()) {
         let p = if n_forced > 0 {
             if *w == u64::MAX {
-                PPM.saturating_sub(params.min_inclusion_fraction_ppm * n_other) / n_forced
+                PPM.saturating_sub(min_inclusion_fraction_ppm * n_other) / n_forced
             } else {
-                params.min_inclusion_fraction_ppm
+                min_inclusion_fraction_ppm
             }
         } else {
             ((*w as u128 * PPM as u128) / total) as u64
         };
-        per_plan.insert(
-            pid.clone(),
-            p.max(params.min_inclusion_fraction_ppm).min(PPM),
-        );
+        per_plan.insert(pid.clone(), p.max(min_inclusion_fraction_ppm).min(PPM));
     }
     let body = Json::obj([
-        ("strategy", Json::str("voi_weighted")),
-        ("estimator", Json::str(params.estimator)),
+        ("strategy", Json::str(strategy)),
+        ("estimator", Json::str(estimator)),
         ("round", Json::Int(round as i64)),
         (
             "per_plan",
@@ -222,11 +297,185 @@ pub fn voi_allocate(
     );
     Some(InclusionProbabilities {
         record_id,
-        strategy: "voi_weighted".to_string(),
-        estimator: params.estimator.to_string(),
+        strategy: strategy.to_string(),
+        estimator: estimator.to_string(),
         round,
         per_plan,
         picked: candidates[picked].0.clone(),
+    })
+}
+
+/// The `successive_halving` parameter set (§6.3 §2.5; ADR-0156) —
+/// `{eta, min_budget, brackets}`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HalvingParams {
+    /// η — the keep ratio divisor (each bracket keeps ⌈N/η⌉ cells).
+    pub eta: u32,
+    /// The minimum per-bracket budget slice (the record carries it for
+    /// audit; the caller's slice affordability still gates spend).
+    pub min_budget: u64,
+    /// The declared bracket count.
+    pub brackets: u32,
+}
+
+/// `halving_bracket` — the recorded bracket row
+/// (`measurement.experiment.halving_bracket`; R-2.10.3⁴): which
+/// `run_plan_id`s survive the current bracket, which drop, and every
+/// plan's last-surviving bracket index — the deterministic evidence the
+/// engine's dispatch pruning replays from.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HalvingBracket {
+    /// The content address of the canonical body.
+    pub record_id: String,
+    /// The current bracket (0-based — the count of prior bracket rows).
+    pub bracket: u32,
+    /// η (recorded — the bracket's keep ratio).
+    pub eta: u32,
+    /// `run_plan_id`s still dispatchable at this bracket.
+    pub kept: Vec<String>,
+    /// `run_plan_id`s eliminated at this bracket.
+    pub dropped: Vec<String>,
+    /// `run_plan_id →` the last bracket index the plan survives to
+    /// (`0…brackets−1`; the per-plan evidence).
+    pub per_plan: BTreeMap<String, u32>,
+}
+
+impl HalvingBracket {
+    /// The canonical payload body.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("record_id", Json::str(&self.record_id)),
+            ("strategy", Json::str("successive_halving")),
+            ("bracket", Json::Int(self.bracket as i64)),
+            ("eta", Json::Int(self.eta as i64)),
+            ("kept", Json::Arr(self.kept.iter().map(Json::str).collect())),
+            (
+                "dropped",
+                Json::Arr(self.dropped.iter().map(Json::str).collect()),
+            ),
+            (
+                "per_plan",
+                Json::Obj(
+                    self.per_plan
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                        .collect(),
+                ),
+            ),
+        ])
+    }
+}
+
+/// `successive_halving_allocate(params, candidates, stats_of, round)` —
+/// the deterministic bracket assignment (R-2.10.3⁴): cells rank by
+/// realized mean (`scored/completed`; unprobed cells rank last, ties on
+/// `cell_id` — the seed is folded into the record id only, the ranking
+/// is observation-only); a cell ranked `r` survives bracket `b` iff
+/// `r < ⌈N/ηᵇ⁺¹⌉`… wait — SH keeps ⌈N/η⌉ *per bracket*: after bracket
+/// `b`, the live set is the top `⌈N/η^(b+1)⌉`. A plan's `per_plan` is the
+/// last bracket it survives; `kept` at `round` is plans with
+/// `per_plan ≥ round`, `dropped` the complement. Returns `None` on an
+/// empty candidate set.
+pub fn successive_halving_allocate(
+    params: &HalvingParams,
+    candidates: &[(String, String)],
+    stats_of: &dyn Fn(&str) -> CellStats,
+    seed: &str,
+    bracket: u32,
+) -> Option<HalvingBracket> {
+    if candidates.is_empty() || params.eta == 0 || params.brackets == 0 {
+        return None;
+    }
+    // Rank distinct cells: realized mean desc, `cell_id` asc (ties), a
+    // cell with no completed attempt ranks below every probed cell.
+    let mut cells: Vec<String> = {
+        let mut c: Vec<String> = candidates.iter().map(|(_, cell)| cell.clone()).collect();
+        c.sort();
+        c.dedup();
+        c
+    };
+    let mean_ppm = |cell: &str| -> Option<u64> {
+        let st = stats_of(cell);
+        if st.completed == 0 {
+            None
+        } else {
+            Some(st.scored as u64 * PPM / st.completed as u64)
+        }
+    };
+    cells.sort_by(|a, b| {
+        let ma = mean_ppm(a);
+        let mb = mean_ppm(b);
+        match (ma, mb) {
+            (Some(x), Some(y)) => y.cmp(&x).then_with(|| a.cmp(b)),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.cmp(b),
+        }
+    });
+    let n = cells.len() as u64;
+    // `rank → last surviving bracket`: bracket `b` retains the top
+    // `⌈N/η^(b+1)⌉` cells; beyond `brackets − 1` nothing advances.
+    let last_bracket = |rank: u64| -> u32 {
+        let mut last = 0u32;
+        for b in 0..params.brackets {
+            let mut keep = n;
+            for _ in 0..=b {
+                keep = keep.div_ceil(params.eta as u64);
+            }
+            if rank < keep.max(1) {
+                last = b;
+            }
+        }
+        last
+    };
+    let rank_of: BTreeMap<String, u64> = cells
+        .iter()
+        .enumerate()
+        .map(|(r, c)| (c.clone(), r as u64))
+        .collect();
+    let mut per_plan = BTreeMap::new();
+    let mut kept = Vec::new();
+    let mut dropped = Vec::new();
+    for (pid, cell) in candidates {
+        let lb = last_bracket(*rank_of.get(cell).unwrap_or(&n));
+        per_plan.insert(pid.clone(), lb);
+        if lb >= bracket {
+            kept.push(pid.clone());
+        } else {
+            dropped.push(pid.clone());
+        }
+    }
+    let body = Json::obj([
+        ("strategy", Json::str("successive_halving")),
+        ("bracket", Json::Int(bracket as i64)),
+        ("eta", Json::Int(params.eta as i64)),
+        ("min_budget", Json::Int(params.min_budget as i64)),
+        ("kept", Json::Arr(kept.iter().map(Json::str).collect())),
+        (
+            "dropped",
+            Json::Arr(dropped.iter().map(Json::str).collect()),
+        ),
+        (
+            "per_plan",
+            Json::Obj(
+                per_plan
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                    .collect(),
+            ),
+        ),
+    ]);
+    let record_id = identify_bytes(
+        RecordKind::HalvingBracket,
+        format!("{seed}|{body:?}").as_bytes(),
+    );
+    Some(HalvingBracket {
+        record_id,
+        bracket,
+        eta: params.eta,
+        kept,
+        dropped,
+        per_plan,
     })
 }
 

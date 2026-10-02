@@ -62,6 +62,10 @@ pub mod class {
     /// `measurement.experiment.inclusion_probabilities` — the adaptive
     /// allocator recorded table (AC-F4-13).
     pub const INCLUSION_PROBABILITIES: &str = "measurement.experiment.inclusion_probabilities";
+    /// `measurement.experiment.halving_bracket` — the `successive_halving`
+    /// bracket assignment (`{record_id, bracket, eta, kept[], dropped[],
+    /// per_plan}`; R-2.10.3⁴).
+    pub const HALVING_BRACKET: &str = "measurement.experiment.halving_bracket";
     /// `measurement.analysis.recorded` — the producer contract's analysis
     /// record stamp on the experiment run (§6.5 §2.3 `record_analysis`;
     /// §6.4 §6 audit events — ADR-0162 D3/D6).
@@ -450,6 +454,18 @@ pub fn inclusion_probabilities(rec: &hh_lab::adaptive::InclusionProbabilities) -
     let mut m = match rec.to_json() {
         Json::Obj(m) => m,
         _ => unreachable!("InclusionProbabilities::to_json is an object"),
+    };
+    m.insert("charged_to".into(), Json::str("instrument"));
+    Json::Obj(m)
+}
+
+/// `halving_bracket{record_id, bracket, eta, kept[], dropped[],
+/// per_plan, charged_to: instrument}` — the `successive_halving`
+/// recorded bracket row (S6.2; R-2.10.3⁴).
+pub fn halving_bracket(rec: &hh_lab::adaptive::HalvingBracket) -> Json {
+    let mut m = match rec.to_json() {
+        Json::Obj(m) => m,
+        _ => unreachable!("HalvingBracket::to_json is an object"),
     };
     m.insert("charged_to".into(), Json::str("instrument"));
     Json::Obj(m)

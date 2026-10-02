@@ -50,6 +50,10 @@ pub mod doc_kind {
     pub const REPORT: &str = "evolution_report";
     /// The pinned `SplitAssignmentRecord` (L3).
     pub const SPLIT: &str = "evolution_split";
+    /// A pinned `SearchBudgetRecord` body — an experiment arm's
+    /// `search_budget` ref resolves here at S4 (G8: complete or
+    /// refuse; ADR-0046 D1, ADR-0191).
+    pub const SEARCH_BUDGET: &str = "evolution_search_budget";
 }
 
 /// `EvolutionCampaign` — one campaign's durable driver.
@@ -410,10 +414,13 @@ impl EvolutionCampaign {
 
         // ── The intake row lands first — the candidate is registered in
         //    lineage even when S1 refuses it right after (G9).
+        //    `target_ref` = the diff's pinned target version — the fold's
+        //    head tracker (`StaleBase`) reads it on `active` transitions.
         let intake = Json::obj([
             ("slot", Json::str(&proposal.slot)),
             ("base_ref", Json::str(&proposal.base_ref)),
             ("diff_ref", Json::str(&diff.target.semantic_id)),
+            ("target_ref", Json::str(&diff.target.version_id)),
         ]);
         self.transitioned(store, &cid, "", "proposed", "S1", None, intake, vec![])?;
 
@@ -433,6 +440,53 @@ impl EvolutionCampaign {
                     detail: format!(
                         "base_ref `{}` is the evolution service's own definition",
                         proposal.base_ref
+                    ),
+                },
+            ));
+        }
+
+        // StaleBase — a candidate names the campaign's current head
+        // (OQ-061; ADR-0195 D12): once an accepted edit advances the
+        // head, proposals on the old base are stale and re-propose.
+        let head = self
+            .view
+            .head_ref()
+            .unwrap_or_else(|| spec.base_definition_ref.clone());
+        if proposal.base_ref != head {
+            return Err(fail(
+                self,
+                store,
+                Refusal::StaleBase {
+                    detail: format!(
+                        "base_ref `{}` ≠ lineage head `{head}` — a moved head re-proposes",
+                        proposal.base_ref
+                    ),
+                },
+            ));
+        }
+
+        // Family provenance — `human` campaigns take human-origin diffs;
+        // an automated family takes `origin = evolution` (delegate class;
+        // §05h §6). The proposer family never mints a human origin and a
+        // human family never mints an evolution one.
+        let origin_ok = match spec.proposer_family.as_str() {
+            "human" => matches!(diff.provenance.origin, Origin::Human { .. }),
+            _ => matches!(diff.provenance.origin, Origin::Evolution { .. }),
+        };
+        if !origin_ok {
+            return Err(fail(
+                self,
+                store,
+                Refusal::InvalidProvenance {
+                    detail: format!(
+                        "proposer_family `{}` requires origin {} — got {:?}",
+                        spec.proposer_family,
+                        if spec.proposer_family == "human" {
+                            "human"
+                        } else {
+                            "evolution"
+                        },
+                        diff.provenance.origin
                     ),
                 },
             ));
@@ -479,6 +533,19 @@ impl EvolutionCampaign {
                 },
             ));
         }
+        // K-4 — `coordination_delta = loosening` is classified and
+        // refused in evolution contexts like widening (R-2.6.5⁴; ADR-0193
+        // (e); the ADR-0053 D-5 shape).
+        if diff.classification.coordination_delta == Delta::Loosening {
+            return Err(fail(
+                self,
+                store,
+                Refusal::CoordinationLoosening {
+                    detail: "coordination_delta = loosening — CoordinationPolicy diffs                              tighten only in evolution contexts"
+                        .into(),
+                },
+            ));
+        }
 
         // Op-target gates — exclusion set, MUST-code leaves, admitted
         // target kinds, the service-definition exclusion.
@@ -493,6 +560,21 @@ impl EvolutionCampaign {
                         node_id: node_id.to_string(),
                     },
                 ));
+            }
+            // G5/X6 — the registered `evolution_proposer` variant and the
+            // campaign spec itself are outside every candidate's target
+            // set (the service evolves only through a human-origin
+            // campaign; CF-419).
+            if let Some(pv) = &spec.proposer_variant_ref {
+                if node_id == pv {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::SelfModificationRefused {
+                            detail: format!("op targets the registered proposer variant `{pv}`"),
+                        },
+                    ));
+                }
             }
             if matches!(op, diff::DiffOp::ReplaceLeaf { .. })
                 && spec.must_code_targets.iter().any(|t| t == node_id)
@@ -775,10 +857,10 @@ impl EvolutionCampaign {
         Ok(href)
     }
 
-    /// The candidate's deposited proposal doc → the diff's semantic op
-    /// targets (for S2's TargetMismatch check).
-    fn proposal_op_targets(&self, candidate_id: &str, diff_ref: &str) -> Res<Vec<String>> {
-        let _ = diff_ref;
+    /// The candidate's deposited proposal doc → the decoded `HirDiff`
+    /// (records-in: the deposit is the single copy; S7's re-check reads
+    /// its classification).
+    fn proposal_diff(&self, candidate_id: &str) -> Res<hh_hir::diff::HirDiff> {
         // The proposal is content-addressed under PROPOSAL with the
         // candidate's id derivable — scan is not supported; the caller's
         // `propose` deposited under a known id. We resolve by re-deriving
@@ -808,8 +890,14 @@ impl EvolutionCampaign {
             .get("diff")
             .cloned()
             .ok_or_else(|| schema("proposal doc missing diff"))?;
-        let d = hh_hir::wire::diff_from_json(&diff_json)
-            .map_err(|e| schema(format!("diff decode: {e:?}")))?;
+        hh_hir::wire::diff_from_json(&diff_json).map_err(|e| schema(format!("diff decode: {e:?}")))
+    }
+
+    /// The candidate's deposited proposal doc → the diff's semantic op
+    /// targets (for S2's TargetMismatch check).
+    fn proposal_op_targets(&self, candidate_id: &str, diff_ref: &str) -> Res<Vec<String>> {
+        let _ = diff_ref;
+        let d = self.proposal_diff(candidate_id)?;
         Ok(d.ops
             .iter()
             .filter(|op| op.tag().semantic)
@@ -866,6 +954,68 @@ impl EvolutionCampaign {
                         .into(),
                 },
             ));
+        }
+        // G7 — a judge-selector counterexample pick is declared on the
+        // campaign's `judge_policy`: calibrated, independent of the
+        // beneficiary snapshot, over a honeypot-bearing set (ADR-0190;
+        // §05h §4 G7).
+        if let Some(sel_ref) = &report.selector_ref {
+            let pol = self.spec.judge_policy.as_ref().ok_or_else(|| {
+                Refusal::JudgeSelectorUndeclared {
+                    selector: sel_ref.clone(),
+                    detail: "the campaign carries no judge_policy".to_string(),
+                }
+            })?;
+            let sel = pol
+                .selectors
+                .iter()
+                .find(|d| d.selector_ref == *sel_ref)
+                .ok_or_else(|| Refusal::JudgeSelectorUndeclared {
+                    selector: sel_ref.clone(),
+                    detail: "the selector is not on the judge_policy".to_string(),
+                })?;
+            if sel.calibration_ref.is_empty() {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::JudgeSelectorUndeclared {
+                        selector: sel_ref.clone(),
+                        detail: "the selector carries no calibration_ref (G7)".to_string(),
+                    },
+                ));
+            }
+            let parent = self
+                .view
+                .candidate(candidate_id)
+                .and_then(|c| c.base_ref.clone())
+                .unwrap_or_else(|| spec.base_definition_ref.clone());
+            if !sel.independent_of.contains(&parent) {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::JudgeSelectorUndeclared {
+                        selector: sel_ref.clone(),
+                        detail: format!(
+                            "the selector declares no independence from the \
+                             beneficiary snapshot `{parent}` (G7)"
+                        ),
+                    },
+                ));
+            }
+            if report.honeypots < pol.min_honeypots {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::JudgeSelectorUndeclared {
+                        selector: sel_ref.clone(),
+                        detail: format!(
+                            "counterexample set carries {} honeypots — the judge \
+                             policy's floor is {}",
+                            report.honeypots, pol.min_honeypots
+                        ),
+                    },
+                ));
+            }
         }
         for l in &report.split_labels_used {
             if !l.search_admissible() {
@@ -969,14 +1119,103 @@ impl EvolutionCampaign {
                     },
                 ));
             }
-            if arm.search_budget.is_none() {
-                return Err(fail(
-                    self,
-                    store,
-                    Refusal::UnbudgetedArm {
-                        arm: arm.arm_id.clone(),
-                    },
-                ));
+            match &arm.search_budget {
+                None => {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::UnbudgetedArm {
+                            arm: arm.arm_id.clone(),
+                        },
+                    ));
+                }
+                // G8 — the pinned `search_budget` ref resolves to a
+                // `SearchBudgetRecord` doc and the record is *complete*
+                // (allocation shares sum to the ppm scale; ADR-0046 D1,
+                // ADR-0191: "complete or refuse").
+                Some(sb_ref) => {
+                    let body = self
+                        .docs
+                        .get_named(doc_kind::SEARCH_BUDGET, sb_ref)
+                        .ok()
+                        .flatten()
+                        .or_else(|| {
+                            self.docs
+                                .get(doc_kind::SEARCH_BUDGET, sb_ref)
+                                .ok()
+                                .flatten()
+                        })
+                        .ok_or_else(|| Refusal::SearchBudgetIncomplete {
+                            detail: format!(
+                                "arm `{}` search_budget ref `{sb_ref}` does not \
+                                 resolve to a pinned SearchBudgetRecord doc",
+                                arm.arm_id
+                            ),
+                        })?;
+                    let record =
+                        hh_ontology::eval::SearchBudgetRecord::from_json(&body).map_err(|e| {
+                            Refusal::SearchBudgetIncomplete {
+                                detail: format!(
+                                    "arm `{}` search_budget doc does not parse as a \
+                                     SearchBudgetRecord: {e:?}",
+                                    arm.arm_id
+                                ),
+                            }
+                        })?;
+                    if !record.is_complete() {
+                        return Err(fail(
+                            self,
+                            store,
+                            Refusal::SearchBudgetIncomplete {
+                                detail: format!(
+                                    "arm `{}` SearchBudgetRecord is incomplete — \
+                                     allocation shares must name every facet and \
+                                     sum to 1_000_000 ppm",
+                                    arm.arm_id
+                                ),
+                            },
+                        ));
+                    }
+                    // G8 facet names — an automated family's record names
+                    // a `proposer` slice (its model calls charge there);
+                    // a declared judge policy names a `judge` slice
+                    // (ADR-0190's audit budget).
+                    if self.spec.proposer_family != "human"
+                        && !record.allocation.keys().any(|k| k == "proposer")
+                    {
+                        return Err(fail(
+                            self,
+                            store,
+                            Refusal::SearchBudgetIncomplete {
+                                detail: format!(
+                                    "arm `{}` SearchBudgetRecord names no `proposer` \
+                                     allocation — an automated family's model calls \
+                                     charge to a named slice (G8)",
+                                    arm.arm_id
+                                ),
+                            },
+                        ));
+                    }
+                    if self.spec.judge_policy.is_some()
+                        && !record
+                            .allocation
+                            .keys()
+                            .any(|k| k == "judge" || k == "audit")
+                    {
+                        return Err(fail(
+                            self,
+                            store,
+                            Refusal::SearchBudgetIncomplete {
+                                detail: format!(
+                                    "arm `{}` SearchBudgetRecord names no `judge`/`audit` \
+                                     allocation — a declared judge policy carries an \
+                                     audit budget (ADR-0190)",
+                                    arm.arm_id
+                                ),
+                            },
+                        ));
+                    }
+                }
             }
         }
         // AC-15 — a hosted-participant campaign declaring reported-only
@@ -1372,6 +1611,21 @@ impl EvolutionCampaign {
         let rec = self.view.candidate(candidate_id).expect("state checked");
         let diff_ref = rec.diff_ref.clone().unwrap_or_default();
         let _ops = self.proposal_op_targets(candidate_id, &diff_ref)?;
+        // K-4 repeated (§05h §4 S7) — the stored diff's classification is
+        // re-read here; a `coordination_delta = loosening` that survived to
+        // S7 refuses identically (the classification is the durable claim —
+        // it rides the sealed deposit, never re-derived).
+        let stored = self.proposal_diff(candidate_id)?;
+        if stored.classification.coordination_delta == hh_hir::diff::Delta::Loosening {
+            return Err(fail(
+                self,
+                store,
+                Refusal::CoordinationLoosening {
+                    detail: "S7 re-check: coordination_delta = loosening —                              CoordinationPolicy diffs tighten only"
+                        .into(),
+                },
+            ));
+        }
         if report.placement == "in_process" {
             return Err(fail(
                 self,
@@ -1530,14 +1784,64 @@ impl EvolutionCampaign {
         let fail = |eng: &mut Self, store: &mut Store, r: Refusal| -> EvolutionError {
             eng.reject(store, candidate_id, &from, r, None)
         };
-        if mode != "shadow" {
-            return Err(fail(
-                self,
-                store,
-                Refusal::SplitRolloutNotCommittable {
-                    detail: format!("canary mode `{mode}` — only `shadow` commits"),
-                },
-            ));
+        // 6b — `shadow` commits unconditionally; `split` commits only
+        // under the spec's declared `RolloutPolicy{mode: split}` (the
+        // split arm's rows are exploratory — `comparable: false`; AC-10;
+        // §05h §4 S9). Anything else refuses.
+        let mut extra = Json::obj([("mode", Json::str(mode))]);
+        match mode {
+            "shadow" => {}
+            "split" => {
+                let pol = self.spec.rollout_policy.as_ref().ok_or_else(|| {
+                    Refusal::SplitRolloutNotCommittable {
+                        detail: "canary mode `split` without a declared                                  rollout_policy — the deterministic assignment seed                                  and share floor are mandatory"
+                            .into(),
+                    }
+                })?;
+                if pol.mode != "split" {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::SplitRolloutNotCommittable {
+                            detail: format!(
+                                "canary mode `split` but rollout_policy.mode = `{}`",
+                                pol.mode
+                            ),
+                        },
+                    ));
+                }
+                if pol.assignment_seed.is_empty() {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::SplitRolloutNotCommittable {
+                            detail: "rollout_policy carries no assignment_seed —                                      the split assignment must be deterministic"
+                                .into(),
+                        },
+                    ));
+                }
+                extra = Json::obj([
+                    ("mode", Json::str("split")),
+                    ("share_ppm", Json::Int(pol.share_ppm as i64)),
+                    ("assignment_seed", Json::str(&pol.assignment_seed)),
+                    // Split-arm rows are exploratory — the aggregate
+                    // exclusion rides `comparable: false` (R-2.10.5).
+                    ("comparable", Json::Bool(false)),
+                    ("exploratory", Json::Bool(true)),
+                ]);
+            }
+            _ => {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::SplitRolloutNotCommittable {
+                        detail: format!(
+                            "canary mode `{mode}` — `shadow` commits; `split` commits \
+                             only under a declared rollout_policy"
+                        ),
+                    },
+                ));
+            }
         }
         if intervention_ref.is_empty() {
             return Err(fail(
@@ -1555,7 +1859,7 @@ impl EvolutionCampaign {
             "canary",
             "S9",
             Some(intervention_ref),
-            Json::obj([]),
+            extra,
             vec![],
         )?;
         Ok(())

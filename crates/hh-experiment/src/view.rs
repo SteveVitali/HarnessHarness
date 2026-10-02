@@ -198,6 +198,10 @@ pub struct ExperimentView {
     /// replayable ordinal — `measurement.experiment.inclusion_probabilities`
     /// rows only ever append; AC-F4-13).
     pub inclusion_rounds: u64,
+    /// The recorded `successive_halving` bracket rows (the next bracket's
+    /// replayable ordinal — `measurement.experiment.halving_bracket` rows
+    /// only ever append; R-2.10.3⁴).
+    pub halving_rounds: u32,
     /// The live pause reason (`paused` minus `resumed`).
     pub paused: Option<String>,
     /// The `closed` payload (`Some` = closed).
@@ -428,6 +432,9 @@ impl ExperimentView {
             }
             c if c == class::INCLUSION_PROBABILITIES => {
                 self.inclusion_rounds += 1;
+            }
+            c if c == class::HALVING_BRACKET => {
+                self.halving_rounds += 1;
             }
             c if c == class::PAUSED => {
                 self.paused = Some(s(p, "reason").unwrap_or_else(|| "operator".to_string()));

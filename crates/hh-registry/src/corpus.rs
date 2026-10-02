@@ -224,8 +224,32 @@ pub fn build(dir: &Path) -> Result<(String, Vec<String>), RegistryError> {
         // suite, no variants — the C3 tier map's floor).
         crate::suites::compute_policy_class(),
         crate::suites::compute_estimator_class(),
+        // S6.2 — the `evolution_proposer` class (§05h §2.4; R-2.9.5;
+        // ADR-0196). The class + its conformance suite land like the
+        // Stage-1 classes (suite pinned, `conformance_suite_ref`
+        // back-patched by a class version upgrade); one variant per
+        // campaign, bound by the campaign spec's `proposer_variant_ref`,
+        // never by a definition slot (the class is `exactly-one per
+        // campaign`, not per definition).
+        crate::suites::evolution_proposer_class(),
     ] {
-        store.register(RegistryRecord::Class(class), &kernel, None)?;
+        let cid = class.class_id.clone();
+        let v = store
+            .register(RegistryRecord::Class(class), &kernel, None)?
+            .version_id;
+        if cid == "evolution_proposer" {
+            let mut suite = crate::suites::evolution_proposer_suite(&v);
+            suite.class_ref = v.clone();
+            let sv = store
+                .register(RegistryRecord::Suite(suite), &kernel, None)?
+                .version_id;
+            let mut upgraded = match store.get(&v).map(|(_, r)| r.clone()) {
+                Some(RegistryRecord::Class(c)) => c,
+                _ => unreachable!(),
+            };
+            upgraded.conformance_suite_ref = Some(sv);
+            store.register(RegistryRecord::Class(upgraded), &kernel, None)?;
+        }
     }
 
     // ── variants: 3 per class, mixed namespaces ──

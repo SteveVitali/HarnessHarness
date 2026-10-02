@@ -191,12 +191,49 @@ pub struct CorpusSpec {
     /// The L3 split pin — a `SplitAssignmentRecord` ref registered before
     /// the campaign opened (R-2.9.4⁴).
     pub split_assignment_ref: String,
+    /// The declared corpus layers (§05h §2.2's `EvidenceCorpus.layers` —
+    /// S6.2, R-2.4.4⁴): a closed subset of [`CORPUS_LAYERS`];
+    /// `memory_lineage` admits `derived_from`/`supersedes` chains of
+    /// `Memory` versions as evidence refs. `None` = the corpus's
+    /// evidence domain stands as at 6a. A `held_out`/`private`/`secrets`
+    /// layer name is a leak — `HeldOutLeak` at S0, never a schema slip.
+    pub layers: Option<Vec<String>>,
 }
+
+/// The closed corpus-layer set (§05h §2.2; R-2.4.4⁴ adds
+/// `memory_lineage` — evolution candidates read memory lineage as
+/// evidence). `model_io` is admitted only under the campaign's `readers`
+/// policy and consent (S6.2 gates it on `corpus.readers` non-empty).
+pub const CORPUS_LAYERS: &[&str] = &[
+    "outcomes",
+    "ledger_views",
+    "model_io",
+    "artifacts",
+    "prior_candidates",
+    "slot_history",
+    "memory_lineage",
+    "reference_trajectories",
+];
+
+/// The layer names that name a held-out surface — refused `HeldOutLeak`
+/// at S0 regardless of set membership.
+pub const FORBIDDEN_LAYERS: &[&str] = &["held_out", "private", "validators", "secrets"];
+
+/// The §5c evolvable target classes (R-2.4.1⁴/2.4.2⁴/2.4.4⁴, R-2.6.4⁴,
+/// R-2.6.5⁴ — the one-class-per-campaign set an automated `target_class`
+/// names). `evolution_proposer` itself is never a member (X6).
+pub const EVOLVABLE_TARGET_CLASSES: &[&str] = &[
+    "guideline",
+    "compaction_guideline",
+    "memory_lineage",
+    "scheduling_rule",
+    "coordination_policy",
+];
 
 impl CorpusSpec {
     /// The canonical JSON.
     pub fn to_json(&self) -> Json {
-        Json::obj([
+        let mut j = Json::obj([
             (
                 "environments",
                 Json::Arr(
@@ -226,7 +263,16 @@ impl CorpusSpec {
                 "split_assignment_ref",
                 Json::str(&self.split_assignment_ref),
             ),
-        ])
+        ]);
+        if let Some(l) = &self.layers {
+            if let Json::Obj(m) = &mut j {
+                m.insert(
+                    "layers".into(),
+                    Json::Arr(l.iter().map(Json::str).collect()),
+                );
+            }
+        }
+        j
     }
 
     /// Strict decode.
@@ -241,9 +287,18 @@ impl CorpusSpec {
                 "task_ids",
                 "evidence_refs",
                 "split_assignment_ref",
+                "layers",
             ],
             "corpus",
         )?;
+        let layers = match m.get("layers") {
+            Some(Json::Arr(a)) => Some(
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect(),
+            ),
+            _ => None,
+        };
         Ok(CorpusSpec {
             environments: enum_vec_at(m, "environments", "corpus", |j| {
                 j.as_str().and_then(EnvironmentFamily::parse)
@@ -253,6 +308,7 @@ impl CorpusSpec {
             task_ids: str_vec_at(m, "task_ids", "corpus")?,
             evidence_refs: str_vec_at(m, "evidence_refs", "corpus")?,
             split_assignment_ref: str_at(m, "split_assignment_ref", "corpus")?.to_string(),
+            layers,
         })
     }
 }
@@ -264,7 +320,8 @@ impl CorpusSpec {
 pub struct EvolutionCampaignSpec {
     /// `campaign_id = H(canonical(spec))` — computed, never authored.
     pub campaign_id: String,
-    /// `protocol` — `human_proposed` only at 6a (proposer plugins are 6b+).
+    /// `protocol` — `human_proposed` (6a) or `automated` (6b: an automated
+    /// proposer family drives the campaign).
     pub protocol: String,
     /// The definition ref the campaign evolves (the lineage's root).
     pub base_definition_ref: String,
@@ -308,6 +365,24 @@ pub struct EvolutionCampaignSpec {
     /// AC-15 trap (non-empty + `hosted_participants` ⇒ every
     /// `matched_total` claim on this campaign is `IncommensurableMatch`).
     pub reported_only_dimensions: Vec<String>,
+    /// The registered `evolution_proposer` variant ref — mandatory when
+    /// `proposer_family != "human"` (6b; `exactly-one per campaign` — a
+    /// single ref, never a list).
+    pub proposer_variant_ref: Option<String>,
+    /// The one component class an automated-family campaign may target
+    /// (§05h §2.5 `ProposalConstraints.target_classes[]`, length 1 at
+    /// 6b) — mandatory with `proposer_variant_ref`; the admitted entity
+    /// kinds ride `allowed_target_kinds`.
+    pub target_class: Option<String>,
+    /// The S9 rollout declaration — `split` canaries require it
+    /// (`share_ppm`, `assignment_seed`, `advance_rule`); `shadow` remains
+    /// the committable default.
+    pub rollout_policy: Option<RolloutPolicy>,
+    /// The G7 judge-selector table + audit budget (6b) — a `selected_
+    /// best_of_n` baseline naming a judge selector must resolve against
+    /// this table (calibrated, independent, honeypots in the
+    /// counterexample set, `audited_share` reported).
+    pub judge_policy: Option<JudgePolicy>,
 }
 
 impl EvolutionCampaignSpec {
@@ -324,21 +399,168 @@ impl EvolutionCampaignSpec {
     /// The schema checks (`open` runs them before any row mints).
     pub fn validate(&self) -> Result<(), crate::errors::Refusal> {
         use crate::errors::Refusal::*;
-        if self.protocol != "human_proposed" {
+        if !matches!(self.protocol.as_str(), "human_proposed" | "automated") {
             return Err(SchemaViolation {
                 detail: format!(
-                    "protocol `{}` — only `human_proposed` is admitted at Stage 6a",
+                    "protocol `{}` — `human_proposed` (6a) or `automated` (6b) only",
                     self.protocol
                 ),
             });
         }
-        if self.proposer_family != "human" {
+        if !matches!(self.proposer_family.as_str(), "human" | "ahe") {
             return Err(SchemaViolation {
                 detail: format!(
-                    "proposer_family `{}` — only `human` is admitted at Stage 6a",
+                    "proposer_family `{}` — `human` (6a) or `ahe` (6b) only",
                     self.proposer_family
                 ),
             });
+        }
+        // The converse leg: a human family's protocol is `human_proposed`
+        // — `automated` without a declared family is incoherent.
+        if self.proposer_family == "human" && self.protocol != "human_proposed" {
+            return Err(SchemaViolation {
+                detail: format!(
+                    "proposer_family `human` requires protocol = `human_proposed`, \
+                     got `{}`",
+                    self.protocol
+                ),
+            });
+        }
+        // The 6b automated family: `protocol = automated`, a registered
+        // `evolution_proposer` variant, and exactly one target class
+        // (§05h §2.5 — the AHE-shaped variant is restricted to one
+        // component class per campaign).
+        if self.proposer_family != "human" {
+            if self.protocol != "automated" {
+                return Err(SchemaViolation {
+                    detail: format!(
+                        "proposer_family `{}` requires protocol = `automated`",
+                        self.proposer_family
+                    ),
+                });
+            }
+            if self.proposer_variant_ref.is_none() {
+                return Err(SchemaViolation {
+                    detail: "an automated family needs `proposer_variant_ref` — the \
+                             registered `evolution_proposer` variant"
+                        .into(),
+                });
+            }
+            match &self.target_class {
+                Some(c) if !c.is_empty() && self.allowed_target_kinds.is_some() => {
+                    if !EVOLVABLE_TARGET_CLASSES.iter().any(|t| t == c) {
+                        return Err(SchemaViolation {
+                            detail: format!(
+                                "target_class `{c}` is not in the evolvable set \
+                                 {EVOLVABLE_TARGET_CLASSES:?} (§5c — one class per \
+                                 campaign)"
+                            ),
+                        });
+                    }
+                }
+                _ => {
+                    return Err(SchemaViolation {
+                        detail: "an automated family names exactly one `target_class` and \
+                                 its `allowed_target_kinds` (the class's op surface)"
+                            .into(),
+                    })
+                }
+            }
+        }
+        // Human-family campaigns may still name the single class the
+        // campaign addresses — membership stays closed either way.
+        if let Some(c) = &self.target_class {
+            if !EVOLVABLE_TARGET_CLASSES.iter().any(|t| t == c) {
+                return Err(SchemaViolation {
+                    detail: format!(
+                        "target_class `{c}` is not in the evolvable set \
+                         {EVOLVABLE_TARGET_CLASSES:?}"
+                    ),
+                });
+            }
+        }
+        // `memory:`-prefixed evidence refs resolve through the lineage
+        // layer (R-2.4.4⁴) — the layer must be declared; an undeclared
+        // `memory:` ref is a schema violation, never silently admitted.
+        let lineage_ok = self
+            .corpus
+            .layers
+            .as_ref()
+            .map(|l| l.iter().any(|x| x == "memory_lineage"))
+            .unwrap_or(false);
+        for r in &self.corpus.evidence_refs {
+            if r.starts_with("memory:") && !lineage_ok {
+                return Err(SchemaViolation {
+                    detail: format!(
+                        "evidence ref `{r}` is `memory:`-prefixed but the corpus \
+                         declares no `memory_lineage` layer"
+                    ),
+                });
+            }
+        }
+        // `split` canaries require a declared split rollout policy (the
+        // recorded assignment seed + share are the picker's evidence).
+        if let Some(rp) = &self.rollout_policy {
+            if !matches!(rp.mode.as_str(), "shadow" | "split") {
+                return Err(SchemaViolation {
+                    detail: format!("rollout_policy.mode `{}` — `shadow`|`split`", rp.mode),
+                });
+            }
+            if rp.mode == "split"
+                && (rp.share_ppm == 0 || rp.share_ppm > 1_000_000 || rp.assignment_seed.is_empty())
+            {
+                return Err(SchemaViolation {
+                    detail: "split rollout needs `share_ppm ∈ (0,1_000_000]` and a recorded \
+                             `assignment_seed`"
+                        .into(),
+                });
+            }
+        }
+        // G7 — a declared judge policy needs its audit budget and at
+        // least one calibrated selector.
+        if let Some(jp) = &self.judge_policy {
+            if jp.audit_budget_ref.is_empty() {
+                return Err(SchemaViolation {
+                    detail: "judge_policy.audit_budget_ref absent — the audit budget is \
+                             charged_to = instrument"
+                        .into(),
+                });
+            }
+            for s in &jp.selectors {
+                if s.kind != "judge" {
+                    return Err(SchemaViolation {
+                        detail: format!(
+                            "selector `{}` kind `{}` — `judge` only",
+                            s.selector_ref, s.kind
+                        ),
+                    });
+                }
+                if s.calibration_ref.is_empty() {
+                    return Err(SchemaViolation {
+                        detail: format!(
+                            "selector `{}` without a CalibrationRecord — G7",
+                            s.selector_ref
+                        ),
+                    });
+                }
+            }
+        }
+        // Corpus layers — a held-out surface name is a leak, never a
+        // schema slip; `model_io` only under a declared readers policy
+        // (the corpus's `model_io` flag + a non-empty evidence domain).
+        if let Some(layers) = &self.corpus.layers {
+            for l in layers {
+                if FORBIDDEN_LAYERS.iter().any(|f| f == l) {
+                    return Err(HeldOutLeak {
+                        detail: format!("corpus layer `{l}` names a held-out surface"),
+                    });
+                }
+                if !CORPUS_LAYERS.iter().any(|c| c == l) {
+                    return Err(SchemaViolation {
+                        detail: format!("corpus layer `{l}` — not in the closed layer set"),
+                    });
+                }
+            }
         }
         if self.base_definition_ref.is_empty() || self.service_definition_ref.is_empty() {
             return Err(SchemaViolation {
@@ -454,6 +676,18 @@ impl EvolutionCampaignSpec {
                     .collect(),
             ),
         );
+        if let Some(p) = &self.proposer_variant_ref {
+            m.insert("proposer_variant_ref".into(), Json::str(p));
+        }
+        if let Some(c) = &self.target_class {
+            m.insert("target_class".into(), Json::str(c));
+        }
+        if let Some(rp) = &self.rollout_policy {
+            m.insert("rollout_policy".into(), rp.to_json());
+        }
+        if let Some(jp) = &self.judge_policy {
+            m.insert("judge_policy".into(), jp.to_json());
+        }
         Json::Obj(m)
     }
 
@@ -483,6 +717,10 @@ impl EvolutionCampaignSpec {
                 "proposer_family",
                 "hosted_participants",
                 "reported_only_dimensions",
+                "proposer_variant_ref",
+                "target_class",
+                "rollout_policy",
+                "judge_policy",
             ],
             "EvolutionCampaignSpec",
         )?;
@@ -523,6 +761,16 @@ impl EvolutionCampaignSpec {
                 "reported_only_dimensions",
                 "EvolutionCampaignSpec",
             )?,
+            proposer_variant_ref: opt_str_at(m, "proposer_variant_ref")?.map(str::to_string),
+            target_class: opt_str_at(m, "target_class")?.map(str::to_string),
+            rollout_policy: match m.get("rollout_policy") {
+                Some(Json::Obj(_)) => Some(RolloutPolicy::from_json(&m["rollout_policy"])?),
+                _ => None,
+            },
+            judge_policy: match m.get("judge_policy") {
+                Some(Json::Obj(_)) => Some(JudgePolicy::from_json(&m["judge_policy"])?),
+                _ => None,
+            },
         })
     }
 }
@@ -752,33 +1000,50 @@ pub struct ScreenReport {
     /// Whether the screen is judge-only (refused — S3 needs targeted
     /// counterexamples).
     pub judge_only: bool,
+    /// The judge selector the screen's counterexample picks went through
+    /// (G7, 6b) — a `judge`-kind `SelectorDeclaration` on the campaign's
+    /// `judge_policy`, or absent (deterministic screen).
+    pub selector_ref: Option<String>,
+    /// The honeypot items the counterexample set carries (G7's trap
+    /// surface — the campaign's `judge_policy.min_honeypots` floor
+    /// applies when `selector_ref` names a judge).
+    pub honeypots: u32,
 }
 
 impl ScreenReport {
     /// The canonical JSON.
     pub fn to_json(&self) -> Json {
-        Json::obj([
-            (
-                "counterexample_set_ref",
-                Json::str(&self.counterexample_set_ref),
+        let mut m = BTreeMap::new();
+        m.insert(
+            "counterexample_set_ref".into(),
+            Json::str(&self.counterexample_set_ref),
+        );
+        m.insert("observations".into(), Json::Int(self.observations as i64));
+        m.insert(
+            "flips_in_direction".into(),
+            Json::Int(self.flips_in_direction as i64),
+        );
+        m.insert(
+            "replicate_count".into(),
+            Json::Int(self.replicate_count as i64),
+        );
+        m.insert(
+            "split_labels_used".into(),
+            Json::Arr(
+                self.split_labels_used
+                    .iter()
+                    .map(|l| Json::str(l.name()))
+                    .collect(),
             ),
-            ("observations", Json::Int(self.observations as i64)),
-            (
-                "flips_in_direction",
-                Json::Int(self.flips_in_direction as i64),
-            ),
-            ("replicate_count", Json::Int(self.replicate_count as i64)),
-            (
-                "split_labels_used",
-                Json::Arr(
-                    self.split_labels_used
-                        .iter()
-                        .map(|l| Json::str(l.name()))
-                        .collect(),
-                ),
-            ),
-            ("judge_only", Json::Bool(self.judge_only)),
-        ])
+        );
+        m.insert("judge_only".into(), Json::Bool(self.judge_only));
+        if let Some(s) = &self.selector_ref {
+            m.insert("selector_ref".into(), Json::str(s));
+        }
+        if self.honeypots > 0 {
+            m.insert("honeypots".into(), Json::Int(self.honeypots as i64));
+        }
+        Json::Obj(m)
     }
 
     /// Strict decode.
@@ -793,6 +1058,8 @@ impl ScreenReport {
                 "replicate_count",
                 "split_labels_used",
                 "judge_only",
+                "selector_ref",
+                "honeypots",
             ],
             "ScreenReport",
         )?;
@@ -806,6 +1073,8 @@ impl ScreenReport {
                 j.as_str().and_then(SplitLabel::parse)
             })?,
             judge_only: opt_bool_at(m, "judge_only")?.unwrap_or(false),
+            selector_ref: opt_str_at(m, "selector_ref")?.map(str::to_string),
+            honeypots: opt_int_at(m, "honeypots")?.unwrap_or(0) as u32,
         })
     }
 }
@@ -1240,6 +1509,520 @@ impl EvolutionAcceptanceReport {
             )?
             .to_string(),
             portability_label,
+        })
+    }
+}
+
+// ── S6.2 — the automated proposer family (R-2.9.5 6b; ADR-0196) ─────────────
+
+/// The reflexive tri-state (T-LCD-07) — `declare()` fields answer
+/// `yes|no|unknown`; `unknown` is never coerced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Tri {
+    /// `yes`.
+    Yes,
+    /// `no`.
+    No,
+    /// `unknown`.
+    Unknown,
+}
+
+impl Tri {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Tri::Yes => "yes",
+            Tri::No => "no",
+            Tri::Unknown => "unknown",
+        }
+    }
+    /// Strict parse.
+    pub fn parse(s: &str) -> Option<Tri> {
+        match s {
+            "yes" | "true" => Some(Tri::Yes),
+            "no" | "false" => Some(Tri::No),
+            "unknown" => Some(Tri::Unknown),
+            _ => None,
+        }
+    }
+}
+
+/// `ParentSelectionPolicy` — `select_parent`'s closed policy sum (§05h
+/// §2.4; ADR-0196 D3). Policies are campaign data; the op is pure.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParentSelectionPolicy {
+    /// `best` — the highest-scoring lineage member.
+    Best,
+    /// `score_proportional{alpha, uniform_mix}` — softmax-ish pick with a
+    /// uniform exploration floor (ppm).
+    ScoreProportional {
+        /// The temperature (ppm — integer arithmetic only).
+        alpha_ppm: u64,
+        /// The uniform exploration mix (ppm).
+        uniform_mix_ppm: u64,
+    },
+    /// `score_child_proportional{alpha, children_penalty}` — score per
+    /// child penalised by realised descendant count (ppm).
+    ScoreChildProportional {
+        /// The temperature (ppm).
+        alpha_ppm: u64,
+        /// The per-child penalty (ppm).
+        children_penalty_ppm: u64,
+    },
+    /// `pareto_per_task` — a task-bucketed Pareto pick.
+    ParetoPerTask,
+}
+
+impl ParentSelectionPolicy {
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        match self {
+            ParentSelectionPolicy::Best => Json::str("best"),
+            ParentSelectionPolicy::ScoreProportional {
+                alpha_ppm,
+                uniform_mix_ppm,
+            } => Json::obj([(
+                "score_proportional",
+                Json::obj([
+                    ("alpha", Json::Int(*alpha_ppm as i64)),
+                    ("uniform_mix", Json::Int(*uniform_mix_ppm as i64)),
+                ]),
+            )]),
+            ParentSelectionPolicy::ScoreChildProportional {
+                alpha_ppm,
+                children_penalty_ppm,
+            } => Json::obj([(
+                "score_child_proportional",
+                Json::obj([
+                    ("alpha", Json::Int(*alpha_ppm as i64)),
+                    ("children_penalty", Json::Int(*children_penalty_ppm as i64)),
+                ]),
+            )]),
+            ParentSelectionPolicy::ParetoPerTask => Json::str("pareto_per_task"),
+        }
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<ParentSelectionPolicy, SchemaError> {
+        match j {
+            Json::Str(s) if s == "best" => Ok(ParentSelectionPolicy::Best),
+            Json::Str(s) if s == "pareto_per_task" => Ok(ParentSelectionPolicy::ParetoPerTask),
+            Json::Obj(m) if m.len() == 1 => {
+                let (k, v) = m.iter().next().expect("len checked");
+                let vm = expect_obj(v, "ParentSelectionPolicy")?;
+                match k.as_str() {
+                    "score_proportional" => {
+                        reject_unknown(vm, &["alpha", "uniform_mix"], "score_proportional")?;
+                        Ok(ParentSelectionPolicy::ScoreProportional {
+                            alpha_ppm: int_at(vm, "alpha", "score_proportional")? as u64,
+                            uniform_mix_ppm: int_at(vm, "uniform_mix", "score_proportional")?
+                                as u64,
+                        })
+                    }
+                    "score_child_proportional" => {
+                        reject_unknown(
+                            vm,
+                            &["alpha", "children_penalty"],
+                            "score_child_proportional",
+                        )?;
+                        Ok(ParentSelectionPolicy::ScoreChildProportional {
+                            alpha_ppm: int_at(vm, "alpha", "score_child_proportional")? as u64,
+                            children_penalty_ppm: int_at(
+                                vm,
+                                "children_penalty",
+                                "score_child_proportional",
+                            )? as u64,
+                        })
+                    }
+                    _ => Err(SchemaError::v(
+                        "ParentSelectionPolicy",
+                        format!("unknown policy `{k}`"),
+                    )),
+                }
+            }
+            _ => Err(SchemaError::v(
+                "ParentSelectionPolicy",
+                "must be `best`|`pareto_per_task` or a one-key policy object",
+            )),
+        }
+    }
+}
+
+/// One conditioned proposer rule and its `AssumptionDebtRecord` (the
+/// static kind's completeness surface — a conditioned rule without a
+/// record is `IncompleteDeclaration`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConditionedRuleDecl {
+    /// The rule ref.
+    pub rule_ref: String,
+    /// The conditioned surface (`conditioned_on`).
+    pub conditioned_on: String,
+    /// The rule's `AssumptionDebtRecord` (canonical JSON) — `None` is the
+    /// conformance failure.
+    pub debt_record: Option<Json>,
+}
+
+impl ConditionedRuleDecl {
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("rule_ref", Json::str(&self.rule_ref)),
+            ("conditioned_on", Json::str(&self.conditioned_on)),
+            (
+                "debt_record",
+                self.debt_record.clone().unwrap_or(Json::Null),
+            ),
+        ])
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<ConditionedRuleDecl, SchemaError> {
+        let m = expect_obj(j, "ConditionedRuleDecl")?;
+        reject_unknown(
+            m,
+            &["rule_ref", "conditioned_on", "debt_record"],
+            "ConditionedRuleDecl",
+        )?;
+        let debt_record = match m.get("debt_record") {
+            Some(Json::Null) | None => None,
+            Some(d) => Some(d.clone()),
+        };
+        Ok(ConditionedRuleDecl {
+            rule_ref: str_at(m, "rule_ref", "ConditionedRuleDecl")?.to_string(),
+            conditioned_on: str_at(m, "conditioned_on", "ConditionedRuleDecl")?.to_string(),
+            debt_record,
+        })
+    }
+}
+
+/// `ProposerDeclaration` — `declare()`'s output (§05h §2.4): `{family,
+/// op_classes_admissible, needs_reference_trajectories, uses_judge,
+/// judge_ref?, maturity}` + the conditioned-rule table the static kind
+/// sweeps.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProposerDeclaration {
+    /// The proposer family (`ahe` at 6b).
+    pub family: String,
+    /// The component classes the proposer may target (`len == 1` at 6b).
+    pub op_classes_admissible: Vec<String>,
+    /// Whether the proposer needs reference trajectories (tri-state).
+    pub needs_reference_trajectories: Tri,
+    /// Whether the proposer calls a judge (tri-state; `no` + an observed
+    /// judge call ⇒ DRIFT).
+    pub uses_judge: Tri,
+    /// The judge selector ref when `uses_judge = yes`.
+    pub judge_ref: Option<String>,
+    /// `instrument-grade` | `research-grade`.
+    pub maturity: String,
+    /// The proposer's model-conditioned rules (each needs a debt record).
+    pub conditioned_rules: Vec<ConditionedRuleDecl>,
+}
+
+impl ProposerDeclaration {
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("family".into(), Json::str(&self.family));
+        m.insert(
+            "op_classes_admissible".into(),
+            Json::Arr(self.op_classes_admissible.iter().map(Json::str).collect()),
+        );
+        m.insert(
+            "needs_reference_trajectories".into(),
+            Json::str(self.needs_reference_trajectories.as_str()),
+        );
+        m.insert("uses_judge".into(), Json::str(self.uses_judge.as_str()));
+        if let Some(j) = &self.judge_ref {
+            m.insert("judge_ref".into(), Json::str(j));
+        }
+        m.insert("maturity".into(), Json::str(&self.maturity));
+        m.insert(
+            "conditioned_rules".into(),
+            Json::Arr(self.conditioned_rules.iter().map(|r| r.to_json()).collect()),
+        );
+        Json::Obj(m)
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<ProposerDeclaration, SchemaError> {
+        let m = expect_obj(j, "ProposerDeclaration")?;
+        reject_unknown(
+            m,
+            &[
+                "family",
+                "op_classes_admissible",
+                "needs_reference_trajectories",
+                "uses_judge",
+                "judge_ref",
+                "maturity",
+                "conditioned_rules",
+            ],
+            "ProposerDeclaration",
+        )?;
+        let tri = |k: &str, default: Tri| -> Result<Tri, SchemaError> {
+            match m.get(k) {
+                None => Ok(default),
+                Some(Json::Str(s)) => {
+                    Tri::parse(s).ok_or_else(|| SchemaError::v(k, "must be yes|no|unknown"))
+                }
+                Some(Json::Bool(b)) => Ok(if *b { Tri::Yes } else { Tri::No }),
+                _ => Err(SchemaError::v(k, "must be yes|no|unknown")),
+            }
+        };
+        Ok(ProposerDeclaration {
+            family: str_at(m, "family", "ProposerDeclaration")?.to_string(),
+            op_classes_admissible: str_vec_at(m, "op_classes_admissible", "ProposerDeclaration")?,
+            needs_reference_trajectories: tri("needs_reference_trajectories", Tri::Unknown)?,
+            uses_judge: tri("uses_judge", Tri::Unknown)?,
+            judge_ref: opt_str_at(m, "judge_ref")?.map(str::to_string),
+            maturity: str_at(m, "maturity", "ProposerDeclaration")?.to_string(),
+            conditioned_rules: match m.get("conditioned_rules") {
+                Some(Json::Arr(a)) => a
+                    .iter()
+                    .map(ConditionedRuleDecl::from_json)
+                    .collect::<Result<Vec<_>, _>>()?,
+                _ => Vec::new(),
+            },
+        })
+    }
+}
+
+/// `ProposerOutcome` — `propose`'s typed output sum (§05h §2.4):
+/// `[CandidateProposal ∪ FailureHypothesis] | NoAddressableFailure`. The
+/// third arm is a typed outcome, never an empty list.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProposerOutcome {
+    /// A candidate proposal (boxed — the diff body is the large arm).
+    Candidate(Box<CandidateProposal>),
+    /// A bare hypothesis (no diff yet — the campaign binds it at S2).
+    Hypothesis(FailureHypothesis),
+    /// The corpus shows no addressable failure — a typed outcome with a
+    /// reason (never an empty list).
+    NoAddressableFailure {
+        /// The reason (a closed vocabulary member or free detail).
+        reason: String,
+    },
+}
+
+/// `ProposerFailure` — `propose`'s typed failure sum (§05h §2.4):
+/// `CorpusUnreadable | ConstraintUnsatisfiable | BudgetExhausted`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProposerFailure {
+    /// The corpus ref did not resolve / a member failed the S0 surface
+    /// checks.
+    CorpusUnreadable {
+        /// Detail.
+        detail: String,
+    },
+    /// The proposal constraints admit no legal diff (empty target class,
+    /// `max_semantic_ops = 0`, exclusion covers the whole target set).
+    ConstraintUnsatisfiable {
+        /// Detail.
+        detail: String,
+    },
+    /// The proposer's budget slice is exhausted (`charged_to =
+    /// instrument` — never a silent stop).
+    BudgetExhausted {
+        /// Detail.
+        detail: String,
+    },
+}
+
+impl ProposerFailure {
+    /// The canonical code.
+    pub fn code(&self) -> &'static str {
+        match self {
+            ProposerFailure::CorpusUnreadable { .. } => "corpus_unreadable",
+            ProposerFailure::ConstraintUnsatisfiable { .. } => "constraint_unsatisfiable",
+            ProposerFailure::BudgetExhausted { .. } => "budget_exhausted",
+        }
+    }
+}
+
+/// `RolloutPolicy` — the S9 rollout declaration (§05h §2.8; ADR-0195
+/// D4): `shadow` branches hold irreversible effects back forever;
+/// `split` serves `share_ppm` of live goals under the principal's
+/// authority, picked by the recorded `assignment_seed` — split rows are
+/// `exploratory` (`comparable = false`, CF-421); only `shadow` canaries
+/// produce comparable evidence. `abort_on` names the veto metrics;
+/// `advance_rule` the advance predicate (`min_runs` met ⇒ advance).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RolloutPolicy {
+    /// `shadow` | `split`.
+    pub mode: String,
+    /// `split`: the live-goal share (ppm).
+    pub share_ppm: u64,
+    /// The minimum settled runs before `advance_rule` may fire.
+    pub min_runs: u64,
+    /// The canary's maximum duration (ms).
+    pub max_duration_ms: u64,
+    /// The veto metrics an abort watches.
+    pub abort_on: Vec<String>,
+    /// The advance predicate (`min_runs_met` | `manual`).
+    pub advance_rule: String,
+    /// `split`: the recorded assignment seed (the deterministic picker).
+    pub assignment_seed: String,
+}
+
+impl RolloutPolicy {
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("mode", Json::str(&self.mode)),
+            ("share_ppm", Json::Int(self.share_ppm as i64)),
+            ("min_runs", Json::Int(self.min_runs as i64)),
+            ("max_duration_ms", Json::Int(self.max_duration_ms as i64)),
+            (
+                "abort_on",
+                Json::Arr(self.abort_on.iter().map(Json::str).collect()),
+            ),
+            ("advance_rule", Json::str(&self.advance_rule)),
+            ("assignment_seed", Json::str(&self.assignment_seed)),
+        ])
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<RolloutPolicy, SchemaError> {
+        let m = expect_obj(j, "RolloutPolicy")?;
+        reject_unknown(
+            m,
+            &[
+                "mode",
+                "share_ppm",
+                "min_runs",
+                "max_duration_ms",
+                "abort_on",
+                "advance_rule",
+                "assignment_seed",
+            ],
+            "RolloutPolicy",
+        )?;
+        Ok(RolloutPolicy {
+            mode: str_at(m, "mode", "RolloutPolicy")?.to_string(),
+            share_ppm: opt_int_at(m, "share_ppm")?.unwrap_or(0) as u64,
+            min_runs: opt_int_at(m, "min_runs")?.unwrap_or(0) as u64,
+            max_duration_ms: opt_int_at(m, "max_duration_ms")?.unwrap_or(0) as u64,
+            abort_on: match m.get("abort_on") {
+                Some(Json::Arr(a)) => a
+                    .iter()
+                    .filter_map(|v| v.as_str().map(str::to_string))
+                    .collect(),
+                _ => Vec::new(),
+            },
+            advance_rule: opt_str_at(m, "advance_rule")?
+                .unwrap_or("manual")
+                .to_string(),
+            assignment_seed: opt_str_at(m, "assignment_seed")?.unwrap_or("").to_string(),
+        })
+    }
+}
+
+/// `SelectorDeclaration` — one judge selector the campaign admits (G7;
+/// §05h §4 S3–S4): judges are *selectors only* inside S3–S4 —
+/// calibrated, independent of the beneficiary snapshot, and their
+/// counterexample sets carry honeypots.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SelectorDeclaration {
+    /// The selector's registry ref.
+    pub selector_ref: String,
+    /// `judge` only at 6b (the closed kind).
+    pub kind: String,
+    /// The selector's `CalibrationRecord` ref — required, never `None`.
+    pub calibration_ref: String,
+    /// The beneficiary snapshots the selector is declared independent of.
+    pub independent_of: Vec<String>,
+}
+
+impl SelectorDeclaration {
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("selector_ref", Json::str(&self.selector_ref)),
+            ("kind", Json::str(&self.kind)),
+            ("calibration_ref", Json::str(&self.calibration_ref)),
+            (
+                "independent_of",
+                Json::Arr(self.independent_of.iter().map(Json::str).collect()),
+            ),
+        ])
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<SelectorDeclaration, SchemaError> {
+        let m = expect_obj(j, "SelectorDeclaration")?;
+        reject_unknown(
+            m,
+            &["selector_ref", "kind", "calibration_ref", "independent_of"],
+            "SelectorDeclaration",
+        )?;
+        Ok(SelectorDeclaration {
+            selector_ref: str_at(m, "selector_ref", "SelectorDeclaration")?.to_string(),
+            kind: str_at(m, "kind", "SelectorDeclaration")?.to_string(),
+            calibration_ref: str_at(m, "calibration_ref", "SelectorDeclaration")?.to_string(),
+            independent_of: str_vec_at(m, "independent_of", "SelectorDeclaration")?,
+        })
+    }
+}
+
+/// `JudgePolicy` — the campaign's G7 table: the admitted judge selectors
+/// plus the fixed audit budget (`charged_to = instrument`; the audited
+/// share is reported) and the honeypot floor every judge-selector
+/// counterexample set must meet.
+#[derive(Debug, Clone, PartialEq)]
+pub struct JudgePolicy {
+    /// The admitted judge selectors.
+    pub selectors: Vec<SelectorDeclaration>,
+    /// The audit budget's ref (a `ResourceAccount`/`SearchBudgetRecord`
+    /// slice the audit draws on — `charged_to = instrument`).
+    pub audit_budget_ref: String,
+    /// The audited share of judge-selected rows (ppm).
+    pub audited_share_ppm: u64,
+    /// The minimum honeypot count a judge-selector counterexample set
+    /// must carry.
+    pub min_honeypots: u32,
+}
+
+impl JudgePolicy {
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            (
+                "selectors",
+                Json::Arr(self.selectors.iter().map(|s| s.to_json()).collect()),
+            ),
+            ("audit_budget_ref", Json::str(&self.audit_budget_ref)),
+            (
+                "audited_share_ppm",
+                Json::Int(self.audited_share_ppm as i64),
+            ),
+            ("min_honeypots", Json::Int(self.min_honeypots as i64)),
+        ])
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<JudgePolicy, SchemaError> {
+        let m = expect_obj(j, "JudgePolicy")?;
+        reject_unknown(
+            m,
+            &[
+                "selectors",
+                "audit_budget_ref",
+                "audited_share_ppm",
+                "min_honeypots",
+            ],
+            "JudgePolicy",
+        )?;
+        Ok(JudgePolicy {
+            selectors: match m.get("selectors") {
+                Some(Json::Arr(a)) => a
+                    .iter()
+                    .map(SelectorDeclaration::from_json)
+                    .collect::<Result<Vec<_>, _>>()?,
+                _ => Vec::new(),
+            },
+            audit_budget_ref: str_at(m, "audit_budget_ref", "JudgePolicy")?.to_string(),
+            audited_share_ppm: opt_int_at(m, "audited_share_ppm")?.unwrap_or(0) as u64,
+            min_honeypots: opt_int_at(m, "min_honeypots")?.unwrap_or(0) as u32,
         })
     }
 }

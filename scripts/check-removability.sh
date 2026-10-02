@@ -195,6 +195,10 @@ consumers=[]
 allowed_deps={
     'hh-wire','hh-identity','hh-ontology','hh-provenance','hh-hir',
     'hh-ledger','hh-budget','hh-lab','hh-experiment',
+    # S6.2 — hh-registry is kernel-side; the proposer conformance
+    # driver reports the registry's ConformanceVerdict (CC7 — the
+    # verdict sum has one owner).
+    'hh-registry',
 }
 for pkg in meta['packages']:
     name=pkg['name']
