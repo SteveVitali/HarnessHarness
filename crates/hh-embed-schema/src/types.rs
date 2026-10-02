@@ -3187,10 +3187,15 @@ impl InterventionRecord {
     }
 }
 
-/// `counterfactual`'s `design` — `{n_seeds, k?, budget, factual_arm}`
-/// (§5a.4; the `budget` member is the MatchSpec's canonical JSON — the
-/// kernel parses it through `hh_budget::MatchSpec`, the schema crate
-/// stays dependency-free).
+/// `counterfactual`'s `design` — `{n_seeds, k?, budget, factual_arm,
+/// noise_coupling?, target?}` (§5a.4 + §5h.7's CF-432; the `budget`
+/// member is the MatchSpec's canonical JSON — the kernel parses it
+/// through `hh_budget::MatchSpec`, the schema crate stays
+/// dependency-free). `noise_coupling = crn` shares
+/// `H(configuration_version_id.seed ∥ replicate_index ∥ fork_point)`
+/// across the two arms of a replicate (S6.3b); absent/`none` keeps the
+/// per-branch derivation. `target` stamps the attribution target ref on
+/// every arm record (`lab.attribution.attribute` drives it).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CounterfactualDesign {
     /// `n_seeds ≥ k` — the replicate axis count per arm.
@@ -3201,6 +3206,11 @@ pub struct CounterfactualDesign {
     pub budget: Json,
     /// `factual_arm` — mandatory `true` (the noise floor).
     pub factual_arm: bool,
+    /// `none | crn` — the exogenous-draw coupling (default `none`).
+    pub noise_coupling: Option<String>,
+    /// The attribution target the arms measure (advisory — stamped on
+    /// every arm record).
+    pub target: Option<String>,
 }
 impl CounterfactualDesign {
     pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
@@ -3215,12 +3225,16 @@ impl CounterfactualDesign {
                 code: "required".to_string(),
             })?;
         let factual_arm = s.opt_bool("factual_arm")?.unwrap_or(false);
+        let noise_coupling = s.opt_str("noise_coupling")?;
+        let target = s.opt_str("target")?;
         s.finish()?;
         Ok(CounterfactualDesign {
             n_seeds,
             k,
             budget,
             factual_arm,
+            noise_coupling: noise_coupling.map(|x| x.to_string()),
+            target: target.map(|x| x.to_string()),
         })
     }
 }

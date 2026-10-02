@@ -39,6 +39,7 @@
 //! the kernel deposits the record + body idempotently; a recorded report
 //! is served, never silently recomputed — AC-R-2.10.4-12).
 
+pub mod attribution;
 pub mod engine;
 pub mod error;
 pub mod frontier;

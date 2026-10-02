@@ -809,6 +809,14 @@ impl EmbedService {
             "lab.model.regression" => self.lab_model_regression(&req.params),
             "lab.analysis.component_targets" => self.lab_analysis_component_targets(&req.params),
             "lab.analysis.attribution_design" => self.lab_analysis_attribution_design(&req.params),
+            // ── S6.3b: `lab.attribution.*` — the designed causal-
+            // attribution surface (R-2.9.7 6c; §5h.7; `attribute` with
+            // `open_arms` drives the real Group W counterfactual legs —
+            // instrument-charged `branch_kind = counterfactual`).
+            "lab.attribution.design" => self.lab_attribution_design(&req.params),
+            "lab.attribution.attribute" => self.lab_attribution_attribute(&req.params),
+            "lab.attribution.locus" => self.lab_attribution_locus(&req.params),
+            "lab.attribution.quality" => self.lab_attribution_quality(&req.params),
             // ── S3.5: `lab.assembly.*` — the assembly service boundary
             // (R-2.10.1; §6.1). Semantics-free: records-in/records-out over
             // the one kernel resolver via `hh_lab::assembly`.

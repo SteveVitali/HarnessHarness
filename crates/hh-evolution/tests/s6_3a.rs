@@ -501,6 +501,7 @@ fn hypothesis() -> FailureHypothesis {
         },
         semantic_op_targets: vec![],
         reference_trajectories: Vec::new(),
+        attribution_ref: None,
     }
 }
 
@@ -837,6 +838,9 @@ fn drive_to_checked(
         &rep,
         &Json::obj([("regressed_tasks", Json::Arr(vec![]))]),
         &BTreeMap::from([("metric:safety".to_string(), false)]),
+        None,
+        None,
+        false,
     )
     .unwrap_or_else(|e| panic!("held_out_eval: {e}"));
     assert_eq!(eng.view.state_of(cid), Some("validated"));
