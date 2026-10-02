@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:f0ef084c9adca77de770c59bcedae590d481fcd165cbc338b4af66a5f35d24c5";
+    "sha256:055c2468cecdff1435d863cbadb41bbfef25da205683a39c3c16cca1d56183ef";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -6950,6 +6950,30 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.assembly.validate_batch` → `json` (see the contract registry).
     pub fn lab_assembly_validate_batch(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.assembly.validate_batch", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.attribution.attribute` → `json` (see the contract registry).
+    pub fn lab_attribution_attribute(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.attribution.attribute", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.attribution.design` → `json` (see the contract registry).
+    pub fn lab_attribution_design(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.attribution.design", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.attribution.locus` → `json` (see the contract registry).
+    pub fn lab_attribution_locus(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.attribution.locus", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.attribution.quality` → `json` (see the contract registry).
+    pub fn lab_attribution_quality(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.attribution.quality", params.clone())?;
         Ok(raw)
     }
 

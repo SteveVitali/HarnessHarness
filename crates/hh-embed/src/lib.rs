@@ -28,6 +28,7 @@
 //! ports implemented in this crate ([`runtime`]).
 
 pub(crate) mod analysis_ops;
+pub(crate) mod attribution_ops;
 mod assembly_ops;
 pub(crate) mod bundle_ops;
 pub(crate) mod debt_manager_ops;

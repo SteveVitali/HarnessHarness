@@ -4994,6 +4994,213 @@ fn s3_6_counterfactual_opens_paired_arms_with_the_factual_floor() {
     assert!(out.get("intervention_ref").and_then(Json::as_str).is_some());
 }
 
+/// S6.3b — `noise_coupling = crn` (CF-432): the factual and counterfactual
+/// arm of one replicate share `H(configuration_version_id.seed ∥
+/// replicate_index ∥ fork_point)`; the arm records stamp
+/// `replicate_index`/`fork_point`/`noise_coupling`/`target`
+/// (AC-R-2.9.7-1's boundary leg).
+#[test]
+fn s6_3b_counterfactual_crn_pairs_share_the_exogenous_draw() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[("experimental", true)])),
+    );
+    assert!(r.get("result").is_some());
+    let s = open_new(&mut svc);
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    let crn_design = Json::obj(vec![
+        ("n_seeds", Json::Int(2)),
+        ("factual_arm", Json::Bool(true)),
+        ("budget", match_spec_json()),
+        ("noise_coupling", Json::str("crn")),
+        ("target", Json::str("retrieval-ranking")),
+    ]);
+    let out = ok(&call(
+        &mut svc,
+        "counterfactual",
+        counterfactual_params(&id, 0, 0, crn_design),
+    ));
+    let arms = |key: &str| -> Vec<Json> {
+        match out.get(key) {
+            Some(Json::Arr(a)) => a.clone(),
+            other => panic!("{key} arms: {other:?}"),
+        }
+    };
+    let factual = arms("factual");
+    let counterfactual = arms("counterfactual");
+    assert_eq!(factual.len(), 2);
+    assert_eq!(counterfactual.len(), 2);
+    // The CRN property — replicate i's two arms carry the same seed.
+    for i in 0..2 {
+        let fs = factual[i].get("seed").and_then(Json::as_str).unwrap();
+        let cs = counterfactual[i].get("seed").and_then(Json::as_str).unwrap();
+        assert_eq!(fs, cs, "crn shares the exogenous draw per replicate");
+        assert_eq!(
+            factual[i].get("replicate_index").and_then(Json::as_int),
+            Some(i as i64)
+        );
+    }
+    // Distinct replicates carry distinct draws.
+    assert_ne!(
+        factual[0].get("seed").and_then(Json::as_str),
+        factual[1].get("seed").and_then(Json::as_str)
+    );
+    for a in factual.iter().chain(counterfactual.iter()) {
+        assert_eq!(
+            a.get("noise_coupling").and_then(Json::as_str),
+            Some("crn")
+        );
+        assert_eq!(a.get("fork_point").and_then(Json::as_int), Some(0));
+        assert_eq!(
+            a.get("target").and_then(Json::as_str),
+            Some("retrieval-ranking")
+        );
+    }
+}
+
+/// S6.3b — `lab.attribution.attribute{open_arms}` drives the real Group
+/// W legs: one `counterfactual` call per (target, fork_point), the
+/// instrument-charged branches minted, the report folded from the
+/// supplied outcome records (AC-R-2.9.7-1).
+#[test]
+fn s6_3b_attribution_open_arms_rides_group_w() {
+    let mut svc = service();
+    let r = call(
+        &mut svc,
+        "hello",
+        hello_params(caps_json(&[
+            ("experimental", true),
+            ("serves_measurement", true),
+        ])),
+    );
+    assert!(r.get("result").is_some());
+    let s = open_new(&mut svc);
+    let id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+
+    let design = Json::obj(vec![
+        ("schema", Json::str("hh-attribution-design/1")),
+        (
+            "subject",
+            Json::obj(vec![
+                ("configuration_id", Json::str("cfg-1")),
+                ("run_ids", Json::Arr(vec![])),
+                ("task_ids", Json::Arr(vec![])),
+            ]),
+        ),
+        ("method", Json::str("M2")),
+        (
+            "targets",
+            Json::Arr(vec![Json::obj(vec![
+                ("kind", Json::str("rule")),
+                ("ref", Json::str("retrieval-ranking")),
+            ])]),
+        ),
+        ("fork_policy", Json::str("run_start")),
+        ("k", Json::Int(4)),
+        ("replay_mode_requested", Json::str("deterministic")),
+        ("noise_coupling", Json::str("crn")),
+        ("match", Json::obj(vec![
+            ("dimensions", Json::Arr(vec![Json::str("model_calls")])),
+            ("mode", Json::str("matched_total")),
+            ("tolerance", Json::Int(0)),
+            ("model_scope", Json::str("same_snapshot")),
+            ("cache_policy", Json::str("cold_start")),
+        ])),
+        ("outcome", Json::str("task_success")),
+        ("budget", Json::obj(vec![("reserved", Json::Int(0))])),
+        ("seed", Json::Int(7)),
+        (
+            "coupled_sources",
+            Json::Arr(vec![
+                Json::obj(vec![
+                    ("source", Json::str("environment_state")),
+                    ("coupling_agreement", Json::Bool(true)),
+                ]),
+                Json::obj(vec![
+                    ("source", Json::str("provider_sampling")),
+                    ("coupling_agreement", Json::Bool(true)),
+                ]),
+            ]),
+        ),
+        ("label", Json::str("exploratory")),
+    ]);
+    let mut outcomes = Vec::new();
+    for i in 0..4 {
+        for (role, p) in [("factual", 1_000_000i64), ("counterfactual", 0)] {
+            outcomes.push(Json::obj(vec![
+                ("target", Json::str("retrieval-ranking")),
+                ("fork_point", Json::Int(0)),
+                ("role", Json::str(role)),
+                ("replicate_index", Json::Int(i)),
+                ("outcome", Json::Int(p)),
+                ("validity", Json::str("deterministic")),
+                ("change_rate_ppm", if role == "factual" {
+                    Json::Int(1_000_000)
+                } else {
+                    Json::Null
+                }),
+                ("spend", Json::Int(1)),
+            ]));
+        }
+    }
+    let out = ok(&call(
+        &mut svc,
+        "lab.attribution.attribute",
+        Json::obj(vec![
+            ("session_id", Json::str(id)),
+            ("design", design),
+            ("open_arms", Json::Bool(true)),
+            ("outcomes", Json::Arr(outcomes)),
+        ]),
+    ));
+    // The Group W legs opened — arm records in the reply, report folded.
+    let arms = match out.get("arms") {
+        Some(Json::Arr(a)) => a.clone(),
+        other => panic!("arms: {other:?}"),
+    };
+    assert_eq!(arms.len(), 1, "one (target, fork_point) counterfactual call");
+    let opened = arms[0]
+        .get("result")
+        .unwrap_or_else(|| panic!("opened: {:?}", arms[0]));
+    for key in ["factual", "counterfactual"] {
+        let arm_list = match opened.get(key) {
+            Some(Json::Arr(a)) => a.clone(),
+            other => panic!("{key}: {other:?}"),
+        };
+        assert_eq!(arm_list.len(), 4, "k instrument-charged arms");
+        for a in &arm_list {
+            assert_eq!(
+                a.get("charged_to").and_then(Json::as_str),
+                Some("instrument")
+            );
+            assert_eq!(
+                a.get("noise_coupling").and_then(Json::as_str),
+                Some("crn")
+            );
+        }
+    }
+    let report = out.get("report").expect("report");
+    assert_eq!(
+        report.get("attribution_label").and_then(Json::as_str),
+        Some("causal_coupled")
+    );
+    assert_eq!(
+        report.get("estimand").and_then(Json::as_str),
+        Some("TE_crn")
+    );
+}
+
 // ── S3.11b — bundle `resolved_dependencies.extensions[]` (AC-R-2.8.5-10) ──
 // The `kernel.bundle` path projects the sealed definition's pinned
 // `assembly.extensions.refs[]` through `trust_snapshot` into the bundle
