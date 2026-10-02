@@ -1398,6 +1398,18 @@ pub fn registry() -> Vec<OpSpec> {
         OpSpec {
             requires_capability: Some("serves_measurement"),
             ..call(
+                "lab.evolution.rebase",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
                 "lab.evolution.withdraw",
                 "L",
                 "json",

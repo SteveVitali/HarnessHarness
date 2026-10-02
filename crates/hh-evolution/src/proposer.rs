@@ -67,6 +67,10 @@ pub struct EvidenceCorpus {
     pub slot_history: BTreeMap<String, String>,
     /// `memory_lineage` — memory version lineage links.
     pub memory_lineage: Vec<LineageLink>,
+    /// `reference_trajectories` — the trajectory refs the corpus anchors
+    /// (S6.3a — the RHO family's required input; the
+    /// `reference_trajectories` corpus layer admits them).
+    pub reference_trajectories: Vec<String>,
     /// `prior_candidates` — the lineage's earlier candidate refs.
     pub prior_candidates: Vec<String>,
     /// The exclusion set (fixed — G5/G6).
@@ -116,6 +120,85 @@ pub struct LineageEntry {
     pub children: u32,
     /// Per-task scores for `pareto_per_task` (`task_id → ppm`).
     pub per_task: BTreeMap<String, u64>,
+    /// The niche the member occupies in the gene-bank archive (S6.3a —
+    /// `gene_bank{niche}` selects within it; `None` = un-niched).
+    pub niche: Option<String>,
+    /// The reference-trajectory evidence refs the member anchors to
+    /// (S6.3a — `rho{trajectory_ref}` selects among members citing it).
+    pub trajectory_refs: Vec<String>,
+}
+
+/// The shared deterministic argmax behind `select_parent` — the policy
+/// weights are the campaign's; every first-party variant resolves
+/// through this one function so policy semantics never fork (CC1).
+/// `gene_bank{niche}` picks the niche's elite (falling back to the
+/// lineage-wide elite when the niche has no member); `rho{trajectory_ref}`
+/// picks the highest-scoring member anchored to the named reference
+/// trajectory (`None` when no member cites it — an anchorless pick is
+/// never invented).
+pub fn select_parent_apply(
+    lineage: &[LineageEntry],
+    policy: &ParentSelectionPolicy,
+) -> Option<DefinitionVersionRef> {
+    if lineage.is_empty() {
+        return None;
+    }
+    // The candidate pool the arm selects over.
+    let pool: Vec<&LineageEntry> = match policy {
+        ParentSelectionPolicy::GeneBank { niche } => {
+            let niched: Vec<&LineageEntry> = lineage
+                .iter()
+                .filter(|e| e.niche.as_deref() == Some(niche.as_str()))
+                .collect();
+            if niched.is_empty() {
+                lineage.iter().collect()
+            } else {
+                niched
+            }
+        }
+        ParentSelectionPolicy::Rho { trajectory_ref } => lineage
+            .iter()
+            .filter(|e| e.trajectory_refs.iter().any(|t| t == trajectory_ref))
+            .collect(),
+        _ => lineage.iter().collect(),
+    };
+    if pool.is_empty() {
+        return None;
+    }
+    let key = |e: &LineageEntry| -> u64 {
+        match policy {
+            ParentSelectionPolicy::Best => e.score_ppm,
+            ParentSelectionPolicy::ScoreProportional {
+                alpha_ppm,
+                uniform_mix_ppm,
+            } => e
+                .score_ppm
+                .saturating_mul(*alpha_ppm)
+                .saturating_add(*uniform_mix_ppm),
+            ParentSelectionPolicy::ScoreChildProportional {
+                alpha_ppm,
+                children_penalty_ppm,
+            } => e
+                .score_ppm
+                .saturating_mul(*alpha_ppm)
+                .saturating_sub(children_penalty_ppm.saturating_mul(e.children as u64)),
+            ParentSelectionPolicy::ParetoPerTask => {
+                e.per_task.values().min().copied().unwrap_or(e.score_ppm)
+            }
+            // The niche/trajectory filter already restricted the pool —
+            // the elite pick inside it is score-argmax.
+            ParentSelectionPolicy::GeneBank { .. } | ParentSelectionPolicy::Rho { .. } => {
+                e.score_ppm
+            }
+        }
+    };
+    pool.iter()
+        .max_by(|a, b| {
+            key(a)
+                .cmp(&key(b))
+                .then(b.candidate_id.cmp(&a.candidate_id))
+        })
+        .map(|e| e.target_ref.clone())
 }
 
 /// The `evolution_proposer` contract (§05h §2.4).
@@ -138,6 +221,50 @@ pub trait EvolutionProposer {
         lineage: &[LineageEntry],
         policy: &ParentSelectionPolicy,
     ) -> Option<DefinitionVersionRef>;
+}
+
+/// Whether a node sits inside the admitted surface: the node kind is
+/// admitted (`allowed_kinds`) and the semantic id is not excluded /
+/// MUST-code. Shared by every leaf-picking variant (AHE, GeneBank,
+/// RHO, code_search).
+fn admissible_node(n: &Node, constraints: &ProposalConstraints) -> bool {
+    let id = n.semantic_id();
+    if constraints.exclusions.iter().any(|e| e == &id)
+        || constraints.must_code.iter().any(|e| e == &id)
+    {
+        return false;
+    }
+    constraints
+        .allowed_kinds
+        .iter()
+        .any(|k| k.as_str() == n.kind.name())
+}
+
+/// The corpus's addressable-failure table — `task → (metric, base_min,
+/// sibling_max)` over `outcome_rows` (`replicates = 0` rows carry no
+/// signal). Shared by every observability-shaped first-party variant.
+fn addressable(corpus: &EvidenceCorpus) -> BTreeMap<String, (String, u64, u64)> {
+    let mut failing: BTreeMap<String, (String, u64, u64)> = BTreeMap::new();
+    for row in &corpus.outcome_rows {
+        if row.replicates == 0 {
+            continue;
+        }
+        if row.arm == "base" {
+            let e = failing
+                .entry(row.task_id.clone())
+                .or_insert((row.metric.clone(), u64::MAX, 0));
+            e.1 = e.1.min(row.value_ppm);
+        } else {
+            let e = failing
+                .entry(row.task_id.clone())
+                .or_insert((row.metric.clone(), u64::MAX, 0));
+            e.2 = e.2.max(row.value_ppm);
+        }
+    }
+    failing
+        .into_iter()
+        .filter(|(_, (_, base_v, best_v))| *best_v > *base_v)
+        .collect()
 }
 
 // ── AheProposer — the AHE-shaped first-party variant ─────────────────────────
@@ -233,16 +360,7 @@ impl AheProposer {
     /// kind is admitted (`allowed_kinds`) and the semantic id is not
     /// excluded / MUST-code.
     fn admissible_node(&self, n: &Node, constraints: &ProposalConstraints) -> bool {
-        let id = n.semantic_id();
-        if constraints.exclusions.iter().any(|e| e == &id)
-            || constraints.must_code.iter().any(|e| e == &id)
-        {
-            return false;
-        }
-        constraints
-            .allowed_kinds
-            .iter()
-            .any(|k| k.as_str() == n.kind.name())
+        admissible_node(n, constraints)
     }
 
     /// The tighten-able member surface: numeric bounds (`*_ppm`,
@@ -347,57 +465,20 @@ impl AheProposer {
         }
         Self::set_member(v, tail, task);
     }
-}
 
-impl EvolutionProposer for AheProposer {
-    fn declare(&self) -> ProposerDeclaration {
-        ProposerDeclaration {
-            family: "ahe".to_string(),
-            op_classes_admissible: vec![self.target_class.clone()],
-            needs_reference_trajectories: Tri::No,
-            uses_judge: Tri::No,
-            judge_ref: None,
-            maturity: "instrument-grade".to_string(),
-            conditioned_rules: self.conditioned_rules.clone(),
-        }
-    }
-
-    fn propose(
+    /// The tightening emit shared by every observability-shaped
+    /// first-party variant (S6.3a — GeneBank picks a niche slot; RHO
+    /// anchors the hypothesis to a `reference_trajectories` ref).
+    /// `propose` still owns the family constraint checks; this body is
+    /// the corpus-read + leaf-tighten + diff-emit machinery.
+    fn emit(
         &mut self,
         corpus: &EvidenceCorpus,
         base: &HirDocument,
         constraints: &ProposalConstraints,
+        slot: &str,
+        trajectory_ref: Option<&str>,
     ) -> Result<Vec<ProposerOutcome>, ProposerFailure> {
-        // Constraint checks first — the typed failures of §2.4.
-        if corpus
-            .layers
-            .iter()
-            .any(|l| crate::records::FORBIDDEN_LAYERS.iter().any(|f| f == l))
-        {
-            return Err(ProposerFailure::CorpusUnreadable {
-                detail: "corpus declares a held-out surface layer".to_string(),
-            });
-        }
-        if constraints.target_classes != vec![self.target_class.clone()] {
-            return Err(ProposerFailure::ConstraintUnsatisfiable {
-                detail: format!(
-                    "AHE-shaped variant targets exactly `{}` — the one-class rule",
-                    self.target_class
-                ),
-            });
-        }
-        if constraints.max_semantic_ops == 0 || constraints.allowed_kinds.is_empty() {
-            return Err(ProposerFailure::ConstraintUnsatisfiable {
-                detail: "no admitted semantic op on the target class".to_string(),
-            });
-        }
-        if self.spent_ppm >= constraints.budget_slice_ppm && constraints.budget_slice_ppm > 0 {
-            return Err(ProposerFailure::BudgetExhausted {
-                detail: "the proposer's budget slice is exhausted".to_string(),
-            });
-        }
-        self.spent_ppm = self.spent_ppm.saturating_add(1);
-
         // The observability signal: a task where the base arm trails a
         // sibling arm on a corpus metric — the addressable failure.
         let mut failing: BTreeMap<String, (String, u64, u64)> = BTreeMap::new();
@@ -453,7 +534,10 @@ impl EvolutionProposer for AheProposer {
         // observed task (search/dev labels only; S2 re-checks).
         let hyp = FailureHypothesis {
             kind: "observational".to_string(),
-            evidence_refs: vec![format!("corpus:{node_id}")],
+            evidence_refs: match trajectory_ref {
+                Some(t) => vec![t.to_string()],
+                None => vec![format!("corpus:{node_id}")],
+            },
             predicted: PredictedEffect {
                 deltas: vec![PredictedDelta {
                     metric: metric.clone(),
@@ -464,6 +548,9 @@ impl EvolutionProposer for AheProposer {
                 horizon: None,
             },
             semantic_op_targets: vec![node_id.clone()],
+            reference_trajectories: trajectory_ref
+                .map(|t| vec![t.to_string()])
+                .unwrap_or_default(),
         };
 
         // The diff — a `ReplaceLeaf` tightening the picked member
@@ -512,8 +599,291 @@ impl EvolutionProposer for AheProposer {
         let proposal = CandidateProposal {
             base_ref: constraints.base_ref.clone(),
             diff: d,
-            slot: self.target_class.clone(),
+            slot: slot.to_string(),
             hypothesis: Some(hyp.clone()),
+            install: None,
+            coordinate_values: BTreeMap::new(),
+        };
+        Ok(vec![
+            ProposerOutcome::Candidate(Box::new(proposal)),
+            ProposerOutcome::Hypothesis(hyp),
+        ])
+    }
+}
+
+impl EvolutionProposer for AheProposer {
+    fn declare(&self) -> ProposerDeclaration {
+        ProposerDeclaration {
+            family: "ahe".to_string(),
+            op_classes_admissible: vec![self.target_class.clone()],
+            needs_reference_trajectories: Tri::No,
+            uses_judge: Tri::No,
+            judge_ref: None,
+            maturity: "instrument-grade".to_string(),
+            conditioned_rules: self.conditioned_rules.clone(),
+        }
+    }
+
+    fn propose(
+        &mut self,
+        corpus: &EvidenceCorpus,
+        base: &HirDocument,
+        constraints: &ProposalConstraints,
+    ) -> Result<Vec<ProposerOutcome>, ProposerFailure> {
+        // Constraint checks first — the typed failures of §2.4.
+        if corpus
+            .layers
+            .iter()
+            .any(|l| crate::records::FORBIDDEN_LAYERS.iter().any(|f| f == l))
+        {
+            return Err(ProposerFailure::CorpusUnreadable {
+                detail: "corpus declares a held-out surface layer".to_string(),
+            });
+        }
+        if constraints.target_classes != vec![self.target_class.clone()] {
+            return Err(ProposerFailure::ConstraintUnsatisfiable {
+                detail: format!(
+                    "AHE-shaped variant targets exactly `{}` — the one-class rule",
+                    self.target_class
+                ),
+            });
+        }
+        if constraints.max_semantic_ops == 0 || constraints.allowed_kinds.is_empty() {
+            return Err(ProposerFailure::ConstraintUnsatisfiable {
+                detail: "no admitted semantic op on the target class".to_string(),
+            });
+        }
+        if self.spent_ppm >= constraints.budget_slice_ppm && constraints.budget_slice_ppm > 0 {
+            return Err(ProposerFailure::BudgetExhausted {
+                detail: "the proposer's budget slice is exhausted".to_string(),
+            });
+        }
+        self.spent_ppm = self.spent_ppm.saturating_add(1);
+
+        self.emit(corpus, base, constraints, &self.target_class.clone(), None)
+    }
+
+    fn select_parent(
+        &self,
+        lineage: &[LineageEntry],
+        policy: &ParentSelectionPolicy,
+    ) -> Option<DefinitionVersionRef> {
+        select_parent_apply(lineage, policy)
+    }
+}
+
+// ── S6.3a research-grade families (R-2.9.5 6c) ───────────────────────────────
+
+/// `CodeSearchProposer` — the `code_search` family variant (6c): it
+/// searches `CompiledPayload` leaves on admissible `Procedure` nodes —
+/// `ProcedureStep::Opaque` bodies carrying a `declared_interface` — and
+/// emits candidates whose diff replaces the payload's `bytes_hash`
+/// while holding the interface fixed (typed + out-of-process only; the
+/// campaign's S1/S7 gates re-check `OpaqueWithoutInterface`/placement).
+/// `maturity = research-grade` — results render `preview`.
+#[derive(Debug)]
+pub struct CodeSearchProposer {
+    /// The component classes this variant may search (`code_payload`
+    /// mandatory — the payload-leaf surface).
+    classes: Vec<String>,
+    /// Emitted candidate count (drives the deterministic bytes_hash).
+    emitted: u64,
+    /// `budget_slice_ppm` accounting (deterministic — model spend is 0).
+    spent_ppm: u64,
+}
+
+impl CodeSearchProposer {
+    /// The variant instance for the admitted classes.
+    pub fn new(classes: Vec<String>) -> CodeSearchProposer {
+        CodeSearchProposer {
+            classes,
+            emitted: 0,
+            spent_ppm: 0,
+        }
+    }
+
+    /// The first admissible `Procedure` node's top-level `Opaque` step
+    /// carrying a declared interface — `(node_id, step_index)`.
+    fn pick_payload(
+        base: &HirDocument,
+        constraints: &ProposalConstraints,
+    ) -> Option<(String, usize)> {
+        for n in &base.nodes {
+            if !admissible_node(n, constraints) {
+                continue;
+            }
+            if let hh_hir::records::KindRecord::Procedure(rec) = &n.semantic {
+                for (i, step) in rec.steps.iter().enumerate() {
+                    if let hh_hir::records::ProcedureStep::Opaque(p) = step {
+                        if p.declared_interface.is_some() {
+                            return Some((n.semantic_id(), i));
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+impl EvolutionProposer for CodeSearchProposer {
+    fn declare(&self) -> ProposerDeclaration {
+        ProposerDeclaration {
+            family: "code_search".to_string(),
+            op_classes_admissible: self.classes.clone(),
+            needs_reference_trajectories: Tri::No,
+            uses_judge: Tri::No,
+            judge_ref: None,
+            maturity: "research-grade".to_string(),
+            conditioned_rules: vec![ConditionedRuleDecl {
+                rule_ref: "hh/evolution_proposer/code_search".to_string(),
+                conditioned_on: "model_profile".to_string(),
+                debt_record: Some(Json::obj([
+                    ("kind", Json::str("assumption_debt")),
+                    ("rule_ref", Json::str("hh/evolution_proposer/code_search")),
+                    (
+                        "deficiency",
+                        Json::str("same-interface payload search may not generalise"),
+                    ),
+                    (
+                        "expiry_condition",
+                        Json::Arr(vec![Json::str("model_version_change")]),
+                    ),
+                    ("owner", Json::str("hh/evolution")),
+                ])),
+            }],
+        }
+    }
+
+    fn propose(
+        &mut self,
+        corpus: &EvidenceCorpus,
+        base: &HirDocument,
+        constraints: &ProposalConstraints,
+    ) -> Result<Vec<ProposerOutcome>, ProposerFailure> {
+        if corpus
+            .layers
+            .iter()
+            .any(|l| crate::records::FORBIDDEN_LAYERS.iter().any(|f| f == l))
+        {
+            return Err(ProposerFailure::CorpusUnreadable {
+                detail: "corpus declares a held-out surface layer".to_string(),
+            });
+        }
+        for c in &constraints.target_classes {
+            if !self.classes.iter().any(|k| k == c) {
+                return Err(ProposerFailure::ConstraintUnsatisfiable {
+                    detail: format!(
+                        "code_search variant admits {classes:?} — `{c}` is outside",
+                        classes = self.classes
+                    ),
+                });
+            }
+        }
+        if !constraints
+            .target_classes
+            .iter()
+            .any(|c| c == "code_payload")
+        {
+            return Err(ProposerFailure::ConstraintUnsatisfiable {
+                detail: "code_search searches `CompiledPayload` leaves — \
+                         `code_payload` must be an admitted target class"
+                    .to_string(),
+            });
+        }
+        if self.spent_ppm >= constraints.budget_slice_ppm && constraints.budget_slice_ppm > 0 {
+            return Err(ProposerFailure::BudgetExhausted {
+                detail: "the proposer's budget slice is exhausted".to_string(),
+            });
+        }
+        self.spent_ppm = self.spent_ppm.saturating_add(1);
+        let failing = addressable(corpus);
+        if failing.is_empty() {
+            return Ok(vec![ProposerOutcome::NoAddressableFailure {
+                reason: "no corpus row shows a sibling arm beating the base".to_string(),
+            }]);
+        }
+        let Some((node_id, step_idx)) = Self::pick_payload(base, constraints) else {
+            return Ok(vec![ProposerOutcome::NoAddressableFailure {
+                reason: "no admissible `CompiledPayload` leaf with a declared \
+                         interface on a Procedure node"
+                    .to_string(),
+            }]);
+        };
+        let task = failing.keys().next().expect("non-empty").clone();
+        let metric = failing[&task].0.clone();
+
+        // The move: rewrite the opaque step's payload — a fresh
+        // `bytes_hash` under the *same* declared interface (the
+        // interface is the contract the leaf satisfies; the campaign's
+        // S1 gate re-checks `OpaqueWithoutInterface` on the assembled
+        // target).
+        let mut target = base.clone();
+        let tnode = target
+            .nodes
+            .iter_mut()
+            .find(|n| n.semantic_id() == node_id)
+            .expect("node came from base");
+        let hh_hir::records::KindRecord::Procedure(rec) = &mut tnode.semantic else {
+            unreachable!("pick_payload only returns Procedure nodes")
+        };
+        let hh_hir::records::ProcedureStep::Opaque(old) = &rec.steps[step_idx] else {
+            unreachable!("pick_payload returned this step index")
+        };
+        let provenance = ProvenanceRecord::minted(
+            hh_provenance::Origin::evolution(&node_id, &node_id),
+            hh_provenance::PersistenceScope::Run,
+            0,
+        );
+        rec.steps[step_idx] =
+            hh_hir::records::ProcedureStep::Opaque(hh_hir::leaves::CompiledPayload {
+                format_tag: old.format_tag.clone(),
+                bytes_hash: format!("{}#cs{}", old.bytes_hash, self.emitted),
+                declared_interface: old.declared_interface.clone(),
+                owner: old.owner.clone(),
+                provenance: provenance.clone(),
+            });
+        self.emitted += 1;
+
+        let hyp = FailureHypothesis {
+            kind: "observational".to_string(),
+            evidence_refs: vec![format!("corpus:{node_id}")],
+            predicted: PredictedEffect {
+                deltas: vec![PredictedDelta {
+                    metric,
+                    direction: "increase".to_string(),
+                }],
+                affected_task_ids: vec![task],
+                model_scope: "same_snapshot".to_string(),
+                horizon: None,
+            },
+            semantic_op_targets: vec![node_id.clone()],
+            reference_trajectories: Vec::new(),
+        };
+        let d = diff::diff(
+            base,
+            &target,
+            provenance.clone(),
+            DiffDerivation {
+                hypothesis: Some(Text::new(
+                    hyp.to_json().to_canonical_string(),
+                    "hh/evolution",
+                    provenance,
+                )),
+                trajectories: vec![],
+                candidate_id: None,
+            },
+        )
+        .map_err(|errs| ProposerFailure::ConstraintUnsatisfiable {
+            detail: format!("emitted diff fails its own gates: {errs:?}"),
+        })?;
+        let proposal = CandidateProposal {
+            base_ref: constraints.base_ref.clone(),
+            diff: d,
+            slot: "code_payload".to_string(),
+            hypothesis: Some(hyp.clone()),
+            install: None,
+            coordinate_values: BTreeMap::new(),
         };
         Ok(vec![
             ProposerOutcome::Candidate(Box::new(proposal)),
@@ -526,41 +896,200 @@ impl EvolutionProposer for AheProposer {
         lineage: &[LineageEntry],
         policy: &ParentSelectionPolicy,
     ) -> Option<DefinitionVersionRef> {
-        if lineage.is_empty() {
-            return None;
+        select_parent_apply(lineage, policy)
+    }
+}
+
+/// `GeneBankProposer` — the `gene_bank` family variant (6c): a
+/// quality-diversity archive over the declared niches (target classes).
+/// Each `propose` addresses the *least-covered* niche — the archive's
+/// slot counter per class — and runs the shared tightening emit. The
+/// `gene_bank{niche}` parent-selection arm reads
+/// `LineageEntry.niche` to pick niche elites. `research-grade`.
+#[derive(Debug)]
+pub struct GeneBankProposer {
+    /// The niches this variant covers (the campaign's `target_classes`).
+    classes: Vec<String>,
+    /// `niche → emitted candidate count` — the archive's coverage table.
+    archive: BTreeMap<String, u64>,
+    /// `budget_slice_ppm` accounting.
+    spent_ppm: u64,
+}
+
+impl GeneBankProposer {
+    /// The variant instance covering `classes`.
+    pub fn new(classes: Vec<String>) -> GeneBankProposer {
+        GeneBankProposer {
+            classes,
+            archive: BTreeMap::new(),
+            spent_ppm: 0,
         }
-        // Deterministic argmax over the policy's weight — `select_parent`
-        // is pure; ties break on the smallest candidate_id.
-        let key = |e: &LineageEntry| -> u64 {
-            match policy {
-                ParentSelectionPolicy::Best => e.score_ppm,
-                ParentSelectionPolicy::ScoreProportional {
-                    alpha_ppm,
-                    uniform_mix_ppm,
-                } => e
-                    .score_ppm
-                    .saturating_mul(*alpha_ppm)
-                    .saturating_add(*uniform_mix_ppm),
-                ParentSelectionPolicy::ScoreChildProportional {
-                    alpha_ppm,
-                    children_penalty_ppm,
-                } => e
-                    .score_ppm
-                    .saturating_mul(*alpha_ppm)
-                    .saturating_sub(children_penalty_ppm.saturating_mul(e.children as u64)),
-                ParentSelectionPolicy::ParetoPerTask => {
-                    e.per_task.values().min().copied().unwrap_or(e.score_ppm)
-                }
-            }
-        };
-        lineage
+    }
+}
+
+impl EvolutionProposer for GeneBankProposer {
+    fn declare(&self) -> ProposerDeclaration {
+        ProposerDeclaration {
+            family: "gene_bank".to_string(),
+            op_classes_admissible: self.classes.clone(),
+            needs_reference_trajectories: Tri::No,
+            uses_judge: Tri::No,
+            judge_ref: None,
+            maturity: "research-grade".to_string(),
+            conditioned_rules: vec![],
+        }
+    }
+
+    fn propose(
+        &mut self,
+        corpus: &EvidenceCorpus,
+        base: &HirDocument,
+        constraints: &ProposalConstraints,
+    ) -> Result<Vec<ProposerOutcome>, ProposerFailure> {
+        if corpus
+            .layers
             .iter()
-            .max_by(|a, b| {
-                key(a)
-                    .cmp(&key(b))
-                    .then(b.candidate_id.cmp(&a.candidate_id))
-            })
-            .map(|e| e.target_ref.clone())
+            .any(|l| crate::records::FORBIDDEN_LAYERS.iter().any(|f| f == l))
+        {
+            return Err(ProposerFailure::CorpusUnreadable {
+                detail: "corpus declares a held-out surface layer".to_string(),
+            });
+        }
+        for c in &constraints.target_classes {
+            if !self.classes.iter().any(|k| k == c) {
+                return Err(ProposerFailure::ConstraintUnsatisfiable {
+                    detail: format!(
+                        "gene_bank variant covers {classes:?} — `{c}` is outside",
+                        classes = self.classes
+                    ),
+                });
+            }
+        }
+        if self.spent_ppm >= constraints.budget_slice_ppm && constraints.budget_slice_ppm > 0 {
+            return Err(ProposerFailure::BudgetExhausted {
+                detail: "the proposer's budget slice is exhausted".to_string(),
+            });
+        }
+        self.spent_ppm = self.spent_ppm.saturating_add(1);
+        // The least-covered niche wins — deterministic argmin over the
+        // archive's emission counts (uncovered niches first, canonical
+        // order on ties).
+        let niche = constraints
+            .target_classes
+            .iter()
+            .min_by_key(|c| self.archive.get(*c).copied().unwrap_or(0))
+            .cloned()
+            .ok_or_else(|| ProposerFailure::ConstraintUnsatisfiable {
+                detail: "no target class to archive into".to_string(),
+            })?;
+        *self.archive.entry(niche.clone()).or_insert(0) += 1;
+        AheProposer::new(niche.clone()).emit(corpus, base, constraints, &niche, None)
+    }
+
+    fn select_parent(
+        &self,
+        lineage: &[LineageEntry],
+        policy: &ParentSelectionPolicy,
+    ) -> Option<DefinitionVersionRef> {
+        select_parent_apply(lineage, policy)
+    }
+}
+
+/// `RhoProposer` — the `rho` family variant (6c): retrospective,
+/// trajectory-anchored search. `declare().needs_reference_trajectories
+/// = yes` — the corpus's `reference_trajectories` layer is mandatory
+/// (`CorpusUnreadable` when undeclared); the emitted hypothesis carries
+/// `reference_trajectories` citing the anchor, and the
+/// `rho{trajectory_ref}` parent-selection arm reads
+/// `LineageEntry.trajectory_refs`. `research-grade`.
+#[derive(Debug)]
+pub struct RhoProposer {
+    /// The component classes this variant may target.
+    classes: Vec<String>,
+    /// `budget_slice_ppm` accounting.
+    spent_ppm: u64,
+}
+
+impl RhoProposer {
+    /// The variant instance covering `classes`.
+    pub fn new(classes: Vec<String>) -> RhoProposer {
+        RhoProposer {
+            classes,
+            spent_ppm: 0,
+        }
+    }
+}
+
+impl EvolutionProposer for RhoProposer {
+    fn declare(&self) -> ProposerDeclaration {
+        ProposerDeclaration {
+            family: "rho".to_string(),
+            op_classes_admissible: self.classes.clone(),
+            needs_reference_trajectories: Tri::Yes,
+            uses_judge: Tri::No,
+            judge_ref: None,
+            maturity: "research-grade".to_string(),
+            conditioned_rules: vec![],
+        }
+    }
+
+    fn propose(
+        &mut self,
+        corpus: &EvidenceCorpus,
+        base: &HirDocument,
+        constraints: &ProposalConstraints,
+    ) -> Result<Vec<ProposerOutcome>, ProposerFailure> {
+        if corpus
+            .layers
+            .iter()
+            .any(|l| crate::records::FORBIDDEN_LAYERS.iter().any(|f| f == l))
+        {
+            return Err(ProposerFailure::CorpusUnreadable {
+                detail: "corpus declares a held-out surface layer".to_string(),
+            });
+        }
+        // The retrospective family's mandatory input — the
+        // `reference_trajectories` corpus layer and its anchored refs.
+        if !corpus.layers.iter().any(|l| l == "reference_trajectories") {
+            return Err(ProposerFailure::CorpusUnreadable {
+                detail: "rho requires the corpus's `reference_trajectories` layer".to_string(),
+            });
+        }
+        let Some(trajectory) = corpus.reference_trajectories.first().cloned() else {
+            return Ok(vec![ProposerOutcome::NoAddressableFailure {
+                reason: "the reference_trajectories layer anchors no trajectory".to_string(),
+            }]);
+        };
+        for c in &constraints.target_classes {
+            if !self.classes.iter().any(|k| k == c) {
+                return Err(ProposerFailure::ConstraintUnsatisfiable {
+                    detail: format!(
+                        "rho variant covers {classes:?} — `{c}` is outside",
+                        classes = self.classes
+                    ),
+                });
+            }
+        }
+        if self.spent_ppm >= constraints.budget_slice_ppm && constraints.budget_slice_ppm > 0 {
+            return Err(ProposerFailure::BudgetExhausted {
+                detail: "the proposer's budget slice is exhausted".to_string(),
+            });
+        }
+        self.spent_ppm = self.spent_ppm.saturating_add(1);
+        let slot = constraints
+            .target_classes
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "guideline".to_string());
+        AheProposer::new(slot.clone()).emit(corpus, base, constraints, &slot, Some(&trajectory))
+    }
+
+    fn select_parent(
+        &self,
+        lineage: &[LineageEntry],
+        policy: &ParentSelectionPolicy,
+    ) -> Option<DefinitionVersionRef> {
+        select_parent_apply(lineage, policy)
     }
 }
 

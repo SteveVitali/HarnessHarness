@@ -329,6 +329,10 @@ fn spec(split_ref: &str) -> EvolutionCampaignSpec {
         reported_only_dimensions: vec![],
         proposer_variant_ref: None,
         target_class: None,
+        target_classes: Vec::new(),
+        hosted_coordinates: Vec::new(),
+        hosted_descriptor_refs: Vec::new(),
+        authority_cap: None,
         rollout_policy: None,
         judge_policy: None,
     }
@@ -391,6 +395,8 @@ fn propose_with(
             diff: d,
             slot: "guideline".into(),
             hypothesis: None,
+            install: None,
+            coordinate_values: Default::default(),
         },
         base,
     )
@@ -423,6 +429,7 @@ fn golden_corpus() -> EvidenceCorpus {
         exclusions: vec![],
         task_ids: vec!["task:a".into()],
         metric_refs: vec!["metric:success".into()],
+        reference_trajectories: Vec::new(),
     }
 }
 
@@ -684,6 +691,8 @@ fn ahe_select_parent_policies() {
         score_ppm: score,
         children,
         per_task: BTreeMap::new(),
+        niche: None,
+        trajectory_refs: Vec::new(),
     };
     let mut lineage = vec![entry("a", 100, 0), entry("b", 900, 0), entry("c", 500, 3)];
     for (e, pt) in lineage.iter_mut().zip([50u64, 600, 400]) {
@@ -968,6 +977,8 @@ fn coordination_loosening_refused_at_s1() {
                 diff: d,
                 slot: "guideline".into(),
                 hypothesis: None,
+                install: None,
+                coordinate_values: Default::default(),
             },
             &base_doc(),
         )
@@ -1610,6 +1621,7 @@ fn hypothesis() -> FailureHypothesis {
             horizon: None,
         },
         semantic_op_targets: vec![],
+        reference_trajectories: Vec::new(),
     }
 }
 
@@ -1859,6 +1871,7 @@ fn acceptance(pass: bool) -> EvolutionAcceptanceReport {
             .collect(),
         attribution_granularity: "designed_ablation".into(),
         portability_label: PortabilityLabel::Reported,
+        label: None,
     }
 }
 

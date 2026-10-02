@@ -121,6 +121,18 @@ impl ProposerPort for InProcessPort<'_> {
                         score_ppm: gi("score_ppm"),
                         children: gi("children") as u32,
                         per_task: Default::default(),
+                        niche: match m.get("niche").and_then(Json::as_str) {
+                            Some(n) if !n.is_empty() => Some(n.to_string()),
+                            _ => None,
+                        },
+                        trajectory_refs: match m.get("trajectory_refs") {
+                            Some(Json::Arr(a)) => a
+                                .iter()
+                                .filter_map(Json::as_str)
+                                .map(str::to_string)
+                                .collect(),
+                            _ => Vec::new(),
+                        },
                     })
                 })
                 .collect(),
@@ -220,6 +232,9 @@ pub fn run_proposer_suite(
 
     // ── static.declaration ────────────────────────────────────────────
     if decl.family.is_empty()
+        || !crate::records::PROPOSER_FAMILIES
+            .iter()
+            .any(|f| *f == decl.family)
         || decl.op_classes_admissible.is_empty()
         || !matches!(
             decl.maturity.as_str(),
@@ -228,12 +243,36 @@ pub fn run_proposer_suite(
     {
         rows.push(fail(
             "static.declaration",
-            "mandatory members absent or maturity outside the closed set",
+            "mandatory members absent, family outside the closed set, or \
+             maturity outside the closed set",
         ));
-    } else if decl.op_classes_admissible.len() > 1 {
+    } else if decl.family == "ahe" && decl.op_classes_admissible.len() > 1 {
         rows.push(fail(
             "static.declaration",
-            "op_classes_admissible has > 1 class — the 6b one-class rule",
+            "op_classes_admissible has > 1 class — the 6b one-class rule \
+             binds `ahe` only",
+        ));
+    } else if crate::records::is_research_family(&decl.family) && decl.maturity != "research-grade"
+    {
+        rows.push(fail(
+            "static.declaration",
+            format!(
+                "family `{}` is a 6c research family — maturity must be \
+                 `research-grade`",
+                decl.family
+            ),
+        ));
+    } else if decl.needs_reference_trajectories == Tri::Yes
+        && !drive
+            .corpus
+            .layers
+            .iter()
+            .any(|l| l == "reference_trajectories")
+    {
+        rows.push(fail(
+            "static.declaration",
+            "needs_reference_trajectories = yes but the drive corpus \
+             declares no `reference_trajectories` layer",
         ));
     } else if decl.uses_judge == Tri::Yes && decl.judge_ref.is_none() {
         rows.push(fail(

@@ -931,11 +931,16 @@ const EXPORT_FIELDS: &[AuditField] = &[
 const EXPORT_REFS: &[&str] = &["loss_report_ref"];
 
 /// `measurement.evolution.candidate.transitioned` — `{candidate_id, from, to,
-/// stage, code, report_ref, hypothesis_ref, evidence_refs[], slot, by,
-/// reason}` (§5h.1's transition payload plus the `evolution_link` obligation
+/// stage, code, report_ref, hypothesis_ref, evidence_refs[], slot, base_ref,
+/// diff_ref, target_ref, rebase, coordinates, install, by, reason}` (§5h.1's transition payload plus
+/// the `evolution_link` obligation
 /// link fields; S6.1a adds `stage`/`code`/`report_ref`/`slot`/`by` — the
 /// rejected{stage, code, report_ref} / withdrawn{by} terminals and the
-/// slot the proposal claimed).
+/// slot the proposal claimed; S6.3a adds `target_ref`/`rebase` for the
+/// `rebased` transition (`rebase` is the `{of, onto}` base pair) plus
+/// `coordinates`/`install` on the `proposed` intake row — the durable
+/// audit trail of the hosted-coordinate keys and model-install leg the
+/// proposal claimed).
 const TRANSITION_FIELDS: &[AuditField] = &[
     af("candidate_id"),
     af("from"),
@@ -949,6 +954,10 @@ const TRANSITION_FIELDS: &[AuditField] = &[
     af("slot"),
     af("base_ref"),
     af("diff_ref"),
+    af("target_ref"),
+    afb("rebase", AUDIT_FIELD_LIST_BYTES),
+    afb("coordinates", AUDIT_FIELD_LIST_BYTES),
+    afb("install", AUDIT_FIELD_LIST_BYTES),
     af("by"),
     af("reason"),
 ];

@@ -23,8 +23,14 @@ pub const CAMPAIGN_SPEC_SCHEMA: &str = "hh.evolution.campaign_spec/1";
 // ── CampaignSpec ────────────────────────────────────────────────────────────
 
 /// `slot_allocation` — how the campaign's search budget distributes across
-/// slots (§05h §4's `uniform | fractional_design`; `uniform` carries a
-/// per-slot floor the open-time `BudgetSplittingTrap` check reads).
+/// slots (§05h §4's `{uniform | fractional_design | concentrate | voi}` —
+/// `concentrate`/`voi` land at S6.3a: `concentrate` is the explicit
+/// concentrate-on-winners mode; `voi` is the value-of-information mode whose
+/// only admissible input is the §05e scheduler's `slot_history` corpus
+/// layer). Every mode carries per-slot `floors` (`map<slot, min_ppm>` —
+/// class ids or hosted coordinate names) whose sum must stay ≤ the whole
+/// and whose keys must name declared campaign slots; a uniform spread below
+/// a declared floor is the `BudgetSplittingTrap` the open-time check reads.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SlotAllocation {
     /// `uniform` — equal shares; `min_share_ppm` is the per-slot floor.
@@ -37,6 +43,20 @@ pub enum SlotAllocation {
     FractionalDesign {
         /// `slot → min_share_ppm` (ppm; must sum to ≤ 1_000_000).
         slots: BTreeMap<String, u64>,
+    },
+    /// `concentrate{floors}` — the explicit concentration mode (6c):
+    /// concentration above the per-slot floors is the declared intent —
+    /// never a silent under-allocation.
+    Concentrate {
+        /// `slot → min_share_ppm` floor table (ppm; sum ≤ 1_000_000).
+        floors: BTreeMap<String, u64>,
+    },
+    /// `voi{floors}` — value-of-information allocation over the
+    /// `slot_history` corpus layer (R-2.9.5 6c; ADR-0190's scheduler
+    /// seam). The bound experiment must run `voi_weighted` validation.
+    Voi {
+        /// `slot → min_share_ppm` floor table (ppm; sum ≤ 1_000_000).
+        floors: BTreeMap<String, u64>,
     },
 }
 
@@ -60,6 +80,40 @@ impl SlotAllocation {
                     ),
                 )]),
             )]),
+            SlotAllocation::Concentrate { floors } => Json::obj([(
+                "concentrate",
+                Json::obj([(
+                    "floors",
+                    Json::Obj(
+                        floors
+                            .iter()
+                            .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                            .collect(),
+                    ),
+                )]),
+            )]),
+            SlotAllocation::Voi { floors } => Json::obj([(
+                "voi",
+                Json::obj([(
+                    "floors",
+                    Json::Obj(
+                        floors
+                            .iter()
+                            .map(|(k, v)| (k.clone(), Json::Int(*v as i64)))
+                            .collect(),
+                    ),
+                )]),
+            )]),
+        }
+    }
+
+    /// The mode spelling (`uniform|fractional_design|concentrate|voi`).
+    pub fn mode(&self) -> &'static str {
+        match self {
+            SlotAllocation::Uniform { .. } => "uniform",
+            SlotAllocation::FractionalDesign { .. } => "fractional_design",
+            SlotAllocation::Concentrate { .. } => "concentrate",
+            SlotAllocation::Voi { .. } => "voi",
         }
     }
 
@@ -69,11 +123,35 @@ impl SlotAllocation {
         if m.len() != 1 {
             return Err(SchemaError::v(
                 "slot_allocation",
-                "must be a one-key {uniform|fractional_design} object",
+                "must be a one-key {uniform|fractional_design|concentrate|voi} object",
             ));
         }
         let (k, v) = m.iter().next().expect("len checked");
         let vm = expect_obj(v, "slot_allocation")?;
+        let floors_of =
+            |vm: &BTreeMap<String, Json>| -> Result<BTreeMap<String, u64>, SchemaError> {
+                reject_unknown(vm, &["floors"], "floored allocation")?;
+                let mut floors = BTreeMap::new();
+                match member_at(vm, "floors", "floored allocation")? {
+                    Json::Obj(sm) => {
+                        for (s, v) in sm {
+                            floors.insert(
+                                s.clone(),
+                                v.as_int().ok_or_else(|| {
+                                    SchemaError::v("floors", "share must be an integer (ppm)")
+                                })? as u64,
+                            );
+                        }
+                    }
+                    _ => {
+                        return Err(SchemaError::v(
+                            "floors",
+                            "must be a map<slot, min_share_ppm>",
+                        ))
+                    }
+                }
+                Ok(floors)
+            };
         match k.as_str() {
             "uniform" => {
                 reject_unknown(vm, &["min_share_ppm"], "uniform")?;
@@ -104,6 +182,12 @@ impl SlotAllocation {
                 }
                 Ok(SlotAllocation::FractionalDesign { slots })
             }
+            "concentrate" => Ok(SlotAllocation::Concentrate {
+                floors: floors_of(vm)?,
+            }),
+            "voi" => Ok(SlotAllocation::Voi {
+                floors: floors_of(vm)?,
+            }),
             _ => Err(SchemaError::v(
                 "slot_allocation",
                 format!("unknown slot_allocation `{k}`"),
@@ -221,14 +305,36 @@ pub const FORBIDDEN_LAYERS: &[&str] = &["held_out", "private", "validators", "se
 
 /// The §5c evolvable target classes (R-2.4.1⁴/2.4.2⁴/2.4.4⁴, R-2.6.4⁴,
 /// R-2.6.5⁴ — the one-class-per-campaign set an automated `target_class`
-/// names). `evolution_proposer` itself is never a member (X6).
+/// names). `evolution_proposer` itself is never a member (X6). S6.3a adds
+/// `code_payload` — the `CompiledPayload` leaf bodies code-search families
+/// rewrite (typed + out-of-process only; S1/S7 gate the interface).
 pub const EVOLVABLE_TARGET_CLASSES: &[&str] = &[
     "guideline",
     "compaction_guideline",
     "memory_lineage",
     "scheduling_rule",
     "coordination_policy",
+    "code_payload",
 ];
+
+/// The automated `proposer_family` spellings the campaign admits
+/// (§05h §2.4 — `human` is the 6a path, never an `evolution_proposer`
+/// variant). `ahe` is the 6b instrument-grade family restricted to one
+/// target class; `rho` (retrospective, needs `reference_trajectories`),
+/// `gene_bank` (quality-diversity niche archive) and `code_search`
+/// (`CompiledPayload` candidates) are the 6c research-grade families —
+/// every research-family campaign carries `research-grade` in
+/// `maturity_flags` and its results render `preview` (AC-R-2.9.5-5).
+pub const PROPOSER_FAMILIES: &[&str] = &["ahe", "rho", "gene_bank", "code_search"];
+
+/// The 6c research-grade families — the members of [`PROPOSER_FAMILIES`]
+/// whose campaigns/results are `preview`-walled by construction.
+pub const RESEARCH_FAMILIES: &[&str] = &["rho", "gene_bank", "code_search"];
+
+/// Whether `family` is a 6c research-grade family spelling.
+pub fn is_research_family(family: &str) -> bool {
+    RESEARCH_FAMILIES.contains(&family)
+}
 
 impl CorpusSpec {
     /// The canonical JSON.
@@ -374,6 +480,32 @@ pub struct EvolutionCampaignSpec {
     /// 6b) — mandatory with `proposer_variant_ref`; the admitted entity
     /// kinds ride `allowed_target_kinds`.
     pub target_class: Option<String>,
+    /// The 6c multi-family surface — the full component-class set an
+    /// automated campaign may search (`§05h §2.5`, R-2.9.5 6c). `ahe`
+    /// campaigns keep the exactly-one rule (`target_class` carries it;
+    /// `target_classes` must be empty or equal `{target_class}`); the
+    /// research families (`rho`, `gene_bank`, `code_search`) may name
+    /// several members of [`EVOLVABLE_TARGET_CLASSES`].
+    pub target_classes: Vec<String>,
+    /// The hosted coordinate names the campaign admits on
+    /// `hh-hosting/1` participants (S6.3a; ADR-0196 D7 — the C4→C2
+    /// edge). Non-empty requires `hosted_participants`; every name must
+    /// resolve in a deposited [`HostedCoordinateDescriptor`] at open and
+    /// carry `capability = "supported"`. A diff op on a `coordinates.`
+    /// path outside this set is `HostedCoordinateUnsupported` at S1; a
+    /// structural coordinate edit is refused outright (D7 — value
+    /// edits only).
+    pub hosted_coordinates: Vec<String>,
+    /// The `hosted_coordinate` document refs/names the open gate reads
+    /// (records-in — the descriptor's `capability_vector` +
+    /// `budget_enforcement` is the admission surface the hosted
+    /// participant's `hh-hosting/1` declaration mirrors).
+    pub hosted_descriptor_refs: Vec<String>,
+    /// `authority_cap` — the experiment-level grant ceiling a candidate
+    /// proposal's `install` leg may name (R-2.8.5²). A requested grant
+    /// outside this set widens authority → `AuthorityWidening` at S1;
+    /// `None` = the campaign admits no model install at all.
+    pub authority_cap: Option<Vec<String>>,
     /// The S9 rollout declaration — `split` canaries require it
     /// (`share_ppm`, `assignment_seed`, `advance_rule`); `shadow` remains
     /// the committable default.
@@ -407,10 +539,12 @@ impl EvolutionCampaignSpec {
                 ),
             });
         }
-        if !matches!(self.proposer_family.as_str(), "human" | "ahe") {
+        if self.proposer_family != "human"
+            && !PROPOSER_FAMILIES.iter().any(|f| *f == self.proposer_family)
+        {
             return Err(SchemaViolation {
                 detail: format!(
-                    "proposer_family `{}` — `human` (6a) or `ahe` (6b) only",
+                    "proposer_family `{}` — `human` (6a) or one of {PROPOSER_FAMILIES:?}",
                     self.proposer_family
                 ),
             });
@@ -446,24 +580,68 @@ impl EvolutionCampaignSpec {
                         .into(),
                 });
             }
+            // 6c — the research families are `research-grade` by
+            // construction: the flag is mandatory and the campaign's
+            // results carry the `preview` wall (AC-R-2.9.5-5).
+            if is_research_family(&self.proposer_family)
+                && !self.maturity_flags.iter().any(|f| f == "research-grade")
+            {
+                return Err(SchemaViolation {
+                    detail: format!(
+                        "proposer_family `{}` is a 6c research family — \
+                         maturity_flags must carry `research-grade`",
+                        self.proposer_family
+                    ),
+                });
+            }
             match &self.target_class {
                 Some(c) if !c.is_empty() && self.allowed_target_kinds.is_some() => {
                     if !EVOLVABLE_TARGET_CLASSES.iter().any(|t| t == c) {
                         return Err(SchemaViolation {
                             detail: format!(
                                 "target_class `{c}` is not in the evolvable set \
-                                 {EVOLVABLE_TARGET_CLASSES:?} (§5c — one class per \
-                                 campaign)"
+                                 {EVOLVABLE_TARGET_CLASSES:?} (§5c)"
                             ),
                         });
                     }
                 }
                 _ => {
                     return Err(SchemaViolation {
-                        detail: "an automated family names exactly one `target_class` and \
+                        detail: "an automated family names its `target_class` and \
                                  its `allowed_target_kinds` (the class's op surface)"
                             .into(),
                     })
+                }
+            }
+            if self.proposer_family == "ahe" {
+                // The 6b instrument-grade rule stays: `ahe` is exactly
+                // one class per campaign — `target_classes` must be
+                // empty or name the same single class.
+                let extra: Vec<&String> = self
+                    .target_classes
+                    .iter()
+                    .filter(|c| Some(*c) != self.target_class.as_ref())
+                    .collect();
+                if !extra.is_empty() {
+                    return Err(SchemaViolation {
+                        detail: format!(
+                            "proposer_family `ahe` is exactly-one-class — \
+                             `target_classes {extra:?}` names more than `target_class`"
+                        ),
+                    });
+                }
+            } else {
+                // 6c research families may be multi-class: every member
+                // of `target_classes` must be in the evolvable set.
+                for c in &self.target_classes {
+                    if !EVOLVABLE_TARGET_CLASSES.iter().any(|t| t == c) {
+                        return Err(SchemaViolation {
+                            detail: format!(
+                                "target_classes member `{c}` is not in the evolvable set \
+                                 {EVOLVABLE_TARGET_CLASSES:?} (§5c)"
+                            ),
+                        });
+                    }
                 }
             }
         }
@@ -474,6 +652,16 @@ impl EvolutionCampaignSpec {
                 return Err(SchemaViolation {
                     detail: format!(
                         "target_class `{c}` is not in the evolvable set \
+                         {EVOLVABLE_TARGET_CLASSES:?}"
+                    ),
+                });
+            }
+        }
+        for c in &self.target_classes {
+            if !EVOLVABLE_TARGET_CLASSES.iter().any(|t| t == c) {
+                return Err(SchemaViolation {
+                    detail: format!(
+                        "target_classes member `{c}` is not in the evolvable set \
                          {EVOLVABLE_TARGET_CLASSES:?}"
                     ),
                 });
@@ -602,7 +790,106 @@ impl EvolutionCampaignSpec {
                     ),
                 })
             }
+            SlotAllocation::Concentrate { floors } | SlotAllocation::Voi { floors }
+                if floors.values().sum::<u64>() > 1_000_000 =>
+            {
+                return Err(BudgetSplittingTrap {
+                    detail: format!(
+                        "{} floors sum to {} ppm — over the whole",
+                        self.slot_allocation.mode(),
+                        floors.values().sum::<u64>()
+                    ),
+                })
+            }
             _ => {}
+        }
+        // `voi` — the only admissible input is the `slot_history` corpus
+        // layer (ADR-0190's scheduler seam; §05h §4's budget.rule_set
+        // member). A VOI campaign whose corpus does not declare
+        // `slot_history` is malformed at open.
+        if matches!(self.slot_allocation, SlotAllocation::Voi { .. }) {
+            let has_history = self
+                .corpus
+                .layers
+                .as_ref()
+                .map(|l| l.iter().any(|x| x == "slot_history"))
+                .unwrap_or(false);
+            if !has_history {
+                return Err(SchemaViolation {
+                    detail: "slot_allocation.mode = `voi` requires corpus layer \
+                             `slot_history` — the VOI input is the scheduler's recorded \
+                             slot history only"
+                        .into(),
+                });
+            }
+        }
+        // Floored allocations — a floor names a declared slot: a target
+        // class or an admitted hosted coordinate (the concentration
+        // surface is never an unlabeled leak).
+        let floors: Vec<String> = match &self.slot_allocation {
+            SlotAllocation::FractionalDesign { slots } => slots.keys().cloned().collect(),
+            SlotAllocation::Concentrate { floors } | SlotAllocation::Voi { floors } => {
+                floors.keys().cloned().collect()
+            }
+            _ => Vec::new(),
+        };
+        for f in &floors {
+            let declared = self.target_classes.iter().any(|c| c == f)
+                || self.target_class.as_ref().map(|c| c == f).unwrap_or(false)
+                || self.hosted_coordinates.iter().any(|c| c == f)
+                || f == "native";
+            if !declared {
+                return Err(SchemaViolation {
+                    detail: format!(
+                        "slot floor `{f}` names no declared slot — floors cover target \
+                         classes, admitted hosted coordinates, or `native`"
+                    ),
+                });
+            }
+        }
+        // Hosted coordinates (6c — ADR-0196 D7): declaring coordinate
+        // admissions requires `hosted_participants` and the descriptor
+        // docs the admission gate resolves at open.
+        if !self.hosted_coordinates.is_empty() && !self.hosted_participants {
+            return Err(SchemaViolation {
+                detail: "hosted_coordinates is non-empty but hosted_participants = false \
+                         — coordinate admission is a hosted campaign surface"
+                    .into(),
+            });
+        }
+        if !self.hosted_coordinates.is_empty() && self.hosted_descriptor_refs.is_empty() {
+            return Err(UnresolvableEvidence {
+                ref_: "hosted_descriptor_refs is empty — every admitted coordinate must \
+                       resolve in a deposited `hosted_coordinate` descriptor at open"
+                    .into(),
+            });
+        }
+        // AC-15 (R-2.9.5 §2.5) — a hosted campaign claiming a
+        // reported-only dimension cannot satisfy `matched_total`: the
+        // campaign refuses at open rather than minting an
+        // incommensurable comparison downstream.
+        if self.hosted_participants && !self.reported_only_dimensions.is_empty() {
+            return Err(IncommensurableMatch {
+                detail: format!(
+                    "hosted_participants + reported_only_dimensions {:?} — a \
+                     matched_total claim is incommensurable (AC-15)",
+                    self.reported_only_dimensions
+                ),
+            });
+        }
+        // `authority_cap` — grant spellings are `domain:scope` (empty or
+        // malformed members are a schema slip, never an admission).
+        if let Some(cap) = &self.authority_cap {
+            for g in cap {
+                if !g.contains(':') {
+                    return Err(SchemaViolation {
+                        detail: format!(
+                            "authority_cap member `{g}` is not a `domain:scope` grant \
+                             spelling"
+                        ),
+                    });
+                }
+            }
         }
         Ok(())
     }
@@ -682,6 +969,30 @@ impl EvolutionCampaignSpec {
         if let Some(c) = &self.target_class {
             m.insert("target_class".into(), Json::str(c));
         }
+        if !self.target_classes.is_empty() {
+            m.insert(
+                "target_classes".into(),
+                Json::Arr(self.target_classes.iter().map(Json::str).collect()),
+            );
+        }
+        if !self.hosted_coordinates.is_empty() {
+            m.insert(
+                "hosted_coordinates".into(),
+                Json::Arr(self.hosted_coordinates.iter().map(Json::str).collect()),
+            );
+        }
+        if !self.hosted_descriptor_refs.is_empty() {
+            m.insert(
+                "hosted_descriptor_refs".into(),
+                Json::Arr(self.hosted_descriptor_refs.iter().map(Json::str).collect()),
+            );
+        }
+        if let Some(cap) = &self.authority_cap {
+            m.insert(
+                "authority_cap".into(),
+                Json::Arr(cap.iter().map(Json::str).collect()),
+            );
+        }
         if let Some(rp) = &self.rollout_policy {
             m.insert("rollout_policy".into(), rp.to_json());
         }
@@ -719,6 +1030,10 @@ impl EvolutionCampaignSpec {
                 "reported_only_dimensions",
                 "proposer_variant_ref",
                 "target_class",
+                "target_classes",
+                "hosted_coordinates",
+                "hosted_descriptor_refs",
+                "authority_cap",
                 "rollout_policy",
                 "judge_policy",
             ],
@@ -763,6 +1078,22 @@ impl EvolutionCampaignSpec {
             )?,
             proposer_variant_ref: opt_str_at(m, "proposer_variant_ref")?.map(str::to_string),
             target_class: opt_str_at(m, "target_class")?.map(str::to_string),
+            target_classes: match m.get("target_classes") {
+                None | Some(Json::Null) => Vec::new(),
+                _ => str_vec_at(m, "target_classes", "EvolutionCampaignSpec")?,
+            },
+            hosted_coordinates: match m.get("hosted_coordinates") {
+                None | Some(Json::Null) => Vec::new(),
+                _ => str_vec_at(m, "hosted_coordinates", "EvolutionCampaignSpec")?,
+            },
+            hosted_descriptor_refs: match m.get("hosted_descriptor_refs") {
+                None | Some(Json::Null) => Vec::new(),
+                _ => str_vec_at(m, "hosted_descriptor_refs", "EvolutionCampaignSpec")?,
+            },
+            authority_cap: match m.get("authority_cap") {
+                None | Some(Json::Null) => None,
+                _ => Some(str_vec_at(m, "authority_cap", "EvolutionCampaignSpec")?),
+            },
             rollout_policy: match m.get("rollout_policy") {
                 Some(Json::Obj(_)) => Some(RolloutPolicy::from_json(&m["rollout_policy"])?),
                 _ => None,
@@ -815,6 +1146,12 @@ pub struct FailureHypothesis {
     /// The attribution set — every semantic diff op's target must be a
     /// member (`TargetMismatch`).
     pub semantic_op_targets: Vec<String>,
+    /// `reference_trajectories` (S6.3a) — the corpus evidence refs the
+    /// hypothesis anchors its prediction to (the RHO selector's
+    /// trajectory set; §05h §2.2's `reference_trajectories` layer).
+    /// Non-empty requires the corpus to declare the layer and every ref
+    /// must resolve in `corpus.evidence_refs` (S2).
+    pub reference_trajectories: Vec<String>,
 }
 
 /// The admitted `hypothesis.kind` spellings.
@@ -833,6 +1170,61 @@ pub struct CandidateProposal {
     pub slot: String,
     /// The hypothesis when the proposal carries one (else `hypothesize`).
     pub hypothesis: Option<FailureHypothesis>,
+    /// `install` (S6.3a; R-2.8.5²) — the model install the candidate
+    /// requests under the campaign's `authority_cap`. `Some` requires the
+    /// spec to declare `authority_cap`; requested grants outside the cap
+    /// are `AuthorityWidening` at S1.
+    pub install: Option<InstallRequest>,
+    /// `coordinate_values` (S6.3a; ADR-0196 D7) — the hosted-coordinate
+    /// value assignments the candidate proposes (`{coordinate: value}` —
+    /// scalar values only; the C4→C2 edge admits *value* edits, never a
+    /// structural coordinate change). Every key must be a member of the
+    /// spec's `hosted_coordinates`, `supported` in the deposited
+    /// descriptor, and `enforced` under `budget_enforcement` — anything
+    /// else is `HostedCoordinateUnsupported`/`ReportedOnlyDimension`
+    /// at S1.
+    pub coordinate_values: BTreeMap<String, Json>,
+}
+
+/// `install` — the candidate's model-install request (S6.3a;
+/// R-2.8.5²): the named extension/kind plus the grant spellings the
+/// install plan must satisfy. The candidate's `requested_grants` must be
+/// a subset of the experiment's `authority_cap` *and* of the proposer's
+/// own grant set — both legs run (cap first, proposer widening second).
+#[derive(Debug, Clone, PartialEq)]
+pub struct InstallRequest {
+    /// The extension/model name to install.
+    pub name: String,
+    /// The extension kind (`model` for a model fetch — §05c §3's
+    /// install contract).
+    pub kind: String,
+    /// The grant spellings the install requests (`domain:scope`).
+    pub requested_grants: Vec<String>,
+}
+
+impl InstallRequest {
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("name", Json::str(&self.name)),
+            ("kind", Json::str(&self.kind)),
+            (
+                "requested_grants",
+                Json::Arr(self.requested_grants.iter().map(Json::str).collect()),
+            ),
+        ])
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<InstallRequest, SchemaError> {
+        let m = expect_obj(j, "InstallRequest")?;
+        reject_unknown(m, &["name", "kind", "requested_grants"], "InstallRequest")?;
+        Ok(InstallRequest {
+            name: str_at(m, "name", "InstallRequest")?.to_string(),
+            kind: str_at(m, "kind", "InstallRequest")?.to_string(),
+            requested_grants: str_vec_at(m, "requested_grants", "InstallRequest")?,
+        })
+    }
 }
 
 impl PredictedDelta {
@@ -913,6 +1305,10 @@ impl FailureHypothesis {
                 "semantic_op_targets",
                 Json::Arr(self.semantic_op_targets.iter().map(Json::str).collect()),
             ),
+            (
+                "reference_trajectories",
+                Json::Arr(self.reference_trajectories.iter().map(Json::str).collect()),
+            ),
         ])
     }
 
@@ -921,7 +1317,13 @@ impl FailureHypothesis {
         let m = expect_obj(j, "FailureHypothesis")?;
         reject_unknown(
             m,
-            &["kind", "evidence_refs", "predicted", "semantic_op_targets"],
+            &[
+                "kind",
+                "evidence_refs",
+                "predicted",
+                "semantic_op_targets",
+                "reference_trajectories",
+            ],
             "FailureHypothesis",
         )?;
         let predicted = match m.get("predicted") {
@@ -933,6 +1335,10 @@ impl FailureHypothesis {
             evidence_refs: str_vec_at(m, "evidence_refs", "FailureHypothesis")?,
             predicted,
             semantic_op_targets: str_vec_at(m, "semantic_op_targets", "FailureHypothesis")?,
+            reference_trajectories: match m.get("reference_trajectories") {
+                None | Some(Json::Null) => Vec::new(),
+                _ => str_vec_at(m, "reference_trajectories", "FailureHypothesis")?,
+            },
         })
     }
 }
@@ -951,6 +1357,22 @@ impl CandidateProposal {
                     .map(|h| h.to_json())
                     .unwrap_or(Json::Null),
             ),
+            (
+                "install",
+                self.install
+                    .as_ref()
+                    .map(|i| i.to_json())
+                    .unwrap_or(Json::Null),
+            ),
+            (
+                "coordinate_values",
+                Json::Obj(
+                    self.coordinate_values
+                        .iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect(),
+                ),
+            ),
         ])
     }
 
@@ -959,7 +1381,14 @@ impl CandidateProposal {
         let m = expect_obj(j, "CandidateProposal")?;
         reject_unknown(
             m,
-            &["base_ref", "diff", "slot", "hypothesis"],
+            &[
+                "base_ref",
+                "diff",
+                "slot",
+                "hypothesis",
+                "install",
+                "coordinate_values",
+            ],
             "CandidateProposal",
         )?;
         let diff = hh_hir::wire::diff_from_json(
@@ -971,11 +1400,32 @@ impl CandidateProposal {
             Some(Json::Null) | None => None,
             Some(h) => Some(FailureHypothesis::from_json(h)?),
         };
+        let install = match m.get("install") {
+            Some(Json::Null) | None => None,
+            Some(i) => Some(InstallRequest::from_json(i)?),
+        };
+        let mut coordinate_values = BTreeMap::new();
+        match m.get("coordinate_values") {
+            Some(Json::Obj(cm)) => {
+                for (k, v) in cm {
+                    coordinate_values.insert(k.clone(), v.clone());
+                }
+            }
+            Some(Json::Null) | None => {}
+            _ => {
+                return Err(SchemaError::v(
+                    "coordinate_values",
+                    "must be a map<coordinate, value>",
+                ))
+            }
+        }
         Ok(CandidateProposal {
             base_ref: str_at(m, "base_ref", "CandidateProposal")?.to_string(),
             diff,
             slot: str_at(m, "slot", "CandidateProposal")?.to_string(),
             hypothesis,
+            install,
+            coordinate_values,
         })
     }
 }
@@ -1328,6 +1778,12 @@ pub struct EvolutionAcceptanceReport {
     pub attribution_granularity: String,
     /// The portability label the report claims.
     pub portability_label: PortabilityLabel,
+    /// `label` — the maturity label the report renders under
+    /// (S6.3a; AC-R-2.9.5-5): a research-grade campaign's report must
+    /// carry `preview` (the `n/a{research-grade}` wall — such results
+    /// never enter C0–C3 acceptance or leaderboards without independent
+    /// reproduction). `None` = no maturity label claimed.
+    pub label: Option<String>,
 }
 
 /// The accepted `attribution_granularity` spellings.
@@ -1428,6 +1884,10 @@ impl EvolutionAcceptanceReport {
             ),
             ("portability_label", pl),
             ("human_review", Json::str("required")),
+            (
+                "label",
+                self.label.as_ref().map(Json::str).unwrap_or(Json::Null),
+            ),
         ])
     }
 
@@ -1441,6 +1901,7 @@ impl EvolutionAcceptanceReport {
                 "attribution_granularity",
                 "portability_label",
                 "human_review",
+                "label",
             ],
             "EvolutionAcceptanceReport",
         )?;
@@ -1509,6 +1970,7 @@ impl EvolutionAcceptanceReport {
             )?
             .to_string(),
             portability_label,
+            label: opt_str_at(m, "label")?.map(str::to_string),
         })
     }
 }
@@ -1571,6 +2033,21 @@ pub enum ParentSelectionPolicy {
     },
     /// `pareto_per_task` — a task-bucketed Pareto pick.
     ParetoPerTask,
+    /// `gene_bank{niche}` (S6.3a) — the elite/gene-bank arm: pick the
+    /// highest-scoring lineage member whose `niche` matches (the
+    /// quality-diversity archive's niche-qualified elite; a niche with
+    /// no member falls back to the lineage-wide elite).
+    GeneBank {
+        /// The niche spelling to select within.
+        niche: String,
+    },
+    /// `rho{trajectory_ref}` (S6.3a) — the retrospective trajectory-
+    /// anchored arm: pick the highest-scoring lineage member whose
+    /// `trajectory_refs` cite the named reference trajectory.
+    Rho {
+        /// The reference-trajectory evidence ref the pick anchors to.
+        trajectory_ref: String,
+    },
 }
 
 impl ParentSelectionPolicy {
@@ -1599,6 +2076,13 @@ impl ParentSelectionPolicy {
                 ]),
             )]),
             ParentSelectionPolicy::ParetoPerTask => Json::str("pareto_per_task"),
+            ParentSelectionPolicy::GeneBank { niche } => {
+                Json::obj([("gene_bank", Json::obj([("niche", Json::str(niche))]))])
+            }
+            ParentSelectionPolicy::Rho { trajectory_ref } => Json::obj([(
+                "rho",
+                Json::obj([("trajectory_ref", Json::str(trajectory_ref))]),
+            )]),
         }
     }
 
@@ -1632,6 +2116,18 @@ impl ParentSelectionPolicy {
                                 "children_penalty",
                                 "score_child_proportional",
                             )? as u64,
+                        })
+                    }
+                    "gene_bank" => {
+                        reject_unknown(vm, &["niche"], "gene_bank")?;
+                        Ok(ParentSelectionPolicy::GeneBank {
+                            niche: str_at(vm, "niche", "gene_bank")?.to_string(),
+                        })
+                    }
+                    "rho" => {
+                        reject_unknown(vm, &["trajectory_ref"], "rho")?;
+                        Ok(ParentSelectionPolicy::Rho {
+                            trajectory_ref: str_at(vm, "trajectory_ref", "rho")?.to_string(),
                         })
                     }
                     _ => Err(SchemaError::v(
@@ -2023,6 +2519,192 @@ impl JudgePolicy {
             audit_budget_ref: str_at(m, "audit_budget_ref", "JudgePolicy")?.to_string(),
             audited_share_ppm: opt_int_at(m, "audited_share_ppm")?.unwrap_or(0) as u64,
             min_honeypots: opt_int_at(m, "min_honeypots")?.unwrap_or(0) as u32,
+        })
+    }
+}
+
+// ── S6.3a — hosted coordinate admission (ADR-0196 D7; hh-hosting/1) ─────────
+
+/// `HostedCoordinateDescriptor` — the records-in admission surface for a
+/// hosted participant's `SUPPORTED` coordinate (the C4→C2 edge,
+/// ADR-0196 D7). The campaign deposits one descriptor per hosted
+/// participant under `doc_kind::HOSTED_DESCRIPTOR` before open; the open
+/// gate resolves `hosted_descriptor_refs`, checks `participant_class =
+/// hosted` + `abi = hh-hosting/1`, and admits exactly the coordinates the
+/// descriptor's `capability_vector` marks `supported` — anything else is
+/// `HostedCoordinateUnsupported` (unknown coordinate), and a coordinate
+/// in `budget_enforcement.reported_only` is refused admission for
+/// matched-total claims (`IncommensurableMatch`, AC-15).
+#[derive(Debug, Clone, PartialEq)]
+pub struct HostedCoordinateDescriptor {
+    /// The participant ref the coordinates bind to (`participant:<id>`).
+    pub participant_ref: String,
+    /// `hosted` only — the participant class the `hh-hosting/1` ABI
+    /// serves (ADR-0196 D7).
+    pub participant_class: String,
+    /// The hosted participant ABI spelling (`hh-hosting/1`).
+    pub abi: String,
+    /// `coordinate_* → capability` — only `supported` admits.
+    pub capability_vector: BTreeMap<String, String>,
+    /// The budget-enforcement declaration — `{enforced: [...],
+    /// reported_only: [...]}` (a `reported_only` member refuses
+    /// `matched_total` admission, AC-15).
+    pub budget_enforcement: BTreeMap<String, Vec<String>>,
+}
+
+/// The hosted-participant ABI the coordinate descriptors declare
+/// (ADR-0196 D7).
+pub const HOSTING_ABI: &str = "hh-hosting/1";
+
+/// The `capability_vector` value that admits a coordinate.
+pub const CAPABILITY_SUPPORTED: &str = "supported";
+
+impl HostedCoordinateDescriptor {
+    /// The capability key a named coordinate resolves under
+    /// (`model` → `coordinate_model`; `foo` → `coordinate_foo`) — the
+    /// `hh-hosting/1` `set_coordinate` spelling.
+    pub fn capability_key(coordinate: &str) -> String {
+        format!("coordinate_{coordinate}")
+    }
+
+    /// `coordinate ∈ capability_vector` with `supported` capability.
+    pub fn admits(&self, coordinate: &str) -> bool {
+        self.capability_vector
+            .get(&Self::capability_key(coordinate))
+            .map(|c| c == CAPABILITY_SUPPORTED)
+            .unwrap_or(false)
+    }
+
+    /// The coordinate's enforcement tier — `enforced`, `reported_only`,
+    /// or absent (undecidable — refuse matched-total claims on it).
+    pub fn enforcement(&self, coordinate: &str) -> &'static str {
+        if self
+            .budget_enforcement
+            .get("enforced")
+            .map(|e| e.iter().any(|c| c == coordinate))
+            .unwrap_or(false)
+        {
+            "enforced"
+        } else if self
+            .budget_enforcement
+            .get("reported_only")
+            .map(|e| e.iter().any(|c| c == coordinate))
+            .unwrap_or(false)
+        {
+            "reported_only"
+        } else {
+            "undeclared"
+        }
+    }
+
+    /// The canonical JSON.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("participant_ref", Json::str(&self.participant_ref)),
+            ("participant_class", Json::str(&self.participant_class)),
+            ("abi", Json::str(&self.abi)),
+            (
+                "capability_vector",
+                Json::Obj(
+                    self.capability_vector
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::str(v)))
+                        .collect(),
+                ),
+            ),
+            (
+                "budget_enforcement",
+                Json::Obj(
+                    self.budget_enforcement
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Arr(v.iter().map(Json::str).collect())))
+                        .collect(),
+                ),
+            ),
+        ])
+    }
+
+    /// Strict decode.
+    pub fn from_json(j: &Json) -> Result<HostedCoordinateDescriptor, SchemaError> {
+        let m = expect_obj(j, "HostedCoordinateDescriptor")?;
+        reject_unknown(
+            m,
+            &[
+                "participant_ref",
+                "participant_class",
+                "abi",
+                "capability_vector",
+                "budget_enforcement",
+            ],
+            "HostedCoordinateDescriptor",
+        )?;
+        let mut capability_vector = BTreeMap::new();
+        match member_at(m, "capability_vector", "HostedCoordinateDescriptor")? {
+            Json::Obj(cm) => {
+                for (k, v) in cm {
+                    capability_vector.insert(
+                        k.clone(),
+                        v.as_str()
+                            .ok_or_else(|| {
+                                SchemaError::v("capability_vector", "member must be a string")
+                            })?
+                            .to_string(),
+                    );
+                }
+            }
+            _ => {
+                return Err(SchemaError::v(
+                    "capability_vector",
+                    "must be a map<coordinate_*, capability>",
+                ))
+            }
+        }
+        let mut budget_enforcement = BTreeMap::new();
+        match m.get("budget_enforcement") {
+            Some(Json::Obj(bm)) => {
+                for (k, v) in bm {
+                    let mut dims = Vec::new();
+                    match v {
+                        Json::Arr(a) => {
+                            for d in a {
+                                dims.push(
+                                    d.as_str()
+                                        .ok_or_else(|| {
+                                            SchemaError::v(
+                                                "budget_enforcement",
+                                                "member must be a string",
+                                            )
+                                        })?
+                                        .to_string(),
+                                );
+                            }
+                        }
+                        _ => {
+                            return Err(SchemaError::v(
+                                "budget_enforcement",
+                                "member must be an array of dimension names",
+                            ))
+                        }
+                    }
+                    budget_enforcement.insert(k.clone(), dims);
+                }
+            }
+            Some(Json::Null) | None => {}
+            _ => {
+                return Err(SchemaError::v(
+                    "budget_enforcement",
+                    "must be a map<list, dimensions>",
+                ))
+            }
+        }
+        Ok(HostedCoordinateDescriptor {
+            participant_ref: str_at(m, "participant_ref", "HostedCoordinateDescriptor")?
+                .to_string(),
+            participant_class: str_at(m, "participant_class", "HostedCoordinateDescriptor")?
+                .to_string(),
+            abi: str_at(m, "abi", "HostedCoordinateDescriptor")?.to_string(),
+            capability_vector,
+            budget_enforcement,
         })
     }
 }

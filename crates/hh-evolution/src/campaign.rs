@@ -11,7 +11,7 @@
 //! endorsement). The pipeline evaluates no task itself — the experiment
 //! engine is the sole evaluation substrate (§05h §4).
 
-use hh_hir::diff;
+use hh_hir::diff::{self, HirDiff};
 use hh_hir::document::HirDocument;
 use hh_identity::idp::idp_id;
 use hh_lab::bench::SplitAssignmentRecord;
@@ -27,6 +27,7 @@ use crate::records::{
     EvolutionAcceptanceReport, EvolutionCampaignSpec, FailureHypothesis, ScreenReport,
     SecurityInvarianceReport, TransferRow, HYPOTHESIS_KINDS,
 };
+use crate::state::CandidateState;
 use crate::view::CampaignView;
 
 /// The kernel producer spelling for evolution-authored rows.
@@ -54,6 +55,10 @@ pub mod doc_kind {
     /// `search_budget` ref resolves here at S4 (G8: complete or
     /// refuse; ADR-0046 D1, ADR-0191).
     pub const SEARCH_BUDGET: &str = "evolution_search_budget";
+    /// A hosted participant's coordinate descriptor (S6.3a; ADR-0196
+    /// D7 — the `hh-hosting/1` admission surface the spec's
+    /// `hosted_descriptor_refs` names).
+    pub const HOSTED_DESCRIPTOR: &str = "hosted_coordinate_descriptor";
 }
 
 /// `EvolutionCampaign` — one campaign's durable driver.
@@ -130,6 +135,24 @@ impl EvolutionCampaign {
                     ),
                 }
                 .into())
+            }
+        }
+        // S6.3a (ADR-0196 D7) — the hosted-coordinate admission runs at
+        // open: every declared `hosted_coordinates` member must resolve
+        // `supported` in a deposited `hh-hosting/1` descriptor (an
+        // unsupported coordinate refuses the campaign open, not the
+        // first assignment).
+        let descriptors = hosted_descriptors(&docs, &spec)?;
+        for c in &spec.hosted_coordinates {
+            let admitted = descriptors.iter().any(|d| d.admits(c));
+            if !admitted {
+                return Err(Refusal::HostedCoordinateUnsupported {
+                    coordinate: c.clone(),
+                    detail: "no deposited `hh-hosting/1` descriptor marks the \
+                             coordinate `supported` — admission fails at open"
+                        .into(),
+                }
+                .into());
             }
         }
         let run_id = format!("evo-{}", spec.campaign_id.replace(':', "-"));
@@ -421,6 +444,21 @@ impl EvolutionCampaign {
             ("base_ref", Json::str(&proposal.base_ref)),
             ("diff_ref", Json::str(&diff.target.semantic_id)),
             ("target_ref", Json::str(&diff.target.version_id)),
+            // S6.3a — the admitted hosted-coordinate keys + install leg
+            // ride the intake row (the durable audit trail of what the
+            // proposal claimed).
+            (
+                "coordinates",
+                Json::Arr(proposal.coordinate_values.keys().map(Json::str).collect()),
+            ),
+            (
+                "install",
+                proposal
+                    .install
+                    .as_ref()
+                    .map(|i| i.to_json())
+                    .unwrap_or(Json::Null),
+            ),
         ]);
         self.transitioned(store, &cid, "", "proposed", "S1", None, intake, vec![])?;
 
@@ -463,6 +501,127 @@ impl EvolutionCampaign {
                     ),
                 },
             ));
+        }
+
+        // R-2.8.5² (S6.3a) — a proposal's `install` leg names grants
+        // bounded by the experiment's `authority_cap`: a grant outside
+        // the cap widens authority, and `install` on a campaign without
+        // a declared cap is refused outright (the cap is the ceiling the
+        // `lab.evolution.install` path re-checks).
+        if let Some(inst) = &proposal.install {
+            let cap = match &spec.authority_cap {
+                Some(c) => c.clone(),
+                None => {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::AuthorityWidening {
+                            detail: "proposal carries `install` but the campaign declares \
+                                     no `authority_cap` — model installs ride the \
+                                     experiment's declared ceiling only"
+                                .into(),
+                        },
+                    ))
+                }
+            };
+            for g in &inst.requested_grants {
+                if !cap.iter().any(|c| c == g) {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::AuthorityWidening {
+                            detail: format!(
+                                "install requests grant `{g}` outside the experiment's \
+                                 `authority_cap` (R-2.8.5²)"
+                            ),
+                        },
+                    ));
+                }
+            }
+        }
+
+        // ADR-0196 D7 (S6.3a) — hosted coordinate assignments are
+        // value-scoped: every `coordinate_values` key must be an
+        // admitted `hosted_coordinates` member carrying
+        // `capability = supported` + `enforced` budget enforcement in a
+        // deposited descriptor, and the value must be scalar (a
+        // structured value is a structural coordinate edit — refused).
+        if !proposal.coordinate_values.is_empty() {
+            let descriptors = hosted_descriptors(&self.docs, &spec)?;
+            for (coord, value) in &proposal.coordinate_values {
+                if matches!(value, Json::Obj(_) | Json::Arr(_)) {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::HostedCoordinateUnsupported {
+                            coordinate: coord.clone(),
+                            detail: "coordinate edits are value-scoped — a structured \
+                                     value is a structural edit (D7)"
+                                .into(),
+                        },
+                    ));
+                }
+                if !spec.hosted_coordinates.iter().any(|c| c == coord) {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::HostedCoordinateUnsupported {
+                            coordinate: coord.clone(),
+                            detail: "coordinate is not in the campaign's \
+                                     `hosted_coordinates` set"
+                                .into(),
+                        },
+                    ));
+                }
+                let mut admitted = false;
+                let mut enforcement = "undeclared";
+                for d in &descriptors {
+                    if d.admits(coord) {
+                        admitted = true;
+                        enforcement = d.enforcement(coord);
+                        break;
+                    }
+                }
+                if !admitted {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::HostedCoordinateUnsupported {
+                            coordinate: coord.clone(),
+                            detail: "no deposited descriptor marks the coordinate \
+                                     `supported`"
+                                .into(),
+                        },
+                    ));
+                }
+                match enforcement {
+                    "enforced" => {}
+                    "reported_only" => {
+                        return Err(fail(
+                            self,
+                            store,
+                            Refusal::ReportedOnlyDimension {
+                                detail: format!(
+                                    "coordinate `{coord}` is reported-only — no \
+                                     matched_total claim may consume it (AC-15)"
+                                ),
+                            },
+                        ))
+                    }
+                    _ => {
+                        return Err(fail(
+                            self,
+                            store,
+                            Refusal::HostedCoordinateUnsupported {
+                                coordinate: coord.clone(),
+                                detail: "the descriptor does not declare the \
+                                         coordinate's budget enforcement"
+                                    .into(),
+                            },
+                        ))
+                    }
+                }
+            }
         }
 
         // Family provenance — `human` campaigns take human-origin diffs;
@@ -647,13 +806,28 @@ impl EvolutionCampaign {
             ));
         }
         // `validate` on the target — the assembled candidate must pass
-        // the HIR's own validation (validate_assembly clean).
-        if let Err(e) = hh_hir::validate::validate(&target) {
+        // the HIR's own validation (validate_assembly clean). S6.3a —
+        // a `CompiledPayload` leaf without a `declared_interface`
+        // refuses `OpaqueWithoutInterface` (the typed S1/S7 gate the
+        // code-search family triggers), never a bare schema slip.
+        if let Err(errs) = hh_hir::validate::validate(&target) {
+            if errs
+                .iter()
+                .any(|e| matches!(e, hh_hir::errors::HirError::OpaqueWithoutInterface { .. }))
+            {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::OpaqueWithoutInterface {
+                        detail: format!("target payload lacks a declared interface: {errs:?}"),
+                    },
+                ));
+            }
             return Err(fail(
                 self,
                 store,
                 Refusal::SchemaViolation {
-                    detail: format!("target fails validate: {e:?}"),
+                    detail: format!("target fails validate: {errs:?}"),
                 },
             ));
         }
@@ -682,6 +856,313 @@ impl EvolutionCampaign {
             vec![],
         )?;
         Ok(cid)
+    }
+
+    // ── S6.3a — rebase + model install ───────────────────────────────────
+
+    /// `rebase` (ADR-0195 D12; R-2.9.5 6c) — a moved lineage head
+    /// rebases a candidate that cleared S4 (`searched | validated |
+    /// transferred | security_checked`). The caller supplies a fresh
+    /// `CandidateProposal` whose `base_ref` is the *current* head and
+    /// whose diff replays the candidate's edit onto it; the gate
+    /// re-checks semantic equivalence (same semantic-op target set —
+    /// a rebase replays the same edit, never smuggles a different
+    /// change), re-runs the S1 apply/invert/validate gates against the
+    /// new base, deposits the rebased proposal doc, and mints
+    /// `transitioned{to: rebased, stage: S5, rebase{of, onto, diff_ref,
+    /// target_ref}}` — the candidate re-enters at S5
+    /// (`rebased → validated`); nothing downstream survives.
+    pub fn rebase(
+        &mut self,
+        store: &mut Store,
+        candidate_id: &str,
+        proposal: &crate::records::CandidateProposal,
+        base_doc: &HirDocument,
+    ) -> Res<String> {
+        self.require_open()?;
+        self.bound(store)?;
+        let cur = self.candidate_state(candidate_id)?;
+        let rebasable = ["searched", "validated", "transferred", "security_checked"];
+        if !rebasable.contains(&cur.as_str()) {
+            return Err(Refusal::IllegalTransition {
+                from: cur,
+                to: "rebased".to_string(),
+            }
+            .into());
+        }
+        let from_state = cur.clone();
+        let spec = self.spec.clone();
+        let fail = move |eng: &mut Self, store: &mut Store, r: Refusal| -> EvolutionError {
+            eng.reject(store, candidate_id, &from_state, r, None)
+        };
+
+        // The rebased diff applies onto the *current* head — anything
+        // else is the same `StaleBase` the intake gate raises.
+        let head = self
+            .view
+            .head_ref()
+            .unwrap_or_else(|| spec.base_definition_ref.clone());
+        if proposal.base_ref != head {
+            return Err(fail(
+                self,
+                store,
+                Refusal::StaleBase {
+                    detail: format!(
+                        "rebase base_ref `{}` ≠ lineage head `{head}`",
+                        proposal.base_ref
+                    ),
+                },
+            ));
+        }
+
+        // Semantic equivalence — the rebased diff's semantic-op target
+        // set must equal the stored diff's (same edit, new base; leaf
+        // *contents* may differ where the head moved under them).
+        let old_diff = self.proposal_diff(candidate_id)?;
+        let op_key = |d: &HirDiff| -> Vec<String> {
+            let mut v: Vec<String> = d
+                .ops
+                .iter()
+                .filter(|o: &&hh_hir::diff::DiffOp| o.tag().semantic)
+                .map(|o| {
+                    let path = match o {
+                        diff::DiffOp::ReplaceField { path, .. }
+                        | diff::DiffOp::ReplaceLeaf { path, .. }
+                        | diff::DiffOp::Rebind { path, .. }
+                        | diff::DiffOp::SurfaceEdit { path, .. } => path.as_str(),
+                        _ => "",
+                    };
+                    format!("{}:{}", o.node_id(), path)
+                })
+                .collect();
+            v.sort();
+            v
+        };
+        if op_key(&old_diff) != op_key(&proposal.diff) {
+            return Err(fail(
+                self,
+                store,
+                Refusal::StaleBase {
+                    detail: "the rebased diff's semantic-op targets differ from the                              candidate's — a rebase replays the same edit"
+                        .into(),
+                },
+            ));
+        }
+
+        // S1 re-gates on the new base — apply/invert byte-identity and
+        // target `validate` (the `OpaqueWithoutInterface` mapping is the
+        // same gate `propose` runs).
+        let target = match diff::apply(base_doc, &proposal.diff) {
+            Ok(t) => t,
+            Err(e) => {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::DiffNotInvertible {
+                        detail: format!("rebased apply failed: {e:?}"),
+                    },
+                ))
+            }
+        };
+        let back = match diff::apply(&target, &diff::invert(&proposal.diff)) {
+            Ok(b) => b,
+            Err(e) => {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::DiffNotInvertible {
+                        detail: format!("rebased inverse apply failed: {e:?}"),
+                    },
+                ))
+            }
+        };
+        if back.canonical_bytes() != base_doc.canonical_bytes() {
+            return Err(fail(
+                self,
+                store,
+                Refusal::DiffNotInvertible {
+                    detail: "rebased apply(target, invert(diff)) != head — not                              invertible"
+                        .into(),
+                },
+            ));
+        }
+        if let Err(errs) = hh_hir::validate::validate(&target) {
+            if errs
+                .iter()
+                .any(|e| matches!(e, hh_hir::errors::HirError::OpaqueWithoutInterface { .. }))
+            {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::OpaqueWithoutInterface {
+                        detail: format!(
+                            "rebased target payload lacks a declared interface: {errs:?}"
+                        ),
+                    },
+                ));
+            }
+            return Err(fail(
+                self,
+                store,
+                Refusal::SchemaViolation {
+                    detail: format!("rebased target fails validate: {errs:?}"),
+                },
+            ));
+        }
+
+        // Deposit the rebased proposal doc (the candidate's `reports`
+        // table re-points at it) + mint the `rebased` row.
+        let proposal_ref = self
+            .docs
+            .put(
+                doc_kind::PROPOSAL,
+                &Json::obj([
+                    ("candidate_id", Json::str(candidate_id)),
+                    ("base_ref", Json::str(&proposal.base_ref)),
+                    ("slot", Json::str(&proposal.slot)),
+                    ("diff", proposal.diff.to_json()),
+                ]),
+            )
+            .map_err(|e| EvolutionError::Docs(format!("{e:?}")))?;
+        let prior_base = self
+            .view
+            .candidate(candidate_id)
+            .and_then(|r| r.base_ref.clone())
+            .unwrap_or_else(|| spec.base_definition_ref.clone());
+        self.transitioned(
+            store,
+            candidate_id,
+            &cur,
+            "rebased",
+            "S5",
+            Some(&proposal_ref),
+            Json::obj([
+                ("slot", Json::str(&proposal.slot)),
+                ("base_ref", Json::str(&proposal.base_ref)),
+                ("diff_ref", Json::str(&proposal.diff.target.semantic_id)),
+                ("target_ref", Json::str(&proposal.diff.target.version_id)),
+                (
+                    "rebase",
+                    Json::obj([
+                        ("of", Json::str(&prior_base)),
+                        ("onto", Json::str(&proposal.base_ref)),
+                        ("diff_ref", Json::str(&proposal.diff.target.semantic_id)),
+                        ("target_ref", Json::str(&proposal.diff.target.version_id)),
+                    ]),
+                ),
+            ]),
+            vec![],
+        )?;
+        Ok(proposal_ref)
+    }
+
+    /// `install` (R-2.8.5²; S6.3a) — the model-install plan bound to the
+    /// campaign's `authority_cap`: `requested_grants ⊆ cap` (else
+    /// `AuthorityWidening` — the proposal-level cap is the ceiling the
+    /// registry's own grant-set check re-checks under), then
+    /// `lifecycle::install_plan`'s trust-view + proposer-grant gates.
+    /// Emits `security.extension.install_requested` on the campaign run
+    /// *before* any fetch; the embed layer continues the completion.
+    #[allow(clippy::too_many_arguments)]
+    pub fn install(
+        &mut self,
+        store: &mut Store,
+        candidate_id: &str,
+        candidate: &hh_registry::extension::Candidate,
+        outcome: &hh_registry::extension::FetchOutcome,
+        requested_grants: std::collections::BTreeSet<String>,
+        proposer: &hh_registry::extension::lifecycle::ProposerContext,
+        view: &hh_registry::extension::lifecycle::TrustView,
+    ) -> Res<hh_registry::extension::lifecycle::InstallPlan> {
+        use hh_registry::extension::lifecycle;
+        self.require_open()?;
+        self.bound(store)?;
+        let cur = self.candidate_state(candidate_id)?;
+        if CandidateState::parse(&cur)
+            .map(|s| matches!(s, "rejected" | "withdrawn" | "reverted" | "retired"))
+            .unwrap_or(false)
+        {
+            return Err(Refusal::IllegalTransition {
+                from: cur,
+                to: "install".to_string(),
+            }
+            .into());
+        }
+        let cur = cur.clone();
+        let fail = move |eng: &mut Self, store: &mut Store, r: Refusal| -> EvolutionError {
+            eng.reject(store, candidate_id, &cur, r, None)
+        };
+
+        // The experiment's `authority_cap` is the ceiling — a grant
+        // outside it widens authority at the campaign boundary, before
+        // the registry's own proposer-grant check runs.
+        let cap = match &self.spec.authority_cap {
+            Some(c) => c.clone(),
+            None => {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::AuthorityWidening {
+                        detail: "install requested but the campaign declares no                                  `authority_cap` (R-2.8.5²)"
+                            .into(),
+                    },
+                ))
+            }
+        };
+        for g in &requested_grants {
+            if !cap.iter().any(|c| c == g) {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::AuthorityWidening {
+                        detail: format!(
+                            "install requests grant `{g}` outside the experiment's                              `authority_cap` (R-2.8.5²)"
+                        ),
+                    },
+                ));
+            }
+        }
+        let plan = lifecycle::install_plan(candidate, outcome, requested_grants, proposer, view)
+            .map_err(|e| {
+                // The registry's refusals land as the campaign's own —
+                // a rejected row lands before the error returns.
+                let r = match e {
+                    hh_registry::RegistryError::AuthorityWidening { .. } => {
+                        Refusal::AuthorityWidening {
+                            detail: format!("{e:?}"),
+                        }
+                    }
+                    hh_registry::RegistryError::ModelInstallDenied { .. } => {
+                        Refusal::PolicyWidening {
+                            leaf: format!("model_install = deny — {e:?}"),
+                        }
+                    }
+                    other => Refusal::SchemaViolation {
+                        detail: format!("install_plan: {other:?}"),
+                    },
+                };
+                fail(self, store, r)
+            })?;
+        // The durable `install_requested` row mints on the campaign run
+        // before any fetch — caused by the candidate's last transition.
+        let causes = self
+            .view
+            .candidate(candidate_id)
+            .and_then(|r| r.history.last().map(|t| t.event_id.clone()))
+            .map(|event_id| {
+                vec![hh_ledger::manifest::EventRef {
+                    run_id: self.run_id.clone(),
+                    event_id,
+                }]
+            })
+            .unwrap_or_default();
+        self.emit(
+            store,
+            "security.extension.install_requested",
+            plan.install_requested.clone(),
+            causes,
+        )?;
+        Ok(plan)
     }
 
     // ── S2 hypothesize ─────────────────────────────────────────────────
@@ -1365,7 +1846,19 @@ impl EvolutionCampaign {
     ) -> Res<()> {
         self.require_open()?;
         self.bound(store)?;
-        let from = self.require_state(candidate_id, "searched", "validated")?;
+        // S5 entry — `searched` (first pass) or `rebased` (S6.3a re-entry
+        // after a moved head; ADR-0195 D12).
+        let from = match self.candidate_state(candidate_id)?.as_str() {
+            "searched" => "searched".to_string(),
+            "rebased" => "rebased".to_string(),
+            cur => {
+                return Err(Refusal::IllegalTransition {
+                    from: cur.to_string(),
+                    to: "validated".to_string(),
+                }
+                .into())
+            }
+        };
         let fail = |eng: &mut Self, store: &mut Store, r: Refusal| -> EvolutionError {
             eng.reject(store, candidate_id, &from, r, Some(report_ref))
         };
@@ -1711,6 +2204,25 @@ impl EvolutionCampaign {
                 self,
                 store,
                 Refusal::AcceptanceIncomplete { items: failing },
+            ));
+        }
+        // S6.3a research-grade wall (AC-R-2.9.5-5) — a campaign whose
+        // `maturity_flags` carry `research-grade` seals only `preview`
+        // reports: the label is the `n/a{research-grade}` marker the
+        // render layer reads; anything else (or its absence) refuses.
+        if self
+            .spec
+            .maturity_flags
+            .iter()
+            .any(|f| f == "research-grade")
+            && report.label.as_deref() != Some("preview")
+        {
+            return Err(fail(
+                self,
+                store,
+                Refusal::SealRefused {
+                    reason: "research_grade_not_preview".into(),
+                },
             ));
         }
         // G3-1's literal spellings — `seal_refused{not_human}` /
@@ -2278,6 +2790,44 @@ impl EvolutionCampaign {
 }
 
 /// `predicted` member JSON (the hypothesis doc's own encoding).
+/// Resolve + decode the spec's `hosted_descriptor_refs` (records-in —
+/// `get_named` first, content-ref fallback; an unresolvable ref is
+/// `UnresolvableEvidence`, an undecodable body `SchemaViolation`, and a
+/// descriptor whose `abi`/`participant_class` is not the `hh-hosting/1`
+/// hosted contract is a `HostedCoordinateUnsupported` admission
+/// failure).
+fn hosted_descriptors(
+    docs: &hh_experiment::docs::LabDocs,
+    spec: &EvolutionCampaignSpec,
+) -> Res<Vec<crate::records::HostedCoordinateDescriptor>> {
+    use crate::records::{HostedCoordinateDescriptor, HOSTING_ABI};
+    let mut out = Vec::new();
+    for r in &spec.hosted_descriptor_refs {
+        let body = docs
+            .get_named(doc_kind::HOSTED_DESCRIPTOR, r)
+            .map_err(|e| EvolutionError::Docs(format!("{e:?}")))?
+            .or_else(|| docs.get(doc_kind::HOSTED_DESCRIPTOR, r).ok().flatten())
+            .ok_or_else(|| Refusal::UnresolvableEvidence {
+                ref_: format!("hosted descriptor `{r}` does not resolve"),
+            })?;
+        let d = HostedCoordinateDescriptor::from_json(&body)
+            .map_err(|e| schema(format!("hosted descriptor `{r}`: {e}")))?;
+        if d.abi != HOSTING_ABI || d.participant_class != "hosted" {
+            return Err(Refusal::HostedCoordinateUnsupported {
+                coordinate: d.participant_ref.clone(),
+                detail: format!(
+                    "descriptor declares abi `{}` / participant_class `{}` — \
+                     `hh-hosting/1` + `hosted` only (ADR-0196 D7)",
+                    d.abi, d.participant_class
+                ),
+            }
+            .into());
+        }
+        out.push(d);
+    }
+    Ok(out)
+}
+
 fn predicted_json(p: &crate::records::PredictedEffect) -> Json {
     Json::obj([
         (
