@@ -80,3 +80,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0288](ADR-0288-s3.11a-monitor-ifc-security-rulings.md) | S3.11a monitor/IFC security rulings | S3.11a (`057_S3.11a__security-eval-monitor-ifc.md`) | Accepted |
 | [ADR-0289](ADR-0289-s3.11b-security-eval-broker-audit-trust-rulings.md) | S3.11b credential/egress/audit/trust/approval rulings | S3.11b (`058_S3.11b__security-eval-broker-audit-trust.md`) | Accepted |
 | [ADR-0290](ADR-0290-s3.12-bundle-and-plugin-conformance-rulings.md) | S3.12 bundle completeness / reproduction / plugin-conformance / debt-retirement rulings | S3.12 (`059_S3.12__bundle-and-plugin-conformance.md`) | Accepted |
+| [ADR-0291](ADR-0291-s3.12b-gate-g2-gap-closure-rulings.md) | S3.12b GATE-G2 gap-closure rulings — benchmarkSet shape, exemplar→compare seam, close-row audit-cap residual, OQ-363 interim rule, rung-audit finding | S3.12b (`059a_S3.12b__gate-g2-gap-closure.md`) | Accepted |

@@ -1,0 +1,36 @@
+{
+  "expected": "{\"answer\":3}",
+  "instruction": "Write the count of [1,2,3] ({\"answer\":3}) to submission.json.",
+  "model_io": [
+    {
+      "args": {
+        "path": "submission.json",
+        "text": "{\"answer\":3}"
+      },
+      "surface": "fs.write"
+    },
+    {
+      "args": {
+        "text": "{\"answer\":3}"
+      },
+      "surface": "hh.submit"
+    }
+  ],
+  "name": "a-count",
+  "original_runs": [
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    }
+  ],
+  "schema": "benchset_task/1",
+  "split": "held_out"
+}

@@ -38,6 +38,7 @@ use crate::records::{BenchTask, EnvironmentHandle, ExposedTask, Submission, Surf
 /// One fixture suite row — the imported `TaskRecord` plus the expected
 /// submission payload (the fixture oracle the verifier checks against —
 /// `held_out.oracle_solution`'s bytes).
+#[derive(Debug, Clone)]
 pub struct FixtureTask {
     /// The imported record.
     pub record: TaskRecord,
@@ -46,6 +47,7 @@ pub struct FixtureTask {
 }
 
 /// `FixtureAdapter` — one adapter letter bound to one family.
+#[derive(Debug)]
 pub struct FixtureAdapter {
     /// `adapter_a` | `adapter_c` | `adapter_d` | `adapter_e`.
     adapter_id: &'static str,

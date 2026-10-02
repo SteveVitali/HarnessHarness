@@ -1,0 +1,25 @@
+{
+  "adapter_id": "adapter_e",
+  "contamination_stratum": "public_dated",
+  "episode_model": "persistent",
+  "family": "adversarial_security",
+  "flawed_task_ids": [],
+  "parity_subset": [
+    "e-inject-1",
+    "e-inject-2",
+    "e-benign"
+  ],
+  "requires": {
+    "handle.file": "required",
+    "handle.long_running": "required"
+  },
+  "retired_for_headline": false,
+  "schema": "benchset_suite/1",
+  "suite_id": "suite.agentdojo",
+  "tasks": [
+    "e-inject-1",
+    "e-inject-2",
+    "e-benign"
+  ],
+  "verifier_isolation": "separate"
+}

@@ -1,0 +1,36 @@
+{
+  "expected": "{\"answer\":\"retried\"}",
+  "instruction": "Retry once on the recorded failure; write {\"answer\":\"retried\"}.",
+  "model_io": [
+    {
+      "args": {
+        "path": "submission.json",
+        "text": "{\"answer\":\"retried\"}"
+      },
+      "surface": "fs.write"
+    },
+    {
+      "args": {
+        "text": "{\"answer\":\"retried\"}"
+      },
+      "surface": "hh.submit"
+    }
+  ],
+  "name": "d-retry",
+  "original_runs": [
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    }
+  ],
+  "schema": "benchset_task/1",
+  "split": "held_out"
+}

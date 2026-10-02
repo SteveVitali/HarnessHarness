@@ -4,6 +4,7 @@
 
 pub mod adapter;
 pub mod adapters;
+pub mod benchset;
 pub mod env;
 pub mod grade;
 pub mod infra;

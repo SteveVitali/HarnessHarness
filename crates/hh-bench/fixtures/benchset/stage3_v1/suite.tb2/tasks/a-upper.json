@@ -1,0 +1,36 @@
+{
+  "expected": "{\"answer\":\"ABC\"}",
+  "instruction": "Write the upper-case of \"abc\" ({\"answer\":\"ABC\"}) to submission.json.",
+  "model_io": [
+    {
+      "args": {
+        "path": "submission.json",
+        "text": "{\"answer\":\"ABC\"}"
+      },
+      "surface": "fs.write"
+    },
+    {
+      "args": {
+        "text": "{\"answer\":\"ABC\"}"
+      },
+      "surface": "hh.submit"
+    }
+  ],
+  "name": "a-upper",
+  "original_runs": [
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    }
+  ],
+  "schema": "benchset_task/1",
+  "split": "held_out"
+}

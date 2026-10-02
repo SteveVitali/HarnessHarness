@@ -1,0 +1,36 @@
+{
+  "expected": "{\"answer\":\"hello\"}",
+  "instruction": "Write {\"answer\":\"hello\"} to submission.json.",
+  "model_io": [
+    {
+      "args": {
+        "path": "submission.json",
+        "text": "{\"answer\":\"hello\"}"
+      },
+      "surface": "fs.write"
+    },
+    {
+      "args": {
+        "text": "{\"answer\":\"hello\"}"
+      },
+      "surface": "hh.submit"
+    }
+  ],
+  "name": "a-hello",
+  "original_runs": [
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    },
+    {
+      "model_calls": 2,
+      "reward_ppm": 1000000
+    }
+  ],
+  "schema": "benchset_task/1",
+  "split": "held_out"
+}
