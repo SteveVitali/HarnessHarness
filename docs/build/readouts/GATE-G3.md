@@ -260,3 +260,16 @@ assume silence is approval.*
 - [ ] PASSED
 - [ ] SKIPPED-BY-OPERATOR
 - [ ] NOT PASSABLE — what would pass it: ____________________
+
+## 2026-10-02 · Operator disposition — **PASSED**
+
+Operator ruled: **passed, proceed** — accept carried-forward residuals (G1/G2 precedent).
+
+All seven §9.7 preconditions verified MET on landed, test-pinned evidence. The five
+Stage-6-scoped OPEN deferral rows (DF-S5.4-1, DF-S1.24-1 residual, DF-S1.15-1,
+DF-S1.14-4, DF-S1.22-1) carry forward as residuals — their owning ticket (S6.1b)
+sits behind this gate, so a literal rule-4 reading would be circular; the operative
+reading releases them. Caveats G3-1 (substance-only SealRefused spellings), G3-2
+(`exp/` owner-seat clauses bind Stage 6, unexercised), G3-3 (debt-manager service is
+S6.1b-staged) recorded for the accepting operator. Suite baseline: 258 blocks /
+2813 tests / 0 failures. Recorded in LEDGER GATE DECISIONS. Stage 6 released.
