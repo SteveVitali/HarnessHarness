@@ -17,8 +17,11 @@ hh-provenance = { path = "../hh-provenance" }
 hh-hir = { path = "../hh-hir" }
 hh-ledger = { path = "../hh-ledger" }
 hh-budget = { path = "../hh-budget" }
+hh-registry = { path = "../hh-registry" }
 hh-lab = { path = "../hh-lab" }
 hh-experiment = { path = "../hh-experiment" }
 
 [dev-dependencies]
 hh-context = { path = "../hh-context" }
+hh-control = { path = "../hh-control" }
+hh-lab = { path = "../hh-lab" }

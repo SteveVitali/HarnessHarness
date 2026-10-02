@@ -45,6 +45,9 @@ pub struct CandidateRecord {
     pub attribution_label: Option<String>,
     /// `diff_ref` of the rolled-back candidate (the revert record).
     pub reverted_to: Option<String>,
+    /// The applied target's pinned version id (the `proposed` row's
+    /// `target_ref` member — the head-tracking input for `StaleBase`).
+    pub target_ref: Option<String>,
 }
 
 impl CandidateRecord {
@@ -57,6 +60,7 @@ impl CandidateRecord {
             ("slot", &self.slot),
             ("base_ref", &self.base_ref),
             ("diff_ref", &self.diff_ref),
+            ("target_ref", &self.target_ref),
             ("hypothesis_ref", &self.hypothesis_ref),
             ("hypothesis_kind", &self.hypothesis_kind),
             ("attribution_label", &self.attribution_label),
@@ -104,6 +108,10 @@ pub struct CampaignView {
     pub reason: Option<String>,
     /// `candidate_id → CandidateRecord`.
     pub candidates: BTreeMap<String, CandidateRecord>,
+    /// The lineage head — the last activated-and-not-reverted
+    /// candidate's `target_ref` (`None` = the spec's
+    /// `base_definition_ref`). OQ-061's moved-head surface.
+    pub head: Option<String>,
     /// Events folded.
     pub event_count: usize,
 }
@@ -129,6 +137,12 @@ impl CampaignView {
         for e in events.iter().skip(self.event_count) {
             self.fold_one(e);
         }
+    }
+
+    /// `head_ref` — the current lineage head (`None` ⇒ the campaign
+    /// spec's `base_definition_ref` still heads the lineage).
+    pub fn head_ref(&self) -> Option<String> {
+        self.head.clone()
     }
 
     /// `n_candidates_registered` — the `to: "proposed"` count (G9's
@@ -210,6 +224,7 @@ impl CampaignView {
                         history: Vec::new(),
                         attribution_label: None,
                         reverted_to: None,
+                        target_ref: None,
                     });
                 // State advances only when the transition's `from` matches the
                 // folded state — a duplicate intake or a refused attempt on an
@@ -226,6 +241,11 @@ impl CampaignView {
                         rec.base_ref = e
                             .payload
                             .get("base_ref")
+                            .and_then(Json::as_str)
+                            .map(str::to_string);
+                        rec.target_ref = e
+                            .payload
+                            .get("target_ref")
                             .and_then(Json::as_str)
                             .map(str::to_string);
                         rec.diff_ref = t.report_ref.clone().or_else(|| {
@@ -255,7 +275,26 @@ impl CampaignView {
                 if t.to == "reverted" && matches_current {
                     rec.reverted_to = t.report_ref.clone();
                 }
+                let to = t.to.clone();
                 rec.history.push(t);
+                // Head tracking (OQ-061; ADR-0195 D12): `active` moves the
+                // head to the candidate's applied target; `reverted`
+                // returns it to the restored ancestor's target (the
+                // reverted_to diff_ref's owner — a sealed ancestor).
+                if to == "active" && matches_current {
+                    self.head = rec.target_ref.clone().or(rec.base_ref.clone());
+                }
+                if to == "reverted" && matches_current {
+                    let reverted_to = rec.reverted_to.clone();
+                    let own_base = rec.base_ref.clone();
+                    let ancestor = reverted_to.as_deref().and_then(|d| {
+                        self.candidates
+                            .values()
+                            .find(|c| c.diff_ref.as_deref() == Some(d))
+                            .and_then(|c| c.target_ref.clone().or(c.base_ref.clone()))
+                    });
+                    self.head = ancestor.or(own_base);
+                }
             }
             _ => {}
         }

@@ -2404,3 +2404,173 @@ fn voi_weighted_refused_outside_adaptive_search() {
     s.experiment_id = s.experiment_id();
     assert_eq!(register_err(&mut r, &s, ctx()), "AdaptiveOutsideSearch");
 }
+
+// ── S6.2 (R-2.10.3⁴) — `disagreement_weighted` + `successive_halving` ────────
+
+/// The `disagreement_weighted` adaptive-search spec — the realized-
+/// variance strategy's record shape rides the same inclusion row.
+fn disagreement_spec() -> ExperimentSpec {
+    let mut s = adaptive_spec();
+    s.validation_strategy = ValidationStrategy::DisagreementWeighted {
+        estimator: "hajek".to_string(),
+        lambda: 0,
+        min_inclusion_fraction_ppm: 10_000,
+    };
+    s.experiment_id = s.experiment_id();
+    s
+}
+
+#[test]
+fn disagreement_weighted_records_the_inclusion_table() {
+    let mut r = rig("dw", 0);
+    let s = disagreement_spec();
+    let (run_id, picked) = {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        let eid = eng.register(&s).unwrap();
+        eng.expand(&eid).unwrap();
+        let run_id = eng.open_experiment(&eid).unwrap();
+        let picked = match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected a plan, got {other:?}"),
+        };
+        (run_id, picked)
+    };
+    let evs = r.store.events(&run_id).unwrap();
+    let rows: Vec<_> = evs
+        .iter()
+        .filter(|e| e.class == "measurement.experiment.inclusion_probabilities")
+        .collect();
+    assert_eq!(rows.len(), 1, "one inclusion row per allocation round");
+    let p = &rows[0].payload;
+    assert_eq!(
+        p.get("strategy").and_then(Json::as_str),
+        Some("disagreement_weighted")
+    );
+    assert_eq!(p.get("estimator").and_then(Json::as_str), Some("hajek"));
+    assert_eq!(
+        p.get("charged_to").and_then(Json::as_str),
+        Some("instrument")
+    );
+    assert_eq!(
+        p.get("picked").and_then(Json::as_str),
+        Some(picked.as_str())
+    );
+    // Replay-stable at (seed, round, dispatchable set).
+    let mut r2 = rig("dw-b", 0);
+    let s2 = disagreement_spec();
+    let second = {
+        let mut eng = ExperimentEngine::new(&mut r2.store, r2.docs.clone(), ctx());
+        let eid = eng.register(&s2).unwrap();
+        eng.expand(&eid).unwrap();
+        eng.open_experiment(&eid).unwrap();
+        match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected a plan, got {other:?}"),
+        }
+    };
+    assert_eq!(second, picked, "the draw is replay-stable");
+}
+
+#[test]
+fn adaptive_strategies_confine_to_adaptive_search() {
+    // `disagreement_weighted` on a paired design — AdaptiveOutsideSearch.
+    let mut r = rig("dw-refused", 0);
+    let mut s = spec(ExperimentKind::Comparative);
+    s.validation_strategy = ValidationStrategy::DisagreementWeighted {
+        estimator: "hajek".to_string(),
+        lambda: 0,
+        min_inclusion_fraction_ppm: 10_000,
+    };
+    s.experiment_id = s.experiment_id();
+    assert_eq!(register_err(&mut r, &s, ctx()), "AdaptiveOutsideSearch");
+
+    // `successive_halving` on a paired design — same refusal.
+    let mut r = rig("sh-refused", 0);
+    let mut s = spec(ExperimentKind::Comparative);
+    s.validation_strategy = ValidationStrategy::SuccessiveHalving {
+        eta: 2,
+        min_budget: 1_000,
+        brackets: 2,
+    };
+    s.experiment_id = s.experiment_id();
+    assert_eq!(register_err(&mut r, &s, ctx()), "AdaptiveOutsideSearch");
+
+    // An adaptive design over a held-out label — LeakedSplit-shaped
+    // confinement (the strategy never sees held-out rows).
+    let mut r = rig("sh-leaked", 0);
+    let mut s = adaptive_spec();
+    s.validation_strategy = ValidationStrategy::SuccessiveHalving {
+        eta: 2,
+        min_budget: 1_000,
+        brackets: 2,
+    };
+    s.suite.split_labels_used = vec![SplitLabel::HeldOut];
+    s.experiment_id = s.experiment_id();
+    assert_eq!(register_err(&mut r, &s, ctx()), "AdaptiveOutsideSearch");
+}
+
+#[test]
+fn successive_halving_records_the_bracket_and_prunes() {
+    let mut r = rig("sh", 0);
+    let mut s = adaptive_spec();
+    s.validation_strategy = ValidationStrategy::SuccessiveHalving {
+        eta: 2,
+        min_budget: 1_000,
+        brackets: 2,
+    };
+    s.experiment_id = s.experiment_id();
+    let (run_id, first) = {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        let eid = eng.register(&s).unwrap();
+        eng.expand(&eid).unwrap();
+        let run_id = eng.open_experiment(&eid).unwrap();
+        let first = match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected a plan, got {other:?}"),
+        };
+        (run_id, first)
+    };
+    let evs = r.store.events(&run_id).unwrap();
+    let rows: Vec<_> = evs
+        .iter()
+        .filter(|e| e.class == "measurement.experiment.halving_bracket")
+        .collect();
+    assert_eq!(rows.len(), 1, "one halving_bracket row per round");
+    let p = &rows[0].payload;
+    assert_eq!(
+        p.get("strategy").and_then(Json::as_str),
+        Some("successive_halving")
+    );
+    assert_eq!(p.get("bracket").and_then(Json::as_int), Some(0));
+    assert_eq!(p.get("eta").and_then(Json::as_int), Some(2));
+    assert_eq!(
+        p.get("charged_to").and_then(Json::as_str),
+        Some("instrument")
+    );
+    // Bracket 0's live set is the full pool (nothing eliminated yet);
+    // `per_plan` records each plan's last-surviving bracket.
+    match (p.get("kept"), p.get("per_plan")) {
+        (Some(Json::Arr(kept)), Some(Json::Obj(per_plan))) => {
+            assert_eq!(kept.len(), 4, "bracket 0 enters the whole pool");
+            assert_eq!(per_plan.len(), 4);
+            assert!(per_plan.contains_key(first.as_str()));
+        }
+        other => panic!("kept/per_plan shape: {other:?}"),
+    }
+    // The fold sees the round.
+    let v = ExperimentView::fold(r.store.events(&run_id).unwrap());
+    assert_eq!(v.halving_rounds, 1);
+    // Replay-stable: a fresh rig at the same seed draws the same bracket.
+    let mut r2 = rig("sh-b", 0);
+    let second = {
+        let mut eng = ExperimentEngine::new(&mut r2.store, r2.docs.clone(), ctx());
+        let eid = eng.register(&s).unwrap();
+        eng.expand(&eid).unwrap();
+        eng.open_experiment(&eid).unwrap();
+        match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected a plan, got {other:?}"),
+        }
+    };
+    assert_eq!(second, first, "the bracket assignment is replay-stable");
+}

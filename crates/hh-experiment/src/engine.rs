@@ -784,25 +784,10 @@ impl<'a> ExperimentEngine<'a> {
         // arm; the recorded `order_pos` list is untouched — V-4).
         let mut head_idx = 0usize;
         if let Some(sp) = &spec {
-            if let ValidationStrategy::VoiWeighted {
-                estimator,
-                lambda,
-                min_inclusion_fraction_ppm,
-                min_replicates,
-            } = &sp.validation_strategy
-            {
-                let params = hh_lab::adaptive::VoiParams {
-                    estimator: match estimator.as_str() {
-                        "expected_information_gain" => "expected_information_gain",
-                        _ => "disagreement",
-                    },
-                    lambda: *lambda,
-                    min_inclusion_fraction_ppm: *min_inclusion_fraction_ppm,
-                    min_replicates: *min_replicates,
-                };
-                // Per-cell settled-outcome statistics — the estimator's
-                // `p̄` is the scored fraction of settled attempts.
-                let mut stats: BTreeMap<String, hh_lab::adaptive::CellStats> = BTreeMap::new();
+            // Per-cell settled-outcome statistics — every adaptive
+            // estimator's `p̄` is the scored fraction of settled attempts.
+            let mut stats: BTreeMap<String, hh_lab::adaptive::CellStats> = BTreeMap::new();
+            if !matches!(sp.validation_strategy, ValidationStrategy::FullSet) {
                 for ps in view.plans.values() {
                     let st = stats.entry(ps.cell_id.clone()).or_default();
                     for a in &ps.attempts {
@@ -817,32 +802,128 @@ impl<'a> ExperimentEngine<'a> {
                         }
                     }
                 }
-                let candidates: Vec<(String, String)> = dispatchable
-                    .iter()
-                    .map(|ps| (ps.run_plan_id.clone(), ps.cell_id.clone()))
-                    .collect();
-                let stats_of = |cell: &str| stats.get(cell).copied().unwrap_or_default();
-                if let Some(rec) = hh_lab::adaptive::voi_allocate(
-                    &params,
-                    &candidates,
-                    &stats_of,
-                    &sp.scheduling.permutation_seed,
-                    view.inclusion_rounds,
-                ) {
-                    head_idx = dispatchable
-                        .iter()
-                        .position(|ps| ps.run_plan_id == rec.picked)
-                        .unwrap_or(0);
-                    self.append_chained(
-                        &run_id,
-                        &lease,
-                        vec![self.mint(
+            }
+            let candidates: Vec<(String, String)> = dispatchable
+                .iter()
+                .map(|ps| (ps.run_plan_id.clone(), ps.cell_id.clone()))
+                .collect();
+            let stats_of = |cell: &str| stats.get(cell).copied().unwrap_or_default();
+            match &sp.validation_strategy {
+                ValidationStrategy::VoiWeighted {
+                    estimator,
+                    lambda,
+                    min_inclusion_fraction_ppm,
+                    min_replicates,
+                } => {
+                    let params = hh_lab::adaptive::VoiParams {
+                        estimator: match estimator.as_str() {
+                            "expected_information_gain" => "expected_information_gain",
+                            _ => "disagreement",
+                        },
+                        lambda: *lambda,
+                        min_inclusion_fraction_ppm: *min_inclusion_fraction_ppm,
+                        min_replicates: *min_replicates,
+                    };
+                    if let Some(rec) = hh_lab::adaptive::voi_allocate(
+                        &params,
+                        &candidates,
+                        &stats_of,
+                        &sp.scheduling.permutation_seed,
+                        view.inclusion_rounds,
+                    ) {
+                        head_idx = dispatchable
+                            .iter()
+                            .position(|ps| ps.run_plan_id == rec.picked)
+                            .unwrap_or(0);
+                        self.append_chained(
                             &run_id,
-                            class::INCLUSION_PROBABILITIES,
-                            ev::inclusion_probabilities(&rec),
-                        )?],
-                    )?;
+                            &lease,
+                            vec![self.mint(
+                                &run_id,
+                                class::INCLUSION_PROBABILITIES,
+                                ev::inclusion_probabilities(&rec),
+                            )?],
+                        )?;
+                    }
                 }
+                // S6.2 — `disagreement_weighted`: the realized-variance
+                // arm (R-2.10.3⁴); same replayable draw + recorded table.
+                ValidationStrategy::DisagreementWeighted {
+                    estimator,
+                    lambda,
+                    min_inclusion_fraction_ppm,
+                } => {
+                    let params = hh_lab::adaptive::DisagreementParams {
+                        estimator: match estimator.as_str() {
+                            "anchored_difference" => "anchored_difference",
+                            _ => "hajek",
+                        },
+                        lambda: *lambda,
+                        min_inclusion_fraction_ppm: *min_inclusion_fraction_ppm,
+                        min_replicates: 1,
+                    };
+                    if let Some(rec) = hh_lab::adaptive::disagreement_weighted_allocate(
+                        &params,
+                        &candidates,
+                        &stats_of,
+                        &sp.scheduling.permutation_seed,
+                        view.inclusion_rounds,
+                    ) {
+                        head_idx = dispatchable
+                            .iter()
+                            .position(|ps| ps.run_plan_id == rec.picked)
+                            .unwrap_or(0);
+                        self.append_chained(
+                            &run_id,
+                            &lease,
+                            vec![self.mint(
+                                &run_id,
+                                class::INCLUSION_PROBABILITIES,
+                                ev::inclusion_probabilities(&rec),
+                            )?],
+                        )?;
+                    }
+                }
+                // S6.2 — `successive_halving`: the current bracket's
+                // `kept` set prunes the dispatchable list; the
+                // `halving_bracket` row is the durable, replayable
+                // evidence (R-2.10.3⁴).
+                ValidationStrategy::SuccessiveHalving {
+                    eta,
+                    min_budget,
+                    brackets,
+                } => {
+                    let params = hh_lab::adaptive::HalvingParams {
+                        eta: *eta,
+                        min_budget: *min_budget,
+                        brackets: *brackets,
+                    };
+                    if let Some(rec) = hh_lab::adaptive::successive_halving_allocate(
+                        &params,
+                        &candidates,
+                        &stats_of,
+                        &sp.scheduling.permutation_seed,
+                        view.halving_rounds,
+                    ) {
+                        self.append_chained(
+                            &run_id,
+                            &lease,
+                            vec![self.mint(
+                                &run_id,
+                                class::HALVING_BRACKET,
+                                ev::halving_bracket(&rec),
+                            )?],
+                        )?;
+                        dispatchable.retain(|ps| rec.kept.iter().any(|k| k == &ps.run_plan_id));
+                        if dispatchable.is_empty() {
+                            if view.open_plans(now).is_empty() {
+                                return Ok(NextVerdict::Done);
+                            }
+                            return Ok(NextVerdict::Wait);
+                        }
+                    }
+                }
+                ValidationStrategy::FullSet => {}
             }
         }
         // The pool must fund the next slice — else pause `budget_exhausted`

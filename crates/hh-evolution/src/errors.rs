@@ -341,6 +341,23 @@ pub enum Refusal {
         /// The failure detail.
         detail: String,
     },
+    /// `coordination_delta = loosening` on the candidate diff — K-4
+    /// classified and refused in evolution contexts like
+    /// `authority_delta = widening` (R-2.6.5⁴; ADR-0193 (e);
+    /// ADR-0053 D-5's shape). Checked at S1 and again at S7.
+    CoordinationLoosening {
+        /// The failure detail.
+        detail: String,
+    },
+    /// A `selected_best_of_n` baseline or screen named a judge selector
+    /// the campaign's `judge_policy` does not declare — calibrated,
+    /// independent, honeypot-bearing selectors only (G7; §05h §4 S3–S4).
+    JudgeSelectorUndeclared {
+        /// The undeclared selector ref.
+        selector: String,
+        /// The failure detail.
+        detail: String,
+    },
 
     // ── S10 retire ──────────────────────────────────────────────────────
     /// The retirement evidence's experiment is not `kind = retirement`
@@ -478,6 +495,8 @@ impl Refusal {
                 "split_rollout_not_committable".to_string()
             }
             Refusal::ConditionedRuleIncomplete { .. } => "conditioned_rule_incomplete".to_string(),
+            Refusal::CoordinationLoosening { .. } => "coordination_loosening".to_string(),
+            Refusal::JudgeSelectorUndeclared { .. } => "judge_selector_undeclared".to_string(),
             Refusal::NotARetirementDiff { .. } => "not_a_retirement_diff".to_string(),
             Refusal::RemovalTestInconclusive { .. } => "removal_test_inconclusive".to_string(),
             Refusal::RetirementSealRefused { .. } => "retirement_seal_refused".to_string(),

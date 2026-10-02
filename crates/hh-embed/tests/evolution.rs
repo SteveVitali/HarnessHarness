@@ -178,6 +178,7 @@ fn campaign_open_requires_the_split_pin() {
             task_ids: vec!["task:t".into()],
             evidence_refs: vec!["ev:1".into()],
             split_assignment_ref: "no-such-pin".into(),
+            layers: None,
         },
         exclusion_targets: vec![],
         must_code_targets: vec![],
@@ -198,6 +199,10 @@ fn campaign_open_requires_the_split_pin() {
         proposer_family: "human".into(),
         hosted_participants: false,
         reported_only_dimensions: vec![],
+        proposer_variant_ref: None,
+        target_class: None,
+        rollout_policy: None,
+        judge_policy: None,
     };
     let r = call(
         &mut svc,
@@ -253,6 +258,7 @@ fn campaign_open_view_ensure_close() {
             task_ids: vec!["task:t".into()],
             evidence_refs: vec!["ev:1".into()],
             split_assignment_ref: "split:t".into(),
+            layers: None,
         },
         exclusion_targets: vec![],
         must_code_targets: vec![],
@@ -273,6 +279,10 @@ fn campaign_open_view_ensure_close() {
         proposer_family: "human".into(),
         hosted_participants: false,
         reported_only_dimensions: vec![],
+        proposer_variant_ref: None,
+        target_class: None,
+        rollout_policy: None,
+        judge_policy: None,
     };
     let r = call(
         &mut svc,

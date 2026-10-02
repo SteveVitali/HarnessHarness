@@ -1007,3 +1007,176 @@ pub fn work_source_adapter_class() -> ClassRecord {
         ],
     }
 }
+
+/// `evolution_proposer` — the §05h §2.4 proposer class (R-2.9.5; ADR-0196
+/// D1/D2; S6.2). `exactly-one` per campaign, homed on plane 7
+/// (measurement), never invoked inside a subject run (`hot_path: false`,
+/// `decision_points: ∅`). Contract: `propose`, `select_parent`,
+/// `declare` — the propose output is the typed sum `[CandidateProposal ∪
+/// FailureHypothesis] | NoAddressableFailure`. Third-party variants run
+/// out of process under `plugin_abi/1` (`subprocess_confined`); the
+/// four-kind suite below is the §06 ADR-0152 driver surface the variant
+/// host doubles as (`registry_ci`).
+pub fn evolution_proposer_class() -> ClassRecord {
+    ClassRecord {
+        class_id: "evolution_proposer".to_string(),
+        contract: vec![
+            ContractOperation {
+                name: "propose".to_string(),
+                inputs: Json::obj([
+                    ("corpus", Json::str("EvidenceCorpusRef")),
+                    ("base", Json::str("DefinitionVersionRef")),
+                    ("constraints", Json::str("ProposalConstraints")),
+                    ("profile", Json::str("ModelProfile")),
+                    ("account", Json::str("ResourceAccount")),
+                ]),
+                outputs: Json::obj([(
+                    "outcomes",
+                    Json::str("[CandidateProposal ∪ FailureHypothesis] | NoAddressableFailure"),
+                )]),
+                invariants: vec![
+                    "reads only the corpus and base — no held-out surface".to_string(),
+                    "writes only candidate records at scope run".to_string(),
+                    "every model call lands on the proposer's budget slice (charged_to = instrument)"
+                        .to_string(),
+                    "NoAddressableFailure is a typed outcome, never an empty list".to_string(),
+                ],
+                failure_modes: vec![
+                    "CorpusUnreadable".to_string(),
+                    "ConstraintUnsatisfiable".to_string(),
+                    "BudgetExhausted".to_string(),
+                ],
+            },
+            ContractOperation {
+                name: "select_parent".to_string(),
+                inputs: Json::obj([
+                    ("lineage", Json::str("CandidateRecord[]")),
+                    ("policy", Json::str("ParentSelectionPolicy")),
+                ]),
+                outputs: Json::obj([("parent", Json::str("DefinitionVersionRef"))]),
+                invariants: vec![
+                    "pure — policies are campaign data".to_string(),
+                    "policy ∈ {best, score_proportional, score_child_proportional, pareto_per_task}"
+                        .to_string(),
+                ],
+                failure_modes: vec![],
+            },
+            ContractOperation {
+                name: "declare".to_string(),
+                inputs: Json::obj([]),
+                outputs: Json::obj([("declaration", Json::str("proposer_declaration"))]),
+                invariants: vec![
+                    "tri-state fields (T-LCD-07 reflexively)".to_string(),
+                    "{family, op_classes_admissible, needs_reference_trajectories, uses_judge, \
+                     judge_ref?, maturity}"
+                        .to_string(),
+                ],
+                failure_modes: vec!["IncompleteDeclaration".to_string()],
+            },
+        ],
+        cardinality: crate::kinds::Cardinality::ExactlyOne,
+        required_inputs: BTreeSet::from([
+            "ModelProfile".to_string(),
+            "ResourceAccount".to_string(),
+        ]),
+        base_param_schema: BTreeMap::new(),
+        hot_path: false,
+        dialect_introduced: "registry/1".to_string(),
+        contract_version: "1.0".to_string(),
+        home: "P7".to_string(),
+        declaration_schema: Json::obj([
+            (
+                "properties",
+                Json::obj([
+                    ("family", Json::Null),
+                    ("op_classes_admissible", Json::Null),
+                    ("needs_reference_trajectories", Json::Null),
+                    ("uses_judge", Json::Null),
+                    ("judge_ref", Json::Null),
+                    ("maturity", Json::Null),
+                    ("conditioned_rules", Json::Null),
+                ]),
+            ),
+            ("additionalProperties", Json::Bool(false)),
+            (
+                "required",
+                Json::Arr(vec![
+                    Json::str("family"),
+                    Json::str("op_classes_admissible"),
+                    Json::str("uses_judge"),
+                    Json::str("maturity"),
+                ]),
+            ),
+        ]),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
+        conformance_suite_ref: None,
+        decision_points: vec![],
+        metrics_declared: vec!["cost_of_proposal".to_string()],
+        slot_key: "evolution_proposer".to_string(),
+        tier: "C4".to_string(),
+    }
+}
+
+/// The `evolution_proposer` conformance suite — the §05h §2.4 four kinds
+/// (ADR-0196 D2): *static* — declaration conforms and every conditioned
+/// proposer rule carries an `AssumptionDebtRecord`; *contract* — driven
+/// out of process over a golden corpus, every output parses as a
+/// `CandidateProposal`/`NoAddressableFailure` and `classify` of every
+/// emitted diff is never widening/loosening; *property* — the isolation
+/// probes (no read outside the corpus, no held-out path, no network
+/// beyond the gateway), never emits a candidate on the exclusion set,
+/// `uses_judge = false` variants make no judge call (DRIFT);
+/// *executable* — the golden corpus yields ≥ 1 S2-valid hypothesis or a
+/// `NoAddressableFailure` with a reason. The driver is
+/// `hh_evolution::proposer_conformance` over a `ProposerPort` — the
+/// variant host supplies the out-of-process lane (§06 ADR-0152's
+/// `registry_ci`).
+pub fn evolution_proposer_suite(class_version_id: &str) -> ConformanceSuite {
+    let test = |test_id: &str, kind: TestKind, verdict_rule: &str| SuiteTest {
+        test_id: test_id.to_string(),
+        kind,
+        fixture_ref: None,
+        driver: TestDriver::OutOfProcess,
+        oracle_class: OracleClass::Deterministic,
+        budget: Json::obj([("max_ms", Json::Int(5_000))]),
+        verdict_rule: verdict_rule.to_string(),
+    };
+    ConformanceSuite {
+        suite_id: "evolution_proposer.c4".to_string(),
+        class_ref: class_version_id.to_string(),
+        contract_version: "1.0".to_string(),
+        tests: vec![
+            test(
+                "static.declaration",
+                TestKind::Static,
+                "declare() fields present; conditioned rules carry complete debt records",
+            ),
+            test(
+                "contract.propose",
+                TestKind::Contract,
+                "every output parses as CandidateProposal|FailureHypothesis|NoAddressableFailure; \
+                 no emitted diff classifies widening/loosening",
+            ),
+            test(
+                "property.isolation",
+                TestKind::Property,
+                "no read outside corpus; no held-out path; no network beyond the gateway; never \
+                 emits an excluded target; uses_judge=false ⇒ zero judge calls else DRIFT",
+            ),
+            test(
+                "executable.golden_corpus",
+                TestKind::Executable,
+                "golden corpus yields ≥ 1 S2-valid hypothesis or NoAddressableFailure{reason}",
+            ),
+        ],
+        required_for_status: BTreeSet::from([
+            "static.declaration".to_string(),
+            "contract.propose".to_string(),
+            "property.isolation".to_string(),
+            "executable.golden_corpus".to_string(),
+        ]),
+    }
+}
