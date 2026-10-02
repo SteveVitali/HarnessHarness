@@ -234,6 +234,7 @@ dependencies = [
  "hh-embed-schema",
  "hh-env",
  "hh-eval",
+ "hh-evolution",
  "hh-experiment",
  "hh-fleet",
  "hh-gateway",
@@ -302,6 +303,22 @@ dependencies = [
  "hh-provenance",
  "hh-telemetry",
  "hh-verification",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-evolution"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-context",
+ "hh-experiment",
+ "hh-hir",
+ "hh-identity",
+ "hh-lab",
+ "hh-ledger",
+ "hh-ontology",
+ "hh-provenance",
  "hh-wire",
 ]
 

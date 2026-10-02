@@ -98,6 +98,12 @@ pub struct EmbedService {
     /// refusal-only `fleet_dispatch` in `fleet_ops`.
     #[cfg(feature = "tier-c4")]
     pub(crate) fleet_engines: BTreeMap<String, hh_fleet::engine::FleetEngine>,
+    /// Evolution-campaign engines held across `lab.evolution.*` calls
+    /// (S6.1a; `campaign_run → EvolutionCampaign` — the writer lease
+    /// persists like `experiment_engines`; the fence still lives in the
+    /// ledger). Tier-gated like `fleet_engines` (CC6).
+    #[cfg(feature = "tier-c4")]
+    pub(crate) evolution_campaigns: BTreeMap<String, hh_evolution::campaign::EvolutionCampaign>,
     /// The removable Hosting Plane driver (S4.5a; `hosting_ops::HostingPlane`
     /// — a pure-Json seam keeping `hosting_edges = []`). `None` = the tier
     /// is absent; ops needing it refuse `hosting_plane_absent`, never fake.
@@ -335,6 +341,8 @@ impl EmbedService {
             experiment_engines: BTreeMap::new(),
             #[cfg(feature = "tier-c4")]
             fleet_engines: BTreeMap::new(),
+            #[cfg(feature = "tier-c4")]
+            evolution_campaigns: BTreeMap::new(),
             results_subscriptions: BTreeMap::new(),
             binding_label: "embedded".to_string(),
         })
@@ -698,6 +706,12 @@ impl EmbedService {
             // dispatch arm routes the whole family through
             // `fleet_ops::fleet_dispatch`; a `--no-default-features`
             // build answers `Unsupported{by: "tier-c4"}` — CC6).
+            // ── S6.1a: the `lab.evolution.*` surface — §05h's C4
+            // evolution pipeline (`run_kind = experiment` campaign runs;
+            // `evolution_ops::evolution_dispatch`; a
+            // `--no-default-features` build answers
+            // `Unsupported{by: "tier-c4"}` — CC6).
+            m if m.starts_with("lab.evolution.") => self.evolution_dispatch(m, &req.params),
             m if m.starts_with("fleet.") => self.fleet_dispatch(m, &req.params),
             // ── S3.3: `lab.eval.*` — the eval kernel boundary
             // (R-2.9.2/R-2.9.4⁰ᵇ; records-in/records-out).

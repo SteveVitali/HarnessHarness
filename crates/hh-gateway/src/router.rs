@@ -1906,10 +1906,49 @@ fn candidate_list(
         | RoutingPolicyKind::QualityTarget
         | RoutingPolicyKind::HealthAware
         | RoutingPolicyKind::Bandit => binding(),
-        RoutingPolicyKind::Learned => Err(RoutingRefusal::PolicyInvalid {
-            rule_id: policy.policy_id.clone(),
-            reason: "kind learned is C4 — not executable at this tier".to_string(),
-        }),
+        // AC-R-2.3.2-14 — `learned` is deployable only through the
+        // evolution pipeline: `params.evolution` must carry the campaign
+        // evidence `{search_budget_ref, artifact_benefit_ref,
+        // match_mode: "matched_total", expiry_condition[] ∋
+        // "model_version_change", budget_match: "matched"}`. Anything
+        // else stays a declared tier refusal — never a fall-through.
+        // Once admitted, the runtime binds the role's sealed candidate
+        // list (`binding()`): the learned choice is the accepted
+        // candidate's frozen selection, not an in-router learner.
+        RoutingPolicyKind::Learned => {
+            let ev = policy.params.get("evolution").ok_or_else(|| {
+                malformed("learned without params.evolution — not pipeline-bound")
+            })?;
+            let evo_str = |k: &str| ev.get(k).and_then(Json::as_str);
+            for (k, what) in [
+                ("search_budget_ref", "SearchBudgetRecord"),
+                ("artifact_benefit_ref", "held-out artifact_benefit report"),
+            ] {
+                if evo_str(k).map(str::is_empty).unwrap_or(true) {
+                    return Err(malformed(&format!(
+                        "learned policy without evolution.{k} — AC-R-2.3.2-14 requires a {what}"
+                    )));
+                }
+            }
+            if evo_str("match_mode") != Some("matched_total") {
+                return Err(malformed(
+                    "learned policy without evolution.match_mode = matched_total",
+                ));
+            }
+            if evo_str("budget_match") != Some("matched") {
+                return Err(malformed(
+                    "learned policy without evolution.budget_match = matched",
+                ));
+            }
+            let expiry_ok = matches!(ev.get("expiry_condition"), Some(Json::Arr(c))
+                if c.iter().any(|e| e.as_str() == Some("model_version_change")));
+            if !expiry_ok {
+                return Err(malformed(
+                    "learned policy without expiry_condition ∋ model_version_change",
+                ));
+            }
+            binding()
+        }
     }
 }
 
@@ -2011,9 +2050,12 @@ pub fn select_with(
     attempted: &BTreeSet<String>,
 ) -> Result<RoutingDecision, RoutingRefusal> {
     // Policy validity first (T-LCD-05; a non-C1 kind is a declared tier
-    // refusal — CC6, never a fall-through).
+    // refusal — CC6, never a fall-through). `learned` (C4) is the one
+    // exception: AC-R-2.3.2-14 admits it *only* pipeline-bound, which
+    // `candidate_list`'s `params.evolution` evidence gate enforces — an
+    // unbound `learned` still refuses there, never silently.
     policy.link_check()?;
-    if !policy.kind.c1() {
+    if !policy.kind.c1() && !matches!(policy.kind, RoutingPolicyKind::Learned) {
         return Err(RoutingRefusal::PolicyInvalid {
             rule_id: policy.policy_id.clone(),
             reason: format!("kind {} is not a C1 kind", policy.kind.as_str()),

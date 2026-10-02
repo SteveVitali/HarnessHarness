@@ -48,6 +48,12 @@ pub enum ExperimentKind {
     Equivalence,
     /// A single-rule removal diff (T-LCD-05).
     Retirement,
+    /// A multi-rule removal batch (§05h S10; S6.1a; R-2.9.5) — the
+    /// retirement kind's removal-test shape lifted to a batch of rules:
+    /// the same `matched_cap`/`cold_start` match and authority/budget
+    /// invariance, the `semantic_ops == 1` single-rule bound relaxed to
+    /// `>= 1` per diff.
+    RetirementBatch,
     /// A reproduction of a published bundle (ADR-0140 R2/R3).
     Reproduction,
 }
@@ -60,6 +66,7 @@ impl ExperimentKind {
             ExperimentKind::Exploratory => "exploratory",
             ExperimentKind::Equivalence => "equivalence",
             ExperimentKind::Retirement => "retirement",
+            ExperimentKind::RetirementBatch => "retirement_batch",
             ExperimentKind::Reproduction => "reproduction",
         }
     }
@@ -71,6 +78,7 @@ impl ExperimentKind {
             "exploratory" => Some(ExperimentKind::Exploratory),
             "equivalence" => Some(ExperimentKind::Equivalence),
             "retirement" => Some(ExperimentKind::Retirement),
+            "retirement_batch" => Some(ExperimentKind::RetirementBatch),
             "reproduction" => Some(ExperimentKind::Reproduction),
             _ => None,
         }
@@ -86,6 +94,16 @@ impl ExperimentKind {
     /// budgets — enforced through `validate_match`).
     pub fn requires_match(self) -> bool {
         self != ExperimentKind::Exploratory
+    }
+
+    /// Whether the kind is a removal test — `retirement` (single-rule)
+    /// or `retirement_batch` (multi-rule; §05h S10). Both run the
+    /// removal match shape and the authority/budget invariance checks.
+    pub fn is_retirement(self) -> bool {
+        matches!(
+            self,
+            ExperimentKind::Retirement | ExperimentKind::RetirementBatch
+        )
     }
 }
 
@@ -1215,7 +1233,7 @@ impl ExperimentSpec {
         //      factor), AC-R-2.3.3-8 (the retirement match shape).
         self.check_cache(ctx)?;
         // 8. `kind`-specific context checks.
-        if self.kind == ExperimentKind::Retirement && ctx.retirement_diff == Some(false) {
+        if self.kind.is_retirement() && ctx.retirement_diff == Some(false) {
             return Err(ExperimentRefusal::NotARetirementDiff {
                 detail: "arms are not a single-rule removal diff".to_string(),
             });
@@ -1226,7 +1244,7 @@ impl ExperimentSpec {
         // is candidate-bound — the amendment's exemption; authority and
         // budget deltas never exempt). `None` from the resolver defers
         // the check to a context that can classify.
-        if self.kind == ExperimentKind::Retirement {
+        if self.kind.is_retirement() {
             if let Some(classify) = ctx.retirement_diff_class {
                 for i in 0..self.arms.len() {
                     for j in 0..self.arms.len() {
@@ -1254,12 +1272,24 @@ impl ExperimentSpec {
                                 ),
                             });
                         }
-                        if v.semantic_ops != 1 && !v.candidate_bound {
+                        // `retirement` removes one rule
+                        // (`semantic_ops == 1`); `retirement_batch`
+                        // removes a batch (`semantic_ops >= 1`). A
+                        // zero-op diff is no removal at all.
+                        let ops_violation = if self.kind == ExperimentKind::RetirementBatch {
+                            v.semantic_ops == 0
+                        } else {
+                            v.semantic_ops != 1
+                        };
+                        if ops_violation && !v.candidate_bound {
                             return Err(ExperimentRefusal::NotARetirementDiff {
                                 detail: format!(
-                                    "arms `{}`->`{}`: a retirement diff refuses \
+                                    "arms `{}`->`{}`: a `{}` diff refuses \
                                      semantic_ops = {} on a non-candidate-bound diff",
-                                    self.arms[j].arm_id, self.arms[i].arm_id, v.semantic_ops
+                                    self.arms[j].arm_id,
+                                    self.arms[i].arm_id,
+                                    self.kind.name(),
+                                    v.semantic_ops
                                 ),
                             });
                         }
@@ -1318,7 +1348,7 @@ impl ExperimentSpec {
         // AC-R-2.3.3-8 — a `retirement` design's arms must carry the removal
         // test's match shape: `MatchSpec{mode: matched_cap, cache_policy:
         // cold_start}` (equal eval_budget is the `validate_match` half).
-        if self.kind == ExperimentKind::Retirement {
+        if self.kind.is_retirement() {
             for arm in &self.arms {
                 let Some(ms) = &arm.match_spec else {
                     continue; // `MissingMatchSpec` (check_arms) owns absence

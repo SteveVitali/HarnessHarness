@@ -41,6 +41,10 @@
 //!   typed).
 //! - `v6_analysis` — V6 frontier/surface/strata (`lab.analysis.render`
 //!   verbatim — the render spec's `view` member selects the pane).
+//! - `v6_evolution` — V6 evolution campaign pane (S6.1a; §05h R-2.9.5's
+//!   proposals + counterfactual arms through V6): the campaign's
+//!   candidate projection (`lab.evolution.view`) verbatim — a fold over
+//!   the durable prefix at the browser's `until_seq`.
 //! - `v11_bundle` — V11 experiment bundles (`kernel.validate` +
 //!   `kernel.status` + `kernel.check_completeness` over the locator).
 //! - `v12_console` — V12 live console (head + account + describe +
@@ -71,6 +75,7 @@ pub const VIEW_IDS: &[&str] = &[
     "v4_editor",
     "v5_launcher",
     "v6_analysis",
+    "v6_evolution",
     "v11_bundle",
     "v12_console",
 ];
@@ -537,6 +542,19 @@ pub fn view(svc: &mut Sessions, id: &str, params: Json) -> Result<Json, ClientEr
             qp.remove("op");
             let r = svc.call(op, Json::Obj(qp))?;
             Ok(envelope("v6_analysis", run_id.as_deref(), obj(&r)))
+        }
+        // V6 — the evolution pane (S6.1a): the campaign's folded
+        // candidate view verbatim (`lab.evolution.view{run, until_seq?}`
+        // — the same fold the audit replay reads; `op = candidates` is
+        // the default; the write legs (`propose`, `seal`, …) ride /api
+        // under the surface's injected provenance like V3's).
+        "v6_evolution" => {
+            let rid = run_id.ok_or_else(bad_params)?;
+            let mut qp = p.clone();
+            qp.remove("run_id");
+            qp.insert("run".into(), Json::str(&rid));
+            let r = svc.call("lab.evolution.view", Json::Obj(qp))?;
+            Ok(envelope("v6_evolution", Some(&rid), obj(&r)))
         }
         // V11 — the bundle/reproducibility pane (run and experiment
         // bundles share the pane): validate + status + completeness

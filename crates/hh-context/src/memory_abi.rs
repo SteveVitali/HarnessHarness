@@ -985,6 +985,13 @@ fn lifecycle_error_json(e: &LifecycleError) -> Json {
         L::BasisNotAllowed { basis } => {
             ("BasisNotAllowed", vec![("basis", Json::str(basis.clone()))])
         }
+        L::PromotionRefused { version_id, reason } => (
+            "PromotionRefused",
+            vec![
+                ("version_id", Json::str(version_id.clone())),
+                ("reason", Json::str(reason.clone())),
+            ],
+        ),
         L::Store(me) => ("Store", vec![("error", memory_error_json(me))]),
     };
     fields.push(("variant", Json::str(variant)));
@@ -1054,6 +1061,7 @@ fn lifecycle_error_code(e: &LifecycleError) -> &'static str {
         LifecycleError::IllegitimateEndorsement { .. } => "IllegitimateEndorsement",
         LifecycleError::EndorserBelowTarget { .. } => "EndorserBelowTarget",
         LifecycleError::BasisNotAllowed { .. } => "BasisNotAllowed",
+        LifecycleError::PromotionRefused { .. } => "PromotionRefused",
         LifecycleError::Store(e) => memory_error_code(e),
     }
 }

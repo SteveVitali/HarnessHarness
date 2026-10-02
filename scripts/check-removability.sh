@@ -177,6 +177,51 @@ print('hh-fleet is edge-free upward; hh-embed (optional) + hh-fleet-adapter are 
 
 echo "check-removability: S4.9 fleet boundary verified"
 
+echo "== removability(S6.1a): C4 evolution tier — hh-evolution optional; hh-embed is its only consumer =="
+# §05h CC6: the evolution pipeline is a removable C4 slice. `hh-embed`'s
+# `tier-c4` feature is the only consumer (an *optional* dependency);
+# absent ⇒ the `lab.evolution.*` ops stay in the schema (CC7 single
+# source) and answer `Unsupported{by: "tier-c4"}` — a typed refusal,
+# never silent degrade (the `cargo build -p hh-embed
+# --no-default-features` leg above already proves the absent-tier
+# build). hh-evolution consumes only kernel-side crates — never a
+# surface, never its consumer.
+cargo metadata --format-version 1 --no-deps | python3 -c "
+import json,sys
+meta=json.load(sys.stdin)
+normal=lambda d: d.get('kind') in (None,'normal')
+bad=[]
+consumers=[]
+allowed_deps={
+    'hh-wire','hh-identity','hh-ontology','hh-provenance','hh-hir',
+    'hh-ledger','hh-budget','hh-lab','hh-experiment',
+}
+for pkg in meta['packages']:
+    name=pkg['name']
+    for d in pkg['dependencies']:
+        if not normal(d):
+            continue
+        if name == 'hh-evolution':
+            if d['name'] == 'hh-embed':
+                bad.append('hh-evolution -> hh-embed (C4 depends on its consumer)')
+            if d['name'] not in allowed_deps:
+                bad.append('hh-evolution -> ' + d['name'] + ' (non-kernel dependency)')
+        if d['name'] == 'hh-evolution' and name != 'hh-evolution':
+            consumers.append((name, 'optional' if d.get('optional') else 'REQUIRED'))
+for name, kind in consumers:
+    if name != 'hh-embed':
+        bad.append(name + ' -> hh-evolution (consumer outside the C4 boundary)')
+    elif kind == 'REQUIRED':
+        bad.append('hh-embed -> hh-evolution must be OPTIONAL (tier-c4 feature)')
+if bad:
+    print('evolution removability violations:')
+    for b in bad: print('  ' + b)
+    sys.exit(1)
+print('hh-evolution is edge-free upward; hh-embed (optional) is its only consumer')
+"
+
+echo "check-removability: S6.1a evolution boundary verified"
+
 echo "== removability(S4.11): C1 MCP-server surface — hh-mcp-lab is a leaf consumer =="
 # §7.3 CC6: the surface server is a removable slice — nothing below it
 # depends on it. Removing the feature = removing the crate: no workspace
