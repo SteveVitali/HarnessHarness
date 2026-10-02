@@ -98,6 +98,11 @@ pub struct AnalysisInput<'a> {
     pub resampling_draws: u64,
     /// The declared resampling seed.
     pub seed: u64,
+    /// `true` when the bound experiment postdates a
+    /// `measurement.experiment.amended` row — the caller folds the
+    /// experiment run's view (§6.3 `post_amendment`; ADR-0162). Records-in:
+    /// the kernel never reads a ledger.
+    pub post_amendment: bool,
 }
 
 /// Decode a required `filters` string member.
@@ -436,6 +441,9 @@ pub fn analyze(
     let mut per_task_tables: Vec<Json> = Vec::new();
     let mut summary_details: Vec<Json> = Vec::new();
     let mut frontier: Option<Json> = None;
+    // Operation-specific body members (A6/A7/A9–A11/A13–A15) — named
+    // sections appended to `analysis_report_body/1` by `assemble`.
+    let mut sections: Vec<(&'static str, Json)> = Vec::new();
 
     match spec.kind.as_str() {
         "summarize" => {
@@ -472,6 +480,35 @@ pub fn analyze(
                     filter_str(&filters, "arm_b")?.to_string(),
                 )]
             };
+            // A3 class gate (§2.5; AC-R-2.10.4-4): a hosted row asked for
+            // a component-level contrast factor is `InadmissibleFactor`
+            // — the factor is never silently dropped nor its level
+            // fabricated. `contrast.factors` (else `filters.factors`)
+            // names the contrast axes.
+            if spec.kind == "interaction" {
+                let names: Vec<String> = match filters
+                    .get("contrast")
+                    .and_then(|c| c.get("factors"))
+                    .or_else(|| filters.get("factors"))
+                {
+                    Some(Json::Arr(items)) => items
+                        .iter()
+                        .filter_map(Json::as_str)
+                        .map(str::to_string)
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+                if let Some((factor, run_id, detail)) =
+                    crate::ops::factor_inadmissible(&runs, input.design, &refs)
+                {
+                    return Err(AnalysisError::InadmissibleFactor {
+                        factor,
+                        run_id,
+                        detail,
+                    });
+                }
+            }
             let varied = opt_filter_str(&filters, "varied_factor");
             let mut outcomes: Vec<CompareOutcome> = Vec::new();
             for (a, b) in &pairs {
@@ -597,10 +634,354 @@ pub fn analyze(
                     },
                 )));
             }
+            // `match_spec_ref` — the content address of the match
+            // declaration set the frontier ran under (the arms' declared
+            // specs, in declaration order — `validate_match` has already
+            // enforced the comparable members' equality).
+            let match_spec_ref = hh_identity::idp::idp_id(
+                "budget.match_spec",
+                Json::Arr(
+                    arms.iter()
+                        .map(|a| {
+                            a.match_spec
+                                .as_ref()
+                                .map(|s| s.to_json())
+                                .unwrap_or(Json::Null)
+                        })
+                        .collect(),
+                )
+                .to_canonical_string()
+                .as_bytes(),
+            );
             frontier = Some(crate::frontier::frontier_report(
                 metric,
                 &comparable,
                 input.facts,
+                input.confidence_ppm,
+                input.seed,
+                input.resampling_draws,
+                &match_spec_ref,
+                input.price_table_version,
+            ));
+        }
+        "benefit_decomposition" => {
+            // A6 (§6.4): the A2 comparison rows plus the
+            // `benefit_decomposition{benefit_kind, search_baseline}`
+            // member — `search_baseline{kind, n}` is `oracle_best_of_n`
+            // (pass@N over the baseline's replicates) or
+            // `selected_best_of_n` when the filters name a recorded
+            // selector; `n/a` when N exceeds the baseline's replicates
+            // (ADR-0159 D5).
+            input.design.ok_or_else(|| AnalysisError::MissingSpecRef {
+                kind: spec.kind.clone(),
+            })?;
+            let a = filter_str(&filters, "arm_a")?.to_string();
+            let b = filter_str(&filters, "arm_b")?.to_string();
+            let arms = [arm_spec(input, &a)?.clone(), arm_spec(input, &b)?.clone()];
+            let varied = opt_filter_str(&filters, "varied_factor");
+            let mut inp = compare_input(spec, input, &runs, &arms, &a, &b, varied);
+            if let Some(k) = opt_filter_str(&filters, "benefit_kind") {
+                inp.benefit_kind = hh_lab::analysis::BenefitKind::parse(k).ok_or_else(|| {
+                    AnalysisError::BadSpec {
+                        member: "query.filters.benefit_kind".into(),
+                        detail: format!("unknown benefit_kind {k}"),
+                    }
+                })?;
+            }
+            let out = compare(&inp)?;
+            for (i, r) in out.reports.iter().enumerate() {
+                comparisons.push(r.clone());
+                per_task_tables.push(Json::Arr(
+                    out.per_task
+                        .get(i)
+                        .cloned()
+                        .unwrap_or_default()
+                        .iter()
+                        .map(|e| e.to_json())
+                        .collect(),
+                ));
+            }
+            let sb = filters
+                .get("search_baseline")
+                .cloned()
+                .unwrap_or(Json::Null);
+            let n = sb.get("n").and_then(Json::as_int).unwrap_or(1).max(1) as u64;
+            let selector = sb.get("selector_ref").and_then(Json::as_str);
+            let baseline_arm = sb.get("arm").and_then(Json::as_str).unwrap_or(&b);
+            let metric = spec.query.metrics.first().cloned().unwrap_or_default();
+            let base_runs: Vec<&EvalRun> =
+                runs.iter().filter(|r| r.arm_id == baseline_arm).collect();
+            sections.push((
+                "benefit_decomposition",
+                Json::obj([
+                    ("benefit_kind", Json::str(inp.benefit_kind.name())),
+                    (
+                        "search_baseline",
+                        crate::ops::search_baseline(&base_runs, &metric, n, selector),
+                    ),
+                ]),
+            ));
+        }
+        "attribution" => {
+            // A10 (§2.5; AC-R-2.10.4-4): class-aware attribution —
+            // hosted rows render `n/a{class}` (listed in `na_rows`,
+            // never zeroed, never silently dropped); native rows get the
+            // M1 designed-ablation effect per design factor — a `compare`
+            // with the factor as `varied_factor`. A component-level
+            // factor on a hosted row is the `InadmissibleFactor` refusal.
+            input.design.ok_or_else(|| AnalysisError::MissingSpecRef {
+                kind: spec.kind.clone(),
+            })?;
+            let a = filter_str(&filters, "arm_a")?.to_string();
+            let b = filter_str(&filters, "arm_b")?.to_string();
+            let factors: Vec<String> = match filters.get("factors") {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .filter_map(Json::as_str)
+                    .map(str::to_string)
+                    .collect(),
+                _ => input
+                    .design
+                    .map(|d| d.factors.iter().map(|f| f.name.clone()).collect())
+                    .unwrap_or_default(),
+            };
+            let factor_refs: Vec<&str> = factors.iter().map(String::as_str).collect();
+            if let Some((factor, run_id, detail)) =
+                crate::ops::factor_inadmissible(&runs, input.design, &factor_refs)
+            {
+                return Err(AnalysisError::InadmissibleFactor {
+                    factor,
+                    run_id,
+                    detail,
+                });
+            }
+            let hosted: Vec<&EvalRun> = runs.iter().filter(|r| crate::ops::is_hosted(r)).collect();
+            let native: Vec<EvalRun> = runs
+                .iter()
+                .filter(|r| !crate::ops::is_hosted(r))
+                .cloned()
+                .collect();
+            let mut effects = Vec::new();
+            if !native.is_empty() {
+                for f in &factors {
+                    let arms = [arm_spec(input, &a)?.clone(), arm_spec(input, &b)?.clone()];
+                    let inp = compare_input(spec, input, &native, &arms, &a, &b, Some(f));
+                    match compare(&inp) {
+                        Ok(out) => {
+                            for (i, r) in out.reports.iter().enumerate() {
+                                comparisons.push(r.clone());
+                                per_task_tables.push(Json::Arr(
+                                    out.per_task
+                                        .get(i)
+                                        .cloned()
+                                        .unwrap_or_default()
+                                        .iter()
+                                        .map(|e| e.to_json())
+                                        .collect(),
+                                ));
+                                effects.push(Json::obj([
+                                    ("factor", Json::str(f)),
+                                    ("arm_a", Json::str(&a)),
+                                    ("arm_b", Json::str(&b)),
+                                    ("metric", Json::str(&r.metric)),
+                                    ("point", r.paired_effect.point.clone().unwrap_or(Json::Null)),
+                                    (
+                                        "interval",
+                                        r.paired_effect.interval.clone().unwrap_or(Json::Null),
+                                    ),
+                                ]));
+                            }
+                        }
+                        // An unpairable factor level is `n/a`, listed —
+                        // never silently dropped (CC3).
+                        Err(_) => effects.push(Json::obj([
+                            ("factor", Json::str(f)),
+                            ("n/a", Json::str("estimator_undefined")),
+                        ])),
+                    }
+                }
+            }
+            sections.push((
+                "attribution",
+                Json::obj([
+                    ("method", Json::str("M1_leave_one_in")),
+                    ("effects", Json::Arr(effects)),
+                    (
+                        "na_rows",
+                        Json::Arr(
+                            hosted
+                                .iter()
+                                .map(|r| {
+                                    Json::obj([
+                                        ("run_id", Json::str(&r.run_id)),
+                                        ("n/a", Json::str("class")),
+                                    ])
+                                })
+                                .collect(),
+                        ),
+                    ),
+                ]),
+            ));
+        }
+        "rank" => {
+            // A9 (§6.4; ADR-0158 D6): the task-resampled rank report —
+            // rank intervals + `indistinguishable_sets` from paired-Δ
+            // overlap; never a forced total order (OQ-369).
+            let metric = spec
+                .query
+                .metrics
+                .first()
+                .ok_or_else(|| AnalysisError::BadSpec {
+                    member: "query.metrics".into(),
+                    detail: "rank requires at least one metric".into(),
+                })?;
+            sections.push((
+                "rank",
+                crate::ops::rank_report(
+                    &runs,
+                    metric,
+                    input.confidence_ppm,
+                    input.resampling_draws,
+                    input.seed,
+                )?,
+            ));
+        }
+        "reliability_profile" => {
+            // A11: pass^k curve, per-task consistency, tails,
+            // `catastrophic_rate{wilson}`, fault/perturbation marks
+            // (`n/a{not_run}` when no factor row exists — ADR-0158 D4).
+            let metric = spec
+                .query
+                .metrics
+                .first()
+                .ok_or_else(|| AnalysisError::BadSpec {
+                    member: "query.metrics".into(),
+                    detail: "reliability_profile requires a metric".into(),
+                })?;
+            sections.push((
+                "reliability",
+                crate::ops::reliability_profile(&runs, metric, input.confidence_ppm)?,
+            ));
+        }
+        "power" => {
+            // A13: `PowerReport` MDE cells from the pilot rows —
+            // `filters.power.{task_grid, replicate_grid}` (int arrays;
+            // the §6.3 30/100/300 × 1/3/5 grid by default).
+            let metric = spec
+                .query
+                .metrics
+                .first()
+                .ok_or_else(|| AnalysisError::BadSpec {
+                    member: "query.metrics".into(),
+                    detail: "power requires a metric".into(),
+                })?;
+            let int_arr = |key: &str| -> Vec<u64> {
+                match filters.get("power").and_then(|p| p.get(key)) {
+                    Some(Json::Arr(items)) => items
+                        .iter()
+                        .filter_map(Json::as_int)
+                        .filter(|v| *v > 0)
+                        .map(|v| v as u64)
+                        .collect(),
+                    _ => Vec::new(),
+                }
+            };
+            sections.push((
+                "power",
+                crate::ops::power_report(
+                    &runs,
+                    metric,
+                    input.confidence_ppm,
+                    &int_arr("task_grid"),
+                    &int_arr("replicate_grid"),
+                )?,
+            ));
+        }
+        "diagnostics" => {
+            // A15: the advisory block — SNR per family, per-task
+            // difficulty, utilization, imbalance, `infra_suspected`.
+            // Advisory only: it never alters a confirmatory cell.
+            let metric = spec.query.metrics.first().cloned().unwrap_or_default();
+            sections.push(("diagnostics", crate::ops::diagnostics(&runs, &metric)));
+        }
+        "fit_surface" => {
+            // A7 contrast form (§6.4 §2.3; ADR-0160): `filters.factors`
+            // names the axes; categorical levels are never interpolated —
+            // unprobed level tuples land in `unknown_cells` (AC-R-2.10.4
+            // -10). `filters.expired_refs[]` names the registry-retired
+            // configurations (the caller resolves registry events) —
+            // `status: expired` then, and the report stays readable.
+            let factors: Vec<String> = match filters.get("factors") {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .filter_map(Json::as_str)
+                    .map(str::to_string)
+                    .collect(),
+                _ => Vec::new(),
+            };
+            let metric = spec
+                .query
+                .metrics
+                .first()
+                .ok_or_else(|| AnalysisError::BadSpec {
+                    member: "query.metrics".into(),
+                    detail: "fit_surface requires a metric".into(),
+                })?;
+            let expired: BTreeSet<String> = match filters.get("expired_refs") {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .filter_map(Json::as_str)
+                    .map(str::to_string)
+                    .collect(),
+                _ => BTreeSet::new(),
+            };
+            sections.push((
+                "surface",
+                crate::ops::fit_surface(
+                    &runs,
+                    input.design,
+                    &factors,
+                    metric,
+                    input.confidence_ppm,
+                    &expired,
+                )?,
+            ));
+        }
+        "strata_view" => {
+            // A14: the strata view — per-`contamination_stratum` run
+            // counts + per-stratum metric means (strata are never
+            // silently pooled — ADR-0012 D6).
+            let metric = spec.query.metrics.first().cloned().unwrap_or_default();
+            let mut strata: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+            let mut stratum_runs: BTreeMap<String, u64> = BTreeMap::new();
+            for r in &runs {
+                let s = r.stratum.name().to_string();
+                *stratum_runs.entry(s.clone()).or_default() += 1;
+                if let MetricValueKind::Decimal(v) = r.value_for(&metric) {
+                    strata.entry(s).or_default().push(v);
+                }
+            }
+            sections.push((
+                "strata",
+                Json::Arr(
+                    stratum_runs
+                        .iter()
+                        .map(|(s, n)| {
+                            let vals = strata.get(s).cloned().unwrap_or_default();
+                            Json::obj([
+                                ("stratum", Json::str(s)),
+                                ("runs", Json::Int(*n as i64)),
+                                (
+                                    "mean_ppm",
+                                    stats::mean(&vals).map_or(
+                                        Json::obj([("n/a", Json::str("estimator_undefined"))]),
+                                        Json::Int,
+                                    ),
+                                ),
+                            ])
+                        })
+                        .collect(),
+                ),
             ));
         }
         other => {
@@ -630,6 +1011,7 @@ pub fn analyze(
         equivalence,
         transfer_profile,
         frontier,
+        sections,
         not_run,
     ))
 }

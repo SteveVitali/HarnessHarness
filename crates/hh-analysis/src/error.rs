@@ -68,6 +68,17 @@ pub enum AnalysisError {
         /// The detail.
         detail: String,
     },
+    /// A3/A10 on a hosted row was asked for a component-level factor
+    /// (§2.5 class-applicability; AC-R-2.10.4-4) — a typed refusal, the
+    /// factor is never silently dropped or its level fabricated.
+    InadmissibleFactor {
+        /// The factor.
+        factor: String,
+        /// The run that cannot carry it.
+        run_id: String,
+        /// The detail.
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for AnalysisError {
@@ -101,6 +112,14 @@ impl std::fmt::Display for AnalysisError {
             AnalysisError::BadSpec { member, detail } => {
                 write!(f, "bad spec member {member}: {detail}")
             }
+            AnalysisError::InadmissibleFactor {
+                factor,
+                run_id,
+                detail,
+            } => write!(
+                f,
+                "factor {factor} is inadmissible for run {run_id}: {detail}"
+            ),
         }
     }
 }

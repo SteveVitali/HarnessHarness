@@ -24,8 +24,17 @@
 //! - [`catalogue`] — `catalogue_refresh` → `BundleCatalogue` (header-only).
 //! - [`annotations`] — `annotate` → the rebuildable annotation index.
 //! - [`verify`] — `verify_row`'s per-check `VerifyReport`.
-//! - [`leaderboard`] — the lab-internal L1–L5 `leaderboard()` (no
-//!   publication — ADR-0163).
+//! - [`leaderboard`] — the L1–L9 `leaderboard()` plus the C1 publication
+//!   surface (`define_leaderboard`, snapshots, `diff_snapshots`,
+//!   `verify_snapshot`, `retract_entry`, `publish_leaderboard`,
+//!   `pin_set` — ADR-0163).
+//! - [`disclosure`] — `DisclosureSummary`, the per-experiment disclosure
+//!   counts (`arms_registered/published/restricted`, exclusions,
+//!   analysis split — ADR-0162 D5).
+//! - [`journal`] — `subscribe`, the durable results journal over the
+//!   ledger subscription stream.
+//! - [`export`] — `export_rows`, the lowering/export op with
+//!   `LoweringLossReport` + `measurement.export.delivered`.
 //! - [`error`] — the typed refusal set (§6.5 §2 errors column).
 
 #![forbid(unsafe_code)]
@@ -34,7 +43,10 @@ pub mod annotations;
 pub mod audit;
 pub mod catalogue;
 pub mod cells;
+pub mod disclosure;
 pub mod error;
+pub mod export;
+pub mod journal;
 pub mod leaderboard;
 pub mod projection;
 pub mod query;
@@ -49,8 +61,16 @@ pub mod watermark;
 pub use audit::{AuditRef, CitationVerdict};
 pub use catalogue::{BundleCatalogue, BundleCatalogueEntry, BundleStatus};
 pub use cells::{CellTable, DistributionRef, TableCell};
+pub use disclosure::{disclosure_summary, DisclosureSummary};
 pub use error::ResultsError;
-pub use leaderboard::{LeaderboardDefinition, LeaderboardEntry, LeaderboardSnapshot};
+pub use export::{
+    export_rows, round_trip_native, ExportOutcome, ExportTarget, LossEntry, LoweringLossReport,
+};
+pub use journal::{JournalEvent, JournalFilter, JournalKind, JournalSubscription};
+pub use leaderboard::{
+    DisclosurePolicy, LeaderboardDefinition, LeaderboardEntry, LeaderboardSnapshot,
+    PublishedLeaderboard, SnapshotDiff,
+};
 pub use query::{Page, QuerySpec};
 pub use row::{ResultsRow, RowKey, ROW_SCHEMA};
 pub use scoring::ScoringContext;

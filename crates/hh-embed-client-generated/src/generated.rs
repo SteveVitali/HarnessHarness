@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:895eaa540b00f76311c47b3c34dccd200d40c0eb5ca84d0c49b5597f7232f128";
+    "sha256:ab792f895432f87c213bd6e94c59360717ce0005635b05cf287c519bcc7875f7";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5769,6 +5769,24 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.analysis.diff_reports` → `json` (see the contract registry).
+    pub fn lab_analysis_diff_reports(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.analysis.diff_reports", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.analysis.power` → `json` (see the contract registry).
+    pub fn lab_analysis_power(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.analysis.power", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.analysis.render` → `json` (see the contract registry).
+    pub fn lab_analysis_render(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.analysis.render", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.assembly.adopt` → `json` (see the contract registry).
     pub fn lab_assembly_adopt(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.assembly.adopt", params.clone())?;
@@ -5913,6 +5931,66 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.leaderboard.define` → `json` (see the contract registry).
+    pub fn lab_leaderboard_define(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.leaderboard.define", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.leaderboard.diff_snapshots` → `json` (see the contract registry).
+    pub fn lab_leaderboard_diff_snapshots(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.leaderboard.diff_snapshots", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.leaderboard.leaderboard` → `json` (see the contract registry).
+    pub fn lab_leaderboard_leaderboard(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.leaderboard.leaderboard", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.leaderboard.publish` → `json` (see the contract registry).
+    pub fn lab_leaderboard_publish(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.leaderboard.publish", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.leaderboard.retract_entry` → `json` (see the contract registry).
+    pub fn lab_leaderboard_retract_entry(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.leaderboard.retract_entry", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.producer.amend` → `json` (see the contract registry).
+    pub fn lab_producer_amend(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.producer.amend", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.producer.bind` → `json` (see the contract registry).
+    pub fn lab_producer_bind(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.producer.bind", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.producer.declare` → `json` (see the contract registry).
+    pub fn lab_producer_declare(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.producer.declare", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.producer.exclude` → `json` (see the contract registry).
+    pub fn lab_producer_exclude(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.producer.exclude", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.producer.record_analysis` → `json` (see the contract registry).
+    pub fn lab_producer_record_analysis(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.producer.record_analysis", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.registry.catalog` → `json` (see the contract registry).
     pub fn lab_registry_catalog(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.registry.catalog", params.clone())?;
@@ -6030,6 +6108,72 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.registry.yank` → `json` (see the contract registry).
     pub fn lab_registry_yank(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.registry.yank", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.catalogue` → `json` (see the contract registry).
+    pub fn lab_results_catalogue(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.catalogue", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.cells` → `json` (see the contract registry).
+    pub fn lab_results_cells(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.cells", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.distribution` → `json` (see the contract registry).
+    pub fn lab_results_distribution(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.distribution", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.export_rows` → `json` (see the contract registry).
+    pub fn lab_results_export_rows(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.export_rows", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.get_row` → `json` (see the contract registry).
+    pub fn lab_results_get_row(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.get_row", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.query_rows` → `json` (see the contract registry).
+    pub fn lab_results_query_rows(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.query_rows", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.row_history` → `json` (see the contract registry).
+    pub fn lab_results_row_history(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.row_history", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.subscribe` → `json` (see the contract registry).
+    pub fn lab_results_subscribe(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.subscribe", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.verify_citation` → `json` (see the contract registry).
+    pub fn lab_results_verify_citation(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.verify_citation", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.verify_row` → `json` (see the contract registry).
+    pub fn lab_results_verify_row(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.verify_row", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.results.verify_snapshot` → `json` (see the contract registry).
+    pub fn lab_results_verify_snapshot(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.results.verify_snapshot", params.clone())?;
         Ok(raw)
     }
 

@@ -10,7 +10,8 @@ use hh_identity::kinds::RecordKind as IdentityKind;
 
 /// The closed `registry/1` record-kind list (ADR-0151 D2 as amended — CF-387 adds
 /// `participant` and `adapter`; `conformance_report.subject_kind` gains
-/// `snapshot_pair` per the Phase-4 amendment). `UnknownRecordKind` is an error;
+/// `snapshot_pair` per the Phase-4 amendment; ADR-0294 adds
+/// `leaderboard_definition` for R-2.10.5 C1). `UnknownRecordKind` is an error;
 /// adding a *component class* is a `ClassRecord` registration, never a new kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum RecordKind {
@@ -64,11 +65,18 @@ pub enum RecordKind {
     Participant,
     /// An `AdapterRecord`.
     Adapter,
+    /// A `LeaderboardDefinition` — the §6.5 named-leaderboard record
+    /// (R-2.10.5 C1; ADR-0294). `hh-results` owns the schema (the same
+    /// opaque layering as `Participant`/`Adapter`/`EnvironmentRecord`):
+    /// the registry stores the canonical body verbatim and gates the
+    /// `kind: "leaderboard_definition"` tag; the name binds through
+    /// `publish` under ADR-0153 `NamespaceRecord` authority (OQ-372).
+    LeaderboardDefinition,
 }
 
 impl RecordKind {
     /// Every kind, in declaration order.
-    pub const ALL: [RecordKind; 25] = [
+    pub const ALL: [RecordKind; 26] = [
         RecordKind::Class,
         RecordKind::Variant,
         RecordKind::ConformanceSuite,
@@ -94,6 +102,7 @@ impl RecordKind {
         RecordKind::IdentityProfile,
         RecordKind::Participant,
         RecordKind::Adapter,
+        RecordKind::LeaderboardDefinition,
     ];
 
     /// The canonical `registry/1` spelling.
@@ -124,6 +133,7 @@ impl RecordKind {
             RecordKind::IdentityProfile => "identity_profile",
             RecordKind::Participant => "participant",
             RecordKind::Adapter => "adapter",
+            RecordKind::LeaderboardDefinition => "leaderboard_definition",
         }
     }
 
@@ -133,7 +143,7 @@ impl RecordKind {
     }
 
     /// Whether this kind has a Stage-1 record schema in this store. The kind list is
-    /// closed at 25; the record *shapes* land with their owning stage — a parseable
+    /// closed at 26; the record *shapes* land with their owning stage — a parseable
     /// kind without a landed schema fails `register`/`from_json` with
     /// `SchemaViolation{path: "kind"}` (never silently admitted — R2/CC3).
     pub fn has_stage1_schema(self) -> bool {
@@ -158,6 +168,10 @@ impl RecordKind {
                 // verbatim (same layering as `EnvironmentRecord`).
                 | RecordKind::Participant
                 | RecordKind::Adapter
+                // The §6.5 leaderboard definition — `hh-results` owns the
+                // schema; the registry stores the canonical body verbatim
+                // (same opaque layering; ADR-0294).
+                | RecordKind::LeaderboardDefinition
                 // The typed sealed-definition record (R-2.10.1/S3.5 — `hh-hir`
                 // owns the schema; `hh_hir::wire::sealed_*` is the one codec).
                 | RecordKind::SealedDefinition
@@ -608,8 +622,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_kind_list_is_closed_at_twenty_five() {
-        assert_eq!(RecordKind::ALL.len(), 25);
+    fn the_kind_list_is_closed_at_twenty_six() {
+        assert_eq!(RecordKind::ALL.len(), 26);
         let mut seen = std::collections::BTreeSet::new();
         for k in RecordKind::ALL {
             assert!(seen.insert(k.as_str()), "duplicate kind spelling {k:?}");

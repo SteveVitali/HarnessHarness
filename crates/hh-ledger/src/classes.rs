@@ -1075,6 +1075,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("measurement.leaderboard.published", "none"),
     // ── measurement:metric ──
     ("measurement.metric.emitted", "none"),
+    // ── measurement:suite ──
+    ("measurement.suite.retired", "none"),
     // ── model:cache ──
     ("model.cache.resolved", "hint"),
     // ── model:call ──
@@ -1676,6 +1678,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_prov("measurement.analysis.superseded",         Led, O::Events, false, false, true,  None, None),
     row_audit("measurement.leaderboard.published",       O::Events, true, OPEN_AUDIT, &[], None, None),
     row_audit("measurement.leaderboard.entry_retracted", O::Events, true, OPEN_AUDIT, &[], None, None),
+    // `measurement.suite.retired{suite_ref, reason}` — the lab-plane suite
+    // retirement row on the experiment run (AC-R-2.10.5-4's `suite_retired`
+    // overlay mark); durable + provenance-mandatory (it is not in §6.5's
+    // audit-grade set).
+    row_prov("measurement.suite.retired",                Led, O::Events, false, false, true,  None, None),
 
     // ── verification (P4) — `verification.validator.invoked` is an accountable
     // event class (R-ACC-2): every invocation is charged (to the instrument).

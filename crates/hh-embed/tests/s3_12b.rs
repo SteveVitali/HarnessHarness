@@ -531,6 +531,7 @@ fn compare_arms(
         confidence_ppm: 950_000,
         resampling_draws: 2000,
         seed: 7,
+        post_amendment: false,
     };
     let aspec = analysis_spec(
         &spec.experiment_id,

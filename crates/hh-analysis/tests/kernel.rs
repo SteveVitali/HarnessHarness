@@ -31,8 +31,8 @@ use hh_ontology::compliance::MetricDeclaration;
 use hh_ontology::control::OutcomeClass;
 use hh_ontology::dimensions::{DimensionId, DimensionKey};
 use hh_ontology::eval::{
-    Design, DesignKind, EstimatorSelection, IntervalMethod, MetricValueKind, Pairing,
-    PreRegistration, RoutingPolicy, SeedPolicy,
+    Design, DesignKind, EstimatorSelection, FactorDeclaration, FactorKind, FactorLevel,
+    IntervalMethod, MetricValueKind, Pairing, PreRegistration, RoutingPolicy, SeedPolicy,
 };
 use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
 use hh_ontology::participant::ParticipantClass;
@@ -362,6 +362,7 @@ impl Fixture {
             confidence_ppm: 950_000,
             resampling_draws: 2000,
             seed: 7,
+            post_amendment: false,
         }
     }
 }
@@ -1965,4 +1966,327 @@ fn s312_frontier_never_dominates_across_currencies() {
         vec!["arm-a|measured|usd", "arm-b|measured|eur"],
         "cross-currency cells never dominate"
     );
+}
+
+// ── S4.3 — AC-R-2.10.4-{4,10}: mixed classes + the C1 op surfaces ──────────
+//
+// KA-4 (mixed native/hosted): hosted rows never coerce to zero — A10 lists
+// them `n/a{class}`; a component-level factor on a hosted row is
+// `InadmissibleFactor` (§6.4 §2.5; ADR-0154 D5).
+// KA-10 (A7): the declared-factor grid is the design space — unprobed cells
+// are `unknown_cells`, never interpolated; a registry expiry flips `status`
+// while the report stays readable (ADR-0160; ADR-0012 D7).
+
+/// A hosted `ResultsRow` — interception-level observability only (no
+/// `ledger`/`model_io`), `participant_class = hosted`.
+fn hosted_row(arm: &str, task_id: &str, rep: u64, value: i64, metric: &str) -> ResultsRow {
+    let mut r = row(arm, task_id, rep, value, metric);
+    r.coordinates.participant_class = "hosted".into();
+    r.coordinates.hosting_mechanism = Some("provider_api".into());
+    r.coordinates.observability_level = vec!["events".into(), "end_state".into()];
+    r
+}
+
+fn factor(name: &str, kind: FactorKind, levels: &[&str]) -> FactorDeclaration {
+    FactorDeclaration {
+        name: name.into(),
+        kind,
+        granularity: None,
+        levels: levels
+            .iter()
+            .map(|id| FactorLevel {
+                id: (*id).to_string(),
+                content_ref: format!("sha256:{id}"),
+                label: (*id).to_string(),
+            })
+            .collect(),
+        role: None,
+    }
+}
+
+#[test]
+fn ka4_attribution_na_class_for_hosted_rows() {
+    // AC-R-2.10.4-4: a mixed native + hosted selection renders the hosted
+    // row `n/a{class}` in `na_rows` — never a zero, never a dropped row —
+    // and a host-visible factor (`environment`) admits the query.
+    let mut rows = paired_rows_exact("a", "b", &["t1", "t2"], 2, 2, 1, "task_success");
+    rows.push(hosted_row("h", "t1", 0, 1, "task_success"));
+    let fixture = Fixture::new(
+        rows,
+        &["t1", "t2"],
+        arms(&["a", "b", "h"]),
+        vec![decl("task_success")],
+        None,
+    );
+    let s = spec(
+        "attribution",
+        &["task_success"],
+        Json::obj([
+            ("arm_a", Json::str("a")),
+            ("arm_b", Json::str("b")),
+            ("factors", Json::Arr(vec![Json::str("environment")])),
+        ]),
+        Some("exp-1"),
+    );
+    let out = analyze(&s, &fixture.input()).expect("hosted rows are n/a, never refused");
+    let att = out.body.get("attribution").expect("attribution section");
+    let na_rows = match att.get("na_rows") {
+        Some(Json::Arr(v)) => v,
+        _ => panic!("na_rows: {att:?}"),
+    };
+    assert_eq!(na_rows.len(), 1);
+    assert_eq!(
+        na_rows[0].get("run_id").and_then(Json::as_str),
+        Some("r-h-t1-0")
+    );
+    // The typed marker — `n/a{class}`, never `0`.
+    assert_eq!(na_rows[0].get("n/a").and_then(Json::as_str), Some("class"));
+    assert!(
+        na_rows[0].get("estimate").is_none() && na_rows[0].get("point").is_none(),
+        "a hosted row carries no estimate: {na_rows:?}"
+    );
+    assert!(matches!(att.get("effects"), Some(Json::Arr(_))));
+}
+
+#[test]
+fn ka4_interaction_refuses_component_factor_on_hosted() {
+    // AC-R-2.10.4-4: `interaction` over a component-level factor refuses
+    // `InadmissibleFactor` when the selection carries a hosted row —
+    // the factor is never silently dropped, never coerced.
+    let contrast = Json::obj([(
+        "contrast",
+        Json::obj([
+            (
+                "pair_a",
+                Json::obj([("arm_a", Json::str("a")), ("arm_b", Json::str("b"))]),
+            ),
+            (
+                "pair_b",
+                Json::obj([("arm_a", Json::str("c")), ("arm_b", Json::str("d"))]),
+            ),
+            ("factors", Json::Arr(vec![Json::str("harness_component")])),
+        ]),
+    )]);
+    let s = spec("interaction", &["task_success"], contrast, Some("exp-1"));
+
+    // Control — the same spec over native rows clears the class gate
+    // (it may still fail downstream checks; it must not fail
+    // `InadmissibleFactor`).
+    let native = Fixture::new(
+        {
+            let mut r = paired_rows_exact("a", "b", &["t1", "t2"], 2, 2, 1, "task_success");
+            r.extend(paired_rows_exact(
+                "c",
+                "d",
+                &["t1", "t2"],
+                2,
+                1,
+                2,
+                "task_success",
+            ));
+            r
+        },
+        &["t1", "t2"],
+        arms(&["a", "b", "c", "d"]),
+        vec![decl("task_success")],
+        None,
+    );
+    if let Err(e) = analyze(&s, &native.input()) {
+        assert!(
+            !matches!(e, AnalysisError::InadmissibleFactor { .. }),
+            "native rows must not hit the hosted class gate: {e:?}"
+        );
+    }
+
+    // One hosted row in the selection → the component factor refuses.
+    let mut mixed_rows = paired_rows_exact("a", "b", &["t1", "t2"], 2, 2, 1, "task_success");
+    mixed_rows.extend(paired_rows_exact(
+        "c",
+        "d",
+        &["t1", "t2"],
+        2,
+        1,
+        2,
+        "task_success",
+    ));
+    mixed_rows.push(hosted_row("h", "t1", 0, 1, "task_success"));
+    let mixed = Fixture::new(
+        mixed_rows,
+        &["t1", "t2"],
+        arms(&["a", "b", "c", "d", "h"]),
+        vec![decl("task_success")],
+        None,
+    );
+    match analyze(&s, &mixed.input()) {
+        Err(AnalysisError::InadmissibleFactor { factor, run_id, .. }) => {
+            assert_eq!(factor, "harness_component");
+            assert_eq!(run_id, "r-h-t1-0");
+        }
+        other => panic!("expected InadmissibleFactor, got {other:?}"),
+    }
+}
+
+#[test]
+fn ka10_surface_unknown_cells_and_expiry() {
+    // AC-R-2.10.4-10: a 3-factor declared grid (environment ×
+    // fault_profile × perturbation_profile = 4 cells) probed at 2 →
+    // exactly the 2 unprobed tuples in `unknown_cells`, never
+    // interpolated; a registry expiry on a contributing configuration
+    // flips `status` to `expired` and the report stays readable.
+    let mut d = design();
+    d.factors = vec![
+        factor("environment", FactorKind::Environment, &["coding_terminal"]),
+        factor("fault_profile", FactorKind::Environment, &["none", "f1"]),
+        factor(
+            "perturbation_profile",
+            FactorKind::Environment,
+            &["none", "p1"],
+        ),
+    ];
+    let rows = paired_rows_exact("a", "b", &["t1", "t2"], 2, 2, 1, "task_success");
+    let mut fixture = Fixture::new(
+        rows,
+        &["t1", "t2"],
+        arms(&["a", "b"]),
+        vec![decl("task_success")],
+        None,
+    );
+    fixture.design = d;
+    // Probe the `f1` cell: one arm-a run carries fault_profile = f1 (the
+    // manifest `extra` member is where the bound profile lives).
+    fixture
+        .manifests
+        .get_mut("r-a-t1-0")
+        .unwrap()
+        .extra
+        .insert("fault_profile".into(), Json::str("f1"));
+
+    let filters = |expired: &[&str]| {
+        Json::obj([
+            (
+                "factors",
+                Json::Arr(vec![
+                    Json::str("environment"),
+                    Json::str("fault_profile"),
+                    Json::str("perturbation_profile"),
+                ]),
+            ),
+            (
+                "expired_refs",
+                Json::Arr(expired.iter().map(|e| Json::str(*e)).collect()),
+            ),
+        ])
+    };
+    let s = spec(
+        "fit_surface",
+        &["task_success"],
+        filters(&[]),
+        Some("exp-1"),
+    );
+    let out = analyze(&s, &fixture.input()).expect("fit_surface");
+    let surface = out.body.get("surface").expect("surface section");
+    assert_eq!(surface.get("status").and_then(Json::as_str), Some("active"));
+    let unknown = match surface.get("unknown_cells") {
+        Some(Json::Arr(v)) => v,
+        _ => panic!("unknown_cells: {surface:?}"),
+    };
+    // 4-cell declared grid; probed = {(coding_terminal, none, none),
+    // (coding_terminal, f1, none)} → the two `p1` tuples are unknown and
+    // *listed* — never interpolated.
+    assert_eq!(unknown.len(), 2, "{unknown:?}");
+    assert!(
+        unknown
+            .iter()
+            .all(|c| matches!(c, Json::Arr(v) if v.len() == 3)),
+        "unknown cells are the level tuples, not estimates: {unknown:?}"
+    );
+    assert!(unknown
+        .iter()
+        .all(|c| { matches!(c, Json::Arr(v) if v[2].as_str() == Some("p1")) }));
+
+    // The registry event — `expired_refs` names the retired
+    // configuration; status flips, the report still parses.
+    let s2 = spec(
+        "fit_surface",
+        &["task_success"],
+        filters(&["cfg-a"]),
+        Some("exp-1"),
+    );
+    let out2 = analyze(&s2, &fixture.input()).expect("expired surface is readable");
+    let surface2 = out2.body.get("surface").expect("surface section");
+    assert_eq!(
+        surface2.get("status").and_then(Json::as_str),
+        Some("expired")
+    );
+    assert_eq!(
+        match surface2.get("expired_refs") {
+            Some(Json::Arr(v)) => v.first().and_then(Json::as_str),
+            _ => None,
+        },
+        Some("cfg-a")
+    );
+    assert_eq!(
+        surface2.get("schema").and_then(Json::as_str),
+        Some("hh-fitted-surface/1")
+    );
+}
+
+#[test]
+fn c1_op_surfaces_render_named_sections() {
+    // The S4.3 dispatch arms — each kind must land its named section on
+    // `analysis_report_body/1` (a removed arm is `KindNotImplemented`).
+    let rows = paired_rows_exact("a", "b", &["t1", "t2", "t3"], 4, 3, 2, "task_success");
+    let fixture = Fixture::new(
+        rows,
+        &["t1", "t2", "t3"],
+        arms(&["a", "b"]),
+        vec![decl("task_success")],
+        None,
+    );
+    let pair = || Json::obj([("arm_a", Json::str("a")), ("arm_b", Json::str("b"))]);
+    for (kind, filters, section) in [
+        (
+            "benefit_decomposition",
+            {
+                let mut f = pair();
+                if let Json::Obj(m) = &mut f {
+                    m.insert(
+                        "search_baseline".into(),
+                        Json::obj([("n", Json::Int(3)), ("arm", Json::str("b"))]),
+                    );
+                }
+                f
+            },
+            "benefit_decomposition",
+        ),
+        ("rank", pair(), "rank"),
+        ("reliability_profile", pair(), "reliability"),
+        (
+            "power",
+            {
+                let mut f = pair();
+                if let Json::Obj(m) = &mut f {
+                    m.insert(
+                        "power".into(),
+                        Json::obj([
+                            ("task_grid", Json::Arr(vec![Json::Int(5), Json::Int(10)])),
+                            ("replicate_grid", Json::Arr(vec![Json::Int(3)])),
+                        ]),
+                    );
+                }
+                f
+            },
+            "power",
+        ),
+        ("diagnostics", pair(), "diagnostics"),
+        ("strata_view", pair(), "strata"),
+    ] {
+        let s = spec(kind, &["task_success"], filters, Some("exp-1"));
+        let out = analyze(&s, &fixture.input()).unwrap_or_else(|e| panic!("{kind}: {e:?}"));
+        assert!(
+            out.body.get(section).is_some(),
+            "{kind} must land a `{section}` section: {:?}",
+            out.body
+        );
+    }
 }

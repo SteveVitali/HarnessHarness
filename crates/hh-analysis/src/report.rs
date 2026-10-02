@@ -91,6 +91,125 @@ pub fn report_id_for(spec: &AnalysisSpec, generated_from: &Json) -> String {
     )
 }
 
+/// The §6.5 producer-contract `kind` vocabulary member a spec `kind`
+/// produces (`custom` for anything outside the closed list — an
+/// unlisted spec kind is recorded, never silently renamed).
+pub(crate) fn record_kind(spec_kind: &str) -> &'static str {
+    match spec_kind {
+        "summarize" => "summary_report",
+        "compare" => "comparison_report",
+        "interaction" => "interaction_report",
+        "frontier" => "frontier_report",
+        "transfer" => "transfer_report",
+        "benefit_decomposition" => "benefit_decomposition",
+        "rank" => "rank_report",
+        "reliability_profile" => "reliability_profile",
+        "power" => "power_report",
+        "strata_view" => "strata_view",
+        "diagnostics" => "diagnostics",
+        "fit_surface" => "fitted_surface",
+        "attribution" => "attribution_report",
+        "equivalence" => "equivalence_report",
+        _ => "custom",
+    }
+}
+
+/// The single bound `experiment_run_id` across the selected rows — `None`
+/// for an unbound or mixed-experiment selection (never fabricated; CC3).
+fn bound_experiment(input: &AnalysisInput<'_>) -> Option<String> {
+    let mut bound: Option<&str> = None;
+    for r in input.rows {
+        let e = r
+            .experiment
+            .as_ref()
+            .and_then(|x| x.get("experiment_run_id"))
+            .and_then(Json::as_str);
+        match (bound, e) {
+            (None, Some(e)) => bound = Some(e),
+            (Some(b), Some(e)) if b == e => {}
+            (Some(_), Some(_)) | (_, None) => return None,
+        }
+    }
+    bound.map(str::to_string)
+}
+
+/// Build the C1 `AnalysisRecord` envelope from `(spec, input, report_id,
+/// status)` — shared by `assemble` (a fresh run) and the engine's serve
+/// path (a recorded report is never recomputed and its envelope must be
+/// *identical*: the record is content-addressed, so a re-served record
+/// recomputes to the same `analysis_id`).
+pub fn record_for(
+    spec: &AnalysisSpec,
+    input: &AnalysisInput<'_>,
+    report_id: &str,
+    status: AnalysisStatus,
+) -> AnalysisRecord {
+    // `oracle_ids` — the distinct oracle refs the analysis's cells cite
+    // (sorted; `judge_snapshots` stays empty at this tier — judged oracles
+    // are C2 and no row carries a judge snapshot yet).
+    let mut oracle_ids: Vec<String> = input
+        .rows
+        .iter()
+        .flat_map(|r| r.cells.iter().filter_map(|c| c.oracle_ref.clone()))
+        .collect();
+    oracle_ids.sort();
+    oracle_ids.dedup();
+    // `pre_registered` — the spec matches the experiment's pinned
+    // analysis plan *by identity* (§6.5: {kind, metric refs, procedure}
+    // match a registered plan — the plan ref pins the spec's content
+    // address, so identity on the ref is the whole test).
+    let (pre_registered, registered_analysis_ref) = match input.pre_registration {
+        Some(p) if !p.analysis_plan_ref.is_empty() && p.analysis_plan_ref == spec.spec_id() => {
+            (true, Some(p.analysis_plan_ref.clone()))
+        }
+        _ => (false, None),
+    };
+    // `procedure` — the estimator selection's content address (what ran,
+    // not a name: declared method + floors + fallback chain are hashed).
+    let procedure = hh_identity::idp::idp_id(
+        "analysis.procedure",
+        spec.estimator_selection
+            .to_json()
+            .to_canonical_string()
+            .as_bytes(),
+    );
+    let watermarks = lab_watermarks(input.watermark_set);
+    let mut record = AnalysisRecord {
+        analysis_id: String::new(),
+        spec_ref: spec.spec_id(),
+        generated_from: watermarks.clone(),
+        outputs: vec![report_id.to_string()],
+        status,
+        kind: Some(record_kind(&spec.kind).to_string()),
+        experiment_run_id: bound_experiment(input),
+        procedure: Some(procedure),
+        inputs: Some(Json::obj([
+            ("query", spec.query.to_json()),
+            ("watermark_set", watermarks.to_json()),
+        ])),
+        metric_registry_version: Some(input.metric_registry_version.to_string()),
+        price_table_version: Some(input.price_table_version.to_string()),
+        oracle_ids,
+        judge_snapshots: Vec::new(),
+        report: Some(report_id.to_string()),
+        pre_registered,
+        registered_analysis_ref,
+        post_amendment: input.post_amendment,
+        provenance: Some(Json::obj([
+            ("origin", Json::str("instrument")),
+            ("authority", Json::str("kernel")),
+        ])),
+        cost: Some(Json::obj([
+            ("resampling_draws", Json::Int(input.resampling_draws as i64)),
+            ("seed", Json::Int(input.seed as i64)),
+            ("n_rows", Json::Int(input.rows.len() as i64)),
+            ("n_tasks", Json::Int(input.tasks.len() as i64)),
+        ])),
+    };
+    record.analysis_id = record.analysis_id();
+    record
+}
+
 /// The report's label (`confirmatory` needs a pre-registration whose
 /// `primary_metrics` cover the spec's metrics — ADR-0157 D5; `preview` is
 /// a reduced-draws run, never persisted as confirmatory).
@@ -129,6 +248,7 @@ pub fn assemble(
     equivalence: Option<Json>,
     transfer_profile: Option<Json>,
     frontier: Option<Json>,
+    sections: Vec<(&'static str, Json)>,
     excluded_not_run: Vec<String>,
 ) -> AnalysisOutcome {
     let mut run_ids: Vec<String> = input.rows.iter().map(|r| r.key.run_id.clone()).collect();
@@ -169,6 +289,13 @@ pub fn assemble(
     if let Some(f) = frontier {
         body.insert("frontier".into(), f);
     }
+    // Operation-specific members (A6 `benefit_decomposition`, A7
+    // `surface`, A9 `rank`, A10 `attribution`, A11 `reliability`, A13
+    // `power`, A14 `strata`, A15 `diagnostics`) — canonical-JSON key
+    // order makes insertion order irrelevant.
+    for (name, section) in sections {
+        body.insert(name.into(), section);
+    }
     body.insert(
         "excluded".into(),
         Json::obj([(
@@ -192,15 +319,9 @@ pub fn assemble(
         generated_from: lab_watermarks(input.watermark_set),
         status,
         result_ref: None, // the engine fills the body's content address
+        kind: Some(record_kind(&spec.kind).to_string()),
     };
-    let mut record = AnalysisRecord {
-        analysis_id: String::new(),
-        spec_ref: spec.spec_id(),
-        generated_from: lab_watermarks(input.watermark_set),
-        outputs: vec![report_id.clone()],
-        status,
-    };
-    record.analysis_id = record.analysis_id();
+    let record = record_for(spec, input, &report_id, status);
 
     AnalysisOutcome {
         body,

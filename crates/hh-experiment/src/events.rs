@@ -59,6 +59,10 @@ pub mod class {
     pub const DRIFT_BRACKET: &str = "measurement.experiment.drift_bracket";
     /// `measurement.experiment.bundle_assembled` — `{bundle_id, kind}`.
     pub const BUNDLE_ASSEMBLED: &str = "measurement.experiment.bundle_assembled";
+    /// `measurement.analysis.recorded` — the producer contract's analysis
+    /// record stamp on the experiment run (§6.5 §2.3 `record_analysis`;
+    /// §6.4 §6 audit events — ADR-0162 D3/D6).
+    pub const ANALYSIS_RECORDED: &str = "measurement.analysis.recorded";
 }
 
 /// The closed `pause` reason set (§6.3 §2.2; ADR-0155 D2).
@@ -469,6 +473,37 @@ pub fn amended(diff_ref: &str, reason: &str, authority: &str) -> Json {
         ("reason", Json::str(reason)),
         ("authority", Json::str(authority)),
     ])
+}
+
+/// `measurement.analysis.recorded{analysis_id, report, kind,
+/// pre_registered, registered_analysis_ref?, post_amendment}` — the
+/// producer contract's analysis stamp on the experiment run (§6.5 §2.3;
+/// §6.4 §6's `measurement.analysis.recorded` audit event; ADR-0162 D3).
+/// Members are the `AnalysisRecord`'s own facts — the row is the record's
+/// ledger presence, never a copy of its body.
+pub fn analysis_recorded(record: &hh_lab::analysis::AnalysisRecord) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("analysis_id".to_string(), Json::str(&record.analysis_id));
+    m.insert(
+        "report".to_string(),
+        record.report.as_ref().map_or(Json::Null, Json::str),
+    );
+    m.insert(
+        "kind".to_string(),
+        record.kind.as_ref().map_or(Json::Null, Json::str),
+    );
+    m.insert(
+        "pre_registered".to_string(),
+        Json::Bool(record.pre_registered),
+    );
+    if let Some(r) = &record.registered_analysis_ref {
+        m.insert("registered_analysis_ref".to_string(), Json::str(r));
+    }
+    m.insert(
+        "post_amendment".to_string(),
+        Json::Bool(record.post_amendment),
+    );
+    Json::Obj(m)
 }
 
 // ── Boundary records ────────────────────────────────────────────────────────

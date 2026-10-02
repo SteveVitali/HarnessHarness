@@ -63,7 +63,7 @@ fn opt_str(j: &Json, k: &str) -> Option<String> {
 /// `ExperimentError` → the boundary's typed surface — the refusal set renders
 /// as `Refused{reason: <code>}`; `WouldBlock`/`InsufficientBudget` map to
 /// their native variants; everything else is `Refused` with the stable code.
-fn xerr(e: ExperimentError) -> EmbedError {
+pub(crate) fn xerr(e: ExperimentError) -> EmbedError {
     match e {
         ExperimentError::WouldBlock { holder } => EmbedError::WouldBlock {
             active_holder: holder,
@@ -79,7 +79,7 @@ fn xerr(e: ExperimentError) -> EmbedError {
 
 /// The resolver bag `EngineContext`'s closures own — every member decoded
 /// from `params` (records-in; absent members defer to `LabDocs`/refuse).
-struct Bag {
+pub(crate) struct Bag {
     budgets: BTreeMap<String, BudgetSpec>,
     suite_tasks: Option<Vec<ExpandTask>>,
     arm_configs: Option<BTreeMap<String, ArmConfiguration>>,
@@ -115,7 +115,7 @@ struct Bag {
 }
 
 impl Bag {
-    fn from_params(p: &Json) -> Result<Bag, EmbedError> {
+    pub(crate) fn from_params(p: &Json) -> Result<Bag, EmbedError> {
         let mut budgets = BTreeMap::new();
         if let Some(Json::Obj(m)) = p.get("budgets") {
             for (k, v) in m {
@@ -391,7 +391,7 @@ impl Bag {
 
     /// The engine context over `self` (the boxed closures borrow `bag`; the
     /// engine never outlives the handler scope).
-    fn ctx(&self) -> EngineContext<'_> {
+    pub(crate) fn ctx(&self) -> EngineContext<'_> {
         EngineContext {
             resolve_budget: Some(Box::new(move |r: &str| self.budgets.get(r).cloned())),
             artifact_sealed: self.sealed.is_some().then(|| {
@@ -474,7 +474,7 @@ impl Bag {
 /// one, else `attach` (fence-acquires; `WouldBlock` while another holder
 /// lives). Disjoint field borrows: `store` and `leases` are separate
 /// `EmbedService` members.
-fn engine_for<'a>(
+pub(crate) fn engine_for<'a>(
     store: &'a mut Store,
     leases: &mut BTreeMap<String, Lease>,
     docs: LabDocs,
@@ -499,7 +499,7 @@ fn engine_for<'a>(
 
 /// Hand the (possibly renewed) binding back to the lease map — consumes the
 /// engine so its `&mut Store` borrow ends before the map is touched.
-fn park(leases: &mut BTreeMap<String, Lease>, mut eng: ExperimentEngine<'_>) {
+pub(crate) fn park(leases: &mut BTreeMap<String, Lease>, mut eng: ExperimentEngine<'_>) {
     if let Some((run_id, lease)) = eng.take_binding() {
         leases.insert(run_id, lease);
     }
@@ -513,7 +513,11 @@ impl EmbedService {
 
     /// The experiment run id for an `experiment_id`-addressed call (or an
     /// `experiment_run_id`-addressed one).
-    fn experiment_run_id(&self, docs: &LabDocs, params: &Json) -> Result<String, EmbedError> {
+    pub(crate) fn experiment_run_id(
+        &self,
+        docs: &LabDocs,
+        params: &Json,
+    ) -> Result<String, EmbedError> {
         if let Some(run_id) = opt_str(params, "experiment_run_id") {
             return Ok(run_id);
         }

@@ -120,6 +120,12 @@ pub enum ExperimentError {
         /// The failure detail.
         detail: String,
     },
+    /// `exclude` refused: the reason is outside the §6.5 §2.3 closed set,
+    /// or `analyst_exclusion` carried a non-human authority (ADR-0162 D2).
+    ExclusionRefused {
+        /// The failure detail.
+        detail: String,
+    },
 }
 
 impl ExperimentError {
@@ -147,6 +153,7 @@ impl ExperimentError {
             ExperimentError::Store { .. } => "StoreError",
             ExperimentError::PoolExhausted { .. } => "PoolExhausted",
             ExperimentError::HostedLaunchUnavailable { .. } => "HostedLaunchUnavailable",
+            ExperimentError::ExclusionRefused { .. } => "ExclusionRefused",
         }
     }
 }
@@ -173,6 +180,9 @@ pub fn refusal_code(r: &ExperimentRefusal) -> &'static str {
         ExperimentRefusal::NotARetirementMatch { .. } => "NotARetirementMatch",
         ExperimentRefusal::PreRegistrationInvalid { .. } => "PreRegistrationInvalid",
         ExperimentRefusal::AdaptiveOutsideSearch { .. } => "AdaptiveOutsideSearch",
+        ExperimentRefusal::DeclarationLate { .. } => "DeclarationLate",
+        ExperimentRefusal::PreRegistrationLate { .. } => "PreRegistrationLate",
+        ExperimentRefusal::NotPreRegistered { .. } => "NotPreRegistered",
         ExperimentRefusal::Schema(_) => "SchemaViolation",
     }
 }
@@ -229,6 +239,9 @@ impl std::fmt::Display for ExperimentError {
             }
             ExperimentError::HostedLaunchUnavailable { detail } => {
                 write!(f, "hosted launch unavailable: {detail}")
+            }
+            ExperimentError::ExclusionRefused { detail } => {
+                write!(f, "exclusion refused: {detail}")
             }
         }
     }

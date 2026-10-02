@@ -410,10 +410,15 @@ fn run_to_close_with(
     decision: bool,
     consume: impl Fn(&str) -> i64,
 ) -> String {
-    // The experiment *run* (distinct from the experiment id `eid` the
-    // engine attaches by) — the plan state lives on its stream.
-    let exp_run = rig
-        .store
+    let exp_run = drive(rig, eid, metric_base, decision, consume, |_, _| Vec::new());
+    close_experiment(rig, eid);
+    exp_run
+}
+
+/// The experiment run id for the rig's single experiment — the run kind
+/// scan (the plan state lives on its stream).
+fn experiment_run_id(rig: &Rig) -> String {
+    rig.store
         .run_ids()
         .into_iter()
         .find(|r| {
@@ -422,7 +427,24 @@ fn run_to_close_with(
                 .map(|m| m.run_kind == hh_ledger::manifest::RunKind::Experiment)
                 .unwrap_or(false)
         })
-        .unwrap();
+        .unwrap()
+}
+
+/// The settle loop minus the close — every plan claims, launches,
+/// finishes (`consume(arm_id)` the realised `ModelCalls`; `extra_for`
+/// adds per-subject events ahead of `finished`) and settles. Returns the
+/// experiment run id with the experiment still live — exclusions,
+/// amendments and `record_analysis` stamps land between `drive` and
+/// `close_experiment` (the producer-contract window).
+fn drive(
+    rig: &mut Rig,
+    eid: &str,
+    metric_base: i64,
+    decision: bool,
+    consume: impl Fn(&str) -> i64,
+    extra_for: impl Fn(&str, &str) -> Vec<(String, Json)>,
+) -> String {
+    let exp_run = experiment_run_id(rig);
     let mut i = 0i64;
     loop {
         let mut eng = ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx());
@@ -449,6 +471,7 @@ fn run_to_close_with(
                         &launched.run_id,
                     ),
                 )];
+                extra.extend(extra_for(&launched.run_id, &arm_id));
                 if decision {
                     // A `control.decision` row marks the run
                     // replay-declared — the bundle's R1 basis arm
@@ -475,12 +498,16 @@ fn run_to_close_with(
             other => panic!("unexpected next: {other:?}"),
         }
     }
+    exp_run
+}
+
+/// Attach + `close(false)` — the S-4 close record lands.
+fn close_experiment(rig: &mut Rig, eid: &str) {
     let mut eng = ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx());
     eng.attach(eid).unwrap();
     let report = eng.close(false).unwrap();
     let _ = report;
     drop(eng);
-    exp_run
 }
 
 /// A minimal self-contained `run` bundle covering `subject_run` at R0 —
@@ -489,7 +516,7 @@ fn run_to_close_with(
 /// `replay_declared` reads for the B-R1 basis); returns the bundle id
 /// (`manifest.version_id`).
 fn deposit_bundle(rig: &mut Rig, subject_run: &str) -> String {
-    deposit_bundle_inner(rig, subject_run, ReproLevel::R0, false)
+    deposit_bundle_inner(rig, subject_run, ReproLevel::R0, false, &[])
 }
 
 /// A bundle claiming `level` — ≥R1 adds the `compiled_bundle` member +
@@ -497,13 +524,36 @@ fn deposit_bundle(rig: &mut Rig, subject_run: &str) -> String {
 /// on the subject run's `control.decision` row for B-R1-replay (the
 /// caller's `run_to_close(…, decision = true)`).
 fn deposit_bundle_at(rig: &mut Rig, subject_run: &str, level: ReproLevel) -> String {
-    deposit_bundle_inner(rig, subject_run, level, false)
+    deposit_bundle_inner(rig, subject_run, level, false, &[])
 }
 
 /// A bundle whose `ledger_tree` member claims `present` but carries no
 /// pool bytes — S1 fails, the catalogue entry stays `assembled`.
 fn deposit_bundle_broken(rig: &mut Rig, subject_run: &str) -> String {
-    deposit_bundle_inner(rig, subject_run, ReproLevel::R0, true)
+    deposit_bundle_inner(rig, subject_run, ReproLevel::R0, true, &[])
+}
+
+/// A bundle whose declared `readers` bound the audience — the
+/// restricted-store arm of `disclosure_summary`/`restricted_arms`
+/// (AC-R-2.10.5-8).
+fn deposit_bundle_restricted(rig: &mut Rig, subject_run: &str, readers: &[&str]) -> String {
+    let bid = deposit_bundle_inner(rig, subject_run, ReproLevel::R0, false, readers);
+    hh_results::status::set_status(
+        &mut rig.store,
+        &rig.results,
+        subject_run,
+        &bid,
+        BundleStatus::Restricted,
+        "restricted audience",
+        readers.iter().map(|s| s.to_string()).collect(),
+        Json::str("operator"),
+        Json::obj([(
+            "validation_report",
+            Json::obj([("status", Json::str("valid"))]),
+        )]),
+    )
+    .unwrap();
+    bid
 }
 
 fn deposit_bundle_inner(
@@ -511,6 +561,7 @@ fn deposit_bundle_inner(
     subject_run: &str,
     level: ReproLevel,
     withhold_member: bool,
+    readers: &[&str],
 ) -> String {
     let member = |bytes: &[u8]| idp_id("blob", bytes);
     let doc = |v: Json| v.to_canonical_string().into_bytes();
@@ -659,6 +710,9 @@ fn deposit_bundle_inner(
         ("ext", Json::obj([])),
         ("version_id", Json::str("pending")),
     ]);
+    // Reader sets are declared through `set_status` (the status book),
+    // not the manifest — the param stays so call sites read the intent.
+    let _ = readers;
     let mut manifest = hh_bundle::manifest::BundleManifest::from_json(&manifest_doc).unwrap();
     manifest.version_id = manifest.compute_id();
     rig.store
@@ -1855,4 +1909,885 @@ fn leaderboard_flags_imbalance_never_excludes() {
         .iter()
         .filter(|e| e.arm_id == "arm:a")
         .any(|e| e.flags.iter().any(|f| f == "under_utilised")));
+}
+
+// ── C1 helpers — bundle facts + producer records ────────────────────────────
+
+/// Emit `measurement.experiment.bundle_assembled` facts on a scratch
+/// instrument run — the catalogue refresh scans every stream, so the
+/// emission site is free.
+fn emit_bundle_facts(rig: &mut Rig, bundle_ids: &[String]) {
+    let manifest = experiment_manifest();
+    let (rid, lease) = rig.store.open_run(manifest, "bundle-facts").unwrap();
+    let events: Vec<Event> = bundle_ids
+        .iter()
+        .map(|bid| {
+            mint(
+                &rig.store,
+                &rid,
+                "measurement.experiment.bundle_assembled",
+                Json::obj([
+                    ("bundle_id", Json::str(bid.as_str())),
+                    ("kind", Json::str("run")),
+                ]),
+            )
+        })
+        .collect();
+    append_chained(&mut rig.store, &rid, &lease, events);
+}
+
+/// A producer-contract `AnalysisRecord` bound to `exp_run` — the record
+/// recomputes its own content address (`analysis_id` is derived, never
+/// asserted).
+fn analysis_record(
+    exp_run: &str,
+    pre_reg: bool,
+    registered_ref: Option<&str>,
+    post_amendment: bool,
+) -> hh_lab::analysis::AnalysisRecord {
+    let mut rec = hh_lab::analysis::AnalysisRecord::from_json(&Json::obj([
+        ("analysis_id", Json::str("pending")),
+        ("spec_ref", Json::str("spec:analysis.test")),
+        (
+            "generated_from",
+            hh_lab::analysis::WatermarkSet::default().to_json(),
+        ),
+        ("outputs", Json::Arr(vec![])),
+        ("status", Json::str("final")),
+        ("kind", Json::str("comparison_report")),
+        ("experiment_run_id", Json::str(exp_run)),
+        ("pre_registered", Json::Bool(pre_reg)),
+        (
+            "registered_analysis_ref",
+            registered_ref.map_or(Json::Null, Json::str),
+        ),
+        ("post_amendment", Json::Bool(post_amendment)),
+    ]))
+    .unwrap();
+    rec.analysis_id = rec.analysis_id();
+    rec
+}
+
+/// A standalone agent run with a `wall_time_ms` metric + `finished` — the
+/// records-in producer path (bound to nothing on its own stream).
+fn foreign_finished_run(rig: &mut Rig, value: i64) -> String {
+    let m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+    let (rid, lease) = rig.store.open_run(m, "foreign-run").unwrap();
+    finish_subject(
+        &mut rig.store,
+        &rid,
+        &lease,
+        StopReason::Completed,
+        &[],
+        vec![(
+            "measurement.metric.emitted".to_string(),
+            metric_payload("wall_time_ms", MetricValueKind::Decimal(value), &rid),
+        )],
+    );
+    rid
+}
+
+/// Mirror a `run_launched` for a run the engine never launched — the
+/// records-in path's ledger fact (the cell table lists the attempt; the
+/// subject's own stream carries no `bound` row, so its row is unbound).
+fn mint_foreign_launched(rig: &mut Rig, exp_run: &str, run_plan_id: &str, run_id: &str) {
+    let lease = rig
+        .store
+        .acquire_writer("test-driver", exp_run, 60_000)
+        .unwrap();
+    let ev = mint(
+        &rig.store,
+        exp_run,
+        "measurement.experiment.run_launched",
+        hh_experiment::events::run_launched(
+            run_plan_id,
+            run_id,
+            9,
+            "budget:records-in",
+            &hh_experiment::events::LaunchStamp {
+                pool_consumed: &[],
+                participant_class: "native",
+                limits_enforced: "full",
+                hosted_session_ref: None,
+            },
+        ),
+    );
+    append_chained(&mut rig.store, exp_run, &lease, vec![ev]);
+    rig.store.release_silent(&lease).unwrap();
+}
+
+// ── AC-R-2.10.5-4: annotate, never hide ─────────────────────────────────────
+
+#[test]
+fn annotate_never_hide_retract_revoke_retire_gc() {
+    let mut r = rig("never-hide", 12_000);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _e) = open(&mut r, &s);
+    // The blob-GC arm — the first launched subject's metric cites a pool
+    // blob the test then `gc`s (`evidence_missing`, never a dropped entry).
+    let ev_blob = r
+        .store
+        .put_blob(b"evidence-1", "application/octet-stream")
+        .unwrap()
+        .id();
+    let ev_addr = ev_blob.clone();
+    let carrier = std::cell::RefCell::new(String::new());
+    let extra_evidence = |run_id: &str, _arm: &str| -> Vec<(String, Json)> {
+        let mut slot = carrier.borrow_mut();
+        if slot.is_empty() {
+            *slot = run_id.to_string();
+            vec![(
+                "measurement.metric.emitted".to_string(),
+                MetricValue {
+                    metric_ref: "wall_time_ms".to_string(),
+                    value: MetricValueKind::Decimal(8_800),
+                    applies_to: run_id.to_string(),
+                    oracle_ref: "oracle:test".to_string(),
+                    detector: Detector::Deterministic,
+                    confidence: None,
+                    evidence_ref: Some(ev_addr.clone()),
+                }
+                .to_json(),
+            )]
+        } else {
+            Vec::new()
+        }
+    };
+    let exp_run = drive(&mut r, &eid, 800, false, |_| 3, &extra_evidence);
+    close_experiment(&mut r, &eid);
+    for sr in &launched_runs(&r, &exp_run) {
+        r.results
+            .project_and_record(
+                &r.store,
+                Some(&r.docs),
+                sr,
+                None,
+                None,
+                DerivedReason::Initial,
+            )
+            .unwrap();
+    }
+    let evidence_run = carrier.into_inner();
+    let subjects = launched_runs(&r, &exp_run);
+    assert_eq!(subjects.len(), 4);
+    assert!(!evidence_run.is_empty());
+    let rest: Vec<String> = subjects
+        .iter()
+        .filter(|x| **x != evidence_run)
+        .cloned()
+        .collect();
+    let s_ret = rest[0].clone(); // retract_entry arm
+    let s_rev = rest[1].clone(); // member revocation arm
+    let b_ev = deposit_bundle(&mut r, &evidence_run);
+    let b_ret = deposit_bundle(&mut r, &s_ret);
+    let b_rev = deposit_bundle(&mut r, &s_rev);
+    emit_bundle_facts(&mut r, &[b_ev.clone(), b_ret.clone(), b_rev.clone()]);
+    r.results.catalogue_refresh(&r.store, None).unwrap();
+
+    let def = LeaderboardDefinition::new(exp_run.clone(), "wall_time_ms");
+    let def_ref = r.results.define_leaderboard(&def).unwrap();
+    let snap_a = r
+        .results
+        .snapshot_leaderboard(&r.store, &r.docs, &def, None)
+        .unwrap();
+    assert_eq!(snap_a.entries.len(), 3);
+    let cfg_of = |snap: &hh_results::leaderboard::LeaderboardSnapshot, bid: &str| {
+        snap.entries
+            .iter()
+            .find(|e| e.bundle_refs.iter().any(|b| b == bid))
+            .unwrap()
+            .configuration_id
+            .clone()
+    };
+    let cfg_ret = cfg_of(&snap_a, &b_ret);
+
+    // 1) `retract_entry` — the entry stays, flagged `retracted`.
+    r.results
+        .retract_entry(
+            &mut r.store,
+            &def_ref,
+            &cfg_ret,
+            "reason:recalled",
+            "operator",
+        )
+        .unwrap();
+    let snap_b = r
+        .results
+        .snapshot_leaderboard(&r.store, &r.docs, &def, None)
+        .unwrap();
+    let e_ret = snap_b
+        .entries
+        .iter()
+        .find(|e| e.configuration_id == cfg_ret)
+        .expect("retracted entry stays listed");
+    assert!(e_ret.retracted);
+    assert!(e_ret.flags.iter().any(|f| f == "retracted"));
+    let diff_ab = r
+        .results
+        .diff_snapshots(&snap_a.snapshot_id, &snap_b.snapshot_id)
+        .unwrap();
+    assert!(
+        diff_ab.entries_removed.is_empty(),
+        "annotate-never-hide: a retraction reports a flag change, never a removal"
+    );
+    assert!(diff_ab
+        .flag_changes
+        .iter()
+        .any(|(c, add, _)| c == &cfg_ret && add.iter().any(|f| f == "retracted")));
+
+    // 2) Member revocation — the covering bundle retracts; the entry
+    // stays listed under `member_revoked`, `bundle_refs` names the revoked
+    // bundle (the record, never a removal).
+    hh_results::status::set_status(
+        &mut r.store,
+        &r.results,
+        &s_rev,
+        &b_rev,
+        BundleStatus::Retracted,
+        "member evidence withdrawn",
+        vec![],
+        Json::str("operator"),
+        Json::Null,
+    )
+    .unwrap();
+    r.results
+        .catalogue_refresh(&r.store, Some(&[b_rev.clone()]))
+        .unwrap();
+    let snap_c = r
+        .results
+        .snapshot_leaderboard(&r.store, &r.docs, &def, None)
+        .unwrap();
+    let e_rev = snap_c
+        .entries
+        .iter()
+        .find(|e| e.audit_ref.run_id == s_rev)
+        .expect("a revoked covering bundle never hides the entry");
+    assert!(e_rev.flags.iter().any(|f| f == "member_revoked"));
+    assert!(e_rev.bundle_refs.iter().any(|b| b == &b_rev));
+
+    // 3) Suite retirement — the `measurement.suite.retired` row on the
+    // experiment run flags every entry `suite_retired`.
+    {
+        let lease = r
+            .store
+            .acquire_writer("never-hide", &exp_run, 60_000)
+            .unwrap();
+        let ev = mint(
+            &r.store,
+            &exp_run,
+            "measurement.suite.retired",
+            Json::obj([
+                ("suite_ref", Json::str(&pinned("suite.tb2"))),
+                ("reason", Json::str("suite superseded")),
+            ]),
+        );
+        append_chained(&mut r.store, &exp_run, &lease, vec![ev]);
+        r.store.release_silent(&lease).unwrap();
+    }
+    let snap_d = r
+        .results
+        .snapshot_leaderboard(&r.store, &r.docs, &def, None)
+        .unwrap();
+    assert_eq!(snap_d.entries.len(), 3);
+    assert!(
+        snap_d
+            .entries
+            .iter()
+            .all(|e| e.flags.iter().any(|f| f == "suite_retired")),
+        "suite retirement annotates every listed entry"
+    );
+
+    // 4) Blob GC — the evidence blob tombstones; the carrying entry flags
+    // `evidence_missing` and stays listed.
+    {
+        let manifest = experiment_manifest();
+        let (gc_run, gc_lease) = r.store.open_run(manifest, "gc-driver").unwrap();
+        r.store
+            .gc(
+                &gc_run,
+                &gc_lease,
+                vec![ev_blob.clone()],
+                "policy:test",
+                "warm",
+                None,
+            )
+            .unwrap();
+    }
+    let snap_e = r
+        .results
+        .snapshot_leaderboard(&r.store, &r.docs, &def, None)
+        .unwrap();
+    assert_eq!(snap_e.entries.len(), 3);
+    let e_ev = snap_e
+        .entries
+        .iter()
+        .find(|e| e.audit_ref.run_id == evidence_run)
+        .expect("a GC'd evidence blob never hides the entry");
+    assert!(e_ev.flags.iter().any(|f| f == "evidence_missing"));
+
+    // The rows were first recorded before the bundles landed — the
+    // projection (and so the `version_id`) moved once `bundle_refs`
+    // joined the canonical bytes. Re-record every subject so the store
+    // holds the head the snapshot names.
+    for sr in &subjects {
+        r.results
+            .project_and_record(
+                &r.store,
+                Some(&r.docs),
+                sr,
+                None,
+                None,
+                DerivedReason::Regrade,
+            )
+            .unwrap();
+    }
+    // `verify_row` still passes on every listed head — the flags are
+    // overlays on sound rows, not masks.
+    for e in &snap_e.entries {
+        assert_eq!(
+            r.results
+                .verify_row(&r.store, Some(&r.docs), &e.version_id)
+                .unwrap(),
+            VerifyVerdict::Ok
+        );
+    }
+    // The annotation index carries the same marks (annotate is derived —
+    // the flags are rebuildable, never recorded on the row).
+    let idx = r.results.annotate(&r.store, None).unwrap();
+    let rev_ann = idx
+        .entries
+        .iter()
+        .find(|a| a.bundle_refs.iter().any(|b| b == &b_rev));
+    assert!(rev_ann
+        .map(|a| a
+            .flags
+            .iter()
+            .any(|f| f == "member_revoked" || f == "bundle_retracted"))
+        .unwrap_or(false));
+    assert!(idx
+        .entries
+        .iter()
+        .all(|a| a.flags.iter().any(|f| f == "suite_retired")));
+    // The A→E diff reports flag changes and no removals — the AC's
+    // entire claim in one diff.
+    let diff_ae = r
+        .results
+        .diff_snapshots(&snap_a.snapshot_id, &snap_e.snapshot_id)
+        .unwrap();
+    assert!(diff_ae.entries_removed.is_empty());
+    let added: std::collections::BTreeSet<&str> = diff_ae
+        .flag_changes
+        .iter()
+        .flat_map(|(_, add, _)| add.iter().map(String::as_str))
+        .collect();
+    for want in [
+        "retracted",
+        "member_revoked",
+        "suite_retired",
+        "evidence_missing",
+    ] {
+        assert!(
+            added.contains(want),
+            "missing flag change {want} in {added:?}"
+        );
+    }
+}
+
+// ── AC-R-2.10.5-8: disclosure summary + undisclosed ─────────────────────────
+
+/// A 3-task context — each arm plans one cell per task, so a search arm's
+/// `n_candidates_registered` reads 3 (the AC's best-of-3 shape).
+fn ctx_tasks(n: usize) -> EngineContext<'static> {
+    let map = budgets();
+    EngineContext {
+        resolve_budget: Some(Box::new(move |r: &str| map.get(r).cloned())),
+        suite_tasks: Some(Box::new(move |_spec: &ExperimentSpec| {
+            Some(
+                (1..=n)
+                    .map(|i| ExpandTask {
+                        task_id: format!("task:{i}"),
+                        split_label: SplitLabel::Dev,
+                    })
+                    .collect(),
+            )
+        })),
+        arm_config: Some(Box::new(|a: &ArmSpec| {
+            Ok(ArmConfiguration {
+                configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
+                configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),
+            })
+        })),
+        min_replicates: 1,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn disclosure_summary_counts_and_marks_undisclosed() {
+    let mut r = rig("disclosure", 12_500);
+    // Four declared arms (the AC fixture) over a 3-task suite.
+    let mut s = spec(ExperimentKind::Comparative);
+    s.arms
+        .push(arm("arm:c", "evict_oldest", "eval:a", Some("search:a")));
+    s.arms.push(arm(
+        "arm:d",
+        "clear_tool_results",
+        "eval:b",
+        Some("search:b"),
+    ));
+    s.experiment_id = s.experiment_id();
+    let exp_run = {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx_tasks(3));
+        let eid = eng.register(&s).unwrap();
+        eng.expand(&eid).unwrap();
+        eng.open_experiment(&eid).unwrap();
+        drop(eng);
+        eid
+    };
+    let eid = exp_run;
+    let exp_run = drive(&mut r, &eid, 900, false, |_| 3, |_, _| Vec::new());
+
+    // Two exclusions + three analyses (1 pre-registered) — the producer
+    // contract's recorded surface, ahead of close.
+    let view_pre = hh_experiment::view::ExperimentView::fold(r.store.envelopes(&exp_run).unwrap());
+    let plans: Vec<(String, String)> = view_pre
+        .plans
+        .iter()
+        .flat_map(|(rpid, p)| {
+            p.attempts
+                .iter()
+                .map(move |a| (rpid.clone(), a.run_id.clone()))
+        })
+        .collect();
+    assert!(plans.len() >= 2);
+    {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        eng.exclude(
+            &plans[0].0,
+            &plans[0].1,
+            "duplicate_attempt",
+            None,
+            "driver",
+        )
+        .unwrap();
+        eng.exclude(
+            &plans[1].0,
+            &plans[1].1,
+            "duplicate_attempt",
+            None,
+            "driver",
+        )
+        .unwrap();
+        eng.record_analysis(
+            &analysis_record(&exp_run, true, Some(&pinned("analysis")), false),
+            None,
+        )
+        .unwrap();
+        eng.record_analysis(&analysis_record(&exp_run, false, None, false), None)
+            .unwrap();
+        eng.record_analysis(&analysis_record(&exp_run, false, None, false), None)
+            .unwrap();
+        drop(eng);
+    }
+
+    close_experiment(&mut r, &eid);
+    // A records-in run — post-close, the experiment run's `run_launched`
+    // mirror names it, but the subject's own stream carries no `bound`
+    // row: the row is bound to no experiment (a live attempt would trip
+    // the S-4 close gate, so the records-in mirror lands after close).
+    let foreign = foreign_finished_run(&mut r, 4_242);
+    mint_foreign_launched(&mut r, &exp_run, &plans[2].0, &foreign);
+
+    let view = hh_experiment::view::ExperimentView::fold(r.store.envelopes(&exp_run).unwrap());
+    // One covering bundle per arm — arm:b's is restricted.
+    let arm_run = |arm: &str| {
+        view.plans
+            .values()
+            .find(|p| p.arm_id == arm)
+            .unwrap()
+            .attempts[0]
+            .run_id
+            .clone()
+    };
+    let bids = vec![
+        deposit_bundle(&mut r, &arm_run("arm:a")),
+        deposit_bundle_restricted(&mut r, &arm_run("arm:b"), &["ops-team"]),
+        deposit_bundle(&mut r, &arm_run("arm:c")),
+        deposit_bundle(&mut r, &arm_run("arm:d")),
+    ];
+    emit_bundle_facts(&mut r, &bids);
+    let cat = r.results.catalogue_refresh(&r.store, None).unwrap();
+    let cat_entry = cat.entries.iter().find(|e| e.bundle_id == bids[1]).unwrap();
+    assert_eq!(cat_entry.readers, vec!["ops-team".to_string()]);
+
+    let summary = hh_results::disclosure::disclosure_summary(&view, &s, &cat);
+    assert_eq!(summary.arms_registered, 4);
+    assert_eq!(summary.arms_published, 3);
+    assert_eq!(summary.arms_restricted, 1);
+    assert_eq!(summary.exclusions, 2);
+    assert_eq!(summary.analyses_pre_registered, 1);
+    assert_eq!(summary.analyses_exploratory, 2);
+    // Every search arm emits a best-of-N selection row — 3 tasks ⇒ 3
+    // registered candidates.
+    assert_eq!(summary.selections.len(), 4);
+    for sel in &summary.selections {
+        let n = sel
+            .get("selection")
+            .and_then(|x| x.get("n_candidates"))
+            .and_then(Json::as_int);
+        assert_eq!(n, Some(3), "selection row: {sel:?}");
+    }
+
+    // `require_experiment` — the records-in run (no binding) is
+    // `undisclosed`, never ranked.
+    let mut def = LeaderboardDefinition::new(exp_run.clone(), "wall_time_ms");
+    def.disclosure_policy.require_experiment = true;
+    let snap = r
+        .results
+        .leaderboard(&r.store, &r.docs, &def, None)
+        .unwrap();
+    assert!(
+        snap.exclusions
+            .iter()
+            .any(|x| x.gate == "L6" && x.reason == "undisclosed"),
+        "unbound row must exclude as undisclosed: {:?}",
+        snap.exclusions
+    );
+    assert!(!snap.entries.iter().any(|e| e.audit_ref.run_id == foreign));
+    // The snapshot embeds the disclosure summary (the §6.5 §4 member).
+    let embedded = snap
+        .disclosure_summary
+        .clone()
+        .expect("snapshot carries disclosure_summary");
+    assert_eq!(
+        embedded.get("arms_registered").and_then(Json::as_int),
+        Some(4)
+    );
+}
+
+// ── AC-R-2.10.5-11: export + loss report + native round-trip ────────────────
+
+#[test]
+fn export_rows_loss_report_and_native_round_trip() {
+    let mut r = rig("export", 13_000);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _e) = open(&mut r, &s);
+    let exp_run = run_to_close(&mut r, &eid, 1_000, false);
+    let subjects = launched_runs(&r, &exp_run);
+    let rows: Vec<ResultsRow> = subjects
+        .iter()
+        .map(|sr| {
+            r.results
+                .project_and_record(
+                    &r.store,
+                    Some(&r.docs),
+                    sr,
+                    None,
+                    None,
+                    DerivedReason::Initial,
+                )
+                .unwrap()
+                .0
+        })
+        .collect();
+
+    // The foreign lowering — every typed/unslotable member lands in the
+    // loss report (`oracle_ref` provenance + the audit head are no-slot
+    // members on every row).
+    let out = r
+        .results
+        .export_rows(
+            &mut r.store,
+            &rows,
+            hh_results::export::ExportTarget::ForeignLeaderboardSubmission,
+            &Json::obj([]),
+        )
+        .unwrap();
+    assert!(!out.loss_report.lossless);
+    assert_eq!(out.loss_report.target, "foreign_leaderboard_submission");
+    assert!(out
+        .loss_report
+        .entries
+        .iter()
+        .any(|e| e.field.contains("oracle_ref") && e.reason == "no_slot"));
+    assert!(out
+        .loss_report
+        .entries
+        .iter()
+        .any(|e| e.field == "audit.head"));
+    // `measurement.export.delivered` lands on every cited run.
+    for sr in &subjects {
+        let delivered = r.store.envelopes(sr).unwrap().iter().any(|e| {
+            e.class == "measurement.export.delivered"
+                && e.payload.get("sink_id").and_then(Json::as_str) == Some(out.artefact.as_str())
+        });
+        assert!(delivered, "no export.delivered on {sr}");
+    }
+    assert_eq!(out.delivered.len(), subjects.len());
+
+    // The `n/a{reason}` arm — a finished run with no metric cells lowers
+    // its `n/a` cell as a named loss entry, never a `0`.
+    let bare = foreign_finished_run(&mut r, 0);
+    // Strip the metric so every declared cell is n/a — re-project a run
+    // that never emitted `wall_time_ms`.
+    let bare_row = {
+        // `foreign_finished_run` emits the metric; for the n/a arm mint a
+        // second run with no metrics at all.
+        let m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+        let (rid, lease) = r.store.open_run(m, "bare-run").unwrap();
+        finish_subject(
+            &mut r.store,
+            &rid,
+            &lease,
+            StopReason::Completed,
+            &[],
+            vec![],
+        );
+        let _ = bare;
+        r.results
+            .project_and_record(
+                &r.store,
+                Some(&r.docs),
+                &rid,
+                None,
+                None,
+                DerivedReason::Initial,
+            )
+            .unwrap()
+            .0
+    };
+    let out_na = r
+        .results
+        .export_rows(
+            &mut r.store,
+            &[bare_row],
+            hh_results::export::ExportTarget::ForeignLeaderboardSubmission,
+            &Json::obj([]),
+        )
+        .unwrap();
+    assert!(out_na
+        .loss_report
+        .entries
+        .iter()
+        .any(|e| e.field.starts_with("cells.")
+            && e.field.ends_with(".value")
+            && e.detail.starts_with("n/a{")));
+
+    // `ledger_native_rows` — lossless; the artefact round-trips to the
+    // identical `version_id`s.
+    let native = r
+        .results
+        .export_rows(
+            &mut r.store,
+            &rows,
+            hh_results::export::ExportTarget::LedgerNativeRows,
+            &Json::obj([]),
+        )
+        .unwrap();
+    assert!(native.loss_report.lossless);
+    assert!(native.loss_report.entries.is_empty());
+    let mut round_tripped = hh_results::export::round_trip_native(&native.body).unwrap();
+    round_tripped.sort();
+    let mut want: Vec<String> = rows.iter().map(|r| r.version_id.clone()).collect();
+    want.sort();
+    assert_eq!(round_tripped, want);
+}
+
+// ── subscribe journal + snapshot lifecycle (C1 verbs) ───────────────────────
+
+#[test]
+fn subscribe_reports_committed_events_in_order() {
+    use hh_results::journal::{JournalFilter, JournalKind};
+    let mut r = rig("journal", 13_500);
+    let sub_all = r.results.subscribe(JournalFilter { kinds: None });
+    let sub_snap = r.results.subscribe(JournalFilter {
+        kinds: Some(std::collections::BTreeSet::from([
+            JournalKind::SnapshotPublished,
+        ])),
+    });
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _e) = open(&mut r, &s);
+    let exp_run = run_to_close(&mut r, &eid, 1_100, false);
+    let subjects = launched_runs(&r, &exp_run);
+
+    // `record` commits the head file (fsync'd rename), then emits —
+    // `recv` can only see the event *after* durability.
+    let (row, ver) = r
+        .results
+        .project_and_record(
+            &r.store,
+            Some(&r.docs),
+            &subjects[0],
+            None,
+            None,
+            DerivedReason::Initial,
+        )
+        .unwrap();
+    let e = sub_all.recv().unwrap();
+    assert_eq!(e.kind, JournalKind::RowHeadChanged);
+    assert_eq!(e.subject, row.key.key_id());
+    assert_eq!(e.detail, ver.version_id);
+    // The filtered subscription sees nothing it doesn't admit.
+    assert!(sub_snap.try_recv().is_none());
+
+    // `annotate` commits the index → `annotation_changed`.
+    r.results.annotate(&r.store, None).unwrap();
+    let e2 = sub_all.recv().unwrap();
+    assert_eq!(e2.kind, JournalKind::AnnotationChanged);
+    assert!(sub_snap.try_recv().is_none());
+
+    // `publish` commits the publication row → `snapshot_published`.
+    let bid = deposit_bundle(&mut r, &subjects[0]);
+    emit_bundle_facts(&mut r, std::slice::from_ref(&bid));
+    r.results.catalogue_refresh(&r.store, None).unwrap();
+    let def = LeaderboardDefinition::new(exp_run.clone(), "wall_time_ms");
+    r.results.define_leaderboard(&def).unwrap();
+    let pubd = r
+        .results
+        .publish_leaderboard(&mut r.store, &r.docs, &def, None, &Json::obj([]))
+        .unwrap();
+    let e3 = sub_snap.recv().unwrap();
+    assert_eq!(e3.kind, JournalKind::SnapshotPublished);
+    assert_eq!(e3.subject, pubd.snapshot_id);
+}
+
+#[test]
+fn leaderboard_define_snapshot_verify_publish_and_pins() {
+    let mut r = rig("publish", 14_000);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _e) = open(&mut r, &s);
+    let exp_run = run_to_close(&mut r, &eid, 1_200, false);
+    let subjects = launched_runs(&r, &exp_run);
+    let bids: Vec<String> = subjects
+        .iter()
+        .map(|sr| deposit_bundle(&mut r, sr))
+        .collect();
+    emit_bundle_facts(&mut r, &bids);
+    r.results.catalogue_refresh(&r.store, None).unwrap();
+    for sr in &subjects {
+        r.results
+            .project_and_record(
+                &r.store,
+                Some(&r.docs),
+                sr,
+                None,
+                None,
+                DerivedReason::Initial,
+            )
+            .unwrap();
+    }
+
+    // `define` — the canonical record persists; the name history binds.
+    let mut def = LeaderboardDefinition::new(exp_run.clone(), "wall_time_ms");
+    def.name = Some("board:test".to_string());
+    def.readers = vec!["public".to_string()];
+    let def_ref = r.results.define_leaderboard(&def).unwrap();
+    assert_eq!(r.results.leaderboard_definition(&def_ref).unwrap(), def);
+    assert_eq!(
+        r.results.leaderboard_definitions("board:test"),
+        vec![def_ref.clone()]
+    );
+
+    // `snapshot` retains; the definition's index lists it; a reload
+    // decodes the identical bytes.
+    let snap = r
+        .results
+        .snapshot_leaderboard(&r.store, &r.docs, &def, None)
+        .unwrap();
+    assert_eq!(snap.entries.len(), 4);
+    assert_eq!(snap.definition_ref.as_deref(), Some(def_ref.as_str()));
+    assert_eq!(
+        r.results.leaderboard_snapshots(&def_ref),
+        vec![snap.snapshot_id.clone()]
+    );
+    assert_eq!(r.results.load_snapshot(&snap.snapshot_id).unwrap(), snap);
+
+    // `verify_snapshot` — recomputation at the pinned watermark set
+    // reproduces the identical snapshot id.
+    assert_eq!(
+        r.results
+            .verify_snapshot(&r.store, &r.docs, &snap.snapshot_id)
+            .unwrap(),
+        VerifyVerdict::Ok
+    );
+
+    // `publish` — the publication row commits on the experiment run;
+    // `export.delivered` lands on every cited subject; the pinned
+    // addresses refuse `gc`.
+    let pubd = r
+        .results
+        .publish_leaderboard(
+            &mut r.store,
+            &r.docs,
+            &def,
+            None,
+            &Json::obj([("readers", Json::Arr(vec![Json::str("public")]))]),
+        )
+        .unwrap();
+    assert!(!pubd.pinned_addresses.is_empty());
+    let published_row = r.store.envelopes(&exp_run).unwrap().iter().any(|e| {
+        e.class == "measurement.leaderboard.published"
+            && e.payload.get("snapshot_id").and_then(Json::as_str)
+                == Some(pubd.snapshot_id.as_str())
+    });
+    assert!(published_row);
+    for sr in &subjects {
+        let delivered = r.store.envelopes(sr).unwrap().iter().any(|e| {
+            e.class == "measurement.export.delivered"
+                && e.payload.get("view_kind").and_then(Json::as_str) == Some("leaderboard_snapshot")
+        });
+        assert!(delivered, "publication delivered row missing on {sr}");
+    }
+    // The persisted pin set reports the publication's addresses — and the
+    // ledger's `gc` refuses them (the refs ride the published row).
+    let pins = r.results.pin_set();
+    assert!(!pins.is_empty());
+    let pinned_addr = pubd.pinned_addresses[0].clone();
+    assert!(pins.contains(&pinned_addr));
+    {
+        let manifest = experiment_manifest();
+        let (gc_run, gc_lease) = r.store.open_run(manifest, "gc-pin").unwrap();
+        let err = r
+            .store
+            .gc(
+                &gc_run,
+                &gc_lease,
+                vec![pinned_addr.clone()],
+                "policy:test",
+                "warm",
+                None,
+            )
+            .unwrap_err();
+        assert!(
+            matches!(err, hh_ledger::errors::LedgerError::Pinned { .. }),
+            "a published snapshot pin must refuse gc: {err:?}"
+        );
+    }
+
+    // `retract_entry` after publication — the published snapshot is
+    // untouched (retained bytes); a fresh snapshot carries the flag.
+    let cfg0 = snap.entries[0].configuration_id.clone();
+    r.results
+        .retract_entry(
+            &mut r.store,
+            &def_ref,
+            &cfg0,
+            "reason:post-publish",
+            "operator",
+        )
+        .unwrap();
+    let snap2 = r
+        .results
+        .snapshot_leaderboard(&r.store, &r.docs, &def, None)
+        .unwrap();
+    let diff = r
+        .results
+        .diff_snapshots(&snap.snapshot_id, &snap2.snapshot_id)
+        .unwrap();
+    assert!(diff.entries_removed.is_empty());
+    assert!(diff
+        .flag_changes
+        .iter()
+        .any(|(c, add, _)| c == &cfg0 && add.iter().any(|f| f == "retracted")));
 }

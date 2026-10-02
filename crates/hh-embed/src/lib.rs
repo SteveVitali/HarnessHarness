@@ -29,6 +29,7 @@ pub(crate) mod eval_ops;
 pub(crate) mod experiment_ops;
 pub mod frames;
 pub mod inject;
+pub(crate) mod lab_c1_ops;
 pub mod open;
 pub mod overrides;
 pub(crate) mod registry_ops;
