@@ -284,6 +284,10 @@ fn spec(split_ref: &str) -> EvolutionCampaignSpec {
         reported_only_dimensions: vec![],
         proposer_variant_ref: None,
         target_class: None,
+        target_classes: Vec::new(),
+        hosted_coordinates: Vec::new(),
+        hosted_descriptor_refs: Vec::new(),
+        authority_cap: None,
         rollout_policy: None,
         judge_policy: None,
     }
@@ -322,6 +326,8 @@ fn propose_ok(
             diff: d,
             slot: "control_strategy".into(),
             hypothesis: None,
+            install: None,
+            coordinate_values: Default::default(),
         },
         base,
     )
@@ -342,6 +348,7 @@ fn hypothesis() -> FailureHypothesis {
             horizon: None,
         },
         semantic_op_targets: vec![],
+        reference_trajectories: Vec::new(),
     }
 }
 
@@ -362,6 +369,7 @@ fn acceptance(pass: bool) -> EvolutionAcceptanceReport {
             .collect(),
         attribution_granularity: "designed_ablation".into(),
         portability_label: PortabilityLabel::Reported,
+        label: None,
     }
 }
 
@@ -537,6 +545,8 @@ fn propose_refuses_self_modification() {
                 diff: d,
                 slot: "control_strategy".into(),
                 hypothesis: None,
+                install: None,
+                coordinate_values: Default::default(),
             },
             &base,
         )
@@ -580,6 +590,8 @@ fn propose_refuses_excluded_target() {
                 diff: d,
                 slot: "control_strategy".into(),
                 hypothesis: None,
+                install: None,
+                coordinate_values: Default::default(),
             },
             &base,
         )
@@ -601,6 +613,8 @@ fn propose_refuses_duplicate_candidate() {
                 diff: d.clone(),
                 slot: "control_strategy".into(),
                 hypothesis: None,
+                install: None,
+                coordinate_values: Default::default(),
             },
             &base,
         )
@@ -613,6 +627,8 @@ fn propose_refuses_duplicate_candidate() {
                 diff: d,
                 slot: "control_strategy".into(),
                 hypothesis: None,
+                install: None,
+                coordinate_values: Default::default(),
             },
             &base,
         )
@@ -878,6 +894,8 @@ fn stop_and_close_mint_the_lifecycle_rows() {
                 diff: d,
                 slot: "s".into(),
                 hypothesis: None,
+                install: None,
+                coordinate_values: Default::default(),
             },
             &base,
         )

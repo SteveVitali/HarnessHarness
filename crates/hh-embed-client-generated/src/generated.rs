@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:a5a447d4debc30740a9f3d9d7d440d6796dcad20b58c6658eaca163ff5c97638";
+    "sha256:f0ef084c9adca77de770c59bcedae590d481fcd165cbc338b4af66a5f35d24c5";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -7100,6 +7100,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.evolution.reactivate` → `json` (see the contract registry).
     pub fn lab_evolution_reactivate(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.evolution.reactivate", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.rebase` → `json` (see the contract registry).
+    pub fn lab_evolution_rebase(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.rebase", params.clone())?;
         Ok(raw)
     }
 
