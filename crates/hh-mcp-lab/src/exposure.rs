@@ -43,6 +43,19 @@ pub enum ToolGroup {
     Experiment,
     /// `lab.results.*`/`lab.leaderboard.*` wraps — `fs_read{results}`.
     Results,
+    /// `lab.analysis.*` wraps (C2 / Stage 5) — `fs_read{results}` plus
+    /// `model_call`/`evaluator_calls` only where the operation itself
+    /// spends (judged analyses charge `instrument`).
+    Analysis,
+    /// `memory_write{scope ∈ {project, organisation}}` — `apply`,
+    /// `publish`, `register`, `define`, `record_conformance` and the
+    /// permission-grant verbs (C2 / Stage 5). `delegate` callers are
+    /// refused unless a sealed `entities.permissions[]` record covers
+    /// the namespace (WS-K3 §6.2 R-5; ADR-0151 `who_may_publish`).
+    Write,
+    /// `serve_bundle` — the supply-surface spawn (C2 / Stage 5),
+    /// `{spawn_process, spend}` compensable like any launch.
+    Hosting,
     /// Supply-surface tools (a served harness bundle's compiled surface).
     Supply,
 }
@@ -55,6 +68,9 @@ impl ToolGroup {
             ToolGroup::Launch => "launch",
             ToolGroup::Experiment => "experiment",
             ToolGroup::Results => "results",
+            ToolGroup::Analysis => "analysis",
+            ToolGroup::Write => "write",
+            ToolGroup::Hosting => "hosting",
             ToolGroup::Supply => "supply",
         }
     }
@@ -66,6 +82,9 @@ impl ToolGroup {
             "launch" => Some(ToolGroup::Launch),
             "experiment" => Some(ToolGroup::Experiment),
             "results" => Some(ToolGroup::Results),
+            "analysis" => Some(ToolGroup::Analysis),
+            "write" => Some(ToolGroup::Write),
+            "hosting" => Some(ToolGroup::Hosting),
             "supply" => Some(ToolGroup::Supply),
             _ => None,
         }
@@ -183,6 +202,22 @@ pub struct ExposureTool {
     pub lowering: Option<Json>,
 }
 
+impl ExposureTool {
+    /// `memory_write` class — the `apply`/`publish`/`register`/
+    /// `define`/`record_conformance` family (effect `write`:
+    /// non-idempotent, non-compensable). The delegate write-gate keys
+    /// on this class (§7.3 §2.3 effect-classes row).
+    pub fn is_memory_write(&self) -> bool {
+        !self.effect.read_only
+            && self
+                .effect
+                .risk_class
+                .get("repeat_safety")
+                .and_then(Json::as_str)
+                == Some("non_idempotent")
+    }
+}
+
 /// A Π row on a supply surface — `{match: semantic_id|name|*, decision ∈
 /// {allow, deny, ask}, hidden?}`. `callable ⇔ revealed`: a `hidden` row
 /// removes the tool from `tools/list` *and* from dispatch; `deny`
@@ -221,7 +256,8 @@ pub struct SupplySurface {
 
 /// An `AssumptionDebtRecord` — `{assumption_id, carrier, statement,
 /// removal_test}` (ADR-0197 shape). The carriers AC-R-2.11.3-12 names:
-/// `tasks_carrier`, `legacy_era_projection`, `caller_binding.<kind>`.
+/// `tasks_carrier`, `resource_carrier`, `legacy_era_projection`,
+/// `caller_binding.<kind>`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssumptionDebt {
     /// The record id.
@@ -379,6 +415,11 @@ pub struct ExposureDef {
     /// `supply_surfaces[]` — served harness bundles for hosted
     /// participants.
     pub supply_surfaces: Vec<SupplySurface>,
+    /// `entities.permissions[]` — the sealed `Permission` records
+    /// verbatim (the document is data; a permission is opaque to the
+    /// server except for the delegate write-gate's coverage check —
+    /// [`ExposureDef::permission_covers`]).
+    pub permissions: Vec<Json>,
     /// `assumption_debt[]` — every declared carrier's record.
     pub assumption_debt: Vec<AssumptionDebt>,
     /// `ext` — preserved verbatim, never interpreted.
@@ -430,6 +471,83 @@ impl ExposureDef {
         }
         vec![]
     }
+
+    /// The delegate write-gate's coverage check (§7.3 §2.3 effect-class
+    /// row: "`apply`/`publish`/`register`/`record_conformance`/`define`
+    /// are `memory_write` … refused for `delegate` callers unless a
+    /// sealed `Permission` covers the namespace" — WS-K3 §6.2 R-5).
+    ///
+    /// A sealed `entities.permissions[]` record covers `(binding,
+    /// tool)` when:
+    /// - it names the binding's `principal_ref` or `binding_id` under
+    ///   any holder key (`holder` | `grantee` | `principal` |
+    ///   `subject`) — or `"*"`;
+    /// - its `scope` member covers the wrapped operation — `scope`
+    ///   string `"*"`, or `scope.namespace` equal to / a `.*`-prefix of
+    ///   `tool.op`, or `scope.tools`/`scope.ops` containing the tool
+    ///   `name`/`semantic_id`/`op`;
+    /// - `state` is absent or `"active"`.
+    ///
+    /// A record naming no holder key never covers (a holder-less
+    /// Permission confers nothing — the same rule the kernel's Π rows
+    /// apply). The check is deliberately conservative: ambiguity
+    /// refuses.
+    pub fn permission_covers(
+        &self,
+        binding: &crate::binding::CallerBinding,
+        tool: &ExposureTool,
+    ) -> bool {
+        self.permissions.iter().any(|p| {
+            let Json::Obj(pm) = p else { return false };
+            if matches!(pm.get("state").and_then(Json::as_str), Some(s) if s != "active") {
+                return false;
+            }
+            let holder_ok = ["holder", "grantee", "principal", "subject"]
+                .iter()
+                .filter_map(|k| pm.get(*k).and_then(Json::as_str))
+                .any(|h| {
+                    h == "*"
+                        || h == binding.principal_ref
+                        || h == binding.binding_id
+                        || h == binding.readers_identity
+                });
+            if !holder_ok {
+                return false;
+            }
+            match pm.get("scope") {
+                Some(Json::Str(s)) => s == "*",
+                Some(Json::Obj(sm)) => {
+                    if let Some(ns) = sm.get("namespace").and_then(Json::as_str) {
+                        if ns == "*" {
+                            return true;
+                        }
+                        if let Some(prefix) = ns.strip_suffix(".*") {
+                            if tool.op.starts_with(prefix) {
+                                return true;
+                            }
+                        }
+                        if tool.op == ns || tool.name == ns {
+                            return true;
+                        }
+                    }
+                    let listed = |key: &str| -> bool {
+                        sm.get(key)
+                            .and_then(|v| match v {
+                                Json::Arr(a) => Some(a.clone()),
+                                _ => None,
+                            })
+                            .is_some_and(|a| {
+                                a.iter().filter_map(Json::as_str).any(|n| {
+                                    n == tool.name || n == tool.semantic_id || n == tool.op
+                                })
+                            })
+                    };
+                    listed("tools") || listed("ops")
+                }
+                _ => false,
+            }
+        })
+    }
 }
 
 /// A parse/link refusal — typed, never a panic.
@@ -462,12 +580,14 @@ impl std::fmt::Display for ExposureError {
 impl std::error::Error for ExposureError {}
 
 /// The carriers every exposure definition must debt-record
-/// (AC-R-2.11.3-12): the Stage-5 tasks carrier and the legacy-era
-/// projection, plus `caller_binding.<kind>` for each credential kind
-/// `caller_bindings[]` uses.
+/// (AC-R-2.11.3-12): the Stage-5 tasks carrier, the resource/
+/// subscription carrier and the legacy-era projection — the
+/// reflexive-debt rule of ADR-0175 D6 — plus `caller_binding.<kind>`
+/// for each credential kind `caller_bindings[]` uses.
 pub fn required_debt(def_bindings: &[CallerBinding]) -> Vec<String> {
     let mut out = vec![
         "tasks_carrier".to_string(),
+        "resource_carrier".to_string(),
         "legacy_era_projection".to_string(),
     ];
     let mut kinds = BTreeSet::new();
@@ -540,6 +660,25 @@ pub fn parse_exposure(doc: &Json) -> Result<ExposureDef, ExposureError> {
             supply_surfaces.push(parse_supply(s, i)?);
         }
     }
+    // `entities.permissions[]` — the sealed Permission records the
+    // delegate write-gate reads (§7.3 §2.1: `entities{Permission[],
+    // Budget[], HarnessRule[]}`). Preserved verbatim; only the
+    // coverage check interprets them.
+    let mut permissions = Vec::new();
+    if let Some(Json::Obj(em)) = m.get("entities") {
+        if let Some(Json::Arr(a)) = em.get("permissions") {
+            for (i, p) in a.iter().enumerate() {
+                match p {
+                    Json::Obj(_) => permissions.push(p.clone()),
+                    _ => {
+                        return Err(ExposureError::Invalid {
+                            detail: format!("entities.permissions[{i}] not an object"),
+                        })
+                    }
+                }
+            }
+        }
+    }
     let mut assumption_debt = Vec::new();
     if let Some(Json::Arr(a)) = m.get("assumption_debt") {
         for (i, d) in a.iter().enumerate() {
@@ -596,6 +735,7 @@ pub fn parse_exposure(doc: &Json) -> Result<ExposureDef, ExposureError> {
         bindings,
         tools,
         supply_surfaces,
+        permissions,
         assumption_debt,
         ext,
         canonical_bytes,
@@ -947,7 +1087,37 @@ pub fn default_lab_document() -> Json {
         ),
         (
             "caller_bindings",
-            Json::Arr(vec![stdio_binding_json()]),
+            Json::Arr(vec![
+                stdio_binding_json(),
+                service_binding_json(),
+                provider_binding_json(),
+            ]),
+        ),
+        (
+            "entities",
+            Json::obj([
+                // The delegate write-gate's sealed Permission set —
+                // the shipped default grants the fixture principal
+                // the registry/assembly namespaces so `human_principal`
+                // and permission-covered delegates can write (a
+                // deployment seals its own).
+                (
+                    "permissions",
+                    Json::Arr(vec![Json::obj([
+                        ("kind", Json::str("Permission")),
+                        ("permission_id", Json::str("perm-lab-writes")),
+                        ("holder", Json::str("principal:test")),
+                        ("state", Json::str("active")),
+                        (
+                            "scope",
+                            Json::obj([(
+                                "namespace",
+                                Json::str("lab.*"),
+                            )]),
+                        ),
+                    ])]),
+                ),
+            ]),
         ),
         (
             "tools",
@@ -1379,6 +1549,235 @@ pub fn default_lab_document() -> Json {
                     Some(t_obj()),
                     None,
                 ),
+                // ── analysis group (C2 §2.2 — `lab.analysis.*`; the
+                // op's own spend charges `instrument`) ────────────────
+                tool(
+                    "analyze",
+                    "hh.lab/analyze/1",
+                    ToolGroup::Analysis,
+                    "lab.analysis.analyze",
+                    "read_only",
+                    "`analyze{AnalysisSpec}` — summarize/compare/interaction/frontier/transfer/equivalence/rank/strata_view/diagnostics per the spec member.",
+                    &[],
+                    &[],
+                    obj_schema(&["spec"], &[("spec", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "render_analysis",
+                    "hh.lab/render_analysis/1",
+                    ToolGroup::Analysis,
+                    "lab.analysis.render",
+                    "read_only",
+                    "Render a comparison/analysis report to a display form.",
+                    &[],
+                    &[],
+                    obj_schema(&["report"], &[("report", t_str()), ("format", t_str())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "diff_reports",
+                    "hh.lab/diff_reports/1",
+                    ToolGroup::Analysis,
+                    "lab.analysis.diff_reports",
+                    "read_only",
+                    "Diff two content-addressed analysis reports.",
+                    &[],
+                    &[],
+                    obj_schema(&["a", "b"], &[("a", t_str()), ("b", t_str())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "power_analysis",
+                    "hh.lab/power_analysis/1",
+                    ToolGroup::Analysis,
+                    "lab.analysis.power",
+                    "read_only",
+                    "`power` — the sample-size/sensitivity analysis op.",
+                    &[],
+                    &[],
+                    obj_schema(&["spec"], &[("spec", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "component_targets",
+                    "hh.lab/component_targets/1",
+                    ToolGroup::Analysis,
+                    "lab.analysis.component_targets",
+                    "read_only",
+                    "Component-target attribution rows over the results store.",
+                    &[],
+                    &[],
+                    obj_schema(&[], &[("query", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "attribution_design",
+                    "hh.lab/attribution_design/1",
+                    ToolGroup::Analysis,
+                    "lab.analysis.attribution_design",
+                    "read_only",
+                    "The attribution-design analysis view.",
+                    &[],
+                    &[],
+                    obj_schema(&["spec"], &[("spec", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                // ── write group (C2 §2.2 — `memory_write`, the
+                // delegate write-gate applies) ────────────────────────
+                tool(
+                    "assembly_apply",
+                    "hh.lab/assembly_apply/1",
+                    ToolGroup::Write,
+                    "lab.assembly.apply",
+                    "write",
+                    "Apply an assembly plan — a `memory_write{project}`; delegate callers need a covering sealed `Permission`.",
+                    &[],
+                    &[],
+                    obj_schema(&["assembly"], &[("assembly", t_obj()), ("plan", t_obj()), ("registrar", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "assembly_adopt",
+                    "hh.lab/assembly_adopt/1",
+                    ToolGroup::Write,
+                    "lab.assembly.adopt",
+                    "write",
+                    "Adopt an applied assembly into the live registry state.",
+                    &[],
+                    &[],
+                    obj_schema(&["assembly"], &[("assembly", t_obj()), ("registrar", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "registry_register",
+                    "hh.lab/registry_register/1",
+                    ToolGroup::Write,
+                    "lab.registry.register",
+                    "write",
+                    "Register a component/recipe record (`memory_write`; delegate-gated).",
+                    &[],
+                    &[],
+                    obj_schema(&["record"], &[("record", t_obj()), ("registrar", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "registry_publish",
+                    "hh.lab/registry_publish/1",
+                    ToolGroup::Write,
+                    "lab.registry.publish",
+                    "write",
+                    "Publish a registered record to the organisation scope (`memory_write{organisation}`; delegate-gated).",
+                    &[],
+                    &[],
+                    obj_schema(&["ref"], &[("ref", t_str()), ("registrar", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "record_conformance",
+                    "hh.lab/record_conformance/1",
+                    ToolGroup::Write,
+                    "lab.registry.record_conformance",
+                    "write",
+                    "Record a conformance verdict row for a registered record.",
+                    &[],
+                    &[],
+                    obj_schema(&["record"], &[("record", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "leaderboard_define",
+                    "hh.lab/leaderboard_define/1",
+                    ToolGroup::Write,
+                    "lab.leaderboard.define",
+                    "write",
+                    "Define a leaderboard (`memory_write`; delegate-gated).",
+                    &[],
+                    &[],
+                    obj_schema(&["leaderboard"], &[("leaderboard", t_obj()), ("registrar", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "leaderboard_publish",
+                    "hh.lab/leaderboard_publish/1",
+                    ToolGroup::Write,
+                    "lab.leaderboard.publish",
+                    "write",
+                    "Publish a leaderboard definition.",
+                    &[],
+                    &[],
+                    obj_schema(&["leaderboard"], &[("leaderboard", t_str()), ("registrar", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "leaderboard_retract",
+                    "hh.lab/leaderboard_retract/1",
+                    ToolGroup::Write,
+                    "lab.leaderboard.retract_entry",
+                    "write",
+                    "Retract one leaderboard entry.",
+                    &[],
+                    &[],
+                    obj_schema(&["leaderboard", "entry"], &[("leaderboard", t_str()), ("entry", t_str()), ("registrar", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "grant_approver",
+                    "hh.lab/grant_approver/1",
+                    ToolGroup::Write,
+                    "lab.permission.grant_approver",
+                    "write",
+                    "Grant an `ApproverGrant` (ADR-0070 D6) — a delegate may hold a scoped approval grant through this write.",
+                    &[],
+                    &[],
+                    obj_schema(&["grant"], &[("grant", t_obj())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                tool(
+                    "revoke_approver",
+                    "hh.lab/revoke_approver/1",
+                    ToolGroup::Write,
+                    "lab.permission.revoke_approver",
+                    "write",
+                    "Revoke an `ApproverGrant`.",
+                    &[],
+                    &[],
+                    obj_schema(&["grant"], &[("grant", t_str())]),
+                    Some(t_obj()),
+                    None,
+                ),
+                // ── hosting group (C2 §2.2 — `serve_bundle`) ─────────
+                tool(
+                    "serve_bundle",
+                    "hh.lab/serve_bundle/1",
+                    ToolGroup::Hosting,
+                    "lab.serve",
+                    "launch",
+                    "Serve a bundle's compiled surface to an external agent or hosting adapter — `spawn_process`-class; returns `connection_info` and mints `session_handle`.",
+                    &[],
+                    &[("bundle_ref", "container")],
+                    obj_schema(
+                        &["bundle_ref"],
+                        &[("bundle_ref", t_str()), ("transport", t_str()), ("target", t_str())],
+                    ),
+                    Some(t_obj()),
+                    None,
+                ),
             ]),
         ),
         ("supply_surfaces", Json::Arr(vec![])),
@@ -1391,13 +1790,29 @@ pub fn default_lab_document() -> Json {
                     (
                         "statement",
                         Json::str(
-                            "The `io.modelcontextprotocol/tasks` carrier is a C2/Stage-5 concern; launch/status calls answer the plain result shape and no `CreateTaskResult` is produced (the extension capability is never advertised, so `-32021` cannot be owed).",
+                            "The `io.modelcontextprotocol/tasks` carrier is itself assumption debt (ADR-0175 D6, reflexive): hypothesis — MCP-only callers need durable task handles and push; expiry — the extension's own deprecation clock.",
                         ),
                     ),
                     (
                         "removal_test",
                         Json::str(
-                            "the tasks carrier lands: launch_run/open_experiment honour `_meta` extension declarations, `tasks/get|update|cancel` map per the §7.3 table, and AC-R-2.11.3-10 runs executable.",
+                            "no binding of kind `agent | service | provider_client` has used the tasks carrier (`_meta` extension declaration, `tasks/get|update|cancel`) in the last N releases.",
+                        ),
+                    ),
+                ]),
+                Json::obj([
+                    ("assumption_id", Json::str("AD-MCP-6")),
+                    ("carrier", Json::str("resource_carrier")),
+                    (
+                        "statement",
+                        Json::str(
+                            "The ledger-resource carrier (`hh://run/{…}/ledger|status`, `hh://results/{…}`, `resources/subscribe` + `notifications/resources/updated`) is itself assumption debt (ADR-0175 D6, reflexive): hypothesis — MCP-only callers need push over polling; a subscription is a declared sink bound to its caller binding and cancelled when the binding changes or expires.",
+                        ),
+                    ),
+                    (
+                        "removal_test",
+                        Json::str(
+                            "no binding of kind `agent | service | provider_client` has held a live resource subscription in the last N releases.",
                         ),
                     ),
                 ]),
@@ -1475,6 +1890,55 @@ pub fn default_lab_document() -> Json {
 /// default — a deployment seals its own `caller_bindings[]`).
 fn stdio_binding_json() -> Json {
     crate::binding::stdio_launch_binding("stdio", crate::binding::CallerKind::Agent).to_json()
+}
+
+/// The shipped `service` binding — a `subject_kind = client` OAuth
+/// record (client credentials; R-1 pins `caller_kind ∈ {service,
+/// provider_client}` for client subjects). `service` callers run
+/// `unattended` — `ask → deny` — and delegate-ceilinged.
+fn service_binding_json() -> Json {
+    crate::binding::CallerBinding {
+        binding_id: "bind-service-default".to_string(),
+        credential: crate::binding::CallerCredential::OAuth {
+            issuer_ref: "issuer:fixture".to_string(),
+            subject_kind: crate::binding::SubjectKind::Client,
+            audience: "mcp://hh-lab".to_string(),
+        },
+        principal_ref: "service:test".to_string(),
+        caller_kind: crate::binding::CallerKind::Service,
+        authority_cap: Json::obj([("class", Json::str("delegate"))]),
+        permissions: vec![],
+        budget_node: "pool:service".to_string(),
+        pool: Json::obj([("dimensions", Json::obj([]))]),
+        readers_identity: "service:test".to_string(),
+        rate_policy: None,
+        expires_at_ms: None,
+    }
+    .to_json()
+}
+
+/// The shipped `provider_client` binding — the model-provider client
+/// (client credentials, delegate ceiling; OQ-398 stays open — its
+/// charges land `instrument` on the surface session).
+fn provider_binding_json() -> Json {
+    crate::binding::CallerBinding {
+        binding_id: "bind-provider-default".to_string(),
+        credential: crate::binding::CallerCredential::OAuth {
+            issuer_ref: "issuer:fixture".to_string(),
+            subject_kind: crate::binding::SubjectKind::Client,
+            audience: "mcp://hh-lab".to_string(),
+        },
+        principal_ref: "provider:test".to_string(),
+        caller_kind: crate::binding::CallerKind::ProviderClient,
+        authority_cap: Json::obj([("class", Json::str("delegate"))]),
+        permissions: vec![],
+        budget_node: "pool:provider".to_string(),
+        pool: Json::obj([("dimensions", Json::obj([]))]),
+        readers_identity: "provider:test".to_string(),
+        rate_policy: None,
+        expires_at_ms: None,
+    }
+    .to_json()
 }
 
 /// The default exposure definition, linked — the shipped `hh-lab/1`.

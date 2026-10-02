@@ -210,20 +210,56 @@ pub fn serve_request(
     };
     let result = if is_view {
         views::view(svc, &op["view.".len()..], params)
-    } else if run_scoped {
-        match run_id {
-            Some(rid) => svc.call_for_run(&rid, &op, params),
-            None => svc.call(&op, params),
-        }
     } else {
-        svc.call(&op, params)
+        // Every admitted op runs the injection path — session-free ops
+        // (`lab.*`/`kernel.reproduce`) ignore `run_id`; a session-scoped
+        // op that named none gets the kernel's own typed refusal (the
+        // browser can never inject `session_id`/`responder`/`registrar`
+        // past the strip — P12/CC2).
+        let _ = run_scoped;
+        svc.call_checked(run_id.as_deref().unwrap_or(""), &op, params)
     };
     match result {
         // P8 — the sink policy runs on every served payload (the scrub
         // inside `js` runs on the serialized text).
         Ok(r) => js(200, sink::enforce_object(&svc.sink, r), detectors),
-        Err(e) => js(200, error_payload(&e), detectors),
+        Err(e) => js(
+            200,
+            refused_enriched(svc, &op, run_id.as_deref(), &e),
+            detectors,
+        ),
     }
+}
+
+/// The refusal payload — the kernel's typed refusal verbatim, plus the
+/// §7.2 §5.2 incoherent-fork enrichment (AC-R-2.11.2-11): a refused
+/// `fork`/`branch.open` carries the canonical `coherent_fork_points`
+/// result (the nearest coherent point is a projection of that list —
+/// the surface never recomputes coherence).
+fn refused_enriched(svc: &mut Sessions, op: &str, run_id: Option<&str>, e: &ClientError) -> Json {
+    let mut payload = error_payload(e);
+    let incoherent =
+        matches!(e, ClientError::Rpc(ee) if ee.message.starts_with("fork_point_not_coherent"));
+    if !incoherent || !matches!(op, "fork" | "branch.open") {
+        return payload;
+    }
+    let Some(rid) = run_id else { return payload };
+    let Ok(pts) = svc.call_for_run(rid, "coherent_fork_points", Json::Obj(BTreeMap::new())) else {
+        return payload;
+    };
+    if let Json::Obj(m) = &mut payload {
+        // The verbatim canonical result (points are ascending seqs);
+        // `nearest_coherent` is the surface's selection — the greatest
+        // listed point, the kernel's own boundary set.
+        m.insert("coherent_fork_points".into(), pts.clone());
+        if let Json::Obj(pm) = &pts {
+            if let Some(Json::Arr(points)) = pm.get("points") {
+                let nearest = points.iter().filter_map(|p| p.as_int()).max().unwrap_or(0);
+                m.insert("nearest_coherent".into(), Json::Int(nearest));
+            }
+        }
+    }
+    payload
 }
 
 /// The kernel's typed refusal passes through verbatim (`{error: kind,

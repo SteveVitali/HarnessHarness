@@ -45,9 +45,11 @@ pub mod handles;
 pub mod http;
 pub mod launch;
 pub mod reads;
+pub mod resources;
 pub mod server;
 pub mod session;
 pub mod supply;
+pub mod tasks;
 
 pub use binding::{stdio_launch_binding, CallerAuth, CallerBinding, CallerKind};
 pub use exposure::{default_exposure, parse_exposure, ExposureDef, ExposureError, ExposurePolicy};

@@ -140,6 +140,21 @@ pub fn call_result_refusal(e: &SurfaceError) -> Json {
 /// is ledgered `refused` and answered typed.
 pub type ToolOutcome = Result<Json, SurfaceError>;
 
+/// R-3 (ADR-0174 D4) — the request `_meta` is read for exactly the
+/// declared keys: the tasks-extension declaration, `protocolVersion`,
+/// `clientCapabilities` and the tracing members. Every other key is
+/// preserved (unknown `_meta` survives in `ext`) and never consulted —
+/// claims never decide (AC-K3-6).
+///
+/// The tasks declaration a request carries — `_meta`
+/// `io.modelcontextprotocol/tasks` present (any value marks the
+/// request task-shaped); returns the declaration object.
+pub fn meta_tasks_declared(request_meta: Option<&Json>) -> bool {
+    request_meta
+        .and_then(|m| m.get("io.modelcontextprotocol/tasks"))
+        .is_some_and(|v| v != &Json::Null)
+}
+
 /// The one `tools/call` path.
 pub fn call_tool(
     srv: &mut LabServer,
@@ -147,6 +162,7 @@ pub fn call_tool(
     name: &str,
     arguments: Json,
     call_id: &Json,
+    request_meta: Option<&Json>,
 ) -> Json {
     // 1 — a supply-surface binding's calls are Π-evaluated, never the
     // Lab groups' (the hosted participant sees only its own surface —
@@ -177,6 +193,10 @@ pub fn call_tool(
         let tool = crate::supply::tool_for_artifact(&at);
         return crate::supply::dispatch(srv, &surface, binding, &tool, arguments, call_id);
     }
+    // R-3 — every `_meta` member except the declared set is ignored
+    // for decisions (a forged `clientInfo`, entitlement key or
+    // capability flag reads identically — AC-K3-6's byte-identity).
+    let tasks_declared = meta_tasks_declared(request_meta);
     // 2 — the Lab catalogue.
     let Some(tool) = srv.exposure.tools.iter().find(|t| t.name == name) else {
         return call_result_refusal(&SurfaceError::new(
@@ -203,7 +223,50 @@ pub fn call_tool(
             Json::obj([("tool", Json::str(name))]),
         ));
     }
-    dispatch_lab(srv, binding, &tool, arguments, call_id)
+    // ── the delegate write-gate (§7.3 §2.3 effect-classes row;
+    // WS-K3 §6.2 R-5): `memory_write` tools are refused for `delegate`
+    // callers (agent | provider_client | service) unless a sealed
+    // `entities.permissions[]` record covers the namespace for this
+    // binding's principal. `human_principal` holds the principal
+    // ceiling and writes under its own attestation.
+    if tool.is_memory_write()
+        && binding.caller_kind != crate::binding::CallerKind::HumanPrincipal
+        && !srv.exposure.permission_covers(binding, &tool)
+    {
+        return call_result_refusal(&SurfaceError::new(
+            "DelegateWriteForbidden",
+            format!(
+                "caller_kind `{}` is delegate-ceilinged — `{name}` is a \
+                 memory_write tool and no sealed `entities.permissions[]` \
+                 record covers its namespace for `{}`",
+                binding.caller_kind.as_str(),
+                binding.principal_ref
+            ),
+            Json::obj([
+                ("tool", Json::str(name)),
+                ("caller_kind", Json::str(binding.caller_kind.as_str())),
+            ]),
+        ));
+    }
+    let result = dispatch_lab(srv, binding, &tool, arguments.clone(), call_id);
+    // ── the tasks carrier (§7.3 §2.5; AC-R-2.11.3-10): a request whose
+    // `_meta` declares `io.modelcontextprotocol/tasks` gets the
+    // `CreateTaskResult` shape for the launch verbs — seq-0 durability
+    // already landed inside the lowering, so the task id binds the
+    // durable run/experiment alias. (`-32021` for a declaration
+    // without the client capability is enforced in `server::dispatch`
+    // before this path runs.)
+    if tasks_declared
+        && matches!(tool.name.as_str(), "launch_run" | "open_experiment")
+        && result.get("isError") == Some(&Json::Bool(false))
+    {
+        return crate::tasks::wrap_create_task_result(srv, binding, &tool.name, &result);
+    }
+    // A served subscription notifies after the underlying event is
+    // durable — the call's effect chain already closed, so the
+    // update lands now.
+    crate::resources::notify_after_call(srv, binding, &tool.name, &arguments, &result);
+    result
 }
 
 /// The lab-group path — the surface-session turn + effect chain around
@@ -499,6 +562,46 @@ fn run_tool_body(
             fx,
             turn_id,
         ),
+        // The hosting group — `serve_bundle` wraps `lab.serve` and
+        // mints the `session_handle` the §7.3 table names (the
+        // connection's surface name; the spawn is the caller's — the
+        // `launch` descriptor it returns).
+        ToolGroup::Hosting => {
+            let payload = op_call(&mut srv.svc, &tool.op, &Json::Obj(args.clone()))?;
+            if tool.name == "serve_bundle" {
+                let now_ms = srv.svc.surface_now_ms();
+                let session = srv.sessions.get_mut(&bid).expect("session");
+                let surface_run = session.run_id.clone();
+                let minted = session.handles.mint_on_run(
+                    &mut srv.svc,
+                    &surface_run,
+                    crate::handles::HandleKind::Session,
+                    &format!("serve-{}", fx.effect_id),
+                    &format!("serve-session-{}", fx.effect_id),
+                    Some(&binding.binding_id),
+                    &[EventRef {
+                        run_id: surface_run.clone(),
+                        event_id: fx
+                            .terminal_ref
+                            .clone()
+                            .map(|r| r.event_id)
+                            .unwrap_or_else(|| "seq0".to_string()),
+                    }],
+                    None,
+                    None,
+                    now_ms,
+                )?;
+                let mut out = payload;
+                if let Json::Obj(m) = &mut out {
+                    m.insert("session_handle".into(), Json::str(minted.alias.clone()));
+                    m.entry("connection_info".into()).or_insert_with(|| {
+                        Json::obj([("handle", Json::str(minted.alias.clone()))])
+                    });
+                }
+                return Ok(out);
+            }
+            Ok(payload)
+        }
         // Declared reads (`op = ""`) go through the surface's read
         // path — `ExposurePolicy` filters + the `delivered` mint.
         _ if tool.op.is_empty() => crate::reads::dispatch(
