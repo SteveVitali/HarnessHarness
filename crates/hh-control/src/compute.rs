@@ -1563,7 +1563,7 @@ fn isqrt_u128(x: u128) -> u128 {
         return 0;
     }
     let mut r = x;
-    let mut y = (r + 1) / 2;
+    let mut y = r.div_ceil(2);
     while y < r {
         r = y;
         y = (r + x / r) / 2;
@@ -1802,6 +1802,9 @@ impl Default for BanditConfig {
     }
 }
 
+/// `(mean_ppm, ucb_bonus, interval)` for a live prior cell.
+type PriorRead = Option<(i64, i64, Option<(i64, i64)>)>;
+
 /// A cell's mean plus the UCB bonus for `option` — `None` when the cell
 /// is absent, expired (`valid_until < now_seq`) or below `min_n` (the
 /// `unknown` read).
@@ -1810,7 +1813,7 @@ fn prior_overlay(
     option: &ComputeOption,
     explore_ppm: u32,
     min_n: u32,
-) -> Option<(i64, i64, Option<(i64, i64)>)> {
+) -> PriorRead {
     let key = cell_key(ctx, option);
     let p = ctx.priors.iter().find(|p| p.cell == key)?;
     if p.valid_until.is_some_and(|t| ctx.now_seq > t) || p.n < min_n {

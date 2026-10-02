@@ -5231,7 +5231,7 @@ mod tests {
             _ => vec![],
         };
         assert!(
-            fired.iter().any(|f| *f == "bandit.cold_start"),
+            fired.contains(&"bandit.cold_start"),
             "the cleared bandit falls back to rules"
         );
         assert_eq!(
