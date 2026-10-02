@@ -814,14 +814,12 @@ impl<S: ControlStrategy> Driver<S> {
         if variant == "static" {
             return Ok((decision, None));
         }
-        let policy = crate::compute::policy_for_configured(
-            &variant,
-            self.config.compute_rules.clone(),
-        )
-        .map_err(|e| DriverError::Port {
-            port: "compute_policy",
-            detail: e.to_string(),
-        })?;
+        let policy =
+            crate::compute::policy_for_configured(&variant, self.config.compute_rules.clone())
+                .map_err(|e| DriverError::Port {
+                    port: "compute_policy",
+                    detail: e.to_string(),
+                })?;
         // Prior reset — drift/supersession since the last reset (or open)
         // voids the cells the ctx reads; the reset row lands before the
         // bind's record so the empty `priors_used[]` has its evidence.
@@ -5156,9 +5154,7 @@ mod tests {
             DriverConfig {
                 compute_policy_ref: "bandit".into(),
                 compute_facts: facts,
-                remaining: [("model_calls".to_string(), 8i64)]
-                    .into_iter()
-                    .collect(),
+                remaining: [("model_calls".to_string(), 8i64)].into_iter().collect(),
                 ..DriverConfig::default()
             },
         )
@@ -5227,8 +5223,7 @@ mod tests {
             .expect("the declared cell appears zeroed");
         assert_eq!(cell.get("n").and_then(Json::as_int), Some(0));
         assert!(
-            cell.get("mean_ppm").is_none()
-                || cell.get("mean_ppm") == Some(&Json::Null),
+            cell.get("mean_ppm").is_none() || cell.get("mean_ppm") == Some(&Json::Null),
             "a cleared cell's mean renders absent/null (the unknown read)"
         );
         let fired: Vec<&str> = match decided.payload.get("rules_fired") {

@@ -221,10 +221,7 @@ mod tests {
             .and_then(|m| m.get("deterministic"))
             .unwrap();
         assert_eq!(det.get("arrival_ppm").and_then(Json::as_int), Some(500_000));
-        let judged = v
-            .get("by_detector")
-            .and_then(|m| m.get("judged"))
-            .unwrap();
+        let judged = v.get("by_detector").and_then(|m| m.get("judged")).unwrap();
         assert_eq!(judged.get("probes").and_then(Json::as_int), Some(1));
     }
 

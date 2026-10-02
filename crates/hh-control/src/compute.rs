@@ -350,7 +350,10 @@ impl PriorFact {
             interval: j
                 .get("interval")
                 .and_then(|i| Some((i.get("lo")?.as_int()?, i.get("hi")?.as_int()?))),
-            valid_until: j.get("valid_until").and_then(Json::as_int).map(|v| v as u64),
+            valid_until: j
+                .get("valid_until")
+                .and_then(Json::as_int)
+                .map(|v| v as u64),
         })
     }
 }
@@ -1746,7 +1749,12 @@ impl ComputePolicy for UniformPolicy {
             decision,
             ctx,
             "uniform",
-            &eval_options(decision, ctx, &RulesConfig::default(), &DelegationConstraint::default()),
+            &eval_options(
+                decision,
+                ctx,
+                &RulesConfig::default(),
+                &DelegationConstraint::default(),
+            ),
             vec!["uniform.max".into()],
             binding,
             1_000_000,
@@ -1813,8 +1821,7 @@ fn prior_overlay(
     // the ledger keeps no decided_clock row; flagged in the debt record).
     let total: u64 = ctx.priors.iter().map(|p| u64::from(p.n)).sum();
     let arg = ln_milli(total.saturating_add(1)) / u64::from(p.n);
-    let bonus =
-        u64::from(explore_ppm) * isqrt_u128(u128::from(arg) * 1_000_000) as u64 / 1_000_000;
+    let bonus = u64::from(explore_ppm) * isqrt_u128(u128::from(arg) * 1_000_000) as u64 / 1_000_000;
     Some((p.mean_ppm, bonus as i64, p.interval))
 }
 
@@ -1831,9 +1838,7 @@ fn annotate_priors(
     let mut scored = false;
     for r in rows.iter_mut() {
         if let OptionEstimate::Estimate(e) = &mut r.estimate {
-            if let Some((mu, bonus, interval)) =
-                prior_overlay(ctx, &r.option, explore_ppm, min_n)
-            {
+            if let Some((mu, bonus, interval)) = prior_overlay(ctx, &r.option, explore_ppm, min_n) {
                 e.delta_p = DeltaP {
                     point_ppm: Some(mu + bonus),
                     interval,
@@ -1892,8 +1897,15 @@ impl ComputePolicy for BanditPolicy {
         if !scored {
             fired.push("bandit.cold_start".to_string());
         }
-        let mut b =
-            finish_bind(decision, ctx, variant, &rows, fired, binding, self.config.lambda_ppm)?;
+        let mut b = finish_bind(
+            decision,
+            ctx,
+            variant,
+            &rows,
+            fired,
+            binding,
+            self.config.lambda_ppm,
+        )?;
         // The chosen option's cell key rides the decided row so the
         // [`prior_cells`] fold attributes the verdict/outcome — cold-start
         // decisions included (the first observation seeds the cell).
@@ -1947,8 +1959,15 @@ impl ComputePolicy for SurfacePriorPolicy {
         if !scored {
             fired.push("surface_prior.cold_start".to_string());
         }
-        let mut b =
-            finish_bind(decision, ctx, variant, &rows, fired, binding, self.config.lambda_ppm)?;
+        let mut b = finish_bind(
+            decision,
+            ctx,
+            variant,
+            &rows,
+            fired,
+            binding,
+            self.config.lambda_ppm,
+        )?;
         let record = record_mut(&mut b);
         record.cell = Some(cell_key(ctx, &record.chosen));
         record.record_id = record.compute_record_id();
@@ -1996,9 +2015,10 @@ impl PolicyDebt {
     pub fn from_json(j: &Json) -> Option<PolicyDebt> {
         Some(PolicyDebt {
             expiry_conditions: match j.get("expiry_conditions") {
-                Some(Json::Arr(a)) => {
-                    a.iter().map(|v| v.as_str().map(str::to_string)).collect::<Option<_>>()?
-                }
+                Some(Json::Arr(a)) => a
+                    .iter()
+                    .map(|v| v.as_str().map(str::to_string))
+                    .collect::<Option<_>>()?,
                 _ => return None,
             },
             removal_test_ref: j.get("removal_test_ref")?.as_str()?.to_string(),
@@ -2078,9 +2098,9 @@ impl DelegationRule {
     pub fn from_json(j: &Json) -> Option<DelegationRule> {
         let effect = match j.get("effect")?.get("kind")?.as_str()? {
             "refuse_delegate" => DelegationRuleEffect::RefuseDelegate,
-            "fan_out_cap" => DelegationRuleEffect::FanOutCap(
-                j.get("effect")?.get("k")?.as_int()?.max(0) as u32,
-            ),
+            "fan_out_cap" => {
+                DelegationRuleEffect::FanOutCap(j.get("effect")?.get("k")?.as_int()?.max(0) as u32)
+            }
             "require_reason" => DelegationRuleEffect::RequireReason(
                 j.get("effect")?.get("reason")?.as_str()?.to_string(),
             ),
@@ -2200,12 +2220,19 @@ impl RulesConfig {
         let d = RulesConfig::default();
         Some(RulesConfig {
             theta_agree_ppm: int("theta_agree_ppm").unwrap_or(d.theta_agree_ppm),
-            agree_window: int("agree_window").map(|v| v.max(0) as u32).unwrap_or(d.agree_window),
+            agree_window: int("agree_window")
+                .map(|v| v.max(0) as u32)
+                .unwrap_or(d.agree_window),
             child_floor_ppm: int("child_floor_ppm").unwrap_or(d.child_floor_ppm),
-            streak_n: int("streak_n").map(|v| v.max(0) as u32).unwrap_or(d.streak_n),
+            streak_n: int("streak_n")
+                .map(|v| v.max(0) as u32)
+                .unwrap_or(d.streak_n),
             lambda_ppm: int("lambda_ppm").unwrap_or(d.lambda_ppm),
             delegation_rules: match j.get("delegation_rules") {
-                Some(Json::Arr(a)) => a.iter().map(DelegationRule::from_json).collect::<Option<_>>()?,
+                Some(Json::Arr(a)) => a
+                    .iter()
+                    .map(DelegationRule::from_json)
+                    .collect::<Option<_>>()?,
                 Some(_) => return None,
                 None => vec![],
             },
@@ -2592,7 +2619,9 @@ fn eval_options(
     // declared parallel steps/subagent_task targets, under both gauges,
     // with a reservable slice ≥ child_floor.
     match &decision.kind {
-        DecisionKind::Delegate { delegation_reason, .. } => {
+        DecisionKind::Delegate {
+            delegation_reason, ..
+        } => {
             // Profile-conditioned delegation rules (S5.5): a matched
             // `refuse_delegate` or a declared reason contradicting a
             // `require_reason` rule excludes `spawn_subagent` outright.
@@ -4441,7 +4470,11 @@ mod tests {
     }
     // ── S5.5 — prior cells, bandit/surface_prior, delegation rules ────────
 
-    fn decided_row(seq: u64, cell: &str, _verdict: Option<bool>) -> hh_ledger::event::EventEnvelope {
+    fn decided_row(
+        seq: u64,
+        cell: &str,
+        _verdict: Option<bool>,
+    ) -> hh_ledger::event::EventEnvelope {
         use hh_ledger::classes::Durability;
         use hh_ledger::event::{EventPlane, Producer, Scope};
         use hh_ledger::manifest::{ObservabilityLevel, ParticipantClass};
@@ -4474,9 +4507,7 @@ mod tests {
             ir_refs: vec![],
             surface_ids: Default::default(),
             provenance: None,
-            payload: Json::obj([
-                ("cell", Json::str(cell)),
-            ]),
+            payload: Json::obj([("cell", Json::str(cell))]),
             prev_hash: "h".into(),
             hash: "h".into(),
         }
@@ -4485,10 +4516,7 @@ mod tests {
     fn verdict_row(seq: u64, ok: bool) -> hh_ledger::event::EventEnvelope {
         let mut e = decided_row(seq, "-", None);
         e.class = "verification.validator.verdict".into();
-        e.payload = Json::obj([(
-            "verdict",
-            Json::str(if ok { "pass" } else { "fail" }),
-        )]);
+        e.payload = Json::obj([("verdict", Json::str(if ok { "pass" } else { "fail" }))]);
         e
     }
 
@@ -4548,10 +4576,7 @@ mod tests {
         assert_eq!(record.cell.as_deref(), Some(cell.as_str()));
         assert_eq!(record.estimator_ref.variant_ref, "bandit");
         assert!(
-            !record
-                .rules_fired
-                .iter()
-                .any(|f| f == "bandit.cold_start"),
+            !record.rules_fired.iter().any(|f| f == "bandit.cold_start"),
             "a scored cell is not a cold start"
         );
         // The prior surfaces in the record's priors_used.
@@ -4576,15 +4601,9 @@ mod tests {
             record.estimator_ref.variant_ref, "rules",
             "cold start is a rules binding (the explainable substitution)"
         );
-        assert!(record
-            .rules_fired
-            .iter()
-            .any(|f| f == "bandit.cold_start"));
+        assert!(record.rules_fired.iter().any(|f| f == "bandit.cold_start"));
         // The first observation's cell still stamps — it seeds the fold.
-        assert_eq!(
-            record.cell.as_deref(),
-            Some(spawn_cell(&ctx).as_str())
-        );
+        assert_eq!(record.cell.as_deref(), Some(spawn_cell(&ctx).as_str()));
     }
 
     #[test]
@@ -4674,7 +4693,9 @@ mod tests {
             ..RulesConfig::default()
         };
         let ctx = delegate_ctx();
-        let p = RulesPolicy { config: cfg.clone() };
+        let p = RulesPolicy {
+            config: cfg.clone(),
+        };
         let out = p.bind(&delegate(), &ctx).unwrap();
         let record = match &out {
             BindOutcome::Bound { record, .. } => record,
@@ -4774,7 +4795,7 @@ mod tests {
                 conditioned_on: "profile/a".into(),
                 effect: DelegationRuleEffect::RefuseDelegate,
                 debt_ref: String::new(), // CC3 — a conditioned rule without
-                // debt is never admitted.
+                                         // debt is never admitted.
             }],
             ..RulesConfig::default()
         };

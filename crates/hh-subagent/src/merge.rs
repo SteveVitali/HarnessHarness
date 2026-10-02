@@ -982,7 +982,6 @@ fn lcs_match<T: PartialEq>(a: &[T], b: &[T]) -> Vec<Option<usize>> {
     out
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 // `three_way_text{ast(grammar/tagged-cst)}` — the tagged-CST tokenizer (S5.5)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1275,7 +1274,6 @@ mod ast_tests {
         assert_eq!(merged, "fn a() { pa(); }\nfn b() { pb(); }\n");
     }
 }
-
 
 #[cfg(test)]
 mod line_engine_tests {

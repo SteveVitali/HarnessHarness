@@ -25,8 +25,8 @@ use hh_ontology::control::Owner;
 use hh_ontology::dimensions::{DimensionId, DimensionKey};
 use hh_orchestrator::{Orchestrator, ParentBinding, TopologyPreset, WaitPolicy};
 use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_subagent::ownership::OwnershipTable;
 use hh_subagent::consistency::{ConsistencyDeclaration, ConsistencyLevel};
+use hh_subagent::ownership::OwnershipTable;
 use hh_subagent::spawn::EnvDeriver;
 use hh_subagent::types::*;
 use hh_wire::json::Json;
@@ -460,7 +460,10 @@ fn t3_share_children_spawn_through_the_kernel_seam() {
     let preset = TopologyPreset::T3Recursive { depth: 2 };
     let mut run = Orchestrator::plan(
         &preset,
-        vec![share_stage("a", 1, &["src/a"]), share_stage("b", 1, &["src/b"])],
+        vec![
+            share_stage("a", 1, &["src/a"]),
+            share_stage("b", 1, &["src/b"]),
+        ],
         WaitPolicy::All,
     )
     .unwrap();
@@ -544,12 +547,8 @@ fn t3_recursion_reaches_depth_two_through_real_runs() {
     // The child run exists; it orchestrates T3{depth:1} — its own spawn
     // binds at `delegation_depth = 2` (parent_depth 1 + 1 ≤ its cap).
     let child_lease = child.child_lease.clone().expect("child lease");
-    let (cb, chandles, cdec) = bind_child_parent(
-        &mut p.store,
-        &child.child_run_id,
-        &child_lease,
-        1,
-    );
+    let (cb, chandles, cdec) =
+        bind_child_parent(&mut p.store, &child.child_run_id, &child_lease, 1);
     let mut run2 = match Orchestrator::plan(
         &TopologyPreset::T3Recursive { depth: 1 },
         vec![stage_spec("g", 0)],
@@ -558,17 +557,10 @@ fn t3_recursion_reaches_depth_two_through_real_runs() {
         Ok(r) => r,
         Err(e) => panic!("the child's T3 plan binds: {e:?}"),
     };
-    let grandchild = Orchestrator::spawn_next(
-        &mut p.store,
-        &chandles,
-        &cb,
-        None,
-        &cdec,
-        &mut run2,
-        None,
-    )
-    .unwrap()
-    .expect("the depth-2 grandchild");
+    let grandchild =
+        Orchestrator::spawn_next(&mut p.store, &chandles, &cb, None, &cdec, &mut run2, None)
+            .unwrap()
+            .expect("the depth-2 grandchild");
     let spawned_row = p
         .store
         .events(&child.child_run_id)
