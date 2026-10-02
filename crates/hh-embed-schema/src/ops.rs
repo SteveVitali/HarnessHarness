@@ -150,6 +150,12 @@ const FLEET_ERR: &[&str] = &[
     "Unsupported",
 ];
 
+/// The `lab.evolution.*` op set's declared errors (S6.1a; §05h R-2.9.5)
+/// — the fleet set verbatim (the campaign engine surfaces the same
+/// store/refusal shape; `Unsupported{by}` covers the `tier-c4`-absent
+/// build).
+const EVO_ERR: &[&str] = FLEET_ERR;
+
 const fn call(
     name: &'static str,
     group: &'static str,
@@ -1108,6 +1114,263 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.model.regression", "L", "json", "json"),
         labi("lab.analysis.component_targets", "L", "json", "json"),
         labi("lab.analysis.attribution_design", "L", "json", "json"),
+        // ── S6.1a (§05h R-2.9.5): the evolution-pipeline surface —
+        // `lab.evolution.*` drives the S0–S10 campaign driver
+        // (`hh-evolution`; records-in/records-out like `lab.experiment.*`,
+        // C4-tier — a `--no-default-features` build answers
+        // `Unsupported{by: "tier-c4"}`).
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.campaign_open",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.campaign_ensure",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.propose",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.hypothesize",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.screen",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.matched_eval",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.held_out_eval",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.transfer",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.security_check",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.seal",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.canary",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.canary_settle",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.expire",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.retire",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.revalidate",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.reactivate",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.withdraw",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.revert",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.stop",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.close",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.view",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
         // S3.1 (R-2.11.3⁰; ADR-0097 D7/ADR-0173): `serve(bundle)` — the
         // Stage-3 fixture MCP server over stdio. The op decodes the
         // bundle, extracts its compiled `target:mcp` member and returns

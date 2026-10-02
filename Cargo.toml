@@ -439,6 +439,18 @@ members = [
     # `crates/hh-tracker-fixture` — the packaged `work_source_adapter`
     # reference variant binary (the L5 lane's fixture half; S5.6).
     "crates/hh-tracker-fixture",
+    # `crates/hh-evolution` — the §05h evolution-pipeline fold/driver
+    # (R-2.9.5; ticket S6.1a; ADR-0195/0196): the closed S0–S10 candidate
+    # state machine over durable `measurement.evolution.*` rows (kernel
+    # producer, `run_kind = experiment`), the campaign spec/records
+    # (hypothesis, screen/search/held-out/transfer/security/acceptance
+    # reports), the typed refusals, and the campaign engine. A
+    # projection/consumer layer like `hh-fleet`: no second store, no
+    # second authority path — every decision folds from the durable
+    # prefix (CC3) and the pipeline evaluates nothing itself (the
+    # experiment engine is the sole substrate; §05h §4). Removable
+    # (CC6: nothing below this layer depends on it).
+    "crates/hh-evolution",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired

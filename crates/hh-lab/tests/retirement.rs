@@ -605,3 +605,44 @@ fn retirement_diff_classification_refusals() {
     s.register(&defer)
         .expect("an unresolvable classification defers to the other gates");
 }
+
+/// S6.1a — `retirement_batch` (§05h S10's multi-rule removal; R-2.10.3⁴):
+/// the same match shape and the same *never-exempt* authority/budget
+/// invariance, with the `semantic_ops == 1` single-rule bound relaxed to
+/// `>= 1` per diff (a zero-op diff is no removal at all).
+#[test]
+fn retirement_batch_semantic_ops_bound() {
+    let mut s = retirement_spec("r.test");
+    s.kind = ExperimentKind::RetirementBatch;
+    s.experiment_id = s.experiment_id();
+
+    // A multi-op removal batch registers — the `!= 1` bound is relaxed.
+    let ctx = classified_ctx("a-minus-r", "a", view("none", "none", 3, false));
+    s.register(&ctx)
+        .expect("a semantic_ops = 3 batch removal registers");
+
+    // `semantic_ops == 0` refuses — nothing removed.
+    let ctx = classified_ctx("a-minus-r", "a", view("none", "none", 0, false));
+    match s.register(&ctx) {
+        Err(ExperimentRefusal::NotARetirementDiff { detail }) => {
+            assert!(detail.contains("semantic_ops"), "{detail}");
+        }
+        other => panic!("a zero-op batch must refuse: {other:?}"),
+    }
+
+    // Authority/budget deltas are never exempt — batch or single.
+    let ctx = classified_ctx("a-minus-r", "a", view("widening", "none", 2, false));
+    match s.register(&ctx) {
+        Err(ExperimentRefusal::NotARetirementDiff { detail }) => {
+            assert!(detail.contains("authority_delta"), "{detail}");
+        }
+        other => panic!("batch authority widening must refuse: {other:?}"),
+    }
+    let ctx = classified_ctx("a-minus-r", "a", view("none", "loosening", 2, false));
+    match s.register(&ctx) {
+        Err(ExperimentRefusal::NotARetirementDiff { detail }) => {
+            assert!(detail.contains("budget_delta"), "{detail}");
+        }
+        other => panic!("batch budget loosening must refuse: {other:?}"),
+    }
+}

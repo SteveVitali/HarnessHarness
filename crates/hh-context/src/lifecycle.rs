@@ -579,6 +579,16 @@ pub enum LifecycleError {
         /// The claimed basis.
         basis: String,
     },
+    /// `PromotionRefused` (AC-R-2.4.5-9) — an `origin = evolution` version
+    /// (an induced Procedure or any pipeline-produced record) may be
+    /// promoted only by a *human* `promotion` act over a `valid`-marked
+    /// version (`validator_endorsed`); the attempt is refused and ledgered.
+    PromotionRefused {
+        /// The version the promotion targeted.
+        version_id: String,
+        /// `not_human` | `validity_not_valid`.
+        reason: String,
+    },
     /// A `MemoryError` from the store half.
     Store(MemoryError),
 }
@@ -770,6 +780,37 @@ pub fn promote(
         return Err(LifecycleError::IllegitimateEndorsement {
             caller: "model".to_string(),
         });
+    }
+    // AC-R-2.4.5-9 — induced (`origin = evolution`) versions promote only
+    // under a *human* promotion act (`Origin::Kernel` is insufficient —
+    // the kernel cannot lift pipeline output on its own motion) and only
+    // once a kernel validator has endorsed the version (`validity =
+    // valid`). The refusal is ledgered `context.memory.promotion_refused`.
+    if matches!(old.provenance.origin, Origin::Evolution { .. }) {
+        let refused = if !matches!(reviewer.origin, Origin::Human { .. }) {
+            Some("not_human")
+        } else if !old.validator_endorsed {
+            Some("validity_not_valid")
+        } else {
+            None
+        };
+        if let Some(reason) = refused {
+            store.emit(
+                "context.memory.promotion_refused",
+                Json::obj([
+                    ("version_id", Json::str(version_id)),
+                    ("reason", Json::str(reason)),
+                    (
+                        "endorser",
+                        Json::str(crate::memory::render_origin(&reviewer.origin)),
+                    ),
+                ]),
+            );
+            return Err(LifecycleError::PromotionRefused {
+                version_id: version_id.to_string(),
+                reason: reason.to_string(),
+            });
+        }
     }
     if to_authority > reviewer.authority {
         return Err(LifecycleError::EndorserBelowTarget {

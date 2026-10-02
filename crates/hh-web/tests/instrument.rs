@@ -507,9 +507,9 @@ fn ac14_cli_parity_verbatim_result() {
 
 // AC-15 — the view catalogue is exactly the C1 set plus the C2
 // operations catalogue (S5.7: `v3_timetravel`, `v4_editor`,
-// `v5_launcher`, `v6_analysis`, `v11_bundle`, `v12_console`) — nothing
-// outside the catalogue is admitted, and every served view labels its
-// `view` member.
+// `v5_launcher`, `v6_analysis`, `v11_bundle`, `v12_console`; S6.1a adds
+// `v6_evolution` — the campaign pane) — nothing outside the catalogue is
+// admitted, and every served view labels its `view` member.
 #[test]
 fn ac15_catalogue_closed_and_labelled() {
     assert_eq!(
@@ -529,6 +529,7 @@ fn ac15_catalogue_closed_and_labelled() {
             "v4_editor",
             "v5_launcher",
             "v6_analysis",
+            "v6_evolution",
             "v11_bundle",
             "v12_console",
         ]
@@ -575,6 +576,58 @@ fn aux_v1_runs_index() {
         .find(|(m, _)| m == "run_index")
         .expect("run_index op");
     assert!(p.to_canonical_string().contains("agent"));
+}
+
+/// S6.1a — `v6_evolution` renders the campaign's folded candidate view
+/// verbatim: the surface calls `lab.evolution.view{run}` and wraps the
+/// projection — it never recomputes candidate state (CC5/CC4).
+#[test]
+fn aux_v6_evolution_passthrough() {
+    let (addr, rx, _jh) = stub_kernel(
+        |m, _p| {
+            if m == "lab.evolution.view" {
+                Json::obj([
+                    ("status", Json::str("open")),
+                    (
+                        "candidates",
+                        Json::obj([(
+                            "cand:1",
+                            Json::obj([
+                                ("state", Json::str("hypothesized")),
+                                ("hypothesis_ref", Json::str("hyp:1")),
+                            ]),
+                        )]),
+                    ),
+                    ("n_registered", Json::Int(1)),
+                ])
+            } else {
+                Json::Null
+            }
+        },
+        64,
+    );
+    let (gate, mut svc, det) = fixture(Some(addr));
+    let (c, j) = served_json(serve_request(
+        &gate,
+        &mut svc,
+        &det,
+        &api_head(),
+        &api_body(
+            "view.v6_evolution",
+            Json::obj([("run_id", Json::str("evo-camp-1"))]),
+        ),
+    ));
+    assert_eq!(c, 200);
+    assert_eq!(jstr(&j, "view"), "v6_evolution");
+    let text = j.to_canonical_string();
+    assert!(text.contains("hypothesized"), "projection verbatim: {text}");
+    // The kernel saw `lab.evolution.view` with the run renamed to `run`.
+    let (_m, p) = rx
+        .try_iter()
+        .find(|(m, _)| m == "lab.evolution.view")
+        .expect("lab.evolution.view op");
+    assert_eq!(p.get("run").and_then(Json::as_str), Some("evo-camp-1"));
+    assert!(p.get("run_id").is_none(), "params rename run_id -> run");
 }
 
 /// P8 — a `{accounting}`-only sink policy withholds content members of

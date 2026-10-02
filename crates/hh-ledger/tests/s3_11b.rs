@@ -420,6 +420,132 @@ fn ac_h6_4_permission_dossier_coverage() {
     );
 }
 
+/// S6.1a — the `evolution_link` obligation (§05h; graduated from the
+/// deferred set): every `measurement.evolution.candidate.transitioned`
+/// row whose `to` is `hypothesized` carries a non-empty `hypothesis_ref`
+/// and a non-empty `evidence_refs[]`; intake/rejection/lifecycle rows
+/// legitimately carry no link.
+#[test]
+fn evolution_link_obligation() {
+    let mk = |id: &str, to: &str, extra: Vec<(&str, Json)>| {
+        let mut m = BTreeMap::new();
+        m.insert("candidate_id".into(), Json::str("cand:t"));
+        m.insert("from".into(), Json::str("classified"));
+        m.insert("to".into(), Json::str(to));
+        for (k, v) in extra {
+            m.insert(k.to_string(), v);
+        }
+        EventEnvelope {
+            event_id: id.into(),
+            run_id: "run-t".into(),
+            seq: 0,
+            ts: TS.into(),
+            hlc: None,
+            plane: EventPlane::Measurement,
+            class: "measurement.evolution.candidate.transitioned".into(),
+            schema_version: 1,
+            producer: Producer::kernel("kernel:test"),
+            participant_class: ParticipantClass::Native,
+            observability_level: BTreeSet::from([ObservabilityLevel::Events]),
+            durability: hh_ledger::classes::Durability::Ledger,
+            scope: Scope::default(),
+            lease_generation: 1,
+            parent_event_id: ROOT_EVENT.into(),
+            causes: vec![],
+            refs: vec![],
+            ir_refs: vec![],
+            surface_ids: BTreeMap::new(),
+            provenance: Some(ProvenanceRecord::kernel("kernel:test", 0)),
+            payload: Json::Obj(m),
+            hash: String::new(),
+            prev_hash: String::new(),
+        }
+    };
+    let effects = BTreeMap::new();
+    let linked = |id: &str| {
+        mk(
+            id,
+            "hypothesized",
+            vec![
+                ("hypothesis_ref", Json::str("hyp:1")),
+                ("evidence_refs", Json::Arr(vec![Json::str("ev:1")])),
+            ],
+        )
+    };
+
+    // Unlinked `hypothesized` rows are unmet — no hypothesis_ref, then a
+    // hypothesis_ref with an empty/missing evidence_refs.
+    for (tag, e) in [
+        ("no-link", mk("e-nl", "hypothesized", vec![])),
+        (
+            "no-evidence",
+            mk(
+                "e-ne",
+                "hypothesized",
+                vec![
+                    ("hypothesis_ref", Json::str("hyp:1")),
+                    ("evidence_refs", Json::Arr(vec![])),
+                ],
+            ),
+        ),
+        (
+            "empty-member",
+            mk(
+                "e-em",
+                "hypothesized",
+                vec![
+                    ("hypothesis_ref", Json::str("hyp:1")),
+                    (
+                        "evidence_refs",
+                        Json::Arr(vec![Json::str(""), Json::str("ev:2")]),
+                    ),
+                ],
+            ),
+        ),
+        (
+            "empty-hyp-ref",
+            mk(
+                "e-eh",
+                "hypothesized",
+                vec![
+                    ("hypothesis_ref", Json::str("")),
+                    ("evidence_refs", Json::Arr(vec![Json::str("ev:1")])),
+                ],
+            ),
+        ),
+    ] {
+        let (_, unmet) = eval_obligations(&[&e], &effects, true);
+        assert!(
+            unmet.iter().any(|u| u.obligation_id == "evolution_link"),
+            "{tag} must be unmet"
+        );
+    }
+    // The linked row discharges; `proposed`/`rejected`/`withdrawn` rows
+    // are not subjects of the obligation at all.
+    let intake = mk("e-in", "proposed", vec![]);
+    let rejected = mk("e-rj", "rejected", vec![]);
+    let (_, unmet) = eval_obligations(&[&intake, &rejected, &linked("e-ok")], &effects, true);
+    assert!(
+        !unmet.iter().any(|u| u.obligation_id == "evolution_link"),
+        "linked hypothesized + non-binding rows must be met: {unmet:?}"
+    );
+}
+
+/// S6.1a — the campaign lifecycle classes are registered, audit-grade,
+/// and carry their field tables (CC3/CC4).
+#[test]
+fn evolution_campaign_classes_registered() {
+    for class in [
+        "measurement.evolution.campaign.opened",
+        "measurement.evolution.campaign.stopped",
+        "measurement.evolution.campaign.closed",
+    ] {
+        let spec = hh_ledger::classes::lookup(class)
+            .unwrap_or_else(|| panic!("{class} missing from the class table"));
+        assert!(spec.audit_grade, "{class} must be audit-grade");
+    }
+}
+
 #[test]
 fn ac_h6_4_persisted_widening_met_by_human_change_row() {
     // `persisted_widening` is satisfied by a human-origin
