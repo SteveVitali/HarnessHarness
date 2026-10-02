@@ -183,7 +183,7 @@ pub fn prove_inclusion(leaves: &[String], index: usize, size: usize) -> Option<I
         return None;
     }
     let mut path = Vec::new();
-    audit_path(leaves, index, &mut path);
+    audit_path(&leaves[..size], index, &mut path);
     Some(InclusionProof {
         leaf_index: index as u64,
         tree_size: size as u64,

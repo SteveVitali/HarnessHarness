@@ -248,6 +248,7 @@ impl std::error::Error for DriverError {}
 /// means the completion gate queued a `completion_refused` cue and the
 /// strategy loop continues (S3.10; §5f.2).
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)] // `Held` is the common arm; boxing `RunResult` would allocate on every finish.
 enum FinishOutcome {
     /// The run finished.
     Done(RunResult),
@@ -256,6 +257,7 @@ enum FinishOutcome {
 }
 
 /// The completion gate's disposition (S3.10).
+#[allow(clippy::large_enum_variant)] // `Held` is the common arm; boxing the decided arm would allocate per decision.
 enum CompletionFlow {
     /// `gate.evaluated{hold}` within the cap — feedback queued.
     Held,

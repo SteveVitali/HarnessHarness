@@ -63,6 +63,14 @@ pub struct AssembleInputs<'a> {
     pub registry_snapshot_id: Option<String>,
     /// The `VariantRecord[]` the sealed definition binds.
     pub variants: Vec<Json>,
+    /// The `extensions[]` members the sealed definition binds
+    /// (§5g.5 §3's `resolved_dependencies.extensions[]` shape, refined by
+    /// CF-145; S3.11b). The caller projects the `entry` JSONs from
+    /// `hh_registry::extension::trust_snapshot`; when `bytes` is carried,
+    /// `assemble` deposits them as a member and refuses on a digest
+    /// mismatch (the `content` pin *is* the digest — AC-R-2.8.5-10);
+    /// without bytes the pin lands `unpinned[not_captured]`, never silent.
+    pub extensions: Vec<ExtensionInput>,
     /// The run's `eval_budget` document.
     pub budget: Json,
     /// The run's bound profile document (`profile:none` when none).
@@ -72,6 +80,22 @@ pub struct AssembleInputs<'a> {
     /// `participant_class` override — the run manifest's class is the
     /// default.
     pub participant_class: Option<String>,
+}
+
+/// One bound extension the bundle carries — the §5g.5 §3
+/// `resolved_dependencies.extensions[]` entry plus its payload bytes when
+/// the caller can supply them (S3.11b).
+#[derive(Debug, Clone)]
+pub struct ExtensionInput {
+    /// The member JSON — `{extension_id, content, trust_record,
+    /// attestation_refs[], surface_pin?}` (the `TrustSnapshotEntry` shape).
+    pub entry: Json,
+    /// The extension payload bytes — when present, `assemble` deposits them
+    /// as a `present` member and checks the `content` pin recomputes (the
+    /// digest *is* the verification; a mismatch refuses `MemberMismatch`).
+    /// When absent the pin lands as `unpinned{reason: not_captured}` — the
+    /// ref is declared, never silently absent (CC3).
+    pub bytes: Option<Vec<u8>>,
 }
 
 /// The assembled bundle: manifest + payload tree (`address → bytes`).
@@ -289,6 +313,61 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
     ]);
     let config_addr = doc_member(&mut members, "configuration", &config_doc, &mut index);
 
+    // ── Extension payload members (§5g.5 §3; AC-R-2.8.5-10; S3.11b) ──
+    // A bound extension whose `bytes` the caller captured is deposited as a
+    // `present` member keyed by its content address — the `content` pin in
+    // `resolved_dependencies.extensions[]` *is* the digest, so a mismatch
+    // refuses `MemberMismatch` (the deposit is the verification, never a
+    // trust-the-caller copy). Absent bytes land `unpinned{not_captured}`
+    // with the pin as the claim — declared, never silently absent (CC3); a
+    // `surface_pin` the caller cannot supply bytes for lands the same way.
+    let mut extension_unpinned: Vec<Unpinned> = Vec::new();
+    for e in &inputs.extensions {
+        let ext_id = e
+            .entry
+            .get("extension_id")
+            .and_then(Json::as_str)
+            .unwrap_or("unknown")
+            .to_string();
+        let content = e.entry.get("content").and_then(Json::as_str);
+        match (&e.bytes, content) {
+            (Some(bytes), Some(pin)) => {
+                let (addr, size) =
+                    add_member(&mut members, bytes.clone(), "application/octet-stream");
+                if addr != pin {
+                    return Err(BundleError::MemberMismatch {
+                        address: pin.to_string(),
+                    });
+                }
+                index.push(MemberRef::present(
+                    format!("extension:{ext_id}"),
+                    addr,
+                    "application/octet-stream",
+                    size,
+                ));
+            }
+            _ => {
+                if let Some(pin) = content {
+                    extension_unpinned.push(Unpinned {
+                        role: format!("extension:{ext_id}"),
+                        reason: "not_captured".into(),
+                        claim: Some(Json::str(pin.to_string())),
+                    });
+                }
+            }
+        }
+        // The lifted SurfaceDocument pin — the payload deposit above covers
+        // `content` only; a declared surface pin the caller supplied no bytes
+        // for is named unpinned rather than failing the closure silently.
+        if let Some(sp) = e.entry.get("surface_pin").and_then(Json::as_str) {
+            extension_unpinned.push(Unpinned {
+                role: format!("extension:{ext_id}:surface"),
+                reason: "not_captured".into(),
+                claim: Some(Json::str(sp.to_string())),
+            });
+        }
+    }
+
     // resolved_dependencies doc member.
     let deps_doc = Json::obj([
         (
@@ -303,6 +382,13 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
         ("tools", Json::Arr(vec![])),
         ("text_leaves", Json::Arr(vec![])),
         ("images", Json::Arr(vec![])),
+        // §5g.5 §3 `resolved_dependencies.extensions[]` (CF-145) — the
+        // definition's bound extensions: `{extension_id, content,
+        // trust_record, attestation_refs[], surface_pin?}` (S3.11b).
+        (
+            "extensions",
+            Json::Arr(inputs.extensions.iter().map(|e| e.entry.clone()).collect()),
+        ),
     ]);
     let _deps_addr = doc_member(&mut members, "resolved_dependencies", &deps_doc, &mut index);
 
@@ -405,6 +491,7 @@ pub fn assemble(inputs: &AssembleInputs<'_>) -> Result<Assembled, BundleError> {
             claim: Some(f),
         });
     }
+    unpinned.extend(extension_unpinned);
     let participant_class = inputs
         .participant_class
         .clone()

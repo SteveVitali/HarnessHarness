@@ -99,6 +99,76 @@ pub struct UnattributedSignal {
     pub detection: Option<String>,
 }
 
+/// One `security.secret.leak_detected` row — the `secret_leak` veto's
+/// evidence (§5g.3 §4; AC-R-2.8.3-3/-11; S3.11b). The fold carries
+/// coordinates only — the leaked value never enters the fact record.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SecretLeakRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `location` — the `leak_scan` target spelling (`event:<id>`,
+    /// `blob:<addr>`, `request_view`, `sink_delivery:<sink>`,
+    /// `mediate:<channel>`…).
+    pub location: Option<String>,
+    /// `detector` — which detector tripped.
+    pub detector: Option<String>,
+    /// `hit.fingerprint` — the channel fingerprint, never the value.
+    pub fingerprint: Option<String>,
+}
+
+/// One `security.permission.decided` row — the AC-H6-4 folds (decider ×
+/// scope counts; `approval_wait_ms` computability; the exactly-one-decision
+/// coverage join).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PermissionDecisionRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `effect_id`.
+    pub effect_id: Option<String>,
+    /// `permission_id` (the pending the decision resolves).
+    pub permission_id: Option<String>,
+    /// `decision` (`allow | deny | ask | error | abstain` spellings).
+    pub decision: Option<String>,
+    /// `decider` (`policy | cache | hook | auto_reviewer | human`).
+    pub decider: Option<String>,
+    /// `decision_scope` (`once | session | persisted`).
+    pub decision_scope: Option<String>,
+    /// `requested_at` (the pending's timestamp — the wait-time base).
+    pub requested_at: Option<String>,
+    /// `wait_ms` (the recorded wait — computable from `requested_at`).
+    pub wait_ms: Option<i64>,
+}
+
+/// One `security.permission.pending` row — the durable owed-decision set
+/// (the pending/requested split AC-H6-4 audits).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PermissionPendingRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `permission_id`.
+    pub permission_id: Option<String>,
+    /// `effect_ids` — coalesced requests share the row.
+    pub effect_ids: Vec<String>,
+    /// `requested_at`.
+    pub requested_at: Option<String>,
+}
+
+/// One `security.permission.granted`/`revoked` row — the grant side of the
+/// `decision_scope ≠ once` obligation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PermissionGrantRow {
+    /// The ledger seq.
+    pub seq: u64,
+    /// `handle_id`.
+    pub handle_id: Option<String>,
+    /// `permission_ref.version_id` — the decided/granted join key.
+    pub permission_ref: Option<String>,
+    /// `scope`.
+    pub scope: Option<String>,
+    /// `revoked` — `true` on `security.permission.revoked` rows.
+    pub revoked: bool,
+}
+
 /// One `context.assembled` item — `{kind, artefact_id?, tokens}`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssembledItem {
@@ -543,6 +613,17 @@ pub struct LedgerFacts {
     /// `file_path` members) — the `metadata_shortcut` veto's access view
     /// (AC-R-2.7.1-6).
     pub metadata_accesses: Vec<String>,
+    /// `security.secret.leak_detected` rows — the `secret_leak` veto's
+    /// input (§5g.3 §4; S3.11b).
+    pub secret_leaks: Vec<SecretLeakRow>,
+    /// `security.permission.decided` rows — the AC-H6-4 folds (decider ×
+    /// scope, wait-time computability, exactly-one-decision coverage).
+    pub permission_decisions: Vec<PermissionDecisionRow>,
+    /// `security.permission.pending` rows — the durable owed-decision set.
+    pub permission_pendings: Vec<PermissionPendingRow>,
+    /// `security.permission.granted`/`revoked` rows — the grant side of
+    /// the `decision_scope ≠ once` obligation.
+    pub permission_grants: Vec<PermissionGrantRow>,
 }
 
 fn s(j: &Json, member: &str) -> Option<String> {
@@ -763,6 +844,66 @@ impl LedgerFacts {
                             }
                         }
                     }
+                    // S3.11b — the AC-H6-4 fold: decider × scope, the
+                    // pending/requested split, `approval_wait_ms`
+                    // computability (`requested_at` + `wait_ms` are both
+                    // durable members of the decided row).
+                    f.permission_decisions.push(PermissionDecisionRow {
+                        seq,
+                        effect_id: s(p, "effect_id"),
+                        permission_id: s(p, "permission_id"),
+                        decision: s(p, "decision"),
+                        decider: s(p, "decider"),
+                        decision_scope: s(p, "decision_scope"),
+                        requested_at: s(p, "requested_at"),
+                        wait_ms: p.get("wait_ms").and_then(Json::as_int),
+                    });
+                }
+                "security.permission.pending" => {
+                    f.permission_pendings.push(PermissionPendingRow {
+                        seq,
+                        permission_id: s(p, "permission_id"),
+                        effect_ids: p
+                            .get("effect_ids")
+                            .and_then(|v| match v {
+                                Json::Arr(a) => Some(a),
+                                _ => None,
+                            })
+                            .map(|a| {
+                                a.iter()
+                                    .filter_map(|x| x.as_str().map(str::to_string))
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        requested_at: s(p, "requested_at"),
+                    });
+                }
+                "security.permission.granted" | "security.permission.revoked" => {
+                    f.permission_grants.push(PermissionGrantRow {
+                        seq,
+                        handle_id: s(p, "handle_id"),
+                        permission_ref: p
+                            .get("permission_ref")
+                            .and_then(|r| r.get("version_id"))
+                            .and_then(Json::as_str)
+                            .map(str::to_string),
+                        scope: s(p, "scope"),
+                        revoked: class == "security.permission.revoked",
+                    });
+                }
+                "security.secret.leak_detected" => {
+                    // Coordinates only — the fingerprint labels the channel,
+                    // never the value (§5g.3 §4's content-free leak record).
+                    f.secret_leaks.push(SecretLeakRow {
+                        seq,
+                        location: s(p, "location"),
+                        detector: s(p, "detector"),
+                        fingerprint: p
+                            .get("hit")
+                            .and_then(|h| h.get("fingerprint"))
+                            .and_then(Json::as_str)
+                            .map(str::to_string),
+                    });
                 }
                 "context.artefact.delivered" => f.artefacts_delivered.push(artefact_row(p)),
                 "context.artefact.activated" => f.artefacts_activated.push(artefact_row(p)),
@@ -1289,6 +1430,242 @@ impl LedgerFacts {
             "metadata_accesses".into(),
             Json::Arr(self.metadata_accesses.iter().map(Json::str).collect()),
         );
+        // ── S3.8/S3.9/S3.11b collections — carried so `ledger_facts/1`
+        // round-trips losslessly (CC3: an unaccounted codec drop is a
+        // silent-loss gap, not a projection).
+        m.insert(
+            "memory_writes".into(),
+            Json::Arr(
+                self.memory_writes
+                    .iter()
+                    .map(|w| {
+                        let mut wm = BTreeMap::new();
+                        wm.insert("seq".into(), Json::Int(w.seq as i64));
+                        wm.insert("version_id".into(), Json::str(&w.version_id));
+                        insert_opt(
+                            &mut wm,
+                            "semantic_id",
+                            w.semantic_id.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut wm, "kind", w.kind.as_deref().map(Json::str));
+                        insert_opt(&mut wm, "authority", w.authority.as_deref().map(Json::str));
+                        Json::Obj(wm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "memory_reads".into(),
+            Json::Arr(
+                self.memory_reads
+                    .iter()
+                    .map(|r| {
+                        Json::obj([
+                            ("seq", Json::Int(r.seq as i64)),
+                            (
+                                "delivered",
+                                Json::Arr(r.delivered.iter().map(Json::str).collect()),
+                            ),
+                            (
+                                "withheld",
+                                Json::Arr(r.withheld.iter().map(Json::str).collect()),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "retrievals".into(),
+            Json::Arr(
+                self.retrievals
+                    .iter()
+                    .map(|r| {
+                        let mut rm = BTreeMap::new();
+                        rm.insert("seq".into(), Json::Int(r.seq as i64));
+                        insert_opt(
+                            &mut rm,
+                            "query_kind",
+                            r.query_kind.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut rm,
+                            "ranker_ref",
+                            r.ranker_ref.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut rm, "deterministic", r.deterministic.map(Json::Bool));
+                        insert_opt(&mut rm, "index_ms", r.index_ms.map(Json::Int));
+                        insert_opt(&mut rm, "embedder_calls", r.embedder_calls.map(Json::Int));
+                        insert_opt(
+                            &mut rm,
+                            "tokens_estimated",
+                            r.tokens_estimated.map(Json::Int),
+                        );
+                        Json::Obj(rm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "tool_completions".into(),
+            Json::Arr(
+                self.tool_completions
+                    .iter()
+                    .map(|t| {
+                        let mut tm = BTreeMap::new();
+                        tm.insert("seq".into(), Json::Int(t.seq as i64));
+                        insert_opt(
+                            &mut tm,
+                            "invocation_ref",
+                            t.invocation_ref.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut tm,
+                            "capability",
+                            t.capability.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut tm,
+                            "args_canonical",
+                            t.args_canonical.as_deref().map(Json::str),
+                        );
+                        Json::Obj(tm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "compactions".into(),
+            Json::Arr(
+                self.compactions
+                    .iter()
+                    .map(|c| {
+                        let mut cm = BTreeMap::new();
+                        cm.insert("seq".into(), Json::Int(c.seq as i64));
+                        cm.insert("completed".into(), Json::Bool(c.completed));
+                        insert_opt(
+                            &mut cm,
+                            "variant_ref",
+                            c.variant_ref.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut cm, "status", c.status.as_deref().map(Json::str));
+                        insert_opt(&mut cm, "tokens_freed", c.tokens_freed.map(Json::Int));
+                        insert_opt(&mut cm, "model_calls", c.model_calls.map(Json::Int));
+                        if !c.forgotten.is_empty() {
+                            cm.insert(
+                                "forgotten".into(),
+                                Json::Arr(c.forgotten.iter().map(Json::str).collect()),
+                            );
+                        }
+                        Json::Obj(cm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "invalidated_ids".into(),
+            Json::Arr(self.invalidated_ids.iter().map(Json::str).collect()),
+        );
+        m.insert(
+            "secret_leaks".into(),
+            Json::Arr(
+                self.secret_leaks
+                    .iter()
+                    .map(|l| {
+                        let mut lm = BTreeMap::new();
+                        lm.insert("seq".into(), Json::Int(l.seq as i64));
+                        insert_opt(&mut lm, "location", l.location.as_deref().map(Json::str));
+                        insert_opt(&mut lm, "detector", l.detector.as_deref().map(Json::str));
+                        insert_opt(
+                            &mut lm,
+                            "fingerprint",
+                            l.fingerprint.as_deref().map(Json::str),
+                        );
+                        Json::Obj(lm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "permission_decisions".into(),
+            Json::Arr(
+                self.permission_decisions
+                    .iter()
+                    .map(|d| {
+                        let mut dm = BTreeMap::new();
+                        dm.insert("seq".into(), Json::Int(d.seq as i64));
+                        insert_opt(&mut dm, "effect_id", d.effect_id.as_deref().map(Json::str));
+                        insert_opt(
+                            &mut dm,
+                            "permission_id",
+                            d.permission_id.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut dm, "decision", d.decision.as_deref().map(Json::str));
+                        insert_opt(&mut dm, "decider", d.decider.as_deref().map(Json::str));
+                        insert_opt(
+                            &mut dm,
+                            "decision_scope",
+                            d.decision_scope.as_deref().map(Json::str),
+                        );
+                        insert_opt(
+                            &mut dm,
+                            "requested_at",
+                            d.requested_at.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut dm, "wait_ms", d.wait_ms.map(Json::Int));
+                        Json::Obj(dm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "permission_pendings".into(),
+            Json::Arr(
+                self.permission_pendings
+                    .iter()
+                    .map(|p_| {
+                        let mut pm = BTreeMap::new();
+                        pm.insert("seq".into(), Json::Int(p_.seq as i64));
+                        insert_opt(
+                            &mut pm,
+                            "permission_id",
+                            p_.permission_id.as_deref().map(Json::str),
+                        );
+                        pm.insert(
+                            "effect_ids".into(),
+                            Json::Arr(p_.effect_ids.iter().map(Json::str).collect()),
+                        );
+                        insert_opt(
+                            &mut pm,
+                            "requested_at",
+                            p_.requested_at.as_deref().map(Json::str),
+                        );
+                        Json::Obj(pm)
+                    })
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "permission_grants".into(),
+            Json::Arr(
+                self.permission_grants
+                    .iter()
+                    .map(|g| {
+                        let mut gm2 = BTreeMap::new();
+                        gm2.insert("seq".into(), Json::Int(g.seq as i64));
+                        insert_opt(&mut gm2, "handle_id", g.handle_id.as_deref().map(Json::str));
+                        insert_opt(
+                            &mut gm2,
+                            "permission_ref",
+                            g.permission_ref.as_deref().map(Json::str),
+                        );
+                        insert_opt(&mut gm2, "scope", g.scope.as_deref().map(Json::str));
+                        gm2.insert("revoked".into(), Json::Bool(g.revoked));
+                        Json::Obj(gm2)
+                    })
+                    .collect(),
+            ),
+        );
         m.insert(
             "metrics_emitted".into(),
             Json::Int(self.metrics_emitted as i64),
@@ -1585,6 +1962,16 @@ impl LedgerFacts {
                 "charges",
                 "spend_rows",
                 "event_calls",
+                "memory_writes",
+                "memory_reads",
+                "retrievals",
+                "tool_completions",
+                "compactions",
+                "invalidated_ids",
+                "secret_leaks",
+                "permission_decisions",
+                "permission_pendings",
+                "permission_grants",
             ],
             REC,
         )?;
@@ -1858,6 +2245,149 @@ impl LedgerFacts {
                     })
                     .unwrap_or_default(),
             };
+        }
+        // ── S3.8/S3.9/S3.11b members (the CC3-lossless decode) ─────────
+        if let Some(Json::Arr(ws)) = m.get("memory_writes") {
+            for w in ws {
+                f.memory_writes.push(MemoryWriteRow {
+                    seq: w.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    version_id: s(w, "version_id").unwrap_or_default(),
+                    semantic_id: s(w, "semantic_id"),
+                    kind: s(w, "kind"),
+                    authority: s(w, "authority"),
+                });
+            }
+        }
+        if let Some(Json::Arr(rs)) = m.get("memory_reads") {
+            for r in rs {
+                let strs = |k: &str| -> Vec<String> {
+                    r.get(k)
+                        .and_then(|v| match v {
+                            Json::Arr(a) => Some(a),
+                            _ => None,
+                        })
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.as_str().map(str::to_string))
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                };
+                f.memory_reads.push(MemoryReadRow {
+                    seq: r.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    delivered: strs("delivered"),
+                    withheld: strs("withheld"),
+                });
+            }
+        }
+        if let Some(Json::Arr(rs)) = m.get("retrievals") {
+            for r in rs {
+                f.retrievals.push(RetrievalRow {
+                    seq: r.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    query_kind: s(r, "query_kind"),
+                    ranker_ref: s(r, "ranker_ref"),
+                    deterministic: b(r, "deterministic"),
+                    index_ms: r.get("index_ms").and_then(Json::as_int),
+                    embedder_calls: r.get("embedder_calls").and_then(Json::as_int),
+                    tokens_estimated: r.get("tokens_estimated").and_then(Json::as_int),
+                });
+            }
+        }
+        if let Some(Json::Arr(ts)) = m.get("tool_completions") {
+            for t in ts {
+                f.tool_completions.push(ToolCompletedRow {
+                    seq: t.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    invocation_ref: s(t, "invocation_ref"),
+                    capability: s(t, "capability"),
+                    args_canonical: s(t, "args_canonical"),
+                });
+            }
+        }
+        if let Some(Json::Arr(cs)) = m.get("compactions") {
+            for c in cs {
+                f.compactions.push(CompactionRow {
+                    seq: c.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    completed: b(c, "completed").unwrap_or(false),
+                    variant_ref: s(c, "variant_ref"),
+                    status: s(c, "status"),
+                    tokens_freed: c.get("tokens_freed").and_then(Json::as_int),
+                    model_calls: c.get("model_calls").and_then(Json::as_int),
+                    forgotten: c
+                        .get("forgotten")
+                        .and_then(|v| match v {
+                            Json::Arr(a) => Some(a),
+                            _ => None,
+                        })
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.as_str().map(str::to_string))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                });
+            }
+        }
+        if let Some(Json::Arr(ids)) = m.get("invalidated_ids") {
+            f.invalidated_ids = ids
+                .iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect();
+        }
+        if let Some(Json::Arr(ls)) = m.get("secret_leaks") {
+            for l in ls {
+                f.secret_leaks.push(SecretLeakRow {
+                    seq: l.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    location: s(l, "location"),
+                    detector: s(l, "detector"),
+                    fingerprint: s(l, "fingerprint"),
+                });
+            }
+        }
+        if let Some(Json::Arr(ds)) = m.get("permission_decisions") {
+            for d in ds {
+                f.permission_decisions.push(PermissionDecisionRow {
+                    seq: d.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    effect_id: s(d, "effect_id"),
+                    permission_id: s(d, "permission_id"),
+                    decision: s(d, "decision"),
+                    decider: s(d, "decider"),
+                    decision_scope: s(d, "decision_scope"),
+                    requested_at: s(d, "requested_at"),
+                    wait_ms: d.get("wait_ms").and_then(Json::as_int),
+                });
+            }
+        }
+        if let Some(Json::Arr(ps)) = m.get("permission_pendings") {
+            for p_ in ps {
+                f.permission_pendings.push(PermissionPendingRow {
+                    seq: p_.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    permission_id: s(p_, "permission_id"),
+                    effect_ids: p_
+                        .get("effect_ids")
+                        .and_then(|v| match v {
+                            Json::Arr(a) => Some(a),
+                            _ => None,
+                        })
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.as_str().map(str::to_string))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    requested_at: s(p_, "requested_at"),
+                });
+            }
+        }
+        if let Some(Json::Arr(gs)) = m.get("permission_grants") {
+            for g in gs {
+                f.permission_grants.push(PermissionGrantRow {
+                    seq: g.get("seq").and_then(Json::as_int).unwrap_or(0) as u64,
+                    handle_id: s(g, "handle_id"),
+                    permission_ref: s(g, "permission_ref"),
+                    scope: s(g, "scope"),
+                    revoked: b(g, "revoked").unwrap_or(false),
+                });
+            }
         }
         Ok(f)
     }

@@ -1611,6 +1611,7 @@ impl EmbedService {
     /// Arm the session driver over the session's run — the bound
     /// `control_strategy` slot selects the variant (`strategy_for`; the
     /// canonical control loop under `KernelSink` + the writer lease).
+    #[allow(clippy::too_many_arguments)] // the arming record is the §5f.2 arm tuple — the arity is the call's.
     fn arm_driver(
         &mut self,
         run_id: &str,

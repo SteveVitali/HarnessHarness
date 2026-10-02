@@ -4528,3 +4528,179 @@ fn s3_6_counterfactual_opens_paired_arms_with_the_factual_floor() {
     assert!(out.get("comparison_ref").and_then(Json::as_str).is_some());
     assert!(out.get("intervention_ref").and_then(Json::as_str).is_some());
 }
+
+// ── S3.11b — bundle `resolved_dependencies.extensions[]` (AC-R-2.8.5-10) ──
+// The `kernel.bundle` path projects the sealed definition's pinned
+// `assembly.extensions.refs[]` through `trust_snapshot` into the bundle
+// manifest — end-to-end over the boundary, never a re-read of the registry
+// at bundle time.
+
+/// A definition document binding one skill extension (selector `latest` —
+/// `resolve` pins it against the embedded registry at open).
+fn document_json_with_extension(name: &str) -> Json {
+    let mut doc = document_json();
+    if let Json::Obj(m) = &mut doc {
+        if let Some(Json::Obj(am)) = m.get_mut("assembly") {
+            am.insert(
+                "extensions".into(),
+                Json::obj([
+                    (
+                        "sources",
+                        Json::Arr(vec![Json::obj([
+                            ("kind", Json::str("registry")),
+                            ("name", Json::str(name)),
+                        ])]),
+                    ),
+                    (
+                        "refs",
+                        Json::Arr(vec![Json::obj([
+                            ("name", Json::str(name)),
+                            ("kind", Json::str("skill")),
+                            (
+                                "locator",
+                                Json::obj([
+                                    ("scheme", Json::str("registry")),
+                                    (
+                                        "credential_free_uri",
+                                        Json::str(format!("registry://local/{name}")),
+                                    ),
+                                    ("selector", Json::str("latest")),
+                                ]),
+                            ),
+                        ])]),
+                    ),
+                    ("merge_policy", Json::str("exact_only")),
+                ]),
+            );
+        }
+    }
+    doc
+}
+
+/// Register a skill extension record through `lab.registry.register`;
+/// returns `(version_id, content_pin)`.
+fn register_skill_extension(
+    svc: &mut EmbedService,
+    name: &str,
+    payload: &[u8],
+) -> (String, String) {
+    use hh_registry::extension::{
+        extension_body_json, resolve_candidate, Candidate, DeclaredSource, ExtensionKind,
+        FetchOutcome, SourceLocator,
+    };
+    let rec = resolve_candidate(
+        &Candidate {
+            name: name.into(),
+            kind: ExtensionKind::Skill,
+            locator: SourceLocator {
+                scheme: "registry".into(),
+                credential_free_uri: format!("registry://local/{name}"),
+                selector: Some("latest".into()),
+                resolved: None,
+                fetched_at: None,
+            },
+            source: DeclaredSource::Registry { name: name.into() },
+        },
+        &FetchOutcome {
+            resolved: format!("resolved:{name}@1"),
+            content: hh_identity::idp::address(payload, "application/octet-stream"),
+            fetched_at: 7,
+            code_identity: vec![],
+            source_snapshot: None,
+            surface_pin: None,
+        },
+        Origin::kernel("s311b.test"),
+        Some(payload),
+        7,
+    );
+    let content_pin = rec.content.id();
+    let r = call(
+        svc,
+        "lab.registry.register",
+        Json::obj([
+            ("kind", Json::str("extension")),
+            ("body", extension_body_json(&rec)),
+            ("registrar", registrar()),
+        ]),
+    );
+    let v = ok(&r);
+    let vid = v
+        .get("version_id")
+        .and_then(Json::as_str)
+        .expect("register returns version_id")
+        .to_string();
+    (vid, content_pin)
+}
+
+#[test]
+fn s311b_kernel_bundle_carries_bound_extensions() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let (ext_vid, content_pin) = register_skill_extension(&mut svc, "ext-s311b", b"skill payload");
+
+    let s = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![
+            (
+                "spec",
+                new_spec_with_doc(document_json_with_extension("ext-s311b"), None),
+            ),
+            ("idempotency_key", Json::str("open-ext")),
+        ]),
+    ));
+    let session_id = s
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    submit(&mut svc, &session_id, text_input("bundle with extension"));
+    close(&mut svc, &session_id);
+
+    let dir = test_dir("bundle-ext");
+    let r = deliver_bundle(&mut svc, &run_id, &dir);
+    let manifest = r.get("manifest").cloned().unwrap();
+
+    // `resolved_dependencies.extensions[]` carries the pinned entry —
+    // resolve pinned the `latest` selector to the registered version_id at
+    // open; the bundle re-projects it via `trust_snapshot` (never a second
+    // resolution).
+    let exts = manifest
+        .get("resolved_dependencies")
+        .and_then(|d| d.get("extensions"))
+        .and_then(|v| match v {
+            Json::Arr(a) => Some(a.clone()),
+            _ => None,
+        })
+        .expect("resolved_dependencies.extensions[]");
+    assert_eq!(exts.len(), 1, "one bound extension: {exts:?}");
+    let e = &exts[0];
+    assert_eq!(
+        e.get("extension_id").and_then(Json::as_str),
+        Some(ext_vid.as_str())
+    );
+    assert_eq!(
+        e.get("content").and_then(Json::as_str),
+        Some(content_pin.as_str())
+    );
+    assert!(e.get("trust_record").and_then(Json::as_str).is_some());
+
+    // The payload bytes were never captured into the run's artifact pool —
+    // the pin lands `unpinned{not_captured}`, declared, never silently
+    // absent (CC3; ADR-0289 D5).
+    let unpinned = manifest
+        .get("unpinned")
+        .and_then(|v| match v {
+            Json::Arr(a) => Some(a.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    assert!(
+        unpinned.iter().any(|u| {
+            u.get("role").and_then(Json::as_str) == Some(format!("extension:{ext_vid}").as_str())
+                && u.get("reason").and_then(Json::as_str) == Some("not_captured")
+        }),
+        "the uncaptured extension pin must be named: {unpinned:?}"
+    );
+}

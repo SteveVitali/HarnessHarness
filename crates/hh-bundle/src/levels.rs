@@ -373,6 +373,33 @@ pub fn section_member_refs(manifest: &BundleManifest) -> Vec<String> {
             refs.push(a);
         }
     }
+    // `resolved_dependencies.extensions[].content`/`surface_pin` — every
+    // carried extension pin must resolve to a member (AC-R-2.8.5-10: S2
+    // recomputes the member's bytes, S3 requires the pin to resolve). A pin
+    // declared in `unpinned[].claim` (`not_captured` — the caller could not
+    // supply the payload) is *named*, not a ref — S3 reads the declaration,
+    // never demands bytes that were declared absent (CC3).
+    let unpinned_claims: std::collections::BTreeSet<String> = manifest
+        .unpinned
+        .iter()
+        .filter_map(|u| u.claim.as_ref().and_then(Json::as_str))
+        .map(str::to_string)
+        .collect();
+    if let Some(Json::Arr(exts)) = manifest.resolved_dependencies.get("extensions") {
+        for e in exts {
+            for pin in [
+                e.get("content").and_then(Json::as_str),
+                e.get("surface_pin").and_then(Json::as_str),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                if !unpinned_claims.contains(pin) {
+                    refs.push(pin.to_string());
+                }
+            }
+        }
+    }
     if let Some(a) = manifest
         .reproducibility
         .get("nondeterminism")

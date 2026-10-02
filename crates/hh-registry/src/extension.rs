@@ -1629,5 +1629,158 @@ pub fn declared_source_from_json(j: &Json, path: &str) -> Result<DeclaredSource,
     }
 }
 
+// ── trust_snapshot (§5g.5 §3; ADR-0064 D7; S3.11b) ────────────────────────────
+
+/// One `trust_snapshot.extensions[]` entry — the bundle-member shape
+/// (`{extension_id, content, trust_record, attestation_refs[], surface_pin?}` —
+/// §5g.5 §3's `resolved_dependencies.extensions[]` row, refined by CF-145).
+/// `trust_record` names the versioned coordinate of the trust facts: the
+/// envelope's `trust_record_ref` when a separate trust-record pin exists,
+/// else the extension record's own `version_id` (the record that carries the
+/// embedded `ExtensionTrustRecord`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrustSnapshotEntry {
+    /// The pinned extension record (`version_id`).
+    pub extension_id: String,
+    /// The content pin (`ContentAddress::id()` — `<algorithm>:<hex>`).
+    pub content: String,
+    /// The trust facts' version coordinate.
+    pub trust_record: String,
+    /// The verified attestations' subject coordinates.
+    pub attestation_refs: Vec<String>,
+    /// The lifted `SurfaceDocument` pin, when the surface was pinned.
+    pub surface_pin: Option<String>,
+}
+
+impl TrustSnapshotEntry {
+    /// The canonical JSON member.
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("extension_id".into(), Json::str(self.extension_id.clone()));
+        m.insert("content".into(), Json::str(self.content.clone()));
+        m.insert("trust_record".into(), Json::str(self.trust_record.clone()));
+        m.insert(
+            "attestation_refs".into(),
+            Json::Arr(self.attestation_refs.iter().map(Json::str).collect()),
+        );
+        if let Some(p) = &self.surface_pin {
+            m.insert("surface_pin".into(), Json::str(p.clone()));
+        }
+        Json::Obj(m)
+    }
+}
+
+/// `trust_snapshot(definition)` — the `{extensions[], policy version_id,
+/// registry_snapshot_id}` projection the bundle's
+/// `resolved_dependencies.extensions[]` carries (§5g.5 §3; ADR-0064 D7).
+/// Pure over `(definition document, store, snapshot)` — the same inputs
+/// re-derive the same snapshot (the AC-R-2.8.5-10 R1 property).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TrustSnapshot {
+    /// The bound extension entries, sorted by `extension_id` (canonical
+    /// order — the fold is order-insensitive).
+    pub extensions: Vec<TrustSnapshotEntry>,
+    /// The `RegistryPolicy` digest the snapshot pins (`policy version_id`).
+    pub policy_version_id: String,
+    /// The registry snapshot the resolution ran under.
+    pub registry_snapshot_id: String,
+}
+
+impl TrustSnapshot {
+    /// The canonical JSON document.
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            (
+                "extensions",
+                Json::Arr(self.extensions.iter().map(|e| e.to_json()).collect()),
+            ),
+            (
+                "policy_version_id",
+                Json::str(self.policy_version_id.clone()),
+            ),
+            (
+                "registry_snapshot_id",
+                Json::str(self.registry_snapshot_id.clone()),
+            ),
+        ])
+    }
+
+    /// The snapshot's content id (`idp/1` over the canonical document —
+    /// re-derivation compares these).
+    pub fn snapshot_id(&self) -> String {
+        idp::idp_id(
+            "registry.trust_snapshot",
+            self.to_json().to_canonical_string().as_bytes(),
+        )
+    }
+}
+
+/// `trust_snapshot(store, definition, snapshot)` — project the definition's
+/// resolved `assembly.extensions.refs[]` into the bundle-carrying snapshot.
+/// Every ref's `extension_id` must resolve to an `extension` record in
+/// `store` (a selector left in a sealed form or an unresolvable pin is
+/// `Unresolved`/`UnknownVersion` — never silently skipped, CC3).
+pub fn trust_snapshot(
+    store: &crate::store::RegistryStore,
+    definition: &Json,
+    snapshot: &crate::records::RegistrySnapshot,
+) -> Result<TrustSnapshot, RegistryError> {
+    let refs = definition
+        .get("assembly")
+        .and_then(|a| a.get("extensions"))
+        .and_then(|e| e.get("refs"))
+        .and_then(|r| match r {
+            Json::Arr(items) => Some(items.as_slice()),
+            _ => None,
+        })
+        .unwrap_or(&[]);
+    let mut extensions = Vec::with_capacity(refs.len());
+    for (i, r) in refs.iter().enumerate() {
+        let path = format!("assembly.extensions.refs[{i}]");
+        let extension_id = r
+            .get("extension_id")
+            .and_then(Json::as_str)
+            .ok_or_else(|| RegistryError::Unresolved {
+                detail: format!("{path}.extension_id: unresolved ref in a sealed form"),
+            })?
+            .to_string();
+        let (env, record) =
+            store
+                .get(&extension_id)
+                .ok_or_else(|| RegistryError::UnknownVersion {
+                    version_id: extension_id.clone(),
+                })?;
+        let crate::records::RegistryRecord::Extension(rec) = record else {
+            return Err(RegistryError::KindMismatch {
+                detail: format!(
+                    "{path}: pin names a {} record, not an extension",
+                    record.kind().domain_tag()
+                ),
+            });
+        };
+        extensions.push(TrustSnapshotEntry {
+            extension_id: env.version_id.clone(),
+            content: rec.content.id(),
+            trust_record: env
+                .trust_record_ref
+                .clone()
+                .unwrap_or_else(|| env.version_id.clone()),
+            attestation_refs: rec
+                .trust
+                .attestations
+                .iter()
+                .map(|a| a.subject_hash.clone())
+                .collect(),
+            surface_pin: rec.trust.surface_pin.as_ref().map(|c| c.id()),
+        });
+    }
+    extensions.sort_by(|a, b| a.extension_id.cmp(&b.extension_id));
+    Ok(TrustSnapshot {
+        extensions,
+        policy_version_id: snapshot.policy_digest.clone(),
+        registry_snapshot_id: snapshot.snapshot_id.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests;

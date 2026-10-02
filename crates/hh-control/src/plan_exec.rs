@@ -135,10 +135,7 @@ pub fn plan_emitted_payload(
         ("valid", Json::Bool(valid)),
         ("detector", Json::str("deterministic")),
         ("steps", Json::Arr(steps.to_vec())),
-        (
-            "reject_reason",
-            reject_reason.map_or(Json::Null, |r| Json::str(r)),
-        ),
+        ("reject_reason", reject_reason.map_or(Json::Null, Json::str)),
     ])
 }
 
