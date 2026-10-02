@@ -648,6 +648,7 @@ impl<'a> Dispatcher<'a> {
             requested_grants: input.requested_grants.clone(),
             containment: gate.clone(),
             flow: input.flow.clone(),
+            remedy_taken: None,
             at: self.store.now_ms(),
         };
         let decision = self

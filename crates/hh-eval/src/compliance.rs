@@ -51,6 +51,17 @@ pub mod names {
     /// `profile.rule.followed_rate` (per-rule — keyed on the rule id;
     /// AC-R-2.3.3-6).
     pub const PROFILE_RULE_FOLLOWED_RATE: &str = "profile.rule.followed_rate";
+    /// `remedies.offered` (§5g.2 process metrics; ADR-0055 D5).
+    pub const REMEDIES_OFFERED: &str = "remedies.offered";
+    /// `remedies.taken`.
+    pub const REMEDIES_TAKEN: &str = "remedies.taken";
+    /// `approvals.requested` (the `ask` count — I-F6 R4).
+    pub const APPROVALS_REQUESTED: &str = "approvals.requested";
+    /// `approvals.consumed` (the `remedy_taken{approval}` share).
+    pub const APPROVALS_CONSUMED: &str = "approvals.consumed";
+    /// `taint_precision` — advisory (AC-R-2.8.2-11; reported, never
+    /// enforced).
+    pub const TAINT_PRECISION: &str = "taint_precision";
 }
 
 /// A `(numerator, denominator)` pair — the raw material every rate reports
@@ -153,6 +164,77 @@ pub fn attribution_completeness(f: &LedgerFacts) -> RateParts {
             .filter(|c| f.cost_attributed_calls.contains(*c))
             .count() as u64,
         den: f.model_calls_completed.len() as u64,
+    }
+}
+
+/// `remedies.offered` / `remedies.taken` — the §5g.2 process-metric pair:
+/// `Σ |decided.remedies[]|` offered vs the decided rows that consumed one
+/// (`remedy_taken` present). Raw counts, never rates — the catalogue rows
+/// carry `unit: count`.
+pub fn remedies(f: &LedgerFacts) -> (u64, u64) {
+    (f.remedies_offered, f.remedies_taken)
+}
+
+/// `approvals.requested` — the `ask` decisions the run emitted, and the
+/// share the remedies consumed (`remedy_taken{kind: "approval"}`). The
+/// pair lets a scorecard report both the budget draw and the remedy path
+/// (§5g.2 process metrics; I-F6 R4).
+pub fn approvals(f: &LedgerFacts) -> (u64, u64) {
+    (f.approvals_requested, f.approvals_consumed)
+}
+
+/// `taint_precision` — **advisory, reported, never enforced** (AC-R-2.8.2-11;
+/// I-F1: a judge verdict is an advisory input and can never drive a label
+/// change). The fraction of denied effects a declared semantic-taint
+/// `Validator{kind: judge}` judges truly influenced by untrusted content:
+/// `|denied ∩ judged-influenced| / |denied ∩ judged|`. `detectors` is the
+/// declared semantic-taint detector set (the caller supplies the
+/// declaration, as with [`detector_conformity`]); a denied effect with no
+/// decided verdict from the set is unjudged, not un-influenced.
+pub fn taint_precision(f: &LedgerFacts, detectors: &BTreeSet<String>) -> RateParts {
+    let judged_denied: BTreeSet<&str> = f
+        .verdicts
+        .iter()
+        .filter(|v| {
+            v.status == "decided"
+                && v.detector
+                    .as_ref()
+                    .map(|d| detectors.contains(d))
+                    .unwrap_or(false)
+        })
+        .filter_map(|v| v.effect_id.as_deref())
+        .filter(|e| f.permission_denials.contains(*e))
+        .collect();
+    let influenced = f
+        .verdicts
+        .iter()
+        .filter(|v| {
+            v.status == "decided"
+                && v.detector
+                    .as_ref()
+                    .map(|d| detectors.contains(d))
+                    .unwrap_or(false)
+                && v.effect_id
+                    .as_deref()
+                    .map(|e| judged_denied.contains(e))
+                    .unwrap_or(false)
+                && verdict_true(&v.value)
+        })
+        .map(|v| v.effect_id.as_deref().unwrap_or(""))
+        .collect::<BTreeSet<_>>();
+    RateParts {
+        num: influenced.len() as u64,
+        den: judged_denied.len() as u64,
+    }
+}
+
+/// A verdict value reads "influenced" — `{value: true}` in the
+/// `{kind, value}` form or a bare boolean.
+fn verdict_true(v: &hh_wire::Json) -> bool {
+    match v {
+        hh_wire::Json::Bool(b) => *b,
+        hh_wire::Json::Obj(m) => matches!(m.get("value"), Some(hh_wire::Json::Bool(true))),
+        _ => false,
     }
 }
 
@@ -420,5 +502,58 @@ mod tests {
         };
         let rates2 = profile_rule_followed_rates(&f2, &detectors[..1]);
         assert_eq!(rates2[0].value, MetricValueKind::Decimal(1_000_000));
+    }
+
+    fn verdict(effect: &str, detector: &str, influenced: bool) -> crate::facts::VerdictRow {
+        crate::facts::VerdictRow {
+            validator_ref: None,
+            oracle_class: Some("judge".into()),
+            status: "decided".into(),
+            value: hh_wire::Json::obj([("value", hh_wire::Json::Bool(influenced))]),
+            detector: Some(detector.into()),
+            isolation: None,
+            inputs_digest: None,
+            phase: None,
+            criterion_ref: None,
+            visibility: None,
+            charged_to: Some("instrument".into()),
+            effect_id: Some(effect.into()),
+        }
+    }
+
+    #[test]
+    fn remedies_and_approvals_count_the_decided_rows() {
+        let f = LedgerFacts {
+            remedies_offered: 3,
+            remedies_taken: 2,
+            approvals_requested: 4,
+            approvals_consumed: 2,
+            ..LedgerFacts::default()
+        };
+        assert_eq!(remedies(&f), (3, 2));
+        assert_eq!(approvals(&f), (4, 2));
+    }
+
+    #[test]
+    fn taint_precision_is_advisory_and_never_enforced() {
+        // Two denied effects; the declared semantic-taint judge calls e1
+        // influenced, e2 not — precision 1/2. An undeclared detector's
+        // verdict never joins the denominator.
+        let dets: BTreeSet<String> = ["semantic_taint".to_string()].into_iter().collect();
+        let f = LedgerFacts {
+            permission_denials: ["e1", "e2", "e3"].iter().map(|s| s.to_string()).collect(),
+            verdicts: vec![
+                verdict("e1", "semantic_taint", true),
+                verdict("e2", "semantic_taint", false),
+                verdict("e3", "other_detector", true),
+            ],
+            ..LedgerFacts::default()
+        };
+        let r = taint_precision(&f, &dets);
+        assert_eq!(r, RateParts { num: 1, den: 2 });
+        assert_eq!(r.ppm(), Some(500_000));
+        // No judged denied effects → n/a, never 0.
+        let none = LedgerFacts::default();
+        assert_eq!(taint_precision(&none, &dets).ppm(), None);
     }
 }

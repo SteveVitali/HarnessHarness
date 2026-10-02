@@ -51,6 +51,7 @@ pub mod decode;
 pub mod derive;
 pub mod endorse;
 pub mod flow;
+pub mod flow_policy;
 pub mod label;
 pub mod lower;
 pub mod mandatory;
@@ -62,18 +63,25 @@ pub use authority::{AuthorityClass, OpacityReport, PersistenceScope, ReaderSet, 
 pub use decode::DecodeError;
 pub use derive::{check_delegate_attenuation, derive, ingest_child_result, DerivationInput};
 pub use endorse::{
-    apply_label, check_endorsement, declassify, endorse, seal, ContentKind, EndorsementBasis,
-    EndorsementError, LabelApplied, LabelDeclassified, LabelEndorsed,
+    apply_label, check_endorsement, declassify, endorse, sanitize_endorse, seal, shape_endorse,
+    ContentKind, EndorsementBasis, EndorsementError, LabelApplied, LabelDeclassified,
+    LabelEndorsed,
 };
 pub use flow::{
     admit, apply_contribution, apply_sanitizer_bounds, capacity_bits, check3_relevant,
-    check_basis_effect, check_flow, check_reader_coverage, check_shape_endorsement, d_robust,
-    enumerate_remedies, eval_cond, label_bytes, label_from_json, label_json_full,
-    prospective_label, resolve_recipients, Admission, AdmissionKind, BasisEffectError,
-    CommittedEffect, Contribution, EnforcementClass, EvalError, FlowCond, FlowContract,
-    FlowDecision, FlowError, FlowInput, FlowRule, FlowSelector, FlowVerdict, ReadersFrom,
-    ReadersTo, Remedy, RobustnessInput, SanitizerBounds, Subject, TaintTagPattern, CAP_MAX_DEFAULT,
-    COND_MAX_DEPTH, COND_MAX_NODES, LABEL_MAX_BYTES,
+    check_basis_effect, check_flow, check_reader_coverage, check_sanitizer_effect,
+    check_shape_endorsement, d_robust, enumerate_remedies, eval_cond, flow_rule_from_json,
+    flow_rule_json, label_bytes, label_from_json, label_json_full, prospective_label,
+    resolve_recipients, Admission, AdmissionKind, BasisEffectError, CommittedEffect, Contribution,
+    EnforcementClass, EvalError, FlowCond, FlowContract, FlowDecision, FlowError, FlowInput,
+    FlowRule, FlowSelector, FlowVerdict, ReadersFrom, ReadersTo, Remedy, RobustnessInput,
+    SanitizerBounds, Subject, TaintTagPattern, CAP_MAX_DEFAULT, COND_MAX_DEPTH, COND_MAX_NODES,
+    LABEL_MAX_BYTES,
+};
+pub use flow_policy::{
+    apply_policy_edit, check_flow_policy, classify_policy_edit, policy_allows, rules_allow,
+    validate_flow_policy, FlowPolicy, FlowPolicyError, PolicyEditClass, PolicyEditError,
+    PolicyPoint, ProposalSpace, DENY_REASON_SPELLINGS, FLOW_POLICY_MAX_RULES,
 };
 pub use label::{
     check_diff_authority_delta, check_label_transition, classify_label_delta, context_label,
@@ -81,7 +89,9 @@ pub use label::{
     EffectiveAuthority, Label, LabelDelta, LabelTransitionError,
 };
 pub use lower::{
-    lift, lower, render_role, Lifted, LowerTarget, Lowered, RolePlacementError, RoleSlot,
+    lift, lift_provenance_meta, lower, lower_provenance_meta, render_role, role_map_collapse,
+    Lifted, LowerTarget, Lowered, MetaLift, MetaLiftSource, RoleCollapse, RolePlacementError,
+    RoleSlot, META_PROVENANCE_KEY,
 };
 pub use mandatory::{
     required_provenance, requires_provenance, ProvenanceEventKind, RequiredProvenance,

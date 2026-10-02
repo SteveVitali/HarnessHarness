@@ -1577,7 +1577,9 @@ impl FlowContract {
     }
 }
 
-fn flow_rule_json(r: &FlowRule) -> Json {
+/// The canonical `FlowRule` JSON — shared by `FlowContract.rules` and
+/// `FlowPolicy.rules` (one spelling, one decoder — CC7).
+pub fn flow_rule_json(r: &FlowRule) -> Json {
     let mut sel = Vec::new();
     if let Some(d) = &r.selector.domain {
         sel.push(("domain", Json::str(d.clone())));
@@ -1644,10 +1646,23 @@ fn flow_rule_json(r: &FlowRule) -> Json {
     Json::obj(m)
 }
 
-fn flow_rule_from_json(j: &Json, path: &str) -> Result<FlowRule, DecodeError> {
+/// Parse the canonical `FlowRule` form — fails closed.
+pub fn flow_rule_from_json(j: &Json, path: &str) -> Result<FlowRule, DecodeError> {
     let err = |m: String| DecodeError {
         detail: format!("{path}.{m}"),
     };
+    // Closed-member check (I-F7 — the language is closed; a code-bearing or
+    // misspelled member is a schema violation at `seal`, never ignored).
+    if let Json::Obj(m) = j {
+        for k in m.keys() {
+            match k.as_str() {
+                "id" | "selector" | "decision" | "condition" | "enforcement" | "remedies_hint" => {}
+                other => return Err(err(format!("unknown member {other}"))),
+            }
+        }
+    } else {
+        return Err(err("must be an object".to_string()));
+    }
     let rule_id = j
         .get("id")
         .and_then(Json::as_str)
@@ -2216,6 +2231,49 @@ pub fn check_basis_effect(
             Ok(())
         }
     }
+}
+
+/// The `policy_rule (b)` sanitizer arm of the per-basis table (§5g.2 §2.2):
+/// a bounded sanitizer's endorsement may move `from → to` only when
+///
+/// - `to == bounds.to` — the endorsement lands exactly on the declared bound
+///   (a sanitizer endorses at its declared label, never more, never less);
+/// - `to.authority == from.authority` — `policy_rule` never touches
+///   authority (`PolicyRuleTouchesNonReaders`);
+/// - `to.taint ⊆ from.taint` and every *dropped* tag matches a declared
+///   `removes` pattern — never taint beyond the declared `removes`;
+/// - `to.readers` may widen or hold — the declassification half a bounded
+///   sanitizer legitimately performs (narrowing alone is not an
+///   endorsement; [`crate::endorse::sanitize_endorse`] applies the
+///   no-increase guard).
+///
+/// `apply_sanitizer_bounds` has already vetted `bounds.to` against the
+/// *realized* output label — this check vets the endorsement delta itself.
+pub fn check_sanitizer_effect(
+    bounds: &SanitizerBounds,
+    from: &Label,
+    to: &Label,
+    capability: &str,
+) -> Result<(), BasisEffectError> {
+    if to != &bounds.to {
+        return Err(BasisEffectError::PolicyRuleTouchesNonReaders);
+    }
+    if to.authority != from.authority {
+        return Err(BasisEffectError::PolicyRuleTouchesNonReaders);
+    }
+    if !to.taint.is_subset(&from.taint) {
+        return Err(BasisEffectError::PolicyRuleTouchesNonReaders);
+    }
+    let uncovered: Vec<String> = from
+        .taint
+        .difference(&to.taint)
+        .filter(|d| !bounds.removes.iter().any(|p| p.matches(d, capability)))
+        .map(|d| d.as_string())
+        .collect();
+    if !uncovered.is_empty() {
+        return Err(BasisEffectError::PolicyRuleTouchesNonReaders);
+    }
+    Ok(())
 }
 
 /// The per-basis effect failures.

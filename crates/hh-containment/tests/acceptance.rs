@@ -1298,6 +1298,7 @@ fn bare_proposal(domain: EffectDomain, gate: ContainmentGate) -> Proposal {
         requested_grants: vec![],
         containment: gate,
         flow: Default::default(),
+        remedy_taken: None,
         at: 0,
     }
 }

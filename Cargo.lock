@@ -404,9 +404,12 @@ name = "hh-monitor"
 version = "0.0.1"
 dependencies = [
  "hh-assembly",
+ "hh-budget",
  "hh-compiler",
+ "hh-eval",
  "hh-hir",
  "hh-identity",
+ "hh-lab",
  "hh-ledger",
  "hh-ontology",
  "hh-provenance",

@@ -22,3 +22,8 @@ hh-hir = { path = "../hh-hir" }
 hh-assembly = { path = "../hh-assembly" }
 hh-compiler = { path = "../hh-compiler" }
 hh-ledger = { path = "../hh-ledger" }
+
+[dev-dependencies]
+hh-eval = { path = "../hh-eval" }
+hh-budget = { path = "../hh-budget" }
+hh-lab = { path = "../hh-lab" }
