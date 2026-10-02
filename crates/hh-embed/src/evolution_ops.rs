@@ -305,14 +305,14 @@ pub(crate) mod imp {
                 // `model_version_change`-scoped debt check
                 // (policy-conditioned expiry; ADR-0194 D6).
                 let retrained_pin = match params.get("retrained_pin") {
-                    Some(j) if !matches!(j, Json::Null) => Some(
-                        hh_lab::model::SnapshotClaim::from_json(j).map_err(|e| {
+                    Some(j) if !matches!(j, Json::Null) => {
+                        Some(hh_lab::model::SnapshotClaim::from_json(j).map_err(|e| {
                             EmbedError::SchemaViolation {
                                 path: "/retrained_pin".into(),
                                 code: format!("{e:?}"),
                             }
-                        })?,
-                    ),
+                        })?)
+                    }
                     _ => None,
                 };
                 let docs = svc.lab_docs()?;

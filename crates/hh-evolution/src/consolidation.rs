@@ -54,11 +54,7 @@ pub fn consolidation_candidates(
 ) -> (Vec<ConsolidationCandidate>, Vec<(String, NeverConsolidate)>) {
     let mut inputs = Vec::new();
     for (cid, rec) in &view.candidates {
-        let cycles_active = rec
-            .history
-            .iter()
-            .filter(|t| t.to == "active")
-            .count() as u64;
+        let cycles_active = rec.history.iter().filter(|t| t.to == "active").count() as u64;
         let terminal = matches!(
             rec.state.as_str(),
             "rejected" | "withdrawn" | "reverted" | "retired" | "expired"

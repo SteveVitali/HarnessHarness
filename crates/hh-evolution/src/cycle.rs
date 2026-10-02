@@ -83,11 +83,7 @@ impl CycleDriver {
     }
 
     /// `begin_phase(phase, inputs)` — open the next phase entry.
-    pub fn begin_phase(
-        &mut self,
-        phase: CyclePhase,
-        inputs: Json,
-    ) -> Result<(), EvolutionError> {
+    pub fn begin_phase(&mut self, phase: CyclePhase, inputs: Json) -> Result<(), EvolutionError> {
         coe::cycle_begin_phase(&mut self.record, phase, inputs)
             .map_err(|e| EvolutionError::Schema(e.code()))
     }

@@ -31,14 +31,19 @@
 
 use std::collections::BTreeMap;
 
-use hh_ontology::debt::ModelSelector;
+use hh_ontology::debt::{
+    DebtClass, DebtExpiry, DebtScope, DebtStatus, DeficiencyClass, EvidenceKind, EvidenceRef,
+    ExpiryCondition, ExpiryKind, ExpiryParams, HypothesisSubject, HypothesisTyped, ModelSelector,
+    OwnerRef, PredictedEffect, RemovalTest, RemovalTestKind, Revalidation, RevalidationAction,
+    RevalidationOn,
+};
 use hh_provenance::ProvenanceRecord;
 use hh_wire::Json;
 
 use crate::json_util::*;
 use crate::model::{
-    CompatibilityRecord, CompatibilityStatus, PolicyVersionExposed, SnapshotClaim,
-    TrainedUnderRef, TrainingLineage,
+    CompatibilityRecord, CompatibilityStatus, PolicyVersionExposed, SnapshotClaim, TrainedUnderRef,
+    TrainingLineage,
 };
 
 /// The maturity every S6.4 operation and output carries (§5h.8 maturity
@@ -92,7 +97,7 @@ pub enum CoEvolutionError {
     },
     /// I-4a — the claim carries a `serving_route` the caller reports
     /// unreachable (`unchecked` is admissible; a reported unreachable
-        /// route refuses).
+    /// route refuses).
     ServingRouteUnreachable {
         /// The unreachable route.
         route: String,
@@ -269,8 +274,7 @@ pub const ADMISSIBLE_INCLUDES: &[&str] = &[
 /// The reward `source` spellings the admissible set admits (§5h.8 §2.1
 /// E-3: oracle rewards only — critic verdicts, reward-model outputs and
 /// participant-reported rows are *never* rewards).
-pub const ADMISSIBLE_REWARD_SOURCES: &[&str] =
-    &["oracle_metric", "oracle_verdict", "metric_value"];
+pub const ADMISSIBLE_REWARD_SOURCES: &[&str] = &["oracle_metric", "oracle_verdict", "metric_value"];
 
 /// The reward `source` spellings that refuse outright (E-3a — the
 /// closed "never a reward" set).
@@ -287,6 +291,7 @@ pub const REFUSED_SPLIT_LABELS: &[&str] = &["held_out", "private"];
 /// The event classes the reward projection reads (`payload.reward`
 /// carrying `{source, oracle_ref, oracle_class, value?, unit?}`).
 const REWARD_EVENT_CLASSES: &[&str] = &[
+    "measurement.metric.emitted",
     "measurement.oracle.metric.emitted",
     "measurement.oracle.verdict",
     "metric.emitted",
@@ -297,10 +302,7 @@ impl TrainingExportPolicy {
     /// The canonical JSON.
     pub fn to_json(&self) -> Json {
         let mut m = BTreeMap::new();
-        m.insert(
-            "sample_unit".into(),
-            Json::str(self.sample_unit.name()),
-        );
+        m.insert("sample_unit".into(), Json::str(self.sample_unit.name()));
         m.insert(
             "include".into(),
             Json::Arr(self.include.iter().map(Json::str).collect()),
@@ -344,9 +346,8 @@ impl TrainingExportPolicy {
             REC,
         )?;
         Ok(TrainingExportPolicy {
-            sample_unit: SampleUnit::parse(str_at(m, "sample_unit", REC)?).ok_or_else(|| {
-                SchemaError::v("sample_unit", "unknown sample_unit")
-            })?,
+            sample_unit: SampleUnit::parse(str_at(m, "sample_unit", REC)?)
+                .ok_or_else(|| SchemaError::v("sample_unit", "unknown sample_unit"))?,
             include: str_vec_at(m, "include", REC)?,
             readers: str_vec_at(m, "readers", REC)?,
             redaction: opt_str_at(m, "redaction")?.map(str::to_string),
@@ -368,9 +369,7 @@ impl TrainingExportPolicy {
         }
         for s in &self.reward_sources {
             if !ADMISSIBLE_REWARD_SOURCES.contains(&s.as_str()) {
-                return Err(CoEvolutionError::InadmissibleRewardSource {
-                    source: s.clone(),
-                });
+                return Err(CoEvolutionError::InadmissibleRewardSource { source: s.clone() });
             }
         }
         for l in &self.split_labels {
@@ -483,7 +482,10 @@ impl TrainingSample {
             m.insert("reward".into(), r.to_json());
         }
         m.insert("veto_tripped".into(), Json::Bool(self.veto_tripped));
-        m.insert("harness_constraints".into(), self.harness_constraints.clone());
+        m.insert(
+            "harness_constraints".into(),
+            self.harness_constraints.clone(),
+        );
         if let Some(p) = &self.provenance {
             m.insert("provenance".into(), p.clone());
         }
@@ -584,10 +586,7 @@ impl TrainingExport {
     /// `maturity` stamp).
     pub fn to_json(&self) -> Json {
         let mut m = BTreeMap::new();
-        m.insert(
-            "training_export".into(),
-            Json::str(TRAINING_EXPORT_DIALECT),
-        );
+        m.insert("training_export".into(), Json::str(TRAINING_EXPORT_DIALECT));
         m.insert("export_id".into(), Json::str(&self.export_id));
         m.insert("policy".into(), self.policy.to_json());
         m.insert(
@@ -601,7 +600,10 @@ impl TrainingExport {
                 Json::Arr(self.loss.iter().map(ExportLossEntry::to_json).collect()),
             );
         }
-        m.insert("harness_constraints".into(), self.harness_constraints.clone());
+        m.insert(
+            "harness_constraints".into(),
+            self.harness_constraints.clone(),
+        );
         m.insert("maturity".into(), Json::str(MATURITY));
         if let Some(p) = &self.provenance {
             m.insert("provenance".into(), p.clone());
@@ -877,12 +879,7 @@ pub fn project_training_export(
         reward_prov.push(format!("{}:{}", rec.source, rec.oracle_ref));
         let idx = bound
             .and_then(|b| export.samples.iter().position(|s| s.trajectory_ref == b))
-            .or_else(|| {
-                export
-                    .samples
-                    .iter()
-                    .rposition(|s| s.seq <= rseq)
-            });
+            .or_else(|| export.samples.iter().rposition(|s| s.seq <= rseq));
         match idx {
             Some(i) => export.samples[i].reward = Some(rec),
             None => {
@@ -981,8 +978,8 @@ pub fn export_regression_suite(
     margins: Json,
 ) -> Result<RegressionSuiteExport, CoEvolutionError> {
     use crate::experiment::{
-        ArmSpec, BundlePolicy, ExperimentKind, ExperimentSpec, FactorSpec, LevelSpec,
-        SuiteBinding, ValidationStrategy,
+        ArmSpec, BundlePolicy, ExperimentKind, ExperimentSpec, FactorSpec, LevelSpec, SuiteBinding,
+        ValidationStrategy,
     };
     use hh_ontology::eval::{
         Design, DesignKind, FactorDeclaration, FactorLevel, ModelRole, Pairing, PreRegistration,
@@ -1463,6 +1460,7 @@ pub fn selector_covers_claim(sel: &ModelSelector, claim: &SnapshotClaim) -> bool
 ///   resolves no known snapshot), `ServingRouteUnreachable` (the caller
 ///   reports the route dead), `LineageCycle` (the claim's own snapshot id
 ///   already descends from a `trained_under` lineage member).
+#[allow(clippy::too_many_arguments)] // the import's records-in arity is the §2.2 record shape.
 pub fn import_snapshot(
     claim: &SnapshotClaim,
     sealed_definitions: &[SealedDefinition],
@@ -1493,13 +1491,19 @@ pub fn import_snapshot(
             route: claim.serving_route.clone().unwrap_or_default(),
         });
     }
-    if descendant_snapshot_ids.iter().any(|d| d == &claim.snapshot_id) {
+    if descendant_snapshot_ids
+        .iter()
+        .any(|d| d == &claim.snapshot_id)
+    {
         return Err(CoEvolutionError::LineageCycle {
             snapshot_id: claim.snapshot_id.clone(),
         });
     }
     // I-3 — the trained_under/unknown compatibility set.
-    let pinned = matches!(claim.policy_version_exposed, PolicyVersionExposed::Supported);
+    let pinned = matches!(
+        claim.policy_version_exposed,
+        PolicyVersionExposed::Supported
+    );
     let mut compatibility = Vec::new();
     let mut trained: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for t in &claim.trained_under {
@@ -1597,7 +1601,10 @@ pub fn import_snapshot(
             "semantic_id",
             Json::str(format!("{}/{}", claim.provider, claim.model_id)),
         ),
-        ("trained_under_count", Json::Int(claim.trained_under.len() as i64)),
+        (
+            "trained_under_count",
+            Json::Int(claim.trained_under.len() as i64),
+        ),
         (
             "scoped_rules",
             Json::Arr(scoped_rules.iter().map(Json::str).collect()),
@@ -1691,9 +1698,7 @@ pub fn guard_at_bind(
             }
         }
         Some(r) => match &r.status {
-            CompatibilityStatus::Verified | CompatibilityStatus::TrainedUnder => {
-                BindGuard::Proceed
-            }
+            CompatibilityStatus::Verified | CompatibilityStatus::TrainedUnder => BindGuard::Proceed,
             CompatibilityStatus::Drifted { rules } => BindGuard::Annotated {
                 compatibility: "drifted".to_string(),
                 expiring_rules: rules.clone(),
@@ -1765,6 +1770,104 @@ pub fn post_import_sweep(
         }
     }
     out
+}
+
+// ── The interface's own debt record (AC-R-2.9.8-13) ──────────────────────
+
+/// The stable `rule_id` the interface's reflexive debt record carries.
+pub const INTERFACE_DEBT_RULE_ID: &str = "rule:coevolution-interface";
+
+/// The conformance-suite ref the interface record's removal test names —
+/// the null-trainer round-trip ([`NullTrainer`]) is the executable
+/// discharge path.
+pub const NULL_TRAINER_SUITE_REF: &str = "coevolution:null-trainer-round-trip";
+
+/// `interface_debt_record(model_family, owner, created_by, created_at)` —
+/// the interface's **own** `AssumptionDebtRecord` (AC-R-2.9.8-13; the
+/// same discipline the spec-debt register applies to ADR-0202/0203/0204):
+///
+/// - `debt_class: model_conditioned` — the interface's value claim holds
+///   only for a trainable beneficiary of the named model generation;
+///   `scope.model_selectors` covers `range{family, generation}` so
+///   [`post_import_sweep`] treats it as covered on import and the
+///   `model_version_change` expiry fires on a generation change (the
+///   spec-debt register's T5 trigger, landed as a record);
+/// - `hypothesis_typed` — `premature_stop`/`increase`: the trainable-
+///   beneficiary assumption is a hypothesis until `matched_total`
+///   evidence grades it;
+/// - `removal_test{kind: conformance_run, conformance_suite_ref:
+///   NULL_TRAINER_SUITE_REF}` — the null-trainer round-trip the ticket's
+///   fixture executes (export → `NullTrainer::train` → `import_snapshot`
+///   → `post_import_sweep`), never an unverifiable promise;
+/// - `revalidation{on: [model_change, schedule], action:
+///   re_probe}` — the revalidation cadence every C4 mechanism owes.
+pub fn interface_debt_record(
+    model_family: &str,
+    owner: &OwnerRef,
+    created_by: &ProvenanceRecord,
+    created_at: u64,
+) -> hh_hir::records::AssumptionDebtRecord {
+    use hh_hir::leaves::Text;
+    hh_hir::records::AssumptionDebtRecord {
+        rule_id: INTERFACE_DEBT_RULE_ID.to_string(),
+        hypothesis: Text::new(
+            String::from(
+                "the co-evolution interface's value claim holds only for a \
+                 trainable beneficiary of the named model generation and only \
+                 under matched_total evidence — a generation change expires \
+                 the claim and re-runs the null-trainer round-trip (AC-R-2.9.8-13; \
+                 the spec-debt register's ADR-0202/0203/0204 rows landed as a \
+                 record)",
+            ),
+            owner.id.as_str(),
+            created_by.clone(),
+        ),
+        evidence_refs: vec![EvidenceRef {
+            kind: EvidenceKind::Source,
+            reference: NULL_TRAINER_SUITE_REF.to_string(),
+            observed_at: Some(created_at),
+            tier: None,
+            provisional: true,
+        }],
+        owner: owner.clone(),
+        expiry_condition: ExpiryCondition {
+            kind: ExpiryKind::ModelVersionChange,
+            value: Some(model_family.to_string()),
+        },
+        removal_test_ref: NULL_TRAINER_SUITE_REF.to_string(),
+        status: DebtStatus::Active,
+        debt_class: Some(DebtClass::ModelConditioned),
+        hypothesis_typed: Some(HypothesisTyped {
+            subject: HypothesisSubject::Deficiency,
+            deficiency_class: DeficiencyClass::PrematureStop,
+            predicted_effect: PredictedEffect::Increase,
+            metric_ref: Some("metric:artifact_benefit".into()),
+        }),
+        scope: Some(DebtScope {
+            model_selectors: vec![ModelSelector::Range {
+                family: model_family.to_string(),
+                version_predicate: "*".to_string(),
+            }],
+            task_classes: vec![],
+            roles: vec![],
+        }),
+        expiry: Some(DebtExpiry {
+            condition: ExpiryKind::ModelVersionChange,
+            params: ExpiryParams::default(),
+        }),
+        runway_ms: None,
+        revalidation: Some(Revalidation {
+            on: vec![RevalidationOn::ModelChange, RevalidationOn::Schedule],
+            action: Some(RevalidationAction::ReProbe),
+        }),
+        removal_test: Some(RemovalTest {
+            conformance_suite_ref: Some(NULL_TRAINER_SUITE_REF.to_string()),
+            ..RemovalTest::new(RemovalTestKind::ConformanceRun)
+        }),
+        created_by: Some(created_by.clone()),
+        created_at: Some(created_at),
+        supersedes: None,
+    }
 }
 
 // ── Consolidation (R-2.9.5 6d; §5h.8 §5) ──────────────────────────────────
@@ -1925,7 +2028,10 @@ pub fn consolidation_candidates(
             continue;
         }
         // N3 — a safety-gated lesson veto removes the row.
-        if i.lessons.iter().any(|l| l.kind == "safety_gated" || l.kind == "veto") {
+        if i.lessons
+            .iter()
+            .any(|l| l.kind == "safety_gated" || l.kind == "veto")
+        {
             refused.push((i.rule_id.clone(), NeverConsolidate::SafetyGated));
             continue;
         }
@@ -2585,14 +2691,10 @@ impl CoEvolutionCycleRecord {
             stop_reason: m.get("stop_reason").and_then(|s| match s {
                 Json::Str(sp) => match sp.as_str() {
                     "max_cycles" => Some(CycleStopReason::MaxCycles),
-                    "search_budget_exhausted" => {
-                        Some(CycleStopReason::SearchBudgetExhausted)
-                    }
+                    "search_budget_exhausted" => Some(CycleStopReason::SearchBudgetExhausted),
                     "veto_tripped" => Some(CycleStopReason::VetoTripped),
                     "compatibility_broken" => Some(CycleStopReason::CompatibilityBroken),
-                    "consolidation_absorbed" => {
-                        Some(CycleStopReason::ConsolidationAbsorbed)
-                    }
+                    "consolidation_absorbed" => Some(CycleStopReason::ConsolidationAbsorbed),
                     _ => None,
                 },
                 Json::Obj(o) => o.get("operator").and_then(|oo| {
@@ -2714,10 +2816,7 @@ pub fn cycle_complete_phase(
     if let (Json::Obj(total), Json::Obj(phase)) = (&mut record.budgets, &budgets) {
         for k in ["search", "eval", "training"] {
             if let Some(v) = phase.get(k).and_then(Json::as_int) {
-                let cur = total
-                    .get(k)
-                    .and_then(Json::as_int)
-                    .unwrap_or(0);
+                let cur = total.get(k).and_then(Json::as_int).unwrap_or(0);
                 total.insert(k.to_string(), Json::Int(cur + v));
             }
         }
@@ -2772,9 +2871,7 @@ pub enum PhasePlan {
 ///   begins a new lap when `consolidation` just completed.
 pub fn cycle_next(record: &CoEvolutionCycleRecord) -> PhasePlan {
     if let Some(r) = &record.stop_reason {
-        return PhasePlan::Stop {
-            reason: r.clone(),
-        };
+        return PhasePlan::Stop { reason: r.clone() };
     }
     if record.cycles_completed() >= record.policy.max_cycles {
         return PhasePlan::Stop {

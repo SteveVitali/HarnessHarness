@@ -1875,7 +1875,8 @@ fn rebase_refuses_a_changed_edit_and_earlier_states() {
     eng.seal(&mut store, &a, &acceptance(true), &human_seal())
         .unwrap();
     eng.canary(&mut store, &a, "shadow", "int:1").unwrap();
-    eng.canary_settle(&mut store, &a, "clean", "", &[], None).unwrap();
+    eng.canary_settle(&mut store, &a, "clean", "", &[], None)
+        .unwrap();
     let head = eng.view.head_ref().unwrap();
 
     // A rebase naming the wrong base → StaleBase, candidate rejected.
@@ -1934,7 +1935,8 @@ fn rebase_folds_identically_through_ensure() {
     eng.seal(&mut store, &a, &acceptance(true), &human_seal())
         .unwrap();
     eng.canary(&mut store, &a, "shadow", "int:1").unwrap();
-    eng.canary_settle(&mut store, &a, "clean", "", &[], None).unwrap();
+    eng.canary_settle(&mut store, &a, "clean", "", &[], None)
+        .unwrap();
     let head = eng.view.head_ref().unwrap();
     eng.rebase(
         &mut store,

@@ -1551,25 +1551,201 @@ pub fn registry() -> Vec<OpSpec> {
         // carry the proposal→human-seal path. C4-tier — a
         // `--no-default-features` build answers
         // `Unsupported{by: "tier-c4"}` (CC6; AC-R-2.9.8-11).
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.export_training", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.export_regression_suite", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.export_compatibility_tags", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.import_snapshot", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.guard_at_bind", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.consolidation_candidates", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.propose_consolidation", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.consolidation_retirement_record", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.cycle_open", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.cycle_begin_phase", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.cycle_complete_phase", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.cycle_next", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.cycle_stop", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.coevolution.cycle_record", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.export_training",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.export_regression_suite",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.export_compatibility_tags",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.import_snapshot",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.guard_at_bind",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.consolidation_candidates",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.propose_consolidation",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.consolidation_retirement_record",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_open",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_begin_phase",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_complete_phase",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_next",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_stop",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.coevolution.cycle_record",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
         // §5i.1 6d (R-2.12.6; ADR-0207 D6): `lab/org-policy-v1` — the
         // recipe every fleet default's removal test instantiates, and
         // the defaults' conditioned debt records themselves.
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.org_policy.recipe", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
-        OpSpec { requires_capability: Some("serves_measurement"), ..call("lab.org_policy.default_removal_tests", "L", "json", "json", EVO_ERR, Tier::Experimental, true) },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.org_policy.recipe",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.org_policy.default_removal_tests",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
         // S3.1 (R-2.11.3⁰; ADR-0097 D7/ADR-0173): `serve(bundle)` — the
         // Stage-3 fixture MCP server over stdio. The op decodes the
         // bundle, extracts its compiled `target:mcp` member and returns

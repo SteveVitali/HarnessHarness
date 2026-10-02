@@ -365,6 +365,7 @@ impl DebtManager {
     /// - `sweep.completed` carries `kind: post_import` +
     ///   `trigger_ref` so the audit fold attributes the sweep to the
     ///   import, never to cadence.
+    #[allow(clippy::too_many_arguments)] // the op's record is the §2.3 sweep shape — the arity is the record's.
     pub fn post_import_sweep(
         &mut self,
         store: &mut Store,

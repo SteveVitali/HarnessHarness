@@ -22,13 +22,13 @@
 
 use hh_hir::leaves::Text;
 use hh_hir::records::AssumptionDebtRecord;
+use hh_ontology::debt::DebtStatus;
 use hh_ontology::debt::{
     DebtClass, DebtExpiry, DebtScope, DeficiencyClass, EvidenceRef, ExpiryCondition, ExpiryKind,
     ExpiryParams, HypothesisSubject, HypothesisTyped, OwnerRef, PredictedEffect, RemovalTest,
     RemovalTestKind, Revalidation, RevalidationAction, RevalidationOn,
 };
 use hh_provenance::ProvenanceRecord;
-use hh_ontology::debt::DebtStatus;
 
 /// The recipe id the removal tests instantiate (`lab/org-policy-v1`'s
 /// `ExperimentSpec.design.id` — the `template_ref` the

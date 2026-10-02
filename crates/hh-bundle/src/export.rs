@@ -695,9 +695,7 @@ pub fn export_target(
 /// `HeldOutInExport`, `InadmissibleRewardSource`, `ReaderViolation`,
 /// `BundleNotValid`, …).
 fn coe_err(e: hh_lab::coevolution::CoEvolutionError) -> BundleError {
-    BundleError::CoevolutionRefused {
-        reason: e.code(),
-    }
+    BundleError::CoevolutionRefused { reason: e.code() }
 }
 
 /// `export_training(bundle, TrainingExportPolicy, ctx) → ExportOutcome`
@@ -746,8 +744,8 @@ pub fn export_training(
                 envelopes.push(ev.to_json());
             }
         }
-        let (exp, l) = coe::project_training_export(run, &envelopes, policy, ctx)
-            .map_err(coe_err)?;
+        let (exp, l) =
+            coe::project_training_export(run, &envelopes, policy, ctx).map_err(coe_err)?;
         samples.extend(exp.samples);
         loss.extend(l);
         data_refs.extend(exp.exposure.data_refs);
@@ -782,11 +780,7 @@ pub fn export_training(
     files.insert("samples.jsonl".into(), lines.into_bytes());
     files.insert(
         "exposure_record.json".into(),
-        record
-            .exposure
-            .to_json()
-            .to_canonical_string()
-            .into_bytes(),
+        record.exposure.to_json().to_canonical_string().into_bytes(),
     );
     files.insert(
         "manifest.json".into(),

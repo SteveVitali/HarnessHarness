@@ -1953,5 +1953,6 @@ fn drive_to_sealed(store: &mut Store, docs: &LabDocs, eng: &mut EvolutionCampaig
 fn drive_to_active(store: &mut Store, docs: &LabDocs, eng: &mut EvolutionCampaign, cid: &str) {
     drive_to_sealed(store, docs, eng, cid);
     eng.canary(store, cid, "shadow", "int:1").unwrap();
-    eng.canary_settle(store, cid, "clean", "", &[], None).unwrap();
+    eng.canary_settle(store, cid, "clean", "", &[], None)
+        .unwrap();
 }

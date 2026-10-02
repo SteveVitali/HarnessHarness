@@ -59,9 +59,7 @@ fn opt_str(j: &Json, k: &str) -> Option<String> {
 
 #[cfg(feature = "tier-c4")]
 fn coe_err(e: hh_lab::coevolution::CoEvolutionError) -> EmbedError {
-    EmbedError::Refused {
-        reason: e.code(),
-    }
+    EmbedError::Refused { reason: e.code() }
 }
 
 #[cfg(feature = "tier-c4")]
@@ -149,10 +147,9 @@ mod imp {
             coe::PhasePlan::WeightUpdate => Json::obj([("phase", Json::str("weight_update"))]),
             coe::PhasePlan::ReEvaluation => Json::obj([("phase", Json::str("re_evaluation"))]),
             coe::PhasePlan::Consolidation => Json::obj([("phase", Json::str("consolidation"))]),
-            coe::PhasePlan::Stop { reason } => Json::obj([
-                ("phase", Json::str("stop")),
-                ("reason", reason.to_json()),
-            ]),
+            coe::PhasePlan::Stop { reason } => {
+                Json::obj([("phase", Json::str("stop")), ("reason", reason.to_json())])
+            }
             coe::PhasePlan::ReSearch { base_ref } => Json::obj([
                 ("phase", Json::str("re_search")),
                 ("base_ref", Json::str(base_ref)),
@@ -176,9 +173,8 @@ mod imp {
             if let Some(r) = opt_str(params, "restore_ref") {
                 let docs = svc.lab_docs()?;
                 match CycleDriver::restore(&docs, &r)
-                    .map_err(|e| EmbedError::Refused {
-                        reason: e.code(),
-                    })? {
+                    .map_err(|e| EmbedError::Refused { reason: e.code() })?
+                {
                     Some(d) => {
                         svc.coevolution_cycles.insert(key.clone(), d);
                     }
@@ -202,9 +198,9 @@ mod imp {
         key: &str,
         driver: &mut CycleDriver,
     ) -> Result<Json, EmbedError> {
-        let deposit_ref = driver.deposit(docs).map_err(|e| EmbedError::Refused {
-            reason: e.code(),
-        })?;
+        let deposit_ref = driver
+            .deposit(docs)
+            .map_err(|e| EmbedError::Refused { reason: e.code() })?;
         Ok(Json::obj([
             ("cycle", Json::str(key)),
             ("cycle_id", Json::str(&driver.record.cycle_id)),
@@ -292,10 +288,7 @@ mod imp {
                         Json::obj([
                             ("sink_id", Json::str("target:training_export")),
                             ("view_kind", Json::str("bundle_export")),
-                            (
-                                "content_classes",
-                                Json::Arr(vec![Json::str("structural")]),
-                            ),
+                            ("content_classes", Json::Arr(vec![Json::str("structural")])),
                             ("target", Json::str("training_export/1")),
                             ("training_exposure", exposure.clone()),
                         ]),
@@ -311,10 +304,7 @@ mod imp {
                         Json::Arr(out.files.keys().map(|k| Json::str(k.clone())).collect()),
                     ),
                     ("loss_report", out.loss_report),
-                    (
-                        "granularity_ceiling",
-                        Json::str(&out.granularity_ceiling),
-                    ),
+                    ("granularity_ceiling", Json::str(&out.granularity_ceiling)),
                 ]))
             }
             // `lab.coevolution.export_regression_suite{definition_ref,
@@ -326,10 +316,9 @@ mod imp {
             // (`kind: comparative`, `design: paired`, `model_snapshot`
             // factor with the unbound `snapshot_out` level).
             "lab.coevolution.export_regression_suite" => {
-                let template = hh_lab::experiment::ExperimentSpec::from_json(
-                    req(params, "template")?,
-                )
-                .map_err(|e| bad("/template", &format!("{e:?}")))?;
+                let template =
+                    hh_lab::experiment::ExperimentSpec::from_json(req(params, "template")?)
+                        .map_err(|e| bad("/template", &format!("{e:?}")))?;
                 let pricing = template
                     .arms
                     .first()
@@ -362,11 +351,7 @@ mod imp {
                         .registry_snapshot_id
                         .clone()
                         .unwrap_or_default(),
-                    analysis_plan_ref: template
-                        .design
-                        .pre_registration
-                        .analysis_plan_ref
-                        .clone(),
+                    analysis_plan_ref: template.design.pre_registration.analysis_plan_ref.clone(),
                     task_split_hash: template.design.pre_registration.task_split_hash.clone(),
                     pricing_table_ref: pricing,
                     registered_at: template.design.pre_registration.registered_at,
@@ -376,13 +361,14 @@ mod imp {
                     reattempt: template.reattempt.clone(),
                     budgets: template.budgets.clone(),
                 };
-                let compliance_rules: BTreeMap<String, String> = match req(params, "compliance_rules")? {
-                    Json::Obj(m) => m
-                        .iter()
-                        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
-                        .collect(),
-                    _ => return Err(bad("/compliance_rules", "type_mismatch")),
-                };
+                let compliance_rules: BTreeMap<String, String> =
+                    match req(params, "compliance_rules")? {
+                        Json::Obj(m) => m
+                            .iter()
+                            .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                            .collect(),
+                        _ => return Err(bad("/compliance_rules", "type_mismatch")),
+                    };
                 let suite = coe::export_regression_suite(
                     req_str(params, "definition_ref")?,
                     req_str(params, "snapshot_in")?,
@@ -453,10 +439,8 @@ mod imp {
                         _ => Vec::new(),
                     }
                 };
-                let provenance = hh_provenance::ProvenanceRecord::kernel(
-                    COE_COMPONENT,
-                    svc.store.now_ms(),
-                );
+                let provenance =
+                    hh_provenance::ProvenanceRecord::kernel(COE_COMPONENT, svc.store.now_ms());
                 let outcome = coe::import_snapshot(
                     &claim,
                     &sealed,
@@ -490,23 +474,11 @@ mod imp {
                     ("snapshot_record", outcome.snapshot_record),
                     (
                         "compatibility",
-                        Json::Arr(
-                            outcome
-                                .compatibility
-                                .iter()
-                                .map(|c| c.to_json())
-                                .collect(),
-                        ),
+                        Json::Arr(outcome.compatibility.iter().map(|c| c.to_json()).collect()),
                     ),
                     (
                         "scoped_rules",
-                        Json::Arr(
-                            outcome
-                                .scoped_rules
-                                .iter()
-                                .map(Json::str)
-                                .collect(),
-                        ),
+                        Json::Arr(outcome.scoped_rules.iter().map(Json::str).collect()),
                     ),
                     ("maturity", Json::str("research-grade")),
                     ("label", Json::str("preview")),
@@ -534,9 +506,7 @@ mod imp {
                     Some(Json::Bool(true))
                 );
                 match coe::guard_at_bind(record.as_ref(), origin, exploratory, allow) {
-                    coe::BindGuard::Proceed => {
-                        Ok(Json::obj([("guard", Json::str("proceed"))]))
-                    }
+                    coe::BindGuard::Proceed => Ok(Json::obj([("guard", Json::str("proceed"))])),
                     coe::BindGuard::Annotated {
                         compatibility,
                         expiring_rules,
@@ -548,12 +518,10 @@ mod imp {
                             Json::Arr(expiring_rules.iter().map(Json::str).collect()),
                         ),
                     ])),
-                    coe::BindGuard::Refused { code } => {
-                        Ok(Json::obj([
-                            ("guard", Json::str("refused")),
-                            ("code", Json::str(&code.code())),
-                        ]))
-                    }
+                    coe::BindGuard::Refused { code } => Ok(Json::obj([
+                        ("guard", Json::str("refused")),
+                        ("code", Json::str(code.code())),
+                    ])),
                 }
             }
             // `lab.coevolution.consolidation_candidates{run, lessons[],
@@ -582,10 +550,7 @@ mod imp {
                                     .and_then(Json::as_str)
                                     .unwrap_or("")
                                     .to_string(),
-                                effect: l
-                                    .get("effect")
-                                    .and_then(Json::as_str)
-                                    .map(str::to_string),
+                                effect: l.get("effect").and_then(Json::as_str).map(str::to_string),
                                 provenance: l.get("provenance").cloned(),
                             })
                         })
@@ -649,9 +614,7 @@ mod imp {
                                         ("rule_id", Json::str(&c.rule_id)),
                                         (
                                             "lessons",
-                                            Json::Arr(
-                                                c.lessons.iter().map(Json::str).collect(),
-                                            ),
+                                            Json::Arr(c.lessons.iter().map(Json::str).collect()),
                                         ),
                                         ("rationale", Json::str(&c.rationale)),
                                     ])
@@ -706,10 +669,9 @@ mod imp {
             // op's gate — this mints only the record).
             "lab.coevolution.consolidation_retirement_record" => {
                 let report = consolidation_report(req(params, "report")?)?;
-                let decided_by = hh_provenance::ProvenanceRecord::from_json(
-                    req(params, "decided_by")?,
-                )
-                .map_err(|e| bad("/decided_by", &format!("{e:?}")))?;
+                let decided_by =
+                    hh_provenance::ProvenanceRecord::from_json(req(params, "decided_by")?)
+                        .map_err(|e| bad("/decided_by", &format!("{e:?}")))?;
                 let rec = coe::consolidation_retirement_record(
                     &report,
                     req_str(params, "verdict_ref")?,
@@ -721,14 +683,13 @@ mod imp {
             // `{cycle, cycle_id, deposit_ref, record}` — the sidecar's
             // open (the `cycle` key is the first `cycle_id`).
             "lab.coevolution.cycle_open" => {
-                let policy = coe::CyclePolicy::from_json(req(params, "policy")?)
-                    .map_err(coe_err)?;
-                let mut driver =
-                    CycleDriver::open(policy, req_str(params, "lineage_ref")?);
+                let policy =
+                    coe::CyclePolicy::from_json(req(params, "policy")?).map_err(coe_err)?;
+                let mut driver = CycleDriver::open(policy, req_str(params, "lineage_ref")?);
                 let docs = svc.lab_docs()?;
-                let deposit_ref = driver.deposit(&docs).map_err(|e| EmbedError::Refused {
-                    reason: e.code(),
-                })?;
+                let deposit_ref = driver
+                    .deposit(&docs)
+                    .map_err(|e| EmbedError::Refused { reason: e.code() })?;
                 let key = driver.record.cycle_id.clone();
                 let cycle_id = key.clone();
                 svc.coevolution_cycles.insert(key.clone(), driver);
@@ -748,9 +709,7 @@ mod imp {
                 let inputs = req(params, "inputs")?.clone();
                 cycle(svc, params)?
                     .begin_phase(phase, inputs)
-                    .map_err(|e| EmbedError::Refused {
-                        reason: e.code(),
-                    })?;
+                    .map_err(|e| EmbedError::Refused { reason: e.code() })?;
                 let docs = svc.lab_docs()?;
                 let driver = svc.coevolution_cycles.get_mut(&key).unwrap();
                 deposited(&docs, &key, driver)
@@ -760,10 +719,7 @@ mod imp {
             "lab.coevolution.cycle_complete_phase" => {
                 let key = req_str(params, "cycle")?.to_string();
                 let outputs = req(params, "outputs")?.clone();
-                let budgets = params
-                    .get("budgets")
-                    .cloned()
-                    .unwrap_or(Json::obj([]));
+                let budgets = params.get("budgets").cloned().unwrap_or(Json::obj([]));
                 cycle(svc, params)?
                     .complete_phase(
                         outputs,
@@ -772,9 +728,7 @@ mod imp {
                         opt_str(params, "verdict").as_deref(),
                         budgets,
                     )
-                    .map_err(|e| EmbedError::Refused {
-                        reason: e.code(),
-                    })?;
+                    .map_err(|e| EmbedError::Refused { reason: e.code() })?;
                 let docs = svc.lab_docs()?;
                 let driver = svc.coevolution_cycles.get_mut(&key).unwrap();
                 deposited(&docs, &key, driver)
@@ -910,9 +864,8 @@ mod imp {
                                     .iter()
                                     .filter_map(|p| {
                                         p.as_str().and_then(|s| {
-                                            s.split_once('=').map(|(f, l)| {
-                                                (f.to_string(), l.to_string())
-                                            })
+                                            s.split_once('=')
+                                                .map(|(f, l)| (f.to_string(), l.to_string()))
                                         })
                                     })
                                     .collect(),
@@ -983,10 +936,8 @@ mod imp {
                         _ => Vec::new(),
                     },
                 };
-                let prov = hh_provenance::ProvenanceRecord::kernel(
-                    COE_COMPONENT,
-                    svc.store.now_ms(),
-                );
+                let prov =
+                    hh_provenance::ProvenanceRecord::kernel(COE_COMPONENT, svc.store.now_ms());
                 let records = hh_fleet::org_policy::fleet_default_debt_records(
                     req_str(params, "fleet")?,
                     &owner,

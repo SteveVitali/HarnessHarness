@@ -272,6 +272,63 @@ print('hh-debt is edge-free upward; hh-embed (optional) is its only consumer')
 
 echo "check-removability: S6.1b debt-manager boundary verified"
 
+echo "== removability(S6.4): co-evolution interface — hh-embed tier-c4 ops; absent tier answers Unsupported =="
+# §5h.8 CC6: the co-evolution interface adds no new crate — the records
+# and drivers live inside kernel-side hh-lab and the already-verified C4
+# slices (hh-evolution's consolidation/cycle, hh-debt's post-import
+# sweep, hh-fleet's org-policy defaults). The surface is hh-embed's
+# `coevolution_ops`, gated by `tier-c4`: absent ⇒ the
+# `lab.coevolution.*` / `lab.org_policy.*` / `lab.debt.post_import_sweep`
+# ops stay in the schema (CC7 single source) and answer
+# `Unsupported{by: "tier-c4"}` — a typed refusal, never silent degrade.
+# The no-default-features test leg exercises the honest refusal; the
+# schema grep proves the ops remain declared regardless of the tier.
+cargo test -p hh-embed --no-default-features --test s6_4
+python3 - <<'EOF'
+import json, sys
+schema = json.load(open('schema/hh-embed-1.schema.json'))
+ops = set()
+def walk(node):
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k == 'methods' and isinstance(v, dict):
+                ops.update(v.keys())
+            else:
+                walk(v)
+    elif isinstance(node, list):
+        for v in node:
+            walk(v)
+walk(schema)
+required = {
+    'lab.coevolution.export_training',
+    'lab.coevolution.export_regression_suite',
+    'lab.coevolution.export_compatibility_tags',
+    'lab.coevolution.import_snapshot',
+    'lab.coevolution.guard_at_bind',
+    'lab.coevolution.consolidation_candidates',
+    'lab.coevolution.propose_consolidation',
+    'lab.coevolution.consolidation_retirement_record',
+    'lab.coevolution.cycle_open',
+    'lab.coevolution.cycle_begin_phase',
+    'lab.coevolution.cycle_complete_phase',
+    'lab.coevolution.cycle_next',
+    'lab.coevolution.cycle_stop',
+    'lab.coevolution.cycle_record',
+    'lab.org_policy.recipe',
+    'lab.org_policy.default_removal_tests',
+    'lab.debt.post_import_sweep',
+}
+missing = required - ops
+if missing:
+    print('coevolution ops missing from the single schema source:')
+    for m in sorted(missing):
+        print('  ' + m)
+    sys.exit(1)
+print('the coevolution ops stay in the schema (CC7); the absent tier answers Unsupported{by: "tier-c4"}')
+EOF
+
+echo "check-removability: S6.4 co-evolution boundary verified"
+
 echo "== removability(S4.11): C1 MCP-server surface — hh-mcp-lab is a leaf consumer =="
 # §7.3 CC6: the surface server is a removable slice — nothing below it
 # depends on it. Removing the feature = removing the crate: no workspace
