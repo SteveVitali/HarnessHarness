@@ -19,6 +19,52 @@ use std::time::Instant;
 const K_PER_RUN: usize = 4; // admissible per-run pattern (ADR-0045 §9): handle + cursor + metric + append
 const N_RUNS: usize = 50;
 
+/// A minimal all-off host capability set (the spike is a passive measurement peer).
+fn default_caps() -> client::HostCapabilities {
+    client::HostCapabilities {
+        experimental: false,
+        opt_out_notifications: vec![],
+        serves_permission_channel: false,
+        serves_host_executor: false,
+        serves_hook_observer: false,
+        serves_elicitation: false,
+        serves_measurement: false,
+        serves_principal_channel: false,
+        accepts_ephemeral_frames: true,
+        max_in_flight_sessions: None,
+        extensions: std::collections::BTreeMap::new(),
+    }
+}
+
+/// The `hello` request params for the generated client (current schema shape).
+fn hello_params(name: &str, version: &str, major: i64) -> client::HelloParams {
+    client::HelloParams {
+        contract_major: major,
+        client: client::ClientDescriptor {
+            name: name.into(),
+            version: version.into(),
+            kind: client::ClientKind::Test,
+        },
+        capabilities: default_caps(),
+        schema_hash: Some(client::EXPECTED_SCHEMA_HASH.to_string()),
+        kernel_floor: None,
+    }
+}
+
+/// One `hello → KernelDescriptor` crossing over stdio with the generated client — the current
+/// handshake (mirrors `hh-kernel/tests/codegen_round_trip.rs`). The returned descriptor carries
+/// `(contract_major, schema_hash)` for the far-side identity re-check.
+fn negotiate<R: BufRead, W: Write>(
+    reader: R,
+    writer: W,
+    name: &str,
+    version: &str,
+) -> Result<client::KernelDescriptor, client::ClientError> {
+    let mut c = client::Client::new(reader, writer);
+    c.hello(&hello_params(name, version, client::CONTRACT_MAJOR))
+        .map(|h| h.kernel)
+}
+
 struct Serve {
     child: Child,
 }
@@ -68,13 +114,13 @@ fn main() {
     // Median round-trip of one crossing over the persistent serve process.
     let mut serve = Serve::spawn(&kernel);
     let (mut reader, mut stdin) = serve.pipes();
-    let warm = client::negotiate(&mut reader, &mut stdin, "spike", "0").expect("warmup hello");
+    let warm = negotiate(&mut reader, &mut stdin, "spike", "0").expect("warmup hello");
     assert_eq!(warm.schema_hash, client::EXPECTED_SCHEMA_HASH);
     let mut hash_ok = 0usize;
     let mut samples = Vec::with_capacity(n);
     for _ in 0..n {
         let t = Instant::now();
-        let ci = client::negotiate(&mut reader, &mut stdin, "spike", "0").expect("hello crossing");
+        let ci = negotiate(&mut reader, &mut stdin, "spike", "0").expect("hello crossing");
         samples.push(t.elapsed().as_micros());
         if ci.contract_major == client::CONTRACT_MAJOR
             && ci.schema_hash == client::EXPECTED_SCHEMA_HASH
@@ -96,7 +142,7 @@ fn main() {
     let total_crossings = K_PER_RUN * N_RUNS;
     let t = Instant::now();
     for _ in 0..total_crossings {
-        let _ = client::negotiate(&mut reader, &mut stdin, "spike", "0").expect("split crossing");
+        let _ = negotiate(&mut reader, &mut stdin, "spike", "0").expect("split crossing");
     }
     let split_us = t.elapsed().as_micros();
     drop(reader);
@@ -164,12 +210,7 @@ fn main() {
 /// request and a canned identity response, with NO subprocess. Both directions serialize +
 /// parse, so `split − native` is the pure crossing (subprocess + pipe + scheduling) cost.
 fn native_roundtrips(count: usize) -> u128 {
-    let params = client::HelloParams {
-        client_name: "spike".into(),
-        client_version: "0".into(),
-        asserted_contract_major: client::CONTRACT_MAJOR,
-        asserted_schema_hash: Some(client::EXPECTED_SCHEMA_HASH.to_string()),
-    };
+    let params = hello_params("spike", "0", client::CONTRACT_MAJOR);
     let identity = client::ContractIdentity {
         contract_major: client::CONTRACT_MAJOR,
         schema_hash: client::EXPECTED_SCHEMA_HASH.to_string(),
@@ -249,14 +290,8 @@ fn version_mismatch_refused(kernel: &str) -> bool {
         ("jsonrpc", Json::str("2.0")),
         ("id", Json::Int(1)),
         ("method", Json::str("hello")),
-        (
-            "params",
-            Json::obj([
-                ("client_name", Json::str("spike")),
-                ("client_version", Json::str("0")),
-                ("asserted_contract_major", Json::Int(42)),
-            ]),
-        ),
+        // A well-formed hello asserting an unsupported major (current schema shape).
+        ("params", hello_params("spike", "0", 42).to_json()),
     ]);
     stdin
         .write_all(format!("{}\n", req.to_canonical_string()).as_bytes())
@@ -285,7 +320,7 @@ fn resume_after_killed_peer(kernel: &str) -> bool {
     let mut serve = Serve::spawn(kernel);
     {
         let (mut reader, mut stdin) = serve.pipes();
-        let ok = client::negotiate(&mut reader, &mut stdin, "spike", "0").is_ok();
+        let ok = negotiate(&mut reader, &mut stdin, "spike", "0").is_ok();
         if !ok {
             serve.kill();
             return false;
@@ -297,7 +332,7 @@ fn resume_after_killed_peer(kernel: &str) -> bool {
     let mut serve2 = Serve::spawn(kernel);
     let recovered = {
         let (mut reader, mut stdin) = serve2.pipes();
-        client::negotiate(&mut reader, &mut stdin, "spike", "0").is_ok()
+        negotiate(&mut reader, &mut stdin, "spike", "0").is_ok()
     };
     serve2.kill();
     recovered
