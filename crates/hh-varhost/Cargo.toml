@@ -28,4 +28,5 @@ hh-embed-schema = { path = "../hh-embed-schema" }
 # dev-dependency cycle (fixture → varhost is the runtime edge) is the
 # standard pattern and adds no production edge.
 hh-plugin-fixture = { path = "../hh-plugin-fixture" }
+hh-ontology = { path = "../hh-ontology" }
 tempfile = "3"

@@ -41,6 +41,7 @@
 
 pub mod engine;
 pub mod error;
+pub mod frontier;
 pub mod kernel;
 pub mod multiplicity;
 pub mod project;

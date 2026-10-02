@@ -439,16 +439,89 @@ fn validate_stages(
             )),
         }
     }
+    // The S1 run-manifest reference closure needs the exported pages
+    // decoded — `decode_traces` runs once here; its rows (page decode /
+    // unmaterialized) belong to S2's byte-verification stage, so they
+    // collect into `s2` below while the closure rows land in `s1`
+    // (AC-R-2.12.1-8: completeness, not byte-verify).
+    let mut s2 = Vec::new();
+    let (events_by_run, replay_declared) = decode_traces(manifest, members, &mut s2);
+    for run in &manifest.subject.run_ids {
+        let created = events_by_run
+            .get(run)
+            .and_then(|evs| evs.iter().find(|e| e.class == "lifecycle.run.created"));
+        match created {
+            Some(env) => match hh_ledger::manifest::RunManifest::from_json(&env.payload) {
+                Ok(rm) => {
+                    let expected = crate::runrefs::manifest_refs(&rm);
+                    let declared =
+                        crate::runrefs::declared_run_refs(&manifest.resolved_dependencies, run);
+                    match (&expected, &declared) {
+                        (Json::Obj(want), Json::Obj(got)) => {
+                            let mut ok = true;
+                            for (field, v) in want {
+                                match got.get(field) {
+                                    Some(d) if d == v => {}
+                                    _ => {
+                                        ok = false;
+                                        s1.push(CheckRow::fail(
+                                            format!("run_refs:{run}:{field}"),
+                                            "manifest_reference_unresolved",
+                                            format!(
+                                                "run-manifest reference {field} is absent from \
+                                                 resolved_dependencies.run_refs[{run}]"
+                                            ),
+                                        ));
+                                    }
+                                }
+                            }
+                            for field in got.keys() {
+                                if !want.contains_key(field) {
+                                    ok = false;
+                                    s1.push(CheckRow::fail(
+                                        format!("run_refs:{run}:{field}"),
+                                        "manifest_reference_unresolved",
+                                        format!(
+                                            "run_refs[{run}] claims {field} — the run manifest \
+                                             carries no such reference"
+                                        ),
+                                    ));
+                                }
+                            }
+                            if ok {
+                                s1.push(CheckRow::pass(format!("run_refs:{run}")));
+                            }
+                        }
+                        _ => s1.push(CheckRow::fail(
+                            format!("run_refs:{run}"),
+                            "manifest_reference_unresolved",
+                            "resolved_dependencies.run_refs is not an object",
+                        )),
+                    }
+                }
+                Err(e) => s1.push(CheckRow::fail(
+                    format!("run_refs:{run}"),
+                    "manifest_reference_unresolved",
+                    format!("lifecycle.run.created does not decode: {e}"),
+                )),
+            },
+            // The pages are fetch/redacted — the closure is unmaterialized,
+            // never a failure (the `complete_not_valid` contract).
+            None => s1.push(CheckRow::unmaterialized(
+                format!("run_refs:{run}"),
+                "no materialized lifecycle.run.created in the export",
+            )),
+        }
+    }
     if want(1) {
         stages.push(StageReport {
             stage: 1,
             name: "completeness",
-            checks: s1.clone(),
+            checks: s1,
         });
     }
 
     // ── S2 present_members_verify ────────────────────────────────────
-    let mut s2 = Vec::new();
     for m in &manifest.members {
         let Some(bytes) = members.get(&m.address) else {
             continue; // unmaterialized — S1 reported it.
@@ -489,8 +562,8 @@ fn validate_stages(
     } else {
         s2.push(CheckRow::pass("manifest.version_id"));
     }
-    // LedgerExport internals (needs decoded pages — shared with S4).
-    let (events_by_run, replay_declared) = decode_traces(manifest, members, &mut s2);
+    // LedgerExport internals (pages decoded above — shared with S1's
+    // run-manifest closure and S4's replay flag).
     for export in manifest.traces.values() {
         verify_export(
             export,

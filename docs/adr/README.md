@@ -79,3 +79,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0287](ADR-0287-s3.10-control-verification-eval-rulings.md) | S3.10 control/verification/eval rulings | S3.10 (`056_S3.10__control-verification-eval.md`) | Accepted |
 | [ADR-0288](ADR-0288-s3.11a-monitor-ifc-security-rulings.md) | S3.11a monitor/IFC security rulings | S3.11a (`057_S3.11a__security-eval-monitor-ifc.md`) | Accepted |
 | [ADR-0289](ADR-0289-s3.11b-security-eval-broker-audit-trust-rulings.md) | S3.11b credential/egress/audit/trust/approval rulings | S3.11b (`058_S3.11b__security-eval-broker-audit-trust.md`) | Accepted |
+| [ADR-0290](ADR-0290-s3.12-bundle-and-plugin-conformance-rulings.md) | S3.12 bundle completeness / reproduction / plugin-conformance / debt-retirement rulings | S3.12 (`059_S3.12__bundle-and-plugin-conformance.md`) | Accepted |

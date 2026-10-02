@@ -31,6 +31,7 @@ pub mod import;
 pub mod levels;
 pub mod manifest;
 pub mod repro;
+pub mod runrefs;
 pub mod validate;
 
 pub use assemble::{assemble, AssembleInputs, Assembled, CompileOutcome};
@@ -47,6 +48,7 @@ pub use repro::{
     budget_limits_equal, fingerprint_drift, snapshot_fingerprint, ReproOutcome, ReproReport,
     REPRO_SCHEMA,
 };
+pub use runrefs::{declared_run_refs, manifest_refs, run_refs_index};
 pub use validate::{
     check_completeness, validate, BundleValidationReport, CheckRow, CheckStatus, StageReport,
     REPORT_SCHEMA,

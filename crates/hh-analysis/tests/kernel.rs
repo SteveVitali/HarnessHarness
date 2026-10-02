@@ -1652,3 +1652,317 @@ fn clustered_clt_finite_cluster_correction() {
         "clustered_clt {iv:?} vs reference ({lo},{hi})"
     );
 }
+
+// ── S3.12 — M2 capability–cost frontier (§8.2; AC-R-2.1.6-8) ──────────────
+
+/// One `measurement.cost.attributed` fact row (the frontier's spend input).
+fn spend_row(
+    seq: u64,
+    class: &str,
+    conf: hh_budget::pricing::Confidence,
+    cov: i64,
+    micros: i64,
+) -> hh_eval::facts::SpendRowFact {
+    hh_eval::facts::SpendRowFact {
+        seq,
+        subject_ref: None,
+        model_ref: None,
+        charged_to: Some("subject".into()),
+        provenance: None,
+        provenance_class: Some(class.into()),
+        confidence: Some(conf),
+        coverage_ppm: Some(cov),
+        currency: Some("usd".into()),
+        micro_units: Some(micros),
+        model_call_id: None,
+    }
+}
+
+/// AC-R-2.1.6-8 — reported and measured spend render *separate* frontiers
+/// plus a combined one; `estimate` confidence or `coverage < 1` renders a
+/// band, never a point; a dominated cell is absent from its frontier but
+/// present in `points` (nothing suppressed).
+#[test]
+fn s312_frontier_per_class_frontiers_bands_and_combined() {
+    use hh_budget::pricing::Confidence;
+    let metric = "task_success";
+    // a/c at 500_000 ppm capability, b at 1_000_000.
+    let mut rows = paired_rows_exact("arm-a", "arm-b", &["t1"], 2, 1, 2, metric);
+    rows.push(row("arm-c", "t1", 0, 0, metric));
+    rows.push(row("arm-c", "t1", 1, 1, metric));
+    let mut f = Fixture::new(
+        rows,
+        &["t1"],
+        arms(&["arm-a", "arm-b", "arm-c"]),
+        vec![decl(metric)],
+        None,
+    );
+    // measured cells — a cheap (100), b dear (400), c dominated (500 @
+    // the same capability as a).
+    for rid in ["r-arm-a-t1-0", "r-arm-a-t1-1"] {
+        f.facts.get_mut(rid).unwrap().spend_rows.push(spend_row(
+            10,
+            "measured",
+            Confidence::Exact,
+            1_000_000,
+            50,
+        ));
+    }
+    for rid in ["r-arm-b-t1-0", "r-arm-b-t1-1"] {
+        f.facts.get_mut(rid).unwrap().spend_rows.push(spend_row(
+            10,
+            "measured",
+            Confidence::Exact,
+            1_000_000,
+            200,
+        ));
+    }
+    for rid in ["r-arm-c-t1-0", "r-arm-c-t1-1"] {
+        f.facts.get_mut(rid).unwrap().spend_rows.push(spend_row(
+            10,
+            "measured",
+            Confidence::Exact,
+            1_000_000,
+            250,
+        ));
+    }
+    // reported cells — a bounded (point-admissible), b `estimate` (band),
+    // c `exact` at coverage 0.9 (band — never summed complete).
+    for rid in ["r-arm-a-t1-0", "r-arm-a-t1-1"] {
+        f.facts.get_mut(rid).unwrap().spend_rows.push(spend_row(
+            11,
+            "reported",
+            Confidence::Bounded { lo: 40, hi: 60 },
+            1_000_000,
+            50,
+        ));
+    }
+    for rid in ["r-arm-b-t1-0", "r-arm-b-t1-1"] {
+        f.facts.get_mut(rid).unwrap().spend_rows.push(spend_row(
+            11,
+            "reported",
+            Confidence::Estimate,
+            1_000_000,
+            150,
+        ));
+    }
+    for rid in ["r-arm-c-t1-0", "r-arm-c-t1-1"] {
+        f.facts.get_mut(rid).unwrap().spend_rows.push(spend_row(
+            11,
+            "reported",
+            Confidence::Exact,
+            900_000,
+            10,
+        ));
+    }
+
+    let s = spec("frontier", &[metric], Json::obj([]), Some("spec-x"));
+    let out = analyze(&s, &f.input()).unwrap();
+    let fr = out.body.get("frontier").expect("frontier member");
+
+    let member_ids = |key: &str| -> Vec<String> {
+        match fr.get(key) {
+            Some(Json::Arr(a)) => a
+                .iter()
+                .filter_map(|p| p.get("point_id").and_then(Json::as_str).map(str::to_string))
+                .collect(),
+            _ => panic!("{key} not an array"),
+        }
+    };
+    let id_list = |j: &Json| -> Vec<String> {
+        match j {
+            Json::Arr(a) => a
+                .iter()
+                .filter_map(|p| p.as_str().map(str::to_string))
+                .collect(),
+            _ => panic!("not an array"),
+        }
+    };
+
+    // Points: every point-admissible cell (dominated c stays listed —
+    // `points` is the census, `frontiers`/`combined` the Pareto set).
+    assert_eq!(
+        member_ids("points"),
+        vec![
+            "arm-a|measured|usd",
+            "arm-a|reported|usd",
+            "arm-b|measured|usd",
+            "arm-c|measured|usd",
+        ]
+    );
+    // Bands: b's estimate-confidence reported cell + c's coverage<1
+    // reported cell — never points, never summed complete.
+    assert_eq!(
+        member_ids("bands"),
+        vec!["arm-b|reported|usd", "arm-c|reported|usd"]
+    );
+
+    // Per-class frontiers (separate — never merged).
+    assert_eq!(
+        id_list(fr.get("frontiers").and_then(|m| m.get("measured")).unwrap()),
+        vec!["arm-a|measured|usd", "arm-b|measured|usd"]
+    );
+    assert_eq!(
+        id_list(fr.get("frontiers").and_then(|m| m.get("reported")).unwrap()),
+        vec!["arm-a|reported|usd"]
+    );
+    // The combined band — c|measured is dominated by a|measured
+    // (100 < 500 cost at equal capability).
+    assert_eq!(
+        id_list(fr.get("combined").unwrap()),
+        vec![
+            "arm-a|measured|usd",
+            "arm-a|reported|usd",
+            "arm-b|measured|usd",
+        ]
+    );
+
+    // `provenance_mix` — micro-units per class per arm.
+    let mix_a = fr
+        .get("provenance_mix")
+        .and_then(|m| m.get("arm-a"))
+        .unwrap();
+    assert_eq!(mix_a.get("measured").and_then(Json::as_int), Some(100));
+    assert_eq!(mix_a.get("reported").and_then(Json::as_int), Some(100));
+
+    // The estimate band carries the summed figure at both ends with the
+    // `confidence_min` marker; the coverage band carries `coverage_min_ppm`.
+    let bands = match fr.get("bands") {
+        Some(Json::Arr(a)) => a.clone(),
+        _ => panic!(),
+    };
+    let b_band = bands
+        .iter()
+        .find(|b| b.get("point_id").and_then(Json::as_str) == Some("arm-b|reported|usd"))
+        .unwrap();
+    assert_eq!(
+        b_band.get("confidence_min").and_then(Json::as_str),
+        Some("estimate")
+    );
+    assert_eq!(
+        b_band
+            .get("cost_micros")
+            .and_then(|c| c.get("lo"))
+            .and_then(Json::as_int),
+        Some(300)
+    );
+    let c_band = bands
+        .iter()
+        .find(|b| b.get("point_id").and_then(Json::as_str) == Some("arm-c|reported|usd"))
+        .unwrap();
+    assert_eq!(
+        c_band.get("coverage_min_ppm").and_then(Json::as_int),
+        Some(900_000)
+    );
+}
+
+/// §8.2 — `MatchSpec{mode: none}` runs may execute but never report a
+/// comparison; the frontier is a comparison surface (typed refusal, the
+/// same vocabulary `compare` uses).
+#[test]
+fn s312_frontier_refuses_exploratory_match_mode() {
+    let metric = "task_success";
+    let rows = paired_rows_exact("arm-a", "arm-b", &["t1"], 2, 1, 2, metric);
+    let exploratory: Vec<(String, ArmSpec)> = ["arm-a", "arm-b"]
+        .iter()
+        .map(|id| {
+            let caps = BudgetSpec::hard_caps(
+                BudgetMode::Pool,
+                &[(DimensionKey::Primary(DimensionId::ModelCalls), 100)],
+            );
+            let mut ms = MatchSpec::matched_cap(&[DimensionId::ModelCalls]);
+            ms.mode = hh_budget::matchspec::MatchMode::None;
+            (id.to_string(), ArmSpec::native(caps.clone(), caps, ms))
+        })
+        .collect();
+    let f = Fixture::new(rows, &["t1"], exploratory, vec![decl(metric)], None);
+    let s = spec("frontier", &[metric], Json::obj([]), Some("spec-x"));
+    match analyze(&s, &f.input()) {
+        Err(AnalysisError::Compare(hh_eval::compare::CompareError::Match(e))) => {
+            assert!(
+                matches!(
+                    e.refusal,
+                    hh_budget::MatchRefusal::IncommensurableMatch {
+                        reason: hh_budget::RefusalReason::ExploratoryNoMatch,
+                        ..
+                    }
+                ),
+                "{e:?}"
+            );
+        }
+        other => panic!("expected exploratory match refusal, got {other:?}"),
+    }
+}
+
+/// §8.2 — an arm without a `MatchSpec` refuses `MissingMatchSpec` (the
+/// frontier shares `validate_match`'s refusal vocabulary).
+#[test]
+fn s312_frontier_refuses_missing_match_spec() {
+    let metric = "task_success";
+    let rows = paired_rows_exact("arm-a", "arm-b", &["t1"], 2, 1, 2, metric);
+    let mut specd = arms(&["arm-a", "arm-b"]);
+    specd[1].1.match_spec = None;
+    let f = Fixture::new(rows, &["t1"], specd, vec![decl(metric)], None);
+    let s = spec("frontier", &[metric], Json::obj([]), Some("spec-x"));
+    match analyze(&s, &f.input()) {
+        Err(AnalysisError::Compare(hh_eval::compare::CompareError::Match(e))) => {
+            assert!(
+                matches!(e.refusal, hh_budget::MatchRefusal::MissingMatchSpec),
+                "{e:?}"
+            );
+        }
+        other => panic!("expected MissingMatchSpec, got {other:?}"),
+    }
+}
+
+/// Cross-currency cells never dominate each other — an incommensurable
+/// currency pair stays on the combined frontier as separate points.
+#[test]
+fn s312_frontier_never_dominates_across_currencies() {
+    use hh_budget::pricing::Confidence;
+    let metric = "task_success";
+    let rows = paired_rows_exact("arm-a", "arm-b", &["t1"], 2, 1, 2, metric);
+    let mut f = Fixture::new(
+        rows,
+        &["t1"],
+        arms(&["arm-a", "arm-b"]),
+        vec![decl(metric)],
+        None,
+    );
+    // arm-a in usd, arm-b in eur — b nominally "worse" on both axes but
+    // incomparable: never dominated, never summed into a's cell.
+    for rid in ["r-arm-a-t1-0", "r-arm-a-t1-1"] {
+        f.facts.get_mut(rid).unwrap().spend_rows.push(spend_row(
+            10,
+            "measured",
+            Confidence::Exact,
+            1_000_000,
+            50,
+        ));
+    }
+    for rid in ["r-arm-b-t1-0", "r-arm-b-t1-1"] {
+        f.facts
+            .get_mut(rid)
+            .unwrap()
+            .spend_rows
+            .push(hh_eval::facts::SpendRowFact {
+                currency: Some("eur".into()),
+                ..spend_row(10, "measured", Confidence::Exact, 1_000_000, 999)
+            });
+    }
+    let s = spec("frontier", &[metric], Json::obj([]), Some("spec-x"));
+    let out = analyze(&s, &f.input()).unwrap();
+    let fr = out.body.get("frontier").unwrap();
+    let combined = match fr.get("combined") {
+        Some(Json::Arr(a)) => a
+            .iter()
+            .filter_map(|p| p.as_str().map(str::to_string))
+            .collect::<Vec<String>>(),
+        _ => panic!(),
+    };
+    assert_eq!(
+        combined,
+        vec!["arm-a|measured|usd", "arm-b|measured|eur"],
+        "cross-currency cells never dominate"
+    );
+}

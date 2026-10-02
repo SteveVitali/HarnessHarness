@@ -623,7 +623,19 @@ fn deposit_bundle_inner(
         ),
         ("definition", definition),
         ("configuration", Json::obj([])),
-        ("resolved_dependencies", Json::obj([])),
+        (
+            "resolved_dependencies",
+            // S3.12 (AC-R-2.12.1-8): `run_refs` indexes every reference
+            // the subject run's manifest carries — a bundler writes it,
+            // so the fixture projects it from the live store's manifest.
+            Json::obj([(
+                "run_refs",
+                hh_bundle::runrefs::run_refs_index(&[(
+                    subject_run,
+                    rig.store.manifest(subject_run).unwrap(),
+                )]),
+            )]),
+        ),
         ("model", Json::obj([("snapshots", Json::Arr(vec![]))])),
         ("instrument", Json::obj([])),
         (

@@ -97,6 +97,11 @@ pub struct FixtureLogic {
     /// The ABI channel socket this process connected on (for
     /// helper-socket probes — derived from argv).
     pub own_socket: Option<String>,
+    /// Whether the `violate:*`/`probe:*` battery answers (default true —
+    /// the fixture is the hostile plugin's driver). A *null* plugin — the
+    /// stub-per-class kind — exposes no probe verbs at all; the kit's
+    /// probes then answer `UnhandledOperation` (the conforming answer).
+    pub probes_live: bool,
     /// Bound count.
     binds: u64,
 }
@@ -126,6 +131,7 @@ impl FixtureLogic {
             probe_peer_root: None,
             probe_peer_socket: None,
             own_socket: None,
+            probes_live: true,
             binds: 0,
         };
         let mut i = 0;
@@ -569,7 +575,9 @@ impl VariantLogic for FixtureLogic {
         if self.delay_ms > 0 {
             std::thread::sleep(std::time::Duration::from_millis(self.delay_ms));
         }
-        if params.operation.starts_with("violate:") || params.operation.starts_with("probe:") {
+        if (params.operation.starts_with("violate:") || params.operation.starts_with("probe:"))
+            && self.probes_live
+        {
             return self.violate(&params.operation, ctx);
         }
         // The class surface — only declared operations are legal.
