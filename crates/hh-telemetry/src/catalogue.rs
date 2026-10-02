@@ -415,11 +415,12 @@ pub const PROCESS_METRICS: &[ProcessMetric] = &[
         unit: MetricUnit::Ppm, fold: N(NA::NotRun) },
     // `belief_divergence` (§5f R-2.7.2b Stage-5; AC-R-2.7.2b-6) — the
     // belief-probe divergence vector over `verification.belief.probe`
-    // rows; `model_io` is mandatory (the elicitation compares model-io
-    // beliefs against handles — `n/a{observability}` without it); every
+    // rows; `events` reads the probe class and `model_io` is mandatory
+    // (the elicitation compares model-io beliefs against handles —
+    // `n/a{observability}` without it); every
     // report labels it `provisional` and the judged stratum never merges
     // with deterministic (the fold keeps `by_detector` strata disjoint).
-    ProcessMetric { name: "belief_divergence", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[IO], applies_to: &[N_],
+    ProcessMetric { name: "belief_divergence", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV, IO], applies_to: &[N_],
         computed_from: &["verification.belief.probe"], unit: MetricUnit::CountMap, fold: C },
     // `scheduling.advice_compliance` (T-LCD-13) — the share of delivered
     // `compute_advice` items the model followed; needs the `advise` arm +
