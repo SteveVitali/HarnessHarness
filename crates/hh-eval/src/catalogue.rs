@@ -308,6 +308,58 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
                 ..base()
             }
         },
+        // ── §5e value-of-compute / critic_experiment rows (S3.10 — the
+        // five metrics `critic_experiment` reports: delta task success is
+        // the headline row above; these four are the value-of-compute
+        // inputs R-2.6.4 names) ───────────────────────────────────────────
+        MetricDeclaration {
+            name: "harness_overhead.verification".into(),
+            dimension: Dimension::Efficiency,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                outcome_class_policy: OutcomeClassPolicy::for_efficiency(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "evaluator_calls".into(),
+            dimension: Dimension::Efficiency,
+            unit: "calls".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                outcome_class_policy: OutcomeClassPolicy::for_efficiency(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "false_stop_rate".into(),
+            dimension: Dimension::Reliability,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                outcome_class_policy: OutcomeClassPolicy::for_capability(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "missed_failure_rate".into(),
+            dimension: Dimension::Reliability,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                outcome_class_policy: OutcomeClassPolicy::for_capability(),
+                ..base()
+            }
+        },
         MetricDeclaration {
             name: "compaction.tokens_freed".into(),
             dimension: Dimension::Efficiency,

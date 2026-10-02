@@ -78,6 +78,14 @@ pub struct RecordedInputs {
     /// only (I2), so a gate needing the surface (the `stop_rule = submit`
     /// re-derivation) resolves it through this map.
     pub proposed_surfaces: BTreeMap<String, String>,
+    /// `effect_id → submission_ref` — the `stop_rule = submit` detection
+    /// recorded on the terminal `action.effect.*` row (S3.10; the replay
+    /// re-serves the *recorded* ref, never a re-minted one).
+    pub effect_submissions: BTreeMap<String, String>,
+    /// `submission_ref`s the recorded `control.decision{stop}` rows
+    /// carried, in seq order — the fallback for records predating the
+    /// terminal-row `submission_ref` member.
+    pub stop_submissions: VecDeque<String>,
 }
 
 fn sget<'a>(j: &'a Json, k: &str) -> Option<&'a str> {
@@ -212,6 +220,12 @@ pub fn extract_recorded(
             _ => None,
         };
         if let Some(outcome) = outcome {
+            // The recorded `stop_rule = submit` detection rides the
+            // terminal row (S3.10) — re-served verbatim at replay.
+            if let Some(sub) = sget(&e.payload, "submission_ref") {
+                out.effect_submissions
+                    .insert(effect_id.clone(), sub.to_string());
+            }
             out.effect_terminals.insert(
                 effect_id,
                 GateOutcome {
@@ -312,6 +326,14 @@ pub fn extract_recorded(
                     .push_back(Cue::HumanInput(HumanInput::FollowUp { payload_ref }));
             }
             "control.decision" => {
+                // The recorded `stop`'s `submission_ref` — the fallback
+                // source for records whose terminal rows predate the
+                // `submission_ref` member.
+                if sget(&e.payload, "kind") == Some("stop") {
+                    if let Some(sub) = sget(&e.payload, "submission_ref") {
+                        out.stop_submissions.push_back(sub.to_string());
+                    }
+                }
                 // A principal-cancelled stop implies an `interrupt` cue
                 // the record does not otherwise mark — synthesize it at
                 // the decision's position (a mistimed interrupt diverges
@@ -442,6 +464,11 @@ pub struct ReplayGate {
     /// the `stop_rule = submit` marker re-derives deterministically from
     /// the intent's surface, the same rule the live gate applied.
     submit_surface: Option<String>,
+    /// `effect_id → submission_ref` recorded on the terminal rows.
+    recorded_submissions: BTreeMap<String, String>,
+    /// `submission_ref`s of the recorded `stop` decisions, in order —
+    /// popped as submit-surface dispatches re-serve them.
+    stop_submissions: VecDeque<String>,
     /// The first divergence observed.
     pub divergence: Option<ReplayDivergence>,
     /// `dispatch` calls served (recorded-terminal serves — executor calls
@@ -457,6 +484,8 @@ impl ReplayGate {
             terminals: recorded.effect_terminals.clone(),
             surfaces: recorded.proposed_surfaces.clone(),
             submit_surface: submit_surface.map(str::to_string),
+            recorded_submissions: recorded.effect_submissions.clone(),
+            stop_submissions: recorded.stop_submissions.clone(),
             divergence: None,
             dispatches: 0,
         }
@@ -479,11 +508,24 @@ impl EffectGate for ReplayGate {
                     .cloned()
             })
             .unwrap_or_default();
-        let submission_ref = if self.submit_surface.as_deref() == Some(surface.as_str()) {
-            Some(format!("sub-{effect_id}"))
-        } else {
-            None
-        };
+        // The `stop_rule = submit` detection re-serves the *recorded*
+        // `submission_ref` — the terminal row's own member first, the
+        // recorded `stop` decision's ref as the fallback for older
+        // records; a synthetic ref is minted only when the record carries
+        // neither (it then diverges honestly against the recorded stop).
+        let submission_ref = self
+            .recorded_submissions
+            .get(effect_id)
+            .cloned()
+            .or_else(|| {
+                if self.submit_surface.as_deref() == Some(surface.as_str()) {
+                    self.stop_submissions
+                        .pop_front()
+                        .or_else(|| Some(format!("sub-{effect_id}")))
+                } else {
+                    None
+                }
+            });
         match self.order.front() {
             Some(e) if e == effect_id => {
                 self.order.pop_front();

@@ -94,13 +94,27 @@ impl DrainReport {
 }
 
 /// The barrier check — a `control.decision{kind: stop}` has been appended
-/// (from its seq, INV-3 forbids new `committed`/`requested` — enforced by
-/// [`crate::invariants`]).
+/// *and stands* (from its seq, INV-3 forbids new `committed`/`requested` —
+/// enforced by [`crate::invariants`]). S3.10: a `verification.gate.
+/// evaluated{verdict: hold}` after the stop decision is the durable release
+/// — the completion gate refused the completion, so the loop re-opens for
+/// the strategy's hold→repair→re-propose (§5f.2; a refused `stop` was never
+/// a barrier the run could drain behind). The next admitted `stop`
+/// decision re-engages the barrier; a `pass`/`veto` leaves it engaged.
 pub fn barrier_engaged(events: &[EventEnvelope]) -> bool {
-    events.iter().any(|e| {
-        e.class == "control.decision"
+    let mut barrier = false;
+    for e in events {
+        if e.class == "control.decision"
             && e.payload.get("kind").and_then(Json::as_str) == Some("stop")
-    })
+        {
+            barrier = true;
+        } else if e.class == "verification.gate.evaluated"
+            && e.payload.get("verdict").and_then(Json::as_str) == Some("hold")
+        {
+            barrier = false;
+        }
+    }
+    barrier
 }
 
 /// Whether a new `action.effect.committed`/`model.call.requested` is

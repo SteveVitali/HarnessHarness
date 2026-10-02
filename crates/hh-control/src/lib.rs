@@ -38,6 +38,7 @@ pub mod guards;
 pub mod invariants;
 pub mod loops;
 pub mod output;
+pub mod plan_exec;
 pub mod policy;
 pub mod react;
 pub mod replay;

@@ -878,8 +878,15 @@ fn decide(
             };
         }
     }
-    // 6. β's proposal — completion admissibility (non-terminal effects
-    // incl. `unknown` block `completed`; `abandoned` does not — OQ-092).
+    // 6. β's proposal — completion admissibility. Since S3.10 the
+    // non-terminal-effect verdict on an `achieved` claim is the
+    // *completion gate's* (§5f.2 F2(a): `hold{open_effect}` with
+    // `resolve_effect` actions, bounded by `reconciliation.holds`) — a
+    // decide-time refusal would short-circuit the gate's durable
+    // `gate.evaluated`/`completion.decided` chain (D6/OQ-092). The
+    // envelope keeps only the grounding half: `stop{completed}` with no
+    // recorded submission is refused `missing_submission` (an F2-format
+    // honesty rule, never a verification verdict).
     if let Some(d) = proposed {
         if let DecisionKind::Stop {
             proposed_reason,
@@ -888,19 +895,6 @@ fn decide(
         {
             let view = crate::views::fold_envelope_view(events);
             if matches!(proposed_reason, StopReason::Completed) {
-                let blocking = blocking_effects(events);
-                if !blocking.is_empty() {
-                    return GuardVerdict::Respond {
-                        observation: Json::obj([
-                            ("kind", Json::str("completion_blocked")),
-                            (
-                                "blocking_effects",
-                                Json::Arr(blocking.iter().map(Json::str).collect()),
-                            ),
-                        ]),
-                        events: vec![],
-                    };
-                }
                 if !submission_present && submission_ref.is_none() {
                     // A `stop{completed}` with no recorded submission is
                     // ungrounded — the envelope converts it (guard_fired
@@ -920,24 +914,6 @@ fn decide(
         reservation_id: None,
         deadline: None,
     }
-}
-
-/// The effects blocking `completed` — open effects plus those settled at a
-/// blocking terminal (`unknown`, `probed(undeterminable)`); `abandoned` is
-/// terminal and does not block (OQ-092 resolved).
-fn blocking_effects(events: &[EventEnvelope]) -> Vec<String> {
-    let view = crate::views::fold_envelope_view(events);
-    let mut blocking = view.open_effects.clone();
-    for ev in events {
-        if ev.class == "action.effect.unknown" {
-            if let Some(id) = &ev.scope.effect_id {
-                if !blocking.contains(id) {
-                    blocking.push(id.clone());
-                }
-            }
-        }
-    }
-    blocking
 }
 
 /// A definition `StopTrigger` evaluates against the folded state (the

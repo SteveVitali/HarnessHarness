@@ -21,6 +21,7 @@ hh-assembly = { path = "../hh-assembly" }
 hh-registry = { path = "../hh-registry" }
 hh-env = { path = "../hh-env" }
 hh-control = { path = "../hh-control" }
+hh-verification = { path = "../hh-verification" }
 hh-containment = { path = "../hh-containment" }
 hh-secrets = { path = "../hh-secrets" }
 hh-monitor = { path = "../hh-monitor" }

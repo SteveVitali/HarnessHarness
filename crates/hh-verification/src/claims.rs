@@ -514,7 +514,9 @@ pub fn reconcile_ledger_only(
         probe_effect_ids: Vec::new(),
         reconciled_at_seq,
         mode: ReconcileMode::LedgerOnly,
-        charged_to: ChargedTo::Subject,
+        // AC-R-2.7.2a-8 — the deterministic check is instrument work: the
+        // per-claim reconcile cost charges `instrument`, never the subject.
+        charged_to: ChargedTo::Instrument,
         provenance,
     };
 
