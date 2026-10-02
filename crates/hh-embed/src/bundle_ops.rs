@@ -31,7 +31,8 @@ use hh_bundle::import::{lift, NATIVE_FORMAT};
 use hh_bundle::levels;
 use hh_bundle::manifest::{BundlePolicy, ReproLevel};
 use hh_bundle::repro::{
-    budget_limits_equal, fingerprint_drift, snapshot_fingerprint, ReproOutcome, ReproReport,
+    budget_limits_equal, compute_independence, fingerprint_drift, snapshot_fingerprint,
+    ReproOutcome, ReproReport,
 };
 use hh_bundle::validate::check_completeness;
 use hh_embed_schema::errors::EmbedError;
@@ -1143,10 +1144,10 @@ impl EmbedService {
 
     // ── Group M — kernel.reproduce ──────────────────────────────────
 
-    /// `kernel.reproduce{path | container, level, eval_budget?}` —
-    /// `reproduce(bundle_ref, level)` (§5h.3 §2/§4; AC-R-2.9.3-3/4/6).
-    /// The native Stage-3 driver re-derives what the bundle's own bytes
-    /// decide offline:
+    /// `kernel.reproduce{path | container, level, eval_budget?,
+    /// seeds?, reproducer?}` — `reproduce(bundle_ref, level)`
+    /// (§5h.3 §2/§4; AC-R-2.9.3-3/4/6). The native Stage-3 driver
+    /// re-derives what the bundle's own bytes decide offline:
     ///
     /// - **every level**: `manifest.version_id` recompute (the identity
     ///   leg of AC-4);
@@ -1173,6 +1174,37 @@ impl EmbedService {
         })?;
         let m = &decoded.manifest;
 
+        // The declared reproducer (S4.4 — §5h.3's
+        // `ReproReport{reproducer: ProvenanceRecord,
+        // reproducer_instrument{version_id, component_versions,
+        // installation_id}}`). `reproducer{provenance, instrument}` is
+        // the caller's declared identity material, recorded verbatim;
+        // `independent` is ALWAYS kernel-computed by
+        // `compute_independence` — a `reproducer.independent` member is
+        // never read (CC2: the flag is conferred by the computation,
+        // not claimed). An absent declaration means the kernel itself
+        // re-checked the bundle — repeatability, never independence —
+        // and the provenance records that honestly.
+        let rep_param = params.get("reproducer").cloned().unwrap_or(Json::Null);
+        let reproducer_prov = rep_param
+            .get("provenance")
+            .cloned()
+            .filter(|p| !matches!(p, Json::Null))
+            .unwrap_or_else(|| {
+                ProvenanceRecord::kernel(BUNDLE_COMPONENT, self.store.now_ms()).to_json()
+            });
+        let reproducer_inst = rep_param
+            .get("instrument")
+            .cloned()
+            .filter(|i| !matches!(i, Json::Null))
+            .unwrap_or_else(|| Json::obj([("version_id", Json::str(self.kernel_version.clone()))]));
+        let (independent, independent_basis) = compute_independence(
+            &m.producer,
+            &m.instrument,
+            &reproducer_prov,
+            &reproducer_inst,
+        );
+
         // Decode the exported envelopes once — R0's fold, the R1 level
         // derivation's `replay_declared` input and R2's re-derivation
         // share them.
@@ -1185,17 +1217,28 @@ impl EmbedService {
         let bundle_id = m.version_id.clone();
         let mk = |outcome: ReproOutcome,
                   refusal: Option<String>,
-                  evidence: Json,
+                  mut evidence: Json,
                   drift: Vec<Json>,
                   achieved: Option<ReproLevel>,
                   env_ok: bool,
                   model_ok: bool| {
+            // Every report records why `independent` computed the way it
+            // did — the flag is conferred, never asserted.
+            if let Json::Obj(em) = &mut evidence {
+                em.insert(
+                    "independent_basis".to_string(),
+                    Json::str(independent_basis),
+                );
+            }
             let mut r = ReproReport {
                 bundle_id: bundle_id.clone(),
                 requested_level: level.name().to_string(),
                 achieved_level: achieved.map(|l| l.name().to_string()),
                 outcome,
                 refusal,
+                reproducer: reproducer_prov.clone(),
+                reproducer_instrument: reproducer_inst.clone(),
+                independent,
                 evidence,
                 drift,
                 basis: basis_json.clone(),

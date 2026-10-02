@@ -2053,7 +2053,7 @@ fn annotate_never_hide_retract_revoke_retire_gc() {
             Vec::new()
         }
     };
-    let exp_run = drive(&mut r, &eid, 800, false, |_| 3, &extra_evidence);
+    let exp_run = drive(&mut r, &eid, 800, false, |_| 3, extra_evidence);
     close_experiment(&mut r, &eid);
     for sr in &launched_runs(&r, &exp_run) {
         r.results
@@ -2151,7 +2151,7 @@ fn annotate_never_hide_retract_revoke_retire_gc() {
     )
     .unwrap();
     r.results
-        .catalogue_refresh(&r.store, Some(&[b_rev.clone()]))
+        .catalogue_refresh(&r.store, Some(std::slice::from_ref(&b_rev)))
         .unwrap();
     let snap_c = r
         .results
@@ -2177,7 +2177,7 @@ fn annotate_never_hide_retract_revoke_retire_gc() {
             &exp_run,
             "measurement.suite.retired",
             Json::obj([
-                ("suite_ref", Json::str(&pinned("suite.tb2"))),
+                ("suite_ref", Json::str(pinned("suite.tb2"))),
                 ("reason", Json::str("suite superseded")),
             ]),
         );

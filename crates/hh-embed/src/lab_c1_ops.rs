@@ -595,6 +595,21 @@ impl EmbedService {
         ]))
     }
 
+    /// `lab.leaderboard.snapshots{definition|definition_ref}` —
+    /// §6.5 §2.2's `snapshots(definition_ref) → [snapshot_id]` — the
+    /// retained-snapshot list (the persisted store's index; oldest
+    /// first).
+    pub(crate) fn lab_leaderboard_snapshots(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let r = results(self)?;
+        let def = definition_of(&r, params)?;
+        let def_id = def.definition_id();
+        let ids = r.leaderboard_snapshots(&def_id);
+        Ok(Json::obj([
+            ("definition_id", Json::str(&def_id)),
+            ("snapshots", Json::Arr(ids.iter().map(Json::str).collect())),
+        ]))
+    }
+
     /// `lab.leaderboard.retract_entry{definition_ref, configuration_id,
     /// reason_ref, authority}` — the annotation (never a deletion).
     pub(crate) fn lab_leaderboard_retract_entry(

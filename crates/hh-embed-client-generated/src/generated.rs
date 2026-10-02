@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:ab792f895432f87c213bd6e94c59360717ce0005635b05cf287c519bcc7875f7";
+    "sha256:ee54db21f3d083458b03412b28f54bc09e38796217aa501c17d339485525774b";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5958,6 +5958,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.leaderboard.retract_entry` → `json` (see the contract registry).
     pub fn lab_leaderboard_retract_entry(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.leaderboard.retract_entry", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.leaderboard.snapshots` → `json` (see the contract registry).
+    pub fn lab_leaderboard_snapshots(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.leaderboard.snapshots", params.clone())?;
         Ok(raw)
     }
 
