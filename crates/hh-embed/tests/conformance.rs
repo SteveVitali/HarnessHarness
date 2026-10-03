@@ -3777,19 +3777,13 @@ fn s31_group_ml_capability_gate() {
 
     let mut svc = service();
     lab_hello(&mut svc);
-    // A still-pending Group L op answers `stage_pending` — the
-    // results/leaderboard/analysis surface went live at S4.3
-    // (`lab.results.query_rows` now answers a real row set); the hosting
-    // attach surface is the remaining staged op.
+    // Group L is fully live at S4.5a — the hosting describe surface
+    // answers a typed schema violation on a missing `participant_ref`
+    // (never a silent fallthrough), matching `lab.experiment.register`
+    // below; an unknown participant ref refuses `Refused` —
+    // `hh-embed/tests/hosting.rs` carries the full verb behaviour.
     let e = call(&mut svc, "lab.hosting.describe", Json::obj([]));
-    assert_eq!(err_kind(&e), "Refused");
-    assert_eq!(
-        e.get("error")
-            .and_then(|x| x.get("data"))
-            .and_then(|d| d.get("reason"))
-            .and_then(Json::as_str),
-        Some("stage_pending")
-    );
+    assert_eq!(err_kind(&e), "SchemaViolation", "{e:?}");
     // `lab.experiment.register` is live at S3.4a — a missing `spec` member is
     // a typed schema violation, and a refusal renders the closed E-1 code.
     let e = call(&mut svc, "lab.experiment.register", Json::obj([]));

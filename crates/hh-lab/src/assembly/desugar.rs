@@ -925,13 +925,22 @@ fn set_json_pointer(target: &mut Json, pointer: &str, value: Json) {
 /// Synthesise the hosted scaffold (D5): the `AgentProcess{hosted}` root plus
 /// `Budget`/`Permission`/`HarnessRule` (accounting) nodes and the `supplies`
 /// entities. `document` members add nodes/edges on top.
+///
+/// `hosted.parameters`/`hosted.values` return as the scaffold layer's members
+/// (`params → ParameterSpec`, `affects ⊆ {configuration, product}`, `sweepable`
+/// admissibility over the declared capability vector — R-2.10.1²/ADR-0013 (4));
+/// the stage-3 check (`C-PARAM-6`) refuses the rest.
 fn hosted_scaffold(
     h: &HostedSpec,
     registrar: &ProvenanceRecord,
     kernel: &ProvenanceRecord,
     diags: &mut Vec<AssemblyDiagnostic>,
     seq: &mut u64,
-) -> (HirDocument, BTreeMap<String, Json>, BTreeMap<String, Json>) {
+) -> (
+    HirDocument,
+    BTreeMap<String, hh_assembly::grammar::ParameterSpec>,
+    BTreeMap<String, Json>,
+) {
     let next = |s: &mut u64| {
         *s += 1;
         *s
@@ -1272,7 +1281,29 @@ fn hosted_scaffold(
     nodes.push(root);
     let mut doc = HirDocument::new(Ref::selected(root_sid, "latest"));
     doc.nodes = nodes;
-    (doc, BTreeMap::new(), BTreeMap::new())
+
+    // `hosted.parameters`/`hosted.values` — the declared space and bound values
+    // ride a scaffold layer below the authored layers (R-2.10.1²); members fail
+    // the `ParameterSpec` schema as `C-LOAD-2`, the hosted admissibility as
+    // `C-PARAM-6` at stage 3.
+    let mut params_space = BTreeMap::new();
+    for (p, j) in &h.parameters {
+        match hh_assembly::grammar::parameter_spec_from_json(j, &format!("/hosted/parameters/{p}"))
+        {
+            Ok(ps) => {
+                params_space.insert(p.clone(), ps);
+            }
+            Err(e) => diags.push(ddiag(
+                Code::LoadParse,
+                &format!("/hosted/parameters/{p}"),
+                p,
+                &format!("hosted parameter `{p}` is not a `ParameterSpec` record: {e}"),
+                "author the parameter as `ParameterSpec{type, domain?, default?, required, sweepable, affects[], budget_relevant}`",
+                kernel,
+            )),
+        }
+    }
+    (doc, params_space, h.values.clone())
 }
 
 /// Decode the `declared_capabilities` tri-state map.
@@ -1516,13 +1547,36 @@ pub fn desugar(
     // base's sealed body.
     let mut doc = match source.root_kind {
         RootKind::Hosted => {
-            let (d, _, _) = hosted_scaffold(
+            let (d, params_space, values) = hosted_scaffold(
                 source.hosted.as_ref().expect("checked above"),
                 registrar,
                 kernel,
                 &mut diags,
                 &mut seq,
             );
+            // The scaffold's `parameters`/`values` ride a synthesised layer
+            // below the authored ones (the `base` layer's slot) so authored
+            // `values`/`parameters` overrides win on precedence (R-2.10.1²).
+            if !params_space.is_empty() || !values.is_empty() {
+                let min_prec = source
+                    .layers
+                    .iter()
+                    .map(|l| l.provenance.precedence)
+                    .min()
+                    .unwrap_or(0);
+                let mut frag = Assembly::empty();
+                frag.parameters = params_space;
+                frag.values = values;
+                layers.push(Layer {
+                    provenance: LayerProvenance {
+                        source_kind: LayerSourceKind::PackagedDefault,
+                        id: "hosted:scaffold".into(),
+                        version: "1".into(),
+                        precedence: min_prec.saturating_sub(1).min(i64::MAX - 2),
+                    },
+                    fragment: frag,
+                });
+            }
             d
         }
         RootKind::Native => match &source.document {

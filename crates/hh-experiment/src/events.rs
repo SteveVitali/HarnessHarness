@@ -305,6 +305,68 @@ pub fn run_bound_mirror(
     ])
 }
 
+/// `lifecycle.hosted.attached` — the Lab's audit stamp that the subject
+/// run's hosted session attached through the Hosting ABI (§6.6 §6 audit
+/// events; ADR-0164). Stamped on the subject run's stream next to its
+/// `bound` row — the Lab mints it, never the participant.
+#[allow(clippy::too_many_arguments)] // the row's members are its shape.
+pub fn hosted_attached(
+    hosting_mechanism: &str,
+    session_ref: Option<&str>,
+    participant_version_identity: Option<&str>,
+    adapter_version_id: Option<&str>,
+    abi_version: Option<&str>,
+    limits_enforced: &str,
+    budget_enforcement: &BTreeMap<String, String>,
+    mediation: Option<&str>,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("hosting_mechanism".into(), Json::str(hosting_mechanism));
+    if let Some(s) = session_ref {
+        m.insert("session_ref".into(), Json::str(s));
+    }
+    if let Some(s) = participant_version_identity {
+        m.insert("participant_version_identity".into(), Json::str(s));
+    }
+    if let Some(s) = adapter_version_id {
+        m.insert("adapter_version_id".into(), Json::str(s));
+    }
+    if let Some(s) = abi_version {
+        m.insert("abi_version".into(), Json::str(s));
+    }
+    if let Some(s) = mediation {
+        m.insert("mediation".into(), Json::str(s));
+    }
+    m.insert("limits_enforced".into(), Json::str(limits_enforced));
+    m.insert(
+        "budget_enforcement".into(),
+        Json::Obj(
+            budget_enforcement
+                .iter()
+                .map(|(k, v)| (k.clone(), Json::str(v)))
+                .collect(),
+        ),
+    );
+    Json::Obj(m)
+}
+
+/// `lifecycle.component.bound{class_id = hosting_adapter}` — the hosted
+/// driver binding (§6.1 §2.5; §6.6 §3): which conditioned adapter artefact
+/// this run's hosted rows entered through. A claim on the adapter record's
+/// `version_id`, never on a mechanism name a string could fake.
+pub fn component_bound_hosting_adapter(
+    adapter_version_id: &str,
+    session_ref: Option<&str>,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("class_id".into(), Json::str("hosting_adapter"));
+    m.insert("component_ref".into(), Json::str(adapter_version_id));
+    if let Some(s) = session_ref {
+        m.insert("session_ref".into(), Json::str(s));
+    }
+    Json::Obj(m)
+}
+
 /// `run_settled{run_plan_id, run_id, outcome_class, accepted, superseded,
 /// attempt_no, budget_utilization, veto_tripped[], regrade}` — the §2.3
 /// record. `regrade = true` marks an `oracle_failure` settlement: the row is

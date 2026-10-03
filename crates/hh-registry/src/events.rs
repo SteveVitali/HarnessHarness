@@ -47,6 +47,10 @@ pub const IMPORTED: &str = "lifecycle.registry.imported";
 /// append-time `check_endorsement` recomputes `from` off it — the subject's
 /// label is a fact the endorsement re-derives, never a claim.
 pub const PIN_SUBJECT: &str = "lifecycle.registry.pin_subject";
+/// `lifecycle.registry.quarantined{version_id, reason, registrar_origin}` — a
+/// subject's admission flipped to `quarantined` (S4.5a: a P0 conformance DRIFT
+/// quarantines the participant version — §6.6 §9.3, AC-R-2.10.6-3).
+pub const QUARANTINED: &str = "lifecycle.registry.quarantined";
 /// `security.label.endorsed{subject_ref, from, to, endorser, basis, basis_ref}`
 /// — the `pin` endorsement that lifts a signature-required quarantine (§6.2;
 /// §8.1 #3; the ledger re-verifies legitimacy at append — ADR-0035 §1).
@@ -215,6 +219,22 @@ impl RegistryEvent {
                 ("subject_ref", Json::str(subject_ref)),
                 ("suite_ref", Json::str(suite_ref)),
                 ("produced_by", Json::str(produced_by)),
+            ]),
+            provenance: None,
+            anchor_tag: None,
+        }
+    }
+
+    /// A `lifecycle.registry.quarantined` row — `{version_id, reason,
+    /// registrar_origin}` (S4.5a; the quarantine act is audited like every
+    /// admission mutation).
+    pub fn quarantined(version_id: &str, reason: &str, registrar_origin: &str) -> RegistryEvent {
+        RegistryEvent {
+            class: QUARANTINED,
+            payload: Json::obj([
+                ("version_id", Json::str(version_id)),
+                ("reason", Json::str(reason)),
+                ("registrar_origin", Json::str(registrar_origin)),
             ]),
             provenance: None,
             anchor_tag: None,

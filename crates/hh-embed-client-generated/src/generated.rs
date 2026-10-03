@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:ee54db21f3d083458b03412b28f54bc09e38796217aa501c17d339485525774b";
+    "sha256:a3f268217bfebf6da0783359e6e8109613df000f4e03dc28439d8ba8a2f9a744";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5928,6 +5928,24 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.experiment.settle` → `json` (see the contract registry).
     pub fn lab_experiment_settle(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.experiment.settle", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.hosting.attach` → `json` (see the contract registry).
+    pub fn lab_hosting_attach(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.hosting.attach", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.hosting.describe` → `json` (see the contract registry).
+    pub fn lab_hosting_describe(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.hosting.describe", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.hosting.probe` → `json` (see the contract registry).
+    pub fn lab_hosting_probe(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.hosting.probe", params.clone())?;
         Ok(raw)
     }
 

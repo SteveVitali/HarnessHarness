@@ -352,22 +352,52 @@ impl Bag {
             if hosted_session_error.is_some() {
                 return None;
             }
-            Some(HostedLaunchOutcome {
-                hosting_mechanism: h
-                    .get("hosting_mechanism")
+            let mut o = HostedLaunchOutcome::minimal(
+                h.get("hosting_mechanism")
                     .and_then(Json::as_str)
-                    .unwrap_or("session-abi")
-                    .to_string(),
-                session_ref: h
-                    .get("session_ref")
+                    .unwrap_or("session-abi"),
+                h.get("limits_enforced")
                     .and_then(Json::as_str)
-                    .map(str::to_string),
-                limits_enforced: h
-                    .get("limits_enforced")
-                    .and_then(Json::as_str)
-                    .unwrap_or("partial")
-                    .to_string(),
-            })
+                    .unwrap_or("partial"),
+            );
+            o.session_ref = h
+                .get("session_ref")
+                .and_then(Json::as_str)
+                .map(str::to_string);
+            o.adapter_version_id = h
+                .get("adapter_version_id")
+                .and_then(Json::as_str)
+                .map(str::to_string);
+            o.participant_version_identity = h
+                .get("participant_version_identity")
+                .and_then(Json::as_str)
+                .map(str::to_string);
+            o.abi_version = h
+                .get("abi_version")
+                .and_then(Json::as_str)
+                .map(str::to_string);
+            if let Some(Json::Obj(cv)) = h.get("capability_vector") {
+                for (k, v) in cv {
+                    if let Some(s) = v.as_str() {
+                        o.capability_vector.insert(k.clone(), s.to_string());
+                    }
+                }
+            }
+            if let Some(Json::Obj(be)) = h.get("budget_enforcement") {
+                for (k, v) in be {
+                    if let Some(s) = v.as_str() {
+                        o.budget_enforcement.insert(k.clone(), s.to_string());
+                    }
+                }
+            }
+            if let Some(Json::Arr(ol)) = h.get("observability_level") {
+                o.observability_level = ol
+                    .iter()
+                    .filter_map(Json::as_str)
+                    .map(str::to_string)
+                    .collect();
+            }
+            Some(o)
         });
         Ok(Bag {
             budgets,

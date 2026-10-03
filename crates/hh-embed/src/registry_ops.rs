@@ -36,37 +36,37 @@ use hh_embed_schema::errors::EmbedError;
 /// The internal ledger run's name — registry lifecycle rows append here.
 const REGISTRY_RUN_LABEL: &str = "registry-events";
 
-fn reg_err(e: RegistryError) -> EmbedError {
+pub(crate) fn reg_err(e: RegistryError) -> EmbedError {
     EmbedError::Refused {
         reason: format!("{e}"),
     }
 }
 
-fn bad(path: &str, code: &str) -> EmbedError {
+pub(crate) fn bad(path: &str, code: &str) -> EmbedError {
     EmbedError::SchemaViolation {
         path: path.to_string(),
         code: code.to_string(),
     }
 }
 
-fn req<'a>(j: &'a Json, k: &str) -> Result<&'a Json, EmbedError> {
+pub(crate) fn req<'a>(j: &'a Json, k: &str) -> Result<&'a Json, EmbedError> {
     j.get(k)
         .ok_or_else(|| bad(&format!("/{k}"), "missing_field"))
 }
 
-fn req_str<'a>(j: &'a Json, k: &str) -> Result<&'a str, EmbedError> {
+pub(crate) fn req_str<'a>(j: &'a Json, k: &str) -> Result<&'a str, EmbedError> {
     req(j, k)?
         .as_str()
         .ok_or_else(|| bad(&format!("/{k}"), "type_mismatch"))
 }
 
-fn opt_str(j: &Json, k: &str) -> Option<String> {
+pub(crate) fn opt_str(j: &Json, k: &str) -> Option<String> {
     j.get(k).and_then(|v| v.as_str()).map(|s| s.to_string())
 }
 
 /// The caller's `registrar` provenance — canonical decode, then the store
 /// validates (origin ⇒ authority class; a claimed class is never read).
-fn registrar_of(params: &Json) -> Result<ProvenanceRecord, EmbedError> {
+pub(crate) fn registrar_of(params: &Json) -> Result<ProvenanceRecord, EmbedError> {
     ProvenanceRecord::from_json(req(params, "registrar")?)
         .map_err(|e| bad("/registrar", &format!("{e:?}")))
 }
@@ -283,7 +283,7 @@ impl EmbedService {
     /// The internal ledger run that carries `lifecycle.registry.*` rows —
     /// created lazily, re-leased when the writer lease expires (the one fenced
     /// writer for registry events — ADR-0151 (e)).
-    fn ensure_registry_run(&mut self) -> Result<(String, Lease), EmbedError> {
+    pub(crate) fn ensure_registry_run(&mut self) -> Result<(String, Lease), EmbedError> {
         if let Some((run_id, lease)) = &self.registry_run {
             // Renew the live lease; on expiry re-acquire (the holder is ours —
             // an expired record fences silently, never blocks).
@@ -323,7 +323,7 @@ impl EmbedService {
     /// fenced writer. Event persistence is best-effort *inside* the ledger —
     /// the store's own canonical log is already authoritative; a failed append
     /// is surfaced, never swallowed.
-    fn flush_registry_events(&mut self) -> Result<(), EmbedError> {
+    pub(crate) fn flush_registry_events(&mut self) -> Result<(), EmbedError> {
         let events = self.registry.drain_events();
         if events.is_empty() {
             return Ok(());

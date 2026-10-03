@@ -1019,6 +1019,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("lifecycle.registry.name_yanked", "none"),
     ("lifecycle.registry.pin_subject", "none"),
     ("lifecycle.registry.published", "none"),
+    ("lifecycle.registry.quarantined", "none"),
     ("lifecycle.registry.registered", "none"),
     ("lifecycle.registry.snapshotted", "none"),
     ("lifecycle.registry.version_revoked", "none"),
@@ -1255,6 +1256,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("lifecycle.registry.version_revoked",   O::Events, true,  REGISTRY_FIELDS, &[], None, None),
     row_audit("lifecycle.registry.snapshotted",       O::Events, true,  REGISTRY_FIELDS, &[], None, None),
     row_audit("lifecycle.registry.conformance_recorded", O::Events, true, REGISTRY_FIELDS, &[], None, None),
+    // S4.5a (§6.6 §9.3; R-2.10.6): a P0 conformance DRIFT flips the
+    // subject's admission to `quarantined` — the audit row carries the
+    // same ids-only surface as the rest of the registry family.
+    row_audit("lifecycle.registry.quarantined",      O::Events, true,  REGISTRY_FIELDS, &[], None, None),
     // S4.1 — `imported`: the quarantined `foreign_import` receipt
     // (`{version_id, system, admission}`; §6.2 R-2.10.2) — the closed
     // `ForeignSystem` spelling lands on the `system` field.

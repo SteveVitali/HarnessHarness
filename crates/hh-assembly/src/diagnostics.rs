@@ -158,6 +158,12 @@ pub enum Code {
     /// `C-PARAM-5 DefaultedBudgetRelevant` — a `budget_relevant` parameter filled only by
     /// its default (warning; the spec-pinned number).
     ParamDefaultedBudgetRelevant,
+    /// `C-PARAM-6 InadmissibleHostedParameter` — on a hosted root, a `ParameterSpec`
+    /// that either names an `affects` coordinate outside `{configuration, product}`
+    /// (hosted parameters vary only those two granularities — §6.1 R-2.10.1²) or
+    /// declares `sweepable` over a capability coordinate the participant's declaration
+    /// records non-`supported` (ADR-0013 (4); an `unknown` claim is never coerced).
+    ParamHostedInadmissible,
     // ── constraints (validate:4) ─────────────────────────────────────────────────
     /// `C-CONS-1 ConstraintViolation` — a `requires`/`conflicts`/`implies`/`range`/
     /// `authority_cap` constraint the document breaks.
@@ -288,6 +294,7 @@ impl Code {
             ParamUndeclaredRef => "C-PARAM-3".into(),
             ParamUnused => "C-PARAM-4".into(),
             ParamDefaultedBudgetRelevant => "C-PARAM-5".into(),
+            ParamHostedInadmissible => "C-PARAM-6".into(),
             ConsViolation => "C-CONS-1".into(),
             Kern(v) => format!("C-KERN-{v}"),
             ProfIncompatible => "C-PROF-1".into(),
@@ -352,6 +359,7 @@ impl Code {
             ParamUndeclaredRef => "UndeclaredParamRef",
             ParamUnused => "UnusedParameter",
             ParamDefaultedBudgetRelevant => "DefaultedBudgetRelevant",
+            ParamHostedInadmissible => "InadmissibleHostedParameter",
             ConsViolation => "ConstraintViolation",
             Kern(_) => "KernelError",
             ProfIncompatible => "ProfileIncompatible",
@@ -416,6 +424,7 @@ impl Code {
             ParamUndeclaredRef,
             ParamUnused,
             ParamDefaultedBudgetRelevant,
+            ParamHostedInadmissible,
             ConsViolation,
             ProfIncompatible,
             ProfUnexpressible,

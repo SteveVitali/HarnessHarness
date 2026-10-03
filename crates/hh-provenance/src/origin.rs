@@ -219,6 +219,14 @@ pub struct MintingContext {
     /// the sealed definition (a tool whose declared effects are all `world = closed`, or
     /// `effects = pure` — computed by `hh-hir`'s `SealedDefinition`).
     pub closed_world_tools: std::collections::BTreeSet<String>,
+    /// `participant_version_identity` coordinates the **Hosting ABI vouches
+    /// for** (§6.6; ADR-0164): a `participant` origin naming one mints
+    /// `delegate` — the ABI-checked claim class — instead of `unverified`.
+    /// The set is conferred by the Lab side (the boundary stamped it after
+    /// validating the participant's registry record), never read from the
+    /// content's own claim — CC2 holds exactly as for `closed_world_tools`.
+    /// Empty ⇒ the Stage-1 floor (`unverified`) — DF-S1.3-2 closes at S4.5a.
+    pub vouched_participants: std::collections::BTreeSet<String>,
 }
 
 /// `default_authority(origin, scope, attestation?) → AuthorityClass` (§8.1 #2): total, pure,
@@ -239,9 +247,11 @@ pub struct MintingContext {
 ///   `validator`-basis endorsement path (`external → environment`, kernel endorser only)
 ///   remains for content minted before the sealed-definition declaration existed.
 ///   DF-S1.3-3 **closed** at S1.4.
-/// - `participant` mints `unverified`: the `≤ delegate` claim class applies only to content the
-///   Hosting ABI vouches for, and no Hosting ABI exists at Stage 1 (T-LCD-06/07; ADR-0033 D2).
-///   Tracked: DF-S1.3-2.
+/// - `participant` mints `delegate` only when its `participant_ref` is in
+///   [`MintingContext::vouched_participants`] — the claim class applies only to
+///   content the Hosting ABI vouches for (ADR-0033 D2; §6.6); an unvouched
+///   participant stays `unverified` (the honest floor). DF-S1.3-2 **closed** at
+///   S4.5a.
 pub fn default_authority(
     origin: &Origin,
     scope: PersistenceScope,
@@ -279,9 +289,21 @@ pub fn default_authority_in(
                 AuthorityClass::External
             }
         }
-        Origin::Import { .. } | Origin::Migration { .. } | Origin::Participant { .. } => {
-            AuthorityClass::Unverified
+        Origin::Participant {
+            participant_ref, ..
+        } => {
+            // The `≤ delegate` mint for *vouched* participant claims (§6.6;
+            // DF-S1.3-2): the vouch is conferred by the boundary (it validated
+            // the participant's registry record), never by the content. An
+            // unvouched participant stays `unverified` — and a `participant`
+            // origin is `is_delegate_class`, so it can never endorse upward.
+            if ctx.vouched_participants.contains(participant_ref) {
+                AuthorityClass::Delegate
+            } else {
+                AuthorityClass::Unverified
+            }
         }
+        Origin::Import { .. } | Origin::Migration { .. } => AuthorityClass::Unverified,
         // `cache(entry_ref)` mints at the tool-result ceiling: a K4 entry's
         // label authority is ≤ `environment` by construction (the cached
         // observation minted through `tool`). The *served* record's class is
@@ -434,6 +456,42 @@ mod tests {
             default_text_authority(&tool, None),
             AuthorityClass::External
         );
+    }
+
+    #[test]
+    fn vouched_participant_mints_delegate_only_under_the_vouch() {
+        // DF-S1.3-2 closed at S4.5a: the Hosting ABI vouches for a
+        // participant_version_identity after validating the registry record;
+        // the vouch set is conferred, never read from content (CC2).
+        let p = Origin::participant("participant:cli:v1", "session_abi");
+        // The Stage-1 floor: no context → `unverified` (nothing changed for
+        // content minted outside a vouching boundary).
+        assert_eq!(
+            default_authority(&p, PersistenceScope::Run, None),
+            AuthorityClass::Unverified
+        );
+        assert_eq!(
+            default_authority_in(&p, PersistenceScope::Run, None, &MintingContext::default()),
+            AuthorityClass::Unverified
+        );
+        // Vouched → `delegate`.
+        let mut ctx = MintingContext::default();
+        ctx.vouched_participants
+            .insert("participant:cli:v1".to_string());
+        assert_eq!(
+            default_authority_in(&p, PersistenceScope::Run, None, &ctx),
+            AuthorityClass::Delegate
+        );
+        // A *different* participant in the same context is still unvouched.
+        let other = Origin::participant("participant:cli:v2", "session_abi");
+        assert_eq!(
+            default_authority_in(&other, PersistenceScope::Run, None, &ctx),
+            AuthorityClass::Unverified
+        );
+        // `participant` is delegate-class — the `endorse` constitutional rule
+        // (a delegate-class origin never endorses) still applies even when
+        // the participant is vouched. That rule is exercised in endorse.rs.
+        assert!(p.is_delegate_class());
     }
 
     #[test]

@@ -39,8 +39,8 @@ use crate::kinds::{
     Admission, OwnerRef, Placement, ProducedBy, PublishRule, RecordKind, RequireConformance,
 };
 use crate::records::{
-    CapabilityRecord, ConformanceReport, NamespaceRecord, RegistryDiagnostic, RegistryEnvelope,
-    RegistryPolicy, RegistryRecord, RegistrySnapshot, VariantRecord,
+    CapabilityRecord, ConformanceRecord, ConformanceReport, NamespaceRecord, RegistryDiagnostic,
+    RegistryEnvelope, RegistryPolicy, RegistryRecord, RegistrySnapshot, VariantRecord,
 };
 use crate::schema;
 
@@ -1579,6 +1579,95 @@ impl RegistryStore {
         self.ok_event(RegistryEvent::pin_endorsed(&anchor_tag, &ev));
         self.seq += 1;
         self.flush()
+    }
+
+    /// `quarantine(version_id, registrar, reason)` — flips a subject's
+    /// admission to `quarantined` and audits the act (§6.6 §9.3; S4.5a: a P0
+    /// conformance DRIFT quarantines the participant version). The registrar
+    /// must be ≥ `principal` — the same gate as `pin` (admission mutation is a
+    /// Lab act, never a participant claim). Idempotent: an already-quarantined
+    /// subject is `Ok` with no duplicate row (re-quarantining is not a new
+    /// fact; the first flip is the audited one).
+    pub fn quarantine(
+        &mut self,
+        version_id: &str,
+        registrar: &ProvenanceRecord,
+        reason: &str,
+    ) -> Result<(), RegistryError> {
+        let op = "quarantine";
+        let subject = Some(version_id.to_string());
+        macro_rules! bail {
+            ($e:expr) => {
+                return Err(self.fail(op, subject.clone(), Some(registrar), $e))
+            };
+        }
+        if let Err(pe) = registrar.validate(None) {
+            bail!(RegistryError::SchemaViolation {
+                path: "registrar".to_string(),
+                detail: format!("{pe:?}"),
+            });
+        }
+        if registrar.authority < AuthorityClass::Principal {
+            bail!(RegistryError::AuthorityInsufficient {
+                operation: op.to_string(),
+            });
+        }
+        if reason.is_empty() {
+            bail!(RegistryError::SchemaViolation {
+                path: "reason".to_string(),
+                detail: "empty".to_string(),
+            });
+        }
+        let env = match self.records.get(version_id) {
+            Some((e, _)) => e.clone(),
+            None => bail!(RegistryError::UnknownVersion {
+                version_id: version_id.to_string(),
+            }),
+        };
+        if env.admission == Admission::Quarantined {
+            return Ok(());
+        }
+        // `revoked` is terminal — a revoked record never re-enters the
+        // admission ladder (the §6.2 lifecycle).
+        if env.admission == Admission::Revoked {
+            bail!(RegistryError::SchemaViolation {
+                path: "admission".to_string(),
+                detail: format!("{version_id} is revoked — a terminal state"),
+            });
+        }
+        if let Some((e, _)) = self.records.get_mut(version_id) {
+            e.admission = Admission::Quarantined;
+        }
+        self.ok_event(RegistryEvent::quarantined(
+            version_id,
+            reason,
+            registrar_origin_tagged(registrar).as_str(),
+        ));
+        self.seq += 1;
+        self.flush()
+    }
+
+    /// `hosted_conformance_entries(version_id)` — every `ConformanceRecord`
+    /// (§6.6 per-dimension entry) registered against the subject, in
+    /// registration order (observation seqs in `at` — transaction-time).
+    /// Records-in/records-out: the Hosting ABI's capability-vector reconcile
+    /// reads this list, never a hidden store member. `publisher_claim`
+    /// reports are excluded — a claim is never evidence (a participant
+    /// cannot self-certify a capability; §6.6 §9.2).
+    pub fn hosted_conformance_entries(&self, version_id: &str) -> Vec<&ConformanceRecord> {
+        self.records
+            .values()
+            .filter_map(|(_, rec)| match rec {
+                RegistryRecord::Report(r)
+                    if r.subject_ref == version_id
+                        && r.produced_by != ProducedBy::PublisherClaim =>
+                {
+                    Some(r.hosted_entries.iter())
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect()
     }
 
     /// `publisher_claims(version_id)` — the §6.2 review projection: the

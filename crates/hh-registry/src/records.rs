@@ -308,12 +308,32 @@ impl ConformanceRecord {
                 .unwrap_or(true)
     }
 
+    /// Verdict-spelling tolerance: the canonical `ConformanceVerdict` spellings
+    /// (UPPERCASE) **or** the ontology `CapabilityVerdict` spellings
+    /// (lowercase — §6.6's hosted vocabulary). Either maps onto the one
+    /// verdict enum (CC1 — `skipped` lands as `Skipped`, never `Unsupported`,
+    /// AC-R-2.10.6-3).
+    pub(crate) fn verdict_parse(s: &str) -> Option<ConformanceVerdict> {
+        ConformanceVerdict::parse(s).or_else(|| {
+            Some(match s {
+                "supported" => ConformanceVerdict::Supported,
+                "unsupported" => ConformanceVerdict::Unsupported,
+                "partial" => ConformanceVerdict::Partial,
+                "not_applicable" => ConformanceVerdict::NotApplicable,
+                "unknown" => ConformanceVerdict::Unknown,
+                "skipped" => ConformanceVerdict::Skipped,
+                "drift" => ConformanceVerdict::Drift,
+                _ => return None,
+            })
+        })
+    }
+
     /// The §6.6 verdict rule: `drift` iff `declared` and `observed` are both
     /// concrete and differ; `supported` when they agree; otherwise the observed
     /// state projects (`unknown`/`skipped` → that verdict; a non-concrete
     /// declared with a concrete observed is the observed verdict).
     pub fn derive_verdict(declared: &Json, observed: &Json) -> ConformanceVerdict {
-        let observed_verdict = match observed.as_str().and_then(ConformanceVerdict::parse) {
+        let observed_verdict = match observed.as_str().and_then(Self::verdict_parse) {
             Some(v) => v,
             None if Self::concrete(observed) => ConformanceVerdict::Supported,
             None => ConformanceVerdict::Unknown,

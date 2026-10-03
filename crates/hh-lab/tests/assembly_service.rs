@@ -880,6 +880,129 @@ fn hosted_root_na_rows_and_class6() {
     );
 }
 
+// ── R-2.10.1²: the hosted parameter space rides the scaffold ─────────────────
+
+fn hosted_source(
+    params: BTreeMap<String, Json>,
+    values: BTreeMap<String, Json>,
+    caps: Option<Json>,
+) -> AssemblySource {
+    AssemblySource {
+        dialect: "hir/1".into(),
+        root_kind: RootKind::Hosted,
+        base: None,
+        document: None,
+        layers: vec![],
+        overrides: Vec::new(),
+        overrides_present: false,
+        imports: Vec::new(),
+        hosted: Some(HostedSpec {
+            harness: "participant:test".into(),
+            model: None,
+            auth: vec![],
+            tools: vec![],
+            instructions: vec![],
+            policies: vec![],
+            params: None,
+            budget: None,
+            permissions: None,
+            declared_capabilities: caps,
+            observability: vec!["events".into()],
+            participant_version: None,
+            hosting_mechanism: Some("session_abi".into()),
+            parameters: params,
+            values,
+        }),
+        ext: BTreeMap::new(),
+    }
+}
+
+fn param_spec(ty: &str, sweepable: bool, affects: &[&str]) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("type".into(), Json::str(ty));
+    m.insert("sweepable".into(), Json::Bool(sweepable));
+    m.insert(
+        "affects".into(),
+        Json::Arr(affects.iter().map(|a| Json::str(*a)).collect()),
+    );
+    if sweepable {
+        m.insert(
+            "domain".into(),
+            Json::Arr(vec![Json::str("a"), Json::str("b")]),
+        );
+    }
+    Json::Obj(m)
+}
+
+#[test]
+fn hosted_parameter_space_populates_and_gates() {
+    let (mut store, catalog) = seeded_store("hosted-params");
+
+    // `affects` outside {configuration, product} → C-PARAM-6.
+    let mut params = BTreeMap::new();
+    params.insert("steer".into(), param_spec("enum", false, &["component"]));
+    let r = svc(&mut store, &catalog).assemble(
+        &hosted_source(params, BTreeMap::new(), None),
+        None,
+        AssembleMode::Plan,
+    );
+    assert!(
+        codes(&r.report).contains(&Code::ParamHostedInadmissible.code()),
+        "hosted affects `component` → C-PARAM-6: {:?}",
+        codes(&r.report)
+    );
+
+    // `sweepable` over a non-supported capability coordinate → C-PARAM-6.
+    let mut params = BTreeMap::new();
+    params.insert("steer".into(), param_spec("enum", true, &["configuration"]));
+    let caps = Json::obj([("steer", Json::str("unsupported"))]);
+    let r = svc(&mut store, &catalog).assemble(
+        &hosted_source(params, BTreeMap::new(), Some(caps)),
+        None,
+        AssembleMode::Plan,
+    );
+    assert!(
+        codes(&r.report).contains(&Code::ParamHostedInadmissible.code()),
+        "sweepable over unsupported `steer` → C-PARAM-6: {:?}",
+        codes(&r.report)
+    );
+
+    // Supported coordinate + legal affects → the space populates the sealed
+    // assembly (and an authored `values` override wins on precedence).
+    let mut params = BTreeMap::new();
+    params.insert("steer".into(), param_spec("enum", true, &["configuration"]));
+    params.insert("max_turns".into(), param_spec("int", false, &["product"]));
+    let mut values = BTreeMap::new();
+    values.insert("steer".into(), Json::str("a"));
+    let caps = Json::obj([("steer", Json::str("supported"))]);
+    let r = svc(&mut store, &catalog).assemble(
+        &hosted_source(params, values, Some(caps)),
+        None,
+        AssembleMode::Seal,
+    );
+    assert!(
+        !codes(&r.report).contains(&Code::ParamHostedInadmissible.code()),
+        "supported `steer` sweep is admissible: {:?}",
+        codes(&r.report)
+    );
+    let sealed = r.sealed.expect("the hosted source seals");
+    let asm = sealed
+        .document
+        .assembly
+        .as_ref()
+        .and_then(|j| Assembly::from_json(j, "/assembly", &kernel(), &mut Vec::new()));
+    let asm = asm.expect("the sealed document carries a decodable assembly");
+    assert!(
+        asm.parameters.contains_key("steer") && asm.parameters.contains_key("max_turns"),
+        "hosted parameters ride the scaffold into the sealed assembly"
+    );
+    assert_eq!(
+        asm.values.get("steer"),
+        Some(&Json::str("a")),
+        "hosted values land in the sealed assembly"
+    );
+}
+
 // ── validate_batch (ADR-0148 D4) ─────────────────────────────────────────────
 
 #[test]

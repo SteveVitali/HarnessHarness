@@ -237,6 +237,29 @@ impl ProvenanceRecord {
         }
     }
 
+    /// Mint under a [`MintingContext`] — `authority = default_authority_in(
+    /// origin, scope, None, ctx)` (CC8 additive: `minted` delegates with an
+    /// empty context). The only behavioural difference a context makes for a
+    /// `participant` origin is the vouched → `delegate` path (DF-S1.3-2;
+    /// §6.6) — the vouch set is conferred by the Lab, never by the record.
+    pub fn minted_in(
+        origin: Origin,
+        scope: PersistenceScope,
+        created_at: u64,
+        ctx: &crate::origin::MintingContext,
+    ) -> ProvenanceRecord {
+        ProvenanceRecord {
+            authority: crate::origin::default_authority_in(&origin, scope, None, ctx),
+            origin,
+            taint: BTreeSet::new(),
+            readers: ReaderSet::Public,
+            scope,
+            derived_from: Vec::new(),
+            created_at,
+            attestation: None,
+        }
+    }
+
     /// Mint with an attestation already verified (`authority = default_authority(origin,
     /// scope, Some(att))`).
     pub fn minted_attested(

@@ -722,6 +722,51 @@ impl CapabilityDeclarationRecord {
             native_config: u,
         }
     }
+
+    /// The field's state by authored name (`streaming` | … | `native_config`);
+    /// `None` for a name the declaration does not carry (R-2.10.1²: a hosted
+    /// `ParameterSpec`'s sweepable admissibility reads the coordinate it varies).
+    pub fn get(&self, name: &str) -> Option<CapabilityState> {
+        Some(match name {
+            "streaming" => self.streaming,
+            "interrupt" => self.interrupt,
+            "steer" => self.steer,
+            "live_queue" => self.live_queue,
+            "resume" => self.resume,
+            "fork" => self.fork,
+            "compaction" => self.compaction,
+            "images" => self.images,
+            "subagents" => self.subagents,
+            "permission_surface" => self.permission_surface,
+            "instruction_delivery" => self.instruction_delivery,
+            "model_family" => self.model_family,
+            "effort_vocabulary" => self.effort_vocabulary,
+            "trajectory_export" => self.trajectory_export,
+            "native_config" => self.native_config,
+            _ => return None,
+        })
+    }
+
+    /// The fifteen authored field names, in declaration order.
+    pub fn field_names() -> &'static [&'static str] {
+        &[
+            "streaming",
+            "interrupt",
+            "steer",
+            "live_queue",
+            "resume",
+            "fork",
+            "compaction",
+            "images",
+            "subagents",
+            "permission_surface",
+            "instruction_delivery",
+            "model_family",
+            "effort_vocabulary",
+            "trajectory_export",
+            "native_config",
+        ]
+    }
 }
 
 /// `Budget = {dimensions, scope, parent, accounting}` (§3.1.3; ADR-0039). Dimension keys

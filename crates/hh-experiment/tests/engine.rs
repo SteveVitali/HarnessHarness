@@ -1926,3 +1926,177 @@ fn producer_contract_refusals_and_chain_verify() {
     // runs stages S1–S9 including DeclarationMissing / UnmatchedBudget /
     // PreRegistrationLate, the same refusal names the engine emits here.)
 }
+
+// ── S4.5a — hosted arms (§6.3; AC-R-2.10.3-3/-14; §6.6 design ruling D4) ──
+//
+// A `Hosted` level routes `launch` through the `HostedLauncher` SPI before
+// the subject run opens; the outcome stamps the manifest extras +
+// `lifecycle.hosted.attached` + `lifecycle.component.bound{class_id =
+// hosting_adapter}` on the subject stream; a missing/refused launcher
+// fails `HostedLaunchUnavailable` (the slice returns to the pool — never
+// a silent native downgrade); a hosted level on a component-level factor
+// is `InadmissibleFactor` at register (§6.3 §2.1).
+
+use hh_experiment::engine::{HostedLaunchOutcome, HostedLaunchRequest};
+use hh_ontology::participant::Granularity;
+
+/// Both levels `Hosted` at configuration-level granularity — every
+/// launched plan routes through the launcher (no scheduling-order
+/// dependence in the test).
+fn hosted_spec() -> ExperimentSpec {
+    let mut s = spec(ExperimentKind::Comparative);
+    s.factors[0].granularity = Some(Granularity::ConfigurationLevel);
+    for l in &mut s.factors[0].levels {
+        l.class = ParticipantClass::Hosted;
+    }
+    // Hosted limits are *reported*, not enforced — an arm on a hosted
+    // level may claim only `partial`/`none` (`full` is unverifiable and
+    // refused at register, §6.3 AC-R-2.10.3-3).
+    for a in &mut s.arms {
+        a.limits_enforced = "partial".to_string();
+    }
+    s.experiment_id = s.experiment_id();
+    s
+}
+
+fn hosted_ctx(seen: std::sync::Arc<std::sync::Mutex<Vec<Vec<String>>>>) -> EngineContext<'static> {
+    let mut c = ctx();
+    c.hosted_launcher = Some(Box::new(move |req: &HostedLaunchRequest| {
+        seen.lock().unwrap().push(req.participant_refs.clone());
+        let mut o = HostedLaunchOutcome::minimal("session_abi", "partial");
+        o.session_ref = Some("hs-1".into());
+        o.adapter_version_id = Some("idp:adapter-a".into());
+        o.participant_version_identity = Some("p:test@1.0.0".into());
+        o.abi_version = Some("hh-hosting/1".into());
+        o.capability_vector
+            .insert("streaming".into(), "supported".into());
+        o.budget_enforcement
+            .insert("time.wall_ms".into(), "enforced".into());
+        o.observability_level = vec!["events".into()];
+        o.mediation = Some("intercept".into());
+        Ok(o)
+    }));
+    c
+}
+
+#[test]
+fn hosted_level_routes_through_launcher_and_stamps_audit_rows() {
+    let mut r = rig("hosted-launch", 0);
+    let s = hosted_spec();
+    let (eid, _run_id) = open(&mut r, &s);
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), hosted_ctx(seen.clone()));
+    eng.attach(&eid).unwrap();
+    let rpid = match eng.next().unwrap() {
+        NextVerdict::Plan { run_plan_id } => run_plan_id,
+        other => panic!("{other:?}"),
+    };
+    let ticket = eng.claim(&rpid, "driver").unwrap();
+    let l = eng.launch(&ticket, "subject").unwrap();
+    // The launcher saw the hosted level's ref — one call, the conditioned
+    // participant ref.
+    let calls = seen.lock().unwrap();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].len(), 1, "one hosted participant ref");
+    drop(calls);
+    drop(eng);
+    // The subject stream carries the audit pair + the derived
+    // `limits_enforced` the launcher reported (never the arm's claim —
+    // AC-R-2.10.3-3).
+    let evs = r.store.events(&l.run_id).unwrap();
+    let attached = evs
+        .iter()
+        .find(|e| e.class == "lifecycle.hosted.attached")
+        .expect("lifecycle.hosted.attached");
+    assert_eq!(
+        attached.payload.get("session_ref").and_then(Json::as_str),
+        Some("hs-1")
+    );
+    assert_eq!(
+        attached.payload.get("abi_version").and_then(Json::as_str),
+        Some("hh-hosting/1")
+    );
+    assert_eq!(
+        attached
+            .payload
+            .get("participant_version_identity")
+            .and_then(Json::as_str),
+        Some("p:test@1.0.0")
+    );
+    assert_eq!(
+        attached.payload.get("mediation").and_then(Json::as_str),
+        Some("intercept")
+    );
+    assert_eq!(
+        attached
+            .payload
+            .get("limits_enforced")
+            .and_then(Json::as_str),
+        Some("partial")
+    );
+    let bound = evs
+        .iter()
+        .find(|e| e.class == "lifecycle.component.bound")
+        .expect("lifecycle.component.bound");
+    assert_eq!(
+        bound.payload.get("class_id").and_then(Json::as_str),
+        Some("hosting_adapter")
+    );
+    assert_eq!(
+        bound.payload.get("component_ref").and_then(Json::as_str),
+        Some("idp:adapter-a")
+    );
+}
+
+#[test]
+fn hosted_level_without_launcher_refuses_and_returns_the_slice() {
+    let mut r = rig("hosted-no-launcher", 0);
+    let s = hosted_spec();
+    let (eid, _run_id) = open(&mut r, &s);
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    let rpid = match eng.next().unwrap() {
+        NextVerdict::Plan { run_plan_id } => run_plan_id,
+        other => panic!("{other:?}"),
+    };
+    let ticket = eng.claim(&rpid, "driver").unwrap();
+    let e = eng.launch(&ticket, "subject").unwrap_err();
+    assert!(
+        matches!(e, ExperimentError::HostedLaunchUnavailable { .. }),
+        "expected HostedLaunchUnavailable, got {e:?}"
+    );
+}
+
+#[test]
+fn hosted_level_refusal_also_fails_closed() {
+    let mut r = rig("hosted-refused", 0);
+    let s = hosted_spec();
+    let (eid, _run_id) = open(&mut r, &s);
+    let mut c = ctx();
+    c.hosted_launcher = Some(Box::new(|_req: &HostedLaunchRequest| {
+        Err("adapter refused: assumption debt incomplete".to_string())
+    }));
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), c);
+    eng.attach(&eid).unwrap();
+    let rpid = match eng.next().unwrap() {
+        NextVerdict::Plan { run_plan_id } => run_plan_id,
+        other => panic!("{other:?}"),
+    };
+    let ticket = eng.claim(&rpid, "driver").unwrap();
+    let e = eng.launch(&ticket, "subject").unwrap_err();
+    assert!(matches!(e, ExperimentError::HostedLaunchUnavailable { .. }));
+}
+
+/// §6.3 §2.1 (AC-R-2.10.3-3): a hosted level on a *component-level*
+/// factor is `InadmissibleFactor` at register — component coordinates
+/// are native-only (the Hosting ABI varies configuration/product).
+#[test]
+fn hosted_level_on_component_level_factor_is_inadmissible() {
+    let mut r = rig("hosted-inadmissible", 0);
+    let mut s = spec(ExperimentKind::Comparative);
+    s.factors[0].granularity = Some(Granularity::ComponentLevel);
+    s.factors[0].levels[1].class = ParticipantClass::Hosted;
+    s.experiment_id = s.experiment_id();
+    let code = register_err(&mut r, &s, ctx());
+    assert_eq!(code, "InadmissibleFactor", "got {code}");
+}

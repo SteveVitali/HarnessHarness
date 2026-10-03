@@ -1180,3 +1180,192 @@ pub fn cmd_eval_op(
     let r = call(b, method, params)?;
     ok_outcome(&format!("eval_{verb}"), r, fmt(p, io)?)
 }
+
+// ── S4.5a — the `participant` noun (§7.1 R-2.11.1²; §6.6) ─────────────
+//
+// One named `hh-embed/1` op per verb — the CLI never carries hosting
+// semantics (AC-R-2.11.1-1). `participant probe --drive` forwards through
+// the boundary's removable Hosting Plane; an absent plane refuses
+// `hosting_plane_absent` (honest tier absence, never a faked report).
+
+/// The shared participant selector — a positional `<name>` (with
+/// `--namespace`/`--label`) or a `--participant-ref <version-id>` pin.
+fn participant_params(p: &crate::cli::Parsed) -> Result<Json, CliError> {
+    let mut m = std::collections::BTreeMap::new();
+    if let Some(vid) = p.flag("participant-ref").or_else(|| {
+        p.positional
+            .first()
+            .cloned()
+            .filter(|s| s.starts_with("idp:"))
+    }) {
+        m.insert("participant_ref".to_string(), Json::str(vid));
+    } else {
+        let name = require_pos(p, 0, "<name>")?;
+        m.insert("name".to_string(), Json::str(name));
+        m.insert(
+            "namespace".to_string(),
+            p.flag("namespace")
+                .map(Json::str)
+                .unwrap_or_else(|| Json::str("local")),
+        );
+        if let Some(l) = p.flag("label") {
+            m.insert("label".to_string(), Json::str(l));
+        }
+        if let Some(s) = p.flag("snapshot-id") {
+            m.insert("snapshot_id".to_string(), Json::str(s));
+        }
+    }
+    Ok(Json::Obj(m))
+}
+
+/// `participant describe <name|version-id> [--namespace] [--label]` →
+/// `lab.hosting.describe` — the participant record + the reconciled
+/// `capability_vector` + `stale`/`drift`/`quarantined` stamps (§6.6 §9).
+pub fn cmd_participant_describe(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let r = call(b, "lab.hosting.describe", participant_params(p)?)?;
+    ok_outcome("participant_describe", r, fmt(p, io)?)
+}
+
+/// `participant conformance <name|version-id>` → `lab.hosting.describe`'s
+/// `conformance_entries` + reconciled vector — the registered
+/// `hosted_entries` view (probes declare; they never mutate the record's
+/// claimed conformance — a new declaration does).
+pub fn cmd_participant_conformance(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let r = call(b, "lab.hosting.describe", participant_params(p)?)?;
+    ok_outcome("participant_conformance", r, fmt(p, io)?)
+}
+
+/// `participant register <record-file>` → `lab.registry.register{kind:
+/// participant}` — a participant record registers through the ordinary
+/// registry path (the ABI never extends the record grammar).
+pub fn cmd_participant_register(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let text = file_text(p, io, 0, "<record-file>")?;
+    let body = hh_wire::json::parse(&text).map_err(|e| {
+        CliError::Invocation(InvocationError::at(
+            "invalid_json",
+            "record-file",
+            &format!("{e:?}"),
+        ))
+    })?;
+    let r = call(
+        b,
+        "lab.registry.register",
+        Json::obj([
+            ("kind", Json::str("participant")),
+            ("body", body),
+            ("registrar", registrar(io)),
+            (
+                "trust_record_ref",
+                p.flag("trust-record-ref")
+                    .map(Json::str)
+                    .unwrap_or(Json::Null),
+            ),
+        ]),
+    )?;
+    ok_outcome("participant_register", r, fmt(p, io)?)
+}
+
+/// `participant probe <name|version-id> (--report <file> | --drive
+/// [--probes <file>] --base <file>)` → `lab.hosting.probe`.
+///
+/// `--report` registers a `conformance_report{subject_kind: participant}`
+/// verbatim (records-in). `--drive` forwards `drive_probe` through the
+/// boundary's Hosting Plane — absent plane → `hosting_plane_absent`. A
+/// P0-dimension DRIFT quarantines the participant version (the op's
+/// result carries `quarantined`/`drift_dimensions`).
+pub fn cmd_participant_probe(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let mut params = match participant_params(p)? {
+        Json::Obj(m) => m,
+        _ => std::collections::BTreeMap::new(),
+    };
+    params.insert("registrar".to_string(), registrar(io));
+    if let Some(report_path) = p.flag("report") {
+        let text = std::fs::read_to_string(&report_path).map_err(|e| {
+            CliError::Invocation(InvocationError::at(
+                "unreadable_file",
+                &report_path,
+                &format!("{e}"),
+            ))
+        })?;
+        let body = hh_wire::json::parse(&text).map_err(|e| {
+            CliError::Invocation(InvocationError::at(
+                "malformed_json",
+                "--report",
+                &format!("{e}"),
+            ))
+        })?;
+        params.insert("report".to_string(), body);
+    } else if p.flag("drive").is_some() || p.positional.iter().any(|s| s == "drive") {
+        let mut drive = Json::obj([]);
+        if let Some(probes_path) = p.flag("probes") {
+            let text = std::fs::read_to_string(&probes_path).map_err(|e| {
+                CliError::Invocation(InvocationError::at(
+                    "unreadable_file",
+                    &probes_path,
+                    &format!("{e}"),
+                ))
+            })?;
+            drive = hh_wire::json::parse(&text).map_err(|e| {
+                CliError::Invocation(InvocationError::at(
+                    "malformed_json",
+                    "--probes",
+                    &format!("{e}"),
+                ))
+            })?;
+        }
+        if let Json::Obj(ref mut d) = drive {
+            if let Some(a) = p.flag("adapter-version-id") {
+                d.insert("adapter_version_id".to_string(), Json::str(a));
+            }
+        }
+        params.insert("drive".to_string(), drive);
+        let base_path = p.flag("base").ok_or_else(|| {
+            CliError::Invocation(InvocationError::at(
+                "missing_flag",
+                "--base",
+                "participant probe --drive needs --base (the report scaffolding the driven entries pack into)",
+            ))
+        })?;
+        let text = std::fs::read_to_string(&base_path).map_err(|e| {
+            CliError::Invocation(InvocationError::at(
+                "unreadable_file",
+                &base_path,
+                &format!("{e}"),
+            ))
+        })?;
+        params.insert(
+            "report_base".to_string(),
+            hh_wire::json::parse(&text).map_err(|e| {
+                CliError::Invocation(InvocationError::at(
+                    "malformed_json",
+                    "--base",
+                    &format!("{e}"),
+                ))
+            })?,
+        );
+    } else {
+        return Err(CliError::Invocation(InvocationError::at(
+            "missing_flag",
+            "--report|--drive",
+            "participant probe needs --report <file> or --drive [--probes <file>] --base <file>",
+        )));
+    }
+    let r = call(b, "lab.hosting.probe", Json::Obj(params))?;
+    ok_outcome("participant_probe", r, fmt(p, io)?)
+}

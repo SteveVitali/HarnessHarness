@@ -143,7 +143,9 @@ pub struct HostedLaunchRequest {
     pub wall_clock_ms: Option<u64>,
 }
 
-/// The `HostedLauncher` result — the adapter's honest report.
+/// The `HostedLauncher` result — the adapter's honest report (S4.5a:
+/// the ABI stamps the §6.6 audit rows carry — every member the adapter
+/// reports, the engine stamps verbatim; nothing is inferred).
 #[derive(Debug, Clone)]
 pub struct HostedLaunchOutcome {
     /// The hosting mechanism the adapter used (stamped on the subject
@@ -154,6 +156,51 @@ pub struct HostedLaunchOutcome {
     /// The `limits_enforced` stamp the adapter actually applied
     /// (`full | partial | none`).
     pub limits_enforced: String,
+    /// The `AdapterRecord`'s `version_id` — the conditioned artefact the
+    /// dispatch ran through (`lifecycle.component.bound{component_ref}`).
+    pub adapter_version_id: Option<String>,
+    /// The participant's `version_identity` at attach (registry claim;
+    /// conformance entries key on it).
+    pub participant_version_identity: Option<String>,
+    /// The negotiated `hh-hosting/n` ABI version.
+    pub abi_version: Option<String>,
+    /// The reconciled capability vector the session was admitted under
+    /// (declaration ∩ probe records; `unknown` entries ride verbatim).
+    pub capability_vector: BTreeMap<String, String>,
+    /// The adapter-derived `budget_enforcement` map (`dimension →
+    /// enforced | advisory | unenforceable`; ADR-0165 D3 — derived, never
+    /// participant-declared).
+    pub budget_enforcement: BTreeMap<String, String>,
+    /// The session's declared observability level (`events`/`model_io`/
+    /// `end_state`; hosted rows never claim `ledger`).
+    pub observability_level: Vec<String>,
+    /// The session's mediation claim (`gateway`/`intercept`/`none` — the
+    /// adapter's report, recorded as data; the mediation-aware metrics and
+    /// the `spend`/`tokens` enforcement derivation read it, never trust it
+    /// as enforcement fact).
+    pub mediation: Option<String>,
+}
+
+impl HostedLaunchOutcome {
+    /// The S4.4-era minimal outcome — mechanism + enforcement only (every
+    /// ext member `None`/`∅`: the adapter reported no more than it ran).
+    pub fn minimal(
+        hosting_mechanism: impl Into<String>,
+        limits_enforced: impl Into<String>,
+    ) -> HostedLaunchOutcome {
+        HostedLaunchOutcome {
+            hosting_mechanism: hosting_mechanism.into(),
+            session_ref: None,
+            limits_enforced: limits_enforced.into(),
+            adapter_version_id: None,
+            participant_version_identity: None,
+            abi_version: None,
+            capability_vector: BTreeMap::new(),
+            budget_enforcement: BTreeMap::new(),
+            observability_level: Vec::new(),
+            mediation: None,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -1108,6 +1155,55 @@ impl<'a> ExperimentEngine<'a> {
             // The participant descriptor carries the capability vector the
             // dispatch resolved against (ADR-0152's record ref).
             manifest.capability_declaration_ref = hosted_refs.first().cloned();
+            // The ABI stamps (§6.6 §3; S4.5a): the adapter's reported
+            // attach facts ride `extra` verbatim — `abi_version`,
+            // `capability_vector`, `budget_enforcement`, the conditioned
+            // adapter artefact and the participant's `version_identity`.
+            // A member the adapter did not report is absent, never 0/"".
+            if let Some(v) = &o.abi_version {
+                manifest.extra.insert("abi_version".into(), Json::str(v));
+            }
+            if !o.capability_vector.is_empty() {
+                manifest.extra.insert(
+                    "capability_vector".into(),
+                    Json::Obj(
+                        o.capability_vector
+                            .iter()
+                            .map(|(k, v)| (k.clone(), Json::str(v)))
+                            .collect(),
+                    ),
+                );
+            }
+            if !o.budget_enforcement.is_empty() {
+                manifest.extra.insert(
+                    "budget_enforcement".into(),
+                    Json::Obj(
+                        o.budget_enforcement
+                            .iter()
+                            .map(|(k, v)| (k.clone(), Json::str(v)))
+                            .collect(),
+                    ),
+                );
+            }
+            if let Some(v) = &o.adapter_version_id {
+                manifest
+                    .extra
+                    .insert("adapter_version_id".into(), Json::str(v));
+            }
+            if let Some(v) = &o.participant_version_identity {
+                manifest
+                    .extra
+                    .insert("participant_version_identity".into(), Json::str(v));
+            }
+            if !o.observability_level.is_empty() {
+                manifest.extra.insert(
+                    "observability_level".into(),
+                    Json::Arr(o.observability_level.iter().map(Json::str).collect()),
+                );
+            }
+            if let Some(v) = &o.mediation {
+                manifest.extra.insert("mediation".into(), Json::str(v));
+            }
         }
         manifest.experiment = Some(ExperimentBinding {
             experiment_run_id: Some(run_id.clone()),
@@ -1137,9 +1233,38 @@ impl<'a> ExperimentEngine<'a> {
             participant_class,
             &limits_enforced,
         );
-        let bound_ev = self.mint(&subject_id, class::BOUND, bound_payload)?;
+        let mut subject_events = vec![self.mint(&subject_id, class::BOUND, bound_payload)?];
+        // The hosted audit stamps (§6.6 §6; S4.5a): `lifecycle.hosted.
+        // attached` records the ABI attach the dispatch reported and
+        // `lifecycle.component.bound{class_id = hosting_adapter}` names the
+        // conditioned adapter artefact the hosted rows will enter through.
+        // Both are Lab-minted on the subject's stream — the participant's
+        // own events ride the adapter's projection, never this row.
+        if let Some(o) = &hosted_outcome {
+            subject_events.push(self.mint(
+                &subject_id,
+                "lifecycle.hosted.attached",
+                ev::hosted_attached(
+                    &o.hosting_mechanism,
+                    o.session_ref.as_deref(),
+                    o.participant_version_identity.as_deref(),
+                    o.adapter_version_id.as_deref(),
+                    o.abi_version.as_deref(),
+                    &o.limits_enforced,
+                    &o.budget_enforcement,
+                    o.mediation.as_deref(),
+                ),
+            )?);
+            if let Some(adapter) = &o.adapter_version_id {
+                subject_events.push(self.mint(
+                    &subject_id,
+                    "lifecycle.component.bound",
+                    ev::component_bound_hosting_adapter(adapter, o.session_ref.as_deref()),
+                )?);
+            }
+        }
         self.store
-            .append(&subject_id, &subject_lease, vec![bound_ev])
+            .append(&subject_id, &subject_lease, subject_events)
             .map_err(ExperimentError::Ledger)?;
         let subject_head = self
             .store
