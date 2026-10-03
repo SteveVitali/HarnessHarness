@@ -343,6 +343,11 @@ pub struct DriverConfig {
     /// The plan-schema validator ref (`control.plan.emitted`'s
     /// `schema_validator_ref` member).
     pub plan_schema_ref: String,
+    /// Whether the binding declares the R-2.6.3 delegation capability
+    /// (ADR-0186 D4; the `capabilities_available` binding — `false` ⇒ a
+    /// `delegate` decision refuses `DelegationUnavailable`, T0). Default
+    /// `false` — a profile declares the capability or it is absent.
+    pub delegation_available: bool,
 }
 
 impl Default for DriverConfig {
@@ -364,6 +369,7 @@ impl Default for DriverConfig {
             holds_cap: hh_verification::gate::DEFAULT_HOLDS_CAP,
             plan_surface_id: None,
             plan_schema_ref: crate::plan_exec::PLAN_SCHEMA_REF.to_string(),
+            delegation_available: false,
         }
     }
 }
@@ -711,6 +717,7 @@ impl<S: ControlStrategy> Driver<S> {
             effect_classes: Default::default(),
             cancel_requested: None,
             interactive_attendance: self.config.interactive_attendance,
+            delegation_available: self.config.delegation_available,
         }
     }
 

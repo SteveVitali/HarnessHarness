@@ -678,6 +678,12 @@ const DECISION_FIELDS: &[AuditField] = &[
     // audit members, never parsed for authority (I7).
     afb("input_requests", AUDIT_FIELD_LIST_BYTES),
     afb("request_state", AUDIT_FIELD_LIST_BYTES),
+    // The `kind: delegate` arm (S4.6; ADR-0186 D4): `delegation_reason` is
+    // mandatory on `owner = code/model` rows and `spec` carries the
+    // bounded `SubagentSpec` record the spawn kernel reads (MUST-data —
+    // never a content ref: the row IS the decision).
+    af("delegation_reason"),
+    afb("spec", AUDIT_FIELD_LIST_BYTES),
 ];
 
 /// `lifecycle.ledger.redacted` — the tombstone (`{targets[], reason_code,
@@ -956,7 +962,11 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── control:loop ──
     ("control.loop.detected", "hint"),
     // ── control:merge ──
+    ("control.merge.completed", "none"),
     ("control.merge.resolved", "none"),
+    ("control.merge.started", "none"),
+    ("control.message.refused", "none"),
+    ("control.message.sent", "none"),
     // ── control:output ──
     ("control.output.rejected", "hint"),
     // ── control:ownership ──
@@ -1579,11 +1589,15 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // now (the class list is dialect schema); their emitters land with the
     // subagent (S2.x/§05e F3) and fleet (§05i) machinery. `spawned`'s child_run
     // scope opener lands with the spawn path (§5a.1 defers it to Stage 4).
-    row_audit("control.subagent.spawned",      O::Events, true,  OPEN_AUDIT, &[], None, None),
-    row_audit("control.subagent.result",       O::Events, true,  OPEN_AUDIT, &[], None, None),
-    row_audit("control.subagent.cancelled",    O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("control.subagent.spawned",      O::Events, true,  OPEN_AUDIT, &[], Some(ScopeKind::ChildRun), None),
+    row_audit("control.subagent.result",       O::Events, true,  OPEN_AUDIT, &[], None, Some(ScopeKind::ChildRun)),
+    row_audit("control.subagent.cancelled",    O::Events, true,  OPEN_AUDIT, &[], None, Some(ScopeKind::ChildRun)),
     row_audit("control.subagent.detached",     O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("control.merge.started",         O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("control.merge.completed",       O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.merge.resolved",        O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("control.message.sent",          O::Events, true,  OPEN_AUDIT, &[], None, None),
+    row_audit("control.message.refused",       O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.ownership.transferred", O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.work_item.dispatched",         O::Events, true,  OPEN_AUDIT, &[], None, None),
     row_audit("control.work_item.stopped",            O::Events, true,  OPEN_AUDIT, &[], None, None),

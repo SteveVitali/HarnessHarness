@@ -157,11 +157,25 @@ impl Envelope {
             DecisionKind::Delegate {
                 delegation_reason, ..
             } => {
-                if decision.stamp.owner == hh_ontology::control::Owner::Model
-                    && delegation_reason.is_none()
+                // ADR-0186 D4 — `delegation_reason` is mandatory for
+                // `owner ∈ {code, model}` (a `model`-owned reason is a
+                // `model_claim` at `delegate`; a `code`-owned reason is
+                // the declared label — both are still data).
+                if matches!(
+                    decision.stamp.owner,
+                    hh_ontology::control::Owner::Model | hh_ontology::control::Owner::Code
+                ) && delegation_reason.is_none()
                 {
                     return CheckVerdict::Refused {
                         reason: "missing_delegation_reason".into(),
+                        events: vec![],
+                    };
+                }
+                // T0 — a `delegate` without the R-2.6.3 capability bound
+                // is `DelegationUnavailable`, never a silent no-op.
+                if !ctx.delegation_available {
+                    return CheckVerdict::Refused {
+                        reason: "delegation_unavailable".into(),
                         events: vec![],
                     };
                 }

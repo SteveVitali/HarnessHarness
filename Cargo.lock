@@ -449,6 +449,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-orchestrator"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-compiler",
+ "hh-control",
+ "hh-env",
+ "hh-experiment",
+ "hh-hir",
+ "hh-identity",
+ "hh-lab",
+ "hh-ledger",
+ "hh-monitor",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-subagent",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-plugin"
 version = "0.0.1"
 dependencies = [
@@ -510,6 +530,24 @@ dependencies = [
  "hh-containment",
  "hh-hir",
  "hh-identity",
+ "hh-ledger",
+ "hh-monitor",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-wire",
+]
+
+[[package]]
+name = "hh-subagent"
+version = "0.0.1"
+dependencies = [
+ "hh-budget",
+ "hh-compiler",
+ "hh-control",
+ "hh-env",
+ "hh-hir",
+ "hh-identity",
+ "hh-lab",
  "hh-ledger",
  "hh-monitor",
  "hh-ontology",

@@ -202,8 +202,11 @@ pub fn replaced_payload(h: &EnvHandle, successor: &str) -> Json {
 /// `action.environment.derived{env_handle, parent, mode, on_parent_end}` —
 /// the `derive` op's record (the child's `ParentEdge` is the handle-side
 /// member; this row is the audit).
-pub fn derived_payload(h: &EnvHandle) -> Json {
+pub fn derived_payload(h: &EnvHandle, derived_for: Option<&str>) -> Json {
     let mut m = vec![("env_handle", Json::str(h.env_handle_id.clone()))];
+    if let Some(run_id) = derived_for {
+        m.push(("derived_for", Json::str(run_id)));
+    }
     if let Some(p) = &h.parent {
         m.push(("parent", Json::str(p.env_handle_id.clone())));
         m.push((

@@ -47,7 +47,7 @@ for pkg in meta['packages']:
     if pkg['name'] in ext:
         continue
     for d in pkg['dependencies']:
-        if d['name'] in ext and d['kind'] == 'normal':
+        if d['name'] in ext and d.get('kind') in (None, 'normal'):
             bad.append(pkg['name'] + ' -> ' + d['name'])
 if bad:
     print('extension-tier edges into the base:')
@@ -72,7 +72,7 @@ for pkg in meta['packages']:
     if pkg['name'] == 'hh-hosting':
         continue
     for d in pkg['dependencies']:
-        if d['name'] == 'hh-hosting' and d['kind'] == 'normal':
+        if d['name'] == 'hh-hosting' and d.get('kind') in (None, 'normal'):
             bad.append(pkg['name'] + ' -> ' + d['name'])
 if bad:
     print('hosting-tier edges into the base:')
@@ -82,3 +82,38 @@ print('hosting tier is edge-free (hosting_edges = [], removable)')
 "
 
 echo "check-removability: hosting tier verified removable"
+
+echo "== removability(S4.6): C1 subagent slice independent; C3 is its only consumer =="
+# §5e.3 CC6 note: the C1 `spawn` slice must survive removability(1); the
+# C3 orchestrator is the removable consumer. `cargo metadata` reports a
+# normal dependency's `kind` as null — accept both null and "normal" here.
+cargo build -p hh-subagent
+cargo test -p hh-subagent
+cargo metadata --format-version 1 --no-deps | python3 -c "
+import json,sys
+meta=json.load(sys.stdin)
+normal=lambda d: d.get('kind') in (None,'normal')
+bad=[]
+consumers=[]
+for pkg in meta['packages']:
+    name=pkg['name']
+    for d in pkg['dependencies']:
+        if not normal(d):
+            continue
+        if name == 'hh-subagent' and d['name'] == 'hh-orchestrator':
+            bad.append('hh-subagent -> hh-orchestrator (C1 depends on C3)')
+        if d['name'] == 'hh-subagent' and name != 'hh-subagent':
+            consumers.append(name)
+        if d['name'] == 'hh-orchestrator' and name != 'hh-orchestrator':
+            bad.append(name + ' -> hh-orchestrator (C3 is not removable)')
+extra=sorted(set(consumers)-{'hh-orchestrator'})
+for name in extra:
+    bad.append(name + ' -> hh-subagent (C1 consumer outside C3)')
+if bad:
+    print('subagent removability violations:')
+    for b in bad: print('  ' + b)
+    sys.exit(1)
+print('hh-subagent is edge-free upward; hh-orchestrator is its only consumer')
+"
+
+echo "check-removability: S4.6 subagent/orchestrator boundary verified"

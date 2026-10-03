@@ -172,6 +172,11 @@ pub struct GuardContext {
     /// The manifest's attendance (`interactive` ⇒ `escalate` on exhaustion —
     /// ADR-0168 D6; C1 admission — the Stage-1 default is `stop`).
     pub interactive_attendance: bool,
+    /// Whether the binding declares the R-2.6.3 delegation capability — a
+    /// `delegate` decision without it is `DelegationUnavailable` (T0;
+    /// ADR-0186 D4's mandatory-reason gate and this gate ride together:
+    /// a profile that cannot spawn cannot delegate at all).
+    pub delegation_available: bool,
 }
 
 /// The `guard()` entry — dispatches the six points over `(events, policy,

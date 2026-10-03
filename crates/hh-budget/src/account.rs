@@ -531,6 +531,17 @@ impl<'a> Account<'a> {
             .ok_or_else(|| BudgetError::UnknownBudget {
                 budget_id: budget_id.to_string(),
             })?;
+        // `complete` is terminal and idempotent — a retried child-result
+        // path must not append a second `released{completion}` row or
+        // subtract the slice remainder twice.
+        if n.node.completed {
+            let h = self.store.head(&self.run_id).map_err(BudgetError::Ledger)?;
+            return Ok(SeqRange {
+                first: h.seq,
+                last: h.seq,
+                count: 0,
+            });
+        }
         if n.node.mode != BudgetMode::Slice {
             self.tree
                 .nodes
