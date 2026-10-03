@@ -12,6 +12,10 @@
 - **Ticket:** <ID>
 - **Requirement ids:** <ids>
 - **Spec:** <sections>
+- **Rung (ADR-0024 obligation):** <the migration-ladder rung the rulings land
+  at — C0 | C1 | C2 | C3 | C4, or an explicit non-contract note for
+  spike/gate/program records. Mandatory; DF-S3.12b-2 swept the pre-convention
+  set at CAP.3.>
 
 ## Context
 <the forces: what made a decision necessary>
