@@ -90,6 +90,19 @@ fn budget_map() -> BTreeMap<String, BudgetSpec> {
         ("budget:experiment".to_string(), caps(100_000)),
         ("budget:instrument".to_string(), caps(100_000)),
         ("budget:inference-zero".to_string(), caps(0)),
+        // A searched arm's budget for the union-dims test — `model_calls`
+        // matches the recipe's zero baseline while `tool_calls` (not a
+        // declared match dim) carries positive headroom.
+        (
+            "budget:search-tools".to_string(),
+            BudgetSpec::hard_caps(
+                BudgetMode::Pool,
+                &[
+                    (DimensionKey::Primary(DimensionId::ModelCalls), 0),
+                    (DimensionKey::Primary(DimensionId::ToolCalls), 5),
+                ],
+            ),
+        ),
     ])
 }
 
@@ -604,6 +617,41 @@ fn value_of_compute_v1_registers_with_iso_companion() {
     let t = tasks(2);
     let plan = expand(&spec, &t, &expand_ctx()).unwrap();
     assert_eq!(plan.cells.len(), 13 * 2);
+}
+
+#[test]
+fn value_of_compute_v1_refuses_a_searched_arm_under_matched_cap() {
+    // AC-R-2.6.4-12 (§5e.4; ADR-0190 D2): an arm doing search work —
+    // `search_budget > 0` (the Stage-5 `bandit`/`predictor` levels'
+    // warm-up/training spend, or evolution-produced rules) is comparable
+    // only under `matched_total`; under the recipe's `matched_cap`
+    // contrast it is `IncommensurableMatch`, never silently admitted.
+    let mut spec = value_of_compute_v1(&pins(), &voc_pins(), 1);
+    // Positive caps on a declared dim (`model_calls` — matched_cap's own
+    // axis): refuses `UnequalCaps` against the group's zero baseline.
+    spec.arms[0].search_budget = Some("budget:experiment".into());
+    spec.experiment_id = spec.experiment_id();
+    assert!(
+        matches!(
+            spec.register(&ctx()),
+            Err(ExperimentRefusal::IncommensurableMatch { .. })
+        ),
+        "a searched arm in the matched_cap group — refused"
+    );
+
+    // The same refusal when the search spend shows only on an
+    // *undeclared* dim — the union-dims guard (a searched arm cannot
+    // evade by capping a dim the match spec does not name).
+    let mut spec = value_of_compute_v1(&pins(), &voc_pins(), 1);
+    spec.arms[1].search_budget = Some("budget:search-tools".into());
+    spec.experiment_id = spec.experiment_id();
+    assert!(
+        matches!(
+            spec.register(&ctx()),
+            Err(ExperimentRefusal::IncommensurableMatch { .. })
+        ),
+        "search headroom on an undeclared dim — refused"
+    );
 }
 
 #[test]

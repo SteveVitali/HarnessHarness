@@ -137,6 +137,12 @@ pub enum RecordKind {
     /// facts on the version, never the coordinate — a provider-side snapshot
     /// roll is a new *version* of the same model line).
     ModelSnapshot,
+    /// A `ComputeDecisionRecord` (§5e.4; S4.7, R-2.6.4) — the
+    /// `control.compute.decided` payload's `record_id` is a content address
+    /// over the canonical body (allocated ids like `decision_id` ride it —
+    /// the address identifies *this* binding record, never replays).
+    /// Version-only.
+    ComputeDecisionRecord,
 }
 
 impl RecordKind {
@@ -181,6 +187,7 @@ impl RecordKind {
             RecordKind::CellPlan => "cell_plan",
             RecordKind::AnalysisRecord => "analysis_record",
             RecordKind::ModelSnapshot => "model_snapshot",
+            RecordKind::ComputeDecisionRecord => "compute_decision",
         }
     }
 
@@ -293,6 +300,7 @@ mod tests {
             RecordKind::CellPlan,
             RecordKind::AnalysisRecord,
             RecordKind::ModelSnapshot,
+            RecordKind::ComputeDecisionRecord,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for k in kinds {

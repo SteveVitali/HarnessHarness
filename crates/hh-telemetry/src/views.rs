@@ -885,6 +885,79 @@ fn compute_metric(name: &str, ev: &[&EventEnvelope]) -> Json {
             )
         }
         "model_calls" => Json::Int(count(&["model.call.requested"])),
+        // §5e.4 — the scheduler's rows (`static` runs produce none, so a
+        // static run's share cells stay honest `n/a`-less zeros only where
+        // the metric is a count; share/rate over an empty set is
+        // `n/a{estimator_undefined}`, never a fabricated 0).
+        "scheduling.decision_count" => Json::Int(count(&["control.compute.decided"])),
+        "scheduling.option_share" => {
+            let mut kinds: BTreeMap<String, i64> = BTreeMap::new();
+            for e in ev.iter().filter(|e| e.class == "control.compute.decided") {
+                if let Some(k) = e
+                    .payload
+                    .get("chosen")
+                    .and_then(|c| c.get("kind"))
+                    .and_then(Json::as_str)
+                {
+                    *kinds.entry(k.to_string()).or_insert(0) += 1;
+                }
+            }
+            Json::Obj(
+                kinds
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Json::Int(*v)))
+                    .collect(),
+            )
+        }
+        "scheduling.prior_coverage" => {
+            let rows: Vec<&&EventEnvelope> = ev
+                .iter()
+                .filter(|e| e.class == "control.compute.decided")
+                .collect();
+            if rows.is_empty() {
+                na(NaReason::EstimatorUndefined)
+            } else {
+                // A record's coverage is live when some `priors_used`
+                // cell carries `n > 0` (a post-reset `n = 0`/`unknown`
+                // cell is recorded, not coverage — AC-F4-9's evidence).
+                let covered = rows
+                    .iter()
+                    .filter(|e| {
+                        matches!(
+                            e.payload.get("priors_used"),
+                            Some(Json::Arr(cells)) if cells.iter().any(|c| {
+                                c.get("n").and_then(Json::as_int).unwrap_or(0) > 0
+                            })
+                        )
+                    })
+                    .count() as i64;
+                Json::Int(covered * ppm / rows.len() as i64)
+            }
+        }
+        "scheduling.overhead" => {
+            let mut totals: BTreeMap<String, i64> = BTreeMap::new();
+            let mut rows = 0i64;
+            for e in ev.iter().filter(|e| e.class == "control.compute.decided") {
+                rows += 1;
+                if let Some(Json::Obj(m)) = e.payload.get("cost_of_estimation") {
+                    for (d, a) in m {
+                        if let Some(n) = a.as_int() {
+                            *totals.entry(d.clone()).or_insert(0) += n;
+                        }
+                    }
+                }
+            }
+            if rows == 0 {
+                na(NaReason::EstimatorUndefined)
+            } else {
+                Json::Obj(
+                    totals
+                        .iter()
+                        .map(|(k, v)| (k.clone(), Json::Int(*v)))
+                        .collect(),
+                )
+            }
+        }
         "tool_calls" => Json::Int(count(&["action.tool.proposed"])),
         "retries" => {
             // `control.retry.fired` rows plus model-call attempts beyond the

@@ -31,6 +31,7 @@
 //! against it). `DecisionPoint`/`Owner`/`ControlBoundary` are reused from the
 //! same module (S1.1; CC7 — no re-declaration).
 
+pub mod compute;
 pub mod driver;
 pub mod envelope;
 pub mod events;

@@ -320,6 +320,7 @@ fn contract(
         evidence_kinds_required: vec![],
         budget_ref: "b-1".into(),
         sealed: true,
+        task_value: None,
     }
 }
 

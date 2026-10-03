@@ -624,6 +624,98 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
         }
     }
 
+    // ── searched-arm guard (§5e.4 AC-F4-12; ADR-0190 D2) ──────────────────
+    // A `search_budget > 0` arm is *searched* (bandit warm-up, predictor
+    // training, evolution-produced rules) and is comparable only under
+    // `matched_total`. Cap matching already refuses unequal caps on the
+    // declared dims; a searched arm whose spend headroom shows only on an
+    // undeclared dim must not slip the matched group either — under
+    // `matched_cap` the ceiling check therefore extends to the union of
+    // every arm's `search_budget` hard caps. Symmetric positive caps stay
+    // legal (`search_budget` is mandatory and may carry the subject's own
+    // work budget — the caps *are* the match); asymmetric headroom —
+    // capped on one arm, absent or differing on another — is
+    // `IncommensurableMatch{UnequalCaps}`, never silently admitted.
+    if spec0.mode == MatchMode::MatchedCap {
+        let declared: std::collections::BTreeSet<String> = spec0
+            .dimensions
+            .iter()
+            .map(|d| d.as_str().to_string())
+            .collect();
+        let mut extra: Vec<String> = Vec::new();
+        for arm in arms {
+            for k in arm
+                .search_budget
+                .as_ref()
+                .expect("checked")
+                .hard_caps_map()
+                .keys()
+            {
+                if !declared.contains(k) && !extra.contains(k) {
+                    extra.push(k.clone());
+                }
+            }
+        }
+        extra.sort();
+        for k in extra {
+            let dim = DimensionId::parse(&k);
+            let cap0 = arms[0]
+                .search_budget
+                .as_ref()
+                .expect("checked")
+                .hard_caps_map()
+                .get(&k)
+                .copied();
+            for (i, arm) in arms.iter().enumerate() {
+                // The M1 enforceability bar extends to the searched dims a
+                // cap-matched arm declares — an unenforceable ceiling is no
+                // ceiling.
+                if let Some(d) = dim {
+                    let e = arm.enforcement.level(d);
+                    if e != EnforcementLevel::Enforced {
+                        return Err(MatchError {
+                            arm: Some(i),
+                            refusal: MatchRefusal::IncommensurableMatch {
+                                reason: RefusalReason::Unenforceable,
+                                dimension: Some(d),
+                                enforceability: Some(e),
+                            },
+                        });
+                    }
+                }
+                if i == 0 {
+                    continue;
+                }
+                let cap = arm
+                    .search_budget
+                    .as_ref()
+                    .expect("checked")
+                    .hard_caps_map()
+                    .get(&k)
+                    .copied();
+                let equal = match (cap0, cap) {
+                    (Some(a), Some(b)) => {
+                        let tol = (spec0.tolerance_ppm.max(0) as i128 * (a.max(b) as i128)
+                            / PPM_SCALE as i128) as i64;
+                        (a - b).abs() <= tol
+                    }
+                    (None, None) => true,
+                    _ => false,
+                };
+                if !equal {
+                    return Err(MatchError {
+                        arm: Some(i),
+                        refusal: MatchRefusal::IncommensurableMatch {
+                            reason: RefusalReason::UnequalCaps,
+                            dimension: dim,
+                            enforceability: None,
+                        },
+                    });
+                }
+            }
+        }
+    }
+
     // ── M3: `search + eval + inference` equal across arms ─────────────────
     if spec0.mode == MatchMode::MatchedTotal {
         let total = |arm: &ArmSpec| -> Option<BTreeMap<String, i64>> {
@@ -949,6 +1041,89 @@ mod tests {
             validate_match(&[a, b]).unwrap_err().refusal,
             MatchRefusal::IncommensurableMatch {
                 reason: RefusalReason::SpendConfidenceTooLow,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn matched_cap_refuses_searched_arm_off_the_declared_dims() {
+        // AC-F4-12 (§5e.4; ADR-0190): a `search_budget > 0` arm is searched —
+        // comparable only under `matched_total`. A positive cap on a
+        // *declared* dim already refuses `UnequalCaps`; an arm whose search
+        // headroom shows only on an undeclared dim must refuse the same
+        // way — never silently admitted to the cap-matched group.
+        let mut searched = arm();
+        let mut extra = caps(&[
+            (DimensionId::ModelCalls, 10),
+            (DimensionId::TimeWallMs, 60_000),
+        ]);
+        // `tool_calls` is not a declared match dimension.
+        extra.dimensions.insert(
+            DimensionKey::Primary(DimensionId::ToolCalls),
+            crate::spec::DimensionRule::hard(4, DimensionKey::Primary(DimensionId::ToolCalls)),
+        );
+        searched.search_budget = Some(extra);
+        assert!(matches!(
+            validate_match(&[arm(), searched]).unwrap_err().refusal,
+            MatchRefusal::IncommensurableMatch {
+                reason: RefusalReason::UnequalCaps,
+                ..
+            }
+        ));
+        // … and the same arm is admitted under `matched_total` where the
+        // totals match (M3 compares the three-term sum — the tool cap
+        // rides both arms' totals symmetrically).
+        let mut a = arm();
+        a.match_spec = Some(MatchSpec {
+            mode: MatchMode::MatchedTotal,
+            ..MatchSpec::matched_cap(&[DimensionId::ModelCalls])
+        });
+        a.inference_budget = Some(caps(&[]));
+        let mut b = arm();
+        b.match_spec = Some(MatchSpec {
+            mode: MatchMode::MatchedTotal,
+            ..MatchSpec::matched_cap(&[DimensionId::ModelCalls])
+        });
+        b.inference_budget = Some(caps(&[]));
+        assert!(validate_match(&[a, b]).is_ok());
+    }
+
+    #[test]
+    fn matched_cap_admits_equal_undeclared_search_caps() {
+        // Symmetric positive search caps stay legal — `search_budget` is
+        // mandatory and may carry the subject's own work budget; identical
+        // ceilings *are* the match (the union check is symmetric, not a
+        // positivity ban).
+        let with_tools = || {
+            let mut b = caps(&[
+                (DimensionId::ModelCalls, 10),
+                (DimensionId::TimeWallMs, 60_000),
+            ]);
+            b.dimensions.insert(
+                DimensionKey::Primary(DimensionId::ToolCalls),
+                crate::spec::DimensionRule::hard(4, DimensionKey::Primary(DimensionId::ToolCalls)),
+            );
+            b
+        };
+        let mut a = arm();
+        a.search_budget = Some(with_tools());
+        let mut b = arm();
+        b.search_budget = Some(with_tools());
+        assert!(validate_match(&[a, b]).is_ok());
+        // … but a one-sided cap on the same dim refuses (asymmetric
+        // headroom — a searched arm relative to the group).
+        let mut capped = arm();
+        capped.search_budget = Some(with_tools());
+        let mut plain = arm();
+        plain.search_budget = Some(caps(&[
+            (DimensionId::ModelCalls, 10),
+            (DimensionId::TimeWallMs, 60_000),
+        ]));
+        assert!(matches!(
+            validate_match(&[plain, capped]).unwrap_err().refusal,
+            MatchRefusal::IncommensurableMatch {
+                reason: RefusalReason::UnequalCaps,
                 ..
             }
         ));

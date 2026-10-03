@@ -374,6 +374,39 @@ pub const PROCESS_METRICS: &[ProcessMetric] = &[
         fold: N(NA::NotRun) }, // arm-level (`eval_budget`) — the Stage-3 harness's
     ProcessMetric { name: "attribution_coverage", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["measurement.cost.attributed"], unit: MetricUnit::Ppm, fold: C },
+    // ── scheduling (§5e.4 — the value-of-compute scheduler's telemetry;
+    // `applies_to = {native}`: a hosted participant receives no native
+    // scheduling, so every row renders `n/a{class}` — AC-F4-12/-14) ─────
+    ProcessMetric { name: "scheduling.decision_count", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: &[N_],
+        computed_from: &["control.compute.decided"], unit: MetricUnit::Count, fold: C },
+    ProcessMetric { name: "scheduling.option_share", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: &[N_],
+        computed_from: &["control.compute.decided"], unit: MetricUnit::CountMap, fold: C },
+    // `scheduling.overhead` — the recipe's primary (§5e.4): Σ
+    // `cost_of_estimation` over the decided rows, charged under the
+    // `harness_overhead.scheduling` attribution (zero for `rules`/
+    // `uniform`/`static` — no model calls; the fold reads the record
+    // member, never a guessed charge).
+    ProcessMetric { name: "scheduling.overhead", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: &[N_],
+        computed_from: &["control.compute.decided"], unit: MetricUnit::Attribution, fold: C },
+    // `scheduling.prior_coverage` — the share of decided records whose
+    // `priors_used[]` carries a live cell (rules reads no priors — a 0
+    // reading is honest coverage, not a missing fold).
+    ProcessMetric { name: "scheduling.prior_coverage", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: &[N_],
+        computed_from: &["control.compute.decided"], unit: MetricUnit::Ppm, fold: C },
+    // `scheduling.regret_vs_oracle` — the chosen option's realized
+    // objective minus the J4-synthesized `oracle_allocation` row's
+    // (`compute_decision_outcome`'s matched view; needs matched_total
+    // arms and an executed recipe — the lab's measurement, not a run fold).
+    ProcessMetric { name: "scheduling.regret_vs_oracle", dimension: Dimension::Efficiency, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: &[N_],
+        computed_from: &["control.compute.decided", "lifecycle.run.finished"],
+        unit: MetricUnit::Ppm, fold: N(NA::NotRun) },
+    // `scheduling.advice_compliance` (T-LCD-13) — the share of delivered
+    // `compute_advice` items the model followed; needs the `advise` arm +
+    // `verification.artefact.followed{kind: compute_advice}` joins —
+    // Stage-4 variants advise nothing, so the stage is not run.
+    ProcessMetric { name: "scheduling.advice_compliance", dimension: Dimension::Efficiency, direction: Direction::Higher, requires_observability: &[EV, LG], applies_to: &[N_],
+        computed_from: &["context.artefact.delivered", "verification.artefact.followed"],
+        unit: MetricUnit::Ppm, fold: N(NA::NotRun) },
 ];
 
 /// Look a metric up by name.
@@ -558,6 +591,12 @@ mod tests {
             "heal_count",
             "wakeups_skipped",
             "search_budget_consumed",
+            "scheduling.decision_count",
+            "scheduling.option_share",
+            "scheduling.overhead",
+            "scheduling.prior_coverage",
+            "scheduling.regret_vs_oracle",
+            "scheduling.advice_compliance",
             "eval_budget_consumed",
             "boundary_overhead_ms",
         ] {

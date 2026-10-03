@@ -705,3 +705,205 @@ pub fn run_suite(
         hosted_entries: Vec::new(),
     }
 }
+
+/// `compute_policy` — the value-of-compute scheduler class (spec §5e.4
+/// R-2.6.4; ADR-0188/0189/0190; S4.7). `exactly-one`, homed on the control
+/// plane, invoked between `decide` and `envelope.check`; binds/tightens
+/// unbound parameters or advises model-owned points — never proposes,
+/// refuses, widens or owns β (B-1…B-6). The packaged `static` null variant
+/// is the default; `uniform`/`rules` are the C3 recipe arms;
+/// `bandit`/`surface_prior`/`predictor` land at Stage 5/6.
+pub fn compute_policy_class() -> ClassRecord {
+    ClassRecord {
+        class_id: "compute_policy".to_string(),
+        contract: vec![
+            ContractOperation {
+                name: "capabilities".to_string(),
+                inputs: Json::obj([]),
+                outputs: Json::obj([(
+                    "capabilities",
+                    Json::str("{options_supported, decision_points, makes_model_calls, estimator_ref, requires{task_value, priors}, deterministic}"),
+                )]),
+                invariants: vec![
+                    "options_supported ⊆ ComputeOption kinds (closed — ADR-0188 D3)".to_string(),
+                    "decision_points ⊆ {propose, delegate, verify, retry, stop}".to_string(),
+                ],
+                failure_modes: vec![],
+            },
+            ContractOperation {
+                name: "bind".to_string(),
+                inputs: Json::obj([
+                    ("decision", Json::str("control_decision")),
+                    ("ctx", Json::str("compute_context")),
+                ]),
+                outputs: Json::obj([(
+                    "outcome",
+                    Json::str("BoundDecision{decision′, record} | Unchanged{record}"),
+                )]),
+                invariants: vec![
+                    "B-1 kind/decision_point/owner unchanged (β untouched)".to_string(),
+                    "B-2 every bound parameter was unbound or is tightened".to_string(),
+                    "B-3 a binding the envelope would refuse returns Unchanged".to_string(),
+                    "B-4 every supported option in options_considered[] with an estimate or typed infeasibility".to_string(),
+                    "B-5 no Text leaf, no model_claim as sole basis".to_string(),
+                    "B-6 pure over (decision, ctx)".to_string(),
+                ],
+                failure_modes: vec![
+                    "PolicyInvalid".to_string(),
+                    "EstimatorBudgetExhausted".to_string(),
+                    "PriorUnknown".to_string(),
+                    "TaskValueMissing".to_string(),
+                ],
+            },
+            ContractOperation {
+                name: "advise".to_string(),
+                inputs: Json::obj([
+                    ("decision_point", Json::str("model-owned point")),
+                    ("ctx", Json::str("compute_context")),
+                ]),
+                outputs: Json::obj([(
+                    "advice",
+                    Json::str("ContextItem{kind: compute_advice} | none"),
+                )]),
+                invariants: vec![
+                    "never affects bind".to_string(),
+                    "rendered through the Model Profile by a HarnessRule".to_string(),
+                ],
+                failure_modes: vec![],
+            },
+            ContractOperation {
+                name: "observe".to_string(),
+                inputs: Json::obj([("events", Json::str("durable ledger events[]"))]),
+                outputs: Json::obj([("priors", Json::str("updated online priors"))]),
+                invariants: vec![
+                    "durable-ledger-only inputs (ADR-0189 D4)".to_string(),
+                    "idempotent; resets cells on supersession/drift".to_string(),
+                ],
+                failure_modes: vec![],
+            },
+            ContractOperation {
+                name: "explain".to_string(),
+                inputs: Json::obj([("record_ref", Json::str("ref"))]),
+                outputs: Json::obj([(
+                    "explanation",
+                    Json::str("projection over control.compute.decided + compute_decision_outcome"),
+                )]),
+                invariants: vec!["a projection, never a stored score".to_string()],
+                failure_modes: vec![],
+            },
+        ],
+        cardinality: crate::kinds::Cardinality::ExactlyOne,
+        required_inputs: BTreeSet::from([
+            "ModelProfile".to_string(),
+            "ResourceAccount".to_string(),
+        ]),
+        base_param_schema: BTreeMap::new(),
+        hot_path: true,
+        dialect_introduced: "registry/1".to_string(),
+        contract_version: "1.0".to_string(),
+        home: "kernel".to_string(),
+        declaration_schema: Json::obj([
+            (
+                "properties",
+                Json::obj([
+                    ("options_supported", Json::Null),
+                    ("decision_points", Json::Null),
+                    ("makes_model_calls", Json::Null),
+                    ("estimator_ref", Json::Null),
+                    ("requires_task_value", Json::Null),
+                    ("requires_priors", Json::Null),
+                    ("deterministic", Json::Null),
+                ]),
+            ),
+            ("additionalProperties", Json::Bool(false)),
+            (
+                "required",
+                Json::Arr(vec![Json::str("deterministic")]),
+            ),
+        ]),
+        conformance_suite_ref: None,
+        decision_points: vec![
+            "propose".to_string(),
+            "delegate".to_string(),
+            "verify".to_string(),
+            "retry".to_string(),
+            "stop".to_string(),
+        ],
+        metrics_declared: vec![
+            "scheduling.overhead".to_string(),
+            "scheduling.decision_count".to_string(),
+            "scheduling.option_share".to_string(),
+            "scheduling.regret_vs_oracle".to_string(),
+            "scheduling.prior_coverage".to_string(),
+            "scheduling.advice_compliance".to_string(),
+        ],
+        slot_key: "compute_policy".to_string(),
+        tier: "C3".to_string(),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+            hh_plugin::ContractRef::class_contract("compute_estimator", "*"),
+        ],
+    }
+}
+
+/// `compute_estimator` — the marginal-value estimator class (spec §5e.4
+/// R-2.6.4; ADR-0189; S4.7). `exactly-one` inside a `compute_policy`
+/// variant's `estimator_ref`; typed inputs only, `MarginalValueEstimate |
+/// EstimatorUnavailable` out. `rules` is the C3 baseline (no model calls);
+/// `bandit`/`surface_prior`/`predictor` land at Stage 5/6.
+pub fn compute_estimator_class() -> ClassRecord {
+    ClassRecord {
+        class_id: "compute_estimator".to_string(),
+        contract: vec![ContractOperation {
+            name: "estimate".to_string(),
+            inputs: Json::obj([
+                ("option", Json::str("compute_option")),
+                ("ctx", Json::str("compute_context")),
+                ("priors", Json::str("prior_cells[]")),
+            ]),
+            outputs: Json::obj([(
+                "estimate",
+                Json::str("MarginalValueEstimate | EstimatorUnavailable{reason}"),
+            )]),
+            invariants: vec![
+                "typed inputs only — no Text leaf, no model_claim as sole basis (B-5)".to_string(),
+                "pure over (option, ctx, priors) when deterministic".to_string(),
+            ],
+            failure_modes: vec!["EstimatorUnavailable".to_string()],
+        }],
+        cardinality: crate::kinds::Cardinality::ExactlyOne,
+        required_inputs: BTreeSet::from([
+            "ModelProfile".to_string(),
+            "ResourceAccount".to_string(),
+        ]),
+        base_param_schema: BTreeMap::new(),
+        hot_path: false,
+        dialect_introduced: "registry/1".to_string(),
+        contract_version: "1.0".to_string(),
+        home: "kernel".to_string(),
+        declaration_schema: Json::obj([
+            (
+                "properties",
+                Json::obj([
+                    ("makes_model_calls", Json::Null),
+                    ("window", Json::Null),
+                    ("discount", Json::Null),
+                    ("min_n", Json::Null),
+                    ("deterministic", Json::Null),
+                ]),
+            ),
+            ("additionalProperties", Json::Bool(false)),
+            ("required", Json::Arr(vec![Json::str("deterministic")])),
+        ]),
+        conformance_suite_ref: None,
+        decision_points: vec![],
+        metrics_declared: vec!["scheduling.overhead".to_string()],
+        slot_key: "compute_estimator".to_string(),
+        tier: "C3".to_string(),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
+    }
+}

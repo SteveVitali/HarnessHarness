@@ -217,6 +217,13 @@ pub fn build(dir: &Path) -> Result<(String, Vec<String>), RegistryError> {
         // first-party variant lives under `plugins/hh-compact-evict-oldest`;
         // the corpus registers the class floors-only).
         crate::suites::compaction_strategy_class(),
+        // S4.7 — the `compute_policy` scheduler class + its
+        // `compute_estimator` (§5e.4 R-2.6.4; ADR-0188/0189). The packaged
+        // `static`/`uniform`/`rules` variants live in hh-control's
+        // `policy_for`; the corpus registers both classes floors-only (no
+        // suite, no variants — the C3 tier map's floor).
+        crate::suites::compute_policy_class(),
+        crate::suites::compute_estimator_class(),
     ] {
         store.register(RegistryRecord::Class(class), &kernel, None)?;
     }

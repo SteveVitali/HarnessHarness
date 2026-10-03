@@ -388,6 +388,11 @@ pub struct RunManifest {
     pub overrides_layer_id: Option<String>,
     /// The envelope policy ref (ADR-0132).
     pub envelope_policy_ref: Option<String>,
+    /// `compute_policy_ref` — the `compute_policy` slot's bound variant
+    /// spelling (`static`/`uniform`/`rules` at C3; §5e.4). A variant ref,
+    /// not a pinned content id — `static` is the default when absent.
+    /// Emitted only when `Some`.
+    pub compute_policy_ref: Option<String>,
     /// The healing policy ref (ADR-0132).
     pub healing_policy_ref: Option<String>,
     /// `{writer, environment, wakeup_claim}`.
@@ -446,6 +451,7 @@ impl RunManifest {
             continued_from: None,
             overrides_layer_id: None,
             envelope_policy_ref: None,
+            compute_policy_ref: None,
             healing_policy_ref: None,
             lease_ttl: LeaseTtl {
                 writer_ms: 60_000,
@@ -689,6 +695,7 @@ impl RunManifest {
             ("parent_run_id", &self.parent_run_id),
             ("overrides_layer_id", &self.overrides_layer_id),
             ("envelope_policy_ref", &self.envelope_policy_ref),
+            ("compute_policy_ref", &self.compute_policy_ref),
             ("healing_policy_ref", &self.healing_policy_ref),
             ("audit_policy_ref", &self.audit_policy_ref),
             ("registry_snapshot_id", &self.registry_snapshot_id),
@@ -954,6 +961,7 @@ impl RunManifest {
             "continued_from",
             "environment_ref",
             "environment_version_id",
+            "compute_policy_ref",
             "envelope_policy_ref",
             "forked_from",
             "grace_ms",
@@ -1007,6 +1015,7 @@ impl RunManifest {
             continued_from: link("continued_from")?,
             overrides_layer_id: opt_str("overrides_layer_id"),
             envelope_policy_ref: opt_str("envelope_policy_ref"),
+            compute_policy_ref: opt_str("compute_policy_ref"),
             healing_policy_ref: opt_str("healing_policy_ref"),
             lease_ttl: LeaseTtl {
                 writer_ms: ttl_i("writer")?,

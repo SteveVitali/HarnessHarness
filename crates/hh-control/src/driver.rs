@@ -348,6 +348,19 @@ pub struct DriverConfig {
     /// `delegate` decision refuses `DelegationUnavailable`, T0). Default
     /// `false` — a profile declares the capability or it is absent.
     pub delegation_available: bool,
+    /// The `compute_policy` variant bound in
+    /// `AgentProcess.native.slots["compute_policy"]` (§5e.4): `static` (the
+    /// default — the slot binds nothing and the run stays byte-identical
+    /// to one without it), `uniform`, `rules`. Any other ref fails
+    /// `policy_for`'s `VariantNotAdmitted` at the first bind.
+    pub compute_policy_ref: String,
+    /// The declared compute facts the driver cannot fold itself
+    /// (`ensemble`, `parallel`/`subagent_task` declarations,
+    /// `profile.capabilities`, `role_table`, `placements`, `priors`,
+    /// `cost_model`, `task_value`, `delegation_depth`) — sealed at
+    /// `open`/`resume` from the manifest/profile projection. Everything
+    /// else in the `ComputeContext` folds from the durable prefix.
+    pub compute_facts: crate::compute::ComputeFacts,
 }
 
 impl Default for DriverConfig {
@@ -370,6 +383,8 @@ impl Default for DriverConfig {
             plan_surface_id: None,
             plan_schema_ref: crate::plan_exec::PLAN_SCHEMA_REF.to_string(),
             delegation_available: false,
+            compute_policy_ref: "static".to_string(),
+            compute_facts: crate::compute::ComputeFacts::default(),
         }
     }
 }
@@ -391,6 +406,10 @@ pub struct Driver<S: ControlStrategy> {
     next_id: u64,
     /// The recorded decision event ids.
     decision_events: Vec<String>,
+    /// The `control.compute.decided` record ids this run emitted
+    /// (`lifecycle.run.finished`'s `compute_decisions` member — empty for
+    /// `static`, which never appends).
+    compute_records: Vec<String>,
     /// The last `control.decision` event ref (`causes ∋` for `intended`).
     last_decision_ref: Option<EventRef>,
     /// Whether a submission has been detected (`stop_rule` reading).
@@ -484,6 +503,7 @@ impl<S: ControlStrategy> Driver<S> {
             now_ms: 0,
             next_id: 0,
             decision_events: vec![],
+            compute_records: vec![],
             last_decision_ref: None,
             submission: None,
             config,
@@ -525,6 +545,19 @@ impl<S: ControlStrategy> Driver<S> {
         let state = strategy.open(ctx).map_err(DriverError::Open)?;
         let (envelope, envelope_state) = Envelope::arm(policy.clone(), sink.prefix())
             .map_err(|e| DriverError::Arm(e.to_string()))?;
+        // The emitted compute records — re-folded from the prefix so a
+        // resumed run's `run.finished` names the whole list.
+        let compute_records: Vec<String> = sink
+            .prefix()
+            .iter()
+            .filter(|e| e.class == "control.compute.decided")
+            .filter_map(|e| {
+                e.payload
+                    .get("record_id")
+                    .and_then(Json::as_str)
+                    .map(str::to_string)
+            })
+            .collect();
         let mut driver = Driver {
             envelope,
             envelope_state,
@@ -534,6 +567,7 @@ impl<S: ControlStrategy> Driver<S> {
             now_ms: 0,
             next_id: 0,
             decision_events: vec![],
+            compute_records,
             last_decision_ref: None,
             submission: None,
             config,
@@ -615,6 +649,16 @@ impl<S: ControlStrategy> Driver<S> {
                     .and_then(Json::as_str)
                     .map(str::to_string)
             });
+        let compute_records: Vec<String> = seed
+            .iter()
+            .filter(|e| e.class == "control.compute.decided")
+            .filter_map(|e| {
+                e.payload
+                    .get("record_id")
+                    .and_then(Json::as_str)
+                    .map(str::to_string)
+            })
+            .collect();
         let last_model_call_id = seed
             .iter()
             .rev()
@@ -634,6 +678,7 @@ impl<S: ControlStrategy> Driver<S> {
             now_ms: 0,
             next_id,
             decision_events,
+            compute_records,
             last_decision_ref,
             submission,
             config,
@@ -718,6 +763,258 @@ impl<S: ControlStrategy> Driver<S> {
             cancel_requested: None,
             interactive_attendance: self.config.interactive_attendance,
             delegation_available: self.config.delegation_available,
+        }
+    }
+
+    /// `compute_policy.bind(d, ctx)` — the §5e.4 seam. `static` never
+    /// reaches the estimator (empty capability set — the driver
+    /// short-circuits, so a `static`-bound run appends zero
+    /// `control.compute.decided` rows and is byte-identical modulo ids to
+    /// a run without the slot). A provider-drift / profile-supersession
+    /// row newer than the last reset clears the ctx's priors and lands
+    /// `control.compute.prior_reset` first (AC-F4-9's rules-fallback
+    /// evidence). A typed estimator degradation
+    /// (`EstimatorBudgetExhausted`/`TaskValueMissing`) degrades to
+    /// `Unchanged` with a degraded record — never a stop; a `PolicyInvalid`
+    /// (an invalid bound member — `check_bound`'s post-check) degrades the
+    /// same way rather than emitting an unverifiable binding.
+    fn bind_compute(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        decision: crate::vocab::ControlDecision,
+    ) -> Result<
+        (
+            crate::vocab::ControlDecision,
+            Option<crate::compute::ComputeDecisionRecord>,
+        ),
+        DriverError,
+    > {
+        let variant = self.config.compute_policy_ref.clone();
+        if variant == "static" {
+            return Ok((decision, None));
+        }
+        let policy = crate::compute::policy_for(&variant).map_err(|e| DriverError::Port {
+            port: "compute_policy",
+            detail: e.to_string(),
+        })?;
+        // Prior reset — drift/supersession since the last reset (or open)
+        // voids the cells the ctx reads; the reset row lands before the
+        // bind's record so the empty `priors_used[]` has its evidence.
+        {
+            let prefix = sink.prefix();
+            let reset_at = prefix.iter().rposition(|e| {
+                matches!(
+                    e.class.as_str(),
+                    "model.rerouted" | "model.profile.expired_used"
+                )
+            });
+            let last_reset = prefix
+                .iter()
+                .rposition(|e| e.class == "control.compute.prior_reset");
+            if let Some(i) = reset_at {
+                if last_reset.map(|r| r < i).unwrap_or(true) {
+                    let trigger_ref = prefix[i].event_id.clone();
+                    let trigger_class = prefix[i].class.clone();
+                    let reason = if trigger_class == "model.rerouted" {
+                        "provider_drift"
+                    } else {
+                        "profile_superseded"
+                    };
+                    self.append(
+                        sink,
+                        "control.compute.prior_reset",
+                        Json::obj([
+                            ("trigger_event_ref", Json::str(&trigger_ref)),
+                            ("trigger_class", Json::str(&trigger_class)),
+                            ("reason", Json::str(reason)),
+                            ("policy_ref", Json::str(&variant)),
+                        ]),
+                        None,
+                    )?;
+                }
+            }
+        }
+        let ctx = self.compute_ctx(sink.prefix());
+        let outcome = match policy.bind(&decision, &ctx) {
+            Ok(o) => o,
+            Err(
+                e @ (crate::compute::ComputeError::EstimatorBudgetExhausted
+                | crate::compute::ComputeError::TaskValueMissing
+                | crate::compute::ComputeError::PolicyInvalid { .. }),
+            ) => crate::compute::BindOutcome::Unchanged {
+                record: crate::compute::degraded_record(&decision, &ctx, policy.variant_ref(), &e),
+            },
+            Err(e) => {
+                return Err(DriverError::Port {
+                    port: "compute_policy",
+                    detail: e.to_string(),
+                })
+            }
+        };
+        match outcome {
+            crate::compute::BindOutcome::Bound {
+                decision: d2,
+                record,
+            } => {
+                // B-1/B-2's post-check — the bound decision must preserve
+                // kind/point/owner and only tighten; an inadmissible
+                // binding degrades to `Unchanged`, never lands.
+                if let Err(e) = crate::compute::check_bound(&decision, &d2, &ctx) {
+                    let record =
+                        crate::compute::degraded_record(&decision, &ctx, policy.variant_ref(), &e);
+                    return Ok((decision, Some(record)));
+                }
+                Ok((d2, Some(record)))
+            }
+            crate::compute::BindOutcome::Unchanged { record } => Ok((decision, Some(record))),
+        }
+    }
+
+    /// The folded `ComputeContext` at `now` — the sealed `compute_facts`
+    /// for what the definition declares, the durable prefix for everything
+    /// the run observed (a pure read; a replayed prefix rebuilds the
+    /// identical ctx — B-6).
+    fn compute_ctx(&self, events: &[EventEnvelope]) -> crate::compute::ComputeContext {
+        let facts = &self.config.compute_facts;
+        // `remaining` — the same view the guards read (the caller's
+        // pass-through merged with `ceiling − consumed`); unregistered
+        // spellings drop (a `DimensionKey`-only bound is not a vector
+        // member — the closed `DimensionId` set is what `ResourceVector`
+        // stores).
+        let gctx = self.guard_ctx(events);
+        let mut remaining = hh_budget::quantity::ResourceVector::zero();
+        for (dim, amt) in &gctx.remaining {
+            if let Some(d) = hh_ontology::dimensions::DimensionId::parse(dim) {
+                remaining.add(d, *amt);
+            }
+        }
+        let occupancy_ppm = gctx
+            .gauges
+            .get("context.occupancy_ppm")
+            .copied()
+            .unwrap_or(0);
+        // Live fan-out — spawned minus the three terminal rows.
+        let spawned = events
+            .iter()
+            .filter(|e| e.class == "control.subagent.spawned")
+            .count() as i64;
+        let settled = events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e.class.as_str(),
+                    "control.subagent.result"
+                        | "control.subagent.cancelled"
+                        | "control.subagent.detached"
+                )
+            })
+            .count() as i64;
+        // `samples_so_far` — one per `model.call.completed`, hashed by
+        // `response_ref` (the content ref — identical outputs share it;
+        // the body never crosses this seam).
+        let samples: Vec<crate::compute::SampleFact> = events
+            .iter()
+            .filter(|e| e.class == "model.call.completed")
+            .map(|e| crate::compute::SampleFact {
+                output_hash: e
+                    .payload
+                    .get("response_ref")
+                    .and_then(Json::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                verdicts: vec![],
+            })
+            .collect();
+        // Verdict streaks — the trailing run of
+        // `verification.validator.verdict` rows (bool values only; a
+        // non-bool tail member stops the streak).
+        let mut pass = 0u32;
+        let mut fail = 0u32;
+        for e in events
+            .iter()
+            .rev()
+            .filter(|e| e.class == "verification.validator.verdict")
+        {
+            match e.payload.get("value") {
+                Some(Json::Bool(true)) if fail == 0 => pass += 1,
+                Some(Json::Bool(false)) if pass == 0 => fail += 1,
+                _ => break,
+            }
+        }
+        // Format-failure streak — the strategy's own counter
+        // (`extension.format_error_streak`; a variant that does not track
+        // it reads 0, never a guess).
+        let format_failure = self
+            .state
+            .extension
+            .get("format_error_streak")
+            .and_then(Json::as_int)
+            .unwrap_or(0)
+            .max(0) as u32;
+        // Priors — cleared when drift/supersession outruns the last reset
+        // (the `control.compute.prior_reset` row lands in `bind_compute`).
+        let reset_at = events.iter().rposition(|e| {
+            matches!(
+                e.class.as_str(),
+                "model.rerouted" | "model.profile.expired_used"
+            )
+        });
+        let last_reset = events
+            .iter()
+            .rposition(|e| e.class == "control.compute.prior_reset");
+        let priors_reset = reset_at
+            .map(|i| last_reset.map(|r| r < i).unwrap_or(true))
+            .unwrap_or(false);
+        let priors = if priors_reset {
+            vec![]
+        } else {
+            facts.priors.clone()
+        };
+        // Health — two consecutive trailing attempt failures degrade the
+        // model-plane view (conservative options only).
+        let mut failed_tail = 0u32;
+        for e in events.iter().rev() {
+            match e.class.as_str() {
+                "model.call.attempt.failed" => failed_tail += 1,
+                "model.call.attempt.completed" => break,
+                _ => {}
+            }
+        }
+        crate::compute::ComputeContext {
+            budget: crate::compute::BudgetView {
+                remaining,
+                reserved: hh_budget::quantity::ResourceVector::zero(),
+                live_fan_out: spawned.saturating_sub(settled).max(0) as u32,
+                fan_out_cap: self.config.gauge_caps.fan_out,
+                delegation_depth: facts.delegation_depth,
+                delegation_depth_cap: self.config.gauge_caps.delegation_depth,
+                occupancy_ppm,
+            },
+            declared_parallel_steps: facts.declared_parallel_steps,
+            subagent_task_targets: facts.subagent_task_targets.clone(),
+            ensemble: facts.ensemble.clone(),
+            samples,
+            verifier: facts
+                .verifier
+                .clone()
+                .or_else(|| self.verify_port.is_some().then(|| "executable".to_string())),
+            validator_streaks: crate::compute::ValidatorStreaks {
+                pass,
+                fail,
+                format_failure,
+            },
+            profile_capabilities: facts.profile_capabilities.clone(),
+            role_table: facts.role_table.clone(),
+            placements: facts.placements.clone(),
+            priors,
+            cost_model: facts.cost_model.clone(),
+            health: if failed_tail >= 2 {
+                crate::compute::HealthView::Degraded
+            } else {
+                crate::compute::HealthView::Ok
+            },
+            task_value: facts.task_value.clone(),
+            context_label: facts.context_label.clone(),
         }
     }
 
@@ -940,7 +1237,12 @@ impl<S: ControlStrategy> Driver<S> {
                 }
             }
             let decision = self.strategy.decide(&mut self.state, &cue);
-            // The F2 seam — `envelope.check(d') → admitted | refused`.
+            // §5e.4 — `compute_policy.bind(d, ctx) → d′ | Unchanged`
+            // between `decide` and `envelope.check`; `static` short-
+            // circuits before the fold (a static run is byte-identical to
+            // one without the slot — AC-F4-1).
+            let (decision, compute_record) = self.bind_compute(sink, decision)?;
+            // The F2 seam — `envelope.check(d′) → admitted | refused`.
             let verdict = self.envelope.check(
                 sink.prefix(),
                 &decision,
@@ -950,7 +1252,21 @@ impl<S: ControlStrategy> Driver<S> {
             match verdict {
                 CheckVerdict::Admitted { .. } => {
                     let ev_id = self.alloc("d");
-                    let payload = crate::events::decision_payload(
+                    // The bind record lands before the `control.decision`
+                    // it advises — `decision_id` is stamped with the
+                    // decision's own allocated id, then `record_id` is
+                    // re-identified over the completed body (the content
+                    // hash covers `decision_id`).
+                    let mut compute_ref: Option<String> = None;
+                    if let Some(mut record) = compute_record {
+                        record.decision_id = ev_id.clone();
+                        record.record_id = record.compute_record_id();
+                        compute_ref = Some(record.record_id.clone());
+                        let payload = record.to_json();
+                        self.append(sink, "control.compute.decided", payload, None)?;
+                        self.compute_records.push(record.record_id);
+                    }
+                    let mut payload = crate::events::decision_payload(
                         &ev_id,
                         &decision,
                         &self.state.cursor,
@@ -967,6 +1283,11 @@ impl<S: ControlStrategy> Driver<S> {
                             None
                         },
                     );
+                    if let Some(r) = &compute_ref {
+                        if let Json::Obj(m) = &mut payload {
+                            m.insert("compute_decision_ref".to_string(), Json::str(r.clone()));
+                        }
+                    }
                     self.append_decision(sink, &ev_id, payload)?;
                     // T-LCD-13 `followed` — an admitted non-`wait` decision
                     // discharges a pending nudge: the strategy's response
@@ -2189,6 +2510,18 @@ impl<S: ControlStrategy> Driver<S> {
                 m.insert("verification_summary_ref".to_string(), Json::str(r.clone()));
             }
         }
+        // §5e.4 — the run's `control.compute.decided` record refs ride the
+        // finished row (`compute_decision_outcome` joins them with the
+        // realized outcome). Empty for `static` — the member stays absent
+        // so a static run's ledger is byte-identical (AC-F4-1).
+        if !self.compute_records.is_empty() {
+            if let Json::Obj(m) = &mut finished {
+                m.insert(
+                    "compute_decisions".to_string(),
+                    Json::Arr(self.compute_records.iter().map(Json::str).collect()),
+                );
+            }
+        }
         self.append(sink, "lifecycle.run.finished", finished, None)?;
         Ok(FinishOutcome::Done(RunResult {
             report,
@@ -2522,6 +2855,7 @@ impl<S: ControlStrategy> Driver<S> {
                     evidence_kinds_required: vec![],
                     budget_ref: "budget".into(),
                     sealed: true,
+                    task_value: None,
                 };
                 &empty_contract
             }
@@ -4406,5 +4740,144 @@ mod tests {
             steer_decision.is_some(),
             "a propose{{steer_ref}} decision row"
         );
+    }
+
+    /// AC-R-2.6.4-1/2/3/4 — the §5e.4 seam end-to-end: `compute_policy`
+    /// `uniform` binds `propose.sample_k = k_max` between `decide` and
+    /// `envelope.check`, the admitted `control.decision` keeps
+    /// kind/decision_point/owner (B-1), cites `compute_decision_ref`, and
+    /// the `control.compute.decided` row lands before it with every
+    /// supported option in `options_considered[]` (B-4).
+    #[test]
+    fn uniform_compute_policy_binds_through_the_driver_seam() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let facts = crate::compute::ComputeFacts {
+            ensemble: Some(crate::compute::EnsembleFact {
+                k_max: 5,
+                oracle: Some("executable".into()),
+            }),
+            ..Default::default()
+        };
+        let mut driver = Driver::open_react(
+            &ctx(),
+            policy,
+            &mut sink,
+            DriverConfig {
+                compute_policy_ref: "uniform".into(),
+                compute_facts: facts,
+                remaining: [
+                    ("model_calls".to_string(), 8i64),
+                    ("tokens.output.visible".to_string(), 1_000_000i64),
+                ]
+                .into_iter()
+                .collect(),
+                ..DriverConfig::default()
+            },
+        )
+        .unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(
+                hh_gateway::vocab::StopReason::ToolUse,
+                vec![ParsedCall {
+                    tool_call_id: "tc-1".into(),
+                    surface: "fs.read".into(),
+                    args_raw: r#"{"path":"/a"}"#.into(),
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let _ = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+        // The record lands *before* the `control.decision` it advises.
+        let classes: Vec<&str> = sink.events.iter().map(|e| e.class.as_str()).collect();
+        let rpos = classes
+            .iter()
+            .position(|c| *c == "control.compute.decided")
+            .expect("a compute.decided row");
+        let dpos = classes
+            .iter()
+            .position(|c| *c == "control.decision")
+            .expect("a decision row");
+        assert!(rpos < dpos, "the record precedes its decision");
+        let record = &sink.events[rpos];
+        let decision = &sink.events[dpos];
+        // B-1 — the advised decision's kind/point/owner are the
+        // strategy's; the binding lives in `context_request`.
+        assert_eq!(
+            decision.payload.get("kind").and_then(Json::as_str),
+            Some("propose")
+        );
+        assert_eq!(
+            decision
+                .payload
+                .get("context_request")
+                .and_then(|cr| cr.get("sample_k"))
+                .and_then(Json::as_int),
+            Some(5),
+            "the uniform binding rides context_request"
+        );
+        // The decision cites the record; the record names the decision.
+        assert_eq!(
+            decision
+                .payload
+                .get("compute_decision_ref")
+                .and_then(Json::as_str),
+            record.payload.get("record_id").and_then(Json::as_str),
+        );
+        // B-4 — every supported option appears with an estimate or a
+        // typed infeasibility.
+        let considered = match record.payload.get("options_considered") {
+            Some(Json::Arr(rows)) => rows,
+            _ => panic!("options_considered present"),
+        };
+        assert_eq!(
+            considered.len(),
+            crate::compute::ComputeOptionKind::ALL.len()
+        );
+        for row in considered {
+            assert!(
+                row.get("estimate").is_some() || row.get("infeasible").is_some(),
+                "each row carries an estimate or a typed infeasibility"
+            );
+        }
+    }
+
+    /// AC-R-2.6.4-1 — `static` is the packaged null: the run emits zero
+    /// `control.compute.*` rows (byte-identical modulo ids to a run
+    /// without the slot).
+    #[test]
+    fn static_compute_policy_appends_no_compute_rows() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver =
+            Driver::open_react(&ctx(), policy, &mut sink, DriverConfig::default()).unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(
+                hh_gateway::vocab::StopReason::ToolUse,
+                vec![ParsedCall {
+                    tool_call_id: "tc-1".into(),
+                    surface: "fs.read".into(),
+                    args_raw: r#"{"path":"/a"}"#.into(),
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let _ = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+        assert!(sink
+            .events
+            .iter()
+            .all(|e| !e.class.starts_with("control.compute.")));
     }
 }
