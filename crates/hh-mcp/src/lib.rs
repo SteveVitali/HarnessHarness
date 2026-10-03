@@ -42,7 +42,10 @@
 pub mod artifact;
 pub mod binding;
 pub mod client;
+pub mod executor;
+pub mod http;
 pub mod listing;
+pub mod oauth;
 pub mod protocol;
 pub mod server;
 
@@ -52,6 +55,14 @@ pub use artifact::{
 };
 pub use binding::{stdio_launch_binding, TEST_PRINCIPAL};
 pub use client::{ClientError, Listing, McpClient, StdioTransport, ToolOutcome, Transport};
+pub use executor::McpExecutor;
+pub use http::{
+    serve_http, HttpResponse, HttpTransport, OriginPolicy, OriginRefusal, ServeHttpError,
+};
+pub use oauth::{
+    parse_www_authenticate, AuthClaims, CredentialMediator, OAuthError, OAuthFlow, OAuthRequest,
+    TokenGrant,
+};
 pub use protocol::{
     pin_version, reconcile_capabilities, CapabilitySupport, Era, NegotiateError, ProtocolBinding,
     PINNED_LEGACY, PINNED_MODERN, PINNED_VERSIONS,

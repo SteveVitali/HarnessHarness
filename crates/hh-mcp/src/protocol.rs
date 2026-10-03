@@ -217,6 +217,10 @@ pub struct ProtocolBinding {
     pub extensions: Vec<String>,
     /// `stdio` at this edge (`streamable_http` is a C1 transport).
     pub transport: String,
+    /// `request_target` — the transport's request URI (§5d.4 D2's
+    /// `binding.request_target`; RFC 8707's resource indicator when the
+    /// edge runs OAuth). `None` on stdio.
+    pub request_target: Option<String>,
     /// `negotiated_at: EventRef` — stamped by the caller; `None` at the
     /// edge itself.
     pub negotiated_at: Option<String>,
@@ -265,6 +269,10 @@ impl ProtocolBinding {
                 ),
             ),
             ("transport", Json::str(self.transport.clone())),
+            (
+                "request_target",
+                self.request_target.clone().map_or(Json::Null, Json::Str),
+            ),
             (
                 "negotiated_at",
                 self.negotiated_at.clone().map_or(Json::Null, Json::Str),
@@ -353,6 +361,7 @@ mod tests {
             capabilities_observed: BTreeMap::new(),
             extensions: vec![],
             transport: "stdio".to_string(),
+            request_target: None,
             negotiated_at: None,
         };
         let j = b.to_json();

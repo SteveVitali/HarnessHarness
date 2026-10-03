@@ -42,6 +42,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-acp"
+version = "0.0.1"
+dependencies = [
+ "hh-compiler",
+ "hh-identity",
+ "hh-ledger",
+ "hh-mcp",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-analysis"
 version = "0.0.1"
 dependencies = [
@@ -397,7 +408,17 @@ name = "hh-mcp"
 version = "0.0.1"
 dependencies = [
  "hh-bundle",
+ "hh-compiler",
+ "hh-containment",
+ "hh-context",
+ "hh-env",
+ "hh-hir",
  "hh-identity",
+ "hh-ledger",
+ "hh-monitor",
+ "hh-ontology",
+ "hh-provenance",
+ "hh-secrets",
  "hh-wire",
 ]
 

@@ -43,6 +43,7 @@
 //! The out-of-process seam is `hh-compile` (canonical `CompileInputs` bytes on stdin →
 //! canonical bundle or typed diagnostics on stdout — AC-CP-11/T-LCD-12).
 
+pub mod acp;
 pub mod compiler;
 pub mod e4;
 pub mod equiv;

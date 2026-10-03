@@ -490,6 +490,12 @@ pub struct ExecutionRequest {
     /// the `commit_proof` over its session nonce and refuses `NotCommitted`
     /// when the members don't match (S2.1; §5d.5 §4 commit_token).
     pub commit_evidence: crate::helper::CommitEvidence,
+    /// The protocol-edge resume payload (§5d.4 D3/ADR-0097 D3 — the paused
+    /// arm): an opaque `requestState` the edge handed back on the paused
+    /// attempt, echoed byte-for-byte on the `attempt_no + 1` retry. The
+    /// kernel stores and forwards it; it never parses, validates, or lets
+    /// it decide anything (I7 — an opaque payload is never authority).
+    pub request_state: Option<Json>,
 }
 
 /// `TerminalReport` — the executor's terminal report (the `terminal` capture
@@ -516,7 +522,10 @@ pub struct TerminalReport {
     pub original_size: u64,
 }
 
-/// `TerminalStatus` — `ok` or `error{class}` (the tool's own result).
+/// `TerminalStatus` — `ok` or `error{class}` (the tool's own result), or
+/// `paused` (§5d.4 D3 — a protocol edge answered `input_required`; the
+/// attempt ends *non-terminal*: the effect stays `prepared`/`committed`,
+/// never `observed`, never `failed`).
 #[derive(Debug, Clone, PartialEq)]
 pub enum TerminalStatus {
     /// Clean.
@@ -527,6 +536,14 @@ pub enum TerminalStatus {
     ToolError {
         /// The reported class.
         class: ErrorClass,
+    },
+    /// The protocol edge paused the call awaiting input — `detail` is the
+    /// verbatim paused payload the executor reported (`{input_requests,
+    /// request_state}` — both opaque to the kernel; the renderer owns the
+    /// projection, the ledger owns the bytes).
+    Paused {
+        /// The verbatim paused result payload.
+        detail: Json,
     },
 }
 

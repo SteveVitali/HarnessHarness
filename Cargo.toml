@@ -247,6 +247,15 @@ members = [
     # served only from a bundle's compiled target member - the server is
     # a pure function of (artifact, binding) with no ledger access.
     "crates/hh-mcp",
+    # The ACP session boundary (spec §5d.4, R-2.5.4 C1; ticket S4.5b) — the
+    # hh-acp-target/1 session artefact consumed from hh-compiler (v2 pin + v1
+    # compatibility profile), render_session over the single-source lowering
+    # table, permission transport through the kernel's Π seam, the _hh/*
+    # method surface, session/resume replay, the binding-(c) attach_session
+    # client, and the C2 A2A edge (AgentCard version=bundle_id signed under a
+    # TrustRootPolicy, TaskState projection, delegate_task records).
+    # Records-in/records-out; a PERSISTENT workspace member.
+    "crates/hh-acp",
     # The hh-embed/1 embedding boundary (spec §7.4, R-2.11.4⁰ᵇ; ticket S1.25) — EmbedService
     # (binding a) + the stdio loop (binding b) over Store/EnvDriver/Driver; the kernel binary
     # delegates to it. A PERSISTENT workspace member.

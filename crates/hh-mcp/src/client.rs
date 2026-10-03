@@ -335,6 +335,7 @@ impl<T: Transport> McpClient<T> {
                 capabilities_observed: Default::default(),
                 extensions: Vec::new(),
                 transport: "stdio".to_string(),
+                request_target: None,
                 negotiated_at: None,
             },
             discover_doc: None,
@@ -487,12 +488,32 @@ impl<T: Transport> McpClient<T> {
         arguments: &Json,
         request_state: Option<&Json>,
     ) -> Result<ToolOutcome, ClientError> {
+        self.call_tool_keyed(name, arguments, request_state, None)
+    }
+
+    /// `call_tool_keyed(name, arguments, request_state, target)` — the
+    /// §5d.4 `target` idempotency-key forwarding (R-2.2.2's target-side
+    /// rule): `params.target` carries the kernel-derived key verbatim;
+    /// the server's dedup slot replays the recorded verdict on a repeat.
+    /// The kernel's `effect_id`/`attempt_no` identity is *derived*
+    /// upstream (the key) — `target` is its edge-facing echo, never a
+    /// second identity source.
+    pub fn call_tool_keyed(
+        &mut self,
+        name: &str,
+        arguments: &Json,
+        request_state: Option<&Json>,
+        target: Option<&str>,
+    ) -> Result<ToolOutcome, ClientError> {
         let mut params = vec![
             ("name", Json::str(name.to_string())),
             ("arguments", arguments.clone()),
         ];
         if let Some(rs) = request_state {
             params.push(("requestState", rs.clone()));
+        }
+        if let Some(t) = target {
+            params.push(("target", Json::str(t.to_string())));
         }
         let params = Json::Obj(
             params
@@ -616,6 +637,14 @@ impl<T: Transport> McpClient<T> {
                     .collect(),
             ),
         )
+    }
+
+    /// `binding.request_target` — the transport's request URI (the
+    /// Streamable HTTP endpoint; RFC 8707's `resource` indicator when
+    /// the edge runs OAuth). Recorded on the minted binding; never
+    /// consulted for a decision.
+    pub fn set_request_target(&mut self, target: &str) {
+        self.binding.request_target = Some(target.to_string());
     }
 
     /// Fill `capabilities_declared`/`capabilities_observed`/`peer_info`

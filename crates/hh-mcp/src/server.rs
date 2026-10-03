@@ -32,6 +32,7 @@
 //! `notifications/tools/list_changed` **before** the next answer —
 //! `listChanged` only on bundle change (AC-R-2.5.4-2).
 
+use std::collections::{BTreeMap, VecDeque};
 use std::io::{BufRead, Write};
 
 use hh_wire::json::Json;
@@ -74,7 +75,8 @@ impl std::fmt::Display for ServeError {
 
 impl std::error::Error for ServeError {}
 
-/// One JSON-RPC error frame.
+/// One JSON-RPC error frame (the `pub(crate)` spelling `error_frame_pub`
+/// exists for the HTTP transport's `-32700` path).
 fn error_frame(id: Json, code: i64, message: &str) -> Json {
     Json::obj([
         ("jsonrpc", Json::str("2.0")),
@@ -87,6 +89,11 @@ fn error_frame(id: Json, code: i64, message: &str) -> Json {
 }
 
 /// One JSON-RPC result frame.
+/// `error_frame` for the HTTP transport (crate-internal).
+pub(crate) fn error_frame_pub(id: Json, code: i64, message: &str) -> Json {
+    error_frame(id, code, message)
+}
+
 fn result_frame(id: Json, result: Json) -> Json {
     Json::obj([
         ("jsonrpc", Json::str("2.0")),
@@ -205,6 +212,7 @@ fn tools_list(artifact: &ServedArtifact, mode: ServeMode) -> Json {
 /// envelope) is *not read* — the two arms that could observe it
 /// (`tools/call` params, the request object) never consult it, which is
 /// the AC-R-2.11.3-6 property by construction.
+#[allow(clippy::too_many_arguments)] // the frame's context is the record's shape.
 fn dispatch(
     artifact: &ServedArtifact,
     mode: ServeMode,
@@ -212,6 +220,8 @@ fn dispatch(
     method: &str,
     params: &Json,
     id: Json,
+    dedup: &mut BTreeMap<String, Json>,
+    pending: &mut VecDeque<Json>,
 ) -> Json {
     match method {
         "initialize" => result_frame(
@@ -227,10 +237,66 @@ fn dispatch(
             ServeMode::Legacy => error_frame(id, -32601, "method_not_found: server/discover"),
         },
         "tools/list" => result_frame(id, tools_list(artifact, mode)),
-        "tools/call" => result_frame(id, tools_call(artifact, params, now_ms())),
+        // `target` — the forwarded idempotency key (§5d.4 D4, R-2.2.2's
+        // target-side rule): a second call under the same `target` replays
+        // the recorded verdict verbatim — never a re-run (the edge's
+        // executor-side dedup is a *recorded* replay, never a fresh
+        // decision).
+        "tools/call" => {
+            let target = params.get("target").and_then(Json::as_str);
+            match target {
+                Some(t) if dedup.contains_key(t) => result_frame(id, dedup[t].clone()),
+                Some(t) => {
+                    let result = tools_call(artifact, params, now_ms());
+                    dedup.insert(t.to_string(), result.clone());
+                    result_frame(id, result)
+                }
+                None => result_frame(id, tools_call(artifact, params, now_ms())),
+            }
+        }
+        // `subscriptions/listen` — the server→client stream drain
+        // (§5d.4 D4): returns the queued notifications verbatim and
+        // empties the queue (each is delivered exactly once).
+        "subscriptions/listen" => result_frame(
+            id,
+            Json::obj([("notifications", Json::Arr(pending.drain(..).collect()))]),
+        ),
         "ping" => result_frame(id, Json::obj([])),
         _ => error_frame(id, -32601, &format!("method_not_found: {method}")),
     }
+}
+
+/// `handle_message(msg) -> Option<response>` — the per-request half of
+/// the serve loops (crate-internal; the stdio loop and the Streamable
+/// HTTP loop share it). Notifications (`id` absent or
+/// `notifications/*`) return `None`; a malformed line returns the
+/// `-32700` frame.
+pub(crate) fn handle_message(
+    artifact: &ServedArtifact,
+    mode: ServeMode,
+    list_changed: bool,
+    msg: &Json,
+    dedup: &mut BTreeMap<String, Json>,
+    pending: &mut VecDeque<Json>,
+) -> Option<Json> {
+    let method = msg.get("method").and_then(Json::as_str).unwrap_or("");
+    let id = msg.get("id").cloned().unwrap_or(Json::Null);
+    let is_notification = !matches!(msg.get("id"), Some(Json::Int(_)) | Some(Json::Str(_)))
+        || method.starts_with("notifications/");
+    if is_notification {
+        return None;
+    }
+    let params = msg.get("params").cloned().unwrap_or(Json::Null);
+    Some(dispatch(
+        artifact,
+        mode,
+        list_changed,
+        method,
+        &params,
+        id,
+        dedup,
+        pending,
+    ))
 }
 
 /// The wall clock for handle-expiry checks — injected for tests via
@@ -283,6 +349,8 @@ pub fn serve_dynamic(
     writer: &mut impl Write,
 ) -> Result<(), ServeError> {
     let mut artifact = load();
+    let mut dedup: BTreeMap<String, Json> = BTreeMap::new();
+    let mut pending: VecDeque<Json> = VecDeque::new();
     let mut line = String::new();
     loop {
         // A changed catalogue fires `listChanged` before anything else
@@ -312,17 +380,10 @@ pub fn serve_dynamic(
                 continue;
             }
         };
-        let method = msg.get("method").and_then(Json::as_str).unwrap_or("");
-        let id = msg.get("id").cloned().unwrap_or(Json::Null);
-        // Notifications — `id` absent or `notifications/*` — never
-        // answer.
-        let is_notification = !matches!(msg.get("id"), Some(Json::Int(_)) | Some(Json::Str(_)))
-            || method.starts_with("notifications/");
-        if is_notification {
-            continue;
-        }
-        let params = msg.get("params").cloned().unwrap_or(Json::Null);
-        let frame = dispatch(&artifact, mode, true, method, &params, id);
+        let Some(frame) = handle_message(&artifact, mode, true, &msg, &mut dedup, &mut pending)
+        else {
+            continue; // notifications are never answered.
+        };
         writeln!(writer, "{}", frame.to_canonical_string()).map_err(ServeError::Io)?;
         writer.flush().map_err(ServeError::Io)?;
     }

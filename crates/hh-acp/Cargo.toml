@@ -1,0 +1,22 @@
+[package]
+name = "hh-acp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The ACP session boundary (spec section 5d.4, R-2.5.4 C1; ticket S4.5b): the hh-acp-target/1 session artefact consumed from hh-compiler (v2 pin + v1 compatibility profile), render_session over the single-source event-class lowering table, permission transport through the kernel's Π seam (never adapter-level approval), the _hh/* method surface + agentCapabilities._meta advertisement, session/resume replay, the binding-(c) attach_session client, and the C2 A2A edge (AgentCard version=bundle_id signed under a TrustRootPolicy, the exhaustive TaskState projection, delegate_task record shapes). Records-in/records-out: no ledger writes, no kernel authority — claims are data, never decisions."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+# `ProtocolBinding` machinery + the pin-set/negotiate sums are shared —
+# `hh-mcp` owns the generic edge vocabulary (never duplicated).
+hh-mcp = { path = "../hh-mcp" }
+# The event-class lowering/tool-kind/task-state tables (the single
+# source — ADR-0096 D5: projections live in the compiler's module).
+hh-compiler = { path = "../hh-compiler" }
+# `FixedSigner`/`KeyTable` for the A2A card signature fixture seam.
+hh-ledger = { path = "../hh-ledger" }
