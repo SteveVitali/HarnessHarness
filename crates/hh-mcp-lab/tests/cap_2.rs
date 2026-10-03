@@ -218,23 +218,26 @@ fn serving_decided(rows: &[(String, Json)], permission_id: &str) -> bool {
     })
 }
 
-/// CAP.2 (green pin): the composed ask → pending → *unanswerable* seam.
+/// CAP.2/CAP.3 (green pin): the composed ask → pending → answer seam.
 ///
 /// The ask leg through the real `LabServer` + `EmbedService`: the Π `ask`
 /// answers `PermissionAskRequired` + `pending_effects[]` and lands the
 /// durable `security.permission.pending{permission_id}` on the caller's
-/// surface run. The answer leg fails closed at two distinct seams —
-/// honestly pinned, not patched:
+/// surface run. CAP.3 (DF-S4.11-3; ADR-0329) made the answer reachable —
+/// `respond_approval` is now the supply protocol's builtin verb:
 ///
-/// 1. the hosted caller's own `respond_approval` is `unknown_tool` — its
-///    catalogue is its artifact (`callable ⇔ revealed`, AC-R-2.11.3-9);
+/// 1. the hosted `human_principal` caller's `respond_approval` resolves
+///    on its own surface run (a `deferred` outcome is recorded, the
+///    pending stays open);
 /// 2. a Lab-catalogue `human_principal` binding's run-less
-///    `respond_approval{permission_id}` refuses `schema_violation` — the
-///    op needs the run's own live `session_id` and the surface run is
-///    never minted as a `hnd-run-*` handle (DF-S4.11-3's exact residual).
+///    `respond_approval{permission_id}` still refuses `schema_violation`
+///    — the op needs the run's own live `session_id` and the surface run
+///    is never minted as a `hnd-run-*` handle. The reply path is the
+///    surface's own verb, not the launched-run op.
 ///
-/// The pending stays open — no serving `security.permission.decided`
-/// names it — and a retry of the asked call asks again.
+/// The pending stays open through both — no serving
+/// `security.permission.decided` names it — and a retry of the asked
+/// call asks again.
 #[test]
 fn cap2_supply_ask_pending_unanswerable() {
     let hosted = hosted_human();
@@ -335,11 +338,11 @@ fn cap2_supply_ask_pending_unanswerable() {
     );
 }
 
-/// CAP.2 (xfail — DF-S4.11-3): the deferral's check verbatim — a hosted
-/// caller's run-less, surface-run-scoped `respond_approval{permission_id}`
-/// resolves the pending row on its own surface run, mints
-/// `security.permission.decided`, and the retried `tools/call` applies.
-/// Routed to CAP.3 — run with `--ignored` to observe the gap.
+/// DF-S4.11-3 (closed at CAP.3; ADR-0329): the deferral's done check
+/// verbatim, un-ignored — a hosted caller's run-less, surface-run-scoped
+/// `respond_approval{permission_id}` resolves the pending row on its own
+/// surface run, mints `security.permission.decided`, and the retried
+/// `tools/call` applies.
 #[test]
 fn cap2_supply_ask_respond_approval_round_trip() {
     let hosted = hosted_human();

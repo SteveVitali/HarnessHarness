@@ -480,8 +480,8 @@ pub fn respond_approval(
             option_id: option.to_string(),
         }
     };
-    let idem = get("idempotency_key")
-        .unwrap_or_else(|| format!("respond_approval:{permission_id}"));
+    let idem =
+        get("idempotency_key").unwrap_or_else(|| format!("respond_approval:{permission_id}"));
     let bid = binding.binding_id.clone();
     if let Err(e) = srv.ensure_session(binding) {
         return call_result_refusal(&SurfaceError::new(
@@ -524,7 +524,11 @@ fn answered_ask(
         if e.class != "security.permission.decided" {
             continue;
         }
-        let d = e.payload.get("decision").and_then(Json::as_str).unwrap_or("");
+        let d = e
+            .payload
+            .get("decision")
+            .and_then(Json::as_str)
+            .unwrap_or("");
         if d != "allow" && d != "deny" {
             continue;
         }
@@ -534,10 +538,8 @@ fn answered_ask(
         let serves = evs.iter().any(|p| {
             p.class == "security.permission.pending"
                 && p.payload.get("permission_id").and_then(Json::as_str) == Some(pid)
-                && p.payload.get("capability_ref").and_then(Json::as_str)
-                    == Some(capability)
-                && p.payload.get("args_canonical_hash").and_then(Json::as_str)
-                    == Some(args_hash)
+                && p.payload.get("capability_ref").and_then(Json::as_str) == Some(capability)
+                && p.payload.get("args_canonical_hash").and_then(Json::as_str) == Some(args_hash)
         });
         if serves {
             return Some(if d == "allow" { "allow" } else { "deny" });

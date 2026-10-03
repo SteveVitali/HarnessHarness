@@ -1740,7 +1740,8 @@ fn ac2_cli_ledger_range_byte_identical_to_the_boundary_sequence() {
     // (`*_event_id` incl. `causes[]`, `env_handle`, `lease_id`,
     // `decision_id`), logical provenance seqs (`created_at`) and the
     // content addresses whose preimages embed shifted ids (`*_ref`,
-    // `head_hash`).
+    // `head_hash`, and — CAP.3 / DF-S2.8-1 — `plan_id`, the assembled
+    // plan's content address over `derived_from{seq, view_hash}`).
     const MECHANICAL: &[&str] = &[
         "seq",
         "hash",
@@ -1754,6 +1755,12 @@ fn ac2_cli_ledger_range_byte_identical_to_the_boundary_sequence() {
         "drain_report_ref",
         "bound_ref",
         "head_hash",
+        "plan_id",
+        // `assembly_ms{value, measured_at}` is a *measured* wall on the
+        // builder record — identical inputs still time differently; the
+        // measurement is derived content, never a CLI-added row.
+        "assembly_ms.value",
+        "assembly_ms.measured_at",
     ];
     for d in &diffs {
         assert!(

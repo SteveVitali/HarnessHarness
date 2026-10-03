@@ -2741,14 +2741,16 @@ fn cap2_dispatch_net_egress_mode_none_refuses() {
         .all(|e| e.class != "action.effect.committed" && e.class != "action.effect.observed"));
 }
 
-/// CAP.2 (green pin — the ask floor): under a `mediated` net policy (the
-/// containment floor admits the class; the *request* is an authorize-stage
-/// decision), a `net_egress` proposal carrying taint — the hosted-participant
-/// case — resolves through the real Π table: `dom_net_egress` asks
-/// (`host_allowlisted` is `unknown`), the durable
-/// `security.permission.pending` lands, the effect suspends, the executor is
-/// never touched, and NOT ONE `security.egress.*` row is minted — the ask
-/// channel is the whole egress gate today.
+/// CAP.2/CAP.3 (green pin — the ask floor): under a `mediated` net policy
+/// (the containment floor admits the class; the *request* is an
+/// authorize-stage decision), a `net_egress` proposal carrying taint — the
+/// hosted-participant case — resolves through the real Π table:
+/// `dom_net_egress` asks (`host_allowlisted` is `unknown`), the durable
+/// `security.permission.pending` lands, the effect suspends, the executor
+/// is never touched, and NOT ONE `security.egress.*` row is minted — the
+/// monitor's own ask suspends the effect at `authorize`, before the
+/// dispatch egress gate (DF-S2.4-1) ever runs. The mediated trail mints
+/// only on a monitor-allowed egress (see the two legs below).
 #[test]
 fn cap2_dispatch_net_egress_asks_no_egress_rows() {
     let (mut store, run, lease, _clock) = open("cap2-egress");

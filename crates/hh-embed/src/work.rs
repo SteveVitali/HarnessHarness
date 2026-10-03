@@ -782,6 +782,7 @@ impl EmbedService {
     /// (= the caller's idempotency key) rides the decided row, so a
     /// replayed answer returns the recorded result and never
     /// double-mints. `Recorded`.
+    #[allow(clippy::too_many_arguments)] // the op's record is the §5g.7 answer shape — the arity is the record's.
     pub fn surface_respond_permission(
         &mut self,
         run_id: &str,

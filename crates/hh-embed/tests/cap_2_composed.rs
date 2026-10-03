@@ -7,14 +7,16 @@
 //! one in-process production dispatch binding) or the real crate seams
 //! where the boundary is records-in — and pins the result honestly:
 //!
-//! 1. **Turn loop → context.assembled (R-2.4.1, PARTIAL).** A real
-//!    `submit` turn appends `context.assembled` — the `AssemblerPort` IS
-//!    invoked on the live path — but the payload is `KernelAssembler`'s
-//!    honest pass-through stamp (`assembler: hh-embed/kernel`), not the
-//!    `hh_context::assemble` builder record (no `plan_id`/`items`/
-//!    `layout_ref`/`assembly_ms`). The pin test FAILS if the stamp is
-//!    silently swapped; the `#[ignore]`d leg asserts the composed builder
-//!    payload and fails today — DF-S2.8-1 (± DF-S1.19-1), routed CAP.3.
+//! 1. **Turn loop → context.assembled (R-2.4.1).** A real `submit` turn
+//!    appends `context.assembled` — the `AssemblerPort` is invoked on the
+//!    live path and (CAP.3, DF-S2.8-1) it IS the real `hh_context::assemble`
+//!    builder over the run's durable prefix: the payload carries the
+//!    builder record (`plan_id`/`layout_ref`/`policy_ref`/`derived_from`/
+//!    `occupancy_estimate`/`assembly_ms`/`compaction_state`), and the
+//!    retired pass-through stamp (`assembler: hh-embed/kernel`) is asserted
+//!    *absent*. Both legs are un-ignored green; the residual DF-S2.8-1
+//!    halves (retrieval/compaction producers, resume_set consumers,
+//!    judged detectors, the OOP corpus leg) stay on the open row.
 //! 2. **env.snapshot → fork{env: snapshot} → child run (R-2.2.4/2.2.5).**
 //!    `env.snapshot{kind: fs_tree}` (instrument) then `fork{env:
 //!    "snapshot"}` at the run head composes green: child run bound
@@ -31,13 +33,14 @@
 //!    ops (R-2.10.3).** register → expand → open_experiment →
 //!    next/claim/launch → subject rows under the subject writer lease
 //!    (`surface_append`, the real append gate) → settle → `NextVerdict::
-//!    Done` → close. At one-matched-dim scale the E-4 close row fits
-//!    `AUDIT_FIELD_MAX_BYTES` and `status: completed` lands
-//!    `measurement.experiment.closed` — the composed green half. At
-//!    exemplar scale (compaction family, 7 matched dims honestly
-//!    measured) the same path refuses `AuditFieldsTooLarge` —
-//!    DF-S3.12b-1, pinned as the observed refusal + an `#[ignore]`d
-//!    `status: completed` assertion, routed CAP.3.
+//!    Done` → close. At one-matched-dim scale the E-4 close row lands
+//!    `status: completed` on `measurement.experiment.closed`. At exemplar
+//!    scale (compaction family, 7 matched dims honestly measured) the
+//!    same path completes too — CAP.3 (DF-S3.12b-1, ADR-0327) replaced
+//!    the 512 B `OPEN_AUDIT` member bound with the enumerated
+//!    `EXPERIMENT_CLOSED_FIELDS` partition, so the honest recheck
+//!    members (`utilization`, `budget_match`) fit their declared
+//!    record/list bound. Both legs are un-ignored green.
 //! 4. **Hosted participant spine (R-2.10.6 ± R-2.10.3/R-2.10.4).** A REAL
 //!    `hh_hosting` `HostingService` (dev-dep — the removable tier is
 //!    test-only here; no production edge) over `AdapterA` +
@@ -50,10 +53,12 @@
 //!    produces a real `ComparisonReport` over `arm:native` vs
 //!    `arm:hosted`.
 //!
-//! The egress fail-closed seam (DF-S2.4-1) is pinned in
-//! `hh-env/tests/acceptance.rs` (`cap2_*`) where the dispatcher fixture
-//! lives; the surface-approval seam (DF-S4.11-3) in
-//! `hh-mcp-lab/tests/cap_2.rs`.
+//! The egress mediation seam (DF-S2.4-1 — closed at CAP.3: dispatch
+//! routes `net_egress` through `EgressMediator::gate`/`forward`) is
+//! pinned in `hh-env/tests/acceptance.rs` (`cap2_*`) where the
+//! dispatcher fixture lives; the surface-approval seam (DF-S4.11-3 —
+//! closed at CAP.3: `respond_approval` is the supply protocol's builtin
+//! answer verb, ADR-0329) in `hh-mcp-lab/tests/cap_2.rs`.
 
 #![allow(clippy::unwrap_used)]
 
