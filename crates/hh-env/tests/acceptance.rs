@@ -2571,3 +2571,324 @@ fn df_s3_9_1_resume_without_pause_trail_is_typed_refusal() {
     assert!(matches!(err, EnvError::InvalidState { .. }), "{err:?}");
     assert_eq!(exec.calls.get(), 0, "a refused resume never executes");
 }
+
+// ── CAP.2 — the composed egress seam (DF-S2.4-1) ───────────────────────────
+//
+// The capstone's whole-build leg for R-2.8.4's mediator wiring: the
+// `EgressMediator` exists and is unit-tested (`egress_mediation.rs`), but
+// dispatch — the production effect path — has no call site into it.
+// These pins prove the composed seam's honest state.
+
+/// `provision + attach` with a `mediated` net policy — the containment floor
+/// admits the `net_egress` *class* (no scoped hosts ⇒ `Admitted`; the request
+/// itself is an authorize-stage decision) so the composed leg exercises the
+/// Π ask rather than the `mode = none` floor-deny the battery's other envs
+/// carry (`test_policy` pins `net = none` — R-NONET).
+fn cap2_ready_env_net(
+    store: &mut Store,
+    lease: &Lease,
+    driver: &mut EnvDriver,
+    ws: &std::path::Path,
+) -> String {
+    let record = test_record(
+        EnvironmentClass::LocalHost,
+        ImageRef::ContentAddress(test_ca()),
+    );
+    let roots = Roots {
+        workspace_roots: vec![ws.display().to_string()],
+        writable_roots: vec![ws.display().to_string()],
+        cwd: ws.display().to_string(),
+    };
+    let mut policy = test_policy(ws);
+    policy.net.mode = NetMode::Mediated;
+    policy.compute_ids();
+    let h = driver
+        .provision(
+            store,
+            lease,
+            &record,
+            roots,
+            PolicySlot::Inline(Box::new(policy)),
+            OnLoss::FailRun,
+        )
+        .unwrap();
+    let backend = Ep2Model::reference();
+    driver
+        .attach(
+            store,
+            lease,
+            &h.env_handle_id,
+            Some(&backend),
+            AttachMode::FailClosed,
+            true,
+            &[],
+        )
+        .unwrap();
+    h.env_handle_id
+}
+
+/// A monitor whose root handle additionally grants `net_egress` — the ask
+/// floor must be *reached* (an uncovered domain denies at authorize step 2
+/// before Π can ask).
+fn cap2_monitor_net(cap: &ToolCapabilityRecord) -> Monitor {
+    let mut table = HandleTable::default();
+    let mut h = root_handle();
+    h.grants.push(Grant {
+        effect: EffectClass::domain_only(EffectDomain::NetEgress),
+        scope: "*".to_string(),
+        constraints: GrantConstraints::default(),
+        delegable: true,
+    });
+    table.handles.insert(h.handle_id.clone(), h);
+    let mut m = Monitor::new(table, default_table("pol-v1", Mode::Attended));
+    m.proposers.insert(
+        "test:agent".to_string(),
+        Label::at(AuthorityClass::Principal),
+    );
+    m.run_id = "run-1".to_string();
+    m.turn_id = "turn-1".to_string();
+    m.effect_id = "e1".to_string();
+    m.capabilities.insert(
+        "test:write_file".to_string(),
+        CapabilityEntry {
+            record: cap.clone(),
+            binding: binding(),
+        },
+    );
+    m
+}
+
+/// The `net_egress` dispatch input the egress legs share — `{path, command,
+/// argv}` args (the scope-bound `path` is required by `scope_bindings`).
+fn cap2_net_input<'a>(
+    cap: &'a ToolCapabilityRecord,
+    bind: &'a SurfaceBinding,
+    sb: &'a ScopeBindings,
+    env: &str,
+    ws: &std::path::Path,
+) -> DispatchInput<'a> {
+    input(
+        cap,
+        bind,
+        sb,
+        env,
+        "tc-1",
+        Json::obj([
+            ("path", Json::str(format!("{}/out.txt", ws.display()))),
+            ("command", Json::str("curl")),
+            ("argv", Json::Arr(vec![Json::str("https://example.test/")])),
+        ]),
+        EffectClass {
+            domain: EffectDomain::NetEgress,
+            attributes: Some(reversible_attrs()),
+        },
+    )
+}
+
+/// CAP.2 (green pin — the production-default floor): with the kernel's
+/// `net.mode = none` containment (`test_policy` — R-NONET), a `net_egress`
+/// effect dispatched through the real `Dispatcher` is refused at the
+/// containment precondition inside `authorize` (`deny{Containment}`, step 0 —
+/// Π is never consulted, `ask` is never produced). `action.effect.refused`
+/// lands; the executor is never touched; and NOT ONE `security.egress.*` row
+/// is minted — fail-closed with no mediation trail.
+#[test]
+fn cap2_dispatch_net_egress_mode_none_refuses() {
+    let (mut store, run, lease, _clock) = open("cap2-egress-none");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("cap2-egress-none");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(
+        EffectDomain::NetEgress,
+        reversible_attrs(),
+        scope_bindings(),
+    );
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = cap2_monitor_net(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [9u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    let inp = cap2_net_input(&cap, &bind, &sb, &env, &ws);
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(
+        matches!(&out, DispatchOutcome::Refused { reason } if reason == "Containment"),
+        "net_egress under net.mode=none refuses at the containment floor: {out:?}"
+    );
+    assert_eq!(exec.calls.get(), 0, "a contained egress never executes");
+    let envs = read_all(disp.store_mut(), &run);
+    assert!(
+        envs.iter().any(|e| e.class == "security.permission.decided"
+            && e.payload.get("decision").and_then(|d| d.as_str()) == Some("deny")),
+        "the deny decision is durable: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+    assert!(
+        envs.iter().any(|e| e.class == "action.effect.refused"),
+        "the refused terminal lands: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+    assert!(
+        envs.iter()
+            .all(|e| !e.class.starts_with("security.egress.")),
+        "no security.egress.* rows — the mediator never ran: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+    assert!(envs
+        .iter()
+        .all(|e| e.class != "action.effect.committed" && e.class != "action.effect.observed"));
+}
+
+/// CAP.2 (green pin — the ask floor): under a `mediated` net policy (the
+/// containment floor admits the class; the *request* is an authorize-stage
+/// decision), a `net_egress` proposal carrying taint — the hosted-participant
+/// case — resolves through the real Π table: `dom_net_egress` asks
+/// (`host_allowlisted` is `unknown`), the durable
+/// `security.permission.pending` lands, the effect suspends, the executor is
+/// never touched, and NOT ONE `security.egress.*` row is minted — the ask
+/// channel is the whole egress gate today.
+#[test]
+fn cap2_dispatch_net_egress_asks_no_egress_rows() {
+    let (mut store, run, lease, _clock) = open("cap2-egress");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("cap2-egress");
+    let mut driver = EnvDriver::new(&run);
+    let env = cap2_ready_env_net(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(
+        EffectDomain::NetEgress,
+        reversible_attrs(),
+        scope_bindings(),
+    );
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = cap2_monitor_net(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [9u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    let mut inp = cap2_net_input(&cap, &bind, &sb, &env, &ws);
+    // A hosted-participant-tainted context (`taint ≠ ∅ ⇒ eff ≤ external`)
+    // routes the proposal through the Π table — untainted `≥ principal`
+    // proposals are floor-decided (ADR-0031) and never see `dom_net_egress`.
+    inp.context_label = Label {
+        authority: AuthorityClass::External,
+        taint: [hh_provenance::TaintTag::Participant {
+            participant: "participant:hosted".to_string(),
+        }]
+        .into_iter()
+        .collect(),
+        readers: hh_provenance::ReaderSet::Public,
+    };
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    // The honest boundary: the monitor's ask suspends the effect behind a
+    // durable `security.permission.pending` — never a wire attempt.
+    assert!(
+        matches!(out, DispatchOutcome::Suspended { .. }),
+        "an unallowlisted net_egress suspends on the ask: {out:?}"
+    );
+    assert_eq!(exec.calls.get(), 0, "an unmediated egress never executes");
+    let envs = read_all(disp.store_mut(), &run);
+    assert!(
+        envs.iter()
+            .any(|e| e.class == "security.permission.pending"),
+        "the durable ask lands: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+    assert!(
+        envs.iter()
+            .all(|e| !e.class.starts_with("security.egress.")),
+        "no security.egress.* rows — mediation never ran: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+    // …and no committed/observed half exists for the suspended effect.
+    assert!(envs
+        .iter()
+        .all(|e| e.class != "action.effect.committed" && e.class != "action.effect.observed"));
+}
+
+/// CAP.2 (green pin — the ADR-0031 floor, honestly): an *untainted* `≥
+/// principal` `net_egress` under a `mediated` policy never reaches the Π
+/// table — `floor_verdict` allows every class except `irreversible ∧
+/// external`, `secret_access`, `spend`, `permission_request`. Dispatch admits
+/// the effect to the executor boundary (the reference `Ep2Model` mediates
+/// nothing; real mediation lives in the backend), so the composed truth is:
+/// an allowed egress produces zero `security.egress.*` rows — the durable
+/// mediated-trail seam is exactly DF-S2.4-1's residual.
+#[test]
+fn cap2_dispatch_net_egress_clean_floor_allows_no_egress_rows() {
+    let (mut store, run, lease, _clock) = open("cap2-egress-floor");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("cap2-egress-floor");
+    let mut driver = EnvDriver::new(&run);
+    let env = cap2_ready_env_net(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(
+        EffectDomain::NetEgress,
+        reversible_attrs(),
+        scope_bindings(),
+    );
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = cap2_monitor_net(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [9u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    let inp = cap2_net_input(&cap, &bind, &sb, &env, &ws);
+    let out = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(
+        matches!(out, DispatchOutcome::Observed(_)),
+        "the ADR-0031 floor admits a clean principal egress: {out:?}"
+    );
+    assert_eq!(exec.calls.get(), 1, "the floor-allowed effect executes");
+    let envs = read_all(disp.store_mut(), &run);
+    assert!(
+        envs.iter().any(|e| e.class == "security.permission.decided"
+            && e.payload.get("decision").and_then(|d| d.as_str()) == Some("allow")),
+        "the allow decision is durable: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+    assert!(
+        envs.iter().all(|e| !e.class.starts_with("security.egress.")),
+        "even an *allowed* egress mints no security.egress.* row — the mediated trail is DF-S2.4-1: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+}
+
+/// DF-S2.4-1 residual — the composed claim the deferral names: dispatch
+/// routes a `net_egress` effect through `EgressMediator::handle`, so the
+/// run carries `security.egress.requested` and the normative
+/// `security.egress.decided` before any wire. `#[ignore]`d pending the
+/// mediator call-site wiring (CAP.3); run with `--ignored` to observe
+/// the gap.
+#[test]
+#[ignore = "DF-S2.4-1: no production dispatch call site drives EgressMediator — a net_egress effect suspends/fails closed without any security.egress.* row; the mediated leg is routed to CAP.3"]
+fn cap2_dispatch_net_egress_mediated() {
+    let (mut store, run, lease, _clock) = open("cap2-egress-med");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("cap2-egress-med");
+    let mut driver = EnvDriver::new(&run);
+    let env = cap2_ready_env_net(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(
+        EffectDomain::NetEgress,
+        reversible_attrs(),
+        scope_bindings(),
+    );
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = cap2_monitor_net(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [9u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    let inp = cap2_net_input(&cap, &bind, &sb, &env, &ws);
+    let _ = disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    let envs = read_all(disp.store_mut(), &run);
+    assert!(
+        envs.iter().any(|e| e.class == "security.egress.requested")
+            && envs.iter().any(|e| e.class == "security.egress.decided"),
+        "DF-S2.4-1 residual: dispatch mints the mediated egress pair: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+}

@@ -254,6 +254,7 @@ dependencies = [
  "hh-fleet",
  "hh-gateway",
  "hh-hir",
+ "hh-hosting",
  "hh-identity",
  "hh-lab",
  "hh-ledger",

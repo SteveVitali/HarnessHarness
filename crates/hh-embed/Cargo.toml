@@ -53,6 +53,12 @@ hh-evolution = { path = "../hh-evolution", optional = true }
 # `--no-default-features` build.
 hh-debt = { path = "../hh-debt", optional = true }
 
+# CAP.2's composed hosted-participant spine drives a real `hh_hosting`
+# `HostingService` next to `EmbedService` — a test-only edge (the
+# production boundary stays records-in/records-out; `hosting_edges = []`).
+[dev-dependencies]
+hh-hosting = { path = "../hh-hosting" }
+
 [features]
 default = ["tier-c4"]
 tier-c4 = ["dep:hh-fleet", "dep:hh-evolution", "dep:hh-debt"]
