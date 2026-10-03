@@ -885,6 +885,60 @@ fn compute_metric(name: &str, ev: &[&EventEnvelope]) -> Json {
             )
         }
         "model_calls" => Json::Int(count(&["model.call.requested"])),
+        // §5e.2 process metrics (AC-R-2.6.2-11): `stop`-action
+        // detections per model call; nudge detections that were the
+        // run's *last* loop detection (the ladder recovered rather than
+        // escalating) per nudge; format rejections per model call. An
+        // empty denominator is `n/a{estimator_undefined}` — the hosted
+        // arm's honest cell when no tool calls are observable (never 0).
+        "loop_stop_rate" => {
+            let den = count(&["model.call.requested"]);
+            if den == 0 {
+                na(NaReason::EstimatorUndefined)
+            } else {
+                let num = ev
+                    .iter()
+                    .filter(|e| {
+                        e.class == "control.loop.detected"
+                            && payload_str(e, "action") == Some("stop")
+                    })
+                    .count() as i64;
+                Json::Int(num.saturating_mul(ppm) / den)
+            }
+        }
+        "loop_nudge_recovery_rate" => {
+            let nudges: Vec<&&EventEnvelope> = ev
+                .iter()
+                .filter(|e| {
+                    e.class == "control.loop.detected" && payload_str(e, "action") == Some("nudge")
+                })
+                .collect();
+            if nudges.is_empty() {
+                na(NaReason::EstimatorUndefined)
+            } else {
+                // A nudge "recovered" when no later `control.loop.detected`
+                // follows it (the pattern did not persist past the rung).
+                let mut recovered = 0i64;
+                for n in &nudges {
+                    let later = ev
+                        .iter()
+                        .any(|e| e.class == "control.loop.detected" && e.seq > n.seq);
+                    if !later {
+                        recovered += 1;
+                    }
+                }
+                Json::Int(recovered.saturating_mul(ppm) / nudges.len() as i64)
+            }
+        }
+        "format_failure_rate" => {
+            let den = count(&["model.call.requested"]);
+            if den == 0 {
+                na(NaReason::EstimatorUndefined)
+            } else {
+                let num = count(&["control.output.rejected"]);
+                Json::Int(num.saturating_mul(ppm) / den)
+            }
+        }
         // §5e.4 — the scheduler's rows (`static` runs produce none, so a
         // static run's share cells stay honest `n/a`-less zeros only where
         // the metric is a count; share/rate over an empty set is

@@ -19,6 +19,7 @@
 //! survives `removability(1)` without C3; C3 is independently removable
 //! (nothing below depends on it).
 
+pub mod coordination;
 pub mod lab;
 pub mod orchestrator;
 pub mod topology;

@@ -82,6 +82,16 @@ pub struct LoopHit {
     pub ladder_position: u32,
     /// The evidence event ids.
     pub evidence_refs: Vec<String>,
+    /// `judged` metadata — the `validator_ref` and observed confidence
+    /// (ppm) the `control.loop.detected` row names (`None` for the
+    /// deterministic arms).
+    pub validator_ref: Option<String>,
+    /// The judge's observed confidence (ppm) — `judged` hits only.
+    pub confidence_ppm: Option<u64>,
+    /// `true` when a `judged` hit's rung was clamped `stop → deny`
+    /// (ADR-0108's rule: a judged detector is never sole grounds for a
+    /// stop — the clamp is what the row records).
+    pub stop_clamped: bool,
 }
 
 /// `LadderPosition` — where a fresh hit lands on the `response_ladder`
@@ -210,6 +220,9 @@ pub fn detect(events: &[EventEnvelope], policy: &LoopPolicy) -> Vec<LoopHit> {
                 pattern,
                 action: rung,
                 ladder_position: state.ladder_position,
+                validator_ref: None,
+                confidence_ppm: None,
+                stop_clamped: false,
             });
         }
     }
@@ -602,4 +615,240 @@ mod tests {
             );
         }
     }
+
+    // ── the `judged` arm (§5e.2 C1; ADR-0108; AC-R-2.6.2-11) ────────────
+
+    #[derive(Debug)]
+    struct AlwaysJudge(u64);
+    impl JudgePort for AlwaysJudge {
+        fn judge(&self, _spec: &crate::policy::JudgedSpec, _w: &[Json]) -> u64 {
+            self.0
+        }
+    }
+
+    fn judged_policy(after_turns: u32, interval: u32, threshold_ppm: u64) -> LoopPolicy {
+        let mut p = LoopPolicy::default();
+        p.judged = Some(crate::policy::JudgedSpec {
+            validator_ref: "validator:judge-v1".into(),
+            after_turns,
+            interval,
+            confidence_threshold_ppm: threshold_ppm,
+            charged_to: "budget:root".into(),
+        });
+        p
+    }
+
+    #[test]
+    fn judged_hit_at_cadence_with_confidence() {
+        let p = judged_policy(2, 1, 500_000);
+        // Two model turns — the cadence admits the judge at `after_turns`.
+        let events = vec![
+            ev(0, "model.call.completed", Json::Null),
+            ev(1, "model.call.completed", Json::Null),
+        ];
+        let hits = detect_with_judge(&events, &p, Some(&AlwaysJudge(900_000)));
+        let hit = hits
+            .iter()
+            .find(|h| h.detector == LoopDetectorKind::Judged)
+            .expect("a confident judge at cadence is a hit");
+        assert_eq!(hit.validator_ref.as_deref(), Some("validator:judge-v1"));
+        assert_eq!(hit.confidence_ppm, Some(900_000));
+        assert_eq!(hit.action, LadderAction::Nudge); // first rung
+    }
+
+    #[test]
+    fn judged_below_threshold_and_no_port_emit_nothing() {
+        let p = judged_policy(1, 1, 500_000);
+        let events = vec![ev(0, "model.call.completed", Json::Null)];
+        // Confidence below the floor — no hit.
+        assert!(detect_with_judge(&events, &p, Some(&AlwaysJudge(100_000)))
+            .iter()
+            .all(|h| h.detector != LoopDetectorKind::Judged));
+        // A declared spec with no bound port emits nothing (a missing
+        // validator is silent-vs-fabricated, never a guess).
+        assert!(detect_with_judge(&events, &p, None)
+            .iter()
+            .all(|h| h.detector != LoopDetectorKind::Judged));
+    }
+
+    #[test]
+    fn judged_stop_rung_clamps_to_deny() {
+        let p = judged_policy(1, 1, 500_000);
+        // Two prior detections — the next rung would be `stop`; a judged
+        // hit is never sole grounds for a stop (ADR-0108 clamp).
+        let events = vec![
+            ev(
+                0,
+                "control.loop.detected",
+                Json::obj([("detector", Json::str("judged"))]),
+            ),
+            ev(
+                1,
+                "control.loop.detected",
+                Json::obj([("detector", Json::str("judged"))]),
+            ),
+            ev(2, "model.call.completed", Json::Null),
+        ];
+        let hits = detect_with_judge(&events, &p, Some(&AlwaysJudge(1_000_000)));
+        let hit = hits
+            .iter()
+            .find(|h| h.detector == LoopDetectorKind::Judged)
+            .expect("clamped hit still lands");
+        assert_eq!(hit.action, LadderAction::Deny);
+        assert!(hit.stop_clamped, "the row records the stop → deny clamp");
+    }
+
+    #[test]
+    fn judged_cadence_does_not_refire_within_interval() {
+        let p = judged_policy(1, 2, 500_000);
+        // A prior judged hit at turn 1; interval=2 — turn 2 must not
+        // re-fire.
+        let events = vec![
+            ev(0, "model.call.completed", Json::Null),
+            ev(
+                1,
+                "control.loop.detected",
+                Json::obj([("detector", Json::str("judged"))]),
+            ),
+            ev(2, "model.call.completed", Json::Null),
+        ];
+        assert!(
+            detect_with_judge(&events, &p, Some(&AlwaysJudge(1_000_000)))
+                .iter()
+                .all(|h| h.detector != LoopDetectorKind::Judged)
+        );
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `judged` — the C1 detector arm (§5e.2; ADR-0108 D1; AC-R-2.6.2-11)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The `Validator{kind: judge}` invocation port — the driver binds an
+/// accountable validator; the port answers the detector's confidence
+/// (ppm ∈ 0..=1_000_000) for the current observation window. A `judged`
+/// hit is *detected* at cadence and may walk the `nudge → deny` rungs —
+/// the `stop` rung is never a judged-only act (the clamp below).
+pub trait JudgePort: std::fmt::Debug {
+    /// `judge(spec, window) → confidence_ppm` — `window` carries the
+    /// trailing observation summaries the deterministic detectors see
+    /// (`{seq, event_id, key, version_id, error, turn_without_act}` —
+    /// data, never surface text).
+    fn judge(&self, spec: &crate::policy::JudgedSpec, window: &[Json]) -> u64;
+}
+
+/// `detect_with_judge(events, policy, judge)` — the Stage-4 admission of
+/// `LoopPolicy.judged`: the four deterministic detectors run as in
+/// [`detect`], then — at `after_turns`/`interval` cadence — the bound
+/// judge port answers; a confidence ≥ `confidence_threshold_ppm` is a
+/// `control.loop.detected{detector: judged, validator_ref}` hit on the
+/// same global ladder, with `stop` clamped to `deny` (a judged detector
+/// is never sole grounds for stopping — deterministic arms still own
+/// `stop`). `judge: None` with a declared spec emits no judged hit (a
+/// declared detector without its validator is silent, never guessed).
+pub fn detect_with_judge(
+    events: &[EventEnvelope],
+    policy: &LoopPolicy,
+    judge: Option<&dyn JudgePort>,
+) -> Vec<LoopHit> {
+    let mut hits = detect(events, policy);
+    let Some(spec) = &policy.judged else {
+        return hits;
+    };
+    let Some(judge) = judge else {
+        return hits;
+    };
+    // Cadence — turns = `model.call.completed` rows so far; the judge
+    // may fire at `after_turns` and every `interval` turns after, but
+    // not twice at the same cadence point (the last judged hit's turn
+    // position gates re-fire).
+    let turns = events
+        .iter()
+        .filter(|e| e.class == "model.call.completed")
+        .count() as u32;
+    if turns < spec.after_turns || (turns - spec.after_turns) % spec.interval != 0 {
+        return hits;
+    }
+    let last_judged_pos = events
+        .iter()
+        .filter(|e| {
+            e.class == "control.loop.detected"
+                && e.payload.get("detector").and_then(Json::as_str) == Some("judged")
+        })
+        .map(|e| {
+            events
+                .iter()
+                .take_while(|x| x.seq <= e.seq)
+                .filter(|x| x.class == "model.call.completed")
+                .count() as u32
+        })
+        .max();
+    if last_judged_pos.is_some_and(|t| turns < t + spec.interval) {
+        return hits;
+    }
+    let window = collect_window(events, policy.window_events as usize);
+    let window_json: Vec<Json> = window
+        .iter()
+        .map(|o| {
+            Json::obj([
+                ("seq", Json::Int(o.seq as i64)),
+                ("event_id", Json::str(o.event_id.clone())),
+                (
+                    "key",
+                    o.key
+                        .as_ref()
+                        .map(|k| Json::str(k.clone()))
+                        .unwrap_or(Json::Null),
+                ),
+                (
+                    "version_id",
+                    o.version_id
+                        .as_ref()
+                        .map(|v| Json::str(v.clone()))
+                        .unwrap_or(Json::Null),
+                ),
+                (
+                    "error",
+                    o.error
+                        .as_ref()
+                        .map(|e| Json::str(e.clone()))
+                        .unwrap_or(Json::Null),
+                ),
+                ("turn_without_act", Json::Bool(o.turn_without_act)),
+            ])
+        })
+        .collect();
+    let confidence = judge.judge(spec, &window_json);
+    if confidence < spec.confidence_threshold_ppm {
+        return hits;
+    }
+    // The shared ladder — the judged hit occupies the same `nudge → deny
+    // → stop` sequence the deterministic arms do (one rung per hit).
+    let state = fold(events);
+    let Some(rung) = next_rung(policy, &state) else {
+        return hits;
+    };
+    let (action, clamped) = if rung == LadderAction::Stop {
+        // Never sole grounds: the clamp is recorded, the run ends only
+        // on deterministic evidence or an orthogonal stop rule.
+        (LadderAction::Deny, true)
+    } else {
+        (rung, false)
+    };
+    let evidence_refs: Vec<String> = window.iter().map(|o| o.event_id.clone()).collect();
+    hits.push(LoopHit {
+        detector: LoopDetectorKind::Judged,
+        pattern: LoopPattern {
+            cycle_len: 0,
+            repeats: (confidence / 10_000).min(u32::MAX as u64) as u32, // confidence %
+            loop_keys: window.iter().filter_map(|o| o.key.clone()).collect(),
+        },
+        action,
+        ladder_position: state.ladder_position,
+        evidence_refs,
+        validator_ref: Some(spec.validator_ref.clone()),
+        confidence_ppm: Some(confidence),
+        stop_clamped: clamped,
+    });
+    hits
 }

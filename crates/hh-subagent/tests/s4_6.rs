@@ -20,7 +20,7 @@ use hh_monitor::table::HandleTable;
 use hh_ontology::control::Owner;
 use hh_ontology::dimensions::{DimensionId, DimensionKey};
 use hh_provenance::{AuthorityClass, ProvenanceRecord};
-use hh_subagent::merge::{merge, project_merge_report, MergeCtx, MergeInput, MergeVeto};
+use hh_subagent::merge::{merge, project_merge_report, MergeCtx, MergeInput, MergeOpts, MergeVeto};
 use hh_subagent::messaging::{inbox_scan, relay_set, send_message, SendCtx};
 use hh_subagent::ownership::OwnershipTable;
 use hh_subagent::recovery::{cancel_on_revocation, recover_parent};
@@ -975,6 +975,7 @@ fn ac11_single_writer_merge_completes_clean_inputs() {
             parent_versions: &parents,
             baseline: &baseline,
             child_ownerships: &child_owns,
+            opts: MergeOpts::default(),
         };
         merge(&mut c).unwrap()
     };
@@ -1021,6 +1022,7 @@ fn ac11_parent_decides_conflict_records_resolved() {
             parent_versions: &parents,
             baseline: &baseline,
             child_ownerships: &child_owns,
+            opts: MergeOpts::default(),
         };
         merge(&mut c).unwrap()
     };
@@ -1059,6 +1061,7 @@ fn ac11_single_writer_conflict_vetoes() {
             parent_versions: &parents,
             baseline: &baseline,
             child_ownerships: &child_owns,
+            opts: MergeOpts::default(),
         };
         merge(&mut c).unwrap()
     };
@@ -1310,7 +1313,10 @@ fn env_derive_without_driver_refuses_mode_unsupported() {
 }
 
 #[test]
-fn env_share_refuses_stage5_arm() {
+fn env_share_spawns_and_activates_hlc() {
+    // S4.8/R-2.6.5: `share` is now implemented — the spawn succeeds and
+    // enables HLC stamping on the parent's ledger (K-2's mandatory arm;
+    // the S4.6 `share is the Stage-5 arm` refusal is retired).
     let mut p = open_parent("env3");
     let mut s = spec();
     s.environment = EnvIsolation::Derive {
@@ -1318,16 +1324,14 @@ fn env_share_refuses_stage5_arm() {
         spec: Json::obj([]),
     };
     let mut drv = TestDeriver;
-    let e = {
+    let spawned = {
         let mut c = ctx(&mut p);
         c.parent_env_id = Some("env-parent");
         c.env_driver = Some(&mut drv);
-        spawn(&mut c, &s).unwrap_err()
+        spawn(&mut c, &s).expect("share spawn is admitted at S4.8")
     };
-    assert!(matches!(
-        e,
-        SpawnError::Refused(SpawnRefused::ModeUnsupported { .. })
-    ));
+    assert!(spawned.env_handle_id.is_some());
+    assert!(p.store.hlc_enabled(&p.run_id));
 }
 
 // ── spec-shape refusals (step 2 pre-checks) ─────────────────────────────────
@@ -1510,6 +1514,7 @@ fn merge_report_projects_from_durable_blob() {
         parent_versions: &parent_versions,
         baseline: &baseline,
         child_ownerships: &child_ownerships,
+        opts: MergeOpts::default(),
     };
     let out = merge(&mut c).unwrap();
     let report = out.report.expect("clean merge reports");

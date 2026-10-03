@@ -1195,6 +1195,18 @@ fn classify_deltas(
                     c.coordination_delta =
                         combine_delta(c.coordination_delta, boundary_dir(old, new));
                 }
+                // K-4 (§5e.5; ADR-0193; CF-414): `CoordinationPolicy` is
+                // MUST-data and tightening-only — relaxing a
+                // `ConsistencyLevel`, enabling `sibling`/`broadcast`
+                // messaging, widening `default_isolation` toward `share`,
+                // raising `depth_cap`/`fan_out_cap`, or setting
+                // `on_absent_child = annotate` classifies
+                // `coordination_delta = loosening` (refused in evolution
+                // contexts alongside `authority_delta = widening`).
+                if path.contains("coordination") {
+                    c.coordination_delta =
+                        combine_delta(c.coordination_delta, coordination_dir(path, old, new));
+                }
                 if path.contains("grants") || path.contains("issuer") {
                     c.authority_delta = combine_authority(c.authority_delta, grants_dir(old, new));
                 }
@@ -1234,6 +1246,104 @@ fn classify_deltas(
             _ => {}
         }
     }
+}
+
+/// The K-4 `CoordinationPolicy` member directions (§5e.5): a member's
+/// edit is `Loosening` when it relaxes the declared coordination posture
+/// — consistency level drops on the strictness lattice, a messaging
+/// gate opens (`sibling`/`broadcast`/`max_pending` raised), isolation
+/// widens toward `share`, caps rise, or `on_absent_child` becomes
+/// `annotate`. Tightening is the symmetric direction; everything else is
+/// `None` (unrelated members, unchanged semantics).
+fn coordination_dir(path: &str, old: &Json, new: &Json) -> Delta {
+    // ── `ConsistencyLevel` strictness (the classic hierarchy, our closed
+    //    vocabulary's order: a weaker level is a lower rank). ──
+    let level_rank = |s: &str| -> Option<u8> {
+        Some(match s {
+            // One vocabulary with `hh_subagent`'s `ConsistencyLevel::
+            // strength` — `causal_cross_run`/`strong_eventual_union`
+            // share rank 2 (incomparable in the classic hierarchy; a
+            // swap between them is `none`, never a guessed direction).
+            "linearizable_single_writer" => 5,
+            "snapshot_at_fork" => 4,
+            "per_key_serializable" => 3,
+            "causal_cross_run" => 2,
+            "strong_eventual_union" => 2,
+            "conflict_set_eventual" => 1,
+            _ => return None,
+        })
+    };
+    if path.contains("level") && path.contains("consistency") {
+        let dir = match (old.as_str(), new.as_str()) {
+            (Some(o), Some(n)) => match (level_rank(o), level_rank(n)) {
+                (Some(o), Some(n)) if n < o => Delta::Loosening,
+                (Some(o), Some(n)) if n > o => Delta::Tightening,
+                _ => Delta::None,
+            },
+            _ => Delta::None,
+        };
+        if dir != Delta::None {
+            return dir;
+        }
+    }
+    // ── `default_isolation` — `fork_snapshot(0) → scoped_subtree(1) →
+    //    share(2)`: rising widens shared territory = loosening. ──
+    if path.contains("default_isolation") {
+        let rank = |s: &str| match s {
+            "fork_snapshot" | "fresh_from_image" | "none" => 0u8,
+            "scoped_subtree" => 1,
+            "share" => 2,
+            _ => u8::MAX,
+        };
+        if let (Some(o), Some(n)) = (old.as_str(), new.as_str()) {
+            let (ro, rn) = (rank(o), rank(n));
+            if ro == u8::MAX || rn == u8::MAX {
+                return Delta::None;
+            }
+            return if rn > ro {
+                Delta::Loosening
+            } else if rn < ro {
+                Delta::Tightening
+            } else {
+                Delta::None
+            };
+        }
+    }
+    // ── `on_absent_child` — `block_completion → annotate` is the
+    //    named loosening (anything else stays `None`). ──
+    if path.contains("on_absent_child") {
+        if old.as_str() == Some("block_completion") && new.as_str() == Some("annotate") {
+            return Delta::Loosening;
+        }
+        if old.as_str() == Some("annotate") && new.as_str() == Some("block_completion") {
+            return Delta::Tightening;
+        }
+        return Delta::None;
+    }
+    // ── messaging gates — `sibling`/`broadcast` `false → true`, and
+    //    `max_pending`/`max_per_sender`-style caps rising, are openings. ──
+    let opens = |m: &str| path.contains(m);
+    if opens("sibling") || opens("broadcast") {
+        match (old, new) {
+            (Json::Bool(false), Json::Bool(true)) => return Delta::Loosening,
+            (Json::Bool(true), Json::Bool(false)) => return Delta::Tightening,
+            _ => return Delta::None,
+        }
+    }
+    // ── caps — `depth_cap`, `fan_out_cap`, `max_pending`, `max_per_*`:
+    //    a raised ceiling widens coordination's reach. ──
+    if opens("depth_cap") || opens("fan_out_cap") || opens("max_pending") || opens("max_per") {
+        if let (Some(o), Some(n)) = (old.as_int(), new.as_int()) {
+            return if n > o {
+                Delta::Loosening
+            } else if n < o {
+                Delta::Tightening
+            } else {
+                Delta::None
+            };
+        }
+    }
+    Delta::None
 }
 
 fn authority_dir(old: Option<AuthorityClass>, new: Option<AuthorityClass>) -> AuthorityDelta {
@@ -1834,4 +1944,122 @@ fn set_leaf_hash(
         }
     }
     Err(stale(path.to_string(), &Json::str(old_hash), leaf))
+}
+
+// ── K-4 tests (§5e.5; ADR-0193) — coordination-policy member directions ────
+
+#[cfg(test)]
+mod coordination_k4_tests {
+    use super::*;
+
+    fn s(v: &str) -> Json {
+        Json::str(v)
+    }
+
+    #[test]
+    fn consistency_level_loosening_is_ranked() {
+        // A drop on the strictness lattice is `Loosening` — the K-4
+        // classifier evolution contexts refuse.
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.consistency[0].level",
+                &s("per_key_serializable"),
+                &s("conflict_set_eventual")
+            ),
+            Delta::Loosening
+        );
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.consistency[0].level",
+                &s("conflict_set_eventual"),
+                &s("linearizable_single_writer")
+            ),
+            Delta::Tightening
+        );
+        // The incomparable pair swaps as `none`, never a guessed direction.
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.consistency[0].level",
+                &s("causal_cross_run"),
+                &s("strong_eventual_union")
+            ),
+            Delta::None
+        );
+    }
+
+    #[test]
+    fn isolation_widening_toward_share_is_loosening() {
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.default_isolation",
+                &s("fork_snapshot"),
+                &s("share")
+            ),
+            Delta::Loosening
+        );
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.default_isolation",
+                &s("share"),
+                &s("scoped_subtree")
+            ),
+            Delta::Tightening
+        );
+    }
+
+    #[test]
+    fn messaging_openings_and_cap_raises_are_loosening() {
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.messaging.sibling",
+                &Json::Bool(false),
+                &Json::Bool(true)
+            ),
+            Delta::Loosening
+        );
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.messaging.broadcast",
+                &Json::Bool(true),
+                &Json::Bool(false)
+            ),
+            Delta::Tightening
+        );
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.depth_cap",
+                &Json::Int(2),
+                &Json::Int(4)
+            ),
+            Delta::Loosening
+        );
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.messaging.max_pending",
+                &Json::Int(8),
+                &Json::Int(4)
+            ),
+            Delta::Tightening
+        );
+    }
+
+    #[test]
+    fn on_absent_child_annotate_is_the_named_loosening() {
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.on_absent_child",
+                &s("block_completion"),
+                &s("annotate")
+            ),
+            Delta::Loosening
+        );
+        assert_eq!(
+            coordination_dir(
+                "coordination_policy.on_absent_child",
+                &s("annotate"),
+                &s("block_completion")
+            ),
+            Delta::Tightening
+        );
+    }
 }

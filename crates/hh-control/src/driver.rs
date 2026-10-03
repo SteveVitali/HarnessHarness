@@ -361,6 +361,11 @@ pub struct DriverConfig {
     /// `open`/`resume` from the manifest/profile projection. Everything
     /// else in the `ComputeContext` folds from the durable prefix.
     pub compute_facts: crate::compute::ComputeFacts,
+    /// The `judged` loop detector's `Validator{kind: judge}` port
+    /// (Stage-4; binds the `Validator` the `LoopPolicy.judged.validator_ref`
+    /// names — `None` with a declared spec means the detector never
+    /// fires, never gets guessed at).
+    pub judge: Option<std::sync::Arc<dyn crate::loops::JudgePort>>,
 }
 
 impl Default for DriverConfig {
@@ -385,6 +390,7 @@ impl Default for DriverConfig {
             delegation_available: false,
             compute_policy_ref: "static".to_string(),
             compute_facts: crate::compute::ComputeFacts::default(),
+            judge: None,
         }
     }
 }
@@ -763,6 +769,7 @@ impl<S: ControlStrategy> Driver<S> {
             cancel_requested: None,
             interactive_attendance: self.config.interactive_attendance,
             delegation_available: self.config.delegation_available,
+            judge: self.config.judge.clone(),
         }
     }
 
@@ -1468,8 +1475,57 @@ impl<S: ControlStrategy> Driver<S> {
                 not_before,
             } => {
                 if let crate::vocab::RetryTarget::ModelCall { model_call_id } = target {
-                    let request = assembler.assemble(&Json::Null).request;
+                    let mut request = assembler.assemble(&Json::Null).request;
                     let next_attempt = crate::retry::attempt_no(sink.prefix(), &model_call_id) + 1;
+                    // `model_fallback{profile_ref}` execution (§5e.2;
+                    // AC-R-2.6.2-11): the last `control.retry.scheduled`
+                    // for this call that carried the declared delta is
+                    // the reroute's basis — the driver emits the
+                    // `model.rerouted` audit row and stamps the
+                    // `profile_override` member on the request (never a
+                    // silent alteration: the delta is the recorded one,
+                    // `attempt_delta_allowed` having admitted it).
+                    let fallback = sink
+                        .prefix()
+                        .iter()
+                        .rev()
+                        .find(|e| {
+                            e.class == "control.retry.scheduled"
+                                && e.payload.get("scope_id").and_then(Json::as_str)
+                                    == Some(model_call_id.as_str())
+                                && e.payload
+                                    .get("attempt_delta")
+                                    .and_then(Json::as_str)
+                                    .is_some_and(|d| d.starts_with("model_fallback{"))
+                        })
+                        .and_then(|e| {
+                            e.payload
+                                .get("attempt_delta")
+                                .and_then(Json::as_str)
+                                .map(|d| {
+                                    (
+                                        d["model_fallback{".len()..d.len() - 1].to_string(),
+                                        e.event_id.clone(),
+                                    )
+                                })
+                        });
+                    if let Some((profile_ref, basis)) = fallback {
+                        self.append(
+                            sink,
+                            "model.rerouted",
+                            Json::obj([
+                                ("model_call_id", Json::str(&model_call_id)),
+                                ("to_profile_ref", Json::str(&profile_ref)),
+                                ("cause", Json::str("model_fallback")),
+                                ("basis", Json::str(&basis)),
+                                ("charged_to", Json::str("subject")),
+                            ]),
+                            Some(&model_call_id),
+                        )?;
+                        if let Json::Obj(m) = &mut request {
+                            m.insert("profile_override".to_string(), Json::str(profile_ref));
+                        }
+                    }
                     let payload = crate::events::retry_scheduled_payload(
                         ScopeKind::ModelCall,
                         &model_call_id,

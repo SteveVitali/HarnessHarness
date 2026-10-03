@@ -177,6 +177,11 @@ pub struct GuardContext {
     /// ADR-0186 D4's mandatory-reason gate and this gate ride together:
     /// a profile that cannot spawn cannot delegate at all).
     pub delegation_available: bool,
+    /// The `judged` loop detector's `Validator{kind: judge}` port
+    /// (Stage-4; `Arc` so the context stays lifetime-free — `None` with
+    /// a declared `judged` spec means the detector never fires, never
+    /// gets guessed at).
+    pub judge: Option<std::sync::Arc<dyn crate::loops::JudgePort>>,
 }
 
 /// The `guard()` entry — dispatches the six points over `(events, policy,
@@ -487,7 +492,7 @@ fn last_loop_reason(events: &[EventEnvelope]) -> Option<StopReason> {
 fn interpret(
     events: &[EventEnvelope],
     policy: &EnvelopePolicy,
-    _ctx: &GuardContext,
+    ctx: &GuardContext,
     model_call_id: &str,
     stop_reason: hh_gateway::vocab::StopReason,
     text_empty: bool,
@@ -597,12 +602,16 @@ fn interpret(
             events: std::mem::take(&mut evs),
         };
     }
-    // The deterministic detectors — a hit's ladder rung decides:
-    // `nudge`/`deny` → respond (the nudge artefact / the denial record);
-    // `stop` → stop{loop_detected}.
-    if let Some(hit) = crate::loops::detect(events, &policy.loop_policy)
-        .into_iter()
-        .next()
+    // The loop detectors — a hit's ladder rung decides: `nudge`/`deny` →
+    // respond (the nudge artefact / the denial record); `stop` →
+    // stop{loop_detected}. `detect_with_judge` admits the Stage-4
+    // `judged` arm at its cadence when a port is bound (a judged `stop`
+    // arrives already clamped to `deny` — the match below then takes the
+    // respond arm, never the stop arm, on judged-only evidence).
+    if let Some(hit) =
+        crate::loops::detect_with_judge(events, &policy.loop_policy, ctx.judge.as_deref())
+            .into_iter()
+            .next()
     {
         let ev_row = GuardEvent {
             class: "control.loop.detected".into(),
@@ -612,7 +621,7 @@ fn interpret(
                 &hit.evidence_refs,
                 hit.action,
                 hit.ladder_position,
-                None,
+                hit.validator_ref.as_deref(),
             ),
             scope_id: None,
         };

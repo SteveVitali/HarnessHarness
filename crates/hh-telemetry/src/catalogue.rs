@@ -223,6 +223,19 @@ pub const PROCESS_METRICS: &[ProcessMetric] = &[
     ProcessMetric { name: "loop_detection", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.turn.started"], unit: MetricUnit::Count,
         fold: N(NA::NoDetector) },
+    // ── §5e.2 process metrics (AC-R-2.6.2-11; T-LCD-15): `loop_*` and
+    // `format_failure_rate` compute over `control.loop.detected` /
+    // `control.output.rejected` / `model.call.requested` — classes a
+    // hosted run without observable tool calls never produces, so the
+    // empty denominator renders `n/a{estimator_undefined}`, never a
+    // fabricated 0. A hosted run *with* observable calls computes (the
+    // lifted `model.call.requested` rows carry the denominator). ──
+    ProcessMetric { name: "loop_stop_rate", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.loop.detected", "model.call.requested"], unit: MetricUnit::Ppm, fold: C },
+    ProcessMetric { name: "loop_nudge_recovery_rate", dimension: Dimension::Reliability, direction: Direction::Higher, requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.loop.detected"], unit: MetricUnit::Ppm, fold: C },
+    ProcessMetric { name: "format_failure_rate", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
+        computed_from: &["control.output.rejected", "model.call.requested"], unit: MetricUnit::Ppm, fold: C },
     ProcessMetric { name: "rollback_count", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV], applies_to: BOTH,
         computed_from: &["lifecycle.run.rolled_back"], unit: MetricUnit::Count, fold: C },
     // ── the five recovery metrics (AC-R-2.2.3-12; §5a.3 §8 — `applies_to

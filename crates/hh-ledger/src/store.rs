@@ -680,6 +680,39 @@ impl Store {
         self.runs.contains_key(run_id)
     }
 
+    /// Whether the run stamps `hlc` on its events (lineage-bearing or
+    /// `require_hlc`-enabled).
+    pub fn hlc_enabled(&self, run_id: &str) -> bool {
+        self.runs
+            .get(run_id)
+            .map(|st| st.hlc_node.is_some())
+            .unwrap_or(false)
+    }
+
+    /// `require_hlc(run_id)` — start stamping `hlc` on the run's subsequent
+    /// events (K-2/§5e.5: `hlc_required` is mandatory once a `share` child
+    /// exists — the parent's coordination record must be causally ordered
+    /// against the shared children). Returns `false` when the run already
+    /// stamps (a no-op, never a re-seed — the clock's `hlc_last` continuity
+    /// is preserved). Events appended before the call stay `hlc`-free: they
+    /// predate the shared coordination the clock orders.
+    pub fn require_hlc(&mut self, run_id: &str) -> Result<bool, LedgerError> {
+        self.tier_c1("require_hlc")?;
+        let now = self.now_ms();
+        let state = self
+            .runs
+            .get_mut(run_id)
+            .ok_or_else(|| LedgerError::UnknownRun {
+                run_id: run_id.to_string(),
+            })?;
+        if state.hlc_node.is_some() {
+            return Ok(false);
+        }
+        state.hlc_node = Some(run_id.to_string());
+        state.hlc_last = Some(crate::hlc::Hlc::seed(now, None, run_id));
+        Ok(true)
+    }
+
     // ── open_run ─────────────────────────────────────────────────────────
 
     /// `open_run(manifest, holder) → (RunId, Lease)` — allocates a time-ordered

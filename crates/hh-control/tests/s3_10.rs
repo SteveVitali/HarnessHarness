@@ -1892,6 +1892,7 @@ fn ac_f2_10_envelope_rebuild_equality() {
         cancel_requested: None,
         interactive_attendance: false,
         delegation_available: false,
+        judge: None,
     };
     let v1 = env_a.guard(
         &prefix,

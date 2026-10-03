@@ -40,6 +40,7 @@ use hh_budget::account::Account;
 use hh_budget::quantity::ResourceVector;
 use hh_budget::spec::BudgetScope;
 use hh_ledger::event::{Event, Producer, Scope};
+use hh_ledger::leases::{LeaseScope, ScopedLease};
 use hh_ledger::manifest::EventRef;
 use hh_ledger::manifest::RunManifest;
 use hh_ledger::store::{Lease, Store};
@@ -52,6 +53,7 @@ use hh_ontology::dimensions::DimensionId;
 use hh_provenance::ProvenanceRecord;
 use hh_wire::json::Json;
 
+use crate::consistency::{k1_check, ConsistencyDeclaration};
 use crate::ownership::OwnershipTable;
 use crate::types::*;
 
@@ -89,6 +91,9 @@ pub enum SpawnPhase {
     AfterAllocate,
     /// After `control.ownership.transferred` rows.
     AfterOwnership,
+    /// After step-4c `resource(key)` lock acquisition (the `share` /
+    /// `scoped_subtree` reserved-key hold — all-or-nothing durable).
+    AfterResourceAcquire,
     /// After `derive` (the `environment.derived` row is durable).
     AfterDerive,
     /// After `control.subagent.spawned` is durable — the delegated-to edge
@@ -577,19 +582,51 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
             }));
         }
     }
-    // `share` isolation — declared, Stage-5 arm (4c's resource-lock walk is
-    // the share machinery's; the keys still record on `spawned`).
-    if matches!(spec.environment, EnvIsolation::Derive { mode, .. } if mode == hh_env::handle::DeriveMode::Share)
-    {
-        return Err(SpawnError::Refused(SpawnRefused::ModeUnsupported {
-            detail: "isolation.environment = share is the Stage-5 arm".into(),
-        }));
+    // K-1 (§5e.5) — a `consistency_declarations[]` entry must parse the
+    // closed declaration shape *and* be consistent with the `derive` mode
+    // (`share` ⇏ `snapshot_at_fork`; `fork_snapshot` ⇏
+    // `per_key_serializable`; `scoped_subtree` ⇏ `snapshot_at_fork`). A
+    // violation is a definition error — refused before any reservation.
+    if let EnvIsolation::Derive { mode, .. } = spec.environment {
+        let mut violations = Vec::new();
+        for (i, d) in spec.consistency_declarations.iter().enumerate() {
+            match ConsistencyDeclaration::from_json(d) {
+                Some(decl) => violations.extend(k1_check(mode, &[decl])),
+                None => violations.push(format!(
+                    "consistency_declarations[{i}]: not a ConsistencyDeclaration"
+                )),
+            }
+        }
+        if let Some(detail) = violations.into_iter().next() {
+            return Err(SpawnError::Refused(SpawnRefused::DefinitionUnresolvable {
+                detail,
+            }));
+        }
     }
     if matches!(spec.environment, EnvIsolation::Derive { .. })
         && (ctx.parent_env_id.is_none() || ctx.env_driver.is_none())
     {
         return Err(SpawnError::Refused(SpawnRefused::ModeUnsupported {
             detail: "derive requested without a live parent environment / driver".into(),
+        }));
+    }
+    // O-2 (§5e.5) — `detach_to_child` is refused under `share` /
+    // `scoped_subtree`: a detached child could keep writing shared or
+    // parent-scoped territory with nobody holding its ownership lease —
+    // the spec's closed answer is a spawn refusal, never a late fence.
+    if matches!(
+        spec.on_parent_end,
+        hh_env::handle::OnParentEnd::DetachToChild
+    ) && matches!(
+        spec.environment,
+        EnvIsolation::Derive {
+            mode: hh_env::handle::DeriveMode::Share | hh_env::handle::DeriveMode::ScopedSubtree,
+            ..
+        }
+    ) {
+        return Err(SpawnError::Refused(SpawnRefused::ModeUnsupported {
+            detail: "on_parent_end = detach_to_child refused under share/scoped_subtree (O-2)"
+                .into(),
         }));
     }
 
@@ -803,7 +840,139 @@ pub fn spawn(ctx: &mut SpawnCtx, spec: &SubagentSpec) -> Result<Spawned, SpawnEr
             .append(ctx.parent_run_id, ctx.parent_lease, transferred)
             .map_err(|e| SpawnError::Kernel(format!("ownership rows: {e}")))?;
     }
+    // The `control.ownership.granted` conferral record — one summary row
+    // naming every object the spawn moved (the `transferred` rows above
+    // are the per-object moves this row cites; §5e.5's `granted` class is
+    // the verb's audit record — `to` is always the child it binds).
+    if !spec.ownership_grants.is_empty() {
+        let granted = kernel_ev_pub(
+            ctx.store,
+            ctx.parent_run_id,
+            "control.ownership.granted",
+            Json::obj([
+                (
+                    "objects",
+                    Json::Arr(
+                        spec.ownership_grants
+                            .iter()
+                            .map(OwnedObject::to_json)
+                            .collect(),
+                    ),
+                ),
+                ("from", Json::str(ctx.parent_run_id)),
+                ("to", Json::str(child_run_id.as_str())),
+                ("grant_of", Json::str(ctx.decision.event_id.as_str())),
+            ]),
+            vec![ctx.decision.clone()],
+            None,
+        )
+        .map_err(|e| SpawnError::Kernel(e.to_string()))?;
+        ctx.store
+            .append(ctx.parent_run_id, ctx.parent_lease, vec![granted])
+            .map_err(|e| SpawnError::Kernel(format!("ownership granted row: {e}")))?;
+    }
     hook_phase!(ctx, SpawnPhase::AfterOwnership);
+
+    // ── step 4c — `resource(key)` locks (§5e.5; ADR-0192 D6) ────────────
+    // `share` / `scoped_subtree` isolation holds every `reserved_keys[]`
+    // lock all-or-nothing *before the child runs* — canonical sorted
+    // order, on the parent's ledger under the parent's writer lease, the
+    // holder naming the child process the lock works for. A live record
+    // in *any* run contends (the cross-run scan — a sibling `share`
+    // writer is fenced, never raced); a record this spawn minted is
+    // adopted unchanged (KP-21's nothing-held rule: the retry sees its
+    // own hold). Failure releases the prefix and refuses
+    // `ResourceLockTimeout` — a refused spawn holds no key (AC-F5-08).
+    let coordination_mode = match &spec.environment {
+        EnvIsolation::Derive { mode, .. } => Some(*mode),
+        EnvIsolation::None => None,
+    };
+    let mut resource_locks: Vec<ScopedLease> = Vec::new();
+    let lock_modes = matches!(
+        coordination_mode,
+        Some(hh_env::handle::DeriveMode::Share) | Some(hh_env::handle::DeriveMode::ScopedSubtree)
+    );
+    if lock_modes && !spec.reserved_keys.is_empty() {
+        let mut keys = spec.reserved_keys.clone();
+        keys.sort();
+        keys.dedup();
+        let holder = format!("subagent:{child_run_id}");
+        for key in &keys {
+            let scope = LeaseScope::Resource(key.clone());
+            // Adopt an already-held record for *this* child (the retry
+            // path's own mint); any other live holder contends.
+            match ctx
+                .store
+                .scoped_lease(ctx.parent_run_id, &scope)
+                .map_err(|e| SpawnError::Kernel(e.to_string()))?
+            {
+                Some(existing) if existing.holder == holder => {
+                    resource_locks.push(existing);
+                    continue;
+                }
+                _ => {}
+            }
+            // Cross-run contention (AC-F5-08's "live sibling/cross-run"
+            // arm) — `lease_acquire` fences the *local* run's records
+            // only; a `resource(key)` held by a different run on this
+            // store still contends, so the shared-key scan runs before
+            // the local acquire.
+            let contends = ctx
+                .store
+                .scoped_lease_holders(&scope)
+                .iter()
+                .any(|(_, l)| l.holder != holder);
+            if contends {
+                for held in &resource_locks {
+                    if held.holder == holder {
+                        let _ = ctx.store.lease_release(
+                            ctx.parent_run_id,
+                            ctx.parent_lease,
+                            held,
+                            "resource_lock_timeout",
+                        );
+                    }
+                }
+                return Err(SpawnError::Refused(SpawnRefused::ResourceLockTimeout {
+                    keys,
+                }));
+            }
+            match ctx.store.lease_acquire(
+                ctx.parent_run_id,
+                ctx.parent_lease,
+                &scope,
+                &holder,
+                ctx.reserve_ttl_ms,
+            ) {
+                Ok(l) => resource_locks.push(l),
+                Err(_) => {
+                    for held in &resource_locks {
+                        if held.holder == holder {
+                            let _ = ctx.store.lease_release(
+                                ctx.parent_run_id,
+                                ctx.parent_lease,
+                                held,
+                                "resource_lock_timeout",
+                            );
+                        }
+                    }
+                    return Err(SpawnError::Refused(SpawnRefused::ResourceLockTimeout {
+                        keys,
+                    }));
+                }
+            }
+        }
+    }
+    // K-2 — `share` requires the parent's record to carry HLC so a
+    // consistent snapshot over the run tree orders the shared writes
+    // (mandatory in `share`, optional elsewhere — `scoped_subtree`
+    // children stamp through their own lineage).
+    if matches!(coordination_mode, Some(hh_env::handle::DeriveMode::Share)) {
+        ctx.store
+            .require_hlc(ctx.parent_run_id)
+            .map_err(|e| SpawnError::Kernel(format!("require_hlc: {e}")))?;
+    }
+    hook_phase!(ctx, SpawnPhase::AfterResourceAcquire);
 
     // ── step 5 — derive the child environment when requested ────────────
     let env_handle_id = match &spec.environment {

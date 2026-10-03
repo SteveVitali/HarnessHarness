@@ -1219,9 +1219,10 @@ impl MergePolicy {
         })
     }
 
-    /// Whether this slice implements the arm.
+    /// Whether this slice implements the arm (all four — the S4.8 slice
+    /// added `three_way_text{line}` + `validator_selected`).
     pub fn implemented(&self) -> bool {
-        matches!(self, MergePolicy::SingleWriter | MergePolicy::ParentDecides)
+        true
     }
 }
 
@@ -1245,6 +1246,10 @@ pub struct MergeConflictRecord {
     pub parent_current: Option<String>,
     /// The child the conflict came from.
     pub child_run_id: String,
+    /// `detector ∈ {deterministic{policy}, judged{validator_ref}}`
+    /// (§5e.5 `MergeConflict`; `None` spells `deterministic` — the
+    /// S4.6-era records predating the member).
+    pub detector: Option<String>,
 }
 
 impl MergeConflictRecord {
@@ -1267,6 +1272,9 @@ impl MergeConflictRecord {
                 None => m.push((k, Json::Null)),
             }
         }
+        if let Some(d) = &self.detector {
+            m.push(("detector", Json::str(d.clone())));
+        }
         Json::obj(m)
     }
 }
@@ -1280,6 +1288,15 @@ pub enum MergeResolution {
     Choose { side: ChooseSide },
     /// `supersede{new_ref}` — a new value supersedes both sides.
     Supersede { new_ref: String },
+    /// `coexist` — both sides keep their version (the conflict record's
+    /// `sides[]` stand; used for `conflict_set`-style objects and
+    /// `three_way_text{line}` hunk conflicts the parent elects to keep
+    /// separate rather than collapse).
+    Coexist,
+    /// `abandon{side}` — drop one side's version entirely (the loser's
+    /// write is recorded, never silently lost — G-1 still counts it in
+    /// `conflicts[]`).
+    Abandon { side: ChooseSide },
     /// `escalate` — human escalation (requires the H7 channel — refused at
     /// this slice as `IllegitimateResolution`).
     Escalate,
@@ -1317,6 +1334,10 @@ pub struct MergeReport {
     pub provenance: Json,
     /// `derived_from` — the child results/reports the fold consumed.
     pub derived_from: Json,
+    /// `merge_hash` — the order-independent outcome address (G-6;
+    /// `merge` computes it over `{policy, merged refs, conflict ids,
+    /// absent set}` — crash-restore equality is proven by comparing it).
+    pub merge_hash: String,
 }
 
 impl MergeReport {
@@ -1350,6 +1371,7 @@ impl MergeReport {
             ),
             ("provenance", self.provenance.clone()),
             ("derived_from", self.derived_from.clone()),
+            ("merge_hash", Json::str(self.merge_hash.clone())),
         ])
     }
 
@@ -1360,6 +1382,60 @@ impl MergeReport {
             "application/json",
         )
         .id()
+    }
+}
+
+/// `MergeProposal{proposal_id, object, from, version_ref, label}` — the
+/// queued write a non-owner offers the object's owner (§5e.5: named
+/// artifacts are `single_writer`; proposals queue as `append`, never apply
+/// without the owner's ledgered action — `control.merge.proposed` is the
+/// queue row, `control.merge.resolved{supersede}` the owner's application).
+#[derive(Debug, Clone, PartialEq)]
+pub struct MergeProposal {
+    /// The proposal id (content-addressed over `{object, from, version_ref}`).
+    pub proposal_id: String,
+    /// The coordination object proposed on.
+    pub object: OwnedObject,
+    /// The proposing run.
+    pub from: String,
+    /// The offered version (a content address / `version_ref`).
+    pub version_ref: String,
+    /// The provenance label the proposer stamped (`delegate`-class max).
+    pub label: Option<String>,
+    /// The proposal state in the projection (`queued | applied | refused`).
+    pub state: String,
+}
+
+impl MergeProposal {
+    /// The canonical JSON (`control.merge.proposed`'s payload shape).
+    pub fn to_json(&self) -> Json {
+        let mut m = vec![
+            ("proposal_id", Json::str(self.proposal_id.clone())),
+            ("object", self.object.to_json()),
+            ("from", Json::str(self.from.clone())),
+            ("version_ref", Json::str(self.version_ref.clone())),
+            ("state", Json::str(self.state.clone())),
+        ];
+        if let Some(l) = &self.label {
+            m.push(("label", Json::str(l.clone())));
+        }
+        Json::obj(m)
+    }
+
+    /// From canonical JSON.
+    pub fn from_json(j: &Json) -> Option<MergeProposal> {
+        Some(MergeProposal {
+            proposal_id: j.get("proposal_id")?.as_str()?.to_string(),
+            object: OwnedObject::from_json(j.get("object")?)?,
+            from: j.get("from")?.as_str()?.to_string(),
+            version_ref: j.get("version_ref")?.as_str()?.to_string(),
+            label: j.get("label").and_then(Json::as_str).map(str::to_string),
+            state: j
+                .get("state")
+                .and_then(Json::as_str)
+                .unwrap_or("queued")
+                .to_string(),
+        })
     }
 }
 
@@ -1747,6 +1823,7 @@ impl Default for MergeReport {
             lost_write_count: 0,
             provenance: Json::Null,
             derived_from: Json::Null,
+            merge_hash: String::new(),
         }
     }
 }
