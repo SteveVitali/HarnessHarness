@@ -26,8 +26,8 @@ use hh_bench::adapter::BenchmarkAdapter;
 use hh_bench::benchset::{Benchset, BenchsetTask};
 use hh_bench::grade::GradeRequest;
 use hh_control::driver::{
-    AssembledRequest, AssemblerPort, Driver, DriverConfig, EffectGate, GateOutcome, LedgerSink,
-    ModelOutcome, ModelPort,
+    AssembleInputs, AssembledRequest, AssemblerPort, Driver, DriverConfig, EffectGate, GateOutcome,
+    LedgerSink, ModelOutcome, ModelPort,
 };
 use hh_control::output::{ParamKind, ParamSpec, ParsedCall, SurfaceSpec};
 use hh_control::policy::EnvelopePolicy;
@@ -217,10 +217,11 @@ impl EffectGate for ParticipantGate {
 
 struct NullAssembler;
 impl AssemblerPort for NullAssembler {
-    fn assemble(&mut self, req: &Json) -> AssembledRequest {
+    fn assemble(&mut self, _inputs: &AssembleInputs<'_>, req: &Json) -> AssembledRequest {
         AssembledRequest {
             request: req.clone(),
             assembled_payload: Some(Json::obj([("context_request", req.clone())])),
+            side_events: Vec::new(),
         }
     }
 }

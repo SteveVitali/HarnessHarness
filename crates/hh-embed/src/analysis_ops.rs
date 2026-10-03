@@ -19,6 +19,7 @@
 use std::collections::BTreeMap;
 
 use hh_analysis::{analyze_and_record, AnalysisInput};
+use hh_budget::errors::EnforcementLevel;
 use hh_budget::matchspec::{ArmSpec as MatchArmSpec, BudgetEnforcement};
 use hh_budget::spec::BudgetSpec;
 use hh_eval::facts::LedgerFacts;
@@ -68,14 +69,67 @@ fn budget(docs: &LabDocs, r: &str) -> Result<BudgetSpec, EmbedError> {
         .ok_or_else(|| bad("/spec_ref/arms/budget", &format!("decode failed for {r}")))
 }
 
+/// `arm_id → BudgetEnforcement` — the *stamped* per-dimension view the
+/// bound subject runs' manifests carry (`extra["budget_enforcement"]`, the
+/// Hosting ABI's adapter-derived `{dimension → enforced|advisory|
+/// unenforceable}` map, stamped at `bound` — ADR-0165 D3). DF-CAP.2-2:
+/// the analysis boundary reads the stamp, never the `limits_enforced`
+/// claim — a stamped map admits exactly the dims the adapter proved, and
+/// a hosted arm with no stamp keeps the empty (all-unenforceable) map the
+/// match check refuses on (CC3/CC9 — never the claim's `full` restated as
+/// proof).
+fn stamped_arm_enforcement(
+    rows: &[ResultsRow],
+    manifests: &BTreeMap<String, RunManifest>,
+) -> BTreeMap<String, BudgetEnforcement> {
+    let mut out: BTreeMap<String, BudgetEnforcement> = BTreeMap::new();
+    for r in rows {
+        let Some(arm_id) = r
+            .experiment
+            .as_ref()
+            .and_then(|e| e.get("arm_id"))
+            .and_then(Json::as_str)
+        else {
+            continue;
+        };
+        if out.contains_key(arm_id) {
+            continue;
+        }
+        let Some(m) = manifests.get(r.key.run_id.as_str()) else {
+            continue;
+        };
+        let Some(Json::Obj(be)) = m.extra.get("budget_enforcement") else {
+            continue;
+        };
+        let pairs: Vec<(hh_ontology::dimensions::DimensionId, EnforcementLevel)> = be
+            .iter()
+            .filter_map(|(d, l)| {
+                let dim = hh_ontology::dimensions::DimensionId::parse(d)?;
+                let lvl = match l.as_str()? {
+                    "enforced" => EnforcementLevel::Enforced,
+                    "advisory" => EnforcementLevel::Advisory,
+                    "unenforceable" => EnforcementLevel::Unenforceable,
+                    _ => return None,
+                };
+                Some((dim, lvl))
+            })
+            .collect();
+        out.insert(arm_id.to_string(), BudgetEnforcement::hosted(&pairs));
+    }
+    out
+}
+
 /// `spec.arms[]` (the lab record) → `(arm_id, matchspec ArmSpec)` pairs —
 /// the match-check inputs the kernel's matched-budget binding consumes.
-/// `limits_enforced = full` maps to `native()`; `partial`/`none` map to
+/// Enforcement comes from the arm's *stamped* `budget_enforcement` where a
+/// bound subject manifest carries it (DF-CAP.2-2; ADR-0165 D3); otherwise
+/// `limits_enforced = full` maps to `native()` and `partial`/`none` to
 /// `hosted(&[])` — the ADR-0046 (d) mapping; research-grade match specs
 /// stay refused inside `hh-eval` (CC9).
 fn resolve_arms(
     docs: &LabDocs,
     espec: &ExperimentSpec,
+    stamped: &BTreeMap<String, BudgetEnforcement>,
 ) -> Result<Vec<(String, MatchArmSpec)>, EmbedError> {
     espec
         .arms
@@ -92,11 +146,13 @@ fn resolve_arms(
                     eval_budget: Some(budget(docs, &a.eval_budget)?),
                     inference_budget: None,
                     match_spec: a.match_spec.clone(),
-                    enforcement: if a.limits_enforced == "full" {
-                        BudgetEnforcement::native()
-                    } else {
-                        BudgetEnforcement::hosted(&[])
-                    },
+                    enforcement: stamped.get(&a.arm_id).cloned().unwrap_or_else(|| {
+                        if a.limits_enforced == "full" {
+                            BudgetEnforcement::native()
+                        } else {
+                            BudgetEnforcement::hosted(&[])
+                        }
+                    }),
                     spend_confidence: None,
                     coverage_ppm: None,
                     ensemble_k: a.ensemble_k,
@@ -132,7 +188,7 @@ impl EmbedService {
         // The experiment spec resolves design + arms + pre-registration —
         // never re-supplied at the boundary (the registered doc is the
         // authority; a `spec_ref` pointing nowhere is a refusal).
-        let (design, arm_specs, pre_registration) = match &spec.spec_ref {
+        let (design, pre_registration, espec) = match &spec.spec_ref {
             Some(r) => {
                 let body = docs
                     .get(doc_kind::SPEC, r)
@@ -142,11 +198,11 @@ impl EmbedService {
                     .map_err(|e| bad("/spec/spec_ref", &format!("{e:?}")))?;
                 (
                     Some(espec.design.clone()),
-                    resolve_arms(&docs, &espec)?,
                     espec.pre_registration.clone(),
+                    Some(espec),
                 )
             }
-            None => (None, Vec::new(), None),
+            None => (None, None, None),
         };
 
         // The rows — durable projections, resolved by key or version id —
@@ -184,6 +240,14 @@ impl EmbedService {
             }
             rows.push(row);
         }
+
+        // DF-CAP.2-2 — the arms resolve *after* the manifests load: the
+        // enforcement view comes from the stamped `budget_enforcement`
+        // the bound subject runs carry, not the record's claim.
+        let arm_specs = match &espec {
+            Some(e) => resolve_arms(&docs, e, &stamped_arm_enforcement(&rows, &manifests))?,
+            None => Vec::new(),
+        };
 
         let declarations = decls_for(&spec.query.metrics)?;
         let metric_registry_version = params

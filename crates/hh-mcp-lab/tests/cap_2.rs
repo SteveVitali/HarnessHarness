@@ -262,25 +262,26 @@ fn cap2_supply_ask_pending_unanswerable() {
         "the durable pending names its id"
     );
 
-    // Leg 1 — the caller that owes the answer cannot even name the verb:
-    // `respond_approval` is a Lab tool; a supply-surface binding's
-    // catalogue is its artifact — `unknown_tool`, before the caller-kind
-    // gate is ever consulted.
+    // Leg 1 (DF-S4.11-3, resolved at CAP.3; ADR-0329): `respond_approval`
+    // is now the supply protocol's builtin answer verb — the hosted
+    // human_principal's call resolves the pending on its own surface
+    // run. (The pinned `unknown_tool` for a *non-principal* caller is
+    // gone too: the verb answers `IllegitimateEndorsement` before the
+    // catalogue check — the gate is the caller-kind bar, same as the
+    // Lab catalogue's.)
     let r = call(
         &mut srv,
         &hosted,
         "respond_approval",
         Json::obj([
             ("permission_id", Json::str(permission_id.clone())),
-            ("outcome", Json::str("approved")),
+            ("outcome", Json::str("deferred")),
             ("idempotency_key", Json::str("resp-1")),
         ]),
     );
-    assert!(is_err(&r), "{r:?}");
-    assert_eq!(
-        refusal_kind(&r),
-        "unknown_tool",
-        "the hosted caller's catalogue is its artifact: {r:?}"
+    assert!(
+        !is_err(&r),
+        "the caller's own deferred answer is accepted (pending stays open): {r:?}"
     );
 
     // Leg 2 — a `human_principal` on the Lab catalogue passes the
@@ -340,7 +341,6 @@ fn cap2_supply_ask_pending_unanswerable() {
 /// `security.permission.decided`, and the retried `tools/call` applies.
 /// Routed to CAP.3 — run with `--ignored` to observe the gap.
 #[test]
-#[ignore = "DF-S4.11-3: the run-less respond_approval{permission_id} round trip is not wired — the surface run is never minted as a hnd-run-* handle and respond_permission needs the run's own live session"]
 fn cap2_supply_ask_respond_approval_round_trip() {
     let hosted = hosted_human();
     let doc = supply_doc(&hosted);

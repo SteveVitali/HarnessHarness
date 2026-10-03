@@ -23,6 +23,8 @@ use std::collections::BTreeSet;
 use hh_compiler::equiv::SurfaceBinding;
 use hh_compiler::plan::PinnedRef;
 use hh_containment::admit::{admit_input, floor_gate, workspace_scope};
+use hh_containment::egress::{ApprovalCache, EgressRequest};
+use hh_containment::policy::{EgressProtocol, NetMode};
 use hh_context::k4::{self, K4Cache, K4Entry, K4Key, K4Resolution};
 use hh_context::memory::WriteContext;
 use hh_hir::kinds::{EffectClass, EffectDomain};
@@ -42,6 +44,7 @@ use hh_provenance::flow;
 use hh_provenance::origin::Origin;
 use hh_provenance::{Label, PersistenceScope, ProvenanceRecord};
 use hh_secrets::redact::{redact, DetectorSet};
+use hh_secrets::CredentialBroker;
 use hh_wire::json::Json;
 
 use crate::capture::{
@@ -275,6 +278,13 @@ pub struct Dispatcher<'a> {
     /// `inject(kill_point, target)`: armed once, fires once at the named
     /// stage boundary. Production code never arms it.
     fault: Option<KillPoint>,
+    /// The kernel-held credential broker the egress mediator fronts
+    /// (DF-S2.4-1; §5g.4 — the broker refuses any `mediate` without a
+    /// monitor decision; SV-8 PDP/CDP separation). Defaults to a fail-closed
+    /// `DenyAllResolver` — a sentinel-bearing request is denied until a
+    /// composed host installs a live broker via `set_egress_broker` (the
+    /// composed secret-source seam).
+    egress_broker: CredentialBroker,
 }
 
 impl<'a> Dispatcher<'a> {
@@ -300,7 +310,19 @@ impl<'a> Dispatcher<'a> {
             )),
             permission_timeout_ms: None,
             fault: None,
+            egress_broker: CredentialBroker::new(
+                Box::new(hh_secrets::DenyAllResolver),
+                format!("kernel-egress/{run_id}"),
+            ),
         }
+    }
+
+    /// `set_egress_broker(broker)` — install the composed credential broker
+    /// the egress mediator fronts (DF-S2.4-1). The default is fail-closed
+    /// (`DenyAllResolver`): a `net_egress` request bearing a credential
+    /// sentinel denies until a host wires its own broker in.
+    pub fn set_egress_broker(&mut self, broker: CredentialBroker) {
+        self.egress_broker = broker;
     }
 
     /// Arm the dispatch-boundary kill point (R-2.2.3⁰ᶜ) — the next stage
@@ -1088,6 +1110,162 @@ impl<'a> Dispatcher<'a> {
                 }
             }
         }
+
+        // ── 2d egress gate (DF-S2.4-1; §5g.4; ADR-0061 D5) ────────────────
+        // A `net_egress` effect on a `mediated` environment routes through
+        // `EgressMediator`: the `requested → attributed → decide_egress` half
+        // runs here, while the effect is still `intended`, so a `deny`
+        // mints `refused` and an `ask` suspends at the same lifecycle point
+        // as the monitor's own ask. The allow leg's
+        // `recheck → sentinels → decided{allow} → wire → charge` is deferred
+        // to the wire point in `execute_capture_observe` (post-`committed`,
+        // pre-executor) — the write-ahead precedes the wire.
+        let mut pending_egress: Option<(EgressRequest, crate::egress::GateAllow)> = None;
+        let mut gate_token: Option<crate::tokens::AttributionToken> = None;
+        if input.declared.domain == EffectDomain::NetEgress
+            && handle.containment.policy().net.mode == NetMode::Mediated
+        {
+            let token = self.minter.mint(&effect_id, 1, &input.env_handle_id);
+            let request = match egress_request(input, &canonical, &token, &effect_id) {
+                Some(r) => r,
+                // A mediated `net_egress` whose destination the kernel cannot
+                // name cannot be checked — fail closed.
+                None => {
+                    self.minter.expire(&effect_id, 1);
+                    let reason = "egress_destination_underivable".to_string();
+                    let refused = self.minter_ev().mint_effect(
+                        "action.effect.refused",
+                        events::refused_payload(&reason),
+                        &effect_id,
+                        &input.chain,
+                    )?;
+                    let rejected = tool_rejected(&self.minter_ev(), &reason)?;
+                    self.store
+                        .append(&self.run_id, lease, vec![refused, rejected])?;
+                    return Ok(DispatchOutcome::Refused { reason });
+                }
+            };
+            let gate_outcome = {
+                let mut mediator = crate::egress::EgressMediator {
+                    store: &mut *self.store,
+                    run_id: self.run_id.clone(),
+                    lease,
+                    tokens: self.minter.resolver(),
+                    broker: &mut self.egress_broker,
+                    policy: handle.containment.policy().clone(),
+                    cache: ApprovalCache::default(),
+                    budget_id: input.reserve.as_ref().map(|r| r.budget_id.clone()),
+                    participant_ref: input.proposer.clone(),
+                    resolver: Box::new(crate::egress::SystemResolver),
+                    transport: Box::new(crate::egress::LocalHttpTransport::default()),
+                };
+                mediator.gate(&request, &input.chain)
+            };
+            match gate_outcome {
+                Ok(crate::egress::GateOutcome::Allowed(g)) => {
+                    gate_token = Some(token);
+                    pending_egress = Some((request, g));
+                }
+                Ok(crate::egress::GateOutcome::Terminal(m)) => match m {
+                    crate::egress::MediatedOutcome::Asked {
+                        permission_id,
+                        decided_ref,
+                        ..
+                    } => {
+                        // The mediator's ask minted the durable
+                        // `pending`/`requested`/`decided{ask}` trail itself;
+                        // dispatch registers the wakeup and suspends at the
+                        // same point as the monitor-ask path (effect still
+                        // `intended` — the resume leg re-enters at
+                        // `authorize`).
+                        let sub = self.store.wakeup_subscribe(
+                            &self.run_id,
+                            lease,
+                            hh_ledger::wakeup::Trigger::PermissionDecided {
+                                permission_id: permission_id.clone(),
+                            },
+                            hh_ledger::wakeup::WakeupPolicy::default_policy(),
+                            &hh_ledger::manifest::EventRef {
+                                run_id: self.run_id.clone(),
+                                event_id: decided_ref,
+                            },
+                        )?;
+                        self.store.suspend(
+                            &self.run_id,
+                            lease,
+                            &[hh_ledger::suspend::SuspendReason::AwaitingApproval {
+                                permission_id: permission_id.clone(),
+                            }],
+                            &[sub],
+                            Json::obj([("on", Json::str("permission_decided"))]),
+                            false,
+                        )?;
+                        return Ok(DispatchOutcome::Suspended { permission_id });
+                    }
+                    crate::egress::MediatedOutcome::Refused { reason: r, .. } => {
+                        self.minter.expire(&effect_id, 1);
+                        let reason = format!("egress_denied:{r:?}");
+                        let refused = self.minter_ev().mint_effect(
+                            "action.effect.refused",
+                            events::refused_payload(&reason),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let rejected = tool_rejected(&self.minter_ev(), &reason)?;
+                        self.store
+                            .append(&self.run_id, lease, vec![refused, rejected])?;
+                        return Ok(DispatchOutcome::Refused { reason });
+                    }
+                    crate::egress::MediatedOutcome::RefusedCredential { code, .. } => {
+                        self.minter.expire(&effect_id, 1);
+                        let reason = format!("egress_credential_denied:{code:?}");
+                        let refused = self.minter_ev().mint_effect(
+                            "action.effect.refused",
+                            events::refused_payload(&reason),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let rejected = tool_rejected(&self.minter_ev(), &reason)?;
+                        self.store
+                            .append(&self.run_id, lease, vec![refused, rejected])?;
+                        return Ok(DispatchOutcome::Refused { reason });
+                    }
+                    // `gate` never produces `Forwarded` — the wire leg is
+                    // deferred to `forward`; unreachable, fail closed.
+                    crate::egress::MediatedOutcome::Forwarded { .. } => {
+                        self.minter.expire(&effect_id, 1);
+                        let reason = "egress_gate_protocol_error".to_string();
+                        let refused = self.minter_ev().mint_effect(
+                            "action.effect.refused",
+                            events::refused_payload(&reason),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let rejected = tool_rejected(&self.minter_ev(), &reason)?;
+                        self.store
+                            .append(&self.run_id, lease, vec![refused, rejected])?;
+                        return Ok(DispatchOutcome::Refused { reason });
+                    }
+                },
+                // The mediator failed closed (ledger/budget/resolution or an
+                // amend error) — a typed refusal, never a pass-through.
+                Err(e) => {
+                    self.minter.expire(&effect_id, 1);
+                    let reason = format!("egress_mediation_error:{e:?}");
+                    let refused = self.minter_ev().mint_effect(
+                        "action.effect.refused",
+                        events::refused_payload(&reason),
+                        &effect_id,
+                        &input.chain,
+                    )?;
+                    let rejected = tool_rejected(&self.minter_ev(), &reason)?;
+                    self.store
+                        .append(&self.run_id, lease, vec![refused, rejected])?;
+                    return Ok(DispatchOutcome::Refused { reason });
+                }
+            }
+        }
+
         let authorized = self.minter_ev().mint_effect(
             "action.effect.authorized",
             events::authorized_payload(&risk),
@@ -1139,7 +1317,12 @@ impl<'a> Dispatcher<'a> {
         }
 
         // ── 3 prepare ──────────────────────────────────────────────────────
-        let token = self.minter.mint(&effect_id, 1, &input.env_handle_id);
+        // The attribution token — minted at the egress gate when mediation
+        // ran (the `security.egress.*` trail attributes to it), else here.
+        let token = match gate_token {
+            Some(t) => t,
+            None => self.minter.mint(&effect_id, 1, &input.env_handle_id),
+        };
         // `reserve` — reserve-before-spend (the reservation is `hh-budget`'s
         // `control.budget.reserved`; the caller's `ReservationSource` appends
         // it).
@@ -1221,6 +1404,7 @@ impl<'a> Dispatcher<'a> {
             pre_baseline,
             &token,
             commit_evidence,
+            pending_egress,
         )
     }
 
@@ -1375,6 +1559,7 @@ impl<'a> Dispatcher<'a> {
             pre_baseline,
             &token,
             commit_evidence,
+            None,
         )
     }
 
@@ -1400,6 +1585,10 @@ impl<'a> Dispatcher<'a> {
         pre_baseline: PathBaseline,
         token: &crate::tokens::AttributionToken,
         commit_evidence: crate::helper::CommitEvidence,
+        // The `gate`-allowed mediated egress (DF-S2.4-1) — `Some` only on the
+        // dispatch path for a `net_egress` effect under a `mediated` policy;
+        // its recheck/wire/charge leg runs at the wire point below.
+        pending_egress: Option<(EgressRequest, crate::egress::GateAllow)>,
     ) -> Result<DispatchOutcome, EnvError> {
         let effect_id = effect_id.to_string();
         let key = idem_key.to_string();
@@ -1474,6 +1663,100 @@ impl<'a> Dispatcher<'a> {
                 }
             }
         };
+        // ── 5a mediated-egress wire (DF-S2.4-1; §5g.4) ───────────────────
+        // A `gate`-allowed mediated egress runs its `recheck → sentinels →
+        // decided{allow} → wire → charge` leg here — post-`committed`,
+        // pre-executor — so the effect's write-ahead precedes the wire and
+        // the consume-once re-resolution still guards the SSRF pivot. A
+        // denial at this stage can no longer mint `refused` (the effect is
+        // `committed`); the wire provably never ran, so the honest terminal
+        // is `observed{not_applied, containment_denied}` +
+        // `completed{error}` — the mediator's `decided{deny}` row is already
+        // durable and names the reason.
+        if let Some((ereq, allow)) = pending_egress {
+            let wire = {
+                let mut mediator = crate::egress::EgressMediator {
+                    store: &mut *self.store,
+                    run_id: self.run_id.clone(),
+                    lease,
+                    tokens: self.minter.resolver(),
+                    broker: &mut self.egress_broker,
+                    policy: handle.containment.policy().clone(),
+                    cache: ApprovalCache::default(),
+                    budget_id: input.reserve.as_ref().map(|r| r.budget_id.clone()),
+                    participant_ref: input.proposer.clone(),
+                    resolver: Box::new(crate::egress::SystemResolver),
+                    transport: Box::new(crate::egress::LocalHttpTransport::default()),
+                };
+                mediator.forward(
+                    &ereq,
+                    &allow.decision,
+                    hh_containment::events::DecidedBy::Policy,
+                    &allow.effect_id,
+                    allow.started,
+                    &input.chain,
+                )
+            };
+            match wire {
+                Ok(crate::egress::MediatedOutcome::Forwarded { .. }) => {}
+                other => {
+                    let reason = match &other {
+                        Ok(crate::egress::MediatedOutcome::Refused { reason: r, .. }) => {
+                            format!("{r:?}")
+                        }
+                        Ok(crate::egress::MediatedOutcome::RefusedCredential { code, .. }) => {
+                            format!("{code:?}")
+                        }
+                        Ok(crate::egress::MediatedOutcome::Asked { .. }) => {
+                            // A re-decided ask at the wire point — the
+                            // mediator's pending/decided trail is durable.
+                            "asked".to_string()
+                        }
+                        Ok(crate::egress::MediatedOutcome::Forwarded { .. }) => {
+                            unreachable!("forwarded arm matched above")
+                        }
+                        Err(e) => format!("{e:?}"),
+                    };
+                    let obs = Observation {
+                        outcome: EffectOutcome::NotApplied,
+                        status: ObservedStatus::Error {
+                            class: ErrorClass::ContainmentDenied {
+                                kind: format!("egress:{reason}"),
+                            },
+                            origin: ErrorOrigin::Execution,
+                            detail_ref: None,
+                            retryable: false,
+                        },
+                        exit_status: None,
+                        manifest_ref: String::new(),
+                        completeness: crate::capture::Completeness::Unknown,
+                        admission: None,
+                    };
+                    let observed = self.minter_ev().mint_effect(
+                        "action.effect.observed",
+                        events::observed_payload(attempt_no, lease.generation, &obs, &[]),
+                        &effect_id,
+                        &input.chain,
+                    )?;
+                    let mut completed = self.minter_ev().mint(
+                        "action.tool.completed",
+                        events::tool_completed_payload("error", None, None),
+                    )?;
+                    completed.scope = hh_ledger::event::Scope {
+                        turn_id: Some(input.chain.turn_id.clone()),
+                        model_call_id: Some(input.chain.model_call_id.clone()),
+                        tool_call_id: Some(input.chain.tool_call_id.clone()),
+                        ..Default::default()
+                    };
+                    self.store
+                        .append(&self.run_id, lease, vec![observed, completed])?;
+                    self.emit_unattributed(&unattributed, lease)?;
+                    self.minter.expire(&effect_id, attempt_no);
+                    return Ok(DispatchOutcome::Observed(Box::new(obs)));
+                }
+            }
+        }
+
         let report = match executor.execute(&request, &mut sink) {
             Ok(r) => {
                 // KP-5/KP-6 — runtime death with the executor's work in
@@ -2643,6 +2926,125 @@ fn dispatch_world_open(input: &DispatchInput) -> bool {
 /// `args` the executor receives).
 fn canonical_json(canonical: &CanonicalArgs) -> Json {
     Json::Obj(canonical.params.clone())
+}
+
+/// `egress_request(input, canonical, token, effect_id)` — the
+/// `EgressRequest` the mediator checks, derived from the canonical args
+/// (DF-S2.4-1; §5g.4 §2's `{effect_id?, tool_call_id, env_handle, protocol,
+/// host_raw, resolved_addrs, port, method?, path?, headers[], body?,
+/// credential_sentinels[]}`): the destination claim from an explicit
+/// `url`/`uri`/`endpoint` member or the first `scheme://` string leaf
+/// (e.g. `run{command: "curl", argv: ["https://h/p"]}`), `method` from the
+/// `method` member (default `GET`), and the credential sentinels from the
+/// `mh_secret:`-shaped leaves. `None` when no destination claim is
+/// derivable — the caller fails closed.
+fn egress_request(
+    input: &DispatchInput,
+    canonical: &CanonicalArgs,
+    token: &crate::tokens::AttributionToken,
+    effect_id: &str,
+) -> Option<EgressRequest> {
+    let args = canonical_json(canonical);
+    let url = find_url_claim(&args)?;
+    let (protocol, host_raw, port, path) = parse_url_claim(&url)?;
+    Some(EgressRequest {
+        token: token.token.clone(),
+        effect_id: Some(effect_id.to_string()),
+        tool_call_id: input.chain.tool_call_id.clone(),
+        env_handle: input.env_handle_id.clone(),
+        protocol,
+        host_raw,
+        resolved_addrs: vec![],
+        port,
+        method: Some(match args.get("method").and_then(Json::as_str) {
+            Some(m) => m.to_uppercase(),
+            None => "GET".to_string(),
+        }),
+        path,
+        headers: vec![],
+        body: args
+            .get("body")
+            .and_then(|b| b.as_str().map(str::to_string)),
+        credential_sentinels: collect_secret_sentinels(&args),
+    })
+}
+
+/// The destination claim: an explicit `url`/`uri`/`endpoint` member wins;
+/// otherwise the first `http(s)://` string leaf in declaration order.
+fn find_url_claim(j: &Json) -> Option<String> {
+    for key in ["url", "uri", "endpoint"] {
+        if let Some(s) = j.get(key).and_then(Json::as_str) {
+            if s.contains("://") {
+                return Some(s.to_string());
+            }
+        }
+    }
+    fn walk(j: &Json, out: &mut Option<String>) {
+        if out.is_some() {
+            return;
+        }
+        match j {
+            Json::Str(s) if s.starts_with("http://") || s.starts_with("https://") => {
+                *out = Some(s.clone());
+            }
+            Json::Arr(a) => a.iter().for_each(|v| walk(v, out)),
+            Json::Obj(m) => m.values().for_each(|v| walk(v, out)),
+            _ => {}
+        }
+    }
+    let mut out = None;
+    walk(j, &mut out);
+    out
+}
+
+/// `scheme://[userinfo@]host[:port][/path]` → `(protocol, host, port, path)`.
+/// `http` maps to `EgressProtocol::Http` (80), `https` to
+/// `HttpsConnect` (443 — CONNECT-tunnelled TLS; the reference transport
+/// terminates nothing). Any other scheme is underivable.
+fn parse_url_claim(s: &str) -> Option<(EgressProtocol, String, u16, Option<String>)> {
+    let (scheme, rest) = s.split_once("://")?;
+    let (protocol, default_port) = match scheme {
+        "http" => (EgressProtocol::Http, 80u16),
+        "https" => (EgressProtocol::HttpsConnect, 443u16),
+        _ => return None,
+    };
+    let (authority, path) = match rest.find('/') {
+        Some(i) => (&rest[..i], Some(rest[i..].to_string())),
+        None => (rest, None),
+    };
+    let authority = authority.rsplit('@').next().unwrap_or(authority);
+    let (host, port) = match authority.split_once(':') {
+        Some((h, p)) => (h.to_string(), p.parse::<u16>().ok()?),
+        None => (authority.to_string(), default_port),
+    };
+    if host.is_empty() {
+        return None;
+    }
+    Some((protocol, host, port, path))
+}
+
+/// The `mh_secret:` placeholder spellings carried in the args — each
+/// mediates through the broker at the wire point.
+fn collect_secret_sentinels(j: &Json) -> Vec<String> {
+    let mut out = BTreeSet::new();
+    fn walk(j: &Json, out: &mut BTreeSet<String>) {
+        match j {
+            Json::Str(s) => {
+                for w in
+                    s.split(|c: char| !(c.is_alphanumeric() || c == ':' || c == '_' || c == '-'))
+                {
+                    if hh_secrets::Placeholder::is_placeholder(w) {
+                        out.insert(w.to_string());
+                    }
+                }
+            }
+            Json::Arr(a) => a.iter().for_each(|v| walk(v, out)),
+            Json::Obj(m) => m.values().for_each(|v| walk(v, out)),
+            _ => {}
+        }
+    }
+    walk(j, &mut out);
+    out.into_iter().collect()
 }
 
 /// The pinned `validator_ref` the kernel local checks (a)–(c) run under —

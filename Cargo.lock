@@ -244,6 +244,7 @@ dependencies = [
  "hh-bundle",
  "hh-compiler",
  "hh-containment",
+ "hh-context",
  "hh-control",
  "hh-debt",
  "hh-embed-schema",

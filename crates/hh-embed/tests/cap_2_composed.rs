@@ -353,13 +353,13 @@ fn rows(svc: &EmbedService, run_id: &str) -> Vec<(String, Json)> {
 
 // ── 1. context assembly — the pass-through pin + the builder xfail ──────────
 
-/// S2 leg — a real turn appends `context.assembled` (the `AssemblerPort`
-/// IS driven on the live path), but the payload is the honest
-/// `KernelAssembler` pass-through — `assembler: hh-embed/kernel` — with
-/// none of the `hh_context::assemble` members (`plan_id`, `items`,
+/// S2 leg — a real turn appends `context.assembled` produced by the
+/// real `hh_context::assemble` builder (DF-S2.8-1 closed): every row
+/// carries the builder record (`plan_id`, `model_call_id`, `derived_from`,
 /// `layout_ref`, `policy_ref`, `occupancy_estimate`, `assembly_ms`,
-/// `compaction_state`). This pins the seam's honest state: the test fails
-/// if the stamp is silently swapped, and it never claims the builder ran.
+/// `compaction_state`) and none carries the retired pass-through stamp.
+/// The pin is removal-sensitive: an assembler that stops running the
+/// builder drops `plan_id` and this test fails.
 #[test]
 fn cap2_turn_loop_assembler_is_invoked_as_passthrough() {
     let mut svc = service("assemble");
@@ -380,16 +380,17 @@ fn cap2_turn_loop_assembler_is_invoked_as_passthrough() {
         evs.iter().map(|(c, _)| c).collect::<Vec<_>>()
     );
     // Every assemble row (one per Propose round of the scripted turn) is
-    // the honest kernel pass-through — none carries the builder record.
+    // the builder's record — none carries the pass-through stamp.
     for p in &assembled {
-        assert_eq!(
-            p.get("assembler").and_then(Json::as_str),
-            Some("hh-embed/kernel"),
-            "the pass-through stamps itself honestly: {p:?}"
+        assert!(
+            p.get("assembler").and_then(Json::as_str) != Some("hh-embed/kernel"),
+            "the pass-through is retired — no `assembler: hh-embed/kernel` stamp: {p:?}"
         );
+        assert!(p.get("assembly_error").is_none(), "the builder ran: {p:?}");
         for member in [
             "plan_id",
-            "items",
+            "model_call_id",
+            "derived_from",
             "layout_ref",
             "policy_ref",
             "occupancy_estimate",
@@ -397,12 +398,12 @@ fn cap2_turn_loop_assembler_is_invoked_as_passthrough() {
             "compaction_state",
         ] {
             assert!(
-                p.get(member).is_none(),
-                "a pass-through payload carries no {member}: {p:?}"
+                p.get(member).is_some(),
+                "the builder record carries {member}: {p:?}"
             );
         }
     }
-    // The turn still completed — the honest stub never blocks the loop.
+    // The turn still completed — the real assembler never blocks the loop.
     assert!(
         evs.iter().any(|(c, _)| c == "lifecycle.run.finished"),
         "run finished"
@@ -410,12 +411,11 @@ fn cap2_turn_loop_assembler_is_invoked_as_passthrough() {
 }
 
 /// DF-S2.8-1 (+ DF-S1.19-1): the composed leg — a live turn driven
-/// through the real `hh_context::assemble` builder — is `#[ignore]`d
-/// pending the producer wiring routed to CAP.3. Run with
-/// `--ignored` to observe the failure evidence; the assertion set is
-/// the deferral's done-condition verbatim.
+/// through the real `hh_context::assemble` builder. CAP.3 landed the
+/// producer wiring (`KernelAssembler` runs `hh_context::assemble` over
+/// the durable prefix); the assertion set is the deferral's
+/// done-condition verbatim.
 #[test]
-#[ignore = "DF-S2.8-1: no producer call site drives hh_context::assemble on a live turn — KernelAssembler is the pass-through; the builder/retrieval/compaction composition is routed to CAP.3"]
 fn cap2_turn_loop_runs_hh_context_assembler() {
     let mut svc = service("assemble-real");
     hello(&mut svc);
@@ -437,10 +437,27 @@ fn cap2_turn_loop_runs_hh_context_assembler() {
         "DF-S2.8-1 residual: context.assembled is the kernel pass-through, \
          not the builder's plan record: {p:?}"
     );
-    assert!(p.get("layout_ref").and_then(Json::as_str).is_some());
-    assert!(p.get("policy_ref").and_then(Json::as_str).is_some());
-    assert!(p.get("assembly_ms").and_then(Json::as_int).is_some());
+    assert_eq!(
+        p.get("layout_ref").and_then(Json::as_str),
+        Some("layout/default")
+    );
+    assert_eq!(
+        p.get("policy_ref").and_then(Json::as_str),
+        Some("context_policy/default")
+    );
+    assert!(
+        p.get("assembly_ms")
+            .and_then(|m| m.get("value"))
+            .and_then(Json::as_int)
+            .is_some(),
+        "assembly_ms{{value, measured_at}} missing: {p:?}"
+    );
     assert!(p.get("occupancy_estimate").is_some());
+    // The record names the call it feeds and the view it derived from.
+    assert!(p.get("model_call_id").and_then(Json::as_str).is_some());
+    let derived = p.get("derived_from").expect("derived_from");
+    assert!(derived.get("run_id").and_then(Json::as_str).is_some());
+    assert!(derived.get("view_hash").and_then(Json::as_str).is_some());
 }
 
 // ── 2. snapshot → fork{env: snapshot} → child run ───────────────────────────
@@ -1239,12 +1256,13 @@ fn cap2_experiment_boundary_lifecycle_closes_green() {
 
 /// 3b — the same boundary lifecycle at exemplar scale: the compaction
 /// family's seven matched dims honestly measured on every subject — the
-/// E-4 `closed` row's `utilization`/`budget_match.detail` members overrun
-/// `AUDIT_FIELD_MAX_BYTES` and `close` refuses `AuditFieldsTooLarge`
-/// (DF-S3.12b-1). Pinned as the observed refusal — never under-measured
-/// to force a green.
+/// E-4 `closed` row's `utilization`/`budget_match`/`na_cells` members are
+/// record-shaped and sit at `AUDIT_FIELD_LIST_BYTES` under the enumerated
+/// `EXPERIMENT_CLOSED_FIELDS` partition (DF-S3.12b-1, closed at CAP.3 —
+/// ADR-0327). Pinned as the landed close — the refusal this test
+/// pre-CAP.3 pinned is gone.
 #[test]
-fn cap2_experiment_exemplar_close_refuses_audit_cap() {
+fn cap2_experiment_exemplar_close_lands() {
     let mut svc = service("exp-exemplar");
     hello(&mut svc);
     let pins = hh_lab::exemplars::ExemplarPins {
@@ -1285,41 +1303,35 @@ fn cap2_experiment_exemplar_close_refuses_audit_cap() {
         .unwrap_or_default();
     let settled = exp_drain(&mut svc, &eid, &rp_arm, &dims, &|_| true, None);
     assert_eq!(settled.len(), 30);
-    let r = call(
+    let report = ok(&call(
         &mut svc,
         "lab.experiment.close",
         Json::obj([("experiment_id", Json::str(&eid))]),
+    ));
+    assert_eq!(
+        report.get("status").and_then(Json::as_str),
+        Some("completed"),
+        "the exemplar close completes under the enumerated partition: {report:?}"
     );
-    assert!(
-        r.get("error").is_some(),
-        "exemplar-scale close must refuse the oversized E-4 row: {r:?}"
-    );
-    // The engine surfaces `LedgerError::AuditFieldsTooLarge{class:
-    // measurement.experiment.closed}` (pinned at that layer in s3_12b);
-    // the embed boundary's `xerr` collapses the typed ledger refusal to
-    // `Refused{reason: "LedgerError"}` — the honest wire spelling, which
-    // this test pins verbatim.
-    assert_eq!(err_kind(&r), "Refused", "{r:?}");
-    assert!(
-        err_text(&r).contains("LedgerError"),
-        "DF-S3.12b-1 refusal is the ledger audit-cap word at the wire: {r:?}"
-    );
-    // …and no close row landed — the refusal is durable-absent, never a
-    // fabricated `closed` record.
+    // The E-4 row is durable on the experiment run and carries the
+    // measured recheck members the open partition refused.
     let evs = rows(&svc, &exp_run);
+    let closed = evs
+        .iter()
+        .find(|(c, _)| c == "measurement.experiment.closed")
+        .map(|(_, p)| p.clone())
+        .expect("measurement.experiment.closed landed at exemplar scale");
     assert!(
-        !evs.iter()
-            .any(|(c, _)| c == "measurement.experiment.closed"),
-        "no measurement.experiment.closed row on refusal"
+        closed.get("utilization").is_some() && closed.get("budget_match").is_some(),
+        "the closed row carries the honest measured detail: {closed:?}"
     );
 }
 
-/// DF-S3.12b-1 — the close that cannot complete: `status: completed` at
-/// exemplar scale. `#[ignore]`d pending the row-shape/class ruling the
-/// deferral names (shrink members, `content_refs`, or re-bound the class);
-/// CAP.3 owns it.
+/// DF-S3.12b-1 — closed at CAP.3: `status: completed` lands at exemplar
+/// scale under the enumerated `EXPERIMENT_CLOSED_FIELDS` partition
+/// (ADR-0327's class-declaration ruling). This is the deferral's done
+/// check verbatim, un-ignored.
 #[test]
-#[ignore = "DF-S3.12b-1: measurement.experiment.closed overruns AUDIT_FIELD_MAX_BYTES (512) with honestly measured exemplar-scale utilization/budget_match detail — needs the class-declaration/row-shape ruling routed to CAP.3"]
 fn cap2_experiment_exemplar_close_completes() {
     let mut svc = service("exp-exemplar-done");
     hello(&mut svc);
@@ -1542,8 +1554,22 @@ fn participant_body(p: &ParticipantRecord) -> Json {
 fn drive_hosted(
     hsvc: &mut HostingService,
     participant_identity: &str,
+    run_plan_id: &str,
+    arm_id: &str,
+) -> HostedLeg {
+    drive_hosted_stamped(hsvc, participant_identity, run_plan_id, arm_id, None)
+}
+
+/// `drive_hosted` + the adapter's stamped `budget_enforcement` report —
+/// `{dimension → enforced|advisory|unenforceable}` rides `launch`'s
+/// `hosted_session` outcome onto the subject manifest (ADR-0165 D3;
+/// DF-CAP.2-2).
+fn drive_hosted_stamped(
+    hsvc: &mut HostingService,
+    participant_identity: &str,
     _run_plan_id: &str,
     _arm_id: &str,
+    budget_enforcement: Option<Json>,
 ) -> HostedLeg {
     let opened = hsvc.open(hosted_run_spec()).expect("hosted open");
     let _turn = hsvc
@@ -1569,6 +1595,10 @@ fn drive_hosted(
                 Json::str(participant_identity),
             ),
             ("abi_version", Json::str(&opened.abi_version)),
+            (
+                "budget_enforcement",
+                budget_enforcement.unwrap_or(Json::obj([])),
+            ),
         ]),
         session_ref: opened.session_ref,
         abi_version: opened.abi_version,
@@ -1806,14 +1836,15 @@ fn cap2_hosted_spine_attach_project_analyze() {
         "the envelope's report identity matches the body"
     );
 
-    // The `compare` half answers honestly: `arm:hosted`'s
-    // `limits_enforced = partial` maps to `BudgetEnforcement::hosted(&[])`
-    // (analysis_ops::resolve_arms — the adapter-stamped
-    // `budget_enforcement` map on the subject manifest is not consulted,
-    // DF-CAP.2-2), so `model_calls` is `Unenforceable` on the hosted arm
-    // and `matched_cap` refuses `IncommensurableMatch` — the specified
+    // The `compare` half answers honestly: `arm:hosted`'s manifest
+    // carries no stamped `budget_enforcement` (the fixture reports
+    // none), so `resolve_arms` keeps `BudgetEnforcement::hosted(&[])` —
+    // `model_calls` is `Unenforceable` on the hosted arm and
+    // `matched_cap` refuses `IncommensurableMatch` — the specified
     // verdict for a dimension the Lab cannot enforce on an unmediated
-    // participant, never a fabricated parity claim.
+    // participant, never a fabricated parity claim. (DF-CAP.2-2 closed
+    // at CAP.3 — the stamp *is* consulted; see
+    // `cap2_hosted_arm_stamped_enforcement_compares` for the proven leg.)
     let mut cspec = hh_lab::analysis::AnalysisSpec {
         spec_id: String::new(),
         kind: "compare".into(),
@@ -1850,15 +1881,182 @@ fn cap2_hosted_spine_attach_project_analyze() {
     );
 }
 
-/// A defect the composed path *found* (DF-CAP.2-1): the default fixture's
-/// permission-gated Lab-supplied tool produces hosted `permission.
-/// {requested,decided}` events whose `proj::lift` rows carry the verbatim
-/// hosted payload (`params`, `approval_wait_ms`) — members the audit-grade
-/// `security.permission.{pending,decided}` partitions do not declare —
-/// and `lab.hosting.attach`'s batch append refuses `SchemaViolation` on
-/// the first one. The allowlist names those classes deliberately, so the
-/// refusal is a lift-table/class-partition mismatch, not intended
-/// behavior — pinned here as the observed refusal, routed to CAP.3.
+/// DF-CAP.2-2 (CAP.3) — the *proven* leg: when the hosted adapter stamps
+/// `budget_enforcement` on the subject manifest (`extra
+/// ["budget_enforcement"]` at `bound`), `resolve_arms` admits exactly the
+/// stamped dims — `model_calls: enforced` satisfies `matched_cap`'s
+/// enforceability bar and the hosted/native compare lands a real verdict
+/// instead of `IncommensurableMatch`. The stamped map, never the
+/// `limits_enforced` claim, is the proof.
+#[test]
+fn cap2_hosted_arm_stamped_enforcement_compares() {
+    let mut svc = service("hosted-stamped");
+    hello(&mut svc);
+    let (mut hsvc, participant) = hosted_service(ungated_fixture());
+    let vid = ok(&call(
+        &mut svc,
+        "lab.registry.register",
+        Json::obj([
+            ("kind", Json::str("participant")),
+            ("body", participant_body(&participant)),
+            (
+                "registrar",
+                ProvenanceRecord::kernel("hh-embed/cap2", 0).to_json(),
+            ),
+        ]),
+    ))
+    .get("version_id")
+    .and_then(Json::as_str)
+    .unwrap()
+    .to_string();
+
+    let spec = exp_spec(ParticipantClass::Native, Some(&vid));
+    let tasks = ["task:cap2s.0"];
+    let (eid, rp_arm) = exp_register_expand(&mut svc, &spec, &tasks, vec![]);
+    let _exp_run = exp_open(&mut svc, &eid);
+
+    let identity = participant.version_identity.clone();
+    // The adapter proves enforcement on the matched dim — the stamp is
+    // `model_calls: enforced`, the only dim `matched_cap` gates on.
+    let mut host = |rpid: &str, arm: &str| {
+        drive_hosted_stamped(
+            &mut hsvc,
+            &identity,
+            rpid,
+            arm,
+            Some(Json::obj([("model_calls", Json::str("enforced"))])),
+        )
+    };
+    let settled = exp_drain(
+        &mut svc,
+        &eid,
+        &rp_arm,
+        &[(DimensionId::ModelCalls, 5)],
+        &|arm| !arm.contains("hosted"),
+        Some((&mut host, vid.as_str())),
+    );
+    assert_eq!(settled.len(), 4);
+
+    // The stamp landed on the subject manifests — the member the analyze
+    // path resolves enforcement from.
+    for (_, subject, arm) in &settled {
+        if !arm.contains("hosted") {
+            continue;
+        }
+        let m = svc.store().manifest(subject).unwrap();
+        assert_eq!(
+            m.extra
+                .get("budget_enforcement")
+                .and_then(|v| v.get("model_calls"))
+                .and_then(Json::as_str),
+            Some("enforced"),
+            "the stamped map rides the subject manifest: {:?}",
+            m.extra
+        );
+    }
+
+    ok(&call(
+        &mut svc,
+        "lab.experiment.close",
+        Json::obj([("experiment_id", Json::str(&eid))]),
+    ));
+
+    let results =
+        hh_results::store::ResultsStore::open(svc.store().root().join("results")).unwrap();
+    let docs = hh_experiment::docs::LabDocs::open(svc.store().root()).unwrap();
+    let mut keys = Vec::new();
+    for (_, subject, _) in &settled {
+        let (row, _v) = results
+            .project_and_record(
+                svc.store(),
+                Some(&docs),
+                subject,
+                None,
+                None,
+                hh_results::version::DerivedReason::Initial,
+            )
+            .unwrap_or_else(|e| panic!("project_and_record {subject}: {e:?}"));
+        keys.push(row.key.key_id());
+    }
+
+    let mut cspec = hh_lab::analysis::AnalysisSpec {
+        spec_id: String::new(),
+        kind: "compare".into(),
+        query: hh_lab::analysis::QuerySpec {
+            metrics: vec!["task_success".into()],
+            filters: Some(Json::obj([
+                ("arm_a", Json::str("arm:native")),
+                ("arm_b", Json::str("arm:hosted")),
+            ])),
+            grain: None,
+        },
+        spec_ref: Some(eid.clone()),
+        label: None,
+        estimator_selection: EstimatorSelection {
+            method: IntervalMethod::ClusteredClt,
+            selection_rule: "adr-0158.clt_floor".into(),
+            floors: BTreeMap::new(),
+            fallback_chain: vec![],
+            substituted: None,
+        },
+        resample: None,
+        outputs: vec!["report".into()],
+    };
+    cspec.spec_id = cspec.spec_id();
+    let c = call(
+        &mut svc,
+        "lab.analysis.analyze",
+        Json::obj([
+            ("spec", cspec.to_json()),
+            (
+                "rows",
+                Json::Arr(keys.iter().map(|k| Json::str(k.as_str())).collect()),
+            ),
+            (
+                "tasks",
+                Json::Arr(vec![Json::obj([
+                    ("task_id", Json::str("task:cap2s.0")),
+                    ("suite_id", Json::str(&spec.suite.suite_ref)),
+                    ("split_label", Json::str("held_out")),
+                    ("split_hash", Json::str(pinned("split.hash"))),
+                    ("stratum", Json::str("private_held_out")),
+                ])]),
+            ),
+            (
+                "suites",
+                Json::Arr(vec![Json::obj([
+                    ("suite_id", Json::str(&spec.suite.suite_ref)),
+                    ("retired_for_headline", Json::Bool(false)),
+                    ("family", Json::str("coding_terminal")),
+                ])]),
+            ),
+            ("seed", Json::Int(11)),
+        ]),
+    );
+    let r = ok(&c);
+    let body = r.get("body").expect("body");
+    assert_eq!(body.get("kind").and_then(Json::as_str), Some("compare"));
+    let bm = match body.get("comparisons") {
+        Some(Json::Arr(a)) => a
+            .first()
+            .and_then(|c| c.get("budget_match"))
+            .expect("the landed comparison carries budget_match"),
+        other => panic!("comparisons: {other:?}"),
+    };
+    assert_eq!(
+        bm.get("status").and_then(Json::as_str),
+        Some("matched"),
+        "the stamped-proven arm meets the matched_cap bar: {body:?}"
+    );
+}
+
+/// DF-CAP.2-1 (resolved in CAP.3; ADR-0328): the lift now *shapes* the
+/// hosted `permission.{requested,decided}` rows to the native
+/// `security.permission.{pending,decided}` partitions. This test keeps
+/// the guard the defect exercised: a lifted row carrying a member the
+/// partition does not declare still refuses `SchemaViolation` at
+/// `lab.hosting.attach` — shaping changed what the lift emits, never
+/// what the partition admits.
 #[test]
 fn cap2_hosted_attach_permission_rows_refuse() {
     let mut svc = service("hosted-perm");
@@ -1891,6 +2089,19 @@ fn cap2_hosted_attach_permission_rows_refuse() {
             .any(|r| r.get("class").and_then(Json::as_str) == Some("security.permission.pending")),
         "the fixture's gated call produces a lifted pending row"
     );
+    // Corrupt one lifted pending row with an undeclared member — the
+    // partition's member check is the guard under test.
+    let mut rows = leg.rows.clone();
+    for row in rows.iter_mut() {
+        if row.get("class").and_then(Json::as_str) == Some("security.permission.pending") {
+            if let Json::Obj(rowmap) = row {
+                if let Some(Json::Obj(payload)) = rowmap.get_mut("payload") {
+                    payload.insert("params".into(), Json::str("undeclared-hosted-member"));
+                }
+            }
+            break;
+        }
+    }
     let r = call(
         &mut svc,
         "lab.hosting.attach",
@@ -1908,11 +2119,11 @@ fn cap2_hosted_attach_permission_rows_refuse() {
                     ("adapter_version_id", Json::str("a/1")),
                 ]),
             ),
-            ("rows", Json::Arr(leg.rows.clone())),
+            ("rows", Json::Arr(rows)),
             ("end_state", leg.end_state.clone()),
         ]),
     );
-    // The observed refusal: the audit-partition (Rule C) member check.
+    // The guard: the audit-partition (Rule C) member check still refuses.
     assert_eq!(
         err_kind(&r),
         "SchemaViolation",
@@ -1927,10 +2138,9 @@ fn cap2_hosted_attach_permission_rows_refuse() {
 /// DF-CAP.2-1 residual — the composed claim the defect blocks: a hosted
 /// session's permission lifecycle (`security.permission.{pending,decided}`
 /// lifted rows) lands on the subject run through `lab.hosting.attach`.
-/// `#[ignore]`d pending the lift-table/class-partition ruling (narrow the
-/// lifted payload, declare a content member, or leaf-wrap — CAP.3's call).
+/// CAP.3 (ADR-0328) resolved it by shaping the lift to the native
+/// partition (`params` → `request`, `approval_wait_ms` → `wait_ms`).
 #[test]
-#[ignore = "DF-CAP.2-1: lifted security.permission.* rows carry hosted members (params/approval_wait_ms) the audit-grade class partition refuses — attach SchemaViolates; needs the lift-table or class-declaration ruling routed to CAP.3"]
 fn cap2_hosted_attach_permission_rows_land() {
     let mut svc = service("hosted-perm-ok");
     hello(&mut svc);

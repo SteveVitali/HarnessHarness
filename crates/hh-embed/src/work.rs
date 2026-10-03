@@ -7,7 +7,7 @@
 use crate::frames::FrameAdapter;
 use crate::inject;
 use crate::open::{attendance_async, realized_settings, sess_manifest_ref, session_json};
-use crate::service::{ledger_err, EmbedService, SubState};
+use crate::service::{ledger_err, EmbedService, PendingAsk, SubState};
 use hh_control::vocab::{Cue, HumanInput};
 use hh_embed_schema::errors::EmbedError;
 use hh_embed_schema::strict::StrictObj;
@@ -768,6 +768,346 @@ impl EmbedService {
             .idem
             .insert(p.idempotency_key, out.clone());
         Ok(out)
+    }
+
+    /// DF-S4.11-3 (CAP.3; ADR-0329) — the run-less, surface-run-scoped
+    /// answer to a Π `ask`: the caller's *surface run* carries the
+    /// durable `security.permission.pending`, and the surface session's
+    /// own writer lease serves the `decided` mint — a surface run is
+    /// never minted as a `hnd-run-*` session handle (the run *is* the
+    /// scope). Everything the session-bound `respond_permission` reads
+    /// out of `SessionState` is re-derived from the durable fold here
+    /// (CC1): the pending, the already-decided check, the asked-risk
+    /// row, the approval fold's grants, the active turn. `request_id`
+    /// (= the caller's idempotency key) rides the decided row, so a
+    /// replayed answer returns the recorded result and never
+    /// double-mints. `Recorded`.
+    pub fn surface_respond_permission(
+        &mut self,
+        run_id: &str,
+        lease: &hh_ledger::store::Lease,
+        permission_id: &str,
+        outcome: &PermissionOutcome,
+        responder_subject: &str,
+        surface_session_ref: Option<&str>,
+        request_id: &str,
+    ) -> Result<Json, EmbedError> {
+        use hh_monitor::approval::{
+            ApprovalResponse, ApprovalState, EndorserRef, LeaseSpec, RespondCtx, ResponseChoice,
+        };
+        use hh_monitor::decision::{Decision, DecisionScope};
+        use hh_provenance::authority::AuthorityClass;
+        use hh_provenance::{HumanRole, Origin, PersistenceScope};
+
+        let events = self.store.events(run_id).map_err(ledger_err)?.to_vec();
+        // Replay: a decided row already stamped with this `request_id`
+        // returns the recorded result — the response is idempotent
+        // across the caller's retry (the run's stream is the truth).
+        for e in events.iter().rev() {
+            if e.class == "security.permission.decided"
+                && e.payload.get("permission_id").and_then(Json::as_str) == Some(permission_id)
+            {
+                if e.payload.get("request_id").and_then(Json::as_str) == Some(request_id) {
+                    return Ok(recorded_json(permission_id));
+                }
+                let d = e
+                    .payload
+                    .get("decision")
+                    .and_then(Json::as_str)
+                    .unwrap_or("");
+                if d != "ask" {
+                    return Err(EmbedError::AlreadyDecided {
+                        permission_id: permission_id.to_string(),
+                    });
+                }
+            }
+        }
+        let pending_row = events
+            .iter()
+            .rev()
+            .find(|e| {
+                e.class == "security.permission.pending"
+                    && e.payload.get("permission_id").and_then(Json::as_str) == Some(permission_id)
+            })
+            .ok_or_else(|| EmbedError::UnknownPermission {
+                permission_id: permission_id.to_string(),
+            })?;
+        let pending = pending_ask_from_row(pending_row);
+        if let PermissionOutcome::Selected { option_id } = outcome {
+            if !pending.options.is_empty() && !pending.options.iter().any(|o| o == option_id) {
+                return Err(EmbedError::OptionNotOffered {
+                    option_id: option_id.clone(),
+                });
+            }
+        }
+        let head_seq = events.last().map(|e| e.seq).unwrap_or(0);
+        let mut approvals = ApprovalState::project(&events, head_seq);
+        let asked_risk = events
+            .iter()
+            .rev()
+            .find(|e| {
+                e.class == "security.permission.decided"
+                    && e.payload.get("permission_id").and_then(Json::as_str) == Some(permission_id)
+                    && e.payload.get("decision").and_then(Json::as_str) == Some("ask")
+            })
+            .and_then(|e| e.payload.get("effective_risk_class"))
+            .and_then(hh_ontology::risk::RiskClass::from_json);
+        let irreversible = asked_risk
+            .map(hh_monitor::approval::never_auto)
+            .unwrap_or(false);
+        let (choice, scope) = match outcome {
+            PermissionOutcome::Cancelled => (
+                ResponseChoice::Deny {
+                    reason: "cancelled".to_string(),
+                },
+                DecisionScope::Once,
+            ),
+            PermissionOutcome::Selected { option_id } => match option_id.as_str() {
+                "allow_once" | "allow" => (ResponseChoice::AllowOnce, DecisionScope::Once),
+                "allow_lease" => (
+                    ResponseChoice::AllowLease(LeaseSpec {
+                        pattern: None,
+                        scope: hh_monitor::approval::LeaseScope::Run,
+                        max_uses: None,
+                    }),
+                    DecisionScope::Session,
+                ),
+                "more_info" | "escalate" => (ResponseChoice::MoreInfo, DecisionScope::Once),
+                _ => (
+                    ResponseChoice::Deny {
+                        reason: option_id.clone(),
+                    },
+                    DecisionScope::Once,
+                ),
+            },
+        };
+        if matches!(choice, ResponseChoice::AllowLease(_))
+            && (pending.capability_ref.is_none()
+                || pending.args_canonical_hash.is_none()
+                || pending.subject_ref.is_none())
+        {
+            return Err(EmbedError::Refused {
+                reason: "allow_lease_requires_capability_material".to_string(),
+            });
+        }
+        let now = self.store.now_ms();
+        // The policy fingerprint's coordinates on a surface run are the
+        // exposure catalogue the ask ran under — `exposure_version_id` +
+        // `catalogue_hash` are stamped on the surface run's manifest at
+        // session open (§7.2; the run's Π *is* its exposure doc).
+        let manifest = self.store.manifest(run_id).map_err(ledger_err)?.clone();
+        let exposure_version_id = manifest
+            .extra
+            .get("exposure_version_id")
+            .and_then(Json::as_str)
+            .unwrap_or("")
+            .to_string();
+        let catalogue_hash = manifest
+            .extra
+            .get("catalogue_hash")
+            .and_then(Json::as_str)
+            .unwrap_or("")
+            .to_string();
+        let ctx = RespondCtx {
+            policy_fingerprint: hh_monitor::approval::policy_fingerprint(
+                &exposure_version_id,
+                &catalogue_hash,
+                &[],
+            ),
+            scope_ref: run_id.to_string(),
+            risk_ceiling: asked_risk.unwrap_or(hh_ontology::risk::RiskClass::UNKNOWN),
+            grant_authority: AuthorityClass::Principal,
+            grants: approvals.grants.values().cloned().collect(),
+            denial_policy: None,
+        };
+        let outcome_res = approvals
+            .respond_with_ctx(
+                &ApprovalResponse {
+                    permission_id: permission_id.to_string(),
+                    choice,
+                    scope,
+                    max_uses: None,
+                    justification: None,
+                    decided_by: EndorserRef::Human {
+                        subject_ref: responder_subject.to_string(),
+                        authority: AuthorityClass::Principal,
+                    },
+                    decided_at: now,
+                },
+                irreversible,
+                now,
+                &ctx,
+            )
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("approval_respond: {e:?}"),
+            })?;
+        if outcome_res.already_decided {
+            return Err(EmbedError::AlreadyDecided {
+                permission_id: permission_id.to_string(),
+            });
+        }
+        if matches!(outcome_res.decision, Decision::Ask { .. }) {
+            // `more_info`/`escalate` — the pending stays open.
+            return Ok(recorded_json(permission_id));
+        }
+        let decision_tag = match &outcome_res.decision {
+            Decision::Allow => "allow",
+            Decision::Deny { .. } => "deny",
+            Decision::Ask { .. } => unreachable!("ask handled above"),
+        };
+        let mut members = vec![
+            ("permission_id", Json::str(permission_id)),
+            ("proposal", Json::str(pending.proposal.clone())),
+            ("decision", Json::str(decision_tag)),
+            ("decider", Json::str("human")),
+            ("decider_ref", Json::str(responder_subject)),
+            ("decision_scope", Json::str(scope.as_str())),
+            ("requested_at", Json::Int(pending.requested_at as i64)),
+            (
+                "wait_ms",
+                Json::Int(now.saturating_sub(pending.requested_at) as i64),
+            ),
+        ];
+        if let Some(ef) = &pending.effect_id {
+            members.push(("effect_id", Json::str(ef.clone())));
+        }
+        // P12 — the responder declaration stamps durable on every
+        // surface write: the human's subject ref + the surface session
+        // the answer transited, keyed by the caller's request id.
+        let mut rp = BTreeMap::new();
+        rp.insert("subject_ref".to_string(), Json::str(responder_subject));
+        if let Some(s) = surface_session_ref {
+            rp.insert("surface_session_ref".to_string(), Json::str(s));
+        }
+        members.push(("responder_provenance", Json::Obj(rp)));
+        members.push(("request_id", Json::str(request_id)));
+        if !pending.options.is_empty() {
+            members.push((
+                "options_presented",
+                Json::Arr(
+                    pending
+                        .options
+                        .iter()
+                        .map(|o| Json::str(o.clone()))
+                        .collect(),
+                ),
+            ));
+        }
+        if let PermissionOutcome::Selected { option_id } = outcome {
+            if decision_tag == "deny" {
+                members.push(("reason", Json::str(option_id.clone())));
+            }
+        } else {
+            members.push(("reason", Json::str("cancelled")));
+        }
+        if let Some(l) = &outcome_res.lease {
+            members.push(("cache_key", Json::str(l.key_hash.clone())));
+        }
+        // `decided` + `lease.granted` in one batch — the same atomicity
+        // the session path guarantees.
+        let mut batch = vec![hh_env::events::EventMinter::new(&self.store, run_id)
+            .mint("security.permission.decided", Json::obj(members))
+            .map_err(ledger_err)?];
+        if let Some(l) = &outcome_res.lease {
+            batch.push(
+                hh_env::events::EventMinter::new(&self.store, run_id)
+                    .mint(
+                        "security.permission.lease.granted",
+                        hh_monitor::approval::lease_granted_payload(l),
+                    )
+                    .map_err(ledger_err)?,
+            );
+        }
+        // The `approval`-basis handle mints only over the pending's
+        // *recorded* material — a pending without `request{subject_ref,
+        // capability_ref}` carries no conferable material (never
+        // fabricated). The surface run's active turn folds from the
+        // durable prefix.
+        let allow = matches!(outcome_res.decision, Decision::Allow);
+        if allow && pending.subject_ref.is_some() && pending.capability_ref.is_some() {
+            let mut active = String::new();
+            let mut finished_turns = std::collections::BTreeSet::new();
+            for e in &events {
+                match e.class.as_str() {
+                    "lifecycle.turn.started" => {
+                        active = e
+                            .payload
+                            .get("turn_id")
+                            .and_then(Json::as_str)
+                            .unwrap_or_default()
+                            .to_string();
+                    }
+                    "lifecycle.turn.finished" => {
+                        if let Some(t) = e
+                            .payload
+                            .get("turn_id")
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                        {
+                            finished_turns.insert(t);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let active_turn = if active.is_empty() || finished_turns.contains(&active) {
+                "turn-1".to_string()
+            } else {
+                active
+            };
+            let handle_id = self.store.alloc_id("hnd");
+            let granted_event_id = self.store.alloc_id("evt");
+            let mint_in = hh_monitor::mint::ApprovalMint {
+                permission_id: permission_id.to_string(),
+                holder: hh_hir::refs::Ref {
+                    semantic_id: pending.subject_ref.clone().unwrap_or_default(),
+                    version: hh_hir::refs::RefVersion::Pinned(granted_event_id.clone()),
+                },
+                issuer: ProvenanceRecord::minted(
+                    Origin::human(responder_subject, HumanRole::Principal),
+                    PersistenceScope::Run,
+                    now,
+                ),
+                grants: pending.requested_grants.clone(),
+                // `requested ⊓ authority_cap` — a surface run carries no
+                // realized-spec caps; the ceiling is the responder's own
+                // authority (the same fold over an empty cap set).
+                ceiling: ctx.grant_authority,
+                scope,
+                lease_scope: outcome_res.lease.as_ref().map(|l| l.scope),
+                lease_pattern: outcome_res.lease.as_ref().and_then(|l| l.pattern.clone()),
+                effect_id: pending.effect_id.clone().unwrap_or_default(),
+                turn_id: active_turn,
+                run_id: run_id.to_string(),
+                session_ref: surface_session_ref.unwrap_or_default().to_string(),
+                budget_ref: None,
+            };
+            let minted = {
+                let store = &self.store;
+                let mut alloc = |kind: &str| match kind {
+                    "hnd" => handle_id.clone(),
+                    "evt" => granted_event_id.clone(),
+                    other => store.alloc_id(other),
+                };
+                hh_monitor::mint::mint_approval_handle(&mint_in, &mut alloc)
+            };
+            let (handle, evt_id) = minted.map_err(|e| EmbedError::Refused {
+                reason: format!("approval_mint: {e:?}"),
+            })?;
+            batch.push(
+                hh_env::events::EventMinter::new(&self.store, run_id)
+                    .mint_with_id(
+                        "security.permission.granted",
+                        hh_monitor::events::granted_payload(&handle),
+                        evt_id,
+                    )
+                    .map_err(ledger_err)?,
+            );
+        }
+        self.store
+            .append(run_id, lease, batch)
+            .map_err(ledger_err)?;
+        Ok(recorded_json(permission_id))
     }
 
     /// `amend` — the ADR-0216 OQ-468 interim op. At Stage 1 the one
@@ -2319,5 +2659,71 @@ impl EmbedService {
             .prove_consistency(&s.run_id, p.first_size as u64, p.second_size as u64)
             .map_err(ledger_err)?;
         Ok(proof.to_json())
+    }
+}
+
+/// Rebuild a [`PendingAsk`] from the durable `security.permission.pending`
+/// row — the same reconstruction the resume path runs (open.rs), used by
+/// the run-less surface answer (DF-S4.11-3). The `request` member is the
+/// §5g.7 `PermissionRequest` record; the supply surface's mint spells
+/// `capability_ref` as a bare semantic id and `requested_at` as the
+/// timestamp string — both spellings decode.
+fn pending_ask_from_row(e: &hh_ledger::event::EventEnvelope) -> PendingAsk {
+    let req = e.payload.get("request").cloned().unwrap_or(Json::Null);
+    let capability_ref = match req.get("capability_ref") {
+        Some(Json::Obj(c)) => match (
+            c.get("semantic_id").and_then(Json::as_str),
+            c.get("version_id").and_then(Json::as_str),
+        ) {
+            (Some(sid), Some(vid)) => Some((sid.to_string(), vid.to_string())),
+            (Some(sid), None) => Some((sid.to_string(), String::new())),
+            _ => None,
+        },
+        Some(Json::Str(s)) => Some((s.clone(), String::new())),
+        _ => None,
+    };
+    let requested_at = e
+        .payload
+        .get("requested_at")
+        .and_then(|v| {
+            v.as_int()
+                .map(|n| n.max(0) as u64)
+                .or_else(|| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+        })
+        .unwrap_or(0);
+    PendingAsk {
+        options: vec![
+            "allow_once".to_string(),
+            "allow_lease".to_string(),
+            "deny".to_string(),
+            "more_info".to_string(),
+        ],
+        proposal: req
+            .get("reason")
+            .and_then(Json::as_str)
+            .unwrap_or("permission request")
+            .to_string(),
+        effect_id: e
+            .payload
+            .get("effect_id")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        requested_at,
+        capability_ref,
+        args_canonical_hash: req
+            .get("args_canonical_hash")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        subject_ref: req
+            .get("subject_ref")
+            .and_then(Json::as_str)
+            .or_else(|| e.payload.get("subject_ref").and_then(Json::as_str))
+            .map(str::to_string),
+        requested_grants: crate::service::decode_requested_grants(&req),
+        deadline_ms: e
+            .payload
+            .get("timeout")
+            .and_then(Json::as_int)
+            .map(|t| requested_at.saturating_add(t.max(0) as u64)),
     }
 }

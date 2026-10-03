@@ -139,6 +139,25 @@ pub fn dispatch(
         ));
     }
 
+    // DF-S4.11-3 (CAP.3; ADR-0329): an answered ask's `decided{allow}`
+    // serves the retried call — the durable row is the grant the Π
+    // evaluation proceeds under; an unanswered ask mints a fresh
+    // pending below (deny is handled inside the ask arm).
+    let decision = if decision == "ask"
+        && matches!(
+            answered_ask(
+                &srv.svc,
+                &srv.sessions.get(&bid).expect("session").run_id,
+                &tool.semantic_id,
+                &fx.args_hash
+            ),
+            Some("allow")
+        ) {
+        "allow"
+    } else {
+        decision
+    };
+
     let outcome: ToolOutcome = match decision {
         "deny" => {
             let err = SurfaceError::new(
@@ -159,11 +178,32 @@ pub fn dispatch(
             Err(err)
         }
         "ask" => {
+            let run_id = srv.sessions[&bid].run_id.clone();
+            // DF-S4.11-3 (CAP.3; ADR-0329): a *denied* answer refuses the
+            // retry outright — the decided row is the human's verdict,
+            // not a re-ask. (`allow` was folded into `decision` above.)
+            if matches!(
+                answered_ask(&srv.svc, &run_id, &tool.semantic_id, &fx.args_hash),
+                Some("deny")
+            ) {
+                let err = SurfaceError::new(
+                    "DeniedByPolicy",
+                    format!("Π ask on `{}` answered `deny`", tool.name),
+                    Json::obj([("surface", Json::str(surface.surface_id.clone()))]),
+                );
+                let _ = fx.refused(
+                    &mut srv.svc,
+                    srv.sessions.get(&bid).expect("session"),
+                    &turn_id,
+                    &err.kind,
+                    err.detail.clone(),
+                );
+                return call_result_refusal(&err);
+            }
             // Mint the durable ask — `security.permission.pending` on
             // the caller's surface run (the SAME class the kernel uses;
             // `respond_approval` against the surface run answers it).
             let permission_id = format!("perm-{}", fx.effect_id);
-            let run_id = srv.sessions[&bid].run_id.clone();
             // PENDING_FIELDS is the closed partition — the ask's
             // coordinates ride `request`/`subject_ref`/`capability_ref`/
             // `args_canonical_hash` (the §5g.7 `PermissionRequest`
@@ -377,4 +417,131 @@ pub fn pending_ids(events: &[hh_ledger::event::EventEnvelope]) -> Vec<String> {
         .into_iter()
         .filter(|id| !decided.contains(id))
         .collect()
+}
+
+/// DF-S4.11-3 (CAP.3; ADR-0329) — `respond_approval`: the supply
+/// protocol's own answer verb. A protocol builtin on every supply
+/// surface — the participant's artifact never declares the Lab's reply
+/// path, but the surface that can `ask` must let the *principal* answer
+/// (`human_principal` only — the caller-kind gate the Lab catalogue
+/// runs, verbatim). Run-less by construction: the pending resolves on
+/// the caller's own surface run and the session's writer lease serves
+/// the `security.permission.decided` mint (`surface_respond_permission`
+/// folds the durable stream — CC1).
+pub fn respond_approval(
+    srv: &mut LabServer,
+    binding: &CallerBinding,
+    arguments: &Json,
+    _call_id: &Json,
+) -> Json {
+    if !binding.caller_kind.may_respond_approval() {
+        return call_result_refusal(&SurfaceError::new(
+            "IllegitimateEndorsement",
+            format!(
+                "caller_kind `{}` cannot decide a permission ask —                  `respond_approval` is human_principal-only",
+                binding.caller_kind.as_str()
+            ),
+            Json::obj([("caller_kind", Json::str(binding.caller_kind.as_str()))]),
+        ));
+    }
+    let get = |k: &str| arguments.get(k).and_then(Json::as_str).map(str::to_string);
+    let Some(permission_id) = get("permission_id").or_else(|| get("permission")) else {
+        return call_result_refusal(&SurfaceError::new(
+            "schema_violation",
+            "`respond_approval` requires `permission_id`",
+            Json::obj([("path", Json::str("respond_approval/permission_id"))]),
+        ));
+    };
+    let Some(raw) = get("outcome") else {
+        return call_result_refusal(&SurfaceError::new(
+            "schema_violation",
+            "`respond_approval` requires `outcome`",
+            Json::obj([("path", Json::str("respond_approval/outcome"))]),
+        ));
+    };
+    let option = match raw.as_str() {
+        "approved" | "grant" | "allow" | "allowed_once" | "allow_once" => "allow_once",
+        "denied" | "deny" => "deny",
+        "deferred" | "defer" | "more_info" => "more_info",
+        "escalate" => "escalate",
+        "cancelled" | "cancel" => "__cancelled",
+        other => {
+            return call_result_refusal(&SurfaceError::new(
+                "schema_violation",
+                format!("unknown `respond_approval` outcome `{other}`"),
+                Json::obj([("path", Json::str("respond_approval/outcome"))]),
+            ))
+        }
+    };
+    let outcome = if option == "__cancelled" {
+        hh_embed_schema::types::PermissionOutcome::Cancelled
+    } else {
+        hh_embed_schema::types::PermissionOutcome::Selected {
+            option_id: option.to_string(),
+        }
+    };
+    let idem = get("idempotency_key")
+        .unwrap_or_else(|| format!("respond_approval:{permission_id}"));
+    let bid = binding.binding_id.clone();
+    if let Err(e) = srv.ensure_session(binding) {
+        return call_result_refusal(&SurfaceError::new(
+            "kernel_error",
+            format!("surface session: {e:?}"),
+            Json::Null,
+        ));
+    }
+    let (run_id, lease) = {
+        let s = srv.sessions.get(&bid).expect("session ensured");
+        (s.run_id.clone(), s.lease.clone())
+    };
+    match srv.svc.surface_respond_permission(
+        &run_id,
+        &lease,
+        &permission_id,
+        &outcome,
+        &binding.principal_ref,
+        Some(&bid),
+        &idem,
+    ) {
+        Ok(payload) => crate::dispatch::call_result_ok(payload),
+        Err(e) => call_result_refusal(&SurfaceError::op(&e)),
+    }
+}
+
+/// The retry half of DF-S4.11-3: fold the surface run's durable
+/// `security.permission.decided` rows — a `decided{allow}` naming a
+/// `pending` for the same `capability_ref` + `args_canonical_hash`
+/// satisfies the re-ask; `decided{deny}` refuses it. `None` = the ask
+/// is unanswered (a fresh pending mints).
+fn answered_ask(
+    svc: &hh_embed::service::EmbedService,
+    run_id: &str,
+    capability: &str,
+    args_hash: &str,
+) -> Option<&'static str> {
+    let evs = svc.surface_events(run_id).ok()?;
+    for e in evs.iter().rev() {
+        if e.class != "security.permission.decided" {
+            continue;
+        }
+        let d = e.payload.get("decision").and_then(Json::as_str).unwrap_or("");
+        if d != "allow" && d != "deny" {
+            continue;
+        }
+        let Some(pid) = e.payload.get("permission_id").and_then(Json::as_str) else {
+            continue;
+        };
+        let serves = evs.iter().any(|p| {
+            p.class == "security.permission.pending"
+                && p.payload.get("permission_id").and_then(Json::as_str) == Some(pid)
+                && p.payload.get("capability_ref").and_then(Json::as_str)
+                    == Some(capability)
+                && p.payload.get("args_canonical_hash").and_then(Json::as_str)
+                    == Some(args_hash)
+        });
+        if serves {
+            return Some(if d == "allow" { "allow" } else { "deny" });
+        }
+    }
+    None
 }

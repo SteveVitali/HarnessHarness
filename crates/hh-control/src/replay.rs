@@ -835,7 +835,9 @@ mod tests {
     //! member-for-member (AC-R-2.2.1-4).
 
     use super::*;
-    use crate::driver::{AssembledRequest, AssemblerPort, DriverConfig, GateOutcome, ModelOutcome};
+    use crate::driver::{
+        AssembleInputs, AssembledRequest, AssemblerPort, DriverConfig, GateOutcome, ModelOutcome,
+    };
     use crate::output::{ParamKind, ParamSpec};
     use crate::policy::EnvelopePolicy;
     use crate::react::ReactMinimal;
@@ -926,10 +928,11 @@ mod tests {
 
     struct NullAsm;
     impl AssemblerPort for NullAsm {
-        fn assemble(&mut self, _req: &Json) -> AssembledRequest {
+        fn assemble(&mut self, _inputs: &AssembleInputs<'_>, _req: &Json) -> AssembledRequest {
             AssembledRequest {
                 request: Json::Null,
                 assembled_payload: None,
+                side_events: Vec::new(),
             }
         }
     }

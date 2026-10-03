@@ -177,6 +177,15 @@ pub fn call_tool(
         .find(|s| s.binding_id == binding.binding_id)
         .cloned()
     {
+        // DF-S4.11-3 (CAP.3; ADR-0329): `respond_approval` is the supply
+        // protocol's own answer verb — a protocol builtin on every
+        // supply surface, never an artifact member (the participant
+        // does not declare the Lab's reply path). Caller-kind-gated
+        // inside the dispatch (`human_principal` only — the same gate
+        // the Lab catalogue runs).
+        if name == "respond_approval" {
+            return crate::supply::respond_approval(srv, binding, &arguments, call_id);
+        }
         let Some(at) = surface
             .artifact
             .tools

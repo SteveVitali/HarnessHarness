@@ -52,7 +52,8 @@ pub mod views;
 pub mod vocab;
 
 pub use driver::{
-    AssemblerPort, Driver, DriverConfig, EffectGate, ModelOutcome, ModelPort, RunResult,
+    AssembleInputs, AssemblerPort, Driver, DriverConfig, EffectGate, ModelOutcome, ModelPort,
+    RunResult,
 };
 pub use envelope::{CheckVerdict, Envelope, EnvelopeState};
 pub use guards::GuardVerdict;

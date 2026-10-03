@@ -43,7 +43,6 @@ use hh_eval::facts::LedgerFacts;
 use hh_eval::runs::{SuiteContext, TaskContext};
 use hh_experiment::docs::LabDocs;
 use hh_experiment::engine::{EngineContext, ExperimentEngine, NextVerdict};
-use hh_experiment::errors::ExperimentError;
 use hh_experiment::view::ExperimentView;
 use hh_identity::idp::idp_id;
 use hh_lab::analysis::{
@@ -336,18 +335,17 @@ fn run_to_close_ctx(
     eng.close(false).unwrap()
 }
 
-/// S3.12b's discovered residual (recorded in the run ledger + DEFERRALS):
-/// with every matched dim honestly measured, `close`'s E-4 recheck writes
-/// `measurement.experiment.closed{…, utilization, budget_match}` whose
-/// per-member audit bound (`AUDIT_FIELD_MAX_BYTES = 512`, `OPEN_AUDIT`) is
-/// exceeded at exemplar scale — `utilization` carries `{median, min, max,
-/// n}` per arm × matched dim, and `budget_match.detail` per comparand dim;
-/// compaction's 7-dim match alone overruns the bound. The compare kernel's
-/// `budget_match` is computed from the *runs*' consumption (pre-close), so
-/// the G2-2 report stands; the close row's recheck overflow is carried as
-/// a deferral, not silently under-measured.
+/// DF-S3.12b-1 closed at CAP.3 (the class-declaration ruling — ADR-0327):
+/// `measurement.experiment.closed` now carries the enumerated dossier
+/// partition (`EXPERIMENT_CLOSED_FIELDS`) whose record/list members sit at
+/// `AUDIT_FIELD_LIST_BYTES`, so an honestly-measured exemplar close
+/// *lands*. This helper is the removal test — it asserts the close
+/// completes with `status: completed` AND that the `closed` row carries
+/// the measured recheck members (`utilization`, `budget_match`) the
+/// pre-CAP.3 partition refused.
 fn assert_close_audit_cap(
     rig: &mut Rig,
+    exp_run_id: &str,
     eid: &str,
     tag: &str,
     n_tasks: usize,
@@ -359,14 +357,26 @@ fn assert_close_audit_cap(
         ctx_exemplar(tag, n_tasks, retirement_diff),
     );
     eng.attach(eid).unwrap();
-    match eng.close(false) {
-        Err(ExperimentError::Ledger(hh_ledger::LedgerError::AuditFieldsTooLarge {
-            class, ..
-        })) => {
-            assert_eq!(class, "measurement.experiment.closed");
-        }
-        other => panic!("expected the closed-row audit-cap overrun (DF-S3.12b-1), got {other:?}"),
-    }
+    let report = eng
+        .close(false)
+        .unwrap_or_else(|e| panic!("DF-S3.12b-1: the exemplar close completes, got {e:?}"));
+    assert_eq!(report.status.as_str(), "completed");
+    drop(eng); // the engine borrows the store; the durable read comes after
+               // The durable `closed` row carries the measured recheck members the
+               // 512 B open partition refused (the row lands under the enumerated
+               // partition — removal of that declaration re-breaks this test).
+    let closed = rig
+        .store
+        .events(exp_run_id)
+        .unwrap()
+        .iter()
+        .find(|e| e.class == "measurement.experiment.closed")
+        .expect("measurement.experiment.closed landed");
+    assert!(
+        closed.payload.get("utilization").is_some() && closed.payload.get("budget_match").is_some(),
+        "the closed row carries the honest measured detail: {:?}",
+        closed.payload
+    );
 }
 
 /// The settled rows → `AnalysisInput` half: fold the experiment run's
@@ -590,10 +600,9 @@ fn exemplar_compaction_produces_comparison_report() {
     // honestly recording consumption on all seven matched dims.
     let settled = drain_plans(&mut r, &spec, &eid, "exc", 3, None);
     assert_eq!(settled, 30);
-    // The E-4 close row overruns its audit-field bound at exemplar scale —
-    // the ComparisonReport below is computed pre-close from the settled
-    // runs (DF-S3.12b-1 carries the close-row residual).
-    assert_close_audit_cap(&mut r, &eid, "exc", 3, None);
+    // The E-4 close row lands at exemplar scale — the enumerated
+    // partition (CAP.3 / ADR-0327) replaced the 512 B open member bound.
+    assert_close_audit_cap(&mut r, &exp_run, &eid, "exc", 3, None);
 
     let rep = compare_arms(
         &r,
@@ -666,7 +675,7 @@ fn exemplar_control_strategy_produces_comparison_report() {
     // runs are distinct subject runs (ADR-0213's interim duplication).
     let settled = drain_plans(&mut r, &spec, &eid, "exctl", 2, None);
     assert_eq!(settled, 50);
-    assert_close_audit_cap(&mut r, &eid, "exctl", 2, None);
+    assert_close_audit_cap(&mut r, &exp_run, &eid, "exctl", 2, None);
 
     // The pre-registered product-arm comparison (same `model_snapshot`
     // family-a, `control_strategy` varied — not a checked field).
