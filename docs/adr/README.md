@@ -116,3 +116,7 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0324](ADR-0324-s6.3b-causal-attribution-and-judge-integrity-rulings.md) | S6.3b causal-attribution + judge-integrity rulings | S6.3b | Accepted |
 | [ADR-0325](ADR-0325-s6.4-co-evolution-interface-rulings.md) | S6.4 co-evolution-interface rulings | S6.4 | Accepted |
 | [ADR-0326](ADR-0326-cap.1-capstone-verdicts-and-routing.md) | CAP.1 capstone verdicts and gap routing | CAP.1 | Accepted |
+| [ADR-0327](ADR-0327-cap.3-experiment-close-audit-field-partition.md) | CAP.3 `measurement.experiment.closed` audit-field partition ruling | CAP.3 | Accepted |
+| [ADR-0328](ADR-0328-cap.3-hosted-permission-lift-partition-shaping.md) | CAP.3 hosted `security.permission.*` lift — partition shaping, not verbatim pass-through | CAP.3 | Accepted |
+| [ADR-0329](ADR-0329-cap.3-supply-surface-respond-approval-builtin.md) | CAP.3 `respond_approval` — the supply protocol's own answer verb | CAP.3 | Accepted |
+| [ADR-0330](ADR-0330-cap.3-closure-rulings-and-accepted-deviations.md) | CAP.3 closure rulings and the accepted-deviation set | CAP.3 | Accepted |

@@ -401,6 +401,12 @@ const DECIDED_FIELDS: &[AuditField] = &[
     af("decider"),
     af("decider_ref"),
     afb("decider_provenance", AUDIT_FIELD_LIST_BYTES),
+    // DF-CAP.2-1 (CAP.3; ADR-0328) — the hosted-attach kernel mint stamps
+    // `provenance: participant_reported` on every audit-grade lifted row
+    // (CC2 — the participant's claim is data); the partition admits the
+    // observation mark the same way OPEN_AUDIT's `*` does for the other
+    // lifted classes.
+    af("provenance"),
     // S4.10 (R-2.11.2 P12; ADR-0301 D4) — the surface's responder
     // declaration `{subject_ref, surface_session_ref}` and the op's
     // request id (the `respond_permission` idempotency key) — stamped when
@@ -442,6 +448,8 @@ const PENDING_FIELDS: &[AuditField] = &[
     af("mode"),
     af("timeout"),
     af("batch_id"),
+    // DF-CAP.2-1 (CAP.3; ADR-0328) — see `DECIDED_FIELDS.provenance`.
+    af("provenance"),
 ];
 
 /// `security.permission.escalated` — the chain-hop row (§5g.7 §4):
@@ -1416,6 +1424,28 @@ pub const fn hosted_lowering(class: &str) -> &'static str {
     "none"
 }
 
+/// `measurement.experiment.closed` — the §6.3 §6 close row's dossier
+/// partition (CAP.3 / DF-S3.12b-1; ADR-0327): the row is audit-grade and
+/// its members are the close's own facts — status/coverage/outcome counts
+/// at the scalar bound, and the E-3/E-4 re-check records (`utilization`,
+/// `budget_match`, `na_cells`, `under_utilised`) at the record/list bound
+/// (`AUDIT_FIELD_LIST_BYTES` — the declared bound for legitimately
+/// record/list-shaped audit fields). `OPEN_AUDIT`'s `*` member bound
+/// (512 B) refused the honestly-measured exemplar close (~525-966 B of
+/// measured detail); the enumerated partition sizes each member to its
+/// declared shape instead of the blanket small-field bound.
+const EXPERIMENT_CLOSED_FIELDS: &[AuditField] = &[
+    af("status"),
+    af("coverage"),
+    af("outcome_counts"),
+    af("watermark_set"),
+    af("summary_ref"),
+    afb("under_utilised", AUDIT_FIELD_LIST_BYTES),
+    afb("budget_match", AUDIT_FIELD_LIST_BYTES),
+    afb("na_cells", AUDIT_FIELD_LIST_BYTES),
+    afb("utilization", AUDIT_FIELD_LIST_BYTES),
+];
+
 /// The one table (CC7). Order is irrelevant; `lookup` is exact-match.
 #[rustfmt::skip]
 pub const CLASS_TABLE: &[ClassSpec] = &[
@@ -1988,7 +2018,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_prov("measurement.experiment.run_replanned",    Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.cell_completed",   Led, O::Events, false, false, true,  None, None),
     row_audit("measurement.experiment.amended",         O::Events, true, OPEN_AUDIT, &[], None, None),
-    row_audit("measurement.experiment.closed",          O::Events, true, OPEN_AUDIT, &[], None, None),
+    // DF-S3.12b-1 (ADR-0327): enumerated partition — the E-4 close
+    // dossier's `utilization`/`budget_match`/`na_cells`/`under_utilised`
+    // members are record/list-shaped and exceed OPEN_AUDIT's 512 B
+    // member bound at exemplar scale (~525-966 B measured).
+    row_audit("measurement.experiment.closed",          O::Events, true, EXPERIMENT_CLOSED_FIELDS, &[], None, None),
     row_audit("measurement.experiment.paused",          O::Events, true, OPEN_AUDIT, &[], None, None),
     row_prov("measurement.experiment.resumed",          Led, O::Events, false, false, true,  None, None),
     row_prov("measurement.experiment.drift_bracket",    Led, O::Events, false, false, true,  None, None),

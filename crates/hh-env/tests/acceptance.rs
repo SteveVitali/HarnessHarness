@@ -2741,14 +2741,16 @@ fn cap2_dispatch_net_egress_mode_none_refuses() {
         .all(|e| e.class != "action.effect.committed" && e.class != "action.effect.observed"));
 }
 
-/// CAP.2 (green pin — the ask floor): under a `mediated` net policy (the
-/// containment floor admits the class; the *request* is an authorize-stage
-/// decision), a `net_egress` proposal carrying taint — the hosted-participant
-/// case — resolves through the real Π table: `dom_net_egress` asks
-/// (`host_allowlisted` is `unknown`), the durable
-/// `security.permission.pending` lands, the effect suspends, the executor is
-/// never touched, and NOT ONE `security.egress.*` row is minted — the ask
-/// channel is the whole egress gate today.
+/// CAP.2/CAP.3 (green pin — the ask floor): under a `mediated` net policy
+/// (the containment floor admits the class; the *request* is an
+/// authorize-stage decision), a `net_egress` proposal carrying taint — the
+/// hosted-participant case — resolves through the real Π table:
+/// `dom_net_egress` asks (`host_allowlisted` is `unknown`), the durable
+/// `security.permission.pending` lands, the effect suspends, the executor
+/// is never touched, and NOT ONE `security.egress.*` row is minted — the
+/// monitor's own ask suspends the effect at `authorize`, before the
+/// dispatch egress gate (DF-S2.4-1) ever runs. The mediated trail mints
+/// only on a monitor-allowed egress (see the two legs below).
 #[test]
 fn cap2_dispatch_net_egress_asks_no_egress_rows() {
     let (mut store, run, lease, _clock) = open("cap2-egress");
@@ -2808,16 +2810,18 @@ fn cap2_dispatch_net_egress_asks_no_egress_rows() {
         .all(|e| e.class != "action.effect.committed" && e.class != "action.effect.observed"));
 }
 
-/// CAP.2 (green pin — the ADR-0031 floor, honestly): an *untainted* `≥
-/// principal` `net_egress` under a `mediated` policy never reaches the Π
+/// CAP.3 (DF-S2.4-1 — the ADR-0031 floor × the egress gate): an *untainted*
+/// `≥ principal` `net_egress` under a `mediated` policy never reaches the Π
 /// table — `floor_verdict` allows every class except `irreversible ∧
-/// external`, `secret_access`, `spend`, `permission_request`. Dispatch admits
-/// the effect to the executor boundary (the reference `Ep2Model` mediates
-/// nothing; real mediation lives in the backend), so the composed truth is:
-/// an allowed egress produces zero `security.egress.*` rows — the durable
-/// mediated-trail seam is exactly DF-S2.4-1's residual.
+/// external`, `secret_access`, `spend`, `permission_request`. The monitor's
+/// `decided{allow}` lands; then the dispatch egress gate runs the mediator:
+/// `security.egress.requested` + `security.egress.decided` are durable
+/// before any wire, and under `default_unmatched = deny` the uncovered
+/// `example.test` denies — the effect mints `action.effect.refused` and the
+/// executor is never touched. The mediated trail is now the normative
+/// contract, not a residual.
 #[test]
-fn cap2_dispatch_net_egress_clean_floor_allows_no_egress_rows() {
+fn cap2_dispatch_net_egress_clean_floor_mediated_gate() {
     let (mut store, run, lease, _clock) = open("cap2-egress-floor");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let ws = workspace("cap2-egress-floor");
@@ -2838,32 +2842,43 @@ fn cap2_dispatch_net_egress_clean_floor_allows_no_egress_rows() {
         .dispatch(&mut driver, &mut exec, None, &inp, &lease)
         .unwrap();
     assert!(
-        matches!(out, DispatchOutcome::Observed(_)),
-        "the ADR-0031 floor admits a clean principal egress: {out:?}"
+        matches!(&out, DispatchOutcome::Refused { reason } if reason.starts_with("egress_denied:")),
+        "the floor-admitted egress denies at the mediator (unmatched host): {out:?}"
     );
-    assert_eq!(exec.calls.get(), 1, "the floor-allowed effect executes");
+    assert_eq!(
+        exec.calls.get(),
+        0,
+        "a denied egress never reaches the executor"
+    );
     let envs = read_all(disp.store_mut(), &run);
     assert!(
         envs.iter().any(|e| e.class == "security.permission.decided"
             && e.payload.get("decision").and_then(|d| d.as_str()) == Some("allow")),
-        "the allow decision is durable: {:?}",
+        "the monitor's allow decision is durable: {:?}",
         envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
     );
     assert!(
-        envs.iter().all(|e| !e.class.starts_with("security.egress.")),
-        "even an *allowed* egress mints no security.egress.* row — the mediated trail is DF-S2.4-1: {:?}",
+        envs.iter().any(|e| e.class == "security.egress.requested")
+            && envs.iter().any(|e| e.class == "security.egress.decided"),
+        "the mediated trail is durable even when the monitor floor-allows: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+    assert!(
+        envs.iter().any(|e| e.class == "action.effect.refused"),
+        "the refused terminal lands: {:?}",
         envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
     );
 }
 
-/// DF-S2.4-1 residual — the composed claim the deferral names: dispatch
-/// routes a `net_egress` effect through `EgressMediator::handle`, so the
-/// run carries `security.egress.requested` and the normative
-/// `security.egress.decided` before any wire. `#[ignore]`d pending the
-/// mediator call-site wiring (CAP.3); run with `--ignored` to observe
-/// the gap.
+/// DF-S2.4-1 (CAP.3) — the composed claim the deferral named: dispatch
+/// routes a `net_egress` effect through `EgressMediator` — `gate` at the
+/// authorize tail (the durable `security.egress.requested` /
+/// `security.egress.decided` pair lands before any wire), `forward` at the
+/// wire point. This fixture's `default_unmatched = deny` policy carries no
+/// rule covering `example.test`, so the pure decision denies: the trail is
+/// `requested → decided{deny}`, the effect mints `action.effect.refused`,
+/// and the executor is never touched.
 #[test]
-#[ignore = "DF-S2.4-1: no production dispatch call site drives EgressMediator — a net_egress effect suspends/fails closed without any security.egress.* row; the mediated leg is routed to CAP.3"]
 fn cap2_dispatch_net_egress_mediated() {
     let (mut store, run, lease, _clock) = open("cap2-egress-med");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
@@ -2881,14 +2896,34 @@ fn cap2_dispatch_net_egress_mediated() {
     let mut disp = Dispatcher::new(&mut store, &mon, &run, [9u8; 32], DetectorSet::default());
     let mut exec = MockExecutor::ok();
     let inp = cap2_net_input(&cap, &bind, &sb, &env, &ws);
-    let _ = disp
+    let out = disp
         .dispatch(&mut driver, &mut exec, None, &inp, &lease)
         .unwrap();
+    assert!(
+        matches!(&out, DispatchOutcome::Refused { reason } if reason.starts_with("egress_denied:")),
+        "the unmatched egress denies at mediation: {out:?}"
+    );
+    assert_eq!(
+        exec.calls.get(),
+        0,
+        "a mediated-denied egress never executes"
+    );
     let envs = read_all(disp.store_mut(), &run);
     assert!(
         envs.iter().any(|e| e.class == "security.egress.requested")
             && envs.iter().any(|e| e.class == "security.egress.decided"),
-        "DF-S2.4-1 residual: dispatch mints the mediated egress pair: {:?}",
+        "dispatch mints the mediated egress pair: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+    assert!(
+        envs.iter().any(|e| e.class == "security.egress.decided"
+            && e.payload.get("decision").and_then(|d| d.as_str()) == Some("deny")),
+        "the decided row spells deny: {:?}",
+        envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+    );
+    assert!(
+        envs.iter().any(|e| e.class == "action.effect.refused"),
+        "the refused terminal lands: {:?}",
         envs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
     );
 }

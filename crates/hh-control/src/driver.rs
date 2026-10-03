@@ -96,6 +96,23 @@ pub struct GateOutcome {
     pub error_class: Option<String>,
 }
 
+/// The kernel-owned inputs `assemble` reads beyond the strategy's
+/// `context_request` — the driver supplies them (DF-S2.8-1): the `mc`
+/// the plan records as `model_call_id`, the durable prefix the
+/// `context_view` projection folds over, and the configured context
+/// window cap (`0` ⇒ the assembler treats the window as unbounded).
+#[derive(Debug, Clone)]
+pub struct AssembleInputs<'a> {
+    /// The call's `model_call_id` — the driver's `mc` on a `propose`,
+    /// the retried call's id on a `retry` re-assembly.
+    pub model_call_id: &'a str,
+    /// The run's durable event prefix (`LedgerSink::prefix`) — the
+    /// `context_view` source.
+    pub prefix: &'a [EventEnvelope],
+    /// `context.window_cap_tokens` — the occupancy gauge's cap.
+    pub window_cap_tokens: u64,
+}
+
 /// The context assembler — `assemble` turns a `propose.context_request`
 /// into the request record the `ModelPort` consumes plus the canonical
 /// `context.assembled` payload the `hh-context` builder produced (the
@@ -103,7 +120,8 @@ pub struct GateOutcome {
 /// site is the turn loop's). The strategy never sees the bytes — I2.
 pub trait AssemblerPort {
     /// Assemble the next request.
-    fn assemble(&mut self, context_request: &Json) -> AssembledRequest;
+    fn assemble(&mut self, inputs: &AssembleInputs<'_>, context_request: &Json)
+        -> AssembledRequest;
 }
 
 /// What `assemble` returns.
@@ -114,6 +132,12 @@ pub struct AssembledRequest {
     /// The `context.assembled` payload (the builder's canonical record —
     /// `None` only for a port that does not assemble).
     pub assembled_payload: Option<Json>,
+    /// The builder's side-band rows — `context.artefact.delivered` and
+    /// any other rows the assembler emitted besides `context.assembled`,
+    /// in emit order. The driver appends them after `context.assembled`
+    /// under the same call scope (DF-S2.8-1 — a builder's emissions are
+    /// durable or they never ran; nothing is dropped silently).
+    pub side_events: Vec<(String, Json)>,
 }
 
 /// Durability — the sink the driver appends through (the `hh-ledger`
@@ -1519,12 +1543,25 @@ impl<S: ControlStrategy> Driver<S> {
                 context_request, ..
             } => {
                 let mc = self.alloc("mc");
-                let assembled = assembler.assemble(&context_request);
+                let assembled = assembler.assemble(
+                    &AssembleInputs {
+                        model_call_id: &mc,
+                        prefix: sink.prefix(),
+                        window_cap_tokens: self.config.window_cap_tokens,
+                    },
+                    &context_request,
+                );
                 // The `context.assembled` emitter call site (DF-S1.19-1's
                 // Stage-1 half) — the builder produced the payload; the
                 // driver owns the `append`, scoped to the call it feeds.
                 if let Some(p) = assembled.assembled_payload {
                     self.append(sink, "context.assembled", p, Some(&mc))?;
+                }
+                // DF-S2.8-1: the builder's side-band rows
+                // (`context.artefact.delivered`, …) are durable in emit
+                // order under the same call scope — never dropped.
+                for (class, payload) in assembled.side_events {
+                    self.append(sink, &class, payload, Some(&mc))?;
                 }
                 self.model_round(sink, model, &assembled.request, Some((mc, 1)))?;
             }
@@ -1537,7 +1574,16 @@ impl<S: ControlStrategy> Driver<S> {
                 not_before,
             } => {
                 if let crate::vocab::RetryTarget::ModelCall { model_call_id } = target {
-                    let mut request = assembler.assemble(&Json::Null).request;
+                    let mut request = assembler
+                        .assemble(
+                            &AssembleInputs {
+                                model_call_id: &model_call_id,
+                                prefix: sink.prefix(),
+                                window_cap_tokens: self.config.window_cap_tokens,
+                            },
+                            &Json::Null,
+                        )
+                        .request;
                     let next_attempt = crate::retry::attempt_no(sink.prefix(), &model_call_id) + 1;
                     // `model_fallback{profile_ref}` execution (§5e.2;
                     // AC-R-2.6.2-11): the last `control.retry.scheduled`
@@ -3622,10 +3668,11 @@ mod tests {
 
     struct NullAssembler;
     impl AssemblerPort for NullAssembler {
-        fn assemble(&mut self, _req: &Json) -> AssembledRequest {
+        fn assemble(&mut self, _inputs: &AssembleInputs<'_>, _req: &Json) -> AssembledRequest {
             AssembledRequest {
                 request: Json::Null,
                 assembled_payload: None,
+                side_events: Vec::new(),
             }
         }
     }
@@ -4447,13 +4494,14 @@ mod tests {
     }
 
     impl AssemblerPort for OccupiedAssembler {
-        fn assemble(&mut self, _req: &Json) -> AssembledRequest {
+        fn assemble(&mut self, _inputs: &AssembleInputs<'_>, _req: &Json) -> AssembledRequest {
             AssembledRequest {
                 request: Json::Null,
                 assembled_payload: Some(Json::obj([(
                     "occupancy_estimate",
                     Json::Int(self.occupancy as i64),
                 )])),
+                side_events: Vec::new(),
             }
         }
     }

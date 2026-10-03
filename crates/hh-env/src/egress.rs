@@ -272,6 +272,33 @@ pub enum MediatedOutcome {
     },
 }
 
+/// `GateOutcome` — the result of [`EgressMediator::gate`] (DF-S2.4-1): the
+/// pre-wire half of the mediated path.
+#[derive(Debug)]
+pub enum GateOutcome {
+    /// `decide_egress` allowed — the caller owes [`EgressMediator::forward`]
+    /// at the wire point (the recheck/sentinel/`decided{allow}`/wire/charge
+    /// leg). Dispatch carries this across `committed` so the write-ahead
+    /// precedes the wire.
+    Allowed(GateAllow),
+    /// The request terminated at the gate — `decided{deny}` or the ask
+    /// trail (`pending`/`requested`/`decided{ask}`) is durable.
+    Terminal(MediatedOutcome),
+}
+
+/// The carried gate state for an allowed request — the decision record and
+/// the `started` stamp `forward`'s `latency_ms` reads.
+#[derive(Debug)]
+pub struct GateAllow {
+    /// The pure decision (`decision = allow`).
+    pub decision: hh_containment::egress::EgressDecision,
+    /// The decided row's effect scope (the token's resolved binding, else
+    /// the claim).
+    pub effect_id: String,
+    /// The gate's start stamp (`decided.latency_ms` baseline).
+    pub started: u64,
+}
+
 /// The mediator's failure modes — typed, never a warning.
 #[derive(Debug)]
 pub enum EgressError {
@@ -389,13 +416,19 @@ impl<'a> EgressMediator<'a> {
         out.into_iter().collect()
     }
 
-    /// `handle(request, chain)` — the mediated path: requested → attributed
-    /// → decide → recheck → mediate → decided → wire → charge.
-    pub fn handle(
+    /// `gate(request, chain)` — the pre-wire half of `handle` (DF-S2.4-1):
+    /// `requested` → attribution → the pure `decide_egress` decision. Deny
+    /// and ask terminate here (their `decided`/`pending`/`requested` rows are
+    /// durable before return); an allow hands the caller a [`GateAllow`] —
+    /// the recheck/sentinel/decided{allow}/wire/charge leg is deferred to
+    /// [`EgressMediator::forward`], which the dispatch path invokes at the
+    /// wire point (post-`committed`, pre-executor) so the effect's
+    /// write-ahead still precedes the wire.
+    pub fn gate(
         &mut self,
         req: &EgressRequest,
         chain: &ScopeChain,
-    ) -> Result<MediatedOutcome, EgressError> {
+    ) -> Result<GateOutcome, EgressError> {
         let started = self.store.now_ms();
         let sentinel_refs = Self::collect_sentinels(req);
 
@@ -446,26 +479,41 @@ impl<'a> EgressMediator<'a> {
                     started,
                     chain,
                 )?;
-                return Ok(MediatedOutcome::Refused {
+                Ok(GateOutcome::Terminal(MediatedOutcome::Refused {
                     request_ref: request_ref(req),
                     decided_ref: ev.event_id,
                     reason: decision.reason.unwrap_or(EgressReason::Denied),
-                });
+                }))
             }
-            EgressVerdict::Ask => {
-                return self.ask(req, &decision, &effect_id, started, chain);
-            }
-            EgressVerdict::Allow => {}
+            EgressVerdict::Ask => Ok(GateOutcome::Terminal(
+                self.ask(req, &decision, &effect_id, started, chain)?,
+            )),
+            EgressVerdict::Allow => Ok(GateOutcome::Allowed(GateAllow {
+                decision,
+                effect_id,
+                started,
+            })),
         }
+    }
 
-        self.forward(
-            req,
-            &decision,
-            DecidedBy::Policy,
-            &effect_id,
-            started,
-            chain,
-        )
+    /// `handle(request, chain)` — the mediated path: requested → attributed
+    /// → decide → recheck → mediate → decided → wire → charge.
+    pub fn handle(
+        &mut self,
+        req: &EgressRequest,
+        chain: &ScopeChain,
+    ) -> Result<MediatedOutcome, EgressError> {
+        match self.gate(req, chain)? {
+            GateOutcome::Terminal(o) => Ok(o),
+            GateOutcome::Allowed(g) => self.forward(
+                req,
+                &g.decision,
+                DecidedBy::Policy,
+                &g.effect_id,
+                g.started,
+                chain,
+            ),
+        }
     }
 
     /// The decided row (durable before its outcome is visible).
@@ -771,7 +819,10 @@ impl<'a> EgressMediator<'a> {
 
     /// The allow pipeline — recheck → sentinels → decided{allow} → wire →
     /// charge. Shared by the direct allow and the monitor-endorsed allow.
-    fn forward(
+    /// `pub` for the dispatch path (DF-S2.4-1): a `gate`-allowed request is
+    /// forwarded at the wire point — post-`committed`, pre-executor — so the
+    /// effect's write-ahead still precedes the wire.
+    pub fn forward(
         &mut self,
         req: &EgressRequest,
         decision: &EgressDecision,
