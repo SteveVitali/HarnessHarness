@@ -8,7 +8,8 @@
   (manifest row 99 — capstone 2 of 3)
 - **Branch:** `svitali/harnessharness-cap.2` (forked from
   `svitali/harnessharness-cap.1` @ `e3ab088`)
-- **PR:** (stacked PR URL recorded in the phase log at close)
+- **PR:** https://github.com/SteveVitali/HarnessHarness/pull/98 (stacked
+  on `svitali/harnessharness-cap.1`)
 - **Requirement ids:** the composed-verification / integration ids of
   `spec/CANONICAL_SPEC.md` (`R-2\.[0-9]+\.[0-9]+[a-z]?`) — exercised
   through the composed path, not per-ticket slices
