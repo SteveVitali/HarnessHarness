@@ -258,6 +258,7 @@ fn spec_with(mode: BudgetMode, wait: WaitMode) -> SubagentSpec {
             ],
         ),
         budget_mode: mode,
+        context: ContextIsolation::Fresh,
         environment: EnvIsolation::None,
         supplies: Supplies::default(),
         return_contract: ReturnContract::default(),
@@ -296,6 +297,8 @@ fn ctx<'a>(p: &'a mut Parent) -> SpawnCtx<'a> {
         holder: "writer-child",
         coords: live_coords(run_id),
         reserve_ttl_ms: 30_000,
+        branch_ctx: None,
+        hosted_plane: None,
         hook: None,
     }
 }

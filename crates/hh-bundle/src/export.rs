@@ -163,6 +163,29 @@ pub fn build_ledger_export(
         })
         .collect();
 
+    // `audit_tree_head` — the newest *signed* `security.audit.checkpoint`
+    // claim, ledgered as the bundle's attestation member (ADR-0038;
+    // ADR-0067 D5; R-2.8.6¹): the bundle attests to the writer's own
+    // signed claim — `checkpoint_ref` + `{tree_size, tree_head,
+    // signatures}` verbatim — never a head it computed itself. A run with
+    // no signed checkpoint carries `None`, an honest absence.
+    let audit_tree_head = events
+        .iter()
+        .rev()
+        .filter(|e| e.class == "security.audit.checkpoint")
+        .find_map(|e| {
+            let claim = hh_ledger::tree::parse_checkpoint(&e.payload)?;
+            if claim.signatures.is_empty() {
+                return None;
+            }
+            let checkpoint_ref = Json::obj([
+                ("run_id", Json::str(run_id)),
+                ("event_id", Json::str(e.event_id.clone())),
+                ("seq", Json::Int(e.seq as i64)),
+            ]);
+            crate::manifest::AuditTreeHead::from_claim(checkpoint_ref, &claim)
+        });
+
     let head = store.head(run_id).map_err(|_| BundleError::RunNotFound {
         run_id: run_id.to_string(),
     })?;
@@ -200,6 +223,7 @@ pub fn build_ledger_export(
             blob_index,
             head: head_json,
             lineage_prefixes,
+            audit_tree_head,
         },
         roles,
     ))

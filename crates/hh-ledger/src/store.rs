@@ -224,6 +224,27 @@ pub(crate) struct RunState {
     subscribers: Vec<Subscriber>,
 }
 
+/// The extra members only a rotation claim carries (`§5g.6 §2`,
+/// R-2.8.6): `rehash` (excluded from the signed preimage — it is derived
+/// data), `bridge_record_ref`/`attestation_ref` (signed claim content).
+/// `none()` is what every ordinary `checkpoint` emits.
+#[derive(Debug, Default)]
+pub(crate) struct CheckpointExtras {
+    /// The `{idp', chain_hash', tree_head'}` recomputation (unsigned).
+    pub rehash: Option<Json>,
+    /// The `security.audit.bridge` event id the rotation minted.
+    pub bridge_record_ref: Option<String>,
+    /// The attestation binding the rotation (signed claim member).
+    pub attestation_ref: Option<String>,
+}
+
+impl CheckpointExtras {
+    /// No extras — the ordinary-checkpoint case.
+    pub(crate) fn none() -> Self {
+        Self::default()
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Store
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2006,7 +2027,6 @@ impl Store {
 
         // ── the checkpoint layer ────────────────────────────────────────
         let manifest = &self.runs[run_id].manifest;
-        let leaf_hashes: Vec<String> = committed.iter().map(|(_, e)| e.hash.clone()).collect();
         let mut prev_claim: Option<(&EventEnvelope, crate::tree::CheckpointClaim)> = None;
         let mut final_seq: Option<u64> = None;
         let mut finished_seq: Option<u64> = None;
@@ -2024,10 +2044,26 @@ impl Store {
             if claim.tree_size != Some(env.seq) {
                 return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
             }
+            // The claim's `identity_profile` names the profile its
+            // digests are under (absent ⇒ the manifest `idp` — every
+            // pre-rotation claim is idp/1). The covered leaves recompute
+            // under that profile — a claim under an unregistered or
+            // mismatched profile can never verify (§5g.6 §2; N2 — no
+            // silent ok under the wrong profile).
+            let claim_profile_name = claim
+                .identity_profile
+                .clone()
+                .unwrap_or_else(|| manifest.idp.clone());
+            let claim_profile = hh_identity::idp::profile_for(&claim_profile_name)
+                .ok_or_else(|| tampered(env.seq, TamperedKind::CheckpointInvalid))?;
+            let covered_leaves = crate::rotation::rehashed_leaves(
+                claim_profile,
+                committed.iter().map(|(_, e)| e).take(env.seq as usize),
+            );
             // The signed head must be the covered range's own MTH — a head
             // the log cannot substantiate is a split view.
             if claim.tree_head.as_deref()
-                != Some(crate::tree::mth_prefix(&leaf_hashes, env.seq as usize).as_str())
+                != Some(crate::tree::mth_in(claim_profile, &covered_leaves).as_str())
             {
                 return Err(tampered(env.seq, TamperedKind::ForkEquivocation));
             }
@@ -2035,13 +2071,52 @@ impl Store {
             let expect_chain = if env.seq == 0 {
                 return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
             } else {
-                leaf_hashes[(env.seq - 1) as usize].as_str()
+                covered_leaves[(env.seq - 1) as usize].as_str()
             };
             if claim.chain_hash.as_deref() != Some(expect_chain) {
                 return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
             }
-            // `idp` re-derives over the unsigned claim bytes.
-            if claim.idp.as_deref() != Some(crate::tree::checkpoint_idp(&env.payload).as_str()) {
+            // `kind = rotation` — the `rehash` member must recompute under
+            // the rotated-to profile and the claim's own digests must be
+            // under that profile too (the rotation claim is
+            // self-evidencing); `bridge_record_ref` must name a committed
+            // `security.audit.bridge` row (§5g.6 §2's claim shape).
+            if claim.kind == CheckpointKind::Rotation.as_str() {
+                let rehash_ok = match &claim.rehash {
+                    Some(r) => {
+                        let same_profile = r.get("idp").and_then(Json::as_str)
+                            == Some(claim_profile_name.as_str());
+                        same_profile
+                            && crate::rotation::verify_rehash(
+                                r,
+                                committed.iter().map(|(_, e)| e).take(env.seq as usize),
+                            ) == Some(true)
+                    }
+                    None => false,
+                };
+                if !rehash_ok {
+                    return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
+                }
+                let bridge_ok = claim
+                    .bridge_record_ref
+                    .as_deref()
+                    .map(|bref| {
+                        committed
+                            .iter()
+                            .take(env.seq as usize)
+                            .any(|(_, e)| e.event_id == bref && e.class == "security.audit.bridge")
+                    })
+                    .unwrap_or(false);
+                if !bridge_ok {
+                    return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
+                }
+            }
+            // `idp` re-derives over the unsigned claim bytes — under the
+            // claim's own `identity_profile` (a rotation claim digests
+            // under `to_idp`).
+            if claim.idp.as_deref()
+                != Some(crate::tree::checkpoint_idp_in(claim_profile, &env.payload).as_str())
+            {
                 return Err(tampered(env.seq, TamperedKind::CheckpointInvalid));
             }
             // `prev_checkpoint` links the prior claim — the first carries
@@ -2206,6 +2281,31 @@ impl Store {
         kind: CheckpointKind,
         signer: &mut dyn AuditSigner,
     ) -> Result<EventEnvelope, LedgerError> {
+        if kind == CheckpointKind::Rotation {
+            // A rotation claim without its `rehash`/`bridge_record_ref`
+            // members would be a forged boundary — the dedicated op mints
+            // them (§5g.6 §2; ADR-0307).
+            return Err(LedgerError::SchemaViolation {
+                detail: "kind = rotation is minted through rotation_checkpoint".into(),
+            });
+        }
+        self.checkpoint_inner(run_id, lease, kind, signer, None, &CheckpointExtras::none())
+    }
+
+    /// The claim-emit core shared by [`Store::checkpoint`] and
+    /// [`Store::rotation_checkpoint`]. `rotation_to` overrides the claim's
+    /// `identity_profile` (the rotation claim digests under `to_idp`);
+    /// `extras` carries the rotation-only members (`rehash`,
+    /// `bridge_record_ref`, `attestation_ref`).
+    fn checkpoint_inner(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        kind: CheckpointKind,
+        signer: &mut dyn AuditSigner,
+        rotation_to: Option<String>,
+        extras: &CheckpointExtras,
+    ) -> Result<EventEnvelope, LedgerError> {
         let rec = self.active_lease(run_id, lease)?;
         let state = self.run(run_id)?;
         let manifest = &state.manifest;
@@ -2246,80 +2346,134 @@ impl Store {
                 return Ok(existing.clone());
             }
         }
-        let leaf_hashes: Vec<String> = state.events.iter().map(|e| e.hash.clone()).collect();
-        let tree_size = leaf_hashes.len() as u64;
-        let tree_head = crate::tree::mth(&leaf_hashes);
-        let chain_hash = state
-            .head
+        // ── the claim's identity profile (§5g.6 §2; R-2.8.6): an
+        // ordinary checkpoint continues under the previous claim's
+        // `identity_profile` (absent ⇒ the manifest's `idp` — every
+        // pre-rotation claim is idp/1); a rotation claim digests under
+        // `to_idp` (`rotation_to` overrides). The leaf digests are
+        // *recomputed* under the claim profile — stored hashes are never
+        // rewritten; under `idp/1` `rehashed_leaves` returns exactly the
+        // stored `hash` values (same construction, one path — CC1).
+        let prev_claim_parsed = match prev_checkpoint_ev {
+            Some(prev_ev) => Some(crate::tree::parse_checkpoint(&prev_ev.payload).ok_or_else(
+                || LedgerError::InconsistentHead {
+                    run_id: run_id.to_string(),
+                    detail: "the previous checkpoint row does not parse".into(),
+                },
+            )?),
+            None => None,
+        };
+        let prev_profile_name = prev_claim_parsed
             .as_ref()
-            .map(|h| h.hash.clone())
+            .and_then(|c| c.identity_profile.clone())
+            .unwrap_or_else(|| manifest.idp.clone());
+        let claim_profile_name = rotation_to
+            .clone()
+            .unwrap_or_else(|| prev_profile_name.clone());
+        let claim_profile =
+            hh_identity::idp::profile_for(&claim_profile_name).ok_or_else(|| {
+                LedgerError::SchemaViolation {
+                    detail: format!(
+                        "unknown_idp: `{claim_profile_name}` is not a registered identity profile"
+                    ),
+                }
+            })?;
+        let leaf_hashes: Vec<String> =
+            crate::rotation::rehashed_leaves(claim_profile, state.events.iter());
+        let tree_size = leaf_hashes.len() as u64;
+        let tree_head = crate::tree::mth_in(claim_profile, &leaf_hashes);
+        let chain_hash = leaf_hashes
+            .last()
+            .cloned()
             .unwrap_or_else(|| GENESIS_HASH.to_string());
         // The consistency-verified-extension gate: recompute the previous
-        // claim's head over the current leaves, then verify the new head as
-        // an append-only extension of it. A divergence means the log under
-        // the signed head changed — refuse to sign.
-        let (since_seq, prev_link) = match prev_checkpoint_ev {
-            Some(prev_ev) => {
-                let prev_claim =
-                    crate::tree::parse_checkpoint(&prev_ev.payload).ok_or_else(|| {
-                        LedgerError::InconsistentHead {
-                            run_id: run_id.to_string(),
-                            detail: "the previous checkpoint row does not parse".into(),
-                        }
-                    })?;
-                let prev_size =
-                    prev_claim
-                        .tree_size
+        // claim's head over the current leaves *under the previous claim's
+        // profile*, then verify the new head as an append-only extension.
+        // A divergence means the log under the signed head changed —
+        // refuse to sign. A consistency proof is single-profile by
+        // construction: at the rotation boundary the prefix check still
+        // runs (under the old profile) but the proof arm is skipped — the
+        // claim's `rehash` is the cross-profile binding (ADR-0307).
+        let (since_seq, prev_link) =
+            match prev_checkpoint_ev {
+                Some(prev_ev) => {
+                    let prev_claim =
+                        prev_claim_parsed
+                            .clone()
+                            .ok_or_else(|| LedgerError::InconsistentHead {
+                                run_id: run_id.to_string(),
+                                detail: "the previous checkpoint row does not parse".into(),
+                            })?;
+                    let prev_size =
+                        prev_claim
+                            .tree_size
+                            .ok_or_else(|| LedgerError::InconsistentHead {
+                                run_id: run_id.to_string(),
+                                detail: "the previous checkpoint lacks tree_size".into(),
+                            })? as usize;
+                    let prev_profile = hh_identity::idp::profile_for(&prev_profile_name)
                         .ok_or_else(|| LedgerError::InconsistentHead {
                             run_id: run_id.to_string(),
-                            detail: "the previous checkpoint lacks tree_size".into(),
-                        })? as usize;
-                let prev_head_now = crate::tree::mth_prefix(&leaf_hashes, prev_size);
-                if Some(prev_head_now.as_str()) != prev_claim.tree_head.as_deref() {
-                    return Err(LedgerError::InconsistentHead {
-                        run_id: run_id.to_string(),
-                        detail: format!(
-                            "the prefix under the last signed head changed \
+                            detail: format!(
+                                "the previous checkpoint names unknown profile {prev_profile_name}"
+                            ),
+                        })?;
+                    let prev_leaves =
+                        crate::rotation::rehashed_leaves(prev_profile, state.events.iter());
+                    let prev_head_now =
+                        crate::tree::mth_prefix_in(prev_profile, &prev_leaves, prev_size);
+                    if Some(prev_head_now.as_str()) != prev_claim.tree_head.as_deref() {
+                        return Err(LedgerError::InconsistentHead {
+                            run_id: run_id.to_string(),
+                            detail: format!(
+                                "the prefix under the last signed head changed \
                              (signed {}, recomputed {prev_head_now})",
-                            prev_claim.tree_head.as_deref().unwrap_or("?")
-                        ),
-                    });
-                }
-                let proof =
-                    crate::tree::prove_consistency(&leaf_hashes, prev_size, leaf_hashes.len())
+                                prev_claim.tree_head.as_deref().unwrap_or("?")
+                            ),
+                        });
+                    }
+                    if prev_profile_name == claim_profile_name {
+                        let proof = crate::tree::prove_consistency_in(
+                            claim_profile,
+                            &leaf_hashes,
+                            prev_size,
+                            leaf_hashes.len(),
+                        )
                         .ok_or_else(|| LedgerError::InconsistentHead {
                             run_id: run_id.to_string(),
                             detail: "no consistency proof exists from the held head".into(),
                         })?;
-                if !crate::tree::verify_consistency(
-                    &proof,
-                    prev_claim.tree_head.as_deref().unwrap_or_default(),
-                    &tree_head,
-                ) {
-                    return Err(LedgerError::InconsistentHead {
-                        run_id: run_id.to_string(),
-                        detail: "the new head is not a consistent extension".into(),
-                    });
+                        if !crate::tree::verify_consistency_in(
+                            claim_profile,
+                            &proof,
+                            prev_claim.tree_head.as_deref().unwrap_or_default(),
+                            &tree_head,
+                        ) {
+                            return Err(LedgerError::InconsistentHead {
+                                run_id: run_id.to_string(),
+                                detail: "the new head is not a consistent extension".into(),
+                            });
+                        }
+                    }
+                    let link = Json::obj([
+                        ("event_id", Json::str(&prev_ev.event_id)),
+                        (
+                            "tree_size",
+                            Json::Int(prev_claim.tree_size.unwrap_or(0) as i64),
+                        ),
+                        (
+                            "tree_head",
+                            prev_claim
+                                .tree_head
+                                .clone()
+                                .map(Json::str)
+                                .unwrap_or(Json::Null),
+                        ),
+                    ]);
+                    (prev_ev.seq + 1, link)
                 }
-                let link = Json::obj([
-                    ("event_id", Json::str(&prev_ev.event_id)),
-                    (
-                        "tree_size",
-                        Json::Int(prev_claim.tree_size.unwrap_or(0) as i64),
-                    ),
-                    (
-                        "tree_head",
-                        prev_claim
-                            .tree_head
-                            .clone()
-                            .map(Json::str)
-                            .unwrap_or(Json::Null),
-                    ),
-                ]);
-                (prev_ev.seq + 1, link)
-            }
-            None => (0, Json::Null),
-        };
+                None => (0, Json::Null),
+            };
         // Cross-run anchors observed in range — manifest lineage links (first
         // checkpoint only) plus `lifecycle.run.forked`/`control.subagent.
         // spawned` rows carrying `scope.child_run_id` since the last claim.
@@ -2333,8 +2487,11 @@ impl Store {
             {
                 if let Some(link) = link {
                     if let Some(src) = self.runs.get(&link.run_id) {
+                        // Anchor heads carry the claim's profile (a claim
+                        // is only checkable against digests in its own
+                        // profile — §5g.6 §2).
                         let src_leaves: Vec<String> =
-                            src.events.iter().map(|e| e.hash.clone()).collect();
+                            crate::rotation::rehashed_leaves(claim_profile, src.events.iter());
                         let size = (link.at_seq + 1) as usize;
                         anchors.push(Json::obj([
                             ("other_run", Json::str(&link.run_id)),
@@ -2344,7 +2501,11 @@ impl Store {
                                     ("tree_size", Json::Int(size as i64)),
                                     (
                                         "tree_head",
-                                        Json::str(crate::tree::mth_prefix(&src_leaves, size)),
+                                        Json::str(crate::tree::mth_prefix_in(
+                                            claim_profile,
+                                            &src_leaves,
+                                            size,
+                                        )),
                                     ),
                                 ]),
                             ),
@@ -2356,14 +2517,17 @@ impl Store {
             if let Some(parent) = &manifest.parent_run_id {
                 if let Some(src) = self.runs.get(parent) {
                     let src_leaves: Vec<String> =
-                        src.events.iter().map(|e| e.hash.clone()).collect();
+                        crate::rotation::rehashed_leaves(claim_profile, src.events.iter());
                     anchors.push(Json::obj([
                         ("other_run", Json::str(parent)),
                         (
                             "other_head",
                             Json::obj([
                                 ("tree_size", Json::Int(src_leaves.len() as i64)),
-                                ("tree_head", Json::str(crate::tree::mth(&src_leaves))),
+                                (
+                                    "tree_head",
+                                    Json::str(crate::tree::mth_in(claim_profile, &src_leaves)),
+                                ),
                             ]),
                         ),
                         ("relation", Json::str("parent")),
@@ -2382,14 +2546,18 @@ impl Store {
                 continue;
             };
             if let Some(src) = self.runs.get(child) {
-                let src_leaves: Vec<String> = src.events.iter().map(|e| e.hash.clone()).collect();
+                let src_leaves: Vec<String> =
+                    crate::rotation::rehashed_leaves(claim_profile, src.events.iter());
                 anchors.push(Json::obj([
                     ("other_run", Json::str(child)),
                     (
                         "other_head",
                         Json::obj([
                             ("tree_size", Json::Int(src_leaves.len() as i64)),
-                            ("tree_head", Json::str(crate::tree::mth(&src_leaves))),
+                            (
+                                "tree_head",
+                                Json::str(crate::tree::mth_in(claim_profile, &src_leaves)),
+                            ),
                         ]),
                     ),
                     ("relation", Json::str(relation)),
@@ -2407,6 +2575,22 @@ impl Store {
         members.insert("cross_run_anchors".to_string(), Json::Arr(anchors));
         if let Some(apr) = &manifest.audit_policy_ref {
             members.insert("audit_policy_ref".to_string(), Json::str(apr));
+        }
+        // `identity_profile` names the profile every digest in this claim
+        // is under (§5g.6 §2 — additive: pre-rotation claims verify under
+        // the implied idp/1 default).
+        members.insert(
+            "identity_profile".to_string(),
+            Json::str(claim_profile.idp_id),
+        );
+        if let Some(rehash) = &extras.rehash {
+            members.insert("rehash".to_string(), rehash.clone());
+        }
+        if let Some(bridge) = &extras.bridge_record_ref {
+            members.insert("bridge_record_ref".to_string(), Json::str(bridge));
+        }
+        if let Some(att) = &extras.attestation_ref {
+            members.insert("attestation_ref".to_string(), Json::str(att));
         }
         let unsigned = Json::Obj(members);
         let preimage = crate::tree::checkpoint_sig_preimage(&unsigned);
@@ -2428,7 +2612,7 @@ impl Store {
                 ("sig", Json::str(crate::audit::render_sig(&sig_bytes))),
             ])]),
         );
-        let idp = crate::tree::checkpoint_idp(&Json::Obj(members.clone()));
+        let idp = crate::tree::checkpoint_idp_in(claim_profile, &Json::Obj(members.clone()));
         members.insert("idp".to_string(), Json::str(idp));
         let payload = Json::Obj(members);
         let state = self.runs.get_mut(run_id).unwrap();
@@ -2440,6 +2624,115 @@ impl Store {
             state,
             seq,
             "security.audit.checkpoint",
+            payload,
+            &prev_hash,
+            rec.generation,
+            KERNEL_LEDGER,
+        );
+        commit_envelopes(
+            state,
+            vec![Staged::Durable(env.clone())],
+            self.clock.now_ms(),
+        )?;
+        Ok(env)
+    }
+
+    /// `rotation_checkpoint(run, lease, signer, plan, bridge_record_ref)` —
+    /// the `security.audit.checkpoint{kind = rotation}` row (§5g.6 §2,
+    /// R-2.8.6; ADR-0307). The claim's digests (`tree_head`, `chain_hash`,
+    /// anchors) recompute under `plan.to_idp`; the `rehash` member carries
+    /// the same values explicitly (`{idp', chain_hash', tree_head'}` over
+    /// the covered prefix), so the row is self-evidencing and
+    /// post-rotation checkpoints continue under `to_idp` by inheriting the
+    /// last claim's `identity_profile`. `plan.from_idp` must name the
+    /// run's current claim profile — a plan that re-anchors a different
+    /// profile refuses `idp_not_writable`, never silently re-roots.
+    pub fn rotation_checkpoint(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        signer: &mut dyn AuditSigner,
+        plan: &hh_identity::rotation::RotationPlan,
+        bridge_record_ref: Option<&str>,
+    ) -> Result<EventEnvelope, LedgerError> {
+        let (from, to) = plan.validate().map_err(|e| LedgerError::SchemaViolation {
+            detail: e.to_string(),
+        })?;
+        let state = self.run(run_id)?;
+        if state.finished {
+            return Err(LedgerError::RunFinished {
+                run_id: run_id.to_string(),
+            });
+        }
+        // The plan's `from_idp` must name the profile the run's claims are
+        // currently under — the manifest profile for a first rotation, or
+        // the last claim's `identity_profile` for a chained one.
+        let current_profile = state
+            .events
+            .iter()
+            .rev()
+            .find(|e| e.class == "security.audit.checkpoint")
+            .and_then(|e| crate::tree::parse_checkpoint(&e.payload))
+            .and_then(|c| c.identity_profile)
+            .unwrap_or_else(|| state.manifest.idp.clone());
+        if current_profile != from.idp_id {
+            return Err(LedgerError::SchemaViolation {
+                detail: format!(
+                    "idp_not_writable: rotation plan names from_idp {} but the run's \
+                     current claim profile is {current_profile}",
+                    from.idp_id
+                ),
+            });
+        }
+        let extras = CheckpointExtras {
+            rehash: Some(crate::rotation::rehash_claim(
+                state.events.iter(),
+                from.idp_id,
+                to,
+            )),
+            bridge_record_ref: bridge_record_ref.map(str::to_string),
+            attestation_ref: plan.attestation_ref.clone(),
+        };
+        self.checkpoint_inner(
+            run_id,
+            lease,
+            CheckpointKind::Rotation,
+            signer,
+            Some(to.idp_id.to_string()),
+            &extras,
+        )
+    }
+
+    /// Mint a kernel-origin event on `run_id` — the bridge-row emit path
+    /// (`security.audit.bridge` is `kernel_origin` like the checkpoint it
+    /// accompanies). Rides the same writer fence.
+    pub(crate) fn emit_system(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        class: &str,
+        payload: Json,
+    ) -> Result<EventEnvelope, LedgerError> {
+        let rec = self.active_lease(run_id, lease)?;
+        let state = self
+            .runs
+            .get_mut(run_id)
+            .ok_or_else(|| LedgerError::UnknownRun {
+                run_id: run_id.to_string(),
+            })?;
+        if state.finished {
+            return Err(LedgerError::RunFinished {
+                run_id: run_id.to_string(),
+            });
+        }
+        let seq = wal_tip_seq(state);
+        let prev_hash = wal_tip_hash(state);
+        let env = system_event(
+            &*self.ids,
+            &*self.clock,
+            state,
+            seq,
+            class,
             payload,
             &prev_hash,
             rec.generation,

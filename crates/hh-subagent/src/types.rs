@@ -250,6 +250,43 @@ impl EnvIsolation {
     }
 }
 
+/// `isolation.context` — `fresh | label_branch` (§5g.2's
+/// `spawn_process{isolation = label_branch}` row; ADR-0054 D4; S4.14b,
+/// R-2.8.2 Stage-4 slice). `fresh` is the ordinary isolated context;
+/// `label_branch` seeds the child at `ctx₀ = ctx(parent at spawn)` with the
+/// parent's effective authority as its clearance and closes its exits to
+/// `abandon | labeled_return | attested_return(validator_ref)` — the
+/// parent's `ctx` never changes while a branch is open and child
+/// approvals/rulings never transfer (`spawn::spawn_branch` /
+/// `branch::return_from_branch`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextIsolation {
+    /// The ordinary isolated context (the pre-S4.14b behaviour).
+    Fresh,
+    /// The label-seeded branch — exits pass through
+    /// [`crate::branch::return_from_branch`].
+    LabelBranch,
+}
+
+impl ContextIsolation {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ContextIsolation::Fresh => "fresh",
+            ContextIsolation::LabelBranch => "label_branch",
+        }
+    }
+
+    /// Parse a canonical spelling.
+    pub fn parse(s: &str) -> Option<ContextIsolation> {
+        Some(match s {
+            "fresh" => ContextIsolation::Fresh,
+            "label_branch" => ContextIsolation::LabelBranch,
+            _ => return None,
+        })
+    }
+}
+
 /// The `DeriveMode` spelling (one spelling table — CC1).
 pub fn derive_mode_str(m: DeriveMode) -> &'static str {
     match m {
@@ -533,6 +570,8 @@ pub struct SubagentSpec {
     pub budget_spec: BudgetSpec,
     /// `budget.mode ∈ {slice, pool}` (must equal `budget_spec.mode`).
     pub budget_mode: BudgetMode,
+    /// `isolation.context` — `fresh | label_branch` (ADR-0054 D4).
+    pub context: ContextIsolation,
     /// `isolation.environment`.
     pub environment: EnvIsolation,
     /// Supplied material (SP-3's only parent→child channel).
@@ -591,7 +630,7 @@ impl SubagentSpec {
             (
                 "isolation",
                 Json::obj([
-                    ("context", Json::str("fresh")),
+                    ("context", Json::str(self.context.as_str())),
                     ("environment", self.environment.to_json()),
                     ("memory_namespace", Json::str("child")),
                 ]),
@@ -682,6 +721,11 @@ impl SubagentSpec {
                 .and_then(AuthorityClass::parse),
             budget_spec,
             budget_mode,
+            context: isolation
+                .get("context")
+                .and_then(Json::as_str)
+                .map(ContextIsolation::parse)
+                .unwrap_or(Some(ContextIsolation::Fresh))?,
             environment: EnvIsolation::from_json(isolation.get("environment")?)?,
             supplies: j
                 .get("supplies")
@@ -757,8 +801,14 @@ impl SubagentSpec {
                     out.push("harness_def is not pinned (version_selector)".into());
                 }
             }
-            ChildProcess::Hosted(_) => {
-                out.push("hosted children are the T7/C2 arm".into());
+            ChildProcess::Hosted(r) => {
+                // S4.14b (§5e.3 T7; AC-R-2.8.1-4): hosted children compose
+                // through the `HostedPlane` seam — the kernel-side check is
+                // the same pin rule `harness_def` carries (a selector is
+                // never admitted; the plane resolves the `OpaqueProcess`).
+                if !r.is_pinned() {
+                    out.push("process.hosted is not pinned (version_selector)".into());
+                }
             }
         }
         if self.goal.origin != GoalOrigin::Delegated {
@@ -1508,6 +1558,19 @@ pub enum SpawnRefused {
     UnattendedAsk { detail: String },
     /// `control.decision{kind: delegate}` without `delegation_reason`.
     MissingDelegationReason,
+    /// `isolation.context = label_branch` requested a ceiling above the
+    /// branch's clearance (the parent's effective authority at spawn —
+    /// §5g.2 `spawn_branch`; `ClearanceExceeded`).
+    ClearanceExceeded {
+        /// The ceiling the branch spec requested.
+        requested: AuthorityClass,
+        /// The branch's clearance.
+        clearance: AuthorityClass,
+    },
+    /// `isolation.context = label_branch` declared without the kernel-side
+    /// `ctx₀`/clearance input (`spawn_branch` supplies it — the parent's
+    /// `ctx` is stamped by the kernel, never carried in the spec).
+    BranchContextMissing,
 }
 
 impl SpawnRefused {
@@ -1527,6 +1590,8 @@ impl SpawnRefused {
             SpawnRefused::DelegationUnavailable => "delegation_unavailable",
             SpawnRefused::UnattendedAsk { .. } => "unattended_ask",
             SpawnRefused::MissingDelegationReason => "missing_delegation_reason",
+            SpawnRefused::ClearanceExceeded { .. } => "clearance_exceeded",
+            SpawnRefused::BranchContextMissing => "branch_context_missing",
         }
     }
 
@@ -1565,7 +1630,16 @@ impl SpawnRefused {
                     Json::Arr(keys.iter().map(|s| Json::str(s.clone())).collect()),
                 ));
             }
-            SpawnRefused::DelegationUnavailable | SpawnRefused::MissingDelegationReason => {}
+            SpawnRefused::ClearanceExceeded {
+                requested,
+                clearance,
+            } => {
+                m.push(("requested", Json::str(requested.as_str())));
+                m.push(("clearance", Json::str(clearance.as_str())));
+            }
+            SpawnRefused::DelegationUnavailable
+            | SpawnRefused::MissingDelegationReason
+            | SpawnRefused::BranchContextMissing => {}
         }
         Json::obj(m)
     }

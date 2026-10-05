@@ -28,31 +28,42 @@
 //! both derive identically (see `compact_range_is_derived` in tests), so no
 //! mutable frontier is load-bearing for correctness.
 
-use hh_identity::idp::{idp_digest, idp_id};
+use hh_identity::idp::{idp_digest_in, idp_id_in, raw_digest, IdentityProfile, IDP_1};
 use hh_wire::json::Json;
-use hh_wire::sha256::sha256_hex;
 
 /// The idp tag anchoring every interior-node digest in the audit tree.
 const TREE_TAG: &str = "idp:ledger-tree/1";
 
-/// The canonical interior-node hash: `idp` over `0x01 ‖ left ‖ right`
-/// (domain-separated from event-hash leaves, which are `ledger.event`
-/// digests — leaf bytes can never be mistaken for node bytes).
-fn node_hash(left: &str, right: &str) -> String {
+/// The canonical interior-node hash under an explicit profile: `idp` over
+/// `0x01 ‖ left ‖ right` (domain-separated from event-hash leaves, which
+/// are `ledger.event` digests — leaf bytes can never be mistaken for node
+/// bytes).
+fn node_hash_in(profile: &IdentityProfile, left: &str, right: &str) -> String {
     let mut preimage = Vec::with_capacity(1 + left.len() + right.len());
     preimage.push(0x01);
     preimage.extend_from_slice(left.as_bytes());
     preimage.extend_from_slice(right.as_bytes());
-    idp_digest(TREE_TAG, &preimage)
+    idp_digest_in(profile, TREE_TAG, &preimage)
 }
 
-/// The deterministic empty-tree head: `idp` over `0x01 ‖ H("") ‖ H("")`
-/// (§5g.6). `H` is the canonical hash function — raw SHA-256 bytes of the
-/// empty string, rendered hex — so `empty_head` is a constant every
-/// implementation can reproduce without any run state.
+/// `node_hash` under `idp/1` — the default profile keeps the one-line
+/// spelling.
+fn node_hash(left: &str, right: &str) -> String {
+    node_hash_in(&IDP_1, left, right)
+}
+
+/// The deterministic empty-tree head under an explicit profile: `idp`
+/// over `0x01 ‖ H_p("") ‖ H_p("")` (§5g.6), where `H_p` is the profile's
+/// hash — `empty_head` is a constant every implementation can reproduce
+/// without any run state.
+pub fn empty_head_in(profile: &IdentityProfile) -> String {
+    let h = raw_digest(profile, b"");
+    node_hash_in(profile, &h, &h)
+}
+
+/// The idp/1 empty-tree head.
 pub fn empty_head() -> String {
-    let h = sha256_hex(b"");
-    node_hash(&h, &h)
+    empty_head_in(&IDP_1)
 }
 
 /// The largest power of two strictly less than `n` (n ≥ 2) — the RFC-6962
@@ -65,18 +76,30 @@ fn largest_pow2_lt(n: usize) -> usize {
     k
 }
 
-/// `MTH(leaves)` — the Merkle tree head over a leaf slice. `leaves` are the
-/// canonical leaf hashes (the event `hash` strings), already digests; the
-/// leaf tag is folded into that upstream `ledger.event` hash.
-pub fn mth(leaves: &[String]) -> String {
+/// `MTH(leaves)` under an explicit profile — the rotation slice's
+/// recomputation path (R-2.8.6): the same compact-range shape, the
+/// profile's node digest.
+pub fn mth_in(profile: &IdentityProfile, leaves: &[String]) -> String {
     match leaves.len() {
-        0 => empty_head(),
+        0 => empty_head_in(profile),
         1 => leaves[0].clone(),
         n => {
             let k = largest_pow2_lt(n);
-            node_hash(&mth(&leaves[..k]), &mth(&leaves[k..]))
+            node_hash_in(
+                profile,
+                &mth_in(profile, &leaves[..k]),
+                &mth_in(profile, &leaves[k..]),
+            )
         }
     }
+}
+
+/// `MTH(leaves)` — the Merkle tree head over a leaf slice under `idp/1`.
+/// `leaves` are the canonical leaf hashes (the event `hash` strings),
+/// already digests; the leaf tag is folded into that upstream
+/// `ledger.event` hash.
+pub fn mth(leaves: &[String]) -> String {
+    mth_in(&IDP_1, leaves)
 }
 
 /// `MTH(l[0..size))` — the head of the prefix of `leaves`. `size` may exceed
@@ -84,6 +107,11 @@ pub fn mth(leaves: &[String]) -> String {
 /// bounds first; kept total so proof verification cannot panic.
 pub fn mth_prefix(leaves: &[String], size: usize) -> String {
     mth(&leaves[..size.min(leaves.len())])
+}
+
+/// `mth_prefix` under an explicit profile.
+pub fn mth_prefix_in(profile: &IdentityProfile, leaves: &[String], size: usize) -> String {
+    mth_in(profile, &leaves[..size.min(leaves.len())])
 }
 
 /// The maintained compact-range state for one run: the list of
@@ -183,7 +211,7 @@ pub fn prove_inclusion(leaves: &[String], index: usize, size: usize) -> Option<I
         return None;
     }
     let mut path = Vec::new();
-    audit_path(&leaves[..size], index, &mut path);
+    audit_path(&leaves[..size], index, &mut path, &IDP_1);
     Some(InclusionProof {
         leaf_index: index as u64,
         tree_size: size as u64,
@@ -192,18 +220,18 @@ pub fn prove_inclusion(leaves: &[String], index: usize, size: usize) -> Option<I
     })
 }
 
-fn audit_path(leaves: &[String], index: usize, path: &mut Vec<String>) {
+fn audit_path(leaves: &[String], index: usize, path: &mut Vec<String>, profile: &IdentityProfile) {
     let n = leaves.len();
     if n == 1 {
         return;
     }
     let k = largest_pow2_lt(n);
     if index < k {
-        audit_path(&leaves[..k], index, path);
-        path.push(mth(&leaves[k..]));
+        audit_path(&leaves[..k], index, path, profile);
+        path.push(mth_in(profile, &leaves[k..]));
     } else {
-        audit_path(&leaves[k..], index - k, path);
-        path.push(mth(&leaves[..k]));
+        audit_path(&leaves[k..], index - k, path, profile);
+        path.push(mth_in(profile, &leaves[..k]));
     }
 }
 
@@ -211,6 +239,17 @@ fn audit_path(leaves: &[String], index: usize, path: &mut Vec<String>) {
 /// the caller supplies the head it independently holds (e.g. from a signed
 /// checkpoint), which is what makes the proof meaningful.
 pub fn verify_inclusion(proof: &InclusionProof, leaf_hash: &str, tree_head: &str) -> bool {
+    verify_inclusion_in(&IDP_1, proof, leaf_hash, tree_head)
+}
+
+/// `verify_inclusion` under an explicit profile (rotation claims re-verify
+/// under the profile the claim names — §5g.6 §2).
+pub fn verify_inclusion_in(
+    profile: &IdentityProfile,
+    proof: &InclusionProof,
+    leaf_hash: &str,
+    tree_head: &str,
+) -> bool {
     if proof.tree_size == 0 || proof.leaf_index >= proof.tree_size {
         return false;
     }
@@ -226,13 +265,13 @@ pub fn verify_inclusion(proof: &InclusionProof, leaf_hash: &str, tree_head: &str
             return false;
         }
         if fn_ % 2 == 1 || fn_ == sn {
-            r = node_hash(p, &r);
+            r = node_hash_in(profile, p, &r);
             while fn_ != 0 && fn_.is_multiple_of(2) {
                 fn_ /= 2;
                 sn /= 2;
             }
         } else {
-            r = node_hash(&r, p);
+            r = node_hash_in(profile, &r, p);
         }
         fn_ /= 2;
         sn /= 2;
@@ -262,13 +301,24 @@ pub fn prove_consistency(
     from_size: usize,
     to_size: usize,
 ) -> Option<ConsistencyProof> {
+    prove_consistency_in(&IDP_1, leaves, from_size, to_size)
+}
+
+/// `prove_consistency` under an explicit profile (the post-rotation claim
+/// path — §5g.6 §2).
+pub fn prove_consistency_in(
+    profile: &IdentityProfile,
+    leaves: &[String],
+    from_size: usize,
+    to_size: usize,
+) -> Option<ConsistencyProof> {
     if from_size == 0 || from_size > to_size || to_size > leaves.len() {
         return None;
     }
     let path = if from_size == to_size {
         Vec::new()
     } else {
-        subproof(&leaves[..to_size], from_size, true)
+        subproof(&leaves[..to_size], from_size, true, profile)
     };
     Some(ConsistencyProof {
         from_size: from_size as u64,
@@ -281,23 +331,28 @@ pub fn prove_consistency(
 /// `complete_subtree` (`b` in the RFC) is true when `m` divides the current
 /// range exactly — the m-leaf prefix then IS the range and contributes no
 /// node.
-fn subproof(leaves: &[String], m: usize, complete_subtree: bool) -> Vec<String> {
+fn subproof(
+    leaves: &[String],
+    m: usize,
+    complete_subtree: bool,
+    profile: &IdentityProfile,
+) -> Vec<String> {
     let n = leaves.len();
     if m == n {
         return if complete_subtree {
             Vec::new()
         } else {
-            vec![mth(leaves)]
+            vec![mth_in(profile, leaves)]
         };
     }
     let k = largest_pow2_lt(n);
     if m <= k {
-        let mut p = subproof(&leaves[..k], m, complete_subtree);
-        p.push(mth(&leaves[k..]));
+        let mut p = subproof(&leaves[..k], m, complete_subtree, profile);
+        p.push(mth_in(profile, &leaves[k..]));
         p
     } else {
-        let mut p = subproof(&leaves[k..], m - k, false);
-        p.push(mth(&leaves[..k]));
+        let mut p = subproof(&leaves[k..], m - k, false, profile);
+        p.push(mth_in(profile, &leaves[..k]));
         p
     }
 }
@@ -306,6 +361,19 @@ fn subproof(leaves: &[String], m: usize, complete_subtree: bool) -> Vec<String> 
 /// `to_size`-leaf tree) as prefix-consistent — the fold of RFC 6962 §2.1.2,
 /// including the "first is a power of two ⇒ prepend `first_hash`" rule.
 pub fn verify_consistency(proof: &ConsistencyProof, head1: &str, head2: &str) -> bool {
+    verify_consistency_in(&IDP_1, proof, head1, head2)
+}
+
+/// `verify_consistency` under an explicit profile — the node fold uses the
+/// profile's digest, so a proof is only meaningful within one profile
+/// (a rotation claim's extension binding is its `rehash`, not a
+/// cross-profile proof — ADR-0307).
+pub fn verify_consistency_in(
+    profile: &IdentityProfile,
+    proof: &ConsistencyProof,
+    head1: &str,
+    head2: &str,
+) -> bool {
     let m = proof.from_size;
     let n = proof.to_size;
     if m == 0 || m > n {
@@ -339,14 +407,14 @@ pub fn verify_consistency(proof: &ConsistencyProof, head1: &str, head2: &str) ->
             return false;
         }
         if fn_ % 2 == 1 || fn_ == sn {
-            fr = node_hash(c, &fr);
-            sr = node_hash(c, &sr);
+            fr = node_hash_in(profile, c, &fr);
+            sr = node_hash_in(profile, c, &sr);
             while fn_ != 0 && fn_.is_multiple_of(2) {
                 fn_ /= 2;
                 sn /= 2;
             }
         } else {
-            sr = node_hash(&sr, c);
+            sr = node_hash_in(profile, &sr, c);
         }
         fn_ /= 2;
         sn /= 2;
@@ -463,6 +531,19 @@ pub struct CheckpointClaim {
     pub signatures: Vec<Json>,
     /// The run's `audit_policy_ref` echoed into the claim.
     pub audit_policy_ref: Option<String>,
+    /// The identity profile the claim's digests (`tree_head`,
+    /// `chain_hash`, `cross_run_anchors`) are computed under — absent on
+    /// pre-rotation claims, where `idp/1` is the only registered profile
+    /// (parse defaults to `idp/1`; §5g.6 §2).
+    pub identity_profile: Option<String>,
+    /// The rotation claim's `rehash{idp, chain_hash, tree_head}` — the
+    /// covered prefix's digests recomputed under the rotated-to profile.
+    pub rehash: Option<Json>,
+    /// The `security.audit.bridge` event the rotation minted
+    /// (`bridge_record_ref`).
+    pub bridge_record_ref: Option<String>,
+    /// The attestation binding the checkpoint (optional; §5g.6 §2).
+    pub attestation_ref: Option<String>,
     /// The raw payload (for re-deriving `idp`/signing preimage).
     pub payload: Json,
 }
@@ -504,6 +585,19 @@ pub fn parse_checkpoint(payload: &Json) -> Option<CheckpointClaim> {
             .get("audit_policy_ref")
             .and_then(|j| j.as_str())
             .map(str::to_string),
+        identity_profile: payload
+            .get("identity_profile")
+            .and_then(|j| j.as_str())
+            .map(str::to_string),
+        rehash: payload.get("rehash").cloned(),
+        bridge_record_ref: payload
+            .get("bridge_record_ref")
+            .and_then(|j| j.as_str())
+            .map(str::to_string),
+        attestation_ref: payload
+            .get("attestation_ref")
+            .and_then(|j| j.as_str())
+            .map(str::to_string),
         payload: payload.clone(),
     })
 }
@@ -535,15 +629,23 @@ pub fn unsigned_checkpoint(payload: &Json) -> Json {
     }
 }
 
-/// The checkpoint claim's `idp` — `idp/1` over the canonical bytes of the
-/// unsigned claim (one identity scheme — CC1; same preimage the signer signs).
-pub fn checkpoint_idp(payload: &Json) -> String {
-    idp_id(
+/// The checkpoint claim's `idp` under an explicit profile — the claim
+/// digest mints under the profile the claim's `identity_profile` member
+/// names (§5g.6 §2; a rotation claim's `idp` is under `to_idp`).
+pub fn checkpoint_idp_in(profile: &IdentityProfile, payload: &Json) -> String {
+    idp_id_in(
+        profile,
         "idp:ledger-checkpoint/1",
         unsigned_checkpoint(payload)
             .to_canonical_string()
             .as_bytes(),
     )
+}
+
+/// The checkpoint claim's `idp` — `idp/1` over the canonical bytes of the
+/// unsigned claim (one identity scheme — CC1; same preimage the signer signs).
+pub fn checkpoint_idp(payload: &Json) -> String {
+    checkpoint_idp_in(&IDP_1, payload)
 }
 
 /// The canonical byte string the checkpoint signature covers: the unsigned

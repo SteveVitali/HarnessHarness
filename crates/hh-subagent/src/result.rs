@@ -637,6 +637,7 @@ pub(crate) fn default_spec() -> SubagentSpec {
         ceiling: None,
         budget_spec: hh_budget::spec::BudgetSpec::default(),
         budget_mode: BudgetMode::Pool,
+        context: ContextIsolation::Fresh,
         environment: EnvIsolation::None,
         supplies: Supplies::default(),
         return_contract: ReturnContract::default(),

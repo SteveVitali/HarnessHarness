@@ -12,6 +12,7 @@
 //! standard is not an ecosystem commitment — ADR-0036 D2 / RK-09 / CC4).
 
 use hh_wire::sha256::sha256_hex;
+use hh_wire::sha512::sha512_hex;
 
 use crate::kinds::RecordKind;
 
@@ -37,7 +38,7 @@ pub struct IdentityProfile {
     pub id_text_form: &'static str,
 }
 
-/// The one mandatory-writable identity profile: **`idp/1`** (spec §8.3 #9 C0/Stage 1).
+/// The one mandatory-writable identity profile at genesis: **`idp/1`** (spec §8.3 #9 C0/Stage 1).
 pub const IDP_1: IdentityProfile = IdentityProfile {
     idp_id: "idp/1",
     hash_algorithm: "sha256",
@@ -46,6 +47,39 @@ pub const IDP_1: IdentityProfile = IdentityProfile {
     tree_rule_version: "tree/1",
     id_text_form: "<algorithm>:<lowercase hex>",
 };
+
+/// The `idp/2` companion profile (spec §5g.6 §2, R-2.8.6; ADR-0307) — the
+/// sha-512 digest over the same `hh-json/1` canonical form and the same
+/// `idp ∥ domain ∥ bytes` framing. Ids minted under `idp/2` render
+/// `sha512:<128 lowercase hex>`; they parse only under `idp/2` (the
+/// profile is a parameter of verification, never coerced — N2).
+pub const IDP_2: IdentityProfile = IdentityProfile {
+    idp_id: "idp/2",
+    hash_algorithm: "sha512",
+    digest_length: 128,
+    canonical_form_version: "hh-json/1",
+    tree_rule_version: "tree/1",
+    id_text_form: "<algorithm>:<lowercase hex>",
+};
+
+/// The registered profile catalogue — the closed set `profile_for`/
+/// `parse_id_any` recognize (§5g.6 §2: profiles are named by their idp
+/// id; a name outside this set is `UnknownIdentityProfile`, never a
+/// silent default — N2).
+pub const PROFILES: &[IdentityProfile] = &[IDP_1, IDP_2];
+
+/// The registered profile record for an idp id (`idp/1`, `idp/2`), or
+/// `None` — callers turn the `None` into `UnknownIdentityProfile`.
+pub fn profile_for(idp_id: &str) -> Option<&'static IdentityProfile> {
+    PROFILES.iter().find(|p| p.idp_id == idp_id)
+}
+
+/// The registered profile whose `hash_algorithm` is `algo` — the
+/// id-text → profile dispatch (`sha256:` ⇒ idp/1, `sha512:` ⇒ idp/2).
+/// `None` when no registered profile uses that algorithm tag.
+pub fn profile_for_algorithm(algo: &str) -> Option<&'static IdentityProfile> {
+    PROFILES.iter().find(|p| p.hash_algorithm == algo)
+}
 
 /// The unit separator that frames `idp ∥ domain_tag ∥ bytes`. Because neither `idp_id` nor any
 /// [`RecordKind::domain_tag`] contains it, the framing is unambiguous — `idp/1 ∥ blob ∥ X` can
@@ -105,14 +139,7 @@ impl ContentAddress {
 /// ∥ payload`. This is the *single* content-addressing primitive (CC1); `address`, `identify`,
 /// the configuration ids and the `schema_hash` all funnel through it.
 pub fn idp_digest(domain_tag: &str, payload: &[u8]) -> String {
-    debug_assert!(!domain_tag.as_bytes().contains(&SEP));
-    let mut framed = Vec::with_capacity(IDP_1.idp_id.len() + domain_tag.len() + payload.len() + 2);
-    framed.extend_from_slice(IDP_1.idp_id.as_bytes());
-    framed.push(SEP);
-    framed.extend_from_slice(domain_tag.as_bytes());
-    framed.push(SEP);
-    framed.extend_from_slice(payload);
-    sha256_hex(&framed)
+    sha256_hex(&frame(&IDP_1, domain_tag, payload))
 }
 
 /// The rendered id (`<algorithm>:<hex>`) over `domain_tag ∥ payload` under `idp/1`.
@@ -122,6 +149,92 @@ pub fn idp_id(domain_tag: &str, payload: &[u8]) -> String {
         IDP_1.hash_algorithm,
         idp_digest(domain_tag, payload)
     )
+}
+
+/// The framed preimage bytes — `idp ∥ SEP ∥ domain_tag ∥ SEP ∥ payload`.
+/// One construction shared by every profile (CC1): profiles differ only
+/// in the hash applied to this framing, never in the framing itself.
+fn frame(profile: &IdentityProfile, domain_tag: &str, payload: &[u8]) -> Vec<u8> {
+    debug_assert!(!domain_tag.as_bytes().contains(&SEP));
+    let mut framed =
+        Vec::with_capacity(profile.idp_id.len() + domain_tag.len() + payload.len() + 2);
+    framed.extend_from_slice(profile.idp_id.as_bytes());
+    framed.push(SEP);
+    framed.extend_from_slice(domain_tag.as_bytes());
+    framed.push(SEP);
+    framed.extend_from_slice(payload);
+    framed
+}
+
+/// Apply a profile's `hash_algorithm` to the framed bytes. `None` names
+/// an algorithm no registered profile provides — a registry-level
+/// inconsistency, which callers surface as `UnknownIdentityProfile` (the
+/// catalogue is closed; this arm is unreachable through `PROFILES`).
+fn digest_for_algorithm(algo: &str, framed: &[u8]) -> Option<String> {
+    match algo {
+        "sha256" => Some(sha256_hex(framed)),
+        "sha512" => Some(sha512_hex(framed)),
+        _ => None,
+    }
+}
+
+/// The raw (unframed) digest of `bytes` under a profile's
+/// `hash_algorithm` — e.g. the audit tree's `H("")` constant. `None` when
+/// the profile's algorithm is unregistered (a catalogue bug, not an input
+/// error — see [`digest_for_algorithm`]).
+pub fn raw_digest(profile: &IdentityProfile, bytes: &[u8]) -> String {
+    digest_for_algorithm(profile.hash_algorithm, bytes).unwrap_or_else(|| {
+        panic!(
+            "identity profile {} registers unknown hash algorithm {}",
+            profile.idp_id, profile.hash_algorithm
+        )
+    })
+}
+
+/// The profile-parameterized construction (spec §5g.6 §2): the lowercase
+/// hex of `profile.hash_algorithm(idp_id ∥ SEP ∥ domain_tag ∥ SEP ∥
+/// payload)`. Returns `None` only if `profile` is not a registered
+/// profile — construct it via [`profile_for`].
+pub fn idp_digest_in(profile: &IdentityProfile, domain_tag: &str, payload: &[u8]) -> String {
+    let framed = frame(profile, domain_tag, payload);
+    digest_for_algorithm(profile.hash_algorithm, &framed).unwrap_or_else(|| {
+        panic!(
+            "identity profile {} registers unknown hash algorithm {}",
+            profile.idp_id, profile.hash_algorithm
+        )
+    })
+}
+
+/// Convenience over [`idp_digest_in`] by profile name; `None` when
+/// `idp_name` is not a registered profile (`UnknownIdentityProfile` is
+/// the caller's refusal — never a silent default, N2).
+pub fn digest_named(idp_name: &str, domain_tag: &str, payload: &[u8]) -> Option<String> {
+    profile_for(idp_name).map(|p| idp_digest_in(p, domain_tag, payload))
+}
+
+/// The rendered id under an explicit profile (`<profile.algorithm>:<hex>`).
+pub fn idp_id_in(profile: &IdentityProfile, domain_tag: &str, payload: &[u8]) -> String {
+    format!(
+        "{}:{}",
+        profile.hash_algorithm,
+        idp_digest_in(profile, domain_tag, payload)
+    )
+}
+
+/// `address(bytes, media_type)` under an explicit profile — the same
+/// `blob` domain, the profile's digest.
+pub fn address_in(
+    profile: &'static IdentityProfile,
+    bytes: &[u8],
+    media_type: impl Into<String>,
+) -> ContentAddress {
+    ContentAddress {
+        idp: profile.idp_id,
+        algorithm: profile.hash_algorithm,
+        digest: idp_digest_in(profile, "blob", bytes),
+        media_type: media_type.into(),
+        size: bytes.len() as u64,
+    }
 }
 
 /// `address(bytes, media_type) → ContentAddress` (§8.3 #2). Domain tag `blob`; streaming-safe
@@ -149,10 +262,19 @@ pub fn identify_bytes(kind: RecordKind, canonical_bytes: &[u8]) -> String {
     idp_id(kind.domain_tag(), canonical_bytes)
 }
 
-/// Parse an id into `(algorithm, hex)` with the N1/N2 format checks. A missing tag, unknown
-/// algorithm, wrong length or non-hex digit is rejected here so a consumer never treats a
-/// truncated or untagged id as valid.
+/// Parse an id into `(algorithm, hex)` with the N1/N2 format checks under the
+/// idp/1 profile. A missing tag, unknown algorithm, wrong length or non-hex
+/// digit is rejected here so a consumer never treats a truncated or untagged
+/// id as valid. `idp/2` ids (`sha512:<128 hex>`) refuse `AlgorithmMismatch`
+/// here — parse them via [`parse_id_in`]/[`parse_id_any`].
 pub fn parse_id(id: &str) -> Result<ParsedId, IdError> {
+    parse_id_in(&IDP_1, id)
+}
+
+/// Parse an id under an explicit profile — the tag, length and alphabet
+/// checks are the profile's (`sha512:` refuses under idp/1 and parses under
+/// idp/2; §5g.6 §2's "ids never verify across profiles" — N2).
+pub fn parse_id_in(profile: &IdentityProfile, id: &str) -> Result<ParsedId, IdError> {
     let (algo, digest) = match id.split_once(':') {
         Some((a, d)) if !a.is_empty() => (a, d),
         _ => {
@@ -161,15 +283,15 @@ pub fn parse_id(id: &str) -> Result<ParsedId, IdError> {
             })
         }
     };
-    if algo != IDP_1.hash_algorithm {
+    if algo != profile.hash_algorithm {
         return Err(IdError::AlgorithmMismatch {
             got: algo.to_string(),
         });
     }
-    if digest.len() != IDP_1.digest_length {
+    if digest.len() != profile.digest_length {
         return Err(IdError::TruncatedId {
             got_len: digest.len(),
-            want_len: IDP_1.digest_length,
+            want_len: profile.digest_length,
         });
     }
     if !digest
@@ -184,6 +306,25 @@ pub fn parse_id(id: &str) -> Result<ParsedId, IdError> {
         algorithm: algo.to_string(),
         digest_hex: digest.to_string(),
     })
+}
+
+/// Parse an id under whichever registered profile its algorithm tag names —
+/// the multi-profile entry point (§5g.6 §2's readable-set). An unknown tag
+/// is `UnknownIdentityProfile` (never silently re-tagged).
+pub fn parse_id_any(id: &str) -> Result<(&'static IdentityProfile, ParsedId), IdError> {
+    let algo = match id.split_once(':') {
+        Some((a, d)) if !a.is_empty() && !d.is_empty() => a,
+        _ => {
+            return Err(IdError::AlgorithmMismatch {
+                got: id.to_string(),
+            })
+        }
+    };
+    let profile = profile_for_algorithm(algo).ok_or_else(|| IdError::UnknownIdentityProfile {
+        idp: algo.to_string(),
+    })?;
+    let parsed = parse_id_in(profile, id)?;
+    Ok((profile, parsed))
 }
 
 /// `verify(id, blob)` for a content address: recompute the blob address and compare. Format
@@ -210,6 +351,44 @@ pub fn verify_record(
 ) -> Result<VerifyOutcome, IdError> {
     let parsed = parse_id(id)?;
     let computed = idp_digest(kind.domain_tag(), canonical_bytes);
+    Ok(if parsed.digest_hex == computed {
+        VerifyOutcome::Ok
+    } else {
+        VerifyOutcome::Mismatch {
+            expected: parsed.digest_hex,
+            computed,
+        }
+    })
+}
+
+/// `verify` under an explicit profile (the id must parse under that
+/// profile — `parse_id_in` refusals propagate).
+pub fn verify_blob_in(
+    profile: &IdentityProfile,
+    id: &str,
+    bytes: &[u8],
+) -> Result<VerifyOutcome, IdError> {
+    let parsed = parse_id_in(profile, id)?;
+    let computed = idp_digest_in(profile, "blob", bytes);
+    Ok(if parsed.digest_hex == computed {
+        VerifyOutcome::Ok
+    } else {
+        VerifyOutcome::Mismatch {
+            expected: parsed.digest_hex,
+            computed,
+        }
+    })
+}
+
+/// `verify_record` under an explicit profile.
+pub fn verify_record_in(
+    profile: &IdentityProfile,
+    id: &str,
+    kind: RecordKind,
+    canonical_bytes: &[u8],
+) -> Result<VerifyOutcome, IdError> {
+    let parsed = parse_id_in(profile, id)?;
+    let computed = idp_digest_in(profile, kind.domain_tag(), canonical_bytes);
     Ok(if parsed.digest_hex == computed {
         VerifyOutcome::Ok
     } else {
@@ -305,5 +484,66 @@ mod tests {
         assert_ne!(idp_digest("blob", b"x"), idp_digest("tree", b"x"));
         // The framing is not naive concatenation: idp/1 ∥ "a" ∥ "bc" ≠ idp/1 ∥ "ab" ∥ "c".
         assert_ne!(idp_digest("a", b"bc"), idp_digest("ab", b"c"));
+    }
+
+    #[test]
+    fn idp_2_is_registered_sha512_and_ids_are_profile_separated() {
+        // §5g.6 §2: the profile is a parameter of the digest — equal bytes
+        // under idp/1 and idp/2 produce different ids, and neither parses
+        // under the other.
+        assert_eq!(IDP_2.idp_id, "idp/2");
+        assert_eq!(IDP_2.hash_algorithm, "sha512");
+        assert_eq!(IDP_2.digest_length, 128);
+        assert_eq!(profile_for("idp/2").map(|p| p.idp_id), Some("idp/2"));
+        assert!(profile_for("idp/9").is_none());
+
+        let ca1 = address(b"hello", "text/plain");
+        let ca2 = address_in(&IDP_2, b"hello", "text/plain");
+        assert!(ca2.id().starts_with("sha512:"));
+        assert_eq!(ca2.id().len(), "sha512:".len() + 128);
+        assert_ne!(ca1.id(), ca2.id());
+    }
+
+    #[test]
+    fn parse_dispatches_by_profile_and_never_across() {
+        let id1 = address(b"x", "text/plain").id();
+        let id2 = address_in(&IDP_2, b"x", "text/plain").id();
+        // Each parses under its own profile…
+        assert!(parse_id_in(&IDP_1, &id1).is_ok());
+        assert!(parse_id_in(&IDP_2, &id2).is_ok());
+        // …and refuses under the other (the algorithm tag is checked
+        // first — a sha256 id under idp/2 is an AlgorithmMismatch before
+        // any length check).
+        assert!(matches!(
+            parse_id_in(&IDP_1, &id2),
+            Err(IdError::AlgorithmMismatch { .. })
+        ));
+        assert!(matches!(
+            parse_id_in(&IDP_2, &id1),
+            Err(IdError::AlgorithmMismatch { .. })
+        ));
+        // `parse_id_any` dispatches on the algorithm tag.
+        assert_eq!(parse_id_any(&id1).unwrap().0.idp_id, "idp/1");
+        assert_eq!(parse_id_any(&id2).unwrap().0.idp_id, "idp/2");
+        assert!(matches!(
+            parse_id_any(&format!("sha1:{}", "a".repeat(40))),
+            Err(IdError::UnknownIdentityProfile { .. })
+        ));
+    }
+
+    #[test]
+    fn verify_in_profile_ok_and_mismatch() {
+        let bytes = b"payload";
+        let id2 = address_in(&IDP_2, bytes, "text/plain").id();
+        assert_eq!(
+            verify_blob_in(&IDP_2, &id2, bytes).unwrap(),
+            VerifyOutcome::Ok
+        );
+        assert!(matches!(
+            verify_blob_in(&IDP_2, &id2, b"other").unwrap(),
+            VerifyOutcome::Mismatch { .. }
+        ));
+        // Never verifies across profiles (N2).
+        assert!(verify_blob_in(&IDP_1, &id2, bytes).is_err());
     }
 }
