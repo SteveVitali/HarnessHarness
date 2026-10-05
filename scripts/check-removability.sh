@@ -117,3 +117,47 @@ print('hh-subagent is edge-free upward; hh-orchestrator is its only consumer')
 "
 
 echo "check-removability: S4.6 subagent/orchestrator boundary verified"
+
+echo "== removability(S4.9): C4 fleet tier — hh-fleet optional; hh-embed is its only consumer =="
+# §5i.1 CC6: the organizational layer is a removable tier. `hh-embed`'s
+# `tier-c4` feature is the single consumer (an *optional* dependency);
+# absent ⇒ the `fleet.*` ops stay in the schema (CC7 single source) and
+# answer `Unsupported{by: "tier-c4"}` — a typed refusal, never silent
+# degrade. Lower tiers are untouched: hh-fleet consumes hh-ledger /
+# hh-budget / hh-monitor / hh-embed-schema and nothing below C4 depends
+# on hh-fleet.
+cargo build -p hh-embed --no-default-features
+cargo build -p hh-embed
+cargo build -p hh-fleet
+cargo metadata --format-version 1 --no-deps | python3 -c "
+import json,sys
+meta=json.load(sys.stdin)
+normal=lambda d: d.get('kind') in (None,'normal')
+bad=[]
+consumers=[]
+for pkg in meta['packages']:
+    name=pkg['name']
+    for d in pkg['dependencies']:
+        if name == 'hh-fleet' and d['name'] == 'hh-embed':
+            bad.append('hh-fleet -> hh-embed (C4 depends on its consumer)')
+        if d['name'] == 'hh-fleet' and name != 'hh-fleet':
+            consumers.append((name, 'optional' if d.get('optional') else 'REQUIRED'))
+for name, kind in consumers:
+    if name != 'hh-embed':
+        bad.append(name + ' -> hh-fleet (consumer outside the boundary)')
+    elif kind == 'REQUIRED':
+        bad.append('hh-embed -> hh-fleet must be OPTIONAL (tier-c4 feature)')
+for pkg in meta['packages']:
+    if pkg['name'] != 'hh-embed':
+        continue
+    feats = pkg.get('features', {})
+    if 'tier-c4' not in feats:
+        bad.append('hh-embed missing the tier-c4 feature gate')
+if bad:
+    print('fleet removability violations:')
+    for b in bad: print('  ' + b)
+    sys.exit(1)
+print('hh-fleet is edge-free upward; hh-embed consumes it behind tier-c4 only')
+"
+
+echo "check-removability: S4.9 fleet boundary verified"

@@ -181,6 +181,21 @@ pub const OBLIGATIONS: &[AuditObligation] = &[
         "rule_ref",
         false,
     ),
+    // S4.9 (§5i.1 #11; ADR-0205–0207) — `fleet_anchor`: every
+    // `control.work_item.dispatched{verb:"run"}` row (the fleet's
+    // `run_ref` stamp on a dispatched agent run) anchors the child's
+    // `lifecycle.run.created` in `causes[]`. The append gate already
+    // resolved the ref — the obligation is the audit-side recheck that
+    // the cross-run anchor member exists (the child's own `run.created`
+    // carries the same link back through its `causes`/`spawn_event`).
+    obligation(
+        "fleet_anchor",
+        "control.work_item.dispatched",
+        ObligationQuantifier::AtLeastOne,
+        "lifecycle.run.created",
+        "causes",
+        false,
+    ),
 ];
 
 /// Obligations of the I-A3 set whose link machinery lands at a later stage —
@@ -191,15 +206,14 @@ pub const OBLIGATIONS: &[AuditObligation] = &[
 /// - `evolution_link` (`transitioned{to: proposed}`/`applied` paired by
 ///   `hypothesis_ref`/`evidence_refs` — the evolution pipeline);
 /// - `producer_resolution` (`component_variant_ref` resolves to a loaded,
-///   pin-attested extension or a sealed-definition member — the registry fold);
-/// - `fleet_anchor` (activation `lifecycle.run.created.causes[]` ↔ the fleet
-///   run's `control.work_item.dispatched` — §05i).
-pub const DEFERRED_OBLIGATIONS: &[&str] = &[
-    "subagent_anchor",
-    "evolution_link",
-    "producer_resolution",
-    "fleet_anchor",
-];
+///   pin-attested extension or a sealed-definition member — the registry fold).
+///
+/// `fleet_anchor` graduated at S4.9 — it lives in [`OBLIGATIONS`] now:
+/// `control.work_item.dispatched{verb:"run"}` rows anchor the child's
+/// `lifecycle.run.created` in `causes[]`, and the child's own seq-0 row
+/// carries the same `spawn_event` link in its `causes` (§5i.1 #11).
+pub const DEFERRED_OBLIGATIONS: &[&str] =
+    &["subagent_anchor", "evolution_link", "producer_resolution"];
 
 // ── checkpoint signing (R-2.8.6 Stage 2; ADR-0050 §8(a) C0) ──────────────
 
@@ -808,6 +822,31 @@ fn eval_obligation(
                             .any(|k| k.as_str() == b)
                     })
                     .unwrap_or(false);
+                if !ok {
+                    unmet.push(Unmet {
+                        obligation_id: ob.id,
+                        subject: e.event_id.clone(),
+                    });
+                }
+            }
+        }
+        "fleet_anchor" => {
+            for e in events.iter().copied().filter(|e| e.class == ob.class) {
+                // Only the `run_ref` stamp carries the obligation — the
+                // admit/dispatch/retry/conflict verbs have no child run.
+                let is_run_note = e
+                    .payload
+                    .get("dispatch")
+                    .and_then(|d| d.get("run_ref"))
+                    .and_then(Json::as_str)
+                    .is_some();
+                if !is_run_note {
+                    continue;
+                }
+                // The child `lifecycle.run.created` rides `causes[]` (the
+                // append gate resolved the ref — this re-checks the
+                // member exists and crosses the run boundary).
+                let ok = e.causes.iter().any(|c| c.run_id != e.run_id);
                 if !ok {
                     unmet.push(Unmet {
                         obligation_id: ob.id,

@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:a3f268217bfebf6da0783359e6e8109613df000f4e03dc28439d8ba8a2f9a744";
+    "sha256:cb50dcde26c5e52fb3ca213b313b8fa9fae138d4601b7c13801b045430676132";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -5632,6 +5632,186 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `env.snapshot` → `json` (see the contract registry).
     pub fn env_snapshot(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("env.snapshot", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.accountability_record` → `json` (see the contract registry).
+    pub fn fleet_accountability_record(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.accountability_record", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.acknowledge_owner` → `json` (see the contract registry).
+    pub fn fleet_acknowledge_owner(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.acknowledge_owner", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.annotate` → `json` (see the contract registry).
+    pub fn fleet_annotate(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.annotate", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.audit_link` → `json` (see the contract registry).
+    pub fn fleet_audit_link(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.audit_link", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.bind_source` → `json` (see the contract registry).
+    pub fn fleet_bind_source(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.bind_source", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.block` → `json` (see the contract registry).
+    pub fn fleet_block(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.block", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.cancel` → `json` (see the contract registry).
+    pub fn fleet_cancel(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.cancel", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.check_activation_delta` → `json` (see the contract registry).
+    pub fn fleet_check_activation_delta(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.check_activation_delta", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.claim` → `json` (see the contract registry).
+    pub fn fleet_claim(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.claim", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.create_work_item` → `json` (see the contract registry).
+    pub fn fleet_create_work_item(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.create_work_item", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.dispatch` → `json` (see the contract registry).
+    pub fn fleet_dispatch(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.dispatch", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.dispatch_note` → `json` (see the contract registry).
+    pub fn fleet_dispatch_note(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.dispatch_note", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.ensure` → `json` (see the contract registry).
+    pub fn fleet_ensure(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.ensure", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.escalate` → `json` (see the contract registry).
+    pub fn fleet_escalate(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.escalate", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.fleet_view` → `json` (see the contract registry).
+    pub fn fleet_fleet_view(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.fleet_view", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.handoff` → `json` (see the contract registry).
+    pub fn fleet_handoff(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.handoff", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.list` → `json` (see the contract registry).
+    pub fn fleet_list(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.list", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.observe` → `json` (see the contract registry).
+    pub fn fleet_observe(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.observe", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.open` → `json` (see the contract registry).
+    pub fn fleet_open(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.open", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.reconcile` → `json` (see the contract registry).
+    pub fn fleet_reconcile(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.reconcile", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.resolve_escalation` → `json` (see the contract registry).
+    pub fn fleet_resolve_escalation(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.resolve_escalation", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.restore` → `json` (see the contract registry).
+    pub fn fleet_restore(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.restore", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.resume_from_handoff` → `json` (see the contract registry).
+    pub fn fleet_resume_from_handoff(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.resume_from_handoff", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.set_owner` → `json` (see the contract registry).
+    pub fn fleet_set_owner(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.set_owner", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.settle` → `json` (see the contract registry).
+    pub fn fleet_settle(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.settle", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.state_map` → `json` (see the contract registry).
+    pub fn fleet_state_map(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.state_map", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.stop` → `json` (see the contract registry).
+    pub fn fleet_stop(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.stop", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.transfer_owner` → `json` (see the contract registry).
+    pub fn fleet_transfer_owner(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.transfer_owner", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.unblock` → `json` (see the contract registry).
+    pub fn fleet_unblock(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.unblock", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.work_item` → `json` (see the contract registry).
+    pub fn fleet_work_item(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.work_item", params.clone())?;
         Ok(raw)
     }
 

@@ -80,6 +80,13 @@ pub struct EmbedService {
     /// JournalSubscription` (the results-store post-durability journal;
     /// S4.3/R-2.10.5).
     pub(crate) results_subscriptions: BTreeMap<String, hh_results::journal::JournalSubscription>,
+    /// Fleet-activation engines held across `fleet.*` calls (S4.9;
+    /// `fleet_run → FleetEngine` — the writer lease persists like
+    /// `experiment_engines`; the fence still lives in the ledger). The
+    /// field itself is tier-gated: `--no-default-features` compiles the
+    /// refusal-only `fleet_dispatch` in `fleet_ops`.
+    #[cfg(feature = "tier-c4")]
+    pub(crate) fleet_engines: BTreeMap<String, hh_fleet::engine::FleetEngine>,
     /// The removable Hosting Plane driver (S4.5a; `hosting_ops::HostingPlane`
     /// — a pure-Json seam keeping `hosting_edges = []`). `None` = the tier
     /// is absent; ops needing it refuse `hosting_plane_absent`, never fake.
@@ -291,6 +298,8 @@ impl EmbedService {
             registry_run: None,
             hosting_plane: None,
             experiment_engines: BTreeMap::new(),
+            #[cfg(feature = "tier-c4")]
+            fleet_engines: BTreeMap::new(),
             results_subscriptions: BTreeMap::new(),
         })
     }
@@ -618,6 +627,12 @@ impl EmbedService {
             "kernel.migrate" => self.kernel_migrate(&req.params),
             "kernel.lineage" => self.kernel_lineage(&req.params),
             "lab.serve" => self.lab_serve(&req.params),
+            // ── S4.9: the `fleet.*` surface — §5i.1's C4 organizational
+            // layer over the one Store (records-in/records-out; one
+            // dispatch arm routes the whole family through
+            // `fleet_ops::fleet_dispatch`; a `--no-default-features`
+            // build answers `Unsupported{by: "tier-c4"}` — CC6).
+            m if m.starts_with("fleet.") => self.fleet_dispatch(m, &req.params),
             // ── S3.3: `lab.eval.*` — the eval kernel boundary
             // (R-2.9.2/R-2.9.4⁰ᵇ; records-in/records-out).
             "lab.eval.catalogue" => self.lab_eval_catalogue(&req.params),
