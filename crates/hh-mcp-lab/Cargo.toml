@@ -1,0 +1,30 @@
+[package]
+name = "hh-mcp-lab"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C1 `hh-lab/1` MCP server slice (spec §7.3, R-2.11.3¹; ticket S4.11; ADR-0173/0174/0175, ADR-0184 D2, ADR-0303). The kernel-side Lab surface over stdio and Streamable HTTP: the read/launch/experiment/results groups as one-wraps-one-op MCP tools, `CallerBinding`s (stdio_launch + OAuth through the H3 `CallerAuth` seam), the `run_kind = surface` surface-session ledger with per-call `lifecycle.turn.*`/`action.effect.*` chains, charges against `binding.budget_node` (`instrument` for server work, `subject` on launched runs), `ExposurePolicy` sink reads with `measurement.export.delivered` per page, supply-surface Π evaluation for hosted participants, and the `surface_ids` handle carrier. hh-mcp stays the protocol edge; the kernel boundary is `hh-embed/1` binding (a) plus the narrow `surface_*` write seam."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-ledger = { path = "../hh-ledger" }
+hh-embed = { path = "../hh-embed" }
+hh-embed-schema = { path = "../hh-embed-schema" }
+hh-mcp = { path = "../hh-mcp" }
+hh-env = { path = "../hh-env" }
+hh-budget = { path = "../hh-budget" }
+hh-telemetry = { path = "../hh-telemetry" }
+hh-ontology = { path = "../hh-ontology" }
+hh-provenance = { path = "../hh-provenance" }
+
+[dev-dependencies]
+# The open_session fixture's hir/1 document (the same shape the
+# hh-embed conformance battery resolves through load → resolve →
+# validate → seal).
+hh-hir = { path = "../hh-hir" }
+hh-assembly = { path = "../hh-assembly" }

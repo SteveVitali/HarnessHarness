@@ -161,3 +161,45 @@ print('hh-fleet is edge-free upward; hh-embed consumes it behind tier-c4 only')
 "
 
 echo "check-removability: S4.9 fleet boundary verified"
+
+echo "== removability(S4.11): C1 MCP-server surface — hh-mcp-lab is a leaf consumer =="
+# §7.3 CC6: the surface server is a removable slice — nothing below it
+# depends on it. Removing the feature = removing the crate: no workspace
+# package names `hh-mcp-lab` as a normal dependency (dev-deps don't ship),
+# and hh-mcp-lab itself consumes only the kernel-side crates (hh-embed,
+# hh-mcp, hh-ledger, hh-embed-schema, …) — never the reverse. The schema
+# (CC7 single source) is unchanged by the surface's absence: `hh-embed/1`
+# ops stay declared regardless of who fronts them.
+cargo metadata --format-version 1 --no-deps | python3 -c "
+import json,sys
+meta=json.load(sys.argv[1]) if len(sys.argv)>1 else json.load(sys.stdin)
+normal=lambda d: d.get('kind') in (None,'normal')
+bad=[]
+for pkg in meta['packages']:
+    name=pkg['name']
+    for d in pkg['dependencies']:
+        if d['name'] == 'hh-mcp-lab' and name != 'hh-mcp-lab' and normal(d):
+            bad.append(name + ' -> hh-mcp-lab (a kernel/base crate may not consume the surface)')
+        if name == 'hh-mcp-lab' and d['name'] == 'hh-mcp-lab':
+            bad.append('hh-mcp-lab self-edge')
+# The surface may only sit ABOVE the kernel boundary — check it never
+# reaches into another surface/extension tier.
+allowed_deps = {
+    'hh-wire','hh-identity','hh-ledger','hh-embed','hh-embed-schema',
+    'hh-mcp','hh-env','hh-budget','hh-telemetry','hh-ontology',
+    'hh-provenance','hh-hir','hh-assembly',
+}
+for pkg in meta['packages']:
+    if pkg['name'] != 'hh-mcp-lab':
+        continue
+    for d in pkg['dependencies']:
+        if normal(d) and d['name'] not in allowed_deps:
+            bad.append('hh-mcp-lab -> ' + d['name'] + ' (surface depends on a non-kernel crate)')
+if bad:
+    print('mcp-lab removability violations:')
+    for b in bad: print('  ' + b)
+    sys.exit(1)
+print('hh-mcp-lab is edge-free upward; removing the crate removes the feature')
+"
+
+echo "check-removability: S4.11 mcp-lab surface boundary verified"

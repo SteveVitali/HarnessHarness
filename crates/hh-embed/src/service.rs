@@ -1395,6 +1395,141 @@ fn woken_cue(w: &WokenDelivery) -> Cue {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+//  S4.11 — the `surface_*` seam (ADR-0303; R-2.11.3¹).
+//
+//  The MCP lab instrument (`hh-mcp-lab`) is a surface: it owns no ledger
+//  internals. Every durable write it needs lands through this narrow
+//  seam — `surface_open_run`/`surface_append`/`surface_commit_row` are
+//  the ONLY ledger entry points — plus the handful of read helpers the
+//  surface-session/projection code needs. Nothing here exposes mutable
+//  service state (`sessions`, `drivers`, `boundary` stay private); a
+//  surface can open ITS run, append under ITS lease, and mint kernel
+//  rows — the same mediation the embed ops get, at the write edge.
+// ═══════════════════════════════════════════════════════════════════════
+impl EmbedService {
+    /// Open a surface-owned run (`run_kind = surface`) under the
+    /// service holder — returns `(run_id, writer lease)`. The
+    /// manifest's `spawn_event`/`parent`/`incomplete` fields resolve at
+    /// open exactly like a session-opened run (a dangling ref refuses).
+    pub fn surface_open_run(
+        &mut self,
+        manifest: hh_ledger::manifest::RunManifest,
+    ) -> Result<(String, hh_ledger::store::Lease), EmbedError> {
+        let holder = self.holder.clone();
+        self.store.open_run(manifest, &holder).map_err(ledger_err)
+    }
+
+    /// Acquire (or re-acquire) the writer lease on a run — the
+    /// post-crash re-attach for a persisted surface run (`takeover`
+    /// lands inside `acquire_writer` when the persisted holder
+    /// differs).
+    pub fn surface_acquire_writer(
+        &mut self,
+        run_id: &str,
+        ttl_ms: u64,
+    ) -> Result<hh_ledger::store::Lease, EmbedError> {
+        let holder = self.holder.clone();
+        self.store
+            .acquire_writer(&holder, run_id, ttl_ms)
+            .map_err(ledger_err)
+    }
+
+    /// Append caller-built events to `run_id` under `lease` — the full
+    /// append gate (fencing, scopes, effect fold, class table) applies.
+    pub fn surface_append(
+        &mut self,
+        run_id: &str,
+        lease: &hh_ledger::store::Lease,
+        events: Vec<hh_ledger::event::Event>,
+    ) -> Result<hh_ledger::event::SeqRange, EmbedError> {
+        self.store.append(run_id, lease, events).map_err(ledger_err)
+    }
+
+    /// Mint one kernel-provenance row on `run_id` — the durable surface
+    /// records (`lifecycle.*`, `measurement.export.delivered`,
+    /// `lifecycle.surface.call.minted`) that only the kernel may author.
+    pub fn surface_commit_row(
+        &mut self,
+        producer: &str,
+        run_id: &str,
+        class: &str,
+        payload: hh_wire::json::Json,
+        refs: Vec<hh_identity::ContentAddress>,
+        causes: Vec<hh_ledger::manifest::EventRef>,
+    ) -> Result<hh_ledger::event::EventEnvelope, EmbedError> {
+        self.store
+            .commit_kernel_row_for(producer, run_id, class, payload, refs, causes)
+            .map_err(ledger_err)
+    }
+
+    /// The run's committed envelopes (the surface-session's own run —
+    /// turn/effect folds + the minted-handle table rebuild off this).
+    pub fn surface_events(
+        &self,
+        run_id: &str,
+    ) -> Result<&[hh_ledger::event::EventEnvelope], EmbedError> {
+        self.store.events(run_id).map_err(ledger_err)
+    }
+
+    /// The run's manifest.
+    pub fn surface_manifest(
+        &self,
+        run_id: &str,
+    ) -> Result<&hh_ledger::manifest::RunManifest, EmbedError> {
+        self.store.manifest(run_id).map_err(ledger_err)
+    }
+
+    /// Enumerate persisted run ids (the session-rebind scan on
+    /// `run_kind = surface` + `manifest.caller_binding`).
+    pub fn surface_run_ids(&self) -> Vec<String> {
+        self.store.run_ids()
+    }
+
+    /// The head event id — `Event.parent_event_id` links (the seam's
+    /// `mint_event` equivalent needs the tip).
+    pub fn surface_head_event_id(&self, run_id: &str) -> Result<String, EmbedError> {
+        Ok(self.store.head(run_id).map_err(ledger_err)?.event_id)
+    }
+
+    /// The budget `Account` over the surface run — charges project off
+    /// the run's own `control.budget.*` rows.
+    pub fn surface_account(
+        &mut self,
+        run_id: &str,
+    ) -> Result<hh_budget::account::Account<'_>, EmbedError> {
+        hh_budget::account::Account::open(&mut self.store, run_id).map_err(|e| {
+            EmbedError::Refused {
+                reason: format!("budget account: {e}"),
+            }
+        })
+    }
+
+    /// Arm the KP-9 durability fault — the harness test path
+    /// (`durability` stays an injected-fault knob, never a flag a
+    /// caller can pass).
+    pub fn surface_inject_durability_faults(&mut self, n: usize) {
+        self.store.inject_durability_faults(n as u32);
+    }
+
+    /// The service's id counter — surface-minted ids (`ef-*`,
+    /// `turn-*`, `hnd-*` payloads) share the monotonic space.
+    pub fn surface_alloc_id(&mut self, prefix: &str) -> String {
+        self.alloc(prefix)
+    }
+
+    /// The store clock (ms) — a surface stamps rows with the kernel's
+    /// own clock, never a second timebase.
+    pub fn surface_now_ms(&self) -> i64 {
+        self.store.now_ms() as i64
+    }
+
+    /// The store's RFC-3339 timestamp — `Event.ts` for surface mints.
+    pub fn surface_ts_now(&self) -> String {
+        self.store.ts_now()
+    }
+}
+
 /// Map a `LedgerError` to the contract's typed surface — the ledger's
 /// words, never a stringy catch-all (I-H7: `Fenced` on a writer
 /// surfaces only as `SessionDetached`; `RunFinished` as `Draining`).
