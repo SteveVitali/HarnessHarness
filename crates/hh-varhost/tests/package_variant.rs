@@ -93,6 +93,8 @@ fn spec(pkg: hh_varhost::VariantPackage, socket_dir: PathBuf) -> SpawnSpec {
         package: pkg,
         session_id: "pkg-1".into(),
         backend: "direct".into(),
+        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        helper_extra_args: vec![],
         socket_dir,
         exec_args,
         cap,

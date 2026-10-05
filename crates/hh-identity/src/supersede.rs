@@ -226,6 +226,22 @@ impl Lineage {
         }
     }
 
+    /// Record a stale-by-dependency entry *without* a member revocation — the
+    /// derived-staleness op for C1 propagation the raw `revoke`/`supersede`
+    /// edges do not reach (S4.14a; R-2.8.5 AC-8: a `TrustRootPolicy` supersession
+    /// that drops a signer marks the records that signer verified stale; the
+    /// signer was never a registry member, so `revoke` cannot name it — the
+    /// `revoked_member` names the superseded policy version instead).
+    pub fn mark_stale_derived(
+        &mut self,
+        dependant: &str,
+        revoked_member: &str,
+        reason: SupersedeReason,
+        since_seq: u64,
+    ) {
+        self.mark_stale(dependant, revoked_member, reason, since_seq);
+    }
+
     /// The stale-by-dependency entries for a dependant (`StaleIndex[dependant]`).
     pub fn stale_for(&self, dependant: &str) -> &[StaleEntry] {
         self.stale

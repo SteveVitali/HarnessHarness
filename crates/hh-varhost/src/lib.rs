@@ -58,6 +58,11 @@ pub enum HostError {
     Lower(LowerError),
     /// Local IO.
     Io(String),
+    /// The declared placement is inadmissible at this launch lane
+    /// (S4.14a — `remote` attaches over a transport, never `spawn`s;
+    /// `in_process`/`component_model`/`host_unconfined` are refused at
+    /// admission and belted again here).
+    Placement(String),
 }
 
 impl std::fmt::Display for HostError {
@@ -71,6 +76,7 @@ impl std::fmt::Display for HostError {
             HostError::Package(e) => write!(f, "package: {e}"),
             HostError::Lower(e) => write!(f, "lower: {e}"),
             HostError::Io(e) => write!(f, "io: {e}"),
+            HostError::Placement(e) => write!(f, "placement: {e}"),
         }
     }
 }
@@ -95,6 +101,7 @@ impl HostError {
             HostError::Package(_) => "PackageError",
             HostError::Lower(_) => "RequestsExceedCap",
             HostError::Io(_) => "IoError",
+            HostError::Placement(_) => "PlacementRefused",
         }
     }
 }

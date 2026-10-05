@@ -80,7 +80,7 @@ fn parse_mode(j: &Json) -> Result<ResolveMode, EmbedError> {
     }
 }
 
-fn parse_reason(s: &str) -> Result<SupersedeReason, EmbedError> {
+pub(crate) fn parse_reason(s: &str) -> Result<SupersedeReason, EmbedError> {
     Ok(match s {
         "edit" => SupersedeReason::Edit,
         "revocation" => SupersedeReason::Revocation,

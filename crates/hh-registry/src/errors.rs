@@ -223,6 +223,35 @@ pub enum RegistryError {
         /// The export target spelling.
         target: String,
     },
+    /// `discover`/`resolve` names a source outside every live
+    /// `TrustRootPolicy.allowed_sources` set (§6.2; AC-R-2.8.5 — the gate is
+    /// fail-open only when no live policy declares the set).
+    SourceNotAllowed {
+        /// The source spelling refused.
+        source: String,
+    },
+    /// A signature/pin attestation past the live `TrustRootPolicy.max_age` —
+    /// freshness expiry is refused at resolve/pin (the TUF timestamp-role
+    /// freshness model, ADR-0153 D3).
+    StalePin {
+        /// The record the stale attestation covered.
+        version_id: String,
+        /// The detail.
+        detail: String,
+    },
+    /// `model_install = deny` — a model-instruction install proposal is
+    /// refused outright (AC-R-2.8.5-7; never relaxed).
+    ModelInstallDenied {
+        /// The detail.
+        detail: String,
+    },
+    /// An install/review request asking for grants beyond the proposer's
+    /// own grant set — the hard widening refusal (AC-R-2.8.5-7: a model
+    /// instruction can never widen authority).
+    AuthorityWidening {
+        /// What would have widened.
+        detail: String,
+    },
 }
 
 impl RegistryError {
@@ -265,6 +294,10 @@ impl RegistryError {
             RegistryError::ForeignSystemRefused { .. } => "ForeignSystemRefused",
             RegistryError::UnknownExportTarget { .. } => "UnknownExportTarget",
             RegistryError::UnsupportedExportKind { .. } => "UnsupportedExportKind",
+            RegistryError::SourceNotAllowed { .. } => "SourceNotAllowed",
+            RegistryError::StalePin { .. } => "StalePin",
+            RegistryError::ModelInstallDenied { .. } => "ModelInstallDenied",
+            RegistryError::AuthorityWidening { .. } => "AuthorityWidening",
         }
     }
 }
@@ -322,6 +355,12 @@ impl std::fmt::Display for RegistryError {
             RegistryError::UnsupportedExportKind { kind, target } => {
                 write!(f, ": {kind} -> {target}")
             }
+            RegistryError::SourceNotAllowed { source } => write!(f, ": {source}"),
+            RegistryError::StalePin { version_id, detail } => {
+                write!(f, ": {version_id} ({detail})")
+            }
+            RegistryError::ModelInstallDenied { detail } => write!(f, ": {detail}"),
+            RegistryError::AuthorityWidening { detail } => write!(f, ": {detail}"),
             _ => Ok(()),
         }
     }

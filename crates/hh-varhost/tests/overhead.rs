@@ -112,10 +112,14 @@ fn in_process_arm() -> (Vec<u64>, Vec<Json>) {
     (overhead, outputs)
 }
 
+/// A measured confined arm: per-invocation boundary overhead, the invoked
+/// outputs, and the live host (kept for teardown ordering).
+type ConfinedArm = (Vec<u64>, Vec<Json>, VariantHost<RecordingPorts, VecEvents>);
+
 /// The `subprocess_confined` arm — the spawned fixture through the live
 /// helper lane; `boundary_overhead_ms` is the kernel-measured M19 field on
 /// each `lifecycle.component.invoked` row, never an estimate.
-fn confined_arm() -> Option<(Vec<u64>, Vec<Json>, VariantHost<RecordingPorts, VecEvents>)> {
+fn confined_arm() -> Option<ConfinedArm> {
     let bin = fixture_bin()?;
     if !helper_present() {
         eprintln!("overhead: hh-helper binary not found — confined lane skipped");
@@ -141,6 +145,8 @@ fn confined_arm() -> Option<(Vec<u64>, Vec<Json>, VariantHost<RecordingPorts, Ve
         package: pkg,
         session_id: format!("m19-{}", std::process::id()),
         backend: "direct".into(),
+        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        helper_extra_args: vec![],
         socket_dir: std::env::temp_dir().join(format!(
             "vh-m19-{}-{}",
             std::process::id(),
@@ -190,7 +196,7 @@ fn confined_arm() -> Option<(Vec<u64>, Vec<Json>, VariantHost<RecordingPorts, Ve
 /// The MemIo lane — the channel boundary measured without a subprocess
 /// (the fallback when `hh-helper` is unavailable: the distribution is real,
 /// the process-isolation part is the confined lane's).
-fn memio_arm() -> (Vec<u64>, Vec<Json>, VariantHost<RecordingPorts, VecEvents>) {
+fn memio_arm() -> ConfinedArm {
     let mut logic = FixtureLogic::from_args(&[]);
     logic.own_socket = None;
     logic.plugin_id = "local/fixture".into();
@@ -214,6 +220,8 @@ fn memio_arm() -> (Vec<u64>, Vec<Json>, VariantHost<RecordingPorts, VecEvents>) 
         package: pkg,
         session_id: format!("m19-mem-{}", std::process::id()),
         backend: "direct".into(),
+        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        helper_extra_args: vec![],
         socket_dir: std::env::temp_dir().join(format!(
             "vh-m19m-{}-{}",
             std::process::id(),
@@ -266,7 +274,7 @@ fn dist(samples: &[u64]) -> Json {
         if s.is_empty() {
             return 0;
         }
-        let i = ((s.len() as u64 * ppm + 999_999) / 1_000_000).max(1) as usize - 1;
+        let i = ((s.len() as u64 * ppm).div_ceil(1_000_000)).max(1) as usize - 1;
         s[i.min(s.len() - 1)] as i64
     };
     Json::obj([
@@ -343,7 +351,7 @@ fn ac_2_12_2_9_boundary_overhead_measured_matched_cap() {
     } else {
         "subprocess_confined(mem-io channel)"
     };
-    let (bd_overhead, bd_outputs, _host) = confined_arm().unwrap_or_else(|| memio_arm());
+    let (bd_overhead, bd_outputs, _host) = confined_arm().unwrap_or_else(memio_arm);
     assert_eq!(
         bd_overhead.len(),
         N,

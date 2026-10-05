@@ -122,7 +122,7 @@ fn publish_name(server_ref: &str, tool_name: &str) -> String {
 /// The import provenance every lifted node mints under —
 /// `Origin::import("mcp", "hh-mcp-listing/1")` ⇒ `unverified` (P7;
 /// V-E1-7's required class for lifted sources).
-fn import_prov(seq: u64) -> ProvenanceRecord {
+pub(crate) fn import_prov(seq: u64) -> ProvenanceRecord {
     ProvenanceRecord::minted(
         Origin::import("mcp", "hh-mcp-listing/1"),
         PersistenceScope::Definition,
@@ -179,7 +179,7 @@ fn lift_effects(meta: Option<&Json>) -> ToolEffects {
 
 /// Lift one wire `Tool` into a `ToolCapabilityRecord` + node provenance
 /// — the `(record, carried?)` pair `import_listing` registers.
-fn lift_tool(server_ref: &str, wire: &Json, seq: u64) -> (ToolCapabilityRecord, bool) {
+pub(crate) fn lift_tool(server_ref: &str, wire: &Json, seq: u64) -> (ToolCapabilityRecord, bool) {
     let name = wire
         .get("name")
         .and_then(Json::as_str)
@@ -266,7 +266,7 @@ const IMPORT_LOSSES: [&str; 3] = [
 ];
 
 /// Parse the `hh-mcp-listing/1` document → `(server_ref, tools)`.
-fn parse_listing(doc: &Json) -> Result<(String, Vec<Json>), RegistryError> {
+pub(crate) fn parse_listing(doc: &Json) -> Result<(String, Vec<Json>), RegistryError> {
     let schema = doc.get("schema").and_then(Json::as_str).unwrap_or("");
     if schema != LISTING_SCHEMA {
         return Err(RegistryError::SchemaViolation {
@@ -295,6 +295,57 @@ fn parse_listing(doc: &Json) -> Result<(String, Vec<Json>), RegistryError> {
         }
     };
     Ok((server_ref, tools))
+}
+
+/// `listing_delta_names(pinned, live) → (added, removed, changed)` — the
+/// name-keyed surface delta between two `hh-mcp-listing/1` documents
+/// (S4.14a — `check_surface`'s per-name evidence; a changed tool is one
+/// whose per-entry `listing_hash` differs).
+pub(crate) fn listing_delta_names(
+    pinned: &Json,
+    live: &Json,
+) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let hashes = |doc: &Json| -> BTreeMap<String, String> {
+        // `tools[]` entries are `{name, listing_hash, tool}` (the served
+        // shape); a bare `tool` object also parses (`hh-mcp`'s projection
+        // omits nothing).
+        match doc.get("tools") {
+            Some(Json::Arr(entries)) => entries
+                .iter()
+                .map(|e| {
+                    let tool = e.get("tool").cloned().unwrap_or_else(|| e.clone());
+                    let name = e
+                        .get("name")
+                        .or_else(|| tool.get("name"))
+                        .and_then(Json::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    let h = e
+                        .get("listing_hash")
+                        .and_then(Json::as_str)
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| {
+                            hh_identity::idp_id(
+                                "mcp.listing.tool",
+                                tool.to_canonical_string().as_bytes(),
+                            )
+                        });
+                    (name, h)
+                })
+                .collect(),
+            _ => BTreeMap::new(),
+        }
+    };
+    let a = hashes(pinned);
+    let b = hashes(live);
+    let added = b.keys().filter(|k| !a.contains_key(*k)).cloned().collect();
+    let removed = a.keys().filter(|k| !b.contains_key(*k)).cloned().collect();
+    let changed = a
+        .keys()
+        .filter(|k| b.get(*k).map(|h| h != &a[*k]).unwrap_or(false))
+        .cloned()
+        .collect();
+    (added, removed, changed)
 }
 
 /// `import_listing(server_ref, listing) → Vec<VersionedRef>` — lift and

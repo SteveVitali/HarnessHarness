@@ -66,6 +66,8 @@ fn spec_for(pkg: VariantPackage, cap: Requests) -> SpawnSpec {
         package: pkg,
         session_id: "s1".into(),
         backend: "direct".into(),
+        placement: hh_registry::kinds::Placement::SubprocessConfined,
+        helper_extra_args: vec![],
         socket_dir: {
             static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             std::env::temp_dir().join(format!(
