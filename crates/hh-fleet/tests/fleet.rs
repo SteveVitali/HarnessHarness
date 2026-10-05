@@ -68,6 +68,9 @@ fn spec() -> FleetSpec {
             name: "observe".into(),
             trigger: Trigger::External {
                 kind: "ticket.updated".into(),
+
+                source_ref: None,
+                filter: None,
             },
             policy: WakeupPolicy::default_policy(),
         },

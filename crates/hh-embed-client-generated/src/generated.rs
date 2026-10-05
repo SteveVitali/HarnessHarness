@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:9fe947f38bf344f954ebb09f236c2489aa5e1bb4de3e53c402e7a3e0e4d2a413";
+    "sha256:e84bc8ad732577c14290cd94b08ac503aab8403b0a9dd457a82448dd19f2c2d6";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -425,6 +425,128 @@ impl AuditViewParams {
             until_seq: match v.get("until_seq") {
                 Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
                 None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchOpenParams {
+    pub session_id: String,
+    pub kind: Option<String>,
+    pub read_only: bool,
+    pub policy: Option<Json>,
+    pub budget_slice_id: Option<String>,
+    pub env_binding: Option<String>,
+    pub evidence_path: Option<String>,
+    pub fork_seq: Option<i64>,
+    pub permissions: Vec<String>,
+}
+
+impl BranchOpenParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.kind {
+            pairs.push(("kind", Json::str(v.clone())));
+        }
+        pairs.push(("read_only", Json::Bool(self.read_only)));
+        if let Some(v) = &self.policy {
+            pairs.push(("policy", v.clone()));
+        }
+        if let Some(v) = &self.budget_slice_id {
+            pairs.push(("budget_slice_id", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.env_binding {
+            pairs.push(("env_binding", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.evidence_path {
+            pairs.push(("evidence_path", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.fork_seq {
+            pairs.push(("fork_seq", Json::Int(v.clone())));
+        }
+        pairs.push((
+            "permissions",
+            Json::Arr(
+                self.permissions
+                    .iter()
+                    .map(|x| Json::str(x.clone()))
+                    .collect(),
+            ),
+        ));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<BranchOpenParams, String> {
+        Ok(BranchOpenParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            kind: match v.get("kind") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            read_only: match v.get("read_only") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+            policy: match v.get("policy") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
+            budget_slice_id: match v.get("budget_slice_id") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            env_binding: match v.get("env_binding") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            evidence_path: match v.get("evidence_path") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            fork_seq: match v.get("fork_seq") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+            permissions: match v.get("permissions") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .ok_or_else(|| "expected string".to_string())?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
             },
         })
     }
@@ -924,6 +1046,112 @@ impl CoherentForkPointsParams {
             },
             to_seq: match v.get("to_seq") {
                 Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContinueCarried {
+    pub resume_set_heads: Vec<String>,
+    pub budget_id: Option<String>,
+}
+
+impl ContinueCarried {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push((
+            "resume_set_heads",
+            Json::Arr(
+                self.resume_set_heads
+                    .iter()
+                    .map(|x| Json::str(x.clone()))
+                    .collect(),
+            ),
+        ));
+        if let Some(v) = &self.budget_id {
+            pairs.push(("budget_id", Json::str(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ContinueCarried, String> {
+        Ok(ContinueCarried {
+            resume_set_heads: match v.get("resume_set_heads") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .ok_or_else(|| "expected string".to_string())?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+            budget_id: match v.get("budget_id") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContinueGoalParams {
+    pub session_id: String,
+    pub goal_ref: String,
+    pub carried: Option<ContinueCarried>,
+    pub manifest_delta: Option<Json>,
+}
+
+impl ContinueGoalParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("goal_ref", Json::str(self.goal_ref.clone())));
+        if let Some(v) = &self.carried {
+            pairs.push(("carried", v.to_json()));
+        }
+        if let Some(v) = &self.manifest_delta {
+            pairs.push(("manifest_delta", v.clone()));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<ContinueGoalParams, String> {
+        Ok(ContinueGoalParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            goal_ref: {
+                let f = v
+                    .get("goal_ref")
+                    .ok_or_else(|| format!("missing '{}'", "goal_ref"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            carried: match v.get("carried") {
+                Some(f) => Some(ContinueCarried::from_json(f).map_err(|e| e)?),
+                None => None,
+            },
+            manifest_delta: match v.get("manifest_delta") {
+                Some(f) => Some(f.clone()),
                 None => None,
             },
         })
@@ -2861,6 +3089,32 @@ impl NavigateParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenInboxParams {
+    pub goal_ref: String,
+}
+
+impl OpenInboxParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("goal_ref", Json::str(self.goal_ref.clone())));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<OpenInboxParams, String> {
+        Ok(OpenInboxParams {
+            goal_ref: {
+                let f = v
+                    .get("goal_ref")
+                    .ok_or_else(|| format!("missing '{}'", "goal_ref"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenSessionParams {
     pub spec: OpenSpec,
     pub idempotency_key: String,
@@ -3726,6 +3980,72 @@ impl RealizedSettings {
                     .get("attendance")
                     .ok_or_else(|| format!("missing '{}'", "attendance"))?;
                 AttendanceDeclaration::from_json(f).map_err(|e| e)?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordOccurrenceParams {
+    pub session_id: String,
+    pub subscription_id: String,
+    pub occurrence_key: String,
+    pub payload_ref: Option<String>,
+    pub observed_at_ms: Option<i64>,
+}
+
+impl RecordOccurrenceParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("subscription_id", Json::str(self.subscription_id.clone())));
+        pairs.push(("occurrence_key", Json::str(self.occurrence_key.clone())));
+        if let Some(v) = &self.payload_ref {
+            pairs.push(("payload_ref", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.observed_at_ms {
+            pairs.push(("observed_at_ms", Json::Int(v.clone())));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<RecordOccurrenceParams, String> {
+        Ok(RecordOccurrenceParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            subscription_id: {
+                let f = v
+                    .get("subscription_id")
+                    .ok_or_else(|| format!("missing '{}'", "subscription_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            occurrence_key: {
+                let f = v
+                    .get("occurrence_key")
+                    .ok_or_else(|| format!("missing '{}'", "occurrence_key"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            payload_ref: match v.get("payload_ref") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            observed_at_ms: match v.get("observed_at_ms") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
             },
         })
     }
@@ -5152,6 +5472,48 @@ impl SubmitParams {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubscribeParams {
+    pub session_id: String,
+    pub trigger: Json,
+    pub policy: Option<Json>,
+}
+
+impl SubscribeParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push(("trigger", self.trigger.clone()));
+        if let Some(v) = &self.policy {
+            pairs.push(("policy", v.clone()));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<SubscribeParams, String> {
+        Ok(SubscribeParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            trigger: {
+                let f = v
+                    .get("trigger")
+                    .ok_or_else(|| format!("missing '{}'", "trigger"))?;
+                f.clone()
+            },
+            policy: match v.get("policy") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Supplies {
     pub context: Vec<Json>,
     pub host_capabilities: Vec<Json>,
@@ -6040,6 +6402,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `branch.open` → `json` (see the contract registry).
+    pub fn branch_open(&mut self, params: &BranchOpenParams) -> Result<Json, ClientError> {
+        let raw = self.call("branch.open", params.to_json())?;
+        Ok(raw)
+    }
+
     /// `cancel` → `Acknowledged` (see the contract registry).
     pub fn cancel(&mut self, params: &CancelParams) -> Result<Acknowledged, ClientError> {
         let raw = self.call("cancel", params.to_json())?;
@@ -6061,6 +6429,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `continue_goal` → `json` (see the contract registry).
+    pub fn continue_goal(&mut self, params: &ContinueGoalParams) -> Result<Json, ClientError> {
+        let raw = self.call("continue_goal", params.to_json())?;
+        Ok(raw)
+    }
+
     /// `counterfactual` → `CounterfactualResult` (see the contract registry).
     pub fn counterfactual(
         &mut self,
@@ -6076,9 +6450,21 @@ impl<R: BufRead, W: Write> Client<R, W> {
         DescribeResult::from_json(&raw).map_err(ClientError::Transport)
     }
 
+    /// `discard` → `json` (see the contract registry).
+    pub fn discard(&mut self, params: &DiscardParams) -> Result<Json, ClientError> {
+        let raw = self.call("discard", params.to_json())?;
+        Ok(raw)
+    }
+
     /// `env.derive` → `json` (see the contract registry).
     pub fn env_derive(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("env.derive", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.resume` → `json` (see the contract registry).
+    pub fn env_resume(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.resume", params.clone())?;
         Ok(raw)
     }
 
@@ -6091,6 +6477,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `env.snapshot` → `json` (see the contract registry).
     pub fn env_snapshot(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("env.snapshot", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.suspend` → `json` (see the contract registry).
+    pub fn env_suspend(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.suspend", params.clone())?;
         Ok(raw)
     }
 
@@ -6879,6 +7271,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `open_inbox` → `json` (see the contract registry).
+    pub fn open_inbox(&mut self, params: &OpenInboxParams) -> Result<Json, ClientError> {
+        let raw = self.call("open_inbox", params.to_json())?;
+        Ok(raw)
+    }
+
     /// `open_session` → `Session` (see the contract registry).
     pub fn open_session(&mut self, params: &OpenSessionParams) -> Result<Session, ClientError> {
         let raw = self.call("open_session", params.to_json())?;
@@ -6889,6 +7287,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     pub fn project(&mut self, params: &ProjectParams) -> Result<View, ClientError> {
         let raw = self.call("project", params.to_json())?;
         View::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `promote` → `json` (see the contract registry).
+    pub fn promote(&mut self, params: &PromoteParams) -> Result<Json, ClientError> {
+        let raw = self.call("promote", params.to_json())?;
+        Ok(raw)
     }
 
     /// `prove_consistency` → `json` (see the contract registry).
@@ -6910,6 +7314,15 @@ impl<R: BufRead, W: Write> Client<R, W> {
     pub fn read(&mut self, params: &ReadParams) -> Result<Page, ClientError> {
         let raw = self.call("read", params.to_json())?;
         Page::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `record_occurrence` → `json` (see the contract registry).
+    pub fn record_occurrence(
+        &mut self,
+        params: &RecordOccurrenceParams,
+    ) -> Result<Json, ClientError> {
+        let raw = self.call("record_occurrence", params.to_json())?;
+        Ok(raw)
     }
 
     /// `replay` → `ReplayResult` (see the contract registry).
@@ -6985,6 +7398,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     pub fn submit(&mut self, params: &SubmitParams) -> Result<Accepted, ClientError> {
         let raw = self.call("submit", params.to_json())?;
         Accepted::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `subscribe` → `json` (see the contract registry).
+    pub fn subscribe(&mut self, params: &SubscribeParams) -> Result<Json, ClientError> {
+        let raw = self.call("subscribe", params.to_json())?;
+        Ok(raw)
     }
 
     /// `verify` → `json` (see the contract registry).

@@ -181,6 +181,11 @@ pub(crate) struct RunState {
     pub(crate) events: Vec<EventEnvelope>,
     pub(crate) by_event_id: HashMap<String, u64>,
     ir_index: HashMap<String, Vec<u64>>,
+    /// `class → seqs` postings — the S4.13 derived-index leg (OQ-388;
+    /// AC-R-2.2.1-16): a `class`/`class.*` read filter resolves candidates
+    /// from postings (BTreeMap prefix range), never a full-log scan. Same
+    /// commit/rebuild discipline as `ir_index`.
+    by_class: BTreeMap<String, Vec<u64>>,
     pub(crate) open_scopes: BTreeMap<String, ScopeKind>,
     /// The `action.effect.*` fold — `effect_id → EffectFold` (§5a.2; R-2.2.2). Fed
     /// on the commit path and rebuilt from the WAL, so `Store::effect_fold` and
@@ -202,6 +207,10 @@ pub(crate) struct RunState {
     /// The wakeup fold — `control.wakeup.*` rows → `subscription_id →
     /// WakeupSubscription` (§5a.3; ADR-0131 §4; S2.3).
     pub(crate) wakeups: BTreeMap<String, crate::wakeup::WakeupSubscription>,
+    /// The intra-run branch fold — `lifecycle.branch.opened/disposed` ∪ every
+    /// `scope.branch_id` event → `branch_id → IntraBranch` (S4.13; R-2.2.4).
+    /// Same commit/rebuild discipline as `effects` (CC1).
+    pub(crate) intra_branches: BTreeMap<String, crate::branch_ops::IntraBranch>,
     /// The HLC node id — `Some` only on continuation/child runs (the
     /// `R-2.2.3⁰ᵇ` slice stamps `hlc` on their events; plain runs carry none —
     /// additive, CC8).
@@ -688,6 +697,7 @@ impl Store {
             events: Vec::new(),
             by_event_id: HashMap::new(),
             ir_index: HashMap::new(),
+            by_class: BTreeMap::new(),
             open_scopes: BTreeMap::new(),
             effects: BTreeMap::new(),
             decisions: BTreeMap::new(),
@@ -696,6 +706,7 @@ impl Store {
             suspended: false,
             scoped_leases: BTreeMap::new(),
             wakeups: BTreeMap::new(),
+            intra_branches: BTreeMap::new(),
             hlc_node: None,
             hlc_last: None,
             tree: crate::tree::CompactRange::default(),
@@ -719,11 +730,17 @@ impl Store {
                     .or_default()
                     .push(env.seq);
             }
+            state
+                .by_class
+                .entry(env.class.clone())
+                .or_default()
+                .push(env.seq);
             apply_scope_marks(&mut state.open_scopes, &state.effects, &env);
             effect::fold_event(&mut state.effects, &env);
             effect::apply_decision(&mut state.decisions, &state.effects, &env);
             crate::leases::fold_lease_row(&mut state.scoped_leases, &env);
             crate::wakeup::fold_wakeup_row(&mut state.wakeups, &env);
+            crate::branch_ops::fold_intra_branch(&mut state.intra_branches, &env);
             if let Some(h) = env.hlc.as_deref().and_then(crate::hlc::Hlc::parse) {
                 state.hlc_last = Some(h);
             }
@@ -864,6 +881,7 @@ impl Store {
             events: Vec::new(),
             by_event_id: HashMap::new(),
             ir_index: HashMap::new(),
+            by_class: BTreeMap::new(),
             open_scopes: BTreeMap::new(),
             effects: BTreeMap::new(),
             decisions: BTreeMap::new(),
@@ -872,6 +890,7 @@ impl Store {
             suspended: false,
             scoped_leases: BTreeMap::new(),
             wakeups: BTreeMap::new(),
+            intra_branches: BTreeMap::new(),
             // A continuation/child run stamps `hlc` on every event — seeded
             // causally above the lineage anchor's own stamp (ADR-0131 §5).
             hlc_node: manifest_has_lineage(&manifest).then(|| run_id.clone()),
@@ -1355,6 +1374,11 @@ impl Store {
             known_ids.insert(ev.event_id.clone());
             // Scope chain + open/close rules (fold-aware effect-scope closes).
             check_scopes(&ev, spec, &mut open, &effect_folds)?;
+            // S4.13 (R-2.2.4): the branch-scope policy gate — a `read_only`
+            // branch admits no writes; `committed` under a speculative branch
+            // admits only `policy.allow_classes` (defer → promote is the
+            // release path; `defer_irreversible` is a floor).
+            crate::branch_ops::check_branch_policy(&state.intra_branches, &effect_folds, &ev)?;
             // §5a.2 effect lifecycle (R-2.2.2): phase transitions, raise-only
             // risk, derived idempotency keys and the post-`prepared` fencing
             // token — checked against the committed fold ∪ this batch.
@@ -1459,7 +1483,15 @@ impl Store {
             };
             if let Some(p) = prov {
                 p.validate(None)?;
-                if spec.kernel_origin && !matches!(p.origin, Origin::Kernel { .. }) {
+                // §5a.5 (R-2.2.5¹, AC-R-2.2.5-13): `action.environment.*`
+                // rows are kernel-origin — *except* hosted/container-
+                // installed handles, whose transition rows legitimately
+                // carry `origin = participant` (the adapter observes; the
+                // kernel records). Every other `kernel_origin` class keeps
+                // the strict check.
+                let env_hosted = spec.class.starts_with("action.environment.")
+                    && matches!(p.origin, Origin::Participant { .. });
+                if spec.kernel_origin && !matches!(p.origin, Origin::Kernel { .. }) && !env_hosted {
                     return Err(LedgerError::KernelOriginRequired {
                         class: ev.class.clone(),
                     });
@@ -3403,11 +3435,17 @@ fn commit_envelopes(
                         .or_default()
                         .push(env.seq);
                 }
+                state
+                    .by_class
+                    .entry(env.class.clone())
+                    .or_default()
+                    .push(env.seq);
                 apply_scope_marks(&mut state.open_scopes, &state.effects, &env);
                 effect::fold_event(&mut state.effects, &env);
                 effect::apply_decision(&mut state.decisions, &state.effects, &env);
                 crate::leases::fold_lease_row(&mut state.scoped_leases, &env);
                 crate::wakeup::fold_wakeup_row(&mut state.wakeups, &env);
+                crate::branch_ops::fold_intra_branch(&mut state.intra_branches, &env);
                 match env.class.as_str() {
                     "lifecycle.run.finished" => state.finished = true,
                     "lifecycle.run.suspended" => state.suspended = true,

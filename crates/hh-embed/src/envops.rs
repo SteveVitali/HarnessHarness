@@ -27,7 +27,7 @@ impl EmbedService {
     /// `(run_id, lease, env_handle_id)` — an attach session or a
     /// session without an environment is the typed refusal, never a
     /// guess.
-    fn env_subject(
+    pub(crate) fn env_subject(
         &mut self,
         params: &Json,
         op: &str,

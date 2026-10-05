@@ -53,6 +53,7 @@ pub mod adapter_zero;
 pub mod budget;
 pub mod events;
 pub mod fixture;
+pub mod hosted_status;
 pub mod probes;
 pub mod proj;
 pub mod records;

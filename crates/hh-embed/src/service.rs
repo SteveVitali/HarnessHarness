@@ -590,6 +590,8 @@ impl EmbedService {
             "navigate" => self.navigate(&req.params),
             "coherent_fork_points" => self.coherent_fork_points(&req.params),
             "rollback" => self.rollback(&req.params),
+            "promote" => self.branch_promote(&req.params),
+            "discard" => self.branch_discard(&req.params),
             "amend" => self.amend(&req.params),
             "report_host_effect" => self.report_host_effect(&req.params),
             "respond_elicitation" => self.respond_elicitation(&req.params),
@@ -602,6 +604,13 @@ impl EmbedService {
             "env.snapshot" => self.env_snapshot(&req.params),
             "env.derive" => self.env_derive(&req.params),
             "env.set_phase" => self.env_set_phase(&req.params),
+            "env.suspend" => self.env_suspend(&req.params),
+            "env.resume" => self.env_resume(&req.params),
+            "branch.open" => self.branch_open(&req.params),
+            "continue_goal" => self.continue_goal(&req.params),
+            "open_inbox" => self.open_inbox(&req.params),
+            "subscribe" => self.wakeup_subscribe(&req.params),
+            "record_occurrence" => self.record_occurrence(&req.params),
             "list_leases" => self.list_leases(&req.params),
             "lineage" => self.lineage(&req.params),
             "run_index" => self.run_index_op(&req.params),
@@ -1383,10 +1392,14 @@ fn woken_cue(w: &WokenDelivery) -> Cue {
         LedgerTrigger::Timer { at_ms } => WokenTrigger::Timer {
             at: rfc3339_ms(*at_ms),
         },
-        LedgerTrigger::Schedule { expr } => WokenTrigger::Schedule {
+        LedgerTrigger::Schedule {
+            expr,
+            kind,
+            timezone,
+        } => WokenTrigger::Schedule {
             expression: expr.clone(),
-            timezone: String::new(),
-            kind: "cron".to_string(),
+            timezone: timezone.clone(),
+            kind: kind.as_str().to_string(),
         },
         LedgerTrigger::PermissionDecided { permission_id } => WokenTrigger::PermissionDecided {
             permission_id: permission_id.clone(),
@@ -1403,9 +1416,13 @@ fn woken_cue(w: &WokenDelivery) -> Cue {
         LedgerTrigger::RetryDue { scope_id } => WokenTrigger::RetryDue {
             scope_id: scope_id.clone(),
         },
-        LedgerTrigger::External { kind } => WokenTrigger::External {
-            source_ref: kind.clone(),
-            filter: String::new(),
+        LedgerTrigger::External {
+            kind,
+            source_ref,
+            filter,
+        } => WokenTrigger::External {
+            source_ref: source_ref.clone().unwrap_or_else(|| kind.clone()),
+            filter: filter.clone().unwrap_or_default(),
         },
         LedgerTrigger::Manual { principal } => WokenTrigger::Manual {
             principal: principal.clone(),

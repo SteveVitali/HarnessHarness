@@ -656,6 +656,12 @@ pub fn lift_event(e: &HostedEvent) -> LiftedRow {
     match e.kind.as_str() {
         "session.opened" => row("lifecycle.run.created", e.payload.clone(), None),
         "session.closed" => row("lifecycle.run.finished", e.payload.clone(), None),
+        // The hosted-resume return path (AC-R-2.2.3-15; §4.9.2): a hosted
+        // `session.resumed` lifts onto the native `lifecycle.session.resumed`
+        // envelope — `resume_event_ref`/`carried` pass through verbatim
+        // (opaque to the lift; nothing is synthesised), so a continuation's
+        // resume point is reconstructible from the native log.
+        "session.resumed" => row("lifecycle.session.resumed", e.payload.clone(), None),
         "turn.started" => row("lifecycle.turn.started", e.payload.clone(), tid()),
         "turn.finished" => {
             // `stop_reason` is the lifted value when present; otherwise lift
@@ -739,6 +745,7 @@ pub fn lift_event(e: &HostedEvent) -> LiftedRow {
 const KNOWN_LIFTED: &[&str] = &[
     "session.opened",
     "session.closed",
+    "session.resumed",
     "turn.started",
     "turn.finished",
     "model.call.started",

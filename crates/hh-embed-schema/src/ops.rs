@@ -495,8 +495,147 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
-        staged_exp("discard", "W", "DiscardParams", "Acknowledged"),
-        staged_exp("promote", "W", "PromoteParams", "Session"),
+        // S4.13 (C2) — `branch.open` opens an *intra-run* branch under the
+        // session's writer lease (`lifecycle.branch.opened`; coherent fork
+        // point, `SpeculationPolicy` verbatim, containment at `fork`;
+        // ADR-0133/0134). `promote`/`discard` close it.
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "branch.open",
+                "W",
+                "BranchOpenParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownRun",
+                    "AuthorityViolation",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "discard",
+                "W",
+                "DiscardParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownRun",
+                    "Fenced",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "promote",
+                "W",
+                "PromoteParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownRun",
+                    "Fenced",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
+        // S4.13 (§5a.3/§5a.4) — the goal continuation chain + inbox runs +
+        // the wakeup `subscribe`/`record_occurrence` pair
+        // (`schedule`/`external`/`peer_message` triggers;
+        // `AlreadyContinued`/`GoalFinished`/`TriggerUnsupported` surface
+        // `Refused{reason}`).
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "continue_goal",
+                "W",
+                "ContinueGoalParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "UnknownRun",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "open_inbox",
+                "W",
+                "OpenInboxParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "subscribe",
+                "W",
+                "SubscribeParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "record_occurrence",
+                "W",
+                "RecordOccurrenceParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
         // `rollback` is implemented (S2.9; ADR-0271) — coherence gate,
         // scoped compensation saga, rewind-note blob, `rolled_back` +
         // `head.moved` rows, `rewind` frame; returns the `RollbackRecord`.
@@ -770,6 +909,18 @@ pub fn registry() -> Vec<OpSpec> {
         OpSpec {
             implemented: true,
             ..lab("env.set_phase", "M", "json", "json")
+        },
+        // S4.13 (R-2.2.5¹; §5a.5) — `env.suspend`/`env.resume`: the
+        // `suspended` state pair; `suspend` refuses `Unsupported` on a
+        // class that never declared the capability; `resume` requires
+        // `suspended` and lands `suspended_ms` on the `resumed` row.
+        OpSpec {
+            implemented: true,
+            ..lab("env.suspend", "M", "json", "json")
+        },
+        OpSpec {
+            implemented: true,
+            ..lab("env.resume", "M", "json", "json")
         },
         // ── Group L — Lab/design-time (ADR-0183; records-in/records-out)
         // S3.5 (§6.1; R-2.10.1): the assembly service — `assemble`/`plan`/

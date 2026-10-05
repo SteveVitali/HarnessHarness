@@ -796,3 +796,174 @@ fn ac_r_2_10_6_2_adapter_zero_parity_over_metric_view() {
         }
     }
 }
+
+// ── S4.13 — hosted resume + status/stop-reason mapping (AC-R-2.2.3-15,
+// AC-R-2.2.2-9) ─────────────────────────────────────────────────────────
+
+/// `session.resumed` — the hosted-resume return path lifts onto the
+/// registered native `lifecycle.session.resumed` with the payload verbatim
+/// (`resume_event_ref`/`carried` are opaque to the lift — nothing is
+/// synthesised, nothing is dropped). Distinct from `lifecycle.run.resumed`
+/// — a hosted resume never clears a kernel suspension.
+#[test]
+fn s4_13_session_resumed_lifts_to_native_class() {
+    let mut e = hosted("session.resumed", "s1", 7);
+    e.payload = Json::obj([
+        ("resume_event_ref", Json::str("ev:prior-head")),
+        ("session_id", Json::str("s1")),
+        (
+            "carried",
+            Json::obj([("resume_set_heads", Json::Arr(vec![Json::str("rs:1")]))]),
+        ),
+    ]);
+    let lifted = hh_hosting::proj::lift_event(&e);
+    assert_eq!(lifted.class, "lifecycle.session.resumed");
+    assert!(
+        hh_ledger::classes::lookup(&lifted.class).is_some(),
+        "the lift target must be a registered native class"
+    );
+    assert_eq!(
+        lifted
+            .payload
+            .get("resume_event_ref")
+            .and_then(Json::as_str),
+        Some("ev:prior-head"),
+        "the resume point is preserved verbatim"
+    );
+    assert_eq!(
+        lifted.payload.get("carried"),
+        Some(&Json::obj([(
+            "resume_set_heads",
+            Json::Arr(vec![Json::str("rs:1")])
+        )]))
+    );
+    assert_eq!(lifted.seq, 7);
+    // Round-trip: the lifted class is *not* in KNOWN_LIFTED's hosted
+    // spellings — a native `lifecycle.session.resumed` lowers back to
+    // `session.resumed` (the hosted table declares the pairing).
+    assert_eq!(
+        hh_ledger::classes::hosted_lowering("lifecycle.session.resumed"),
+        "session.resumed"
+    );
+}
+
+/// `lift_stop_reason` — the five declared spellings land on the closed
+/// `StopReason` sum; `other`/`_vendor`/unparseable land on
+/// `participant_unclassified` with the raw spelling preserved (never a
+/// panic, never a guess — AC-R-2.2.2-9's unknown-status clause).
+#[test]
+fn s4_13_lift_stop_reason_table_and_unknown_preserved() {
+    use hh_hosting::proj::{lift_stop_reason, lift_stop_reason_json};
+    use hh_ontology::control::StopReason;
+    assert!(matches!(
+        lift_stop_reason("end_turn"),
+        StopReason::Completed
+    ));
+    assert!(matches!(
+        lift_stop_reason("max_tokens"),
+        StopReason::BudgetExhausted { .. }
+    ));
+    assert!(matches!(
+        lift_stop_reason("max_turn_requests"),
+        StopReason::BudgetExhausted { .. }
+    ));
+    assert!(matches!(
+        lift_stop_reason("refusal"),
+        StopReason::Refused { .. }
+    ));
+    assert!(matches!(
+        lift_stop_reason("cancelled"),
+        StopReason::Cancelled { .. }
+    ));
+    for raw in ["other", "_vendor_x", "some_new_status", ""] {
+        let j = lift_stop_reason(raw).to_json();
+        let s = format!("{j:?}");
+        assert!(
+            s.contains("participant_unclassified"),
+            "{raw} must lift to participant_unclassified: {s}"
+        );
+    }
+    // The member-level lift never guesses a kernel dimension for a
+    // participant's budget word — `dimension: "unknown"`, raw preserved
+    // by the caller on `stop_reason_raw`.
+    let j = lift_stop_reason_json("max_tokens");
+    assert_eq!(j.get("dimension").and_then(Json::as_str), Some("unknown"));
+    assert_eq!(
+        j.get("kind").and_then(Json::as_str),
+        Some("budget_exhausted")
+    );
+}
+
+/// `map_tool_call_status` — the five-status hosted table lands on the
+/// native effect classes; an undeclared spelling reports
+/// `action.effect.unknown{cause: executor_error}` with `status_raw`
+/// preserved — never `read_only`, never a fabricated terminal.
+#[test]
+fn s4_13_hosted_status_map_five_plus_unknown() {
+    use hh_hosting::hosted_status::{hosted_lifecycle_payload, map_tool_call_status};
+    assert_eq!(
+        map_tool_call_status("pending").class(),
+        "action.effect.intended"
+    );
+    assert_eq!(
+        map_tool_call_status("in_progress").class(),
+        "action.effect.committed"
+    );
+    let applied = map_tool_call_status("completed");
+    assert_eq!(applied.class(), "action.effect.observed");
+    assert_eq!(applied.members(), vec![("outcome", Json::str("applied"))]);
+    let failed = map_tool_call_status("failed");
+    assert_eq!(failed.class(), "action.effect.observed");
+    assert_eq!(
+        failed.members(),
+        vec![("outcome", Json::str("not_applied"))]
+    );
+    let cancelled = map_tool_call_status("cancelled");
+    assert_eq!(cancelled.class(), "action.effect.unknown");
+    assert_eq!(cancelled.members(), vec![("cause", Json::str("cancelled"))]);
+    // Undeclared — `executor_error`, and the participant's own spelling is
+    // preserved on `status_raw`.
+    let und = map_tool_call_status("vendor_mystery");
+    assert_eq!(und.class(), "action.effect.unknown");
+    let p = hosted_lifecycle_payload("vendor_mystery");
+    assert_eq!(
+        p.get("cause").and_then(Json::as_str),
+        Some("executor_error")
+    );
+    assert_eq!(
+        p.get("status_raw").and_then(Json::as_str),
+        Some("vendor_mystery")
+    );
+    // A hosted `turn.finished` with only `stop_reason_raw` lifts the raw
+    // spelling through the table (the lifted `stop_reason` member appears;
+    // the participant's word survives beside it).
+    let mut e = hosted("turn.finished", "s1", 3);
+    e.payload = Json::obj([
+        ("turn_id", Json::str("t1")),
+        ("stop_reason_raw", Json::str("max_tokens")),
+    ]);
+    let lifted = hh_hosting::proj::lift_event(&e);
+    assert_eq!(lifted.class, "lifecycle.turn.finished");
+    assert_eq!(lifted.turn_id.as_deref(), Some("t1"));
+    assert_eq!(
+        lifted
+            .payload
+            .get("stop_reason")
+            .and_then(|s| s.get("kind"))
+            .and_then(Json::as_str),
+        Some("budget_exhausted")
+    );
+    assert_eq!(
+        lifted.payload.get("stop_reason_raw").and_then(Json::as_str),
+        Some("max_tokens")
+    );
+    // Unknown kinds land as `lifecycle.hosted.native_record` — nothing
+    // silently drops (CC3).
+    let e = hosted("_vendor.heartbeat", "s1", 9);
+    let lifted = hh_hosting::proj::lift_event(&e);
+    assert_eq!(lifted.class, "lifecycle.hosted.native_record");
+    assert_eq!(
+        lifted.payload.get("kind").and_then(Json::as_str),
+        Some("_vendor.heartbeat")
+    );
+}

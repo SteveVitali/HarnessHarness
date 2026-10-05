@@ -129,6 +129,30 @@ impl Store {
         Ok(report)
     }
 
+    /// One compensated effect, outside the run-wide walk — S4.13's
+    /// `discard_branch` drives the discard table's compensable effects
+    /// through the same `saga_step` (one lifecycle, one record — CC1).
+    /// Returns the disposition string the caller reports:
+    /// `compensated` | `abandoned` | `in_flight`.
+    pub(crate) fn compensate_one(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        gen: u64,
+        original: &str,
+        dispatch: &mut dyn FnMut(&CompensationIntent) -> Result<Json, String>,
+    ) -> Result<String, LedgerError> {
+        let mut report = SagaReport::default();
+        self.saga_step(run_id, lease, gen, original, dispatch, &mut report)?;
+        Ok(if report.compensated.iter().any(|e| e == original) {
+            "compensated".to_string()
+        } else if report.abandoned.iter().any(|e| e == original) {
+            "abandoned".to_string()
+        } else {
+            "in_flight".to_string()
+        })
+    }
+
     /// One saga step — `original` is `observed{applied}` + `compensable`.
     fn saga_step(
         &mut self,

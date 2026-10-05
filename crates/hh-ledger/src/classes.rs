@@ -316,6 +316,9 @@ const EFFECT_FIELDS: &[AuditField] = &[
     af("permission_id"),
     af("reason"),
     af("reason_code"),
+    // S4.13 — `refused{decider}` names the refusing authority (`kernel` on
+    // the branch discard/abandon paths).
+    af("decider"),
     af("compensates"),
     af("reverts"),
     af("fencing_token"),
@@ -336,6 +339,9 @@ const EFFECT_FIELDS: &[AuditField] = &[
     af("kind"),
     af("model"),
     af("branch_id"),
+    // S4.13 (R-2.2.4) — `committed{release: "branch_promotion"}` marks the
+    // promotion's fresh write-ahead commit (a `decided` gate row precedes it).
+    af("release"),
     // S1.16 (R-2.5.5; ADR-0100/0101/0102) — the execution-contract members:
     // `prepared{attribution_token_hash, deadline, output_policy_ref}`,
     // `observed{exit_status, outcome_ref, output_artifact_ids,
@@ -646,6 +652,11 @@ const BUDGET_AUDIT_FIELDS: &[AuditField] = &[
     afb("old", AUDIT_FIELD_LIST_BYTES),
     afb("new", AUDIT_FIELD_LIST_BYTES),
     af("authority"),
+    // S4.13 (AC-R-2.2.4-10) — `control.budget.exceeded{node, root_first}`:
+    // the exhausted `BudgetNode`/slice id and the root-first marker (the
+    // manifest `budget` id => every open branch abandons).
+    af("node"),
+    af("root_first"),
 ];
 
 /// `control.decision` — the audit-grade decision row. The §5e.1 full payload
@@ -760,6 +771,47 @@ const HEAD_MOVED_FIELDS: &[AuditField] = &[
     af("reason"),
 ];
 
+/// `lifecycle.branch.opened` — the intra-run branch record (S4.13; R-2.2.4 §4.9):
+/// `{branch_id, fork_seq, fork_event_id, kind, read_only, policy?,
+/// budget_slice_id?, env_binding?, evidence_path?}` — `scope.branch_id` opens.
+const BRANCH_OPENED_FIELDS: &[AuditField] = &[
+    af("branch_id"),
+    af("fork_seq"),
+    af("fork_event_id"),
+    af("kind"),
+    af("read_only"),
+    afb("policy", AUDIT_FIELD_LIST_BYTES),
+    af("budget_slice_id"),
+    af("env_binding"),
+    af("evidence_path"),
+    // S4.13 (AC-R-2.2.4-10) — the permission ids the branch claims; each
+    // must be `allow`-decided/granted in the parent run at `fork`.
+    afb("permissions", AUDIT_FIELD_LIST_BYTES),
+];
+
+/// `lifecycle.branch.disposed` — `{branch_id, disposition,
+/// released[]?, denied[]?, refused[]?, compensated[]?, uncompensable[]?,
+/// unresolved[]?, uncaptured[]?, merged_at_event_id?,
+/// restored_snapshot_ref?}` — `scope.branch_id` closes.
+const BRANCH_DISPOSED_FIELDS: &[AuditField] = &[
+    af("branch_id"),
+    af("disposition"),
+    afb("released", AUDIT_FIELD_LIST_BYTES),
+    afb("denied", AUDIT_FIELD_LIST_BYTES),
+    afb("refused", AUDIT_FIELD_LIST_BYTES),
+    afb("compensated", AUDIT_FIELD_LIST_BYTES),
+    afb("uncompensable", AUDIT_FIELD_LIST_BYTES),
+    afb("unresolved", AUDIT_FIELD_LIST_BYTES),
+    afb("uncaptured", AUDIT_FIELD_LIST_BYTES),
+    af("merged_at_event_id"),
+    af("restored_snapshot_ref"),
+    // S4.13 (AC-R-2.2.4-10) — `disposed{abandoned}` from
+    // `branch.budget_exhausted` records `{reason: "budget_exhausted",
+    // budget_slice_id}` (the slice whose exhaustion ended the branch).
+    af("reason"),
+    af("budget_slice_id"),
+];
+
 /// `lifecycle.ledger.gc` — `{addresses[], policy_ref, tier, retained_until?}`.
 const GC_FIELDS: &[AuditField] = &[
     afb("addresses", AUDIT_FIELD_LIST_BYTES),
@@ -838,7 +890,7 @@ const TRANSITION_FIELDS: &[AuditField] = &[
 
 use crate::manifest::ObservabilityLevel as O;
 use Durability::{Ephemeral as Eph, Ledger as Led};
-use ScopeKind::{Effect, ModelCall, ToolCall, Turn};
+use ScopeKind::{Branch, Effect, ModelCall, ToolCall, Turn};
 
 /// The hosted-lowering column (ADR-0164 D4/D5; R-2.10.6⁰). Every registered class
 /// appears exactly once; the value is one of:
@@ -1078,6 +1130,11 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── lifecycle:session ──
     ("lifecycle.session.attached", "none"),
     ("lifecycle.session.detached", "none"),
+    // S4.13 (AC-R-2.2.3-15) — the hosted-resume return path: hosted
+    // `session.resumed` lifts onto this class (`resume_event_ref`/`carried`
+    // pass through verbatim — a continuation's resume point is
+    // reconstructible from the native log).
+    ("lifecycle.session.resumed", "session.resumed"),
     // ── lifecycle:surface ──
     ("lifecycle.surface.call.minted", "none"),
     ("lifecycle.surface.invoked", "none"),
@@ -1277,8 +1334,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // Non-audit lifecycle rows — still kernel-origin + provenance-bearing.
     row("lifecycle.turn.started",          Led, O::Events, false, true,  Some(Turn), None),
     row("lifecycle.turn.finished",         Led, O::Events, false, true,  None, Some(Turn)),
-    row("lifecycle.branch.opened",         Led, O::Events, false, true,  None, None),
-    row("lifecycle.branch.disposed",       Led, O::Events, false, true,  None, None),
+    // S4.13 (R-2.2.4): intra-run branch records are audit-grade with a
+    // declared partition; `opened` opens the `branch_id` scope, `disposed`
+    // closes it.
+    row_audit("lifecycle.branch.opened",   O::Events, true,  BRANCH_OPENED_FIELDS, &[], Some(Branch), None),
+    row_audit("lifecycle.branch.disposed", O::Events, true,  BRANCH_DISPOSED_FIELDS, &[], None, Some(Branch)),
     row("lifecycle.replay.started",        Led, O::Events, false, true,  None, None),
     row("lifecycle.replay.finished",       Led, O::Events, false, true,  None, None),
     row("lifecycle.component.bound",       Led, O::Events, false, true,  None, None),
@@ -1298,6 +1358,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("lifecycle.surface.call.minted",   Led, O::Events, false, true,  None, None),
     row("lifecycle.session.attached",      Led, O::Events, false, true,  None, None),
     row("lifecycle.session.detached",      Led, O::Events, false, true,  None, None),
+    // S4.13 — the hosted `session.resumed` lift target (§4.9.2 resume
+    // mapping; distinct from `lifecycle.run.resumed` — a hosted resume is
+    // never a kernel suspension resume, so the suspension fold does not
+    // fire on it).
+    row("lifecycle.session.resumed",       Led, O::Events, false, true,  None, None),
     row("lifecycle.contract.deprecated_use", Led, O::Events, false, true, None, None),
     // `lifecycle.run.imported` — the S3.1 import receipt (§5h.3 §2 `import`;
     // R-2.9.3⁰; ADR-0141 D1): kernel-minted, refs/coordinates only — lifted
