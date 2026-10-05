@@ -471,6 +471,7 @@ fn types_schema() -> Json {
                     ("attendance", "AttendanceDeclaration", true),
                     ("approval_mode", "string", false),
                     ("spawn_event", "SpawnEventRef", false),
+                    ("notification_sink", "string", false),
                 ],
             ),
             (
@@ -504,6 +505,7 @@ fn types_schema() -> Json {
             ("idempotency_key", "string", true),
             ("invocation", "InvocationRecord", false),
             ("client", "ClientDecl", false),
+            ("contract_json", "json", false),
         ]),
     );
     m.insert(
@@ -812,6 +814,18 @@ fn types_schema() -> Json {
             ("session_id", "string", true),
             ("expected_turn_id", "string", false),
             ("input", "[json]", true),
+            ("idempotency_key", "string", false),
+        ]),
+    );
+    // `set_coordinate` — implemented at S4.12 (§7.4; ADR-0177 D10):
+    // `model` re-lowers the bound profile; unknown names are
+    // `UnknownCoordinate`.
+    m.insert(
+        "SetCoordinateParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("coordinate", "string", true),
+            ("value", "json", true),
             ("idempotency_key", "string", false),
         ]),
     );
@@ -1247,6 +1261,7 @@ fn errors_schema() -> Json {
         ("Fenced", 1504, &["detail"]),
         ("EnvironmentUnavailable", 1600, &["reason"]),
         ("UnknownCapability", 1601, &["capability"]),
+        ("UnknownCoordinate", 1602, &["coordinate"]),
         ("Overloaded", 1700, &[]),
         ("Disconnected", 1701, &[]),
         ("Timeout", 1702, &[]),

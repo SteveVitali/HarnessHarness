@@ -112,3 +112,55 @@ impl SessionTransport for MemorySessionTransport {
         }
     }
 }
+
+/// `StdioSessionTransport` — newline-delimited JSON-RPC over a
+/// reader/writer pair (the `hh acp` verb's channel: stdin frames in,
+/// `session/update` + responses out on stdout — progress lines belong
+/// to the caller's stderr, never the frame stream). One canonical
+/// JSON frame per line, both directions — the same framing binding
+/// (b) uses for `hh-embed/1` (ADR-0179 D3), so an ACP client can
+/// share one codec.
+pub struct StdioSessionTransport<R: std::io::BufRead, W: std::io::Write> {
+    /// Inbound frame lines.
+    reader: R,
+    /// Outbound frame lines.
+    writer: W,
+}
+
+impl<R: std::io::BufRead, W: std::io::Write> StdioSessionTransport<R, W> {
+    /// `new(reader, writer)` — stdin/stdout (or a pipe pair in tests).
+    pub fn new(reader: R, writer: W) -> Self {
+        Self { reader, writer }
+    }
+}
+
+impl<R: std::io::BufRead, W: std::io::Write> SessionTransport for StdioSessionTransport<R, W> {
+    fn send(&mut self, frame: Json) -> Result<(), String> {
+        let line = frame.to_canonical_string();
+        self.writer
+            .write_all(line.as_bytes())
+            .and_then(|_| self.writer.write_all(b"\n"))
+            .and_then(|_| self.writer.flush())
+            .map_err(|e| format!("stdio/write: {e}"))
+    }
+
+    fn recv(&mut self) -> Result<Option<Json>, String> {
+        loop {
+            let mut line = String::new();
+            match self.reader.read_line(&mut line) {
+                Ok(0) => return Ok(None), // EOF — the peer closed
+                Ok(_) => {
+                    let t = line.trim();
+                    if t.is_empty() {
+                        continue; // blank separators are not frames
+                    }
+                    match hh_wire::json::parse(t) {
+                        Ok(f) => return Ok(Some(f)),
+                        Err(e) => return Err(format!("stdio/frame: {e:?}")),
+                    }
+                }
+                Err(e) => return Err(format!("stdio/read: {e}")),
+            }
+        }
+    }
+}

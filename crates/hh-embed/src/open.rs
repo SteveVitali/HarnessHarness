@@ -271,7 +271,9 @@ impl EmbedService {
         };
         match replay {
             Replay::Verbatim(hit) => return Ok(hit),
-            Replay::AttachOf(run_id) => return self.open_attach(&run_id, p.client.as_ref()),
+            Replay::AttachOf(run_id) => {
+                return self.open_attach(&run_id, p.client.as_ref(), p.contract_json.as_ref())
+            }
             Replay::None => {}
         }
         let session = match &p.spec {
@@ -288,6 +290,7 @@ impl EmbedService {
                 workspace_trust,
                 narrowing_leaves,
                 spawn_event,
+                notification_sink,
             } => self.open_new(
                 definition,
                 overrides,
@@ -301,6 +304,9 @@ impl EmbedService {
                 workspace_trust.as_deref(),
                 narrowing_leaves,
                 spawn_event.as_ref(),
+                notification_sink.as_deref(),
+                p.client.as_ref(),
+                p.contract_json.as_ref(),
                 p.invocation.as_ref(),
             )?,
             OpenSpec::Resume {
@@ -309,19 +315,32 @@ impl EmbedService {
                 definition,
                 ..
             } => self.open_resume(run_id, mode, definition.as_ref(), p.invocation.as_ref())?,
-            OpenSpec::Attach { run_id } => self.open_attach(run_id, p.client.as_ref())?,
+            OpenSpec::Attach { run_id } => {
+                self.open_attach(run_id, p.client.as_ref(), p.contract_json.as_ref())?
+            }
         };
         // S4.10 (§7.2 P8): a declared `client` rides on every opened
         // session — the delivery mint + responder stamping key off it.
-        if p.client.is_some() {
+        if p.client.is_some() || p.contract_json.is_some() {
             if let Some(sid) = session.get("session_id").and_then(Json::as_str) {
                 if let Some(s) = self.sessions.get_mut(sid) {
-                    s.client = p.client.clone();
+                    if p.client.is_some() {
+                        s.client = p.client.clone();
+                    }
+                    if p.contract_json.is_some() {
+                        s.contract_json = p.contract_json.clone();
+                    }
                 }
             }
         }
         self.open_idem
             .insert(p.idempotency_key.clone(), session.clone());
+        // §7.1 D-2 — an `open_session` that minted deferred asks delivers
+        // them to the declared `notification_sink` before returning (the
+        // sink file is a derived view of the durable pending rows).
+        if let Some(sid) = session.get("session_id").and_then(Json::as_str) {
+            self.flush_notification_sink(sid)?;
+        }
         Ok(session)
     }
 
@@ -353,8 +372,34 @@ impl EmbedService {
         workspace_trust: Option<&str>,
         narrowing_leaves: &[NarrowingLeaf],
         spawn_event: Option<&hh_embed_schema::types::SpawnEventRef>,
+        notification_sink: Option<&str>,
+        client: Option<&hh_embed_schema::ClientDecl>,
+        contract_json: Option<&Json>,
         invocation: Option<&InvocationRecord>,
     ) -> Result<Json, EmbedError> {
+        // §7.1 D-2 notification-sink validation (ADR-0304 D1): the sink
+        // is a kernel-side *delivery* declaration — Stage-1 admits only
+        // `sink:file:<rel>` (a workspace-relative path the host watches).
+        // An absolute or escaping path can never be a workspace-relative
+        // delivery target → `SchemaViolation` pre-ledger.
+        if let Some(s) = notification_sink {
+            if let Some(p) = s.strip_prefix("sink:file:") {
+                let bad = p.is_empty()
+                    || p.starts_with('/')
+                    || p.split('/').any(|seg| seg == ".." || seg.is_empty());
+                if bad {
+                    return Err(EmbedError::SchemaViolation {
+                        path: "spec.notification_sink".to_string(),
+                        code: "sink_path_escape".to_string(),
+                    });
+                }
+            } else {
+                return Err(EmbedError::SchemaViolation {
+                    path: "spec.notification_sink".to_string(),
+                    code: "unsupported_sink".to_string(),
+                });
+            }
+        }
         // `max_in_flight_sessions` bounds *live* sessions — a fenced or
         // detached session is residue, not in-flight (the negotiated
         // cap would otherwise deadlock the parked-run workflow: a
@@ -489,6 +534,15 @@ impl EmbedService {
                 .extra
                 .insert("approval_mode".to_string(), Json::str(am));
         }
+        // §7.1 D-2 — the declared `notification_sink` is a manifest claim
+        // (`manifest.extra["notification_sink"]`) every later session
+        // re-reads for delivery: the durable pending rows are the
+        // authority, the sink is a derived view (ADR-0304 D1).
+        if let Some(s) = notification_sink {
+            manifest
+                .extra
+                .insert("notification_sink".to_string(), Json::str(s));
+        }
         // The declared Π narrowing leaves (surface presets — ADR-0168 D3):
         // their ids are a `policy_fingerprint` leg, so the manifest records
         // the id set the fingerprint folded (leaf change ⇒ lease revocation
@@ -619,15 +673,24 @@ impl EmbedService {
 
         // ── session + driver ─────────────────────────────────────────
         let session_id = self.alloc_session_id();
+        let mut attached_payload = Json::obj([
+            ("session_id", Json::str(session_id.clone())),
+            ("mode", Json::str("new")),
+            ("attachment_id", Json::str(session_id.clone())),
+        ]);
+        if let Json::Obj(m) = &mut attached_payload {
+            if let Some(c) = client {
+                m.insert("client".into(), c.to_json());
+            }
+            if let Some(ct) = contract_json {
+                m.insert("contract_json".into(), ct.clone());
+            }
+        }
         self.mint(
             &run_id,
             &lease,
             "lifecycle.session.attached",
-            Json::obj([
-                ("session_id", Json::str(session_id.clone())),
-                ("mode", Json::str("new")),
-                ("attachment_id", Json::str(session_id.clone())),
-            ]),
+            attached_payload,
         )?;
 
         let surfaces = driver_surfaces(&cap_decl);
@@ -684,7 +747,9 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
-            client: None,
+            client: client.cloned(),
+            contract_json: contract_json.cloned(),
+            sink_seq: head.seq as i64,
         };
         self.sessions.insert(session_id.clone(), sess);
         // Persist the resume-by-leaf pair (S2.3) — a resume right
@@ -1282,6 +1347,8 @@ impl EmbedService {
             next_completion: String::new(),
             next_response_ref: String::new(),
             client: None,
+            contract_json: None,
+            sink_seq: head.seq as i64,
         };
         self.sessions.insert(session_id.clone(), sess);
         Ok(session_json(
@@ -1306,11 +1373,13 @@ impl EmbedService {
     /// `lifecycle.session.attached{binding, client{kind}}` on the subject
     /// run — the durable surface-session record §7.2 P12/§6.6 require and
     /// the V10 accountability view reads (ADR-0301 D2; kernel-origin row via
-    /// `commit_kernel_row_for` — an attach session holds no lease).
+    /// `commit_kernel_row_for` — an attach session holds no lease). A
+    /// declared `contract_json` rides the same row (AC-R-2.11.4-15).
     fn open_attach(
         &mut self,
         run_id: &str,
         client: Option<&hh_embed_schema::ClientDecl>,
+        contract_json: Option<&Json>,
     ) -> Result<Json, EmbedError> {
         // `max_in_flight_sessions` bounds *live* sessions — a fenced or
         // detached session is residue, not in-flight (the negotiated
@@ -1369,6 +1438,8 @@ impl EmbedService {
             next_completion: String::new(),
             next_response_ref: String::new(),
             client: client.cloned(),
+            contract_json: contract_json.cloned(),
+            sink_seq: head.seq as i64,
         };
         self.sessions.insert(session_id.clone(), sess);
         // The surface-session record (§7.2 §6.6) — minted only for
@@ -1379,16 +1450,22 @@ impl EmbedService {
         // (kernel-origin facts, never a client lease).
         if let Some(c) = client {
             let binding = self.binding_label.clone();
+            let mut payload = Json::obj([
+                ("session_id", Json::str(session_id.clone())),
+                ("binding", Json::str(binding)),
+                ("client", c.to_json()),
+            ]);
+            if let Some(ct) = contract_json {
+                if let Json::Obj(m) = &mut payload {
+                    m.insert("contract_json".into(), ct.clone());
+                }
+            }
             self.store
                 .commit_kernel_row_for(
                     "kernel:surface",
                     run_id,
                     "lifecycle.session.attached",
-                    Json::obj([
-                        ("session_id", Json::str(session_id.clone())),
-                        ("binding", Json::str(binding)),
-                        ("client", c.to_json()),
-                    ]),
+                    payload,
                     vec![],
                     vec![],
                 )
@@ -1407,6 +1484,100 @@ impl EmbedService {
             &realized,
             head.seq as i64,
         ))
+    }
+
+    /// §7.1 D-2 — the declared `notification_sink` delivery sweep
+    /// (ADR-0304 D1): every durable `security.permission.requested`,
+    /// `security.permission.pending`, `security.permission.decided`,
+    /// or `lifecycle.run.suspended` row appended since the session's
+    /// watermark lands on the run's declared `sink:file:<rel>` as one
+    /// canonical JSON line (`{seq, event_id, class, ts, payload}`).
+    /// The ledger rows are the authority — the sink file is a derived,
+    /// at-least-once notification view a detached host watches; a run
+    /// with no declared sink (or a sink other than `sink:file:*`) is a
+    /// no-op.
+    pub(crate) fn flush_notification_sink(&mut self, session_id: &str) -> Result<(), EmbedError> {
+        let Some(s) = self.sessions.get_mut(session_id) else {
+            return Ok(());
+        };
+        let run_id = s.run_id.clone();
+        let since = s.sink_seq;
+        let manifest = self.store.manifest(&run_id).map_err(ledger_err)?.clone();
+        let Some(sink) = manifest
+            .extra
+            .get("notification_sink")
+            .and_then(Json::as_str)
+            .map(str::to_string)
+        else {
+            return Ok(());
+        };
+        let Some(rel) = sink.strip_prefix("sink:file:").map(str::to_string) else {
+            return Ok(());
+        };
+        let events = self.store.events(&run_id).map_err(ledger_err)?;
+        let rows: Vec<Json> = events
+            .iter()
+            .filter(|e| {
+                (e.seq as i64) > since
+                    && matches!(
+                        e.class.as_str(),
+                        "security.permission.requested"
+                            | "security.permission.pending"
+                            | "security.permission.decided"
+                            | "lifecycle.run.suspended"
+                    )
+            })
+            .map(|e| {
+                Json::obj([
+                    ("seq", Json::Int(e.seq as i64)),
+                    ("event_id", Json::str(e.event_id.clone())),
+                    ("class", Json::str(e.class.clone())),
+                    ("ts", Json::str(e.ts.clone())),
+                    ("payload", e.payload.clone()),
+                ])
+            })
+            .collect();
+        let watermark = events.last().map(|e| e.seq as i64).unwrap_or(since);
+        if rows.is_empty() {
+            if let Some(s) = self.sessions.get_mut(session_id) {
+                s.sink_seq = watermark;
+            }
+            return Ok(());
+        }
+        // Delivery is best-effort: the durable pending/asked rows are the
+        // authority, so a sink write failure never fails the dispatch —
+        // the watermark only advances past rows actually written (a later
+        // session retries the tail, at-least-once).
+        let path = self.workspace_root().join(&rel);
+        if let Some(parent) = path.parent() {
+            if std::fs::create_dir_all(parent).is_err() {
+                return Ok(());
+            }
+        }
+        let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+        else {
+            return Ok(());
+        };
+        use std::io::Write;
+        let mut delivered_upto = since;
+        for (i, row) in rows.iter().enumerate() {
+            let mut line = row.to_canonical_string();
+            line.push('\n');
+            if f.write_all(line.as_bytes()).is_err() {
+                break;
+            }
+            if let Json::Int(s) = row.get("seq").cloned().unwrap_or(Json::Int(0)) {
+                delivered_upto = s;
+            }
+            let _ = i;
+        }
+        if let Some(s) = self.sessions.get_mut(session_id) {
+            s.sink_seq = delivered_upto;
+        }
+        Ok(())
     }
 
     /// `close{reason}` — the writer's drain (interrupt → finished →

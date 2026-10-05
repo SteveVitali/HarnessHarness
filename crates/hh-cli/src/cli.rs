@@ -16,8 +16,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
 
 use hh_embed_client_generated::{
-    AttendanceDeclaration, AttendanceValue, InvocationRecord, OutputFormat, Override,
-    PermissionOutcome, Session,
+    AttendanceDeclaration, AttendanceSource, AttendanceValue, InvocationRecord, OutputFormat,
+    Override, PermissionOutcome, Session,
 };
 use hh_wire::json::Json;
 
@@ -308,10 +308,25 @@ const VALUE_FLAGS: &[&str] = &[
     "cell",
     "run",
     "holder",
+    // ── S4.12 — `async`/`defer` (§7.1 D-2; ADR-0304) ──
+    "defer",
+    // `hh acp`/`hh serve`/`leaderboard`/`profile`/`participant` operands ──
+    "report",
+    "probes",
+    "participant-ref",
+    "base",
+    // `--profile <coordinate>` — the bound profile coordinate an
+    // on-demand compile resolves through the registry
+    // (`lab.assembly.compile{profile_refs}` — the same spelling
+    // `set_coordinate` takes; never a CLI-side substitute).
+    "profile",
 ];
 
 const SWITCHES: &[&str] = &[
     "no-input", "bypass", "takeover", "follow", "cancel", "help", "dry-run",
+    // S4.12 — the detached-async invocation switch (`--defer` carries
+    // the notification-sink value and is a VALUE flag).
+    "async", "drive",
 ];
 
 impl Parsed {
@@ -339,7 +354,12 @@ fn parse_args(argv: &[String]) -> Result<Parsed, InvocationError> {
             "usage: hh run <verb> | hh approval <verb> | hh version | hh doctor",
         ));
     }
-    let single = matches!(noun.as_str(), "version" | "doctor" | "compact");
+    let single = matches!(
+        noun.as_str(),
+        // S4.12 — `serve`/`acp` are verb-less surface commands: the
+        // operand is positional, never a sub-verb (§7.1 C1 row).
+        "version" | "doctor" | "compact" | "serve" | "acp"
+    );
     let verb = if single {
         noun.clone()
     } else {
@@ -1009,6 +1029,13 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
             OutputFormat::Json,
         )),
         ("compact", _) => go(cmd_compact(b, io, p, argv)),
+        // ── S4.12 — the §7.1 C1 surface verbs (`serve`/`acp`) + the
+        // `leaderboard *`/`profile *` nouns (R-2.11.1 stage row;
+        // `participant *` landed at S4.5a) ──
+        ("serve", _) => go(crate::lab::cmd_serve(b, io, p)),
+        ("acp", _) => go(crate::lab::cmd_acp(b, io, p)),
+        ("leaderboard", verb) => go(crate::lab::cmd_leaderboard(b, io, p, verb)),
+        ("profile", verb) => go(crate::lab::cmd_profile(b, io, p, verb)),
         ("config", "explain") => go(cmd_config_explain(b, io, p, argv)),
         ("approval", "list") => go(cmd_approval_list(b, io, p, argv)),
         ("approval", "show") => go(cmd_approval_show(b, io, p, argv)),
@@ -1583,6 +1610,62 @@ fn cmd_run_start(
 
     // ── attendance + format + invocation record ──────────────────────
     let r = resolve(p, io, argv, true, stdin_used)?;
+
+    // ── S4.12 — `async`/`defer` (§7.1 D-2; ADR-0304 D1): `--async`
+    // declares `attendance = async` and detaches after `submit`;
+    // `--defer <relpath>` additionally binds `sink:file:<relpath>` as
+    // the notification sink and lowers to
+    // `approval_mode = unattended_defer` — the spec's defaults table
+    // admits `unattended_defer` only when a sink is configured
+    // (`async`). Both are *invocation* modes: the durable record is
+    // the authority; the sink file is a derived at-least-once view.
+    let defer_sink = p.flag("defer");
+    let async_invocation = p.has("async") || defer_sink.is_some();
+    if async_invocation {
+        if p.flag("attendance").is_some() {
+            return Err(CliError::Invocation(InvocationError::at(
+                "flag_conflict",
+                "--attendance",
+                "--async/--defer declare `attendance = async`; drop the --attendance flag",
+            )));
+        }
+        if p.has("no-input") {
+            return Err(CliError::Invocation(InvocationError::at(
+                "flag_conflict",
+                "--no-input",
+                "--no-input forces `unattended`; --async/--defer declare `async`",
+            )));
+        }
+    }
+    if defer_sink.is_some() {
+        if let Some(am) = p.flag("approval-mode") {
+            if am != "unattended_defer" {
+                return Err(CliError::Invocation(InvocationError::at(
+                    "flag_conflict",
+                    "--approval-mode",
+                    "--defer lowers to `unattended_defer`; the modes disagree",
+                )));
+            }
+        }
+        if let Some(pre) = preset {
+            if pre.approval_mode != "unattended_defer" {
+                return Err(CliError::Invocation(InvocationError::at(
+                    "flag_conflict",
+                    "--preset",
+                    "--defer lowers to `unattended_defer`; the preset's mode disagrees",
+                )));
+            }
+        }
+    }
+    let attendance = if async_invocation {
+        AttendanceDeclaration {
+            value: AttendanceValue::Async,
+            source: AttendanceSource::Declared,
+        }
+    } else {
+        r.attendance.clone()
+    };
+
     let approval_mode = match (p.flag("approval-mode"), preset) {
         (Some(am), Some(pre)) if am != pre.approval_mode => {
             return Err(CliError::Invocation(InvocationError::at(
@@ -1596,9 +1679,16 @@ fn cmd_run_start(
         }
         (Some(am), _) => Some(am),
         (None, Some(pre)) => Some(pre.approval_mode.to_string()),
-        (None, None) => Some(match r.attendance.value {
-            AttendanceValue::Interactive => "tiered".to_string(),
-            _ => "unattended_deny".to_string(),
+        (None, None) => Some(if defer_sink.is_some() {
+            // §7.1 D-2 defaults row — `unattended_defer` only when a
+            // notification sink is configured (`async` alone stays on
+            // the `unattended_deny` floor).
+            "unattended_defer".to_string()
+        } else {
+            match attendance.value {
+                AttendanceValue::Interactive => "tiered".to_string(),
+                _ => "unattended_deny".to_string(),
+            }
         }),
     };
     // `BypassWithoutContainment` — fires on the *effective* mode, so the
@@ -1651,7 +1741,7 @@ fn cmd_run_start(
             Json::Arr(overrides.iter().map(|o| o.to_json()).collect()),
         ),
         ("environment", environment.clone()),
-        ("attendance", r.attendance.to_json()),
+        ("attendance", attendance.to_json()),
         (
             "supplies",
             Json::obj([
@@ -1680,6 +1770,16 @@ fn cmd_run_start(
         if workspace_trust != "unknown" {
             m.insert("workspace_trust".into(), Json::str(workspace_trust));
         }
+        // §7.1 D-2 — `--defer <relpath>` binds the `sink:file:` sink
+        // the kernel sweeps `security.permission.*`/`suspended` rows
+        // to (ADR-0304 D1: path syntax is kernel-validated; a bad
+        // spelling is `SchemaViolation`, never a silent drop).
+        if let Some(rel) = &defer_sink {
+            m.insert(
+                "notification_sink".into(),
+                Json::str(format!("sink:file:{rel}")),
+            );
+        }
     }
     let sess_raw = b.call(
         "open_session",
@@ -1696,6 +1796,53 @@ fn cmd_run_start(
 
     let mut st = LoopState::new(b, -1);
     let interactive = r.attendance.value == AttendanceValue::Interactive;
+
+    // S4.12 — `async`/`defer` detach (§7.1 D-2): submit the work and
+    // leave the writer session live — the run keeps driving kernel-side
+    // and asks defer to the declared sink (or `unattended_deny` when
+    // `--async` named none). `run resume --takeover`/`approval respond`
+    // reattach later; nothing in this invocation blocks on the terminal
+    // (the "detach without deadlocking" contract).
+    if async_invocation {
+        match b.call(
+            "submit",
+            &Json::obj([
+                ("session_id", Json::str(sess.session_id.clone())),
+                ("input", Json::Arr(input)),
+                (
+                    "idempotency_key",
+                    Json::str(step_key(&r.invocation, "submit")),
+                ),
+            ]),
+        ) {
+            Ok(_) => {}
+            // `Draining` on an idempotent replay = the run already
+            // finished — the same run, not a second one (I-1).
+            Err(CliError::Kernel(k)) if k.kind == "Draining" => {}
+            Err(e) => return Err(e),
+        }
+        let mut out = Json::obj([
+            ("state", Json::str("deferred")),
+            ("run_id", Json::str(sess.run_id.clone())),
+            ("session_id", Json::str(sess.session_id.clone())),
+        ]);
+        if let Json::Obj(m) = &mut out {
+            if let Some(rel) = &defer_sink {
+                m.insert(
+                    "notification_sink".into(),
+                    Json::str(format!("sink:file:{rel}")),
+                );
+            }
+        }
+        return Ok((
+            CliOutcome {
+                class: ExitClass::Ok,
+                result: result_record("run_deferred", &out, ExitClass::Ok),
+            },
+            r.format,
+        ));
+    }
+
     // Attend open-time asks before injecting work — `open_session`
     // minted them durably and the upcalls are already queued. On an
     // idempotent replay the boundary hands back an attach handle on the

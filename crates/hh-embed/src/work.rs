@@ -16,6 +16,7 @@ use hh_ledger::branch::{BranchKind, EnvBinding, ForkOpts, NavigateTarget, Replay
 use hh_ledger::event::{Cursor, Direction as ReadDir};
 use hh_ledger::manifest::{RunKind, RunManifest};
 use hh_ledger::views::ViewKind;
+use hh_provenance::ProvenanceRecord;
 use hh_wire::json::Json;
 use std::collections::BTreeMap;
 
@@ -259,6 +260,147 @@ impl EmbedService {
                 Ok(out)
             }
         }
+    }
+
+    /// `set_coordinate{session_id, coordinate, value, idempotency_key?}`
+    /// (§7.4 §2.6; ADR-0177 D10; AC-R-2.11.4-14): the session-variable
+    /// parameters WS-C3 names. `model` is the profile coordinate — the
+    /// change is §3.2.2's `relower`: the requested coordinate resolves
+    /// through the registry (`UnknownCoordinate`, never a silent
+    /// substitute), stages 3–5 re-run under it, `runtime_plan` is
+    /// unchanged, a new `bundle_id` issues, and
+    /// `model.surface.relowered{old_bundle_id, new_bundle_id,
+    /// old_profile_ref, new_profile_ref, dropped_items[],
+    /// rewritten_items[], reason}` lands *before* the coordinate takes
+    /// effect — the durable record is the authority the next model call
+    /// reads. The new bundle member is pool-addressed so
+    /// `kernel.bundle`/`get_artifact` resolve it.
+    ///
+    /// Any other coordinate name is `UnknownCoordinate` — typed,
+    /// never ignored, never coerced to a default.
+    pub(crate) fn set_coordinate(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        inject::refuse_secrets(params)?;
+        let p = SetCoordinateParams::from_json(params)?;
+        let (run_id, lease, manifest_ref) = {
+            let s = self.writer_session(&p.session_id)?;
+            if let Some(k) = &p.idempotency_key {
+                if let Some(hit) = s.idem.get(k) {
+                    return Ok(hit.clone());
+                }
+            }
+            (
+                s.run_id.clone(),
+                s.lease.clone().ok_or(EmbedError::Refused {
+                    reason: "session_is_read_only".to_string(),
+                })?,
+                s.manifest_ref.clone(),
+            )
+        };
+        match p.coordinate.as_str() {
+            "model" => {}
+            other => {
+                return Err(EmbedError::UnknownCoordinate {
+                    coordinate: other.to_string(),
+                })
+            }
+        }
+        // The value — a coordinate string or the `{profile_ref:
+        // {profile}}`/`{profile}` spellings (`profile_binding`'s own
+        // value shapes — one resolution path, never a second grammar).
+        let coord = match &p.value {
+            Json::Str(v) => v.clone(),
+            other => other
+                .get("profile_ref")
+                .and_then(|r| r.get("profile"))
+                .or_else(|| other.get("profile"))
+                .and_then(Json::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| EmbedError::SchemaViolation {
+                    path: "/value".to_string(),
+                    code: "not_a_coordinate".to_string(),
+                })?,
+        };
+        // Registry resolution — a coordinate naming nothing admissible
+        // is `UnknownCoordinate` (revoked records coordinate nothing
+        // live either).
+        let (_version_id, profile) =
+            crate::bundle_ops::resolve_profile_coordinate(&self.registry, &coord).ok_or_else(
+                || EmbedError::UnknownCoordinate {
+                    coordinate: coord.clone(),
+                },
+            )?;
+        let new_ref = hh_compiler::profile::profile_coordinate(&profile);
+
+        let sealed = self.persisted_definition(&manifest_ref)?;
+        let kernel_prov = ProvenanceRecord::kernel("kernel:relower", self.store.now_ms());
+        let old_refs = crate::bundle_ops::pinned_profile_refs(&sealed.document);
+        // The old bundle — the same compile inputs the run compiled
+        // under (relower re-checks `runtime_plan` identity itself; a
+        // divergence is `PlanError`, never a silent plan change).
+        let old = hh_compiler::compile(
+            &hh_compiler::CompileInputs {
+                sealed: sealed.clone(),
+                profile_refs: old_refs,
+                fallback_profile: None,
+                targets: vec![],
+                compile_for_expired: false,
+            },
+            &crate::bundle_ops::RegistryProfiles(&self.registry),
+            &self.registry,
+            &self.catalog,
+            &kernel_prov,
+        )
+        .map_err(|e| EmbedError::Refused {
+            reason: format!("relower_baseline: {e:?}"),
+        })?;
+        let (new_bundle, migration) = hh_compiler::relower(
+            &old,
+            &hh_compiler::CompileInputs {
+                sealed,
+                profile_refs: vec![new_ref.clone()],
+                fallback_profile: None,
+                targets: vec![],
+                compile_for_expired: false,
+            },
+            &crate::bundle_ops::RegistryProfiles(&self.registry),
+            &self.registry,
+            &self.catalog,
+            &kernel_prov,
+            "set_coordinate",
+        )
+        .map_err(|e| EmbedError::Refused {
+            reason: format!("relower: {e:?}"),
+        })?;
+        // The durable record first (durable-before-visible): the
+        // §3.2.8 event is the authority the next model call reads —
+        // the coordinate never applies ahead of its ledger row.
+        self.mint(
+            &run_id,
+            &lease,
+            "model.surface.relowered",
+            hh_compiler::relowered_event(&migration),
+        )?;
+        // The new bundle member joins the content-addressed pool — the
+        // `new_bundle_id` the event cites is resolvable.
+        let doc = hh_compiler::schema::bundle_to_json(&new_bundle);
+        let bytes = doc.to_canonical_string().into_bytes();
+        self.store
+            .put_blob(&bytes, "application/json")
+            .map_err(ledger_err)?;
+        let out = Json::obj([
+            ("status", Json::str("applied")),
+            ("coordinate", Json::str("model")),
+            ("new_bundle_id", Json::str(new_bundle.bundle_id.clone())),
+            ("new_profile_ref", Json::str(migration.new_profile_ref)),
+            ("old_bundle_id", Json::str(migration.from_bundle)),
+            ("old_profile_ref", Json::str(migration.old_profile_ref)),
+            ("dropped_items", Json::Arr(migration.dropped_items)),
+            ("rewritten_items", Json::Arr(migration.rewritten_items)),
+        ]);
+        if let Some(k) = p.idempotency_key {
+            self.session_mut(&p.session_id)?.idem.insert(k, out.clone());
+        }
+        Ok(out)
     }
 
     /// `respond_permission` — the host's answer to a live
@@ -1243,6 +1385,8 @@ impl EmbedService {
             next_completion: String::new(),
             next_response_ref: String::new(),
             client: None,
+            contract_json: None,
+            sink_seq: head.seq as i64,
         };
         self.sessions.insert(session_id.clone(), sess);
         let mut out = session_json(
