@@ -41,13 +41,33 @@ fn main() -> ExitCode {
             println!("{}", embed::canonical_schema_bytes());
             ExitCode::SUCCESS
         }
-        "serve" => match serve::run(io::stdin().lock(), io::stdout().lock()) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(e) => {
-                eprintln!("hh-kernel serve: {e}");
-                ExitCode::FAILURE
+        "serve" => {
+            // `serve --http <addr> [--token <t>] [--token-file <path>]`
+            // binds the (c) local_network transport; bare `serve` is
+            // binding (b) over stdio (ADR-0179 D1(b) — one dispatch).
+            if args.iter().any(|a| a == "--http") {
+                let http_addr = flag_value(&args, "--http")
+                    .or_else(|| args.get(1).filter(|a| a.contains(':')).cloned())
+                    .unwrap_or_else(|| "127.0.0.1:7777".to_string());
+                let token = flag_value(&args, "--token");
+                let token_file = flag_value(&args, "--token-file").map(std::path::PathBuf::from);
+                match serve::run_http(&http_addr, token, token_file, &mut io::stderr()) {
+                    Ok(()) => ExitCode::SUCCESS,
+                    Err(e) => {
+                        eprintln!("hh-kernel serve --http: {e}");
+                        ExitCode::FAILURE
+                    }
+                }
+            } else {
+                match serve::run(io::stdin().lock(), io::stdout().lock()) {
+                    Ok(()) => ExitCode::SUCCESS,
+                    Err(e) => {
+                        eprintln!("hh-kernel serve: {e}");
+                        ExitCode::FAILURE
+                    }
+                }
             }
-        },
+        }
         "hello" => {
             println!("{}", kernel_identity().to_json().to_canonical_string());
             ExitCode::SUCCESS
@@ -149,9 +169,23 @@ fn doctor() -> ExitCode {
     }
 }
 
+/// `--flag <value>` or `--flag=<value>` — the serve-mode flag forms.
+fn flag_value(args: &[String], flag: &str) -> Option<String> {
+    let eq = format!("{flag}=");
+    for (i, a) in args.iter().enumerate() {
+        if let Some(v) = a.strip_prefix(&eq) {
+            return Some(v.to_string());
+        }
+        if a == flag {
+            return args.get(i + 1).filter(|v| !v.starts_with("--")).cloned();
+        }
+    }
+    None
+}
+
 fn print_help() {
     let _ = writeln!(
         io::stderr(),
-        "hh-kernel <export-schema|serve|hello|version|doctor>"
+        "hh-kernel <export-schema|serve [--http <addr> [--token <t>] [--token-file <path>]]|hello|version|doctor>"
     );
 }

@@ -484,11 +484,21 @@ fn types_schema() -> Json {
         ]),
     );
     m.insert(
+        "ClientDecl".into(),
+        strct(&[
+            ("kind", "string", true),
+            ("sink", "json", false),
+            ("surface_ref", "string", false),
+            ("ui_caps", "[string]", false),
+        ]),
+    );
+    m.insert(
         "OpenSessionParams".into(),
         strct(&[
             ("spec", "OpenSpec", true),
             ("idempotency_key", "string", true),
             ("invocation", "InvocationRecord", false),
+            ("client", "ClientDecl", false),
         ]),
     );
     m.insert(
@@ -596,12 +606,20 @@ fn types_schema() -> Json {
         ]),
     );
     m.insert(
+        "ResponderDecl".into(),
+        strct(&[
+            ("subject_ref", "string", true),
+            ("surface_session_ref", "string", false),
+        ]),
+    );
+    m.insert(
         "RespondPermissionParams".into(),
         strct(&[
             ("session_id", "string", true),
             ("permission_id", "string", true),
             ("outcome", "PermissionOutcome", true),
             ("idempotency_key", "string", true),
+            ("responder", "ResponderDecl", false),
         ]),
     );
 
@@ -659,7 +677,18 @@ fn types_schema() -> Json {
     );
     m.insert(
         "ViewKind".into(),
-        str_enum(&["context_view", "run_summary", "checkpoint"]),
+        str_enum(&[
+            "context_view",
+            "run_summary",
+            "checkpoint",
+            // S4.10 (R-2.11.2; ADR-0301 D6) — the surface projections the
+            // kernel now folds over the durable prefix (the V3/V5/V7 views
+            // read these; owner = kernel, never the client).
+            "trace_view",
+            "cost_view",
+            "effect_ledger",
+            "branch_tree",
+        ]),
     );
     m.insert(
         "ProjectParams".into(),
@@ -724,6 +753,41 @@ fn types_schema() -> Json {
         strct(&[
             ("subscription_id", "string", true),
             ("frame", "Frame", true),
+        ]),
+    );
+    // S4.10 (R-2.11.2 V1) — the store-level run index.
+    m.insert(
+        "RunIndexFilter".into(),
+        strct(&[
+            ("run_kind", "string", false),
+            ("participant_class", "string", false),
+            ("status", "string", false),
+            ("outcome_class", "string", false),
+            ("configuration_id", "string", false),
+            ("experiment_ref", "string", false),
+            ("text", "string", false),
+        ]),
+    );
+    m.insert(
+        "RunIndexParams".into(),
+        strct(&[
+            ("filters", "RunIndexFilter", false),
+            ("cursor", "string", false),
+            ("limit", "integer", false),
+        ]),
+    );
+    m.insert(
+        "RunIndexEntry".into(),
+        strct(&[
+            ("run_id", "string", true),
+            ("run_kind", "string", true),
+            ("participant_class", "string", true),
+            ("status", "string", true),
+            ("head_seq", "integer", true),
+            ("outcome_class", "string", false),
+            ("configuration_id", "string", false),
+            ("experiment_ref", "string", false),
+            ("opened_ts", "string", false),
         ]),
     );
 

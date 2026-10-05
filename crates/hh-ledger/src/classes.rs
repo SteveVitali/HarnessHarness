@@ -395,6 +395,12 @@ const DECIDED_FIELDS: &[AuditField] = &[
     af("decider"),
     af("decider_ref"),
     afb("decider_provenance", AUDIT_FIELD_LIST_BYTES),
+    // S4.10 (R-2.11.2 P12; ADR-0301 D4) — the surface's responder
+    // declaration `{subject_ref, surface_session_ref}` and the op's
+    // request id (the `respond_permission` idempotency key) — stamped when
+    // the caller passes `responder{…}` (the web instrument always does).
+    af("responder_provenance"),
+    af("request_id"),
     // S2.7 (R-2.8.2; §5g.2 §3) — the `Remedy` a prior stage consumed.
     af("remedy_taken"),
     af("decision"),

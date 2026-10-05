@@ -91,6 +91,12 @@ pub struct EmbedService {
     /// — a pure-Json seam keeping `hosting_edges = []`). `None` = the tier
     /// is absent; ops needing it refuse `hosting_plane_absent`, never fake.
     pub(crate) hosting_plane: Option<crate::hosting_ops::HostingPlane>,
+    /// The transport this service instance was bound through —
+    /// `embedded` (a), `stdio` (b) or `local_network` (c); stamped on the
+    /// `lifecycle.session.{attached,detached}{binding}` members S4.10
+    /// mints (ADR-0301 D2; §7.2 P12 — the session record names the
+    /// binding, never the socket).
+    pub(crate) binding_label: String,
 }
 
 /// A declared host-executor capability (`supplies.host_capabilities[]`).
@@ -220,6 +226,11 @@ pub(crate) struct SessionState {
     pub next_completion: String,
     /// The response ref staged for the next model call.
     pub next_response_ref: String,
+    /// The session's declared client (§7.2 P8; ADR-0301 D3) — `Some` on
+    /// every surface-declared session (`client{kind:"web", sink}`); the
+    /// kernel gates `measurement.export.delivered` minting + session-row
+    /// stamping on it. `None` for legacy/CLI attaches.
+    pub client: Option<hh_embed_schema::ClientDecl>,
 }
 
 /// A live subscription — the ledger `Subscription` (taken by the stdio
@@ -301,7 +312,14 @@ impl EmbedService {
             #[cfg(feature = "tier-c4")]
             fleet_engines: BTreeMap::new(),
             results_subscriptions: BTreeMap::new(),
+            binding_label: "embedded".to_string(),
         })
+    }
+
+    /// Set the binding label — the (c) server calls this before serving so
+    /// session rows stamp `binding: local_network`.
+    pub fn set_binding_label(&mut self, label: &str) {
+        self.binding_label = label.to_string();
     }
 
     /// Seed the embedded registry with the kernel's Stage-1 suite — the
@@ -574,6 +592,7 @@ impl EmbedService {
             "env.set_phase" => self.env_set_phase(&req.params),
             "list_leases" => self.list_leases(&req.params),
             "lineage" => self.lineage(&req.params),
+            "run_index" => self.run_index_op(&req.params),
             "get_artifact" => self.get_artifact(&req.params),
             "audit_view" => self.audit_view(&req.params),
             "verify" => self.verify(&req.params),

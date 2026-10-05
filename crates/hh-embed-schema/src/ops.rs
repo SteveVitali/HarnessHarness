@@ -627,6 +627,19 @@ pub fn registry() -> Vec<OpSpec> {
             Tier::Stable,
             true,
         ),
+        // S4.10 (R-2.11.2 V1; ADR-0301 D5) — the store-level run listing.
+        // Session-free by design: a cross-run index is not a run read and
+        // V1 must serve before any per-run attach exists (precedent:
+        // `lab.results.*` Group-L reads are session-free).
+        call(
+            "run_index",
+            "R",
+            "RunIndexParams",
+            "json",
+            &["UnknownField", "SchemaViolation", "Refused"],
+            Tier::Stable,
+            true,
+        ),
         // S2.5 (R-2.8.6): the audit surface is live — `audit_view` reads
         // the ledger (no second store), `verify` returns the `Tampered`
         // taxonomy, `prove_*` return RFC 6962-style proofs.

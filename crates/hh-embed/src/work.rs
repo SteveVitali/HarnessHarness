@@ -17,6 +17,7 @@ use hh_ledger::event::{Cursor, Direction as ReadDir};
 use hh_ledger::manifest::{RunKind, RunManifest};
 use hh_ledger::views::ViewKind;
 use hh_wire::json::Json;
+use std::collections::BTreeMap;
 
 /// The read page bound when `limit = 0` (server default).
 const DEFAULT_PAGE: usize = 200;
@@ -461,6 +462,20 @@ impl EmbedService {
         ];
         if let Some(ef) = &pending.effect_id {
             members.push(("effect_id", Json::str(ef.clone())));
+        }
+        // S4.10 (R-2.11.2 P12; ADR-0301 D4) — the surface's responder
+        // declaration is stamped durable: `responder_provenance` names the
+        // human subject + the surface session the response transited;
+        // `request_id` is the op's idempotency key (the ledgered request
+        // id every surface write must carry).
+        if let Some(r) = &p.responder {
+            let mut rp = BTreeMap::new();
+            rp.insert("subject_ref".to_string(), Json::str(r.subject_ref.clone()));
+            if let Some(s) = &r.surface_session_ref {
+                rp.insert("surface_session_ref".to_string(), Json::str(s.clone()));
+            }
+            members.push(("responder_provenance", Json::Obj(rp)));
+            members.push(("request_id", Json::str(p.idempotency_key.clone())));
         }
         if !pending.options.is_empty() {
             members.push((
@@ -1227,6 +1242,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            client: None,
         };
         self.sessions.insert(session_id.clone(), sess);
         let mut out = session_json(
@@ -1571,7 +1587,10 @@ impl EmbedService {
             .store
             .read(&s.run_id, cursor, None, direction, limit)
             .map_err(ledger_err)?;
-        let events: Vec<Json> = page
+        // P8 — the served page's content-class shape: observation/model-
+        // plane rows carry content bytes; everything else is structural
+        // (the delivered row lists the union served).
+        let served: Vec<&hh_ledger::event::EventEnvelope> = page
             .events
             .iter()
             .filter(|e| {
@@ -1580,8 +1599,24 @@ impl EmbedService {
                     .map(|f| f.iter().any(|c| e.class.starts_with(c.as_str())))
                     .unwrap_or(true)
             })
-            .map(|e| e.to_json())
             .collect();
+        let has_content = served.iter().any(|e| {
+            matches!(
+                e.plane,
+                hh_ledger::event::EventPlane::Observation | hh_ledger::event::EventPlane::Model
+            )
+        });
+        let first = served.first().map(|e| e.seq);
+        let last = served.last().map(|e| e.seq);
+        let events: Vec<Json> = served.iter().map(|e| e.to_json()).collect();
+        if has_content && !served.is_empty() {
+            self.record_delivery(
+                &p.session_id,
+                "read",
+                (first, last),
+                &["structural", "content"],
+            )?;
+        }
         Ok(Page {
             events,
             next: page.next_cursor.map(|c| match c {
@@ -1606,22 +1641,68 @@ impl EmbedService {
         .to_json())
     }
 
-    /// `project` — the ledger's own view fold (`context_view`,
-    /// `run_summary`, `checkpoint`); `view_hash` is the ledger's
-    /// (recomputed nowhere — AC-9 byte parity by construction).
+    /// `project` — the canonical view fold (§7.4 §2.4; S4.10): ledger-
+    /// owned kinds fold in `Store::project`; `trace_view`/`cost_view`/
+    /// `metric_view` are owner projections the boundary delegates to
+    /// `hh-telemetry` (ADR-0042 D2 — the kernel performs the owning fold,
+    /// the surface never recomputes); hh-context kinds stay
+    /// `OwnerProjected` → `Refused` until their boundary lands. Unknown
+    /// spellings are `SchemaViolation`, never a silent fallback.
     pub(crate) fn project(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let p = ProjectParams::from_json(params)?;
         let s = self.live_session(&p.session_id)?;
-        let kind = match p.view_kind.as_str() {
-            "context_view" => ViewKind::ContextView,
-            "run_summary" => ViewKind::RunSummary,
-            "compact" => ViewKind::Compact,
-            _ => ViewKind::Checkpoint,
+        let kind = ViewKind::parse(&p.view_kind).ok_or_else(|| EmbedError::SchemaViolation {
+            path: "project/view_kind".to_string(),
+            code: format!("unknown_view_kind {}", p.view_kind),
+        })?;
+        let until = p.until_seq.map(|u| u as u64);
+        let v = match kind {
+            ViewKind::TraceView | ViewKind::CostView | ViewKind::MetricView => {
+                let run_id = s.run_id.clone();
+                let manifest = self.store.manifest(&run_id).map_err(ledger_err)?.clone();
+                let events = self.store.events(&run_id).map_err(ledger_err)?.to_vec();
+                let root_run_id = self
+                    .store
+                    .lineage(&run_id)
+                    .ok()
+                    .and_then(|c| c.first().map(|e| e.run_id.clone()))
+                    .unwrap_or_else(|| run_id.clone());
+                match kind {
+                    ViewKind::TraceView => hh_telemetry::views::trace_view(
+                        &run_id,
+                        &root_run_id,
+                        &events,
+                        until,
+                        hh_telemetry::clocks::clock_tolerance(&manifest),
+                    ),
+                    ViewKind::CostView => {
+                        hh_telemetry::views::cost_view(&run_id, &root_run_id, &events, until)
+                    }
+                    _ => {
+                        let declared: std::collections::BTreeSet<
+                            hh_ontology::participant::Observability,
+                        > = manifest
+                            .observability_level
+                            .iter()
+                            .filter_map(|l| {
+                                hh_ontology::participant::Observability::parse(l.as_str())
+                            })
+                            .collect();
+                        hh_telemetry::views::metric_view(
+                            &run_id,
+                            &root_run_id,
+                            &declared,
+                            &events,
+                            until,
+                        )
+                    }
+                }
+            }
+            _ => self
+                .store
+                .project(&s.run_id, kind, until)
+                .map_err(ledger_err)?,
         };
-        let v = self
-            .store
-            .project(&s.run_id, kind, p.until_seq.map(|u| u as u64))
-            .map_err(ledger_err)?;
         let derived_hash = match v.derived_from_seq {
             Some(seq) => self
                 .store
@@ -1632,13 +1713,25 @@ impl EmbedService {
                 .unwrap_or_default(),
             None => String::new(),
         };
-        Ok(View {
+        let out = View {
             payload: v.payload,
             derived_from_seq: v.derived_from_seq.map(|s| s as i64).unwrap_or(-1),
             derived_from_hash: derived_hash,
             view_hash: v.view_hash,
         }
-        .to_json())
+        .to_json();
+        // P8 — a content-bearing serving to a web-declared session is a
+        // `measurement.export.delivered` fact (`context_view` carries the
+        // context items themselves — content class).
+        if kind == ViewKind::ContextView {
+            self.record_delivery(
+                &p.session_id,
+                "context_view",
+                (None, v.derived_from_seq),
+                &["structural", "content"],
+            )?;
+        }
+        Ok(out)
     }
 
     /// `account` — the run's `ResourceAccount` projection. Stage 1 runs
@@ -1789,11 +1882,112 @@ impl EmbedService {
             Ok(t) => Json::str(t),
             Err(_) => Json::str(hex(&bytes)),
         };
+        // P8 — blob bytes are content-class by construction.
+        let head_seq = self
+            .store
+            .head(&self.live_session(&p.session_id)?.run_id)
+            .map(|h| h.seq)
+            .unwrap_or(0);
+        self.record_delivery(
+            &p.session_id,
+            "get_artifact",
+            (Some(head_seq), Some(head_seq)),
+            &["structural", "content"],
+        )?;
         Ok(Json::obj([
             ("address", Json::str(p.address)),
             ("size", Json::Int(bytes.len() as i64)),
             ("content", content),
         ]))
+    }
+
+    /// `run_index` — the store-level run listing (§7.2 V1; ADR-0301 D5).
+    /// Session-free: a cross-run index cannot take a session's run scope
+    /// (the surface serves V1 before any attach exists).
+    pub(crate) fn run_index_op(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let p = RunIndexParams::from_json(params)?;
+        let filter = p
+            .filters
+            .map(|f| hh_ledger::store::RunIndexFilter {
+                run_kind: f.run_kind,
+                participant_class: f.participant_class,
+                status: f.status,
+                outcome_class: f.outcome_class,
+                configuration_id: f.configuration_id,
+                experiment_ref: f.experiment_ref,
+                text: f.text,
+            })
+            .unwrap_or_default();
+        let limit = p
+            .limit
+            .map(|l| l.clamp(1, RUN_INDEX_MAX_LIMIT))
+            .unwrap_or(RUN_INDEX_DEFAULT_LIMIT) as usize;
+        let (entries, next) = self.store.run_index(&filter, p.cursor.as_deref(), limit);
+        Ok(Json::obj([
+            (
+                "runs",
+                Json::Arr(entries.iter().map(schema_run_index_entry).collect()),
+            ),
+            ("next_cursor", next.map(Json::str).unwrap_or(Json::Null)),
+        ]))
+    }
+
+    /// P8 (§7.2; ADR-0301 D7) — mint
+    /// `measurement.export.delivered{sink_id: surface:<session>,
+    /// view_kind, seq_range{from_seq,to_seq}, content_classes[]}` on the
+    /// subject run for a content-bearing serving to a
+    /// `client{kind:"web"}` session. Undeclared/non-web sessions return
+    /// `Ok` without a row — CLI servings are not surface deliveries. A
+    /// mint failure propagates: a serving whose audit row cannot commit
+    /// is refused, never silently unrecorded (CC3). Stream frames do not
+    /// mint here — a durable-frame relay is a replay of already-served
+    /// records, and a delivered row is itself a durable event (minting on
+    /// drains would self-amplify).
+    pub(crate) fn record_delivery(
+        &mut self,
+        session_id: &str,
+        view_kind: &str,
+        seq_range: (Option<u64>, Option<u64>),
+        classes: &[&'static str],
+    ) -> Result<(), EmbedError> {
+        let run_id = match self.sessions.get(session_id) {
+            Some(s) => {
+                if s.client.as_ref().map(|c| c.kind.as_str()) == Some("web") {
+                    s.run_id.clone()
+                } else {
+                    return Ok(());
+                }
+            }
+            None => return Ok(()),
+        };
+        let from = seq_range.0.unwrap_or(0);
+        let to = seq_range.1.unwrap_or(from);
+        self.store
+            .commit_kernel_row_for(
+                "kernel:surface",
+                &run_id,
+                "measurement.export.delivered",
+                Json::obj([
+                    ("sink_id", Json::str(format!("surface:{session_id}"))),
+                    ("view_kind", Json::str(view_kind)),
+                    (
+                        "seq_range",
+                        Json::obj([
+                            ("from_seq", Json::Int(from as i64)),
+                            ("to_seq", Json::Int(to as i64)),
+                        ]),
+                    ),
+                    (
+                        "content_classes",
+                        Json::Arr(classes.iter().map(|c| Json::str(*c)).collect()),
+                    ),
+                    ("loss_report_ref", Json::Null),
+                ]),
+                vec![],
+                vec![],
+            )
+            .map_err(ledger_err)?;
+        Ok(())
     }
 }
 
@@ -1845,6 +2039,32 @@ fn cursor_from(c: &ReadCursor) -> i64 {
         ReadCursor::Seq(n) => *n,
         _ => 0,
     }
+}
+
+/// The store-side `RunIndexEntry` → the wire `RunIndexEntry` JSON
+/// (ADR-0301 D5 — the boundary converts; hh-ledger never imports the
+/// schema crate).
+fn schema_run_index_entry(e: &hh_ledger::store::RunIndexEntry) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("run_id".to_string(), Json::str(e.run_id.clone()));
+    m.insert("run_kind".to_string(), Json::str(e.run_kind.clone()));
+    m.insert(
+        "participant_class".to_string(),
+        Json::str(e.participant_class.clone()),
+    );
+    m.insert("status".to_string(), Json::str(e.status.clone()));
+    m.insert("head_seq".to_string(), Json::Int(e.head_seq as i64));
+    for (k, v) in [
+        ("outcome_class", &e.outcome_class),
+        ("configuration_id", &e.configuration_id),
+        ("experiment_ref", &e.experiment_ref),
+        ("opened_ts", &e.opened_ts),
+    ] {
+        if let Some(x) = v {
+            m.insert(k.to_string(), Json::str(x.clone()));
+        }
+    }
+    Json::Obj(m)
 }
 
 /// Lowercase-hex render (the non-UTF-8 `get_artifact` fallback).
