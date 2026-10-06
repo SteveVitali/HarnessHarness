@@ -22,9 +22,11 @@
 //!    "snapshot"}` at the run head composes green: child run bound
 //!    `forked_from`, `lifecycle.run.forked`, a snapshot-derived child env
 //!    handle. The cadence leg — fork succeeding at a boundary with NO
-//!    explicit snapshot — is `#[ignore]`d (DF-S2.9-3); the same call
-//!    without a producer returns the typed `snapshot_unavailable`
-//!    `EnvironmentUnavailable` refusal (pinned green — the honest answer).
+//!    explicit snapshot — is un-ignored green at R2.4 (DF-S2.9-3 closed):
+//!    a declared `snapshot_cadence` takes the `fs_tree` at the turn
+//!    boundary; the same call on a run with no producer still returns the
+//!    typed `snapshot_unavailable` `EnvironmentUnavailable` refusal
+//!    (pinned green — the honest answer).
 //!    `env.suspend` on `local_host` refuses `UnknownCapability` →
 //!    `EnvironmentUnavailable` (the class never declared it; provider
 //!    classes that declare `fs_only` are not served at the boundary —
@@ -583,18 +585,81 @@ fn cap2_fork_without_snapshot_producer_refuses_typed() {
     );
 }
 
-/// DF-S2.9-3: the producer cadence — nothing snapshots a live run at
-/// turn/checkpoint boundaries, so this assertion fails today. `#[ignore]`d
-/// pending the env-driver ticket the deferral names.
+/// DF-S2.9-3 — closed at R2.4: the binding declares
+/// `connection_info{snapshot_cadence:"on_turn_end"}` and the driver takes
+/// the `fs_tree` at the turn boundary itself — no `env.snapshot` call in
+/// the loop. The durable `action.environment.snapshot{taken_by:"cadence"}`
+/// row lands inside the sink between `lifecycle.turn.finished` and
+/// `lifecycle.run.finished`; `fork{env:"snapshot"}` at that boundary seq
+/// composes on the cadence-produced snapshot.
 #[test]
-#[ignore = "DF-S2.9-3: no snapshot producer cadence — fork{env: snapshot} at a turn boundary only composes when a test/op called env.snapshot first; routed to the env-driver ticket (CAP.3 may wire a minimal cadence)"]
 fn cap2_fork_at_turn_boundary_without_explicit_snapshot() {
     let mut svc = service("fork-cadence");
     hello(&mut svc);
-    let (sid, _run_id) = open_new(&mut svc, "open-cadence");
+    // The cadence is a *declared* binding member — `new_spec` with
+    // `snapshot_cadence` on the connection_info.
+    let mut spec = new_spec();
+    if let Json::Obj(m) = &mut spec {
+        if let Some(Json::Obj(e)) = m.get_mut("environment") {
+            if let Some(Json::Obj(ci)) = e.get_mut("connection_info") {
+                ci.insert("snapshot_cadence".to_string(), Json::str("on_turn_end"));
+            }
+        }
+    }
+    let r = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj([
+            ("spec", spec),
+            ("idempotency_key", Json::str("open-cadence")),
+        ]),
+    ));
+    let sid = r
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string();
+    let run_id = r.get("run_id").and_then(Json::as_str).unwrap().to_string();
     let r = submit(&mut svc, &sid, "submit-cadence");
     assert!(r.get("result").is_some(), "submit refused: {r:?}");
-    // The cadence that does not exist: a snapshot at/below the boundary.
+    // The cadence-produced row: `taken_by:"cadence"` on an
+    // `action.environment.snapshot` — landed before `run.finished`.
+    let evs = svc.surface_events(&run_id).unwrap();
+    let (snap_seq, snap_at_seq, snap_ref) = {
+        let snap = evs
+            .iter()
+            .find(|e| {
+                e.class == "action.environment.snapshot"
+                    && e.payload.get("taken_by").and_then(Json::as_str) == Some("cadence")
+            })
+            .unwrap_or_else(|| {
+                panic!(
+                    "no cadence snapshot row: {:?}",
+                    evs.iter().map(|e| e.class.as_str()).collect::<Vec<_>>()
+                )
+            });
+        (
+            snap.seq,
+            snap.payload.get("at_seq").and_then(Json::as_int).unwrap(),
+            snap.payload
+                .get("snapshot_ref")
+                .and_then(Json::as_str)
+                .unwrap()
+                .to_string(),
+        )
+    };
+    let finished_seq = evs
+        .iter()
+        .find(|e| e.class == "lifecycle.run.finished")
+        .map(|e| e.seq)
+        .expect("run finished");
+    assert!(
+        snap_seq < finished_seq,
+        "the cadence take lands before the run seals: snap@{snap_seq} finished@{finished_seq}"
+    );
+    // Fork at the turn boundary the snapshot covers (`at_seq` = the
+    // `turn.finished` seq) — no explicit snapshot call anywhere.
+    let at_seq = snap_at_seq;
     let f = call(
         &mut svc,
         "fork",
@@ -602,24 +667,34 @@ fn cap2_fork_at_turn_boundary_without_explicit_snapshot() {
             ("session_id", Json::str(&sid)),
             (
                 "at",
-                Json::obj([("kind", Json::str("seq")), ("seq", Json::Int(1))]),
+                Json::obj([("kind", Json::str("seq")), ("seq", Json::Int(at_seq))]),
             ),
             ("env", Json::str("snapshot")),
         ]),
     );
     assert!(
         f.get("result").is_some(),
-        "DF-S2.9-3 residual: no cadence-produced snapshot exists: {f:?}"
+        "fork at the cadence boundary composes: {f:?}"
+    );
+    let fres = ok(&f);
+    let br = fres.get("branch_record").expect("branch_record");
+    assert_eq!(
+        br.get("snapshot_ref").and_then(Json::as_str),
+        Some(snap_ref.as_str()),
+        "the fork bound the cadence snapshot: {br:?}"
     );
 }
 
 /// The suspend leg is environment-bound: `local_host` never declared a
 /// `suspend` capability (`SuspendKind::Unknown`), so `env.suspend`
-/// honestly refuses `EnvironmentUnavailable{unknown_capability}` — and
-/// the provider classes that declare `fs_only` are not served at the
-/// boundary at all (`environment class <x> is not served at Stage 2`).
-/// Both halves pinned green — this is the specified behavior, not a
-/// fake of the composed suspend→snapshot→fork leg.
+/// honestly refuses the *typed* `UnknownCapability` (R2.4's `env_err`
+/// keeps the capability tri-state typed at the boundary — `unknown` is
+/// never coerced to `unsupported` or flattened into
+/// `environment_unavailable`) — and the provider classes that declare
+/// `fs_only` are not served at the boundary at all (`environment class
+/// <x> is not served at Stage 2`). Both halves pinned green — this is
+/// the specified behavior, not a fake of the composed
+/// suspend→snapshot→fork leg.
 #[test]
 fn cap2_suspend_is_environment_bound_honest_refusal() {
     let mut svc = service("suspend");
@@ -630,7 +705,7 @@ fn cap2_suspend_is_environment_bound_honest_refusal() {
         "env.suspend",
         Json::obj([("session_id", Json::str(&sid))]),
     );
-    assert_eq!(err_kind(&s), "EnvironmentUnavailable", "{s:?}");
+    assert_eq!(err_kind(&s), "UnknownCapability", "{s:?}");
     // A provider-class binding never reaches a driver — the boundary
     // refuses the class at open (no provider adapters are served).
     let r = call(

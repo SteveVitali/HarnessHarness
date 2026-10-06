@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:986168f1b524816f57f67eae83b0016f0610204cbe0587052b3608c958d200a4";
+    "sha256:7e0214115e04f72104759baec1adee14bf4b7b680c7f8c9329a61c1e0b033968";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -6681,9 +6681,45 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `env.attach` → `json` (see the contract registry).
+    pub fn env_attach(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.attach", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.close` → `json` (see the contract registry).
+    pub fn env_close(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.close", params.clone())?;
+        Ok(raw)
+    }
+
     /// `env.derive` → `json` (see the contract registry).
     pub fn env_derive(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("env.derive", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.diff` → `json` (see the contract registry).
+    pub fn env_diff(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.diff", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.download` → `json` (see the contract registry).
+    pub fn env_download(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.download", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.open` → `json` (see the contract registry).
+    pub fn env_open(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.open", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.restore` → `json` (see the contract registry).
+    pub fn env_restore(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.restore", params.clone())?;
         Ok(raw)
     }
 
@@ -6708,6 +6744,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `env.suspend` → `json` (see the contract registry).
     pub fn env_suspend(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("env.suspend", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `env.upload` → `json` (see the contract registry).
+    pub fn env_upload(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("env.upload", params.clone())?;
         Ok(raw)
     }
 

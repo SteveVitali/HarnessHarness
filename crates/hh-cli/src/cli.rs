@@ -1026,11 +1026,20 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         ("env", "derive") => go(cmd_env_derive(b, io, p, argv)),
         ("env", "set-phase") => go(cmd_env_set_phase(b, io, p, argv)),
         ("env", "list-detached") => go(cmd_env_list_detached(b, io, p, argv)),
+        // R2.4 (DF-S2.10-1) — the lifecycle family dispatches to the
+        // boundary ops; capability refusals surface verbatim.
+        ("env", "open") => go(cmd_env_open(b, io, p, argv)),
+        ("env", "attach") => go(cmd_env_attach(b, io, p, argv)),
+        ("env", "close") => go(cmd_env_close(b, io, p, argv)),
+        ("env", "diff") => go(cmd_env_diff(b, io, p, argv)),
+        ("env", "restore") => go(cmd_env_restore(b, io, p, argv)),
+        ("env", "upload") => go(cmd_env_upload(b, io, p, argv)),
+        ("env", "download") => go(cmd_env_download(b, io, p, argv)),
         ("env", verb) => Err((
             CliError::Invocation(InvocationError::at(
                 "stage_pending",
                 &format!("env {verb}"),
-                "env open/attach/close/diff/restore/upload/download are not                  boundary-backed at this stage (DF-S2.10-*) — the verb is                  refused, never faked",
+                "unknown env verb — the verb is refused, never faked",
             )),
             OutputFormat::Json,
         )),
@@ -1053,7 +1062,8 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         // with a `webhook` member selects the signed-webhook lane).
         (
             "fleet",
-            verb @ ("view" | "items" | "item" | "reconcile" | "observe" | "capabilities" | "records" | "webhook"),
+            verb @ ("view" | "items" | "item" | "reconcile" | "observe" | "capabilities"
+            | "records" | "webhook"),
         ) => go(cmd_fleet(b, io, p, argv, verb)),
         // ── S3.1 — the Lab nouns + bundle/run import-export (§7.1;
         // every verb is one named Group L/M/R op — lab.rs) ──
@@ -1071,7 +1081,9 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         ("registry", "publish") => go(crate::lab::cmd_registry_publish(b, io, p)),
         ("registry", "snapshot") => go(crate::lab::cmd_registry_snapshot(b, io, p)),
         ("registry", "conformance") => go(crate::lab::cmd_registry_conformance(b, io, p)),
-        ("registry", "deprecate") => go(crate::lab::cmd_registry_name_status(b, io, p, "deprecate")),
+        ("registry", "deprecate") => {
+            go(crate::lab::cmd_registry_name_status(b, io, p, "deprecate"))
+        }
         ("registry", "yank") => go(crate::lab::cmd_registry_name_status(b, io, p, "yank")),
         ("registry", "revoke") => go(crate::lab::cmd_registry_revoke(b, io, p)),
         ("registry", "lineage") => go(crate::lab::cmd_registry_lineage(b, io, p)),
@@ -1080,13 +1092,12 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         ("experiment", "register") => go(crate::lab::cmd_experiment_register(b, io, p)),
         ("experiment", "expand") => go(crate::lab::cmd_experiment_expand(b, io, p)),
         ("experiment", "open") => go(crate::lab::cmd_experiment_open(b, io, p)),
-        ("experiment", verb @ ("next" | "claim" | "launch" | "settle" | "pause" | "resume" | "close")) => {
-            go(crate::lab::cmd_experiment_op(b, io, p, verb))
-        }
+        (
+            "experiment",
+            verb @ ("next" | "claim" | "launch" | "settle" | "pause" | "resume" | "close"),
+        ) => go(crate::lab::cmd_experiment_op(b, io, p, verb)),
         ("results", "query") => go(crate::lab::cmd_results_query(b, io, p)),
-        ("results", verb @ ("row" | "history")) => {
-            go(crate::lab::cmd_results_row(b, io, p, verb))
-        }
+        ("results", verb @ ("row" | "history")) => go(crate::lab::cmd_results_row(b, io, p, verb)),
         ("results", "cells") => go(crate::lab::cmd_results_cells(b, io, p)),
         ("results", "distribution") => go(crate::lab::cmd_results_distribution(b, io, p)),
         ("results", "catalogue") => go(crate::lab::cmd_results_catalogue(b, io, p)),
@@ -1342,6 +1353,236 @@ fn cmd_env_list_detached(
         ]),
         r.format,
     )
+}
+
+// ── env lifecycle family (R2.4; DF-S2.10-1) ──────────────────────────
+//
+// Each verb is one named boundary op (`env.open`/`attach`/`close`/
+// `diff`/`restore`/`upload`/`download`) over a writer session — the
+// kernel's capability refusals surface verbatim (`Unsupported`,
+// `UnknownCapability`, `EnvironmentUnavailable`, `SchemaViolation`),
+// never re-rendered (K-2). The session stays open — the parked-run
+// discipline of `cmd_env_snapshot` applies verbatim.
+
+/// `env open <run_id> [--class <c>] [--root <dir>] [--cadence <c>]` →
+/// `env.open{connection_info}` — provision + attach a new environment
+/// on the run and select it for the session.
+fn cmd_env_open(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let mut info = Json::obj([(
+        "class",
+        Json::str(p.flag("class").unwrap_or_else(|| "local_host".to_string())),
+    )]);
+    if let Json::Obj(m) = &mut info {
+        if let Some(root) = p.flag("root") {
+            m.insert("workspace_roots".into(), Json::Arr(vec![Json::str(root)]));
+        }
+        if let Some(c) = p.flag("cadence") {
+            m.insert("snapshot_cadence".into(), Json::str(c));
+        }
+    }
+    let raw = b.call(
+        "env.open",
+        &Json::obj([
+            ("session_id", Json::str(sess.session_id.clone())),
+            ("connection_info", info),
+        ]),
+    );
+    ok_outcome("env_open", raw?, r.format)
+}
+
+/// `env attach <run_id>` → `env.attach` — reattach the session's
+/// `detached` environment (fail-closed; the kernel's `InvalidState`
+/// refusal surfaces verbatim on a `ready`/terminal handle).
+fn cmd_env_attach(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let raw = b.call(
+        "env.attach",
+        &Json::obj([("session_id", Json::str(sess.session_id.clone()))]),
+    );
+    ok_outcome("env_attach", raw?, r.format)
+}
+
+/// `env close <run_id> [--detach]` → `env.close{mode}` — `teardown` is
+/// the default (terminal); `--detach` keeps the environment reattachable
+/// (the provider `remote_persistent`/`provider_hosted` classes keep
+/// their remote side — the kernel's detach machinery records it).
+fn cmd_env_close(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let raw = b.call(
+        "env.close",
+        &Json::obj([
+            ("session_id", Json::str(sess.session_id.clone())),
+            (
+                "mode",
+                Json::str(if p.has("detach") {
+                    "detach"
+                } else {
+                    "teardown"
+                }),
+            ),
+        ]),
+    );
+    ok_outcome("env_close", raw?, r.format)
+}
+
+/// `env diff <run_id> <snapshot_ref>` → `env.diff{baseline}` — the
+/// `fs_tree` change-set between the named snapshot and the live
+/// workspace roots.
+fn cmd_env_diff(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let snapshot_ref = require_pos(p, 1, "<snapshot_ref>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let raw = b.call(
+        "env.diff",
+        &Json::obj([
+            ("session_id", Json::str(sess.session_id.clone())),
+            ("baseline", Json::str(snapshot_ref)),
+        ]),
+    );
+    ok_outcome("env_diff", raw?, r.format)
+}
+
+/// `env restore <run_id> <snapshot_ref> [--in-place]` →
+/// `env.restore{snapshot_ref, mode?}` — the successor restore is the
+/// default (a fresh verified workspace; the session rebinds to it);
+/// `--in-place` is the provider mechanism, gated on the class's declared
+/// `restore_in_place` capability.
+fn cmd_env_restore(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let snapshot_ref = require_pos(p, 1, "<snapshot_ref>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let mut params = Json::obj([
+        ("session_id", Json::str(sess.session_id.clone())),
+        ("snapshot_ref", Json::str(snapshot_ref)),
+    ]);
+    if p.has("in-place") {
+        if let Json::Obj(m) = &mut params {
+            m.insert("mode".into(), Json::str("in_place"));
+        }
+    }
+    let raw = b.call("env.restore", &params);
+    ok_outcome("env_restore", raw?, r.format)
+}
+
+/// `env upload <run_id> <path> (--content <utf8> | --content-address
+/// <addr>)` → `env.upload` — bytes land in a writable root and the blob
+/// pool (content-addressed); the audit row mints kernel-side.
+fn cmd_env_upload(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let path = require_pos(p, 1, "<path>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let mut params = Json::obj([
+        ("session_id", Json::str(sess.session_id.clone())),
+        ("path", Json::str(path)),
+    ]);
+    if let Json::Obj(m) = &mut params {
+        if let Some(c) = p.flag("content") {
+            m.insert("content".into(), Json::str(c));
+        }
+        if let Some(a) = p.flag("content-address") {
+            m.insert("content_address".into(), Json::str(a));
+        }
+    }
+    let raw = b.call("env.upload", &params);
+    ok_outcome("env_upload", raw?, r.format)
+}
+
+/// `env download <run_id> <path>` → `env.download` — the readable path's
+/// bytes move into the blob pool; the result is the `ContentAddress`
+/// (never raw bytes over the boundary).
+fn cmd_env_download(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &Parsed,
+    argv: &[String],
+) -> Result<(CliOutcome, OutputFormat), CliError> {
+    let run_id = require_pos(p, 0, "<run_id>")?;
+    let path = require_pos(p, 1, "<path>")?;
+    let r = resolve(p, io, argv, false, false)?;
+    let mode = if p.has("takeover") {
+        "takeover"
+    } else {
+        "continue"
+    };
+    let sess = resume_session(b, &run_id, mode, Some(&r.invocation))?;
+    let raw = b.call(
+        "env.download",
+        &Json::obj([
+            ("session_id", Json::str(sess.session_id.clone())),
+            ("path", Json::str(path)),
+        ]),
+    );
+    ok_outcome("env_download", raw?, r.format)
 }
 
 // ── compact / config ──────────────────────────────────────────────────

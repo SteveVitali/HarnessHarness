@@ -1060,6 +1060,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("action.environment.declared", "hint"),
     ("action.environment.derived", "hint"),
     ("action.environment.detached", "hint"),
+    ("action.environment.downloaded", "hint"),
     ("action.environment.drift.detected", "hint"),
     ("action.environment.evidence.attached", "hint"),
     ("action.environment.failed", "hint"),
@@ -1089,6 +1090,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("action.environment.suspended", "hint"),
     ("action.environment.torn_down", "hint"),
     ("action.environment.unreachable", "hint"),
+    ("action.environment.uploaded", "hint"),
     ("action.environment.verdict.recorded", "hint"),
     ("action.environment.verified", "hint"),
     // ── action:tool ──
@@ -1684,6 +1686,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row("action.environment.derived",              Led, O::Events, false, true, None, None),
     row("action.environment.replaced",             Led, O::Events, false, true, None, None),
     row("action.environment.failed",               Led, O::Events, false, true, None, None),
+    // R2.4 (DF-S2.10-1) — the `env.upload`/`env.download` audit rows:
+    // content-addressed bytes moved through the store, both directions
+    // ledgered (§5a.2 — "upload/download move content through the store").
+    row("action.environment.uploaded",             Led, O::Events, false, true, None, None),
+    row("action.environment.downloaded",           Led, O::Events, false, true, None, None),
     row("action.environment.torn_down",            Led, O::Events, false, true, None, None),
     row("action.environment.meters_sampled",       Led, O::Events, false, true, None, None),
     row("action.environment.verified",             Led, O::Events, false, true, None, None),

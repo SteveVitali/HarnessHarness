@@ -45,6 +45,14 @@ pub struct KernelSink<'a> {
     pub store: &'a mut Store,
     pub run_id: String,
     pub lease: Lease,
+    /// R2.4 (DF-S2.9-3) — the declared `snapshot_cadence` producer: the
+    /// run's env driver the boundary take routes through. `None` on the
+    /// arm/replay paths (`Driver::open`/`resume_from`) — a cadence never
+    /// re-takes on replay.
+    pub envs: Option<&'a mut hh_env::driver::EnvDriver>,
+    /// The session's env handle the cadence targets (R-NOSIDE — the id
+    /// never leaves the kernel).
+    pub env_handle: Option<String>,
 }
 
 impl LedgerSink for KernelSink<'_> {
@@ -60,10 +68,43 @@ impl LedgerSink for KernelSink<'_> {
                 ev.provenance = Some(hh_provenance::ProvenanceRecord::kernel("hh-embed", now));
             }
         }
+        // The cadence trigger classes this append carries (scanned before
+        // the append consumes the batch) — `lifecycle.turn.finished` is
+        // the turn boundary; a settled `action.effect.*` terminal row is
+        // the `every_n_effects` count leg.
+        let mut triggers = Vec::new();
+        for ev in &events {
+            match ev.class.as_str() {
+                "lifecycle.turn.finished" => {
+                    triggers.push(hh_env::driver::SnapshotTrigger::TurnBoundary)
+                }
+                "action.effect.observed"
+                | "action.effect.refused"
+                | "action.effect.unknown"
+                | "action.effect.abandoned" => {
+                    triggers.push(hh_env::driver::SnapshotTrigger::EffectSettled)
+                }
+                _ => {}
+            }
+        }
         self.store
             .append(&self.run_id, &self.lease, events)
             .map(|_| ())
-            .map_err(|e| format!("{e:?}"))
+            .map_err(|e| format!("{e:?}"))?;
+        // DF-S2.9-3 — the declared cadence fires on the durable trigger
+        // rows *after* they land (the take's `at_seq` covers them) and
+        // *inside* the sink — a `lifecycle.run.finished` append arriving
+        // later in the same finish() call cannot seal the store before
+        // the snapshot row exists. `cadence_take` records its own
+        // `action.environment.failed` row on an attempted take that fails
+        // — never silent, never run-fatal.
+        if let (Some(envs), Some(env_id)) = (self.envs.as_deref_mut(), self.env_handle.as_deref()) {
+            for trigger in triggers {
+                envs.cadence_take(self.store, &self.lease, env_id, trigger)
+                    .map_err(|e| format!("{e:?}"))?;
+            }
+        }
+        Ok(())
     }
     fn prefix(&self) -> &[EventEnvelope] {
         self.store.events(&self.run_id).unwrap_or(&[])

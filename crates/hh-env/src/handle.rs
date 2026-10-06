@@ -177,8 +177,10 @@ pub enum OnLoss {
     ReplaceFromImage,
 }
 
-/// `SnapshotCadence` — when the driver auto-snapshots (Stage-1 default
-/// `never`; the only supported kind is `path_baseline` on demand).
+/// `SnapshotCadence` — when the driver auto-snapshots. The ratified
+/// Stage-1 default is `never`; R2.4 (DF-S2.9-3) wires the declared
+/// cadences to the real producers (`connection_info{snapshot_cadence}` —
+/// the MUST-data member on the §5a.1 binding).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapshotCadence {
     /// At every turn end.
@@ -189,6 +191,36 @@ pub enum SnapshotCadence {
     OnIdle,
     /// Never (the Stage-1 default).
     Never,
+}
+
+impl SnapshotCadence {
+    /// The `connection_info{snapshot_cadence}` spelling (one canonical
+    /// parse — CC1). `None` is the honest answer for every other
+    /// spelling (`"every_n_effects"` must carry `:<n≥1>`).
+    pub fn parse(s: &str) -> Option<SnapshotCadence> {
+        match s {
+            "never" => Some(SnapshotCadence::Never),
+            "on_turn_end" => Some(SnapshotCadence::OnTurnEnd),
+            "on_idle" => Some(SnapshotCadence::OnIdle),
+            _ => {
+                let n = s.strip_prefix("every_n_effects:")?.parse::<u64>().ok()?;
+                if n == 0 {
+                    return None;
+                }
+                Some(SnapshotCadence::EveryNEffects(n))
+            }
+        }
+    }
+
+    /// The declaration spelling (the canonical member form).
+    pub fn as_str(&self) -> String {
+        match self {
+            SnapshotCadence::OnTurnEnd => "on_turn_end".to_string(),
+            SnapshotCadence::EveryNEffects(n) => format!("every_n_effects:{n}"),
+            SnapshotCadence::OnIdle => "on_idle".to_string(),
+            SnapshotCadence::Never => "never".to_string(),
+        }
+    }
 }
 
 /// `DeriveMode` — how a child environment forks from a parent (Stage 2+; the
@@ -340,21 +372,63 @@ pub struct Roots {
     pub cwd: String,
 }
 
+/// `canonicalize_path(path)` — the one path canonicalizer (CC1): `.`/`..`
+/// resolve lexically, then symlinks resolve on the deepest *existing*
+/// ancestor (std's `canonicalize` fails on a not-yet-created leaf — the
+/// declared roots and the upload/download operands under them must agree
+/// whether or not the leaf exists, e.g. macOS `/var` → `/private/var`).
+pub fn canonicalize_path(path: &str) -> String {
+    let mut segs: Vec<String> = Vec::new();
+    for seg in path.split('/') {
+        match seg {
+            "" | "." => {}
+            ".." => {
+                segs.pop();
+            }
+            s => segs.push(s.to_string()),
+        }
+    }
+    let mut i = segs.len();
+    let mut resolved = String::new();
+    while i > 0 {
+        let cand = format!("/{}", segs[..i].join("/"));
+        if let Ok(c) = std::fs::canonicalize(&cand) {
+            resolved = c.to_string_lossy().to_string();
+            break;
+        }
+        i -= 1;
+    }
+    let tail = segs[i..].join("/");
+    match (resolved.is_empty(), tail.is_empty()) {
+        (true, true) => "/".to_string(),
+        (true, false) => format!("/{tail}"),
+        (false, true) => resolved,
+        (false, false) => format!("{resolved}/{tail}"),
+    }
+}
+
 impl Roots {
-    /// Whether `path` (canonical) is inside a writable root — the R-NOSIDE
-    /// guard for `fs_write`/`upload`/`apply_patch`.
+    /// Whether `path` is inside a writable root — the R-NOSIDE guard for
+    /// `fs_write`/`upload`/`apply_patch`. Both sides canonicalize at the
+    /// check (`canonicalize_path` — the deepest existing ancestor's
+    /// symlinks resolve), so a declared root spelled through a symlinked
+    /// prefix (`/var` → `/private/var`) still answers true for the real
+    /// path and an escape through a symlink still answers false (F1).
     pub fn is_writable(&self, path: &str) -> bool {
-        self.writable_roots
-            .iter()
-            .any(|r| path == r || path.starts_with(&format!("{r}/")))
+        let canon = canonicalize_path(path);
+        self.writable_roots.iter().any(|r| {
+            let r = canonicalize_path(r);
+            canon == r || canon.starts_with(&format!("{r}/"))
+        })
     }
 
     /// Whether `path` is inside a readable root (`fs_read`/`fs_list`).
     pub fn is_readable(&self, path: &str) -> bool {
-        self.workspace_roots
-            .iter()
-            .any(|r| path == r || path.starts_with(&format!("{r}/")))
-            || self.is_writable(path)
+        let canon = canonicalize_path(path);
+        self.workspace_roots.iter().any(|r| {
+            let r = canonicalize_path(r);
+            canon == r || canon.starts_with(&format!("{r}/"))
+        }) || self.is_writable(path)
     }
 }
 

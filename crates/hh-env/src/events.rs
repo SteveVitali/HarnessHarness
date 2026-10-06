@@ -374,16 +374,22 @@ pub fn resumed_payload(h: &EnvHandle, cause: &str, suspended_ms: u64) -> Json {
 }
 
 /// `action.environment.snapshot{env_handle, snapshot_ref, kind, at_seq,
-/// manifest_ref}` — `at_seq`/`manifest_ref` landed at S2.9 (the branch model's
-/// snapshot chooser reloads the record blob; pre-S2.9 rows lack them and the
-/// chooser falls back to the row's seq).
+/// manifest_ref, taken_by, quiesced}` — `at_seq`/`manifest_ref` landed at
+/// S2.9 (the branch model's snapshot chooser reloads the record blob;
+/// pre-S2.9 rows lack them and the chooser falls back to the row's seq);
+/// `taken_by`/`quiesced` landed at R2.4 (DF-S2.9-3 — the cadence/suspend
+/// producers name themselves on the row; a pre-R2.4 row folds `taken_by`
+/// as absent, never guessed).
 pub fn snapshot_payload(
     h: &EnvHandle,
     snapshot_ref: &str,
     kind: &str,
     at_seq: u64,
     manifest_ref: Option<&str>,
+    taken_by: crate::snapshot::TakenBy,
+    quiesced: bool,
 ) -> Json {
+    use crate::snapshot::TakenBy;
     let mut m = BTreeMap::new();
     m.insert("env_handle".to_string(), Json::str(h.env_handle_id.clone()));
     m.insert("snapshot_ref".to_string(), Json::str(snapshot_ref));
@@ -392,7 +398,37 @@ pub fn snapshot_payload(
     if let Some(mr) = manifest_ref {
         m.insert("manifest_ref".to_string(), Json::str(mr));
     }
+    m.insert(
+        "taken_by".to_string(),
+        Json::str(match taken_by {
+            TakenBy::Subject => "subject",
+            TakenBy::Instrument => "instrument",
+            TakenBy::Cadence => "cadence",
+            TakenBy::Suspend => "suspend",
+        }),
+    );
+    m.insert("quiesced".to_string(), Json::Bool(quiesced));
     Json::Obj(m)
+}
+
+/// `action.environment.uploaded{env_handle, path, content_address,
+/// size_bytes}` — R2.4 (DF-S2.10-1): the `env.upload` audit row — bytes
+/// (or a named `ContentAddress`) materialised into a writable root, the
+/// blob-pool address recorded (content-addressed both ways).
+pub fn uploaded_payload(h: &EnvHandle, path: &str, address: &str, size_bytes: u64) -> Json {
+    Json::obj([
+        ("env_handle", Json::str(h.env_handle_id.clone())),
+        ("path", Json::str(path)),
+        ("content_address", Json::str(address)),
+        ("size_bytes", Json::Int(size_bytes as i64)),
+    ])
+}
+
+/// `action.environment.downloaded{env_handle, path, content_address,
+/// size_bytes}` — R2.4 (DF-S2.10-1): the `env.download` audit row — the
+/// readable path's bytes deposited into the blob pool.
+pub fn downloaded_payload(h: &EnvHandle, path: &str, address: &str, size_bytes: u64) -> Json {
+    uploaded_payload(h, path, address, size_bytes)
 }
 
 // ── effect lifecycle (the dispatcher's seven stages) ─────────────────────────
