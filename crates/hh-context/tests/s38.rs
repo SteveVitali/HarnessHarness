@@ -152,6 +152,9 @@ fn compact_input<'a>(
         scope: PersistenceScope::Run,
         at: 20,
         run_id: "run1".into(),
+        summarizer: None,
+        slot_min_authority: BTreeMap::new(),
+        item_texts: BTreeMap::new(),
     }
 }
 
@@ -739,4 +742,329 @@ fn ac_r_2_4_1_2_xcpe_external_memory_never_enters_principal_slot() {
         }
     }
     assert_eq!(out.plan.context_label.authority, AuthorityClass::External);
+}
+
+// ── S4.16b — the C1 ranker family (§5c.3) ────────────────────────────────────
+
+fn draft_structured(j: Json) -> MemoryDraft {
+    MemoryDraft {
+        kind: MemoryKind::Fact,
+        subject_key: None,
+        content: MemoryContent::Structured(j),
+        contract: None,
+        scope: PersistenceScope::Run,
+        declared_inputs: Vec::new(),
+        justifications: Vec::new(),
+        supersedes: None,
+        validity: None,
+        provenance: Some(ProvenanceRecord::minted(
+            Origin::model("m1", "run1", "r1"),
+            PersistenceScope::Run,
+            0,
+        )),
+        semantic_id: None,
+        validator_endorsed: false,
+    }
+}
+
+/// Every kernel-registered ranker variant satisfies its own declaration
+/// checks; the closed feature vocabulary refuses foreign and forbidden
+/// members (`authority`/`readers`/`validity` are not features — a ranker
+/// cannot read or set them).
+#[test]
+fn ranker_family_declarations_are_closed_and_valid() {
+    use hh_context::retrieve::{
+        check_ranker_deterministic, ranker_declaration_valid, ranker_declared, RankerDeclaration,
+        RANKER_DECLARATIONS,
+    };
+    for d in RANKER_DECLARATIONS {
+        ranker_declaration_valid(d).unwrap_or_else(|e| panic!("{}: {e}", d.variant_id));
+    }
+    // A foreign feature refuses.
+    assert!(ranker_declaration_valid(&RankerDeclaration {
+        variant_id: "_x_test",
+        deterministic: true,
+        features_used: &["not_a_feature"],
+        required_inputs: &[],
+        model_conditioned_rules: &[],
+    })
+    .is_err());
+    // `authority`/`readers`/`validity` are never features.
+    for forbidden in ["authority", "readers", "validity", "retention"] {
+        let features: &[&'static str] = Box::leak(Box::new([forbidden]));
+        assert!(ranker_declaration_valid(&RankerDeclaration {
+            variant_id: "_x_test",
+            deterministic: true,
+            features_used: features,
+            required_inputs: &[],
+            model_conditioned_rules: &[],
+        })
+        .is_err());
+    }
+    // A non-deterministic variant without the model inputs refuses.
+    assert!(ranker_declaration_valid(&RankerDeclaration {
+        variant_id: "_x_test",
+        deterministic: false,
+        features_used: &["similarity"],
+        required_inputs: &[],
+        model_conditioned_rules: &["r"],
+    })
+    .is_err());
+    // require_deterministic — declared deterministic pass; the unbound C2
+    // arm and undeclared refs refuse `RankerNotDeterministic`.
+    for d in RANKER_DECLARATIONS.iter().filter(|d| d.deterministic) {
+        check_ranker_deterministic(d.variant_id, "slot").unwrap();
+    }
+    assert!(matches!(
+        check_ranker_deterministic(hh_context::retrieve::SIMILARITY_RERANK, "slot"),
+        Err(hh_context::retrieve::RetrievalError::RankerNotDeterministic { .. })
+    ));
+    assert!(matches!(
+        check_ranker_deterministic("unregistered_ranker", "slot"),
+        Err(hh_context::retrieve::RetrievalError::RankerNotDeterministic { .. })
+    ));
+    let _ = ranker_declared; // used below
+}
+
+/// The C1 rankers serve; the declared-but-unbound `similarity_rerank` and
+/// undeclared refs refuse typed — never a silent default.
+#[test]
+fn ac_r_2_4_3_c1_ranker_family_serves_and_refuses_typed() {
+    use hh_context::retrieve::{LEXICAL_WEIGHTED, RECENCY_IMPORTANCE, SIMILARITY_RERANK};
+    let (mut store, a, _b) = populated();
+    let q = RetrievalQuery::Lexical {
+        terms: vec!["function".to_string()],
+        match_mode: MatchMode::Any,
+        context_lines: 0,
+        case_sensitive: false,
+        normalized: true,
+    };
+    for ranker in [LEXICAL_WEIGHTED, RECENCY_IMPORTANCE] {
+        let mut sink = CollectSink::default();
+        let (items, report) = retrieve::retrieve(
+            &mut store,
+            &req(q.clone(), 2, ranker),
+            &mut sink,
+            None,
+            || 1,
+        )
+        .unwrap_or_else(|e| panic!("{ranker} serves: {e:?}"));
+        assert_eq!(items[0].address, a);
+        assert!(report.deterministic, "{ranker} is declared deterministic");
+        // The evidence carries the declaration's features_used — not a
+        // hard-coded list (CC7's one declaration table).
+        assert_eq!(
+            items[0].rank_evidence.features,
+            retrieve::ranker_declared(ranker)
+                .unwrap()
+                .features_used
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+        );
+    }
+    // `similarity_rerank` — declared, unbound: EmbedderUnpinned.
+    let mut sink = CollectSink::default();
+    assert!(matches!(
+        retrieve::retrieve(
+            &mut store,
+            &req(q.clone(), 2, SIMILARITY_RERANK),
+            &mut sink,
+            None,
+            || 1
+        ),
+        Err(hh_context::retrieve::RetrievalError::EmbedderUnpinned)
+    ));
+    // Undeclared refs — UnknownRanker, never a silent default.
+    let mut sink = CollectSink::default();
+    assert!(matches!(
+        retrieve::retrieve(
+            &mut store,
+            &req(q.clone(), 2, "super_smart_ranker_9000"),
+            &mut sink,
+            None,
+            || 1
+        ),
+        Err(hh_context::retrieve::RetrievalError::UnknownRanker { .. })
+    ));
+}
+
+/// `lexical_weighted` — idf weights rare terms above common ones; the
+/// exact-phrase boost lands in the class digit; the report stays
+/// deterministic and the naive implementation agrees.
+#[test]
+fn ac_r_2_4_3_lexical_weighted_orders_by_idf() {
+    use hh_context::retrieve::LEXICAL_WEIGHTED;
+    // (1) "zebra reads" consecutive (rare term + exact phrase), (2) both
+    // terms scattered (no phrase), (3) the common term alone.
+    let make = || {
+        let mut store = MemoryStore::new("ms");
+        let ctx = write_ctx(&mut store, 1);
+        let phrase = store
+            .put(draft_text("zebra reads the manual quietly"), &ctx)
+            .unwrap()
+            .version
+            .version_id;
+        let ctx = write_ctx(&mut store, 2);
+        let scatter = store
+            .put(
+                draft_text("zebra naps, and later the librarian reads"),
+                &ctx,
+            )
+            .unwrap()
+            .version
+            .version_id;
+        let ctx = write_ctx(&mut store, 3);
+        let common = store
+            .put(draft_text("reads reads reads everywhere"), &ctx)
+            .unwrap()
+            .version
+            .version_id;
+        (store, phrase, scatter, common)
+    };
+    let (mut store, phrase, scatter, common) = make();
+    let q = RetrievalQuery::Lexical {
+        terms: vec!["zebra".to_string(), "reads".to_string()],
+        match_mode: MatchMode::Any,
+        context_lines: 0,
+        case_sensitive: false,
+        normalized: true,
+    };
+    let mut sink = CollectSink::default();
+    let (items, report) = retrieve::retrieve(
+        &mut store,
+        &req(q.clone(), 3, LEXICAL_WEIGHTED),
+        &mut sink,
+        None,
+        || 1,
+    )
+    .unwrap();
+    assert_eq!(items[0].address, phrase, "the exact phrase outranks");
+    assert!(
+        items[0].rank_evidence.score.starts_with('2'),
+        "phrase class digit: {}",
+        items[0].rank_evidence.score
+    );
+    assert_eq!(items[1].address, scatter, "all-terms outranks partial");
+    assert_eq!(items[2].address, common, "a single common term trails");
+    assert!(report.deterministic);
+    // Two implementations agree on identical initial state — a second,
+    // read-free store (the prod retrieve records reads).
+    let (pristine, ..) = make();
+    let naive = retrieve::retrieve_naive(&pristine, &req(q, 3, LEXICAL_WEIGHTED)).unwrap();
+    let prod: Vec<(String, String)> = items
+        .iter()
+        .map(|i| (i.address.clone(), i.rank_evidence.score.clone()))
+        .collect();
+    assert_eq!(prod, naive);
+}
+
+/// `recency_importance` — the declared `importance` member dominates, then
+/// recency (`last_read` ∨ `created`), then `read_count`; the hint is data
+/// the writer declared (never authority-derived).
+#[test]
+fn ac_r_2_4_3_recency_importance_orders_hint_then_recency() {
+    use hh_context::retrieve::RECENCY_IMPORTANCE;
+    let make = || {
+        let mut store = MemoryStore::new("ms");
+        let ctx = write_ctx(&mut store, 1);
+        let low = store
+            .put(
+                draft_structured(Json::obj([
+                    ("note", Json::str("alpha fact")),
+                    ("importance", Json::Int(1)),
+                ])),
+                &ctx,
+            )
+            .unwrap()
+            .version
+            .version_id;
+        let ctx = write_ctx(&mut store, 2);
+        let high_old = store
+            .put(
+                draft_structured(Json::obj([
+                    ("note", Json::str("beta fact")),
+                    ("importance", Json::Int(5)),
+                ])),
+                &ctx,
+            )
+            .unwrap()
+            .version
+            .version_id;
+        let ctx = write_ctx(&mut store, 3);
+        let none_declared = store
+            .put(
+                draft_structured(Json::obj([("note", Json::str("gamma fact"))])),
+                &ctx,
+            )
+            .unwrap()
+            .version
+            .version_id;
+        (store, low, high_old, none_declared)
+    };
+    let (mut store, low, high_old, none_declared) = make();
+    let q = RetrievalQuery::Lexical {
+        terms: vec!["fact".to_string()],
+        match_mode: MatchMode::Any,
+        context_lines: 0,
+        case_sensitive: false,
+        normalized: true,
+    };
+    let mut sink = CollectSink::default();
+    let (items, _) = retrieve::retrieve(
+        &mut store,
+        &req(q.clone(), 3, RECENCY_IMPORTANCE),
+        &mut sink,
+        None,
+        || 1,
+    )
+    .unwrap();
+    assert_eq!(items[0].address, high_old, "importance dominates recency");
+    assert_eq!(items[1].address, low);
+    assert_eq!(items[2].address, none_declared, "no hint → importance 0");
+    assert!(items[0].rank_evidence.score.starts_with('5'));
+    let (pristine, ..) = make();
+    let naive = retrieve::retrieve_naive(&pristine, &req(q, 3, RECENCY_IMPORTANCE)).unwrap();
+    let prod: Vec<(String, String)> = items
+        .iter()
+        .map(|i| (i.address.clone(), i.rank_evidence.score.clone()))
+        .collect();
+    assert_eq!(prod, naive);
+}
+
+/// AC-R-2.4.3 conformance — the full deterministic family agrees with the
+/// independent implementation on every query kind the fixture drives.
+#[test]
+fn ac_r_2_4_3_two_implementations_agree_full_ranker_family() {
+    use hh_context::retrieve::{LEXICAL_WEIGHTED, RECENCY_IMPORTANCE};
+    let q = RetrievalQuery::Lexical {
+        terms: vec!["function".to_string()],
+        match_mode: MatchMode::Any,
+        context_lines: 0,
+        case_sensitive: false,
+        normalized: true,
+    };
+    for ranker in [
+        DETERMINISTIC_DEFAULT,
+        STRUCTURAL_PAGERANK,
+        LEXICAL_WEIGHTED,
+        RECENCY_IMPORTANCE,
+    ] {
+        // The prod store records reads; the naive implementation runs on a
+        // pristine identical store (identical inputs → identical outputs).
+        let (mut store, _a, _b) = populated();
+        let (pristine, ..) = populated();
+        let request = req(q.clone(), 2, ranker);
+        let mut sink = CollectSink::default();
+        let (items, report) =
+            retrieve::retrieve(&mut store, &request, &mut sink, None, || 1).unwrap();
+        assert_eq!(items.len(), 1, "{ranker} delivers the one hit");
+        assert!(report.deterministic, "{ranker} declared deterministic");
+        let prod: Vec<(String, String)> = items
+            .iter()
+            .map(|i| (i.address.clone(), i.rank_evidence.score.clone()))
+            .collect();
+        let naive = retrieve::retrieve_naive(&pristine, &request).unwrap();
+        assert_eq!(prod, naive, "two implementations agree on {ranker}");
+    }
 }

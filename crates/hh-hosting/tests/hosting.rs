@@ -1092,3 +1092,150 @@ fn m18_measured_and_reported_coexist_as_distinct_provenance() {
     assert_eq!(measured.mediation, Mediation::Mediated);
     assert_eq!(measured.origin, HostedOrigin::Intercept);
 }
+
+// ── S4.16b / AC-R-2.4.2-11 — the hosted compaction lift ─────────────────────
+
+/// An Inspect-style `CompactionEvent` and a Claude-Code-style
+/// `compact_boundary` both normalize to `compaction.observed` and lift to
+/// `context.compaction.completed{applied_ops[{kind}], tokens_before/after}`
+/// at `origin = participant`, `authority = unverified`, with the component
+/// metrics the host cannot observe stamped `n/a{hosted_opaque}`.
+#[test]
+fn ac_r_2_4_2_11_hosted_compaction_lift() {
+    use hh_hosting::compact::{normalize_compaction, CompactionSpelling};
+
+    // Inspect's `CompactionEvent` — the transcript record (op reported).
+    let inspect_raw = Json::obj([
+        ("type", Json::str("CompactionEvent")),
+        ("ops", Json::Arr(vec![Json::str("summarize")])),
+        ("tokens_before", Json::Int(181_240)),
+        ("tokens_after", Json::Int(3_912)),
+    ]);
+    let ev = normalize_compaction(
+        CompactionSpelling::InspectCompactionEvent,
+        &inspect_raw,
+        7,
+        "sess-1",
+        42,
+        Mediation::Observed,
+        EventChannel::Log,
+        Some("log-line:9182".into()),
+    )
+    .expect("Inspect record normalizes");
+    assert_eq!(ev.kind, "compaction.observed");
+    assert_eq!(ev.provenance.origin, HostedOrigin::Participant);
+    assert_eq!(ev.provenance.authority, AuthorityClass::Unverified);
+
+    let rows = lift(&[ev]);
+    assert_eq!(rows.len(), 1);
+    let row = &rows[0];
+    assert_eq!(row.class, "context.compaction.completed");
+    assert_eq!(row.origin, HostedOrigin::Participant);
+    assert_eq!(row.authority, AuthorityClass::Unverified);
+    let Some(Json::Arr(ops)) = row.payload.get("applied_ops") else {
+        panic!("applied_ops[]")
+    };
+    assert_eq!(
+        ops.iter()
+            .filter_map(|o| o.get("kind").and_then(Json::as_str))
+            .collect::<Vec<_>>(),
+        vec!["summarize"]
+    );
+    assert_eq!(row.payload.get("tokens_before"), Some(&Json::Int(181_240)));
+    assert_eq!(row.payload.get("tokens_after"), Some(&Json::Int(3_912)));
+    // Component metrics the host cannot observe — typed n/a, never a
+    // fabricated estimate.
+    let components = row.payload.get("components").expect("components");
+    assert_eq!(
+        components
+            .get("input_reduction")
+            .and_then(|c| c.get("n/a"))
+            .and_then(Json::as_str),
+        Some("hosted_opaque")
+    );
+    assert_eq!(
+        components
+            .get("summariser_usage")
+            .and_then(|c| c.get("n/a"))
+            .and_then(Json::as_str),
+        Some("hosted_opaque")
+    );
+
+    // Claude Code's `compact_boundary` — nested metadata, no explicit ops
+    // (the format default is `[{kind: summarize}]`, stamped `format`).
+    let cc_raw = Json::obj([
+        ("type", Json::str("compact_boundary")),
+        (
+            "compact_metadata",
+            Json::obj([
+                ("trigger", Json::str("auto")),
+                ("pre_tokens", Json::Int(95_031)),
+            ]),
+        ),
+    ]);
+    let ev2 = normalize_compaction(
+        CompactionSpelling::ClaudeCompactBoundary,
+        &cc_raw,
+        8,
+        "sess-1",
+        50,
+        Mediation::Observed,
+        EventChannel::Protocol,
+        None,
+    )
+    .expect("compact_boundary normalizes");
+    // The raw record is preserved verbatim (CC3).
+    assert_eq!(ev2.ext.get("_raw"), Some(&cc_raw));
+    let row2 = lift(&[ev2]).into_iter().next().unwrap();
+    assert_eq!(row2.class, "context.compaction.completed");
+    assert_eq!(
+        match row2.payload.get("applied_ops") {
+            Some(Json::Arr(a)) => a[0].get("kind").and_then(Json::as_str),
+            _ => None,
+        },
+        Some("summarize")
+    );
+    assert_eq!(
+        row2.payload
+            .get("applied_ops_source")
+            .and_then(Json::as_str),
+        Some("format")
+    );
+    assert_eq!(row2.payload.get("tokens_before"), Some(&Json::Int(95_031)));
+    assert_eq!(
+        row2.payload.get("trigger").and_then(Json::as_str),
+        Some("auto")
+    );
+    // tokens_after unreported → the member stays absent (never fabricated).
+    assert!(row2.payload.get("tokens_after").is_none());
+    assert_eq!(row2.authority, AuthorityClass::Unverified);
+
+    // A hand-rolled `compaction.observed` (no normalizer) still lifts to
+    // the AC shape — `applied_ops`/`components` backfill idempotently.
+    let bare = HostedEvent {
+        seq: 9,
+        session: "sess-1".into(),
+        at: 60,
+        kind: "compaction.observed".into(),
+        payload: Json::obj([("tokens_before", Json::Int(100))]),
+        provenance: HostedProvenance {
+            origin: HostedOrigin::Participant,
+            authority: AuthorityClass::Unverified,
+        },
+        mediation: Mediation::Observed,
+        event_channel: EventChannel::Hook,
+        raw_ref: None,
+        ext: std::collections::BTreeMap::new(),
+    };
+    let row3 = lift(&[bare]).into_iter().next().unwrap();
+    assert_eq!(row3.class, "context.compaction.completed");
+    assert_eq!(
+        match row3.payload.get("applied_ops") {
+            Some(Json::Arr(a)) => Some(a.len()),
+            _ => None,
+        },
+        Some(0)
+    );
+    assert!(row3.payload.get("components").is_some());
+    assert_eq!(row3.payload.get("tokens_before"), Some(&Json::Int(100)));
+}

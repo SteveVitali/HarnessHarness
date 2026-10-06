@@ -100,10 +100,12 @@ pub enum CompactionTrigger {
         /// The rule that scheduled it.
         rule_id: String,
     },
-    /// `relower{dropped_items}` — a re-lowering pass dropped items.
+    /// `relower{dropped_items[]}` — a re-lowering pass dropped items (the
+    /// dropped `context_item_id`s — the `relower_summarize` variant reads
+    /// them as the summarize input set).
     Relower {
-        /// How many items the re-lower dropped.
-        dropped_items: u64,
+        /// The `context_item_id`s the re-lower dropped.
+        dropped_items: Vec<String>,
     },
 }
 
@@ -308,9 +310,12 @@ impl CompactionOp {
     }
 }
 
-/// `CompactionProposal{proposal_id, ops, fallback, reclaim_estimate}` —
+/// `CompactionProposal{proposal_id, ops, fallback, reclaim_estimate,
+/// summarizer_profile?, max_summary_tokens?, input_reduction?}` —
 /// `proposal_id = idp(context_compaction.1, canonical(ops ∥ fallback))`
-/// (I-DET: identical on any host for identical inputs).
+/// (I-DET: identical on any host for identical inputs). The three
+/// model-call members are additive (CC8): a proposal that carries none
+/// hashes identically to the C0 shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompactionProposal {
     /// The proposal's content address.
@@ -318,24 +323,60 @@ pub struct CompactionProposal {
     /// The ops.
     pub ops: Vec<CompactionOp>,
     /// `proposal.fallback` — the ops the ladder tries before the variant
-    /// ladder continues (I-FALLBACK).
+    /// ladder continues (I-FALLBACK). Deterministic-only per §5c.2.
     pub fallback: Option<Vec<CompactionOp>>,
     /// The proposer's reclaim estimate (informational — I-RECLAIM measures the
     /// executed view).
     pub reclaim_estimate: u64,
     /// The proposing variant's identity.
     pub variant_ref: String,
+    /// `summarizer_profile` — the declared profile ref a `summarize` op is
+    /// gated on (§5c.2; a summarize proposal without it is
+    /// `UnresolvedSummarizer` at execute).
+    pub summarizer_profile: Option<String>,
+    /// `max_summary_tokens` — the variant's summary-length bound.
+    pub max_summary_tokens: Option<u64>,
+    /// `input_reduction` — the declared reduction applied on
+    /// `SummarizerOverflow` and recorded `input_reduction_applied`.
+    pub input_reduction: Option<InputReduction>,
+}
+
+/// The deterministic-fallback shape a model-call proposal must declare
+/// (§5c.2 `fallback: [CompactionOp] (deterministic only)`): no `summarize`
+/// op may appear in `fallback` — the fallback ladder is the last safety net
+/// and never needs a model call.
+fn fallback_deterministic(ops: &[CompactionOp]) -> bool {
+    !ops.iter()
+        .any(|o| matches!(o, CompactionOp::Summarize { .. }))
 }
 
 impl CompactionProposal {
-    /// Mint a proposal (deterministic `proposal_id`).
+    /// Mint a proposal (deterministic `proposal_id`) — the C0 shape (no
+    /// model-call members).
     pub fn mint(
         variant_ref: &str,
         ops: Vec<CompactionOp>,
         fallback: Option<Vec<CompactionOp>>,
         reclaim_estimate: u64,
     ) -> CompactionProposal {
-        let preimage = Json::obj([
+        CompactionProposal::mint_with(variant_ref, ops, fallback, reclaim_estimate, None)
+    }
+
+    /// Mint with the model-call members. `model_call = {summarizer_profile?,
+    /// max_summary_tokens?, input_reduction?}` packed for the caller; a
+    /// `fallback` containing a `summarize` op is refused with
+    /// `PolicyViolation` (deterministic-only, §5c.2) — mint returns the
+    /// proposal without it rather than carrying a model call in the net.
+    pub fn mint_with(
+        variant_ref: &str,
+        ops: Vec<CompactionOp>,
+        fallback: Option<Vec<CompactionOp>>,
+        reclaim_estimate: u64,
+        model_call: Option<ModelCallMembers>,
+    ) -> CompactionProposal {
+        let mc = model_call.unwrap_or_default();
+        let fallback = fallback.filter(|f| fallback_deterministic(f));
+        let mut members = vec![
             (
                 "ops",
                 Json::Arr(ops.iter().map(CompactionOp::to_json).collect()),
@@ -348,16 +389,209 @@ impl CompactionProposal {
                     .unwrap_or(Json::Null),
             ),
             ("variant", Json::str(variant_ref.to_string())),
-        ])
-        .to_canonical_string();
+        ];
+        if let Some(sp) = &mc.summarizer_profile {
+            members.push(("summarizer_profile", Json::str(sp.clone())));
+        }
+        if let Some(m) = mc.max_summary_tokens {
+            members.push(("max_summary_tokens", Json::Int(m as i64)));
+        }
+        if let Some(ir) = &mc.input_reduction {
+            members.push(("input_reduction", ir.to_json()));
+        }
+        let preimage = Json::obj(members).to_canonical_string();
         CompactionProposal {
             proposal_id: hh_identity::idp::idp_id(COMPACTION_IDP, preimage.as_bytes()),
             ops,
             fallback,
             reclaim_estimate,
             variant_ref: variant_ref.to_string(),
+            summarizer_profile: mc.summarizer_profile,
+            max_summary_tokens: mc.max_summary_tokens,
+            input_reduction: mc.input_reduction,
         }
     }
+}
+
+/// The model-call members a `mint_with` proposal carries (§5c.2).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModelCallMembers {
+    /// The declared summariser profile ref.
+    pub summarizer_profile: Option<String>,
+    /// The summary-length bound.
+    pub max_summary_tokens: Option<u64>,
+    /// The declared input reduction.
+    pub input_reduction: Option<InputReduction>,
+}
+
+/// `InputReduction` — the closed sum applied when the summariser's own
+/// window overflows (§5c.2): `trim_oldest | drop_tool_results_middle_out{percent}
+/// | shrink_strings{factor}`. Recorded as `input_reduction_applied`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputReduction {
+    /// Drop the oldest inputs.
+    TrimOldest,
+    /// Drop tool-result bodies, middle-out, to `percent` of the set.
+    DropToolResultsMiddleOut {
+        /// The retained share (0–100).
+        percent: u64,
+    },
+    /// Truncate every body to `⌊len / factor⌋`.
+    ShrinkStrings {
+        /// The shrink divisor (≥ 1).
+        factor: u64,
+    },
+}
+
+impl InputReduction {
+    /// The canonical JSON (proposal preimage + `input_reduction_applied`).
+    pub fn to_json(&self) -> Json {
+        match self {
+            InputReduction::TrimOldest => Json::obj([("kind", Json::str("trim_oldest"))]),
+            InputReduction::DropToolResultsMiddleOut { percent } => Json::obj([
+                ("kind", Json::str("drop_tool_results_middle_out")),
+                ("percent", Json::Int(*percent as i64)),
+            ]),
+            InputReduction::ShrinkStrings { factor } => Json::obj([
+                ("kind", Json::str("shrink_strings")),
+                ("factor", Json::Int(*factor as i64)),
+            ]),
+        }
+    }
+
+    /// The canonical kind spelling.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            InputReduction::TrimOldest => "trim_oldest",
+            InputReduction::DropToolResultsMiddleOut { .. } => "drop_tool_results_middle_out",
+            InputReduction::ShrinkStrings { .. } => "shrink_strings",
+        }
+    }
+
+    /// Apply the reduction to the summariser's input set (in place).
+    pub fn apply(&self, items: &mut Vec<SummarizeItem>) {
+        match self {
+            InputReduction::TrimOldest => {
+                if items.len() > 1 {
+                    let keep = (items.len() / 2).max(1);
+                    items.drain(0..items.len() - keep);
+                }
+            }
+            InputReduction::DropToolResultsMiddleOut { percent } => {
+                let keep = (items.len() as u64 * (*percent).min(100) / 100) as usize;
+                let keep = keep.max(1);
+                while items.len() > keep {
+                    // Middle-out: drop the middle element each round.
+                    items.remove(items.len() / 2);
+                }
+            }
+            InputReduction::ShrinkStrings { factor } => {
+                let f = (*factor).max(1) as usize;
+                for it in items.iter_mut() {
+                    let n = it.text.len() / f;
+                    it.text.truncate(n.max(1));
+                    it.tokens = (it.tokens / f.max(1) as u64).max(1);
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The Summarizer port (§5c.2 — the only compaction op that may call a model)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One summariser input item (body + estimated tokens).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SummarizeItem {
+    /// The `context_item_id`.
+    pub context_item_id: String,
+    /// The body text (caller-supplied — the kernel never reads it).
+    pub text: String,
+    /// The estimated tokens.
+    pub tokens: u64,
+}
+
+/// `SummarizeInput` — the port's request (§5c.2 `summarize{input_ids,
+/// schema_ref?, insert_at, previous_summary_ref?, instructions_ref}`).
+#[derive(Debug, Clone, Default)]
+pub struct SummarizeInput {
+    /// The forgotten inputs, in view order.
+    pub items: Vec<SummarizeItem>,
+    /// `instructions_ref` — the compaction prompt's `Text` ref (the profile's
+    /// declared prompt — opacity-counted, never inlined here).
+    pub instructions_ref: Option<String>,
+    /// `max_summary_tokens` — the variant's bound.
+    pub max_summary_tokens: Option<u64>,
+    /// `previous_summary_ref` — incremental summarisation chains.
+    pub previous_summary_ref: Option<String>,
+}
+
+/// `SummarizerOutput` — the port's response: the summary body plus the
+/// usage the caller posts as `summariser_usage` /
+/// `control.budget.consumed{charged_to: subject, harness_overhead.compaction}`.
+#[derive(Debug, Clone)]
+pub struct SummarizerOutput {
+    /// The summary body.
+    pub text: String,
+    /// The summary's estimated tokens.
+    pub tokens: u64,
+    /// The usage record the caller charges (opaque JSON — the port declares
+    /// the shape; the kernel records it verbatim).
+    pub usage: Json,
+}
+
+/// `SummarizationFailed{error | empty | aborted}` — the closed failure kind
+/// (§5c.2 execute errors).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SummarizerFailure {
+    /// The call errored.
+    Error,
+    /// The call returned an empty summary.
+    Empty,
+    /// The call was aborted (principal / hook / cancel).
+    Aborted,
+}
+
+impl SummarizerFailure {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SummarizerFailure::Error => "error",
+            SummarizerFailure::Empty => "empty",
+            SummarizerFailure::Aborted => "aborted",
+        }
+    }
+}
+
+/// The port's typed failure set.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SummarizerError {
+    /// `SummarizerOverflow` — the summariser's own window is too small
+    /// (handled by a declared `InputReduction`, then success or fallback).
+    Overflow {
+        /// The offered input tokens.
+        input_tokens: u64,
+        /// The summariser's window.
+        cap: u64,
+    },
+    /// `SummarizationFailed{error | empty | aborted}`.
+    Failed {
+        /// The closed kind.
+        kind: SummarizerFailure,
+        /// Detail.
+        detail: String,
+    },
+}
+
+/// The `Summarizer` port — the only compaction surface that may call a
+/// model, and only through the caller's gateway as an ordinary
+/// `model.call.*` (I-BUDGET: the caller reserves before dispatch). The port
+/// is a caller-supplied trait so offline runs wire a deterministic stub;
+/// the kernel never calls a model itself.
+pub trait Summarizer {
+    /// `summarize(input) → output`.
+    fn summarize(&self, input: &SummarizeInput) -> Result<SummarizerOutput, SummarizerError>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -383,7 +617,6 @@ pub struct FlatItem {
 /// The kernel's compaction input: the delivered plan plus the candidates the
 /// plan was assembled from (the retention/pairing/priority facts live on the
 /// candidate, not the projected item).
-#[derive(Debug)]
 pub struct CompactInput<'a> {
     /// The delivered plan.
     pub plan: &'a ContextPlan,
@@ -403,6 +636,19 @@ pub struct CompactInput<'a> {
     pub at: u64,
     /// The run id (emission dressing).
     pub run_id: String,
+    /// The bound `Summarizer` port (the only compaction op that may call a
+    /// model — caller-supplied; `None` ⇒ every `summarize` op is
+    /// `UnresolvedSummarizer`).
+    pub summarizer: Option<&'a dyn Summarizer>,
+    /// `slot_id → min_authority` — the admission floor a summary insert is
+    /// checked against: a summary is admitted only into slots with
+    /// `min_authority ≤ delegate` (`transcript`, `external`) — a slot absent
+    /// here refuses with `PolicyViolation`, never defaults (I-REQ).
+    pub slot_min_authority: BTreeMap<String, hh_provenance::AuthorityClass>,
+    /// `context_item_id → body text` — the bodies a `summarize` op's inputs
+    /// carry into the port call (the kernel never reads them; a missing
+    /// body is `MissingBody`, never a silent empty string — CC3).
+    pub item_texts: BTreeMap<String, String>,
 }
 
 impl<'a> CompactInput<'a> {
@@ -477,6 +723,34 @@ pub enum CompactError {
     UnsupportedOp {
         /// The op.
         detail: String,
+    },
+    /// `PolicyViolation{required_item | authority | retention}` — the
+    /// kernel refused a label/authority mutation or a summary insert into a
+    /// slot whose `min_authority` floor is above `delegate` (§5c.2; I-NOWIDEN).
+    PolicyViolation {
+        /// The violated rule.
+        detail: String,
+    },
+    /// `SummarizerOverflow` — the summariser's window is too small and no
+    /// `input_reduction` was declared (or the reduction still overflows).
+    SummarizerOverflow {
+        /// The offered input tokens.
+        input_tokens: u64,
+        /// The summariser's window.
+        cap: u64,
+    },
+    /// `SummarizationFailed{error | empty | aborted}` (§5c.2).
+    SummarizationFailed {
+        /// The closed kind.
+        kind: SummarizerFailure,
+        /// Detail.
+        detail: String,
+    },
+    /// A `summarize` op's input has no caller-supplied body — CC3: never a
+    /// silent empty string.
+    MissingBody {
+        /// The item.
+        item_id: String,
     },
     /// The terminal failure: every rung of the I-FALLBACK ladder exhausted
     /// without reclaiming the requirement. The caller stops
@@ -813,6 +1087,155 @@ impl CompactionStrategy for ClearToolResults {
     }
 }
 
+/// `hh/relower-summarize@1` — the C2 `relower_summarize` variant (§5c.2):
+/// when a re-lowering pass drops items (`CompactionTrigger::Relower`), the
+/// variant proposes `summarize` over the dropped set (a single op — the
+/// dropped range is contiguous by construction of the relowering) with the
+/// declared `summarizer_profile`/`max_summary_tokens`/`input_reduction`,
+/// and declares a deterministic `evict` fallback for the I-FALLBACK ladder
+/// (a `summarize` op in `fallback` is refused at mint — deterministic
+/// only).
+///
+/// `dropped` is the relowering's own dropped set, caller-supplied (the
+/// variant never re-derives what the relower dropped — the trigger's
+/// `dropped_items` count is checked against it).
+pub struct RelowerSummarize {
+    /// The declared summariser profile ref.
+    pub summarizer_profile: String,
+    /// `max_summary_tokens`.
+    pub max_summary_tokens: Option<u64>,
+    /// The declared `InputReduction`.
+    pub input_reduction: Option<InputReduction>,
+    /// The `context_item_id`s the relowering dropped.
+    pub dropped: Vec<String>,
+}
+
+impl CompactionStrategy for RelowerSummarize {
+    fn variant_ref(&self) -> &str {
+        RELOWER_SUMMARIZE_REF
+    }
+
+    fn propose(
+        &self,
+        input: &CompactInput,
+        assessment: &Assessment,
+    ) -> Result<CompactionProposal, CompactError> {
+        let flat = input.flattened();
+        let at = flat
+            .iter()
+            .find(|f| f.item.context_item_id == self.dropped.first().cloned().unwrap_or_default())
+            .map(|f| f.flat_index)
+            .unwrap_or(0);
+        let ops = if self.dropped.is_empty() {
+            vec![]
+        } else {
+            vec![CompactionOp::Summarize {
+                input_ids: self.dropped.clone(),
+                insert_at: at,
+            }]
+        };
+        let fallback = if self.dropped.is_empty() {
+            None
+        } else {
+            Some(vec![CompactionOp::Evict {
+                item_ids: self.dropped.clone(),
+                placeholder: Placeholder::KernelOmission,
+            }])
+        };
+        let freed: u64 = flat
+            .iter()
+            .filter(|f| self.dropped.contains(&f.item.context_item_id))
+            .map(|f| f.item.tokens)
+            .sum();
+        Ok(CompactionProposal::mint_with(
+            RELOWER_SUMMARIZE_REF,
+            ops,
+            fallback,
+            freed.max(assessment.min_reclaim),
+            Some(ModelCallMembers {
+                summarizer_profile: Some(self.summarizer_profile.clone()),
+                max_summary_tokens: self.max_summary_tokens,
+                input_reduction: self.input_reduction.clone(),
+            }),
+        ))
+    }
+}
+
+/// `hh/fold-on-return@1` — the C2 `fold_on_return` variant (§5c.2; needs
+/// the §5e subagent boundary): when a delegated child run returns, the
+/// child's contribution folds into one summary (`Summarize + Evict` under
+/// the op grammar — the model-owned `fold` op's kernel shape) instead of
+/// occupying the view item-for-item. `returned` is the caller-joined fold
+/// set (the `context_item_id`s the child contributed); the variant proposes
+/// `summarize` at the fold set's head with a deterministic `evict`
+/// fallback.
+pub struct FoldOnReturn {
+    /// The declared summariser profile ref.
+    pub summarizer_profile: String,
+    /// `max_summary_tokens`.
+    pub max_summary_tokens: Option<u64>,
+    /// The declared `InputReduction`.
+    pub input_reduction: Option<InputReduction>,
+    /// The `context_item_id`s the returned child contributed.
+    pub returned: Vec<String>,
+}
+
+impl CompactionStrategy for FoldOnReturn {
+    fn variant_ref(&self) -> &str {
+        FOLD_ON_RETURN_REF
+    }
+
+    fn propose(
+        &self,
+        input: &CompactInput,
+        _assessment: &Assessment,
+    ) -> Result<CompactionProposal, CompactError> {
+        let flat = input.flattened();
+        let at = flat
+            .iter()
+            .find(|f| self.returned.contains(&f.item.context_item_id))
+            .map(|f| f.flat_index)
+            .unwrap_or(0);
+        let ops = if self.returned.is_empty() {
+            vec![]
+        } else {
+            vec![CompactionOp::Summarize {
+                input_ids: self.returned.clone(),
+                insert_at: at,
+            }]
+        };
+        let fallback = if self.returned.is_empty() {
+            None
+        } else {
+            Some(vec![CompactionOp::Evict {
+                item_ids: self.returned.clone(),
+                placeholder: Placeholder::KernelOmission,
+            }])
+        };
+        let freed: u64 = flat
+            .iter()
+            .filter(|f| self.returned.contains(&f.item.context_item_id))
+            .map(|f| f.item.tokens)
+            .sum();
+        Ok(CompactionProposal::mint_with(
+            FOLD_ON_RETURN_REF,
+            ops,
+            fallback,
+            freed,
+            Some(ModelCallMembers {
+                summarizer_profile: Some(self.summarizer_profile.clone()),
+                max_summary_tokens: self.max_summary_tokens,
+                input_reduction: self.input_reduction.clone(),
+            }),
+        ))
+    }
+}
+
+/// `hh/relower-summarize@1`'s variant tag.
+pub const RELOWER_SUMMARIZE_REF: &str = "hh/relower-summarize@1";
+/// `hh/fold-on-return@1`'s variant tag.
+pub const FOLD_ON_RETURN_REF: &str = "hh/fold-on-return@1";
+
 /// I-CUT for a proposed evicted set: split it into contiguous flattened runs;
 /// each run must start and end on a legal boundary.
 fn runs_legal(input: &CompactInput, flat: &[FlatItem], evicted: &BTreeSet<usize>) -> bool {
@@ -962,6 +1385,18 @@ pub struct CompactedView {
     pub forgotten: Vec<String>,
     /// The omission items the placeholders minted (`delivered` rows emit).
     pub omission_items: Vec<PlannedItem>,
+    /// The summary items `summarize` ops minted (`delivered` rows emit;
+    /// `Artifact{kind: compaction_summary}` — authority ≤ delegate,
+    /// `derived_from` = the forgotten ids).
+    pub summary_items: Vec<PlannedItem>,
+    /// `summariser_usage` — the port's usage record for the caller to post
+    /// `control.budget.consumed{charged_to: subject,
+    /// harness_overhead.compaction}` (I-BUDGET; `None` when no summariser
+    /// ran).
+    pub summariser_usage: Option<Json>,
+    /// The `InputReduction` applied on a `SummarizerOverflow` (recorded as
+    /// `input_reduction_applied` — §5c.2).
+    pub input_reduction_applied: Option<InputReduction>,
 }
 
 /// `execute(proposal, input)` — kernel-side application (C0). `evict` removes
@@ -976,9 +1411,14 @@ pub fn execute(
     for op in &proposal.ops {
         match op {
             CompactionOp::Summarize { .. } => {
-                return Err(CompactError::UnresolvedSummarizer {
-                    detail: "no summariser declared at C0".into(),
-                })
+                // I-BUDGET: a summary executes only under a declared
+                // `summarizer_profile` *and* a bound `Summarizer` port —
+                // the kernel refuses, never silently skips.
+                if proposal.summarizer_profile.is_none() || input.summarizer.is_none() {
+                    return Err(CompactError::UnresolvedSummarizer {
+                        detail: "no declared summarizer_profile / bound port".into(),
+                    });
+                }
             }
             CompactionOp::Restructure { extractor, .. } => {
                 return Err(CompactError::UnsupportedOp {
@@ -1014,6 +1454,152 @@ pub fn execute(
         }
     }
 
+    // ── summarize ops (§5c.2 `Summarize{input_ids, insert_at}`): the only
+    // model call compaction may make, through the bound port. The output is
+    // `Artifact{kind: compaction_summary}` — authority `min(⊔ inputs,
+    // delegate)`, taint = ∪ inputs, readers = ∩ inputs, `derived_from` =
+    // forgotten ids + `model_call_id` + `instructions_ref`, admitted only
+    // into slots with `min_authority ≤ delegate`.
+    let mut summary_items: Vec<PlannedItem> = Vec::new();
+    let mut summary_inserts: Vec<(String, usize, PlannedItem)> = Vec::new(); // (slot_id, flat_index, item)
+    let mut summarized_set: BTreeSet<usize> = BTreeSet::new();
+    let mut summariser_usage: Option<Json> = None;
+    let mut input_reduction_applied: Option<InputReduction> = None;
+    for op in &proposal.ops {
+        let CompactionOp::Summarize {
+            input_ids,
+            insert_at,
+        } = op
+        else {
+            continue;
+        };
+        // Gather the input bodies (CC3 — a missing body is a typed refusal).
+        let mut sitems: Vec<SummarizeItem> = Vec::new();
+        for id in input_ids {
+            let f = by_item[id.as_str()];
+            let text = input.item_texts.get(id.as_str()).cloned().ok_or_else(|| {
+                CompactError::MissingBody {
+                    item_id: id.clone(),
+                }
+            })?;
+            sitems.push(SummarizeItem {
+                context_item_id: id.clone(),
+                text,
+                tokens: f.item.tokens,
+            });
+        }
+        let summarizer = input.summarizer.expect("gated above");
+        let mut req = SummarizeInput {
+            items: sitems,
+            instructions_ref: None,
+            max_summary_tokens: proposal.max_summary_tokens,
+            previous_summary_ref: None,
+        };
+        let out = match summarizer.summarize(&req) {
+            Ok(o) => o,
+            Err(SummarizerError::Overflow { input_tokens, cap }) => {
+                // A declared `InputReduction` applies, once, then success or
+                // the typed failure (§5c.2 `SummarizerOverflow` row).
+                match &proposal.input_reduction {
+                    Some(red) => {
+                        red.apply(&mut req.items);
+                        input_reduction_applied = Some(red.clone());
+                        match summarizer.summarize(&req) {
+                            Ok(o) => o,
+                            Err(SummarizerError::Overflow { input_tokens, cap }) => {
+                                return Err(CompactError::SummarizerOverflow { input_tokens, cap })
+                            }
+                            Err(SummarizerError::Failed { kind, detail }) => {
+                                return Err(CompactError::SummarizationFailed { kind, detail })
+                            }
+                        }
+                    }
+                    None => return Err(CompactError::SummarizerOverflow { input_tokens, cap }),
+                }
+            }
+            Err(SummarizerError::Failed { kind, detail }) => {
+                return Err(CompactError::SummarizationFailed { kind, detail })
+            }
+        };
+        if out.text.is_empty() {
+            return Err(CompactError::SummarizationFailed {
+                kind: SummarizerFailure::Empty,
+                detail: "summariser returned an empty body".into(),
+            });
+        }
+        summariser_usage = Some(out.usage);
+
+        // The summary item: authority `min(⊔ inputs, delegate)`, label
+        // `⊔ labels` capped `delegate` with taint ∪ / readers ∩ (the port's
+        // derivation record carries the same computation).
+        let inputs: Vec<&FlatItem> = input_ids.iter().map(|id| by_item[id.as_str()]).collect();
+        let join_auth = inputs
+            .iter()
+            .map(|f| f.item.authority)
+            .max()
+            .unwrap_or(hh_provenance::AuthorityClass::Unverified);
+        let authority = join_auth.min(hh_provenance::AuthorityClass::Delegate);
+        let mut label = inputs.iter().fold(
+            Label::at(hh_provenance::AuthorityClass::Unverified),
+            |acc, f| acc.join(&f.item.label),
+        );
+        label.authority = authority;
+        // `insert_at` must land in a slot whose floor admits `≤ delegate`
+        // (I-REQ's authority half — never a silent re-slot).
+        let slot_of_insert = flat
+            .iter()
+            .find(|f| f.flat_index == *insert_at)
+            .map(|f| f.slot_id.clone())
+            .or_else(|| inputs.first().map(|f| f.slot_id.clone()))
+            .ok_or_else(|| CompactError::PolicyViolation {
+                detail: format!("summarize insert_at {insert_at} names no view index"),
+            })?;
+        match input.slot_min_authority.get(&slot_of_insert) {
+            Some(floor) if *floor <= hh_provenance::AuthorityClass::Delegate => {}
+            _ => {
+                return Err(CompactError::PolicyViolation {
+                    detail: format!(
+                        "summary admitted only into slots with min_authority ≤ delegate (slot {slot_of_insert})"
+                    ),
+                })
+            }
+        }
+        let derived_from_id = hh_identity::idp::idp_id(
+            COMPACTION_IDP,
+            Json::obj([
+                ("kind", Json::str("compaction_summary")),
+                (
+                    "inputs",
+                    Json::Arr(input_ids.iter().map(|i| Json::str(i.clone())).collect()),
+                ),
+                ("text", Json::str(&out.text)),
+            ])
+            .to_canonical_string()
+            .as_bytes(),
+        );
+        let summary = PlannedItem {
+            candidate_id: format!("compaction-summary-{insert_at}"),
+            context_item_id: derived_from_id.clone(),
+            artefact_id: Some(derived_from_id.clone()),
+            delivery_id: hh_identity::idp::idp_id(
+                crate::plan::DELIVERY_IDP,
+                format!("compact-summary:{}:{}", input.run_id, insert_at).as_bytes(),
+            ),
+            authority,
+            label,
+            tokens: out.tokens,
+            state: CandidateState::Expanded,
+            delivered_by_reference: false,
+            derived_from: Some(derived_from_id),
+        };
+        for id in input_ids {
+            let f = by_item[id.as_str()];
+            summarized_set.insert(f.flat_index as usize);
+        }
+        summary_inserts.push((slot_of_insert, *insert_at as usize, summary.clone()));
+        summary_items.push(summary);
+    }
+
     // Rebuild the slot fills: evicted items leave; offloaded items flip to
     // by-reference; a `kernel_omission` placeholder lands where each forgotten
     // contiguous run began (one item per range, kernel authority — I-LABEL:
@@ -1024,6 +1610,7 @@ pub fn execute(
     let runs = contiguous_runs(&evict_set);
     let run_start: BTreeMap<usize, usize> = runs.iter().map(|(s, e)| (*s, *e)).collect();
     let mut placeholder_count = 0u64;
+    let mut emitted_summary: BTreeSet<usize> = BTreeSet::new();
     for slot in &input.plan.slots {
         let mut items = Vec::new();
         for item in &slot.items {
@@ -1032,6 +1619,23 @@ pub fn execute(
                 .find(|f| f.item.delivery_id == item.delivery_id)
                 .expect("plan items flatten 1:1");
             let idx = f.flat_index as usize;
+            // A `summarize` op's output lands at `insert_at` — exactly once
+            // (the first view position at or after the declared index inside
+            // its admitted slot).
+            if slot.slot_id
+                == summary_inserts
+                    .iter()
+                    .find(|(_, at, _)| *at == idx)
+                    .map(|(sid, _, _)| sid.clone())
+                    .unwrap_or_default()
+            {
+                if let Some((_, at, it)) = summary_inserts.iter().find(|(sid, at, _)| {
+                    sid == &slot.slot_id && *at == idx && !emitted_summary.contains(at)
+                }) {
+                    items.push(it.clone());
+                    emitted_summary.insert(*at);
+                }
+            }
             if evict_set.contains(&idx) {
                 forgotten.push(item.context_item_id.clone());
                 if want_placeholder && run_start.contains_key(&idx) {
@@ -1059,6 +1663,10 @@ pub fn execute(
                 }
                 continue;
             }
+            if summarized_set.contains(&idx) {
+                forgotten.push(item.context_item_id.clone());
+                continue;
+            }
             if offload_set.contains(&idx) {
                 let mut it = item.clone();
                 it.delivered_by_reference = true;
@@ -1067,6 +1675,13 @@ pub fn execute(
                 continue;
             }
             items.push(item.clone());
+        }
+        // A `insert_at` at the slot's tail (past every surviving item).
+        for (sid, at, it) in &summary_inserts {
+            if sid == &slot.slot_id && !emitted_summary.contains(at) {
+                items.push(it.clone());
+                emitted_summary.insert(*at);
+            }
         }
         slots.push(crate::plan::SlotFill {
             slot_id: slot.slot_id.clone(),
@@ -1083,8 +1698,10 @@ pub fn execute(
 
     let evicted_tokens: u64 = evict_set.iter().map(|i| flat[*i].item.tokens).sum();
     let offloaded_tokens: u64 = offload_set.iter().map(|i| flat[*i].item.tokens).sum();
-    let tokens_freed = (evicted_tokens + offloaded_tokens)
-        .saturating_sub(placeholder_count * OMISSION_ITEM_TOKENS);
+    let summarized_tokens: u64 = summarized_set.iter().map(|i| flat[*i].item.tokens).sum();
+    let summary_tokens: u64 = summary_items.iter().map(|i| i.tokens).sum();
+    let tokens_freed = (evicted_tokens + offloaded_tokens + summarized_tokens)
+        .saturating_sub(placeholder_count * OMISSION_ITEM_TOKENS + summary_tokens);
 
     Ok(CompactedView {
         slots,
@@ -1092,6 +1709,9 @@ pub fn execute(
         tokens_freed,
         forgotten,
         omission_items,
+        summary_items,
+        summariser_usage,
+        input_reduction_applied,
     })
 }
 
@@ -1194,6 +1814,9 @@ pub struct CompactionRecord {
     /// `control.budget.consumed{charged_to: subject, attribution:
     /// harness_overhead.compaction}` before dispatch — I-BUDGET).
     pub summariser_usage: Option<Json>,
+    /// `input_reduction_applied` — the declared `InputReduction` kind the
+    /// executor applied on `SummarizerOverflow` (§5c.2 record member).
+    pub input_reduction_applied: Option<String>,
     /// `duration_ms{measured_at}` — the caller's clock (the driver is pure).
     pub duration_ms: u64,
     /// The ladder position that applied (0 = the first variant).
@@ -1360,6 +1983,9 @@ pub fn compact(
         tokens_freed: 0,
         forgotten: vec![],
         omission_items: vec![],
+        summary_items: vec![],
+        summariser_usage: None,
+        input_reduction_applied: None,
     };
     let record = mint_record(
         input,
@@ -1493,13 +2119,22 @@ fn mint_record(
         ops_applied: ops.to_vec(),
         forgotten: view.forgotten.clone(),
         summary_ref: view
-            .omission_items
+            .summary_items
             .first()
-            .map(|o| o.context_item_id.clone()),
+            .map(|o| o.context_item_id.clone())
+            .or_else(|| {
+                view.omission_items
+                    .first()
+                    .map(|o| o.context_item_id.clone())
+            }),
         context_label_after: view.context_label_after.clone(),
         tokens_freed: view.tokens_freed,
         derived_from: view.forgotten.clone(),
-        summariser_usage: None,
+        summariser_usage: view.summariser_usage.clone(),
+        input_reduction_applied: view
+            .input_reduction_applied
+            .as_ref()
+            .map(|r| r.kind().to_string()),
         duration_ms: 0,
         pipeline_index,
         fallback_variant,

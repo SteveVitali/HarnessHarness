@@ -568,17 +568,32 @@ fn select_target_unexpressible_as_workflow_falls_through_to_instruction() {
 }
 
 #[test]
-fn select_target_subagent_path_is_delegation_unavailable() {
-    // I(P) ∧ subagents bound ∧ declared → `DelegationUnavailable` (the
-    // honest Stage-3 refusal — subagent_task never silently lands).
+fn select_target_subagent_path_selects_under_stage4_and_refuses_on_demand() {
+    // Stage 4 (S4.16b): I(P) ∧ subagents bound ∧ declared selects
+    // `subagent_task` (rule iii). `DelegationUnavailable` survives only as
+    // the honest refusal of a *demanded* path that cannot bind.
     let p = proc_node("test:proc", vec![], 5);
     let ctx = SelectCtx {
         subagents_bound: true,
         profile_declares_subagents: true,
         ..SelectCtx::default()
     };
+    let d = select_target(&p, None, &ctx, &empty_index()).unwrap();
+    assert_eq!(d.target, CompilationTarget::SubagentTask);
+
+    // Demanded (a `subagent_task` override) with no binding →
+    // `DelegationUnavailable`, never a silent instruction fallback.
+    let override_profile = hh_hir::procedure::ProcedureProfile {
+        target_override: Some(hh_hir::records::CompileHint::SubagentTask),
+        ..hh_hir::procedure::ProcedureProfile::default()
+    };
     assert!(matches!(
-        select_target(&p, None, &ctx, &empty_index()),
+        select_target(
+            &p,
+            Some(&override_profile),
+            &SelectCtx::default(),
+            &empty_index()
+        ),
         Err(SelectError::DelegationUnavailable { .. })
     ));
 }

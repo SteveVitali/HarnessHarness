@@ -29,7 +29,8 @@ pub use channel::{AbiChannel, ChannelError, FrameIo, MemIo, SocketIo, MAX_FRAME_
 pub use host::{digest_docs, InvokeOutcome, SessionEvents, VariantHost, VecEvents};
 pub use kit::{run_kit, KitRequest, CLASS_TESTS, LAYERS, PROBES};
 pub use lower::{
-    lower_requests, stamp_json, view_kinds_for, LowerContext, LowerError, LoweredRequests,
+    lower_requests, stamp_json, unstamp_json, view_kinds_for, LowerContext, LowerError,
+    LoweredRequests,
 };
 pub use package::{load as load_package, seal as seal_package, variant_class, VariantPackage};
 pub use ports::{CallbackCtx, HostPorts, NullPorts, RecordingPorts};

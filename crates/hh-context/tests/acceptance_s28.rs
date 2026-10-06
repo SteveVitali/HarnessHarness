@@ -232,6 +232,9 @@ fn compact_input<'a>(
         scope: PersistenceScope::Run,
         at: 20,
         run_id: "run1".into(),
+        summarizer: None,
+        slot_min_authority: BTreeMap::new(),
+        item_texts: BTreeMap::new(),
     }
 }
 
@@ -1366,6 +1369,7 @@ fn ac_r_2_4_4_2_dependency_changed_expires_row_granularity_survives() {
                 ref_: dep_ref.into(),
                 stamp: stamp.into(),
                 granularity: Granularity::Row,
+                validator_ref: None,
             }],
             cache_hint: hh_context::vocab::CacheHint::Cacheable,
             validator_ref: None,
@@ -1689,6 +1693,7 @@ fn ac_r_2_4_4_4_conflict_sets_coexist_withhold_and_resolve() {
             version_id: m.clone(),
             authority: AuthorityClass::External,
             readers: ReaderSet::Public,
+            scope: PersistenceScope::Run,
             state: LifecycleStateKind::Valid,
             stale_since: None,
             conflict_set_ref: Some(set.conflict_set_id.clone()),
@@ -1706,6 +1711,7 @@ fn ac_r_2_4_4_4_conflict_sets_coexist_withhold_and_resolve() {
         ResolveMode::Execute,
         5,
         store.conflicts(),
+        None,
     );
     assert!(
         filtered.admitted.is_empty(),
