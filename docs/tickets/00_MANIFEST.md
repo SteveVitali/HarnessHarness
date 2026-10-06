@@ -287,6 +287,10 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
 ## Spec amendments applied
 (none — the spec is ratified v1.0-rc2, gate-passed PASS 7/7; amend via the protocol above.)
 
+- 2026-10-06 · §7.1 (`run` verb row §2.2, `Exit classes` row §2.5, `ResultRecord` row §3; R-2.11.1) · before: `result.exit_class` authoritative, no detach member declared (`detached:"parked"` a build interim) · after: `ResultRecord` declares `detached?: "parked"` — a parked detach answers `ok` + `detached:"parked"`, the run stays live/resumable, opens no turn, takes no `ExitClass` row; closed `ExitClass` sum unchanged · approver: operator tick (SPEC_RECONCILIATION_PLAN A-1) · ADR-0331 D2
+- 2026-10-06 · §7.1 `[[DEFERRED ADR-0214: OQ-388]]` marker + AC-R-2.11.2-13, §5a AC-R-2.2.1-16 (R-2.2.1/R-2.11.2) · before: bound's shape stated without a value · after: dated S4.13 measurement note — `by_event_id`/`by_class`/`ir_index` incremental at append, every other projection a shared-fold rebuild, 100-of-10⁵ filtered `read` ≈15 ms (`ac_r_2_2_1_16_latency_1e5_fixture`, CI-enforced); bound value + policy ratification remains WS-B1/K2's · approver: operator tick (A-2) · ADR-0331 D4 (measurement ADR-0305 D1)
+- 2026-10-06 · spec Appendix B header prose · before: appendix indexes only the pre-build ratified set ADR-0001…ADR-0216 · after: appended paragraph indexing the build-phase set ADR-0217–ADR-0330 (`docs/adr/` + generated `docs/adr/README.md`) by reference, Sections column n/a · approver: operator tick (A-3) · ADR-0331 D5
+
 ## Decomposition decisions
 - **Grain:** one ticket per scope-item **slice at one stage** (subagent dispatch ceiling — each ticket
   must fit one non-compacting fresh context). Tiny co-located schema slices are merged into the owning
