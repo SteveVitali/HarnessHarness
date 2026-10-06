@@ -119,6 +119,7 @@ fn req(candidates: Vec<Candidate>, cap: u64) -> AssemblyRequest {
         },
         estimator_ref: "est/pinned".to_string(),
         policy_params: Json::Null,
+        demotion_wrappers: Vec::new(),
     }
 }
 

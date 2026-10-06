@@ -164,6 +164,10 @@ fn compact_input<'a>(
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
+        previous_summary_ref: None,
+        extractor: None,
+        provider: None,
+        item_kinds: BTreeMap::new(),
     }
 }
 
@@ -313,6 +317,8 @@ fn summarize_executes_through_the_bound_port() {
             summarizer_profile: Some("summ/pinned".into()),
             max_summary_tokens: Some(50),
             input_reduction: None,
+            instructions_ref: None,
+            restructure: None,
         }),
     );
     let view = compact::execute(&input, &proposal).unwrap();
@@ -369,6 +375,8 @@ fn summarize_unbound_port_refuses_typed_never_skips() {
             summarizer_profile: Some("summ/pinned".into()),
             max_summary_tokens: None,
             input_reduction: None,
+            instructions_ref: None,
+            restructure: None,
         }),
     );
     let err = compact::execute(&input, &proposal).unwrap_err();
@@ -460,6 +468,8 @@ fn summarize_overflow_applies_declared_input_reduction_once() {
             summarizer_profile: Some("summ/pinned".into()),
             max_summary_tokens: Some(50),
             input_reduction: Some(InputReduction::TrimOldest),
+            instructions_ref: None,
+            restructure: None,
         }),
     );
     let view = compact::execute(&input, &proposal).unwrap();
@@ -486,6 +496,8 @@ fn summarize_overflow_applies_declared_input_reduction_once() {
             summarizer_profile: Some("summ/pinned".into()),
             max_summary_tokens: None,
             input_reduction: None,
+            instructions_ref: None,
+            restructure: None,
         }),
     );
     let sz2 = StubSummarizer {
@@ -546,6 +558,8 @@ fn summarize_missing_body_and_floor_admission_are_typed() {
             summarizer_profile: Some("summ/pinned".into()),
             max_summary_tokens: None,
             input_reduction: None,
+            instructions_ref: None,
+            restructure: None,
         }),
     );
     let err = compact::execute(&input, &proposal).unwrap_err();

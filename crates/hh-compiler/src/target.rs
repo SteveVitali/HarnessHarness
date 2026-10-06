@@ -220,6 +220,44 @@ fn mcp_losses(linked: &LinkedGraph, plan: &RuntimePlan, surface: &ModelSurface) 
                 "bound validators have no MCP slot — enforced at plan time",
             );
         }
+        // AC-R-2.5.2-4: a composite/shim/code-mode surface's nested carried
+        // surfaces have no MCP slot — the loss entry names every carried
+        // `capability_refs` member verbatim (never a count, never a guess).
+        match &t.binding.mapping {
+            crate::surface::BindingMapping::PlanMap(proc_ref) => {
+                let carried = t.binding.capability_refs.join(",");
+                entries.push(LossEntry {
+                    hir_node_id: sid.clone(),
+                    field: "mapping.plan_map".to_string(),
+                    class: LossKind::NoSlot,
+                    severity: LossSeverity::Info,
+                    detail: format!(
+                        "PlanMap {proc_ref} carries nested surfaces [{carried}] — MCP `tools/list` has no composite slot; the plan hash is the approval coordinate and nested calls mediate individually (S2)"
+                    ),
+                    debt_ref: None,
+                });
+            }
+            crate::surface::BindingMapping::SurfaceArgMap => {}
+        }
+        if matches!(
+            t.binding.exposure_mode,
+            crate::surface::CompileExposureMode::CodeMode
+                | crate::surface::CompileExposureMode::Shim
+                | crate::surface::CompileExposureMode::Freeform
+        ) {
+            let carried = t.binding.capability_refs.join(",");
+            entries.push(LossEntry {
+                hir_node_id: sid.clone(),
+                field: format!("exposure_mode.{}", t.binding.exposure_mode.as_str()),
+                class: LossKind::NoSlot,
+                severity: LossSeverity::Info,
+                detail: format!(
+                    "{} surface carries nested surfaces [{carried}] — MCP has no container slot; nested calls lower through their own bindings",
+                    t.binding.exposure_mode.as_str()
+                ),
+                debt_ref: None,
+            });
+        }
         let _ = linked;
     }
     entries.sort_by(|a, b| {

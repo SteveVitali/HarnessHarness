@@ -155,6 +155,10 @@ fn compact_input<'a>(
         summarizer: None,
         slot_min_authority: BTreeMap::new(),
         item_texts: BTreeMap::new(),
+        previous_summary_ref: None,
+        extractor: None,
+        provider: None,
+        item_kinds: BTreeMap::new(),
     }
 }
 
@@ -488,6 +492,7 @@ fn ac_r_2_4_3_7_indexed_and_ondemand_views_agree() {
         &RetrievalIndexes {
             lexical: None,
             structural: Some(&sidx),
+            embedder: None,
         },
         || 1,
     )
@@ -558,6 +563,7 @@ fn asm_req(candidates: Vec<Candidate>, cap: u64) -> AssemblyRequest {
         },
         estimator_ref: "est/pinned".to_string(),
         policy_params: Json::Null,
+        demotion_wrappers: Vec::new(),
     }
 }
 

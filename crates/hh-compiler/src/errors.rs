@@ -120,6 +120,14 @@ pub enum CompileError {
         /// The narrowing observed.
         detail: String,
     },
+    /// `AuthorityWidening` — a surface/PlanMap/synthesis step widens authority:
+    /// `effects_bound ⊄ effects(capability_refs)`, an `Invoke` outside
+    /// `allowed_capabilities`, or synthesized text landing above `delegate`
+    /// (ADR-0091 S1/S3; the refusal class shared with ADR-0016/0017/0002).
+    AuthorityWidening {
+        /// What widened.
+        detail: String,
+    },
     /// `TargetError` — a stage-4 lowering/lifting failure (§3.2.10).
     TargetError {
         /// What failed.
@@ -180,6 +188,9 @@ impl std::fmt::Display for CompileError {
             } => write!(f, "UnexpressibleSurface({entity}, {profile}): {reason}"),
             CompileError::UncheckableSurface { surface, reason } => {
                 write!(f, "UncheckableSurface({surface}): {reason}")
+            }
+            CompileError::AuthorityWidening { detail } => {
+                write!(f, "AuthorityWidening: {detail}")
             }
             CompileError::DialectNarrowingUndeclared { detail } => {
                 write!(f, "DialectNarrowingUndeclared: {detail}")

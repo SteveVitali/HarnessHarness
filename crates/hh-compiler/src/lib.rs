@@ -50,6 +50,7 @@ pub mod equiv;
 pub mod errors;
 pub mod expiry;
 pub mod exposure;
+pub mod family;
 pub mod lcd;
 pub mod link;
 pub mod lower;

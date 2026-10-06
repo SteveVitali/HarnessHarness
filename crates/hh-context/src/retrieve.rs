@@ -202,6 +202,91 @@ pub fn check_ranker_deterministic(ranker_ref: &str, slot: &str) -> Result<(), Re
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// The pinned embedder port (§5c.3 C2; AC-R-2.4.3-10)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `Embedder` — the pinned-embedder port `similarity`/`similarity_rerank`
+/// binds (§5c.3; ADR-0120): `embedder_ref()` names the pinned
+/// `ModelSnapshotRecord`/`ProfileRef` — a similarity request whose
+/// `embedder` member names a *different* ref is `EmbedderUnpinned` (the pin
+/// is the bound snapshot, never a loose name). Components are signed
+/// integers (fixed-point vectors — canonical records carry decimal strings,
+/// never floats; I-DET keeps the score identical on every host).
+pub trait Embedder {
+    /// The pinned embedder identity (`ModelSnapshotRecord`/`ProfileRef`).
+    fn embedder_ref(&self) -> &str;
+    /// `embed(text) → vector` — one embedder model call per invocation
+    /// (the call counts into `report.cost.embedder_calls` — AC-R-2.4.3-10).
+    fn embed(&self, text: &str) -> Result<Vec<i64>, String>;
+}
+
+/// Integer `⌊√n⌋` — Newton's method on `u128`, float-free (I-DET: the ranker
+/// score is identical on every host).
+fn isqrt_u128(n: u128) -> u128 {
+    if n < 2 {
+        return n;
+    }
+    let mut x = 1u128 << (128 - n.leading_zeros()).div_ceil(2);
+    loop {
+        let y = (x + n / x) / 2;
+        if y >= x {
+            return x;
+        }
+        x = y;
+    }
+}
+
+/// `cosine_ppm(a, b)` — cosine similarity as integer parts-per-million in
+/// `[0, 1_000_000]` (negative cosines floor at 0 — a ranker order, not a
+/// geometry; the decimal string keeps the canonical record float-free).
+/// Integer-only math — identical on every host (I-DET).
+pub fn cosine_ppm(a: &[i64], b: &[i64]) -> u64 {
+    let dot: i128 = a
+        .iter()
+        .zip(b.iter())
+        .map(|(x, y)| (*x as i128) * (*y as i128))
+        .sum();
+    if dot <= 0 {
+        return 0;
+    }
+    let na: i128 = a.iter().map(|x| (*x as i128) * (*x as i128)).sum();
+    let nb: i128 = b.iter().map(|x| (*x as i128) * (*x as i128)).sum();
+    if na == 0 || nb == 0 {
+        return 0;
+    }
+    // cos = dot/(|a||b|) — ppm² = ⌊dot²·1e12/(|a|²|b|²)⌋, then integer sqrt.
+    let num = (dot * dot) as u128 * 1_000_000_000_000u128;
+    let den = (na * nb) as u128;
+    let ppm_sq = (num / den).min(1_000_000_000_000);
+    isqrt_u128(ppm_sq) as u64
+}
+
+/// The probe text a ranker embeds for `similarity_rerank` — the query's own
+/// words (lexical terms, names, patterns, or the `similarity{text}` body).
+/// A query with no textual probe yields `None` — the reranker then scores
+/// every hit `0` (the family shapes the score, never the served set).
+pub fn similarity_probe(query: &RetrievalQuery) -> Option<String> {
+    match query {
+        RetrievalQuery::Similarity { text, .. } => Some(text.clone()),
+        RetrievalQuery::Lexical { terms, .. } => Some(terms.join(" ")),
+        RetrievalQuery::ByName { name, .. } => Some(name.clone()),
+        RetrievalQuery::ByAddress { address } => Some(address.clone()),
+        RetrievalQuery::ByPathGlob { pattern } => Some(pattern.clone()),
+        RetrievalQuery::ByRun { run_id, .. } => Some(run_id.clone()),
+        RetrievalQuery::Discover { filenames, .. } => Some(filenames.join(" ")),
+        RetrievalQuery::Trigger { .. } => None,
+        RetrievalQuery::Structural {
+            anchors,
+            mentioned_idents,
+        } => Some(format!(
+            "{} {}",
+            anchors.join(" "),
+            mentioned_idents.join(" ")
+        )),
+    }
+}
+
 /// `request_hash` domain — `retrieval_request/1`.
 pub const REQUEST_IDP: &str = "retrieval_request.1";
 
@@ -421,6 +506,12 @@ pub enum RetrievalError {
     },
     /// `EmbedderUnpinned` — `similarity` without a pinned snapshot.
     EmbedderUnpinned,
+    /// `EmbedderFailed` — the bound port's `embed` returned an error (the
+    /// detail is the port's, verbatim).
+    EmbedderFailed {
+        /// The port's error detail.
+        detail: String,
+    },
     /// `BudgetExhausted` — the mandatory-cover portion alone exceeds budget
     /// (whole items only — never truncation).
     BudgetExhausted {
@@ -799,12 +890,16 @@ pub fn rank_score(hit_count: u64, exact: bool, glob_match: bool, created_at: u64
 /// The materialized views `retrieve` may serve from (`lexical_index` and the
 /// Stage-3 `structural_index` — §5c.3; each is a stamped `View`, never a
 /// second store).
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Default, Clone)]
 pub struct RetrievalIndexes<'a> {
     /// The lexical view (computed on the fly when absent).
     pub lexical: Option<&'a LexicalIndex>,
     /// The structural view (computed on the fly when absent).
     pub structural: Option<&'a StructuralIndex>,
+    /// The pinned `Embedder` port — the `ModelProfile`/`ResourceAccount`
+    /// binding `similarity`/`similarity_rerank` require (C2). `None` keeps
+    /// the declared-but-unbound arm at `EmbedderUnpinned`.
+    pub embedder: Option<&'a dyn Embedder>,
 }
 
 /// `retrieve(store, request, sink)` → `(items, report)` — the one pipeline
@@ -825,6 +920,7 @@ pub fn retrieve(
         &RetrievalIndexes {
             lexical: index,
             structural: None,
+            embedder: None,
         },
         elapsed_ms,
     )
@@ -854,7 +950,22 @@ pub fn retrieve_indexed(
     // refuses `UnknownRanker` (fail closed, never a silent default).
     match ranker_declared(&req.ranker) {
         Some(d) if d.deterministic => {}
-        Some(_) => return Err(RetrievalError::EmbedderUnpinned),
+        Some(_) => {
+            // C2: a model-conditioned ranker serves only when its declared
+            // `{ModelProfile, ResourceAccount}` inputs bind — the pinned
+            // `Embedder` port is bound AND (for a `similarity` query) its
+            // ref equals the query's declared `embedder` member — the pin
+            // check, not a loose name match (ADR-0120).
+            let bound = indexes.embedder.is_some_and(|e| match &req.query {
+                RetrievalQuery::Similarity { embedder, .. } => {
+                    e.embedder_ref() == embedder.as_str()
+                }
+                _ => true,
+            });
+            if !bound {
+                return Err(RetrievalError::EmbedderUnpinned);
+            }
+        }
         None => {
             return Err(RetrievalError::UnknownRanker {
                 ranker: req.ranker.clone(),
@@ -871,7 +982,8 @@ pub fn retrieve_indexed(
         }
     }
     // Query narrowing — the enumerate half each kind drives.
-    let (hits, features) = enumerate_query(store, req, &raw, indexes)?;
+    let mut embedder_calls = 0u64;
+    let (hits, features) = enumerate_query(store, req, &raw, indexes, &mut embedder_calls)?;
     let enumerated = hits.len() as u64;
     let mut _features = features;
     // (2) filter — validity → authority → readers (E2; the attested order).
@@ -930,11 +1042,49 @@ pub fn retrieve_indexed(
     } else {
         None
     };
+    // `similarity_rerank` — the C2 arm: embed the query's probe once and
+    // each admitted item once through the pinned port; cosine_ppm is the
+    // score (decimal string — the canonical record stays float-free). The
+    // gate above already proved the port bound.
+    let sim_scores: Option<BTreeMap<String, u64>> = if req.ranker == SIMILARITY_RERANK {
+        let mut m = BTreeMap::new();
+        if let (Some(port), Some(probe)) = (indexes.embedder, similarity_probe(&req.query)) {
+            let pv = port
+                .embed(&probe)
+                .map_err(|detail| RetrievalError::EmbedderFailed { detail })?;
+            embedder_calls += 1;
+            for id in &admitted_ids {
+                let body = store
+                    .version(id)
+                    .map(|v| v.content.index_text())
+                    .or_else(|| store.artifacts().get(id).map(|a| a.index_text.clone()))
+                    .unwrap_or_default();
+                if body.is_empty() {
+                    continue;
+                }
+                let iv = port
+                    .embed(&body)
+                    .map_err(|detail| RetrievalError::EmbedderFailed { detail })?;
+                embedder_calls += 1;
+                m.insert(id.clone(), cosine_ppm(&pv, &iv));
+            }
+        }
+        Some(m)
+    } else {
+        None
+    };
     let mut scored: Vec<(String, String, u64)> = filtered
         .admitted
         .iter()
         .map(|id| {
-            let (score, created) = score_of(store, id, req, indexes, pr_scores.as_ref());
+            let (score, created) = score_of(
+                store,
+                id,
+                req,
+                indexes,
+                pr_scores.as_ref(),
+                sim_scores.as_ref(),
+            );
             (id.clone(), score, created)
         })
         .collect();
@@ -1026,7 +1176,7 @@ pub fn retrieve_indexed(
         cost: RetrievalCost {
             tokens_estimated: tokens_used,
             index_ms: elapsed_ms(),
-            embedder_calls: 0,
+            embedder_calls,
         },
     };
     sink.emit(
@@ -1097,6 +1247,7 @@ fn enumerate_query(
     req: &RetrievalRequest,
     raw: &[(String, Layer)],
     indexes: &RetrievalIndexes<'_>,
+    embedder_calls: &mut u64,
 ) -> Result<EnumeratedHits, RetrievalError> {
     let ids: BTreeSet<String> = raw.iter().map(|(id, _)| id.clone()).collect();
     let layer_of_id: BTreeMap<&str, Layer> = raw.iter().map(|(id, l)| (id.as_str(), *l)).collect();
@@ -1336,7 +1487,38 @@ fn enumerate_query(
             }
             Ok((hits, vec!["structural_hit".to_string()]))
         }
-        RetrievalQuery::Similarity { .. } => Err(RetrievalError::EmbedderUnpinned),
+        RetrievalQuery::Similarity { text, embedder } => {
+            // The pin check: the bound port's ref must equal the query's
+            // declared `embedder` member (ADR-0120 — a `similarity` query
+            // against any other snapshot is `EmbedderUnpinned`).
+            let port = indexes
+                .embedder
+                .filter(|e| e.embedder_ref() == embedder.as_str())
+                .ok_or(RetrievalError::EmbedderUnpinned)?;
+            let probe = port
+                .embed(text)
+                .map_err(|detail| RetrievalError::EmbedderFailed { detail })?;
+            *embedder_calls += 1;
+            let mut hits = Vec::new();
+            for (id, l) in raw {
+                let body = store
+                    .version(id)
+                    .map(|v| v.content.index_text())
+                    .or_else(|| store.artifacts().get(id).map(|a| a.index_text.clone()))
+                    .unwrap_or_default();
+                if body.is_empty() {
+                    continue;
+                }
+                let v = port
+                    .embed(&body)
+                    .map_err(|detail| RetrievalError::EmbedderFailed { detail })?;
+                *embedder_calls += 1;
+                if cosine_ppm(&probe, &v) > 0 {
+                    hits.push((id.clone(), *l));
+                }
+            }
+            Ok((hits, vec!["similarity_hit".to_string()]))
+        }
     }
 }
 
@@ -1406,6 +1588,7 @@ fn score_of(
     req: &RetrievalRequest,
     indexes: &RetrievalIndexes<'_>,
     pr_scores: Option<&BTreeMap<String, u64>>,
+    sim_scores: Option<&BTreeMap<String, u64>>,
 ) -> (String, u64) {
     let created = store
         .version(id)
@@ -1417,6 +1600,13 @@ fn score_of(
     if req.ranker == STRUCTURAL_PAGERANK {
         let pr = pr_scores.and_then(|m| m.get(id)).copied().unwrap_or(0);
         return (format!("1.{pr:012}"), created);
+    }
+    // `similarity_rerank` — the pinned-embedder cosine (reads `similarity`
+    // only; `2.` class above the deterministic families' `1.`/`0.` shapes —
+    // rankers never share a score space, the string is the evidence).
+    if req.ranker == SIMILARITY_RERANK {
+        let ppm = sim_scores.and_then(|m| m.get(id)).copied().unwrap_or(0);
+        return (format!("2.{ppm:012}"), created);
     }
     // `recency_importance` — the declared `importance` hint dominates; the
     // recency signal (`last_read` ∨ `created`, scaled) then `read_count`
