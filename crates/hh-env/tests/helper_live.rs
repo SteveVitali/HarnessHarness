@@ -459,6 +459,10 @@ fn sandboxed_env(
 /// maps to `observed{applied}`.
 #[test]
 fn ac_s2_live_exec_streams_and_settles_observed() {
+    if !hh_helper::seatbelt::is_available() {
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
+        return;
+    }
     let (mut store, run, lease, _clock) = open("live-exec");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let mut driver = EnvDriver::new(&run);
@@ -519,6 +523,10 @@ fn ac_s2_live_exec_streams_and_settles_observed() {
 /// `observed{error{timeout}}` fast (no kernel-side timer needed).
 #[test]
 fn ac_s2_deadline_is_helper_enforced() {
+    if !hh_helper::seatbelt::is_available() {
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
+        return;
+    }
     let (mut store, run, lease, _clock) = open("live-deadline");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let mut driver = EnvDriver::new(&run);
@@ -664,6 +672,7 @@ fn ac_s2_token_echo_is_verbatim() {
     );
     // Drain the journal — every frame echoes `att-token-xyz`.
     let mut saw_chunk = false;
+    let mut polls_after_exit = 0;
     loop {
         let r = client
             .request(&hh_helper::protocol::HelperRequest::Read {
@@ -690,7 +699,16 @@ fn ac_s2_token_echo_is_verbatim() {
             }
         }
         if matches!(r.get("exited"), Some(Json::Bool(true))) {
-            break;
+            // The stdout chunk can be journaled just after the process is
+            // reaped, so `exited` may lead the last `Chunk` frame. Keep
+            // draining (after_seq:0 re-reads every frame) until it lands or a
+            // bounded budget elapses — the assertion below still requires a
+            // real chunk, this only removes the exit/journal race (flaky on
+            // fast Linux runners).
+            if saw_chunk || polls_after_exit >= 25 {
+                break;
+            }
+            polls_after_exit += 1;
         }
     }
     assert!(saw_chunk, "the echo check ran on real frames");
@@ -793,6 +811,10 @@ fn ac_s2_malformed_frame_is_protocol_error() {
 /// never a silent redispatch (AC-R-2.2.5-8's lapsed-window honesty).
 #[test]
 fn ac_s2_helper_crash_lands_unknown() {
+    if !hh_helper::seatbelt::is_available() {
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
+        return;
+    }
     let (mut store, run, lease, _clock) = open("live-crash");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let mut driver = EnvDriver::new(&run);
@@ -844,6 +866,10 @@ fn ac_s2_helper_crash_lands_unknown() {
 /// serving execs after reattach.
 #[test]
 fn ac_s2_unreachable_heal_live_reattaches() {
+    if !hh_helper::seatbelt::is_available() {
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
+        return;
+    }
     let (mut store, run, lease, _clock) = open("live-heal");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let mut driver = EnvDriver::new(&run);
@@ -892,6 +918,10 @@ fn ac_s2_unreachable_heal_live_reattaches() {
 /// terminal `replaced` (AC-R-2.2.5-8's replace rung).
 #[test]
 fn ac_s2_replace_lands_successor() {
+    if !hh_helper::seatbelt::is_available() {
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
+        return;
+    }
     let (mut store, run, lease, _clock) = open("live-replace");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let mut driver = EnvDriver::new(&run);
@@ -938,6 +968,10 @@ fn ac_s2_replace_lands_successor() {
 /// the parent's files; the subtree child is narrowed to the scope.
 #[test]
 fn ac_s2_derive_modes() {
+    if !hh_helper::seatbelt::is_available() {
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
+        return;
+    }
     let (mut store, run, lease, _clock) = open("live-derive");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let mut driver = EnvDriver::new(&run);
@@ -1008,6 +1042,10 @@ fn ac_s2_derive_modes() {
 /// `diff` is deterministic (AC-R-2.2.5-10's tree identity).
 #[test]
 fn ac_s2_fs_tree_snapshot_verify_restore() {
+    if !hh_helper::seatbelt::is_available() {
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
+        return;
+    }
     let (mut store, run, lease, _clock) = open("live-fstree");
     open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
     let mut driver = EnvDriver::new(&run);
