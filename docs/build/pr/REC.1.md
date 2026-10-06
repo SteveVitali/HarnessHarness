@@ -2,6 +2,8 @@
 
 **Stacked on:** `svitali/harnessharness-capstone` (PR #99) · **Do not merge — operator-controlled**
 
+**PR:** https://github.com/SteveVitali/HarnessHarness/pull/100
+
 ## Summary
 
 `reconcile-build mode=backlog`: everything the build left owed at

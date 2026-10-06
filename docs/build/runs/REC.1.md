@@ -7,8 +7,7 @@
   (manifest row 102 — reconcile 1 of 2, sequence 102 of 106)
 - **Branch:** `svitali/harnessharness-rec.1` (forked from the chain tip
   `svitali/harnessharness-capstone` @ `82ef6b0`)
-- **PR:** stacked on `svitali/harnessharness-capstone`; URL recorded in
-  `docs/build/pr/REC.1.md` and the LEDGER phase log
+- **PR:** https://github.com/SteveVitali/HarnessHarness/pull/100 (stacked on `svitali/harnessharness-capstone` / PR #99)
 - **Mode:** `reconcile-build mode=backlog` — catalogue only; no
   deviation signatures, no deferral flips, no verdict changes, no code
 
