@@ -112,11 +112,12 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 2. **Generated files are never hand-edited:** `schema/*.json`,
    `crates/hh-embed-client-generated/src/generated.rs`, `docs/adr/README.md`
    (regenerate: `build-memory adr-index docs/adr`).
-3. **`hh-kernel doctor` exits 1 (`identity mismatch`) on a clean build** —
-   known defect DF-DOC.1-1: the binary self-check compares the semver tail it
-   stores as `kernel.version` against the full `hh-kernel/<ver>` id. The
-   working self-check is `hh doctor` over the boundary. Do not "fix" docs to
-   claim the binary doctor passes.
+3. **`hh-kernel doctor` self-checks the negotiated identity** — it exits 0
+   on a clean build (DF-DOC.1-1 fixed at R2.1; ADR-0332):
+   `KernelDescriptor.version` is the SemVer-class label (the
+   `kernel_version_id` tail via `hh_embed_schema::kernel_version_label`),
+   never the full `hh-kernel/<ver>` id. `hh doctor` over the boundary
+   answers the same facts. A real identity mismatch still fails loudly.
 4. **The `edit` tool drops writes on build-memory files** (overlay anomaly):
    write `LEDGER.md`/`DEFERRALS.md`/`BUILD_INDEX.md` via shell/python and
    verify with `git diff` before committing.

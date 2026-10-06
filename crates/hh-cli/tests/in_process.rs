@@ -1340,13 +1340,32 @@ fn parked_run_takeover_resume_fork_amend_submit() {
     let mut b = ServiceBoundary::new("takeover");
     let def = write_definition("takeover");
     // Park the run on the `model_calls=0` escalation — EOF on the prompt
-    // detaches with the writer session live.
-    let (_class, out, _err) = hh(
+    // detaches with the writer session live. The parked-detach surface is
+    // the declared §7.1 member: `ok` + `detached:"parked"` on the result
+    // record, no `ExitClass` row (ADR-0331 D2; DF-S1.26-2's member
+    // assertion leg).
+    let (class, out, _err) = hh(
         &mut b,
         &["run", "start", &def, "hi", "--budget", "model_calls=0"],
         ALL_TTY,
         None,
         &[],
+    );
+    assert_eq!(class, ExitClass::Ok, "{out}");
+    let line = out.trim().lines().last().unwrap_or("");
+    let line = line.strip_prefix("result: ").unwrap_or(line);
+    let rec = hh_wire::json::parse(line).unwrap_or(Json::Null);
+    assert_eq!(
+        rec.get("exit_class").and_then(Json::as_str),
+        Some("ok"),
+        "{out}"
+    );
+    assert_eq!(
+        rec.get("payload")
+            .and_then(|p| p.get("detached"))
+            .and_then(Json::as_str),
+        Some("parked"),
+        "the parked-detach result record must carry detached:\"parked\": {out}"
     );
     let run_id = result_run_id(&out);
     assert!(!run_id.is_empty(), "{out}");
@@ -1851,6 +1870,12 @@ fn ac5_attended_and_unattended_share_one_configuration() {
     }
     // `hash`/`prev_hash` are the chain consequence of the allowed rows;
     // `idempotency_key` derives over `attendance`.
+    // `assembly_ms{value, measured_at}` is a *measured* wall on the
+    // builder record — identical inputs still time differently (the same
+    // convention the sibling comparison's `MECHANICAL` list states;
+    // CAP.3 added it there, this leg was missed — the #104 CI flake,
+    // run 37482844398). The measurement is derived content, never a
+    // semantic difference.
     for d in &diffs {
         assert!(
             d == ".hash"
@@ -1859,7 +1884,9 @@ fn ac5_attended_and_unattended_share_one_configuration() {
                 || d.ends_with("attendance.source")
                 || d.ends_with("idempotency_key")
                 || d.ends_with("decider")
-                || d.ends_with("reason"),
+                || d.ends_with("reason")
+                || d.ends_with("assembly_ms.value")
+                || d.ends_with("assembly_ms.measured_at"),
             "unexpected ledger difference at {d}"
         );
     }

@@ -127,13 +127,31 @@ pub fn compat_matrix_bytes() -> String {
     compat_matrix().to_canonical_string()
 }
 
+/// The SemVer-class label a `KernelDescriptor.version` reports — the
+/// semver tail of the kernel's `kernel_version_id` (`hh-kernel/<semver>`;
+/// the `<name>/<label>` name-history spelling lives on
+/// `ContractIdentity`, never on the wire `version` member). The one
+/// spelling of the §7.4 `kernel.version` contract (CC1): `hello`'s
+/// descriptor, the `kernel_floor` compare and the `doctor` self-check
+/// all speak this label (ADR-0332 D1 — DF-DOC.1-1).
+pub fn kernel_version_label(kernel_version_id: &str) -> &str {
+    kernel_version_id
+        .rsplit('/')
+        .next()
+        .unwrap_or(kernel_version_id)
+}
+
 /// Negotiate `hello` against the kernel (ADR-0178 D2/D8; the AC-R-2.11.4-8
 /// compatibility matrix). `Ok(HelloResult)` when compatible; a typed
 /// [`EmbedError`] otherwise — never a silent fallback.
 ///
+/// `kernel_version` is the SemVer-class label ([`kernel_version_label`]
+/// of the version id) — the domain the `kernel_floor` compare and the
+/// reported `KernelDescriptor.version` speak (ADR-0332 D1).
+///
 /// Order matters: major first, then schema assertion, then floor —
 /// the matrix's refusal precedence.
-pub fn negotiate(params: &HelloParams, kernel_version_id: &str) -> Result<HelloResult, EmbedError> {
+pub fn negotiate(params: &HelloParams, kernel_version: &str) -> Result<HelloResult, EmbedError> {
     if params.contract_major != CONTRACT_MAJOR {
         return Err(EmbedError::ContractMajorUnsupported {
             requested: params.contract_major,
@@ -156,16 +174,16 @@ pub fn negotiate(params: &HelloParams, kernel_version_id: &str) -> Result<HelloR
         }
     }
     if let Some(floor) = &params.kernel_floor {
-        if version_lt(kernel_version_id, floor) {
+        if version_lt(kernel_version, floor) {
             return Err(EmbedError::KernelBelowFloor {
-                version: kernel_version_id.to_string(),
+                version: kernel_version.to_string(),
                 floor: floor.clone(),
             });
         }
     }
     Ok(HelloResult {
         kernel: KernelDescriptor {
-            version: kernel_version_id.to_string(),
+            version: kernel_version.to_string(),
             schema_hash: kernel_hash,
             contract_major: CONTRACT_MAJOR,
             idp: IDP.to_string(),

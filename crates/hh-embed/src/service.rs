@@ -322,12 +322,11 @@ impl EmbedService {
             reason: format!("registry_open: {e:?}"),
         })?;
         Self::seed_registry(&mut registry);
-        let kernel_version = config
-            .kernel_version_id
-            .rsplit('/')
-            .next()
-            .unwrap_or("0.0.0")
-            .to_string();
+        // `KernelDescriptor.version` is the SemVer-class label — the
+        // `kernel_version_id` tail through the one canonical spelling
+        // (ADR-0332 D1 — DF-DOC.1-1).
+        let kernel_version =
+            hh_embed_schema::kernel_version_label(&config.kernel_version_id).to_string();
         Ok(EmbedService {
             kernel_version,
             kernel_prov: ProvenanceRecord::kernel("hh-embed", 0),

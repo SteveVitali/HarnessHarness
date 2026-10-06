@@ -48,6 +48,12 @@ updatedAt:       2026-10-06
   difference at `.payload.assembly_ms.value`; a sibling run on the same SHA passed. The comparison's
   allowlist omits the measured-wall `assembly_ms.{value,measured_at}` fields a sibling parity test
   already excludes. Timing-sensitive, not semantic; assigned to R2.1 with the run URL. Not a block.
+  **Repaired 2026-10-06 (R2.1):** the ac5 allowlist now carries
+  `assembly_ms.{value,measured_at}` under the sibling comparison's `ends_with` convention —
+  semantic differences still reject; only the measured-wall members are allowlisted. Failing run:
+  https://github.com/SteveVitali/HarnessHarness/actions/runs/37482844398 (sibling run
+  `37482834486` at the same SHA passed). Root cause: CAP.3 added the fields to one allowlist; the
+  ac5 sibling comparison was missed.
 
 ## GATE DECISIONS
 
