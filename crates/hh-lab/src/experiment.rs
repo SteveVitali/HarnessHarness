@@ -280,6 +280,12 @@ pub struct ArmSpec {
     /// non-`reproduction` spec requires `cache` declared as a factor
     /// (`PreRegistrationInvalid`; AC-R-2.3.4-11).
     pub response_cache: Option<ResponseCacheDecl>,
+    /// `ensemble_k` — the arm's declared `EnsembleProcedure` member count
+    /// (`None`/`Some(1)` = a single-call arm). A k-vs-1 comparison is
+    /// incommensurable except under `MatchSpec.mode = matched_total`
+    /// (AC-R-2.3.2-10 — `validate_match` enforces it on the budget
+    /// projection).
+    pub ensemble_k: Option<u32>,
 }
 
 impl ArmSpec {
@@ -315,6 +321,9 @@ impl ArmSpec {
         if let Some(rc) = self.response_cache {
             m.insert("response_cache".into(), Json::str(rc.as_str()));
         }
+        if let Some(k) = self.ensemble_k {
+            m.insert("ensemble_k".into(), Json::Int(k as i64));
+        }
         Json::Obj(m)
     }
 
@@ -336,6 +345,7 @@ impl ArmSpec {
                 "limits_enforced",
                 "model_role_table_ref",
                 "response_cache",
+                "ensemble_k",
             ],
             REC,
         )?;
@@ -379,6 +389,16 @@ impl ArmSpec {
                     return Err(SchemaError::v(
                         "response_cache",
                         format!("unknown response-cache kind `{other}`"),
+                    ))
+                }
+            },
+            ensemble_k: match m.get("ensemble_k") {
+                None | Some(Json::Null) => None,
+                Some(Json::Int(k)) if *k > 0 => Some(*k as u32),
+                _ => {
+                    return Err(SchemaError::v(
+                        "ensemble_k",
+                        "must be a positive integer when present",
                     ))
                 }
             },
@@ -1789,6 +1809,7 @@ impl ExperimentSpec {
                     enforcement,
                     spend_confidence: None,
                     coverage_ppm: None,
+                    ensemble_k: arm.ensemble_k,
                 },
             ));
         }

@@ -126,6 +126,7 @@ fn arm(arm_id: &str, level: &str, eval: &str, search: Option<&str>) -> ArmSpec {
         limits_enforced: "full".to_string(),
         model_role_table_ref: None,
         response_cache: None,
+        ensemble_k: None,
     }
 }
 

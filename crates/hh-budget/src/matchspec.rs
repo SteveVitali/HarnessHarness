@@ -290,6 +290,11 @@ pub struct ArmSpec {
     pub spend_confidence: Option<crate::pricing::Confidence>,
     /// The arm's declared coverage floor (ppm of 1.0).
     pub coverage_ppm: Option<i64>,
+    /// The arm's ensemble factor — the `EnsembleProcedure{sample_k_vote, k}`
+    /// member count (`None`/`Some(1)` = a single-call arm). A k-vs-1
+    /// comparison is incommensurable except under `matched_total`
+    /// (AC-R-2.3.2-10 — the per-member spend only matches at the totals).
+    pub ensemble_k: Option<u32>,
 }
 
 impl ArmSpec {
@@ -303,6 +308,7 @@ impl ArmSpec {
             enforcement: BudgetEnforcement::native(),
             spend_confidence: None,
             coverage_ppm: None,
+            ensemble_k: None,
         }
     }
 }
@@ -434,6 +440,25 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
                     enforceability: None,
                 },
             });
+        }
+    }
+
+    // ── the ensemble factor (AC-R-2.3.2-10) — arms whose declared ensemble
+    //    `k` differs are commensurable only at the totals: a k-vs-1 (or
+    //    mixed-k) comparison under any mode but `matched_total` refuses ────
+    {
+        let k0 = arms[0].ensemble_k.unwrap_or(1);
+        for (i, arm) in arms.iter().enumerate().skip(1) {
+            if arm.ensemble_k.unwrap_or(1) != k0 && spec0.mode != MatchMode::MatchedTotal {
+                return Err(MatchError {
+                    arm: Some(i),
+                    refusal: MatchRefusal::IncommensurableMatch {
+                        reason: RefusalReason::EnsembleKvs1,
+                        dimension: None,
+                        enforceability: None,
+                    },
+                });
+            }
         }
     }
 
@@ -1166,5 +1191,40 @@ mod tests {
             utilization_floor_ppm: None,
         };
         assert_eq!(MatchSpec::from_json(&s.to_json()), Some(s));
+    }
+
+    /// AC-R-2.3.2-10 — a k-vs-1 comparison refuses under every mode but
+    /// `matched_total`; under `matched_total` the ensemble factor is
+    /// commensurable at the totals.
+    #[test]
+    fn ensemble_kvs1_refuses_without_matched_total() {
+        let mut k4 = arm();
+        k4.ensemble_k = Some(4);
+        // matched_cap → EnsembleKvs1.
+        assert!(matches!(
+            validate_match(&[k4.clone(), arm()]).unwrap_err().refusal,
+            MatchRefusal::IncommensurableMatch {
+                reason: RefusalReason::EnsembleKvs1,
+                ..
+            }
+        ));
+        // matched_total → admitted (M3 over equal budgets; the totals carry
+        // the member calls + reducer).
+        let total = |ensemble_k| {
+            let mut a = arm();
+            a.inference_budget = Some(caps(&[(DimensionId::ModelCalls, 40)]));
+            a.ensemble_k = ensemble_k;
+            a.match_spec = Some(MatchSpec {
+                mode: MatchMode::MatchedTotal,
+                dimensions: vec![],
+                ..MatchSpec::matched_cap(&[DimensionId::ModelCalls])
+            });
+            a
+        };
+        assert!(validate_match(&[total(Some(4)), total(None)]).is_ok());
+        // Equal k on both arms needs no matched_total (it isn't k-vs-1).
+        let mut k4b = arm();
+        k4b.ensemble_k = Some(4);
+        assert!(validate_match(&[k4, k4b]).is_ok());
     }
 }

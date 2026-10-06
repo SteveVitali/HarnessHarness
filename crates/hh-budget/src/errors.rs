@@ -305,6 +305,10 @@ pub enum RefusalReason {
     UnequalCaps,
     /// The comparison precondition — `eval_budget` differs across arms.
     UnequalEvalBudgets,
+    /// A k-vs-1 (or mixed-k) ensemble comparison under a mode other than
+    /// `matched_total` — the per-member spend never matches dimension-wise,
+    /// so only the totals are commensurable (AC-R-2.3.2-10).
+    EnsembleKvs1,
 }
 
 /// The `budget_enforcement` level an arm can apply to a dimension (ADR-0165 D3).

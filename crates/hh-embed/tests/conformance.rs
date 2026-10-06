@@ -4066,6 +4066,7 @@ fn s34c_arm(id: &str, level: &str, eval: &str) -> hh_lab::experiment::ArmSpec {
         limits_enforced: "full".into(),
         model_role_table_ref: None,
         response_cache: None,
+        ensemble_k: None,
     }
 }
 

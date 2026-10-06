@@ -751,8 +751,11 @@ pub struct CacheCallFact {
     pub static_hash: String,
     /// `request_sent` — when the attempt's first byte went out (ms).
     pub request_sent_ms: u64,
-    /// Whether the call reached `completed`.
+    /// Whether the call reached `completed` (a warm basis).
     pub completed: bool,
+    /// Whether the call reached a terminal row (`completed` or `failed`) —
+    /// a call neither completed nor closed is the in-flight sibling.
+    pub closed: bool,
     /// The call's `model_call_id` (for `basis.last_call`).
     pub model_call_id: String,
 }
@@ -833,7 +836,7 @@ pub fn expect_cache_state(
         .filter(|f| f.affinity_key == key && f.static_hash == static_hash)
         .collect();
     // A same-key sibling still in flight ⇒ `cold{concurrent_sibling}`.
-    if let Some(open) = same.iter().find(|f| !f.completed) {
+    if let Some(open) = same.iter().find(|f| !f.closed) {
         return ExpectedCacheState {
             expected: ExpectedState::Cold,
             basis: ExpectedBasis {
@@ -951,6 +954,236 @@ pub fn cache_agreement(expected: ExpectedState, observed: ObservedState) -> bool
             | (ExpectedState::Cold, ObservedState::Cold)
             | (ExpectedState::Unknown, ObservedState::Unknown)
     )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The durable-prefix fold (IR-1; AC-R-2.3.4-7)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `project_cache_view`'s result — `expect_cache_state`'s `(facts,
+/// invalidations)` inputs folded from the run's event stream. Pure over the
+/// rows (CK-3); replayable.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CacheView {
+    /// The `model.call.*` facts, in request order.
+    pub facts: Vec<CacheCallFact>,
+    /// The committed invalidations, in stream order — the most recent is the
+    /// `cold{reason}` attribution (IR-1).
+    pub invalidations: Vec<MissReason>,
+}
+
+/// `project_cache_view(rows) → {facts, invalidations}` — the IR-1 fold.
+///
+/// * `model.call.requested` opens a fact (`cache.affinity_key`,
+///   `cache.static_hash`, the row's `ts` as `request_sent_ms`);
+///   `model.call.completed` closes it `completed`; `model.call.failed`
+///   closes it without `completed` (a failed call never seeds `warm` and is
+///   never an open sibling).
+/// * Version stamps on consecutive `model.call.requested` rows attribute
+///   IR-1 causes: `dialect.version` → `dialect_change`,
+///   `model_ref.profile_ref` → `profile_version` (suppressed while a
+///   `relower` invalidation is still fresh — the reroute's own reason
+///   wins), `tool_set_version` → `tool_set_change`, `definition_version` →
+///   `definition_version`, `marker_policy_version` → `marker_policy`.
+/// * `model.surface.relowered` / `model.rerouted{relowered: true}` →
+///   `relower`; `context.compaction.completed{status: applied}` →
+///   `compaction`; any other payload carrying `cache_invalidating = true`
+///   classifies by class prefix (`context.*` → `context_edit`,
+///   `control.compute.*` → `parameter_change`, else `unknown`).
+/// * `control.compute.decided{chosen.kind: effort_level}` whose chosen
+///   option row carries `estimate.risk.cache_invalidation = true` →
+///   `parameter_change` (AC-R-2.3.3-15; ADR-0208 `effort.
+///   cache_invalidation_on_change`).
+///
+/// Consecutive identical reasons collapse (the `relowered` pair is one
+/// logical event).
+pub fn project_cache_view(rows: &[(u64, u64, &str, &Json)]) -> CacheView {
+    let mut view = CacheView::default();
+    let mut index: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut relower_fresh = false;
+    // The IR-1 version stamps, last-seen per member path.
+    let mut last: std::collections::BTreeMap<&'static str, String> =
+        std::collections::BTreeMap::new();
+    let push = |view: &mut CacheView, reason: MissReason| {
+        if view.invalidations.last() != Some(&reason) {
+            view.invalidations.push(reason);
+        }
+    };
+    for (_, ts, class, p) in rows {
+        match *class {
+            "model.call.requested" => {
+                let id = p
+                    .get("model_call_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                let cache = p.get("cache").cloned().unwrap_or(Json::Null);
+                index.insert(id.clone(), view.facts.len());
+                view.facts.push(CacheCallFact {
+                    affinity_key: cache
+                        .get("affinity_key")
+                        .and_then(Json::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                    static_hash: cache
+                        .get("static_hash")
+                        .and_then(Json::as_str)
+                        .unwrap_or("")
+                        .to_string(),
+                    request_sent_ms: *ts,
+                    completed: false,
+                    closed: false,
+                    model_call_id: id,
+                });
+                // IR-1 stamp attribution — a changed version member on the
+                // requested row records the named reason.
+                let stamps: [(&'static str, Json, MissReason); 5] = [
+                    (
+                        "dialect.version",
+                        p.get("dialect")
+                            .and_then(|d| d.get("version"))
+                            .cloned()
+                            .unwrap_or(Json::Null),
+                        MissReason::DialectChange,
+                    ),
+                    (
+                        "model_ref.profile_ref",
+                        p.get("model_ref")
+                            .and_then(|m| m.get("profile_ref"))
+                            .cloned()
+                            .unwrap_or(Json::Null),
+                        MissReason::ProfileVersion,
+                    ),
+                    (
+                        "tool_set_version",
+                        p.get("tool_set_version").cloned().unwrap_or(Json::Null),
+                        MissReason::ToolSetChange,
+                    ),
+                    (
+                        "definition_version",
+                        p.get("definition_version").cloned().unwrap_or(Json::Null),
+                        MissReason::DefinitionVersion,
+                    ),
+                    (
+                        "marker_policy_version",
+                        p.get("marker_policy_version")
+                            .cloned()
+                            .unwrap_or(Json::Null),
+                        MissReason::MarkerPolicy,
+                    ),
+                ];
+                for (name, val, reason) in stamps {
+                    let Some(v) = val.as_str() else { continue };
+                    match last.get(name) {
+                        Some(prev) if prev != v => {
+                            // A fresh relower owns the profile_ref change —
+                            // the reroute already recorded `relower`.
+                            if reason == MissReason::ProfileVersion && relower_fresh {
+                                last.insert(name, v.to_string());
+                                continue;
+                            }
+                            push(&mut view, reason);
+                        }
+                        _ => {}
+                    }
+                    last.insert(name, v.to_string());
+                }
+                relower_fresh = false;
+            }
+            "model.call.completed" | "model.call.failed" => {
+                if let Some(i) = p
+                    .get("model_call_id")
+                    .and_then(Json::as_str)
+                    .and_then(|id| index.get(id).copied())
+                {
+                    view.facts[i].closed = true;
+                    view.facts[i].completed = *class == "model.call.completed";
+                }
+            }
+            "model.surface.relowered" => {
+                push(&mut view, MissReason::Relower);
+                relower_fresh = true;
+            }
+            "model.rerouted" => {
+                if matches!(p.get("relowered"), Some(Json::Bool(true))) {
+                    push(&mut view, MissReason::Relower);
+                    relower_fresh = true;
+                }
+            }
+            "context.compaction.completed" => {
+                if p.get("status").and_then(Json::as_str) == Some("applied") {
+                    push(&mut view, MissReason::Compaction);
+                }
+            }
+            "control.compute.decided" => {
+                // AC-R-2.3.3-15 — a chosen `effort_level` whose estimate's
+                // declared risk is `cache_invalidation` records
+                // `parameter_change`.
+                let effort_chosen = p
+                    .get("chosen")
+                    .and_then(|c| c.get("kind"))
+                    .and_then(Json::as_str)
+                    == Some("effort_level");
+                if effort_chosen {
+                    let level = p
+                        .get("chosen")
+                        .and_then(|c| c.get("level"))
+                        .and_then(Json::as_str);
+                    let invalidating = p
+                        .get("options_considered")
+                        .and_then(|o| match o {
+                            Json::Arr(v) => Some(v.clone()),
+                            _ => None,
+                        })
+                        .unwrap_or_default()
+                        .iter()
+                        .filter(|row| {
+                            row.get("option")
+                                .and_then(|o| o.get("kind"))
+                                .and_then(Json::as_str)
+                                == Some("effort_level")
+                                && row
+                                    .get("option")
+                                    .and_then(|o| o.get("level"))
+                                    .and_then(Json::as_str)
+                                    == level
+                        })
+                        .any(|row| {
+                            matches!(
+                                row.get("estimate")
+                                    .and_then(|e| e.get("risk"))
+                                    .and_then(|r| r.get("cache_invalidation")),
+                                Some(Json::Bool(true))
+                            )
+                        });
+                    if invalidating {
+                        push(&mut view, MissReason::ParameterChange);
+                    }
+                }
+            }
+            _ => {
+                // The generic `cache_invalidating` stamp — classify by class
+                // prefix so the ledger's reason stays honest.
+                if matches!(p.get("cache_invalidating"), Some(Json::Bool(true))) {
+                    let reason = if class.starts_with("context.compaction") {
+                        MissReason::Compaction
+                    } else if class.starts_with("context.") {
+                        MissReason::ContextEdit
+                    } else if class.starts_with("model.surface.relowered")
+                        || class.starts_with("model.rerouted")
+                    {
+                        MissReason::Relower
+                    } else if class.starts_with("control.compute.") {
+                        MissReason::ParameterChange
+                    } else {
+                        MissReason::Unknown
+                    };
+                    push(&mut view, reason);
+                }
+            }
+        }
+    }
+    view
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
