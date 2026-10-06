@@ -10,8 +10,8 @@
 ## CURRENT STATE
 
 ```
-projectStatus:   DONE               # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      DONE
+projectStatus:   IN_PROGRESS        # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
+nextTicket:      R2.1
 lastCompleted:   DOC.2
 blockedOn:       (none)
 pauseRequested:  false
@@ -23,11 +23,11 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-doc.2
+chainTip:        svitali/spec-amend-a1-a3  # amended-spec tip — carries the A-1..A-3 fold on top of doc.2; R2.1 forks here
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
-round:           1
+round:           2
 updatedAt:       2026-10-06
 ```
 
@@ -42,6 +42,12 @@ updatedAt:       2026-10-06
 
 - 2026-09-18 · **Foreign-writer sweep after S2.4 worker flag — clear.** The S2.4 worker saw live `claude --dangerously-skip-permissions` processes and non-persisting `edit` writes. Orchestrator sweep: all claude cwds resolve to other repos (Episteme ×4, Eleutheria, agent-discourse, Rhēma, `$HOME`, and the *main* MetaHarness checkout — none in `MetaHarness-harnessharness`); only `hh-helper` pid 4853 holds a cwd in the build worktree (a test-spawned leftover, not a writer). The non-persisting writes are the established `edit`-tool stale-view anomaly — rule already in force (shell/python + `git diff` for build-memory files).
 
+
+- 2026-10-06 · **CI flake on #104 → R2.1.** PR #104's run `37482844398` (`build · test · fmt · drift`)
+  failed once on `ac5_attended_and_unattended_share_one_configuration` — an unexpected ledger
+  difference at `.payload.assembly_ms.value`; a sibling run on the same SHA passed. The comparison's
+  allowlist omits the measured-wall `assembly_ms.{value,measured_at}` fields a sibling parity test
+  already excludes. Timing-sensitive, not semantic; assigned to R2.1 with the run URL. Not a block.
 
 ## GATE DECISIONS
 
@@ -221,3 +227,12 @@ updatedAt:       2026-10-06
 - 2026-10-06 · REC.3 done — branch `svitali/harnessharness-rec.3` · PR https://github.com/SteveVitali/HarnessHarness/pull/102 · base `svitali/harnessharness-rec.2` (@2593908). `reconcile-build mode=integration`: `INTEGRATION_PLAN.md` written — the ticket's 49-open-PR premise corrected (operator already merged 86 chain PRs into `main`; live open stack = #87–#101); read-only `merge-dryrun.sh --ci` → **15/15 clean, 0 conflicts** onto `origin/main` (JSON: `docs/build/reports/merge-dryrun-2026-10-06.json`; CI 13 pass / #100 cancelled-run red / #101 pending); foreign CI-fix commits proven identical by `git patch-id` (2625dd23…); strategy = continue the landed convention — bottom-up merge commits into `main`, retarget each base via `gh pr edit --base main`; rollback = tail reverts newest-first; post-merge = workspace suite + check-build-memory. Plus `reports/RELEASE_NOTES.md` draft + `planning/2026-10-06_decision-memo.md` seeding round 2. **Verify:** check-build-memory 0 violations (7 pre-existing warnings); `^||` empty; no code — cargo test not run. chainTip → svitali/harnessharness-rec.3 · next → DOC.1.
 - 2026-10-06 · DOC.1 done — branch `svitali/harnessharness-doc.1` · PR https://github.com/SteveVitali/HarnessHarness/pull/103 · base `svitali/harnessharness-rec.3` (@1bedc05). `refresh-repo-docs` against the composed build: detector 0 broken refs / 707 docs; **state correction** — no root README/examples/CHANGELOG ever existed (ticket premise stale). Landed: root `README.md` (verified map — 50 crates, Rust 1.94, 16 binaries, the `hh` noun surface, bindings (a)/(b)/(c), `HH_*` defaults, exemplars, the fixture-verified honesty ceiling); `docs/README.md` map corrected to the real corpus + adjacent-surfaces table; `spikes/README.md` s0.3b indexed + runner line fixed; `Cargo.toml` header comment corrected (one `tempfile` dev-dep); `.gitignore` += `.hh/`. **Deferrals:** DF-DOC.1-1 opened (`hh-kernel doctor` exits 1 on a clean build — `kernel.version` semver tail vs full `kernel_version_id` compare; untested path; compensating control: `hh doctor` over the boundary is test-covered). No ADRs (no owned decision). Modes honored — historical/frozen/append-only report-only; AGENTS.md left to DOC.2. chainTip → svitali/harnessharness-doc.1 · next → DOC.2.
 - 2026-10-06 · DOC.2 done — branch `svitali/harnessharness-doc.2` · PR https://github.com/SteveVitali/HarnessHarness/pull/104 · base `svitali/harnessharness-doc.1` (@13ea223). Ran `agent-docs` refresh mode end to end: detector 1 critical (`drive-build.sh` authoring error) → **0 issues / 2 docs** post-run. Root `AGENTS.md` was the 28-line Build-memory stub only — regenerated from verified source (Purpose / Architecture / Key files / Build & Test / Conventions / Critical Gotchas incl. the DF-DOC.1-1 doctor defect + the edit-tool anomaly / Terminology / Do-Don't; Build memory block preserved verbatim minus the stale line); `crates/AGENTS.md` added (50-crate map, verified 50/50 vs `ls crates/`); `CLAUDE.md` bridge added. **Deferrals:** none opened/closed; DF-DOC.1-1 stays OPEN as backlog (no `BL-` id — catalogue predates the row; next reconcile-build assigns it). **Verify:** freshness 0 issues; check-build-memory 0 violations / 7 pre-existing warnings; `^||` clean; no code changed. **Closing act:** DONE preconditions verified — 102 index rows cover every non-gate/non-human manifest row (1–106), all four gates PASSED, no nextTicket remains → `projectStatus: DONE`. chainTip → svitali/harnessharness-doc.2 · next → DONE (the 106-row chain is complete; no nextTicket remains).
+
+### Round 2
+
+- 2026-10-06 · **round 2 seeded** — `decompose-spec mode=extend`: rows 107–136 appended to the manifest
+  (20 ticket rows R2.1–R2.21 + R2.22–R2.27 reconcile/docs, 2 HUMAN markers, 1 gate GATE-G4); partition +
+  Phase-4 review in `## Decomposition decisions → Round 2` and
+  `docs/build/planning/2026-10-06_round2-decomposition.md`. `projectStatus: DONE → IN_PROGRESS`;
+  `round: 1 → 2`; `nextTicket: R2.1`; `chainTip` → `svitali/spec-amend-a1-a3` so Round-2 tickets fork
+  over the amended spec (A-1..A-3). lastCompleted stays `DOC.2`; Round-1 history unchanged.
