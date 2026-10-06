@@ -50,7 +50,7 @@ build scope**; named for the record, not discharged.
 
 102 BUILD_INDEX rows cover every non-gate/non-human manifest row after
 this one; all four gates (G1/G2/G3/GATE-ACCEPT) dispositioned PASSED;
-HUMAN rows carried as signed acceptances; no `nextTicket` remains.
+HUMAN rows carried as signed acceptances; no `nextTicket` remains (`DONE`).
 LEDGER goes `projectStatus: DONE` in the closeout commit.
 
 ## For the operator

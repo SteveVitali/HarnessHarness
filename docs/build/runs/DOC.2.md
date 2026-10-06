@@ -115,6 +115,6 @@ docs-scope item is **R-2.12.4** — `deferred(ADR-0210)` to WS-L6, out of
 build scope; named for the record in the PR, not discharged. No ADR
 owed — no decision owned (hierarchy design follows the skill's rules).
 BUILD_INDEX row 103 + LEDGER (`projectStatus: DONE`,
-`nextTicket: (none)`, `lastCompleted: DOC.2`,
+`nextTicket: DONE`, `lastCompleted: DOC.2`,
 `chainTip: svitali/harnessharness-doc.2`) advanced in the closeout
 commit.
