@@ -613,8 +613,79 @@ fn hint_source(e: &HostedEvent) -> Option<&Json> {
 
 /// Lift one hosted event to a native-class row. The mapping is total —
 /// unknown/`_`-prefixed kinds land as `lifecycle.hosted.native_record` leaves
-/// carrying `{kind, payload}` (CC3: nothing silently drops).
+/// carrying `{kind, payload}` (CC3: nothing silently drops). M18's dual-row
+/// lowerings ([`lift_event_rows`]) return their *primary* row here.
 pub fn lift_event(e: &HostedEvent) -> LiftedRow {
+    lift_event_rows(e)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| LiftedRow {
+            class: "lifecycle.hosted.native_record".to_string(),
+            payload: Json::obj([("kind", Json::str(&e.kind)), ("payload", e.payload.clone())]),
+            seq: e.seq,
+            at: e.at,
+            mediation: e.mediation.clone(),
+            origin: e.provenance.origin.clone(),
+            authority: e.provenance.authority,
+            turn_id: None,
+        })
+}
+
+/// Lift one hosted event to its native-class row*s* — one row per event for
+/// every kind but the M18 dual-carrier lowerings (`usage.reported` appends
+/// both the `measurement.cost.attributed` accounting row and, when the
+/// report names a call, the `model.call.completed{usage, provenance}`
+/// carrier — "both rows appended when measured and reported coexist",
+/// spec §5h M18 / ADR-0165 D5 / AC-R-2.10.6-9).
+pub fn lift_event_rows(e: &HostedEvent) -> Vec<LiftedRow> {
+    let primary = lift_event_primary(e);
+    let mut rows = vec![primary];
+    // M18's second carrier (spec §5h M18; ADR-0165 D5): a `usage.reported`
+    // that names a call also lowers the usage onto the call row —
+    // `model.call.completed{model_call_id, usage, provenance}` — so the
+    // measured (intercept) and reported (participant) carriers *both* land
+    // when they coexist; the agreement fold reads the pair (AC-R-2.10.6-9).
+    if e.kind == "usage.reported" {
+        if let Some(call) = e.payload.get("model_call_id").and_then(Json::as_str) {
+            rows.push(LiftedRow {
+                class: "model.call.completed".to_string(),
+                payload: Json::obj([
+                    ("model_call_id", Json::str(call)),
+                    ("status", Json::str("completed")),
+                    ("provenance", Json::str(usage_provenance(e))),
+                    ("mediation", Json::str(e.mediation.as_str())),
+                    ("usage", e.payload.clone()),
+                ]),
+                seq: e.seq,
+                at: e.at,
+                mediation: e.mediation.clone(),
+                origin: e.provenance.origin.clone(),
+                authority: e.provenance.authority,
+                turn_id: e
+                    .payload
+                    .get("turn_id")
+                    .and_then(Json::as_str)
+                    .map(String::from),
+            });
+        }
+    }
+    rows
+}
+
+/// The `usage.reported` cost provenance by mediation (ADR-0165 D5): a live
+/// participant report (`observed`/`mediated` on a declared channel) is
+/// `participant_reported`; a post-hoc reconstruction (`unobserved` — the
+/// container-installed native-log leg) is `reconstructed_from_native_log`.
+fn usage_provenance(e: &HostedEvent) -> &'static str {
+    match e.mediation {
+        Mediation::Unobserved => "reconstructed_from_native_log",
+        _ => "participant_reported",
+    }
+}
+
+/// The single-row lift — one native-class row per hosted event
+/// ([`lift_event_rows`] adds M18's second carrier where the spec asks).
+fn lift_event_primary(e: &HostedEvent) -> LiftedRow {
     let row = |class: &str, payload: Json, turn_id: Option<String>| LiftedRow {
         class: class.to_string(),
         payload,
@@ -710,11 +781,33 @@ pub fn lift_event(e: &HostedEvent) -> LiftedRow {
         }
         "permission.requested" => row("security.permission.pending", e.payload.clone(), tid()),
         "permission.decided" => row("security.permission.decided", e.payload.clone(), tid()),
+        // M18 (§5h; ADR-0165 D5): the accounting row — `participant_reported`
+        // for a live session-ABI report, `reconstructed_from_native_log` for
+        // a post-hoc (`unobserved`) reconstruction. `confidence` is `bounded`
+        // only when the report carries a pinned `pricing_ref` (D5's cache
+        // buckets + pinned table rule); `estimate` otherwise — never `exact`,
+        // never zero. `mediation` stamps the row so the hosted fold can
+        // classify it (I-5).
         "usage.reported" => row(
             "measurement.cost.attributed",
             Json::obj([
-                ("provenance", Json::str("participant_reported")),
-                ("confidence", Json::str("estimate")),
+                ("provenance", Json::str(usage_provenance(e))),
+                (
+                    "provenance_class",
+                    Json::str(match e.mediation {
+                        Mediation::Unobserved => "reconstructed",
+                        _ => "reported",
+                    }),
+                ),
+                (
+                    "confidence",
+                    Json::str(if e.payload.get("pricing_ref").is_some() {
+                        "bounded"
+                    } else {
+                        "estimate"
+                    }),
+                ),
+                ("mediation", Json::str(e.mediation.as_str())),
                 ("usage", e.payload.clone()),
             ]),
             tid(),
@@ -761,7 +854,8 @@ const KNOWN_LIFTED: &[&str] = &[
     "coordinate.changed",
 ];
 
-/// Lift a hosted session slice — one row per event, order preserved.
+/// Lift a hosted session slice — one or more rows per event (the M18
+/// dual-carrier kinds emit two), source order preserved.
 pub fn lift(events: &[HostedEvent]) -> Vec<LiftedRow> {
-    events.iter().map(lift_event).collect()
+    events.iter().flat_map(lift_event_rows).collect()
 }

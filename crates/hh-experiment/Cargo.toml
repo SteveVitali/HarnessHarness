@@ -17,3 +17,4 @@ hh-ontology = { path = "../hh-ontology" }
 hh-ledger = { path = "../hh-ledger" }
 hh-budget = { path = "../hh-budget" }
 hh-lab = { path = "../hh-lab" }
+hh-eval = { path = "../hh-eval" }

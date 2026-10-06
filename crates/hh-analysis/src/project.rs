@@ -30,9 +30,15 @@
 //!   precondition reads this; a nonzero charge would come from a
 //!   `search`-dimension consumed fold the Stage-3 store does not
 //!   produce);
-//! - `mediation`/`capability_vector` — empty: capability resolution is
-//!   the C2 seam (ADR-0165); `applicability` treats absent entries as
-//!   non-evidence, never `Supported`.
+//! - `capability_vector` — the launch-stamped
+//!   `manifest.extra["capability_vector"]` (the adapter-reported vector
+//!   `capability_vector_ref` binds — records-in, ADR-0165 D6 + S4.15):
+//!   every member is a strict `CapabilityVerdict` spelling — an unknown
+//!   spelling, a non-string verdict or a non-object member is a typed
+//!   `RowField` refusal, never a coerced `Unknown` (T-LCD-07). Absent →
+//!   empty: `applicability` renders `n/a{capability}` for
+//!   `requires_capabilities` metrics rather than inventing a verdict
+//!   (T-LCD-15).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -43,7 +49,7 @@ use hh_ontology::control::OutcomeClass;
 use hh_ontology::dimensions::DimensionId;
 use hh_ontology::eval::{MediationChannel, MetricValue};
 use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
-use hh_ontology::participant::{Observability, ParticipantClass};
+use hh_ontology::participant::{CapabilityVerdict, Observability, ParticipantClass};
 use hh_results::row::ResultsRow;
 use hh_wire::Json;
 
@@ -55,6 +61,52 @@ fn field_err(run_id: &str, field: &str, detail: impl Into<String>) -> AnalysisEr
         field: field.to_string(),
         detail: detail.into(),
     }
+}
+
+/// The launch-stamped capability vector (`manifest.extra["capability_
+/// vector"]` — the member the hosted adapter / launch overrides stamp,
+/// `capability_vector_ref` binds the record it reconciled from).
+/// Spellings parse strictly through `CapabilityVerdict::parse`: an
+/// unknown spelling, a non-string verdict or a non-object member is a
+/// typed refusal (T-LCD-07 — unknown is never coerced). Absent → empty:
+/// `applicability` renders `n/a{capability}` rather than inventing a
+/// `Supported` verdict.
+fn capability_vector(
+    run_id: &str,
+    manifest: Option<&RunManifest>,
+) -> Result<BTreeMap<String, CapabilityVerdict>, AnalysisError> {
+    let mut vector = BTreeMap::new();
+    let Some(extra) = manifest.map(|m| &m.extra) else {
+        return Ok(vector);
+    };
+    let Some(member) = extra.get("capability_vector") else {
+        return Ok(vector);
+    };
+    let Json::Obj(entries) = member else {
+        return Err(field_err(
+            run_id,
+            "capability_vector",
+            "manifest.extra.capability_vector is not an object",
+        ));
+    };
+    for (capability, verdict) in entries {
+        let Json::Str(spelling) = verdict else {
+            return Err(field_err(
+                run_id,
+                "capability_vector",
+                format!("{capability}: verdict is not a string"),
+            ));
+        };
+        let Some(v) = CapabilityVerdict::parse(spelling) else {
+            return Err(field_err(
+                run_id,
+                "capability_vector",
+                format!("{capability}: unknown verdict spelling {spelling:?}"),
+            ));
+        };
+        vector.insert(capability.clone(), v);
+    }
+    Ok(vector)
 }
 
 /// `eval_run(row, manifest, facts, task_ctx, suite_ctx)` — project one
@@ -227,6 +279,8 @@ pub fn eval_run(
         .map(|t| t.stratum)
         .unwrap_or(ContaminationStratum::Unknown);
     let split_hash = task_ctx.map(|t| t.split_hash.clone());
+    // Hoisted ahead of the literal — `run_id` moves into `EvalRun`.
+    let capabilities = capability_vector(&run_id, manifest)?;
 
     Ok(EvalRun {
         run_id,
@@ -243,9 +297,9 @@ pub fn eval_run(
         // feed `applicability_at` (a native row's surface is fully mediated —
         // the kernel owns every channel; a hosted row carries the row's
         // declared spellings, never defaulted, T-LCD-07). The capability
-        // vector resolves through `capability_vector_ref` (Stage 4 binding —
-        // absent = empty, and `requires_capabilities` metrics render
-        // `n/a{capability}` rather than a coerced verdict).
+        // vector projects the launch-stamped record `capability_vector_ref`
+        // binds (S4.15 — absent = empty, and `requires_capabilities` metrics
+        // render `n/a{capability}` rather than a coerced verdict).
         mediation: if participant_class == ParticipantClass::Native {
             [
                 MediationChannel::Effects,
@@ -261,7 +315,7 @@ pub fn eval_run(
                 .filter_map(|s| MediationChannel::parse(s))
                 .collect()
         },
-        capability_vector: BTreeMap::new(),
+        capability_vector: capabilities,
         task_id,
         suite_id,
         split_label,

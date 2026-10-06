@@ -1,20 +1,20 @@
 {
- "adapter_id": "adapter_a",
+ "adapter_id": "adapter_b",
  "audit": {
   "audited_at": 0,
-  "dispatch_ref": "dispatch://benchset.stage3.v1/suite.tb2",
+  "dispatch_ref": "dispatch://benchset.stage3.v1/suite.swe_fresh",
   "epoch_seeded": true
  },
  "contamination_stratum": "fresh_temporal",
  "episode_model": null,
  "family": "coding_terminal",
- "flawed_task_ids": [],
+ "flawed_task_ids": [
+  "b-ambiguous"
+ ],
  "parity_subset": [
-  "a-hello",
-  "a-sum",
-  "a-upper",
-  "a-count",
-  "a-echo"
+  "b-resolve-1",
+  "b-resolve-2",
+  "b-resolve-3"
  ],
  "requires": {
   "handle.bash": "required",
@@ -22,13 +22,12 @@
  },
  "retired_for_headline": false,
  "schema": "benchset_suite/1",
- "suite_id": "suite.tb2",
+ "suite_id": "suite.swe_fresh",
  "tasks": [
-  "a-hello",
-  "a-sum",
-  "a-upper",
-  "a-count",
-  "a-echo"
+  "b-resolve-1",
+  "b-resolve-2",
+  "b-resolve-3",
+  "b-ambiguous"
  ],
  "verifier_isolation": "separate"
 }

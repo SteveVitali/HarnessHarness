@@ -31,8 +31,26 @@ fn benchset_loads_and_validates() {
     assert_eq!(bs.id, BENCHSET_ID);
     assert_eq!(
         bs.suites.keys().cloned().collect::<Vec<_>>(),
-        vec!["a", "c", "d", "e"]
+        vec!["a", "b", "c", "d", "e", "g"]
     );
+
+    // S4.15 C1 strata — B is headline-admissible (its committed
+    // `SuiteValidityRecord` audit block is dated); G is the provisional
+    // smoke suite (never headline).
+    let b = bs.suite("b").unwrap();
+    assert_eq!(b.manifest.foreign.name, "suite.swe_fresh");
+    assert_eq!(b.stratum(), ContaminationStratum::FreshTemporal);
+    assert!(b.headline_admissible());
+    // The flawed member stays in `tasks[]` — named in the validity
+    // record, never dropped.
+    assert_eq!(b.manifest.validity.flawed_task_ids.len(), 1);
+    assert!(b
+        .manifest
+        .tasks
+        .contains(&b.manifest.validity.flawed_task_ids[0]));
+    let g = bs.suite("g").unwrap();
+    assert_eq!(g.manifest.foreign.name, "suite.harbor_index");
+    assert!(!g.headline_admissible());
 
     let a = bs.suite("a").unwrap();
     assert_eq!(a.family(), EnvironmentFamily::CodingTerminal);

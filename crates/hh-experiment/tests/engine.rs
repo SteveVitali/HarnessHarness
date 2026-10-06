@@ -2100,3 +2100,157 @@ fn hosted_level_on_component_level_factor_is_inadmissible() {
     let code = register_err(&mut r, &s, ctx());
     assert_eq!(code, "InadmissibleFactor", "got {code}");
 }
+
+// ── S4.15 — F fault/perturbation profiles on environment levels ─────────────
+//
+// An `environment`-kind level's `overrides` carries `fault_profile` /
+// `perturbation_profile` ids (R-2.9.4's F-suite depth). The ids must name
+// Stage-3 catalogue profiles — an unknown id, a non-string member or two
+// environment levels disagreeing on the same member refuses
+// `InadmissibleFactor` at launch (before the slice is spent); the
+// resolved ids stamp `RunManifest.extra` so the row projection and the
+// compare's profile match axes read them (§5h.2 C2).
+
+/// A single-level `environment` factor whose level carries the declared
+/// `overrides` (not varied — `paired` stays at exactly one varied factor).
+fn env_factor(level_id: &str, overrides: Json) -> FactorSpec {
+    FactorSpec {
+        name: "environment".to_string(),
+        kind: FactorKind::Environment,
+        granularity: Some(Granularity::ProductLevel),
+        role: None,
+        levels: vec![LevelSpec {
+            level_id: level_id.to_string(),
+            ref_: pinned(&format!("env.{level_id}")),
+            overrides: Some(overrides),
+            label: level_id.to_string(),
+            class: ParticipantClass::Native,
+            non_portable: false,
+        }],
+    }
+}
+
+/// The base spec plus one environment level assigned on every arm.
+fn spec_with_env(level_id: &str, overrides: Json) -> ExperimentSpec {
+    let mut s = spec(ExperimentKind::Comparative);
+    s.factors.push(env_factor(level_id, overrides));
+    for a in &mut s.arms {
+        a.level_assignment
+            .insert("environment".to_string(), level_id.to_string());
+    }
+    s.experiment_id = s.experiment_id();
+    s
+}
+
+/// Register → expand → open → next → claim; the launchable plan.
+fn claimed<'a>(
+    rig: &'a mut Rig,
+    spec: &ExperimentSpec,
+    ctx: EngineContext<'static>,
+) -> (ExperimentEngine<'a>, ClaimTicket) {
+    let mut eng = ExperimentEngine::new(&mut rig.store, rig.docs.clone(), ctx);
+    let eid = eng.register(spec).unwrap();
+    eng.expand(&eid).unwrap();
+    eng.open_experiment(&eid).unwrap();
+    let rpid = match eng.next().unwrap() {
+        NextVerdict::Plan { run_plan_id } => run_plan_id,
+        other => panic!("{other:?}"),
+    };
+    let ticket = eng.claim(&rpid, "driver").unwrap();
+    (eng, ticket)
+}
+
+#[test]
+fn launch_stamps_env_profiles() {
+    let mut r = rig("env-profiles", 0);
+    let s = spec_with_env(
+        "env_faulty",
+        Json::obj([
+            ("fault_profile", Json::str("f/tool-timeout-p50")),
+            ("perturbation_profile", Json::str("p/rename-variable")),
+        ]),
+    );
+    let (mut eng, ticket) = claimed(&mut r, &s, ctx());
+    let launched = eng.launch(&ticket, "subject").unwrap();
+    drop(eng); // release the engine's store borrow before reading the manifest
+    let m = r.store.manifest(&launched.run_id).unwrap();
+    assert_eq!(
+        m.extra.get("fault_profile").and_then(Json::as_str),
+        Some("f/tool-timeout-p50"),
+    );
+    assert_eq!(
+        m.extra.get("perturbation_profile").and_then(Json::as_str),
+        Some("p/rename-variable"),
+    );
+}
+
+#[test]
+fn launch_without_profiles_stamps_nothing() {
+    let mut r = rig("env-profiles-absent", 0);
+    let s = spec_with_env("env_clean", Json::obj([]));
+    let (mut eng, ticket) = claimed(&mut r, &s, ctx());
+    let launched = eng.launch(&ticket, "subject").unwrap();
+    drop(eng); // release the engine's store borrow before reading the manifest
+    let m = r.store.manifest(&launched.run_id).unwrap();
+    assert!(!m.extra.contains_key("fault_profile"));
+    assert!(!m.extra.contains_key("perturbation_profile"));
+}
+
+#[test]
+fn unknown_profile_id_refuses_launch() {
+    let mut r = rig("env-profiles-unknown", 0);
+    let s = spec_with_env(
+        "env_bogus",
+        Json::obj([("fault_profile", Json::str("f/not-a-profile"))]),
+    );
+    let (mut eng, ticket) = claimed(&mut r, &s, ctx());
+    let e = eng.launch(&ticket, "subject").unwrap_err();
+    assert_eq!(e.code(), "InadmissibleFactor", "got {e}");
+}
+
+#[test]
+fn non_string_profile_member_refuses_launch() {
+    let mut r = rig("env-profiles-nonstring", 0);
+    let s = spec_with_env(
+        "env_bad_member",
+        Json::obj([("perturbation_profile", Json::Int(1))]),
+    );
+    let (mut eng, ticket) = claimed(&mut r, &s, ctx());
+    let e = eng.launch(&ticket, "subject").unwrap_err();
+    assert_eq!(e.code(), "InadmissibleFactor", "got {e}");
+}
+
+#[test]
+fn disagreeing_env_levels_refuse_launch() {
+    // Two `environment`-kind factors whose assigned levels disagree on
+    // `fault_profile` — the engine never picks one silently.
+    let mut r = rig("env-profiles-conflict", 0);
+    let mut s = spec(ExperimentKind::Comparative);
+    for (name, profile) in [
+        ("environment", "f/tool-timeout-p50"),
+        ("environment_b", "f/model-5xx-p10"),
+    ] {
+        s.factors.push(FactorSpec {
+            name: name.to_string(),
+            kind: FactorKind::Environment,
+            granularity: Some(Granularity::ProductLevel),
+            role: None,
+            levels: vec![LevelSpec {
+                level_id: format!("{name}_level"),
+                ref_: pinned(&format!("env.{name}")),
+                overrides: Some(Json::obj([("fault_profile", Json::str(profile))])),
+                label: name.to_string(),
+                class: ParticipantClass::Native,
+                non_portable: false,
+            }],
+        });
+        for a in &mut s.arms {
+            a.level_assignment
+                .insert(name.to_string(), format!("{name}_level"));
+        }
+    }
+    s.experiment_id = s.experiment_id();
+    let (mut eng, ticket) = claimed(&mut r, &s, ctx());
+    let e = eng.launch(&ticket, "subject").unwrap_err();
+    assert_eq!(e.code(), "InadmissibleFactor", "got {e}");
+}

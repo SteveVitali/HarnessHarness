@@ -427,12 +427,28 @@ pub fn export_target(
                 runs.push(Json::obj([
                     ("run_id", Json::str(run.clone())),
                     ("trajectory", Json::str(path)),
+                    // Lineage-aware export (R-2.12.1¹): fork/continuation
+                    // prefixes and the signed audit head ride the foreign
+                    // row — ancestry is data, never a dropped member.
+                    (
+                        "lineage_prefixes",
+                        Json::Arr(export.lineage_prefixes.clone()),
+                    ),
+                    (
+                        "audit_tree_head",
+                        export
+                            .audit_tree_head
+                            .as_ref()
+                            .map(|h| h.to_json())
+                            .unwrap_or(Json::Null),
+                    ),
                 ]));
             }
             let job = Json::obj([
                 ("schema", Json::str("harbor_job/1")),
                 ("job_id", Json::str(manifest.version_id.clone())),
                 ("runs", Json::Arr(runs)),
+                ("subject_lineage", Json::Arr(manifest.subject.lineage.clone())),
             ]);
             files.insert(
                 "job.json".into(),
@@ -490,6 +506,7 @@ pub fn export_target(
             // degrades to `product` granularity with every non-trajectory
             // member listed in the loss report.
             let mut lines = String::new();
+            let mut run_events: BTreeMap<String, Vec<EventEnvelope>> = BTreeMap::new();
             for (run, export) in &manifest.traces {
                 for page_addr in &export.pages {
                     if let Some(bytes) = members.get(page_addr) {
@@ -500,11 +517,83 @@ pub fn export_target(
                             ]);
                             lines.push_str(&row.to_canonical_string());
                             lines.push('\n');
+                            run_events.entry(run.clone()).or_default().push(ev);
                         }
                     }
                 }
             }
             files.insert("trajectory.jsonl".into(), lines.into_bytes());
+            // `cost_view` fields in the header (R-2.9.1¹ — "interchange
+            // export of `cost_view` fields with unit conversion declared
+            // lossy"): the projection's exact per-currency micro-unit
+            // totals stay verbatim; `total_spend` is the *converted* whole-
+            // unit figure the interchange schema carries — truncation is
+            // declared per run in the loss report, never silent (CC3).
+            let mut cost_views = BTreeMap::new();
+            for (run, events) in &run_events {
+                let cv = hh_telemetry::views::cost_view(run, run, events, None);
+                let micro = cv
+                    .payload
+                    .get("total_spend_micro")
+                    .cloned()
+                    .unwrap_or(Json::obj([]));
+                let mut units = BTreeMap::new();
+                if let Json::Obj(m) = &micro {
+                    for (ccy, v) in m {
+                        if let Some(micro_units) = v.as_int() {
+                            units.insert(
+                                ccy.clone(),
+                                Json::Int(micro_units / 1_000_000),
+                            );
+                        }
+                    }
+                }
+                cost_views.insert(
+                    run.clone(),
+                    Json::obj([
+                        ("total_spend_micro", micro),
+                        ("total_spend", Json::Obj(units)),
+                        (
+                            "total_rows",
+                            cv.payload
+                                .get("total_rows")
+                                .cloned()
+                                .unwrap_or(Json::Int(0)),
+                        ),
+                        (
+                            "watermark_seq",
+                            cv.derived_from_seq
+                                .map(|w| Json::Int(w as i64))
+                                .unwrap_or(Json::Null),
+                        ),
+                    ]),
+                );
+                loss.push(Json::obj([
+                    ("member", Json::str(format!("cost_view:{run}"))),
+                    ("address", Json::str("")),
+                    ("class", Json::str("unit_conversion")),
+                    (
+                        "detail",
+                        Json::str(
+                            "total_spend converts micro-units → units by truncation; \
+                             total_spend_micro is the exact source",
+                        ),
+                    ),
+                ]));
+            }
+            // Lineage-aware export (R-2.12.1¹): the subject lineage and each
+            // run's ledger lineage prefixes ride the header — a forked or
+            // continued run's ancestry is part of the product row, never
+            // dropped by the lowering.
+            let mut lineage_by_run = BTreeMap::new();
+            for (run, export) in &manifest.traces {
+                if !export.lineage_prefixes.is_empty() {
+                    lineage_by_run.insert(
+                        run.clone(),
+                        Json::Arr(export.lineage_prefixes.clone()),
+                    );
+                }
+            }
             let header = Json::obj([
                 ("schema", Json::str("hh-interchange-trajectory/1")),
                 ("bundle_id", Json::str(manifest.version_id.clone())),
@@ -513,6 +602,9 @@ pub fn export_target(
                     "subject_runs",
                     Json::Arr(manifest.subject.run_ids.iter().map(Json::str).collect()),
                 ),
+                ("subject_lineage", Json::Arr(manifest.subject.lineage.clone())),
+                ("lineage_prefixes", Json::Obj(lineage_by_run)),
+                ("cost_views", Json::Obj(cost_views)),
             ]);
             files.insert(
                 "interchange.json".into(),

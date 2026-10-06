@@ -22,7 +22,7 @@ use hh_ontology::participant::Observability;
 use hh_wire::json::Json;
 
 use crate::catalogue::{self, FoldStatus};
-use crate::clocks::{skewed, ts_span_ms};
+use crate::clocks::{self, skewed, ts_span_ms};
 use crate::events::{export_delivered_from_json, ExportDelivered};
 use crate::scope::{self, MeasurementPoint, ScopeKind};
 use crate::tokens::TokenVector;
@@ -552,6 +552,11 @@ fn confidence_label(rank: u8) -> &'static str {
     }
 }
 
+/// Render a `currency → micro_units` map as a JSON object of ints.
+fn micro_map_json(m: &BTreeMap<String, i64>) -> Json {
+    Json::Obj(m.iter().map(|(k, v)| (k.clone(), Json::Int(*v))).collect())
+}
+
 /// `cost_view` — the §3 cost projection: `measurement.cost.attributed` rows
 /// folded per charge subject (`attribution.budget_id`) with per-currency
 /// `Money` micro-units (never summed across), `provenance_mix` by class,
@@ -566,108 +571,276 @@ pub fn cost_view(
     events: &[EventEnvelope],
     until_seq: Option<u64>,
 ) -> View {
-    let mut subjects: BTreeMap<String, SubjectAcc> = BTreeMap::new();
-    let mut tool_rows = 0i64;
-    let (mut tw, mut te, mut tc, mut tn) = (0i64, 0i64, 0i64, 0i64);
-    let mut permission_wait_ms = 0i64;
-    let mut watermark: Option<u64> = None;
-
-    for env in events {
-        if let Some(u) = until_seq {
-            if env.seq > u {
-                break;
-            }
-        }
-        watermark = Some(env.seq);
-        match env.class.as_str() {
-            "measurement.cost.attributed" => {
-                if let Some(row) = SpendRow::from_json(&env.payload) {
-                    let acc = subjects
-                        .entry(row.attribution.budget_id.clone())
-                        .or_insert_with(|| SubjectAcc::new(&row.attribution.run_id));
-                    acc.rows += 1;
-                    *acc.spend.entry(row.money.currency.clone()).or_insert(0) +=
-                        row.money.micro_units;
-                    *acc.provenance_mix
-                        .entry(row.provenance_class.as_str())
-                        .or_insert(0) += 1;
-                    acc.confidence_min = acc.confidence_min.min(row.confidence.rank());
-                    acc.coverage_min_ppm = acc.coverage_min_ppm.min(row.coverage_ppm);
-                }
-            }
-            "action.tool.completed" => {
-                tool_rows += 1;
-                let get = |k: &str| env.payload.get(k).and_then(Json::as_int).unwrap_or(0);
-                tw += get("commit_wall_ms");
-                te += get("commit_env_ms");
-                tc += get("commit_cpu_ms");
-                tn += get("commit_net_bytes");
-            }
-            "security.permission.decided" => {
-                permission_wait_ms += env
-                    .payload
-                    .get("approval_wait_ms")
-                    .and_then(Json::as_int)
-                    .unwrap_or(0);
-            }
-            _ => {}
-        }
-    }
-
-    let mut subjects_json = BTreeMap::new();
-    let mut totals: BTreeMap<String, i64> = BTreeMap::new();
-    let mut total_rows = 0i64;
-    for (subject, acc) in &subjects {
-        total_rows += acc.rows;
-        for (ccy, micro) in &acc.spend {
-            *totals.entry(ccy.clone()).or_insert(0) += micro;
-        }
-        subjects_json.insert(
-            subject.clone(),
-            Json::obj([
-                ("run_id", Json::str(&acc.run_id)),
-                (
-                    "spend",
-                    Json::Obj(
-                        acc.spend
-                            .iter()
-                            .map(|(k, v)| (k.clone(), Json::Int(*v)))
-                            .collect(),
-                    ),
-                ),
-                ("rows", Json::Int(acc.rows)),
-                (
-                    "provenance_mix",
-                    Json::Obj(
-                        acc.provenance_mix
-                            .iter()
-                            .map(|(k, v)| (k.to_string(), Json::Int(*v)))
-                            .collect(),
-                    ),
-                ),
-                (
-                    "confidence_min",
-                    Json::str(confidence_label(acc.confidence_min)),
-                ),
-                ("coverage_min_ppm", Json::Int(acc.coverage_min_ppm)),
-            ]),
-        );
-    }
-
+    let fold = cost_fold(events, until_seq);
     let payload = Json::obj([
         ("kind", Json::str("cost_view")),
         ("run_id", Json::str(run_id)),
         ("root_run_id", Json::str(root_run_id)),
-        ("subjects", Json::Obj(subjects_json)),
+        ("subjects", Json::Obj(fold.subjects_json())),
+        ("total_spend_micro", micro_map_json(&fold.totals_map())),
+        ("total_rows", Json::Int(fold.total_rows())),
+        ("tool_commit_totals", fold.tool_totals_json()),
+        ("permission_wait_ms", Json::Int(fold.permission_wait_ms)),
         (
-            "total_spend_micro",
+            "contention_waits_ms",
+            Json::obj([("na", Json::str(na_str(NaReason::Capability)))]),
+        ),
+    ]);
+    View::stamped(run_id, ViewKind::CostView, fold.watermark, payload)
+}
+
+// ── M12 — the run-tree rollup (AC-R-2.9.1-9; S4.15) ──────────────────────
+//
+// A `subagent` scope's measurement point (M12) closes on
+// `control.subagent.{result,cancelled}` and rolls the *child run's* vector
+// into the parent's view — counted exactly once. `cost_view_run_tree`
+// is the tree extension of `cost_view`: the caller supplies the tree's
+// members (each run's durable prefix plus its parent link, the manifest's
+// `parent_run_id`/`spawn_event` coordinate); the view folds each run with
+// the same [`cost_fold`] the single-run view uses, sums every member's
+// totals into the tree totals (each run's rows enter the sum exactly once
+// — a duplicated member id is a typed refusal, never a silent merge), and
+// renders each child under its parent's `subagent` scope.
+
+/// One member of a run tree — the run's durable prefix plus its parent
+/// link (`None` on the root only).
+#[derive(Debug, Clone, Copy)]
+pub struct RunTreeSlice<'a> {
+    /// The member's `run_id`.
+    pub run_id: &'a str,
+    /// The parent's `run_id` — `None` iff this member is the root.
+    pub parent_run_id: Option<&'a str>,
+    /// The member's durable event prefix.
+    pub events: &'a [EventEnvelope],
+}
+
+/// `cost_view_run_tree` refusals — structural defects of the supplied tree,
+/// never a partial rollup (a tree that cannot be walked honestly renders
+/// `n/a`-free totals only when it is well-formed).
+#[derive(Debug, Clone, PartialEq)]
+pub enum CostTreeError {
+    /// The tree names no member at `root_run_id`.
+    RootMissing {
+        /// The requested root.
+        root_run_id: String,
+    },
+    /// A member other than the root carries no parent link.
+    RootMismatch {
+        /// The offending member.
+        run_id: String,
+    },
+    /// A member's `parent_run_id` names no member of the tree.
+    UnknownParent {
+        /// The orphan member.
+        run_id: String,
+        /// The missing parent.
+        parent_run_id: String,
+    },
+    /// A `run_id` appears twice — counting it once is the AC's whole point;
+    /// a duplicated member is refused, never silently deduped.
+    DuplicateRun {
+        /// The duplicated id.
+        run_id: String,
+    },
+}
+
+impl std::fmt::Display for CostTreeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CostTreeError::RootMissing { root_run_id } => {
+                write!(f, "RootMissing({root_run_id})")
+            }
+            CostTreeError::RootMismatch { run_id } => {
+                write!(
+                    f,
+                    "RootMismatch({run_id}: non-root member without a parent)"
+                )
+            }
+            CostTreeError::UnknownParent {
+                run_id,
+                parent_run_id,
+            } => write!(f, "UnknownParent({run_id} → {parent_run_id})"),
+            CostTreeError::DuplicateRun { run_id } => {
+                write!(f, "DuplicateRun({run_id})")
+            }
+        }
+    }
+}
+
+impl std::error::Error for CostTreeError {}
+
+/// `cost_view(run_tree)` — the M12 rollup (AC-R-2.9.1-9). `members` is the
+/// tree walked from `root_run_id`; each member folds through the same
+/// [`cost_fold`] the single-run view uses. The tree `totals` are the sum of
+/// the members' totals — a grandchild is counted once, under *its* parent's
+/// `subagent` scope; `subagents[parent][child]` carries each child's own-run
+/// totals exactly once (never the subtree sum — nesting composes the same
+/// way the scope tree does).
+pub fn cost_view_run_tree(
+    root_run_id: &str,
+    members: &[RunTreeSlice<'_>],
+    until_seq: Option<u64>,
+) -> Result<View, CostTreeError> {
+    // ── tree shape checks (typed refusals, never partial sums) ─────────
+    let mut ids: BTreeSet<&str> = BTreeSet::new();
+    for m in members {
+        if !ids.insert(m.run_id) {
+            return Err(CostTreeError::DuplicateRun {
+                run_id: m.run_id.to_string(),
+            });
+        }
+    }
+    if !ids.contains(root_run_id) {
+        return Err(CostTreeError::RootMissing {
+            root_run_id: root_run_id.to_string(),
+        });
+    }
+    for m in members {
+        match m.parent_run_id {
+            None => {
+                if m.run_id != root_run_id {
+                    return Err(CostTreeError::RootMismatch {
+                        run_id: m.run_id.to_string(),
+                    });
+                }
+            }
+            Some(p) => {
+                if m.run_id == root_run_id {
+                    return Err(CostTreeError::RootMismatch {
+                        run_id: m.run_id.to_string(),
+                    });
+                }
+                if !ids.contains(p) {
+                    return Err(CostTreeError::UnknownParent {
+                        run_id: m.run_id.to_string(),
+                        parent_run_id: p.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    // ── the per-run folds (one fold, one home — CC1) ───────────────────
+    let events_by_id: BTreeMap<&str, &[EventEnvelope]> =
+        members.iter().map(|m| (m.run_id, m.events)).collect();
+    let mut runs_json = BTreeMap::new();
+    let mut subagents: BTreeMap<String, BTreeMap<String, Json>> = BTreeMap::new();
+    let mut watermarks = BTreeMap::new();
+    let mut totals: BTreeMap<String, i64> = BTreeMap::new();
+    let mut total_rows = 0i64;
+    let mut tool_rows = 0i64;
+    let (mut tw, mut te, mut tc, mut tn) = (0i64, 0i64, 0i64, 0i64);
+    let mut permission_wait_ms = 0i64;
+    let mut root_watermark = None;
+
+    for m in members {
+        let fold = cost_fold(m.events, until_seq);
+        if m.run_id == root_run_id {
+            root_watermark = fold.watermark;
+        }
+        watermarks.insert(
+            m.run_id.to_string(),
+            fold.watermark.map(|w| Json::Int(w as i64)),
+        );
+        let run_totals = fold.totals_map();
+        let run_rows = fold.total_rows();
+        runs_json.insert(
+            m.run_id.to_string(),
+            Json::obj([
+                ("subjects", Json::Obj(fold.subjects_json())),
+                ("total_spend_micro", micro_map_json(&run_totals)),
+                ("total_rows", Json::Int(run_rows)),
+                ("tool_commit_totals", fold.tool_totals_json()),
+                ("permission_wait_ms", Json::Int(fold.permission_wait_ms)),
+            ]),
+        );
+        // Each run's totals enter the tree sum exactly once.
+        for (ccy, micro) in &run_totals {
+            *totals.entry(ccy.clone()).or_insert(0) += micro;
+        }
+        total_rows += run_rows;
+        tool_rows += fold.tool_rows;
+        tw += fold.tool_wall_ms;
+        te += fold.tool_env_ms;
+        tc += fold.tool_cpu_ms;
+        tn += fold.tool_net_bytes;
+        permission_wait_ms += fold.permission_wait_ms;
+        // The child is recorded once under its parent's `subagent` scope —
+        // the spawn/close rows on the parent's own ledger supply the scope's
+        // link, budget slice, and delegation time (M12's full row, §3).
+        if let Some(p) = m.parent_run_id {
+            let mut row = vec![
+                ("total_spend_micro", micro_map_json(&run_totals)),
+                ("total_rows", Json::Int(run_rows)),
+            ];
+            let parent_events = events_by_id.get(p).copied().unwrap_or(&[]);
+            let spawned = parent_events.iter().find(|e| {
+                e.class == "control.subagent.spawned"
+                    && (e.payload.get("child_run_id").and_then(Json::as_str) == Some(m.run_id)
+                        || e.scope.child_run_id.as_deref() == Some(m.run_id))
+            });
+            let closed = parent_events.iter().find(|e| {
+                matches!(
+                    e.class.as_str(),
+                    "control.subagent.result" | "control.subagent.cancelled"
+                ) && (e.payload.get("child_run_id").and_then(Json::as_str) == Some(m.run_id)
+                    || e.scope.child_run_id.as_deref() == Some(m.run_id))
+            });
+            if let Some(sp) = spawned {
+                row.push(("spawn_event", Json::str(format!("{}:{}", p, sp.event_id))));
+                for field in ["delegation_ref", "budget_id", "reservation_id", "mode"] {
+                    if let Some(v) = sp.payload.get(field) {
+                        row.push((field, v.clone()));
+                    }
+                }
+            }
+            match closed {
+                Some(cl) => {
+                    row.push(("status", Json::str("closed")));
+                    row.push((
+                        "closed_by",
+                        Json::str(cl.class.rsplit('.').next().unwrap_or("closed")),
+                    ));
+                    row.push(("close_event", Json::str(format!("{}:{}", p, cl.event_id))));
+                    // The delegation time — spawned.ts → close.ts, `n/a` when
+                    // either stamp cannot be parsed (typed, never 0).
+                    let delegation_ms = spawned
+                        .and_then(|sp| clocks::ts_ms(&sp.ts))
+                        .zip(clocks::ts_ms(&cl.ts))
+                        .map(|(a, b)| b.saturating_sub(a));
+                    row.push((
+                        "delegation_ms",
+                        delegation_ms.map_or_else(
+                            || Json::obj([("na", Json::str("unparseable_ts"))]),
+                            Json::Int,
+                        ),
+                    ));
+                }
+                None => row.push(("status", Json::str("open"))),
+            }
+            subagents
+                .entry(p.to_string())
+                .or_default()
+                .insert(m.run_id.to_string(), Json::obj(row));
+        }
+    }
+
+    let payload = Json::obj([
+        ("kind", Json::str("cost_view")),
+        ("scope", Json::str("run_tree")),
+        ("run_id", Json::str(root_run_id)),
+        ("root_run_id", Json::str(root_run_id)),
+        ("runs", Json::Obj(runs_json)),
+        (
+            "subagents",
             Json::Obj(
-                totals
-                    .iter()
-                    .map(|(k, v)| (k.clone(), Json::Int(*v)))
+                subagents
+                    .into_iter()
+                    .map(|(p, cs)| (p, Json::Obj(cs)))
                     .collect(),
             ),
         ),
+        ("total_spend_micro", micro_map_json(&totals)),
         ("total_rows", Json::Int(total_rows)),
         (
             "tool_commit_totals",
@@ -684,8 +857,168 @@ pub fn cost_view(
             "contention_waits_ms",
             Json::obj([("na", Json::str(na_str(NaReason::Capability)))]),
         ),
+        (
+            "watermarks",
+            Json::Obj(
+                watermarks
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone().unwrap_or(Json::Null)))
+                    .collect(),
+            ),
+        ),
     ]);
-    View::stamped(run_id, ViewKind::CostView, watermark, payload)
+    Ok(View::stamped(
+        root_run_id,
+        ViewKind::CostView,
+        root_watermark,
+        payload,
+    ))
+}
+
+/// The per-run cost fold — the single accumulation `cost_view` and
+/// `cost_view_run_tree` share (CC1: one fold, one home).
+struct CostFold {
+    /// `budget_id → subject accumulator`.
+    subjects: BTreeMap<String, SubjectAcc>,
+    /// `action.tool.completed` rows folded.
+    tool_rows: i64,
+    /// Σ `commit_wall_ms`.
+    tool_wall_ms: i64,
+    /// Σ `commit_env_ms`.
+    tool_env_ms: i64,
+    /// Σ `commit_cpu_ms`.
+    tool_cpu_ms: i64,
+    /// Σ `commit_net_bytes`.
+    tool_net_bytes: i64,
+    /// Σ `approval_wait_ms` on `security.permission.decided`.
+    permission_wait_ms: i64,
+    /// The last seq folded.
+    watermark: Option<u64>,
+}
+
+/// Fold one run's durable prefix into the cost accumulators.
+fn cost_fold(events: &[EventEnvelope], until_seq: Option<u64>) -> CostFold {
+    let mut fold = CostFold {
+        subjects: BTreeMap::new(),
+        tool_rows: 0,
+        tool_wall_ms: 0,
+        tool_env_ms: 0,
+        tool_cpu_ms: 0,
+        tool_net_bytes: 0,
+        permission_wait_ms: 0,
+        watermark: None,
+    };
+    for env in events {
+        if let Some(u) = until_seq {
+            if env.seq > u {
+                break;
+            }
+        }
+        fold.watermark = Some(env.seq);
+        match env.class.as_str() {
+            "measurement.cost.attributed" => {
+                if let Some(row) = SpendRow::from_json(&env.payload) {
+                    let acc = fold
+                        .subjects
+                        .entry(row.attribution.budget_id.clone())
+                        .or_insert_with(|| SubjectAcc::new(&row.attribution.run_id));
+                    acc.rows += 1;
+                    *acc.spend.entry(row.money.currency.clone()).or_insert(0) +=
+                        row.money.micro_units;
+                    *acc.provenance_mix
+                        .entry(row.provenance_class.as_str())
+                        .or_insert(0) += 1;
+                    acc.confidence_min = acc.confidence_min.min(row.confidence.rank());
+                    acc.coverage_min_ppm = acc.coverage_min_ppm.min(row.coverage_ppm);
+                }
+            }
+            "action.tool.completed" => {
+                fold.tool_rows += 1;
+                let get = |k: &str| env.payload.get(k).and_then(Json::as_int).unwrap_or(0);
+                fold.tool_wall_ms += get("commit_wall_ms");
+                fold.tool_env_ms += get("commit_env_ms");
+                fold.tool_cpu_ms += get("commit_cpu_ms");
+                fold.tool_net_bytes += get("commit_net_bytes");
+            }
+            "security.permission.decided" => {
+                fold.permission_wait_ms += env
+                    .payload
+                    .get("approval_wait_ms")
+                    .and_then(Json::as_int)
+                    .unwrap_or(0);
+            }
+            _ => {}
+        }
+    }
+    fold
+}
+
+impl CostFold {
+    /// The per-subject JSON block (`budget_id → {run_id, spend, rows,
+    /// provenance_mix, confidence_min, coverage_min_ppm}`).
+    fn subjects_json(&self) -> BTreeMap<String, Json> {
+        let mut out = BTreeMap::new();
+        for (subject, acc) in &self.subjects {
+            out.insert(
+                subject.clone(),
+                Json::obj([
+                    ("run_id", Json::str(&acc.run_id)),
+                    (
+                        "spend",
+                        Json::Obj(
+                            acc.spend
+                                .iter()
+                                .map(|(k, v)| (k.clone(), Json::Int(*v)))
+                                .collect(),
+                        ),
+                    ),
+                    ("rows", Json::Int(acc.rows)),
+                    (
+                        "provenance_mix",
+                        Json::Obj(
+                            acc.provenance_mix
+                                .iter()
+                                .map(|(k, v)| (k.to_string(), Json::Int(*v)))
+                                .collect(),
+                        ),
+                    ),
+                    (
+                        "confidence_min",
+                        Json::str(confidence_label(acc.confidence_min)),
+                    ),
+                    ("coverage_min_ppm", Json::Int(acc.coverage_min_ppm)),
+                ]),
+            );
+        }
+        out
+    }
+
+    /// The per-currency totals map (`currency → Σ micro_units`).
+    fn totals_map(&self) -> BTreeMap<String, i64> {
+        let mut totals: BTreeMap<String, i64> = BTreeMap::new();
+        for acc in self.subjects.values() {
+            for (ccy, micro) in &acc.spend {
+                *totals.entry(ccy.clone()).or_insert(0) += micro;
+            }
+        }
+        totals
+    }
+
+    /// Σ spend rows across subjects.
+    fn total_rows(&self) -> i64 {
+        self.subjects.values().map(|a| a.rows).sum()
+    }
+
+    /// The `tool_commit_totals` block.
+    fn tool_totals_json(&self) -> Json {
+        Json::obj([
+            ("rows", Json::Int(self.tool_rows)),
+            ("wall_ms", Json::Int(self.tool_wall_ms)),
+            ("env_ms", Json::Int(self.tool_env_ms)),
+            ("cpu_ms", Json::Int(self.tool_cpu_ms)),
+            ("net_bytes", Json::Int(self.tool_net_bytes)),
+        ])
+    }
 }
 
 struct SubjectAcc {
