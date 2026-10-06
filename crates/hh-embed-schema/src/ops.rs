@@ -1041,6 +1041,43 @@ pub fn registry() -> Vec<OpSpec> {
             implemented: true,
             ..lab("env.resume", "M", "json", "json")
         },
+        // R2.4 (DF-S2.10-1; §5a.1–5a.2 S1–S5; ADR-0272 residual) — the
+        // environment lifecycle family: `open`/`attach`/`close` manage the
+        // session's env handle (`close{mode:"detach"}` is the survivable
+        // form); `diff`/`restore` are the snapshot consumers (successor
+        // restore is the default; `in_place` stays capability-gated);
+        // `upload`/`download` move content-addressed bytes through the
+        // store. Every op routes through declared driver capabilities —
+        // `Unsupported`/`UnknownCapability`/`InvalidState` surface
+        // verbatim, never fabricated.
+        OpSpec {
+            implemented: true,
+            ..lab("env.open", "M", "json", "json")
+        },
+        OpSpec {
+            implemented: true,
+            ..lab("env.attach", "M", "json", "json")
+        },
+        OpSpec {
+            implemented: true,
+            ..lab("env.close", "M", "json", "json")
+        },
+        OpSpec {
+            implemented: true,
+            ..lab("env.diff", "M", "json", "json")
+        },
+        OpSpec {
+            implemented: true,
+            ..lab("env.restore", "M", "json", "json")
+        },
+        OpSpec {
+            implemented: true,
+            ..lab("env.upload", "M", "json", "json")
+        },
+        OpSpec {
+            implemented: true,
+            ..lab("env.download", "M", "json", "json")
+        },
         // ── Group L — Lab/design-time (ADR-0183; records-in/records-out)
         // S3.5 (§6.1; R-2.10.1): the assembly service — `assemble`/`plan`/
         // `apply`/`validate_batch`/`explain`/`diff`/`drift`/`adopt`/`identity`

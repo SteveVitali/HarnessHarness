@@ -6260,14 +6260,15 @@ fn s4_13_env_suspend_resume_over_the_boundary() {
     let id = writer_session(&mut svc);
 
     // `local_host` never declared a suspend capability — `SuspendKind::
-    // Unknown` is the honest `Unsupported`, surfaced as
-    // `EnvironmentUnavailable` (never a silent no-op).
+    // Unknown` surfaces as the typed `UnknownCapability` (R2.4's `env_err`
+    // keeps the tri-state typed — `unknown` is never coerced to
+    // `unsupported`, never a silent no-op).
     let s = call(
         &mut svc,
         "env.suspend",
         Json::obj(vec![("session_id", Json::str(id.clone()))]),
     );
-    assert_eq!(err_kind(&s), "EnvironmentUnavailable", "{s:?}");
+    assert_eq!(err_kind(&s), "UnknownCapability", "{s:?}");
 
     // `resume` outside `suspended` is likewise a typed refusal, and an
     // unknown `cause` never reaches the driver (schema rejection).

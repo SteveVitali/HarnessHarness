@@ -2040,8 +2040,9 @@ impl EmbedService {
 
     /// Provision + attach the session's environment. Stage 1 serves
     /// `local_host` (`EnvironmentInput::connection_info{class, roots?}`);
-    /// anything else is a typed refusal.
-    fn provision_environment(
+    /// anything else is a typed refusal. `pub(crate)` — `env.open`
+    /// (R2.4) runs the same path for a second environment.
+    pub(crate) fn provision_environment(
         &mut self,
         run_id: &str,
         lease: &hh_ledger::store::Lease,
@@ -2074,6 +2075,23 @@ impl EmbedService {
                 })
             }
         };
+        // R2.4 (DF-S2.9-3) — `connection_info{snapshot_cadence}` is the
+        // binding's declared automatic-snapshot producer (§5a.1 MUST-data
+        // member): `never` (default) | `on_turn_end` | `on_idle` |
+        // `every_n_effects:N`. An unknown spelling is a SchemaViolation,
+        // never a guess; a declared cadence the class cannot serve (no
+        // `snapshot.<kind> = supported` in its capability declaration)
+        // refuses `snapshot_cadence_unsatisfiable` — a declaration that
+        // could never fire is a lie.
+        let snapshot_cadence = match info.get("snapshot_cadence").and_then(Json::as_str) {
+            None | Some("never") => None,
+            Some(s) => Some(hh_env::handle::SnapshotCadence::parse(s).ok_or_else(|| {
+                EmbedError::SchemaViolation {
+                    path: "environment.connection_info.snapshot_cadence".into(),
+                    code: format!("unknown_snapshot_cadence:{s}"),
+                }
+            })?),
+        };
         let driver = self
             .env_drivers
             .entry(run_id.to_string())
@@ -2088,6 +2106,28 @@ impl EmbedService {
                 on_loss,
             )
             .map_err(env_err)?;
+        if let Some(cadence) = snapshot_cadence {
+            // Honesty gate: refuse a declared cadence on a class whose
+            // capability declaration names no supported snapshot kind —
+            // before the attach rows land.
+            let any_kind = driver
+                .handle(&handle.env_handle_id)
+                .map(|h| {
+                    h.capabilities
+                        .snapshot
+                        .values()
+                        .any(|t| matches!(t, hh_env::handle::Tri::Supported))
+                })
+                .unwrap_or(false);
+            if !any_kind {
+                return Err(EmbedError::EnvironmentUnavailable {
+                    reason: "snapshot_cadence_unsatisfiable".to_string(),
+                });
+            }
+            driver
+                .set_cadence(&handle.env_handle_id, cadence)
+                .map_err(env_err)?;
+        }
         driver
             .attach(
                 &mut self.store,
@@ -2219,6 +2259,11 @@ impl EmbedService {
             store: &mut self.store,
             run_id: run_id.to_string(),
             lease: lease.clone(),
+            // Arm/resume paths carry no cadence tail — a cadence take
+            // fires on turn/idle/effect boundaries during `drive`, never
+            // on replay (DF-S2.9-3).
+            envs: None,
+            env_handle: None,
         };
         Driver::open(
             strategy_for(control_variant),
@@ -2350,6 +2395,11 @@ impl EmbedService {
             store: &mut self.store,
             run_id: run_id.to_string(),
             lease: lease.clone(),
+            // Arm/resume paths carry no cadence tail — a cadence take
+            // fires on turn/idle/effect boundaries during `drive`, never
+            // on replay (DF-S2.9-3).
+            envs: None,
+            env_handle: None,
         };
         let mut ceiling = arm.budget_ceiling.clone();
         let mut remaining = arm.remaining.clone();
@@ -2863,11 +2913,17 @@ fn environment_spec(
             reason: format!("environment class {class} is not served at Stage 2"),
         });
     }
-    let ws = workspace_root.to_string();
+    // Canonicalized once here — the driver's operand canonicalizer
+    // resolves the deepest existing ancestor's symlinks, so the declared
+    // roots must name resolved paths too (the macOS `/var` →
+    // `/private/var` leg; R-NOSIDE's root check is a string prefix on
+    // canonical forms).
+    let ws = hh_env::handle::canonicalize_path(workspace_root);
     let roots_json = match info.get("workspace_roots") {
         Some(Json::Arr(a)) => a
             .iter()
-            .filter_map(|v| v.as_str().map(String::from))
+            .filter_map(|v| v.as_str())
+            .map(hh_env::handle::canonicalize_path)
             .collect::<Vec<_>>(),
         _ => vec![ws.clone()],
     };
@@ -3055,6 +3111,16 @@ pub(crate) fn env_err(e: hh_env::errors::EnvError) -> EmbedError {
             EmbedError::EnvironmentUnavailable {
                 reason: format!("attestation_missing:{isolation_class}"),
             }
+        }
+        // R2.4 — the capability tri-state stays *typed* at the boundary
+        // (DF-S2.10-1): `unsupported` (declared, not backed) and
+        // `unknown` (never declared) are different answers — the surface
+        // must see which, never a flattened `environment_unavailable`.
+        hh_env::errors::EnvError::Unsupported { capability, detail } => EmbedError::Unsupported {
+            by: format!("{capability}: {detail}"),
+        },
+        hh_env::errors::EnvError::UnknownCapability { capability } => {
+            EmbedError::UnknownCapability { capability }
         }
         other => EmbedError::EnvironmentUnavailable {
             reason: format!("{other:?}"),
