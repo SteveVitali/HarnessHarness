@@ -146,9 +146,115 @@ pub struct AssemblyService<'a> {
     pub resolved_at: u64,
 }
 
-fn sdiag(
+/// The stage-6b (C-PROF-2) verdict translation (R-2.1.4¹ᵇ; CF-323): the
+/// compile pass-through's error becomes plan diagnostics —
+/// `UnexpressibleSurface` spells `C-PROF-2`; `LinkError`/`InvalidDefinition`
+/// carry their typed `C-*` diagnostics verbatim; `NoProfile` reads
+/// `C-LINK-2`, `PlanError` `C-PLAN-2`, and anything else is a `C-PLAN-1`
+/// plan refusal — every failure is observable, none silently absorbed.
+fn stage6b_diags(
+    e: hh_compiler::errors::CompileError,
+    kernel: &ProvenanceRecord,
+) -> Vec<AssemblyDiagnostic> {
+    use hh_compiler::errors::CompileError;
+    match e {
+        CompileError::UnexpressibleSurface {
+            entity,
+            profile,
+            reason,
+        } => vec![sdiag(
+            Code::ProfUnexpressible,
+            Stage::Validate(6),
+            "/assembly/profile_binding",
+            &entity,
+            &format!(
+                "profile `{profile}` cannot express the compiled surface: {reason}"
+            ),
+            "bind a profile whose rules express the surface, or author the construct into a registered surface family",
+            kernel,
+        )],
+        CompileError::PlanError { node, detail } => vec![sdiag(
+            Code::PlanUnsupportedConstruct,
+            Stage::Validate(6),
+            &node,
+            &node,
+            &detail,
+            "the construct has no RuntimePlan/1 lowering — author it into a supported form",
+            kernel,
+        )],
+        CompileError::NoProfile { detail } => vec![sdiag(
+            Code::LinkNoProfile,
+            Stage::Validate(6),
+            "/assembly/profile_binding",
+            "profile_binding",
+            &detail,
+            "bind a profile coordinate the registry resolves",
+            kernel,
+        )],
+        // The typed diagnostics the compiler already minted (C-LINK-*
+        // rows, or the stage-0 validation set) pass through verbatim —
+        // they carry their own stage and code. A link refusal that mints
+        // *no* rows (an unresolvable coordinate, an untested/invalid
+        // report, drift or expired-without-intent) still surfaces at
+        // plan — as a `warning`, not an error: 6b's named check is
+        // expressibility (C-PROF-2); the link gates own the refusal at
+        // compile (ADR-0312). Passing an empty set through verbatim would
+        // lose the verdict entirely (CC3).
+        CompileError::LinkError {
+            kind,
+            detail,
+            diagnostics,
+        } => {
+            if diagnostics.is_empty() {
+                vec![wdiag(
+                    link_code_for(kind),
+                    Stage::Validate(6),
+                    "/assembly/profile_binding",
+                    "profile_binding",
+                    &format!("{}: {detail}", kind.name()),
+                    "the plan-time compiled-surface check could not run for this binding — the link gate's refusal surfaces at compile",
+                    kernel,
+                )]
+            } else {
+                diagnostics
+            }
+        }
+        CompileError::InvalidDefinition { diagnostics } => {
+            if diagnostics.is_empty() {
+                vec![wdiag(
+                    Code::PlanRefusal,
+                    Stage::Validate(6),
+                    "/assembly",
+                    "assembly",
+                    "the sealed document failed the compiler's stage-0 revalidation without diagnostics",
+                    "the validation set runs inside the same plan — fix the named member",
+                    kernel,
+                )]
+            } else {
+                diagnostics
+            }
+        }
+        other => vec![sdiag(
+            Code::PlanRefusal,
+            Stage::Validate(6),
+            "/assembly/profile_binding",
+            "profile_binding",
+            &format!("plan-time compile refused: {other:?}"),
+            "the compile verdict is a plan fact — fix the named member",
+            kernel,
+        )],
+    }
+}
+
+/// The stage-6b diagnostic builder — `severity` is per-call: the named
+/// check (`C-PROF-2`) and the plan-construct failures are `error`; the
+/// link-gate verdicts 6b only *previews* (the compile owns their refusal)
+/// report at `warning` so nothing is silently lost (CC3).
+#[allow(clippy::too_many_arguments)]
+fn diag_at(
     code: Code,
     stage: Stage,
+    severity: Severity,
     path: &str,
     subject: &str,
     detail: &str,
@@ -158,7 +264,7 @@ fn sdiag(
     AssemblyDiagnostic {
         code,
         class: None,
-        severity: Severity::Error,
+        severity,
         path: path.to_string(),
         source_layer: None,
         subject: subject.to_string(),
@@ -166,6 +272,67 @@ fn sdiag(
         detail: detail_text(detail, kernel),
         remedy: remedy.to_string(),
         owner_adr: "ADR-0147".into(),
+    }
+}
+
+fn sdiag(
+    code: Code,
+    stage: Stage,
+    path: &str,
+    subject: &str,
+    detail: &str,
+    remedy: &str,
+    kernel: &ProvenanceRecord,
+) -> AssemblyDiagnostic {
+    diag_at(
+        code,
+        stage,
+        Severity::Error,
+        path,
+        subject,
+        detail,
+        remedy,
+        kernel,
+    )
+}
+
+fn wdiag(
+    code: Code,
+    stage: Stage,
+    path: &str,
+    subject: &str,
+    detail: &str,
+    remedy: &str,
+    kernel: &ProvenanceRecord,
+) -> AssemblyDiagnostic {
+    diag_at(
+        code,
+        stage,
+        Severity::Warning,
+        path,
+        subject,
+        detail,
+        remedy,
+        kernel,
+    )
+}
+
+/// The C-LINK code a `LinkErrorKind` maps to at plan time — the kinds
+/// without a C-LINK number (`profile_untested`, `profile_invalid`,
+/// `capability_drift`, `expired_without_intent`) report under `C-PLAN-1`
+/// with the typed kind spelled into the detail (the diagnostic stays
+/// typed-by-name; never a bare string).
+fn link_code_for(k: hh_compiler::errors::LinkErrorKind) -> Code {
+    use hh_compiler::errors::LinkErrorKind;
+    match k {
+        LinkErrorKind::UnboundSlot => Code::LinkUnboundSlot,
+        LinkErrorKind::VersionConflict => Code::LinkVersionConflict,
+        LinkErrorKind::MissingDebtRecord => Code::LinkMissingDebtRecord,
+        LinkErrorKind::UnknownTarget => Code::LinkUnknownTarget,
+        LinkErrorKind::ProfileUntested
+        | LinkErrorKind::ProfileInvalid
+        | LinkErrorKind::CapabilityDrift
+        | LinkErrorKind::ExpiredWithoutIntent => Code::PlanRefusal,
     }
 }
 
@@ -313,6 +480,43 @@ impl<'a> AssemblyService<'a> {
         }
         report.diagnostics.extend(notices.iter().cloned());
         report.diagnostics.extend(diags.iter().cloned());
+
+        // ── Stage 6b — `C-PROF-2` (R-2.1.4¹ᵇ; ADR-0025 as amended, CF-323):
+        // the compiled-surface check at plan time. `plan` (and the other
+        // Plan-mode callers — `explain`, `validate_batch` source points)
+        // runs the compiler's own `accept → link → …` pass-through over the
+        // resolved subject under the bound profile coordinates; the verdict
+        // lands as plan diagnostics — `UnexpressibleSurface` is `C-PROF-2`,
+        // an **error**, never a warning. Skipped when the report already
+        // fails (the compile's stage-0 accept re-runs this same validation),
+        // when no profile is bound (6a's empty set — nothing to check), or
+        // when the subject never resolved.
+        if mode == AssembleMode::Plan && report.status != ReportStatus::Fail {
+            if let Some(s) = &sealed {
+                let mut scratch = Vec::new();
+                let asm = s.document.assembly.as_ref().map(|j| {
+                    hh_assembly::grammar::Assembly::from_json(j, "/assembly", &kernel, &mut scratch)
+                });
+                let coords = hh_assembly::validate::bound_profile_coordinates(
+                    &s.document,
+                    asm.as_ref().and_then(|o| o.as_ref()),
+                );
+                if !coords.is_empty() {
+                    let inputs = hh_compiler::compiler::CompileInputs {
+                        sealed: s.clone(),
+                        profile_refs: coords,
+                        fallback_profile: None,
+                        targets: Vec::new(),
+                        compile_for_expired: false,
+                        intent_ref: None,
+                    };
+                    let profiles = crate::assembly::profiles::RegistryProfiles(&*self.registry);
+                    if let Err(e) = self.compile(&inputs, &profiles) {
+                        report.diagnostics.extend(stage6b_diags(e, &kernel));
+                    }
+                }
+            }
+        }
         report.finalize();
 
         let status = if report.status == ReportStatus::Fail {

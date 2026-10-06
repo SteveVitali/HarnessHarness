@@ -1067,6 +1067,7 @@ fn scripted_gateway(t: ScriptedTransport) -> ModelGateway<'static> {
         transport,
         now_ms: Box::new(|| 1_000u64),
         normalizer_ref: "norm:test".into(),
+        pending_relower: std::collections::BTreeSet::new(),
     };
     g.load_dialect(dialect_a());
     g.load_dialect(dialect_b());

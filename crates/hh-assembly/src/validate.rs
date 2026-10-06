@@ -1,7 +1,10 @@
 //! `validate_assembly` (§3.3.4/§3.3.8): the seven-stage validation that **runs and
 //! reports every stage** — never fail-fast. Stages 1–5, 6a and 7 run (§3.3.13);
-//! 6b is `n/a{not_run}` (C1/Stage 5 — `C-PROF-2` is the compiled-surface check
-//! the plan stage propagates). A hosted root flips stages 2, 6 and the
+//! 6b (`C-PROF-2`, the compiled-surface check) runs at plan time — the assembly
+//! service's `plan` invokes the compiler pass-through and propagates
+//! `UnexpressibleSurface` as a `C-PROF-2` diagnostic (R-2.1.4¹ᵇ; S5.1;
+//! [`bound_profile_coordinates`] names the coordinate set). A hosted root flips
+//! stages 2, 6 and the
 //! 7-opacity sub-check to `n/a{class}` (AC-CC-12; T-LCD-15).
 //!
 //! Stages: (1) schema — the member-wise grammar decode + `layers`/`source` consistency;
@@ -935,18 +938,12 @@ fn declaration_requires(decl: &Json) -> bool {
 /// must be supported by the profile's `capabilities` declaration, and the
 /// variant's `dialect_range` must admit the document dialect. Declaration-level
 /// only — no compilation (6b owns the compiled-surface check at C1/Stage 5).
-fn stage6a_profile_compat(
-    doc: &HirDocument,
-    assembly: Option<&Assembly>,
-    slots: &BTreeMap<String, SlotBindings>,
-    catalog: &dyn ClassCatalog,
-    profiles: Option<&dyn ProfileView>,
-    diags: &mut Vec<AssemblyDiagnostic>,
-    kernel: &ProvenanceRecord,
-) {
-    // The named profiles — `assembly.profile_binding` pinned refs ∪ the root's
-    // pinned `native.profile` (a `ProfileConstraint` is opaque here; §5b owns
-    // its semantics at C1/Stage 5).
+/// The stage-6 coordinate set — `assembly.profile_binding`'s pinned ref ∪
+/// the root's pinned `native.profile` (a `ProfileConstraint` is opaque here;
+/// §5b owns its semantics). Stage 6a sweeps declarations against it; the
+/// plan-time stage 6b (C-PROF-2) binds the same coordinates — one
+/// definition, CC7.
+pub fn bound_profile_coordinates(doc: &HirDocument, assembly: Option<&Assembly>) -> Vec<String> {
     let mut named: Vec<String> = Vec::new();
     if let Some(a) = assembly {
         if let ProfileBinding::Pinned(r) = &a.profile_binding {
@@ -967,6 +964,22 @@ fn stage6a_profile_compat(
             }
         }
     }
+    named
+}
+
+fn stage6a_profile_compat(
+    doc: &HirDocument,
+    assembly: Option<&Assembly>,
+    slots: &BTreeMap<String, SlotBindings>,
+    catalog: &dyn ClassCatalog,
+    profiles: Option<&dyn ProfileView>,
+    diags: &mut Vec<AssemblyDiagnostic>,
+    kernel: &ProvenanceRecord,
+) {
+    // The named profiles — `assembly.profile_binding` pinned refs ∪ the root's
+    // pinned `native.profile` (a `ProfileConstraint` is opaque here; §5b owns
+    // its semantics at C1/Stage 5).
+    let named = bound_profile_coordinates(doc, assembly);
     if named.is_empty() {
         return; // unbound profile — no declarations to check against
     }

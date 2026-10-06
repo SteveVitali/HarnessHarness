@@ -37,7 +37,7 @@ fn link_of(sealed: &SealedDefinition, store: &dyn VariantView) -> LinkedGraph {
         &profiles,
         store,
         &kernel(),
-        false,
+        None,
     )
     .expect("link")
 }
@@ -142,7 +142,7 @@ fn link_refuses_a_surviving_selector() {
         &profiles,
         &NoVariants,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::LinkError {
             kind, diagnostics, ..
@@ -205,7 +205,7 @@ fn link_no_profile_is_a_typed_refusal() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::NoProfile { detail }) => {
             assert!(detail.contains("ADR-0124"), "{detail}");
@@ -233,7 +233,7 @@ fn link_fallback_requires_a_dated_hypothesis() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::NoProfile { detail }) => {
             assert!(detail.contains("dated debt hypothesis"), "{detail}");
@@ -252,7 +252,7 @@ fn link_fallback_requires_a_dated_hypothesis() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     )
     .expect("dated fallback binds");
     assert!(linked.profile.is_fallback);
@@ -277,7 +277,7 @@ fn link_unknown_target_is_typed() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::LinkError {
             kind, diagnostics, ..
@@ -301,7 +301,7 @@ fn link_version_conflict_on_a_missing_variant() {
         &MapProfileView::of(vec![test_profile()]),
         &NoVariants,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::LinkError { kind, .. }) => {
             assert_eq!(kind, LinkErrorKind::VersionConflict);
@@ -325,7 +325,7 @@ fn link_version_conflict_on_a_profile_mismatch() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::LinkError { kind, .. }) => {
             assert_eq!(kind, LinkErrorKind::VersionConflict);
@@ -346,7 +346,7 @@ fn link_unresolvable_profile_coordinate_is_version_conflict() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::LinkError { kind, .. }) => {
             assert_eq!(kind, LinkErrorKind::VersionConflict);
@@ -394,7 +394,7 @@ fn link_missing_debt_record_on_a_conditioned_rule() {
         &MapProfileView::of(vec![test_profile()]),
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::LinkError {
             kind, diagnostics, ..
@@ -427,7 +427,7 @@ fn link_missing_debt_record_on_a_profile_rule() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::LinkError { kind, .. }) => {
             assert_eq!(kind, LinkErrorKind::MissingDebtRecord);
@@ -449,7 +449,8 @@ fn link_expired_rule_warns_only_under_recorded_intent() {
     let p = profile_with("sha256:profile", "1.0", vec![r]);
     let profiles = MapProfileView::of(vec![p.clone()]);
     let coord = profile_coordinate(&p);
-    // Without the recorded intent → error (C-LINK-6 surfaced as a refusal).
+    // Without the recorded intent → `LinkError{expired_without_intent}`
+    // (C-LINK-6 surfaced as a refusal; §5b.3 — `intent_ref` is the record).
     match link(
         &sealed,
         std::slice::from_ref(&coord),
@@ -458,12 +459,12 @@ fn link_expired_rule_warns_only_under_recorded_intent() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::LinkError {
             kind, diagnostics, ..
         }) => {
-            assert_eq!(kind, LinkErrorKind::MissingDebtRecord);
+            assert_eq!(kind, LinkErrorKind::ExpiredWithoutIntent);
             assert!(diagnostics.iter().any(|d| d.code.code() == "C-LINK-6"));
         }
         other => panic!("expected expired-rule refusal, got {other:?}"),
@@ -477,7 +478,7 @@ fn link_expired_rule_warns_only_under_recorded_intent() {
         &profiles,
         &store,
         &kernel(),
-        true,
+        Some("design/expired-intent"),
     )
     .expect("recorded intent admits expired rules");
     assert!(linked
@@ -509,7 +510,7 @@ fn link_capability_requires_needs_a_depends_on_edge() {
         &MapProfileView::of(vec![test_profile()]),
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::LinkError { diagnostics, .. }) => {
             assert!(
@@ -566,7 +567,7 @@ fn link_refuses_a_non_native_fc_interaction_mode() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::UnexpressibleSurface { reason, .. }) => {
             assert!(reason.contains("native_fc"), "{reason}");
@@ -601,7 +602,7 @@ fn link_refuses_a_tool_shape_family_outside_the_c0_set() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::UnexpressibleSurface { entity, reason, .. }) => {
             assert_eq!(entity, "edit_file");
@@ -631,7 +632,7 @@ fn link_refuses_undeclared_dialect_narrowing() {
         &MapProfileView::of(vec![test_profile()]),
         &store,
         &kernel(),
-        false,
+        None,
     ) {
         Err(CompileError::DialectNarrowingUndeclared { detail }) => {
             assert!(detail.contains("token-optimized-notation"), "{detail}");
@@ -666,7 +667,7 @@ fn link_admits_a_dialect_narrowing_the_profile_declares() {
         &profiles,
         &store,
         &kernel(),
-        false,
+        None,
     )
     .expect("a declared narrowing binds");
 }
@@ -1424,6 +1425,7 @@ fn plan_refuses_a_non_tool_surface_on_a_capability_as_uncheckable() {
         fallback_profile: None,
         targets: vec![mcp_target()],
         compile_for_expired: false,
+        intent_ref: None,
     };
     match hh_compiler::compile(&inputs, &profiles, &store, &cat, &kernel()) {
         Err(CompileError::UncheckableSurface { surface, .. }) => {

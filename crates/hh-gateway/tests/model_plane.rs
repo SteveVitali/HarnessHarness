@@ -296,6 +296,7 @@ fn routing_request() -> RoutingRequest {
         preferences: None,
         source_profile_ref: None,
         in_flight_effect: false,
+        task_class: None,
     }
 }
 
@@ -393,6 +394,7 @@ fn gateway(endpoints: &[&str]) -> (ModelGateway<'static>, NoTransport) {
         transport,
         now_ms: Box::new(|| 0),
         normalizer_ref: "norm:test".into(),
+        pending_relower: std::collections::BTreeSet::new(),
     };
     g.load_dialect(dialect());
     // The transport handle is borrowed; return a clone marker for assertions.
@@ -1890,7 +1892,50 @@ fn views<'a>(
         pricing: Some(pricing),
         quality: Some(quality),
         migration: Some(migration),
+        bandit: None,
     }
+}
+
+/// A `views` bundle carrying a `BanditView`.
+fn views_bandit<'a>(bandit: &'a dyn BanditView) -> RoutingViews<'a> {
+    RoutingViews {
+        bandit: Some(bandit),
+        ..RoutingViews::none()
+    }
+}
+
+/// The projected reward store — `(task_class, model_ref_spelling) → cell`.
+struct Cells {
+    cells: BTreeMap<(String, String), BanditCell>,
+}
+
+impl BanditView for Cells {
+    fn cell(&self, task_class: &str, model_ref: &str) -> Option<BanditCell> {
+        self.cells
+            .get(&(task_class.to_string(), model_ref.to_string()))
+            .copied()
+    }
+    fn total_n(&self, task_class: &str) -> u64 {
+        self.cells
+            .iter()
+            .filter(|((t, _), _)| t == task_class)
+            .map(|(_, c)| c.n)
+            .sum()
+    }
+}
+
+/// A `bandit` policy with its estimator's conditioned rule + debt record
+/// (ADR-0312 d.1; ADR-0189: every non-`static` estimator is a conditioned
+/// rule).
+fn bandit_policy(params: Json) -> RoutingPolicy {
+    let mut p = routing_policy(RoutingPolicyKind::Bandit);
+    p.params = params;
+    p.conditioned_rules = vec![PolicyConditionedRule {
+        rule_id: "r.bandit.estimator".into(),
+        conditioned_key: Some("family:mod".into()),
+        debt: Some(debt(DebtStatus::Active)),
+    }];
+    p
 }
 
 /// AC-R-2.3.2 (C1) — `fallback_chain` selects `params.targets[]` in order and
@@ -3031,4 +3076,480 @@ fn version_stamps_attribute_ir1_reasons() {
     }];
     let view = project_cache_view(&as_refs(&rows));
     assert_eq!(view.invalidations, vec![MissReason::ProfileVersion]);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// S5.1 / AC-R-2.3.3-9 — a `compatibility_token` change marks the profile
+// `pending_relower` and the *next* call refuses `ReLowerRequired` until
+// `mark_relowered` clears the gate (re-lowering happens before the next
+// call, never lazily after a served call).
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct DiscoverTransport {
+    descriptor: Json,
+}
+impl Transport for DiscoverTransport {
+    fn send(
+        &mut self,
+        _b: &[u8],
+        _c: &CredentialHandle,
+        _e: &str,
+    ) -> Result<Vec<(u64, WireFrame)>, ModelError> {
+        Err(ModelError::new(
+            ModelErrorClass::UnsupportedFeature,
+            "no send",
+        ))
+    }
+    fn discover(&mut self, _endpoint_ref: &str) -> Result<Json, ModelError> {
+        Ok(self.descriptor.clone())
+    }
+}
+
+#[test]
+fn compatibility_token_change_gates_dispatch_until_relowered() {
+    let pinned = Json::obj([("value", Json::str("tok-v1"))]);
+    let descriptor_same = Json::obj([(
+        "capabilities",
+        Json::obj([("compatibility_token", pinned.clone())]),
+    )]);
+    let descriptor_drifted = Json::obj([(
+        "capabilities",
+        Json::obj([(
+            "compatibility_token",
+            Json::obj([("value", Json::str("tok-v2"))]),
+        )]),
+    )]);
+
+    let creds: &'static mut StubCreds = Box::leak(Box::new(StubCreds));
+    let transport: &'static mut DiscoverTransport = Box::leak(Box::new(DiscoverTransport {
+        descriptor: descriptor_same,
+    }));
+    let mut allow = EndpointAllowlist::default();
+    allow.endpoints.insert("ep-a".to_string());
+    let mut g = ModelGateway {
+        dialects: Default::default(),
+        endpoints: allow,
+        credentials: creds,
+        transport,
+        now_ms: Box::new(|| 0),
+        normalizer_ref: "norm:test".into(),
+        pending_relower: std::collections::BTreeSet::new(),
+    };
+    g.load_dialect(dialect());
+
+    // Unchanged token → no claim, nothing pending.
+    let claim = g
+        .check_compatibility_token("ep-a", Some(&pinned), "prof.test@1", "m-1")
+        .expect("discover runs");
+    assert!(claim.is_none());
+    assert!(g.pending_relower.is_empty());
+
+    // Changed token → the `compatibility_token_changed` claim mints and the
+    // profile is gated.
+    let transport2: &'static mut DiscoverTransport = Box::leak(Box::new(DiscoverTransport {
+        descriptor: descriptor_drifted,
+    }));
+    let creds2: &'static mut StubCreds = Box::leak(Box::new(StubCreds));
+    let mut allow2 = EndpointAllowlist::default();
+    allow2.endpoints.insert("ep-a".to_string());
+    let mut g = ModelGateway {
+        dialects: Default::default(),
+        endpoints: allow2,
+        credentials: creds2,
+        transport: transport2,
+        now_ms: Box::new(|| 0),
+        normalizer_ref: "norm:test".into(),
+        pending_relower: std::collections::BTreeSet::new(),
+    };
+    g.load_dialect(dialect());
+    let claim = g
+        .check_compatibility_token("ep-a", Some(&pinned), "prof.test@1", "m-1")
+        .expect("discover runs")
+        .expect("a changed token claims");
+    assert_eq!(
+        claim.claim_kind,
+        hh_gateway::snapshot::SnapshotClaimKind::CompatibilityTokenChanged
+    );
+    assert!(g.pending_relower.contains("prof.test@1"));
+
+    // The next call under the profile refuses pre-dispatch — no
+    // `model.call.requested` mints.
+    let mut sink = CollectSink::default();
+    match g.open_call(request_fixture("ep-a", Some("res-1")), &mut sink) {
+        Err(GatewayError::ReLowerRequired { profile_ref }) => {
+            assert_eq!(profile_ref, "prof.test@1");
+        }
+        other => panic!("expected ReLowerRequired, got {other:?}"),
+    }
+    assert!(sink.events.is_empty(), "no ledger rows on a gated call");
+
+    // `mark_relowered` (the caller ran `relower` + minted
+    // `model.surface.relowered{reason: compatibility_token_changed}`)
+    // re-opens the call path.
+    g.mark_relowered("prof.test@1");
+    let handle = g
+        .open_call(request_fixture("ep-a", Some("res-1")), &mut sink)
+        .expect("relowered profile admits");
+    assert_eq!(handle.call_id, "mc-1");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// S5.1 — the `bandit` routing-policy family (§5b.2; ADR-0312 d.1):
+// ledger-projected reward cells keyed (task_class, model_ref), min_n/unknown
+// cold-start, the λ·cost fold, deterministic selection, estimator debt.
+// Every test fails if the behaviour it names is removed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+fn cell(n: u64, success_ppm: i64, cost_millis: i64) -> BanditCell {
+    BanditCell {
+        n,
+        success_ppm,
+        cost_millis,
+    }
+}
+
+/// AC-R-2.3.2-1 (ADR-0312 d.1) — `bandit` ranks admissible candidates by the
+/// projected reward cell, not binding order: m-2's higher success_ppm wins
+/// even though it is the alternate.
+#[test]
+fn bandit_ranks_by_projected_reward() {
+    let env = two_candidate_env();
+    let policy = bandit_policy(Json::obj([("min_n", Json::Int(1))]));
+    let view = Cells {
+        cells: BTreeMap::from([
+            (
+                (
+                    "untagged".to_string(),
+                    "prof.test@1/m-1@route-a".to_string(),
+                ),
+                cell(10, 400_000, 100),
+            ),
+            (
+                ("untagged".to_string(), "prof.b@1/m-2@route-b".to_string()),
+                cell(10, 800_000, 100),
+            ),
+        ]),
+    };
+    let d = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &views_bandit(&view),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    )
+    .expect("m-2 outranks on reward");
+    assert_eq!(d.selected.provider_model_id, "m-2");
+    assert_eq!(d.selected.profile_ref, "prof.b@1");
+    // The loser verdicts `lower_score` with its score recorded (R-3).
+    assert_eq!(
+        d.candidates_considered[0].verdict,
+        CandidateVerdict::Rejected(CandidateRejectReason::LowerScore)
+    );
+    assert!(d.inputs_read.iter().any(|i| i == "bandit_view"));
+}
+
+/// A cell below `min_n` is `unknown` — it scores the declared
+/// `cold_start_ppm` prior, never an interpolated value (ADR-0012).
+#[test]
+fn bandit_min_n_unknown_reads_cold_start() {
+    let env = two_candidate_env();
+    // cold_start below the observed cell → observed wins.
+    let policy = bandit_policy(Json::obj([
+        ("min_n", Json::Int(5)),
+        ("cold_start_ppm", Json::Int(300_000)),
+    ]));
+    let view = Cells {
+        cells: BTreeMap::from([(
+            (
+                "untagged".to_string(),
+                "prof.test@1/m-1@route-a".to_string(),
+            ),
+            cell(10, 400_000, 100),
+        )]),
+    };
+    let d = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &views_bandit(&view),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    )
+    .expect("observed cell beats cold-start");
+    assert_eq!(d.selected.provider_model_id, "m-1");
+
+    // An informative cold-start prior above the observed cell lifts the
+    // unobserved candidate (ADR-0189 D6: cold-start priors are declared
+    // data, not invented).
+    let policy = bandit_policy(Json::obj([
+        ("min_n", Json::Int(5)),
+        ("cold_start_ppm", Json::Int(900_000)),
+    ]));
+    let d = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &views_bandit(&view),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    )
+    .expect("cold-start prior lifts unknown cell");
+    assert_eq!(d.selected.provider_model_id, "m-2");
+}
+
+/// Cells key on `task_class` — reward observed under another class is never
+/// pooled into this lookup (ADR-0189 D8; ADR-0012 no-interpolation).
+#[test]
+fn bandit_task_class_never_pools() {
+    let env = two_candidate_env();
+    let policy = bandit_policy(Json::obj([("min_n", Json::Int(1))]));
+    let view = Cells {
+        // m-2's reward lives under a different task_class.
+        cells: BTreeMap::from([
+            (
+                ("other".to_string(), "prof.b@1/m-2@route-b".to_string()),
+                cell(50, 950_000, 10),
+            ),
+            (
+                ("t1".to_string(), "prof.test@1/m-1@route-a".to_string()),
+                cell(10, 400_000, 100),
+            ),
+        ]),
+    };
+    let mut req = routing_request();
+    req.task_class = Some("t1".into());
+    let d = select_with(
+        &req,
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &views_bandit(&view),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    )
+    .expect("t1 reads only its own cells");
+    assert_eq!(d.selected.provider_model_id, "m-1");
+}
+
+/// The λ·cost fold — `reward = success_ppm − λ_ppm·cost_millis/1000`: a
+/// pricier high-success target loses to the cheaper cell when λ is steep.
+#[test]
+fn bandit_lambda_docks_cost() {
+    let env = two_candidate_env();
+    let policy = bandit_policy(Json::obj([
+        ("min_n", Json::Int(1)),
+        ("lambda_ppm", Json::Int(100_000)),
+    ]));
+    let view = Cells {
+        cells: BTreeMap::from([
+            (
+                (
+                    "untagged".to_string(),
+                    "prof.test@1/m-1@route-a".to_string(),
+                ),
+                // 850_000 − 100_000·10/1000 = 849_000
+                cell(10, 850_000, 10),
+            ),
+            (
+                ("untagged".to_string(), "prof.b@1/m-2@route-b".to_string()),
+                // 900_000 − 100_000·5000/1000 = 400_000
+                cell(10, 900_000, 5_000),
+            ),
+        ]),
+    };
+    let d = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &views_bandit(&view),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    )
+    .expect("λ docks the pricey target");
+    assert_eq!(d.selected.provider_model_id, "m-1");
+}
+
+/// Equal inputs select identically — the bandit fold is integer
+/// arithmetic over projected ledger data; nothing samples.
+#[test]
+fn bandit_selection_is_deterministic() {
+    let env = two_candidate_env();
+    let policy = bandit_policy(Json::obj([
+        ("min_n", Json::Int(1)),
+        ("explore_ppm", Json::Int(50_000)),
+    ]));
+    let view = Cells {
+        cells: BTreeMap::from([
+            (
+                (
+                    "untagged".to_string(),
+                    "prof.test@1/m-1@route-a".to_string(),
+                ),
+                cell(4, 700_000, 0),
+            ),
+            (
+                ("untagged".to_string(), "prof.b@1/m-2@route-b".to_string()),
+                cell(9, 700_000, 0),
+            ),
+        ]),
+    };
+    let pick = |decision_id: &str| {
+        select_with(
+            &routing_request(),
+            &env,
+            &mut FakeBudget(Ok("r".into())),
+            &NoHealth,
+            &views_bandit(&view),
+            &policy,
+            &two_candidate_table(),
+            decision_id,
+            0,
+            &BTreeSet::new(),
+        )
+        .expect("selects")
+    };
+    let a = pick("d1");
+    let b = pick("d2");
+    assert_eq!(a.selected, b.selected);
+    // UCB bonus favours the less-observed cell: m-1 (n=4) over m-2 (n=9)
+    // at equal success_ppm — √9/4 = 1.5 ⇒ +75_000 vs +50_000.
+    assert_eq!(a.selected.provider_model_id, "m-1");
+}
+
+/// The `bandit` estimator is a conditioned rule (ADR-0189) — `link`
+/// refuses a bandit policy carrying no complete `AssumptionDebtRecord`.
+#[test]
+fn bandit_requires_estimator_debt_record() {
+    let env = two_candidate_env();
+    let bare = routing_policy(RoutingPolicyKind::Bandit);
+    let r = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &RoutingViews::none(),
+        &bare,
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    );
+    match r {
+        Err(RoutingRefusal::PolicyInvalid { reason, .. }) => {
+            assert!(reason.contains("missing_debt_record"), "got {reason}");
+        }
+        other => panic!("expected PolicyInvalid, got {other:?}"),
+    }
+}
+
+/// No reward view ⇒ every cell `unknown` ⇒ all candidates read the
+/// cold-start prior and binding order (primary first) selects — a
+/// deterministic degrade, never a silent invention.
+#[test]
+fn bandit_without_view_reads_cold_start() {
+    let env = two_candidate_env();
+    let policy = bandit_policy(Json::obj([("min_n", Json::Int(1))]));
+    let d = select_with(
+        &routing_request(),
+        &env,
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &RoutingViews::none(),
+        &policy,
+        &two_candidate_table(),
+        "d",
+        0,
+        &BTreeSet::new(),
+    )
+    .expect("all-unknown selects by binding order");
+    assert_eq!(d.selected.provider_model_id, "m-1");
+}
+
+// ── AC-R-2.3.3-11 — `ModelRoleTable` codec / semantic_id / projection ────
+
+/// The table codec round-trips through the canonical JSON — every role
+/// binding survives (`from_json` gates the closed `ModelRole` set: a
+/// non-ratified role name never decodes).
+#[test]
+fn model_role_table_codec_round_trip() {
+    let t = two_candidate_table();
+    let j = t.to_json();
+    let back = ModelRoleTable::from_json(&j).expect("round-trips");
+    assert_eq!(back.semantic_id(), t.semantic_id());
+    // A role outside the closed set refuses — never coerced (CF-468).
+    let mut bad = j.clone();
+    if let Json::Obj(m) = &mut bad {
+        if let Some(Json::Obj(roles)) = m.get_mut("roles") {
+            roles.insert(
+                "summarizer".to_string(),
+                roles.values().next().cloned().unwrap_or(Json::Null),
+            );
+        }
+    }
+    assert!(
+        ModelRoleTable::from_json(&bad).is_none(),
+        "the pre-ratification `summarizer` spelling never decodes"
+    );
+    // Missing/non-object `roles` refuses.
+    assert!(ModelRoleTable::from_json(&Json::obj([])).is_none());
+}
+
+/// `semantic_id` is the idp/1 address of the canonical record: identical
+/// tables agree, differing tables diverge (the AC's determinism leg —
+/// `configuration_id.model_ref` names this id, CF-313).
+#[test]
+fn model_role_table_semantic_id_deterministic() {
+    let a = role_table();
+    let b = role_table();
+    assert_eq!(a.semantic_id(), b.semantic_id());
+    let mut c = role_table();
+    c.roles.get_mut("primary").unwrap().profile_ref = "sha256:other".to_string();
+    assert_ne!(a.semantic_id(), c.semantic_id());
+    // An added role diverges the id.
+    let mut d = role_table();
+    d.roles.insert(
+        "compaction".to_string(),
+        RoleBinding {
+            primary: candidate_b(),
+            alternates: vec![],
+            policy_ref: "p".to_string(),
+            profile_ref: "sha256:compact".to_string(),
+        },
+    );
+    assert_ne!(a.semantic_id(), d.semantic_id());
+}
+
+/// The `profile_binding` projection is `map<ModelRole, ProfileRef>` —
+/// `{role → {profile_ref, pinned: true}}`; the manifest's member carries
+/// exactly this shape (CF-313).
+#[test]
+fn model_role_table_profile_binding_projection() {
+    let t = role_table();
+    let pb = t.profile_binding();
+    let primary = pb.get("primary").expect("primary projects");
+    assert_eq!(
+        primary.get("profile_ref").and_then(Json::as_str),
+        Some(t.roles["primary"].profile_ref.as_str())
+    );
+    assert_eq!(primary.get("pinned"), Some(&Json::Bool(true)));
 }

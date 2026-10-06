@@ -33,6 +33,12 @@ pub struct CompileInputs {
     pub targets: Vec<TargetSpec>,
     /// The recorded intent to compile under expired conditioned rules.
     pub compile_for_expired: bool,
+    /// `intent_ref` — the Design/operator record the expired compile rides
+    /// (§5b.3: `expired` requires `intent_ref` in the bundle inputs, else
+    /// `LinkError{expired_without_intent}`). Counted only when
+    /// `compile_for_expired` is also set — the flag is the switch, the ref is
+    /// the record.
+    pub intent_ref: Option<String>,
 }
 
 /// Stage 0's outcome — the `ValidationReport` `validate_assembly` produced (carried into
@@ -152,7 +158,11 @@ pub fn compile(
         profiles,
         variants,
         kernel,
-        inputs.compile_for_expired,
+        if inputs.compile_for_expired {
+            inputs.intent_ref.as_deref()
+        } else {
+            None
+        },
     )?;
     let plan: RuntimePlan = lower_native(&linked)?;
     // Stage 3 — `lower_profile`.

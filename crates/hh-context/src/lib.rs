@@ -53,6 +53,7 @@ pub mod consolidate;
 pub mod events;
 pub mod k4;
 pub mod k5;
+pub mod k6;
 pub mod lifecycle;
 pub mod memory;
 pub mod memory_abi;
@@ -81,6 +82,10 @@ pub use k5::{
     admit as admit_k5, definition_dep_ref, k5_dependencies, profile_dep_ref, snapshot_dep_ref,
     K5Cache, K5Context, K5Entry, K5Key, K5Resolution, PreRegistrationInvalid, K5_CACHE_KIND,
     K5_KEY_IDP, K5_SCHEMA_REF,
+};
+pub use k6::{
+    cosine_similarity_ppm, k6_dependencies, K6Cache, K6Entry, K6Refusal, K6Request, K6Resolution,
+    K6Scope, K6Verdict, K6Verifier, K6Write, K6_CACHE_KIND, K6_KEY_IDP, K6_SCHEMA_REF, PPM,
 };
 pub use lifecycle::{
     check_contract, check_revoke_authority, check_supersede_authority, dependants, filter_for_slot,

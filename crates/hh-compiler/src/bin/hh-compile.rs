@@ -88,6 +88,9 @@ fn error_json(e: &CompileError) -> Json {
                 hh_compiler::LinkErrorKind::ProfileUntested => "LinkError{profile_untested}",
                 hh_compiler::LinkErrorKind::ProfileInvalid => "LinkError{profile_invalid}",
                 hh_compiler::LinkErrorKind::CapabilityDrift => "LinkError{capability_drift}",
+                hh_compiler::LinkErrorKind::ExpiredWithoutIntent => {
+                    "LinkError{expired_without_intent}"
+                }
             },
             detail.clone(),
             diagnostics.clone(),
@@ -194,6 +197,7 @@ fn run() -> Result<Json, CompileError> {
             fallback_profile: inputs.fallback_profile,
             targets: inputs.targets,
             compile_for_expired: inputs.compile_for_expired,
+            intent_ref: inputs.intent_ref,
         },
         &profiles,
         &variants,

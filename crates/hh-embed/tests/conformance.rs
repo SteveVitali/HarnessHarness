@@ -6067,3 +6067,382 @@ fn s4_13_env_suspend_resume_over_the_boundary() {
     );
     assert_eq!(err_kind(&bad_cause), "SchemaViolation", "{bad_cause:?}");
 }
+
+// ── AC-R-2.3.3-11 — the realized `ModelRoleTable` (S5.1; CF-313) ─────────
+// `open_session`'s `profile_binding` member + the definition's pinned
+// `native.profile` realize the run's role table: the manifest records the
+// table's profile projection (`profile_binding{roles, fallback_used}`),
+// `model_profile_ref` carries the primary binding, `configuration_id`
+// derives the table's `semantic_id`, and an expired binding refuses
+// `expired_without_intent` or mints `model.profile.expired_used` under a
+// declared `intent_ref` (§5b.3 d.6 / R-2.3.3).
+
+/// A minimal `ModelProfile` fixture — the compiler-test shape:
+/// `profile_identity` content-addresses the record; `expiry.status` is
+/// the status leg `profile_status` reads.
+fn s51_profile(
+    id: &str,
+    version: &str,
+    status: hh_compiler::profile::DebtStatus,
+) -> hh_compiler::profile::ModelProfile {
+    use hh_compiler::profile::{
+        ExpiryCondition, ExpiryKind, ModelProfile, ModelRole, ProfileCompatibility,
+        ProfileDebtRecord, ProfileSelector, VersionPattern,
+    };
+    let mut p = ModelProfile {
+        profile_id: id.to_string(),
+        version: version.to_string(),
+        content_hash: String::new(),
+        selector: ProfileSelector {
+            provider_api_family: "test-api".to_string(),
+            model_family: "test-model".to_string(),
+            version_pattern: VersionPattern::Any,
+            precedence: 0,
+            successor_ref: None,
+            retirement_at: None,
+            roles_admitted: vec![ModelRole::Primary],
+        },
+        extends: None,
+        capabilities: Default::default(),
+        rules: vec![],
+        ext: std::collections::BTreeMap::new(),
+        expiry: ProfileDebtRecord {
+            rule_id: format!("{id}.expiry"),
+            hypothesis: "the model honours the declared contract".to_string(),
+            evidence_refs: vec![hh_hir::EvidenceRef::legacy("sha256:ev")],
+            owner: "test:owner".to_string(),
+            reach_via: Vec::new(),
+            expiry_condition: ExpiryCondition {
+                kind: ExpiryKind::Date,
+                value: Some("2099-01-01".to_string()),
+            },
+            removal_test_ref: "sha256:test".to_string(),
+            removal_test: Some(hh_hir::RemovalTest::new(
+                hh_hir::RemovalTestKind::Inspection,
+            )),
+            status,
+            debt_class: None,
+            hypothesis_typed: None,
+            scope: None,
+            expiry: None,
+            runway_ms: None,
+            revalidation: None,
+            created_at: None,
+            supersedes: None,
+        },
+        compatibility: ProfileCompatibility {
+            inventory_version: "1.0".to_string(),
+            min_compiler_version: "0.0.0".to_string(),
+        },
+        tests: Json::obj([]),
+    };
+    p.content_hash = hh_compiler::profile::profile_identity(&p);
+    p
+}
+
+/// Register a `model_profile` record through the boundary — returns the
+/// record's `version_id` (a resolvable coordinate).
+fn s51_register_profile(svc: &mut EmbedService, p: &hh_compiler::profile::ModelProfile) -> String {
+    let r = call(
+        svc,
+        "lab.registry.register",
+        Json::obj([
+            ("kind", Json::str("model_profile")),
+            (
+                "body",
+                Json::obj([
+                    ("kind", Json::str("model_profile")),
+                    ("profile", hh_compiler::schema::profile_to_json(p)),
+                ]),
+            ),
+            ("registrar", registrar()),
+        ]),
+    );
+    ok(&r)
+        .get("version_id")
+        .and_then(Json::as_str)
+        .expect("register returns version_id")
+        .to_string()
+}
+
+/// `open_session{kind:new}` with a `profile_binding` spec member.
+fn s51_open_with_binding(svc: &mut EmbedService, binding: Json) -> Json {
+    let mut spec = new_spec(None);
+    if let Json::Obj(m) = &mut spec {
+        m.insert("profile_binding".to_string(), binding);
+    }
+    call(
+        svc,
+        "open_session",
+        Json::obj([
+            ("spec", spec),
+            (
+                "idempotency_key",
+                Json::str(format!("open-pb-{}", uuidish())),
+            ),
+        ]),
+    )
+}
+
+fn uuidish() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    format!("{}", N.fetch_add(1, Ordering::Relaxed))
+}
+
+#[test]
+fn s_profile_binding_manifest_projection() {
+    let mut svc = service();
+    hello(&mut svc);
+    let s = open_new(&mut svc);
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let m = svc.store().manifest(&run_id).unwrap();
+    // The `profile_binding` member — the realized table's profile
+    // projection: `primary` binds the document's `native.profile` pin
+    // (unresolvable in the embedded registry → recorded verbatim, never
+    // substituted), `fallback_used` records no silent fallback.
+    let pb = m
+        .extra
+        .get("profile_binding")
+        .expect("profile_binding member");
+    assert_eq!(pb.get("fallback_used"), Some(&Json::Bool(false)));
+    let primary = pb
+        .get("roles")
+        .and_then(|r| r.get("primary"))
+        .expect("primary role");
+    assert_eq!(
+        primary.get("profile_ref").and_then(Json::as_str),
+        Some("sha256:profile")
+    );
+    assert_eq!(
+        primary.get("pinned"),
+        Some(&Json::Bool(true)),
+        "the projection emits a ProfileRef row"
+    );
+    // `sha256:profile` names no registry record — the
+    // `open_run` gate admits only a resolvable ref, so
+    // `model_profile_ref` stays absent; the declared coordinate stays
+    // legible on `profile_binding.roles.primary.profile_ref`.
+    assert_eq!(m.model_profile_ref, None);
+}
+
+#[test]
+fn s_profile_binding_supplied_roles() {
+    let mut svc = service();
+    hello(&mut svc);
+    let r = s51_open_with_binding(
+        &mut svc,
+        Json::obj([
+            ("compaction", Json::str("sha256:compact")),
+            ("judge", Json::str("hh/judge@prod")),
+        ]),
+    );
+    let s = ok(&r);
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let m = svc.store().manifest(&run_id).unwrap();
+    let roles = m
+        .extra
+        .get("profile_binding")
+        .and_then(|p| p.get("roles"))
+        .expect("roles map");
+    // `primary` defaulted to the definition pin; the declared rows bind
+    // under their own coordinates.
+    assert_eq!(
+        roles
+            .get("primary")
+            .and_then(|r| r.get("profile_ref"))
+            .and_then(Json::as_str),
+        Some("sha256:profile")
+    );
+    assert_eq!(
+        roles
+            .get("compaction")
+            .and_then(|r| r.get("profile_ref"))
+            .and_then(Json::as_str),
+        Some("sha256:compact")
+    );
+    assert_eq!(
+        roles
+            .get("judge")
+            .and_then(|r| r.get("profile_ref"))
+            .and_then(Json::as_str),
+        Some("hh/judge@prod")
+    );
+}
+
+#[test]
+fn s_profile_binding_unknown_role_refuses() {
+    let mut svc = service();
+    hello(&mut svc);
+    let r = s51_open_with_binding(&mut svc, Json::obj([("not_a_role", Json::str("sha256:x"))]));
+    assert_eq!(
+        err_kind(&r),
+        "SchemaViolation",
+        "a role outside the closed ModelRole set refuses — never coerced"
+    );
+}
+
+#[test]
+fn s_profile_binding_canonicalises_resolved_coordinates() {
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let p = s51_profile(
+        "test:profile.canonical",
+        "1",
+        hh_compiler::profile::DebtStatus::Active,
+    );
+    let vid = s51_register_profile(&mut svc, &p);
+    let r = s51_open_with_binding(&mut svc, Json::obj([("compaction", Json::str(vid))]));
+    let s = ok(&r);
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let m = svc.store().manifest(&run_id).unwrap();
+    let roles = m
+        .extra
+        .get("profile_binding")
+        .and_then(|p| p.get("roles"))
+        .expect("roles map");
+    // The recorded profile_ref is the resolved profile's canonical
+    // `profile_id@version`, not the version_id the caller supplied.
+    assert_eq!(
+        roles
+            .get("compaction")
+            .and_then(|r| r.get("profile_ref"))
+            .and_then(Json::as_str),
+        Some("test:profile.canonical@1")
+    );
+}
+
+#[test]
+fn s_profile_binding_model_profile_ref_resolved() {
+    // `model_profile_ref` is the resolved record's `version_id` — the
+    // only spelling `open_run`'s pin gate admits — when `primary`
+    // resolves to a real record.
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let p = s51_profile(
+        "test:profile.bound",
+        "1",
+        hh_compiler::profile::DebtStatus::Active,
+    );
+    let vid = s51_register_profile(&mut svc, &p);
+    let r = s51_open_with_binding(&mut svc, Json::obj([("primary", Json::str(vid.clone()))]));
+    let s = ok(&r);
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let m = svc.store().manifest(&run_id).unwrap();
+    assert_eq!(m.model_profile_ref.as_deref(), Some(vid.as_str()));
+    let roles = m
+        .extra
+        .get("profile_binding")
+        .and_then(|p| p.get("roles"))
+        .expect("roles map");
+    assert_eq!(
+        roles
+            .get("primary")
+            .and_then(|r| r.get("profile_ref"))
+            .and_then(Json::as_str),
+        Some("test:profile.bound@1")
+    );
+}
+
+#[test]
+fn s_profile_binding_expired_requires_intent() {
+    let p = s51_profile(
+        "test:profile.expired",
+        "1",
+        hh_compiler::profile::DebtStatus::Expired,
+    );
+    let coord = hh_compiler::profile::profile_coordinate(&p);
+
+    // Expired without a declared `intent_ref` — the open refuses
+    // `expired_without_intent` (the §5b.3 d.6 link rule at open).
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let vid = s51_register_profile(&mut svc, &p);
+    let r = s51_open_with_binding(
+        &mut svc,
+        Json::obj([("compaction", Json::str(vid.clone()))]),
+    );
+    assert_eq!(err_kind(&r), "Refused");
+    let reason = r
+        .get("error")
+        .and_then(|e| e.get("data"))
+        .and_then(|d| d.get("reason"))
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    assert!(
+        reason.contains("expired_without_intent"),
+        "the refusal names the contract leg: {reason}"
+    );
+
+    // Expired under a declared `intent_ref` — the run opens, the
+    // manifest records `expired_used`, and the
+    // `model.profile.expired_used` event lands in the run's log.
+    let mut svc = service();
+    lab_hello(&mut svc);
+    s51_register_profile(&mut svc, &p);
+    let r = s51_open_with_binding(
+        &mut svc,
+        Json::obj([(
+            "compaction",
+            Json::obj([
+                ("profile_ref", Json::str(coord.clone())),
+                ("intent_ref", Json::str("intent:test.decision")),
+            ]),
+        )]),
+    );
+    let s = ok(&r);
+    let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+    let m = svc.store().manifest(&run_id).unwrap();
+    let rows = match m.extra.get("expired_used") {
+        Some(Json::Arr(a)) => a,
+        _ => panic!("expired_used member"),
+    };
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].get("profile_ref").and_then(Json::as_str),
+        Some(coord.as_str())
+    );
+    assert_eq!(
+        rows[0].get("intent_ref").and_then(Json::as_str),
+        Some("intent:test.decision")
+    );
+    let events: Vec<&str> = svc
+        .store()
+        .events(&run_id)
+        .unwrap()
+        .iter()
+        .map(|e| e.class.as_str())
+        .collect();
+    assert!(
+        events.contains(&"model.profile.expired_used"),
+        "the expired-use ledger event mints: {events:?}"
+    );
+}
+
+#[test]
+fn s_profile_binding_configuration_id_diverges() {
+    // Two spec blocks differing only in the realized role table carry
+    // different `configuration_id`s — the table's `semantic_id` is the
+    // `model_ref` composition input (AC-R-2.3.3-11 determinism leg).
+    let cfg_of = |binding: Json| -> String {
+        let mut svc = service();
+        hello(&mut svc);
+        let s = ok(&s51_open_with_binding(&mut svc, binding));
+        let run_id = s.get("run_id").and_then(Json::as_str).unwrap().to_string();
+        svc.store()
+            .manifest(&run_id)
+            .unwrap()
+            .configuration_id
+            .clone()
+            .expect("configuration_id")
+    };
+    let a = cfg_of(Json::obj([("compaction", Json::str("sha256:a"))]));
+    let b = cfg_of(Json::obj([("compaction", Json::str("sha256:b"))]));
+    let c = cfg_of(Json::obj([("compaction", Json::str("sha256:a"))]));
+    assert_ne!(a, b, "differing tables differ in the configuration id");
+    assert_eq!(
+        a, c,
+        "identical tables carry the identical configuration id"
+    );
+}
