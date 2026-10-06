@@ -7,9 +7,9 @@
   (manifest row 103 — reconcile 2 of 3, sequence 103 of 106)
 - **Branch:** `svitali/harnessharness-rec.2` (stacked on the chain tip
   `svitali/harnessharness-rec.1` @ `bb8b482`)
-- **PR:** (see `docs/build/pr/REC.2.md`; stacked on
-  `svitali/harnessharness-rec.1` / PR #100 — do not merge, OPERATOR
-  policy)
+- **PR:** https://github.com/SteveVitali/HarnessHarness/pull/101
+  (stacked on `svitali/harnessharness-rec.1` / PR #100 — do not
+  merge, OPERATOR policy)
 - **Mode:** `reconcile-build mode=spec` — proposals-only
   (`apply_amendments=false` default: every amendment stays `[ ]`; the
   operator ticks and re-runs)
