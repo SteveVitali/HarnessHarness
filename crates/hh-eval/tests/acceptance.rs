@@ -66,6 +66,8 @@ fn run(arm: &str, task: &str, rep: u64, value: i64, metric_name: &str) -> EvalRu
             detector: Detector::Deterministic,
             confidence: None,
             evidence_ref: None,
+            calibration_ref: None,
+            exploratory: None,
         }],
         environment_version_id: Some("env-1".into()),
         environment_family: EnvironmentFamily::CodingTerminal,

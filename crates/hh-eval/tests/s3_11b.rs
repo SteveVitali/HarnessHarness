@@ -136,6 +136,8 @@ fn run(id: &str, veto_tripped: Vec<String>, facts: LedgerFacts) -> EvalRun {
             detector: Detector::Deterministic,
             confidence: None,
             evidence_ref: None,
+            calibration_ref: None,
+            exploratory: None,
         }],
         environment_version_id: Some("env-1".into()),
         environment_family: EnvironmentFamily::CodingTerminal,

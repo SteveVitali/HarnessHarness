@@ -1418,6 +1418,13 @@ pub struct MetricValue {
     pub confidence: Option<u64>,
     /// The evidence ref the value cites, when one exists.
     pub evidence_ref: Option<String>,
+    /// `calibration_ref` — the `CalibrationRecord` a `detector = judged`
+    /// value ran under (AC-R-2.7.3-8/12; absent on deterministic values).
+    pub calibration_ref: Option<String>,
+    /// `exploratory` — `true` marks a judged value emitted without an
+    /// active calibration (exploratory-only — never a headline input;
+    /// AC-R-2.7.3-8).
+    pub exploratory: Option<bool>,
 }
 
 impl MetricValue {
@@ -1445,6 +1452,12 @@ impl MetricValue {
         if let Some(e) = &self.evidence_ref {
             m.insert("evidence_ref".into(), Json::str(e));
         }
+        if let Some(c) = &self.calibration_ref {
+            m.insert("calibration_ref".into(), Json::str(c));
+        }
+        if let Some(x) = self.exploratory {
+            m.insert("exploratory".into(), Json::Bool(x));
+        }
         Json::Obj(m)
     }
 
@@ -1462,6 +1475,8 @@ impl MetricValue {
                 "detector",
                 "confidence",
                 "evidence_ref",
+                "calibration_ref",
+                "exploratory",
             ],
             REC,
         )?;
@@ -1488,6 +1503,8 @@ impl MetricValue {
             detector,
             confidence: opt_int_at(m, "confidence")?.map(|c| c as u64),
             evidence_ref: opt_str_at(m, "evidence_ref")?.map(str::to_string),
+            calibration_ref: opt_str_at(m, "calibration_ref")?.map(str::to_string),
+            exploratory: opt_bool_at(m, "exploratory")?,
         })
     }
 }
@@ -2902,6 +2919,21 @@ pub(crate) fn bool_at(
     }
 }
 
+/// `opt_bool_at` — an optional bool member.
+pub(crate) fn opt_bool_at(
+    m: &BTreeMap<String, Json>,
+    member: &str,
+) -> Result<Option<bool>, EvalError> {
+    match m.get(member) {
+        None | Some(Json::Null) => Ok(None),
+        Some(Json::Bool(b)) => Ok(Some(*b)),
+        _ => Err(EvalError::SchemaViolation {
+            member: member.to_string(),
+            detail: "must be a bool".to_string(),
+        }),
+    }
+}
+
 /// `arr_at` — a required array member.
 pub(crate) fn arr_at<'a>(
     m: &'a BTreeMap<String, Json>,
@@ -3103,6 +3135,8 @@ mod tests {
             detector: Detector::Deterministic,
             confidence: None,
             evidence_ref: None,
+            calibration_ref: None,
+            exploratory: None,
         };
         let j = v.to_json();
         let back = MetricValue::from_json(&j).unwrap();

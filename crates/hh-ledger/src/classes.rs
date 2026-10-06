@@ -1061,6 +1061,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── control:compute ──
     ("control.compute.decided", "none"),
     ("control.compute.prior_reset", "none"),
+    // ── control:critic ──
+    ("control.critic.gated", "none"),
     // ── control:decision ──
     ("control.decision", "none"),
     // ── control:guard ──
@@ -1798,6 +1800,13 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // declaration a non-declaring run has no business recording).
     row("control.clock.read",              Led, O::Events, false, true,  None, None),
     row("control.random.read",             Led, O::Events, false, true,  None, None),
+    // `control.critic.gated{rule_ref, verdict_id, critic_ref,
+    // decision_point, iteration, use, followup_ref?}` — the runtime
+    // critic-gate audit row (§5f.4; AC-R-2.7.3-6; S4.16c): one per gated
+    // critic verdict, kernel-origin, provenance-bearing. Not audit-grade —
+    // the payload is a bounded record of refs/ints (the gate's own
+    // `verification.gate.evaluated` row carries the audit weight).
+    row_prov("control.critic.gated",       Led, O::Events, false, true,  true,  None, None),
     // The S1.20 control-envelope rows (§5e.2 ledger row): the deterministic
     // `loop_detector` verdict (`{detector, pattern{cycle_len, repeats,
     // loop_keys[]}, evidence_refs[], action, ladder_position, validator_ref?}`),

@@ -413,6 +413,43 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
                 ..base()
             }
         },
+        // ── §5f.3 interventions_experiment rows (S4.16c — the four metrics
+        // the on/off comparison reports; `task_success` is the headline row
+        // above): `false_completion_rate` is the registered veto's rate,
+        // `gate_hold_count`/`reconciliation_cost` the intervention spend —
+        // the verification register owns the per-run computation (ADR-0114
+        // D1); these are the scorecard declarations the comparison
+        // consumes (CC7: the GroundingMetricDecl table and these rows name
+        // the same metrics, never duplicate a process-catalogue row). ──
+        veto_metric("false_completion_rate", Dimension::Grounding),
+        MetricDeclaration {
+            name: "gate_hold_count".into(),
+            dimension: Dimension::Grounding,
+            level: MetricLevel::Run,
+            unit: "count".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                applies_to_classes: all_classes(),
+                outcome_class_policy: OutcomeClassPolicy::for_capability(),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "reconciliation_cost".into(),
+            dimension: Dimension::Efficiency,
+            level: MetricLevel::Run,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Ledger].into_iter().collect(),
+                applies_to_classes: all_classes(),
+                outcome_class_policy: OutcomeClassPolicy::for_efficiency(),
+                ..base()
+            }
+        },
         MetricDeclaration {
             name: "reacquisition_count".into(),
             dimension: Dimension::Efficiency,
