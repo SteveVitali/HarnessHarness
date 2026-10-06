@@ -1031,3 +1031,55 @@ fn rebuild_from_the_ledger_matches_the_incremental_projection() {
     assert_eq!(res_count, acc2.tree.reservations.len());
     assert_eq!(charged_count, acc2.tree.charged.len());
 }
+
+// ── R-2.2.1 — `budget_hard_escalated`: exhaust lands the escalation ────
+
+/// `budget_hard_escalated` (R-2.2.1; ADR-0333 D6): a hard-bound `exhaust`
+/// commits `lifecycle.escalation.raised{budget_id, kind: budget_hard}` in
+/// the same batch as `control.budget.exceeded` + `control.decision{stop}`.
+#[test]
+fn r221_exhaust_raises_budget_hard_escalation() {
+    let (mut s, run, lease) = open("esc");
+    let src = source_event(&mut s, &run, &lease, 1);
+    let root;
+    {
+        let mut acc = Account::open(&mut s, &run).unwrap();
+        root = alloc_root(&mut acc, &lease, caps(&[(DimensionId::ModelCalls, 1)]));
+        acc.charge(
+            &lease,
+            &charge_req(&run, &root, DimensionId::ModelCalls, 1, &src),
+        )
+        .unwrap();
+        // Charge past the cap so the second `check` reports the breach.
+        acc.charge(
+            &lease,
+            &charge_req(&run, &root, DimensionId::ModelCalls, 1, &src),
+        )
+        .unwrap();
+        acc.exhaust(
+            &lease,
+            &root,
+            DimensionKey::Primary(DimensionId::ModelCalls),
+            None,
+        )
+        .unwrap();
+    }
+    let events = s.envelopes(&run).unwrap();
+    let esc = events
+        .iter()
+        .find(|e| e.class == "lifecycle.escalation.raised")
+        .expect("exhaust lands lifecycle.escalation.raised");
+    assert_eq!(
+        esc.payload.get("budget_id").and_then(|j| j.as_str()),
+        Some(root.as_str())
+    );
+    assert_eq!(
+        esc.payload.get("kind").and_then(|j| j.as_str()),
+        Some("budget_hard")
+    );
+    // Order: the escalation precedes the stop decision — the raise is the
+    // durable fact the decision answers.
+    let pos = |c: &str| events.iter().position(|e| e.class == c).unwrap();
+    assert!(pos("control.budget.exceeded") < pos("lifecycle.escalation.raised"));
+    assert!(pos("lifecycle.escalation.raised") < pos("control.decision"));
+}

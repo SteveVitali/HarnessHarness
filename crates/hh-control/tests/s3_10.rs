@@ -2086,3 +2086,82 @@ fn bound_reconciler_emits_d7_and_kernel_notice() {
             && e.payload.get("kind").and_then(Json::as_str) == Some("kernel_notice")
     }));
 }
+
+// ── R-2.2.1 — `unknown_escalated`: finish lands the escalation ─────────
+
+/// `unknown_escalated` (R-2.2.1; ADR-0333 D6): an effect `unknown` at
+/// `finished` gets `lifecycle.escalation.raised{effect_id, kind:
+/// effect_unknown}` — `fs.read` settles `unknown{awaiting_host}` and
+/// stays unknown through `finished`.
+#[test]
+fn r221_unknown_effect_at_finish_is_escalated() {
+    let mut sink = MemSink::new();
+    let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+    let mut driver = Driver::open_react(
+        &ctx(),
+        policy,
+        &mut sink,
+        DriverConfig {
+            surfaces: vec![fs_read(), submit_surface()],
+            ..DriverConfig::default()
+        },
+    )
+    .unwrap();
+    let mut model = ScriptedModel {
+        script: [
+            call("fs.read", r#"{"path":"/a"}"#),
+            submit_call(),
+            submit_call(),
+            submit_call(),
+            submit_call(),
+        ]
+        .into_iter()
+        .collect(),
+        calls: 0,
+    };
+    let mut gate = ScriptedGate::observed().with_submit().with_surface(
+        "fs.read",
+        GateOutcome {
+            outcome: SettledOutcome::Unknown {
+                cause: "awaiting_host".into(),
+            },
+            submission_ref: None,
+            error_class: None,
+        },
+    );
+    gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
+    let mut asm = NullAssembler;
+    driver
+        .run(&mut model, &mut gate, &mut asm, &mut sink)
+        .unwrap();
+
+    // The `unknown` row names the effect; the escalation names it back —
+    // `unknown_escalated` resolves (`effect_id` / `effect_unknown`).
+    let unknown = sink
+        .events
+        .iter()
+        .find(|e| e.class == "action.effect.unknown")
+        .expect("the fs.read effect records unknown");
+    let effect_id = unknown.scope.effect_id.clone().expect("effect scope");
+    let esc = sink
+        .events
+        .iter()
+        .find(|e| {
+            e.class == "lifecycle.escalation.raised"
+                && (e.payload.get("effect_id").and_then(Json::as_str) == Some(effect_id.as_str())
+                    || e.payload.get("kind").and_then(Json::as_str) == Some("effect_unknown"))
+        })
+        .expect("an unknown effect at finished is escalated");
+    assert_eq!(
+        esc.payload.get("kind").and_then(Json::as_str),
+        Some("effect_unknown")
+    );
+    assert_eq!(
+        esc.payload.get("effect_id").and_then(Json::as_str),
+        Some(effect_id.as_str())
+    );
+    // The raise is durable before the terminal `run.finished` row.
+    let classes = sink.classes();
+    let pos = |c: &str| classes.iter().position(|x| *x == c).unwrap();
+    assert!(pos("lifecycle.escalation.raised") < pos("lifecycle.run.finished"));
+}

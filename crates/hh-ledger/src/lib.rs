@@ -42,6 +42,7 @@ pub mod leases;
 pub mod manifest;
 pub mod recovery;
 pub mod replay;
+pub mod retention;
 pub mod rotation;
 pub mod saga;
 pub mod schema;
