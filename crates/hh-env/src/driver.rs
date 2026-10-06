@@ -1087,6 +1087,14 @@ impl EnvDriver {
         )
     }
 
+    /// The folded handle state — a read the boundary's policy-bound heal
+    /// needs (`mark_unreachable` rides a `ready` handle only; a
+    /// non-attached verdict on an already-`unreachable` handle goes
+    /// straight to `heal_with_policy`).
+    pub fn handle_state(&self, env_handle_id: &str) -> Option<HandleState> {
+        self.handles.get(env_handle_id).map(|h| h.state)
+    }
+
     /// `mark_unreachable(env_handle_id)` — contact lost. `ready →
     /// unreachable`; `active_ms` stops at `last_contact` (the kernel-dead gap
     /// is excluded — AC-R-2.2.5-2).

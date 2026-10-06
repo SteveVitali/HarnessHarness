@@ -646,6 +646,11 @@ impl EmbedService {
             "continue_goal" => self.continue_goal(&req.params),
             "open_inbox" => self.open_inbox(&req.params),
             "subscribe" => self.wakeup_subscribe(&req.params),
+            // R2.3 (DF-S2.3-1) — the §5a.3 durable-execution protocol
+            // entry points; writer-session + writer-lease only.
+            "suspend" => self.run_suspend(&req.params),
+            "compensate" => self.run_compensate(&req.params),
+            "heal" => self.run_heal(&req.params),
             "record_occurrence" => self.record_occurrence(&req.params),
             "list_leases" => self.list_leases(&req.params),
             "lineage" => self.lineage(&req.params),
@@ -1121,6 +1126,40 @@ impl EmbedService {
                 ),
             ]),
         )?;
+        // R2.3 (DF-S2.3-1) — a deadline-bearing pending is a durable
+        // timer: mint the `timer` subscription the deadline produces so
+        // a suspended run re-cues to resolve `timed_out` (the ask's
+        // pending row is the producer; the `control.wakeup.scheduled`
+        // row is durable before any occurrence it synthesizes). One
+        // live sub per deadline instant — a second pending at the same
+        // instant rides the existing promise.
+        if let Some(deadline_ms) = timeout.map(|t| now.saturating_add(t)) {
+            let covered = self
+                .store
+                .wakeup_subscriptions(&run_id)
+                .map_err(ledger_err)?
+                .iter()
+                .any(|s| {
+                    s.state != hh_ledger::wakeup::SubscriptionState::Cancelled
+                        && s.policy.expires_at_ms.is_none_or(|e| now < e)
+                        && s.trigger == (LedgerTrigger::Timer { at_ms: deadline_ms })
+                });
+            if !covered {
+                let created_by = hh_ledger::manifest::EventRef {
+                    run_id: run_id.clone(),
+                    event_id: self.store.head(&run_id).map_err(ledger_err)?.event_id,
+                };
+                self.store
+                    .wakeup_subscribe(
+                        &run_id,
+                        &lease,
+                        LedgerTrigger::Timer { at_ms: deadline_ms },
+                        hh_ledger::wakeup::WakeupPolicy::default_policy(),
+                        &created_by,
+                    )
+                    .map_err(ledger_err)?;
+            }
+        }
         self.mint(
             &run_id,
             &lease,
