@@ -125,16 +125,16 @@ blank — the operator fills them.*
 
 | # | Deviation row | Disposition (ACCEPTED \| SEND-BACK) | What would accept it (if SEND-BACK) |
 |---|---|---|---|
-| 1 | R-2.7.2 split (ADR-0146) |  |  |
-| 2 | R-2.12.3 ecosystem decision (ADR-0050; ADR-0009; ADR-0226) |  |  |
-| 3 | R-2.12.4 spec-level deferral (ADR-0210) |  |  |
-| 4 | R-2.12.5 program-level naming thesis (ADR-0003/0006) |  |  |
-| 5 | R-2.11.2 E3-ecosystem binding (HUMAN-H1; DF-S4.10-1) |  |  |
-| 6 | R-2.12.6 real issue tracker (HUMAN-H2; DF-S5.6-1) |  |  |
-| 7 | R2 cross-camp human signature (DF-S0.3-3 residual; GATE-G1) |  |  |
-| 8 | Armed revalidation trigger 5 satisfied-by-analysis (ADR-0226) |  |  |
-| 9 | Foreign-toolchain verification cells (DF-S0.3-2, DF-S1.2-2, DF-S1.5-3, DF-S1.8-1, DF-S1.27-1) |  |  |
-| 10 | GATE-G2 recorded set (DF-S1.13-3 arm, DF-S1.17-1 arm, DF-S1.21-2, DF-S1.15-1, DF-S1.24-1 residual, DF-S1.14-4, DF-S1.22-1, DF-S5.4-1) |  |  |
+| 1 | R-2.7.2 split (ADR-0146) | ACCEPTED | — |
+| 2 | R-2.12.3 ecosystem decision (ADR-0050; ADR-0009; ADR-0226) | ACCEPTED | — |
+| 3 | R-2.12.4 spec-level deferral (ADR-0210) | ACCEPTED | — |
+| 4 | R-2.12.5 program-level naming thesis (ADR-0003/0006) | ACCEPTED | — |
+| 5 | R-2.11.2 E3-ecosystem binding (HUMAN-H1; DF-S4.10-1) | ACCEPTED | — |
+| 6 | R-2.12.6 real issue tracker (HUMAN-H2; DF-S5.6-1) | ACCEPTED | — |
+| 7 | R2 cross-camp human signature (DF-S0.3-3 residual; GATE-G1) | ACCEPTED | — |
+| 8 | Armed revalidation trigger 5 satisfied-by-analysis (ADR-0226) | ACCEPTED | — |
+| 9 | Foreign-toolchain verification cells (DF-S0.3-2, DF-S1.2-2, DF-S1.5-3, DF-S1.8-1, DF-S1.27-1) | ACCEPTED | — |
+| 10 | GATE-G2 recorded set (DF-S1.13-3 arm, DF-S1.17-1 arm, DF-S1.21-2, DF-S1.15-1, DF-S1.24-1 residual, DF-S1.14-4, DF-S1.22-1, DF-S5.4-1) | ACCEPTED | — |
 
 ### 5 · DEFERRALS sweep — 99 rows audited; 39 DONE; 60 not-fully-discharged, every one classified
 
@@ -215,16 +215,16 @@ plan — PR graph, read-only merge dry-run, release notes), and **DOC.1/DOC.2** 
 docs refresh). **`projectStatus: DONE` is recorded only after this gate records PASSED**
 — no proposed deviation may be left unsigned.
 
-### Verdict — PENDING (operator fills one)
+### Verdict — PASSED (operator, 2026-10-02)
 
-- [ ] PASSED — every ACCEPTED row signed (or each SEND-BACK returned to closure with its
-  acceptance condition recorded).
+- [x] PASSED — every ACCEPTED row signed (blanket acceptance — operator: "I accept",
+  2026-10-02; no SEND-BACKs).
 - [ ] NOT PASSABLE — what would pass it: ____________________
 - [ ] SKIPPED-BY-OPERATOR
 
-**Date:** ____________
+**Date:** 2026-10-02
 
 ### Operator disposition line — FOR THE OPERATOR
 
-- [ ] Disposition recorded: ____________________ (operator signature / initials, and the
+- [x] Disposition recorded: operator verbal acceptance in session ("I accept") recorded by orchestrate-build, 2026-10-02 — see LEDGER `GATE DECISIONS` 2026-10-02 GATE-ACCEPT row (operator signature / initials, and the
   ledger `GATE DECISIONS` row reference once `orchestrate-build` records it)
