@@ -134,6 +134,72 @@ pub enum OnLost {
     Fail,
 }
 
+impl OnLost {
+    /// The closed-set spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OnLost::Reprovision => "reprovision",
+            OnLost::SnapshotRestoreThenReprovision => "snapshot_restore_then_reprovision",
+            OnLost::Ask => "ask",
+            OnLost::Fail => "fail",
+        }
+    }
+
+    /// Parse the closed-set spelling.
+    pub fn parse(s: &str) -> Option<OnLost> {
+        match s {
+            "reprovision" => Some(OnLost::Reprovision),
+            "snapshot_restore_then_reprovision" => Some(OnLost::SnapshotRestoreThenReprovision),
+            "ask" => Some(OnLost::Ask),
+            "fail" => Some(OnLost::Fail),
+            _ => None,
+        }
+    }
+}
+
+impl HealingPolicy {
+    /// The canonical JSON form — the member spelling a registry record's
+    /// `healing_policy` body carries (`healing_policy_ref` resolves to
+    /// exactly this shape; CC1 — one codec, no second spelling).
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("on_lost", Json::str(self.on_lost.as_str())),
+            ("max_heals", Json::Int(self.max_heals as i64)),
+            (
+                "verify_after",
+                match &self.verify_after {
+                    Some(v) => Json::str(v.clone()),
+                    None => Json::Null,
+                },
+            ),
+            ("preserve_detached", Json::Bool(self.preserve_detached)),
+        ])
+    }
+
+    /// Parse the canonical form — `None` on a bad member (a malformed
+    /// declared policy is the caller's typed refusal, never a default).
+    pub fn from_json(j: &Json) -> Option<HealingPolicy> {
+        Some(HealingPolicy {
+            on_lost: OnLost::parse(j.get("on_lost").and_then(Json::as_str).unwrap_or(""))?,
+            max_heals: j
+                .get("max_heals")
+                .and_then(Json::as_int)
+                .map(|n| n.max(0) as u32)?,
+            verify_after: j
+                .get("verify_after")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            preserve_detached: j
+                .get("preserve_detached")
+                .and_then(|v| match v {
+                    Json::Bool(b) => Some(*b),
+                    _ => None,
+                })
+                .unwrap_or(false),
+        })
+    }
+}
+
 /// What `heal_with_policy` did — `healed{…} | refused{reason} |
 /// ask{permission_id}` (§5a.3's return sum).
 #[derive(Debug, Clone, PartialEq, Eq)]

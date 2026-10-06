@@ -950,6 +950,48 @@ fn types_schema() -> Json {
         ]),
     );
 
+    // ── R2.3 (C2) — the durable-execution protocol ops' typed params ──
+    // `suspend{session_id, reasons, subscription_ids?, resume_policy?,
+    // release_lease?}` — `reasons` is the §5a.4 `SuspendReason` sum
+    // verbatim (`[{type, …}]`); `release_lease` defaults `true`
+    // (ADR-0131 §6). The writer mints the producing subscriptions for
+    // the waiting reasons durable before `lifecycle.run.suspended`.
+    m.insert(
+        "SuspendParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("reasons", "[json]", true),
+            ("subscription_ids", "[string]", false),
+            ("resume_policy", "json", false),
+            ("release_lease", "bool", false),
+        ]),
+    );
+    // `compensate{session_id, after_seq?, outcomes?}` —
+    // `outcomes{<original_effect_id>: <payload> | {"error": reason}}` is
+    // the host's declared compensator dispatch; a missing entry is the
+    // honest `CompensatorMissing` leg (ADR-0032).
+    m.insert(
+        "CompensateParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("after_seq", "integer", false),
+            ("outcomes", "json", false),
+        ]),
+    );
+    // `heal{session_id, policy_ref?, policy?}` — inline `policy` is the
+    // §5a.3 `HealingPolicy` record verbatim; `policy_ref` names a
+    // registry version_id resolved through the one `RegistryStore`
+    // (ADR-0132 §2). An unresolvable/malformed declared ref is the
+    // typed `Refused`, never a substituted default.
+    m.insert(
+        "HealParams".into(),
+        strct(&[
+            ("session_id", "string", true),
+            ("policy_ref", "string", false),
+            ("policy", "json", false),
+        ]),
+    );
+
     // ── close result + implemented staged/experimental signatures ──────
     m.insert(
         "RunSummaryRef".into(),
