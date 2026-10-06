@@ -711,6 +711,12 @@ pub fn analyze(
             let metric = spec.query.metrics.first().cloned().unwrap_or_default();
             let base_runs: Vec<&EvalRun> =
                 runs.iter().filter(|r| r.arm_id == baseline_arm).collect();
+            // C2 (§2.3): the judged realized-benefit stages join the
+            // search-baseline member — `P(valid)·P(activated|delivered,
+            // valid)·P(followed|activated)·E[Δ|followed]` per detector,
+            // each stage a confidence-band row; hosted rows render
+            // `n/a{observability}` beyond `delivered` (§2.5).
+            let arm_a_runs: Vec<&EvalRun> = runs.iter().filter(|r| r.arm_id == a).collect();
             sections.push((
                 "benefit_decomposition",
                 Json::obj([
@@ -719,16 +725,27 @@ pub fn analyze(
                         "search_baseline",
                         crate::ops::search_baseline(&base_runs, &metric, n, selector),
                     ),
+                    (
+                        "realized_stages",
+                        crate::ops::realized_stages(
+                            &arm_a_runs,
+                            &base_runs,
+                            &metric,
+                            input.confidence_ppm,
+                        ),
+                    ),
                 ]),
             ));
         }
         "attribution" => {
-            // A10 (§2.5; AC-R-2.10.4-4): class-aware attribution —
-            // hosted rows render `n/a{class}` (listed in `na_rows`,
-            // never zeroed, never silently dropped); native rows get the
-            // M1 designed-ablation effect per design factor — a `compare`
-            // with the factor as `varied_factor`. A component-level
-            // factor on a hosted row is the `InadmissibleFactor` refusal.
+            // A10 M1 designed ablation → `AttributionReport/1` (§2.3;
+            // R-2.9.7 C2; ADR-0200 D5/D6): class-aware — hosted rows
+            // render `n/a{class}` (listed in `na_rows`, never zeroed,
+            // never silently dropped); native rows get the M1
+            // designed-ablation effect per `ComponentTarget` — an A2
+            // `compare` per ablated factor under one `MatchSpec`. A
+            // component-level factor on a hosted row is the
+            // `InadmissibleFactor` refusal.
             input.design.ok_or_else(|| AnalysisError::MissingSpecRef {
                 kind: spec.kind.clone(),
             })?;
@@ -744,6 +761,42 @@ pub fn analyze(
                     .design
                     .map(|d| d.factors.iter().map(|f| f.name.clone()).collect())
                     .unwrap_or_default(),
+            };
+            // `targets[]` — typed `ComponentTarget`s (`filters.targets`
+            // = `[{kind ∈ {slot, variant, rule, parameter, leaf}, ref}]`;
+            // a bare factor name desugars to `{kind: parameter}` —
+            // R-2.9.7's typed-target requirement).
+            let targets: Vec<Json> = match filters.get("targets") {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .map(|t| {
+                        let kind = t.get("kind").and_then(Json::as_str).unwrap_or("parameter");
+                        if !["slot", "variant", "rule", "parameter", "leaf"].contains(&kind) {
+                            return Err(AnalysisError::BadSpec {
+                                member: "filters.targets.kind".into(),
+                                detail: format!(
+                                    "unknown ComponentTarget kind {kind} — ∈ {{slot, variant, rule, parameter, leaf}}"
+                                ),
+                            });
+                        }
+                        Ok(Json::obj([
+                            ("kind", Json::str(kind)),
+                            (
+                                "ref",
+                                t.get("ref").cloned().unwrap_or(Json::Null),
+                            ),
+                        ]))
+                    })
+                    .collect::<Result<_, AnalysisError>>()?,
+                _ => factors
+                    .iter()
+                    .map(|f| {
+                        Json::obj([
+                            ("kind", Json::str("parameter")),
+                            ("ref", Json::str(f)),
+                        ])
+                    })
+                    .collect(),
             };
             let factor_refs: Vec<&str> = factors.iter().map(String::as_str).collect();
             if let Some((factor, run_id, detail)) =
@@ -761,10 +814,12 @@ pub fn analyze(
                 .filter(|r| !crate::ops::is_hosted(r))
                 .cloned()
                 .collect();
+            let arms = [arm_spec(input, &a)?.clone(), arm_spec(input, &b)?.clone()];
             let mut effects = Vec::new();
+            let mut effect_sum: i128 = 0;
+            let mut n_effect = 0u64;
             if !native.is_empty() {
                 for f in &factors {
-                    let arms = [arm_spec(input, &a)?.clone(), arm_spec(input, &b)?.clone()];
                     let inp = compare_input(spec, input, &native, &arms, &a, &b, Some(f));
                     match compare(&inp) {
                         Ok(out) => {
@@ -779,8 +834,20 @@ pub fn analyze(
                                         .map(|e| e.to_json())
                                         .collect(),
                                 ));
+                                if let Some(Json::Int(p)) = r.paired_effect.point {
+                                    effect_sum += p as i128;
+                                    n_effect += 1;
+                                }
                                 effects.push(Json::obj([
+                                    (
+                                        "target",
+                                        Json::obj([
+                                            ("kind", Json::str("parameter")),
+                                            ("ref", Json::str(f)),
+                                        ]),
+                                    ),
                                     ("factor", Json::str(f)),
+                                    ("estimand", Json::str("designed_ablation")),
                                     ("arm_a", Json::str(&a)),
                                     ("arm_b", Json::str(&b)),
                                     ("metric", Json::str(&r.metric)),
@@ -789,23 +856,149 @@ pub fn analyze(
                                         "interval",
                                         r.paired_effect.interval.clone().unwrap_or(Json::Null),
                                     ),
+                                    ("replay_mode", Json::str("none")),
+                                    ("validity_mode", Json::str("designed_ablation")),
+                                    ("label", Json::str("designed_ablation")),
                                 ]));
                             }
                         }
                         // An unpairable factor level is `n/a`, listed —
                         // never silently dropped (CC3).
                         Err(_) => effects.push(Json::obj([
+                            (
+                                "target",
+                                Json::obj([
+                                    ("kind", Json::str("parameter")),
+                                    ("ref", Json::str(f)),
+                                ]),
+                            ),
                             ("factor", Json::str(f)),
+                            ("estimand", Json::str("designed_ablation")),
                             ("n/a", Json::str("estimator_undefined")),
                         ])),
                     }
                 }
             }
+            // `AttributionReport/1` member set (R-2.9.7; ADR-0200 D5):
+            // the ablation manifest, the subject coordinate, the
+            // budget carrier, delivered/settled counts, the
+            // `unattributed_share` against the head-to-head Δ, and the
+            // `designed_ablation` attribution label. Single-target
+            // effects are never presented as a decomposition — the
+            // share member names the residual, not a sum.
+            let subject_configs: BTreeSet<&str> =
+                runs.iter().map(|r| r.configuration_id.as_str()).collect();
+            let subject_runs: BTreeSet<&str> = runs.iter().map(|r| r.run_id.as_str()).collect();
+            let subject_tasks: BTreeSet<&str> = runs.iter().map(|r| r.task_id.as_str()).collect();
+            let delivered = runs
+                .iter()
+                .filter(|r| !r.facts.artefacts_delivered.is_empty())
+                .count() as i64;
+            let settled = runs.iter().filter(|r| r.facts.finished.is_some()).count() as i64;
+            // The head-to-head Δ for `unattributed_share` (the a-vs-b
+            // comparison over every run, no varied factor) — `n/a` when
+            // unpairable.
+            let delta_total = if native.is_empty() {
+                None
+            } else {
+                let inp = compare_input(spec, input, &native, &arms, &a, &b, None);
+                compare(&inp).ok().and_then(|out| {
+                    out.reports
+                        .first()
+                        .and_then(|r| r.paired_effect.point.clone())
+                        .and_then(|p| p.as_int())
+                })
+            };
+            let unattributed = delta_total.map(|d| Json::Int(d - effect_sum as i64));
+            let ablation_manifest = Json::obj([
+                ("kind", Json::str("designed_ablation")),
+                (
+                    "factors",
+                    Json::Arr(factors.iter().map(Json::str).collect()),
+                ),
+                ("targets", Json::Arr(targets.clone())),
+                ("arms", Json::Arr(vec![Json::str(&a), Json::str(&b)])),
+                (
+                    "match_spec_ref",
+                    arms.first()
+                        .and_then(|s| s.match_spec.as_ref())
+                        .map(|m| {
+                            Json::str(hh_identity::idp_id(
+                                "budget.match_spec",
+                                m.to_json().to_canonical_string().as_bytes(),
+                            ))
+                        })
+                        .unwrap_or(Json::Null),
+                ),
+            ]);
             sections.push((
                 "attribution",
                 Json::obj([
-                    ("method", Json::str("M1_leave_one_in")),
+                    ("schema", Json::str("hh-attribution/1")),
+                    ("kind", Json::str("attribution")),
+                    ("method", Json::str("M1")),
+                    (
+                        "subject",
+                        Json::obj([
+                            (
+                                "configuration_ids",
+                                Json::Arr(subject_configs.iter().map(|c| Json::str(*c)).collect()),
+                            ),
+                            (
+                                "run_ids",
+                                Json::Arr(subject_runs.iter().map(|c| Json::str(*c)).collect()),
+                            ),
+                            (
+                                "task_ids",
+                                Json::Arr(subject_tasks.iter().map(|c| Json::str(*c)).collect()),
+                            ),
+                        ]),
+                    ),
+                    (
+                        "design_ref",
+                        spec.spec_ref.clone().map(Json::str).unwrap_or(Json::Null),
+                    ),
+                    ("targets", Json::Arr(targets)),
+                    ("ablation_manifest", ablation_manifest),
                     ("effects", Json::Arr(effects)),
+                    ("delta", delta_total.map(Json::Int).unwrap_or(Json::Null)),
+                    ("unattributed_share", unattributed.unwrap_or(Json::Null)),
+                    ("n_effects", Json::Int(n_effect as i64)),
+                    ("delivered", Json::Int(delivered)),
+                    ("settled", Json::Int(settled)),
+                    ("attributable", Json::Bool(!native.is_empty())),
+                    (
+                        "budget",
+                        Json::obj([
+                            (
+                                "search_ref",
+                                arms.first()
+                                    .and_then(|s| s.search_budget.as_ref())
+                                    .map(|_| Json::str("declared"))
+                                    .unwrap_or(Json::Null),
+                            ),
+                            ("charged_to", Json::str("instrument")),
+                        ]),
+                    ),
+                    (
+                        "assumptions",
+                        Json::obj([
+                            ("coupling_assumption", Json::Null),
+                            ("fork_policy", Json::str("designed_ablation")),
+                        ]),
+                    ),
+                    (
+                        "label",
+                        spec.label
+                            .clone()
+                            .map(Json::str)
+                            .unwrap_or_else(|| Json::str("confirmatory")),
+                    ),
+                    ("attribution_label", Json::str("designed_ablation")),
+                    (
+                        "provenance",
+                        Json::obj([("origin", Json::str("instrument"))]),
+                    ),
                     (
                         "na_rows",
                         Json::Arr(
@@ -905,12 +1098,16 @@ pub fn analyze(
             sections.push(("diagnostics", crate::ops::diagnostics(&runs, &metric)));
         }
         "fit_surface" => {
-            // A7 contrast form (§6.4 §2.3; ADR-0160): `filters.factors`
-            // names the axes; categorical levels are never interpolated —
-            // unprobed level tuples land in `unknown_cells` (AC-R-2.10.4
-            // -10). `filters.expired_refs[]` names the registry-retired
-            // configurations (the caller resolves registry events) —
-            // `status: expired` then, and the report stays readable.
+            // A7 (§6.4 §2.3; ADR-0160; S5.3): `filters.factors` names the
+            // axes; `filters.model_form` picks `contrast` (default) /
+            // `factorial_glmm` / `curve_on_ordered_axis`; `ordered[]` and
+            // `adjust_for[]` are the C2 filter members. The expiry
+            // observables are records-in: `expired_refs`/`superseded_refs`
+            // (registry-retired/superseded refs), `expiring_refs`,
+            // `fitted_at`, `now_ms`, `max_age_ms`, `owner` — the section
+            // mints the home-11 debt record and names its content
+            // address in `debt_record_ref`. The surface runs under one
+            // `MatchSpec` — distinct arm specs must validate.
             let factors: Vec<String> = match filters.get("factors") {
                 Some(Json::Arr(items)) => items
                     .iter()
@@ -927,61 +1124,123 @@ pub fn analyze(
                     member: "query.metrics".into(),
                     detail: "fit_surface requires a metric".into(),
                 })?;
-            let expired: BTreeSet<String> = match filters.get("expired_refs") {
-                Some(Json::Arr(items)) => items
-                    .iter()
-                    .filter_map(Json::as_str)
-                    .map(str::to_string)
-                    .collect(),
-                _ => BTreeSet::new(),
+            let model_form = match filters.get("model_form").and_then(Json::as_str) {
+                Some(s) => crate::ops::SurfaceModelForm::parse(s).ok_or_else(|| {
+                    AnalysisError::BadSpec {
+                        member: "query.filters.model_form".into(),
+                        detail: format!(
+                            "unknown model_form {s} — ∈ {{contrast, factorial_glmm, curve_on_ordered_axis}}"
+                        ),
+                    }
+                })?,
+                None => crate::ops::SurfaceModelForm::Contrast,
+            };
+            let str_list = |key: &str| -> Vec<String> {
+                match filters.get(key) {
+                    Some(Json::Arr(items)) => items
+                        .iter()
+                        .filter_map(Json::as_str)
+                        .map(str::to_string)
+                        .collect(),
+                    _ => Vec::new(),
+                }
+            };
+            let ordered = str_list("ordered");
+            let adjust_for = str_list("adjust_for");
+            let superseded: BTreeSet<String> = str_list("superseded_refs")
+                .into_iter()
+                .chain(str_list("expired_refs"))
+                .collect();
+            let expiring: BTreeSet<String> = str_list("expiring_refs").into_iter().collect();
+            let expiry = crate::ops::SurfaceExpiry {
+                fitted_at: filters.get("fitted_at").and_then(Json::as_int),
+                now_ms: filters.get("now_ms").and_then(Json::as_int),
+                superseded,
+                expiring,
+                max_age_ms: filters.get("max_age_ms").and_then(Json::as_int),
+                owner: filters
+                    .get("owner")
+                    .and_then(Json::as_str)
+                    .map(str::to_string),
+            };
+            // One MatchSpec — the distinct arm specs the selected runs
+            // declared must validate (§2.3; `IncommensurableMatch`
+            // otherwise). A surface over a single arm has no
+            // between-arm matching to enforce.
+            let mut distinct: Vec<ArmSpec> = Vec::new();
+            let mut seen_arms: BTreeSet<&str> = BTreeSet::new();
+            for r in &runs {
+                if seen_arms.insert(r.arm_id.as_str()) {
+                    distinct.push(arm_spec(input, &r.arm_id)?.clone());
+                }
+            }
+            if distinct.len() > 1 {
+                hh_budget::matchspec::validate_match(&distinct)
+                    .map_err(CompareError::Match)
+                    .map_err(AnalysisError::Compare)?;
+            }
+            let match_spec_ref = distinct.first().and_then(|a| {
+                a.match_spec.as_ref().map(|m| {
+                    hh_identity::idp_id(
+                        "budget.match_spec",
+                        m.to_json().to_canonical_string().as_bytes(),
+                    )
+                })
+            });
+            let generated_from = crate::report::generated_from_for(input);
+            // `report_id` seeds the debt record's `evidence_refs` (the
+            // record binds the report it rides — §5h.6); it is the same
+            // id `assemble` computes (`H(spec_hash ∥ generated_from)`).
+            let report_id_seed = crate::report::report_id_for(spec, &generated_from);
+            let req = crate::ops::FitRequest {
+                factors: &factors,
+                metric,
+                model_form,
+                confidence_ppm: input.confidence_ppm,
+                ordered_axes: &ordered,
+                adjust_for: &adjust_for,
+                expiry: &expiry,
+                design_ref: spec.spec_ref.as_deref(),
+                match_spec_ref: match_spec_ref.as_deref(),
+                report_id: &report_id_seed,
+                generated_from: &generated_from,
             };
             sections.push((
                 "surface",
-                crate::ops::fit_surface(
-                    &runs,
-                    input.design,
-                    &factors,
-                    metric,
-                    input.confidence_ppm,
-                    &expired,
-                )?,
+                crate::ops::fit_surface(&runs, input.design, &req)?,
             ));
         }
         "strata_view" => {
-            // A14: the strata view — per-`contamination_stratum` run
-            // counts + per-stratum metric means (strata are never
-            // silently pooled — ADR-0012 D6).
+            // A14 (§2.3; ADR-0012 D6): `filters.by` picks the stratum
+            // axis — `contamination_stratum` (default) |
+            // `capability_vector` | `cost_confidence` | `suite_validity`
+            // | `mediation`; strata are never silently pooled — the
+            // report carries `pooled: never` and refuses
+            // `StrataPooledUnannotated` on an aggregate-without-annotation
+            // request (`filters.aggregate = pooled`).
             let metric = spec.query.metrics.first().cloned().unwrap_or_default();
-            let mut strata: BTreeMap<String, Vec<i64>> = BTreeMap::new();
-            let mut stratum_runs: BTreeMap<String, u64> = BTreeMap::new();
-            for r in &runs {
-                let s = r.stratum.name().to_string();
-                *stratum_runs.entry(s.clone()).or_default() += 1;
-                if let MetricValueKind::Decimal(v) = r.value_for(&metric) {
-                    strata.entry(s).or_default().push(v);
-                }
+            let by = match filters.get("by").and_then(Json::as_str) {
+                Some(s) => crate::ops::StrataAxis::parse(s).ok_or_else(|| {
+                    AnalysisError::BadSpec {
+                        member: "query.filters.by".into(),
+                        detail: format!(
+                            "unknown stratum {s} — strata_view by ∈ {{contamination_stratum, capability_vector, cost_confidence, suite_validity, mediation}}"
+                        ),
+                    }
+                })?,
+                None => crate::ops::StrataAxis::ContaminationStratum,
+            };
+            if matches!(
+                filters.get("aggregate").and_then(Json::as_str),
+                Some("pooled")
+            ) {
+                return Err(AnalysisError::StrataPooledUnannotated {
+                    detail: "strata_view never pools silently — read per-stratum rows".into(),
+                });
             }
             sections.push((
                 "strata",
-                Json::Arr(
-                    stratum_runs
-                        .iter()
-                        .map(|(s, n)| {
-                            let vals = strata.get(s).cloned().unwrap_or_default();
-                            Json::obj([
-                                ("stratum", Json::str(s)),
-                                ("runs", Json::Int(*n as i64)),
-                                (
-                                    "mean_ppm",
-                                    stats::mean(&vals).map_or(
-                                        Json::obj([("n/a", Json::str("estimator_undefined"))]),
-                                        Json::Int,
-                                    ),
-                                ),
-                            ])
-                        })
-                        .collect(),
-                ),
+                crate::ops::strata_view(&runs, &metric, by, input.suites),
             ));
         }
         other => {

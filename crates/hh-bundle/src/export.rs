@@ -263,6 +263,26 @@ impl Default for PublicationPolicy {
 }
 
 impl PublicationPolicy {
+    /// The per-suite **public** default (R-2.10.5 C2; §6.5 §4): a
+    /// `public` read set, `restricted_store` payload protection and the
+    /// `content` class withheld — the exported view carries accounting,
+    /// structural and diagnostic members; every withheld member lands in
+    /// the loss report (never silently dropped — CC3).
+    pub fn public() -> Self {
+        PublicationPolicy {
+            readers: vec!["public".to_string()],
+            content_classes: vec![
+                "accounting".to_string(),
+                "structural".to_string(),
+                "diagnostic".to_string(),
+            ],
+            redaction: None,
+            payload_protection: "restricted_store".to_string(),
+        }
+    }
+}
+
+impl PublicationPolicy {
     /// Decode from boundary params (`policy` member of `kernel.export`).
     pub fn from_json(j: Option<&Json>) -> Result<PublicationPolicy, BundleError> {
         let mut p = PublicationPolicy::default();

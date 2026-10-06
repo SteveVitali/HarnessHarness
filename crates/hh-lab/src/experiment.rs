@@ -1046,6 +1046,12 @@ pub struct SpecContext<'a> {
     /// Whether the arms form a single-rule removal diff (`kind =
     /// retirement` only; `None` = cannot check).
     pub retirement_diff: Option<bool>,
+    /// The arm-pair's `HirDiff` classification view (`kind = retirement`
+    /// only; AC-R-2.10.3-13 — `authority_delta ≠ none`, `budget_delta ≠
+    /// none`, or `semantic_ops ≠ 1` unless candidate-bound is a typed
+    /// refusal, never a warning). `(candidate_arm, baseline_arm) → view`;
+    /// `None` = cannot resolve (the check defers to a context that can).
+    pub retirement_diff_class: Option<&'a RetirementDiffResolver<'a>>,
     /// Whether a level ref's capability has drifted.
     pub capability_drifted: Option<&'a dyn Fn(&str) -> bool>,
     /// The arm's per-dimension `budget_enforcement` view (ADR-0165 D3) —
@@ -1076,6 +1082,24 @@ pub struct SpecContext<'a> {
     pub participant_descriptor: Option<&'a ParticipantDescriptor<'a>>,
 }
 
+/// `RetirementDiffView` — the `HirDiff` classification members the
+/// `retirement` kind checks (AC-R-2.10.3-13), projected by the context
+/// (the classification itself lives in `hh-hir::diff`; the Lab reads a
+/// records-in view, never the store).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetirementDiffView {
+    /// `authority_delta` spelling (`none | narrowing | widening`).
+    pub authority_delta: String,
+    /// `budget_delta` spelling (`none | tightening | loosening`).
+    pub budget_delta: String,
+    /// `semantic_ops` count.
+    pub semantic_ops: u64,
+    /// The amendment's candidate-bound flag — a diff the evolution
+    /// candidate produced is bound to it (the `semantic_ops ≠ 1`
+    /// exemption; authority/budget deltas never exempt).
+    pub candidate_bound: bool,
+}
+
 /// A `budget_relevant` parameter's bound value and the dimensions it drives
 /// (the `param_schema` `affects[]` projection — ADR-0151 D5). The
 /// AC-R-2.10.2-12 coverage check refuses an arm whose `MatchSpec` omits a
@@ -1097,6 +1121,12 @@ pub type BudgetRelevantResolver<'a> = dyn Fn(&str) -> BTreeMap<String, BudgetRel
 /// AC-R-2.3.4-10 check defers to a context that can).
 pub type CacheVisibilityResolver<'a> = dyn Fn(&ArmSpec) -> Option<bool> + 'a;
 
+/// The classified-diff resolver — `(candidate_arm, baseline_arm) → HirDiff
+/// classification view` for the AC-R-2.10.3-13 retirement check
+/// (`authority_delta`/`budget_delta`/`semantic_ops`, `candidate_bound`).
+/// `None` = cannot classify at this layer; the other gates still run.
+pub type RetirementDiffResolver<'a> = dyn Fn(&ArmSpec, &ArmSpec) -> Option<RetirementDiffView> + 'a;
+
 /// A level's bound `budget_relevant` parameters — `{param → (value,
 /// affects)}` (the check_match working map).
 type BoundParams = BTreeMap<String, (Json, BTreeSet<DimensionId>)>;
@@ -1109,6 +1139,7 @@ impl SpecContext<'_> {
             resolve_budget: None,
             artifact_sealed: None,
             retirement_diff: None,
+            retirement_diff_class: None,
             capability_drifted: None,
             budget_enforcement: None,
             budget_relevant_params: None,
@@ -1188,6 +1219,53 @@ impl ExperimentSpec {
             return Err(ExperimentRefusal::NotARetirementDiff {
                 detail: "arms are not a single-rule removal diff".to_string(),
             });
+        }
+        // AC-R-2.10.3-13 — a `retirement` design refuses a diff whose
+        // classification carries `authority_delta ≠ none`,
+        // `budget_delta ≠ none`, or `semantic_ops ≠ 1` (unless the diff
+        // is candidate-bound — the amendment's exemption; authority and
+        // budget deltas never exempt). `None` from the resolver defers
+        // the check to a context that can classify.
+        if self.kind == ExperimentKind::Retirement {
+            if let Some(classify) = ctx.retirement_diff_class {
+                for i in 0..self.arms.len() {
+                    for j in 0..self.arms.len() {
+                        if i == j {
+                            continue;
+                        }
+                        let Some(v) = classify(&self.arms[i], &self.arms[j]) else {
+                            continue;
+                        };
+                        if v.authority_delta != "none" {
+                            return Err(ExperimentRefusal::NotARetirementDiff {
+                                detail: format!(
+                                    "arms `{}`->`{}`: a retirement diff refuses \
+                                     authority_delta = {} (never exempt)",
+                                    self.arms[j].arm_id, self.arms[i].arm_id, v.authority_delta
+                                ),
+                            });
+                        }
+                        if v.budget_delta != "none" {
+                            return Err(ExperimentRefusal::NotARetirementDiff {
+                                detail: format!(
+                                    "arms `{}`->`{}`: a retirement diff refuses \
+                                     budget_delta = {}",
+                                    self.arms[j].arm_id, self.arms[i].arm_id, v.budget_delta
+                                ),
+                            });
+                        }
+                        if v.semantic_ops != 1 && !v.candidate_bound {
+                            return Err(ExperimentRefusal::NotARetirementDiff {
+                                detail: format!(
+                                    "arms `{}`->`{}`: a retirement diff refuses \
+                                     semantic_ops = {} on a non-candidate-bound diff",
+                                    self.arms[j].arm_id, self.arms[i].arm_id, v.semantic_ops
+                                ),
+                            });
+                        }
+                    }
+                }
+            }
         }
         Ok(())
     }

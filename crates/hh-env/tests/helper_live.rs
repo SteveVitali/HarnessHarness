@@ -459,7 +459,7 @@ fn sandboxed_env(
 #[test]
 fn ac_s2_live_exec_streams_and_settles_observed() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-exec");
@@ -523,7 +523,7 @@ fn ac_s2_live_exec_streams_and_settles_observed() {
 #[test]
 fn ac_s2_deadline_is_helper_enforced() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-deadline");
@@ -811,7 +811,7 @@ fn ac_s2_malformed_frame_is_protocol_error() {
 #[test]
 fn ac_s2_helper_crash_lands_unknown() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-crash");
@@ -866,7 +866,7 @@ fn ac_s2_helper_crash_lands_unknown() {
 #[test]
 fn ac_s2_unreachable_heal_live_reattaches() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-heal");
@@ -918,7 +918,7 @@ fn ac_s2_unreachable_heal_live_reattaches() {
 #[test]
 fn ac_s2_replace_lands_successor() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-replace");
@@ -968,7 +968,7 @@ fn ac_s2_replace_lands_successor() {
 #[test]
 fn ac_s2_derive_modes() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-derive");
@@ -1042,7 +1042,7 @@ fn ac_s2_derive_modes() {
 #[test]
 fn ac_s2_fs_tree_snapshot_verify_restore() {
     if !hh_helper::seatbelt::is_available() {
-        eprintln!("SKIP: seatbelt unavailable (no /usr/bin/sandbox-exec)");
+        eprintln!("SKIP: seatbelt backend unavailable (no /usr/bin/sandbox-exec)");
         return;
     }
     let (mut store, run, lease, _clock) = open("live-fstree");

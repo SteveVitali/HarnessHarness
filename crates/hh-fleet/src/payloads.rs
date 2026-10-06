@@ -457,6 +457,7 @@ pub fn owner_acknowledged_payload(
 /// `lifecycle.escalation.raised` — the durable raise (a `timer` wakeup
 /// arms `deadline_ms` when present; `deadline_sub` names the subscription
 /// id so the fold can map fired rows back).
+#[allow(clippy::too_many_arguments)] // the raised row carries the full member set
 pub fn escalation_raised_payload(
     item_id: &str,
     run_item_id: &str,
@@ -498,6 +499,7 @@ pub fn escalation_raised_payload(
 /// `lifecycle.escalation.resolved` — the durable resolution; the fold
 /// clears the item's open escalation and drops the `escalation` block
 /// cause (`unblocked` records whether the row cleared it).
+#[allow(clippy::too_many_arguments)] // the resolved row carries the full member set
 pub fn escalation_resolved_payload(
     item_id: &str,
     run_item_id: &str,

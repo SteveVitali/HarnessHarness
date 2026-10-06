@@ -239,6 +239,7 @@ pub fn derive_state(v: &WorkItemView) -> String {
 /// Whether a state transition is admissible under §5i.1 #4's ordering —
 /// `queued → dispatching → dispatched → blocked → handoff → terminal`,
 /// `blocked` is re-entrant; `handoff` returns to `dispatched`/`queued`.
+#[allow(clippy::match_like_matches_macro)] // the table reads as a transition matrix
 pub fn transition_ok(from: &str, to: &str) -> bool {
     match (from, to) {
         ("queued", "dispatching" | "blocked" | "terminal") => true,

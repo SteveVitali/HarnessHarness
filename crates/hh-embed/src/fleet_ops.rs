@@ -88,7 +88,7 @@ fn item_json(it: &WorkItemView) -> Json {
     m.insert("item_id".into(), Json::str(&it.item_id));
     m.insert("run_item_id".into(), Json::str(&it.run_item_id));
     m.insert("title".into(), Json::str(&it.title));
-    m.insert("state".into(), Json::str(&derive_state(it)));
+    m.insert("state".into(), Json::str(derive_state(it)));
     m.insert("spec_ref".into(), Json::str(&it.spec_ref));
     m.insert("source".into(), it.source.clone());
     m.insert("idempotency_key".into(), Json::str(&it.idempotency_key));
