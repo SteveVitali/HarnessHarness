@@ -856,6 +856,22 @@ const GC_FIELDS: &[AuditField] = &[
     af("retained_until"),
 ];
 
+/// `lifecycle.ledger.tier_transition` — the retention-scheduler row
+/// (R-2.2.1; ADR-0068 R4; ADR-0333): `{address, from_tier, to_tier,
+/// policy_ref, at_ms, compressed}`. `from_tier = "none"` marks the
+/// first observed transition (an untracked subject). All members are
+/// audit fields — the row *names* its subject; it is not a content
+/// reference (`pin_reason` skips it — a retention-managed blob stays
+/// collectable).
+const TIER_TRANSITION_FIELDS: &[AuditField] = &[
+    af("address"),
+    af("from_tier"),
+    af("to_tier"),
+    af("policy_ref"),
+    af("at_ms"),
+    af("compressed"),
+];
+
 /// `security.audit.checkpoint` — the §5g.6 §3 record; nothing offloaded (a
 /// proof path over the bound is omitted and recomputed on demand).
 const CHECKPOINT_FIELDS: &[AuditField] = &[
@@ -1226,6 +1242,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     // ── lifecycle:ledger ──
     ("lifecycle.ledger.gc", "none"),
     ("lifecycle.ledger.redacted", "none"),
+    ("lifecycle.ledger.tier_transition", "none"),
     // ── lifecycle:registry ──
     ("lifecycle.registry.admission_refused", "none"),
     ("lifecycle.registry.conformance_recorded", "none"),
@@ -1467,6 +1484,7 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("lifecycle.lease.fenced",    O::Events, true,  LEASE_FIELDS, &[], None, None),
     row_audit("lifecycle.ledger.redacted", O::Events, true,  REDACTED_FIELDS, &[], None, None),
     row_audit("lifecycle.ledger.gc",       O::Events, true,  GC_FIELDS, &[], None, None),
+    row_audit("lifecycle.ledger.tier_transition", O::Events, true, TIER_TRANSITION_FIELDS, &[], None, None),
     // `lifecycle.escalation.{raised,resolved}` — audit-grade per the §5g.6 §3 list;
     // the emitters land at Stage 2 (the §05e F2/B2 escalation path).
     row_audit("lifecycle.escalation.raised",   O::Events, true,  OPEN_AUDIT, &[], None, None),
