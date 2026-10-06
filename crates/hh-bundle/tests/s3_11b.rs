@@ -101,6 +101,8 @@ fn inputs<'a>(
         extensions,
         budget: Json::Null,
         profile: Json::str("none"),
+        profile_refs: vec![],
+        images: vec![],
         nondeterminism: vec![],
         participant_class: None,
     }

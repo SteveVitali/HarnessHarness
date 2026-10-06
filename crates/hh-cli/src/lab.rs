@@ -1796,3 +1796,99 @@ pub fn cmd_profile(
         ))),
     }
 }
+
+// ── S5.4 — `debt *` / `model *` / `analysis *` (§7.1; R-2.9.6¹/R-2.9.8¹/
+// R-2.9.7¹) — one named Group L op per verb; the params file is the
+// canonical-JSON params body (records-in, never a fabricated member).
+
+/// `debt evaluate|index|report <params-file>` → the `lab.debt.*` op.
+pub fn cmd_debt_op(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+    verb: &str,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let method = match verb {
+        "evaluate" => "lab.debt.evaluate",
+        "index" => "lab.debt.index",
+        "report" => "lab.debt.report",
+        _ => {
+            return Err(CliError::Invocation(InvocationError::at(
+                "unknown_command",
+                &format!("debt {verb}"),
+                "unknown debt verb",
+            )))
+        }
+    };
+    let text = file_text(p, io, 0, "<params-file>")?;
+    let params = hh_wire::json::parse(&text).map_err(|e| {
+        CliError::Invocation(InvocationError::at(
+            "invalid_json",
+            "params-file",
+            &format!("{e:?}"),
+        ))
+    })?;
+    let r = call(b, method, params)?;
+    ok_outcome(&format!("debt_{verb}"), r, fmt(p, io)?)
+}
+
+/// `model snapshot-claim|regression <params-file>` → the `lab.model.*` op.
+pub fn cmd_model_op(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+    verb: &str,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let method = match verb {
+        "snapshot-claim" => "lab.model.snapshot_claim",
+        "regression" => "lab.model.regression",
+        _ => {
+            return Err(CliError::Invocation(InvocationError::at(
+                "unknown_command",
+                &format!("model {verb}"),
+                "unknown model verb",
+            )))
+        }
+    };
+    let text = file_text(p, io, 0, "<params-file>")?;
+    let params = hh_wire::json::parse(&text).map_err(|e| {
+        CliError::Invocation(InvocationError::at(
+            "invalid_json",
+            "params-file",
+            &format!("{e:?}"),
+        ))
+    })?;
+    let r = call(b, method, params)?;
+    ok_outcome(&format!("model_{verb}"), r, fmt(p, io)?)
+}
+
+/// `analysis targets|design <params-file>` → the `lab.analysis.*` op
+/// (the M1 component-target/design surface).
+pub fn cmd_analysis_op(
+    b: &mut dyn Boundary,
+    io: &mut Io,
+    p: &crate::cli::Parsed,
+    verb: &str,
+) -> Result<(crate::cli::CliOutcome, OutputFormat), CliError> {
+    let method = match verb {
+        "targets" => "lab.analysis.component_targets",
+        "design" => "lab.analysis.attribution_design",
+        _ => {
+            return Err(CliError::Invocation(InvocationError::at(
+                "unknown_command",
+                &format!("analysis {verb}"),
+                "unknown analysis verb",
+            )))
+        }
+    };
+    let text = file_text(p, io, 0, "<params-file>")?;
+    let params = hh_wire::json::parse(&text).map_err(|e| {
+        CliError::Invocation(InvocationError::at(
+            "invalid_json",
+            "params-file",
+            &format!("{e:?}"),
+        ))
+    })?;
+    let r = call(b, method, params)?;
+    ok_outcome(&format!("analysis_{verb}"), r, fmt(p, io)?)
+}

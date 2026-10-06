@@ -763,41 +763,180 @@ pub fn analyze(
                     .unwrap_or_default(),
             };
             // `targets[]` — typed `ComponentTarget`s (`filters.targets`
-            // = `[{kind ∈ {slot, variant, rule, parameter, leaf}, ref}]`;
-            // a bare factor name desugars to `{kind: parameter}` —
-            // R-2.9.7's typed-target requirement).
+            // = `[{kind ∈ {slot, variant, rule, parameter, leaf,
+            // text_leaf, procedure, decision_point}, ref}]`; a bare factor
+            // name desugars to `{kind: parameter}` — R-2.9.7's typed-target
+            // requirement). `leaf` is the Stage-3 spelling; `text_leaf` is
+            // the §5h.7 canonical one (same target — decode to the
+            // canonical spelling). `intervention` ∈ {ablation,
+            // observation_substitution} — the latter is admissible on
+            // hosted rows only under `interception: model_io` at
+            // `granularity: configuration` (AC-R-2.9.7-10).
+            const COMPONENT_TARGET_KINDS: &[&str] = &[
+                "slot",
+                "variant",
+                "rule",
+                "parameter",
+                "leaf",
+                "text_leaf",
+                "procedure",
+                "decision_point",
+            ];
+            const TARGET_CAP: usize = 64;
             let targets: Vec<Json> = match filters.get("targets") {
-                Some(Json::Arr(items)) => items
-                    .iter()
-                    .map(|t| {
-                        let kind = t.get("kind").and_then(Json::as_str).unwrap_or("parameter");
-                        if !["slot", "variant", "rule", "parameter", "leaf"].contains(&kind) {
-                            return Err(AnalysisError::BadSpec {
-                                member: "filters.targets.kind".into(),
-                                detail: format!(
-                                    "unknown ComponentTarget kind {kind} — ∈ {{slot, variant, rule, parameter, leaf}}"
-                                ),
-                            });
-                        }
-                        Ok(Json::obj([
-                            ("kind", Json::str(kind)),
-                            (
-                                "ref",
+                Some(Json::Arr(items)) => {
+                    if items.len() > TARGET_CAP {
+                        return Err(AnalysisError::BadSpec {
+                            member: "filters.targets".into(),
+                            detail: format!("target cap {TARGET_CAP} exceeded ({})", items.len()),
+                        });
+                    }
+                    items
+                        .iter()
+                        .map(|t| {
+                            let kind =
+                                t.get("kind").and_then(Json::as_str).unwrap_or("parameter");
+                            if !COMPONENT_TARGET_KINDS.contains(&kind) {
+                                return Err(AnalysisError::BadSpec {
+                                    member: "filters.targets.kind".into(),
+                                    detail: format!(
+                                        "unknown ComponentTarget kind {kind} — ∈ {COMPONENT_TARGET_KINDS:?}"
+                                    ),
+                                });
+                            }
+                            let canonical_kind = if kind == "leaf" { "text_leaf" } else { kind };
+                            let intervention = t
+                                .get("intervention")
+                                .and_then(Json::as_str)
+                                .unwrap_or("ablation");
+                            if !["ablation", "observation_substitution"].contains(&intervention)
+                            {
+                                return Err(AnalysisError::BadSpec {
+                                    member: "filters.targets.intervention".into(),
+                                    detail: format!(
+                                        "unknown intervention {intervention} — ∈ {{ablation, observation_substitution}}"
+                                    ),
+                                });
+                            }
+                            let mut tm = BTreeMap::new();
+                            tm.insert("kind".into(), Json::str(canonical_kind));
+                            tm.insert(
+                                "ref".into(),
                                 t.get("ref").cloned().unwrap_or(Json::Null),
-                            ),
-                        ]))
-                    })
-                    .collect::<Result<_, AnalysisError>>()?,
+                            );
+                            if intervention != "ablation" {
+                                tm.insert("intervention".into(), Json::str(intervention));
+                            }
+                            if let Some(i) = t.get("interception") {
+                                tm.insert("interception".into(), i.clone());
+                            }
+                            if let Some(g) = t.get("granularity") {
+                                tm.insert("granularity".into(), g.clone());
+                            }
+                            Ok(Json::Obj(tm))
+                        })
+                        .collect::<Result<_, AnalysisError>>()?
+                }
                 _ => factors
                     .iter()
-                    .map(|f| {
-                        Json::obj([
-                            ("kind", Json::str("parameter")),
-                            ("ref", Json::str(f)),
-                        ])
-                    })
+                    .map(|f| Json::obj([("kind", Json::str("parameter")), ("ref", Json::str(f))]))
                     .collect(),
             };
+            // The recipe (R-2.9.7's `retirement` experiment kind): the same
+            // M1 math, spelled `retirement` — the report carries
+            // `removal_verdict` the debt settle path consumes.
+            let recipe = filters
+                .get("recipe")
+                .and_then(Json::as_str)
+                .unwrap_or("designed_ablation");
+            if !["designed_ablation", "retirement"].contains(&recipe) {
+                return Err(AnalysisError::BadSpec {
+                    member: "filters.recipe".into(),
+                    detail: format!(
+                        "unknown recipe {recipe} — ∈ {{designed_ablation, retirement}}"
+                    ),
+                });
+            }
+            // The estimand spelling — `loo` (leave-one-out: the factor is
+            // ablated) / `loi` (leave-one-in: only the factor survives)
+            // (§5h.7's estimand vocabulary; the default keeps the Stage-3
+            // `designed_ablation` spelling).
+            let estimand = filters
+                .get("estimand")
+                .and_then(Json::as_str)
+                .unwrap_or("designed_ablation");
+            if !["designed_ablation", "loo", "loi"].contains(&estimand) {
+                return Err(AnalysisError::BadSpec {
+                    member: "filters.estimand".into(),
+                    detail: format!(
+                        "unknown estimand {estimand} — ∈ {{designed_ablation, loo, loi}}"
+                    ),
+                });
+            }
+            // `budget_allocation{regime ∈ {uniform, concentrated},
+            // per_target, search_floor}` — the budget-splitting regimes are
+            // never pooled (AC-R-2.9.7-4): a `uniform` allocation below a
+            // target's search floor nulls its effect and the report carries
+            // `budget_allocation_ref`; `concentrated` allocates the whole
+            // budget to `concentrated_on` (or the first target).
+            let allocation: Option<Json> = match filters.get("budget_allocation") {
+                Some(Json::Obj(_)) => Some(
+                    filters
+                        .get("budget_allocation")
+                        .cloned()
+                        .unwrap_or(Json::Null),
+                ),
+                Some(_) => {
+                    return Err(AnalysisError::BadSpec {
+                        member: "filters.budget_allocation".into(),
+                        detail: "must be an object".into(),
+                    })
+                }
+                None => None,
+            };
+            let budget_regime = allocation
+                .as_ref()
+                .and_then(|a| a.get("regime").and_then(Json::as_str))
+                .unwrap_or("none");
+            if let Some(a) = &allocation {
+                let regime = a.get("regime").and_then(Json::as_str).unwrap_or("uniform");
+                if !["uniform", "concentrated"].contains(&regime) {
+                    return Err(AnalysisError::BadSpec {
+                        member: "filters.budget_allocation.regime".into(),
+                        detail: format!("unknown regime {regime} — ∈ {{uniform, concentrated}}"),
+                    });
+                }
+            }
+            let per_target_budget = allocation
+                .as_ref()
+                .and_then(|a| a.get("per_target").and_then(Json::as_int))
+                .unwrap_or(0);
+            let search_floor = allocation
+                .as_ref()
+                .and_then(|a| a.get("search_floor").and_then(Json::as_int))
+                .unwrap_or(0);
+            let below_floor =
+                budget_regime == "uniform" && per_target_budget < search_floor && search_floor > 0;
+            let concentrated_on: Option<String> = if budget_regime == "concentrated" {
+                allocation
+                    .as_ref()
+                    .and_then(|a| a.get("concentrated_on").and_then(Json::as_str))
+                    .map(str::to_string)
+                    .or_else(|| {
+                        targets
+                            .first()
+                            .and_then(|t| t.get("ref").and_then(Json::as_str))
+                            .map(str::to_string)
+                    })
+            } else {
+                None
+            };
+            let budget_allocation_ref = allocation.as_ref().map(|a| {
+                hh_identity::idp_id(
+                    "attribution.budget_allocation",
+                    a.to_canonical_string().as_bytes(),
+                )
+            });
             let factor_refs: Vec<&str> = factors.iter().map(String::as_str).collect();
             if let Some((factor, run_id, detail)) =
                 crate::ops::factor_inadmissible(&runs, input.design, &factor_refs)
@@ -814,12 +953,78 @@ pub fn analyze(
                 .filter(|r| !crate::ops::is_hosted(r))
                 .cloned()
                 .collect();
+            // The hosted `model_io` exception (AC-R-2.9.7-10): a hosted
+            // target is `n/a{class}` *unless* its `intervention` is
+            // `observation_substitution` under `interception: model_io` at
+            // `granularity: configuration` — the only hosted admissible
+            // form.
+            let hosted_exceptions: Vec<&Json> = targets
+                .iter()
+                .filter(|t| {
+                    t.get("intervention").and_then(Json::as_str) == Some("observation_substitution")
+                        && t.get("interception").and_then(Json::as_str) == Some("model_io")
+                        && t.get("granularity").and_then(Json::as_str) == Some("configuration")
+                })
+                .collect();
+            let hosted_exception_refs: Vec<String> = hosted_exceptions
+                .iter()
+                .filter_map(|t| t.get("ref").and_then(Json::as_str))
+                .map(str::to_string)
+                .collect();
             let arms = [arm_spec(input, &a)?.clone(), arm_spec(input, &b)?.clone()];
+            // The typed `ComponentTarget` each factor reports under —
+            // keyed by `ref` (a bare factor desugared to
+            // `{kind: parameter}` above).
+            let target_of = |f: &str| -> Json {
+                targets
+                    .iter()
+                    .find(|t| t.get("ref").and_then(Json::as_str) == Some(f))
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        Json::obj([("kind", Json::str("parameter")), ("ref", Json::str(f))])
+                    })
+            };
             let mut effects = Vec::new();
             let mut effect_sum: i128 = 0;
             let mut n_effect = 0u64;
-            if !native.is_empty() {
+            let mut reasons: Vec<String> = Vec::new();
+            if below_floor {
+                // AC-R-2.9.7-4: a uniform allocation below every target's
+                // search floor nulls every effect — the report names the
+                // allocation (`budget_allocation_ref`), regimes never pool.
+                reasons.push("budget_allocation_below_floor".into());
                 for f in &factors {
+                    effects.push(Json::obj([
+                        ("target", target_of(f)),
+                        ("factor", Json::str(f)),
+                        ("estimand", Json::str(estimand)),
+                        ("point", Json::Null),
+                        ("interval", Json::Null),
+                        ("replay_mode", Json::str("none")),
+                        ("validity_mode", Json::str("designed_ablation")),
+                        ("label", Json::str("designed_ablation")),
+                    ]));
+                }
+            } else if !native.is_empty() {
+                for f in &factors {
+                    // `concentrated` regimes fund only `concentrated_on` —
+                    // every other target's effect is null (the regime is
+                    // named on the report, never pooled).
+                    if let Some(on) = &concentrated_on {
+                        if on != f {
+                            effects.push(Json::obj([
+                                ("target", target_of(f)),
+                                ("factor", Json::str(f)),
+                                ("estimand", Json::str(estimand)),
+                                ("point", Json::Null),
+                                ("interval", Json::Null),
+                                ("replay_mode", Json::str("none")),
+                                ("validity_mode", Json::str("designed_ablation")),
+                                ("label", Json::str("designed_ablation")),
+                            ]));
+                            continue;
+                        }
+                    }
                     let inp = compare_input(spec, input, &native, &arms, &a, &b, Some(f));
                     match compare(&inp) {
                         Ok(out) => {
@@ -839,15 +1044,9 @@ pub fn analyze(
                                     n_effect += 1;
                                 }
                                 effects.push(Json::obj([
-                                    (
-                                        "target",
-                                        Json::obj([
-                                            ("kind", Json::str("parameter")),
-                                            ("ref", Json::str(f)),
-                                        ]),
-                                    ),
+                                    ("target", target_of(f)),
                                     ("factor", Json::str(f)),
-                                    ("estimand", Json::str("designed_ablation")),
+                                    ("estimand", Json::str(estimand)),
                                     ("arm_a", Json::str(&a)),
                                     ("arm_b", Json::str(&b)),
                                     ("metric", Json::str(&r.metric)),
@@ -865,19 +1064,98 @@ pub fn analyze(
                         // An unpairable factor level is `n/a`, listed —
                         // never silently dropped (CC3).
                         Err(_) => effects.push(Json::obj([
-                            (
-                                "target",
-                                Json::obj([
-                                    ("kind", Json::str("parameter")),
-                                    ("ref", Json::str(f)),
-                                ]),
-                            ),
+                            ("target", target_of(f)),
                             ("factor", Json::str(f)),
-                            ("estimand", Json::str("designed_ablation")),
+                            ("estimand", Json::str(estimand)),
                             ("n/a", Json::str("estimator_undefined")),
                         ])),
                     }
                 }
+            }
+            // The hosted exception rows: `observation_substitution` under
+            // `model_io`/`configuration` computes over the hosted runs
+            // (interception at configuration granularity is the one hosted
+            // admissible form; every other hosted target stays
+            // `n/a{class}`).
+            if !hosted_exception_refs.is_empty() && !hosted.is_empty() {
+                let hosted_runs: Vec<EvalRun> = hosted.iter().map(|r| (*r).clone()).collect();
+                for f in &hosted_exception_refs {
+                    let inp = compare_input(spec, input, &hosted_runs, &arms, &a, &b, Some(f));
+                    match compare(&inp) {
+                        Ok(out) => {
+                            for r in out.reports.iter() {
+                                if let Some(Json::Int(p)) = r.paired_effect.point {
+                                    effect_sum += p as i128;
+                                    n_effect += 1;
+                                }
+                                effects.push(Json::obj([
+                                    ("target", target_of(f)),
+                                    ("factor", Json::str(f)),
+                                    ("estimand", Json::str("observation_substitution")),
+                                    ("interception", Json::str("model_io")),
+                                    ("granularity", Json::str("configuration")),
+                                    ("arm_a", Json::str(&a)),
+                                    ("arm_b", Json::str(&b)),
+                                    ("metric", Json::str(&r.metric)),
+                                    ("point", r.paired_effect.point.clone().unwrap_or(Json::Null)),
+                                    (
+                                        "interval",
+                                        r.paired_effect.interval.clone().unwrap_or(Json::Null),
+                                    ),
+                                    ("replay_mode", Json::str("none")),
+                                    ("validity_mode", Json::str("hosted_interception")),
+                                    ("label", Json::str("designed_ablation")),
+                                ]));
+                            }
+                        }
+                        Err(_) => effects.push(Json::obj([
+                            ("target", target_of(f)),
+                            ("factor", Json::str(f)),
+                            ("estimand", Json::str("observation_substitution")),
+                            ("n/a", Json::str("estimator_undefined")),
+                        ])),
+                    }
+                }
+            }
+            // The `retirement` recipe (R-2.9.7): the report's
+            // `removal_verdict` is the settle-path input — `pass` when every
+            // computed effect is null or inside `filters.tolerance_ppm`
+            // (default 0), `inconclusive` when any effect is `n/a`, `fail`
+            // otherwise.
+            let removal_verdict: Option<Json> = if recipe == "retirement" {
+                let tol = filters
+                    .get("tolerance_ppm")
+                    .and_then(Json::as_int)
+                    .unwrap_or(0);
+                let mut saw_na = false;
+                let mut exceeded = false;
+                for e in &effects {
+                    if e.get("n/a").is_some() {
+                        saw_na = true;
+                    }
+                    if let Some(Json::Int(p)) = e.get("point") {
+                        if p.abs() > tol as i64 {
+                            exceeded = true;
+                        }
+                    }
+                }
+                let v = if saw_na {
+                    "inconclusive"
+                } else if exceeded {
+                    "fail"
+                } else {
+                    "pass"
+                };
+                reasons.push(format!("retirement_verdict:{v}"));
+                Some(Json::obj([("verdict", Json::str(v))]))
+            } else {
+                None
+            };
+            if !hosted.is_empty() {
+                reasons.push("hosted_rows_present".into());
+            }
+            if concentrated_on.is_some() {
+                reasons.push("budget_concentrated".into());
             }
             // `AttributionReport/1` member set (R-2.9.7; ADR-0200 D5):
             // the ablation manifest, the subject coordinate, the
@@ -912,6 +1190,7 @@ pub fn analyze(
             let unattributed = delta_total.map(|d| Json::Int(d - effect_sum as i64));
             let ablation_manifest = Json::obj([
                 ("kind", Json::str("designed_ablation")),
+                ("recipe", Json::str(recipe)),
                 (
                     "factors",
                     Json::Arr(factors.iter().map(Json::str).collect()),
@@ -931,90 +1210,126 @@ pub fn analyze(
                         .unwrap_or(Json::Null),
                 ),
             ]);
-            sections.push((
-                "attribution",
-                Json::obj([
-                    ("schema", Json::str("hh-attribution/1")),
-                    ("kind", Json::str("attribution")),
-                    ("method", Json::str("M1")),
-                    (
-                        "subject",
-                        Json::obj([
-                            (
-                                "configuration_ids",
-                                Json::Arr(subject_configs.iter().map(|c| Json::str(*c)).collect()),
-                            ),
-                            (
-                                "run_ids",
-                                Json::Arr(subject_runs.iter().map(|c| Json::str(*c)).collect()),
-                            ),
-                            (
-                                "task_ids",
-                                Json::Arr(subject_tasks.iter().map(|c| Json::str(*c)).collect()),
-                            ),
-                        ]),
-                    ),
-                    (
-                        "design_ref",
-                        spec.spec_ref.clone().map(Json::str).unwrap_or(Json::Null),
-                    ),
-                    ("targets", Json::Arr(targets)),
-                    ("ablation_manifest", ablation_manifest),
-                    ("effects", Json::Arr(effects)),
-                    ("delta", delta_total.map(Json::Int).unwrap_or(Json::Null)),
-                    ("unattributed_share", unattributed.unwrap_or(Json::Null)),
-                    ("n_effects", Json::Int(n_effect as i64)),
-                    ("delivered", Json::Int(delivered)),
-                    ("settled", Json::Int(settled)),
-                    ("attributable", Json::Bool(!native.is_empty())),
-                    (
-                        "budget",
-                        Json::obj([
-                            (
-                                "search_ref",
-                                arms.first()
-                                    .and_then(|s| s.search_budget.as_ref())
-                                    .map(|_| Json::str("declared"))
-                                    .unwrap_or(Json::Null),
-                            ),
-                            ("charged_to", Json::str("instrument")),
-                        ]),
-                    ),
-                    (
-                        "assumptions",
-                        Json::obj([
-                            ("coupling_assumption", Json::Null),
-                            ("fork_policy", Json::str("designed_ablation")),
-                        ]),
-                    ),
-                    (
-                        "label",
-                        spec.label
-                            .clone()
-                            .map(Json::str)
-                            .unwrap_or_else(|| Json::str("confirmatory")),
-                    ),
-                    ("attribution_label", Json::str("designed_ablation")),
-                    (
-                        "provenance",
-                        Json::obj([("origin", Json::str("instrument"))]),
-                    ),
-                    (
-                        "na_rows",
-                        Json::Arr(
-                            hosted
-                                .iter()
-                                .map(|r| {
-                                    Json::obj([
-                                        ("run_id", Json::str(&r.run_id)),
-                                        ("n/a", Json::str("class")),
-                                    ])
-                                })
-                                .collect(),
+            let mut budget_members = BTreeMap::new();
+            budget_members.insert(
+                "search_ref".into(),
+                arms.first()
+                    .and_then(|s| s.search_budget.as_ref())
+                    .map(|_| Json::str("declared"))
+                    .unwrap_or(Json::Null),
+            );
+            budget_members.insert("charged_to".into(), Json::str("instrument"));
+            if let Some(alloc) = &allocation {
+                budget_members.insert("allocation".into(), alloc.clone());
+            }
+            if let Some(r) = &budget_allocation_ref {
+                budget_members.insert("budget_allocation_ref".into(), Json::str(r));
+            }
+            // `multiplicity{n_tests, correction}` — the report counts the
+            // tests it ran; `filters.correction` ∈ {none, holm} (the
+            // multiple-comparison correction spelling, never silent).
+            let correction = filters
+                .get("correction")
+                .and_then(Json::as_str)
+                .unwrap_or("none");
+            let mut report = Json::obj([
+                ("schema", Json::str("hh-attribution/1")),
+                ("kind", Json::str("attribution")),
+                ("method", Json::str("M1")),
+                (
+                    "subject",
+                    Json::obj([
+                        (
+                            "configuration_ids",
+                            Json::Arr(subject_configs.iter().map(|c| Json::str(*c)).collect()),
                         ),
+                        (
+                            "run_ids",
+                            Json::Arr(subject_runs.iter().map(|c| Json::str(*c)).collect()),
+                        ),
+                        (
+                            "task_ids",
+                            Json::Arr(subject_tasks.iter().map(|c| Json::str(*c)).collect()),
+                        ),
+                    ]),
+                ),
+                (
+                    "design_ref",
+                    spec.spec_ref.clone().map(Json::str).unwrap_or(Json::Null),
+                ),
+                ("targets", Json::Arr(targets)),
+                ("ablation_manifest", ablation_manifest),
+                ("recipe", Json::str(recipe)),
+                ("estimand", Json::str(estimand)),
+                ("effects", Json::Arr(effects)),
+                ("delta", delta_total.map(Json::Int).unwrap_or(Json::Null)),
+                ("unattributed_share", unattributed.unwrap_or(Json::Null)),
+                ("n_effects", Json::Int(n_effect as i64)),
+                ("delivered", Json::Int(delivered)),
+                ("settled", Json::Int(settled)),
+                ("attributable", Json::Bool(!native.is_empty())),
+                ("budget", Json::Obj(budget_members)),
+                (
+                    "multiplicity",
+                    Json::obj([
+                        ("n_tests", Json::Int(n_effect as i64)),
+                        ("correction", Json::str(correction)),
+                    ]),
+                ),
+                (
+                    "reasons",
+                    Json::Arr(reasons.iter().map(Json::str).collect()),
+                ),
+                (
+                    "assumptions",
+                    Json::obj([
+                        ("coupling_assumption", Json::Null),
+                        ("fork_policy", Json::str("designed_ablation")),
+                    ]),
+                ),
+                (
+                    "label",
+                    spec.label
+                        .clone()
+                        .map(Json::str)
+                        .unwrap_or_else(|| Json::str("confirmatory")),
+                ),
+                ("attribution_label", Json::str("designed_ablation")),
+                (
+                    "provenance",
+                    Json::obj([("origin", Json::str("instrument"))]),
+                ),
+                (
+                    "na_rows",
+                    Json::Arr(
+                        hosted
+                            .iter()
+                            .map(|r| {
+                                Json::obj([
+                                    ("run_id", Json::str(&r.run_id)),
+                                    ("n/a", Json::str("class")),
+                                ])
+                            })
+                            .collect(),
                     ),
-                ]),
-            ));
+                ),
+            ]);
+            if let Some(v) = removal_verdict {
+                if let Json::Obj(m) = &mut report {
+                    m.insert("removal_verdict".into(), v);
+                }
+            }
+            // `report_id` — the content address of the report sans the id
+            // member (AC-R-2.9.7-11: deterministic reruns mint the same
+            // report and the same id).
+            if let Json::Obj(m) = &mut report {
+                let id = hh_identity::idp_id(
+                    "attribution.report",
+                    Json::Obj(m.clone()).to_canonical_string().as_bytes(),
+                );
+                m.insert("report_id".into(), Json::str(id));
+            }
+            sections.push(("attribution", report));
         }
         "rank" => {
             // A9 (§6.4; ADR-0158 D6): the task-resampled rank report —

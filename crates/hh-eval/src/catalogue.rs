@@ -905,6 +905,37 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
         }
         metrics.push(m);
     }
+    // ── S5.4: the attribution + debt declarations (R-2.9.7¹/R-2.9.6¹) ────
+    // `attribution_quality` — the M1 report's quality surface (the
+    // attributed share / effect coverage — native-only: hosted rows render
+    // `n/a{class}` under the §5h.7 class rule). `debt.*` — the assumption-
+    // debt health metrics — the closed `hh_ontology::debt::
+    // DEBT_HEALTH_METRICS` set (§5h.6 §5; one spelling source — CC1),
+    // native-only: hosted surfaces never mint debt rows.
+    metrics.push(MetricDeclaration {
+        name: "attribution_quality".into(),
+        dimension: Dimension::Evolvability,
+        level: MetricLevel::Run,
+        unit: "ppm".into(),
+        interval_method: IntervalMethod::Wilson,
+        ..MetricDeclaration {
+            applies_to_classes: [ParticipantClass::Native].into_iter().collect(),
+            ..base()
+        }
+    });
+    for name in hh_ontology::debt::DEBT_HEALTH_METRICS {
+        metrics.push(MetricDeclaration {
+            name: (*name).into(),
+            dimension: Dimension::Evolvability,
+            level: MetricLevel::Run,
+            unit: "ppm".into(),
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                applies_to_classes: [ParticipantClass::Native].into_iter().collect(),
+                ..base()
+            }
+        });
+    }
     // The hosted-specific declarations (§6.6 §2.4 — `applies_to_classes =
     // {hosted}`, non-veto). Schema-only at C0/Stage 3: the folds land with the
     // hosting service (S4.5a); a declared row renders `n/a{class}` on native

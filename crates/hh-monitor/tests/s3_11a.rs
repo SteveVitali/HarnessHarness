@@ -2826,11 +2826,17 @@ fn ac_r_2_1_5_11_hosted_rows_are_class_gated() {
         assert!(!m.veto, "{name} is a report row, never a veto");
     }
     // No *native-only* metric claims hosted coverage: the native-only rows
-    // (the ledger-derived vetoes) name `{native}` exactly.
+    // (the ledger-derived vetoes plus the S5.4 additions — `debt.*` health
+    // rows a hosted surface never mints, and `attribution_quality`, which a
+    // hosted arm renders `n/a{class}` under the §5h.7 class rule) name
+    // `{native}` exactly.
     for m in scorecard_metrics() {
         if m.applies_to_classes == [PC::Native].into_iter().collect::<BTreeSet<_>>() {
             assert!(
-                m.name.starts_with("veto.") || m.name == "opacity_dynamic",
+                m.name.starts_with("veto.")
+                    || m.name.starts_with("debt.")
+                    || m.name == "opacity_dynamic"
+                    || m.name == "attribution_quality",
                 "native-only row: {}",
                 m.name
             );

@@ -2487,3 +2487,125 @@ pub fn realized_stages(
         ("stages", Json::Arr(rows)),
     ])
 }
+
+// ── S5.4: component targets + the attribution design helper — R-2.9.7¹ ──────
+
+/// `component_targets(sealed_definition, filter?) → [ComponentTarget]` —
+/// the typed-target enumeration (§5h.7; R-2.9.7¹): walks the sealed
+/// definition's members and emits `{kind, ref}` rows —
+/// `slots[]`→`slot`, `variants[]`→`variant`, `rules[]`→`rule`,
+/// `parameters`/`parameter_defaults` keys→`parameter`,
+/// `procedures[]`→`procedure`, `leaves[]`/`text[]`→`text_leaf`,
+/// `decision_points[]`→`decision_point`. `filter` narrows by
+/// `{kinds[], pattern}` (a substring match on `ref` — records-in,
+/// records-out; nothing here reads a store).
+pub fn component_targets(definition: &Json, filter: Option<&Json>) -> Vec<Json> {
+    let kinds: Option<Vec<String>> = filter.and_then(|f| f.get("kinds")).and_then(|k| match k {
+        Json::Arr(items) => Some(
+            items
+                .iter()
+                .filter_map(Json::as_str)
+                .map(str::to_string)
+                .collect(),
+        ),
+        _ => None,
+    });
+    let pattern = filter
+        .and_then(|f| f.get("pattern"))
+        .and_then(Json::as_str)
+        .map(str::to_string);
+    let mut out: Vec<Json> = Vec::new();
+    let mut push = |kind: &'static str, reference: &str| {
+        if let Some(ks) = &kinds {
+            if !ks.iter().any(|k| k == kind) {
+                return;
+            }
+        }
+        if let Some(p) = &pattern {
+            if !reference.contains(p.as_str()) {
+                return;
+            }
+        }
+        out.push(Json::obj([
+            ("kind", Json::str(kind)),
+            ("ref", Json::str(reference)),
+        ]));
+    };
+    let arr_refs = |m: Option<&Json>| -> Vec<String> {
+        match m {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .filter_map(|v| {
+                    v.as_str()
+                        .map(str::to_string)
+                        .or_else(|| v.get("ref").and_then(Json::as_str).map(str::to_string))
+                        .or_else(|| v.get("name").and_then(Json::as_str).map(str::to_string))
+                        .or_else(|| v.get("rule_id").and_then(Json::as_str).map(str::to_string))
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    };
+    if let Json::Obj(m) = definition {
+        for s in arr_refs(m.get("slots")) {
+            push("slot", &s);
+        }
+        for s in arr_refs(m.get("variants")) {
+            push("variant", &s);
+        }
+        for s in arr_refs(m.get("rules")) {
+            push("rule", &s);
+        }
+        for member in ["parameters", "parameter_defaults"] {
+            if let Some(Json::Obj(pm)) = m.get(member) {
+                for k in pm.keys() {
+                    push("parameter", k);
+                }
+            }
+        }
+        for s in arr_refs(m.get("procedures")) {
+            push("procedure", &s);
+        }
+        for member in ["leaves", "text", "text_leaves"] {
+            for s in arr_refs(m.get(member)) {
+                push("text_leaf", &s);
+            }
+        }
+        for s in arr_refs(m.get("decision_points")) {
+            push("decision_point", &s);
+        }
+    }
+    out.sort_by_key(|a| a.to_canonical_string());
+    out.dedup();
+    out
+}
+
+/// `attribution_design(design_ref, targets, arms, match_spec_ref?,
+/// budget_allocation?) → AttributionDesign` — the design document the M1
+/// kernel consumes (§5h.7; R-2.9.7¹): `{schema: hh-attribution-design/1,
+/// design_ref, targets[], arms[], match_spec_ref?, budget_allocation?,
+/// method: M1}`.
+pub fn attribution_design(
+    design_ref: &str,
+    targets: Vec<Json>,
+    arms: &[String],
+    match_spec_ref: Option<&str>,
+    budget_allocation: Option<Json>,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert("schema".into(), Json::str("hh-attribution-design/1"));
+    m.insert("design_ref".into(), Json::str(design_ref));
+    m.insert("method".into(), Json::str("M1"));
+    m.insert("targets".into(), Json::Arr(targets));
+    m.insert(
+        "arms".into(),
+        Json::Arr(arms.iter().map(Json::str).collect()),
+    );
+    if let Some(ms) = match_spec_ref {
+        m.insert("match_spec_ref".into(), Json::str(ms));
+    }
+    if let Some(b) = budget_allocation {
+        m.insert("budget_allocation".into(), b);
+    }
+    Json::Obj(m)
+}

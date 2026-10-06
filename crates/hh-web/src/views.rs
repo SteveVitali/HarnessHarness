@@ -298,6 +298,7 @@ pub fn view(svc: &mut Sessions, id: &str, params: Json) -> Result<Json, ClientEr
                                 Json::Arr(vec![
                                     Json::str("control.work_item."),
                                     Json::str("measurement.debt."),
+                                    Json::str("lifecycle.debt."),
                                     Json::str("lifecycle.fleet."),
                                 ]),
                             )]),
@@ -305,6 +306,16 @@ pub fn view(svc: &mut Sessions, id: &str, params: Json) -> Result<Json, ClientEr
                     ]),
                 )?;
                 m.insert("control".into(), control);
+            }
+            // S5.4 (R-2.9.6¹): the `debt_report` member — when the browser
+            // params carry `debt_report{rows[], policy?, scope?}` the view
+            // forwards it to `lab.debt.report` verbatim (records-in — the
+            // view never fabricates index rows); the `DebtReport` +
+            // `routed_notices` render verbatim.
+            if let Some(drq) = p.get("debt_report") {
+                if let Ok(r) = svc.call("lab.debt.report", drq.clone()) {
+                    m.insert("debt_report".into(), r);
+                }
             }
             let audit = svc.call("lab.eval.catalogue", Json::Obj(BTreeMap::new()));
             if let Ok(a) = audit {

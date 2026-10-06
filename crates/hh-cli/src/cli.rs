@@ -1077,6 +1077,15 @@ fn dispatch(p: &Parsed, b: &mut dyn Boundary, io: &mut Io, argv: &[String]) -> C
         ("results", "catalogue") => go(crate::lab::cmd_results_catalogue(b, io, p)),
         ("results", "verify-row") => go(crate::lab::cmd_results_verify_row(b, io, p)),
         ("results", "export") => go(crate::lab::cmd_results_export(b, io, p)),
+        ("debt", verb @ ("evaluate" | "index" | "report")) => {
+            go(crate::lab::cmd_debt_op(b, io, p, verb))
+        }
+        ("model", verb @ ("snapshot-claim" | "regression")) => {
+            go(crate::lab::cmd_model_op(b, io, p, verb))
+        }
+        ("analysis", verb @ ("targets" | "design")) => {
+            go(crate::lab::cmd_analysis_op(b, io, p, verb))
+        }
         ("compare", "report") => go(crate::lab::cmd_compare_report(b, io, p)),
         ("compare", "scorecard") => go(crate::lab::cmd_compare_scorecard(b, io, p)),
         ("eval", "catalogue") => go(crate::lab::cmd_eval_catalogue(b, io, p)),

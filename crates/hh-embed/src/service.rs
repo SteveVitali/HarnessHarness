@@ -749,6 +749,21 @@ impl EmbedService {
             "lab.hosting.describe" => self.lab_hosting_describe(&req.params),
             "lab.hosting.probe" => self.lab_hosting_probe(&req.params),
             "lab.hosting.attach" => self.lab_hosting_attach(&req.params),
+            // ── S5.4: `lab.debt.*` (the live all-home evaluator +
+            // DebtIndex + the health-report/notifier surface —
+            // R-2.9.6¹), `lab.model.*` (synthetic provider-drift claims +
+            // the regression-suite fold — R-2.9.8¹), and
+            // `lab.analysis.{component_targets,attribution_design}` (the
+            // M1 design surface — R-2.9.7¹). All records-in/records-out
+            // (AC-R-2.9.6-10: the manager is out-of-process by
+            // construction — no private verb).
+            "lab.debt.evaluate" => self.lab_debt_evaluate(&req.params),
+            "lab.debt.index" => self.lab_debt_index(&req.params),
+            "lab.debt.report" => self.lab_debt_report(&req.params),
+            "lab.model.snapshot_claim" => self.lab_model_snapshot_claim(&req.params),
+            "lab.model.regression" => self.lab_model_regression(&req.params),
+            "lab.analysis.component_targets" => self.lab_analysis_component_targets(&req.params),
+            "lab.analysis.attribution_design" => self.lab_analysis_attribution_design(&req.params),
             // ── S3.5: `lab.assembly.*` — the assembly service boundary
             // (R-2.10.1; §6.1). Semantics-free: records-in/records-out over
             // the one kernel resolver via `hh_lab::assembly`.
