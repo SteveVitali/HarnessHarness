@@ -30,7 +30,7 @@ button{font:inherit}#tokbox{margin-left:auto}
 "#;
 
 pub const JS: &str = r#"let TOK=sessionStorage.getItem('hh-tok')||'';
-const views=[['v1_runs','runs'],['v11_run','run'],['v5_monitor','monitor'],['v3_context','context'],['v3_timetravel','timetravel'],['v4_editor','editor'],['v5_launcher','launch'],['v2_scorecard','scorecard'],['v6_comparison','compare'],['v6_analysis','analysis'],['v7_traversal','traverse'],['v8_inbox','inbox'],['v9_delivery','delivery'],['v10_supervision','fleet'],['v11_bundle','bundle'],['v12_console','console']];
+const views=[['v1_runs','runs'],['v11_run','run'],['v5_monitor','monitor'],['v3_context','context'],['v3_timetravel','timetravel'],['v4_editor','editor'],['v5_launcher','launch'],['v2_scorecard','scorecard'],['v6_comparison','compare'],['v6_analysis','analysis'],['v6_evolution','evolution'],['v7_traversal','traverse'],['v8_inbox','inbox'],['v9_delivery','delivery'],['v10_supervision','fleet'],['v11_bundle','bundle'],['v12_console','console']];
 const nav=document.getElementById('nav'),main=document.getElementById('main');
 document.getElementById('tok').value=TOK;
 document.getElementById('tokbtn').onclick=()=>{TOK=document.getElementById('tok').value;sessionStorage.setItem('hh-tok',TOK);};
@@ -59,6 +59,7 @@ function render(v,b){
  if(v==='v4_editor'){main.innerHTML='<h2>assembly editor</h2>'+kv(b.resolve||{})+kv(b.identity||{})+kv(b.explain||{})+kv(b.plan||{})+kv(b.diff||{})+kv(b.debt_report||{});return;}
  if(v==='v5_launcher'){main.innerHTML='<h2>launch pre-flight</h2>'+kv(b.expand||{})+kv(b.power||{})+kv(b.next||{});return;}
  if(v==='v6_analysis'){main.innerHTML='<h2>analysis</h2>'+kv(b);return;}
+ if(v==='v6_evolution'){main.innerHTML='<h2>evolution</h2>'+kv(b);return;}
  if(v==='v11_bundle'){main.innerHTML='<h2>bundle</h2>'+kv(b.validate||{})+kv(b.status||{})+kv(b.completeness||{});return;}
  if(v==='v12_console'){main.innerHTML='<h2>console '+esc(b.run_id)+'</h2>'+kv(b.head)+kv(b.account)+kv(b.describe)+kv(b.stream||{})+kv(b.tail);return;}
  main.innerHTML=kv(b);}

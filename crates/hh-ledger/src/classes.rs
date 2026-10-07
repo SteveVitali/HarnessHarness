@@ -916,6 +916,10 @@ const MEMORY_FIELDS: &[AuditField] = &[
 ];
 const MEMORY_REFS: &[&str] = &["conflict_set_ref"];
 
+/// `context.memory.promotion_refused` — the AC-R-2.4.5-9 refusal record:
+/// `{version_id, reason ∈ {not_human, validity_not_valid}, endorser}`.
+const PROMOTION_REFUSED_FIELDS: &[AuditField] = &[af("version_id"), af("reason"), af("endorser")];
+
 /// `measurement.export.delivered` — `{sink_id, view_kind, seq_range,
 /// content_classes, loss_report_ref}` (the loss report is the one content ref).
 const EXPORT_FIELDS: &[AuditField] = &[
@@ -927,14 +931,44 @@ const EXPORT_FIELDS: &[AuditField] = &[
 const EXPORT_REFS: &[&str] = &["loss_report_ref"];
 
 /// `measurement.evolution.candidate.transitioned` — `{candidate_id, from, to,
-/// hypothesis_ref, evidence_refs[]}` (the obligation link fields).
+/// stage, code, report_ref, hypothesis_ref, evidence_refs[], slot, by,
+/// reason}` (§5h.1's transition payload plus the `evolution_link` obligation
+/// link fields; S6.1a adds `stage`/`code`/`report_ref`/`slot`/`by` — the
+/// rejected{stage, code, report_ref} / withdrawn{by} terminals and the
+/// slot the proposal claimed).
 const TRANSITION_FIELDS: &[AuditField] = &[
     af("candidate_id"),
     af("from"),
     af("to"),
+    af("stage"),
+    af("code"),
+    af("report_ref"),
     af("hypothesis_ref"),
+    af("hypothesis_kind"),
     afb("evidence_refs", AUDIT_FIELD_LIST_BYTES),
+    af("slot"),
+    af("base_ref"),
+    af("diff_ref"),
+    af("by"),
     af("reason"),
+];
+
+/// `measurement.evolution.campaign.{opened,stopped,closed}` — the campaign
+/// lifecycle rows (§5h.1 §6; S6.1a): `{campaign_id, spec_ref, protocol,
+/// holder, split_assignment_ref, service_definition_ref, slot_allocation,
+/// stop_rule, reason, candidates_registered}`. The spec body itself lives
+/// under the Lab document store — the row carries its content address.
+const CAMPAIGN_FIELDS: &[AuditField] = &[
+    af("campaign_id"),
+    af("spec_ref"),
+    af("protocol"),
+    af("holder"),
+    af("split_assignment_ref"),
+    af("service_definition_ref"),
+    afb("slot_allocation", AUDIT_FIELD_LIST_BYTES),
+    afb("stop_rule", AUDIT_FIELD_LIST_BYTES),
+    af("reason"),
+    af("candidates_registered"),
 ];
 
 use crate::manifest::ObservabilityLevel as O;
@@ -1039,6 +1073,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("context.compaction.started", "compaction.observed"),
     // ── context:memory ──
     ("context.memory.invalidated", "hint"),
+    ("context.memory.promotion_refused", "hint"),
     ("context.memory.read", "hint"),
     ("context.memory.written", "hint"),
     // ── context:observation ──
@@ -1200,6 +1235,9 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("measurement.cost.attributed", "hint"),
     // ── measurement:evolution ──
     ("measurement.evolution.candidate.transitioned", "hint"),
+    ("measurement.evolution.campaign.opened", "hint"),
+    ("measurement.evolution.campaign.stopped", "hint"),
+    ("measurement.evolution.campaign.closed", "hint"),
     // ── measurement:experiment ──
     ("measurement.experiment.amended", "none"),
     ("measurement.experiment.bound", "none"),
@@ -1723,6 +1761,10 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("context.memory.written",     O::Events, true, MEMORY_FIELDS, MEMORY_REFS, None, None),
     row_audit("context.memory.invalidated", O::Events, true, MEMORY_FIELDS, MEMORY_REFS, None, None),
     row_audit("context.memory.read",        O::Events, true, MEMORY_FIELDS, MEMORY_REFS, None, None),
+    // `context.memory.promotion_refused` (AC-R-2.4.5-9; S6.1a) — the
+    // ledgered refusal of an induced (`origin = evolution`) promotion
+    // attempt; audit-grade like the lifecycle rows it guards.
+    row_audit("context.memory.promotion_refused", O::Events, true, PROMOTION_REFUSED_FIELDS, &[], None, None),
 
     // ── control (P3) — the budget/accounting classes (§8.2; ADR-0039/0040/0041)
     // and the audit-grade decision row. Every `control.*` row is kernel-origin +
@@ -1859,6 +1901,12 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // pipeline (§05h). `transitioned` carries the obligation link fields
     // (`hypothesis_ref`, `evidence_refs`).
     row_audit("measurement.evolution.candidate.transitioned", O::Events, true, TRANSITION_FIELDS, &[], None, None),
+    // The campaign lifecycle rows (§05h §6; S6.1a) — a campaign's
+    // open/stop/close are consequential acts minted kernel-origin on the
+    // campaign's own `run_kind = experiment` run.
+    row_audit("measurement.evolution.campaign.opened",  O::Events, true, CAMPAIGN_FIELDS, &[], None, None),
+    row_audit("measurement.evolution.campaign.stopped", O::Events, true, CAMPAIGN_FIELDS, &[], None, None),
+    row_audit("measurement.evolution.campaign.closed",  O::Events, true, CAMPAIGN_FIELDS, &[], None, None),
     row_audit("measurement.harness_edit.applied",             O::Events, true, OPEN_AUDIT, &[], None, None),
     // `measurement.metric.emitted{metric_ref, value, applies_to, oracle_ref,
     // detector, confidence, evidence_ref}` (§5h.2 §3 / ADR-0045 D9 — the

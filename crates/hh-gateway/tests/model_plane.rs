@@ -1032,6 +1032,107 @@ fn router_refusals_are_typed() {
     assert!(matches!(r, Err(RoutingRefusal::PolicyInvalid { .. })));
 }
 
+/// AC-R-2.3.2-14 — `learned` is deployable only through the evolution
+/// pipeline: `params.evolution` must carry the campaign evidence —
+/// `search_budget_ref`, `artifact_benefit_ref`, `match_mode:
+/// matched_total`, `budget_match: matched`, `expiry_condition ∋
+/// model_version_change`. Every missing/malformed member is
+/// `PolicyInvalid`, never a fall-through; a complete binding admits and
+/// selects the role's sealed candidate list (the accepted candidate's
+/// frozen selection — not an in-router learner).
+#[test]
+fn learned_policy_requires_evolution_pipeline_evidence() {
+    let env = || {
+        Env(vec![profile(
+            "prof.test",
+            "1",
+            0,
+            VersionPattern::Exact("v1".into()),
+            DebtStatus::Active,
+        )])
+    };
+    let evo = |overrides: &[(&str, Json)]| {
+        let mut m = BTreeMap::new();
+        m.insert("search_budget_ref".into(), Json::str("sb:r1"));
+        m.insert("artifact_benefit_ref".into(), Json::str("ab:r1"));
+        m.insert("match_mode".into(), Json::str("matched_total"));
+        m.insert("budget_match".into(), Json::str("matched"));
+        m.insert(
+            "expiry_condition".into(),
+            Json::Arr(vec![Json::str("model_version_change")]),
+        );
+        for (k, v) in overrides {
+            m.insert(k.to_string(), v.clone());
+        }
+        Json::Obj(m)
+    };
+    let learned = |params_evolution: Option<Json>| {
+        let mut p = routing_policy(RoutingPolicyKind::Learned);
+        p.params = match params_evolution {
+            Some(ev) => Json::obj([("evolution", ev)]),
+            None => Json::obj([]),
+        };
+        p
+    };
+    // Bare `learned` — no pipeline binding — stays a typed refusal.
+    let r = select(
+        &routing_request(),
+        &env(),
+        &mut FakeBudget(Ok("r".into())),
+        &NoHealth,
+        &learned(None),
+        &role_table(),
+        "d",
+    );
+    assert!(matches!(r, Err(RoutingRefusal::PolicyInvalid { .. })));
+    // Each missing/malformed member refuses (one leg per member).
+    for (tag, ev) in [
+        ("no-ev", Json::obj([])),
+        (
+            "no-search-budget",
+            evo(&[("search_budget_ref", Json::Null)]),
+        ),
+        (
+            "no-artifact-benefit",
+            evo(&[("artifact_benefit_ref", Json::str(""))]),
+        ),
+        ("bad-match-mode", evo(&[("match_mode", Json::str("fixed"))])),
+        (
+            "bad-budget-match",
+            evo(&[("budget_match", Json::str("unmatched"))]),
+        ),
+        ("no-expiry", evo(&[("expiry_condition", Json::Arr(vec![]))])),
+    ] {
+        let r = select(
+            &routing_request(),
+            &env(),
+            &mut FakeBudget(Ok("r".into())),
+            &NoHealth,
+            &learned(Some(ev)),
+            &role_table(),
+            "d",
+        );
+        assert!(
+            matches!(r, Err(RoutingRefusal::PolicyInvalid { .. })),
+            "{tag} must refuse"
+        );
+    }
+    // A complete evidence binding admits — the learned choice is the
+    // accepted candidate's frozen selection, executed through the same
+    // candidate list as every other kind.
+    let d = select(
+        &routing_request(),
+        &env(),
+        &mut FakeBudget(Ok("res-9".into())),
+        &NoHealth,
+        &learned(Some(evo(&[]))),
+        &role_table(),
+        "d",
+    )
+    .expect("pipeline-bound learned selects");
+    assert_eq!(d.selected.provider_model_id, "m-1");
+}
+
 /// AC-R-2.3.2-7 — a conditioned rule without a complete debt record is
 /// `PolicyInvalid{rule_id, missing_debt_record}` at `link` (T-LCD-05).
 #[test]

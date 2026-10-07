@@ -1,0 +1,24 @@
+[package]
+name = "hh-evolution"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C5 §05h evolution pipeline (R-2.9.5; ticket S6.1a; ADR-0195/0196): the closed S0–S10 candidate state machine over durable `measurement.evolution.*` rows (kernel producer `hh-evolution`, one `run_kind = experiment` campaign run, fold-of-the-prefix view — the fleet engine pattern), the `EvolutionCampaignSpec`/typed records (hypothesis, screen, search, held-out, transfer, security-invariance, acceptance, retirement), the closed refusal table (S1 static, S3 screen, S4 M3 matched_total, S5 artifact_benefit, S6 transfer/compatibility, S7 security invariance, S8 human-seal, S9 canary/rollout, S10 retire/revalidate), and the campaign driver. Records-in/records-out — the pipeline evaluates no task itself; the experiment engine is the sole evaluation substrate. Reuses hh-hir (diff/apply/invert/classify/validate), hh-budget (matched_total), hh-lab/hh-experiment (specs, reports, LabDocs), hh-ledger (classes, leases, kernel rows) — no second store, no second authority path (CC1/CC3/CC10)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-ontology = { path = "../hh-ontology" }
+hh-provenance = { path = "../hh-provenance" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+hh-budget = { path = "../hh-budget" }
+hh-lab = { path = "../hh-lab" }
+hh-experiment = { path = "../hh-experiment" }
+
+[dev-dependencies]
+hh-context = { path = "../hh-context" }

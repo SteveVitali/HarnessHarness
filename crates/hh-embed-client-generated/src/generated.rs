@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:e34cea3ee47450b7ea62e9fcddcec9620d3eacc836aed3f5454400202d1363a1";
+    "sha256:35784743ce6db41536fdf74eabaf924cb0e333f0a64ae0a9840116d51a707e28";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -6998,6 +6998,132 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.eval.render_scorecard` → `json` (see the contract registry).
     pub fn lab_eval_render_scorecard(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.eval.render_scorecard", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.campaign_ensure` → `json` (see the contract registry).
+    pub fn lab_evolution_campaign_ensure(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.campaign_ensure", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.campaign_open` → `json` (see the contract registry).
+    pub fn lab_evolution_campaign_open(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.campaign_open", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.canary` → `json` (see the contract registry).
+    pub fn lab_evolution_canary(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.canary", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.canary_settle` → `json` (see the contract registry).
+    pub fn lab_evolution_canary_settle(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.canary_settle", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.close` → `json` (see the contract registry).
+    pub fn lab_evolution_close(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.close", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.expire` → `json` (see the contract registry).
+    pub fn lab_evolution_expire(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.expire", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.held_out_eval` → `json` (see the contract registry).
+    pub fn lab_evolution_held_out_eval(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.held_out_eval", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.hypothesize` → `json` (see the contract registry).
+    pub fn lab_evolution_hypothesize(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.hypothesize", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.matched_eval` → `json` (see the contract registry).
+    pub fn lab_evolution_matched_eval(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.matched_eval", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.propose` → `json` (see the contract registry).
+    pub fn lab_evolution_propose(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.propose", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.reactivate` → `json` (see the contract registry).
+    pub fn lab_evolution_reactivate(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.reactivate", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.retire` → `json` (see the contract registry).
+    pub fn lab_evolution_retire(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.retire", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.revalidate` → `json` (see the contract registry).
+    pub fn lab_evolution_revalidate(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.revalidate", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.revert` → `json` (see the contract registry).
+    pub fn lab_evolution_revert(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.revert", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.screen` → `json` (see the contract registry).
+    pub fn lab_evolution_screen(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.screen", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.seal` → `json` (see the contract registry).
+    pub fn lab_evolution_seal(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.seal", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.security_check` → `json` (see the contract registry).
+    pub fn lab_evolution_security_check(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.security_check", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.stop` → `json` (see the contract registry).
+    pub fn lab_evolution_stop(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.stop", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.transfer` → `json` (see the contract registry).
+    pub fn lab_evolution_transfer(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.transfer", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.view` → `json` (see the contract registry).
+    pub fn lab_evolution_view(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.view", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.withdraw` → `json` (see the contract registry).
+    pub fn lab_evolution_withdraw(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.withdraw", params.clone())?;
         Ok(raw)
     }
 

@@ -196,6 +196,19 @@ pub const OBLIGATIONS: &[AuditObligation] = &[
         "causes",
         false,
     ),
+    // S6.1a (§05h; R-2.9.5) — `evolution_link` graduates: every
+    // `measurement.evolution.candidate.transitioned{to:"hypothesized"}`
+    // row carries the S2 binding's `hypothesis_ref` + a non-empty
+    // `evidence_refs[]` — the hypothesis the candidate instantiates and
+    // the corpus evidence it cites (the pair the deferred note named).
+    obligation(
+        "evolution_link",
+        "measurement.evolution.candidate.transitioned",
+        ObligationQuantifier::AtLeastOne,
+        "measurement.evolution.candidate.transitioned",
+        "hypothesis_ref",
+        false,
+    ),
 ];
 
 /// Obligations of the I-A3 set whose link machinery lands at a later stage —
@@ -203,8 +216,6 @@ pub const OBLIGATIONS: &[AuditObligation] = &[
 /// never silently absent:
 /// - `subagent_anchor` (`control.subagent.spawned` ↔ child `lifecycle.run.created`
 ///   + `result|cancelled` carrying the child head — cross-run, Stage 2+);
-/// - `evolution_link` (`transitioned{to: proposed}`/`applied` paired by
-///   `hypothesis_ref`/`evidence_refs` — the evolution pipeline);
 /// - `producer_resolution` (`component_variant_ref` resolves to a loaded,
 ///   pin-attested extension or a sealed-definition member — the registry fold).
 ///
@@ -212,8 +223,14 @@ pub const OBLIGATIONS: &[AuditObligation] = &[
 /// `control.work_item.dispatched{verb:"run"}` rows anchor the child's
 /// `lifecycle.run.created` in `causes[]`, and the child's own seq-0 row
 /// carries the same `spawn_event` link in its `causes` (§5i.1 #11).
-pub const DEFERRED_OBLIGATIONS: &[&str] =
-    &["subagent_anchor", "evolution_link", "producer_resolution"];
+///
+/// `evolution_link` graduated at S6.1a — it lives in [`OBLIGATIONS`] now:
+/// the candidate's `transitioned{to:"hypothesized"}` row carries
+/// `hypothesis_ref` + `evidence_refs[]` (§05h §4's S2 binding) — the pair
+/// the deferred note named (`transitioned{to: proposed}` needs no link —
+/// it is the candidate's intake row; `applied` is covered by the
+/// `derived-from` record on the diff itself).
+pub const DEFERRED_OBLIGATIONS: &[&str] = &["subagent_anchor", "producer_resolution"];
 
 // ── checkpoint signing (R-2.8.6 Stage 2; ADR-0050 §8(a) C0) ──────────────
 
@@ -904,6 +921,35 @@ fn eval_obligation(
                 // member exists and crosses the run boundary).
                 let ok = e.causes.iter().any(|c| c.run_id != e.run_id);
                 if !ok {
+                    unmet.push(Unmet {
+                        obligation_id: ob.id,
+                        subject: e.event_id.clone(),
+                    });
+                }
+            }
+        }
+        "evolution_link" => {
+            for e in events.iter().copied().filter(|e| e.class == ob.class) {
+                // Only the `to: hypothesized` transition carries the S2
+                // binding obligation — intake (`proposed`), gate verdicts
+                // (`rejected`), and lifecycle transitions legitimately
+                // carry no hypothesis link.
+                if str_member(e, "to") != Some("hypothesized") {
+                    continue;
+                }
+                let hyp_ok = str_member(e, "hypothesis_ref")
+                    .map(|h| !h.is_empty())
+                    .unwrap_or(false);
+                let ev_ok = match e.payload.get("evidence_refs") {
+                    Some(Json::Arr(refs)) => {
+                        !refs.is_empty()
+                            && refs
+                                .iter()
+                                .all(|r| r.as_str().map(|s| !s.is_empty()).unwrap_or(false))
+                    }
+                    _ => false,
+                };
+                if !(hyp_ok && ev_ok) {
                     unmet.push(Unmet {
                         obligation_id: ob.id,
                         subject: e.event_id.clone(),
