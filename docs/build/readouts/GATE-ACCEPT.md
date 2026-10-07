@@ -1,4 +1,5 @@
 # GATE-ACCEPT readout — the operator signs the ACCEPTED-deviations list
+Status: SIGNED   <!-- recorded 2026-10-06 (DOC.2): reflects the operator signature of 2026-10-02 already in this file (### Verdict — PASSED + disposition line); the line was absent because the file predates the Status: convention (BM-TAIL-03) -->
 
 *Append-only. Each operator reading is a new dated block; never edit an earlier one.*
 
