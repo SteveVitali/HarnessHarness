@@ -66,6 +66,49 @@ pub const PRESERVE_UNTIL_TTL_MS: u64 = 86_400_000;
 /// its dedup records inside the preserved journal.
 pub const DEDUP_WINDOW_MS: u64 = PRESERVE_UNTIL_TTL_MS;
 
+/// `resources → BudgetNode` mapping (DF-S1.12-2; §5g `ContainmentPolicy`:
+/// "`resources = {cpu_ms?, memory_bytes?, disk_bytes?, pids?, open_files?,
+/// wall_ms?, network_bytes_out?, network_calls?}` each mapped to a
+/// `BudgetNode` dimension or a registered `ext` dimension"). The five
+/// env-capacity bounds land on the `hh.env.*` registered names (R2.9a —
+/// the dims joined `DimensionId` at this ticket); the metered bounds map
+/// onto the kernel dims the meter fold already charges. `None` when no
+/// bound is set — there is nothing to allocate.
+///
+/// Every member lands as a hard `Ceiling`; gauges (memory/disk/pids/
+/// open_files) cap through the tree's E5 gauge leg, never `reserve`.
+pub fn resource_budget_spec(
+    limits: &hh_containment::policy::ResourceLimits,
+) -> Option<hh_budget::spec::BudgetSpec> {
+    use hh_ontology::dimensions::DimensionId as D;
+    if limits.is_empty() {
+        return None;
+    }
+    let pairs: [(Option<u64>, D); 8] = [
+        (limits.cpu_ms, D::ExtEnvCpuMs),
+        (limits.memory_bytes, D::ExtEnvMemoryBytes),
+        (limits.disk_bytes, D::ExtEnvDiskBytes),
+        (limits.pids, D::ExtEnvPids),
+        (limits.open_files, D::ExtEnvOpenFiles),
+        (limits.wall_ms, D::TimeWallMs),
+        (limits.network_bytes_out, D::NetworkBytesOut),
+        (limits.network_calls, D::NetworkCalls),
+    ];
+    let mut caps = Vec::new();
+    for (v, dim) in pairs {
+        if let Some(v) = v {
+            caps.push((
+                hh_ontology::dimensions::DimensionKey::Primary(dim),
+                v.min(i64::MAX as u64) as i64,
+            ));
+        }
+    }
+    Some(hh_budget::spec::BudgetSpec::hard_caps(
+        hh_budget::spec::BudgetMode::Pool,
+        &caps,
+    ))
+}
+
 impl EnvDriver {
     /// A driver for `run_id`.
     pub fn new(run_id: &str) -> Self {
@@ -131,6 +174,83 @@ impl EnvDriver {
     /// Install a handle (tests build the table directly).
     pub fn install(&mut self, h: EnvHandle) {
         self.handles.insert(h.env_handle_id.clone(), h);
+    }
+
+    /// `allocate_resource_budget(store, lease, env_handle_id, limits)` —
+    /// DF-S1.12-2's `resources → BudgetNode` leg (§5g `ContainmentPolicy.
+    /// resources`): the declared bounds map through
+    /// [`resource_budget_spec`] into a **pool child under the run's root
+    /// budget** — the parentless `control.budget.allocated` node the run's
+    /// owner opened (the same derivation `hh-experiment::root_budget`
+    /// reads — one spelling, CC1). Never a second root: the environment
+    /// draws inside the run's envelope and CC9's matched-budget rule
+    /// holds. `Ok(None)` when no bound is set (nothing to allocate). A
+    /// missing root or a child spec wider than the parent's remaining
+    /// surfaces `BudgetRefused` — the allocation is typed and ledgered,
+    /// never fabricated or silently skipped.
+    pub fn allocate_resource_budget(
+        &self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        limits: &hh_containment::policy::ResourceLimits,
+    ) -> Result<Option<String>, EnvError> {
+        let Some(spec) = resource_budget_spec(limits) else {
+            return Ok(None);
+        };
+        // The run's root node — the `control.budget.allocated` row with no
+        // `parent` (derived from the durable prefix, S-1).
+        let parent = store
+            .events(&self.run_id)
+            .map_err(EnvError::Ledger)?
+            .iter()
+            .find(|e| e.class == "control.budget.allocated" && e.payload.get("parent").is_none())
+            .and_then(|e| e.payload.get("budget_id").and_then(Json::as_str))
+            .map(str::to_string)
+            .ok_or_else(|| EnvError::BudgetRefused {
+                detail: "env resource bounds declared but the run has no root budget".into(),
+            })?;
+        let mut acct = hh_budget::account::Account::open(store, &self.run_id).map_err(|e| {
+            EnvError::BudgetRefused {
+                detail: format!("account_open: {e:?}"),
+            }
+        })?;
+        let budget_id = acct
+            .allocate(
+                lease,
+                Some(&parent),
+                hh_budget::spec::BudgetScope {
+                    kind: hh_budget::spec::BudgetScopeKind::AgentProcess,
+                    target: env_handle_id.to_string(),
+                },
+                spec,
+            )
+            .map_err(|e| EnvError::BudgetRefused {
+                detail: format!("env_resource_budget: {e:?}"),
+            })?;
+        Ok(Some(budget_id))
+    }
+
+    /// `apply_amended_containment(env_handle_id, policy)` — install the
+    /// policy a successful `amend()` produced (R2.9a; DF-S1.12-2 + the
+    /// DF-S2.4-1b `allow_lease` leg). The `security.containment.amended`
+    /// row is already durable when this runs — this writes the *live*
+    /// half so the next `decide_egress`/`attach` reads the amended
+    /// `version_id` and the record never diverges from the handle.
+    pub fn apply_amended_containment(
+        &mut self,
+        env_handle_id: &str,
+        policy: hh_containment::policy::ContainmentPolicy,
+    ) -> Result<(), EnvError> {
+        let h = self
+            .handles
+            .get_mut(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?;
+        h.containment = PolicySlot::Inline(Box::new(policy));
+        Ok(())
     }
 
     /// `provision(record, roots, containment, on_loss) → EnvHandle` —
@@ -206,6 +326,14 @@ impl EnvDriver {
             c if c.needs_adapter() => self.declared_capabilities(c),
             _ => EnvCapabilityDeclaration::stage1_local_sandboxed(),
         };
+        // DF-S1.12-2 — `resources → BudgetNode`: the declared bounds
+        // allocate a pool child under the run's root budget before the
+        // handle lands — a refusal aborts the provision typed, never
+        // half-provisions.
+        let budget_node_refs = self
+            .allocate_resource_budget(store, lease, &env_handle_id, &record.limits)?
+            .into_iter()
+            .collect();
         let handle = EnvHandle {
             env_handle_id,
             run_id: self.run_id.clone(),
@@ -220,7 +348,7 @@ impl EnvDriver {
             credential_bindings: vec![],
             roots,
             limits: record.limits.clone(),
-            budget_node_refs: vec![],
+            budget_node_refs,
             meters: crate::handle::EnvMeters::new(now),
             snapshots: vec![],
             parent: None,
@@ -306,6 +434,13 @@ impl EnvDriver {
             hosting_mechanism: hosting_mechanism.to_string(),
             unobserved: unobserved.iter().map(|s| s.to_string()).collect(),
         };
+        // DF-S1.12-2 — `resources → BudgetNode` (same pool-child rule as
+        // `provision`; the provider's bounds land inside the run's
+        // envelope).
+        let budget_node_refs = self
+            .allocate_resource_budget(store, lease, &env_handle_id, &record.limits)?
+            .into_iter()
+            .collect();
         let mut handle = EnvHandle {
             env_handle_id,
             run_id: self.run_id.clone(),
@@ -320,7 +455,7 @@ impl EnvDriver {
             credential_bindings: vec![],
             roots,
             limits: record.limits.clone(),
-            budget_node_refs: vec![],
+            budget_node_refs,
             meters: crate::handle::EnvMeters::new(now),
             snapshots: vec![],
             parent: None,
@@ -1697,7 +1832,7 @@ impl EnvDriver {
         Ok(())
     }
 
-    /// `rebind_credentials_for_fork(store, lease, broker, parent_id, child_id)`
+    /// `rebind_credentials_for_fork(store, lease, broker, parent, child_id)`
     /// — LT-09's fork half (S2.4; ADR-0266 D4): after `derive(ForkSnapshot)`,
     /// the parent's live bindings are *re-bound* onto the child's env handle
     /// with **fresh** placeholders (`CredentialBroker::virtualize_for_fork`),
@@ -1707,18 +1842,20 @@ impl EnvDriver {
     /// snapshot never holds a value, so the rewrite is spelling→spelling).
     /// The fork's `env_spec_for(child)` then projects the fresh spellings —
     /// the parent's nonce never transfers (SV-10).
+    ///
+    /// R2.9a (DF-S2.4-1c): the parent is the *handle*, not an id — a
+    /// cross-run fork's parent lives under a different `EnvDriver` (the
+    /// child's driver never held it), so custody passes the record, not a
+    /// lookup. The `not_a_derive_child` edge check still binds the rebind
+    /// to a real `derive` child.
     pub fn rebind_credentials_for_fork(
         &mut self,
         store: &mut Store,
         lease: &Lease,
         broker: &mut hh_secrets::CredentialBroker,
-        parent_id: &str,
+        parent: &EnvHandle,
         child_id: &str,
     ) -> Result<hh_secrets::ForkVirtualization, EnvError> {
-        let parent = self.handles.get(parent_id).ok_or(EnvError::Unavailable {
-            env_handle_id: parent_id.to_string(),
-            state: "missing",
-        })?;
         let child_state = self.handles.get(child_id).ok_or(EnvError::Unavailable {
             env_handle_id: child_id.to_string(),
             state: "missing",
@@ -1735,7 +1872,7 @@ impl EnvDriver {
             });
         }
         let virt = broker
-            .virtualize_for_fork(store, &self.run_id, lease, parent_id, child_id)
+            .virtualize_for_fork(store, &self.run_id, lease, &parent.env_handle_id, child_id)
             .map_err(|e| EnvError::Blob(format!("virtualize_for_fork: {e:?}")))?;
         let h = self.handles.get_mut(child_id).expect("child present");
         h.credential_bindings = virt.bindings.clone();
@@ -1757,6 +1894,14 @@ impl EnvDriver {
         env_handle_id: String,
     ) -> Result<EnvHandle, EnvError> {
         let now = store.now_ms();
+        // DF-S1.12-2 — a derived/replaced child inherits the parent's
+        // bounds; they allocate their own pool child under *this* run's
+        // root (the parent's node stays the parent's — custody never
+        // shares a budget coordinate across handles).
+        let budget_node_refs = self
+            .allocate_resource_budget(store, lease, &env_handle_id, &parent.limits)?
+            .into_iter()
+            .collect();
         let h = EnvHandle {
             env_handle_id,
             run_id: self.run_id.clone(),
@@ -1771,7 +1916,7 @@ impl EnvDriver {
             credential_bindings: vec![],
             roots,
             limits: parent.limits.clone(),
-            budget_node_refs: vec![],
+            budget_node_refs,
             meters: crate::handle::EnvMeters::new(now),
             snapshots: vec![],
             parent: parent_edge,
