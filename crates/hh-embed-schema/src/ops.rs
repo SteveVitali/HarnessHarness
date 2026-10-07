@@ -1121,6 +1121,17 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.model.regression", "L", "json", "json"),
         labi("lab.analysis.component_targets", "L", "json", "json"),
         labi("lab.analysis.attribution_design", "L", "json", "json"),
+        // ── S6.3b (§5h.7 R-2.9.7 6c): the designed causal-attribution
+        // surface — `design` (validate + content-address +
+        // `estimate_rollouts` for the scheduler), `attribute` (the
+        // M2–M5 fold over Group W `counterfactual` arms — `open_arms`
+        // mints the real instrument-charged branches), `locus` and
+        // `quality` (the report projections). `Refused{reason}` carries
+        // the closed `hh_analysis::attribution` refusal codes.
+        labi("lab.attribution.design", "L", "json", "json"),
+        labi("lab.attribution.attribute", "L", "json", "json"),
+        labi("lab.attribution.locus", "L", "json", "json"),
+        labi("lab.attribution.quality", "L", "json", "json"),
         // ── S6.1b (§5h.6 R-2.9.6): the assumption-debt *manager*
         // service — `hh-debt` over the registry run's `lifecycle.debt.*`
         // book of record (records-in/records-out; C4-tier — a
@@ -1459,6 +1470,47 @@ pub fn registry() -> Vec<OpSpec> {
             requires_capability: Some("serves_measurement"),
             ..call(
                 "lab.evolution.view",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        // ── S6.3b (§8.1 R-2.7.3⁴ + R-2.12.1⁴): the monitor-selector
+        // protocols (deterministic-first `assigned` before `veto` —
+        // veto-only, never a vote) and the lineage-DAG surface
+        // (`lineage` returns the DAG; `attribution` folds the deposited
+        // `hh-attribution/1` reports over it).
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.monitor_assign",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.monitor_veto",
+                "L",
+                "json",
+                "json",
+                EVO_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            requires_capability: Some("serves_measurement"),
+            ..call(
+                "lab.evolution.lineage",
                 "L",
                 "json",
                 "json",

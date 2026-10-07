@@ -369,6 +369,47 @@ pub enum Refusal {
         /// The failure detail.
         detail: String,
     },
+    /// A monitor selector's `adversarial` is missing, or is
+    /// `untrusted_unmonitored` — §8.1's untrusted-monitor protocols
+    /// never admit an unmonitored untrusted selector for gate use
+    /// (S6.3b; §05h §4 G7's policy validation).
+    MonitorSelectorInadmissible {
+        /// The inadmissible selector ref.
+        selector: String,
+        /// The failure detail.
+        detail: String,
+    },
+    /// An artifact benefit was produced inside a judge selector's
+    /// `held_out_from` closure while naming that selector — the
+    /// benefit's producer may never consume the held-out judge's
+    /// verdict (§5f.4; S6.3b; mirrors hh-verification's
+    /// `JudgeLeakedIntoArtifact` at the evolution boundary).
+    JudgeLeakedIntoArtifact {
+        /// The artifact-benefit producer inside the closure.
+        producer: String,
+    },
+    /// The proposal carries a semantic diff but the hypothesis names no
+    /// `attribution_ref` — a designed semantic change must name its
+    /// `hh-attribution-design/1` doc at S2 (§5h.7; S6.3b).
+    AttributionMissing {
+        /// The failure detail.
+        detail: String,
+    },
+    /// The `attribution_ref`'s doc does not decode to
+    /// `hh-attribution-design/1`, or the deposited `hh-attribution/1`
+    /// report's label/effects do not satisfy the hypothesis's design
+    /// (§5h.7's label ceiling; S6.3b).
+    AttributionReportInvalid {
+        /// The failure detail.
+        detail: String,
+    },
+    /// A monitor selector vetoed the candidate — `trusted_weaker` and
+    /// `untrusted_monitored` monitors are veto-only, never votes
+    /// (S6.3b; §8.1).
+    MonitorVetoed {
+        /// The vetoing selector ref.
+        selector: String,
+    },
 
     // ── S10 retire ──────────────────────────────────────────────────────
     /// The retirement evidence's experiment is not `kind = retirement`
@@ -511,6 +552,13 @@ impl Refusal {
             Refusal::ConditionedRuleIncomplete { .. } => "conditioned_rule_incomplete".to_string(),
             Refusal::CoordinationLoosening { .. } => "coordination_loosening".to_string(),
             Refusal::JudgeSelectorUndeclared { .. } => "judge_selector_undeclared".to_string(),
+            Refusal::MonitorSelectorInadmissible { .. } => {
+                "monitor_selector_inadmissible".to_string()
+            }
+            Refusal::JudgeLeakedIntoArtifact { .. } => "judge_leaked_into_artifact".to_string(),
+            Refusal::AttributionMissing { .. } => "attribution_missing".to_string(),
+            Refusal::AttributionReportInvalid { .. } => "attribution_report_invalid".to_string(),
+            Refusal::MonitorVetoed { .. } => "monitor_vetoed".to_string(),
             Refusal::NotARetirementDiff { .. } => "not_a_retirement_diff".to_string(),
             Refusal::RemovalTestInconclusive { .. } => "removal_test_inconclusive".to_string(),
             Refusal::RetirementSealRefused { .. } => "retirement_seal_refused".to_string(),
@@ -533,6 +581,7 @@ impl Refusal {
             | Refusal::ReaderViolation { .. }
             | Refusal::ExecutableBytesInCorpus { .. }
             | Refusal::EvidenceStale { .. }
+            | Refusal::MonitorSelectorInadmissible { .. }
             | Refusal::UnresolvableEvidence { .. } => "S0",
             Refusal::AuthorityWidening { .. }
             | Refusal::BudgetLoosening { .. }
@@ -548,9 +597,11 @@ impl Refusal {
             Refusal::HypothesisUnfalsifiable { .. }
             | Refusal::UnknownMetric { .. }
             | Refusal::LeakedSplit { .. }
+            | Refusal::AttributionMissing { .. }
             | Refusal::TargetMismatch { .. } => "S2",
             Refusal::PredictionFalsified { .. }
             | Refusal::InsufficientReplicates { .. }
+            | Refusal::MonitorVetoed { .. }
             | Refusal::JudgeOnlyAcceptance { .. } => "S3",
             Refusal::UnmatchedSearchBudget { .. }
             | Refusal::UnmatchedBudget { .. }
@@ -564,7 +615,9 @@ impl Refusal {
             | Refusal::NotHeldOut { .. }
             | Refusal::RetentionRegressed { .. }
             | Refusal::VetoRegressed { .. }
-            | Refusal::ObservationalOnly { .. } => "S5",
+            | Refusal::ObservationalOnly { .. }
+            | Refusal::JudgeLeakedIntoArtifact { .. }
+            | Refusal::AttributionReportInvalid { .. } => "S5",
             Refusal::TransferUnreported { .. } | Refusal::CompatibilityUnproven { .. } => "S6",
             Refusal::PolicyWidening { .. }
             | Refusal::OpaqueWithoutInterface { .. }

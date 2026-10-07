@@ -215,6 +215,15 @@ mod imp {
                     &report_ref,
                     &retention,
                     &veto,
+                    params.get("judge_selector_ref").and_then(Json::as_str),
+                    params.get("attribution_report_ref").and_then(Json::as_str),
+                    params
+                        .get("locality_claim")
+                        .and_then(|v| match v {
+                            Json::Bool(b) => Some(*b),
+                            _ => None,
+                        })
+                        .unwrap_or(false),
                 )
                 .map_err(evo_err)?;
                 Ok(Json::obj([("state", Json::str("validated"))]))
@@ -418,6 +427,67 @@ mod imp {
                         Json::Int(view.n_candidates_registered() as i64),
                     ),
                 ]))
+            }
+            "lab.evolution.monitor_assign" => {
+                let run = req_str(params, "run")?.to_string();
+                let candidate_id = cid(params)?;
+                let selector_ref = req_str(params, "selector_ref")?.to_string();
+                let docs = svc.lab_docs()?;
+                let eng = campaign(&mut svc.evolution_campaigns, &mut svc.store, docs, &run)?;
+                eng.monitor_assign(&mut svc.store, &candidate_id, &selector_ref)
+                    .map_err(evo_err)?;
+                Ok(Json::obj([("assigned", Json::Bool(true))]))
+            }
+            "lab.evolution.monitor_veto" => {
+                let run = req_str(params, "run")?.to_string();
+                let candidate_id = cid(params)?;
+                let selector_ref = req_str(params, "selector_ref")?.to_string();
+                let detail = req_str(params, "detail")?.to_string();
+                let docs = svc.lab_docs()?;
+                let eng = campaign(&mut svc.evolution_campaigns, &mut svc.store, docs, &run)?;
+                match eng.monitor_veto(&mut svc.store, &candidate_id, &selector_ref, &detail) {
+                    // `MonitorVetoed` is the veto's *success* spelling —
+                    // the candidate rejected under the monitor's verdict.
+                    Err(e) => {
+                        let code = format!("{e:?}");
+                        if code.contains("MonitorVetoed") {
+                            Ok(Json::obj([
+                                ("vetoed", Json::Bool(true)),
+                                ("state", Json::str("rejected")),
+                            ]))
+                        } else {
+                            Err(evo_err(e))
+                        }
+                    }
+                    Ok(()) => Ok(Json::obj([
+                        ("vetoed", Json::Bool(true)),
+                        ("state", Json::str("rejected")),
+                    ])),
+                }
+            }
+            "lab.evolution.lineage" => {
+                let run = req_str(params, "run")?.to_string();
+                let docs = svc.lab_docs()?;
+                let eng = campaign(&mut svc.evolution_campaigns, &mut svc.store, docs, &run)?;
+                let dag = hh_evolution::lineage::LineageDag::from_view(
+                    &eng.view,
+                    &eng.spec.base_definition_ref,
+                );
+                // `reports` — an optional `{candidate_id → hh-attribution/1
+                // body}` map the caller deposits; attribution over the
+                // DAG folds it (R-2.12.1⁴).
+                let reports: BTreeMap<String, Json> = match params.get("reports") {
+                    Some(Json::Obj(m)) => m.clone(),
+                    _ => BTreeMap::new(),
+                };
+                let mut out = vec![("dag", dag.to_json())];
+                if !reports.is_empty() {
+                    out.push((
+                        "attribution",
+                        hh_evolution::lineage::attribute_lineage(&dag, &reports),
+                    ));
+                }
+                Ok(Json::obj(out))
             }
             other => Err(EmbedError::Refused {
                 reason: format!("unknown_evolution_op:{other}"),

@@ -322,13 +322,30 @@ impl EmbedService {
             ] {
                 // The replicate axis — `H(source ∥ at ∥ role ∥ i)`
                 // (ADR-0135 §2's `noise_coupling` seed, derived over the
-                // recorded coordinates).
-                let seed = format!(
-                    "sha256:{}",
-                    hh_wire::sha256::sha256_hex(
-                        format!("cf-seed:{source}:{}:{role}:{i}", p.at_seq).as_bytes()
+                // recorded coordinates); `noise_coupling = crn` shares
+                // `H(configuration_version_id.seed ∥ replicate_index ∥
+                // fork_point)` across the two arms of a replicate
+                // (CF-432's amended derivation — §5h.7; ADR-0199 D7).
+                let seed = if p.design.noise_coupling.as_deref() == Some("crn") {
+                    let config_seed = parent
+                        .seed
+                        .map(|s| s.to_string())
+                        .or_else(|| parent.configuration_version_id.clone())
+                        .unwrap_or_else(|| source.clone());
+                    format!(
+                        "sha256:{}",
+                        hh_wire::sha256::sha256_hex(
+                            format!("cf-crn:{}:{}:{i}", config_seed, p.at_seq).as_bytes()
+                        )
                     )
-                );
+                } else {
+                    format!(
+                        "sha256:{}",
+                        hh_wire::sha256::sha256_hex(
+                            format!("cf-seed:{source}:{}:{role}:{i}", p.at_seq).as_bytes()
+                        )
+                    )
+                };
                 let mut child =
                     hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
                 child.configuration_id = parent.configuration_id.clone();
@@ -372,7 +389,21 @@ impl EmbedService {
                     ("branch_id", Json::str(record.branch_id.clone())),
                     ("arm_role", Json::str(role)),
                     ("seed", Json::str(seed)),
+                    ("replicate_index", Json::Int(i as i64)),
+                    ("fork_point", Json::Int(p.at_seq)),
                     ("charged_to", Json::str("instrument")),
+                    (
+                        "noise_coupling",
+                        Json::str(p.design.noise_coupling.as_deref().unwrap_or("none")),
+                    ),
+                    (
+                        "target",
+                        p.design
+                            .target
+                            .as_ref()
+                            .map(|t| Json::str(t.clone()))
+                            .unwrap_or(Json::Null),
+                    ),
                 ]);
                 if role == "factual" {
                     factual.push(entry);

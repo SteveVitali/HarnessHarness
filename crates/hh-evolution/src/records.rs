@@ -714,23 +714,59 @@ impl EvolutionCampaignSpec {
                         .into(),
                 });
             }
+            let validate_selector =
+                |s: &SelectorDeclaration| -> Result<(), crate::errors::Refusal> {
+                    if !SELECTOR_KINDS.iter().any(|k| k == &s.kind) {
+                        return Err(SchemaViolation {
+                            detail: format!(
+                                "selector `{}` kind `{}` — `judge`|`monitor`",
+                                s.selector_ref, s.kind
+                            ),
+                        });
+                    }
+                    if s.kind == "monitor" {
+                        match s.adversarial.as_deref() {
+                            Some(a) if MONITOR_ADVERSARIAL.contains(&a) => {}
+                            Some(a) => {
+                                return Err(MonitorSelectorInadmissible {
+                                    selector: s.selector_ref.clone(),
+                                    detail: format!(
+                                        "adversarial `{a}` — `untrusted_unmonitored` is \
+                                     never gate-admissible (§8.1)"
+                                    ),
+                                });
+                            }
+                            None => {
+                                return Err(MonitorSelectorInadmissible {
+                                selector: s.selector_ref.clone(),
+                                detail: "a monitor selector must declare                                          `adversarial`"
+                                    .into(),
+                            });
+                            }
+                        }
+                    }
+                    if s.calibration_ref.is_empty() {
+                        return Err(SchemaViolation {
+                            detail: format!(
+                                "selector `{}` without a CalibrationRecord — G7",
+                                s.selector_ref
+                            ),
+                        });
+                    }
+                    Ok(())
+                };
             for s in &jp.selectors {
-                if s.kind != "judge" {
-                    return Err(SchemaViolation {
-                        detail: format!(
-                            "selector `{}` kind `{}` — `judge` only",
-                            s.selector_ref, s.kind
-                        ),
+                validate_selector(s)?;
+            }
+            if let Some(ab) = &jp.artifact_benefit_selector {
+                if ab.kind != "judge" {
+                    return Err(MonitorSelectorInadmissible {
+                        selector: ab.selector_ref.clone(),
+                        detail: "artifact_benefit_selector must be a `judge`                                  selector (§5f.4)"
+                            .into(),
                     });
                 }
-                if s.calibration_ref.is_empty() {
-                    return Err(SchemaViolation {
-                        detail: format!(
-                            "selector `{}` without a CalibrationRecord — G7",
-                            s.selector_ref
-                        ),
-                    });
-                }
+                validate_selector(ab)?;
             }
         }
         // Corpus layers — a held-out surface name is a leak, never a
@@ -1152,6 +1188,12 @@ pub struct FailureHypothesis {
     /// Non-empty requires the corpus to declare the layer and every ref
     /// must resolve in `corpus.evidence_refs` (S2).
     pub reference_trajectories: Vec<String>,
+    /// `attribution_ref` (S6.3b; §5h.7) — the `hh-attribution-design/1`
+    /// doc ref the hypothesis names when the proposal carries a
+    /// semantic diff. The design's declared `targets[]` must cover every
+    /// semantic diff op's target (S2's check beside `TargetMismatch`;
+    /// `AttributionMissing` when the semantic diff has no design).
+    pub attribution_ref: Option<String>,
 }
 
 /// The admitted `hypothesis.kind` spellings.
@@ -1292,9 +1334,10 @@ impl PredictedEffect {
 }
 
 impl FailureHypothesis {
-    /// The canonical JSON.
+    /// The canonical JSON (`attribution_ref` is additive — emitted
+    /// only when set; S6.3b).
     pub fn to_json(&self) -> Json {
-        Json::obj([
+        let mut v = vec![
             ("kind", Json::str(&self.kind)),
             (
                 "evidence_refs",
@@ -1309,7 +1352,11 @@ impl FailureHypothesis {
                 "reference_trajectories",
                 Json::Arr(self.reference_trajectories.iter().map(Json::str).collect()),
             ),
-        ])
+        ];
+        if let Some(a) = &self.attribution_ref {
+            v.push(("attribution_ref", Json::str(a)));
+        }
+        Json::obj(v)
     }
 
     /// Strict decode.
@@ -1323,6 +1370,7 @@ impl FailureHypothesis {
                 "predicted",
                 "semantic_op_targets",
                 "reference_trajectories",
+                "attribution_ref",
             ],
             "FailureHypothesis",
         )?;
@@ -1339,6 +1387,7 @@ impl FailureHypothesis {
                 None | Some(Json::Null) => Vec::new(),
                 _ => str_vec_at(m, "reference_trajectories", "FailureHypothesis")?,
             },
+            attribution_ref: opt_str_at(m, "attribution_ref")?.map(str::to_string),
         })
     }
 }
@@ -2413,20 +2462,41 @@ impl RolloutPolicy {
     }
 }
 
-/// `SelectorDeclaration` — one judge selector the campaign admits (G7;
-/// §05h §4 S3–S4): judges are *selectors only* inside S3–S4 —
-/// calibrated, independent of the beneficiary snapshot, and their
-/// counterexample sets carry honeypots.
+/// The selector kinds the campaign admits (S6.3b): `judge` selectors
+/// score counterexample sets inside S3–S4; `monitor` selectors are
+/// veto-only (§05h §4 G7 + §8.1's untrusted-monitor protocols —
+/// `adversarial ∈ {trusted_weaker, untrusted_monitored}` mandatory).
+pub const SELECTOR_KINDS: &[&str] = &["judge", "monitor"];
+
+/// The adversarial classes a monitor selector may declare
+/// (`untrusted_unmonitored` is *Refused* at policy validation for any
+/// gate use — §8.1).
+pub const MONITOR_ADVERSARIAL: &[&str] = &["trusted_weaker", "untrusted_monitored"];
+
+/// `SelectorDeclaration` — one judge/monitor selector the campaign
+/// admits (G7; §05h §4 S3–S4 + S6.3b's monitor protocols): judges are
+/// *selectors only* inside S3–S4 — calibrated, independent of the
+/// beneficiary snapshot, and their counterexample sets carry honeypots;
+/// monitors veto-only, never a vote toward acceptance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SelectorDeclaration {
     /// The selector's registry ref.
     pub selector_ref: String,
-    /// `judge` only at 6b (the closed kind).
+    /// `judge` | `monitor` (the closed kind).
     pub kind: String,
     /// The selector's `CalibrationRecord` ref — required, never `None`.
     pub calibration_ref: String,
     /// The beneficiary snapshots the selector is declared independent of.
     pub independent_of: Vec<String>,
+    /// `trusted_weaker | untrusted_monitored` — mandatory on
+    /// `kind = monitor` (S6.3b; `untrusted_unmonitored` refuses at policy
+    /// validation — §8.1's gate floor).
+    pub adversarial: Option<String>,
+    /// `held_out_from` (S6.3b; §5f.4) — the producer refs the selector
+    /// is held out from. An artifact benefit produced by a member of
+    /// this closure may not consume the selector's verdict —
+    /// `JudgeLeakedIntoArtifact` at S5.
+    pub held_out_from: Vec<String>,
 }
 
 impl SelectorDeclaration {
@@ -2443,12 +2513,36 @@ impl SelectorDeclaration {
         ])
     }
 
+    /// The canonical JSON with the S6.3b additive members.
+    pub fn to_json_full(&self) -> Json {
+        let mut j = self.to_json();
+        if let Json::Obj(m) = &mut j {
+            if let Some(a) = &self.adversarial {
+                m.insert("adversarial".into(), Json::str(a));
+            }
+            if !self.held_out_from.is_empty() {
+                m.insert(
+                    "held_out_from".into(),
+                    Json::Arr(self.held_out_from.iter().map(Json::str).collect()),
+                );
+            }
+        }
+        j
+    }
+
     /// Strict decode.
     pub fn from_json(j: &Json) -> Result<SelectorDeclaration, SchemaError> {
         let m = expect_obj(j, "SelectorDeclaration")?;
         reject_unknown(
             m,
-            &["selector_ref", "kind", "calibration_ref", "independent_of"],
+            &[
+                "selector_ref",
+                "kind",
+                "calibration_ref",
+                "independent_of",
+                "adversarial",
+                "held_out_from",
+            ],
             "SelectorDeclaration",
         )?;
         Ok(SelectorDeclaration {
@@ -2456,6 +2550,8 @@ impl SelectorDeclaration {
             kind: str_at(m, "kind", "SelectorDeclaration")?.to_string(),
             calibration_ref: str_at(m, "calibration_ref", "SelectorDeclaration")?.to_string(),
             independent_of: str_vec_at(m, "independent_of", "SelectorDeclaration")?,
+            adversarial: opt_str_at(m, "adversarial")?.map(str::to_string),
+            held_out_from: str_vec_at(m, "held_out_from", "SelectorDeclaration")?,
         })
     }
 }
@@ -2466,7 +2562,7 @@ impl SelectorDeclaration {
 /// counterexample set must meet.
 #[derive(Debug, Clone, PartialEq)]
 pub struct JudgePolicy {
-    /// The admitted judge selectors.
+    /// The admitted judge/monitor selectors (`kind` splits the two).
     pub selectors: Vec<SelectorDeclaration>,
     /// The audit budget's ref (a `ResourceAccount`/`SearchBudgetRecord`
     /// slice the audit draws on — `charged_to = instrument`).
@@ -2476,15 +2572,21 @@ pub struct JudgePolicy {
     /// The minimum honeypot count a judge-selector counterexample set
     /// must carry.
     pub min_honeypots: u32,
+    /// `artifact_benefit_selector` (S6.3b; §5f.4) — the selector S5's
+    /// `artifact_benefit` row names. It carries `held_out_from`: a
+    /// benefit produced inside that closure is `JudgeLeakedIntoArtifact`
+    /// — the selector may never grade what produced it.
+    pub artifact_benefit_selector: Option<SelectorDeclaration>,
 }
 
 impl JudgePolicy {
-    /// The canonical JSON.
+    /// The canonical JSON (`artifact_benefit_selector` is additive —
+    /// emitted only when set; S6.3b).
     pub fn to_json(&self) -> Json {
-        Json::obj([
+        let mut v = vec![
             (
                 "selectors",
-                Json::Arr(self.selectors.iter().map(|s| s.to_json()).collect()),
+                Json::Arr(self.selectors.iter().map(|s| s.to_json_full()).collect()),
             ),
             ("audit_budget_ref", Json::str(&self.audit_budget_ref)),
             (
@@ -2492,7 +2594,11 @@ impl JudgePolicy {
                 Json::Int(self.audited_share_ppm as i64),
             ),
             ("min_honeypots", Json::Int(self.min_honeypots as i64)),
-        ])
+        ];
+        if let Some(a) = &self.artifact_benefit_selector {
+            v.push(("artifact_benefit_selector", a.to_json_full()));
+        }
+        Json::obj(v)
     }
 
     /// Strict decode.
@@ -2505,6 +2611,7 @@ impl JudgePolicy {
                 "audit_budget_ref",
                 "audited_share_ppm",
                 "min_honeypots",
+                "artifact_benefit_selector",
             ],
             "JudgePolicy",
         )?;
@@ -2519,6 +2626,12 @@ impl JudgePolicy {
             audit_budget_ref: str_at(m, "audit_budget_ref", "JudgePolicy")?.to_string(),
             audited_share_ppm: opt_int_at(m, "audited_share_ppm")?.unwrap_or(0) as u64,
             min_honeypots: opt_int_at(m, "min_honeypots")?.unwrap_or(0) as u32,
+            artifact_benefit_selector: match m.get("artifact_benefit_selector") {
+                Some(Json::Obj(_)) => Some(SelectorDeclaration::from_json(
+                    &m["artifact_benefit_selector"],
+                )?),
+                _ => None,
+            },
         })
     }
 }

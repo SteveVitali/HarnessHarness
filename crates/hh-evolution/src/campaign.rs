@@ -59,6 +59,13 @@ pub mod doc_kind {
     /// D7 — the `hh-hosting/1` admission surface the spec's
     /// `hosted_descriptor_refs` names).
     pub const HOSTED_DESCRIPTOR: &str = "hosted_coordinate_descriptor";
+    /// A pinned `hh-attribution-design/1` body — the hypothesis's
+    /// `attribution_ref` resolves here at S2 (S6.3b; §5h.7).
+    pub const ATTRIBUTION_DESIGN: &str = "attribution_design";
+    /// A pinned `hh-attribution/1` report body — S5's
+    /// `attribution_report_ref` resolves here (S6.3b; §5h.7's label
+    /// gate).
+    pub const ATTRIBUTION_REPORT: &str = "attribution_report";
 }
 
 /// `EvolutionCampaign` — one campaign's durable driver.
@@ -1296,27 +1303,105 @@ impl EvolutionCampaign {
                 }
             }
         }
+        // S6.3b (§5h.7) — a hypothesis claiming designed semantic
+        // changes (`semantic_op_targets` non-empty) must name its
+        // designed attribution arm: `attribution_ref` resolves to a
+        // deposited `hh-attribution-design/1` whose declared
+        // `targets[].ref` cover every semantic op (the designed-
+        // attribution link beside `TargetMismatch`; a hypothesis that
+        // claims no designed targets keeps the mechanical path).
+        if !hyp.semantic_op_targets.is_empty() {
+            let aref = match &hyp.attribution_ref {
+                Some(a) => a.clone(),
+                None => {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::AttributionMissing {
+                            detail: format!(
+                                "the proposal carries {} semantic op(s) but the                                  hypothesis names no `attribution_ref` — a designed                                  semantic change must name its hh-attribution-design/1",
+                                op_targets.len()
+                            ),
+                        },
+                    ))
+                }
+            };
+            let design = self
+                .docs
+                .get_named(doc_kind::ATTRIBUTION_DESIGN, &aref)
+                .map_err(|e| EvolutionError::Docs(format!("{e:?}")))?
+                .or_else(|| {
+                    self.docs
+                        .get(doc_kind::ATTRIBUTION_DESIGN, &aref)
+                        .ok()
+                        .flatten()
+                });
+            let design = match design {
+                Some(j) => j,
+                None => {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::AttributionReportInvalid {
+                            detail: format!(
+                                "attribution_ref `{aref}` does not resolve to a                                  deposited hh-attribution-design/1"
+                            ),
+                        },
+                    ))
+                }
+            };
+            if design.get("schema").and_then(Json::as_str) != Some("hh-attribution-design/1") {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::AttributionReportInvalid {
+                        detail: format!(
+                            "attribution_ref `{aref}` — `schema` member is not                              `hh-attribution-design/1`"
+                        ),
+                    },
+                ));
+            }
+            let design_targets: Vec<String> = design
+                .get("targets")
+                .and_then(|t| match t {
+                    Json::Arr(a) => Some(
+                        a.iter()
+                            .filter_map(|row| {
+                                row.get("ref").and_then(Json::as_str).map(str::to_string)
+                            })
+                            .collect(),
+                    ),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            for t in &op_targets {
+                if !design_targets.iter().any(|d| d == t) {
+                    return Err(fail(self, store, Refusal::TargetMismatch { op: t.clone() }));
+                }
+            }
+        }
 
         // Deposit the hypothesis + mint `hypothesized` carrying the
         // obligation link fields.
+        let mut hyp_members: Vec<(&str, Json)> = vec![
+            ("candidate_id", Json::str(candidate_id)),
+            ("kind", Json::str(&hyp.kind)),
+            (
+                "evidence_refs",
+                Json::Arr(hyp.evidence_refs.iter().map(Json::str).collect()),
+            ),
+            ("predicted", predicted_json(&hyp.predicted)),
+            (
+                "semantic_op_targets",
+                Json::Arr(hyp.semantic_op_targets.iter().map(Json::str).collect()),
+            ),
+        ];
+        if let Some(a) = &hyp.attribution_ref {
+            hyp_members.push(("attribution_ref", Json::str(a)));
+        }
         let href = self
             .docs
-            .put(
-                doc_kind::HYPOTHESIS,
-                &Json::obj([
-                    ("candidate_id", Json::str(candidate_id)),
-                    ("kind", Json::str(&hyp.kind)),
-                    (
-                        "evidence_refs",
-                        Json::Arr(hyp.evidence_refs.iter().map(Json::str).collect()),
-                    ),
-                    ("predicted", predicted_json(&hyp.predicted)),
-                    (
-                        "semantic_op_targets",
-                        Json::Arr(hyp.semantic_op_targets.iter().map(Json::str).collect()),
-                    ),
-                ]),
-            )
+            .put(doc_kind::HYPOTHESIS, &Json::obj(hyp_members))
             .map_err(|e| EvolutionError::Docs(format!("{e:?}")))?;
         self.transitioned(
             store,
@@ -1325,14 +1410,20 @@ impl EvolutionCampaign {
             "hypothesized",
             "S2",
             Some(&href),
-            Json::obj([
-                ("hypothesis_ref", Json::str(&href)),
-                ("hypothesis_kind", Json::str(&hyp.kind)),
-                (
-                    "evidence_refs",
-                    Json::Arr(hyp.evidence_refs.iter().map(Json::str).collect()),
-                ),
-            ]),
+            {
+                let mut m: Vec<(&str, Json)> = vec![
+                    ("hypothesis_ref", Json::str(&href)),
+                    ("hypothesis_kind", Json::str(&hyp.kind)),
+                    (
+                        "evidence_refs",
+                        Json::Arr(hyp.evidence_refs.iter().map(Json::str).collect()),
+                    ),
+                ];
+                if let Some(a) = &hyp.attribution_ref {
+                    m.push(("attribution_ref", Json::str(a)));
+                }
+                Json::obj(m)
+            },
             vec![],
         )?;
         Ok(href)
@@ -1549,6 +1640,129 @@ impl EvolutionCampaign {
             vec![],
         )?;
         Ok(rref)
+    }
+
+    // ── monitor selectors (S6.3b; §8.1's untrusted-monitor protocols) ──
+
+    /// `monitor_assign` — bind a declared `kind = monitor` selector to
+    /// a candidate *before* its verdict can arrive: the assignment row
+    /// (`measurement.evolution.monitor.assigned`) is the deterministic-
+    /// first ordering evidence — a monitor with no recorded assignment
+    /// can never veto (records-in).
+    pub fn monitor_assign(
+        &mut self,
+        store: &mut Store,
+        candidate_id: &str,
+        selector_ref: &str,
+    ) -> Res<()> {
+        self.require_open()?;
+        self.bound(store)?;
+        let from = self.candidate_state(candidate_id)?;
+        if from == "rejected" || from == "active" || from == "retired" {
+            return Err(Refusal::IllegalTransition {
+                from,
+                to: "monitor_assigned".to_string(),
+            }
+            .into());
+        }
+        let sel = self
+            .spec
+            .judge_policy
+            .as_ref()
+            .and_then(|jp| {
+                jp.selectors
+                    .iter()
+                    .find(|d| d.selector_ref == selector_ref && d.kind == "monitor")
+            })
+            .cloned()
+            .ok_or_else(|| Refusal::MonitorSelectorInadmissible {
+                selector: selector_ref.to_string(),
+                detail: "the selector is not a `kind = monitor` declaration on the \
+                         campaign's judge_policy"
+                    .into(),
+            })?;
+        self.emit(
+            store,
+            "measurement.evolution.monitor.assigned",
+            Json::obj([
+                ("candidate_id", Json::str(candidate_id)),
+                ("selector_ref", Json::str(selector_ref)),
+                (
+                    "adversarial",
+                    Json::str(sel.adversarial.as_deref().unwrap_or("")),
+                ),
+                ("stage", Json::str(&from)),
+            ]),
+            vec![],
+        )?;
+        Ok(())
+    }
+
+    /// `monitor_veto` — a bound monitor's verdict is *veto-only*: it
+    /// mints `measurement.evolution.monitor.veto` and rejects the
+    /// candidate — a monitor is never a vote toward acceptance (§8.1).
+    /// The veto refuses (`MonitorSelectorInadmissible`) when no
+    /// assignment row precedes it — deterministic-first.
+    pub fn monitor_veto(
+        &mut self,
+        store: &mut Store,
+        candidate_id: &str,
+        selector_ref: &str,
+        detail: &str,
+    ) -> Res<()> {
+        self.require_open()?;
+        self.bound(store)?;
+        let from = self.candidate_state(candidate_id)?;
+        if from == "rejected" || from == "active" || from == "retired" {
+            return Err(Refusal::IllegalTransition {
+                from,
+                to: "rejected".to_string(),
+            }
+            .into());
+        }
+        // The assignment must precede the verdict (deterministic-first —
+        // a verdict with no prior `monitor.assigned` row never counts).
+        let assigned = store
+            .events(&self.run_id)
+            .map(|evs| {
+                evs.iter().any(|e| {
+                    e.class == "measurement.evolution.monitor.assigned"
+                        && e.payload.get("candidate_id").and_then(Json::as_str)
+                            == Some(candidate_id)
+                        && e.payload.get("selector_ref").and_then(Json::as_str)
+                            == Some(selector_ref)
+                })
+            })
+            .unwrap_or(false);
+        if !assigned {
+            return Err(Refusal::MonitorSelectorInadmissible {
+                selector: selector_ref.to_string(),
+                detail: "no `monitor.assigned` row precedes the verdict — \
+                         assignment is deterministic-first (§8.1)"
+                    .into(),
+            }
+            .into());
+        }
+        self.emit(
+            store,
+            "measurement.evolution.monitor.veto",
+            Json::obj([
+                ("candidate_id", Json::str(candidate_id)),
+                ("selector_ref", Json::str(selector_ref)),
+                ("stage", Json::str(&from)),
+                ("detail", Json::str(detail)),
+            ]),
+            vec![],
+        )?;
+        Err(self.reject(
+            store,
+            candidate_id,
+            &from,
+            Refusal::MonitorVetoed {
+                selector: selector_ref.to_string(),
+            },
+            None,
+        ))
     }
 
     // ── S4 matched-eval (M3) ───────────────────────────────────────────
@@ -1835,6 +2049,7 @@ impl EvolutionCampaign {
     /// retention within margin; veto metrics clean; the split pin's
     /// `task_split_hash` predates the campaign (the L3 pin resolved at
     /// open).
+    #[allow(clippy::too_many_arguments)] // the gate's records are its arity — S5's evidence table is the record.
     pub fn held_out_eval(
         &mut self,
         store: &mut Store,
@@ -1843,6 +2058,9 @@ impl EvolutionCampaign {
         report_ref: &str,
         retention: &Json,
         vetoes: &BTreeMap<String, bool>,
+        judge_selector_ref: Option<&str>,
+        attribution_report_ref: Option<&str>,
+        locality_claim: bool,
     ) -> Res<()> {
         self.require_open()?;
         self.bound(store)?;
@@ -1907,6 +2125,149 @@ impl EvolutionCampaign {
                     detail: "the artifact-benefit comparison did not run held-out".into(),
                 },
             ));
+        }
+        // S6.3b (§5f.4) — the judge selector the artifact benefit names
+        // must not sit inside its own `held_out_from` closure over this
+        // artifact: a benefit the selector's verdict helped produce
+        // never grades the producing artifact — `JudgeLeakedIntoArtifact`
+        // (mirrors hh-verification's boundary check, durable here).
+        if let Some(sel_ref) = judge_selector_ref {
+            if let Some(pol) = &self.spec.judge_policy {
+                if let Some(ab) = &pol.artifact_benefit_selector {
+                    if ab.selector_ref == sel_ref {
+                        let diff_ref = self
+                            .view
+                            .candidate(candidate_id)
+                            .and_then(|c| c.diff_ref.clone())
+                            .unwrap_or_default();
+                        let leaked = ab
+                            .held_out_from
+                            .iter()
+                            .any(|h| h == candidate_id || h == &diff_ref);
+                        if leaked {
+                            return Err(fail(
+                                self,
+                                store,
+                                Refusal::JudgeLeakedIntoArtifact {
+                                    producer: candidate_id.to_string(),
+                                },
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+        // S6.3b (§5h.7's label gate) — a hypothesis that named a designed
+        // attribution arm lands its `hh-attribution/1` report here: the
+        // report's `design_ref` must equal the hypothesis's
+        // `attribution_ref`, its `attribution_label` must honor the
+        // closed-set ceiling, and a `locality` claim needs at least
+        // `causal_interventional` (M2+; `designed_ablation` cannot
+        // support a locus claim).
+        let hyp_aref: Option<String> = {
+            self.view
+                .candidate(candidate_id)
+                .and_then(|c| c.hypothesis_ref.clone())
+                .and_then(|href| {
+                    self.docs
+                        .get_named(doc_kind::HYPOTHESIS, &href)
+                        .ok()
+                        .flatten()
+                        .or_else(|| self.docs.get(doc_kind::HYPOTHESIS, &href).ok().flatten())
+                })
+                .and_then(|j| {
+                    j.get("attribution_ref")
+                        .and_then(Json::as_str)
+                        .map(str::to_string)
+                })
+        };
+        if let Some(aref) = &hyp_aref {
+            let rref = match attribution_report_ref {
+                Some(r) => r.to_string(),
+                None => {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::AttributionReportInvalid {
+                            detail: format!(
+                                "the hypothesis names attribution design `{aref}`                                  but no `attribution_report_ref` landed at S5"
+                            ),
+                        },
+                    ))
+                }
+            };
+            let rep = self
+                .docs
+                .get_named(doc_kind::ATTRIBUTION_REPORT, &rref)
+                .map_err(|e| EvolutionError::Docs(format!("{e:?}")))?
+                .or_else(|| {
+                    self.docs
+                        .get(doc_kind::ATTRIBUTION_REPORT, &rref)
+                        .ok()
+                        .flatten()
+                });
+            let rep = match rep {
+                Some(j) => j,
+                None => {
+                    return Err(fail(
+                        self,
+                        store,
+                        Refusal::AttributionReportInvalid {
+                            detail: format!(
+                                "attribution_report_ref `{rref}` does not resolve                                  to a deposited hh-attribution/1 report"
+                            ),
+                        },
+                    ))
+                }
+            };
+            if rep.get("schema").and_then(Json::as_str) != Some("hh-attribution/1") {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::AttributionReportInvalid {
+                        detail: format!(
+                            "attribution_report_ref `{rref}` — `schema` is not                              `hh-attribution/1`"
+                        ),
+                    },
+                ));
+            }
+            if rep.get("design_ref").and_then(Json::as_str) != Some(aref.as_str()) {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::AttributionReportInvalid {
+                        detail: format!(
+                            "the report's `design_ref` does not equal the                              hypothesis's attribution_ref `{aref}`"
+                        ),
+                    },
+                ));
+            }
+            let label = rep
+                .get("attribution_label")
+                .and_then(Json::as_str)
+                .unwrap_or("");
+            if !matches!(
+                label,
+                "designed_ablation" | "causal_interventional" | "causal_coupled"
+            ) {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::AttributionReportInvalid {
+                        detail: format!("attribution_label `{label}` — outside the closed set"),
+                    },
+                ));
+            }
+            if locality_claim && label == "designed_ablation" {
+                return Err(fail(
+                    self,
+                    store,
+                    Refusal::AttributionReportInvalid {
+                        detail: "a locality claim needs `causal_interventional` or                                  `causal_coupled` — `designed_ablation` carries no                                  locus"
+                            .into(),
+                    },
+                ));
+            }
         }
         // The interval must exclude 0 (paired_effect.interval{lo,hi}).
         let excludes_zero = report

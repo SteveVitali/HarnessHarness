@@ -113,3 +113,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0321](ADR-0321-s6.1b-assumption-debt-manager-rulings.md) | S6.1b assumption-debt-manager rulings | S6.1b | Accepted |
 | [ADR-0322](ADR-0322-s6.2-automated-family-one-class-rulings.md) | S6.2 automated-family / one-class rulings | S6.2 | Accepted |
 | [ADR-0323](ADR-0323-s6.3a-multi-family-code-search-rulings.md) | S6.3a multi-family code-search + hosted-coordinate rulings | S6.3a | Accepted |
+| [ADR-0324](ADR-0324-s6.3b-causal-attribution-and-judge-integrity-rulings.md) | S6.3b causal-attribution + judge-integrity rulings | S6.3b | Accepted |

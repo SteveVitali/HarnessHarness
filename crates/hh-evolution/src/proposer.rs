@@ -551,6 +551,7 @@ impl AheProposer {
             reference_trajectories: trajectory_ref
                 .map(|t| vec![t.to_string()])
                 .unwrap_or_default(),
+            attribution_ref: None,
         };
 
         // The diff — a `ReplaceLeaf` tightening the picked member
@@ -859,6 +860,7 @@ impl EvolutionProposer for CodeSearchProposer {
             },
             semantic_op_targets: vec![node_id.clone()],
             reference_trajectories: Vec::new(),
+            attribution_ref: None,
         };
         let d = diff::diff(
             base,

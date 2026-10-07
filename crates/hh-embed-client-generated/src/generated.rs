@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:f0ef084c9adca77de770c59bcedae590d481fcd165cbc338b4af66a5f35d24c5";
+    "sha256:6d66d2c18e53f110c878c2f8f815ee43204514091dcc7b001fd522a8804d92f5";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -6953,6 +6953,30 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.attribution.attribute` → `json` (see the contract registry).
+    pub fn lab_attribution_attribute(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.attribution.attribute", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.attribution.design` → `json` (see the contract registry).
+    pub fn lab_attribution_design(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.attribution.design", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.attribution.locus` → `json` (see the contract registry).
+    pub fn lab_attribution_locus(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.attribution.locus", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.attribution.quality` → `json` (see the contract registry).
+    pub fn lab_attribution_quality(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.attribution.quality", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.debt.evaluate` → `json` (see the contract registry).
     pub fn lab_debt_evaluate(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.debt.evaluate", params.clone())?;
@@ -7085,9 +7109,27 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.evolution.lineage` → `json` (see the contract registry).
+    pub fn lab_evolution_lineage(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.lineage", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.evolution.matched_eval` → `json` (see the contract registry).
     pub fn lab_evolution_matched_eval(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.evolution.matched_eval", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.monitor_assign` → `json` (see the contract registry).
+    pub fn lab_evolution_monitor_assign(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.monitor_assign", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.evolution.monitor_veto` → `json` (see the contract registry).
+    pub fn lab_evolution_monitor_veto(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.evolution.monitor_veto", params.clone())?;
         Ok(raw)
     }
 

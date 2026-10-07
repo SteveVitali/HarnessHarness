@@ -932,7 +932,8 @@ const EXPORT_REFS: &[&str] = &["loss_report_ref"];
 
 /// `measurement.evolution.candidate.transitioned` — `{candidate_id, from, to,
 /// stage, code, report_ref, hypothesis_ref, evidence_refs[], slot, base_ref,
-/// diff_ref, target_ref, rebase, coordinates, install, by, reason}` (§5h.1's transition payload plus
+/// diff_ref, target_ref, rebase, coordinates, install, attribution_ref,
+/// by, reason}` (§5h.1's transition payload plus
 /// the `evolution_link` obligation
 /// link fields; S6.1a adds `stage`/`code`/`report_ref`/`slot`/`by` — the
 /// rejected{stage, code, report_ref} / withdrawn{by} terminals and the
@@ -958,8 +959,22 @@ const TRANSITION_FIELDS: &[AuditField] = &[
     afb("rebase", AUDIT_FIELD_LIST_BYTES),
     afb("coordinates", AUDIT_FIELD_LIST_BYTES),
     afb("install", AUDIT_FIELD_LIST_BYTES),
+    // S6.3b — the hypothesis's designed-attribution link (§5h.7).
+    af("attribution_ref"),
     af("by"),
     af("reason"),
+];
+
+/// `measurement.evolution.monitor.{assigned,veto}` — the S6.3b
+/// monitor-selector rows (§8.1's untrusted-monitor protocols):
+/// `{candidate_id, selector_ref, stage, detail}` — the assignment row
+/// is the deterministic-first ordering evidence; the veto row the
+/// veto-only verdict (a monitor is never a vote toward acceptance).
+const MONITOR_FIELDS: &[AuditField] = &[
+    af("candidate_id"),
+    af("selector_ref"),
+    af("stage"),
+    af("detail"),
 ];
 
 /// `measurement.evolution.campaign.{opened,stopped,closed}` — the campaign
@@ -1250,6 +1265,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("measurement.evolution.campaign.opened", "hint"),
     ("measurement.evolution.campaign.stopped", "hint"),
     ("measurement.evolution.campaign.closed", "hint"),
+    ("measurement.evolution.monitor.assigned", "hint"),
+    ("measurement.evolution.monitor.veto", "hint"),
     // ── measurement:experiment ──
     ("measurement.experiment.amended", "none"),
     ("measurement.experiment.bound", "none"),
@@ -1920,6 +1937,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("measurement.evolution.campaign.opened",  O::Events, true, CAMPAIGN_FIELDS, &[], None, None),
     row_audit("measurement.evolution.campaign.stopped", O::Events, true, CAMPAIGN_FIELDS, &[], None, None),
     row_audit("measurement.evolution.campaign.closed",  O::Events, true, CAMPAIGN_FIELDS, &[], None, None),
+    // S6.3b — the monitor-assignment/veto audit rows (§8.1's
+    // untrusted-monitor protocols; the assignment precedes the verdict —
+    // deterministic-first).
+    row_audit("measurement.evolution.monitor.assigned", O::Events, true, MONITOR_FIELDS, &[], None, None),
+    row_audit("measurement.evolution.monitor.veto",     O::Events, true, MONITOR_FIELDS, &[], None, None),
     row_audit("measurement.harness_edit.applied",             O::Events, true, OPEN_AUDIT, &[], None, None),
     // `measurement.metric.emitted{metric_ref, value, applies_to, oracle_ref,
     // detector, confidence, evidence_ref}` (§5h.2 §3 / ADR-0045 D9 — the
