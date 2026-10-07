@@ -158,14 +158,29 @@ pub fn provisioning_payload(h: &EnvHandle) -> Json {
 /// *resolved* image + the class's implied isolation (pre-attach; the report
 /// refines it).
 pub fn provisioned_payload(h: &EnvHandle) -> Json {
-    Json::obj([
+    let mut m = vec![
         ("env_handle", Json::str(h.env_handle_id.clone())),
         ("image", h.image.to_json()),
         (
             "isolation_class",
             Json::str(h.class.implied_isolation().as_str()),
         ),
-    ])
+    ];
+    // DF-S1.13-3 — the registered canary channel ids are the durable record
+    // of the §5g.3 §9 image-manifest obligation (ids only — never spec
+    // values; a canary carries no secret material by construction).
+    if !h.canary_channels.is_empty() {
+        m.push((
+            "canary_channels",
+            Json::Arr(
+                h.canary_channels
+                    .iter()
+                    .map(|c| Json::str(c.clone()))
+                    .collect(),
+            ),
+        ));
+    }
+    Json::obj(m)
 }
 
 /// `action.environment.attached{env_handle, containment_report_ref,

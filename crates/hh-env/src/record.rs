@@ -267,6 +267,24 @@ pub struct NondeterminismDeclaration {
     pub mitigation: Option<String>,
 }
 
+/// `CanaryChannel{channel_id, spec}` — one canary channel the image
+/// manifest registers on the run's credential broker at `provision`
+/// (R2.10; DF-S1.13-3's last cell — §5g.3 §9: "a canary channel in every
+/// Stage-3 environment image", the §05h I3 `environment` bundle member).
+/// `spec.canary` must be `true` — the member holds tripwires only; a
+/// non-canary declaration is a lie and `provision` refuses it
+/// `CanaryManifest`. The channel id is the broker coordinate
+/// (`[a-z0-9_.-]+`); the `action.environment.provisioned` row records the
+/// registered ids.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CanaryChannel {
+    /// The channel id registered on the broker.
+    pub channel_id: String,
+    /// The channel spec — must carry `canary: true` (the broker never
+    /// injects it; any use attempt is `leak_detected` + `Refused{canary}`).
+    pub spec: hh_secrets::SecretChannelSpec,
+}
+
 /// `EnvironmentRecord` — the definition record (ADR-0136 §3). `identify()`
 /// yields `version_id` + `semantic_id` (the `environment_ref` a `RunManifest`
 /// or `AgentProcessRecord` pins). A mutable `image.tag` is *recordable* here —
@@ -302,6 +320,12 @@ pub struct EnvironmentRecord {
     /// The `unpinned[]` context — the member names a `tag` selector the run
     /// deliberately admits un-pinned (records `unpinned_tag` on provision).
     pub unpinned: BTreeSet<String>,
+    /// The canary channels the image registers on the run's credential
+    /// broker at `provision` (R2.10; DF-S1.13-3; §5g.3 §9). Identity-bearing
+    /// — a different canary set is a different image. `needs_adapter`
+    /// (Stage-3) classes MUST declare ≥1 — `provision`/`provision_hosted`
+    /// refuse `CanaryManifest` otherwise.
+    pub canary_channels: Vec<CanaryChannel>,
     /// Extension members (surface — never identity-bearing).
     pub ext: BTreeMap<String, Json>,
 }
@@ -371,6 +395,22 @@ impl EnvironmentRecord {
                 "unpinned",
                 Json::Arr(self.unpinned.iter().map(|t| Json::str(t.clone())).collect()),
             );
+        if !self.canary_channels.is_empty() {
+            r = r.semantic(
+                "canary_channels",
+                Json::Arr(
+                    self.canary_channels
+                        .iter()
+                        .map(|c| {
+                            Json::obj([
+                                ("channel_id", Json::str(c.channel_id.clone())),
+                                ("spec", c.spec.to_json()),
+                            ])
+                        })
+                        .collect(),
+                ),
+            );
+        }
         if let Some(bc) = &self.build_context {
             r = r.semantic("build_context", Json::str(bc.id()));
         }

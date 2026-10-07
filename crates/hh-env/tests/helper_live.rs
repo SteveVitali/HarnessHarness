@@ -126,6 +126,7 @@ fn test_record(class: EnvironmentClass, image: ImageRef) -> EnvironmentRecord {
         unpinned: BTreeSet::new(),
         image_attestation: None,
         ext: BTreeMap::new(),
+        canary_channels: vec![],
     }
 }
 
@@ -159,6 +160,7 @@ fn ready_env(
             roots,
             PolicySlot::Inline(Box::new(test_policy(ws))),
             on_loss,
+            None,
         )
         .unwrap();
     let backend = Ep2Model::reference();
@@ -1183,6 +1185,7 @@ fn ac_s2_local_container_exec_runs_inside_podman() {
             roots,
             PolicySlot::Inline(Box::new(test_policy(&ws))),
             OnLoss::FailRun,
+            None,
         )
         .unwrap();
     let backend = Ep2Model::reference();

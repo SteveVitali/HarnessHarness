@@ -50,6 +50,16 @@ pub enum EnvError {
         /// The closed reason.
         reason: String,
     },
+    /// A `needs_adapter` (Stage-3) image manifest carries no canary channel,
+    /// a declared `canary_channels` member is not `canary: true`, or the
+    /// provision path carried no credential broker to register them —
+    /// every Stage-3 environment registers ≥1 canary (R2.10; DF-S1.13-3;
+    /// §5g.3 §9 — the §05h I3 `environment` member). Fail-closed.
+    CanaryManifest {
+        /// What failed (`missing` | `non_canary` | `broker_absent` |
+        /// `register:<detail>`).
+        detail: String,
+    },
     /// `attach`'s non-evidence failures (invalid policy, degrade-on-lab).
     Attach(AttachError),
     /// The environment is not `ready` — `EnvironmentUnavailable` (the
@@ -179,6 +189,9 @@ impl std::fmt::Display for EnvError {
                 field_group,
                 reason,
             } => write!(f, "ContainmentUnverified: {field_group} ({reason})"),
+            EnvError::CanaryManifest { detail } => {
+                write!(f, "CanaryManifest: {detail}")
+            }
             EnvError::Attach(e) => write!(f, "attach: {e}"),
             EnvError::Unavailable {
                 env_handle_id,
