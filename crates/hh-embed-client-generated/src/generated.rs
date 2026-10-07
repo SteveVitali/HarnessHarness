@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:4e47676381eceffc189fcf25205bed3c2b701e46c55e6a7fa35b36d95fc81ef8";
+    "sha256:49771153d7eadd184e8dafd496f375af2a023457d4175a4967c220b9e5e8431e";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -6636,6 +6636,18 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `fleet.source_capabilities` → `json` (see the contract registry).
+    pub fn fleet_source_capabilities(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.source_capabilities", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.source_records` → `json` (see the contract registry).
+    pub fn fleet_source_records(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.source_records", params.clone())?;
+        Ok(raw)
+    }
+
     /// `fleet.state_map` → `json` (see the contract registry).
     pub fn fleet_state_map(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("fleet.state_map", params.clone())?;
@@ -6657,6 +6669,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `fleet.unblock` → `json` (see the contract registry).
     pub fn fleet_unblock(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("fleet.unblock", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `fleet.webhook_ingress` → `json` (see the contract registry).
+    pub fn fleet_webhook_ingress(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("fleet.webhook_ingress", params.clone())?;
         Ok(raw)
     }
 

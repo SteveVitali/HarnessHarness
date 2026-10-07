@@ -215,33 +215,9 @@ pub fn view(svc: &mut Sessions, id: &str, params: Json) -> Result<Json, ClientEr
         "v8_inbox" => {
             let rid = run_id.ok_or_else(bad_params)?;
             let rows = permission_rows(svc, &rid)?;
-            let mut pending: BTreeMap<String, Json> = BTreeMap::new();
-            let mut decided_ids: std::collections::BTreeSet<String> =
-                std::collections::BTreeSet::new();
-            for row in match rows.get("rows") {
-                Some(Json::Arr(a)) => a.clone(),
-                _ => Vec::new(),
-            } {
-                let rm = obj(&row);
-                let kind = str_of(&row, "event_class")
-                    .or_else(|| str_of(&row, "class"))
-                    .unwrap_or_default();
-                let pid = str_of(&row, "permission_id")
-                    .or_else(|| str_of(&row, "decision_id"))
-                    .unwrap_or_default();
-                if kind.ends_with("permission.pending") && !pid.is_empty() {
-                    pending.insert(pid, Json::Obj(rm));
-                } else if kind.ends_with("permission.decided") {
-                    if let Some(d) = str_of(&row, "permission_id") {
-                        decided_ids.insert(d);
-                    }
-                }
-            }
-            for d in &decided_ids {
-                pending.remove(d);
-            }
+            let pending = pending_permissions(&rows);
             let mut m = BTreeMap::new();
-            m.insert("items".into(), Json::Arr(pending.into_values().collect()));
+            m.insert("items".into(), Json::Arr(pending));
             Ok(envelope("v8_inbox", Some(&rid), m))
         }
         // V9 — delivery: session lifecycle rows + delivery records +
@@ -306,6 +282,53 @@ pub fn view(svc: &mut Sessions, id: &str, params: Json) -> Result<Json, ClientEr
                     ]),
                 )?;
                 m.insert("control".into(), control);
+                // S5.6 (R-2.12.6; ADR-0207 D4; WS-K2): the canonical
+                // FleetView member — `fleet.fleet_view` verbatim when the
+                // run is a fleet activation (`hh.fleet.view/2`,
+                // ledger-derived, rebuild-equal; the op's own typed
+                // refusal means "not a fleet run" — the member is simply
+                // absent, never fabricated).
+                if let Ok(fv) = svc.call("fleet.fleet_view", Json::obj([("run", Json::str(&rid))]))
+                {
+                    // The approval-inbox join (§5i.1 — "the approval
+                    // inbox joins on `work_item_id` through the pending
+                    // permission's run"): pending permission rows whose
+                    // payload names a `work_item_id` group onto the
+                    // item's `approvals` member; the full pending set
+                    // rides `approval_inbox` so the join is auditable.
+                    let pending = permission_rows(svc, &rid)
+                        .map(|r| pending_permissions(&r))
+                        .unwrap_or_default();
+                    let mut by_item: BTreeMap<String, Vec<Json>> = BTreeMap::new();
+                    for row in &pending {
+                        if let Some(wi) = str_of(row, "work_item_id") {
+                            by_item.entry(wi).or_default().push(row.clone());
+                        }
+                    }
+                    let mut fv = fv;
+                    if let Json::Obj(ref mut fm) = fv {
+                        if let Some(Json::Arr(items)) = fm.get_mut("items") {
+                            for it in items.iter_mut() {
+                                if let Json::Obj(ref mut im) = it {
+                                    let wi = im
+                                        .get("work_item_id")
+                                        .and_then(Json::as_str)
+                                        .map(str::to_string);
+                                    let apps = wi
+                                        .as_deref()
+                                        .and_then(|w| by_item.remove(w))
+                                        .unwrap_or_default();
+                                    im.insert("approvals".into(), Json::Arr(apps));
+                                }
+                            }
+                        }
+                        fm.insert(
+                            "approval_inbox".into(),
+                            Json::obj([("pending", Json::Arr(pending))]),
+                        );
+                    }
+                    m.insert("fleet_view".into(), fv);
+                }
             }
             // S5.4 (R-2.9.6¹): the `debt_report` member — when the browser
             // params carry `debt_report{rows[], policy?, scope?}` the view
@@ -366,6 +389,38 @@ fn permission_rows(svc: &mut Sessions, run_id: &str) -> Result<Json, ClientError
             ),
         ]),
     )
+}
+
+/// The pending fold V8 and V10 share — durable
+/// `security.permission.pending` rows minus the `decided` set (a set
+/// difference over canonical rows, presentation selection only; the
+/// options stay verbatim on each row).
+fn pending_permissions(rows: &Json) -> Vec<Json> {
+    let mut pending: BTreeMap<String, Json> = BTreeMap::new();
+    let mut decided_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for row in match rows.get("rows") {
+        Some(Json::Arr(a)) => a.clone(),
+        _ => Vec::new(),
+    } {
+        let rm = obj(&row);
+        let kind = str_of(&row, "event_class")
+            .or_else(|| str_of(&row, "class"))
+            .unwrap_or_default();
+        let pid = str_of(&row, "permission_id")
+            .or_else(|| str_of(&row, "decision_id"))
+            .unwrap_or_default();
+        if kind.ends_with("permission.pending") && !pid.is_empty() {
+            pending.insert(pid, Json::Obj(rm));
+        } else if kind.ends_with("permission.decided") {
+            if let Some(d) = str_of(&row, "permission_id") {
+                decided_ids.insert(d);
+            }
+        }
+    }
+    for d in &decided_ids {
+        pending.remove(d);
+    }
+    pending.into_values().collect()
 }
 
 fn bad_params() -> ClientError {

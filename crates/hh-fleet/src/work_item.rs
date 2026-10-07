@@ -32,6 +32,13 @@ pub struct ItemOn {
     /// when the work item's dispatch class requires acknowledgement" — the
     /// declaration is durable on the item, never a host convention).
     pub ack_required: bool,
+    /// `external_irreversible` — the item's dispatch class commits an
+    /// `irreversible ∧ scope = external` effect (ADR-0207 D5's optional
+    /// ceiling input): the reconciler reserves one unit of the registered
+    /// `ext.effects.external_irreversible` dimension at the owner pool
+    /// before the mark; exhaustion is `deny{irreversibility_ceiling}`.
+    /// Unset/false ⇒ no behaviour change (the dimension is optional).
+    pub external_irreversible: bool,
     /// The item's own Π narrowing leaves (state-map per-row members).
     pub narrowing: Vec<NarrowingLeaf>,
 }
@@ -197,6 +204,12 @@ pub struct WorkItemView {
     /// The most recent `verb:"dispatch"` row's event id — the child run's
     /// `spawn_event` anchor (the fleet_anchor obligation).
     pub dispatch_event_id: Option<String>,
+    /// `activation_no` — the folded count of `verb:"dispatch"` marks
+    /// (the item's Nth activation; §7.1 `FleetView` member).
+    pub activation_no: u64,
+    /// `last_activity` — the newest `ts` of any folded row naming the
+    /// item (RC-3's ledger-derived activity stamp — never a clock).
+    pub last_activity: String,
 }
 
 /// The closed `state` spellings (§5i.1 #4's fold + terminal).
@@ -301,6 +314,9 @@ impl ItemOn {
         if self.ack_required {
             m.insert("ack_required".into(), Json::Bool(true));
         }
+        if self.external_irreversible {
+            m.insert("external_irreversible".into(), Json::Bool(true));
+        }
         if !self.narrowing.is_empty() {
             m.insert(
                 "narrowing".into(),
@@ -325,6 +341,7 @@ impl ItemOn {
             "retry",
             "stall",
             "ack_required",
+            "external_irreversible",
             "narrowing",
         ];
         for k in o.keys() {
@@ -401,6 +418,7 @@ impl ItemOn {
             retry_backoff_ms: backoff,
             stall_escalate: esc_of(o.get("stall").unwrap_or(&Json::Null), "/on/stall")?,
             ack_required: matches!(o.get("ack_required"), Some(Json::Bool(true))),
+            external_irreversible: matches!(o.get("external_irreversible"), Some(Json::Bool(true))),
             narrowing,
         })
     }
@@ -473,5 +491,34 @@ impl WorkItemInit {
                 Some(v) => ItemOn::from_json(v)?,
             },
         })
+    }
+
+    /// The canonical wire form (the inverse of [`WorkItemInit::from_json`]
+    /// — the `hh-fleet-adapter` plugin lane carries items across the
+    /// process boundary as records).
+    pub fn to_json(&self) -> Json {
+        let mut m = BTreeMap::new();
+        m.insert("item_id".into(), Json::str(&self.item_id));
+        m.insert("title".into(), Json::str(&self.title));
+        m.insert("source".into(), self.source.clone());
+        m.insert(
+            "occurrence".into(),
+            self.occurrence.clone().unwrap_or(Json::Null),
+        );
+        m.insert("idempotency_key".into(), Json::str(&self.idempotency_key));
+        m.insert(
+            "owner".into(),
+            self.owner.as_ref().map(Json::str).unwrap_or(Json::Null),
+        );
+        if !self.blocking.is_empty() {
+            m.insert(
+                "blocking".into(),
+                Json::Arr(self.blocking.iter().map(Json::str).collect()),
+            );
+        }
+        if self.on != ItemOn::default() {
+            m.insert("on".into(), self.on.to_json());
+        }
+        Json::Obj(m)
     }
 }

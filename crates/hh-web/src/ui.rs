@@ -51,11 +51,20 @@ function render(v,b){
  if(v==='v7_traversal'){main.innerHTML='<h2>traversal '+esc(b.run_id)+'</h2>'+kv(b.trace_view)+kv(b.cost_view)+kv(b.effect_ledger)+kv(b.permissions);return;}
  if(v==='v8_inbox'){const it=b.items||[];main.innerHTML='<h2>inbox '+esc(b.run_id)+'</h2>'+it.map(x=>inbox(x)).join('');wire();return;}
  if(v==='v9_delivery'){main.innerHTML='<h2>delivery '+esc(b.run_id)+'</h2>'+kv(b.lifecycle)+kv(b.kernel_status);return;}
- if(v==='v10_supervision'){main.innerHTML='<h2>fleet supervision</h2>'+kv(b.fleets)+kv(b.control||{})+kv(b.catalogue||{});return;}
+ if(v==='v10_supervision'){main.innerHTML='<h2>fleet supervision</h2>'+kv(b.fleets)+fleetview(b.fleet_view)+kv(b.control||{})+kv(b.catalogue||{});return;}
  main.innerHTML=kv(b);}
 function kv(j){return '<pre>'+esc(JSON.stringify(j,null,1))+'</pre>';}
+// V10's fleet lane — the canonical `hh.fleet.view/2` verbatim: items
+// table with the spec member set (§7.1), the capacity/escalation folds,
+// the metrics member, and `approvals` — the inbox join keyed on
+// `work_item_id` (a pending row naming the item renders inline).
+function fleetview(fv){if(!fv)return'';
+ const items=fv.items||[];let h='<h3>fleet '+esc(fv.run||'')+'</h3>'+table(items.map(it=>Object.assign({approvals_n:(it.approvals||[]).length},it)),
+  ['work_item_id','state','owner','source_state','activation_no','escalations_open','approvals_n','children_open']);
+ h+=kv(fv.capacity)+kv(fv.escalations)+kv(fv.totals)+kv(fv.approval_inbox)+kv(fv.metrics);return h;}
 function inbox(x){const id=x.permission_id||'',opts=x.options||x.offered_options||[];
- return '<div class="badge">'+esc(x.event_class||'pending')+'</div> <code>'+esc(id)+'</code> '+esc(x.request?JSON.stringify(x.request):'')+
+ const wi=x.work_item_id?(' <span class="badge">work_item '+esc(x.work_item_id)+'</span>'):'';
+ return '<div class="badge">'+esc(x.event_class||'pending')+'</div> <code>'+esc(id)+'</code>'+wi+' '+esc(x.request?JSON.stringify(x.request):'')+
  ' '+opts.map(o=>'<button data-pid="'+esc(id)+'" data-out="'+esc(typeof o==='string'?o:o.kind||o)+'">'+esc(typeof o==='string'?o:o.kind||o)+'</button>').join(' ');}
 function wire(){main.querySelectorAll('button[data-pid]').forEach(b=>b.onclick=()=>{
  const run_id=window.__run;api('respond_permission',{run_id,permission_id:b.dataset.pid,outcome:b.dataset.out}).then(({body})=>show('v8_inbox',{run_id}));});}

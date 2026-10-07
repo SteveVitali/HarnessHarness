@@ -119,6 +119,16 @@ pub fn classify(op: &str) -> Option<OpClass> {
         | "kernel.lineage"
         | "kernel.diff"
         | "kernel.audit_bundle" => OpClass::Read,
+        // S5.6 — the fleet read seam (§5i.1; ADR-0207 D4): FleetView,
+        // the item reads, and the adapter capability/source-record
+        // reads are canonical reads (R group). The W ops —
+        // `webhook_ingress`, `reconcile`, `observe`, `dispatch` — stay
+        // unadmitted: the browser surface never drives fleet writes.
+        "fleet.fleet_view"
+        | "fleet.work_item"
+        | "fleet.list"
+        | "fleet.source_capabilities"
+        | "fleet.source_records" => OpClass::Read,
         "respond_permission" | "amend" | "kernel.reproduce" => OpClass::Write,
         _ => return None,
     })

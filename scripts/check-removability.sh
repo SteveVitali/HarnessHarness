@@ -34,11 +34,12 @@ cargo test -p hh-ledger --no-default-features --test durable_execution removabil
 
 echo "== removability(extension): no base crate depends on the variant host =="
 # S2.2 (§8.4 removability tiers): hh-varhost, hh-plugin-fixture and the
-# packaged plugin binaries (hh-compact-evict-oldest; S4.16b's hh-memory-store)
-# are the extension tier — removable without breaking the base class
+# packaged plugin binaries (hh-compact-evict-oldest; S4.16b's hh-memory-store;
+# S5.6's hh-tracker-fixture — the packaged `work_source_adapter` reference
+# variant) are the extension tier — removable without breaking the base class
 # contracts. The check: no *other* workspace crate names them as a normal
 # dependency (dev-dependency edges don't ship).
-EXT="hh-varhost hh-plugin-fixture hh-compact-evict-oldest hh-memory-store"
+EXT="hh-varhost hh-plugin-fixture hh-compact-evict-oldest hh-memory-store hh-tracker-fixture"
 cargo metadata --format-version 1 --no-deps | python3 -c "
 import json,sys
 ext=set(sys.argv[1].split())
@@ -121,12 +122,13 @@ echo "check-removability: S4.6 subagent/orchestrator boundary verified"
 
 echo "== removability(S4.9): C4 fleet tier — hh-fleet optional; hh-embed is its only consumer =="
 # §5i.1 CC6: the organizational layer is a removable tier. `hh-embed`'s
-# `tier-c4` feature is the single consumer (an *optional* dependency);
-# absent ⇒ the `fleet.*` ops stay in the schema (CC7 single source) and
-# answer `Unsupported{by: "tier-c4"}` — a typed refusal, never silent
-# degrade. Lower tiers are untouched: hh-fleet consumes hh-ledger /
-# hh-budget / hh-monitor / hh-embed-schema and nothing below C4 depends
-# on hh-fleet.
+# `tier-c4` feature and S5.6's `hh-fleet-adapter` (the L5 plugin boundary —
+# itself C4-tier and leaf-consumed only by the packaged fixture binary) are
+# the consumers (the embed edge an *optional* dependency); absent ⇒ the
+# `fleet.*` ops stay in the schema (CC7 single source) and answer
+# `Unsupported{by: "tier-c4"}` — a typed refusal, never silent degrade.
+# Lower tiers are untouched: hh-fleet consumes hh-ledger / hh-budget /
+# hh-monitor / hh-embed-schema and nothing below C4 depends on hh-fleet.
 cargo build -p hh-embed --no-default-features
 cargo build -p hh-embed
 cargo build -p hh-fleet
@@ -139,15 +141,27 @@ consumers=[]
 for pkg in meta['packages']:
     name=pkg['name']
     for d in pkg['dependencies']:
+        if not normal(d):
+            continue  # dev-deps don't ship (hh-varhost's fixture test consumes hh-fleet dev-only)
         if name == 'hh-fleet' and d['name'] == 'hh-embed':
             bad.append('hh-fleet -> hh-embed (C4 depends on its consumer)')
         if d['name'] == 'hh-fleet' and name != 'hh-fleet':
             consumers.append((name, 'optional' if d.get('optional') else 'REQUIRED'))
 for name, kind in consumers:
-    if name != 'hh-embed':
-        bad.append(name + ' -> hh-fleet (consumer outside the boundary)')
-    elif kind == 'REQUIRED':
+    if name == 'hh-embed' and kind == 'REQUIRED':
         bad.append('hh-embed -> hh-fleet must be OPTIONAL (tier-c4 feature)')
+    elif name not in ('hh-embed', 'hh-fleet-adapter'):
+        bad.append(name + ' -> hh-fleet (consumer outside the C4 boundary)')
+# hh-fleet-adapter is the C4 L5 boundary — leaf-consumed only by the
+# packaged fixture binary (itself extension-tier). Anything else depending
+# on it is an upward edge.
+for pkg in meta['packages']:
+    name = pkg['name']
+    for d in pkg['dependencies']:
+        if not normal(d):
+            continue
+        if d['name'] == 'hh-fleet-adapter' and name not in ('hh-fleet-adapter', 'hh-tracker-fixture'):
+            bad.append(name + ' -> hh-fleet-adapter (consumer outside the C4/extension tier)')
 for pkg in meta['packages']:
     if pkg['name'] != 'hh-embed':
         continue
@@ -158,7 +172,7 @@ if bad:
     print('fleet removability violations:')
     for b in bad: print('  ' + b)
     sys.exit(1)
-print('hh-fleet is edge-free upward; hh-embed consumes it behind tier-c4 only')
+print('hh-fleet is edge-free upward; hh-embed (optional) + hh-fleet-adapter are its only consumers')
 "
 
 echo "check-removability: S4.9 fleet boundary verified"

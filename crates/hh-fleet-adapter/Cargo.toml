@@ -1,0 +1,14 @@
+[package]
+name = "hh-fleet-adapter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C4/Stage-5 work-source adapter boundary (spec §5i.1, R-2.12.6; ticket S5.6): the `work_source_adapter` plugin class contract — the one wire codec (`ops` ↔ canonical-JSON records), the host-side `PluginSourceAdapter` (`WorkSourceAdapter` over a `SourceChannel`, channel faults latching `SourceUnavailable`), and the plugin-side `TrackerLogic` trait a tracker variant implements out of process (ADR-0180/0181; T-LCD-12 records-in/records-out). Transport-agnostic — the variant host supplies the channel; a `hh-tracker-fixture` binary is the reference plugin. Removable with the C4 tier (CC6)."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-fleet = { path = "../hh-fleet" }

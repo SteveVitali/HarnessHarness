@@ -335,6 +335,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-fleet-adapter"
+version = "0.0.1"
+dependencies = [
+ "hh-fleet",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-gateway"
 version = "0.0.1"
 dependencies = [
@@ -622,6 +630,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hh-tracker-fixture"
+version = "0.0.1"
+dependencies = [
+ "hh-embed-schema",
+ "hh-fleet-adapter",
+ "hh-plugin-fixture",
+ "hh-varhost",
+ "hh-wire",
+]
+
+[[package]]
 name = "hh-varhost"
 version = "0.0.1"
 dependencies = [
@@ -629,6 +648,8 @@ dependencies = [
  "hh-context",
  "hh-embed-schema",
  "hh-env",
+ "hh-fleet",
+ "hh-fleet-adapter",
  "hh-helper",
  "hh-hir",
  "hh-identity",

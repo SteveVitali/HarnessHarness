@@ -1391,6 +1391,45 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
+        // ── S5.6: the adapter surface — signed-webhook ingress (W), the
+        // capability probe + source read minimum (R) (§5i.1 #3;
+        // ADR-0205 D5).
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.webhook_ingress",
+                "W",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.source_capabilities",
+                "R",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            implemented: true,
+            ..call(
+                "fleet.source_records",
+                "R",
+                "json",
+                "json",
+                FLEET_ERR,
+                Tier::Experimental,
+                true,
+            )
+        },
         OpSpec {
             implemented: true,
             ..call(
