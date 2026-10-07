@@ -13,7 +13,7 @@
 - **Machine form:** `docs/build/BACKLOG.csv` (39 rows; `check-backlog.sh` exit 0)
 - **Sources consumed:** `docs/tickets/DEFERRALS.md` (60 owed rows of 99) ·
   `docs/build/COVERAGE_MATRIX.csv` (31 PARTIAL rows) · `docs/adr/` (114 `## Revisit trigger`
-  sections, ADR-0217…ADR-0330) · `research/registers/open-questions.md` (103 `deferred(ADR-*)`
+  sections, ADR-0217…ADR-0331 — +0331 appended 2026-10-06) · `research/registers/open-questions.md` (103 `deferred(ADR-*)`
   questions) · `research/registers/scope.md` (R-2.12.4 `deferred(ADR-0210)`) ·
   `research/registers/spec-debt.md` (216 active AssumptionDebtRecords) ·
   `research/registers/conflicts.md` (2 open conflicts) · `docs/build/LEDGER.md` OPEN FINDINGS
@@ -70,6 +70,8 @@
 ### REC.2 — 1 row (spec reconciliation)
 
 | BL-30 | Spec/governance rulings — signer custody (ADR-0213), OQ-388 latency ratification, ModelProfile/2 `debt.hypothesis`, parked-detach closed sum; open conflicts CF-476/CF-487 | DF-S2.5-1, DF-S4.13-1, DF-S1.24-3, DF-S1.26-2, CF-476, CF-487, ADR-0260, ADR-0261, ADR-0267, ADR-0274, ADR-0305 |
+
+*Progress 2026-10-06 (REC.2): rulings issued at **ADR-0331** — D1 discharges DF-S1.24-3 (DONE); D2 rules the parked-detach surface (plan A-1, unticked); D3 confirms custody external (OQ-170/WS-H3-H6-L4); D4 proposes the OQ-388 measurement fold (plan A-2, unticked); D5 dispositions the ADR-appendix delta (plan A-3). The row stays `open` — the spec folds await the operator's tick and the two ratifications their named workstreams. ADR-0331 appended to the sources cell and the sweep table.*
 
 ### REC.3 — 2 rows (integration)
 
@@ -244,9 +246,10 @@ build) · `dormant` (trigger exists but its subject is inert) · `superseded`
 | ADR-0328 | quiet | work-units dominance trigger stands | BL-42 |
 | ADR-0329 | quiet | run-less respond_approval landed; rebind conditions stand | BL-42 |
 | ADR-0330 | fired-unanswered | amending retain/rebind call sites owed | BL-18 |
+| ADR-0331 | fired-unanswered | REC.2 rulings issued (D1–D5); ticked folds (plan A-1/A-2/A-3) + external ratifications (OQ-170 WS-H3/H6/L4, OQ-388 WS-B1/K2) owed | BL-30 |
 
-Sweep tally: **54 fired-unanswered · 30 fired-answered · 28 quiet · 2 dormant ·
-0 superseded** (114 total).
+Sweep tally: **55 fired-unanswered · 30 fired-answered · 28 quiet · 2 dormant ·
+0 superseded** (115 total — REC.2 appended ADR-0331, 2026-10-06).
 
 ## Coverage sums — recomputed 2026-10-06 vs the CAP.3 headline
 

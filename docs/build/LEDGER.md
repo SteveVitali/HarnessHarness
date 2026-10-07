@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS        # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      REC.2
-lastCompleted:   REC.1
+nextTicket:      REC.3
+lastCompleted:   REC.2
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-rec.1
+chainTip:        svitali/harnessharness-rec.2
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -217,3 +217,4 @@ updatedAt:       2026-10-06
 
 - 2026-10-02 · **GATE-ACCEPT PASSED** (operator, reading 1) — the accepted-deviations list signed: all 10 CAP.3 ACCEPTED rows dispositioned ACCEPTED, no SEND-BACKs (readouts/GATE-ACCEPT.md §4; CAPSTONE_CLOSURE.md). Coverage post-closure: 29 MET / 6 MET-DIFFERENTLY / 31 PARTIAL / 0 MISSING / 0 AT-RISK; suite 280 blocks / 3028 tests / 0 failures. Carry-forward: 45 DEFERRALS rows classified for REC.* (37 backlog / 4 spec-reconciliation / 4 integration) + the three human rows on the accepted list. lastCompleted → GATE-ACCEPT · chainTip unchanged (svitali/harnessharness-capstone; gates create no branch) · next → REC.1.
 - 2026-10-06 · REC.1 done — branch `svitali/harnessharness-rec.1` · PR https://github.com/SteveVitali/HarnessHarness/pull/100 · base `svitali/harnessharness-capstone` (@82ef6b0). Ran `reconcile-build mode=backlog` over the whole landed record: `docs/build/BACKLOG.csv` (39 deduplicated rows; every owed source — 60 not-fully-discharged DEFERRALS rows, 31 PARTIAL matrix ids, 114 ADR revisit triggers, 103 deferred open-questions, the R-2.12.4 scope row, the ADR-0211 D-1..D-6 set, 216 spec-debt records via range token, 2 open conflicts, 5 ledger findings — occurs in exactly one `sources` cell); `docs/build/BACKLOG.md` (rows grouped by landing + themes; dated 2026-10-06 revisit-trigger sweep — 54 fired-unanswered / 30 fired-answered / 28 quiet / 2 dormant / 0 superseded; recomputed sums 35/66 engineering-closed and 35/66 requirement-satisfied matching the CAP.3 headline; dated Round-1 risk-register review + findings map); `docs/build/OPERATIONAL_READINESS.md` (16-row capability table — code state / infra / human owner+date / highest layer / proof; 10-step ordered critical path with `ticket:`/`proof:` on every step; zero `TBD`; live read of record = ci-boundary/1 `target/rec1-ci-boundary-chainTip.json`, read_at 2026-10-06T13:39:34Z, sha256 c09d50e1…fe28, pass on #99@82ef6b0 + open stack #98…#87); `research/registers/risks.md` `## Round 1 review` appended (append-only, no re-ratings). **Verify:** check-backlog.sh exit 0 (complete + non-duplicating + verdict-consistent); check-build-memory.sh 0 violations / 7 pre-existing warnings; DEFERRALS `^||` grep clean; no code changed (cargo test not required). **Deferrals:** none opened/closed — catalogue only; the two unflipped-done cells are BL-29, unedited. **ADRs:** none. chainTip → svitali/harnessharness-rec.1 · next → REC.2 (manifest row 103 — spec reconciliation).
+- 2026-10-06 · REC.2 done — branch `svitali/harnessharness-rec.2` · PR https://github.com/SteveVitali/HarnessHarness/pull/101 · base `svitali/harnessharness-rec.1` (@bb8b482). Ran `reconcile-build mode=spec` (proposals-only): `TICKET_VS_SPEC.md` tags every landed row — in-spec 389 / spec-implied 114 / ticket-added 17 tagged groups, nothing contradicting the spec; `SPEC_RECONCILIATION_PLAN.md` proposes 3 amendments (A-1 parked-detach `detached` member → §7.1/R-2.11.1; A-2 OQ-388 measured bound + maintenance policy → §7.1/§5a AC-R-2.2.1-16; A-3 build-ADR reference note → Appendix B), 0 applied — all `[ ]` pending the operator's tick; **ADR-0331** issues the BL-30 rulings + the appendix parity disposition (DF-S1.24-3 → DONE; DF-S1.26-2/DF-S2.5-1/DF-S4.13-1 stay OPEN — tick/workstream-owned). Verify: check-backlog exit 0 (146 sources); check-build-memory 0 violations / 7 pre-existing warnings; no code changed; spec untouched. chainTip → svitali/harnessharness-rec.2 · next → REC.3.

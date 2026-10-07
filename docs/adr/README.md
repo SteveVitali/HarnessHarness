@@ -120,3 +120,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0328](ADR-0328-cap.3-hosted-permission-lift-partition-shaping.md) | CAP.3 hosted `security.permission.*` lift — partition shaping, not verbatim pass-through | CAP.3 | Accepted |
 | [ADR-0329](ADR-0329-cap.3-supply-surface-respond-approval-builtin.md) | CAP.3 `respond_approval` — the supply protocol's own answer verb | CAP.3 | Accepted |
 | [ADR-0330](ADR-0330-cap.3-closure-rulings-and-accepted-deviations.md) | CAP.3 closure rulings and the accepted-deviation set | CAP.3 | Accepted |
+| [ADR-0331](ADR-0331-rec.2-spec-reconciliation-rulings.md) | REC.2 spec-reconciliation rulings — `debt.hypothesis` canonical, parked-detach declared, custody and OQ-388 external, ADR-appendix parity disposition | REC.2 | Accepted |
