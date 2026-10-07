@@ -45,19 +45,14 @@ pub fn blob_ref(j: &Json) -> String {
     hh_identity::idp::address(j.to_canonical_string().as_bytes(), "application/json").id()
 }
 
-/// The `lowering_loss` blob — `[{field, backend, reason}]`.
+/// The `lowering_loss` blob — `[{field, backend, reason, kind,
+/// consequence}]` (the R2.9b typed row — DF-S1.12-4; ADR-0341 D1/D2).
 pub fn lowering_loss_json(report: &ContainmentReport) -> Json {
     Json::Arr(
         report
             .lowering_loss
             .iter()
-            .map(|l| {
-                Json::obj([
-                    ("field", Json::str(l.field.clone())),
-                    ("backend", Json::str(l.backend.clone())),
-                    ("reason", Json::str(l.reason.clone())),
-                ])
-            })
+            .map(crate::report::LoweringLoss::to_json)
             .collect(),
     )
 }
@@ -104,6 +99,20 @@ pub fn applied_payload(
             Json::str(blob_ref(&lowering_loss_json(report))),
         ),
         ("probes_ref", Json::str(blob_ref(&probes_json(report)))),
+        // The declared-field spellings of the report's losses — closed
+        // content-free tags (the `proxy.hijack_attempt_rate` fold's
+        // numerator reads them without resolving the blob — R2.9b;
+        // ADR-0341 D5).
+        (
+            "lowering_loss_fields",
+            Json::Arr(
+                report
+                    .lowering_loss
+                    .iter()
+                    .map(|l| Json::str(l.declared_field.clone()))
+                    .collect(),
+            ),
+        ),
     ])
 }
 
@@ -243,6 +252,7 @@ pub fn egress_decided_payload(
     credential_binding_applied: &[String],
     effect_id: &str,
     latency_ms: u64,
+    tls_terminated: bool,
 ) -> Json {
     let mut m = Json::obj([
         ("request_ref", Json::str(request_ref(req))),
@@ -272,7 +282,15 @@ pub fn egress_decided_payload(
             ),
         ),
         ("latency_ms", Json::Int(latency_ms as i64)),
+        // Whether the wire leg ran through a TLS-terminating transport
+        // (a runtime fact — `false` on every non-forwarded leg; R2.9b).
+        ("tls_terminated", Json::Bool(tls_terminated)),
     ]);
+    if let (Json::Obj(ref mut map), Some(d)) = (&mut m, &decision.guard_detail) {
+        // The C2 guard's coordinate (the declared `inspect_hooks` ref /
+        // `tls.terminate`) — a closed policy-declared ref, never content.
+        map.insert("guard_detail".to_string(), Json::str(d.clone()));
+    }
     if let (Json::Obj(ref mut map), Some(r)) = (&mut m, &decision.rule_ref) {
         map.insert("rule_ref".to_string(), Json::str(r.clone()));
     }

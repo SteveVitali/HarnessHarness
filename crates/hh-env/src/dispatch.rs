@@ -1226,6 +1226,9 @@ impl<'a> Dispatcher<'a> {
                     participant_ref: input.proposer.clone(),
                     resolver: Box::new(crate::egress::SystemResolver),
                     transport: Box::new(crate::egress::LocalHttpTransport::default()),
+                    // R2.9b — no inspect hooks registered at dispatch; a
+                    // declared-but-unregistered hook refuses closed.
+                    inspect_hooks: std::collections::BTreeMap::new(),
                 };
                 match ask_state {
                     EgressAskState::Decided { response, endorser } => mediator.endorse_gate(
@@ -1778,6 +1781,9 @@ impl<'a> Dispatcher<'a> {
                     participant_ref: input.proposer.clone(),
                     resolver: Box::new(crate::egress::SystemResolver),
                     transport: Box::new(crate::egress::LocalHttpTransport::default()),
+                    // R2.9b — no inspect hooks registered at dispatch; a
+                    // declared-but-unregistered hook refuses closed.
+                    inspect_hooks: std::collections::BTreeMap::new(),
                 };
                 mediator.forward(
                     &ereq,
@@ -3203,6 +3209,15 @@ fn egress_request(
         body: args
             .get("body")
             .and_then(|b| b.as_str().map(str::to_string)),
+        // `readers(body)` — the kernel-stamped label on the `body`
+        // canonical arg is the `approved_host_body` closer's input (R2.9b;
+        // ADR-0341 D6). Unlabeled => `None` => unproven coverage => the
+        // closer refuses when the residual is declared.
+        body_readers: input
+            .flow
+            .param_labels
+            .get("body")
+            .map(|l| l.readers.clone()),
         credential_sentinels: collect_secret_sentinels(&args),
     })
 }

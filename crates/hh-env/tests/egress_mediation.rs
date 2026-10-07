@@ -496,6 +496,7 @@ fn req(
         path: Some(path.to_string()),
         headers,
         body: None,
+        body_readers: None,
         credential_sentinels: vec![],
     }
 }
@@ -607,6 +608,7 @@ fn lt02_bound_destination_receives_real_carrier_over_real_wire() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(hh_env::egress::SystemResolver),
         transport: Box::new(hh_env::egress::LocalHttpTransport::default()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
 
     let out = med
@@ -713,6 +715,7 @@ fn lt02_unbound_destination_refuses_out_of_scope() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("evil.example", "93.184.216.34")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let out = med
         .handle(
@@ -788,6 +791,7 @@ fn lt02_ambiguous_path_refuses() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("127.0.0.1", "127.0.0.1")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let out = med
         .handle(
@@ -840,6 +844,7 @@ fn lt09_unattributed_request_denied_fail_closed() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     // A token the minter never minted.
     let out = med
@@ -881,6 +886,7 @@ fn lt09_unattributed_request_denied_fail_closed() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let out2 = med2
         .handle(
@@ -931,6 +937,7 @@ fn non_public_guard_denies_then_allow_listed_forwards() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("127.0.0.1", "127.0.0.1")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let out = med
         .handle(
@@ -976,6 +983,7 @@ fn non_public_guard_denies_then_allow_listed_forwards() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("127.0.0.1", "127.0.0.1")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let out2 = med2
         .handle(
@@ -1024,6 +1032,7 @@ fn default_unmatched_ask_endorse_lease_amends_and_forwards() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("new.example", "127.0.0.1")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
 
     let r = req(
@@ -1142,6 +1151,7 @@ fn endorse_allow_once_forwards_deny_refuses() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("svc.example", "93.184.216.34")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let r = req(
         &tok.token,
@@ -1197,6 +1207,7 @@ fn endorse_allow_once_forwards_deny_refuses() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("svc.example", "93.184.216.34")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let r2 = req(
         &tok2.token,
@@ -1269,6 +1280,7 @@ fn network_calls_exhaustion_gates_before_wire() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("127.0.0.1", "127.0.0.1")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let out1 = med
         .handle(
@@ -1339,6 +1351,7 @@ fn approvals_exhaustion_converts_ask_to_deny() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("svc.example", "93.184.216.34")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let out = med
         .handle(
@@ -1482,6 +1495,7 @@ fn lt04_three_channels_rotate_leak_scan_empty() {
             ("10.0.0.3", "10.0.0.3"),
         ])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
 
     // One authenticated request per channel.
@@ -1648,6 +1662,7 @@ fn lt05_revoke_fences_replay_minted_and_destination() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("127.0.0.1", "127.0.0.1")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
     let out = med
         .handle(
@@ -1926,6 +1941,7 @@ fn lt09_snapshot_placeholders_only_fork_virtualizes() {
         participant_ref: "agent.main".into(),
         resolver: Box::new(fixture_resolver(&[("127.0.0.1", "127.0.0.1")])),
         transport: Box::new(transport.clone()),
+        inspect_hooks: std::collections::BTreeMap::new(),
     };
 
     let t1 = tm.mint(&effs[0], 1, "env-2");

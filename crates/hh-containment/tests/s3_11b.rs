@@ -83,6 +83,7 @@ fn req(host: &str, port: u16) -> EgressRequest {
         path: None,
         headers: vec![],
         body: None,
+        body_readers: None,
         credential_sentinels: vec![],
     }
 }

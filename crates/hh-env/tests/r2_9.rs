@@ -372,6 +372,7 @@ fn egress_req(token: &str, effect_id: &str, env: &str, host: &str) -> EgressRequ
         path: Some("/".to_string()),
         headers: vec![],
         body: None,
+        body_readers: None,
         credential_sentinels: vec![],
     }
 }
@@ -402,6 +403,7 @@ fn mediated<'a>(
             )]),
         }),
         transport: Box::new(transport),
+        inspect_hooks: std::collections::BTreeMap::new(),
     }
 }
 

@@ -1790,6 +1790,39 @@ impl<'a> ExperimentEngine<'a> {
                 )?);
             }
         }
+        // The security process metrics (R2.9b; DF-S1.12-4; ADR-0341 D7) —
+        // fold the subject run's durable rows (`security.egress.decided`,
+        // `security.containment.*`, `security.credential.*`) and emit one
+        // `measurement.metric.emitted` per produced value, `applies_to`
+        // the subject run. `None` members stay unemitted — the cell
+        // renders `n/a{not_run}`, never 0.
+        {
+            let rows: Vec<hh_eval::facts::FactRow> = subject_events
+                .iter()
+                .enumerate()
+                .map(|(i, e)| hh_eval::facts::FactRow {
+                    seq: i as u64,
+                    event_id: Some(e.event_id.clone()),
+                    class: e.class.clone(),
+                    payload: e.payload.clone(),
+                })
+                .collect();
+            let folded = hh_eval::security_metrics::fold(&rows);
+            for (name, value) in hh_eval::security_metrics::emit(&folded) {
+                let Some(v) = value else { continue };
+                batch.push(self.mint(
+                    &run_id,
+                    "measurement.metric.emitted",
+                    Json::obj([
+                        ("metric_ref", Json::str(name)),
+                        ("value", Json::obj([("decimal", Json::Int(v))])),
+                        ("applies_to", Json::str(&attempt.run_id)),
+                        ("oracle_ref", Json::str("oracle/executable")),
+                        ("detector", Json::str("deterministic")),
+                    ]),
+                )?);
+            }
+        }
         self.append_chained(&run_id, &lease, batch)?;
         Ok(outcome)
     }
