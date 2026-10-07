@@ -21,14 +21,23 @@ by hand falsifies the record; only *living* docs are edited in place.
 
 | Entry | Mode | What it is / how to change it |
 |---|---|---|
-| `brief.md` | frozen | the founding brief (optional) |
-| `research-ledger.md` | living → frozen | S1–S3 work list + Q register; frozen at ratification |
-| `research/` `design/` | frozen | numbered notes; `research/CONVENTIONS.md` is the finding format |
-| `<spec>.md` | living → frozen | the canonical spec; amend via the manifest protocol + an ADR |
-| `decomposition-prompt.md` | frozen | the committed hand-off to `decompose-spec` |
-| `adr/` | append-only | decision records; `adr/README.md` is **generated** (`build-memory adr-index`) |
+| `1_harness_engineering_frontier_report.md` | frozen | "doc 1" — the frontier survey |
+| `2_Harness_Engineering_Genealogy_Anatomy_2026_Frontier_v2.md` | frozen | "doc 2" — the genealogy/anatomy (the spec's seven-plane source) |
+| `3_MetaHarness_Meta_Plan_and_Research_Ledger.md` | frozen | "doc 3" — the meta-plan that produced the spec |
+| `adr/` | append-only | build decision records; `adr/README.md` is **generated** (`build-memory adr-index`) |
 | `tickets/` | historical | the contracts (what was owed); `DEFERRALS.md` is append-only |
 | `build/` | historical | the record of what happened (ledger, run ledgers, PR bodies, index, readouts) |
+| `README.md` | living | this map — edit in place when the tree changes |
+
+## Adjacent doc surfaces (repo root, not under `docs/`)
+
+| Entry | Mode | What it is |
+|---|---|---|
+| `../README.md` | living | the repo's front door |
+| `../AGENTS.md` | living | agent-facing docs — refreshed under `agent-docs` (DOC.2), not `refresh-repo-docs` |
+| `../spec/` | living → frozen | `CANONICAL_SPEC.md` + `sections/` + `READINESS_REPORT.md`; amend via the manifest protocol + an ADR |
+| `../research/` | frozen | the program ledger (`LEDGER.md`), research ADRs (`decisions/ADR-0001…`), registers, dossiers, briefs — frozen at the readiness gate |
+| `../spikes/README.md` | living | the throwaway-spike index — kept in sync with the committed trees |
 
 ## Where to start
 - Building a ticket? `build/LEDGER.md` → `tickets/00_MANIFEST.md` → `tickets/DEFERRALS.md`.

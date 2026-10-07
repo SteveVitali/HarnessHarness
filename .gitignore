@@ -4,6 +4,10 @@
 # Agent scratch — never committed; this repo's durable memory is research/ and spec/
 .agents/
 
+# The `hh`/`hh-kernel` runtime store (HH_STORE_ROOT default `<cwd>/.hh/store`) — local state,
+# never committed.
+.hh/
+
 # Rust build outputs (E1 workspace + throwaway spike trees). Cargo.lock IS committed.
 /target/
 **/target/
