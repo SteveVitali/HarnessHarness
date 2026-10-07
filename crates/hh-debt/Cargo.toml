@@ -1,0 +1,22 @@
+[package]
+name = "hh-debt"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The C4 §5h.6 assumption-debt manager service (R-2.9.6; ticket S6.1b; ADR-0197/0198; ADR-0209 D2): the DebtManagerRecord service record (maturity + the home-16 reflexive AssumptionDebtRecord + DebtPolicy.schedule), the durable-prefix ManagerView fold over the registry run's lifecycle.debt.* rows (probation book, scheduled/settled removal tests, sweep watermarks — kernel producer hh-debt, one authority path), schedule_removal_test under DebtPolicy (priority ordering, max_open_removal_tests, instrument-budget reservation, Deferred{reason}), retirement_batch designs (k single-rule removal arms sharing one base arm), the reflexive no_dead_weight_found test, propose_retirement + the retirement gate (RetirementNotEvidenced / proposal-vs-deployment separation), and the ledgered probation trigger surface (DF-S5.4-1: the append→consume seam through evaluate_debt). Records-in/records-out — the manager never opens a run and never applies a diff to a subject (D-2); it authors specs and proposals, folds the durable prefix, and mints lifecycle.debt.* rows on the registry run. Removable (CC6): only hh-embed consumes it, under the tier-c4 feature."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-ontology = { path = "../hh-ontology" }
+hh-provenance = { path = "../hh-provenance" }
+hh-hir = { path = "../hh-hir" }
+hh-ledger = { path = "../hh-ledger" }
+hh-lab = { path = "../hh-lab" }
+
+[dev-dependencies]
+hh-budget = { path = "../hh-budget" }

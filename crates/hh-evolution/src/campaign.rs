@@ -1066,9 +1066,9 @@ impl EvolutionCampaign {
         // spec; the eval stages take a comparison-bearing kind
         // (`comparative`/`equivalence` — `exploratory` never compares and
         // a removal test is not an eval).
-        let slabel: &'static str = if stage.iter().any(|k| *k == "retirement") {
+        let slabel: &'static str = if stage.contains(&"retirement") {
             "S10"
-        } else if stage.iter().any(|k| *k == "held_out_eval") {
+        } else if stage.contains(&"held_out_eval") {
             "S5"
         } else {
             "S4"

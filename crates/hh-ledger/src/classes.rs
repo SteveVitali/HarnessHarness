@@ -1165,9 +1165,12 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("lifecycle.contract.deprecated_use", "none"),
     // ── lifecycle:debt ──
     ("lifecycle.debt.expired_used", "none"),
+    ("lifecycle.debt.probation.opened", "none"),
     ("lifecycle.debt.removal_test.scheduled", "none"),
     ("lifecycle.debt.removal_test.settled", "none"),
+    ("lifecycle.debt.service.registered", "none"),
     ("lifecycle.debt.status.changed", "none"),
+    ("lifecycle.debt.sweep.completed", "none"),
     // ── lifecycle:definition ──
     ("lifecycle.definition.changed", "none"),
     // ── lifecycle:escalation ──
@@ -1923,6 +1926,15 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("lifecycle.debt.removal_test.scheduled",  O::Events, true, OPEN_AUDIT, &[], None, None),
     row_audit("lifecycle.debt.removal_test.settled",    O::Events, true, OPEN_AUDIT, &[], None, None),
     row_audit("lifecycle.debt.expired_used",            O::Events, true, OPEN_AUDIT, &[], None, None),
+    // S6.1b — the manager-service rows (§5h.6 §6's `lifecycle.debt.*`
+    // family, audit-grade/kernel-origin like the four above):
+    // `probation.opened` is the ledgered probation record the DF-S5.4-1
+    // seam consumes; `service.registered` carries the manager's own
+    // record (maturity + the home-16 reflexive debt); `sweep.completed`
+    // is the standing monitor's durable watermark.
+    row_audit("lifecycle.debt.probation.opened",        O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("lifecycle.debt.service.registered",      O::Events, true, OPEN_AUDIT, &[], None, None),
+    row_audit("lifecycle.debt.sweep.completed",         O::Events, true, OPEN_AUDIT, &[], None, None),
 
     // ── measurement.experiment (§6.3 §6 / §9.2; R-2.10.3⁰ᵃ+R-2.10.5⁰; S1.24) —
     // the experiment-run event family. Producer = the sweep engine through the
@@ -2235,12 +2247,16 @@ mod tests {
 
     #[test]
     fn s1_24_measurement_and_debt_classes_are_registered() {
-        // R-2.9.6⁰ᵃ/§5h.6 §6 — the four `lifecycle.debt.*` rows are audit-grade.
+        // R-2.9.6⁰ᵃ/§5h.6 §6 — the `lifecycle.debt.*` rows are
+        // audit-grade (S6.1b adds the three manager-service rows).
         for c in [
             "lifecycle.debt.status.changed",
             "lifecycle.debt.removal_test.scheduled",
             "lifecycle.debt.removal_test.settled",
             "lifecycle.debt.expired_used",
+            "lifecycle.debt.probation.opened",
+            "lifecycle.debt.service.registered",
+            "lifecycle.debt.sweep.completed",
         ] {
             let spec = lookup(c).unwrap_or_else(|| panic!("{c} not registered"));
             assert!(spec.audit_grade, "{c}");

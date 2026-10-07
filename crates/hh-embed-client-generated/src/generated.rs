@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:35784743ce6db41536fdf74eabaf924cb0e333f0a64ae0a9840116d51a707e28";
+    "sha256:a5a447d4debc30740a9f3d9d7d440d6796dcad20b58c6658eaca163ff5c97638";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -6965,9 +6965,45 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.debt.manager_open` → `json` (see the contract registry).
+    pub fn lab_debt_manager_open(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.manager_open", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.debt.propose` → `json` (see the contract registry).
+    pub fn lab_debt_propose(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.propose", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.debt.register` → `json` (see the contract registry).
+    pub fn lab_debt_register(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.register", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.debt.report` → `json` (see the contract registry).
     pub fn lab_debt_report(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.debt.report", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.debt.retire` → `json` (see the contract registry).
+    pub fn lab_debt_retire(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.retire", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.debt.settle` → `json` (see the contract registry).
+    pub fn lab_debt_settle(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.settle", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.debt.sweep` → `json` (see the contract registry).
+    pub fn lab_debt_sweep(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.debt.sweep", params.clone())?;
         Ok(raw)
     }
 
