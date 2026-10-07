@@ -1355,6 +1355,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("model.call.requested", "model.call.started"),
     // ── model:profile ──
     ("model.profile.expired_used", "hint"),
+    ("model.profile.probed", "hint"),
+    ("model.profile.status.changed", "hint"),
     // ── model:rerouted ──
     ("model.rerouted", "hint"),
     // ── model:route ──
@@ -1610,6 +1612,16 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // `model.profile.expired_used` — an `expired` profile bound under a
     // recorded `intent_ref` (G-1's only admissible expired path; §5b.3).
     row("model.profile.expired_used",      Led, O::ModelIo, false, false, None, None),
+    // `model.profile.probed` — the §5b.5 d.4 accepted-probe record
+    // (R-2.3.3): the declared-probe outcome for a bound profile
+    // (`status`, `capability`, `rule_id`, `report_ref` members).
+    row("model.profile.probed",            Led, O::ModelIo, false, false, None, None),
+    // `model.profile.status.changed` — the §5b.3 g-i/b.4 re-resolve
+    // transition record (R-2.3.3): a bound profile's declared
+    // `expiry.status` moved under re-resolution; `from`/`to`/`trigger`/
+    // `rule_id`/`evidence_ref` members are route facts, never message
+    // content.
+    row("model.profile.status.changed",    Led, O::ModelIo, false, false, None, None),
     row("model.cache.resolved",            Led, O::ModelIo, false, false, None, None),
     row("model.surface.relowered",         Led, O::Events, false, false, None, None),
 
