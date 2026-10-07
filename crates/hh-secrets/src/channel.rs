@@ -77,15 +77,22 @@ impl CredentialKind {
 }
 
 /// `sender_constraint ∈ {dpop, audience, none}` (§5g.3 §3) — how a delivered
-/// credential is bound to its sender. At Stage 1 no verification machinery
-/// exists, so a `minted_scoped` bind on a channel declaring `dpop`/`audience`
-/// refuses `Refused{sender_constraint_unmet}` (fail closed; the verifier lands
-/// with the `minted_scoped` delivery machinery at Stage 2, DF-S1.13-*).
+/// credential is bound to its sender. `audience` verifies offline (R2.10;
+/// DF-S1.13-1): injected modes are fenced by the channel's declared
+/// `destinations` (the audience *is* the destination) and `minted_scoped`
+/// carries the audience on the token — `mint` scopes it to the binding's
+/// destinations and `verify_minted` checks it at the destination. `dpop`
+/// refuses `Refused{sender_constraint_unmet}` on every delivery mode —
+/// proof-of-possession needs an asymmetric signature verification pure-std
+/// does not have; an unverifiable constraint never fabricates an accept.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SenderConstraint {
-    /// DPoP-bound (sender key verified at the destination).
+    /// DPoP-bound (sender key verified at the destination) — unverifiable
+    /// pure-std; `bind`/`mint` refuse `SenderConstraintUnmet` (fail closed).
     Dpop,
-    /// Audience-bound (the token names the destination).
+    /// Audience-bound (the token names the destination) — verified via the
+    /// destination scope (injected modes) / the minted token's `audience`
+    /// member checked by `verify_minted` (`minted_scoped`).
     Audience,
     /// No sender constraint.
     None,
@@ -430,8 +437,9 @@ pub struct SecretChannelSpec {
     /// The rotation policy tag (e.g. `manual`, `per_run`) — the rotation
     /// *mechanism* (`rotate`) is the broker verb.
     pub rotation_policy: Option<String>,
-    /// The sender constraint (`none` at Stage 1 — `dpop`/`audience` refuse
-    /// `sender_constraint_unmet` until the verifier lands at Stage 2).
+    /// The sender constraint — `audience` verifies (R2.10); `dpop` refuses
+    /// `sender_constraint_unmet` on every delivery mode (no pure-std
+    /// proof-of-possession verifier).
     pub sender_constraint: SenderConstraint,
     /// The default grant constraints (`budget`, `time`, `count`).
     pub constraints: GrantConstraints,

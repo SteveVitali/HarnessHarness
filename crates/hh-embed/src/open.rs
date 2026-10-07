@@ -2196,6 +2196,11 @@ impl EmbedService {
                 roots,
                 PolicySlot::Inline(Box::new(policy)),
                 on_loss,
+                // R2.10 (DF-S1.13-3) — the service broker registers any
+                // declared `canary_channels` (Stage-3-class records refuse
+                // without them; `environment_spec` only builds `local_host`,
+                // which may carry none).
+                Some(&mut self.credential_broker),
             )
             .map_err(env_err)?;
         if let Some(cadence) = snapshot_cadence {
@@ -3223,6 +3228,7 @@ fn environment_spec(
         unpinned: BTreeSet::new(),
         ext: BTreeMap::new(),
         image_attestation: None,
+        canary_channels: vec![],
     };
     let roots = Roots {
         workspace_roots: roots_json.clone(),

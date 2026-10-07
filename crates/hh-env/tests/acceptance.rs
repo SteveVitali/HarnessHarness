@@ -135,6 +135,7 @@ fn test_record(class: EnvironmentClass, image: ImageRef) -> EnvironmentRecord {
         unpinned: BTreeSet::new(),
         image_attestation: None,
         ext: BTreeMap::new(),
+        canary_channels: vec![],
     }
 }
 
@@ -166,6 +167,7 @@ fn ready_env(
             roots,
             PolicySlot::Inline(Box::new(test_policy(ws))),
             OnLoss::FailRun,
+            None,
         )
         .unwrap();
     let backend = Ep2Model::reference();
@@ -722,6 +724,7 @@ fn ac_r_2_2_5_6_unknown_evidence_never_reaches_ready() {
             roots,
             PolicySlot::Inline(Box::new(test_policy(&ws))),
             OnLoss::FailRun,
+            None,
         )
         .unwrap();
     // No backend — `helper_unavailable` is fail-closed (`AttachError`).
@@ -2610,6 +2613,7 @@ fn cap2_ready_env_net(
             roots,
             PolicySlot::Inline(Box::new(policy)),
             OnLoss::FailRun,
+            None,
         )
         .unwrap();
     let backend = Ep2Model::reference();

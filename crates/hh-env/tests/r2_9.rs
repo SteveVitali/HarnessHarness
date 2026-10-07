@@ -231,6 +231,7 @@ fn test_record(limits: ResourceLimits) -> EnvironmentRecord {
         unpinned: BTreeSet::new(),
         image_attestation: None,
         ext: BTreeMap::new(),
+        canary_channels: vec![],
     }
 }
 
@@ -288,6 +289,7 @@ fn ready_env(
             roots_for(ws),
             PolicySlot::Inline(Box::new(policy)),
             OnLoss::FailRun,
+            None,
         )
         .unwrap();
     let backend = Ep2Model::reference();
@@ -490,6 +492,7 @@ fn r29_provision_allocates_env_budget_pool_child() {
             roots_for(&ws),
             PolicySlot::Inline(Box::new(test_policy(&ws))),
             OnLoss::FailRun,
+            None,
         )
         .unwrap();
     assert_eq!(
@@ -537,6 +540,7 @@ fn r29_provision_with_bounds_and_no_root_refuses() {
             roots_for(&ws),
             PolicySlot::Inline(Box::new(test_policy(&ws))),
             OnLoss::FailRun,
+            None,
         )
         .unwrap_err();
     assert!(
@@ -569,6 +573,7 @@ fn r29_env_budget_child_cannot_widen_past_parent() {
             roots_for(&ws),
             PolicySlot::Inline(Box::new(test_policy(&ws))),
             OnLoss::FailRun,
+            None,
         )
         .unwrap_err();
     assert!(

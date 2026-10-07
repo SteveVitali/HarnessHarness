@@ -139,6 +139,7 @@ fn ready_env(
         unpinned: BTreeSet::new(),
         image_attestation: None,
         ext: BTreeMap::new(),
+        canary_channels: vec![],
     };
     let roots = Roots {
         workspace_roots: vec![ws.display().to_string()],
@@ -153,6 +154,7 @@ fn ready_env(
             roots,
             PolicySlot::Inline(Box::new(test_policy(ws))),
             OnLoss::FailRun,
+            None,
         )
         .unwrap();
     let backend = Ep2Model::reference();
