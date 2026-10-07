@@ -436,7 +436,7 @@ impl ControlStrategy for ReactMinimal {
             Cue::EffectsSettled {
                 submission_ref,
                 settled,
-                ..
+                all_terminal,
             } => {
                 if let Some(sub) = submission_ref {
                     // Record the submission durably (the strategy's own
@@ -462,6 +462,20 @@ impl ControlStrategy for ReactMinimal {
                         *sr = Some(sub.clone());
                     }
                     d
+                } else if !*all_terminal {
+                    // The batch parked mid-flight — a `pending` outcome is a
+                    // host-executor dispatch whose terminal arrives via
+                    // `report_host_effect` (R-2.5). Proposing again would
+                    // dangle the open intent (INV-2); the loop waits for the
+                    // settle cue the terminal report re-arms.
+                    ControlDecision {
+                        stamp: stamp_for(state, DecisionPoint::Act, None),
+                        kind: DecisionKind::Wait {
+                            until: WaitUntil::CueKind {
+                                cue_kind: "effects_settled".into(),
+                            },
+                        },
+                    }
                 } else if settled
                     .iter()
                     .any(|s| matches!(s.outcome, SettledOutcome::Unknown { .. }))
@@ -558,7 +572,8 @@ impl ControlStrategy for ReactMinimal {
                 ),
                 HumanInput::Approval { .. }
                 | HumanInput::Steer { .. }
-                | HumanInput::FollowUp { .. } => self.propose(state),
+                | HumanInput::FollowUp { .. }
+                | HumanInput::ArtefactMark { .. } => self.propose(state),
             },
 
             // `guard_fired` — a nudge landed or a refused `stop{completed}`

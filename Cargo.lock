@@ -87,6 +87,7 @@ name = "hh-bench"
 version = "0.0.1"
 dependencies = [
  "hh-budget",
+ "hh-context",
  "hh-control",
  "hh-eval",
  "hh-gateway",
@@ -158,8 +159,12 @@ dependencies = [
 name = "hh-compact-evict-oldest"
 version = "0.0.1"
 dependencies = [
+ "hh-bench",
+ "hh-context",
  "hh-embed-schema",
+ "hh-hir",
  "hh-plugin-fixture",
+ "hh-provenance",
  "hh-varhost",
  "hh-wire",
 ]

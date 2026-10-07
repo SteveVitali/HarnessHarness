@@ -18,7 +18,7 @@ use hh_ledger::event::{Event, EventEnvelope, Scope};
 use hh_ledger::manifest::EventRef;
 use hh_ontology::control::{CancelledBy, DecisionPoint, Owner, StopReason};
 use hh_provenance::authority::PersistenceScope;
-use hh_provenance::origin::Origin;
+use hh_provenance::origin::{HumanRole, Origin};
 use hh_provenance::record::ProvenanceRecord;
 use hh_wire::json::Json;
 
@@ -31,7 +31,7 @@ use crate::state::ControlState;
 use crate::stop::DrainReport;
 use crate::strategy::{ControlContext, ControlError, ControlStrategy, FinalReport};
 use crate::vocab::{
-    Cue, Decider, DecisionKind, EffectOutcome, EnvelopeSignal, GuardPoint, ScopeKind,
+    Cue, Decider, DecisionKind, EffectOutcome, EnvelopeSignal, GuardPoint, HumanInput, ScopeKind,
     SettledOutcome,
 };
 
@@ -84,6 +84,16 @@ pub trait EffectGate {
     fn finish_record(&self) -> Option<Json> {
         None
     }
+
+    /// The component id the `emitted` rows carry as
+    /// `producer.component_variant_ref` (INV-7: `security.permission.
+    /// decided{allow}` minted under `hh-control` is an envelope grant —
+    /// refused as a violation; the gate is the effect boundary, its
+    /// records carry its own identity). Defaulted for Stage-1 scripted
+    /// gates; real boundaries override with their own ref.
+    fn producer_component(&self) -> &'static str {
+        "effect-gate"
+    }
 }
 
 /// The gate's terminal report.
@@ -95,6 +105,13 @@ pub struct GateOutcome {
     pub submission_ref: Option<String>,
     /// The `ErrorClass` spelling for retryable failures.
     pub error_class: Option<String>,
+    /// The dispatch lifecycle rows the gate computed
+    /// (`security.permission.decided`, `action.effect.{authorized,
+    /// prepared, committed}` — the §5a.2 chain up to dispatch). The
+    /// driver appends them in order before the terminal, under the run's
+    /// writer lease — the producer computes, the fenced writer lands
+    /// (CC3; the `AssembleOutcome.side_events` convention).
+    pub emitted: Vec<(String, Json)>,
 }
 
 /// The kernel-owned inputs `assemble` reads beyond the strategy's
@@ -139,6 +156,11 @@ pub struct AssembledRequest {
     /// under the same call scope (DF-S2.8-1 — a builder's emissions are
     /// durable or they never ran; nothing is dropped silently).
     pub side_events: Vec<(String, Json)>,
+    /// Rows the context pipeline emitted *before* the assembled row
+    /// (`context.procedure.selected` — the §5c.5 selector runs ahead of
+    /// assembly; R2.5 / DF-S2.8-1). The driver appends them first, under
+    /// the same call scope, preserving the producer's emit order.
+    pub pre_events: Vec<(String, Json)>,
 }
 
 /// Durability — the sink the driver appends through (the `hh-ledger`
@@ -171,6 +193,60 @@ pub trait CompactionPort {
 pub struct CompactionDone {
     /// The post-compaction `context_view` hash.
     pub view_hash: String,
+    /// The `context.compaction.started`/`completed` (and any side-band)
+    /// rows the compaction produced, in emit order. The driver appends
+    /// them under the run's writer lease — the producer computes, the
+    /// fenced writer lands (CC3; the `AssembleOutcome.side_events`
+    /// convention — R2.5 / DF-S2.8-1's durable-from-the-loop leg).
+    pub emitted: Vec<(String, Json)>,
+}
+
+/// The context/memory producer boundary (R-2.4.3/§5c.3-4 — DF-S2.8-1's
+/// `retrieve`, `resume_set`, `trigger` and `mark_scope_ended` legs). The
+/// port owns the memory store and the retrieval pipeline; the driver owns
+/// the appends — every return vector is `(class, payload)` rows in emit
+/// order, landed durable-before-visible under the run's writer lease.
+pub trait MemoryPort {
+    /// A strategy-admitted `retrieve{query}` (the model-owned `retrieve`
+    /// decision point). The port interprets the query member and runs the
+    /// retrieval pipeline at `watermark` (`(run_id, seq)` — the read's
+    /// `until` point), returning `context.retrieval.completed` +
+    /// `context.memory.read` in emit order. `Err` is the port's typed
+    /// failure — the run fails, never silently skipped.
+    fn retrieve(
+        &mut self,
+        query: &Json,
+        model_call_id: &str,
+        watermark: (String, u64),
+    ) -> Result<Vec<(String, Json)>, String>;
+    /// The `trigger{path_touched}` leg (AC-R-2.4.3-12) — a settled effect
+    /// named `path`; the port retrieves the memory/procedure versions
+    /// watching it (the next `assemble` delivers their index candidates).
+    fn trigger_retrieve(
+        &mut self,
+        path: &str,
+        model_call_id: &str,
+        watermark: (String, u64),
+    ) -> Result<Vec<(String, Json)>, String>;
+    /// `resume_set` consumption (§5c.4; AC-R-2.4.3-11) — each carried
+    /// head is read `by_name`; the emitted `context.memory.read` rows
+    /// record `delivered[]`/`withheld[]` for the continuation's members.
+    fn resume_set_read(
+        &mut self,
+        heads: &[String],
+        watermark: (String, u64),
+    ) -> Result<Vec<(String, Json)>, String>;
+    /// `mark_scope_ended(scope)` — the unconditional expiry floor
+    /// (§5c.4). Returns the `context.memory.invalidated{reason: expired,
+    /// fired_stamp: scope_ended}` rows the floor produced, in store
+    /// order (empty when nothing the scope covered remained live).
+    fn mark_scope_ended(&mut self, scope: PersistenceScope, at_seq: u64) -> Vec<(String, Json)>;
+    /// A store-backed procedure artefact's declared
+    /// `allowed_capabilities` — the `context.artefact.activated` member
+    /// the deterministic `followed` detector reads. `None` ⇒ the artefact
+    /// is not a store-backed procedure (the activation row still lands —
+    /// capless, so no `followed` can mint from it).
+    fn procedure_capabilities(&self, artefact_id: &str) -> Option<Vec<String>>;
 }
 
 /// `CompactionImpossible{required_tokens, cap}` — the exhausted ladder's
@@ -403,6 +479,16 @@ pub struct DriverConfig {
     /// D7–D10 on top of the C0 classes). `None` (the default) keeps the
     /// byte-identical C0 `ledger_only` fold.
     pub reconciler: Option<hh_verification::reconciler::ReconcilerDeclaration>,
+    /// The §5a.3 `carried.resume_set_heads` this activation inherited —
+    /// projected at `open`/`resume` from the manifest's durable `carried`
+    /// member (CC3 — the manifest is the record; the driver consumes,
+    /// never re-derives). Non-empty ⇒ the run's first `run` drains the
+    /// set through the wired `MemoryPort` (one `context.retrieval.
+    /// completed` plus one `context.memory.read` per head —
+    /// AC-R-2.4.3-11) before the first `decide`; an armed set with no
+    /// memory boundary fails `UnbackedPort{kind: "resume_set"}`, never a
+    /// silent skip.
+    pub resume_set_heads: Vec<String>,
 }
 
 impl Default for DriverConfig {
@@ -430,6 +516,7 @@ impl Default for DriverConfig {
             compute_rules: None,
             judge: None,
             reconciler: None,
+            resume_set_heads: Vec::new(),
         }
     }
 }
@@ -471,6 +558,11 @@ pub struct Driver<S: ControlStrategy> {
     /// The run id the claim ledger records (`verification.claim.recorded`'s
     /// `run_id` — the `AgentProcess` ref of this run).
     run_id: String,
+    /// The *ledger* run id — the durable prefix's `run_id` member. `causes`
+    /// refs resolve against it (a fenced sink refuses a dangling
+    /// `UnresolvedEventRef`); `run_id` above is the AgentProcess ref the
+    /// verification claim records, never a ledger coordinate.
+    ledger_run_id: String,
     /// The most recent `model_call_id` scope (the claim's `model_call_id` —
     /// the call whose output the completion claim rides).
     last_model_call_id: Option<String>,
@@ -482,6 +574,17 @@ pub struct Driver<S: ControlStrategy> {
     /// `None` ⇒ a `verify` decision fails `DriverError::UnbackedPort` — a
     /// declared verification never silently passes).
     verify_port: Option<Box<dyn VerifyPort>>,
+    /// The memory/context producer port (R-2.4.3 — `retrieve{query}`,
+    /// `trigger{path_touched}`, `resume_set` consumption and
+    /// `mark_scope_ended` at the run's end). `None` ⇒ a `retrieve`
+    /// decision or an armed `resume_set` fails `UnbackedPort` — a
+    /// declared producer leg never silently skips.
+    memory_port: Option<Box<dyn MemoryPort>>,
+    /// Whether this armed driver already drained `config.resume_set_heads`
+    /// (once per process-arm — the emitted `context.memory.read` rows are
+    /// the durable consumption record; a re-armed session re-reads, which
+    /// is honest re-projection, never a double count).
+    resume_set_drained: bool,
     /// A guard-fired nudge `HarnessRule` awaiting its `followed` verdict —
     /// set when a `LadderAction::Nudge`/`RuleAction::Nudge`/`missing_
     /// submission` respond fires (the delivered/activated pair is emitted
@@ -555,9 +658,16 @@ impl<S: ControlStrategy> Driver<S> {
             stop_pending: None,
             deadlines: std::collections::BTreeMap::new(),
             run_id: ctx.process_ref.clone(),
+            ledger_run_id: sink
+                .prefix()
+                .first()
+                .map(|e| e.run_id.clone())
+                .unwrap_or_default(),
             last_model_call_id: None,
             compaction_port: None,
             verify_port: None,
+            memory_port: None,
+            resume_set_drained: false,
             pending_nudge: None,
             model_ref: ctx
                 .profile
@@ -619,9 +729,16 @@ impl<S: ControlStrategy> Driver<S> {
             stop_pending: None,
             deadlines: std::collections::BTreeMap::new(),
             run_id: ctx.process_ref.clone(),
+            ledger_run_id: sink
+                .prefix()
+                .first()
+                .map(|e| e.run_id.clone())
+                .unwrap_or_default(),
             last_model_call_id: None,
             compaction_port: None,
             verify_port: None,
+            memory_port: None,
+            resume_set_drained: false,
             pending_nudge: None,
             model_ref: ctx
                 .profile
@@ -679,8 +796,12 @@ impl<S: ControlStrategy> Driver<S> {
             .filter(|e| e.class == "control.decision")
             .map(|e| e.event_id.clone())
             .collect();
+        // The `causes` ref names the run's own id — the replayed
+        // prefix's `run_id`, never a placeholder (a fenced sink resolves
+        // every `causes` ref — `UnresolvedEventRef` on a dangling id).
+        let seed_run_id = seed.first().map(|e| e.run_id.clone()).unwrap_or_default();
         let last_decision_ref = decision_events.last().map(|id| EventRef {
-            run_id: "run".into(),
+            run_id: seed_run_id.clone(),
             event_id: id.clone(),
         });
         // The submission marker — a recorded `stop` decision carrying
@@ -730,9 +851,16 @@ impl<S: ControlStrategy> Driver<S> {
             stop_pending: None,
             deadlines: std::collections::BTreeMap::new(),
             run_id: ctx.process_ref.clone(),
+            ledger_run_id: sink
+                .prefix()
+                .first()
+                .map(|e| e.run_id.clone())
+                .unwrap_or_default(),
             last_model_call_id,
             compaction_port: None,
             verify_port: None,
+            memory_port: None,
+            resume_set_drained: false,
             pending_nudge: None,
             model_ref: ctx
                 .profile
@@ -1127,6 +1255,16 @@ impl<S: ControlStrategy> Driver<S> {
         self.verify_port = Some(port);
     }
 
+    /// `set_memory_port` — wire the context/memory producer boundary
+    /// (R-2.4.3; DF-S2.8-1): `retrieve{query}` decisions,
+    /// `trigger{path_touched}` reads on settled effects, the carried
+    /// `resume_set` drain and `mark_scope_ended` at run end all dispatch
+    /// through it — absent, each is a typed `UnbackedPort`, never a
+    /// skipped leg.
+    pub fn set_memory_port(&mut self, port: Box<dyn MemoryPort>) {
+        self.memory_port = Some(port);
+    }
+
     /// `clock_read(declaring)` — the runtime's wall-clock read seam
     /// (R-2.2.4⁰ᵇ recording rules; ADR-0135 §2; OQ-322's ratified default:
     /// durable only where the variant declares `deterministic_replay`).
@@ -1303,6 +1441,35 @@ impl<S: ControlStrategy> Driver<S> {
         assembler: &mut dyn AssemblerPort,
         sink: &mut dyn LedgerSink,
     ) -> Result<RunResult, DriverError> {
+        // §5c.4 `resume_set` consumption (DF-S2.8-1; AC-R-2.4.3-11) — a
+        // continued activation reads its carried heads durable-before-
+        // visible, once per arm, ahead of the first `decide`: the
+        // `context.retrieval.completed`/`context.memory.read` rows are the
+        // consumption record. An armed set with no memory boundary is
+        // `UnbackedPort` — a declared resume set never silently skips.
+        if !self.resume_set_drained {
+            self.resume_set_drained = true;
+            if !self.config.resume_set_heads.is_empty() {
+                let port = self
+                    .memory_port
+                    .as_mut()
+                    .ok_or(DriverError::UnbackedPort { kind: "resume_set" })?;
+                let watermark = (
+                    self.run_id.clone(),
+                    sink.prefix().last().map(|e| e.seq).unwrap_or(0),
+                );
+                let heads = self.config.resume_set_heads.clone();
+                for (class, payload) in
+                    port.resume_set_read(&heads, watermark)
+                        .map_err(|detail| DriverError::Port {
+                            port: "memory",
+                            detail,
+                        })?
+                {
+                    self.append(sink, &class, payload, None)?;
+                }
+            }
+        }
         loop {
             let cue = match self.inbox.pop_front() {
                 Some(c) => c,
@@ -1329,6 +1496,20 @@ impl<S: ControlStrategy> Driver<S> {
                         at: kp.as_str().to_string(),
                     });
                 }
+            }
+            // DF-S2.8-1(e) — the `human` artefact detector: a principal's
+            // `artefact_mark` mints `context.artefact.activated{detector:
+            // human}` durable-before-visible, gated on the delivery it
+            // names (a mark against an undelivered id mints nothing — the
+            // cue still reaches `decide` as ordinary input). The row is
+            // evidence, never a deterministic gate input.
+            if let Cue::HumanInput(HumanInput::ArtefactMark {
+                artefact_id,
+                delivery_id,
+                signal,
+            }) = &cue
+            {
+                self.emit_human_artefact_activated(sink, artefact_id, delivery_id, signal)?;
             }
             let decision = self.strategy.decide(&mut self.state, &cue);
             // §5e.4 — `compute_policy.bind(d, ctx) → d′ | Unchanged`
@@ -1512,7 +1693,7 @@ impl<S: ControlStrategy> Driver<S> {
         sink.append(vec![ev]).map_err(DriverError::Append)?;
         self.decision_events.push(ev_id.to_string());
         self.last_decision_ref = Some(EventRef {
-            run_id: "run".into(),
+            run_id: self.ledger_run_id.clone(),
             event_id: ev_id.to_string(),
         });
         // Fold the appended row into the strategy's view (idempotent —
@@ -1552,6 +1733,15 @@ impl<S: ControlStrategy> Driver<S> {
                     },
                     &context_request,
                 );
+                // The `context.assembled` emitter call site (DF-S1.19-1's
+                // Stage-1 half) — the builder produced the payload; the
+                // driver owns the `append`, scoped to the call it feeds.
+                // DF-S2.8-1: the selector's pre-assemble rows
+                // (`context.procedure.selected`) land in emit order —
+                // before the assembled record they fed.
+                for (class, payload) in assembled.pre_events {
+                    self.append(sink, &class, payload, Some(&mc))?;
+                }
                 // The `context.assembled` emitter call site (DF-S1.19-1's
                 // Stage-1 half) — the builder produced the payload; the
                 // driver owns the `append`, scoped to the call it feeds.
@@ -1669,7 +1859,41 @@ impl<S: ControlStrategy> Driver<S> {
             } => {
                 self.verify_round(sink, &validator_refs, &subject)?;
             }
-            DecisionKind::Retrieve { .. } | DecisionKind::Delegate { .. } => {
+            DecisionKind::Retrieve { query } => {
+                // R-2.4.3 (DF-S2.8-1) — the strategy-admitted `retrieve`
+                // dispatches to the memory boundary: the port runs the
+                // retrieval pipeline, the driver lands its
+                // `context.retrieval.completed`/`context.memory.read` rows
+                // durable-before-visible, then the `retrieval_completed`
+                // cue returns the fetch to β (F1). No wired boundary ⇒
+                // `UnbackedPort` — a retrieve decision never silently
+                // resolves to "nothing found".
+                let port = self
+                    .memory_port
+                    .as_mut()
+                    .ok_or(DriverError::UnbackedPort { kind: "retrieve" })?;
+                let mc = self.last_model_call_id.clone().unwrap_or_default();
+                let watermark = (
+                    self.run_id.clone(),
+                    sink.prefix().last().map(|e| e.seq).unwrap_or(0),
+                );
+                for (class, payload) in
+                    port.retrieve(&query, &mc, watermark)
+                        .map_err(|detail| DriverError::Port {
+                            port: "retrieve",
+                            detail,
+                        })?
+                {
+                    self.append(
+                        sink,
+                        &class,
+                        payload,
+                        Some(mc.as_str()).filter(|s| !s.is_empty()),
+                    )?;
+                }
+                self.inbox.push_back(Cue::RetrievalCompleted);
+            }
+            DecisionKind::Delegate { .. } => {
                 // C1+ decision kinds — no Stage-2 variant emits them; a
                 // staged variant parks before this point.
             }
@@ -1984,6 +2208,25 @@ impl<S: ControlStrategy> Driver<S> {
                             .cloned()
                             .unwrap_or_else(|| Json::str("reversible")),
                     ),
+                    // `effective_risk_class` — the audit-grade dossier
+                    // member (§5g.6 §3). The declared class resolves off
+                    // the armed surface table (`SurfaceSpec.risk_class`);
+                    // an undeclared surface stamps `UNKNOWN` — the most
+                    // dangerous point (ADR-0031 §2), never a guessed-safe
+                    // class.
+                    (
+                        "effective_risk_class",
+                        dispatch_intent
+                            .get("surface_id")
+                            .or_else(|| dispatch_intent.get("surface"))
+                            .and_then(Json::as_str)
+                            .and_then(|sid| {
+                                self.config.surfaces.iter().find(|s| s.surface_id == sid)
+                            })
+                            .and_then(|s| s.risk_class.as_ref())
+                            .map(|rc| rc.to_json())
+                            .unwrap_or_else(|| hh_ontology::risk::RiskClass::UNKNOWN.to_json()),
+                    ),
                 ]),
             );
             sink.append(vec![intended]).map_err(DriverError::Append)?;
@@ -2010,23 +2253,99 @@ impl<S: ControlStrategy> Driver<S> {
             );
             if matches!(pre, GuardVerdict::Pass { .. }) {
                 let out = gate.dispatch(&ef, 1, dispatch_intent);
+                // The gate's dispatch-lifecycle rows land durable before
+                // the terminal — `decided`/`authorized`/`prepared`/
+                // `committed` in emit order (§5a.2; the sink stamps the
+                // fencing token it owns on the post-`prepared` classes).
+                // Producer: the gate's component — these are the
+                // boundary's authorization records, not the envelope's
+                // (INV-7).
+                let gate_component = gate.producer_component().to_string();
+                for (class, payload) in &out.emitted {
+                    self.append_producer(sink, class, payload.clone(), Some(&ef), &gate_component)?;
+                }
+                if matches!(out.outcome, SettledOutcome::Pending) {
+                    // Out-of-loop dispatch (a host capability): the
+                    // write-ahead `committed` row is the record; the
+                    // terminal arrives via `report_host_effect`. The
+                    // effect stays open — `open_effects` parks every cue
+                    // but `effects_settled` until it settles (I4).
+                    settled.push(EffectOutcome {
+                        effect_id: ef.clone(),
+                        outcome: SettledOutcome::Pending,
+                    });
+                    continue;
+                }
                 let terminal_class = match &out.outcome {
                     SettledOutcome::Observed { .. } => "action.effect.observed",
                     SettledOutcome::Refused => "action.effect.refused",
                     SettledOutcome::Unknown { .. } => "action.effect.unknown",
                     SettledOutcome::Abandoned => "action.effect.abandoned",
+                    SettledOutcome::Pending => unreachable!("pending handled above"),
                 };
                 // The `stop_rule = submit` detection is ledgered where it
                 // happened (CC3 — the terminal row carries the ref so a
                 // deterministic replay re-serves the *recorded* value,
-                // never a re-minted one — ADR-0135 §2).
+                // never a re-minted one — ADR-0135 §2). `attempt_no` is a
+                // declared dossier member; `refused` carries a `reason`
+                // (the gate's error class when it named one).
                 let mut terminal_payload = crate::events::settled_outcome_json(&out.outcome);
+                if let Json::Obj(m) = &mut terminal_payload {
+                    m.insert("attempt_no".to_string(), Json::Int(1));
+                    if matches!(out.outcome, SettledOutcome::Refused) {
+                        m.insert(
+                            "reason".to_string(),
+                            Json::str(
+                                out.error_class
+                                    .clone()
+                                    .unwrap_or_else(|| "gate_refused".to_string()),
+                            ),
+                        );
+                    }
+                }
                 if let Some(s) = &out.submission_ref {
                     if let Json::Obj(m) = &mut terminal_payload {
                         m.insert("submission_ref".to_string(), Json::str(s.clone()));
                     }
                 }
                 self.append(sink, terminal_class, terminal_payload, Some(&ef))?;
+                // AC-R-2.4.3-12 (DF-S2.8-1) — the `trigger{path_touched}`
+                // leg: an *observed* effect whose intent names `args.path`
+                // runs a trigger retrieval over the memory boundary
+                // (procedure_pointer `triggers[].path_glob` matches are
+                // the §5c.3 hit kind). The port's rows land durable,
+                // scoped to the model call that proposed the effect; the
+                // next `assemble` delivers the hit indexes as candidates.
+                if terminal_class == "action.effect.observed" {
+                    if let Some(path) = dispatch_intent
+                        .get("args")
+                        .and_then(|a| a.get("path"))
+                        .and_then(Json::as_str)
+                    {
+                        if let Some(port) = self.memory_port.as_mut() {
+                            let path = path.to_string();
+                            let mc = self.last_model_call_id.clone().unwrap_or_default();
+                            let watermark = (
+                                self.run_id.clone(),
+                                sink.prefix().last().map(|e| e.seq).unwrap_or(0),
+                            );
+                            for (class, payload) in port
+                                .trigger_retrieve(&path, &mc, watermark)
+                                .map_err(|detail| DriverError::Port {
+                                    port: "retrieve",
+                                    detail,
+                                })?
+                            {
+                                self.append(
+                                    sink,
+                                    &class,
+                                    payload,
+                                    Some(mc.as_str()).filter(|s| !s.is_empty()),
+                                )?;
+                            }
+                        }
+                    }
+                }
                 if let Some(s) = &out.submission_ref {
                     self.submission = Some(s.clone());
                 }
@@ -2039,9 +2358,12 @@ impl<S: ControlStrategy> Driver<S> {
                 return Ok(());
             }
         }
+        let all_terminal = settled
+            .iter()
+            .all(|o| !matches!(o.outcome, SettledOutcome::Pending));
         self.inbox.push_back(Cue::EffectsSettled {
             settled,
-            all_terminal: true,
+            all_terminal,
             submission_ref: self.submission.clone(),
         });
         Ok(())
@@ -2144,6 +2466,14 @@ impl<S: ControlStrategy> Driver<S> {
         match &mut self.compaction_port {
             Some(port) => match port.compact(reason) {
                 Ok(done) => {
+                    // The port's `context.compaction.started`/`completed`
+                    // rows land durable in emit order, then the cue —
+                    // durable-before-visible, same convention as the
+                    // assembler's side bands (DF-S2.8-1: the rows are
+                    // minted from the loop, not a test-side stub).
+                    for (class, payload) in done.emitted {
+                        self.append(sink, &class, payload, None)?;
+                    }
                     self.inbox.push_back(Cue::CompactionCompleted {
                         view_hash: done.view_hash,
                     });
@@ -2235,8 +2565,162 @@ impl<S: ControlStrategy> Driver<S> {
                 prov,
             )?;
         }
+        // DF-S2.8-1 (e) — the `judged`/`human` artefact-detector legs ride
+        // the verify seam: `subject{kind: artefact_activation |
+        // artefact_followed}` declares the artefact check, and a `decided`
+        // verdict mints the chain row under the *verdict's own* detector
+        // class (a judge's `judged`; a rater verdict riding the port is
+        // `human`). The row is gated on the durable `delivered` it names —
+        // an undelivered delivery mints nothing — and a non-affirmative /
+        // inconclusive verdict mints nothing (a judged absence is an
+        // absence, never a deterministic `false`). `confidence_ppm` carries
+        // the verdict's own grade capped at the parsed/judged ceiling —
+        // never `1_000_000` (judged evidence keeps its grade).
+        match subject.get("kind").and_then(Json::as_str) {
+            Some("artefact_activation") => {
+                let artefact_id = subject
+                    .get("artefact_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or_default();
+                let delivery_id = subject
+                    .get("delivery_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or_default();
+                let signal = subject
+                    .get("signal")
+                    .and_then(Json::as_str)
+                    .unwrap_or("judged");
+                if self.delivered_artefact(sink.prefix(), artefact_id, delivery_id) {
+                    for v in &verdicts {
+                        if !matches!(v.status, hh_verification::vocab::VerdictStatus::Decided)
+                            || !v.value.is_affirmative()
+                        {
+                            continue;
+                        }
+                        let mut payload = match hh_context::events::artefact_activated_payload(
+                            artefact_id,
+                            delivery_id,
+                            v.detector.as_str(),
+                            signal,
+                        ) {
+                            Json::Obj(m) => m,
+                            other => {
+                                unreachable!("artefact_activated_payload is an object: {other:?}")
+                            }
+                        };
+                        payload.insert(
+                            "detector_ref".to_string(),
+                            Json::str(
+                                v.validator_ref
+                                    .semantic_id
+                                    .clone()
+                                    .unwrap_or_else(|| v.validator_ref.version_id.clone()),
+                            ),
+                        );
+                        payload.insert(
+                            "confidence_ppm".to_string(),
+                            Json::Int(judged_confidence_ppm(v) as i64),
+                        );
+                        payload.insert("evidence_ref".to_string(), Json::str(v.verdict_id.clone()));
+                        self.append(sink, "context.artefact.activated", Json::Obj(payload), None)?;
+                    }
+                }
+            }
+            Some("artefact_followed") => {
+                let artefact_id = subject
+                    .get("artefact_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or_default();
+                let delivery_id = subject
+                    .get("delivery_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or_default();
+                let kind = subject
+                    .get("artefact_kind")
+                    .and_then(Json::as_str)
+                    .unwrap_or("procedure");
+                if self.delivered_artefact(sink.prefix(), artefact_id, delivery_id) {
+                    for v in &verdicts {
+                        if !matches!(v.status, hh_verification::vocab::VerdictStatus::Decided) {
+                            continue;
+                        }
+                        self.append(
+                            sink,
+                            "verification.artefact.followed",
+                            hh_verification::followed::followed_payload_det(
+                                artefact_id,
+                                delivery_id,
+                                v.detector.as_str(),
+                                &v.validator_ref
+                                    .semantic_id
+                                    .clone()
+                                    .unwrap_or_else(|| v.validator_ref.version_id.clone()),
+                                v.value.is_affirmative(),
+                                judged_confidence_ppm(v),
+                                &v.verdict_id,
+                                kind,
+                            ),
+                            None,
+                        )?;
+                    }
+                }
+            }
+            _ => {}
+        }
         self.inbox.push_back(Cue::VerificationCompleted);
         Ok(())
+    }
+
+    /// Whether `delivery_id`/`artefact_id` name a durable
+    /// `context.artefact.delivered` row — the shared gate the human/judged
+    /// detector legs check before minting (a detector never fabricates its
+    /// precondition).
+    fn delivered_artefact(
+        &self,
+        prefix: &[EventEnvelope],
+        artefact_id: &str,
+        delivery_id: &str,
+    ) -> bool {
+        prefix.iter().any(|e| {
+            e.class == "context.artefact.delivered"
+                && e.payload.get("delivery_id").and_then(Json::as_str) == Some(delivery_id)
+                && e.payload.get("artefact_id").and_then(Json::as_str) == Some(artefact_id)
+        })
+    }
+
+    /// `context.artefact.activated{detector: human}` — the principal's
+    /// `artefact_mark` leg (DF-S2.8-1 e). Gated on the durable `delivered`
+    /// row the mark names; the row's provenance is principal-origin (the
+    /// human's assertion is the evidence) and it never enters the
+    /// deterministic `followed` fold — `maybe_emit_artefact_followed`
+    /// reads `detector: deterministic` activations only.
+    fn emit_human_artefact_activated(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        artefact_id: &str,
+        delivery_id: &str,
+        signal: &str,
+    ) -> Result<(), DriverError> {
+        if !self.delivered_artefact(sink.prefix(), artefact_id, delivery_id) {
+            return Ok(());
+        }
+        let prov = ProvenanceRecord::minted(
+            Origin::human("principal", HumanRole::Principal),
+            PersistenceScope::Run,
+            self.now_ms,
+        );
+        self.append_prov(
+            sink,
+            "context.artefact.activated",
+            hh_context::events::artefact_activated_payload(
+                artefact_id,
+                delivery_id,
+                "human",
+                signal,
+            ),
+            None,
+            prov,
+        )
     }
 
     /// Mint the nudge `HarnessRule` (conditioned on the run's profile — I9
@@ -2411,7 +2895,13 @@ impl<S: ControlStrategy> Driver<S> {
                         .unwrap_or_default()
                         .to_string(),
                 }),
-                "context.artefact.activated" => {
+                "context.artefact.activated"
+                    // Only the deterministic leg feeds the deterministic
+                    // `followed` fold — a `judged`/`human` activation is
+                    // its own evidence class (CF-483: never pooled).
+                    if e.payload.get("detector").and_then(Json::as_str)
+                        == Some("deterministic") =>
+                {
                     let delivery_id = e
                         .payload
                         .get("delivery_id")
@@ -2481,6 +2971,48 @@ impl<S: ControlStrategy> Driver<S> {
                 prov,
             )
         };
+        // The deterministic `activated` leg (§5c.1; AC-R-2.4.5-10):
+        // a delivered `procedure_index`/`procedure` whose `delivery_id`
+        // rode this call's assembled context activates —
+        // `detector: deterministic, signal: cited`. The store's declared
+        // `allowed_capabilities` ride the row when the memory boundary
+        // resolves the artefact (capless ⇒ no `followed` can mint).
+        for d in &delivered {
+            if !matches!(d.kind.as_str(), "procedure" | "procedure_index") {
+                continue;
+            }
+            if !causes.iter().any(|c| c == &d.delivery_id) {
+                continue;
+            }
+            if activated.iter().any(|(id, _)| id == &d.delivery_id) {
+                continue;
+            }
+            let caps = self
+                .memory_port
+                .as_ref()
+                .and_then(|p| p.procedure_capabilities(&d.artefact_id))
+                .map(|v| {
+                    v.into_iter()
+                        .collect::<std::collections::BTreeSet<String>>()
+                });
+            let mut payload = match hh_context::events::artefact_activated_payload(
+                &d.artefact_id,
+                &d.delivery_id,
+                "deterministic",
+                "cited",
+            ) {
+                Json::Obj(m) => m,
+                other => unreachable!("artefact_activated_payload is an object: {other:?}"),
+            };
+            if let Some(c) = &caps {
+                payload.insert(
+                    "allowed_capabilities".to_string(),
+                    Json::Arr(c.iter().map(|s| Json::str(s.clone())).collect()),
+                );
+            }
+            self.append(sink, "context.artefact.activated", Json::Obj(payload), None)?;
+            activated.push((d.delivery_id.clone(), caps));
+        }
         // tool_surface — the validated call IS the args-conform evidence.
         for d in &delivered {
             if d.kind == "tool_surface"
@@ -2690,17 +3222,37 @@ impl<S: ControlStrategy> Driver<S> {
             "sha256:{}",
             hh_wire::sha256::sha256_hex(drain.to_json().to_canonical_string().as_bytes())
         );
-        self.append(
-            sink,
-            "lifecycle.turn.finished",
-            crate::events::turn_finished_payload(&final_reason),
-            None,
-        )?;
+        // §5c.4 scope floors (DF-S2.8-1): the turn is ending —
+        // `turn`-scoped memories expire; the run is ending — `run`-scoped
+        // the same. The memory boundary's `context.memory.invalidated`
+        // rows land *inside* the closing turn scope (before
+        // `lifecycle.turn.finished` seals it — a `turn_id` stamp on a
+        // closed turn trips the ledger's scope gate; `Turn` then `Run` —
+        // inner scope first; session/goal/user scopes survive the
+        // activation by contract). `at_seq` is the durable tip — the
+        // fold's `until` point.
+        if self.memory_port.is_some() {
+            let at_seq = sink.prefix().last().map(|e| e.seq).unwrap_or(0);
+            let mut rows = Vec::new();
+            for scope in [PersistenceScope::Turn, PersistenceScope::Run] {
+                rows.extend(
+                    self.memory_port
+                        .as_mut()
+                        .map(|port| port.mark_scope_ended(scope, at_seq))
+                        .unwrap_or_default(),
+                );
+            }
+            for (class, payload) in rows {
+                self.append(sink, &class, payload, None)?;
+            }
+        }
         // AC-F2-03 — an `invariant_violation` stop quarantines: the
         // `security.audit.checkpoint{kind: quarantine}` row lands durable
         // before `run.finished`, naming the violated invariant + the
         // detection evidence (the run is `infrastructure_failure`, never
-        // scored — ADR-0108 D3).
+        // scored — ADR-0108 D3). It must precede `lifecycle.turn.finished`
+        // — the row carries the `turn-1` stamp and the ledger refuses a
+        // `turn_id` on a closed turn scope (`ScopeNotOpen`).
         if let StopReason::InvariantViolation { invariant_id } = &final_reason {
             let evidence: Vec<String> = sink
                 .prefix()
@@ -2715,6 +3267,12 @@ impl<S: ControlStrategy> Driver<S> {
                 None,
             )?;
         }
+        self.append(
+            sink,
+            "lifecycle.turn.finished",
+            crate::events::turn_finished_payload(&final_reason),
+            None,
+        )?;
         let mut finished = crate::events::run_finished_payload(
             &run_status,
             &final_reason,
@@ -3366,6 +3924,61 @@ impl<S: ControlStrategy> Driver<S> {
         Ok(())
     }
 
+    /// `append` with an explicit producer component — the effect gate's
+    /// `emitted` rows are the *boundary's* records (the §5a.2 chain's
+    /// `decided`/`authorized`/`prepared`/`committed`), not the envelope's;
+    /// minting them under `hh-control` reads as the envelope granting
+    /// itself a permission (INV-7).
+    fn append_producer(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        class: &str,
+        payload: Json,
+        scope_id: Option<&str>,
+        component: &str,
+    ) -> Result<(), DriverError> {
+        let mut ev = crate::events::kernel_event(
+            self.alloc("e"),
+            class,
+            self.ts(),
+            Scope {
+                turn_id: if class.starts_with("lifecycle.run.") {
+                    None
+                } else {
+                    Some("turn-1".into())
+                },
+                effect_id: scope_id
+                    .filter(|_| class.starts_with("action.effect."))
+                    .map(String::from),
+                model_call_id: scope_id
+                    .filter(|_| class.starts_with("model.") || class == "action.tool.proposed")
+                    .map(String::from),
+                tool_call_id: if class == "action.tool.proposed" {
+                    payload
+                        .get("tool_call_id")
+                        .and_then(Json::as_str)
+                        .map(String::from)
+                } else {
+                    None
+                },
+                ..scope_empty()
+            },
+            self.parent_id(sink),
+            vec![],
+            payload,
+        );
+        ev.producer.component_variant_ref = component.to_string();
+        sink.append(vec![ev]).map_err(DriverError::Append)?;
+        let tail: Vec<EventEnvelope> = sink
+            .prefix()
+            .iter()
+            .filter(|e| e.seq > self.state.last_cue_seq)
+            .cloned()
+            .collect();
+        self.strategy.observe(&mut self.state, &tail);
+        Ok(())
+    }
+
     /// Append one kernel row through the sink (scope id → `Scope.effect_id`
     /// — the driver maps it; the class registry validates).
     fn append(
@@ -3549,6 +4162,19 @@ fn resolve_intents(prefix: &[EventEnvelope], intents: &[Json]) -> Vec<Json> {
 /// (`budget_exhausted`'s dimension, `cancelled`'s `by`,
 /// `format_failure`'s count) survive verbatim; the bare-kind spellings
 /// remain as a fallback for any hand-made refusal).
+/// The `confidence_ppm` a judged/human chain row carries — the verdict's
+/// own graded confidence when it declares one, else the parsed/judged
+/// ceiling. Never `1_000_000` — judged evidence keeps its grade (ADR-0110;
+/// the same cap `ExtractedBy::Judged` carries on the claim surface).
+fn judged_confidence_ppm(v: &hh_verification::validators::Verdict) -> u64 {
+    match v.value {
+        hh_verification::vocab::VerdictValue::Graded(ppm) => {
+            ppm.min(hh_verification::vocab::PARSED_CONFIDENCE_CAP_PPM)
+        }
+        _ => hh_verification::vocab::PARSED_CONFIDENCE_CAP_PPM,
+    }
+}
+
 /// Whether the guard's `respond` observation is a nudge — the observation
 /// kinds that mint a conditioned `HarnessRule` artefact (AC-R-2.6.1-8;
 /// I9). Returns the T-LCD-13 `kind` member (`loop_nudge | continue_nudge`
@@ -3725,6 +4351,7 @@ mod tests {
                 request: Json::Null,
                 assembled_payload: None,
                 side_events: Vec::new(),
+                pre_events: Vec::new(),
             }
         }
     }
@@ -3781,6 +4408,8 @@ mod tests {
                     )]
                     .into_iter()
                     .collect(),
+
+                    risk_class: None,
                 }],
                 ..DriverConfig::default()
             },
@@ -3805,6 +4434,8 @@ mod tests {
                 },
                 submission_ref: Some("sub-1".into()),
                 error_class: None,
+
+                emitted: Vec::new(),
             },
             finish: None,
         };
@@ -3870,6 +4501,8 @@ mod tests {
                     )]
                     .into_iter()
                     .collect(),
+
+                    risk_class: None,
                 }],
                 ..DriverConfig::default()
             },
@@ -3894,6 +4527,8 @@ mod tests {
                 },
                 submission_ref: Some("sub-1".into()),
                 error_class: None,
+
+                emitted: Vec::new(),
             },
             finish: Some(Json::obj([
                 ("completion", Json::str("achieved")),
@@ -4005,6 +4640,7 @@ mod tests {
                 outcome: SettledOutcome::Abandoned,
                 submission_ref: None,
                 error_class: None,
+                emitted: Vec::new(),
             },
             finish: None,
         };
@@ -4058,6 +4694,7 @@ mod tests {
                 outcome: SettledOutcome::Abandoned,
                 submission_ref: None,
                 error_class: None,
+                emitted: Vec::new(),
             },
             finish: None,
         };
@@ -4109,6 +4746,7 @@ mod tests {
             )]
             .into_iter()
             .collect(),
+            risk_class: None,
         }
     }
 
@@ -4131,6 +4769,8 @@ mod tests {
                 },
                 submission_ref: None,
                 error_class: None,
+
+                emitted: Vec::new(),
             },
             finish: None,
         }
@@ -4409,6 +5049,8 @@ mod tests {
                 },
                 submission_ref: Some("sub-1".into()),
                 error_class: None,
+
+                emitted: Vec::new(),
             },
             finish: None,
         };
@@ -4474,6 +5116,8 @@ mod tests {
                     },
                     submission_ref: Some("sub-1".into()),
                     error_class: None,
+
+                    emitted: Vec::new(),
                 },
                 finish: None,
             };
@@ -4518,6 +5162,7 @@ mod tests {
             self.calls += 1;
             self.results.pop_front().unwrap_or(Ok(CompactionDone {
                 view_hash: "cv-1".into(),
+                emitted: Vec::new(),
             }))
         }
     }
@@ -4554,6 +5199,7 @@ mod tests {
                     Json::Int(self.occupancy as i64),
                 )])),
                 side_events: Vec::new(),
+                pre_events: Vec::new(),
             }
         }
     }
@@ -4782,6 +5428,7 @@ mod tests {
             results: [
                 Ok(CompactionDone {
                     view_hash: "cv-1".into(),
+                    emitted: Vec::new(),
                 }),
                 Err(CompactionImpossible {
                     required_tokens: 950,

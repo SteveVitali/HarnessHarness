@@ -308,6 +308,17 @@ const EFFECT_FIELDS: &[AuditField] = &[
     af("args_canonical_hash"),
     af("declared_risk_class"),
     af("effective_risk_class"),
+    // R2.5 — the driver's `intended` dossier (§5a.2): `effect_class` is the
+    // reversibility hint the PreDispatch guard reads (the risk classes
+    // supersede it for admission; the member stays the loop's record);
+    // `intent` is the minimal intent record — `tool_call_id` only, never
+    // the arg bytes (I2, S3.10). `terminal` restates the settled class on
+    // the terminal row; `submission_ref` is the `stop_rule = submit`
+    // marker the terminal records (ADR-0135 §2).
+    af("effect_class"),
+    afb("intent", AUDIT_FIELD_LIST_BYTES),
+    af("terminal"),
+    af("submission_ref"),
     af("idempotency_key"),
     af("env_handle_id"),
     af("outcome"),
@@ -893,6 +904,11 @@ const CHECKPOINT_FIELDS: &[AuditField] = &[
     afb("signatures", AUDIT_FIELD_LIST_BYTES),
     afb("witness_cosignatures", AUDIT_FIELD_LIST_BYTES),
     af("audit_policy_ref"),
+    // R2.5 — the `kind = quarantine` checkpoint (AC-F2-03): the violated
+    // invariant plus the `control.invariant.violated` evidence row ids the
+    // quarantine cites.
+    af("invariant_id"),
+    afb("evidence_refs", AUDIT_FIELD_LIST_BYTES),
 ];
 
 /// `security.audit.bridge` — the sealed `BridgeRecord` row an identity
@@ -938,7 +954,10 @@ const MEMORY_FIELDS: &[AuditField] = &[
     afb("rank_evidence", AUDIT_FIELD_LIST_BYTES),
     afb("validity", AUDIT_FIELD_LIST_BYTES),
 ];
-const MEMORY_REFS: &[&str] = &["conflict_set_ref"];
+/// `content_ref` — the blob-pool address the kernel minted the written
+/// version's bytes under (R2.5: the supplies-ingest write records where
+/// the content plane holds the body so the resume fold can re-resolve).
+const MEMORY_REFS: &[&str] = &["conflict_set_ref", "content_ref"];
 
 /// `context.memory.promotion_refused` — the AC-R-2.4.5-9 refusal record:
 /// `{version_id, reason ∈ {not_human, validity_not_valid}, endorser}`.

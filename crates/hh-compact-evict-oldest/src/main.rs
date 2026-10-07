@@ -4,10 +4,10 @@
 //! launched by the variant host through `hh-helper`
 //! (`argv = [bin, --socket, <path>, --version-id <pin>, --content <addr>]`).
 
-mod compact;
-
 use std::collections::BTreeMap;
 use std::time::Duration;
+
+use hh_compact_evict_oldest::compact;
 
 use hh_embed_schema::plugin_abi::{
     AbiError, BindFailure, BindParams, ConformanceParams, GuardParams, GuardVerdict, HelloParams,

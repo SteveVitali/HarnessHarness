@@ -330,6 +330,9 @@ pub fn settled_outcome_json(o: &SettledOutcome) -> Json {
             ("cause", Json::str(cause)),
         ]),
         SettledOutcome::Abandoned => Json::obj([("terminal", Json::str("abandoned"))]),
+        // `Pending` never mints a terminal row — the open `committed` is
+        // the record (the driver skips this builder for pending effects).
+        SettledOutcome::Pending => Json::Null,
     }
 }
 
