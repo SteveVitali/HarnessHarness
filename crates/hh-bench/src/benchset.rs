@@ -336,6 +336,11 @@ fn kernel_prov(tag: &str) -> ProvenanceRecord {
 
 // ── task load ────────────────────────────────────────────────────────────
 
+// The per-task loader carries the suite context verbatim (the record's own
+// fields — a params struct would just rename them); lint-tolerated on base
+// since S3.12b, surfaced for `-D warnings` when R2.5's dev-dep pulled this
+// crate into `hh-compact-evict-oldest`'s test build.
+#[allow(clippy::too_many_arguments)]
 fn load_task(
     suite_dir: &Path,
     suite_id: &str,

@@ -180,6 +180,7 @@ impl EffectGate for ParticipantGate {
                         outcome: SettledOutcome::Refused,
                         submission_ref: None,
                         error_class: Some("path_escape".into()),
+                        emitted: Vec::new(),
                     };
                 }
                 match std::fs::write(self.root.join(rel), text.as_bytes()) {
@@ -189,6 +190,7 @@ impl EffectGate for ParticipantGate {
                         },
                         submission_ref: None,
                         error_class: None,
+                        emitted: Vec::new(),
                     },
                     Err(e) => GateOutcome {
                         outcome: SettledOutcome::Unknown {
@@ -196,6 +198,7 @@ impl EffectGate for ParticipantGate {
                         },
                         submission_ref: None,
                         error_class: None,
+                        emitted: Vec::new(),
                     },
                 }
             }
@@ -205,11 +208,13 @@ impl EffectGate for ParticipantGate {
                 },
                 submission_ref: Some(format!("sub-{effect_id}")),
                 error_class: None,
+                emitted: Vec::new(),
             },
             _ => GateOutcome {
                 outcome: SettledOutcome::Refused,
                 submission_ref: None,
                 error_class: Some("surface_not_bound".into()),
+                emitted: Vec::new(),
             },
         }
     }
@@ -222,6 +227,7 @@ impl AssemblerPort for NullAssembler {
             request: req.clone(),
             assembled_payload: Some(Json::obj([("context_request", req.clone())])),
             side_events: Vec::new(),
+            pre_events: Vec::new(),
         }
     }
 }
@@ -262,6 +268,7 @@ fn surface(id: &str, params: &[&str]) -> SurfaceSpec {
                 )
             })
             .collect(),
+        risk_class: None,
     }
 }
 

@@ -159,14 +159,19 @@ fn inv1(
 /// *dispatched* is not yet dangling — the predicate fires on intents that
 /// remain open while the model has already been shown a settled batch).
 fn inv2(events: &[EventEnvelope], guard: GuardPoint, out: &mut Vec<InvariantViolation>) {
-    let mut intended: BTreeSet<String> = BTreeSet::new();
+    // `intended` carries its seq — a `propose` decision can only dangle an
+    // intent the loop *moved past*. An intent still open while the loop
+    // parks awaiting its host-executor/`report_host_effect` terminal is
+    // not dangling: the proposes that minted its batch precede it, and
+    // I4's park admits no new `propose` until `effects_settled` lands.
+    let mut intended: BTreeMap<String, u64> = BTreeMap::new();
     let mut settled: BTreeSet<String> = BTreeSet::new();
-    let mut delivered_settlement = false;
+    let mut propose_seqs: Vec<u64> = vec![];
     for ev in events {
         match ev.class.as_str() {
             "action.effect.intended" => {
                 if let Some(id) = &ev.scope.effect_id {
-                    intended.insert(id.clone());
+                    intended.insert(id.clone(), ev.seq);
                 }
             }
             "action.effect.observed"
@@ -177,18 +182,21 @@ fn inv2(events: &[EventEnvelope], guard: GuardPoint, out: &mut Vec<InvariantViol
                     settled.insert(id.clone());
                 }
             }
-            // An `effects_settled` decision means the model saw the batch's
-            // terminals — any *other* intended effect still open is dangling.
+            // An admitted `propose` after the intent means the model was
+            // shown the next batch while this effect hung — dangling.
             "control.decision"
                 if ev.payload.get("kind").and_then(Json::as_str) == Some("propose") =>
             {
-                delivered_settlement = true;
+                propose_seqs.push(ev.seq);
             }
             _ => {}
         }
     }
-    if delivered_settlement {
-        for id in intended.difference(&settled) {
+    for (id, at) in &intended {
+        if settled.contains(id) {
+            continue;
+        }
+        if propose_seqs.iter().any(|s| s > at) {
             out.push(InvariantViolation {
                 invariant_id: InvariantId::Inv2,
                 evidence_refs: vec![id.clone()],

@@ -1304,6 +1304,24 @@ impl MemoryStore {
 
     // ── bind / manifest / resolve ────────────────────────────────────────
 
+    /// `rehydrate(version)` — the resume fold's restore leg: inserts a
+    /// `MemoryVersion` reconstructed from durable `context.memory.written`
+    /// rows under its *recorded* `version_id` (identity is the durable
+    /// row's, never re-minted — CC3: the store is the ledger's pure
+    /// projection). `put`'s write gates do not re-run — the write already
+    /// passed at record time; the skeleton's contract/validity members
+    /// carry what the durable row can prove (a fold that cannot recover
+    /// the original contract declares `unknown`-reading members, never a
+    /// fabricated `valid`).
+    pub fn rehydrate(&mut self, version: MemoryVersion) {
+        let vid = version.version_id.clone();
+        if !self.versions.contains_key(&vid) {
+            self.order.push(vid.clone());
+        }
+        self.applied_seq = self.applied_seq.max(version.created_at);
+        self.versions.insert(vid, version);
+    }
+
     /// `bind(scope, name, version_id, supersedes?, reason)` — append to the
     /// name history (§5c.3; never an edit). `supersedes` names the prior
     /// binding's version and applies the lineage edge.

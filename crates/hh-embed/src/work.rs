@@ -1696,6 +1696,7 @@ impl EmbedService {
             manifest_ref: sess_manifest_ref(&child),
             realized: realized.clone(),
             driver: None,
+            mem_ctx: None,
             steering: (
                 hh_control::strategy::SteerMode::Unsupported,
                 hh_control::strategy::ConcurrentInput::QueueOnly,
