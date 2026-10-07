@@ -779,8 +779,40 @@ fn lift_event_primary(e: &HostedEvent) -> LiftedRow {
             };
             row(class, e.payload.clone(), tid())
         }
-        "permission.requested" => row("security.permission.pending", e.payload.clone(), tid()),
-        "permission.decided" => row("security.permission.decided", e.payload.clone(), tid()),
+        // DF-CAP.2-1 (CAP.3; ADR-0328): the lift *shapes* the hosted
+        // upcall rows to the native audit partitions — it never passes a
+        // hosted payload through verbatim (the hosted spelling carries
+        // members the Rule-C partitions do not declare). `requested`'s
+        // `params` upcall record lands as the partition's `request`
+        // member (record bound); nothing the participant did not report
+        // is minted, and no member is dropped silently — `params` is
+        // preserved in full inside `request`.
+        "permission.requested" => {
+            let mut m = BTreeMap::new();
+            if let Some(v) = e.payload.get("permission_id") {
+                m.insert("permission_id".into(), v.clone());
+            }
+            if let Some(v) = e.payload.get("params") {
+                m.insert("request".into(), v.clone());
+            }
+            row("security.permission.pending", Json::Obj(m), tid())
+        }
+        // `{decision, decider, approval_wait_ms}` → the decided
+        // partition: the hosted `approval_wait_ms` names the native
+        // `wait_ms` member; `permission_id` (when the adapter stamps
+        // it) joins the row to its pending.
+        "permission.decided" => {
+            let mut m = BTreeMap::new();
+            for k in ["permission_id", "decision", "decider"] {
+                if let Some(v) = e.payload.get(k) {
+                    m.insert(k.into(), v.clone());
+                }
+            }
+            if let Some(v) = e.payload.get("approval_wait_ms") {
+                m.insert("wait_ms".into(), v.clone());
+            }
+            row("security.permission.decided", Json::Obj(m), tid())
+        }
         // M18 (§5h; ADR-0165 D5): the accounting row — `participant_reported`
         // for a live session-ABI report, `reconstructed_from_native_log` for
         // a post-hoc (`unobserved`) reconstruction. `confidence` is `bounded`

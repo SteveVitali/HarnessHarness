@@ -550,6 +550,13 @@ impl AdapterA {
                 self.lifted.push(LiftedObservation::kernel_fact(
                     "permission.decided",
                     Json::obj([
+                        // The same correlator `requested` carries — the
+                        // lifted row joins pending↔decided on it
+                        // (DF-CAP.2-1; ADR-0328).
+                        (
+                            "permission_id",
+                            u.params.get("tool_call_id").cloned().unwrap_or(Json::Null),
+                        ),
                         ("decision", Json::str(&decision)),
                         (
                             "decider",

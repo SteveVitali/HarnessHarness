@@ -27,8 +27,8 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use hh_control::driver::{
-    AssembledRequest, AssemblerPort, Driver, DriverConfig, EffectGate, GateOutcome, LedgerSink,
-    ModelOutcome, ModelPort, VerifyPort,
+    AssembleInputs, AssembledRequest, AssemblerPort, Driver, DriverConfig, EffectGate, GateOutcome,
+    LedgerSink, ModelOutcome, ModelPort, VerifyPort,
 };
 use hh_control::output::{ParamKind, ParamSpec, ParsedCall, SurfaceSpec};
 use hh_control::plan_exec::{PlanExecute, PLAN_SURFACE_ID};
@@ -189,10 +189,11 @@ impl EffectGate for ScriptedGate {
 
 struct NullAssembler;
 impl AssemblerPort for NullAssembler {
-    fn assemble(&mut self, req: &Json) -> AssembledRequest {
+    fn assemble(&mut self, _inputs: &AssembleInputs<'_>, req: &Json) -> AssembledRequest {
         AssembledRequest {
             request: req.clone(),
             assembled_payload: Some(Json::obj([("context_request", req.clone())])),
+            side_events: Vec::new(),
         }
     }
 }
@@ -1213,7 +1214,7 @@ struct ItemAssembler {
     delivery_ids: Vec<String>,
 }
 impl AssemblerPort for ItemAssembler {
-    fn assemble(&mut self, req: &Json) -> AssembledRequest {
+    fn assemble(&mut self, _inputs: &AssembleInputs<'_>, req: &Json) -> AssembledRequest {
         AssembledRequest {
             request: req.clone(),
             assembled_payload: Some(Json::obj([
@@ -1228,6 +1229,7 @@ impl AssemblerPort for ItemAssembler {
                     ),
                 ),
             ])),
+            side_events: Vec::new(),
         }
     }
 }
