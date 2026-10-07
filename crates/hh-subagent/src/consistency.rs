@@ -445,7 +445,7 @@ impl CoordinationPolicy {
                 }
             }
         }
-        for (k, _) in &other.merge_policies {
+        for k in other.merge_policies.keys() {
             if !self.merge_policies.contains_key(k) {
                 tightening = true;
             }

@@ -16,6 +16,8 @@
 
 use std::collections::BTreeMap;
 
+use hh_control::strategy::{ControlContext, ControlStrategy};
+use hh_control::wire;
 use hh_embed_schema::plugin_abi::{
     AbiError, BindFailure, BindParams, ConformanceParams, GuardParams, GuardVerdict, HelloParams,
     InvokeParams, Narrow, StreamParams, TriState,
@@ -41,6 +43,16 @@ pub enum Mode {
     /// `propose` / `select_parent` over `invoke` — the out-of-process
     /// lane the class suite drives through the variant host.
     Proposer,
+    /// `control` (R2.6) — hosts a registered `hh-control` variant over
+    /// `plugin_abi/1` `invoke` ops (`open`/`observe`/`decide`/
+    /// `terminate`/`checkpoint`/`restore` — the `control_strategy`
+    /// contract's method set). The bound variant is *named by the bind*
+    /// (`BindParams::variant.semantic_id`, or the `--variant` flag) and
+    /// resolved through the same `hh_control::react::variant_for`
+    /// registry `open.rs` consults; documents cross the boundary as
+    /// canonical `hh_control::wire` records — one registry, one codec on
+    /// both sides of the process boundary (DF-S1.20-1).
+    Control,
 }
 
 /// The verdict spelling `--verdict` takes (`allow` is the forged arm —
@@ -64,6 +76,13 @@ pub enum FixtureVerdict {
     /// claim (`{"authority":"kernel"}` inside the verdict payload → the
     /// host's V1 screen catches it).
     Widen,
+}
+
+/// One `control`-mode binding: the registered `hh-control` variant impl
+/// plus the `ControlContext` `open` was handed (kept for `restore`).
+struct ControlBinding {
+    variant: Box<dyn ControlStrategy>,
+    ctx: Option<ControlContext>,
 }
 
 /// The fixture's configuration (parsed from argv by [`FixtureLogic::from_args`]).
@@ -108,6 +127,13 @@ pub struct FixtureLogic {
     pub probes_live: bool,
     /// Bound count.
     binds: u64,
+    /// `control` mode — the bound variant impl per `binding_id` (the
+    /// `open`'d `ControlContext` rides along so `restore` can re-bind
+    /// it).
+    control: BTreeMap<String, ControlBinding>,
+    /// `--variant <ref>` — the variant `semantic_id` `control` mode binds
+    /// when `BindParams::variant` does not name one.
+    control_variant: Option<String>,
 }
 
 impl FixtureLogic {
@@ -137,6 +163,8 @@ impl FixtureLogic {
             own_socket: None,
             probes_live: true,
             binds: 0,
+            control: BTreeMap::new(),
+            control_variant: None,
         };
         let mut i = 0;
         while i < args.len() {
@@ -177,6 +205,7 @@ impl FixtureLogic {
                         "crash" => Mode::Crash,
                         "slow" => Mode::Slow,
                         "proposer" => Mode::Proposer,
+                        "control" => Mode::Control,
                         _ => Mode::Null,
                     };
                 }
@@ -220,6 +249,7 @@ impl FixtureLogic {
                 "--probe-helper-sock" => f.probe_helper_sock = Some(val(i)),
                 "--probe-peer-root" => f.probe_peer_root = Some(val(i)),
                 "--probe-peer-socket" => f.probe_peer_socket = Some(val(i)),
+                "--variant" => f.control_variant = Some(val(i)),
                 _ => {}
             }
             i += 2;
@@ -280,6 +310,103 @@ impl FixtureLogic {
                     })
                     .unwrap_or(Json::Null);
                 Ok(vec![picked])
+            }
+            _ => Err(AbiError::UnhandledOperation),
+        }
+    }
+
+    /// The `control` invoke lane (R2.6) — each op takes its inputs as
+    /// canonical `hh_control::wire` documents and returns canonical
+    /// documents. A `ControlError`/`RestoreError` becomes the codec's
+    /// `{error: …}` refusal doc (typed, distinguishable from a schema
+    /// crash); malformed inputs answer `schema_violation` — typed on the
+    /// wire, never a guess. State is caller-carried (`{state, …}` in →
+    /// `{state, …}` out): the lane is pure over its inputs, so the
+    /// conformance suite's determinism/purity assertions hold by
+    /// construction.
+    fn control_invoke(&mut self, params: &InvokeParams) -> Result<Vec<Json>, AbiError> {
+        let input = || params.inputs.first().cloned().unwrap_or(Json::Null);
+        let Some(binding) = self.control.get_mut(&params.binding_id) else {
+            // A `control`-mode invoke on a binding this process never
+            // bound is a session-level violation — typed, not guessed.
+            return Err(AbiError::SchemaViolation);
+        };
+        let variant = &mut binding.variant;
+        match params.operation.as_str() {
+            // open(ctx) -> [state | {error}]
+            "open" => {
+                let ctx = wire::context_from_json(&input()).ok_or(AbiError::SchemaViolation)?;
+                match variant.open(&ctx) {
+                    Ok(st) => {
+                        binding.ctx = Some(ctx);
+                        Ok(vec![wire::state_to_json(&st)])
+                    }
+                    Err(e) => Ok(vec![wire::control_error_to_json(&e)]),
+                }
+            }
+            // observe({state, events:[ev-doc…]}) -> [state']
+            "observe" => {
+                let doc = input();
+                let mut st = wire::state_from_json(doc.get("state").unwrap_or(&Json::Null))
+                    .ok_or(AbiError::SchemaViolation)?;
+                let event_docs = match doc.get("events") {
+                    Some(Json::Arr(a)) => a.clone(),
+                    _ => Vec::new(),
+                };
+                let events: Vec<_> = event_docs
+                    .iter()
+                    .map(|e| wire::event_from_json(e).ok_or(AbiError::SchemaViolation))
+                    .collect::<Result<_, _>>()?;
+                variant.observe(&mut st, &events);
+                Ok(vec![wire::state_to_json(&st)])
+            }
+            // decide({state, cue}) -> [{state, decision}]
+            "decide" => {
+                let doc = input();
+                let mut st = wire::state_from_json(doc.get("state").unwrap_or(&Json::Null))
+                    .ok_or(AbiError::SchemaViolation)?;
+                let cue = wire::cue_from_json(doc.get("cue").unwrap_or(&Json::Null))
+                    .ok_or(AbiError::SchemaViolation)?;
+                let d = variant.decide(&mut st, &cue);
+                Ok(vec![Json::obj([
+                    ("state", wire::state_to_json(&st)),
+                    ("decision", wire::decision_to_json(&d)),
+                ])])
+            }
+            // terminate({state, stop_reason}) -> [report | {error}]
+            "terminate" => {
+                let doc = input();
+                let st = wire::state_from_json(doc.get("state").unwrap_or(&Json::Null))
+                    .ok_or(AbiError::SchemaViolation)?;
+                let reason =
+                    wire::stop_reason_from_json(doc.get("stop_reason").unwrap_or(&Json::Null))
+                        .ok_or(AbiError::SchemaViolation)?;
+                Ok(vec![wire::report_to_json(&variant.terminate(&st, &reason))])
+            }
+            // checkpoint({state}) -> [{checkpoint}] — canonical state
+            // bytes carried as a UTF-8 string (the checkpoint dialect is
+            // canonical JSON — `state.rs` owns it, CC1).
+            "checkpoint" => {
+                let doc = input();
+                let st = wire::state_from_json(doc.get("state").unwrap_or(&Json::Null))
+                    .ok_or(AbiError::SchemaViolation)?;
+                let bytes = variant.checkpoint(&st);
+                let text = String::from_utf8(bytes).map_err(|_| AbiError::SchemaViolation)?;
+                Ok(vec![Json::obj([("checkpoint", Json::str(text))])])
+            }
+            // restore({checkpoint, ctx}) -> [state | {error}]
+            "restore" => {
+                let doc = input();
+                let text = doc
+                    .get("checkpoint")
+                    .and_then(Json::as_str)
+                    .ok_or(AbiError::SchemaViolation)?;
+                let ctx = wire::context_from_json(doc.get("ctx").unwrap_or(&Json::Null))
+                    .ok_or(AbiError::SchemaViolation)?;
+                match variant.restore(text.as_bytes(), &ctx) {
+                    Ok(st) => Ok(vec![wire::state_to_json(&st)]),
+                    Err(e) => Ok(vec![wire::restore_error_to_json(&e)]),
+                }
             }
             _ => Err(AbiError::UnhandledOperation),
         }
@@ -626,7 +753,32 @@ impl VariantLogic for FixtureLogic {
         if params.contract_version != "1.0" {
             return Err(BindFailure::ContractMismatch);
         }
-        Ok(format!("b{}", self.binds))
+        let binding_id = format!("b{}", self.binds);
+        if self.mode == Mode::Control {
+            // The bind names the variant (`BindParams::variant` is the
+            // canonical `VersionedRef` Json — `semantic_id`); `--variant`
+            // overrides. `variant_for` is the same registry `open.rs`
+            // consults — an unknown name is `not_installed`, never a
+            // silent `react/minimal` substitute.
+            let named = self
+                .control_variant
+                .clone()
+                .or_else(|| {
+                    params
+                        .variant
+                        .get("semantic_id")
+                        .and_then(Json::as_str)
+                        .map(str::to_string)
+                })
+                .unwrap_or_else(|| "hh/react-steerable".to_string());
+            let Some(variant) = hh_control::react::variant_for(&named) else {
+                eprintln!("hh-plugin-fixture: unknown control variant {named}");
+                return Err(BindFailure::NotInstalled);
+            };
+            self.control
+                .insert(binding_id.clone(), ControlBinding { variant, ctx: None });
+        }
+        Ok(binding_id)
     }
 
     fn invoke(
@@ -647,6 +799,11 @@ impl VariantLogic for FixtureLogic {
         // select_parent`, the class's contract operations.
         if self.mode == Mode::Proposer {
             return self.proposer(&params.operation, &params.inputs);
+        }
+        // The `control` lane (R2.6) — the `control_strategy` contract's
+        // method set over canonical `hh_control::wire` documents.
+        if self.mode == Mode::Control {
+            return self.control_invoke(params);
         }
         // The class surface — only declared operations are legal.
         if !matches!(

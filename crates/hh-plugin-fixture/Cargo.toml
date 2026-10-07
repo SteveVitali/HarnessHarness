@@ -14,3 +14,4 @@ path = "src/main.rs"
 hh-wire = { path = "../hh-wire" }
 hh-embed-schema = { path = "../hh-embed-schema" }
 hh-varhost = { path = "../hh-varhost" }
+hh-control = { path = "../hh-control" }

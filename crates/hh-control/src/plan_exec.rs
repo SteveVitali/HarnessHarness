@@ -20,7 +20,7 @@
 use std::collections::BTreeMap;
 
 use hh_ledger::event::EventEnvelope;
-use hh_ontology::control::{ControlBoundary, DecisionPoint, Owner, StopReason};
+use hh_ontology::control::{CancelledBy, ControlBoundary, DecisionPoint, Owner, StopReason};
 use hh_wire::json::Json;
 
 use crate::state::{ControlState, PlanCursor};
@@ -29,7 +29,8 @@ use crate::strategy::{
     PlanProvenance, RestoreError, StrategyParams, VariantRequires,
 };
 use crate::vocab::{
-    ActMode, ControlDecision, Cue, DecisionKind, ExpectedOutput, OnPartial, WaitUntil,
+    ActMode, ControlDecision, Cue, DecisionKind, EnvelopeSignal, ExpectedOutput, HumanInput,
+    OnPartial, WaitUntil,
 };
 
 /// The `plan_execute` variant ref.
@@ -604,6 +605,28 @@ impl ControlStrategy for PlanExecute {
                 }
             }
 
+            // The stop protocol lands even mid-plan — the envelope's
+            // `cancelled` proposal is the code-owned answer, never an
+            // improvised step (the parked check above already lets the
+            // pair through an open-effect window).
+            Cue::HumanInput(HumanInput::Interrupt) => self.stop(
+                state,
+                StopReason::Cancelled {
+                    by: CancelledBy::Principal,
+                },
+            ),
+            Cue::EnvelopeSignal(EnvelopeSignal::CancelRequested { by }) => self.stop(
+                state,
+                StopReason::Cancelled {
+                    by: CancelledBy::parse(by).unwrap_or(CancelledBy::Principal),
+                },
+            ),
+
+            // A steer/follow-up the plan did not sequence — the plan owns
+            // the step order (the variant declares no steering, so the
+            // `steer` op refuses upstream; a `woken{steer}` that still
+            // arrives — replayed, minted under a stale arm — parks rather
+            // than improvising a re-plan outside the declared procedure).
             // Everything else parks — a plan_execute run awaiting a cue the
             // plan did not sequence waits rather than improvising (I3
             // totality is still honoured: every cue maps to a row).

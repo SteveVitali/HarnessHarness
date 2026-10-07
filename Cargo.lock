@@ -584,6 +584,7 @@ dependencies = [
 name = "hh-plugin-fixture"
 version = "0.0.1"
 dependencies = [
+ "hh-control",
  "hh-embed-schema",
  "hh-varhost",
  "hh-wire",
@@ -687,6 +688,7 @@ version = "0.0.1"
 dependencies = [
  "hh-containment",
  "hh-context",
+ "hh-control",
  "hh-embed-schema",
  "hh-env",
  "hh-fleet",

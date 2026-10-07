@@ -713,6 +713,33 @@ impl<S: ControlStrategy> Driver<S> {
                     .map(str::to_string)
             })
             .collect();
+        // The alloc watermark — `{tag}-{n}` ids share one counter; the
+        // durable prefix's max `n` continues numbering so a resumed
+        // driver's first `decision` does not re-mint `d-1` over the row
+        // the pre-crash writer already committed (the same rule
+        // `replay_from` applies over a seeded prefix — CC1).
+        let mut next_id = 0u64;
+        for e in sink.prefix() {
+            if let Some((_, n)) = e.event_id.rsplit_once('-') {
+                if let Ok(v) = n.parse::<u64>() {
+                    next_id = next_id.max(v);
+                }
+            }
+        }
+        let decision_events: Vec<String> = sink
+            .prefix()
+            .iter()
+            .filter(|e| e.class == "control.decision")
+            .map(|e| e.event_id.clone())
+            .collect();
+        let last_decision_ref = decision_events.last().map(|id| EventRef {
+            run_id: sink
+                .prefix()
+                .first()
+                .map(|e| e.run_id.clone())
+                .unwrap_or_default(),
+            event_id: id.clone(),
+        });
         let mut driver = Driver {
             envelope,
             envelope_state,
@@ -720,10 +747,10 @@ impl<S: ControlStrategy> Driver<S> {
             state,
             inbox: std::collections::VecDeque::new(),
             now_ms: 0,
-            next_id: 0,
-            decision_events: vec![],
+            next_id,
+            decision_events,
             compute_records,
-            last_decision_ref: None,
+            last_decision_ref,
             submission: None,
             config,
             stop_pending: None,
