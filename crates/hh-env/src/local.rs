@@ -8,7 +8,6 @@
 //! *reports* capture items + a terminal report (I-3).
 
 use std::collections::BTreeSet;
-use std::io::Read;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -256,69 +255,133 @@ fn drain_child(
     sink: &mut dyn FnMut(ExecutorSignal),
     token: &str,
 ) -> DrainOutcome {
-    let mut so = child.stdout.take();
-    let mut se = child.stderr.take();
-    let mut buf = [0u8; 8192];
+    // One reader thread per pipe. A blocking `read` in this loop would
+    // starve the deadline check for a child that never writes — the
+    // hanging-tool case the deadline exists for (DF-S1.20-1: env owns the
+    // kill half). `env_clear`d children carry no threads of their own;
+    // the readers are pure pump plumbing over std channels.
+    let (tx, rx) = std::sync::mpsc::channel::<(u8, Vec<u8>)>();
+    let mut readers = Vec::new();
+    fn pump(
+        tag: u8,
+        mut s: impl std::io::Read + Send + 'static,
+        tx: std::sync::mpsc::Sender<(u8, Vec<u8>)>,
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            let mut buf = [0u8; 8192];
+            loop {
+                match s.read(&mut buf) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => {
+                        if tx.send((tag, buf[..n].to_vec())).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        })
+    }
+    if let Some(so) = child.stdout.take() {
+        readers.push(pump(0, so, tx.clone()));
+    }
+    if let Some(se) = child.stderr.take() {
+        readers.push(pump(1, se, tx.clone()));
+    }
+    drop(tx);
+    let mut drained = false; // both readers finished (channel closed)
+    let mut exit: Option<DrainOutcome> = None;
     loop {
-        if let Some(d) = deadline {
-            if Instant::now() >= d {
-                let _ = child.kill();
-                return DrainOutcome::Timeout;
+        if exit.is_none() {
+            if let Some(d) = deadline {
+                if Instant::now() >= d {
+                    // The env-owned kill — SIGKILL the child, reap it.
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    exit = Some(DrainOutcome::Timeout);
+                }
             }
         }
-        let mut progressed = false;
-        if let Some(s) = so.as_mut() {
-            match s.read(&mut buf) {
-                Ok(0) => {
-                    so = None;
-                }
-                Ok(n) => {
-                    progressed = true;
-                    push_capped(out, &buf[..n], retain_cap, truncated, dropped, seen);
+        // Drain buffered output — after a kill/exit the readers flush the
+        // pipes to EOF, so the last chunks still land (never dropped
+        // silently: `dropped`/`truncated` account what the cap shed).
+        while let Ok((tag, chunk)) = rx.try_recv() {
+            let (buf, name) = if tag == 0 {
+                (&mut *out, "stdout")
+            } else {
+                (&mut *err, "stderr")
+            };
+            push_capped(buf, &chunk, retain_cap, truncated, dropped, seen);
+            sink(ExecutorSignal {
+                token: token.to_string(),
+                kind: CaptureKind::OutputChunk {
+                    stream: name.to_string(),
+                    data: String::from_utf8_lossy(&chunk).to_string(),
+                },
+            });
+        }
+        if !drained {
+            match rx.try_recv() {
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => drained = true,
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Ok((tag, chunk)) => {
+                    let (buf, name) = if tag == 0 {
+                        (&mut *out, "stdout")
+                    } else {
+                        (&mut *err, "stderr")
+                    };
+                    push_capped(buf, &chunk, retain_cap, truncated, dropped, seen);
                     sink(ExecutorSignal {
                         token: token.to_string(),
                         kind: CaptureKind::OutputChunk {
-                            stream: "stdout".to_string(),
-                            data: String::from_utf8_lossy(&buf[..n]).to_string(),
+                            stream: name.to_string(),
+                            data: String::from_utf8_lossy(&chunk).to_string(),
                         },
                     });
                 }
-                Err(_) => so = None,
             }
         }
-        if let Some(s) = se.as_mut() {
-            match s.read(&mut buf) {
-                Ok(0) => {
-                    se = None;
-                }
-                Ok(n) => {
-                    progressed = true;
-                    push_capped(err, &buf[..n], retain_cap, truncated, dropped, seen);
-                    sink(ExecutorSignal {
-                        token: token.to_string(),
-                        kind: CaptureKind::OutputChunk {
-                            stream: "stderr".to_string(),
-                            data: String::from_utf8_lossy(&buf[..n]).to_string(),
-                        },
+        if exit.is_none() {
+            match child.try_wait() {
+                Ok(Some(st)) => {
+                    exit = Some(match st.code() {
+                        Some(code) => DrainOutcome::Exited(code),
+                        None => DrainOutcome::Killed("kill"),
                     });
                 }
-                Err(_) => se = None,
+                Ok(None) => {}
+                Err(_) => exit = Some(DrainOutcome::Killed("kill")),
             }
         }
-        match child.try_wait() {
-            Ok(Some(st)) => {
-                if let Some(code) = st.code() {
-                    return DrainOutcome::Exited(code);
-                }
-                return DrainOutcome::Killed("kill");
-            }
-            Ok(None) => {}
-            Err(_) => return DrainOutcome::Killed("kill"),
+        if exit.is_some() && drained {
+            break;
         }
-        if !progressed {
-            std::thread::sleep(Duration::from_millis(1));
+        // `recv_timeout` is the poll — it wakes on a chunk, never blocks
+        // past a ms of quiet, so a silent child still reaches the deadline
+        // check every iteration.
+        match rx.recv_timeout(Duration::from_millis(1)) {
+            Ok((tag, chunk)) => {
+                let (buf, name) = if tag == 0 {
+                    (&mut *out, "stdout")
+                } else {
+                    (&mut *err, "stderr")
+                };
+                push_capped(buf, &chunk, retain_cap, truncated, dropped, seen);
+                sink(ExecutorSignal {
+                    token: token.to_string(),
+                    kind: CaptureKind::OutputChunk {
+                        stream: name.to_string(),
+                        data: String::from_utf8_lossy(&chunk).to_string(),
+                    },
+                });
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => drained = true,
         }
     }
+    for r in readers {
+        let _ = r.join();
+    }
+    exit.unwrap_or(DrainOutcome::Killed("kill"))
 }
 
 /// Append to `buf` up to the retain cap (overflow → `truncated`, the excess

@@ -385,6 +385,13 @@ impl EmbedService {
         let drained = self.store.wakeup_drain(&run_id).map_err(ledger_err)?;
         let mut fresh = Vec::new();
         for w in drained {
+            // `steer` deliveries are the `steer{mode: next_turn}` op's
+            // durable queue — they enter `decide` through `drive`, never a
+            // surface poll (the caller-side `delivered_wokens` set is
+            // shared, so draining one here would swallow the cue).
+            if w.delivery_mode == hh_ledger::wakeup::DeliveryMode::Steer {
+                continue;
+            }
             let key = format!("{}\u{0}{}", w.subscription_id, w.occurrence_key);
             if self.session_mut(session_id)?.delivered_wokens.insert(key) {
                 fresh.push(w);
@@ -1057,7 +1064,6 @@ mod r2_3_tests {
                     hh_control::strategy::SteerMode::QueueNextTurn,
                     hh_control::strategy::ConcurrentInput::QueueOnly,
                 ),
-                pending_steer: None,
                 env_json: Json::Null,
                 env_handle_id: None,
                 host_caps: vec![],
