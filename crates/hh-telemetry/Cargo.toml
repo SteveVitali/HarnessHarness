@@ -19,3 +19,6 @@ hh-ledger = { path = "../hh-ledger" }
 # `measurement.cost.attributed` payload contract live here (the one schema source,
 # CC7) — cost_view decodes them, never redefines them.
 hh-budget = { path = "../hh-budget" }
+# The `belief_divergence` fold lives in hh-verification (the probe record's
+# one schema source — CC7); telemetry maps envelopes → RowView.
+hh-verification = { path = "../hh-verification" }

@@ -426,6 +426,10 @@ impl CoordinationPolicy {
             crate::types::MergePolicy::SingleWriter => 4,
             crate::types::MergePolicy::ParentDecides => 3,
             crate::types::MergePolicy::ThreeWayText => 2,
+            // `three_way_text{ast}` ranks with `line` — both are diff3
+            // conflict-recorders, never side-pickers (the tokenizer
+            // member changes collision granularity, not permissiveness).
+            crate::types::MergePolicy::ThreeWayTextAst { .. } => 2,
             crate::types::MergePolicy::ValidatorSelected => 1,
         };
         for (k, o) in &self.merge_policies {

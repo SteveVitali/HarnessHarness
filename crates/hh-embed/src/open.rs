@@ -2199,6 +2199,7 @@ impl EmbedService {
                     .then(|| hh_control::plan_exec::PLAN_SURFACE_ID.to_string()),
                 compute_policy_ref: compute_variant.to_string(),
                 compute_facts,
+                compute_rules: doc.and_then(compute_rules_for),
                 ..DriverConfig::default()
             },
         )
@@ -2289,12 +2290,17 @@ impl EmbedService {
         // The resume re-projects the scheduler's declared facts from the
         // persisted definition — the same fold `arm_driver` runs (the
         // sealed doc is the arm record, never a side channel).
-        let mut compute_facts = manifest
+        let sealed_def = manifest
             .harness_def_ref
             .as_deref()
-            .and_then(|r| self.persisted_definition(r).ok())
+            .and_then(|r| self.persisted_definition(r).ok());
+        let mut compute_facts = sealed_def
+            .as_ref()
             .map(|sealed| compute_facts_for(&sealed.document))
             .unwrap_or_default();
+        let compute_rules = sealed_def
+            .as_ref()
+            .and_then(|sealed| compute_rules_for(&sealed.document));
         if let Some(tv) = task_contract.as_ref().and_then(|c| c.task_value.as_ref()) {
             compute_facts.task_value = Some(hh_control::compute::TaskValueFact::from_task_value(
                 &task_contract
@@ -2327,6 +2333,7 @@ impl EmbedService {
                     .then(|| hh_control::plan_exec::PLAN_SURFACE_ID.to_string()),
                 compute_policy_ref: arm.compute_variant.clone(),
                 compute_facts,
+                compute_rules,
                 ..DriverConfig::default()
             },
         )
@@ -2593,10 +2600,56 @@ fn compute_facts_for(doc: &hh_hir::document::HirDocument) -> hh_control::compute
                 facts.task_value = p
                     .get("task_value")
                     .and_then(hh_control::compute::TaskValueFact::from_json);
+                // S5.5 prior-cell coordinates + declared prior seeds —
+                // `bandit`/`surface_prior` refuse without `profile_ref`
+                // (AC-F4-12's unmatched-cell rule).
+                facts.profile_ref = p
+                    .get("profile_ref")
+                    .and_then(Json::as_str)
+                    .map(str::to_string);
+                facts.snapshot_fingerprint = p
+                    .get("snapshot_fingerprint")
+                    .and_then(Json::as_str)
+                    .map(str::to_string);
+                facts.task_class = p
+                    .get("task_class")
+                    .and_then(Json::as_str)
+                    .map(str::to_string);
+                if let Some(Json::Arr(seeds)) = p.get("priors") {
+                    facts.priors = seeds
+                        .iter()
+                        .filter_map(hh_control::compute::PriorFact::from_json)
+                        .collect();
+                }
             }
         }
     }
     facts
+}
+
+/// `compute_rules_for(doc)` — the definition-declared `RulesConfig` (the
+/// `rules` member of the bound `compute_policy` slot params: conditioned
+/// thresholds + `delegation_rules[]` — S5.5's profile-conditioned
+/// delegation rules with `debt_ref` per rule). Absent ⇒ `None` (the
+/// driver binds the default config).
+pub(crate) fn compute_rules_for(
+    doc: &hh_hir::document::HirDocument,
+) -> Option<hh_control::compute::RulesConfig> {
+    for n in &doc.nodes {
+        if let KindRecord::AgentProcess(a) = &n.semantic {
+            if let AgentProcessBody::Native(np) = &a.body {
+                let params = match np.slots.get("compute_policy") {
+                    Some(SlotBindings::One(b)) => Some(&b.params),
+                    Some(SlotBindings::Many(v)) => v.first().map(|b| &b.params),
+                    _ => None,
+                };
+                if let Some(rc) = params.and_then(|p| p.get("rules")) {
+                    return hh_control::compute::RulesConfig::from_json(rc);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// The strategy instance the bound `control_strategy` variant selects —

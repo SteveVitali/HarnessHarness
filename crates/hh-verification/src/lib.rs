@@ -45,6 +45,7 @@
 //! evaluation, judged validators/critics and the `probe`/`resume` halves are
 //! spec-staged to Stage 2/3/4 — tracked as DF-S1.21-* rows.
 
+pub mod belief_probe;
 pub mod bind;
 pub mod claims;
 pub mod critic_rt;

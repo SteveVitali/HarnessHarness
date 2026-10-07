@@ -46,6 +46,11 @@ pub enum ProfileRuleKind {
     CachingMarkers,
     /// `procedure_target` — owns `compile_hint`; admitted at Phase 2 (ADR-0085; CF-316).
     ProcedureTarget,
+    /// `belief_probe` — a per-step belief probe rule (C2/Stage 5; §5f
+    /// R-2.7.2b: profile-owned `ProfileRule`s with debt records — OQ-274's
+    /// ratified home). `params` carry `{probe_id, elicitation,
+    /// compares_to}`; `requires_observability = model_io` binds at link.
+    BeliefProbe,
 }
 
 impl ProfileRuleKind {
@@ -65,6 +70,7 @@ impl ProfileRuleKind {
             ProfileRuleKind::SamplingDefaults => "sampling_defaults",
             ProfileRuleKind::CachingMarkers => "caching_markers",
             ProfileRuleKind::ProcedureTarget => "procedure_target",
+            ProfileRuleKind::BeliefProbe => "belief_probe",
         }
     }
 
@@ -84,6 +90,7 @@ impl ProfileRuleKind {
             "sampling_defaults" => ProfileRuleKind::SamplingDefaults,
             "caching_markers" => ProfileRuleKind::CachingMarkers,
             "procedure_target" => ProfileRuleKind::ProcedureTarget,
+            "belief_probe" => ProfileRuleKind::BeliefProbe,
             _ => return None,
         })
     }
@@ -103,6 +110,7 @@ impl ProfileRuleKind {
         ProfileRuleKind::SamplingDefaults,
         ProfileRuleKind::CachingMarkers,
         ProfileRuleKind::ProcedureTarget,
+        ProfileRuleKind::BeliefProbe,
     ];
 }
 

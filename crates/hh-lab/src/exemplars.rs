@@ -2224,6 +2224,11 @@ pub struct DelegationPins {
     /// The coding-suite environment level ref (Stage-4 first
     /// execution).
     pub environment_level_ref: String,
+    /// The research/long-context suite environment level ref — the
+    /// Stage-5 axis (the recipe's `{coding suite, research/long-context
+    /// suite}` product; H2 reads the delegation benefit as a function of
+    /// context length).
+    pub research_environment_level_ref: String,
     /// The sealed artifacts the five topology arms bind (same order as
     /// `topology_refs`).
     pub artifacts: (Ref, Ref, Ref, Ref, Ref),
@@ -2259,14 +2264,20 @@ fn delegation_match(pricing: &PricingTableRef) -> MatchSpec {
     }
 }
 
-/// `lab/delegation-v1` at its Stage-4 first-execution size (ADR-0186
-/// D6): `comparative`, `full_factorial` over `topology ∈ {T0, T1(2),
-/// T1(4), T2, T3(2)}` (component-level) × two model families, one coding
-/// suite held-out split, `replicates_per_cell = 5` (≥ 5 seeds),
-/// `MatchSpec{matched_total, tolerance 0.10}` — the negative-literature
-/// null hypothesis H0 (T0 vs every delegating topology at matched
-/// total) with primaries `{capability.task_success,
-/// coordination.lost_write_count, efficiency.cost_of_pass}`.
+/// `lab/delegation-v1` at its Stage-5 size (ADR-0186 D6): `comparative`,
+/// `full_factorial` over `topology ∈ {T0, T1(2), T1(4), T2, T3(2)}`
+/// (component-level) × two model families × `{coding suite,
+/// research/long-context suite}` on each suite's held-out split,
+/// `replicates_per_cell = 5` (≥ 5 seeds), `MatchSpec{matched_total,
+/// tolerance 0.10}` as the primary contrast plus the recipe's second arm
+/// set — `matched_cap` on `time.wall_ms` over the same design points
+/// (a cross-mode `compare` is `IncommensurableMatch`). The hypotheses:
+/// H0 — no headline difference between T0 and any delegating topology at
+/// matched total; H1 — T1 lowers `time.wall_ms` at equal tokens where
+/// subtasks are independent; H2 — the delegation benefit grows with
+/// context length (the research-suite read). Primaries
+/// `{capability.task_success, coordination.lost_write_count,
+/// efficiency.cost_of_pass}`.
 pub fn delegation_v1(
     pins: &ExemplarPins,
     own: &DelegationPins,
@@ -2275,8 +2286,9 @@ pub fn delegation_v1(
     let prereg = pre_registration(
         registered_at,
         "H0 — no headline difference between T0 and any delegating topology at \
-         matched total on the coding suite; H1 — T1 lowers time.wall_ms at equal \
-         tokens where subtasks are independent",
+         matched total; H1 — T1 lowers time.wall_ms at equal tokens where \
+         subtasks are independent; H2 — the delegation benefit grows with \
+         context length (the research/long-context suite read)",
         &[
             "capability.task_success",
             "coordination.lost_write_count",
@@ -2301,9 +2313,15 @@ pub fn delegation_v1(
             _ => own.artifacts.4.clone(),
         }
     };
-    // `full_factorial` — the arms are the complete varied-factor
-    // product: topology(5) × model_snapshot(2) (the single-level
-    // environment factor rides every arm's assignment).
+    // `full_factorial` — the matched_total arms are the complete
+    // varied-factor product: topology(5) × model_snapshot(2) ×
+    // environment(2) (the second suite is the Stage-5
+    // research/long-context axis). Every arm carries `inference_budget`
+    // so the M3 total `search + eval + inference` is matched.
+    let env_levels: &[(&str, &str)] = &[
+        ("coding-suite", "coding suite"),
+        ("research-longctx", "research/long-context suite"),
+    ];
     let model_levels: &[(&str, &str)] = &[
         ("model:a", &own.model_family_refs.0),
         ("model:b", &own.model_family_refs.1),
@@ -2311,19 +2329,49 @@ pub fn delegation_v1(
     let mut arms: Vec<ArmSpec> = Vec::new();
     for (tid, _r, tlabel) in topology_levels {
         for (mid, _mr) in model_levels {
-            arms.push(arm(
-                &format!("arm:{tid}:{mid}"),
-                &format!("delegation {tlabel} × {mid}"),
-                &[
-                    ("topology", tid),
-                    ("model_snapshot", mid),
-                    ("environment", "coding-suite"),
-                ],
-                delegation_match(&own.pricing_table_ref),
-                &artifact_for(tid),
-                pins,
-            ));
-            arms.last_mut().unwrap().inference_budget = Some(own.inference_budget_ref.clone());
+            for (eid, _) in env_levels {
+                arms.push(arm(
+                    &format!("arm:{tid}:{mid}:{eid}"),
+                    &format!("delegation {tlabel} × {mid} on {eid}"),
+                    &[
+                        ("topology", tid),
+                        ("model_snapshot", mid),
+                        ("environment", eid),
+                    ],
+                    delegation_match(&own.pricing_table_ref),
+                    &artifact_for(tid),
+                    pins,
+                ));
+                arms.last_mut().unwrap().inference_budget = Some(own.inference_budget_ref.clone());
+            }
+        }
+    }
+    // The recipe's second arm set — `matched_cap` on `time.wall_ms` over
+    // the same design points (the H1 time read). A different-mode arm at
+    // an occupied point is its own comparand group (ADR-0156 D2); a
+    // cross-mode `compare` is `IncommensurableMatch`.
+    let wall_cap = MatchSpec {
+        dimensions: vec![hh_ontology::dimensions::DimensionId::TimeWallMs],
+        mode: MatchMode::MatchedCap,
+        ..delegation_match(&own.pricing_table_ref)
+    };
+    for (tid, _r, tlabel) in topology_levels {
+        for (mid, _) in model_levels {
+            for (eid, _) in env_levels {
+                arms.push(arm(
+                    &format!("arm:{tid}:{mid}:{eid}:wall"),
+                    &format!("delegation {tlabel} × {mid} on {eid} — wall-clock cap"),
+                    &[
+                        ("topology", tid),
+                        ("model_snapshot", mid),
+                        ("environment", eid),
+                    ],
+                    wall_cap.clone(),
+                    &artifact_for(tid),
+                    pins,
+                ));
+                arms.last_mut().unwrap().inference_budget = Some(own.inference_budget_ref.clone());
+            }
         }
     }
     let mut spec = ExperimentSpec {
@@ -2357,11 +2405,14 @@ pub fn delegation_v1(
                     name: "environment".to_string(),
                     kind: FactorKind::Environment,
                     granularity: None,
-                    levels: vec![decl_level(
-                        "coding-suite",
-                        &own.environment_level_ref,
-                        "Stage-3 coding suite",
-                    )],
+                    levels: vec![
+                        decl_level("coding-suite", &own.environment_level_ref, "coding suite"),
+                        decl_level(
+                            "research-longctx",
+                            &own.research_environment_level_ref,
+                            "research/long-context suite",
+                        ),
+                    ],
                     role: None,
                 },
             ],
@@ -2405,11 +2456,14 @@ pub fn delegation_v1(
                 kind: FactorKind::Environment,
                 granularity: None,
                 role: Some("blocking".to_string()),
-                levels: vec![level(
-                    "coding-suite",
-                    &own.environment_level_ref,
-                    "Stage-3 coding suite",
-                )],
+                levels: vec![
+                    level("coding-suite", &own.environment_level_ref, "coding suite"),
+                    level(
+                        "research-longctx",
+                        &own.research_environment_level_ref,
+                        "research/long-context suite",
+                    ),
+                ],
             },
         ],
         arms,
@@ -2437,19 +2491,27 @@ pub fn delegation_v1(
 
 /// The level pins `lab/value-of-compute-v1` binds, beyond
 /// [`ExemplarPins`]. `compute_policy` is a component-level factor; the
-/// `bandit`/`predictor` levels land at Stage 5 (the recipe's
-/// `matched_total` rule — ADR-0041 M3 — makes a `search_budget > 0` arm
-/// `IncommensurableMatch` under `matched_cap`, never silently admitted).
+/// `bandit` level lands at Stage 5 (the recipe's `matched_total` rule —
+/// ADR-0041 M3 — makes a `search_budget > 0` arm `IncommensurableMatch`
+/// under `matched_cap`, never silently admitted; `predictor` is C4).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValueOfComputePins {
     /// `compute_policy` level refs — `(static, uniform, rules)` order.
     pub policy_refs: (String, String, String),
+    /// The `bandit` level ref (Stage-5 fourth level).
+    pub bandit_policy_ref: String,
     /// The two pinned model-family level refs.
     pub model_family_refs: (String, String),
     /// The coding-suite environment level ref.
     pub environment_level_ref: String,
-    /// The sealed artifacts the three policy arms bind (same order).
+    /// The terminal-suite environment level ref — the recipe's
+    /// `{coding suite, terminal suite}` axis (ADR-0144).
+    pub terminal_environment_level_ref: String,
+    /// The sealed artifacts the three `matched_cap` policy arms bind
+    /// (same order).
     pub artifacts: (Ref, Ref, Ref),
+    /// The artifact the `bandit` arms bind.
+    pub bandit_artifact: Ref,
     /// The artifact the `iso_cost` arm binds.
     pub iso_artifact: Ref,
     /// The pinned pricing table — mandatory on the `iso_cost` arm and
@@ -2458,6 +2520,12 @@ pub struct ValueOfComputePins {
     /// The second `eval_budget` ref — the recipe's `budget ∈ {tight,
     /// wide}` axis.
     pub eval_budget_wide: String,
+    /// The bandit warm-up `search_budget` ref — `> 0`, comparable only
+    /// under `matched_total` (M3).
+    pub warmup_search_budget_ref: String,
+    /// The pinned `inference_budget` ref the `matched_total` arms carry
+    /// (`search + eval + inference` sums equal across the group).
+    pub inference_budget_ref: String,
 }
 
 /// `lab/value-of-compute-v1`'s primary contrast — `matched_cap` on
@@ -2476,16 +2544,23 @@ fn value_of_compute_match(pricing: &PricingTableRef) -> MatchSpec {
     }
 }
 
-/// `lab/value-of-compute-v1` at its Stage-4 first-execution size
-/// (ADR-0190 D1–D6): `comparative`, `full_factorial` over
-/// `compute_policy ∈ {static, uniform, rules}` (component-level) × two
-/// model families × `eval_budget ∈ {tight, wide}` on the coding suite
-/// held-out split, `replicates_per_cell = 5`, primaries
+/// `lab/value-of-compute-v1` at its Stage-5 size (ADR-0190 D1–D6):
+/// `comparative`, `full_factorial` over `compute_policy ∈ {static,
+/// uniform, rules, bandit}` (component-level) × two model families ×
+/// `{coding suite, terminal suite}` × `eval_budget ∈ {tight, wide}` on
+/// the held-out split, `replicates_per_cell = 5`, primaries
 /// `{capability.task_success, efficiency.cost_of_pass,
-/// scheduling.overhead}` (Holm-controlled), plus one `iso_cost` arm for
-/// the `cost_of_pass` frontier (ADR-0159). H0 — `rules` vs `static` no
+/// scheduling.overhead}` (Holm-controlled). The `matched_cap` product
+/// is the covering comparand group (an unfunded `bandit` is not a
+/// searched arm — it cold-starts through `bandit.cold_start`); the
+/// *searched* warm-up contrast binds a second arm set under
+/// `matched_total` (`{rules, bandit} × models × suites` at tight —
+/// M3 equal totals), and a searched arm under `matched_cap` is
+/// `IncommensurableMatch` (AC-F4-12). One `iso_cost` arm rides the
+/// `cost_of_pass` frontier (ADR-0159). H0 — `rules` vs `static` no
 /// headline difference at matched cap; H2 — the budget × policy
-/// contrast is the registered interaction.
+/// contrast; H3 — `bandit` ≥ `rules` only under `matched_total` once
+/// its warm-up is funded.
 pub fn value_of_compute_v1(
     pins: &ExemplarPins,
     own: &ValueOfComputePins,
@@ -2495,7 +2570,8 @@ pub fn value_of_compute_v1(
         registered_at,
         "H0 — no headline difference rules vs static at matched cap; \
          H1 — rules spends less than uniform at equal task_success; \
-         H2 — larger rules effect at the tight budget (budget × policy contrast)",
+         H2 — larger rules effect at the tight budget (budget × policy contrast); \
+         H3 — bandit ≥ rules only under matched_total once its warm-up is funded",
         &[
             "capability.task_success",
             "efficiency.cost_of_pass",
@@ -2504,46 +2580,62 @@ pub fn value_of_compute_v1(
         &["eval_budget × compute_policy"],
         pins,
     );
+    // The declared `compute_policy` factor levels — `bandit` joins at
+    // Stage 5 (the recipe's fourth value; `predictor` is C4).
     let policy_levels: &[(&str, &str, &str)] = &[
         ("static", &own.policy_refs.0, "static"),
         ("uniform", &own.policy_refs.1, "uniform"),
         ("rules", &own.policy_refs.2, "rules"),
+        ("bandit", &own.bandit_policy_ref, "bandit"),
     ];
     let artifact_for = |pid: &str| -> Ref {
         match pid {
             "static" => own.artifacts.0.clone(),
             "uniform" => own.artifacts.1.clone(),
+            "bandit" => own.bandit_artifact.clone(),
             _ => own.artifacts.2.clone(),
         }
     };
-    // `full_factorial` — the matched_cap arms are the complete product:
-    // compute_policy(3) × model_snapshot(2) × eval_budget(2).
+    // `full_factorial` — the `matched_cap` product covers the declared
+    // factor space exactly once (the primary contrast; ADR-0156 D2's
+    // covering-group rule): compute_policy(4) × model_snapshot(2) ×
+    // environment(2) × eval_budget(2). The `bandit` rows carry the
+    // shared zero-cap `search_budget` like every matched_cap arm — an
+    // unfunded bandit is *not* a searched arm (it cold-starts through
+    // `bandit.cold_start`); the searched warm-up contrast binds
+    // `matched_total` below.
     let model_levels: &[(&str, &str)] = &[
         ("model:a", &own.model_family_refs.0),
         ("model:b", &own.model_family_refs.1),
     ];
+    let env_levels: &[(&str, &str)] = &[
+        ("coding-suite", &own.environment_level_ref),
+        ("terminal-suite", &own.terminal_environment_level_ref),
+    ];
     let mut arms: Vec<ArmSpec> = Vec::new();
     for (pid, _r, label) in policy_levels {
         for (mid, _mr) in model_levels {
-            for (bid, budget_ref) in [
-                ("tight", &pins.eval_budget),
-                ("wide", &own.eval_budget_wide),
-            ] {
-                let mut a = arm(
-                    &format!("arm:{pid}:{mid}:{bid}"),
-                    &format!("{label} × {mid} at {bid} budget"),
-                    &[
-                        ("compute_policy", pid),
-                        ("model_snapshot", mid),
-                        ("eval_budget", bid),
-                        ("environment", "coding-suite"),
-                    ],
-                    value_of_compute_match(&own.pricing_table_ref),
-                    &artifact_for(pid),
-                    pins,
-                );
-                a.eval_budget = budget_ref.clone();
-                arms.push(a);
+            for (eid, _) in env_levels {
+                for (bid, budget_ref) in [
+                    ("tight", &pins.eval_budget),
+                    ("wide", &own.eval_budget_wide),
+                ] {
+                    let mut a = arm(
+                        &format!("arm:{pid}:{mid}:{eid}:{bid}"),
+                        &format!("{label} × {mid} on {eid} at {bid} budget"),
+                        &[
+                            ("compute_policy", pid),
+                            ("model_snapshot", mid),
+                            ("eval_budget", bid),
+                            ("environment", eid),
+                        ],
+                        value_of_compute_match(&own.pricing_table_ref),
+                        &artifact_for(pid),
+                        pins,
+                    );
+                    a.eval_budget = budget_ref.clone();
+                    arms.push(a);
+                }
             }
         }
     }
@@ -2574,6 +2666,56 @@ pub fn value_of_compute_v1(
     );
     iso.eval_budget = pins.eval_budget.clone();
     arms.push(iso);
+
+    // The Stage-5 `bandit` arm set — `matched_total` only (ADR-0041 M3):
+    // the warm-up `search_budget` is real spend a cap-only contrast
+    // cannot see, so a searched bandit is `IncommensurableMatch` under
+    // `matched_cap` and binds here. `rules` companions at the same
+    // design points make H3 a same-mode compare. M3 sums
+    // `search + eval + inference` per arm across the *whole* mode group,
+    // so the group pins one eval budget (tight) and varies the recipe's
+    // suite axis — equal totals by construction.
+    let matched_total = {
+        use hh_ontology::dimensions::DimensionId::*;
+        MatchSpec {
+            dimensions: vec![
+                TokensInputUncached,
+                TokensInputCacheRead,
+                TokensInputCacheWrite,
+                TokensOutputVisible,
+                TokensOutputReasoning,
+                Spend,
+            ],
+            mode: MatchMode::MatchedTotal,
+            tolerance_ppm: EXEMPLAR_TOLERANCE_PPM,
+            pricing_table_ref: Some(own.pricing_table_ref.clone()),
+            model_scope: ModelScope::SameSnapshot,
+            cache_policy: CachePolicy::ColdStart,
+            utilization_floor_ppm: None,
+        }
+    };
+    for pid in ["rules", "bandit"] {
+        for (mid, _mr) in model_levels {
+            for (eid, _) in env_levels {
+                let mut a = arm(
+                    &format!("arm:{pid}:{mid}:{eid}:total"),
+                    &format!("{pid} × {mid} on {eid} under matched_total"),
+                    &[
+                        ("compute_policy", pid),
+                        ("model_snapshot", mid),
+                        ("eval_budget", "tight"),
+                        ("environment", eid),
+                    ],
+                    matched_total.clone(),
+                    &artifact_for(pid),
+                    pins,
+                );
+                a.search_budget = Some(own.warmup_search_budget_ref.clone());
+                a.inference_budget = Some(own.inference_budget_ref.clone());
+                arms.push(a);
+            }
+        }
+    }
 
     let mut spec = ExperimentSpec {
         experiment_id: String::new(),
@@ -2606,11 +2748,14 @@ pub fn value_of_compute_v1(
                     name: "environment".to_string(),
                     kind: FactorKind::Environment,
                     granularity: None,
-                    levels: vec![decl_level(
-                        "coding-suite",
-                        &own.environment_level_ref,
-                        "Stage-3 coding suite",
-                    )],
+                    levels: vec![
+                        decl_level("coding-suite", &own.environment_level_ref, "coding suite"),
+                        decl_level(
+                            "terminal-suite",
+                            &own.terminal_environment_level_ref,
+                            "terminal suite",
+                        ),
+                    ],
                     role: None,
                 },
                 FactorDeclaration {
@@ -2664,11 +2809,14 @@ pub fn value_of_compute_v1(
                 kind: FactorKind::Environment,
                 granularity: None,
                 role: Some("blocking".to_string()),
-                levels: vec![level(
-                    "coding-suite",
-                    &own.environment_level_ref,
-                    "Stage-3 coding suite",
-                )],
+                levels: vec![
+                    level("coding-suite", &own.environment_level_ref, "coding suite"),
+                    level(
+                        "terminal-suite",
+                        &own.terminal_environment_level_ref,
+                        "terminal suite",
+                    ),
+                ],
             },
             FactorSpec {
                 name: "eval_budget".to_string(),
