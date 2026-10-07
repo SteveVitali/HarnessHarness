@@ -211,6 +211,11 @@ pub(crate) struct RunState {
     /// `scope.branch_id` event → `branch_id → IntraBranch` (S4.13; R-2.2.4).
     /// Same commit/rebuild discipline as `effects` (CC1).
     pub(crate) intra_branches: BTreeMap<String, crate::branch_ops::IntraBranch>,
+    /// The `lifecycle.contract.deprecated_use` fold — `(method, client) →
+    /// count` (S5.8; §7.4 rule 5; ADR-0178 D5). The removal gate's zero-uses
+    /// evidence is a rebuildable projection of the durable rows, never a
+    /// stored fact — same commit/rebuild discipline as `effects` (CC1).
+    pub(crate) deprecated_uses: BTreeMap<(String, String), u64>,
     /// The HLC node id — `Some` only on continuation/child runs (the
     /// `R-2.2.3⁰ᵇ` slice stamps `hlc` on their events; plain runs carry none —
     /// additive, CC8).
@@ -728,6 +733,7 @@ impl Store {
             scoped_leases: BTreeMap::new(),
             wakeups: BTreeMap::new(),
             intra_branches: BTreeMap::new(),
+            deprecated_uses: BTreeMap::new(),
             hlc_node: None,
             hlc_last: None,
             tree: crate::tree::CompactRange::default(),
@@ -762,6 +768,7 @@ impl Store {
             crate::leases::fold_lease_row(&mut state.scoped_leases, &env);
             crate::wakeup::fold_wakeup_row(&mut state.wakeups, &env);
             crate::branch_ops::fold_intra_branch(&mut state.intra_branches, &env);
+            fold_deprecated_use(&mut state, &env);
             if let Some(h) = env.hlc.as_deref().and_then(crate::hlc::Hlc::parse) {
                 state.hlc_last = Some(h);
             }
@@ -791,6 +798,32 @@ impl Store {
     /// collision; this is the probe the idempotent path uses).
     pub fn has_run(&self, run_id: &str) -> bool {
         self.runs.contains_key(run_id)
+    }
+
+    /// `deprecated_use_counts(run)` — the `(method, client) → use count`
+    /// projection over `lifecycle.contract.deprecated_use` rows (S5.8; §7.4
+    /// rule 5; ADR-0178 D5). Rebuildable from the WAL like every fold — the
+    /// removal gate's "zero uses across the registry" evidence is a sum over
+    /// these per-run maps, never a separately stored fact.
+    pub fn deprecated_use_counts(
+        &self,
+        run_id: &str,
+    ) -> Result<BTreeMap<(String, String), u64>, LedgerError> {
+        Ok(self.run(run_id)?.deprecated_uses.clone())
+    }
+
+    /// `deprecated_use_totals()` — the store-wide `(method, client) → count`
+    /// (every run's fold summed). The readiness report's removal-readiness
+    /// table reads this — a deprecated method is removable at the next major
+    /// only when the row it names is absent here (zero uses).
+    pub fn deprecated_use_totals(&self) -> BTreeMap<(String, String), u64> {
+        let mut out: BTreeMap<(String, String), u64> = BTreeMap::new();
+        for st in self.runs.values() {
+            for (k, n) in &st.deprecated_uses {
+                *out.entry(k.clone()).or_insert(0) += n;
+            }
+        }
+        out
     }
 
     /// Whether the run stamps `hlc` on its events (lineage-bearing or
@@ -912,6 +945,7 @@ impl Store {
             scoped_leases: BTreeMap::new(),
             wakeups: BTreeMap::new(),
             intra_branches: BTreeMap::new(),
+            deprecated_uses: BTreeMap::new(),
             // A continuation/child run stamps `hlc` on every event — seeded
             // causally above the lineage anchor's own stamp (ADR-0131 §5).
             hlc_node: manifest_has_lineage(&manifest).then(|| run_id.clone()),
@@ -3744,6 +3778,7 @@ fn commit_envelopes(
                 crate::leases::fold_lease_row(&mut state.scoped_leases, &env);
                 crate::wakeup::fold_wakeup_row(&mut state.wakeups, &env);
                 crate::branch_ops::fold_intra_branch(&mut state.intra_branches, &env);
+                fold_deprecated_use(state, &env);
                 match env.class.as_str() {
                     "lifecycle.run.finished" => state.finished = true,
                     "lifecycle.run.suspended" => state.suspended = true,
@@ -3815,6 +3850,35 @@ fn wal_tip_hash(state: &RunState) -> String {
 /// next append chains from genesis); every other durable row extends it. Runs
 /// identically on the commit path and WAL replay (CC1) — the head pointer is a
 /// rebuildable projection, never a stored fact.
+/// The `lifecycle.contract.deprecated_use{method, client}` fold — the
+/// deprecation use-counter (S5.8; §7.4 rule 5; ADR-0178 D5). `client` is the
+/// negotiated `ClientDescriptor{name, version, kind}` the *kernel* minted —
+/// the key is `name@version:kind`, so the removal gate counts uses per client
+/// build, not per caller-supplied string (a client never authors the row).
+/// Runs identically on commit and replay like every other fold (CC1).
+fn fold_deprecated_use(state: &mut RunState, env: &EventEnvelope) {
+    if env.class != "lifecycle.contract.deprecated_use" {
+        return;
+    }
+    let Some(method) = env
+        .payload
+        .get("method")
+        .and_then(Json::as_str)
+        .map(str::to_string)
+    else {
+        return;
+    };
+    let client = match env.payload.get("client") {
+        Some(Json::Obj(m)) => {
+            let pick = |k: &str| m.get(k).and_then(Json::as_str).unwrap_or("").to_string();
+            format!("{}@{}:{}", pick("name"), pick("version"), pick("kind"))
+        }
+        Some(Json::Str(s)) => s.clone(),
+        _ => "unknown".to_string(),
+    };
+    *state.deprecated_uses.entry((method, client)).or_insert(0) += 1;
+}
+
 fn fold_head(state: &mut RunState, env: &EventEnvelope) {
     if env.class == "lifecycle.head.moved" {
         let to = env

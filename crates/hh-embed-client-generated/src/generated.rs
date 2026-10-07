@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:49771153d7eadd184e8dafd496f375af2a023457d4175a4967c220b9e5e8431e";
+    "sha256:e34cea3ee47450b7ea62e9fcddcec9620d3eacc836aed3f5454400202d1363a1";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -3192,6 +3192,7 @@ pub enum OpenSpec {
         mode: ResumeMode,
         from_seq: Option<i64>,
         definition: Option<DefinitionInput>,
+        cause: Option<ResumeCause>,
     },
     Attach {
         run_id: String,
@@ -3251,6 +3252,7 @@ impl OpenSpec {
                 mode,
                 from_seq,
                 definition,
+                cause,
             } => {
                 pairs.push(("kind", Json::str("resume")));
                 pairs.push(("run_id", Json::str(run_id.clone())));
@@ -3260,6 +3262,9 @@ impl OpenSpec {
                 }
                 if let Some(v) = definition {
                     pairs.push(("definition", v.to_json()));
+                }
+                if let Some(v) = cause {
+                    pairs.push(("cause", v.to_json()));
                 }
             }
             OpenSpec::Attach { run_id, read_only } => {
@@ -3368,6 +3373,10 @@ impl OpenSpec {
                 },
                 definition: match v.get("definition") {
                     Some(f) => Some(DefinitionInput::from_json(f).map_err(|e| e)?),
+                    None => None,
+                },
+                cause: match v.get("cause") {
+                    Some(f) => Some(ResumeCause::from_json(f).map_err(|e| e)?),
                     None => None,
                 },
             }),
@@ -4591,6 +4600,42 @@ impl ResponderDecl {
                 None => None,
             },
         })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResumeCause {
+    Crash,
+    Takeover,
+    Wakeup,
+    Operator,
+    Continuation,
+}
+
+impl ResumeCause {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ResumeCause::Crash => "crash",
+            ResumeCause::Takeover => "takeover",
+            ResumeCause::Wakeup => "wakeup",
+            ResumeCause::Operator => "operator",
+            ResumeCause::Continuation => "continuation",
+        }
+    }
+
+    pub fn to_json(&self) -> Json {
+        Json::str(self.as_str())
+    }
+
+    pub fn from_json(v: &Json) -> Result<ResumeCause, String> {
+        match v.as_str() {
+            Some("crash") => Ok(ResumeCause::Crash),
+            Some("takeover") => Ok(ResumeCause::Takeover),
+            Some("wakeup") => Ok(ResumeCause::Wakeup),
+            Some("operator") => Ok(ResumeCause::Operator),
+            Some("continuation") => Ok(ResumeCause::Continuation),
+            other => Err(format!("unknown ResumeCause variant {other:?}")),
+        }
     }
 }
 

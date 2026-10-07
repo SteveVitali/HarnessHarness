@@ -34,7 +34,7 @@ pub mod types;
 
 pub use errors::{EmbedError, ALL_ERROR_KINDS};
 pub use frames::{ephemeral_kind_of, Frame, StreamNotification, CLOSED_REASONS, EPHEMERAL_KINDS};
-pub use ops::{registry, stability_map, Direction, OpDebt, OpSpec, Tier};
+pub use ops::{registry, stability_map, Direction, OpDebt, OpDeprecation, OpSpec, Tier};
 pub use types::*;
 
 /// The contract major version. A `contract_major` bump is an ADR
@@ -87,6 +87,44 @@ fn retired_schema_hashes() -> &'static [&'static str] {
     // gets `kernel_newer`, not `client_newer`. (The Stage-0 export is
     // reproduced verbatim by the test that pins this value.)
     &["sha256:83c5b4b415f5b01f2c9ca87d53c9df68a021b6c6e51a7d7be37a544c66b95ce1"]
+}
+
+/// The compatibility matrix fixture set (ADR-0178 D8; AC-R-2.11.4-8/-11):
+/// one row per `(contract_major, schema_hash)` identity this kernel
+/// recognizes — `current` rows negotiate `Ok`, `retired` rows must refuse
+/// `SchemaMismatch{direction: "kernel_newer"}` (the retired side of the
+/// direction rule; anything unlisted is `client_newer`). Emitted as the
+/// drift-checked artifact `schema/compat-1.matrix.json` and driven
+/// executable by the `compat_matrix_rows_negotiate` test below — the
+/// matrix is data, never prose.
+pub fn compat_matrix() -> Json {
+    let mut entries = vec![Json::obj([
+        ("contract_major", Json::Int(CONTRACT_MAJOR)),
+        ("schema_hash", Json::str(schema_hash())),
+        ("status", Json::str("current")),
+        ("negotiate", Json::str("ok")),
+    ])];
+    for h in retired_schema_hashes() {
+        entries.push(Json::obj([
+            ("contract_major", Json::Int(CONTRACT_MAJOR)),
+            ("schema_hash", Json::str(*h)),
+            ("status", Json::str("retired")),
+            ("negotiate", Json::str("schema_mismatch")),
+            ("direction", Json::str("kernel_newer")),
+        ]));
+    }
+    Json::obj([
+        ("$schema", Json::str("hh-embed/compat-matrix/1")),
+        ("contract_major", Json::Int(CONTRACT_MAJOR)),
+        ("entries", Json::Arr(entries)),
+    ])
+}
+
+/// Canonical bytes for the compat-matrix artifact (same canonical
+/// serializer the schema export uses — the artifact is drift-checked by
+/// `scripts/check-drift.sh`).
+pub fn compat_matrix_bytes() -> String {
+    compat_matrix().to_canonical_string()
 }
 
 /// Negotiate `hello` against the kernel (ADR-0178 D2/D8; the AC-R-2.11.4-8
@@ -206,6 +244,9 @@ fn methods_schema() -> Json {
         e.insert("implemented".into(), Json::Bool(op.implemented));
         if let Some(cap) = op.requires_capability {
             e.insert("requires_capability".into(), Json::str(cap));
+        }
+        if let Some(dep) = &op.deprecated {
+            e.insert("deprecated".into(), dep.to_json());
         }
         if let Some(d) = &op.debt {
             e.insert(
@@ -451,6 +492,12 @@ fn types_schema() -> Json {
         ]),
     );
     m.insert("ResumeMode".into(), str_enum(&["continue", "takeover"]));
+    // S5.8 (AC-R-2.2.3-13) — the resume cause closed set; lands on
+    // `lifecycle.run.resumed{recovery_decision.cause}`.
+    m.insert(
+        "ResumeCause".into(),
+        str_enum(&["crash", "takeover", "wakeup", "operator", "continuation"]),
+    );
     m.insert(
         "SpawnEventRef".into(),
         strct(&[("run_id", "string", true), ("event_id", "string", true)]),
@@ -481,6 +528,7 @@ fn types_schema() -> Json {
                     ("mode", "ResumeMode", true),
                     ("from_seq", "integer", false),
                     ("definition", "DefinitionInput", false),
+                    ("cause", "ResumeCause", false),
                 ],
             ),
             (
@@ -1455,6 +1503,46 @@ mod tests {
         let mut p = hello();
         p.kernel_floor = Some("0.0.1".into());
         assert!(negotiate(&p, "0.1.0").is_ok());
+    }
+
+    #[test]
+    fn compat_matrix_rows_negotiate() {
+        // The committed compatibility matrix is executable: every row
+        // drives `negotiate` to its declared outcome (AC-R-2.11.4-8/-11;
+        // the same rows ship as `schema/compat-1.matrix.json`).
+        let Json::Obj(matrix) = compat_matrix() else {
+            panic!("compat_matrix is not an object");
+        };
+        let entries = match matrix.get("entries").unwrap() {
+            Json::Arr(v) => v,
+            _ => panic!("entries not an array"),
+        };
+        assert!(entries.len() >= 2, "matrix carries current + retired rows");
+        for row in entries {
+            let Json::Obj(r) = row else {
+                panic!("matrix row is not an object");
+            };
+            let mut p = hello();
+            p.contract_major = r["contract_major"].as_int().unwrap();
+            p.schema_hash = r
+                .get("schema_hash")
+                .and_then(Json::as_str)
+                .map(str::to_string);
+            let status = r["status"].as_str().unwrap();
+            match status {
+                "current" => assert!(
+                    negotiate(&p, "0.1.0").is_ok(),
+                    "current matrix row refused: {row:?}"
+                ),
+                "retired" => match negotiate(&p, "0.1.0") {
+                    Err(EmbedError::SchemaMismatch { direction, .. }) => {
+                        assert_eq!(direction, "kernel_newer")
+                    }
+                    other => panic!("retired row must refuse kernel_newer: {other:?}"),
+                },
+                other => panic!("unknown matrix status {other}"),
+            }
+        }
     }
 
     #[test]

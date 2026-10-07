@@ -173,6 +173,121 @@ impl<'a> EmbedDriver<'a> {
             .ok_or_else(|| "session/unknown".to_string())
     }
 
+    /// Infer the resume `cause` for a dead-writer `session/resume`
+    /// (S5.8; AC-R-2.2.3-13): open a read-only `attach` on the run, walk
+    /// the durable tail, and report `wakeup` when the run's last
+    /// `lifecycle.run.suspended` carried an awaiting-*/`hibernated`
+    /// reason *and* a `control.wakeup.fired` row landed after it —
+    /// otherwise `operator`. The attach session is closed best-effort;
+    /// it mints no durable row (no `client` declared).
+    fn infer_resume_cause(&mut self, run_id: &str) -> Result<String, String> {
+        let idem = self.key("resume-scan", run_id);
+        let attach = self.op(
+            "open_session",
+            Json::obj([
+                (
+                    "spec",
+                    Json::obj([
+                        ("kind", Json::str("attach")),
+                        ("run_id", Json::str(run_id)),
+                        ("read_only", Json::Bool(true)),
+                    ]),
+                ),
+                ("idempotency_key", Json::str(idem)),
+            ]),
+        )?;
+        let scan_sid = attach
+            .get("session_id")
+            .and_then(Json::as_str)
+            .map(String::from)
+            .ok_or_else(|| "attach returned no session_id".to_string())?;
+        // Walk the whole tail (seq 1 fwd); `suspended_at` tracks the
+        // last suspension's seq and reasons, `wakeup_fired` any
+        // `control.wakeup.fired` seen after it.
+        let mut cursor: i64 = 1;
+        let mut suspended: Option<(u64, Vec<Json>)> = None;
+        let mut wakeup_after_suspend = false;
+        loop {
+            let page = self.op(
+                "read",
+                Json::obj([
+                    ("session_id", Json::str(scan_sid.clone())),
+                    (
+                        "cursor",
+                        Json::obj([("kind", Json::str("seq")), ("seq", Json::Int(cursor))]),
+                    ),
+                    ("direction", Json::str("fwd")),
+                    ("limit", Json::Int(512)),
+                ]),
+            )?;
+            let events = match page.get("events") {
+                Some(Json::Arr(v)) => v.clone(),
+                _ => Vec::new(),
+            };
+            for e in &events {
+                let seq = e.get("seq").and_then(Json::as_int).unwrap_or(0);
+                let class = e.get("class").and_then(Json::as_str).unwrap_or("");
+                match class {
+                    "lifecycle.run.suspended" => {
+                        let reasons = e
+                            .get("payload")
+                            .and_then(|p| p.get("reasons"))
+                            .and_then(|r| match r {
+                                Json::Arr(v) => Some(v.clone()),
+                                _ => None,
+                            })
+                            .unwrap_or_default();
+                        suspended = Some((seq.max(0) as u64, reasons));
+                        wakeup_after_suspend = false;
+                    }
+                    "lifecycle.run.resumed" | "lifecycle.run.finished" => {
+                        suspended = None;
+                        wakeup_after_suspend = false;
+                    }
+                    "control.wakeup.fired" => {
+                        if suspended.is_some() {
+                            wakeup_after_suspend = true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            match page
+                .get("next")
+                .and_then(|n| n.get("seq"))
+                .and_then(Json::as_int)
+            {
+                Some(n) if n > cursor => cursor = n,
+                _ => break,
+            }
+        }
+        let _ = self.op(
+            "close",
+            Json::obj([
+                ("session_id", Json::str(scan_sid)),
+                ("reason", Json::str("done")),
+            ]),
+        );
+        let awaiting_wakeup = suspended
+            .map(|(_, reasons)| {
+                reasons.iter().any(|r| {
+                    matches!(
+                        r.get("type").and_then(Json::as_str),
+                        Some("awaiting_event")
+                            | Some("awaiting_timer")
+                            | Some("awaiting_environment")
+                            | Some("hibernated")
+                    )
+                })
+            })
+            .unwrap_or(false);
+        Ok(if awaiting_wakeup && wakeup_after_suspend {
+            "wakeup".to_string()
+        } else {
+            "operator".to_string()
+        })
+    }
+
     /// `read` the session's durable tail above its watermark; fold
     /// `permission_id`s into the pending queue and advance the
     /// watermark. Returns the new `(seq, class, payload)` triples.
@@ -403,6 +518,53 @@ impl SessionDriver for EmbedDriver<'_> {
         session_id: &str,
         replay_from: Option<u64>,
     ) -> Result<Vec<(u64, String, Json)>, String> {
+        // S5.8 (R-2.2.3²; AC-R-2.2.3-13) — the hosted `session/resume`
+        // mapping: when the recorded writer session is gone (host
+        // restart, fenced takeover) the resume re-opens the run through
+        // `open_session{kind:"resume", mode:"takeover", cause}` — the
+        // durable `lifecycle.run.resumed{recovery_decision.cause}` mints
+        // with `wakeup` when the tail shows a wakeup-fired suspension,
+        // `operator` otherwise (`infer_resume_cause` reads the durable
+        // record, never the caller's claim). A live writer keeps the
+        // pure-replay semantics — `session/resume{replayFrom}` rewinds
+        // the watermark and re-reads.
+        let (embed_sid, run_id) = {
+            let s = self.sess(session_id)?;
+            (s.embed_session_id.clone(), s.run_id.clone())
+        };
+        let writer_live = self
+            .op(
+                "head",
+                Json::obj([("session_id", Json::str(embed_sid.clone()))]),
+            )
+            .is_ok();
+        if !writer_live {
+            let cause = self.infer_resume_cause(&run_id)?;
+            let idem = self.key("resume-takeover", session_id);
+            let resp = self.op(
+                "open_session",
+                Json::obj([
+                    (
+                        "spec",
+                        Json::obj([
+                            ("kind", Json::str("resume")),
+                            ("run_id", Json::str(run_id.clone())),
+                            ("mode", Json::str("takeover")),
+                            ("cause", Json::str(cause)),
+                        ]),
+                    ),
+                    ("idempotency_key", Json::str(idem)),
+                ]),
+            )?;
+            let new_sid = resp
+                .get("session_id")
+                .and_then(Json::as_str)
+                .map(String::from)
+                .ok_or_else(|| "resume takeover returned no session_id".to_string())?;
+            // One session id across both contracts — the ACP session
+            // adopts the fresh writer id (the client sees no seam).
+            self.sess_mut(session_id)?.embed_session_id = new_sid;
+        }
         // Replay from the durable record — rewinds the watermark to the
         // requested point and re-reads (dedupe keeps monotonic order;
         // a `replayFrom` below the watermark re-serves the prefix).
@@ -719,5 +881,170 @@ mod tests {
         assert!(d
             .permission_decision("s", "perm-s-2", &Json::obj([]))
             .is_err());
+    }
+
+    /// S5.8 (R-2.2.3²; AC-R-2.2.3-13) — a `session/resume` whose
+    /// recorded writer is dead re-opens through
+    /// `open_session{kind:"resume", mode:"takeover", cause}`; the
+    /// `cause` is inferred from the durable tail — an awaiting-*
+    /// suspension with a `control.wakeup.fired` after it is `wakeup`.
+    #[test]
+    fn resume_dead_writer_infers_wakeup_cause() {
+        let (mut d, calls) = stub(vec![
+            // new_session → open_session{kind:"new"}
+            Ok(Json::obj([
+                ("session_id", Json::str("sess-1")),
+                ("run_id", Json::str("run-1")),
+                ("cursor", Json::obj([("seq", Json::Int(10))])),
+            ])),
+            // resume → head{sess-1} fails — the writer is gone.
+            Err(Json::obj([("kind", Json::str("unknown_session"))])),
+            // infer_resume_cause → attach for the scan
+            Ok(Json::obj([("session_id", Json::str("scan-1"))])),
+            //   read → suspended awaiting a timer, then wakeup.fired
+            Ok(Json::obj([(
+                "events",
+                Json::Arr(vec![
+                    envelope(
+                        8,
+                        "lifecycle.run.suspended",
+                        Json::obj([(
+                            "reasons",
+                            Json::Arr(vec![Json::obj([("type", Json::str("awaiting_timer"))])]),
+                        )]),
+                    ),
+                    envelope(9, "control.wakeup.fired", Json::obj([])),
+                ]),
+            )])),
+            //   close the scan session
+            Ok(Json::obj([])),
+            // open_session{kind:"resume", mode:"takeover", cause}
+            Ok(Json::obj([("session_id", Json::str("sess-2"))])),
+            // tail → the resumed row re-serves above the watermark
+            Ok(Json::obj([(
+                "events",
+                Json::Arr(vec![envelope(11, "lifecycle.run.resumed", Json::obj([]))]),
+            )])),
+        ]);
+        d.new_session(&Json::obj([])).unwrap();
+        let updates = d.resume("sess-1", None).expect("resume");
+        assert_eq!(updates[0].1, "lifecycle.run.resumed");
+        let spec_cause = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(op, _)| op == "open_session")
+            .filter_map(|(_, p)| {
+                p.get("spec")
+                    .and_then(|s| s.get("cause"))
+                    .and_then(Json::as_str)
+                    .map(String::from)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            spec_cause,
+            vec!["wakeup".to_string()],
+            "the takeover resume declares the inferred cause: {calls:?}"
+        );
+        // The fresh writer session replaces the dead id — the ACP
+        // session keeps one id across both contracts.
+        let ops: Vec<String> = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(o, _)| o.clone())
+            .collect();
+        assert_eq!(
+            ops,
+            vec![
+                "open_session", // new
+                "head",         // writer liveness
+                "open_session", // attach (scan)
+                "read",
+                "close",
+                "open_session", // resume takeover
+                "read",         // tail replay
+            ],
+            "{ops:?}"
+        );
+    }
+
+    /// A dead-writer resume whose tail shows no wakeup-fired
+    /// suspension declares `operator` — the inference reads the durable
+    /// record, never the caller's claim.
+    #[test]
+    fn resume_dead_writer_without_wakeup_defaults_operator() {
+        let (mut d, calls) = stub(vec![
+            Ok(Json::obj([
+                ("session_id", Json::str("sess-1")),
+                ("run_id", Json::str("run-1")),
+            ])),
+            Err(Json::obj([("kind", Json::str("unknown_session"))])),
+            Ok(Json::obj([("session_id", Json::str("scan-1"))])),
+            // A suspension for an approval ask — no wakeup fired after.
+            Ok(Json::obj([(
+                "events",
+                Json::Arr(vec![envelope(
+                    8,
+                    "lifecycle.run.suspended",
+                    Json::obj([(
+                        "reasons",
+                        Json::Arr(vec![Json::obj([("type", Json::str("awaiting_approval"))])]),
+                    )]),
+                )]),
+            )])),
+            Ok(Json::obj([])),
+            Ok(Json::obj([("session_id", Json::str("sess-2"))])),
+            Ok(Json::obj([("events", Json::Arr(vec![]))])),
+        ]);
+        d.new_session(&Json::obj([])).unwrap();
+        d.resume("sess-1", None).expect("resume");
+        let spec_cause = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(op, _)| op == "open_session")
+            .filter_map(|(_, p)| {
+                p.get("spec")
+                    .and_then(|s| s.get("cause"))
+                    .and_then(Json::as_str)
+                    .map(String::from)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(spec_cause, vec!["operator".to_string()]);
+    }
+
+    /// A live writer keeps pure-replay semantics — `head` answers, no
+    /// takeover `open_session` runs, the watermark rewinds to
+    /// `replayFrom` and re-reads.
+    #[test]
+    fn resume_live_writer_replays_without_takeover() {
+        let (mut d, calls) = stub(vec![
+            Ok(Json::obj([
+                ("session_id", Json::str("sess-1")),
+                ("run_id", Json::str("run-1")),
+                ("cursor", Json::obj([("seq", Json::Int(5))])),
+            ])),
+            // head{sess-1} answers — the writer is live.
+            Ok(Json::obj([("seq", Json::Int(5))])),
+            // tail from replay_from=2 → seqs 3..5 re-serve.
+            Ok(Json::obj([(
+                "events",
+                Json::Arr(vec![
+                    envelope(3, "lifecycle.turn.started", Json::obj([])),
+                    envelope(5, "state.turn.completed", Json::obj([])),
+                ]),
+            )])),
+        ]);
+        d.new_session(&Json::obj([])).unwrap();
+        let updates = d.resume("sess-1", Some(2)).expect("resume");
+        assert_eq!(updates.len(), 2);
+        let ops: Vec<String> = calls
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|(o, _)| o.clone())
+            .collect();
+        assert_eq!(ops, vec!["open_session", "head", "read"], "{ops:?}");
     }
 }

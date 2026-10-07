@@ -55,23 +55,51 @@ impl EmbedService {
         ))
     }
 
-    /// `env.snapshot{session_id}` — an `fs_tree` snapshot of the
-    /// session's environment, `taken_by = instrument` (ADR-0177 D7).
+    /// `env.snapshot{session_id, kind?}` — a snapshot of the session's
+    /// environment, `taken_by = instrument` (ADR-0177 D7). `kind`
+    /// defaults `fs_tree` (the workspace-tree rung); `memory` (S5.8;
+    /// R-2.2.5²) routes to the provider adapter's checkpoint — declared
+    /// `supported` classes only, `quiesced` (`suspended`) handles only;
+    /// every other spelling is a `SchemaViolation`, never a guess.
     /// Returns `{snapshot_ref, kind, at_seq, size_bytes, taken_by}` —
     /// the record's own fields, no handle id.
     pub(crate) fn env_snapshot(&mut self, params: &Json) -> Result<Json, EmbedError> {
         let (run_id, lease, env_handle_id) = self.env_subject(params, "env.snapshot")?;
+        let kind = params
+            .get("kind")
+            .and_then(Json::as_str)
+            .unwrap_or("fs_tree")
+            .to_string();
         let driver = self.env_drivers.get_mut(&run_id).ok_or_else(|| {
             EmbedError::EnvironmentUnavailable {
                 reason: "env_driver_absent".to_string(),
             }
         })?;
-        let (rec, _tree) = driver
-            .fs_tree_snapshot_as(&mut self.store, &lease, &env_handle_id, TakenBy::Instrument)
-            .map_err(crate::open::env_err)?;
+        let rec = match kind.as_str() {
+            "fs_tree" => {
+                driver
+                    .fs_tree_snapshot_as(
+                        &mut self.store,
+                        &lease,
+                        &env_handle_id,
+                        TakenBy::Instrument,
+                    )
+                    .map_err(crate::open::env_err)?
+                    .0
+            }
+            "memory" => driver
+                .memory_snapshot(&mut self.store, &lease, &env_handle_id, TakenBy::Instrument)
+                .map_err(crate::open::env_err)?,
+            other => {
+                return Err(EmbedError::SchemaViolation {
+                    path: "env.snapshot/kind".to_string(),
+                    code: format!("unknown_snapshot_kind:{other}"),
+                })
+            }
+        };
         Ok(Json::obj([
             ("snapshot_ref", Json::str(rec.snapshot_ref)),
-            ("kind", Json::str("fs_tree")),
+            ("kind", Json::str(kind)),
             ("at_seq", Json::Int(rec.at_seq as i64)),
             ("size_bytes", Json::Int(rec.size_bytes as i64)),
             ("taken_by", Json::str("instrument")),
