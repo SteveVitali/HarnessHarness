@@ -1439,6 +1439,12 @@ pub fn policy_for_configured(
                 ..BanditConfig::default()
             },
         })),
+        "predictor" => Ok(Box::new(PredictorPolicy {
+            config: PredictorConfig {
+                rules: rules.unwrap_or_default(),
+                ..PredictorConfig::default()
+            },
+        })),
         other => Err(ComputeError::VariantNotAdmitted {
             variant_ref: other.to_string(),
         }),
@@ -1982,6 +1988,234 @@ impl ComputePolicy for SurfacePriorPolicy {
 // `rules` — the C3 baseline (ADR-0189 D3: five conditioned rules, no calls)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// `PredictorConfig` — the `predictor` variant's parameters (R-2.6.4⁴ —
+/// the adaptive-search/estimation leg; ADR-0189 D5). The scheduling
+/// members (`budget_share_cap_ppm`, `drift_reset_ppm`) are
+/// tightening-only targets: `classify_compute_rule_delta` classifies
+/// them and an evolution-authored loosening refuses via
+/// [`compute_rule_delta_admissible`] (ADR-0053 D-5's shape).
+#[derive(Debug, Clone)]
+pub struct PredictorConfig {
+    /// The conditioned-rule envelope the predictor degrades to on
+    /// cold-start or drift reset (the fallback is `rules`, never a stop).
+    pub rules: RulesConfig,
+    /// The predictor slice's cap — the chosen option's reserve-sized
+    /// `expected_cost` must fit this share (ppm) of `budget.remaining`,
+    /// else `Unchanged` (never a partial bind — AC-F4-8's shape).
+    pub budget_share_cap_ppm: u64,
+    /// `|claimed_ppm − realized_ppm|` per cell that drifts the cell back
+    /// to the `rules` baseline. **Lowering loosens** (more drift
+    /// tolerated ⇒ more spend admissible) — a guard threshold.
+    pub drift_reset_ppm: i64,
+    /// The predictor's declared `SearchBudgetRecord` ref — the slice its
+    /// estimates account against. `None` ⇒ inert: `bind` lands
+    /// `Unchanged{estimator_budget_exhausted}` (never a stop).
+    pub search_budget_ref: Option<String>,
+    /// Cells the drift reset has silenced (`observe` grows it — the
+    /// reset is durable through the fold's own row, not this map).
+    pub reset_cells: BTreeSet<String>,
+    /// The drift accumulator `cell → (claimed_ppm, realized_ppm, n)` —
+    /// `observe` folds it from `control.compute.decided`+outcome joins.
+    pub drift: BTreeMap<String, (i64, i64, u64)>,
+}
+
+impl Default for PredictorConfig {
+    fn default() -> PredictorConfig {
+        PredictorConfig {
+            rules: RulesConfig::default(),
+            budget_share_cap_ppm: 500_000,
+            drift_reset_ppm: 300_000,
+            search_budget_ref: None,
+            reset_cells: BTreeSet::new(),
+            drift: BTreeMap::new(),
+        }
+    }
+}
+
+/// `PredictorPolicy` — the `predictor` variant: claims ride
+/// `DeltaPSource::Online` (the estimator's own source label) with a
+/// `claimed` evidence marker — the claimed-vs-realized audit is what
+/// `observe` folds; cells whose drift exceeds `drift_reset_ppm` reset to
+/// the `rules` baseline (`predictor.drift_reset` on `rules_fired`), and
+/// a `budget_share_cap` overrun yields `Unchanged` (never a stop).
+pub struct PredictorPolicy {
+    /// The predictor thresholds + drift state.
+    pub config: PredictorConfig,
+}
+
+impl ComputePolicy for PredictorPolicy {
+    fn variant_ref(&self) -> &str {
+        "predictor"
+    }
+
+    fn capabilities(&self) -> PolicyCapabilities {
+        PolicyCapabilities {
+            options_supported: ComputeOptionKind::ALL.iter().copied().collect(),
+            decision_points: all_decision_points(),
+            // The first-party predictor is a deterministic estimator —
+            // no model calls (its `cost_of_estimation` stays zero; the
+            // search-budget slice accounts the *scheduled* spend, not
+            // the estimator's).
+            makes_model_calls: false,
+            estimator_ref: Some("predictor".into()),
+            requires_task_value: false,
+            requires_priors: true,
+            deterministic: true,
+        }
+    }
+
+    fn bind(
+        &self,
+        decision: &ControlDecision,
+        ctx: &ComputeContext,
+    ) -> Result<BindOutcome, ComputeError> {
+        self.config.rules.validate()?;
+        prior_admissible(ctx)?;
+        // R-2.6.4⁴ G8 — the predictor's estimates draw on a declared
+        // `SearchBudgetRecord` slice; an undeclared slice is inert
+        // (`Unchanged`, never a stop — §5e.4's estimator degradation).
+        if self.config.search_budget_ref.is_none() {
+            return Ok(BindOutcome::Unchanged {
+                record: degraded_record(
+                    decision,
+                    ctx,
+                    "predictor",
+                    &ComputeError::EstimatorBudgetExhausted,
+                ),
+            });
+        }
+        let delegation = eval_delegation_rules(&self.config.rules, ctx, decision);
+        let mut rows = eval_options(decision, ctx, &self.config.rules, &delegation);
+        // Score like `surface_prior` — the cell mean as the *claimed*
+        // delta (no UCB bonus; the claim is what `observe` audits).
+        // Drift-reset cells score nothing — `rules` ranks them alone.
+        let mut scored = false;
+        let mut drift_reset = Vec::new();
+        for r in rows.iter_mut() {
+            let key = cell_key(ctx, &r.option);
+            if self.config.reset_cells.contains(&key) {
+                drift_reset.push(key);
+                continue;
+            }
+            if let OptionEstimate::Estimate(e) = &mut r.estimate {
+                if let Some((mu, _bonus, interval)) = prior_overlay(ctx, &r.option, 0, 1) {
+                    e.delta_p = DeltaP {
+                        point_ppm: Some(mu),
+                        interval,
+                        // `online` — the estimator's own claim (the
+                        // claimed-vs-realized audit's left leg).
+                        source: DeltaPSource::Online,
+                    };
+                    e.evidence_refs.push("claimed".to_string());
+                    if let Some(rf) = &self.config.search_budget_ref {
+                        e.evidence_refs.push(rf.clone());
+                    }
+                    scored = true;
+                }
+            }
+        }
+        let variant = if scored { "predictor" } else { "rules" };
+        let binding = rules_binding(decision, ctx, &rows, &self.config.rules, &delegation);
+        let mut fired = rules_fired(&rows);
+        fired.extend(delegation.fired.iter().cloned());
+        if !scored {
+            fired.push("predictor.cold_start".to_string());
+        }
+        for key in drift_reset {
+            fired.push(format!("predictor.drift_reset:{key}"));
+        }
+        // `budget_share_cap` — the chosen option's reserve-sized cost
+        // must fit the capped share of `remaining`; an overrun is
+        // `Unchanged` (never a partial bind).
+        let mut b = finish_bind(
+            decision,
+            ctx,
+            variant,
+            &rows,
+            fired,
+            binding,
+            self.config.rules.lambda_ppm,
+        )?;
+        if let BindOutcome::Bound { ref record, .. } = b {
+            let cap = vector_ppm_of(
+                &ctx.budget.remaining,
+                self.config.budget_share_cap_ppm as i64,
+            );
+            if let Some(OptionEstimate::Estimate(e)) = rows
+                .iter()
+                .find(|r| r.option == record.chosen)
+                .map(|r| &r.estimate)
+            {
+                let fits = e.expected_cost.iter().all(|(d, a)| a <= cap.get(d));
+                if !fits {
+                    return Ok(BindOutcome::Unchanged {
+                        record: degraded_record(
+                            decision,
+                            ctx,
+                            "predictor",
+                            &ComputeError::EstimatorBudgetExhausted,
+                        ),
+                    });
+                }
+            }
+        }
+        if let BindOutcome::Bound { ref mut record, .. } = b {
+            record.cell = Some(cell_key(ctx, &record.chosen));
+            record.record_id = record.compute_record_id();
+        }
+        Ok(b)
+    }
+
+    /// `observe` — fold `control.compute.decided`+outcome joins: each
+    /// predictor-scored cell accumulates `(claimed, realized, n)`; a
+    /// cell whose mean |claimed − realized| exceeds `drift_reset_ppm`
+    /// lands in `reset_cells` — the next `bind` scores it `rules`.
+    fn observe(&mut self, events: &[hh_ledger::event::EventEnvelope]) {
+        for row in compute_decision_outcome(events) {
+            if row.record.estimator_ref.variant_ref != "predictor" {
+                continue;
+            }
+            let Some(cell) = row.record.cell.clone() else {
+                continue;
+            };
+            let Some(outcome) = &row.outcome_class else {
+                continue;
+            };
+            // Realized delta (ppm): the run's outcome class as a
+            // pass/fail realization of the claimed success delta.
+            let realized = if outcome == "success" {
+                1_000_000i64
+            } else {
+                0
+            };
+            let claimed = row
+                .record
+                .options_considered
+                .iter()
+                .find(|r| r.option == row.record.chosen)
+                .and_then(|r| match &r.estimate {
+                    OptionEstimate::Estimate(e) => e.delta_p.point_ppm,
+                    _ => None,
+                })
+                .unwrap_or(0);
+            let e = self.config.drift.entry(cell.clone()).or_insert((0, 0, 0));
+            e.0 += claimed;
+            e.1 += realized;
+            e.2 += 1;
+            let mean_drift = (e.0 - e.1).abs() / (e.2.max(1) as i64);
+            if mean_drift > self.config.drift_reset_ppm {
+                self.config.reset_cells.insert(cell.clone());
+                self.config.drift.remove(&cell);
+            }
+        }
+    }
+}
+
+// `predictor`'s `SearchBudgetRecord` gate is the *declared* slice — the
+// record's completeness is the `is_complete` check the S4 gate runs at
+// admission (the slice ref resolves to a complete record or the caller
+// refuses before `bind`).
+
 /// `PolicyDebt` — the `AssumptionDebtRecord` a non-`static` rule/prior
 /// family carries (§5e.4; T-LCD-05): `expiry_condition ⊇
 /// {profile_superseded, provider_drift_observed, suite_validity_superseded,
@@ -2297,7 +2531,7 @@ pub fn classify_compute_rule_delta(param: &str, old: i64, new: i64) -> BudgetDel
         // Spend ceilings — raising them loosens.
         "child_floor_ppm" | "k_max" | "budget_share_cap_ppm" | "agree_window" => new > old,
         // Guard thresholds — lowering them loosens (more spend admissible).
-        "theta_agree_ppm" | "streak_n" => new < old,
+        "theta_agree_ppm" | "streak_n" | "drift_reset_ppm" => new < old,
         // Unregistered parameters are never classified tightening.
         _ => false,
     };
@@ -2310,7 +2544,8 @@ pub fn classify_compute_rule_delta(param: &str, old: i64, new: i64) -> BudgetDel
             | "budget_share_cap_ppm"
             | "agree_window"
             | "theta_agree_ppm"
-            | "streak_n" => BudgetDelta::Tightening,
+            | "streak_n"
+            | "drift_reset_ppm" => BudgetDelta::Tightening,
             _ => BudgetDelta::Neutral,
         }
     } else {
@@ -4017,7 +4252,10 @@ mod tests {
         // S5.5 — the prior-backed variants are admitted class members.
         assert!(policy_for("bandit").is_ok());
         assert!(policy_for("surface_prior").is_ok());
-        for v in ["predictor", "oracle_allocation", "bogus"] {
+        // S6.2 — the `predictor` variant is admitted (R-2.6.4⁴); its
+        // `SearchBudgetRecord` slice gate keeps it inert when undeclared.
+        assert!(policy_for("predictor").is_ok());
+        for v in ["oracle_allocation", "bogus"] {
             assert!(matches!(
                 policy_for(v),
                 Err(ComputeError::VariantNotAdmitted { .. })

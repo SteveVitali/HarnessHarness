@@ -149,6 +149,10 @@ pub enum RecordKind {
     /// round. Every adaptive `run_launched`/`analysis` row under a
     /// `voi_weighted` strategy names this record by ref. Version-only.
     InclusionProbabilities,
+    /// `halving_bracket` — the `successive_halving` strategy's recorded
+    /// bracket assignment (`{bracket, eta, kept[], dropped[], per_plan}`
+    /// — §6.3 §2.5; R-2.10.3⁴). Version-only.
+    HalvingBracket,
 }
 
 impl RecordKind {
@@ -195,6 +199,7 @@ impl RecordKind {
             RecordKind::ModelSnapshot => "model_snapshot",
             RecordKind::ComputeDecisionRecord => "compute_decision",
             RecordKind::InclusionProbabilities => "inclusion_probabilities",
+            RecordKind::HalvingBracket => "halving_bracket",
         }
     }
 
@@ -309,6 +314,7 @@ mod tests {
             RecordKind::ModelSnapshot,
             RecordKind::ComputeDecisionRecord,
             RecordKind::InclusionProbabilities,
+            RecordKind::HalvingBracket,
         ];
         let mut seen = std::collections::BTreeSet::new();
         for k in kinds {

@@ -261,6 +261,7 @@ fn spec(split_ref: &str) -> EvolutionCampaignSpec {
             task_ids: vec!["task:a".into(), "task:b".into()],
             evidence_refs: vec!["ev:1".into(), "ev:2".into()],
             split_assignment_ref: split_ref.into(),
+            layers: None,
         },
         exclusion_targets: vec![],
         must_code_targets: vec![],
@@ -281,6 +282,10 @@ fn spec(split_ref: &str) -> EvolutionCampaignSpec {
         proposer_family: "human".into(),
         hosted_participants: false,
         reported_only_dimensions: vec![],
+        proposer_variant_ref: None,
+        target_class: None,
+        rollout_policy: None,
+        judge_policy: None,
     }
 }
 
@@ -755,6 +760,8 @@ fn screen_ok() -> ScreenReport {
         replicate_count: 1,
         split_labels_used: vec![SplitLabel::Dev],
         judge_only: false,
+        selector_ref: None,
+        honeypots: 0,
     }
 }
 
@@ -1372,6 +1379,24 @@ fn advance_to_sealed(
         MatchMode::MatchedTotal,
     );
     docs.put_spec(&search).unwrap();
+    // S6.2 G8 — the arm's `search_budget` ref resolves to a complete
+    // `SearchBudgetRecord` (allocation shares sum to the ppm scale).
+    docs.put_named(
+        doc_kind::SEARCH_BUDGET,
+        "budget:search",
+        &hh_ontology::eval::SearchBudgetRecord {
+            rollouts: 4,
+            model_calls: 4,
+            tokens: 8_000,
+            feedback_labels_used: 0,
+            judge_calls: 0,
+            wall_clock: 1_000,
+            allocation: [("search".to_string(), 1_000_000)].into_iter().collect(),
+            adaptive_selection: false,
+        }
+        .to_json(),
+    )
+    .unwrap();
     let search_rep = format!("rep:search:{tag}");
     docs.put_named(
         doc_kind::REPORT,

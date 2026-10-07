@@ -5,6 +5,8 @@
 
 pub mod campaign;
 pub mod errors;
+pub mod proposer;
+pub mod proposer_conformance;
 pub mod records;
 pub mod state;
 pub mod view;

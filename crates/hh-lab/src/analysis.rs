@@ -954,6 +954,8 @@ pub struct ComparisonReport {
     pub held_out: bool,
     /// `estimated{estimator, inclusion_probabilities_ref}` — set on
     /// adaptive-strategy rows (ADR-0156; `search_time_benefit` only).
+    /// The allocator-side spellings are `estimated_disagreement`,
+    /// `estimated_halving`, and `estimated_voi` below.
     pub estimated: Option<Json>,
     /// The test record.
     pub test: TestRecord,
@@ -969,6 +971,45 @@ pub struct ComparisonReport {
     pub label: ReportLabelKind,
     /// The `EstimatorSelection` for the paired-effect interval (CF-337).
     pub estimator_selection: EstimatorSelection,
+}
+
+/// `estimated` members for adaptive-strategy rows (R-2.10.3⁴; ADR-0156
+/// D4) — the report a touched comparison emits names the estimator and
+/// the durable allocation record (`inclusion_probabilities` /
+/// `halving_bracket`) it derived from. A `full_set` comparison carries
+/// no `estimated` member.
+///
+/// The `disagreement_weighted` stamp — `{estimator, ref}` over the
+/// recorded inclusion table.
+pub fn estimated_disagreement(estimator: &str, record_ref: &str) -> hh_wire::json::Json {
+    hh_wire::json::Json::obj([
+        ("estimator", hh_wire::json::Json::str(estimator)),
+        ("ref", hh_wire::json::Json::str(record_ref)),
+        (
+            "strategy",
+            hh_wire::json::Json::str("disagreement_weighted"),
+        ),
+    ])
+}
+
+/// The `successive_halving` stamp — `{estimator: successive_halving,
+/// ref}` over the recorded bracket row.
+pub fn estimated_halving(record_ref: &str) -> hh_wire::json::Json {
+    hh_wire::json::Json::obj([
+        ("estimator", hh_wire::json::Json::str("successive_halving")),
+        ("ref", hh_wire::json::Json::str(record_ref)),
+        ("strategy", hh_wire::json::Json::str("successive_halving")),
+    ])
+}
+
+/// The `voi_weighted` stamp — `{estimator, ref}` over the recorded
+/// inclusion table.
+pub fn estimated_voi(estimator: &str, record_ref: &str) -> hh_wire::json::Json {
+    hh_wire::json::Json::obj([
+        ("estimator", hh_wire::json::Json::str(estimator)),
+        ("ref", hh_wire::json::Json::str(record_ref)),
+        ("strategy", hh_wire::json::Json::str("voi_weighted")),
+    ])
 }
 
 impl ComparisonReport {

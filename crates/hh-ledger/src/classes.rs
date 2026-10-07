@@ -1250,6 +1250,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("measurement.experiment.closed", "none"),
     ("measurement.experiment.declared", "none"),
     ("measurement.experiment.drift_bracket", "none"),
+    ("measurement.experiment.halving_bracket", "none"),
     ("measurement.experiment.inclusion_probabilities", "none"),
     ("measurement.experiment.paused", "none"),
     ("measurement.experiment.resumed", "none"),
@@ -1967,6 +1968,12 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // the rest of the run family (the pick is replay-sensitive: the same
     // table must re-derive the same plan under `rebuild`).
     row_prov("measurement.experiment.inclusion_probabilities",
+                                                    Led, O::Events, false, false, true,  None, None),
+    // S6.2 (R-2.10.3⁴; ADR-0156): the `successive_halving` strategy's
+    // bracket assignment — `{record_id, bracket, eta, kept[], dropped[],
+    // per_plan}`; durable + provenance-mandatory like the inclusion
+    // table (the pruning is replay-sensitive).
+    row_prov("measurement.experiment.halving_bracket",
                                                     Led, O::Events, false, false, true,  None, None),
 
     // ── measurement.analysis / measurement.leaderboard (§6.4/§9.2; R-2.10.4⁰ᵃ;
