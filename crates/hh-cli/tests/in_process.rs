@@ -1850,7 +1850,10 @@ fn ac5_attended_and_unattended_share_one_configuration() {
         diff_paths(x, y, "", &mut diffs);
     }
     // `hash`/`prev_hash` are the chain consequence of the allowed rows;
-    // `idempotency_key` derives over `attendance`.
+    // `idempotency_key` derives over `attendance`. `assembly_ms{value,
+    // measured_at}` is a *measured* wall on the builder record —
+    // identical inputs still time differently, so the two runs' timing
+    // measurements are derived content, never an attendance-driven row.
     for d in &diffs {
         assert!(
             d == ".hash"
@@ -1859,7 +1862,9 @@ fn ac5_attended_and_unattended_share_one_configuration() {
                 || d.ends_with("attendance.source")
                 || d.ends_with("idempotency_key")
                 || d.ends_with("decider")
-                || d.ends_with("reason"),
+                || d.ends_with("reason")
+                || d.ends_with("assembly_ms.value")
+                || d.ends_with("assembly_ms.measured_at"),
             "unexpected ledger difference at {d}"
         );
     }
