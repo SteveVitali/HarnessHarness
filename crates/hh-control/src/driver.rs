@@ -65,6 +65,158 @@ pub struct ModelOutcome {
     pub retry_after_ms: Option<u64>,
 }
 
+// ── R-2.7 — the §5b.2 router seam (ADR-0121/ADR-0122) ────────────────────────
+//
+// The bound `router` slot arms a [`RoutingPort`]; when one is wired the
+// driver mints the model-plane rows the spec orders (`model.route.decided`
+// before the scope opens, `model.call.attempt.{started,completed,failed}`
+// per attempt, `model.surface.relowered` → `model.rerouted` → restarted
+// `model.call.attempt.started` across a profile boundary, the consult's
+// `control.budget.{reserved,released}`/`model.profile.status.changed` side
+// rows) — all through the run's fenced writer, durable-before-visible.
+// With no port wired the legacy scripted lane runs byte-identical (no
+// `route.decided`/`attempt.*` rows land — the AC's honest asymmetry).
+
+/// The lane the bound `router` slot declares — the sealed data the driver
+/// folds into every `RoutingRequest`: role, capability axes, the budget the
+/// G-4 reserve charges, and the realized `RoutingPolicy` + `ModelRoleTable`.
+/// Pure data (sealed-document decode is the boundary's job); the port owns
+/// the views + the account.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RoutingLane {
+    /// `role` — the `ModelRole` the driver calls under (`"primary"`).
+    pub role: String,
+    /// `required_capabilities[]` — the axes the call needs (G-2).
+    pub required_capabilities: Vec<String>,
+    /// `budget_id` — the budget the reservation charges.
+    pub budget_id: String,
+    /// `task_class?` — the `bandit` cell axis.
+    pub task_class: Option<String>,
+    /// `latency_target_ms?` — the `latency_cap` target.
+    pub latency_target_ms: Option<u64>,
+    /// `effort?` — the requested effort rung.
+    pub effort: Option<String>,
+    /// `intent_ref?` — the recorded intent an `expired` bind needs (G-1).
+    pub intent_ref: Option<String>,
+    /// The bound `RoutingPolicy` document.
+    pub policy: hh_gateway::router::RoutingPolicy,
+    /// The realized `ModelRoleTable` (the manifest's `profile_binding`
+    /// projection — same table the boundary realized at open).
+    pub table: hh_gateway::router::ModelRoleTable,
+}
+
+/// The router port (R-2.7) — the boundary's half of §5b.2: the profile
+/// environment (`SelectorView`), the budget account (`BudgetPort`), the
+/// health/C1 views, and the profile-boundary `relower` producer are the
+/// port's; the driver owns ordering + the appends. Side rows the consults
+/// produce (reservation hold/release, `model.profile.status.changed`)
+/// drain through [`RoutingPort::take_rows`] — the producer computes, the
+/// fenced writer lands (CC3, the `AssembleOutcome.side_events`
+/// convention).
+pub trait RoutingPort {
+    /// The bound lane declaration.
+    fn lane(&self) -> &RoutingLane;
+    /// The §5b.2 select — `select_with` over the port's declared views.
+    /// `attempted` is the forward-only consumption set the durable fold
+    /// rebuilt; `prefix` is the driver's durable tail.
+    fn select(
+        &mut self,
+        request: &hh_gateway::router::RoutingRequest,
+        decision_id: &str,
+        now_ms: u64,
+        attempted: &std::collections::BTreeSet<String>,
+        prefix: &[EventEnvelope],
+    ) -> Result<hh_gateway::router::RoutingDecision, hh_gateway::router::RoutingRefusal>;
+    /// The ADR-0122 consult — `on_attempt_failed` over the port's views;
+    /// `state` is the driver-rebuilt `AttemptState` cursor.
+    #[allow(clippy::too_many_arguments)] // the consult arity is the contract's.
+    fn attempt_failed(
+        &mut self,
+        request: &hh_gateway::router::RoutingRequest,
+        prior: &hh_gateway::router::RoutingDecision,
+        error: &hh_gateway::vocab::ModelErrorClass,
+        attempts_on_target: u32,
+        retry_after_ms: Option<u64>,
+        state: &mut hh_gateway::router::AttemptState,
+        decision_id: &str,
+        now_ms: u64,
+        prefix: &[EventEnvelope],
+    ) -> hh_gateway::router::AttemptDisposition;
+    /// The `model.surface.relowered` payload a cross-profile reroute mints
+    /// (`old_profile_ref`/`new_profile_ref`/`dropped_items[]`/
+    /// `rewritten_items[]`/`reason`/`model_call_id` members — the
+    /// `check_reroute_order` derivation set). `Err` is a typed refusal —
+    /// the boundary cannot project the move, the driver closes the call
+    /// `select_refused` (never a silent skip).
+    fn relower(
+        &mut self,
+        from_profile_ref: &str,
+        to_profile_ref: &str,
+        reason: &str,
+        model_call_id: &str,
+    ) -> Result<Json, String>;
+    /// Rows the consults produced, in emit order — drained by the driver
+    /// into the durable tail before the caller-visible cue.
+    fn take_rows(&mut self) -> Vec<(String, Json)>;
+}
+
+/// `CacheBinding` — the `K5Key` members the `response_cache` slot's binding
+/// declares; the driver composes `plan_hash` from the assembled request.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CacheBinding {
+    /// The scripted model's `provider_model_id` (the key's request axis).
+    pub provider_model_id: String,
+    /// The pinned `ModelSnapshotRecord` id (`None` ⇒ `"none"` in the key).
+    pub snapshot_id: Option<String>,
+    /// The pinned profile version id the entry's contract stamps.
+    pub profile_version_id: String,
+    /// The replicate index (cached responses never fake variance).
+    pub replicate: u64,
+    /// The run's `configuration_version_id`.
+    pub configuration_version_id: String,
+    /// The `idp/1` plan domain (`provider_request_plan.1`).
+    pub plan_domain: String,
+}
+
+/// A served cache entry — the recorded response document + the entry ref
+/// the terminal row's `served_from_cache` member stamps.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServedEntry {
+    /// The content-addressed entry ref.
+    pub entry_ref: String,
+    /// The recorded response document (`{stop_reason, response_ref,
+    /// text_empty, calls[], retry_after_ms?}` — the scripted lane's
+    /// canonical `ModelOutcome` record).
+    pub message: Json,
+}
+
+/// What a cache `resolve` produced — the `model.cache.resolved` payload the
+/// driver lands plus the recorded `ModelOutcome` document when the outcome
+/// serves (`hit`; a withheld/annotated entry never silently serves under
+/// `mode = execute`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct CacheResolution {
+    /// The `model.cache.resolved` payload (one row per lookup — hits,
+    /// misses, withhelds alike; ADR-0128 d.3).
+    pub payload: Json,
+    /// The served entry on a servable outcome.
+    pub serve: Option<ServedEntry>,
+}
+
+/// The response-cache port (R-2.7's K5 store leg — §5b.4) — the scripted
+/// lane's `K5Cache` adapter. The driver owns the `model.cache.resolved`
+/// append (scoped to the call it serves) and the serve/record ordering.
+pub trait ResponseCachePort {
+    /// The declared binding members.
+    fn binding(&self) -> &CacheBinding;
+    /// `resolve(plan_hash)` — the lookup; returns the resolved payload +
+    /// the recorded message when servable (K5 `hit`).
+    fn resolve(&mut self, plan_hash: &str) -> CacheResolution;
+    /// `record(plan_hash, message, usage, timing)` — a completed call's
+    /// served artifacts write the entry; idempotent under the key.
+    fn record(&mut self, plan_hash: &str, message: Json, usage: Json, timing: Json) -> String;
+}
+
 /// The effect boundary — `dispatch` runs one intent through the
 /// `intended → prepared → committed → observed` lifecycle (the gate
 /// appends its own rows through the sink the driver hands it — the
@@ -580,6 +732,13 @@ pub struct Driver<S: ControlStrategy> {
     /// decision or an armed `resume_set` fails `UnbackedPort` — a
     /// declared producer leg never silently skips.
     memory_port: Option<Box<dyn MemoryPort>>,
+    /// The router port (R-2.7 — the bound `router` slot's arm). `None` ⇒
+    /// the legacy scripted lane runs byte-identical (no `route.decided` /
+    /// `attempt.*` rows); `Some` ⇒ the §5b.2 emission set lands.
+    routing_port: Option<Box<dyn RoutingPort>>,
+    /// The response-cache port (R-2.7's K5 store leg). `None` ⇒ no
+    /// `model.cache.resolved` rows (the lane declared no cache).
+    cache_port: Option<Box<dyn ResponseCachePort>>,
     /// Whether this armed driver already drained `config.resume_set_heads`
     /// (once per process-arm — the emitted `context.memory.read` rows are
     /// the durable consumption record; a re-armed session re-reads, which
@@ -667,6 +826,8 @@ impl<S: ControlStrategy> Driver<S> {
             compaction_port: None,
             verify_port: None,
             memory_port: None,
+            routing_port: None,
+            cache_port: None,
             resume_set_drained: false,
             pending_nudge: None,
             model_ref: ctx
@@ -765,6 +926,8 @@ impl<S: ControlStrategy> Driver<S> {
             compaction_port: None,
             verify_port: None,
             memory_port: None,
+            routing_port: None,
+            cache_port: None,
             resume_set_drained: false,
             pending_nudge: None,
             model_ref: ctx
@@ -887,6 +1050,8 @@ impl<S: ControlStrategy> Driver<S> {
             compaction_port: None,
             verify_port: None,
             memory_port: None,
+            routing_port: None,
+            cache_port: None,
             resume_set_drained: false,
             pending_nudge: None,
             model_ref: ctx
@@ -1290,6 +1455,21 @@ impl<S: ControlStrategy> Driver<S> {
     /// skipped leg.
     pub fn set_memory_port(&mut self, port: Box<dyn MemoryPort>) {
         self.memory_port = Some(port);
+    }
+
+    /// `set_routing_port` — arm the §5b.2 router seam (R-2.7; the bound
+    /// `router` slot's port). The boundary re-arms it per `drive` (the
+    /// port's profile/pricing views are declared snapshots read at
+    /// consult; between-drive registry republishes are observed on the
+    /// next consult — durable rows, never a cached lie).
+    pub fn set_routing_port(&mut self, port: Box<dyn RoutingPort>) {
+        self.routing_port = Some(port);
+    }
+
+    /// `set_cache_port` — arm the `response_cache` slot's K5 store leg
+    /// (R-2.7). `None`/unset ⇒ no `model.cache.resolved` rows land.
+    pub fn set_cache_port(&mut self, port: Box<dyn ResponseCachePort>) {
+        self.cache_port = Some(port);
     }
 
     /// `clock_read(declaring)` — the runtime's wall-clock read seam
@@ -1803,53 +1983,156 @@ impl<S: ControlStrategy> Driver<S> {
                         )
                         .request;
                     let next_attempt = crate::retry::attempt_no(sink.prefix(), &model_call_id) + 1;
-                    // `model_fallback{profile_ref}` execution (§5e.2;
-                    // AC-R-2.6.2-11): the last `control.retry.scheduled`
-                    // for this call that carried the declared delta is
-                    // the reroute's basis — the driver emits the
-                    // `model.rerouted` audit row and stamps the
-                    // `profile_override` member on the request (never a
-                    // silent alteration: the delta is the recorded one,
-                    // `attempt_delta_allowed` having admitted it).
-                    let fallback = sink
-                        .prefix()
-                        .iter()
-                        .rev()
-                        .find(|e| {
-                            e.class == "control.retry.scheduled"
-                                && e.payload.get("scope_id").and_then(Json::as_str)
-                                    == Some(model_call_id.as_str())
-                                && e.payload
+                    // R-2.7 — the routed lane's reroute execution: a
+                    // pending `model.route.decided` (the failure consult's
+                    // fresh decision, minted durable inside `model_round`)
+                    // mints `model.surface.relowered` on a cross-profile
+                    // move then `model.rerouted` — both scope-free: the
+                    // failed terminal already closed the `mc` scope (the
+                    // payload's `model_call_id` member is the join).
+                    if self.routing_port.is_some() {
+                        if let Some((fresh, prior)) = pending_reroute(sink.prefix(), &model_call_id)
+                        {
+                            let mut relower_ref: Option<String> = None;
+                            if fresh.relower_required {
+                                let payload =
+                                    self.routing_port.as_mut().expect("routed lane").relower(
+                                        &prior.selected.profile_ref,
+                                        &fresh.selected.profile_ref,
+                                        "model_retry",
+                                        &model_call_id,
+                                    );
+                                match payload {
+                                    Ok(p) => {
+                                        let ev_id = self.alloc("e");
+                                        self.append_with_id(
+                                            sink,
+                                            &ev_id,
+                                            "model.surface.relowered",
+                                            p,
+                                            None,
+                                        )?;
+                                        relower_ref = Some(ev_id);
+                                    }
+                                    Err(e) => {
+                                        // The boundary cannot project the
+                                        // move — a typed refusal, never a
+                                        // skipped leg: the audit row +
+                                        // the `Refused` cue, no re-drive.
+                                        let mut fired = match crate::events::guard_fired_payload(
+                                            DecisionPoint::Retry,
+                                            "route_reroute",
+                                        ) {
+                                            Json::Obj(m) => m,
+                                            other => unreachable!("guard_fired_payload: {other:?}"),
+                                        };
+                                        fired.insert("verdict".into(), Json::str("refused"));
+                                        fired
+                                            .insert("required".into(), Json::str("relower_failed"));
+                                        fired.insert("detail".into(), Json::str(&e));
+                                        fired.insert(
+                                            "model_call_id".into(),
+                                            Json::str(&model_call_id),
+                                        );
+                                        self.append(
+                                            sink,
+                                            "control.guard.fired",
+                                            Json::Obj(fired),
+                                            None,
+                                        )?;
+                                        self.inbox.push_back(Cue::EnvelopeSignal(
+                                            EnvelopeSignal::Refused {
+                                                decision_ref: model_call_id.clone(),
+                                                reason: format!("route_reroute:relower_failed:{e}"),
+                                            },
+                                        ));
+                                        return Ok(());
+                                    }
+                                }
+                            }
+                            let policy = self
+                                .routing_port
+                                .as_ref()
+                                .expect("routed lane")
+                                .lane()
+                                .policy
+                                .clone();
+                            let reason = reroute_reason(sink.prefix(), &model_call_id, &policy);
+                            self.append(
+                                sink,
+                                "model.rerouted",
+                                hh_gateway::events::rerouted(
+                                    &model_call_id,
+                                    &prior.selected.provider_model_id,
+                                    &fresh.selected.provider_model_id,
+                                    &reason,
+                                    next_attempt as u32,
+                                    fresh.relower_required,
+                                    relower_ref.as_deref(),
+                                    &fresh.decision_id,
+                                ),
+                                None,
+                            )?;
+                            if let Json::Obj(m) = &mut request {
+                                m.insert(
+                                    "profile_override".to_string(),
+                                    Json::str(&fresh.selected.profile_ref),
+                                );
+                            }
+                        }
+                    } else {
+                        // `model_fallback{profile_ref}` execution (§5e.2;
+                        // AC-R-2.6.2-11): the last `control.retry.scheduled`
+                        // for this call that carried the declared delta is
+                        // the reroute's basis — the driver emits the
+                        // `model.rerouted` audit row and stamps the
+                        // `profile_override` member on the request (never a
+                        // silent alteration: the delta is the recorded one,
+                        // `attempt_delta_allowed` having admitted it).
+                        let fallback = sink
+                            .prefix()
+                            .iter()
+                            .rev()
+                            .find(|e| {
+                                e.class == "control.retry.scheduled"
+                                    && e.payload.get("scope_id").and_then(Json::as_str)
+                                        == Some(model_call_id.as_str())
+                                    && e.payload
+                                        .get("attempt_delta")
+                                        .and_then(Json::as_str)
+                                        .is_some_and(|d| d.starts_with("model_fallback{"))
+                            })
+                            .and_then(|e| {
+                                e.payload
                                     .get("attempt_delta")
                                     .and_then(Json::as_str)
-                                    .is_some_and(|d| d.starts_with("model_fallback{"))
-                        })
-                        .and_then(|e| {
-                            e.payload
-                                .get("attempt_delta")
-                                .and_then(Json::as_str)
-                                .map(|d| {
-                                    (
-                                        d["model_fallback{".len()..d.len() - 1].to_string(),
-                                        e.event_id.clone(),
-                                    )
-                                })
-                        });
-                    if let Some((profile_ref, basis)) = fallback {
-                        self.append(
-                            sink,
-                            "model.rerouted",
-                            Json::obj([
-                                ("model_call_id", Json::str(&model_call_id)),
-                                ("to_profile_ref", Json::str(&profile_ref)),
-                                ("cause", Json::str("model_fallback")),
-                                ("basis", Json::str(&basis)),
-                                ("charged_to", Json::str("subject")),
-                            ]),
-                            Some(&model_call_id),
-                        )?;
-                        if let Json::Obj(m) = &mut request {
-                            m.insert("profile_override".to_string(), Json::str(profile_ref));
+                                    .map(|d| {
+                                        (
+                                            d["model_fallback{".len()..d.len() - 1].to_string(),
+                                            e.event_id.clone(),
+                                        )
+                                    })
+                            });
+                        if let Some((profile_ref, basis)) = fallback {
+                            // Scope-free: the failed terminal already closed
+                            // the `mc` scope — the payload's `model_call_id`
+                            // member is the join (the `Some` scope id would
+                            // trip `ScopeNotOpen` under the real writer).
+                            self.append(
+                                sink,
+                                "model.rerouted",
+                                Json::obj([
+                                    ("model_call_id", Json::str(&model_call_id)),
+                                    ("to_profile_ref", Json::str(&profile_ref)),
+                                    ("cause", Json::str("model_fallback")),
+                                    ("basis", Json::str(&basis)),
+                                    ("charged_to", Json::str("subject")),
+                                ]),
+                                None,
+                            )?;
+                            if let Json::Obj(m) = &mut request {
+                                m.insert("profile_override".to_string(), Json::str(profile_ref));
+                            }
                         }
                     }
                     let payload = crate::events::retry_scheduled_payload(
@@ -1878,7 +2161,7 @@ impl<S: ControlStrategy> Driver<S> {
                 // audit; the loop parks on `human_input`.
             }
             DecisionKind::Compact { reason } => {
-                self.compact_round(sink, &reason)?;
+                self.compact_round(sink, &reason, None)?;
             }
             DecisionKind::Verify {
                 validator_refs,
@@ -1969,17 +2252,63 @@ impl<S: ControlStrategy> Driver<S> {
             return Ok(());
         }
         self.derive_deadline(ScopeKind::ModelCall, &mc);
+        // R-2.7 — the routed lane: the §5b.2 select runs *before* the
+        // request opens the call scope (the route decision lands durable
+        // ahead of the call it binds — durable-before-visible). A pending
+        // reroute's fresh decision was minted at the failure consult —
+        // the durable fold is the cursor, so the select runs only when no
+        // decision exists for `mc` yet (INV-5's shared identity).
+        if self.routing_port.is_some()
+            && route_decisions(sink.prefix(), &mc).is_empty()
+            && !self.route_select(sink, &mc)?
+        {
+            return Ok(());
+        }
+        let active_decision = route_decisions(sink.prefix(), &mc)
+            .last()
+            .map(|(_, d)| d.clone());
+        let mut requested_members = vec![
+            ("model_call_id", Json::str(&mc)),
+            ("attempt_no", Json::Int(attempt as i64)),
+            ("request_ref", Json::str(format!("req-{mc}-a{attempt}"))),
+        ];
+        if let Some(d) = &active_decision {
+            // The bound `ModelRef` + the profile the attempt runs under —
+            // the health view's join key and the reroute's derivation.
+            requested_members.push(("model_ref", d.selected.to_json()));
+            requested_members.push(("profile_ref", Json::str(&d.selected.profile_ref)));
+            requested_members.push(("route_decision_ref", Json::str(&d.decision_id)));
+        }
         self.append(
             sink,
             "model.call.requested",
-            Json::obj([
-                ("model_call_id", Json::str(&mc)),
-                ("attempt_no", Json::Int(attempt as i64)),
-                ("request_ref", Json::str(format!("req-{mc}-a{attempt}"))),
-            ]),
+            Json::obj(requested_members),
             Some(&mc),
         )?;
-        let outcome = model.call(&mc, request);
+        // The K5 lookup — one `model.cache.resolved` row per lookup (the
+        // row lands scoped to the call it serves; a `hit` replays the
+        // recorded response verbatim — §5b.4).
+        let k5 = self.k5_resolve(sink, &mc, request)?;
+        let served = k5.as_ref().and_then(|(_, sv)| sv.clone());
+        // The attempt span opens only when the call actually runs — a
+        // served hit is no attempt (the honest row set: requested →
+        // cache.resolved → completed{served_from_cache}).
+        let outcome = match &served {
+            Some(entry) => Self::served_outcome(&entry.message).ok_or_else(|| {
+                DriverError::Append(format!("k5 serve decode failed for {}", entry.entry_ref))
+            })?,
+            None => {
+                if self.routing_port.is_some() {
+                    self.append(
+                        sink,
+                        "model.call.attempt.started",
+                        hh_gateway::events::attempt_started(&mc, attempt as u32, 0),
+                        Some(&mc),
+                    )?;
+                }
+                model.call(&mc, request)
+            }
+        };
         // G-INTERPRET — output validation + loop detectors + empty ladder.
         let interp = self.envelope.guard(
             sink.prefix(),
@@ -2078,63 +2407,72 @@ impl<S: ControlStrategy> Driver<S> {
                     .error_class
                     .clone()
                     .unwrap_or_else(|| "unknown".into());
-                let mut failed_members = vec![
-                    ("model_call_id", Json::str(&mc)),
-                    ("attempt_no", Json::Int(attempt as i64)),
-                    ("error", Json::obj([("class", Json::str(&class))])),
-                ];
-                if let Some(ms) = outcome.retry_after_ms {
-                    failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
-                }
-                self.append(
-                    sink,
-                    "model.call.failed",
-                    Json::obj(failed_members),
-                    Some(&mc),
-                )?;
-                // The F2 seam — `schedule_retry` decides `retry` vs `give_up`.
-                let retries_used =
-                    crate::views::fold_envelope_view(sink.prefix()).retries_scheduled;
-                match self.envelope.schedule_retry(
-                    sink.prefix(),
-                    ScopeKind::ModelCall,
-                    &mc,
-                    &class,
-                    self.now_ms,
-                    outcome.retry_after_ms,
-                    None,
-                    retries_used,
-                    self.config.retries_ceiling,
-                ) {
-                    crate::retry::RetryOutcome::Retry(s) => {
-                        self.append(
-                            sink,
-                            "control.retry.scheduled",
-                            crate::events::retry_scheduled_payload(
-                                ScopeKind::ModelCall,
-                                &mc,
-                                s.attempt_no,
-                                &class,
-                                s.delay_ms,
-                                s.not_before,
-                                &self.envelope.policy.policy_id,
-                                s.attempt_delta.as_ref(),
-                            ),
-                            Some(&mc),
-                        )?;
-                        self.inbox
-                            .push_back(Cue::EnvelopeSignal(EnvelopeSignal::RetryableError {
-                                class,
-                                attempt: s.attempt_no - 1,
-                            }));
+                if self.routing_port.is_some() {
+                    // R-2.7 — the ADR-0122 consult decides retry-vs-reroute
+                    // off the sealed `error_actions` table; the row set is
+                    // `attempt.failed → call.failed → [side rows] →
+                    // [route.decided] → [compact] → retry.scheduled`.
+                    self.routed_failure(sink, &mc, attempt, &outcome, &class)?;
+                } else {
+                    let mut failed_members = vec![
+                        ("model_call_id", Json::str(&mc)),
+                        ("attempt_no", Json::Int(attempt as i64)),
+                        ("error", Json::obj([("class", Json::str(&class))])),
+                    ];
+                    if let Some(ms) = outcome.retry_after_ms {
+                        failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
                     }
-                    crate::retry::RetryOutcome::GiveUp(_)
-                    | crate::retry::RetryOutcome::BudgetExhausted { .. } => {
-                        self.inbox
-                            .push_back(Cue::EnvelopeSignal(EnvelopeSignal::Refused {
-                                decision_ref: mc.clone(),
-                                reason: "retry_budget_exhausted".into(),
-                            }));
+                    self.append(
+                        sink,
+                        "model.call.failed",
+                        Json::obj(failed_members),
+                        Some(&mc),
+                    )?;
+                    // The F2 seam — `schedule_retry` decides `retry` vs `give_up`.
+                    let retries_used =
+                        crate::views::fold_envelope_view(sink.prefix()).retries_scheduled;
+                    match self.envelope.schedule_retry(
+                        sink.prefix(),
+                        ScopeKind::ModelCall,
+                        &mc,
+                        &class,
+                        self.now_ms,
+                        outcome.retry_after_ms,
+                        None,
+                        retries_used,
+                        self.config.retries_ceiling,
+                    ) {
+                        crate::retry::RetryOutcome::Retry(s) => {
+                            self.append(
+                                sink,
+                                "control.retry.scheduled",
+                                crate::events::retry_scheduled_payload(
+                                    ScopeKind::ModelCall,
+                                    &mc,
+                                    s.attempt_no,
+                                    &class,
+                                    s.delay_ms,
+                                    s.not_before,
+                                    &self.envelope.policy.policy_id,
+                                    s.attempt_delta.as_ref(),
+                                ),
+                                Some(&mc),
+                            )?;
+                            self.inbox.push_back(Cue::EnvelopeSignal(
+                                EnvelopeSignal::RetryableError {
+                                    class,
+                                    attempt: s.attempt_no - 1,
+                                },
+                            ));
+                        }
+                        crate::retry::RetryOutcome::GiveUp(_)
+                        | crate::retry::RetryOutcome::BudgetExhausted { .. } => {
+                            self.inbox
+                                .push_back(Cue::EnvelopeSignal(EnvelopeSignal::Refused {
+                                    decision_ref: mc.clone(),
+                                    reason: "retry_budget_exhausted".into(),
+                                }));
+                        }
                     }
                 }
             }
@@ -2170,12 +2508,58 @@ impl<S: ControlStrategy> Driver<S> {
                 if let Some(ms) = outcome.retry_after_ms {
                     completed_members.push(("retry_after_ms", Json::Int(ms as i64)));
                 }
+                // §5b.4 — a served K5 hit stamps `{served_from_cache:
+                // entry_ref, timing: n/a{not_run}}` on the terminal row;
+                // the recorded artifacts replayed verbatim (never the
+                // entry's timing re-read as the serve's).
+                if let Some(entry) = &served {
+                    if let Json::Obj(stamp) =
+                        hh_context::k5::K5Cache::served_terminal_stamp(&entry.entry_ref)
+                    {
+                        for (k, v) in stamp {
+                            // The stamp's declared member set is closed
+                            // (`served_from_cache`/`timing`) — named
+                            // statically so `completed_members` keeps its
+                            // `&'static` member spelling.
+                            let key: &'static str = match k.as_str() {
+                                "served_from_cache" => "served_from_cache",
+                                "timing" => "timing",
+                                _ => continue,
+                            };
+                            completed_members.push((key, v));
+                        }
+                    }
+                }
+                // R-2.7 — the attempt terminal closes ahead of the call's
+                // (`attempt.completed → call.completed`; a served hit ran
+                // no attempt, so no attempt row lands).
+                if self.routing_port.is_some() && served.is_none() {
+                    self.append(
+                        sink,
+                        "model.call.attempt.completed",
+                        hh_gateway::events::attempt_completed(&mc, attempt as u32, 0, None),
+                        Some(&mc),
+                    )?;
+                }
                 self.append(
                     sink,
                     "model.call.completed",
                     Json::obj(completed_members),
                     Some(&mc),
                 )?;
+                // K5 — a completed call writes its served artifacts under
+                // the key (idempotent — the canonical key fixes the value;
+                // a served hit never re-records).
+                if served.is_none() {
+                    if let (Some(port), Some((plan_hash, _))) = (self.cache_port.as_mut(), &k5) {
+                        port.record(
+                            plan_hash,
+                            Self::outcome_record(&outcome),
+                            Json::obj([]),
+                            Json::obj([]),
+                        );
+                    }
+                }
                 self.inbox.push_back(Cue::ModelCompleted {
                     model_call_id: mc,
                     response_ref: outcome.response_ref.clone(),
@@ -2189,6 +2573,206 @@ impl<S: ControlStrategy> Driver<S> {
             self.inbox.push_back(cue);
         }
         let _ = proposed_tool_calls;
+        Ok(())
+    }
+
+    /// The routed lane's failure consult (R-2.7; ADR-0122 d.1–d.3): the
+    /// consult runs before the attempt terminal lands so
+    /// `attempt.failed{will_retry, next_delay_ms}` carries the policy's
+    /// answer; then `model.call.failed` closes the scope, the consult's
+    /// side rows drain (reservation release/hold, `model.profile.status.
+    /// changed`), a reroute mints its fresh `model.route.decided`, the
+    /// `compact_then_retry` leg runs its compaction, and the F2
+    /// `control.retry.scheduled` + `RetryableError` cue hand the strategy
+    /// the re-drive (the envelope's retry bound still governs). `GiveUp`
+    /// mints the refused audit row + the `Refused` cue — the honest
+    /// terminal is the strategy's `stop{refused}`.
+    fn routed_failure(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        mc: &str,
+        attempt: u64,
+        outcome: &ModelOutcome,
+        class: &str,
+    ) -> Result<(), DriverError> {
+        let err_class = hh_gateway::vocab::ModelErrorClass::parse(class)
+            .unwrap_or(hh_gateway::vocab::ModelErrorClass::Unknown);
+        let err = hh_gateway::vocab::ModelError::new(
+            err_class,
+            format!("model call {mc} attempt {attempt} failed: {class}"),
+        );
+        let lane = self
+            .routing_port
+            .as_ref()
+            .expect("routed_failure on a routed lane")
+            .lane()
+            .clone();
+        let disposition = {
+            let prior = route_decisions(sink.prefix(), mc)
+                .last()
+                .map(|(_, d)| d.clone());
+            let Some(prior) = prior else {
+                // No decision exists for the call (unreachable under the
+                // select-first arm — never mint a consult against a
+                // missing decision; the call closes `policy_give_up`).
+                self.append(
+                    sink,
+                    "model.call.attempt.failed",
+                    hh_gateway::events::attempt_failed(mc, attempt as u32, &err, false, None),
+                    Some(mc),
+                )?;
+                let mut failed_members = vec![
+                    ("model_call_id", Json::str(mc)),
+                    ("attempt_no", Json::Int(attempt as i64)),
+                    ("error", Json::obj([("class", Json::str(class))])),
+                ];
+                if let Some(ms) = outcome.retry_after_ms {
+                    failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
+                }
+                self.append(
+                    sink,
+                    "model.call.failed",
+                    Json::obj(failed_members),
+                    Some(mc),
+                )?;
+                self.inbox
+                    .push_back(Cue::EnvelopeSignal(EnvelopeSignal::Refused {
+                        decision_ref: mc.to_string(),
+                        reason: "route_attempt:no_decision".to_string(),
+                    }));
+                return Ok(());
+            };
+            let mut state = attempt_state(sink.prefix(), mc);
+            let req = self.routing_request(&lane, mc, None);
+            let decision_id = self.alloc("d");
+            let port = self.routing_port.as_mut().expect("routed lane");
+            port.attempt_failed(
+                &req,
+                &prior,
+                &err_class,
+                attempts_on_target(sink.prefix(), mc),
+                outcome.retry_after_ms,
+                &mut state,
+                &decision_id,
+                self.now_ms,
+                sink.prefix(),
+            )
+        };
+        let (will_retry, next_delay_ms) = match &disposition {
+            hh_gateway::router::AttemptDisposition::Continue { not_before_ms, .. } => {
+                (true, Some(*not_before_ms))
+            }
+            hh_gateway::router::AttemptDisposition::Reroute(_) => (true, None),
+            hh_gateway::router::AttemptDisposition::GiveUp(_) => (false, None),
+        };
+        self.append(
+            sink,
+            "model.call.attempt.failed",
+            hh_gateway::events::attempt_failed(mc, attempt as u32, &err, will_retry, next_delay_ms),
+            Some(mc),
+        )?;
+        let mut failed_members = vec![
+            ("model_call_id", Json::str(mc)),
+            ("attempt_no", Json::Int(attempt as i64)),
+            ("error", Json::obj([("class", Json::str(class))])),
+        ];
+        if let Some(ms) = outcome.retry_after_ms {
+            failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
+        }
+        self.append(
+            sink,
+            "model.call.failed",
+            Json::obj(failed_members),
+            Some(mc),
+        )?;
+        // The consult's side rows land durable in emit order (CC3 — the
+        // producer computed them; the fenced writer lands them).
+        for (class, payload) in self.routing_port.as_mut().expect("routed lane").take_rows() {
+            self.append(sink, &class, payload, None)?;
+        }
+        match disposition {
+            hh_gateway::router::AttemptDisposition::Continue { compact_first, .. } => {
+                // `compact_then_retry` — the compaction runs under the old
+                // profile before the retry (ADR-0122 d.3 ordering).
+                if compact_first {
+                    self.compact_round(sink, "model_retry", Some(mc))?;
+                }
+            }
+            hh_gateway::router::AttemptDisposition::Reroute(d) => {
+                // The fresh decision is durable before the reroute
+                // consumes it — the Retry arm folds `pending_reroute`.
+                self.append(
+                    sink,
+                    "model.route.decided",
+                    hh_gateway::events::route_decided(&d),
+                    None,
+                )?;
+            }
+            hh_gateway::router::AttemptDisposition::GiveUp(reason) => {
+                let mut fired =
+                    match crate::events::guard_fired_payload(DecisionPoint::Retry, "route_attempt")
+                    {
+                        Json::Obj(m) => m,
+                        other => unreachable!("guard_fired_payload is an object: {other:?}"),
+                    };
+                fired.insert("verdict".into(), Json::str("refused"));
+                fired.insert("required".into(), Json::str(reason.as_str()));
+                fired.insert("detail".into(), Json::str(format!("{reason:?}")));
+                fired.insert("model_call_id".into(), Json::str(mc));
+                self.append(sink, "control.guard.fired", Json::Obj(fired), None)?;
+                self.inbox
+                    .push_back(Cue::EnvelopeSignal(EnvelopeSignal::Refused {
+                        decision_ref: mc.to_string(),
+                        reason: format!("route_attempt:{}", reason.as_str()),
+                    }));
+                return Ok(());
+            }
+        }
+        // The F2 seam — `schedule_retry` decides `retry` vs `give_up` (the
+        // envelope bound still governs a router-admitted retry).
+        let retries_used = crate::views::fold_envelope_view(sink.prefix()).retries_scheduled;
+        match self.envelope.schedule_retry(
+            sink.prefix(),
+            ScopeKind::ModelCall,
+            mc,
+            class,
+            self.now_ms,
+            outcome.retry_after_ms,
+            None,
+            retries_used,
+            self.config.retries_ceiling,
+        ) {
+            crate::retry::RetryOutcome::Retry(s) => {
+                self.append(
+                    sink,
+                    "control.retry.scheduled",
+                    crate::events::retry_scheduled_payload(
+                        ScopeKind::ModelCall,
+                        mc,
+                        s.attempt_no,
+                        class,
+                        s.delay_ms,
+                        s.not_before,
+                        &self.envelope.policy.policy_id,
+                        s.attempt_delta.as_ref(),
+                    ),
+                    Some(mc),
+                )?;
+                self.inbox
+                    .push_back(Cue::EnvelopeSignal(EnvelopeSignal::RetryableError {
+                        class: class.to_string(),
+                        attempt: s.attempt_no - 1,
+                    }));
+            }
+            crate::retry::RetryOutcome::GiveUp(_)
+            | crate::retry::RetryOutcome::BudgetExhausted { .. } => {
+                self.inbox
+                    .push_back(Cue::EnvelopeSignal(EnvelopeSignal::Refused {
+                        decision_ref: mc.to_string(),
+                        reason: "retry_budget_exhausted".into(),
+                    }));
+            }
+        }
         Ok(())
     }
 
@@ -2480,15 +3064,197 @@ impl<S: ControlStrategy> Driver<S> {
         }
     }
 
+    // ── R-2.7 routed-lane consults ────────────────────────────────────────
+
+    /// The `RoutingRequest` the lane's consults run under.
+    fn routing_request(
+        &self,
+        lane: &RoutingLane,
+        mc: &str,
+        source_profile_ref: Option<String>,
+    ) -> hh_gateway::router::RoutingRequest {
+        hh_gateway::router::RoutingRequest {
+            role: lane.role.clone(),
+            required_capabilities: lane.required_capabilities.clone(),
+            budget_id: lane.budget_id.clone(),
+            holder: self.run_id.clone(),
+            model_call_id: Some(mc.to_string()),
+            intent_ref: lane.intent_ref.clone(),
+            effort: lane.effort.clone(),
+            latency_target_ms: lane.latency_target_ms,
+            quality_prior_ref: None,
+            preferences: None,
+            source_profile_ref,
+            // G-3's honest fold — a proposed-but-unresolved effect in the
+            // durable fold parks the cross-profile move (ADR-0030).
+            in_flight_effect: !self.state.open_effects.is_empty(),
+            task_class: lane.task_class.clone(),
+        }
+    }
+
+    /// The §5b.2 select for a fresh logical call — mints the durable
+    /// `model.route.decided` (scope-free; the call scope opens with
+    /// `model.call.requested`), or on refusal the `control.guard.fired`
+    /// audit row + the `Refused` envelope cue the strategy answers
+    /// `stop{refused}` with. Returns `false` when the call never opened.
+    fn route_select(&mut self, sink: &mut dyn LedgerSink, mc: &str) -> Result<bool, DriverError> {
+        let lane = match self.routing_port.as_ref() {
+            Some(p) => p.lane().clone(),
+            None => return Ok(true),
+        };
+        let req = self.routing_request(&lane, mc, None);
+        let decision_id = self.alloc("d");
+        let port = self.routing_port.as_mut().expect("lane checked");
+        match port.select(
+            &req,
+            &decision_id,
+            self.now_ms,
+            &Default::default(),
+            sink.prefix(),
+        ) {
+            Ok(d) => {
+                for (class, payload) in port.take_rows() {
+                    self.append(sink, &class, payload, None)?;
+                }
+                self.append(
+                    sink,
+                    "model.route.decided",
+                    hh_gateway::events::route_decided(&d),
+                    None,
+                )?;
+                Ok(true)
+            }
+            Err(r) => {
+                for (class, payload) in port.take_rows() {
+                    self.append(sink, &class, payload, None)?;
+                }
+                let mut fired =
+                    match crate::events::guard_fired_payload(DecisionPoint::Plan, "route_select") {
+                        Json::Obj(m) => m,
+                        other => unreachable!("guard_fired_payload is an object: {other:?}"),
+                    };
+                fired.insert("verdict".into(), Json::str("refused"));
+                fired.insert("required".into(), Json::str(r.as_str()));
+                fired.insert("detail".into(), Json::str(r.to_string()));
+                fired.insert("model_call_id".into(), Json::str(mc));
+                self.append(sink, "control.guard.fired", Json::Obj(fired), None)?;
+                self.inbox
+                    .push_back(Cue::EnvelopeSignal(EnvelopeSignal::Refused {
+                        decision_ref: mc.to_string(),
+                        reason: format!("route_select:{}", r.as_str()),
+                    }));
+                Ok(false)
+            }
+        }
+    }
+
+    /// The K5 lookup between `model.call.requested` and the attempt —
+    /// `Some((plan_hash, served))` when the lane bound a `response_cache`;
+    /// the `model.cache.resolved` row lands scoped to the call, one per
+    /// lookup (ADR-0128 d.3). `served` is the recorded response document
+    /// on a `hit` — the caller replays it verbatim and stamps
+    /// `served_from_cache` + `timing = n/a{not_run}` on the terminal row.
+    fn k5_resolve(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        mc: &str,
+        request: &Json,
+    ) -> Result<Option<(String, Option<ServedEntry>)>, DriverError> {
+        let Some(port) = self.cache_port.as_mut() else {
+            return Ok(None);
+        };
+        let plan_hash = hh_identity::idp_id(
+            &port.binding().plan_domain,
+            request.to_canonical_string().as_bytes(),
+        );
+        let res = port.resolve(&plan_hash);
+        let mut payload = res.payload;
+        if let Json::Obj(m) = &mut payload {
+            m.insert("model_call_id".to_string(), Json::str(mc));
+        }
+        self.append(sink, "model.cache.resolved", payload, Some(mc))?;
+        Ok(Some((plan_hash, res.serve)))
+    }
+
+    /// Decode a served entry's recorded response document back into the
+    /// `ModelOutcome` it records (the scripted lane's symmetric codec —
+    /// `record`/`served` are one spelling).
+    fn served_outcome(doc: &Json) -> Option<ModelOutcome> {
+        let mut calls = Vec::new();
+        if let Some(Json::Arr(items)) = doc.get("calls") {
+            for c in items {
+                calls.push(ParsedCall {
+                    tool_call_id: c.get("tool_call_id")?.as_str()?.to_string(),
+                    surface: c.get("surface")?.as_str()?.to_string(),
+                    args_raw: c.get("args_raw")?.as_str()?.to_string(),
+                });
+            }
+        }
+        Some(ModelOutcome {
+            stop_reason: hh_gateway::vocab::StopReason::parse(doc.get("stop_reason")?.as_str()?)?,
+            response_ref: doc
+                .get("response_ref")
+                .and_then(Json::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            text_empty: matches!(doc.get("text_empty"), Some(Json::Bool(true))),
+            calls,
+            error_class: doc
+                .get("error_class")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            retry_after_ms: doc
+                .get("retry_after_ms")
+                .and_then(Json::as_int)
+                .map(|v| v.max(0) as u64),
+        })
+    }
+
+    /// The canonical record a completed call writes into the cache — the
+    /// scripted lane's `ModelOutcome` document (the `served_outcome`
+    /// decoder's input spelling).
+    fn outcome_record(outcome: &ModelOutcome) -> Json {
+        let mut m = vec![
+            ("stop_reason", Json::str(outcome.stop_reason.as_str())),
+            ("response_ref", Json::str(&outcome.response_ref)),
+            ("text_empty", Json::Bool(outcome.text_empty)),
+            (
+                "calls",
+                Json::Arr(
+                    outcome
+                        .calls
+                        .iter()
+                        .map(|c| {
+                            Json::obj([
+                                ("tool_call_id", Json::str(&c.tool_call_id)),
+                                ("surface", Json::str(&c.surface)),
+                                ("args_raw", Json::str(&c.args_raw)),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ];
+        if let Some(ms) = outcome.retry_after_ms {
+            m.push(("retry_after_ms", Json::Int(ms as i64)));
+        }
+        Json::obj(m)
+    }
+
     /// `compact{reason}` — the compaction boundary: the port runs the
     /// I-FALLBACK ladder (its own `context.compaction.started/completed`
     /// rows ride its sink); `CompactionImpossible` or an absent port is the
     /// exhausted ladder → envelope-owned `stop{context_exhausted}`
     /// (CF-225; `stop_pending` — `run` mints the decision row).
+    /// `for_call` stamps the `model_call_id` payload member the
+    /// `compact_then_retry` consult's `compact_tried` fold reads (R-2.7 —
+    /// the compaction that ran *for* a failed call is a ledger fact, never
+    /// an inferred span).
     fn compact_round(
         &mut self,
         sink: &mut dyn LedgerSink,
         reason: &str,
+        for_call: Option<&str>,
     ) -> Result<(), DriverError> {
         match &mut self.compaction_port {
             Some(port) => match port.compact(reason) {
@@ -2499,6 +3265,13 @@ impl<S: ControlStrategy> Driver<S> {
                     // assembler's side bands (DF-S2.8-1: the rows are
                     // minted from the loop, not a test-side stub).
                     for (class, payload) in done.emitted {
+                        let payload = match (for_call, payload) {
+                            (Some(mc), Json::Obj(mut m)) => {
+                                m.insert("model_call_id".to_string(), Json::str(mc));
+                                Json::Obj(m)
+                            }
+                            (_, p) => p,
+                        };
                         self.append(sink, &class, payload, None)?;
                     }
                     self.inbox.push_back(Cue::CompactionCompleted {
@@ -4105,6 +4878,132 @@ impl Driver<ReactMinimal> {
         config: DriverConfig,
     ) -> Result<Driver<ReactMinimal>, DriverError> {
         Driver::resume_from(ReactMinimal::new(), ctx, policy, checkpoint, sink, config)
+    }
+}
+
+// ── R-2.7 — the durable-prefix folds the routed lane reads ─────────────────
+// (the folds are the cursor — a resume replays them identically; nothing
+// routing-shaped lives only in process memory, CC3.)
+
+/// The run's `model.route.decided` decisions for `mc` — `(seq, decision)`
+/// pairs in seq order.
+fn route_decisions(
+    prefix: &[EventEnvelope],
+    mc: &str,
+) -> Vec<(u64, hh_gateway::router::RoutingDecision)> {
+    prefix
+        .iter()
+        .filter(|e| {
+            e.class == "model.route.decided"
+                && e.payload.get("model_call_id").and_then(Json::as_str) == Some(mc)
+        })
+        .filter_map(|e| {
+            hh_gateway::router::RoutingDecision::from_json(&e.payload).map(|d| (e.seq, d))
+        })
+        .collect()
+}
+
+/// Attempts already made on the currently-active target — the
+/// `model.call.attempt.started` rows for `mc` landed after the active
+/// decision's seq (a reroute resets the count — ADR-0122
+/// `attempts_on_target` is per-target, not per-call).
+fn attempts_on_target(prefix: &[EventEnvelope], mc: &str) -> u32 {
+    let since = route_decisions(prefix, mc)
+        .last()
+        .map(|(s, _)| *s)
+        .unwrap_or(0);
+    prefix
+        .iter()
+        .filter(|e| {
+            e.class == "model.call.attempt.started"
+                && e.seq > since
+                && e.payload.get("model_call_id").and_then(Json::as_str) == Some(mc)
+        })
+        .count() as u32
+}
+
+/// The `AttemptState` cursor rebuilt from the durable prefix — `attempted`
+/// = every selected `model_ref` the call's decisions bound (the
+/// forward-only chain never re-selects a tried target), `reroutes_used`
+/// = the call's `model.rerouted` count, `compact_tried` = a
+/// `context.compaction.completed` row stamped `model_call_id = mc`.
+fn attempt_state(prefix: &[EventEnvelope], mc: &str) -> hh_gateway::router::AttemptState {
+    let mut st = hh_gateway::router::AttemptState::default();
+    for (_, d) in route_decisions(prefix, mc) {
+        st.attempted
+            .insert(hh_gateway::router::model_ref_spelling(&d.selected));
+        st.attempted.insert(d.selected.provider_model_id.clone());
+    }
+    st.reroutes_used = prefix
+        .iter()
+        .filter(|e| {
+            e.class == "model.rerouted"
+                && e.payload.get("model_call_id").and_then(Json::as_str) == Some(mc)
+        })
+        .count() as u32;
+    st.compact_tried = prefix.iter().any(|e| {
+        e.class == "context.compaction.completed"
+            && e.payload.get("model_call_id").and_then(Json::as_str) == Some(mc)
+    });
+    st
+}
+
+/// A fresh `model.route.decided` the failure consult minted that the Retry
+/// arm has not yet consumed with a `model.rerouted` — `(fresh, prior)` or
+/// `None` (a same-target `Continue` leaves the last decision in place).
+fn pending_reroute(
+    prefix: &[EventEnvelope],
+    mc: &str,
+) -> Option<(
+    hh_gateway::router::RoutingDecision,
+    hh_gateway::router::RoutingDecision,
+)> {
+    let ds = route_decisions(prefix, mc);
+    if ds.len() < 2 {
+        return None;
+    }
+    let fresh = ds.last().map(|(_, d)| d.clone())?;
+    let prior = ds[ds.len() - 2].1.clone();
+    let consumed = prefix.iter().any(|e| {
+        e.class == "model.rerouted"
+            && e.payload.get("model_call_id").and_then(Json::as_str) == Some(mc)
+            && e.payload.get("decision_ref").and_then(Json::as_str)
+                == Some(fresh.decision_id.as_str())
+    });
+    (!consumed).then_some((fresh, prior))
+}
+
+/// The `RerouteReason` a pending reroute spells — read off the policy's
+/// `error_actions` row for the last failed class: a `reroute` leaf entry
+/// is `permanent{class}`; a chain that *landed* on reroute after bounded
+/// same-target retries is `transient_exhausted` (§5b.2's closed set).
+fn reroute_reason(
+    prefix: &[EventEnvelope],
+    mc: &str,
+    policy: &hh_gateway::router::RoutingPolicy,
+) -> hh_gateway::vocab::RerouteReason {
+    let class = prefix
+        .iter()
+        .rev()
+        .find(|e| {
+            e.class == "model.call.attempt.failed"
+                && e.payload.get("model_call_id").and_then(Json::as_str) == Some(mc)
+        })
+        .and_then(|e| {
+            e.payload
+                .get("error")
+                .and_then(|er| er.get("class"))
+                .and_then(Json::as_str)
+        })
+        .and_then(hh_gateway::vocab::ModelErrorClass::parse);
+    match class {
+        Some(c) => match hh_gateway::router::error_action(policy, &c) {
+            hh_gateway::router::ErrorAction::Reroute => {
+                hh_gateway::vocab::RerouteReason::Permanent(c)
+            }
+            _ => hh_gateway::vocab::RerouteReason::TransientExhausted,
+        },
+        None => hh_gateway::vocab::RerouteReason::TransientExhausted,
     }
 }
 

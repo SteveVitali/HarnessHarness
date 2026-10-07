@@ -32,8 +32,9 @@ use hh_context::{
     SlotConstraints, TriggerKind, ValidityPolicy, DETERMINISTIC_DEFAULT,
 };
 use hh_control::driver::{
-    AssembleInputs, AssembledRequest, AssemblerPort, CompactionDone, CompactionImpossible,
-    CompactionPort, EffectGate, GateOutcome, LedgerSink, MemoryPort, ModelOutcome, ModelPort,
+    AssembleInputs, AssembledRequest, AssemblerPort, CacheBinding, CacheResolution, CompactionDone,
+    CompactionImpossible, CompactionPort, EffectGate, GateOutcome, LedgerSink, MemoryPort,
+    ModelOutcome, ModelPort, ResponseCachePort, RoutingLane, RoutingPort, ServedEntry,
 };
 use hh_control::output::ParsedCall;
 use hh_control::vocab::SettledOutcome;
@@ -154,11 +155,35 @@ pub struct EmbedModel {
     pub response_ref: String,
     /// Calls issued (drives `tool_call_id` allocation).
     pub calls_made: u64,
+    /// The `model_fail` script (R-2.7): each call pops one step —
+    /// `StagedCall::Fail` answers the classified error (the routing
+    /// consult reads `error.class`, never a guess), `StagedCall::Pass` is
+    /// a scripted success marker (a mid-plan success keeps the ordinal
+    /// alignment). A drained script is all-success — the lane never
+    /// fabricates a failure the script did not declare.
+    pub fail_plan: std::collections::VecDeque<StagedCall>,
 }
 
 impl ModelPort for EmbedModel {
     fn call(&mut self, _model_call_id: &str, _request: &Json) -> ModelOutcome {
         self.calls_made += 1;
+        if let Some(StagedCall::Fail {
+            class,
+            retry_after_ms,
+        }) = self.fail_plan.pop_front()
+        {
+            // The staged failure — `StopReason::Error` + the declared
+            // `ModelErrorClass` spelling; `calls` empty (the call never
+            // produced output — the attempt row's `error` is the record).
+            return ModelOutcome {
+                stop_reason: hh_gateway::vocab::StopReason::Error,
+                response_ref: String::new(),
+                text_empty: true,
+                calls: Vec::new(),
+                error_class: Some(class),
+                retry_after_ms,
+            };
+        }
         let (surface, args_raw) = match &self.invoke {
             Some((cap, args)) => (cap.clone(), args.to_canonical_string()),
             None => (
@@ -1330,4 +1355,629 @@ impl CompactionPort for KernelCompaction {
             emitted: sink.events,
         })
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// R-2.7 — the routed lane's fixture ports (§5b.2/§5b.4; DF-S1.18-1's
+// machine-achievable cells): the bound `router` slot arms [`KernelRouting`]
+// (the §5b.2 select + the ADR-0122 failure consult over the run's registry
+// snapshot, declared budget ceiling and the attempt-row health projection)
+// and [`KernelK5`] (the K5 exact-match response store). The driver owns the
+// appends — every side row a consult mints rides `take_rows` into the fenced
+// writer (CC3, durable-before-visible).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `StagedCall` — one step of the `router` slot's declared `model_fail`
+/// script. `Fail{class, retry_after_ms?}` answers the classified error;
+/// `Pass` is an explicit success marker (a mid-plan success keeps the
+/// ordinal alignment — every call pops exactly one step when a plan
+/// remains).
+#[derive(Debug, Clone, PartialEq)]
+pub enum StagedCall {
+    /// The scripted success marker.
+    Pass,
+    /// The scripted classified failure.
+    Fail {
+        /// The `ModelErrorClass` spelling the outcome reports.
+        class: String,
+        /// The provider `retry-after` hint (ms), when staged.
+        retry_after_ms: Option<u64>,
+    },
+}
+
+/// `StaticProfiles` — the owned `SelectorView` the routed lane's consults
+/// read: the run's registry `model_profile` records projected at arm time
+/// (§5b.3's enumeration is over the *registered* set; the snapshot is the
+/// sealed-document boundary — a run never observes a mid-run registration,
+/// CF-046's snapshot-confined read model).
+pub struct StaticProfiles(pub Vec<hh_compiler::profile::ModelProfile>);
+
+impl hh_compiler::profile::ProfileView for StaticProfiles {
+    fn profile(&self, coordinate: &str) -> Option<hh_compiler::profile::ModelProfile> {
+        self.0
+            .iter()
+            .find(|p| {
+                hh_compiler::profile::profile_coordinate(p) == coordinate
+                    || p.content_hash == coordinate
+            })
+            .cloned()
+    }
+}
+
+impl hh_compiler::profile::SelectorView for StaticProfiles {
+    fn registered(&self) -> Vec<hh_compiler::profile::ModelProfile> {
+        self.0.clone()
+    }
+}
+
+/// `KernelBudget` — the fixture `BudgetPort` (G-4's `reserve`/`release`
+/// under the declared ceiling). Reservations are process-local records —
+/// their `control.budget.{reserved,released}` rows are the durable leg the
+/// driver lands; an undeclared budget admits unbounded (the fixture never
+/// fabricates a cap the binding did not declare), a refused reserve mints
+/// its `refused` row before the typed error returns (AC-4's pattern).
+pub struct KernelBudget {
+    /// `budget_id → remaining tokens.output.visible` ceiling.
+    ceilings: BTreeMap<String, i64>,
+    /// `reservation_id → (budget_id, amount)` — the affine table.
+    held: BTreeMap<String, (String, i64)>,
+    /// The reservation ordinal (`res-r27-N` — deterministic per consult).
+    next: u64,
+    /// Minted side rows awaiting the driver's `take_rows` drain.
+    rows: Vec<(String, Json)>,
+}
+
+impl KernelBudget {
+    /// `KernelBudget::new(ceilings)` — `ceilings` maps each declared
+    /// `budget_id` to its `tokens.output.visible` remaining ceiling.
+    pub fn new(ceilings: BTreeMap<String, i64>) -> KernelBudget {
+        KernelBudget {
+            ceilings,
+            held: BTreeMap::new(),
+            next: 0,
+            rows: Vec::new(),
+        }
+    }
+
+    /// Drain the minted side rows (the driver's lease lands them).
+    pub fn take_rows(&mut self) -> Vec<(String, Json)> {
+        std::mem::take(&mut self.rows)
+    }
+}
+
+impl hh_gateway::router::BudgetPort for KernelBudget {
+    fn reserve(
+        &mut self,
+        budget_id: &str,
+        max_output_tokens: u64,
+        holder: &str,
+    ) -> Result<String, String> {
+        let amount = max_output_tokens as i64;
+        let qty =
+            hh_budget::ResourceVector::one(hh_budget::DimensionId::TokensOutputVisible, amount);
+        let reservation_id = format!("res-r27-{}", self.next);
+        self.next += 1;
+        let refusal = match self.ceilings.get(budget_id) {
+            Some(avail) if *avail < amount => {
+                Some(hh_budget::errors::BudgetError::InsufficientBudget {
+                    dimension: hh_budget::DimensionKey::Primary(
+                        hh_budget::DimensionId::TokensOutputVisible,
+                    ),
+                    requested: amount,
+                    available: *avail.max(&0),
+                })
+            }
+            _ => None,
+        };
+        self.rows.push((
+            "control.budget.reserved".to_string(),
+            hh_budget::events::reserved_payload(
+                budget_id,
+                &reservation_id,
+                holder,
+                &qty,
+                0,
+                if refusal.is_none() { "held" } else { "refused" },
+                refusal.as_ref(),
+            ),
+        ));
+        if let Some(e) = refusal {
+            return Err(format!("{e}"));
+        }
+        if let Some(avail) = self.ceilings.get_mut(budget_id) {
+            *avail -= amount;
+        }
+        self.held
+            .insert(reservation_id.clone(), (budget_id.to_string(), amount));
+        Ok(reservation_id)
+    }
+
+    fn release(&mut self, reservation_id: &str) -> Result<(), String> {
+        let Some((budget_id, amount)) = self.held.remove(reservation_id) else {
+            return Err(format!("release: unknown reservation {reservation_id}"));
+        };
+        if let Some(avail) = self.ceilings.get_mut(&budget_id) {
+            *avail += amount;
+        }
+        self.rows.push((
+            "control.budget.released".to_string(),
+            hh_budget::events::released_payload(
+                &budget_id,
+                Some(reservation_id),
+                &hh_budget::ResourceVector::one(
+                    hh_budget::DimensionId::TokensOutputVisible,
+                    amount,
+                ),
+                "release",
+            ),
+        ));
+        Ok(())
+    }
+}
+
+/// `KernelRouting` — the boundary's `RoutingPort` (R-2.7): `select` runs
+/// the real `select_with` over the arm-time profile snapshot, the declared
+/// `KernelBudget` ceiling, and the attempt-row health projection folded
+/// from the durable prefix the driver passes (`project_health` — CC1, the
+/// one fold). `ts_ms` stamps are the consult's `now_ms` at first
+/// observation — the fixture's honest instant, never a fabricated
+/// provider timestamp.
+pub struct KernelRouting {
+    /// The sealed lane declaration.
+    lane: RoutingLane,
+    /// The arm-time `registered()` snapshot.
+    profiles: StaticProfiles,
+    /// The declared-ceiling reservation account.
+    budget: KernelBudget,
+    /// `seq → now_ms` — the first-observation stamp per durable row (the
+    /// health projection's `ts_ms` input; a re-fold re-stamps nothing).
+    stamps: BTreeMap<u64, u64>,
+    /// Side rows the consults minted (budget holds/releases ride
+    /// `KernelBudget.rows`; profile-status rows land here).
+    pending: Vec<(String, Json)>,
+}
+
+impl KernelRouting {
+    /// Arm the port: `lane` is the decoded slot declaration; `profiles`
+    /// the registry `registered()` snapshot; `ceilings` the declared
+    /// `budget_id → tokens.output.visible` ceilings.
+    pub fn new(
+        lane: RoutingLane,
+        profiles: Vec<hh_compiler::profile::ModelProfile>,
+        ceilings: BTreeMap<String, i64>,
+    ) -> KernelRouting {
+        KernelRouting {
+            lane,
+            profiles: StaticProfiles(profiles),
+            budget: KernelBudget::new(ceilings),
+            stamps: BTreeMap::new(),
+            pending: Vec::new(),
+        }
+    }
+
+    /// The `TableHealth` projection over the driver's durable prefix —
+    /// `project_health` over `(seq, first-observed-ms, class, payload)`
+    /// with the role table's single-candidate suppression.
+    fn health(&mut self, prefix: &[EventEnvelope], now_ms: u64) -> hh_gateway::router::TableHealth {
+        for e in prefix {
+            self.stamps.entry(e.seq).or_insert(now_ms);
+        }
+        let rows: Vec<(u64, u64, &str, &Json)> = prefix
+            .iter()
+            .map(|e| {
+                (
+                    e.seq,
+                    *self.stamps.get(&e.seq).unwrap_or(&now_ms),
+                    e.class.as_str(),
+                    &e.payload,
+                )
+            })
+            .collect();
+        let singles: std::collections::BTreeSet<(String, String)> = self
+            .lane
+            .table
+            .roles
+            .values()
+            .filter(|b| b.alternates.is_empty())
+            .map(|b| {
+                (
+                    b.primary.model_ref.provider_model_id.clone(),
+                    b.primary
+                        .model_ref
+                        .serving_route
+                        .clone()
+                        .unwrap_or_default(),
+                )
+            })
+            .collect();
+        hh_gateway::router::project_health(
+            &rows,
+            &hh_gateway::router::HealthConfig::default(),
+            &singles,
+        )
+    }
+}
+
+impl RoutingPort for KernelRouting {
+    fn lane(&self) -> &RoutingLane {
+        &self.lane
+    }
+
+    fn select(
+        &mut self,
+        request: &hh_gateway::router::RoutingRequest,
+        decision_id: &str,
+        now_ms: u64,
+        attempted: &std::collections::BTreeSet<String>,
+        prefix: &[EventEnvelope],
+    ) -> Result<hh_gateway::router::RoutingDecision, hh_gateway::router::RoutingRefusal> {
+        let health = self.health(prefix, now_ms);
+        let views = hh_gateway::router::RoutingViews::none();
+        hh_gateway::router::select_with(
+            request,
+            &self.profiles,
+            &mut self.budget,
+            &health,
+            &views,
+            &self.lane.policy,
+            &self.lane.table,
+            decision_id,
+            now_ms,
+            attempted,
+        )
+    }
+
+    fn attempt_failed(
+        &mut self,
+        request: &hh_gateway::router::RoutingRequest,
+        prior: &hh_gateway::router::RoutingDecision,
+        error: &hh_gateway::vocab::ModelErrorClass,
+        attempts_on_target: u32,
+        retry_after_ms: Option<u64>,
+        state: &mut hh_gateway::router::AttemptState,
+        decision_id: &str,
+        now_ms: u64,
+        prefix: &[EventEnvelope],
+    ) -> hh_gateway::router::AttemptDisposition {
+        let health = self.health(prefix, now_ms);
+        let views = hh_gateway::router::RoutingViews::none();
+        hh_gateway::router::on_attempt_failed(
+            request,
+            prior,
+            error,
+            attempts_on_target,
+            retry_after_ms,
+            state,
+            &self.profiles,
+            &mut self.budget,
+            &health,
+            &views,
+            &self.lane.policy,
+            &self.lane.table,
+            decision_id,
+            now_ms,
+        )
+    }
+
+    fn relower(
+        &mut self,
+        from_profile_ref: &str,
+        to_profile_ref: &str,
+        reason: &str,
+        model_call_id: &str,
+    ) -> Result<Json, String> {
+        // The scripted boundary's derivation — both profiles must be bound
+        // in the realized role table (a profile the table never bound is a
+        // typed refusal, never an invented projection). The scripted port
+        // renders no provider-native items, so `dropped_items` /
+        // `rewritten_items` are honestly empty — never fabricated losses.
+        let bound = |r: &str| self.lane.table.roles.values().any(|b| b.profile_ref == r);
+        if !bound(from_profile_ref) || !bound(to_profile_ref) {
+            return Err(format!(
+                "relower: unbound profile ({from_profile_ref} → {to_profile_ref})"
+            ));
+        }
+        Ok(Json::obj([
+            ("model_call_id", Json::str(model_call_id)),
+            ("old_profile_ref", Json::str(from_profile_ref)),
+            ("new_profile_ref", Json::str(to_profile_ref)),
+            ("reason", Json::str(reason)),
+            ("dropped_items", Json::Arr(vec![])),
+            ("rewritten_items", Json::Arr(vec![])),
+        ]))
+    }
+
+    fn take_rows(&mut self) -> Vec<(String, Json)> {
+        let mut out = std::mem::take(&mut self.pending);
+        out.extend(self.budget.take_rows());
+        out
+    }
+}
+
+/// `KernelK5` — the `response_cache` slot's `ResponseCachePort` (R-2.7's
+/// K5 store leg over the shared `K5Cache`): `resolve` runs the real
+/// `K5Cache::resolve(mode = execute)` — a hit serves the recorded
+/// `ModelMessage` document verbatim; `record` writes the completed call's
+/// served artifacts under the canonical key (`{model_snapshot,
+/// profile_version, definition_version}` contract deps, `revalidation =
+/// never` by construction). The store is the run's process state — a
+/// restart re-arms an empty cache and every post-resume lookup lands its
+/// honest `miss` row (never a fabricated hit).
+pub struct KernelK5 {
+    /// The underlying exact-match store.
+    cache: hh_context::k5::K5Cache,
+    /// The sealed binding members.
+    binding: CacheBinding,
+    /// The lookup/write stamp (`now_ms` at arm).
+    now_ms: u64,
+}
+
+impl KernelK5 {
+    /// Arm the store over the sealed binding.
+    pub fn new(binding: CacheBinding, now_ms: u64) -> KernelK5 {
+        KernelK5 {
+            cache: hh_context::k5::K5Cache::new(),
+            binding,
+            now_ms,
+        }
+    }
+
+    /// The `K5Key` the binding + `plan_hash` compose.
+    fn key(&self, plan_hash: &str) -> hh_context::k5::K5Key {
+        hh_context::k5::K5Key {
+            plan_hash: plan_hash.to_string(),
+            provider_model_id: self.binding.provider_model_id.clone(),
+            served_model: None,
+            snapshot_id: self.binding.snapshot_id.clone(),
+            replicate: self.binding.replicate,
+            configuration_version_id: self.binding.configuration_version_id.clone(),
+        }
+    }
+}
+
+impl ResponseCachePort for KernelK5 {
+    fn binding(&self) -> &CacheBinding {
+        &self.binding
+    }
+
+    fn resolve(&mut self, plan_hash: &str) -> CacheResolution {
+        let key = self.key(plan_hash);
+        let res = self
+            .cache
+            .resolve(&key, hh_identity::names::ResolveMode::Execute, false);
+        let serve = match &res {
+            hh_context::k5::K5Resolution::Hit { entry } => Some(ServedEntry {
+                entry_ref: entry.entry_ref.clone(),
+                message: entry.message.clone(),
+            }),
+            _ => None,
+        };
+        CacheResolution {
+            payload: self.cache.resolved_payload(
+                &key,
+                &res,
+                hh_identity::names::ResolveMode::Execute,
+                self.now_ms,
+            ),
+            serve,
+        }
+    }
+
+    fn record(&mut self, plan_hash: &str, message: Json, usage: Json, timing: Json) -> String {
+        let key = self.key(plan_hash);
+        let snapshot_id = self
+            .binding
+            .snapshot_id
+            .clone()
+            .unwrap_or_else(|| "none".to_string());
+        let deps = hh_context::k5::k5_dependencies(
+            &snapshot_id,
+            &snapshot_id,
+            &self.binding.profile_version_id,
+            &self.binding.profile_version_id,
+            &self.binding.configuration_version_id,
+        );
+        self.cache
+            .write(key, message, usage, timing, deps, self.now_ms)
+    }
+}
+
+/// `RouterArm` — the `router` slot's decoded arm record (R-2.7): the
+/// fixture ports plus the declared probes' mint rows and the `model_fail`
+/// script the session drains into `EmbedModel`. A `None` slot is the
+/// legacy scripted lane — byte-identical, no model-plane rows.
+pub struct RouterArm {
+    /// The routed-lane port.
+    pub routing: KernelRouting,
+    /// The `response_cache` member's K5 store leg, when declared.
+    pub cache: Option<KernelK5>,
+    /// The `(class, payload)` rows the declared probes mint at arm —
+    /// `model.profile.probed` (+ `model.profile.status.changed` when a
+    /// probe's declared `status` contradicts the bound profile's).
+    pub probe_rows: Vec<(String, Json)>,
+    /// The `model_fail` script (drained per `EmbedModel::call`).
+    pub model_fail: std::collections::VecDeque<StagedCall>,
+}
+
+/// `router_arm_from_params(params, table, budget_id, configuration_version_id,
+/// profiles, now_ms)` — decode the `slots["router"].params` record into the
+/// arm. The grammar:
+///
+/// - `policy` — the `RoutingPolicy` document (required — `RoutingPolicy::
+///   from_json`; a malformed doc is a typed refusal, never a default);
+/// - `lane` — `{role?, required_capabilities[]?, budget_id?, task_class?,
+///   latency_target_ms?, effort?, intent_ref?}` overrides on the arm
+///   defaults (`role: "primary"`, `budget_id` = the run's budget ref);
+/// - `budget_ceiling` — `tokens.output.visible` ceiling for `budget_id`
+///   (absent ⇒ unbounded admit — the fixture declares or it doesn't);
+/// - `response_cache` — the `CacheBinding` members (`provider_model_id`,
+///   `snapshot_id?`, `profile_version_id`, `replicate?`, `plan_domain?`);
+/// - `probes[]` — `{profile_ref, probe_run_id?, records[]}` declarations;
+///   `records[].status` differing from the bound profile's declared status
+///   additionally mints `model.profile.status.changed{trigger: probe}`;
+/// - `model_fail[]` — `{class, retry_after_ms?}` | `{}` (a pass marker).
+///
+/// Returns `Err` on any malformed member — the slot is a sealed
+/// declaration, never coerced.
+pub fn router_arm_from_params(
+    params: &Json,
+    table: &hh_gateway::router::ModelRoleTable,
+    default_budget_id: &str,
+    configuration_version_id: &str,
+    profiles: Vec<hh_compiler::profile::ModelProfile>,
+    now_ms: u64,
+) -> Result<RouterArm, String> {
+    let bad = |d: String| format!("router slot: {d}");
+    let policy_doc = params
+        .get("policy")
+        .ok_or_else(|| bad("policy missing".into()))?;
+    let policy = hh_gateway::router::RoutingPolicy::from_json(policy_doc).map_err(bad)?;
+    let lane_j = params.get("lane").cloned().unwrap_or(Json::Null);
+    let lane = RoutingLane {
+        role: lane_j
+            .get("role")
+            .and_then(Json::as_str)
+            .unwrap_or("primary")
+            .to_string(),
+        required_capabilities: match lane_j.get("required_capabilities") {
+            Some(Json::Arr(a)) => a
+                .iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect(),
+            _ => Vec::new(),
+        },
+        budget_id: lane_j
+            .get("budget_id")
+            .and_then(Json::as_str)
+            .unwrap_or(default_budget_id)
+            .to_string(),
+        task_class: lane_j
+            .get("task_class")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        latency_target_ms: lane_j
+            .get("latency_target_ms")
+            .and_then(Json::as_int)
+            .map(|v| v.max(0) as u64),
+        effort: lane_j
+            .get("effort")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        intent_ref: lane_j
+            .get("intent_ref")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+        policy,
+        table: table.clone(),
+    };
+    let mut ceilings = BTreeMap::new();
+    if let Some(c) = params.get("budget_ceiling").and_then(Json::as_int) {
+        ceilings.insert(lane.budget_id.clone(), c);
+    }
+    let cache = params.get("response_cache").map(|c| {
+        let binding = CacheBinding {
+            provider_model_id: c
+                .get("provider_model_id")
+                .and_then(Json::as_str)
+                .unwrap_or("hh-embed/kernel-scripted")
+                .to_string(),
+            snapshot_id: c
+                .get("snapshot_id")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            profile_version_id: c
+                .get("profile_version_id")
+                .and_then(Json::as_str)
+                .unwrap_or(configuration_version_id)
+                .to_string(),
+            replicate: c
+                .get("replicate")
+                .and_then(Json::as_int)
+                .unwrap_or(0)
+                .max(0) as u64,
+            configuration_version_id: configuration_version_id.to_string(),
+            plan_domain: c
+                .get("plan_domain")
+                .and_then(Json::as_str)
+                .unwrap_or("hh.embed.provider_request_plan.1")
+                .to_string(),
+        };
+        KernelK5::new(binding, now_ms)
+    });
+    // The declared probes — `model.profile.probed` rows minted at arm;
+    // a record's declared `status` member that contradicts the bound
+    // profile's status additionally mints `model.profile.status.changed`
+    // (`trigger: "probe"`, `evidence_ref` = the probe row's run-side id —
+    // the fixture spells it `probe-<i>`, the durable row is the join).
+    let mut probe_rows = Vec::new();
+    if let Some(Json::Arr(probes)) = params.get("probes") {
+        for (i, probe) in probes.iter().enumerate() {
+            let profile_ref = probe
+                .get("profile_ref")
+                .and_then(Json::as_str)
+                .ok_or_else(|| bad(format!("probes[{i}].profile_ref missing")))?;
+            let records = match probe.get("records") {
+                Some(Json::Arr(r)) => r.clone(),
+                _ => Vec::new(),
+            };
+            let probe_run_id = probe
+                .get("probe_run_id")
+                .and_then(Json::as_str)
+                .map(str::to_string)
+                .unwrap_or_else(|| format!("probe-{i}"));
+            probe_rows.push((
+                "model.profile.probed".to_string(),
+                hh_gateway::events::profile_probed(profile_ref, &probe_run_id, &records),
+            ));
+            if let Some(status) = records
+                .iter()
+                .find_map(|r| r.get("status").and_then(Json::as_str))
+            {
+                let declared = profiles
+                    .iter()
+                    .find(|p| {
+                        hh_compiler::profile::profile_coordinate(p) == profile_ref
+                            || p.content_hash == profile_ref
+                    })
+                    .map(|p| hh_compiler::profile::profile_status(p).name().to_string());
+                if declared.as_deref() != Some(status) {
+                    probe_rows.push((
+                        "model.profile.status.changed".to_string(),
+                        hh_gateway::events::profile_status_changed(
+                            profile_ref,
+                            None,
+                            declared.as_deref().unwrap_or("unknown"),
+                            status,
+                            "probe",
+                            Some(&probe_run_id),
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    let mut model_fail = std::collections::VecDeque::new();
+    if let Some(Json::Arr(steps)) = params.get("model_fail") {
+        for (i, step) in steps.iter().enumerate() {
+            if let Some(class) = step.get("class").and_then(Json::as_str) {
+                model_fail.push_back(StagedCall::Fail {
+                    class: class.to_string(),
+                    retry_after_ms: step
+                        .get("retry_after_ms")
+                        .and_then(Json::as_int)
+                        .map(|v| v.max(0) as u64),
+                });
+            } else if step.get("pass").is_some() || matches!(step, Json::Null) {
+                model_fail.push_back(StagedCall::Pass);
+            } else {
+                return Err(bad(format!("model_fail[{i}] declares no class")));
+            }
+        }
+    }
+    Ok(RouterArm {
+        routing: KernelRouting::new(lane, profiles, ceilings),
+        cache,
+        probe_rows,
+        model_fail,
+    })
 }

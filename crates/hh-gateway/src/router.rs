@@ -235,6 +235,46 @@ pub enum ErrorAction {
 }
 
 impl ErrorAction {
+    /// Decode a `to_json()` spelling — the bare strings
+    /// (`"reroute"`/`"give_up"`/`"compact_then_retry"`) or the object forms
+    /// (`{retry_same:{max, then?}}`, `{compact_then_retry:{then}}`).
+    /// `None` on any malformed member — never a coerced default.
+    pub fn from_json(j: &Json) -> Option<ErrorAction> {
+        match j {
+            Json::Str(s) => match s.as_str() {
+                "reroute" => Some(ErrorAction::Reroute),
+                "give_up" => Some(ErrorAction::GiveUp),
+                "compact_then_retry" => Some(ErrorAction::CompactThenRetry { then: None }),
+                _ => None,
+            },
+            Json::Obj(_) => {
+                if let Some(inner) = j.get("retry_same") {
+                    let max = inner.get("max")?.as_int()?;
+                    if max < 0 {
+                        return None;
+                    }
+                    let then = match inner.get("then") {
+                        Some(t) => Some(Box::new(ErrorAction::from_json(t)?)),
+                        None => None,
+                    };
+                    Some(ErrorAction::RetrySame {
+                        max: max as u32,
+                        then,
+                    })
+                } else if let Some(inner) = j.get("compact_then_retry") {
+                    let then = match inner.get("then") {
+                        Some(t) => Some(Box::new(ErrorAction::from_json(t)?)),
+                        None => None,
+                    };
+                    Some(ErrorAction::CompactThenRetry { then })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
     /// The canonical spelling.
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -514,6 +554,120 @@ impl RoutingPolicy {
         }
         Ok(())
     }
+
+    /// `to_json()`'s inverse — the sealed `router` slot's policy document
+    /// decodes through this codec (R-2.7; CC1 — one spelling for the
+    /// record). `Err` on any missing/malformed member: a sealed policy
+    /// never coerces. An absent `content_hash` member computes
+    /// `content_id()` (the declared address of the rest) — a present one
+    /// is carried verbatim for the caller's seal check.
+    pub fn from_json(j: &Json) -> Result<RoutingPolicy, String> {
+        let str_at = |k: &str| {
+            j.get(k)
+                .and_then(Json::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| format!("routing_policy.{k}: missing/not-string"))
+        };
+        let role_scope = match j.get("role_scope") {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .map(|i| i.as_str().map(str::to_string))
+                .collect::<Option<BTreeSet<String>>>()
+                .ok_or_else(|| "routing_policy.role_scope: not a string array".to_string())?,
+            Some(_) => return Err("routing_policy.role_scope: not an array".to_string()),
+            None => BTreeSet::new(),
+        };
+        let kind = RoutingPolicyKind::parse(&str_at("kind")?)
+            .ok_or_else(|| "routing_policy.kind: unknown kind".to_string())?;
+        let params = j.get("params").cloned().unwrap_or(Json::Null);
+        let mut error_actions = BTreeMap::new();
+        match j.get("error_actions") {
+            Some(Json::Obj(m)) => {
+                for (class, v) in m {
+                    error_actions.insert(
+                        class.clone(),
+                        ErrorAction::from_json(v).ok_or_else(|| {
+                            format!("routing_policy.error_actions.{class}: malformed")
+                        })?,
+                    );
+                }
+            }
+            Some(_) => return Err("routing_policy.error_actions: not an object".to_string()),
+            None => {}
+        }
+        let mml = j
+            .get("max_migration_loss")
+            .ok_or_else(|| "routing_policy.max_migration_loss: missing".to_string())?;
+        let max_migration_loss = MigrationLossBound {
+            dropped_items: mml
+                .get("dropped_items")
+                .and_then(Json::as_int)
+                .filter(|d| *d >= 0)
+                .ok_or_else(|| "routing_policy.max_migration_loss.dropped_items".to_string())?
+                as u64,
+            no_in_flight_tool_call: match mml.get("no_in_flight_tool_call") {
+                Some(Json::Bool(b)) => *b,
+                _ => {
+                    return Err(
+                        "routing_policy.max_migration_loss.no_in_flight_tool_call".to_string()
+                    )
+                }
+            },
+        };
+        let allow_unknown = match j.get("allow_unknown") {
+            None | Some(Json::Null) => None,
+            Some(v) => Some(conditioned_rule_from_json(
+                v,
+                "routing_policy.allow_unknown",
+            )?),
+        };
+        let conditioned_rules = match j.get("conditioned_rules") {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    conditioned_rule_from_json(v, &format!("routing_policy.conditioned_rules[{i}]"))
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            Some(_) => return Err("routing_policy.conditioned_rules: not an array".to_string()),
+            None => Vec::new(),
+        };
+        let ext = match j.get("ext") {
+            Some(Json::Obj(m)) => m.clone(),
+            Some(_) => return Err("routing_policy.ext: not an object".to_string()),
+            None => BTreeMap::new(),
+        };
+        let mut p = RoutingPolicy {
+            policy_id: str_at("policy_id")?,
+            // `version` is the canonical member; the sealed `router` slot's
+            // params grammar spells it `policy_version` — a bare `version`
+            // member inside a node's semantic projection trips T-10
+            // (`IdentityIncludesSurface`). One decoder, two admitted
+            // surface spellings; emission is always `version`.
+            version: match str_at("version") {
+                Ok(v) => v,
+                Err(e) if j.get("policy_version").is_some() => {
+                    let _ = e;
+                    str_at("policy_version")?
+                }
+                Err(e) => return Err(e),
+            },
+            content_hash: String::new(),
+            role_scope,
+            kind,
+            params,
+            error_actions,
+            max_migration_loss,
+            allow_unknown,
+            conditioned_rules,
+            ext,
+        };
+        p.content_hash = match j.get("content_hash").and_then(Json::as_str) {
+            Some(h) => h.to_string(),
+            None => p.content_id(),
+        };
+        Ok(p)
+    }
 }
 
 fn conditioned_rule_json(r: &PolicyConditionedRule) -> Json {
@@ -523,9 +677,39 @@ fn conditioned_rule_json(r: &PolicyConditionedRule) -> Json {
         m.insert("conditioned_key".into(), Json::str(k.clone()));
     }
     if let Some(d) = &r.debt {
-        m.insert("debt".into(), crate::events::debt_json(d));
+        // The record spelling (schema's `debt_to_json`), not the event
+        // projection — `RoutingPolicy` is a sealed document and the
+        // codec must round-trip `removal_test` & the additive members.
+        m.insert("debt".into(), hh_compiler::schema::debt_to_json(d));
     }
     Json::Obj(m)
+}
+
+/// `conditioned_rule_json`'s inverse — `Err` on any malformed member (the
+/// sealed document's debt record decodes through the compiler's codec —
+/// CC1, never a second spelling).
+fn conditioned_rule_from_json(j: &Json, path: &str) -> Result<PolicyConditionedRule, String> {
+    let rule_id = j
+        .get("rule_id")
+        .and_then(Json::as_str)
+        .ok_or_else(|| format!("{path}.rule_id: missing"))?
+        .to_string();
+    let conditioned_key = j
+        .get("conditioned_key")
+        .and_then(Json::as_str)
+        .map(str::to_string);
+    let debt = match j.get("debt") {
+        None | Some(Json::Null) => None,
+        Some(d) => Some(
+            hh_compiler::schema::debt_from_json(d, &format!("{path}.debt"))
+                .map_err(|e| format!("{path}.debt: {e:?}"))?,
+        ),
+    };
+    Ok(PolicyConditionedRule {
+        rule_id,
+        conditioned_key,
+        debt,
+    })
 }
 
 /// `RoutingRefusal` — the closed refusal sum (§5b.2; ADR-0121 d.3):
@@ -698,6 +882,24 @@ pub enum CandidateRejectReason {
 }
 
 impl CandidateRejectReason {
+    /// Parse a canonical spelling — `None` on an unknown reason (the closed
+    /// sum never coerces).
+    pub fn parse(s: &str) -> Option<CandidateRejectReason> {
+        Some(match s {
+            "no_profile" => CandidateRejectReason::NoProfile,
+            "expired_profile" => CandidateRejectReason::ExpiredProfile,
+            "capability_unmet" => CandidateRejectReason::CapabilityUnmet,
+            "capability_unknown" => CandidateRejectReason::CapabilityUnknown,
+            "migration_loss" => CandidateRejectReason::MigrationLoss,
+            "insufficient_budget" => CandidateRejectReason::InsufficientBudget,
+            "no_price" => CandidateRejectReason::NoPrice,
+            "cooldown" => CandidateRejectReason::Cooldown,
+            "policy_excluded" => CandidateRejectReason::PolicyExcluded,
+            "lower_score" => CandidateRejectReason::LowerScore,
+            _ => return None,
+        })
+    }
+
     /// The canonical spelling.
     pub fn as_str(self) -> &'static str {
         match self {
@@ -771,6 +973,71 @@ pub struct RoutingDecision {
     /// `relower_required` — whether the choice crosses a profile boundary
     /// (a cross-profile reroute must `relower` first — ADR-0122 d.3).
     pub relower_required: bool,
+}
+
+impl RoutingDecision {
+    /// Decode a `model.route.decided` payload (the `events::route_decided`
+    /// spelling) — the durable-fold read path the driver's reroute
+    /// execution replays a pending decision from (R-2.7; CC1 — one codec
+    /// pair per record). `None` on any malformed member — a ledger row
+    /// that can't be read is never silently defaulted.
+    pub fn from_json(j: &Json) -> Option<RoutingDecision> {
+        let bool_at = |k: &str| match j.get(k) {
+            Some(Json::Bool(b)) => Some(*b),
+            _ => None,
+        };
+        let str_arr = |k: &str| -> Option<Vec<String>> {
+            match j.get(k) {
+                Some(Json::Arr(items)) => items
+                    .iter()
+                    .map(|i| i.as_str().map(str::to_string))
+                    .collect(),
+                _ => None,
+            }
+        };
+        let mut candidates_considered = Vec::new();
+        match j.get("candidates_considered") {
+            Some(Json::Arr(items)) => {
+                for c in items {
+                    let model_ref = c.get("model_ref")?.as_str()?.to_string();
+                    let verdict = match c.get("verdict")?.as_str()? {
+                        "selected" => CandidateVerdict::Selected,
+                        v => CandidateVerdict::Rejected(CandidateRejectReason::parse(
+                            v.strip_prefix("rejected:")?,
+                        )?),
+                    };
+                    let score = c.get("score").and_then(Json::as_int);
+                    candidates_considered.push(Candidate {
+                        model_ref,
+                        verdict,
+                        score,
+                    });
+                }
+            }
+            _ => return None,
+        }
+        let policy_ref = j.get("policy_ref")?;
+        Some(RoutingDecision {
+            decision_id: j.get("decision_id")?.as_str()?.to_string(),
+            model_call_id: match j.get("model_call_id") {
+                Some(Json::Null) | None => None,
+                Some(v) => Some(v.as_str()?.to_string()),
+            },
+            role: j.get("role")?.as_str()?.to_string(),
+            selected: model_ref_from_json(j.get("selected")?)?,
+            reservation_id: match j.get("reservation_id") {
+                Some(Json::Null) | None => None,
+                Some(v) => Some(v.as_str()?.to_string()),
+            },
+            policy_ref: policy_ref.get("variant_ref")?.as_str()?.to_string(),
+            policy_version_id: policy_ref.get("version_id")?.as_str()?.to_string(),
+            rule_ids_fired: str_arr("rule_ids_fired")?,
+            candidates_considered,
+            inputs_read: str_arr("inputs_read")?,
+            deviation: bool_at("deviation")?,
+            relower_required: bool_at("relower_required")?,
+        })
+    }
 }
 
 /// A route-table candidate — the `ModelRef` plus its `ModelCoordinate` (the
@@ -1486,7 +1753,11 @@ fn isqrt_ppm(total: u64, n: u64) -> i64 {
     (x.min(i64::MAX as u128)) as i64
 }
 
-fn model_ref_spelling(m: &ModelRef) -> String {
+/// The canonical `model_ref` spelling a route decision's `attempted` set
+/// keys on — `{profile_ref}/{provider_model_id}[@{serving_route}]` (CC1:
+/// the driver rebuilds the durable `AttemptState.attempted` through this
+/// one spelling — never a second derivation).
+pub fn model_ref_spelling(m: &ModelRef) -> String {
     format!(
         "{}/{}{}",
         m.profile_ref,
@@ -2514,12 +2785,16 @@ pub fn on_attempt_failed(
     }
 }
 
-/// Decode a `RouteCandidate` from `params.target` / `params.targets[]`
-/// (`{model_ref{…}, coordinate{provider_api_family, model_family,
-/// model_version}}`).
+/// Decode a `RouteCandidate` from `params.target` / `params.targets[]`.
+/// The member spells `candidate{profile_ref, provider_model_id, …}` —
+/// the sealed-document grammar (a `model_ref` key inside HIR `params`
+/// trips T-LCD-01's model-identity statics). `model_ref` stays admitted
+/// on decode for authored records that predate the document spelling —
+/// emission is always `candidate`.
 fn candidate_from_json(j: &Json) -> Option<RouteCandidate> {
+    let mref = j.get("candidate").or_else(|| j.get("model_ref"))?;
     Some(RouteCandidate {
-        model_ref: model_ref_from_json(j.get("model_ref")?)?,
+        model_ref: model_ref_from_json(mref)?,
         coordinate: coordinate_from_json(j.get("coordinate")?)?,
     })
 }

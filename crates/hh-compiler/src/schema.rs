@@ -90,7 +90,11 @@ fn str_arr(j: &Json, path: &str) -> Result<Vec<String>, CompileError> {
 // ModelProfile/1
 // ─────────────────────────────────────────────────────────────────────────────
 
-fn debt_json(d: &ProfileDebtRecord) -> Json {
+/// `debt_from_json`'s pair — the full `ProfileDebtRecord` spelling
+/// (R-2.7; the router's sealed `RoutingPolicy` codec round-trips debt
+/// records through this spelling — the event-payload projection
+/// `hh_gateway::events::debt_json` is a separate, narrower contract).
+pub fn debt_to_json(d: &ProfileDebtRecord) -> Json {
     let mut expiry = vec![("kind", Json::str(d.expiry_condition.kind.name()))];
     if let Some(v) = &d.expiry_condition.value {
         expiry.push(("value", Json::str(v.clone())));
@@ -168,7 +172,10 @@ fn debt_member_err(path: &str, e: hh_ontology::debt::DebtSchemaError) -> Compile
     schema_err(path, e.detail)
 }
 
-fn debt_from_json(j: &Json, path: &str) -> Result<ProfileDebtRecord, CompileError> {
+/// Decode a `ProfileDebtRecord` from its `to_json()` form (R-2.7 — the
+/// router's sealed-policy codec round-trips `PolicyDebt` debt records
+/// through this decoder; pub so the gateway tier can read the spellings).
+pub fn debt_from_json(j: &Json, path: &str) -> Result<ProfileDebtRecord, CompileError> {
     let expiry = req(j, "expiry_condition", path)?;
     let expiry_condition =
         hh_ontology::debt::ExpiryCondition::from_json(expiry, &format!("{path}.expiry_condition"))
@@ -473,7 +480,7 @@ fn capabilities_from_json(j: &Json, path: &str) -> Result<ProfileCapabilities, C
 fn rule_json(r: &ProfileRule) -> Json {
     let mut pairs = vec![
         ("compliance", compliance_json(&r.compliance)),
-        ("debt", debt_json(&r.debt)),
+        ("debt", debt_to_json(&r.debt)),
         ("kind", Json::str(r.kind.name())),
         (
             "owned_fields",
@@ -558,7 +565,7 @@ pub fn profile_to_json(p: &ModelProfile) -> Json {
             ])
         }),
         ("content_hash", Json::str(p.content_hash.clone())),
-        ("expiry", debt_json(&p.expiry)),
+        ("expiry", debt_to_json(&p.expiry)),
         (
             "ext",
             Json::Obj(
@@ -567,7 +574,10 @@ pub fn profile_to_json(p: &ModelProfile) -> Json {
                     .map(|(k, e)| {
                         (
                             k.clone(),
-                            Json::obj([("block", e.block.clone()), ("debt", debt_json(&e.debt))]),
+                            Json::obj([
+                                ("block", e.block.clone()),
+                                ("debt", debt_to_json(&e.debt)),
+                            ]),
                         )
                     })
                     .collect(),

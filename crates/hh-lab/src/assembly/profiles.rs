@@ -151,3 +151,40 @@ impl hh_compiler::profile::ProfileView for RegistryProfiles<'_> {
         resolve_test_report(self.0, coordinate)
     }
 }
+
+/// The §5b.3 enumeration leg (R-2.7) — selector matching ranges over *every
+/// registered profile*, so `registered()` projects the live `model_profile`
+/// catalog (revoked records coordinate nothing live — the same admission the
+/// point-lookup applies; deterministic `version_id` order under the catalog
+/// fold, never a hash-map order).
+impl hh_compiler::profile::SelectorView for RegistryProfiles<'_> {
+    fn registered(&self) -> Vec<hh_compiler::profile::ModelProfile> {
+        use hh_registry::records::RegistryRecord;
+        let pred = hh_registry::store::QueryPredicate {
+            clauses: vec![hh_registry::store::QueryClause {
+                field: "kind".to_string(),
+                op: hh_registry::store::QueryOp::Eq,
+                value: "model_profile".to_string(),
+            }],
+            snapshot_id: None,
+        };
+        let mut out: Vec<(String, hh_compiler::profile::ModelProfile)> = self
+            .0
+            .catalog(Some(&pred))
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|entry| !entry.revoked)
+            .filter_map(|entry| {
+                if let RegistryRecord::ModelProfile(body) = &entry.record {
+                    body.get("profile")
+                        .and_then(|v| hh_compiler::schema::profile_from_json(v, "profile").ok())
+                        .map(|p| (entry.envelope.version_id.clone(), p))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out.into_iter().map(|(_, p)| p).collect()
+    }
+}

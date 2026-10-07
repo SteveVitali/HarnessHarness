@@ -255,6 +255,10 @@ pub(crate) struct SessionState {
     pub next_completion: String,
     /// The response ref staged for the next model call.
     pub next_response_ref: String,
+    /// The `router` slot's `model_fail` script remainder (R-2.7) — each
+    /// `drive` hands it to `EmbedModel` and takes back what the calls did
+    /// not consume (the plan is the session's, the port only borrows it).
+    pub model_fail_plan: std::collections::VecDeque<crate::runtime::StagedCall>,
     /// The session's declared client (§7.2 P8; ADR-0301 D3) — `Some` on
     /// every surface-declared session (`client{kind:"web", sink}`); the
     /// kernel gates `measurement.export.delivered` minting + session-row
@@ -412,6 +416,14 @@ impl EmbedService {
             (
                 hh_registry::suites::context_policy_class(),
                 "full_window",
+                BTreeMap::new(),
+            ),
+            (
+                // R-2.7 — the `router` slot's scripted-lane variant: the
+                // arm decodes the slot's sealed `policy` document and
+                // runs the offline-decidable policy arms (DF-S1.18-1).
+                hh_registry::suites::routing_policy_class(),
+                "router_static",
                 BTreeMap::new(),
             ),
         ] {
@@ -1394,6 +1406,7 @@ impl EmbedService {
         // it; legacy sessions without one run the pre-R2.5 shape — a
         // retrieve decision there still fails `UnbackedPort`, honestly).
         let mem_ctx = self.session(sess_id)?.mem_ctx.clone();
+        let fail_plan = std::mem::take(&mut self.session_mut(sess_id)?.model_fail_plan);
         let mut sink = KernelSink {
             store: &mut self.store,
             run_id: run_id.clone(),
@@ -1406,6 +1419,7 @@ impl EmbedService {
             completion,
             response_ref,
             calls_made: 0,
+            fail_plan,
         };
         let mut gate = EmbedGate {
             host_surfaces,
@@ -1425,8 +1439,10 @@ impl EmbedService {
         // below while the run is still open.
         let parked = matches!(&outcome, Err(DriverError::Port { .. }));
         let asks = std::mem::take(&mut gate.host_asks);
+        let fail_left = std::mem::take(&mut model.fail_plan);
         let s = self.session_mut(sess_id)?;
         s.driver = Some(driver);
+        s.model_fail_plan = fail_left;
         s.next_invoke = None;
         match outcome {
             Ok(_r) => {
