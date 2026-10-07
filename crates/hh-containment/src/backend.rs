@@ -19,14 +19,16 @@
 //! Stage 2), `tls.terminate`/`inspect_hooks` (C2), `upstream_proxy` (proxy
 //! env vars never count as `mediated` — a `lowering_loss`), or a
 //! `syscall_filter` ref (pointer-rule resolution is the executor's) — each
-//! lands a [`LossItem`] when the policy relies on it.
+//! lands a [`LoweringLoss`] when the policy relies on it.
 
 use std::collections::BTreeMap;
 
 use crate::admit::{classify_read, classify_write, ReadClass, WriteClass};
 use crate::paths;
-use crate::policy::{ContainmentPolicy, ExecPolicy, IsolationClass, NetMode, UnixSocketMode};
-use crate::report::{FieldGroup, LossItem};
+use crate::policy::{
+    ContainmentPolicy, EnvInherit, EnvPolicy, ExecPolicy, IsolationClass, NetMode, UnixSocketMode,
+};
+use crate::report::{FieldGroup, LossConsequence, LossKind, LoweringLoss};
 
 /// The syscall sum the gate models (the AC-H4-03 surface plus the fs/exec
 /// gates). Deliberately small and closed — this is the Stage-1 *model* of
@@ -142,7 +144,7 @@ pub enum GateVerdict {
 
 /// What a backend enforces — the `lowering_loss`/evidence computation's
 /// input. `true` = the backend enforces the surface; `false` = a policy
-/// relying on the field lands a [`LossItem`] (and the owning field group's
+/// relying on the field lands a [`LoweringLoss`] (and the owning field group's
 /// evidence degrades to `unknown` — never coerced).
 #[derive(Debug, Clone, PartialEq)]
 pub struct BackendCaps {
@@ -272,9 +274,9 @@ pub trait ContainmentBackend {
         let sys = crate::probes::probe_syscall(kind, policy, self.bridged_channel());
         self.gate(&sys, policy)
     }
-    /// The relied-on losses — a [`LossItem`] for every field the policy
+    /// The relied-on losses — a [`LoweringLoss`] for every field the policy
     /// configures that the backend cannot enforce.
-    fn lowering_loss(&self, policy: &ContainmentPolicy) -> Vec<LossItem>;
+    fn lowering_loss(&self, policy: &ContainmentPolicy) -> Vec<LoweringLoss>;
     /// The net enforcement plane (default [`NetPlane::BridgedChannel`] —
     /// the EP2 model). The battery is plane-aware: a
     /// `transparent_redirect` backend holds no bridged `AF_UNIX` channel,
@@ -587,34 +589,138 @@ impl ContainmentBackend for Ep2Model {
         }
     }
 
-    fn lowering_loss(&self, policy: &ContainmentPolicy) -> Vec<LossItem> {
+    fn lowering_loss(&self, policy: &ContainmentPolicy) -> Vec<LoweringLoss> {
         let mut out = Vec::new();
-        let mut loss = |field: &str, reason: &str| {
-            out.push(LossItem {
-                field: field.to_string(),
+        let mut loss = |field: &str, reason: &str, kind: LossKind, consequence: LossConsequence| {
+            out.push(LoweringLoss {
+                declared_field: field.to_string(),
                 backend: self.name().to_string(),
                 reason: reason.to_string(),
+                kind,
+                consequence,
             });
         };
         if !self.caps.enforce_resources {
             for (field, _) in policy.resources.set_fields() {
-                loss(field, "resources_unenforced");
+                loss(
+                    field,
+                    "resources_unenforced",
+                    LossKind::NoSlot,
+                    LossConsequence::FailClosed,
+                );
             }
         }
         if policy.proc.syscall_filter.is_some() && !self.caps.enforce_syscall_filter {
-            loss("proc.syscall_filter", "filter_ref_unresolved");
+            loss(
+                "proc.syscall_filter",
+                "filter_ref_unresolved",
+                LossKind::NoSlot,
+                LossConsequence::FailClosed,
+            );
         }
-        if policy.net.tls.terminate && !self.caps.enforce_tls {
-            loss("net.tls.terminate", "tls_terminate_c2");
+        // The C2 TLS members are never an EP2 backend slot — the loss row
+        // is recorded either way (`no_slot`: the member has no slot at this
+        // enforcement point). Under `mediated` the **mediator** discharges
+        // them at the wire point — `tls.terminate` enforces through the
+        // terminating transport or the leg refuses typed
+        // (`tls_terminate_unsupported`), and every declared `inspect_hook`
+        // runs (or refuses `inspect_hook_unavailable`) before
+        // `decided{allow}` mints (R2.9b; ADR-0341 D3) — so the row is
+        // `stratified` (`mediator_discharges`: the member's enforcement
+        // moved to EP3), never `fail_closed`. Under `none`/`public` no
+        // mediator exists — the member is a real unenforced loss and is
+        // `fail_closed` where the `net` group is relied on (`none`; under
+        // `public` the group is not relied on — the row records but
+        // does not refuse).
+        if !self.caps.enforce_tls {
+            let mediated = policy.net.mode == NetMode::Mediated;
+            if policy.net.tls.terminate {
+                loss(
+                    "net.tls.terminate",
+                    if mediated {
+                        "mediator_discharges"
+                    } else {
+                        "tls_terminate_c2"
+                    },
+                    LossKind::NoSlot,
+                    if mediated {
+                        LossConsequence::Stratified
+                    } else {
+                        LossConsequence::FailClosed
+                    },
+                );
+            }
+            if !policy.net.tls.inspect_hooks.is_empty() {
+                loss(
+                    "net.tls.inspect_hooks",
+                    if mediated {
+                        "mediator_discharges"
+                    } else {
+                        "inspect_hooks_c2"
+                    },
+                    LossKind::NoSlot,
+                    if mediated {
+                        LossConsequence::Stratified
+                    } else {
+                        LossConsequence::FailClosed
+                    },
+                );
+            }
         }
-        if !policy.net.tls.inspect_hooks.is_empty() && !self.caps.enforce_tls {
-            loss("net.tls.inspect_hooks", "inspect_hooks_c2");
-        }
+        // `upstream_proxy` (and the ambient/`env`-carried proxy-variable
+        // surface under `mediated`) never *counts as* mediation: the loss
+        // is recorded and the run stratifies on it (§5g.4 §5's proxy row —
+        // `stratified`, not `fail_closed`; ADR-0341 D4).
         if policy.net.upstream_proxy.is_some() && !self.caps.enforce_proxy {
-            loss("net.upstream_proxy", "proxy_env_is_not_mediation");
+            loss(
+                "net.upstream_proxy",
+                "proxy_env_is_not_mediation",
+                LossKind::HintOnly,
+                LossConsequence::Stratified,
+            );
+        }
+        if policy.net.mode == NetMode::Mediated && proxy_env_surface(&policy.proc.env) {
+            loss(
+                "proc.env",
+                "proxy_env_is_not_mediation",
+                LossKind::HintOnly,
+                LossConsequence::Stratified,
+            );
         }
         out
     }
+}
+
+/// The proxy-variable spellings — the env-carried "mediation" masquerade
+/// (§5g.4 §5's "proxy environment variables mistaken for mediation" row).
+/// Compared case-insensitively (`HTTP_PROXY`/`http_proxy` are the same
+/// surface).
+const PROXY_ENV_VARS: &[&str] = &[
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+    "ftp_proxy",
+    "no_proxy",
+];
+
+/// Whether `env` admits a proxy variable — an explicit `set`, an
+/// `include_only` membership, or an `inherit = all` ambient surface an
+/// `exclude` does not cover (ADR-0341 D4). `include_only` **bounds**
+/// inheritance — a non-empty list admits only the named unexcluded
+/// variables, so `include_only = [PATH]` leaves no ambient proxy surface.
+fn proxy_env_surface(env: &EnvPolicy) -> bool {
+    let is_proxy = |name: &str| PROXY_ENV_VARS.iter().any(|v| v.eq_ignore_ascii_case(name));
+    let excluded = |name: &str| env.exclude.iter().any(|e| e.eq_ignore_ascii_case(name));
+    // `set` always injects — an excluded name is still set.
+    if env.set.keys().any(|k| is_proxy(k)) {
+        return true;
+    }
+    if !env.include_only.is_empty() {
+        return env.include_only.iter().any(|n| is_proxy(n) && !excluded(n));
+    }
+    // `inherit = all` admits the ambient set unless every proxy name is
+    // excluded.
+    env.inherit == EnvInherit::All && PROXY_ENV_VARS.iter().any(|v| !excluded(v))
 }
 
 fn sys_kind(sys: &Syscall) -> &'static str {
@@ -1010,7 +1116,7 @@ impl ContainmentBackend for ModelBackend {
         self.inner.run_probe(kind, policy)
     }
 
-    fn lowering_loss(&self, policy: &ContainmentPolicy) -> Vec<LossItem> {
+    fn lowering_loss(&self, policy: &ContainmentPolicy) -> Vec<LoweringLoss> {
         self.inner.lowering_loss(policy)
     }
 }

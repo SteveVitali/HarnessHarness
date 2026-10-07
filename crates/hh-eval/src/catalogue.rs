@@ -694,6 +694,35 @@ pub fn scorecard_metrics() -> Vec<MetricDeclaration> {
                 ..base()
             }
         },
+        // R2.9b (DF-S1.12-4's remaining half; ADR-0341 D7) — the proxy
+        // surface and the revoked-continuation folds. `proxy.hijack_
+        // attempt_rate` counts `applied` rows whose `lowering_loss_fields`
+        // declares a proxy surface (`net.upstream_proxy`/`proc.env`) —
+        // a declared proxy under `mediated` is the "env vars mistaken for
+        // mediation" shape, never enforcement.
+        MetricDeclaration {
+            name: "proxy.hijack_attempt_rate".into(),
+            dimension: Dimension::Security,
+            unit: "ppm".into(),
+            direction: Direction::Lower,
+            interval_method: IntervalMethod::Wilson,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                requires_mediation: MediationRequirement::Mediated(MediationChannel::Egress),
+                ..base()
+            }
+        },
+        MetricDeclaration {
+            name: "session.revoked_continuation_denied".into(),
+            dimension: Dimension::Security,
+            unit: "count".into(),
+            direction: Direction::Higher,
+            interval_method: IntervalMethod::ClusteredClt,
+            ..MetricDeclaration {
+                requires_observability: [Observability::Events].into_iter().collect(),
+                ..base()
+            }
+        },
         MetricDeclaration {
             name: "containment.amendments_per_run".into(),
             dimension: Dimension::Security,

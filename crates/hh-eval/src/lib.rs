@@ -38,6 +38,7 @@ pub mod opacity;
 pub mod oracle;
 pub mod runs;
 pub mod scorecard;
+pub mod security_metrics;
 pub mod stats;
 pub mod vetoes;
 

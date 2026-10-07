@@ -139,6 +139,16 @@ pub trait EgressTransport {
         headers: &[(String, String)],
         body: Option<&[u8]>,
     ) -> Result<WireResponse, String>;
+
+    /// Whether the transport terminates TLS at the mediator (a
+    /// `tls.terminate`-declared policy's relied-on capability — R2.9b;
+    /// ADR-0341 D3). Default `false`: the reference `LocalHttpTransport`
+    /// terminates nothing (the real terminating transport is BL-31's
+    /// surface). A policy that requires termination on a TLS leg refuses
+    /// closed against a `false` answer — never silently unterminated.
+    fn terminates_tls(&self) -> bool {
+        false
+    }
 }
 
 /// The local HTTP/1.1 transport — a plain `TcpStream` to the resolved
@@ -217,6 +227,54 @@ fn parse_response(buf: &[u8]) -> Result<WireResponse, String> {
         headers,
         body: body.as_bytes().to_vec(),
     })
+}
+
+// ── the inspect-hook seam (R2.9b; ADR-0341 D3/D4) ─────────────────────────────
+
+/// `InspectView` — the request view a declared `inspect_hooks` member
+/// receives: the wire coordinates plus the *sentinel-spelling* content
+/// (headers/body before claim drain — credential **values** never reach a
+/// hook; the broker's material stays behind the substitution, ADR-0341 D4).
+/// A `validator`-class plugin contribution (ADR-0181; OQ-154's resolved
+/// half) — the hook is a mechanism the policy names, never an enforcement
+/// point of its own (§5g.4 §2.2: hooks are inputs, enforcement stays at
+/// EP3).
+#[derive(Debug)]
+pub struct InspectView<'a> {
+    /// The normalised host.
+    pub host_norm: &'a str,
+    /// The port.
+    pub port: u16,
+    /// The protocol spelling (`http` / `https_connect`).
+    pub protocol: &'a str,
+    /// The method.
+    pub method: &'a str,
+    /// The path.
+    pub path: Option<&'a str>,
+    /// The headers (sentinel spellings, never drained values).
+    pub headers: &'a [(String, String)],
+    /// The body (sentinel spellings, never drained values).
+    pub body: Option<&'a str>,
+}
+
+/// The hook verdict — a closed sum: `allow` passes the request onward,
+/// `deny` refuses it (`decided{deny, source: inspect_hook, reason:
+/// inspect_hook_denied, guard_detail: <ref>}` is durable before visible).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InspectVerdict {
+    /// The request may proceed.
+    Allow,
+    /// The request is refused.
+    Deny,
+}
+
+/// `InspectHook` — the runtime seam `net.tls.inspect_hooks` resolves
+/// through. One registered hook per declared ref; a declared ref with no
+/// registration refuses `inspect_hook_unavailable` (the declared mechanism
+/// cannot be honoured — enforce-or-refuse, I-C4's shape).
+pub trait InspectHook {
+    /// Inspect the request view; return the verdict.
+    fn inspect(&self, view: &InspectView) -> InspectVerdict;
 }
 
 // ── outcomes / errors ─────────────────────────────────────────────────────────
@@ -370,6 +428,10 @@ pub struct EgressMediator<'a> {
     pub resolver: Box<dyn EgressResolver>,
     /// The transport (the only wire).
     pub transport: Box<dyn EgressTransport>,
+    /// The `inspect_hooks` registry — declared ref → hook (validator-class
+    /// plugin contributions; an unregistered declared ref refuses closed,
+    /// R2.9b).
+    pub inspect_hooks: std::collections::BTreeMap<String, Box<dyn InspectHook>>,
 }
 
 impl<'a> EgressMediator<'a> {
@@ -488,6 +550,7 @@ impl<'a> EgressMediator<'a> {
                     &effect_id,
                     started,
                     chain,
+                    false,
                 )?;
                 Ok(GateOutcome::Terminal(MediatedOutcome::Refused {
                     request_ref: request_ref(req),
@@ -540,6 +603,7 @@ impl<'a> EgressMediator<'a> {
         effect_id: &str,
         started: u64,
         chain: &ScopeChain,
+        tls_terminated: bool,
     ) -> Result<Event, EgressError> {
         let latency = self.store.now_ms().saturating_sub(started);
         self.emit(
@@ -553,6 +617,7 @@ impl<'a> EgressMediator<'a> {
                 applied,
                 effect_id,
                 latency,
+                tls_terminated,
             ),
             Some(effect_id),
             chain,
@@ -588,6 +653,7 @@ impl<'a> EgressMediator<'a> {
                         reason: Some(EgressReason::BudgetExhausted),
                         credential_binding_candidates: vec![],
                         rule_index: None,
+                        guard_detail: None,
                     };
                     let ev = self.decide_row(
                         req,
@@ -598,6 +664,7 @@ impl<'a> EgressMediator<'a> {
                         effect_id,
                         started,
                         chain,
+                        false,
                     )?;
                     return Ok(MediatedOutcome::Refused {
                         request_ref: request_ref(req),
@@ -678,6 +745,7 @@ impl<'a> EgressMediator<'a> {
             reason: None,
             credential_binding_candidates: vec![],
             rule_index: None,
+            guard_detail: None,
         };
         let ev = self.decide_row(
             req,
@@ -688,6 +756,7 @@ impl<'a> EgressMediator<'a> {
             effect_id,
             started,
             chain,
+            false,
         )?;
         Ok(MediatedOutcome::Asked {
             request_ref: request_ref(req),
@@ -735,6 +804,7 @@ impl<'a> EgressMediator<'a> {
                     reason: Some(EgressReason::Denied),
                     credential_binding_candidates: vec![],
                     rule_index: None,
+                    guard_detail: None,
                 };
                 let ev = self.decide_row(
                     req,
@@ -745,6 +815,7 @@ impl<'a> EgressMediator<'a> {
                     &effect_id,
                     started,
                     chain,
+                    false,
                 )?;
                 return Ok(GateOutcome::Terminal(MediatedOutcome::Refused {
                     request_ref: request_ref(req),
@@ -835,6 +906,7 @@ impl<'a> EgressMediator<'a> {
                 reason: None,
                 credential_binding_candidates: vec![],
                 rule_index: None,
+                guard_detail: None,
             },
             effect_id,
             started,
@@ -911,11 +983,129 @@ impl<'a> EgressMediator<'a> {
                 effect_id,
                 started,
                 chain,
+                false,
             )?;
             return Ok(MediatedOutcome::Refused {
                 request_ref: request_ref(req),
                 decided_ref: ev.event_id,
                 reason: deny.reason.unwrap_or(EgressReason::Denied),
+            });
+        }
+
+        // (d2) The C2 post-allow guards (R2.9b; ADR-0341 D3) — they run on
+        //      *every* allow here, including monitor-endorsed ones the pure
+        //      `decide_egress` never re-decided. Order: the `approved_host_
+        //      body` readers closer (content flow), then TLS termination
+        //      (a hook inspects terminated/plaintext content — refuse
+        //      before invoking hooks when a TLS leg can't terminate), then
+        //      the declared hook set. A guard deny is durable before the
+        //      refusal is visible, and no credential is staged for a
+        //      refused leg.
+        if let Some(deny) = hh_containment::approved_host_body_check(&self.policy, req) {
+            let ev = self.decide_row(
+                req,
+                &deny,
+                decided_by,
+                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+                &[],
+                effect_id,
+                started,
+                chain,
+                false,
+            )?;
+            return Ok(MediatedOutcome::Refused {
+                request_ref: request_ref(req),
+                decided_ref: ev.event_id,
+                reason: deny.reason.unwrap_or(EgressReason::ReaderCoverage),
+            });
+        }
+        let tls_leg = req.protocol == hh_containment::policy::EgressProtocol::HttpsConnect;
+        if tls_leg
+            && (self.policy.net.tls.terminate || !self.policy.net.tls.inspect_hooks.is_empty())
+            && !self.transport.terminates_tls()
+        {
+            // A TLS leg under `tls.terminate` or declared hooks cannot be
+            // honoured by a non-terminating transport — enforce-or-refuse.
+            let (reason, detail) = if self.policy.net.tls.terminate {
+                (
+                    EgressReason::TlsTerminateUnsupported,
+                    "tls.terminate".to_string(),
+                )
+            } else {
+                (
+                    EgressReason::InspectHookUnavailable,
+                    self.policy.net.tls.inspect_hooks[0].clone(),
+                )
+            };
+            let deny = EgressDecision::deny_guard(EgressSource::TlsGuard, reason, Some(detail));
+            let ev = self.decide_row(
+                req,
+                &deny,
+                decided_by,
+                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+                &[],
+                effect_id,
+                started,
+                chain,
+                false,
+            )?;
+            return Ok(MediatedOutcome::Refused {
+                request_ref: request_ref(req),
+                decided_ref: ev.event_id,
+                reason,
+            });
+        }
+        let hook_deny: Option<EgressDecision> = {
+            let view = InspectView {
+                host_norm: &host_norm,
+                port: req.port,
+                protocol: req.protocol.as_str(),
+                method: req.method.as_deref().unwrap_or("GET"),
+                path: req.path.as_deref(),
+                headers: &req.headers,
+                body: req.body.as_deref(),
+            };
+            let mut deny = None;
+            for hook_ref in &self.policy.net.tls.inspect_hooks {
+                match self.inspect_hooks.get(hook_ref) {
+                    None => {
+                        deny = Some(EgressDecision::deny_guard(
+                            EgressSource::InspectHook,
+                            EgressReason::InspectHookUnavailable,
+                            Some(hook_ref.clone()),
+                        ));
+                        break;
+                    }
+                    Some(h) if h.inspect(&view) == InspectVerdict::Deny => {
+                        deny = Some(EgressDecision::deny_guard(
+                            EgressSource::InspectHook,
+                            EgressReason::InspectHookDenied,
+                            Some(hook_ref.clone()),
+                        ));
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            deny
+        };
+        if let Some(deny) = hook_deny {
+            let reason = deny.reason.unwrap_or(EgressReason::InspectHookDenied);
+            let ev = self.decide_row(
+                req,
+                &deny,
+                decided_by,
+                &fresh.iter().map(|a| a.to_string()).collect::<Vec<_>>(),
+                &[],
+                effect_id,
+                started,
+                chain,
+                false,
+            )?;
+            return Ok(MediatedOutcome::Refused {
+                request_ref: request_ref(req),
+                decided_ref: ev.event_id,
+                reason,
             });
         }
 
@@ -953,6 +1143,7 @@ impl<'a> EgressMediator<'a> {
                         reason: Some(EgressReason::Denied),
                         credential_binding_candidates: vec![],
                         rule_index: None,
+                        guard_detail: None,
                     };
                     let ev = self.decide_row(
                         req,
@@ -963,6 +1154,7 @@ impl<'a> EgressMediator<'a> {
                         effect_id,
                         started,
                         chain,
+                        false,
                     )?;
                     return Ok(MediatedOutcome::RefusedCredential {
                         request_ref: request_ref(req),
@@ -998,6 +1190,7 @@ impl<'a> EgressMediator<'a> {
                     reason: Some(EgressReason::BudgetExhausted),
                     credential_binding_candidates: vec![],
                     rule_index: None,
+                    guard_detail: None,
                 };
                 let ev = self.decide_row(
                     req,
@@ -1008,6 +1201,7 @@ impl<'a> EgressMediator<'a> {
                     effect_id,
                     started,
                     chain,
+                    false,
                 )?;
                 return Ok(MediatedOutcome::Refused {
                     request_ref: request_ref(req),
@@ -1017,7 +1211,9 @@ impl<'a> EgressMediator<'a> {
             }
         }
 
-        // `decided{allow}` — durable before the wire fires.
+        // `decided{allow}` — durable before the wire fires; the
+        // `tls_terminated` member records whether the leg terminates at the
+        // mediator (a runtime fact the C2 surface reads back).
         let decided_ev = self.decide_row(
             req,
             decision,
@@ -1027,6 +1223,7 @@ impl<'a> EgressMediator<'a> {
             effect_id,
             started,
             chain,
+            self.transport.terminates_tls(),
         )?;
         let decided_ref = decided_ev.event_id.clone();
 
@@ -1128,6 +1325,12 @@ impl<'a> EgressMediator<'a> {
         intents
             .iter()
             .map(|i| {
+                // The kernel's own revocation leg carries a coordinate body
+                // (`{binding_id, channel_id}` — content-free) whose only
+                // intended reader is the destination it revokes at; the
+                // `approved_host_body` closer reads `Restricted{host_norm}`
+                // as exactly that statement (R2.9b; ADR-0341 D6).
+                let host_norm = hh_containment::policy::normalize_host(&i.host_pattern);
                 let req = EgressRequest {
                     token: token.to_string(),
                     effect_id: None,
@@ -1143,6 +1346,9 @@ impl<'a> EgressMediator<'a> {
                     body: Some(format!(
                         "{{\"binding_id\":\"{}\",\"channel_id\":\"{}\"}}",
                         i.binding_id, i.channel_id
+                    )),
+                    body_readers: Some(hh_provenance::authority::ReaderSet::Restricted(
+                        [host_norm].into_iter().collect(),
                     )),
                     credential_sentinels: vec![],
                 };

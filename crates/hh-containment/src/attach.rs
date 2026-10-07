@@ -39,7 +39,9 @@ use crate::backend::ContainmentBackend;
 use crate::events;
 use crate::policy::{ContainmentPolicy, NetMode, PolicyError};
 use crate::probes;
-use crate::report::{verify_report, ContainmentReport, EnforcementEvidence, FieldGroup};
+use crate::report::{
+    verify_report, ContainmentReport, EnforcementEvidence, FieldGroup, LossConsequence,
+};
 
 /// `on_unavailable` (MUST-data; ADR-0062 D4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -377,13 +379,16 @@ pub fn attach(input: &AttachInput) -> Result<AttachOutcome, AttachError> {
         probes: probes_out,
     };
 
-    // A relied-on group with `unknown` evidence — or a `lowering_loss`
-    // naming a field in it — is a fail-closed attach (AC-R-2.8.4-8/-10).
+    // A relied-on group with `unknown` evidence — or a `fail_closed`
+    // `lowering_loss` naming a field in it — is a fail-closed attach
+    // (AC-R-2.8.4-8/-10). A `stratified` loss (`upstream_proxy`, the
+    // `proc.env` proxy-var surface) records + stratifies; it never
+    // refuses (ADR-0341 D2/D4).
     for g in relied_groups(policy) {
-        let loss = report
-            .lowering_loss
-            .iter()
-            .any(|l| l.field.starts_with(&format!("{}.", g.as_str())));
+        let loss = report.lowering_loss.iter().any(|l| {
+            l.declared_field.starts_with(&format!("{}.", g.as_str()))
+                && l.consequence == LossConsequence::FailClosed
+        });
         if report.evidence(g) == EnforcementEvidence::Unknown || loss {
             return unverified(
                 g.as_str(),
