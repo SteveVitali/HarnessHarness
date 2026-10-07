@@ -134,6 +134,44 @@ fn evolution_unknown_op_refuses() {
     );
 }
 
+/// `lab.evolution.rebase` (S6.3a) — the op is declared, capability/experimental
+/// gated like the rest of the surface, and strict-decodes its members
+/// (`candidate_id` is required before dispatch resolves the run).
+#[cfg(feature = "tier-c4")]
+#[test]
+fn evolution_rebase_is_a_declared_op() {
+    let (_root, mut svc) = service();
+    hello_evo(&mut svc);
+    // Missing `candidate_id` → a strict-decode SchemaViolation (the op
+    // decoded — an undeclared op would be `unknown_method` instead).
+    let r = call(
+        &mut svc,
+        "lab.evolution.rebase",
+        Json::obj([("run", Json::str("evo-x"))]),
+    );
+    assert_eq!(err_kind(&r), "SchemaViolation", "{r:?}");
+    assert_ne!(
+        r.get("error")
+            .and_then(|e| e.get("data"))
+            .and_then(|d| d.get("code"))
+            .and_then(Json::as_str),
+        Some("unknown_method"),
+        "{r:?}"
+    );
+    // An unknown run with a full envelope → the campaign fence refuses.
+    let r = call(
+        &mut svc,
+        "lab.evolution.rebase",
+        Json::obj([
+            ("run", Json::str("evo-absent")),
+            ("candidate_id", Json::str("cand:x")),
+            ("proposal", Json::obj([])),
+            ("base_doc", Json::obj([])),
+        ]),
+    );
+    assert_eq!(err_kind(&r), "SchemaViolation", "{r:?}");
+}
+
 /// A malformed spec is a strict-codec `SchemaViolation` at the boundary —
 /// never a partial decode.
 #[cfg(feature = "tier-c4")]
@@ -201,6 +239,10 @@ fn campaign_open_requires_the_split_pin() {
         reported_only_dimensions: vec![],
         proposer_variant_ref: None,
         target_class: None,
+        target_classes: Vec::new(),
+        hosted_coordinates: Vec::new(),
+        hosted_descriptor_refs: Vec::new(),
+        authority_cap: None,
         rollout_policy: None,
         judge_policy: None,
     };
@@ -281,6 +323,10 @@ fn campaign_open_view_ensure_close() {
         reported_only_dimensions: vec![],
         proposer_variant_ref: None,
         target_class: None,
+        target_classes: Vec::new(),
+        hosted_coordinates: Vec::new(),
+        hosted_descriptor_refs: Vec::new(),
+        authority_cap: None,
         rollout_policy: None,
         judge_policy: None,
     };

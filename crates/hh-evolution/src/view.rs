@@ -48,6 +48,9 @@ pub struct CandidateRecord {
     /// The applied target's pinned version id (the `proposed` row's
     /// `target_ref` member — the head-tracking input for `StaleBase`).
     pub target_ref: Option<String>,
+    /// The base the candidate was rebased *from* (S6.3a; ADR-0195 D12 —
+    /// `None` = never rebased; the `rebased` row's `rebase{of}` member).
+    pub rebase_of: Option<String>,
 }
 
 impl CandidateRecord {
@@ -65,6 +68,7 @@ impl CandidateRecord {
             ("hypothesis_kind", &self.hypothesis_kind),
             ("attribution_label", &self.attribution_label),
             ("reverted_to", &self.reverted_to),
+            ("rebase_of", &self.rebase_of),
         ] {
             if let Some(s) = v {
                 m.insert(k.into(), Json::str(s));
@@ -225,6 +229,7 @@ impl CampaignView {
                         attribution_label: None,
                         reverted_to: None,
                         target_ref: None,
+                        rebase_of: None,
                     });
                 // State advances only when the transition's `from` matches the
                 // folded state — a duplicate intake or a refused attempt on an
@@ -263,6 +268,36 @@ impl CampaignView {
                             .get("hypothesis_kind")
                             .and_then(Json::as_str)
                             .map(str::to_string);
+                    }
+                    "rebased" if matches_current => {
+                        // S6.3a (ADR-0195 D12) — the rebase row's
+                        // `rebase{of, onto, diff_ref, target_ref}` member
+                        // rebinds the candidate's lineage coordinates;
+                        // downstream stage reports are superseded (the
+                        // candidate re-enters at S5 — its `reports`
+                        // table still carries the historical refs under
+                        // their stages; S5's re-run overwrites `S5`).
+                        let rb = e.payload.get("rebase").cloned().unwrap_or(Json::Null);
+                        rec.rebase_of = rb
+                            .get("of")
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                            .or(rec.base_ref.clone());
+                        rec.base_ref = rb
+                            .get("onto")
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                            .or(rec.base_ref.clone());
+                        rec.diff_ref = rb
+                            .get("diff_ref")
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                            .or(rec.diff_ref.clone());
+                        rec.target_ref = rb
+                            .get("target_ref")
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                            .or(rec.target_ref.clone());
                     }
                     _ => {}
                 }

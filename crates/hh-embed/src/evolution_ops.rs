@@ -349,6 +349,19 @@ mod imp {
                     .map_err(evo_err)?;
                 Ok(Json::obj([("state", Json::str("active"))]))
             }
+            "lab.evolution.rebase" => {
+                let run = req_str(params, "run")?.to_string();
+                let candidate_id = cid(params)?;
+                let proposal = CandidateProposal::from_json(req(params, "proposal")?)
+                    .map_err(|e| bad("/proposal", &format!("{e:?}")))?;
+                let base_doc = hh_hir::wire::document_from_json(req(params, "base_doc")?)
+                    .map_err(|e| bad("/base_doc", &format!("{e:?}")))?;
+                let docs = svc.lab_docs()?;
+                let eng = campaign(&mut svc.evolution_campaigns, &mut svc.store, docs, &run)?;
+                eng.rebase(&mut svc.store, &candidate_id, &proposal, &base_doc)
+                    .map_err(evo_err)?;
+                Ok(Json::obj([("state", Json::str("rebased"))]))
+            }
             "lab.evolution.withdraw" => {
                 let run = req_str(params, "run")?.to_string();
                 let candidate_id = cid(params)?;

@@ -109,6 +109,17 @@ pub enum Refusal {
         /// The failure detail.
         detail: String,
     },
+    /// A semantic op touches a `coordinates.*` hosted surface the
+    /// campaign did not admit — either the coordinate is not in
+    /// `hosted_coordinates`, its descriptor does not carry
+    /// `capability = supported`, or the edit is structural (ADR-0196
+    /// D7 — coordinate admission is value-scoped, never structural).
+    HostedCoordinateUnsupported {
+        /// The coordinate or op path refused.
+        coordinate: String,
+        /// The failure detail.
+        detail: String,
+    },
 
     // ── S2 hypothesize ──────────────────────────────────────────────────
     /// The hypothesis is not falsifiable: empty `evidence_refs`, no
@@ -460,6 +471,9 @@ impl Refusal {
             Refusal::DuplicateCandidate { .. } => "duplicate_candidate".to_string(),
             Refusal::DiffNotInvertible { .. } => "diff_not_invertible".to_string(),
             Refusal::InvalidProvenance { .. } => "invalid_provenance".to_string(),
+            Refusal::HostedCoordinateUnsupported { .. } => {
+                "hosted_coordinate_unsupported".to_string()
+            }
             Refusal::HypothesisUnfalsifiable { .. } => "hypothesis_unfalsifiable".to_string(),
             Refusal::UnknownMetric { .. } => "unknown_metric".to_string(),
             Refusal::LeakedSplit { .. } => "leaked_split".to_string(),
@@ -529,7 +543,8 @@ impl Refusal {
             | Refusal::TooManyOps { .. }
             | Refusal::DuplicateCandidate { .. }
             | Refusal::DiffNotInvertible { .. }
-            | Refusal::InvalidProvenance { .. } => "S1",
+            | Refusal::InvalidProvenance { .. }
+            | Refusal::HostedCoordinateUnsupported { .. } => "S1",
             Refusal::HypothesisUnfalsifiable { .. }
             | Refusal::UnknownMetric { .. }
             | Refusal::LeakedSplit { .. }

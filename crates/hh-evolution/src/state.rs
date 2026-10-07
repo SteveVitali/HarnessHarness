@@ -10,6 +10,11 @@
 //!   → canary → active → expiring → {retired | revalidated → active}
 //! terminals: rejected{stage,code,report_ref?} | withdrawn{by}
 //!            | reverted{from ∈ {canary, active}, reason}
+//! S6.3a — `rebase` (ADR-0195 D12): a moved lineage head rebases a
+//! candidate that passed S4 (`searched | validated | transferred |
+//! security_checked → rebased`); `rebased` re-enters at S5
+//! (`rebased → validated`) — the rebased candidate must re-pass the
+//! held-out gates before S6 resumes; it never bypasses S5.
 //! ```
 
 use hh_wire::json::Json;
@@ -47,6 +52,11 @@ pub enum CandidateState {
     Expiring,
     /// The removal test kept the candidate — return to service.
     Revalidated,
+    /// The candidate was rebased onto the moved lineage head (S6.3a;
+    /// ADR-0195 D12) — it re-enters at S5 (`rebased → validated`);
+    /// downstream evidence is invalidated until the held-out gates
+    /// re-pass.
+    Rebased,
     /// The removal test retired the candidate (terminal).
     Retired,
     /// A gate refused the candidate (terminal) — `{stage, code,
@@ -91,6 +101,7 @@ impl CandidateState {
             CandidateState::Active => "active",
             CandidateState::Expiring => "expiring",
             CandidateState::Revalidated => "revalidated",
+            CandidateState::Rebased => "rebased",
             CandidateState::Retired => "retired",
             CandidateState::Rejected { .. } => "rejected",
             CandidateState::Withdrawn { .. } => "withdrawn",
@@ -126,6 +137,7 @@ impl CandidateState {
             "active" => Some("active"),
             "expiring" => Some("expiring"),
             "revalidated" => Some("revalidated"),
+            "rebased" => Some("rebased"),
             "retired" => Some("retired"),
             "rejected" => Some("rejected"),
             "withdrawn" => Some("withdrawn"),
@@ -156,6 +168,13 @@ pub fn allowed(from: &CandidateState, to: &str) -> bool {
                 | (CandidateState::Hypothesized, "screened")
                 | (CandidateState::Screened, "searched")
                 | (CandidateState::Searched, "validated")
+                // S6.3a rebase (ADR-0195 D12): a moved head rebases any
+                // post-S4 candidate; `rebased` re-enters at S5.
+                | (CandidateState::Searched, "rebased")
+                | (CandidateState::Validated, "rebased")
+                | (CandidateState::Transferred, "rebased")
+                | (CandidateState::SecurityChecked, "rebased")
+                | (CandidateState::Rebased, "validated")
                 | (CandidateState::Validated, "transferred")
                 | (CandidateState::Transferred, "security_checked")
                 | (CandidateState::SecurityChecked, "sealed_candidate")
