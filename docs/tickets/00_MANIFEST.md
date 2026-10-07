@@ -171,7 +171,7 @@ is assigned to R2.6 (single owner of the durable steer-cue seam; `*` on row 111)
 | 112 | `112_R2.6__control-steer-interpreters.md` | Round 2 | ticket | Control-plane legs: durable steer-cue transport (OQ-316 arm), queue_next_turn, steerable/plan_execute interpreters, OOP suite, env kill (DF-S2.11-1, DF-S1.20-1; BL-14) | — |
 | 113 | `113_R2.7__model-plane-legs.md` | Round 2 | ticket | Model-plane producer legs (machine cells): model.* emitters, non-static routing arms, WireDialect corpus, K4/K5 (DF-S1.18-1; BL-31 partial) | — |
 | 114 | `114_R2.8__tool-exposure-residual.md` | Round 2 | ticket | Tool-exposure residual: C1 bindings/ids/indexes/renderers, C2 control + runtime emitters, ≥200-surface battery (DF-S1.17-1/-2/-3; BL-16) | — |
-| 115 | `115_R2.9__egress-containment-legs.md` | Round 2 | ticket | Egress/containment residual: amend(), T-CON members, tls.terminate enforcement + inspect_hooks, ask-endorsement ingress, fork rebind, leak-scan surfaces (DF-S1.12-*, DF-S2.4-1/-3; BL-18) | — |
+| 115 | `115_R2.9__egress-containment-legs.md` | Round 2 | ticket | Egress/containment residual: amend(), T-CON members, tls.terminate enforcement + inspect_hooks, ask-endorsement ingress, fork rebind, leak-scan surfaces (DF-S1.12-*, DF-S2.4-1/-3; BL-18) — **superseded-by-split 2026-10-07 → R2.9a + R2.9b** (## Plan extensions) | — |
 | 116 | `116_R2.10__credential-broker-legs.md` | Round 2 | ticket | Credential-broker legs: audience sender-constraint verify, honest dpop, canary channel in every Stage-3 env image (DF-S1.13-1/-3; BL-19) | — |
 | 117 | `117_R2.11__approvals-monitor-acceptance.md` | Round 2 | ticket | Approval UX + Π acceptance: ApprovalOption.modify, ApproverGrant + label.endorsed call site, check_write@prepare, depth-3 (DF-S1.23-1, DF-S1.11-2; BL-22+23) | — |
 | 118 | `118_R2.12__ifc-residual.md` | Round 2 | ticket | IFC residual: labels_leaves per-leaf walk, remedy-ingress consume path, shape_endorsed produce-time caller (DF-S2.7-1; BL-20) | — |
@@ -456,6 +456,20 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
 ## Plan extensions
 (append-only: inserts `NNa_…`, splits `<ID>a`/`<ID>b` with the original marked superseded-by-split, rounds)
 - 2026-09-15 · **inserted** `003a_S0.3b__cross-candidate-online-spike.md` (id `S0.3b`, row `3a`) between S0.3 and GATE-G1. Reason: the operator's GATE-G1 disposition authorized an **online** spike budget to close the machine-achievable cells of DF-S0.3-1 (MCP/ACP official SDK round-trip + cross-candidate G1 byte-identity) and DF-S0.3-3 (E2/E3 cross-candidate scoring + E5b/E5c splits). The R2 human cross-camp reviewer signature and the Stage-3 polyglot CI (DF-S0.3-2) are explicitly NOT pulled into this ticket. GATE-G1 stays PENDING until S0.3b lands and the operator re-reads the extended sheet.
+- 2026-10-07 · **split** `R2.9` (row 115, `115_R2.9__egress-containment-legs.md`) →
+  `R2.9a` + `R2.9b` at the ticket's pre-registered seam (`## Notes`), run-time split under the
+  revisability rule — the ticket is the round's largest and overflows a subagent context.
+  **R2.9a** (this run, branch `svitali/harnessharness-r2.9`): DF-S1.12-1 verify pass,
+  DF-S1.12-2 (`amend()`/`AmendmentDiff`/durable `security.containment.amended` + the
+  `containment_amended` results annotation + the `resources → BudgetNode` dimension
+  mapping), DF-S2.4-1 producer seams (the `net_egress` effect-surface route, the
+  ask-endorsement ingress on resume, the `fork` rebind call site). **R2.9b** (successor —
+  runs the same ticket file `115_R2.9__egress-containment-legs.md`; no second ticket
+  authored): DF-S1.12-4 T-CON residuals + per-backend `lowering_loss` + the four metrics'
+  runtime emission, DF-S1.12-6 `tls.terminate`/`inspect_hooks`/`approved_host_body`,
+  DF-S2.4-3 Stage-3 leak-scan surfaces. R2.9's manifest row reads superseded-by-split;
+  `nextTicket` advances to `R2.9b` on R2.9a's closeout; R2.9b forks from
+  `svitali/harnessharness-r2.9`.
 - 2026-10-06 · **round 2 appended** — rows 107–136 (`R2.1`…`R2.27`, `HUMAN-H3`, `HUMAN-H4`,
   `GATE-G4`) by `decompose-spec mode=extend` over the Round-1 closeout. Sources: the 2026-10-06
   decision memo + `docs/build/BACKLOG.csv` (BL-01…BL-43) + the OPEN/PARTIAL DEFERRALS set. Round-1

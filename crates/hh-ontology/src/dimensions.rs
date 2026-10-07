@@ -76,16 +76,33 @@ pub enum RegisteredDimension {
     /// `ext.effects.external_irreversible` — `irreversible ∧ scope = external` effects
     /// reaching `committed` (ADR-0207 d5; kernel-list promotion deferred — ADR-0211).
     EffectsExternalIrreversible,
+    /// `hh.env.cpu_ms` — the environment's CPU-milliseconds bound
+    /// (`ContainmentPolicy.resources.cpu_ms → BudgetNode`, R-2.8.4; R2.9a).
+    EnvCpuMs,
+    /// `hh.env.memory_bytes` — the environment's memory-level cap (gauge).
+    EnvMemoryBytes,
+    /// `hh.env.disk_bytes` — the environment's disk-level cap (gauge).
+    EnvDiskBytes,
+    /// `hh.env.pids` — the environment's live-PID cap (gauge).
+    EnvPids,
+    /// `hh.env.open_files` — the environment's open-fd cap (gauge).
+    EnvOpenFiles,
 }
 
 impl RegisteredDimension {
-    /// The registered set, in canonical (sorted-by-spelling) order.
-    pub const ALL: [RegisteredDimension; 5] = [
+    /// The registered set, in declaration order (`env.*` resource caps
+    /// joined at R2.9a — the `resources → BudgetNode` mapping).
+    pub const ALL: [RegisteredDimension; 10] = [
         RegisteredDimension::EffectsExternalIrreversible,
         RegisteredDimension::EgressDecisionsAllowed,
         RegisteredDimension::EgressDecisionsAsked,
         RegisteredDimension::EgressDecisionsDenied,
         RegisteredDimension::ContainmentViolations,
+        RegisteredDimension::EnvCpuMs,
+        RegisteredDimension::EnvMemoryBytes,
+        RegisteredDimension::EnvDiskBytes,
+        RegisteredDimension::EnvPids,
+        RegisteredDimension::EnvOpenFiles,
     ];
 
     /// The full registered spelling.
@@ -96,6 +113,11 @@ impl RegisteredDimension {
             RegisteredDimension::EgressDecisionsAsked => "hh.egress.decisions.asked",
             RegisteredDimension::ContainmentViolations => "hh.containment.violations",
             RegisteredDimension::EffectsExternalIrreversible => "ext.effects.external_irreversible",
+            RegisteredDimension::EnvCpuMs => "hh.env.cpu_ms",
+            RegisteredDimension::EnvMemoryBytes => "hh.env.memory_bytes",
+            RegisteredDimension::EnvDiskBytes => "hh.env.disk_bytes",
+            RegisteredDimension::EnvPids => "hh.env.pids",
+            RegisteredDimension::EnvOpenFiles => "hh.env.open_files",
         }
     }
 
@@ -195,6 +217,17 @@ pub enum DimensionId {
     ExtContainmentViolations,
     /// `ext.effects.external_irreversible`.
     ExtEffectsExternalIrreversible,
+    /// `hh.env.cpu_ms` — environment CPU-ms bound (R2.9a `resources →
+    /// BudgetNode` mapping).
+    ExtEnvCpuMs,
+    /// `hh.env.memory_bytes` — environment memory cap.
+    ExtEnvMemoryBytes,
+    /// `hh.env.disk_bytes` — environment disk cap.
+    ExtEnvDiskBytes,
+    /// `hh.env.pids` — environment live-PID cap.
+    ExtEnvPids,
+    /// `hh.env.open_files` — environment open-fd cap.
+    ExtEnvOpenFiles,
 
     // ---- gauges (instantaneous, max-aggregated, cap-bounded; E5) ----
     /// `context.occupancy` — fraction of the context window in use (ppm).
@@ -212,11 +245,13 @@ pub enum DimensionId {
 }
 
 impl DimensionId {
-    /// The closed list — 25 kernel counters + 5 registered names + 4 gauges, in enum
+    /// The closed list — 25 kernel counters + 6 registered counters + 8 gauges
+    /// (4 kernel + 4 registered `hh.env.*` caps), in enum
     /// (canonical) order. `reconciliation.holds` joined at S1.21 (ADR-0113 D4);
     /// `message_human` joined at S6.4 (ADR-0207 D6 — the §5i.1 org-policy
-    /// budgeted dimension).
-    pub const ALL: [DimensionId; 34] = [
+    /// budgeted dimension); the five `hh.env.*` resource-cap names joined at
+    /// R2.9a (the `resources → BudgetNode` mapping).
+    pub const ALL: [DimensionId; 39] = [
         DimensionId::TokensInputUncached,
         DimensionId::TokensInputCacheRead,
         DimensionId::TokensInputCacheWrite,
@@ -247,6 +282,11 @@ impl DimensionId {
         DimensionId::ExtEgressAsked,
         DimensionId::ExtContainmentViolations,
         DimensionId::ExtEffectsExternalIrreversible,
+        DimensionId::ExtEnvCpuMs,
+        DimensionId::ExtEnvMemoryBytes,
+        DimensionId::ExtEnvDiskBytes,
+        DimensionId::ExtEnvPids,
+        DimensionId::ExtEnvOpenFiles,
         DimensionId::ContextOccupancy,
         DimensionId::FanOut,
         DimensionId::DelegationDepth,
@@ -286,6 +326,11 @@ impl DimensionId {
             DimensionId::ExtEgressAsked => "hh.egress.decisions.asked",
             DimensionId::ExtContainmentViolations => "hh.containment.violations",
             DimensionId::ExtEffectsExternalIrreversible => "ext.effects.external_irreversible",
+            DimensionId::ExtEnvCpuMs => "hh.env.cpu_ms",
+            DimensionId::ExtEnvMemoryBytes => "hh.env.memory_bytes",
+            DimensionId::ExtEnvDiskBytes => "hh.env.disk_bytes",
+            DimensionId::ExtEnvPids => "hh.env.pids",
+            DimensionId::ExtEnvOpenFiles => "hh.env.open_files",
             DimensionId::ContextOccupancy => "context.occupancy",
             DimensionId::FanOut => "fan_out",
             DimensionId::DelegationDepth => "delegation_depth",
@@ -304,7 +349,11 @@ impl DimensionId {
             DimensionId::ContextOccupancy
             | DimensionId::FanOut
             | DimensionId::DelegationDepth
-            | DimensionId::ReconciliationHolds => DimensionClass::Gauge,
+            | DimensionId::ReconciliationHolds
+            | DimensionId::ExtEnvMemoryBytes
+            | DimensionId::ExtEnvDiskBytes
+            | DimensionId::ExtEnvPids
+            | DimensionId::ExtEnvOpenFiles => DimensionClass::Gauge,
             _ => DimensionClass::Counter,
         }
     }
@@ -328,8 +377,10 @@ impl DimensionId {
             | DimensionId::TimeHumanWaitMs
             | DimensionId::EnvActiveMs
             | DimensionId::EnvReservedMs
-            | DimensionId::EnvSuspendedMs => "ms",
+            | DimensionId::EnvSuspendedMs
+            | DimensionId::ExtEnvCpuMs => "ms",
             DimensionId::NetworkBytesOut | DimensionId::NetworkBytesIn => "bytes",
+            DimensionId::ExtEnvMemoryBytes | DimensionId::ExtEnvDiskBytes => "bytes",
             DimensionId::Spend => "micro_units",
             DimensionId::ContextOccupancy => "fraction_ppm",
             DimensionId::Turns
@@ -342,6 +393,8 @@ impl DimensionId {
             | DimensionId::ExtEgressAsked
             | DimensionId::ExtContainmentViolations
             | DimensionId::ExtEffectsExternalIrreversible
+            | DimensionId::ExtEnvPids
+            | DimensionId::ExtEnvOpenFiles
             | DimensionId::FanOut
             | DimensionId::DelegationDepth
             | DimensionId::ReconciliationHolds
@@ -361,6 +414,11 @@ impl DimensionId {
                 RegisteredDimension::EffectsExternalIrreversible => {
                     DimensionId::ExtEffectsExternalIrreversible
                 }
+                RegisteredDimension::EnvCpuMs => DimensionId::ExtEnvCpuMs,
+                RegisteredDimension::EnvMemoryBytes => DimensionId::ExtEnvMemoryBytes,
+                RegisteredDimension::EnvDiskBytes => DimensionId::ExtEnvDiskBytes,
+                RegisteredDimension::EnvPids => DimensionId::ExtEnvPids,
+                RegisteredDimension::EnvOpenFiles => DimensionId::ExtEnvOpenFiles,
             });
         }
         DimensionId::ALL.iter().copied().find(|d| d.as_str() == s)
@@ -555,14 +613,26 @@ mod tests {
         "hh.egress.decisions.asked",
         "hh.containment.violations",
         "ext.effects.external_irreversible",
+        "hh.env.cpu_ms", // R2.9a — resources → BudgetNode
+        "hh.env.memory_bytes",
+        "hh.env.disk_bytes",
+        "hh.env.pids",
+        "hh.env.open_files",
+    ];
+    const SPEC_REGISTERED_GAUGES: &[&str] = &[
+        "hh.env.memory_bytes",
+        "hh.env.disk_bytes",
+        "hh.env.pids",
+        "hh.env.open_files",
     ];
 
     #[test]
     fn kernel_list_matches_the_spec_row_exactly() {
-        // §8.2 §3: 25 counters + 4 gauges + 5 registered = 34 names
+        // §8.2 §3: 25 counters + 4 gauges + 10 registered = 39 names
         // (`reconciliation.holds` joined at S1.21 — ADR-0113 D4;
-        // `message_human` joined at S6.4 — ADR-0207 D6).
-        assert_eq!(DimensionId::ALL.len(), 34);
+        // `message_human` joined at S6.4 — ADR-0207 D6; the five
+        // `hh.env.*` resource caps joined at R2.9a).
+        assert_eq!(DimensionId::ALL.len(), 39);
         let names: BTreeSet<&'static str> = DimensionId::ALL.iter().map(|d| d.as_str()).collect();
         assert_eq!(names.len(), DimensionId::ALL.len(), "duplicate spellings");
         let expected: BTreeSet<&'static str> = SPEC_COUNTERS
@@ -581,7 +651,12 @@ mod tests {
             .filter(|d| d.class() == DimensionClass::Gauge)
             .map(|d| d.as_str())
             .collect();
-        assert_eq!(gauges, SPEC_GAUGES.iter().copied().collect());
+        let expected: BTreeSet<&'static str> = SPEC_GAUGES
+            .iter()
+            .chain(SPEC_REGISTERED_GAUGES)
+            .copied()
+            .collect();
+        assert_eq!(gauges, expected);
     }
 
     #[test]

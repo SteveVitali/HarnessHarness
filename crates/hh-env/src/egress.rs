@@ -280,7 +280,7 @@ pub enum GateOutcome {
     /// at the wire point (the recheck/sentinel/`decided{allow}`/wire/charge
     /// leg). Dispatch carries this across `committed` so the write-ahead
     /// precedes the wire.
-    Allowed(GateAllow),
+    Allowed(Box<GateAllow>),
     /// The request terminated at the gate — `decided{deny}` or the ask
     /// trail (`pending`/`requested`/`decided{ask}`) is durable.
     Terminal(MediatedOutcome),
@@ -297,6 +297,16 @@ pub struct GateAllow {
     pub effect_id: String,
     /// The gate's start stamp (`decided.latency_ms` baseline).
     pub started: u64,
+    /// Who decided — `policy` on the direct `gate` path, `monitor` on an
+    /// operator endorsement (R2.9a; the `decided` row `forward` mints
+    /// attributes the verdict correctly).
+    pub decided_by: DecidedBy,
+    /// The policy a successful `amend(AddEgressAllow)` produced
+    /// (`endorse_gate`'s `allow_lease` leg) — the caller installs it on the
+    /// environment handle so the *next* dispatch's `decide_egress` sees the
+    /// widened allow set and the version-pinned cache stays honest
+    /// (`security.containment.amended` is already durable).
+    pub amended_policy: Option<ContainmentPolicy>,
 }
 
 /// The mediator's failure modes — typed, never a warning.
@@ -488,11 +498,13 @@ impl<'a> EgressMediator<'a> {
             EgressVerdict::Ask => Ok(GateOutcome::Terminal(
                 self.ask(req, &decision, &effect_id, started, chain)?,
             )),
-            EgressVerdict::Allow => Ok(GateOutcome::Allowed(GateAllow {
+            EgressVerdict::Allow => Ok(GateOutcome::Allowed(Box::new(GateAllow {
                 decision,
                 effect_id,
                 started,
-            })),
+                decided_by: DecidedBy::Policy,
+                amended_policy: None,
+            }))),
         }
     }
 
@@ -508,7 +520,7 @@ impl<'a> EgressMediator<'a> {
             GateOutcome::Allowed(g) => self.forward(
                 req,
                 &g.decision,
-                DecidedBy::Policy,
+                g.decided_by,
                 &g.effect_id,
                 g.started,
                 chain,
@@ -684,28 +696,36 @@ impl<'a> EgressMediator<'a> {
         })
     }
 
-    /// `endorse_asked(req, response, endorser)` — the monitor's answer
-    /// resolves the pending ask (ADR-0266 D6):
+    /// `endorse_gate(req, response, endorser)` — the *gate-stage* half of
+    /// the monitor's answer (R2.9a; DF-S2.4-1b — the resume ingress):
+    /// dispatch calls this where [`EgressMediator::gate`] would run, when
+    /// the durable prefix shows the egress `pending` was answered by a
+    /// `security.permission.decided` row. The wire leg is still deferred —
+    /// an allowed endorsement hands back a [`GateAllow`] whose
+    /// `decided_by = monitor` (and `amended_policy` when `allow_lease`'s
+    /// `amend` succeeded) so `forward` mints `decided{allow, monitor}` at
+    /// the wire point under the effect's write-ahead.
     ///
-    /// - `deny`/`more_info` ⇒ `decided{deny, source: monitor}` + refuse.
-    /// - `allow_once` ⇒ `decided{allow, source: monitor}` + forward — the
-    ///   endorsement covers *this request only* (nothing cached, nothing
-    ///   amended).
+    /// - `deny`/`more_info` ⇒ `decided{deny, source: monitor}` is durable
+    ///   and the outcome terminates at the gate.
+    /// - `allow_once` ⇒ allowed for *this request only* (nothing cached,
+    ///   nothing amended).
     /// - `allow_lease{session|persisted}` ⇒ `amend(AddEgressAllow)` at the
     ///   lease's scope (`session | run` — §5g.4 §2's bound), the
     ///   `security.containment.amended` row, the cache insert (when
-    ///   `session_cache`), then the forward under `decided{allow, monitor}`.
-    ///   An `amend` refusal falls back to a cache entry when
-    ///   `session_cache` is on; otherwise the endorsement is refused typed.
-    pub fn endorse_asked(
+    ///   `session_cache`), then allow. An `amend` refusal falls back to a
+    ///   narrowing-only cache entry when `session_cache` is on; otherwise
+    ///   the endorsement is refused typed (`EgressError::Amend`).
+    pub fn endorse_gate(
         &mut self,
         req: &EgressRequest,
         response: &ApprovalResponse,
         endorser: &ProvenanceRecord,
         chain: &ScopeChain,
-    ) -> Result<MediatedOutcome, EgressError> {
+    ) -> Result<GateOutcome, EgressError> {
         let started = self.store.now_ms();
         let effect_id = req.effect_id.clone().unwrap_or_default();
+        let mut amended_policy = None;
         match &response.choice {
             ResponseChoice::Deny { .. } | ResponseChoice::MoreInfo => {
                 let deny = EgressDecision {
@@ -726,11 +746,11 @@ impl<'a> EgressMediator<'a> {
                     started,
                     chain,
                 )?;
-                return Ok(MediatedOutcome::Refused {
+                return Ok(GateOutcome::Terminal(MediatedOutcome::Refused {
                     request_ref: request_ref(req),
                     decided_ref: ev.event_id,
                     reason: EgressReason::Denied,
-                });
+                }));
             }
             ResponseChoice::AllowOnce => {}
             ResponseChoice::AllowLease(spec) => {
@@ -776,8 +796,9 @@ impl<'a> EgressMediator<'a> {
                             Some(&effect_id),
                             chain,
                         )?;
-                        self.policy = outcome.policy;
+                        self.policy = outcome.policy.clone();
                         self.cache.retain_version(&self.policy.version_id);
+                        amended_policy = Some(outcome.policy);
                     }
                     Err(e) => {
                         // Fall back to a narrowing-only cache entry when the
@@ -804,17 +825,56 @@ impl<'a> EgressMediator<'a> {
                 }
             }
         }
-        // The endorsement decided allow — decide/forward under
-        // `source: monitor`.
-        let allow = EgressDecision {
-            decision: EgressVerdict::Allow,
-            source: EgressSource::Monitor,
-            rule_ref: None,
-            reason: None,
-            credential_binding_candidates: vec![],
-            rule_index: None,
-        };
-        self.forward(req, &allow, DecidedBy::Monitor, &effect_id, started, chain)
+        // The endorsement decided allow — `forward` runs the wire leg under
+        // `source: monitor` / `decided_by = monitor`.
+        Ok(GateOutcome::Allowed(Box::new(GateAllow {
+            decision: EgressDecision {
+                decision: EgressVerdict::Allow,
+                source: EgressSource::Monitor,
+                rule_ref: None,
+                reason: None,
+                credential_binding_candidates: vec![],
+                rule_index: None,
+            },
+            effect_id,
+            started,
+            decided_by: DecidedBy::Monitor,
+            amended_policy,
+        })))
+    }
+
+    /// `endorse_asked(req, response, endorser)` — the monitor's answer
+    /// resolves the pending ask (ADR-0266 D6): [`Self::endorse_gate`]
+    /// decides, then the allow legs forward at the wire point.
+    ///
+    /// - `deny`/`more_info` ⇒ `decided{deny, source: monitor}` + refuse.
+    /// - `allow_once` ⇒ `decided{allow, source: monitor}` + forward — the
+    ///   endorsement covers *this request only* (nothing cached, nothing
+    ///   amended).
+    /// - `allow_lease{session|persisted}` ⇒ `amend(AddEgressAllow)` at the
+    ///   lease's scope (`session | run` — §5g.4 §2's bound), the
+    ///   `security.containment.amended` row, the cache insert (when
+    ///   `session_cache`), then the forward under `decided{allow, monitor}`.
+    ///   An `amend` refusal falls back to a cache entry when
+    ///   `session_cache` is on; otherwise the endorsement is refused typed.
+    pub fn endorse_asked(
+        &mut self,
+        req: &EgressRequest,
+        response: &ApprovalResponse,
+        endorser: &ProvenanceRecord,
+        chain: &ScopeChain,
+    ) -> Result<MediatedOutcome, EgressError> {
+        match self.endorse_gate(req, response, endorser, chain)? {
+            GateOutcome::Terminal(o) => Ok(o),
+            GateOutcome::Allowed(g) => self.forward(
+                req,
+                &g.decision,
+                g.decided_by,
+                &g.effect_id,
+                g.started,
+                chain,
+            ),
+        }
     }
 
     /// The allow pipeline — recheck → sentinels → decided{allow} → wire →

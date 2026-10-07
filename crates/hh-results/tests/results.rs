@@ -2895,6 +2895,104 @@ fn catalog_epochs_fold_and_raise_configuration_drift() {
         .is_none());
 }
 
+/// R2.9a (DF-S1.12-2) — a mid-run containment `amend()` lands
+/// `security.containment.amended`; the row lifts it into
+/// `annotations_from_ledger.containment_amended[]` so a scored run's
+/// egress policy never silently moved (the `from → to` version pair,
+/// basis and scope are carried verbatim).
+#[test]
+fn containment_amended_folds_into_annotations() {
+    let mut r = rig("containment-amend", 1_000);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, _exp_run) = open(&mut r, &s);
+    let run_id = {
+        let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+        eng.attach(&eid).unwrap();
+        let run_plan_id = match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected plan, got {other:?}"),
+        };
+        let ticket = eng.claim(&run_plan_id, "driver").unwrap();
+        let launched = eng.launch(&ticket, "subject").unwrap();
+        drop(eng);
+        finish_subject(
+            &mut r.store,
+            &launched.run_id,
+            &launched.subject_writer,
+            StopReason::Completed,
+            &[],
+            vec![(
+                "security.containment.amended".to_string(),
+                Json::obj([
+                    ("from_version_id", Json::str("sha256:old")),
+                    ("to_version_id", Json::str("sha256:new")),
+                    ("basis", Json::str("approval")),
+                    ("scope", Json::str("run")),
+                    ("effect_id", Json::str("eff-1")),
+                    (
+                        "endorser",
+                        Json::obj([("subject_ref", Json::str("human:op"))]),
+                    ),
+                ]),
+            )],
+        );
+        launched.run_id
+    };
+    let row = r
+        .results
+        .project_row(&r.store, Some(&r.docs), &run_id, None, None)
+        .unwrap();
+    let amended = row
+        .annotations_from_ledger
+        .get("containment_amended")
+        .and_then(|e| match e {
+            Json::Arr(a) => Some(a.clone()),
+            _ => None,
+        })
+        .expect("containment_amended folded");
+    assert_eq!(amended.len(), 1);
+    assert_eq!(
+        amended[0].get("to_version_id").and_then(|c| c.as_str()),
+        Some("sha256:new")
+    );
+    assert_eq!(
+        amended[0].get("basis").and_then(|c| c.as_str()),
+        Some("approval")
+    );
+
+    // A run with no amendment emits no member.
+    let mut r2 = rig("containment-amend-clean", 1_000);
+    let (eid2, _e2) = open(&mut r2, &s);
+    let run_id2 = {
+        let mut eng = ExperimentEngine::new(&mut r2.store, r2.docs.clone(), ctx());
+        eng.attach(&eid2).unwrap();
+        let run_plan_id = match eng.next().unwrap() {
+            NextVerdict::Plan { run_plan_id } => run_plan_id,
+            other => panic!("expected plan, got {other:?}"),
+        };
+        let ticket = eng.claim(&run_plan_id, "driver").unwrap();
+        let launched = eng.launch(&ticket, "subject").unwrap();
+        drop(eng);
+        finish_subject(
+            &mut r2.store,
+            &launched.run_id,
+            &launched.subject_writer,
+            StopReason::Completed,
+            &[],
+            vec![],
+        );
+        launched.run_id
+    };
+    let row2 = r2
+        .results
+        .project_row(&r2.store, Some(&r2.docs), &run_id2, None, None)
+        .unwrap();
+    assert!(row2
+        .annotations_from_ledger
+        .get("containment_amended")
+        .is_none());
+}
+
 // ── S5.3 — verifiable_by per reader set + the public tier (§6.5 §2.4/§4;
 // R-2.10.5 C2) ────────────────────────────────────────────────────────
 

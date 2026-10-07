@@ -150,6 +150,12 @@ impl EmbedService {
                 reason: "env_driver_absent".to_string(),
             }
         })?;
+        // R2.9a (DF-S2.4-1c; LT-09) — a `fork_snapshot` child must not
+        // carry the parent's placeholder spellings: capture the parent
+        // handle before `derive` so the rebind can name it.
+        let parent_handle = (mode == DeriveMode::ForkSnapshot)
+            .then(|| driver.handle(&env_handle_id).cloned())
+            .flatten();
         let child = driver
             .derive(
                 &mut self.store,
@@ -160,6 +166,20 @@ impl EmbedService {
                 on_parent_end,
             )
             .map_err(crate::open::env_err)?;
+        if let Some(parent) = parent_handle {
+            // Fresh placeholders + preserved expiry ceilings; the
+            // `security.credential.bound` rows are durable before the
+            // derive answers.
+            driver
+                .rebind_credentials_for_fork(
+                    &mut self.store,
+                    &lease,
+                    &mut self.credential_broker,
+                    &parent,
+                    &child.env_handle_id,
+                )
+                .map_err(crate::open::env_err)?;
+        }
         Ok(Json::obj([
             ("derived", Json::Bool(true)),
             ("mode", Json::str(mode_str)),
