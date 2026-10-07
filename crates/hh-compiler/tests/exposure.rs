@@ -17,8 +17,8 @@ use hh_compiler::compiler::compile;
 use hh_compiler::exposure::{
     build_catalog, check_callable, direct_all, evict, index_query, reveal, select_surfaces,
     CallProposal, CallRefusal, CatalogIndex, DiscoveryForm, DiscoveryQuery, EvictCause,
-    ExposurePolicy, ExposurePolicyParams, OmitReason, Retention, RevealCause, RevealedSet,
-    SelectError, TurnState,
+    ExposurePolicy, ExposurePolicyParams, IndexGranularity, OmitReason, Retention, RevealCause,
+    RevealedSet, SelectError, TurnState,
 };
 use hh_compiler::schema::{bundle_from_json, bundle_to_json};
 use hh_compiler::CompileInputs;
@@ -445,6 +445,7 @@ fn ac_e3_12_hidden_never_appears_and_direct_all_covers_admitted() {
             form: DiscoveryForm::Regex,
             text: "tool_a".into(),
             limit: None,
+            granularity: IndexGranularity::Surface,
         },
         8,
     )

@@ -1992,29 +1992,6 @@ fn error_spec_from_json(
 }
 
 fn result_spec_json(s: &crate::surface::ResultRenderSpec) -> Json {
-    let (mode, extra): (Json, Vec<(&str, Json)>) = match &s.mode {
-        crate::surface::RenderMode::Full => (Json::str("full"), Vec::new()),
-        crate::surface::RenderMode::Truncate {
-            max_lines,
-            max_bytes,
-            max_tokens,
-            direction,
-        } => {
-            let mut p = vec![("direction", Json::str(direction.as_str()))];
-            if let Some(v) = max_lines {
-                p.push(("max_lines", Json::Int(*v as i64)));
-            }
-            if let Some(v) = max_bytes {
-                p.push(("max_bytes", Json::Int(*v as i64)));
-            }
-            if let Some(v) = max_tokens {
-                p.push(("max_tokens", Json::Int(*v as i64)));
-            }
-            (Json::str("truncate"), p)
-        }
-    };
-    let mut mode_obj = vec![("kind", mode)];
-    mode_obj.extend(extra);
     Json::obj([
         (
             "declared_loss",
@@ -2023,7 +2000,7 @@ fn result_spec_json(s: &crate::surface::ResultRenderSpec) -> Json {
                 None => Json::Null,
             },
         ),
-        ("mode", Json::obj(mode_obj)),
+        ("mode", s.mode.mode_json()),
         (
             "validator_reads",
             Json::Arr(s.validator_reads.iter().map(Json::str).collect()),
@@ -2036,29 +2013,9 @@ fn result_spec_from_json(
     path: &str,
 ) -> Result<crate::surface::ResultRenderSpec, CompileError> {
     let mode_j = req(j, "mode", path)?;
-    let mode = match str_at(mode_j, "kind", &format!("{path}.mode"))?.as_str() {
-        "full" => crate::surface::RenderMode::Full,
-        "truncate" => crate::surface::RenderMode::Truncate {
-            max_lines: mode_j
-                .get("max_lines")
-                .and_then(Json::as_int)
-                .map(|i| i as u64),
-            max_bytes: mode_j
-                .get("max_bytes")
-                .and_then(Json::as_int)
-                .map(|i| i as u64),
-            max_tokens: mode_j
-                .get("max_tokens")
-                .and_then(Json::as_int)
-                .map(|i| i as u64),
-            direction: mode_j
-                .get("direction")
-                .and_then(Json::as_str)
-                .and_then(crate::surface::TruncateDirection::parse)
-                .unwrap_or(crate::surface::TruncateDirection::Head),
-        },
-        other => return Err(schema_err(path, format!("result_render.mode: {other}"))),
-    };
+    let kind = str_at(mode_j, "kind", &format!("{path}.mode"))?;
+    let mode = crate::surface::RenderMode::parse(&kind, mode_j)
+        .map_err(|e| schema_err(path, e.to_string()))?;
     let str_vec = |k: &str| -> Vec<String> {
         match j.get(k) {
             Some(Json::Arr(items)) => items
