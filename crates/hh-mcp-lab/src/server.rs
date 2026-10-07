@@ -51,8 +51,21 @@ pub struct LabServer {
     pub sessions: BTreeMap<String, SurfaceSession>,
     /// Executor-side dedup (`target` → recorded answer).
     pub dedup: BTreeMap<String, Json>,
-    /// The notification queue (`subscriptions/listen` drains it).
+    /// The notification queue (`subscriptions/listen` drains it) —
+    /// `notifications/resources/updated` + `notifications/tasks`.
     pub pending: VecDeque<Json>,
+    /// `binding_id → subscribed resource URIs` — a subscription is
+    /// bound to its caller binding and cancelled on change/expiry
+    /// (ADR-0175 D2).
+    pub subscriptions: BTreeMap<String, std::collections::BTreeSet<String>>,
+    /// `binding_id` set — clients that declared the
+    /// `io.modelcontextprotocol/tasks` capability at `initialize`
+    /// (the `-32021` gate: `CreateTaskResult`/`tasks/*` never serve a
+    /// client without it — AC-R-2.11.3-10).
+    pub client_tasks: std::collections::BTreeSet<String>,
+    /// `taskId → TaskRecord` — the registered tasks (the alias table
+    /// `tasks/get` resolves; ids are names, grants are the binding's).
+    pub tasks: BTreeMap<String, crate::tasks::TaskRecord>,
 }
 
 impl LabServer {
@@ -77,6 +90,9 @@ impl LabServer {
             sessions: BTreeMap::new(),
             dedup: BTreeMap::new(),
             pending: VecDeque::new(),
+            subscriptions: BTreeMap::new(),
+            client_tasks: std::collections::BTreeSet::new(),
+            tasks: BTreeMap::new(),
         }
     }
 
@@ -210,8 +226,28 @@ impl LabServer {
     /// The method dispatch — same members `hh-mcp` answers, the lab
     /// `tools/call` goes through the surface-session chain.
     fn dispatch(&mut self, binding: &CallerBinding, method: &str, params: &Json, id: Json) -> Json {
+        // A binding that stopped being live loses its subscriptions
+        // (ADR-0175 D2 — binding change/expiry cancels them).
+        if !binding.live_at(self.svc.surface_now_ms().max(0) as u64) {
+            crate::resources::cancel_for_binding(self, &binding.binding_id);
+        }
         match method {
-            "initialize" => result_frame(id, initialize_result(params)),
+            "initialize" => {
+                // Record the client's tasks-extension declaration —
+                // `capabilities.tasks` present ⇒ `CreateTaskResult`
+                // shapes are admissible for this binding's calls
+                // (AC-R-2.11.3-10; a client without it gets `-32021`).
+                if params
+                    .get("capabilities")
+                    .and_then(|c| c.get("tasks"))
+                    .is_some_and(|t| t != &Json::Null)
+                {
+                    self.client_tasks.insert(binding.binding_id.clone());
+                } else {
+                    self.client_tasks.remove(&binding.binding_id);
+                }
+                result_frame(id, initialize_result(params))
+            }
             "server/discover" | "discover" => {
                 let artifact = self.artifact_for(binding);
                 result_frame(id, discover_result(&artifact, binding, &self.exposure))
@@ -221,6 +257,20 @@ impl LabServer {
                 result_frame(id, tools_list_result(&artifact))
             }
             "tools/call" => {
+                // AC-R-2.11.3-10 — a `_meta` tasks declaration from a
+                // client that never advertised the capability at
+                // `initialize` is a `-32021`, never a `CreateTaskResult`.
+                if crate::dispatch::meta_tasks_declared(params.get("_meta"))
+                    && !self.client_tasks.contains(&binding.binding_id)
+                {
+                    return error_frame(
+                        id,
+                        crate::tasks::TASKS_ERROR,
+                        "task_capability_missing: the request declares \
+                         `io.modelcontextprotocol/tasks` but the client did \
+                         not advertise `capabilities.tasks` at initialize",
+                    );
+                }
                 // `target` — the forwarded idempotency key: a replay
                 // under the same `target` answers the recorded verdict
                 // verbatim (never a re-run, §5d.4 D4's target rule).
@@ -237,6 +287,38 @@ impl LabServer {
                     None => result_frame(id, self.call(binding, params)),
                 }
             }
+            // ── the tasks carrier (`io.modelcontextprotocol/tasks`) —
+            // protocol methods, never catalogue tools. `-32021` gates
+            // the capability; `task_unknown` for foreign/absent ids.
+            "tasks/get" | "tasks/update" | "tasks/cancel" | "tasks/list" => {
+                if !self.client_tasks.contains(&binding.binding_id) {
+                    return error_frame(
+                        id,
+                        crate::tasks::TASKS_ERROR,
+                        "task_capability_missing: the client did not \
+                         advertise `capabilities.tasks` at initialize",
+                    );
+                }
+                match crate::tasks::dispatch(self, binding, method, params) {
+                    Ok(r) => result_frame(id, r),
+                    Err((code, msg)) => error_frame(id, code, &msg),
+                }
+            }
+            // ── the ledger-resource carrier (ADR-0175 D2/D6) ────────
+            "resources/list" => result_frame(id, crate::resources::list(self, binding)),
+            "resources/templates/list" => result_frame(id, crate::resources::templates()),
+            "resources/read" => match crate::resources::read(self, binding, params) {
+                Ok(r) => result_frame(id, r),
+                Err((code, msg)) => error_frame(id, code, &msg),
+            },
+            "resources/subscribe" => match crate::resources::subscribe(self, binding, params) {
+                Ok(r) => result_frame(id, r),
+                Err((code, msg)) => error_frame(id, code, &msg),
+            },
+            "resources/unsubscribe" => match crate::resources::unsubscribe(self, binding, params) {
+                Ok(r) => result_frame(id, r),
+                Err((code, msg)) => error_frame(id, code, &msg),
+            },
             "subscriptions/listen" => result_frame(
                 id,
                 Json::obj([("notifications", Json::Arr(self.pending.drain(..).collect()))]),
@@ -246,12 +328,21 @@ impl LabServer {
         }
     }
 
-    /// `tools/call` — `{name, arguments}` through the chain.
+    /// `tools/call` — `{name, arguments, _meta?}` through the chain.
+    /// `_meta` travels as the R-3 read-only carrier (the tasks
+    /// declaration + tracing members; nothing else is consulted).
     fn call(&mut self, binding: &CallerBinding, params: &Json) -> Json {
         let name = params.get("name").and_then(Json::as_str).unwrap_or("");
         let arguments = params.get("arguments").cloned().unwrap_or(Json::obj([]));
         let call_id = params.get("call_id").cloned().unwrap_or(Json::Null);
-        crate::dispatch::call_tool(self, binding, name, arguments, &call_id)
+        crate::dispatch::call_tool(
+            self,
+            binding,
+            name,
+            arguments,
+            &call_id,
+            params.get("_meta"),
+        )
     }
 }
 
@@ -267,7 +358,23 @@ fn initialize_result(params: &Json) -> Json {
         ("protocolVersion", Json::str(version)),
         (
             "capabilities",
-            Json::obj([("tools", Json::obj([("listChanged", Json::Bool(false))]))]),
+            Json::obj([
+                ("tools", Json::obj([("listChanged", Json::Bool(false))])),
+                (
+                    "resources",
+                    Json::obj([
+                        ("subscribe", Json::Bool(true)),
+                        ("listChanged", Json::Bool(false)),
+                    ]),
+                ),
+                (
+                    "tasks",
+                    Json::obj([(
+                        "requests",
+                        Json::obj([("tools", Json::obj([("call", Json::obj([]))]))]),
+                    )]),
+                ),
+            ]),
         ),
         (
             "serverInfo",
@@ -303,7 +410,23 @@ fn discover_result(
         ),
         (
             "capabilities",
-            Json::obj([("tools", Json::obj([("listChanged", Json::Bool(false))]))]),
+            Json::obj([
+                ("tools", Json::obj([("listChanged", Json::Bool(false))])),
+                (
+                    "resources",
+                    Json::obj([
+                        ("subscribe", Json::Bool(true)),
+                        ("listChanged", Json::Bool(false)),
+                    ]),
+                ),
+                (
+                    "tasks",
+                    Json::obj([(
+                        "requests",
+                        Json::obj([("tools", Json::obj([("call", Json::obj([]))]))]),
+                    )]),
+                ),
+            ]),
         ),
         ("ttlMs", Json::Int(artifact.ttl_ms as i64)),
         ("cacheScope", Json::str("private")),

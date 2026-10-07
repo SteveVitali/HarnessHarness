@@ -60,11 +60,33 @@ where
                         let id = req.get("id").cloned().unwrap_or(Json::Null);
                         let _ = tx.send((method.clone(), params.clone()));
                         let result = handler(&method, &params);
-                        Json::obj([
-                            ("jsonrpc", Json::str("2.0")),
-                            ("id", id),
-                            ("result", result),
-                        ])
+                        // A handler emits an RPC refusal by returning
+                        // `{_err: "<message>"}` — the frame is the
+                        // kernel's typed refusal shape
+                        // (`error{code, message, data{kind}}`).
+                        let refused = result
+                            .get("_err")
+                            .and_then(Json::as_str)
+                            .map(str::to_string);
+                        match refused {
+                            Some(msg) => Json::obj([
+                                ("jsonrpc", Json::str("2.0")),
+                                ("id", id),
+                                (
+                                    "error",
+                                    Json::obj([
+                                        ("code", Json::Int(-32000)),
+                                        ("message", Json::str(msg)),
+                                        ("data", Json::obj([("kind", Json::str("Refused"))])),
+                                    ]),
+                                ),
+                            ]),
+                            None => Json::obj([
+                                ("jsonrpc", Json::str("2.0")),
+                                ("id", id),
+                                ("result", result),
+                            ]),
+                        }
                     }
                     _ => continue,
                 }

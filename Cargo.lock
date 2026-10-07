@@ -683,6 +683,7 @@ dependencies = [
  "hh-embed",
  "hh-embed-client-generated",
  "hh-embed-schema",
+ "hh-identity",
  "hh-ledger",
  "hh-secrets",
  "hh-telemetry",
