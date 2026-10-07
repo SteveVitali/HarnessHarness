@@ -46,11 +46,32 @@ impl CatalogSource {
             CatalogSource::Kernel => "kernel".to_string(),
         }
     }
+
+    /// Parse the canonical spelling (`harness:<ref?>` tolerates the bare
+    /// `harness` — `Harness(None)`).
+    pub fn parse(s: &str) -> Option<CatalogSource> {
+        if s == "kernel" {
+            return Some(CatalogSource::Kernel);
+        }
+        let (kind, rest) = s.split_once(':')?;
+        match kind {
+            "harness" => Some(CatalogSource::Harness(if rest.is_empty() {
+                None
+            } else {
+                Some(rest.to_string())
+            })),
+            "mcp" => Some(CatalogSource::Mcp(rest.to_string())),
+            "procedure" => Some(CatalogSource::Procedure(rest.to_string())),
+            "extension" => Some(CatalogSource::Extension(rest.to_string())),
+            _ => None,
+        }
+    }
 }
 
-/// `IndexGranularity ∈ {surface, namespace, source}` — the granularity an
-/// `indexed` entry is delivered at (`surface` is the C0 granularity; the
-/// others need a `direct` discovery capability — I-DISCOVERY).
+/// `IndexGranularity ∈ {surface, namespace, source, catalog}` — the
+/// granularity a `catalog_index` answers at (`surface` is the C0
+/// granularity; the others need a `direct` discovery capability —
+/// I-DISCOVERY — and a query routed at the same granularity, R2.8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IndexGranularity {
     /// One index form per surface.
@@ -59,6 +80,32 @@ pub enum IndexGranularity {
     Namespace,
     /// One index form per source.
     Source,
+    /// One index form over the catalog as a unit (§5d.2.8's `catalog`
+    /// granularity — the C1 member).
+    Catalog,
+}
+
+impl IndexGranularity {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            IndexGranularity::Surface => "surface",
+            IndexGranularity::Namespace => "namespace",
+            IndexGranularity::Source => "source",
+            IndexGranularity::Catalog => "catalog",
+        }
+    }
+
+    /// Parse the closed sum; unknown spellings are refused.
+    pub fn parse(s: &str) -> Option<IndexGranularity> {
+        match s {
+            "surface" => Some(IndexGranularity::Surface),
+            "namespace" => Some(IndexGranularity::Namespace),
+            "source" => Some(IndexGranularity::Source),
+            "catalog" => Some(IndexGranularity::Catalog),
+            _ => None,
+        }
+    }
 }
 
 /// `search_text_fields ⊆ {name, name_split, description, param_names,
@@ -216,6 +263,14 @@ pub struct CatalogEntry {
     /// Whether the entry is the `discover_surfaces` capability
     /// (`exposure_hint.discovery = true` — I-DISCOVERY reads it).
     pub is_discovery: bool,
+    /// `lifted` — the entry joined the catalog through an unverified lift
+    /// (an MCP/extension import, an `adopt`ed addition — the delta's
+    /// `authority = unverified` stamp's entry-side half; R2.8). The
+    /// attestation-gated indexing leg (`SelectionGates.index_unverified`)
+    /// refuses `indexed` on lifted entries; a `lifted` ∧ `pinned` entry is
+    /// a `CatalogBuildError::PinBindsLifted`/`CatalogDriftError` —
+    /// a pin binds the admission, never an unverified lift.
+    pub lifted: bool,
 }
 
 /// `sources[{source_ref, snapshot_hash, ttl?, listened}]` — one row per
@@ -247,8 +302,45 @@ pub struct Catalog {
     pub sources: Vec<SourceState>,
     /// The entries (sorted by `surface_id` — canonical).
     pub entries: Vec<CatalogEntry>,
-    /// The content-addressed index ref, when a `catalog_index` is bound.
+    /// The bound `catalog_index` declarations — `(index, granularity)`
+    /// pairs (§5d.2.8; R2.8). The per-surface indexes discovery serves are
+    /// here; non-surface granularities (`namespace`/`source`/`catalog`)
+    /// need a `direct` discovery capability (I-DISCOVERY) and answer at
+    /// their declared granularity.
+    pub indexes: Vec<IndexDecl>,
+    /// The content-addressed index ref — `H(canonical indexes[])` when any
+    /// are bound ([`bind_indexes`]); `None` when unbound.
     pub index_ref: Option<String>,
+}
+
+/// `IndexDecl{index, granularity}` — one bound `catalog_index` declaration
+/// (§5d.2 §3; the granularity the index answers at — the `index_forms_at`
+/// producer's read).
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexDecl {
+    /// The index variant.
+    pub index: CatalogIndex,
+    /// The granularity the index answers at.
+    pub granularity: IndexGranularity,
+}
+
+/// `index_decl_json` — the canonical declaration record.
+pub fn index_decl_json(d: &IndexDecl) -> Json {
+    Json::obj([
+        ("granularity", Json::str(d.granularity.as_str())),
+        ("index", index_json(&d.index)),
+    ])
+}
+
+/// `bind_indexes(catalog, decls)` — declare the catalog's index set;
+/// `index_ref` re-mints over the canonical declarations (`index_ref` is the
+/// content address of the *declared set*, not of any built posting list —
+/// the build's instrument stamp, ADR-0094 D4).
+pub fn bind_indexes(catalog: &mut Catalog, decls: Vec<IndexDecl>) {
+    let body = Json::Arr(decls.iter().map(index_decl_json).collect());
+    catalog.index_ref = (!decls.is_empty())
+        .then(|| hh_identity::idp::idp_id("catalog_index", body.to_canonical_string().as_bytes()));
+    catalog.indexes = decls;
 }
 
 // ── The plan / revealed set (ADR-0093 D4/D6) ─────────────────────────────────
@@ -348,6 +440,31 @@ pub enum RevealCause {
     Pinned,
 }
 
+impl RevealCause {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            RevealCause::Policy => "policy",
+            RevealCause::Discovery => "discovery",
+            RevealCause::Principal => "principal",
+            RevealCause::Procedure => "procedure",
+            RevealCause::Pinned => "pinned",
+        }
+    }
+
+    /// Parse the closed sum.
+    pub fn parse(s: &str) -> Option<RevealCause> {
+        match s {
+            "policy" => Some(RevealCause::Policy),
+            "discovery" => Some(RevealCause::Discovery),
+            "principal" => Some(RevealCause::Principal),
+            "procedure" => Some(RevealCause::Procedure),
+            "pinned" => Some(RevealCause::Pinned),
+            _ => None,
+        }
+    }
+}
+
 /// `retention ∈ {call, turn, run, until_evicted}` — default `run`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Retention {
@@ -359,6 +476,29 @@ pub enum Retention {
     Run,
     /// Until explicitly evicted.
     UntilEvicted,
+}
+
+impl Retention {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Retention::Call => "call",
+            Retention::Turn => "turn",
+            Retention::Run => "run",
+            Retention::UntilEvicted => "until_evicted",
+        }
+    }
+
+    /// Parse the closed sum.
+    pub fn parse(s: &str) -> Option<Retention> {
+        match s {
+            "call" => Some(Retention::Call),
+            "turn" => Some(Retention::Turn),
+            "run" => Some(Retention::Run),
+            "until_evicted" => Some(Retention::UntilEvicted),
+            _ => None,
+        }
+    }
 }
 
 /// A `RevealedSet` entry.
@@ -395,6 +535,27 @@ pub enum EvictCause {
     Policy,
     /// The principal evicted it.
     Principal,
+}
+
+impl EvictCause {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            EvictCause::Compaction => "compaction",
+            EvictCause::Policy => "policy",
+            EvictCause::Principal => "principal",
+        }
+    }
+
+    /// Parse the closed sum.
+    pub fn parse(s: &str) -> Option<EvictCause> {
+        match s {
+            "compaction" => Some(EvictCause::Compaction),
+            "policy" => Some(EvictCause::Policy),
+            "principal" => Some(EvictCause::Principal),
+            _ => None,
+        }
+    }
 }
 
 /// `drift_policy ∈ {freeze, adopt, ask}` — `freeze` for Lab runs, `adopt` for
@@ -521,7 +682,11 @@ pub struct StructuredQuery {
     pub source: Option<String>,
 }
 
-/// `DiscoveryQuery{form, text, limit?}` — the `discover_surfaces` input.
+/// `DiscoveryQuery{form, text, limit?, granularity}` — the
+/// `discover_surfaces` input. `granularity` is the R2.8 member (default
+/// `surface`): a non-`surface` query is served by an [`IndexDecl`] whose
+/// declared granularity matches — hits are the member entries of the
+/// matched units (§5d.2.8's non-surface granularity leg).
 #[derive(Debug, Clone, PartialEq)]
 pub struct DiscoveryQuery {
     /// The form.
@@ -530,6 +695,19 @@ pub struct DiscoveryQuery {
     pub text: String,
     /// The caller's hit bound.
     pub limit: Option<u64>,
+    /// The granularity the query answers at (default `surface`).
+    pub granularity: IndexGranularity,
+}
+
+impl Default for DiscoveryQuery {
+    fn default() -> Self {
+        DiscoveryQuery {
+            form: DiscoveryForm::NaturalLanguage,
+            text: String::new(),
+            limit: None,
+            granularity: IndexGranularity::Surface,
+        }
+    }
 }
 
 /// `DiscoveryQueryInvalid{too_long | empty | unsupported_form}` —
@@ -549,6 +727,18 @@ pub enum DiscoveryQueryInvalid {
     InvalidPattern {
         /// The closed reason tag.
         reason: String,
+    },
+    /// The index variant needs a declared [`IndexExecutor`] (the C2
+    /// `embedding`/`model_ranked`/`filesystem` variants carry no kernel
+    /// engine) and none is bound — the typed refusal, never a fake ranking.
+    ExecutorUnavailable,
+    /// The index is declared at a different granularity than the query
+    /// (§5d.2.8 — an index answers only at its declared granularity).
+    NotQueryable {
+        /// The granularity the index serves.
+        index_granularity: IndexGranularity,
+        /// The granularity the query asked.
+        query_granularity: IndexGranularity,
     },
 }
 
@@ -592,6 +782,17 @@ pub struct DiscoveryResult {
 /// | `lexical_regex` | bounded regex over declared search text | refused | filters + regex over text |
 /// | `bm25` | refused | BM25 over declared search text | filters + BM25 |
 /// | `hierarchical` | refused | namespace-path descent | filters + descent |
+/// | `embedding{t}` | refused | executor-scored (cosine ≥ t) | filters + executor |
+/// | `model_ranked` | refused | executor-ranked | filters + executor |
+/// | `filesystem` | path glob (executor) | refused | filters + executor |
+///
+/// **C2 executor variants** (R2.8): `embedding`, `model_ranked` and
+/// `filesystem` declare their forms but carry no kernel embedding/model/
+/// filesystem engine — they execute through a declared
+/// [`IndexExecutor`]; an absent executor is
+/// [`DiscoveryQueryInvalid::ExecutorUnavailable`] (honest refusal, never a
+/// fake ranking — T-LCD-15). `executed_by` on their result names the
+/// executor leg (`provider`/`filesystem`), never `"kernel"`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CatalogIndex {
     /// `exact_name` — the query text matches `IndexForm.name` literally.
@@ -614,12 +815,26 @@ pub enum CatalogIndex {
     /// `.`, `::`, `/`) descend the entry's `namespace ∥ name` path; score =
     /// matched segment depth (×10⁶ int) with a terminal name-prefix bonus.
     Hierarchical,
+    /// `embedding{similarity_threshold}` — an embedding-similarity index:
+    /// hits are entries whose executor-computed similarity meets the
+    /// declared threshold (×10⁶-scaled — canonical JSON carries no float).
+    /// C2: executor-gated.
+    Embedding {
+        /// The similarity threshold (×10⁶-scaled — `0..=1_000_000`).
+        similarity_threshold_ppm: u64,
+    },
+    /// `model_ranked` — a model/provider-ranked index (C2 — executor-gated;
+    /// the ranker is a declared instrument, `executed_by` names it).
+    ModelRanked,
+    /// `filesystem` — a filesystem catalogue index (path-glob over the
+    /// declared entries — C2 — executor-gated).
+    Filesystem,
 }
 
-/// The content-addressed index ref (`charged instrument` — the ref is
-/// `H(canonical index form)`).
-pub fn index_ref(index: &CatalogIndex) -> String {
-    let body = match index {
+/// The canonical JSON of an index declaration (the `index_ref` preimage and
+/// the `IndexDecl` member spelling).
+pub fn index_json(index: &CatalogIndex) -> Json {
+    match index {
         CatalogIndex::ExactName => Json::obj([("kind", Json::str("exact_name"))]),
         CatalogIndex::StaticAllowlist(ids) => Json::obj([
             ("kind", Json::str("static_allowlist")),
@@ -631,8 +846,85 @@ pub fn index_ref(index: &CatalogIndex) -> String {
         CatalogIndex::LexicalRegex => Json::obj([("kind", Json::str("lexical_regex"))]),
         CatalogIndex::Bm25 => Json::obj([("kind", Json::str("bm25"))]),
         CatalogIndex::Hierarchical => Json::obj([("kind", Json::str("hierarchical"))]),
-    };
-    hh_identity::idp::idp_id("catalog_index", body.to_canonical_string().as_bytes())
+        CatalogIndex::Embedding {
+            similarity_threshold_ppm,
+        } => Json::obj([
+            ("kind", Json::str("embedding")),
+            (
+                "similarity_threshold_ppm",
+                Json::Int(*similarity_threshold_ppm as i64),
+            ),
+        ]),
+        CatalogIndex::ModelRanked => Json::obj([("kind", Json::str("model_ranked"))]),
+        CatalogIndex::Filesystem => Json::obj([("kind", Json::str("filesystem"))]),
+    }
+}
+
+/// The content-addressed index ref (`charged instrument` — the ref is
+/// `H(canonical index form)`).
+pub fn index_ref(index: &CatalogIndex) -> String {
+    hh_identity::idp::idp_id(
+        "catalog_index",
+        index_json(index).to_canonical_string().as_bytes(),
+    )
+}
+
+/// `DiscoveryFormKind ∈ {regex, natural_language, structured}` — the form
+/// *kind* a `catalog_index` declares it serves (the `index_forms_at`
+/// producer's vocabulary; the `DiscoveryForm` value carries the structured
+/// members — the kind is the admissibility set member).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DiscoveryFormKind {
+    /// `regex`.
+    Regex,
+    /// `natural_language`.
+    NaturalLanguage,
+    /// `structured`.
+    Structured,
+}
+
+impl DiscoveryFormKind {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DiscoveryFormKind::Regex => "regex",
+            DiscoveryFormKind::NaturalLanguage => "natural_language",
+            DiscoveryFormKind::Structured => "structured",
+        }
+    }
+
+    /// The kind of a query form.
+    pub fn of(form: &DiscoveryForm) -> DiscoveryFormKind {
+        match form {
+            DiscoveryForm::Regex => DiscoveryFormKind::Regex,
+            DiscoveryForm::NaturalLanguage => DiscoveryFormKind::NaturalLanguage,
+            DiscoveryForm::Structured(_) => DiscoveryFormKind::Structured,
+        }
+    }
+}
+
+/// The form kinds an index serves — the doc-table above as data (the
+/// `catalog_index` capability schema's `forms` member and
+/// `index_forms_at`'s per-granularity answer).
+pub fn form_kinds(index: &CatalogIndex) -> BTreeSet<DiscoveryFormKind> {
+    use DiscoveryFormKind::*;
+    match index {
+        // verbatim `name` serves every form.
+        CatalogIndex::ExactName | CatalogIndex::StaticAllowlist(_) => {
+            [Regex, NaturalLanguage, Structured].into_iter().collect()
+        }
+        // a regex engine answers no free-text.
+        CatalogIndex::LexicalRegex => [Regex, Structured].into_iter().collect(),
+        // BM25/descent/embeddings/model-rank answer no regex query.
+        CatalogIndex::Bm25
+        | CatalogIndex::Hierarchical
+        | CatalogIndex::Embedding { .. }
+        | CatalogIndex::ModelRanked => [NaturalLanguage, Structured].into_iter().collect(),
+        // `filesystem` answers the glob form (a `regex`-class query over
+        // paths) and the structured filters — natural-language prose has no
+        // path semantics to bind to.
+        CatalogIndex::Filesystem => [Regex, Structured].into_iter().collect(),
+    }
 }
 
 /// The structured members of a query (empty for non-structured forms).
@@ -874,34 +1166,83 @@ fn hierarchical_rank<'e>(
     scored
 }
 
+/// `IndexExecutor` — the declared executor legs for the C2 index variants
+/// (R2.8). Every member is a function pointer the host binds (the driver,
+/// a test fixture, an MCP-side search); the kernel ships no embedding /
+/// model / filesystem engine of its own — an absent leg is
+/// [`DiscoveryQueryInvalid::ExecutorUnavailable`], never a fabricated
+/// ranking (T-LCD-15).
+///
+/// Executor contract: `(candidates, query) → (surface_id, score?)` hits in
+/// the executor's rank order; `Err(detail)` is the executor's typed
+/// failure (the query fails as `ExecutorUnavailable` with the detail on
+/// the refusal — detail carried for the audit row, never the result).
+/// The executor-leg callback — a variant's host-side index answer:
+/// `[(surface_id, score?)]` over the caller-filtered candidates; a `None`
+/// score is a rank-only hit (provider search carries no score), `Err` is
+/// the executor's typed failure (the query fails `ExecutorUnavailable`).
+pub type ExecutorFn =
+    fn(&[&CatalogEntry], &DiscoveryQuery) -> Result<Vec<(String, Option<i64>)>, String>;
+
+#[derive(Clone, Copy, Default)]
+pub struct IndexExecutor {
+    /// The `embedding` leg — executor-scored cosine over the declared
+    /// search text; hits below the variant's `similarity_threshold_ppm`
+    /// are dropped by the kernel after the executor answers.
+    pub embedding: Option<ExecutorFn>,
+    /// The `model_ranked` leg.
+    pub model_ranked: Option<ExecutorFn>,
+    /// The `filesystem` leg — the host's path-glob walker.
+    pub filesystem: Option<ExecutorFn>,
+}
+
+impl std::fmt::Debug for IndexExecutor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IndexExecutor")
+            .field("embedding", &self.embedding.is_some())
+            .field("model_ranked", &self.model_ranked.is_some())
+            .field("filesystem", &self.filesystem.is_some())
+            .finish()
+    }
+}
+
 /// The per-variant matcher — returns scored hits over `candidates` (the
 /// caller's filtered set: non-hidden, plan-mode-restricted, structured
 /// filters already applied is the caller's choice — this layer applies
 /// `matches_structured` itself so every variant honours it uniformly).
+/// `executed_by` names the executor leg the row records (`kernel` for the
+/// in-tree variants; `provider`/`filesystem` for executor legs).
 fn variant_hits(
     index: &CatalogIndex,
     candidates: &[&CatalogEntry],
     query: &DiscoveryQuery,
     structured: Option<&StructuredQuery>,
-) -> Result<Vec<Scored>, DiscoveryQueryInvalid> {
+    executor: &IndexExecutor,
+) -> Result<(Vec<Scored>, &'static str), DiscoveryQueryInvalid> {
     let filtered: Vec<&CatalogEntry> = candidates
         .iter()
         .copied()
         .filter(|e| structured.is_none_or(|s| matches_structured(e, s)))
         .collect();
-    match index {
-        CatalogIndex::ExactName => Ok(filtered
-            .into_iter()
-            .filter(|e| e.name == query.text)
-            .map(|e| (e.surface_id.clone(), None))
-            .collect()),
-        CatalogIndex::StaticAllowlist(ids) => Ok(filtered
-            .into_iter()
-            .filter(|e| {
-                ids.contains(&e.surface_id) && (structured.is_some() || e.name == query.text)
-            })
-            .map(|e| (e.surface_id.clone(), None))
-            .collect()),
+    let hits = match index {
+        CatalogIndex::ExactName => (
+            filtered
+                .into_iter()
+                .filter(|e| e.name == query.text)
+                .map(|e| (e.surface_id.clone(), None))
+                .collect(),
+            "kernel",
+        ),
+        CatalogIndex::StaticAllowlist(ids) => (
+            filtered
+                .into_iter()
+                .filter(|e| {
+                    ids.contains(&e.surface_id) && (structured.is_some() || e.name == query.text)
+                })
+                .map(|e| (e.surface_id.clone(), None))
+                .collect(),
+            "kernel",
+        ),
         CatalogIndex::LexicalRegex => {
             if matches!(query.form, DiscoveryForm::NaturalLanguage) {
                 return Err(DiscoveryQueryInvalid::UnsupportedForm);
@@ -911,35 +1252,86 @@ fn variant_hits(
                     reason: e.to_string(),
                 }
             })?;
-            Ok(filtered
-                .into_iter()
-                .filter(|e| {
-                    search_fields(e)
-                        .iter()
-                        .any(|(_, _, text)| re.is_match(text))
-                })
-                .map(|e| (e.surface_id.clone(), None))
-                .collect())
+            (
+                filtered
+                    .into_iter()
+                    .filter(|e| {
+                        search_fields(e)
+                            .iter()
+                            .any(|(_, _, text)| re.is_match(text))
+                    })
+                    .map(|e| (e.surface_id.clone(), None))
+                    .collect(),
+                "kernel",
+            )
         }
         CatalogIndex::Bm25 => {
             if matches!(query.form, DiscoveryForm::Regex) {
                 return Err(DiscoveryQueryInvalid::UnsupportedForm);
             }
-            Ok(bm25_rank(&filtered, &query.text)
-                .into_iter()
-                .map(|(e, s)| (e.surface_id.clone(), Some(s)))
-                .collect())
+            (
+                bm25_rank(&filtered, &query.text)
+                    .into_iter()
+                    .map(|(e, s)| (e.surface_id.clone(), Some(s)))
+                    .collect(),
+                "kernel",
+            )
         }
         CatalogIndex::Hierarchical => {
             if matches!(query.form, DiscoveryForm::Regex) {
                 return Err(DiscoveryQueryInvalid::UnsupportedForm);
             }
-            Ok(hierarchical_rank(&filtered, &query.text)
-                .into_iter()
-                .map(|(e, s)| (e.surface_id.clone(), Some(s)))
-                .collect())
+            (
+                hierarchical_rank(&filtered, &query.text)
+                    .into_iter()
+                    .map(|(e, s)| (e.surface_id.clone(), Some(s)))
+                    .collect(),
+                "kernel",
+            )
         }
-    }
+        // The C2 executor legs — a missing leg is `ExecutorUnavailable`
+        // (never a fabricated ranking); the form gate still applies
+        // (executor legs refuse `regex` per the admissibility table).
+        CatalogIndex::Embedding {
+            similarity_threshold_ppm,
+        } => {
+            if matches!(query.form, DiscoveryForm::Regex) {
+                return Err(DiscoveryQueryInvalid::UnsupportedForm);
+            }
+            let Some(exec) = executor.embedding else {
+                return Err(DiscoveryQueryInvalid::ExecutorUnavailable);
+            };
+            let mut hits =
+                exec(&filtered, query).map_err(|_| DiscoveryQueryInvalid::ExecutorUnavailable)?;
+            hits.retain(|(_, s)| s.is_some_and(|s| s as u64 >= *similarity_threshold_ppm));
+            (hits, "provider")
+        }
+        CatalogIndex::ModelRanked => {
+            if matches!(query.form, DiscoveryForm::Regex) {
+                return Err(DiscoveryQueryInvalid::UnsupportedForm);
+            }
+            let Some(exec) = executor.model_ranked else {
+                return Err(DiscoveryQueryInvalid::ExecutorUnavailable);
+            };
+            (
+                exec(&filtered, query).map_err(|_| DiscoveryQueryInvalid::ExecutorUnavailable)?,
+                "provider",
+            )
+        }
+        CatalogIndex::Filesystem => {
+            if matches!(query.form, DiscoveryForm::NaturalLanguage) {
+                return Err(DiscoveryQueryInvalid::UnsupportedForm);
+            }
+            let Some(exec) = executor.filesystem else {
+                return Err(DiscoveryQueryInvalid::ExecutorUnavailable);
+            };
+            (
+                exec(&filtered, query).map_err(|_| DiscoveryQueryInvalid::ExecutorUnavailable)?,
+                "kernel",
+            )
+        }
+    };
+    Ok(hits)
 }
 
 /// `query(index, catalog, query, max_reveal)` — the C0/C1 index executor
@@ -947,23 +1339,173 @@ fn variant_hits(
 /// min(query.limit, max_reveal_per_search)` (ceiling 32); an empty result is
 /// normal. The plan-mode restriction (`hits ⊆ indexed|deferred` members)
 /// lives in [`discover`], the `discover_surfaces` lowering.
+///
+/// Legacy surface-granularity entry — the index is read as a `surface`
+/// [`IndexDecl`]; non-surface queries route through
+/// [`index_query_decl`]/[`discover_with`].
 pub fn index_query(
     index: &CatalogIndex,
     catalog: &Catalog,
     query: &DiscoveryQuery,
     max_reveal_per_search: u64,
 ) -> Result<DiscoveryResult, DiscoveryQueryInvalid> {
+    index_query_decl(
+        &IndexDecl {
+            index: index.clone(),
+            granularity: IndexGranularity::Surface,
+        },
+        catalog,
+        query,
+        max_reveal_per_search,
+        &IndexExecutor::default(),
+    )
+}
+
+/// `index_query_decl(decl, catalog, query, max_reveal, executor)` — the
+/// R2.8 query path: the `IndexDecl` carries the granularity the index
+/// answers at; a query at another granularity is `NotQueryable`, a C2
+/// variant without its executor leg is `ExecutorUnavailable`.
+pub fn index_query_decl(
+    decl: &IndexDecl,
+    catalog: &Catalog,
+    query: &DiscoveryQuery,
+    max_reveal_per_search: u64,
+    executor: &IndexExecutor,
+) -> Result<DiscoveryResult, DiscoveryQueryInvalid> {
     let candidates: Vec<&CatalogEntry> = catalog.entries.iter().filter(|e| !e.hidden).collect();
-    query_over(index, &candidates, query, max_reveal_per_search)
+    query_over(decl, &candidates, query, max_reveal_per_search, executor)
+}
+
+/// `unit_candidates` — aggregate members into the granularity unit a
+/// non-surface index answers over: one synthesized entry per namespace /
+/// source / catalog (the aggregate's `name` is the unit key; its
+/// `search_text` is the member texts' union under their declared fields —
+/// an index reads a unit's text only when the member declared the field —
+/// I-NARROW). Unit entries are internal candidates — never entries, never
+/// revealed; the hit expands back to the members' real `surface_id`s.
+fn unit_entries(
+    members: &[&CatalogEntry],
+    granularity: IndexGranularity,
+) -> Vec<(String, CatalogEntry, Vec<String>)> {
+    let mut units: BTreeMap<String, Vec<&CatalogEntry>> = BTreeMap::new();
+    for e in members {
+        let key = match granularity {
+            IndexGranularity::Namespace => match &e.namespace {
+                Some(ns) => format!("ns:{ns}"),
+                None => continue, // a namespace-less entry has no unit at this granularity
+            },
+            IndexGranularity::Source => format!("src:{}", e.source.as_str()),
+            IndexGranularity::Catalog => "catalog".to_string(),
+            IndexGranularity::Surface => continue,
+        };
+        units.entry(key).or_default().push(*e);
+    }
+    units
+        .into_iter()
+        .map(|(key, ms)| {
+            let mut fields: BTreeSet<SearchTextField> = BTreeSet::new();
+            let mut text: BTreeMap<SearchTextField, String> = BTreeMap::new();
+            let mut effects: BTreeSet<String> = BTreeSet::new();
+            let name_field = if granularity == IndexGranularity::Namespace {
+                SearchTextField::NamespaceName
+            } else {
+                SearchTextField::Name
+            };
+            fields.insert(name_field);
+            for m in &ms {
+                for f in &m.index_form.search_text_fields {
+                    fields.insert(*f);
+                }
+                for (f, t) in &m.index_form.search_text {
+                    text.entry(*f)
+                        .and_modify(|x| {
+                            x.push(' ');
+                            x.push_str(t);
+                        })
+                        .or_insert_with(|| t.clone());
+                }
+                effects.extend(m.effect_summary.iter().cloned());
+            }
+            // The unit's own name/description text is indexable on its own
+            // field — `namespace_name`/`namespace_description` declarations
+            // flow from the members; the unit *key* itself is always the
+            // `name` field's text.
+            text.insert(name_field, {
+                let bare = key
+                    .strip_prefix("ns:")
+                    .or_else(|| key.strip_prefix("src:"))
+                    .unwrap_or(&key);
+                match text.get(&name_field) {
+                    Some(t) => format!("{bare} {t}"),
+                    None => bare.to_string(),
+                }
+            });
+            let unit = CatalogEntry {
+                surface_id: format!("unit:{key}"),
+                capability: String::new(),
+                version_id: String::new(),
+                source: CatalogSource::Kernel,
+                name: key
+                    .strip_prefix("ns:")
+                    .or_else(|| key.strip_prefix("src:"))
+                    .unwrap_or(&key)
+                    .to_string(),
+                namespace: None,
+                admitted_modes: [ExposureMode::Indexed, ExposureMode::Deferred]
+                    .into_iter()
+                    .collect(),
+                pinned: false,
+                hidden: false,
+                index_form: IndexForm {
+                    name: key
+                        .strip_prefix("ns:")
+                        .or_else(|| key.strip_prefix("src:"))
+                        .unwrap_or(&key)
+                        .to_string(),
+                    title: None,
+                    summary_ref: String::new(),
+                    namespace: None,
+                    tags: Vec::new(),
+                    search_text_fields: fields,
+                    search_text: text,
+                },
+                size_tokens: 0,
+                estimator_ref: String::new(),
+                effect_summary: effects.into_iter().collect(),
+                permission_coverage: PermissionCoverage::Unknown,
+                label: None,
+                availability: Availability::Available,
+                is_discovery: false,
+                lifted: false,
+            };
+            let member_ids: Vec<String> = {
+                let mut v: Vec<String> = ms.iter().map(|m| m.surface_id.clone()).collect();
+                v.sort();
+                v
+            };
+            (key, unit, member_ids)
+        })
+        .collect()
 }
 
 /// The shared query executor — validate, dispatch per variant, bound, rank.
+/// `decl.granularity` is the index's declared granularity; a non-surface
+/// query aggregates members into unit entries, matches over the units, and
+/// expands hits back to member `surface_id`s (each member carries its
+/// unit's score; members of a hit unit order by `surface_id`).
 fn query_over(
-    index: &CatalogIndex,
+    decl: &IndexDecl,
     candidates: &[&CatalogEntry],
     query: &DiscoveryQuery,
     max_reveal_per_search: u64,
+    executor: &IndexExecutor,
 ) -> Result<DiscoveryResult, DiscoveryQueryInvalid> {
+    if decl.granularity != query.granularity {
+        return Err(DiscoveryQueryInvalid::NotQueryable {
+            index_granularity: decl.granularity,
+            query_granularity: query.granularity,
+        });
+    }
     if query.text.is_empty() {
         return Err(DiscoveryQueryInvalid::Empty);
     }
@@ -976,7 +1518,32 @@ fn query_over(
         .min(max_reveal_per_search)
         .min(32);
     let structured = structured_of(query);
-    let mut hits = variant_hits(index, candidates, query, structured)?;
+    let (mut hits, executed_by): (Vec<Scored>, &str) =
+        if query.granularity == IndexGranularity::Surface {
+            variant_hits(&decl.index, candidates, query, structured, executor)?
+        } else {
+            // Non-surface: structured filters still apply at member level; the
+            // index then matches over the surviving units.
+            let members: Vec<&CatalogEntry> = candidates
+                .iter()
+                .copied()
+                .filter(|e| structured.is_none_or(|s| matches_structured(e, s)))
+                .collect();
+            let units = unit_entries(&members, query.granularity);
+            let unit_refs: Vec<&CatalogEntry> = units.iter().map(|(_, u, _)| u).collect();
+            let (unit_hits, by) = variant_hits(&decl.index, &unit_refs, query, None, executor)?;
+            let mut expanded: Vec<Scored> = Vec::new();
+            for (uid, score) in unit_hits {
+                let Some((_, _, member_ids)) = units.iter().find(|(_, u, _)| u.surface_id == uid)
+                else {
+                    continue;
+                };
+                for sid in member_ids {
+                    expanded.push((sid.clone(), score));
+                }
+            }
+            (expanded, by)
+        };
     // Predicate indexes rank by surface_id; scoring indexes are already
     // ordered by (score desc, surface_id asc).
     if hits.iter().all(|(_, s)| s.is_none()) {
@@ -995,7 +1562,7 @@ fn query_over(
             })
             .collect(),
         truncated,
-        executed_by: "kernel".to_string(),
+        executed_by: executed_by.to_string(),
         cost: None,
     })
 }
@@ -1012,6 +1579,30 @@ pub fn discover(
     query: &DiscoveryQuery,
     params: &ExposurePolicyParams,
 ) -> Result<DiscoveryResult, DiscoveryQueryInvalid> {
+    discover_with(
+        plan,
+        &IndexDecl {
+            index: index.clone(),
+            granularity: IndexGranularity::Surface,
+        },
+        catalog,
+        query,
+        params,
+        &IndexExecutor::default(),
+    )
+}
+
+/// `discover_with(plan, decl, catalog, query, params, executor)` — the
+/// decl-carrying `discover` (R2.8): granularity and executor legs are the
+/// decl's declaration.
+pub fn discover_with(
+    plan: &ExposurePlan,
+    decl: &IndexDecl,
+    catalog: &Catalog,
+    query: &DiscoveryQuery,
+    params: &ExposurePolicyParams,
+    executor: &IndexExecutor,
+) -> Result<DiscoveryResult, DiscoveryQueryInvalid> {
     let discoverable: std::collections::BTreeSet<&str> = plan
         .entries
         .iter()
@@ -1023,7 +1614,37 @@ pub fn discover(
         .iter()
         .filter(|e| !e.hidden && discoverable.contains(e.surface_id.as_str()))
         .collect();
-    query_over(index, &candidates, query, params.max_reveal_per_search)
+    query_over(
+        decl,
+        &candidates,
+        query,
+        params.max_reveal_per_search,
+        executor,
+    )
+}
+
+/// `index_forms_at(catalog, index, granularity)` — the §5d.2.8 producer:
+/// the form kinds `index` serves at `granularity`. An index bound in
+/// `catalog.indexes` answers only at its declared granularity (a mismatch
+/// is `NotQueryable`); an unbound index answers at `surface` only (the
+/// legacy per-entry read).
+pub fn index_forms_at(
+    catalog: &Catalog,
+    index: &CatalogIndex,
+    granularity: IndexGranularity,
+) -> Result<BTreeSet<DiscoveryFormKind>, DiscoveryQueryInvalid> {
+    match catalog.indexes.iter().find(|d| d.index == *index) {
+        Some(d) if d.granularity == granularity => Ok(form_kinds(&d.index)),
+        Some(d) => Err(DiscoveryQueryInvalid::NotQueryable {
+            index_granularity: d.granularity,
+            query_granularity: granularity,
+        }),
+        None if granularity == IndexGranularity::Surface => Ok(form_kinds(index)),
+        None => Err(DiscoveryQueryInvalid::NotQueryable {
+            index_granularity: IndexGranularity::Surface,
+            query_granularity: granularity,
+        }),
+    }
 }
 
 // ── Catalog deltas / epochs (schemas — ADR-0095 D1/D2) ───────────────────────
@@ -1045,8 +1666,12 @@ pub enum SyncTrigger {
     AuthorizationChanged,
 }
 
-/// `CatalogDelta{source_ref, cause, added[], removed[], changed[]}` — every
-/// delta is emitted as `action.tool.catalog.delta`, including empty ones.
+/// `CatalogDelta{source_ref, cause, added[], removed[], changed[],
+/// index_decls[]}` — every delta is emitted as `action.tool.catalog.delta`,
+/// including empty ones. `index_decls` are the index declarations the
+/// source's new listing re-declares (R2.8 — a source may re-declare the
+/// granularities it indexes at; an adoption refusing them is
+/// `CatalogDriftError::UnsupportedIndexGranularity`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct CatalogDelta {
     /// The source.
@@ -1059,6 +1684,9 @@ pub struct CatalogDelta {
     pub removed: Vec<String>,
     /// Changed entries (re-lowered).
     pub changed: Vec<CatalogEntry>,
+    /// The source's re-declared index set (empty = the source declares
+    /// nothing new — no granularity check).
+    pub index_decls: Vec<IndexDecl>,
 }
 
 /// `CatalogEpoch{epoch, catalog_id_prev, catalog_id, bundle_delta,
@@ -1094,6 +1722,10 @@ impl CatalogDelta {
                 ("version_id", Json::str(e.version_id.clone())),
                 ("name", Json::str(e.name.clone())),
                 ("authority", Json::str("unverified")),
+                // The full descriptor rides beside the projection — the
+                // durable-fold rebuild (`hh_control`'s resume fold) reads
+                // `entry`, the spec's member minimum stays.
+                ("entry", catalog_entry_json(e)),
             ])
         };
         Json::obj([
@@ -1120,6 +1752,10 @@ impl CatalogDelta {
             (
                 "changed",
                 Json::Arr(self.changed.iter().map(entry_json).collect()),
+            ),
+            (
+                "index_decls",
+                Json::Arr(self.index_decls.iter().map(index_decl_json).collect()),
             ),
         ])
     }
@@ -1174,21 +1810,60 @@ pub fn catalog_delta(
         added,
         removed,
         changed,
+        index_decls: Vec::new(),
     }
 }
 
-/// `adopt`'s refusal — `CatalogDriftRefused` (§5d.3 §2). `ask` is the C2
-/// `permission_request` path (ADR-0095 D2); at C1 it is the typed refusal.
+/// `catalog_delta_with(…, index_decls)` — the decl-carrying delta (R2.8):
+/// the source's re-declared index set rides the delta to `adopt` (an
+/// adoption serving a granularity the catalog does not declare is
+/// `CatalogDriftError::UnsupportedIndexGranularity`).
+pub fn catalog_delta_with(
+    catalog: &Catalog,
+    source_ref: &str,
+    cause: SyncTrigger,
+    listing: &[CatalogEntry],
+    index_decls: Vec<IndexDecl>,
+) -> CatalogDelta {
+    let mut d = catalog_delta(catalog, source_ref, cause, listing);
+    d.index_decls = index_decls;
+    d
+}
+
+/// `adopt`'s refusal — `CatalogDriftRefused | unsupported_index_granularity
+/// | pin_binds_lifted` (§5d.3 §2). `ask` is the C2 `permission_request`
+/// path (ADR-0095 D2; R2.8 lands the driver half — the kernel's typed
+/// refusal stays `Refused` until the ask resolves).
 #[derive(Debug, Clone, PartialEq)]
 pub enum CatalogDriftError {
     /// `drift_policy = ask` — a permission request is required (C2).
     Refused,
+    /// The delta's `index_decls` declare a granularity the catalog does
+    /// not serve (`index_decls` non-empty ⇒ every declared granularity
+    /// must be bound in `catalog.indexes` — §5d.3's error column).
+    UnsupportedIndexGranularity {
+        /// The unsupported granularity.
+        granularity: IndexGranularity,
+    },
+    /// A delta would adopt a `pinned ∧ lifted` entry — a pin binds an
+    /// admission, never an unverified lift (the adopt-side twin of
+    /// `CatalogBuildError::PinBindsLifted`).
+    PinBindsLifted {
+        /// The surface.
+        surface_id: String,
+    },
 }
 
 impl std::fmt::Display for CatalogDriftError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CatalogDriftError::Refused => write!(f, "CatalogDriftRefused"),
+            CatalogDriftError::UnsupportedIndexGranularity { granularity } => {
+                write!(f, "unsupported_index_granularity: {}", granularity.as_str())
+            }
+            CatalogDriftError::PinBindsLifted { surface_id } => {
+                write!(f, "pin_binds_lifted: {surface_id}")
+            }
         }
     }
 }
@@ -1285,6 +1960,33 @@ pub fn adopt_with(
             Ok(AdoptOutcome::Frozen { catalog: out })
         }
         DriftPolicy::Adopt => {
+            // The C2 drift checks (R2.8) — typed refusals, never a silent
+            // drop:
+            // - a re-declared index granularity the catalog does not serve
+            //   is `UnsupportedIndexGranularity`;
+            // - an adopted `pinned ∧ lifted` entry is `PinBindsLifted`.
+            if !delta.index_decls.is_empty() {
+                let served: BTreeSet<IndexGranularity> = catalog
+                    .indexes
+                    .iter()
+                    .map(|d| d.granularity)
+                    .chain(std::iter::once(IndexGranularity::Surface))
+                    .collect();
+                for d in &delta.index_decls {
+                    if !served.contains(&d.granularity) {
+                        return Err(CatalogDriftError::UnsupportedIndexGranularity {
+                            granularity: d.granularity,
+                        });
+                    }
+                }
+            }
+            for e in delta.changed.iter().chain(delta.added.iter()) {
+                if e.pinned && e.lifted {
+                    return Err(CatalogDriftError::PinBindsLifted {
+                        surface_id: e.surface_id.clone(),
+                    });
+                }
+            }
             let removed: BTreeSet<&str> = delta.removed.iter().map(|s| s.as_str()).collect();
             let mut entries: Vec<CatalogEntry> = catalog
                 .entries
@@ -1333,6 +2035,7 @@ pub fn adopt_with(
                     bundle_id: catalog.bundle_id.clone(),
                     sources: catalog.sources.clone(),
                     entries,
+                    indexes: catalog.indexes.clone(),
                     index_ref: None, // index rebuilt — `action.tool.catalog.built` is the caller's row
                 },
                 epoch,
@@ -1382,21 +2085,37 @@ pub fn sync_source(
     drift_policy: DriftPolicy,
     adopted_by: &str,
 ) -> SyncOutcome {
-    let delta = catalog_delta(catalog, source_ref, cause, listing);
+    sync_source_with(
+        catalog,
+        source_ref,
+        cause,
+        listing,
+        source_state,
+        drift_policy,
+        adopted_by,
+        Vec::new(),
+    )
+}
+
+/// `sync_source_with(…, index_decls)` — the decl-carrying sync (R2.8): the
+/// source's re-declared index set rides the delta (`adopt` refuses an
+/// unsupported granularity — `CatalogDriftError::UnsupportedIndexGranularity`).
+#[allow(clippy::too_many_arguments)]
+pub fn sync_source_with(
+    catalog: &Catalog,
+    source_ref: &str,
+    cause: SyncTrigger,
+    listing: &[CatalogEntry],
+    source_state: &SourceState,
+    drift_policy: DriftPolicy,
+    adopted_by: &str,
+    index_decls: Vec<IndexDecl>,
+) -> SyncOutcome {
+    let delta = catalog_delta_with(catalog, source_ref, cause, listing, index_decls);
     let delta_event = delta.to_json();
     let outcome = adopt(catalog, &delta, drift_policy, adopted_by);
     let epoch_event = match &outcome {
-        Ok(AdoptOutcome::Adopted { epoch, .. }) => Some(Json::obj([
-            ("epoch", Json::Int(epoch.epoch as i64)),
-            ("catalog_id_prev", Json::str(epoch.catalog_id_prev.clone())),
-            ("catalog_id", Json::str(epoch.catalog_id.clone())),
-            ("bundle_delta", epoch.bundle_delta.clone()),
-            (
-                "loss_report",
-                epoch.loss_report.clone().unwrap_or(Json::Null),
-            ),
-            ("adopted_by", Json::str(epoch.adopted_by.clone())),
-        ])),
+        Ok(AdoptOutcome::Adopted { epoch, .. }) => Some(catalog_epoch_payload(epoch)),
         _ => None,
     };
     // Update the source row on whichever catalog survived (freeze keeps
@@ -1429,7 +2148,8 @@ pub fn sync_source(
 
 // ── Errors (the spec's error column) ─────────────────────────────────────────
 
-/// `CatalogBuildError` — `source_unavailable | IndexOverflow{pages | bytes}`.
+/// `CatalogBuildError` — `source_unavailable | IndexOverflow{pages | bytes}
+/// | pin_binds_lifted` (R2.8's attestation leg).
 #[derive(Debug, Clone, PartialEq)]
 pub enum CatalogBuildError {
     /// A declared source could not be read.
@@ -1441,6 +2161,13 @@ pub enum CatalogBuildError {
     IndexOverflow {
         /// `pages` | `bytes` | `duplicate_cursor`.
         what: String,
+    },
+    /// `lifted ∧ pinned` — a pin binds the admission of a *compiled*
+    /// surface; pinning an unverified lift is `pin_binds_lifted` (§5d.3
+    /// error column — never an attestation bypass).
+    PinBindsLifted {
+        /// The surface.
+        surface_id: String,
     },
 }
 
@@ -1555,12 +2282,42 @@ pub fn build_catalog(
     epoch: u64,
     source_states: Vec<SourceState>,
 ) -> Result<Catalog, CatalogBuildError> {
+    build_catalog_with(
+        bundle,
+        sources_state,
+        epoch,
+        source_states,
+        &BTreeSet::new(),
+    )
+}
+
+/// `build_catalog_with(…, lifted)` — the attestation-aware build (R2.8):
+/// `lifted` names the `surface_id`s whose capability arrived through an
+/// unverified lift (MCP/extension import). The entries carry `lifted`; a
+/// `lifted ∧ pinned` surface is `CatalogBuildError::PinBindsLifted` — a
+/// pin binds an admission, never an unverified lift.
+pub fn build_catalog_with(
+    bundle: &CompiledBundle,
+    sources_state: &BTreeMap<String, CatalogSource>,
+    epoch: u64,
+    source_states: Vec<SourceState>,
+    lifted: &BTreeSet<String>,
+) -> Result<Catalog, CatalogBuildError> {
     let mut entries = Vec::new();
     for tool in &bundle.runtime_plan.tools {
         let Some(binding) = &tool.surface else {
             continue;
         };
-        entries.push(entry_from_binding(bundle, tool, binding, sources_state));
+        let mut entry = entry_from_binding(bundle, tool, binding, sources_state);
+        if lifted.contains(entry.surface_id.as_str()) {
+            entry.lifted = true;
+            if entry.pinned {
+                return Err(CatalogBuildError::PinBindsLifted {
+                    surface_id: entry.surface_id.clone(),
+                });
+            }
+        }
+        entries.push(entry);
     }
     entries.sort_by(|a, b| a.surface_id.cmp(&b.surface_id));
     let catalog_id = catalog_id_of(&entries, epoch, &bundle.bundle_id);
@@ -1570,6 +2327,7 @@ pub fn build_catalog(
         bundle_id: bundle.bundle_id.clone(),
         sources: source_states,
         entries,
+        indexes: Vec::new(),
         index_ref: None,
     })
 }
@@ -1620,6 +2378,7 @@ fn entry_from_binding(
         label: None,
         availability: Availability::Available,
         is_discovery: tool_is_discovery(tool),
+        lifted: false,
     }
 }
 
@@ -1702,6 +2461,22 @@ pub fn direct_all(
         .collect()
 }
 
+/// `SelectionGates` — the selection-time capability gates (R2.8 C2 legs,
+/// §5d.2's gating inputs). Every member is a *declared* gate — `false` is
+/// the absence of the gate, never a guess.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SelectionGates {
+    /// `index_unverified` — the verifier-attestation gate for indexing
+    /// unverified-lifted surfaces (§5d.3's attestation leg): a `lifted`
+    /// entry's `indexed` mode is admissible **only** under this gate.
+    /// `false` ⇒ `indexed` is dropped from a lifted entry's admit meet
+    /// (`deferred`/`direct` still admit — the gate gates *indexing*, not
+    /// delivery; an entry left with no mode is `omitted(ModeUnsupportedByProfile)`).
+    /// `lifted ∧ pinned` never reaches here — the build refuses it
+    /// (`CatalogBuildError::PinBindsLifted`).
+    pub index_unverified: bool,
+}
+
 /// `select_surfaces(catalog, turn_state, profile_modes, params, policy)` —
 /// the kernel `admit → policy.rank → enforce` pipeline (§5d.3 §2):
 ///
@@ -1722,6 +2497,36 @@ pub fn select_surfaces(
     profile_modes: &BTreeSet<ExposureMode>,
     params: &ExposurePolicyParams,
     policy: Option<&dyn ExposurePolicy>,
+) -> Result<ExposurePlan, SelectError> {
+    select_surfaces_with(
+        catalog,
+        turn_state,
+        profile_modes,
+        params,
+        policy,
+        &SelectionGates::default(),
+    )
+}
+
+/// `select_surfaces_with(…, gates)` — the gated `select_surfaces` (R2.8):
+/// the `permission_gate` and `index_unverified` legs run in the kernel
+/// admit (the rows they produce ride the plan's `omitted[]` — never silent
+/// drops):
+///
+/// - `permission_gate = hide_uncovered` ⇒ `uncovered` entries omit
+///   `PermissionUncovered` (the C2 half of OQ-234);
+/// - `permission_gate = demote_uncovered` ⇒ `uncovered` entries lose
+///   `direct` from the meet (they may still serve `indexed`/`deferred` —
+///   demoted, never hidden);
+/// - `gates.index_unverified = false` ⇒ a `lifted` entry loses `indexed`
+///   from the meet (the attestation gate's absence leg).
+pub fn select_surfaces_with(
+    catalog: &Catalog,
+    turn_state: &TurnState,
+    profile_modes: &BTreeSet<ExposureMode>,
+    params: &ExposurePolicyParams,
+    policy: Option<&dyn ExposurePolicy>,
+    gates: &SelectionGates,
 ) -> Result<ExposurePlan, SelectError> {
     let mut omitted: Vec<OmittedEntry> = Vec::new();
     let mut admitted: BTreeMap<String, BTreeSet<ExposureMode>> = BTreeMap::new();
@@ -1749,14 +2554,38 @@ pub fn select_surfaces(
             });
             continue;
         }
+        // `permission_gate` (OQ-234) — `hide_uncovered` removes the entry
+        // wholesale; `demote_uncovered` drops `direct` from the meet (the
+        // C1 default); `none` reads no coverage.
+        if params.permission_gate == PermissionGate::HideUncovered
+            && e.permission_coverage == PermissionCoverage::Uncovered
+        {
+            omitted.push(OmittedEntry {
+                surface_id: e.surface_id.clone(),
+                reason: OmitReason::PermissionUncovered,
+            });
+            continue;
+        }
         // I-NARROW: definition ∩ profile ∩ policy. `default_mode_by_source`
-        // narrows to its singleton when it names this source; `permission_gate`
-        // demotes `uncovered` (OQ-234 default) but never hides at C0.
+        // narrows to its singleton when it names this source.
         let mut meet: BTreeSet<ExposureMode> = e
             .admitted_modes
             .intersection(profile_modes)
             .copied()
             .collect();
+        // `demote_uncovered` — a coverage-less entry keeps its non-direct
+        // modes (the pin check below fails it if `direct` was mandatory).
+        if params.permission_gate == PermissionGate::DemoteUncovered
+            && e.permission_coverage == PermissionCoverage::Uncovered
+            && !e.pinned
+        {
+            meet.remove(&ExposureMode::Direct);
+        }
+        // `index_unverified` attestation gate (R2.8) — absent the gate a
+        // lifted (unverified) entry may not serve `indexed`.
+        if e.lifted && !gates.index_unverified {
+            meet.remove(&ExposureMode::Indexed);
+        }
         let source_key = e.source.as_str();
         let source_key = source_key.split(':').next().unwrap_or("harness");
         if let Some(default) = params.default_mode_by_source.get(source_key) {
@@ -2174,4 +3003,566 @@ pub fn expire_reveals(
         keep
     });
     (out, expired)
+}
+
+// ── Entry codec + catalog payloads (R2.8 — the durable-fold halves) ────────
+
+/// `catalog_entry_json` — the canonical entry record (the durable
+/// `catalog.built`/`catalog.delta` member and the resume fold's decode
+/// input; CC1 — one spelling, both directions live here).
+pub fn catalog_entry_json(e: &CatalogEntry) -> Json {
+    let mode_json = |m: &ExposureMode| Json::str(m.as_str());
+    Json::obj([
+        ("surface_id", Json::str(e.surface_id.clone())),
+        ("capability", Json::str(e.capability.clone())),
+        ("version_id", Json::str(e.version_id.clone())),
+        ("name", Json::str(e.name.clone())),
+        (
+            "namespace",
+            e.namespace.clone().map_or(Json::Null, Json::str),
+        ),
+        ("source", Json::str(e.source.as_str())),
+        (
+            "admitted_modes",
+            Json::Arr(e.admitted_modes.iter().map(mode_json).collect()),
+        ),
+        ("pinned", Json::Bool(e.pinned)),
+        ("hidden", Json::Bool(e.hidden)),
+        ("lifted", Json::Bool(e.lifted)),
+        ("is_discovery", Json::Bool(e.is_discovery)),
+        (
+            "index_form",
+            Json::obj([
+                ("name", Json::str(e.index_form.name.clone())),
+                (
+                    "title",
+                    e.index_form.title.clone().map_or(Json::Null, Json::str),
+                ),
+                ("summary_ref", Json::str(e.index_form.summary_ref.clone())),
+                (
+                    "namespace",
+                    e.index_form.namespace.clone().map_or(Json::Null, Json::str),
+                ),
+                (
+                    "tags",
+                    Json::Arr(e.index_form.tags.iter().map(Json::str).collect()),
+                ),
+                (
+                    "search_text_fields",
+                    Json::Arr(
+                        e.index_form
+                            .search_text_fields
+                            .iter()
+                            .map(|f| Json::str(f.as_str()))
+                            .collect(),
+                    ),
+                ),
+                (
+                    "search_text",
+                    Json::Obj(
+                        e.index_form
+                            .search_text
+                            .iter()
+                            .map(|(f, t)| (f.as_str().to_string(), Json::str(t.clone())))
+                            .collect(),
+                    ),
+                ),
+            ]),
+        ),
+        ("size_tokens", Json::Int(e.size_tokens as i64)),
+        ("estimator_ref", Json::str(e.estimator_ref.clone())),
+        (
+            "effect_summary",
+            Json::Arr(e.effect_summary.iter().map(Json::str).collect()),
+        ),
+        (
+            "permission_coverage",
+            Json::str(match e.permission_coverage {
+                PermissionCoverage::Covered => "covered",
+                PermissionCoverage::Ask => "ask",
+                PermissionCoverage::Uncovered => "uncovered",
+                PermissionCoverage::Unknown => "unknown",
+            }),
+        ),
+        ("label", e.label.clone().map_or(Json::Null, Json::str)),
+        (
+            "availability",
+            match &e.availability {
+                Availability::Available => Json::str("available"),
+                Availability::Unavailable(r) => Json::obj([
+                    ("kind", Json::str("unavailable")),
+                    ("reason", Json::str(r.clone())),
+                ]),
+                Availability::Stale(epoch) => Json::obj([
+                    ("kind", Json::str("stale")),
+                    ("epoch", Json::Int(*epoch as i64)),
+                ]),
+            },
+        ),
+    ])
+}
+
+/// `catalog_entry_from_json` — the read half of [`catalog_entry_json`]
+/// (`None` on a malformed member — the fold's caller names the skip, the
+/// codec never invents a member).
+pub fn catalog_entry_from_json(j: &Json) -> Option<CatalogEntry> {
+    let s = |k: &str| j.get(k).and_then(Json::as_str).map(str::to_string);
+    let b = |k: &str| matches!(j.get(k), Some(Json::Bool(true)));
+    let form_j = j.get("index_form")?;
+    let mut fields = BTreeSet::new();
+    if let Some(Json::Arr(fs)) = form_j.get("search_text_fields") {
+        for f in fs {
+            fields.insert(SearchTextField::parse(f.as_str()?)?);
+        }
+    }
+    let mut search_text = BTreeMap::new();
+    if let Some(Json::Obj(m)) = form_j.get("search_text") {
+        for (k, v) in m {
+            search_text.insert(SearchTextField::parse(k)?, v.as_str()?.to_string());
+        }
+    }
+    Some(CatalogEntry {
+        surface_id: s("surface_id")?,
+        capability: s("capability")?,
+        version_id: s("version_id")?,
+        source: CatalogSource::parse(&s("source")?)?,
+        name: s("name")?,
+        namespace: s("namespace"),
+        admitted_modes: match j.get("admitted_modes") {
+            Some(Json::Arr(ms)) => {
+                let mut set = BTreeSet::new();
+                for m in ms {
+                    set.insert(ExposureMode::parse(m.as_str()?)?);
+                }
+                set
+            }
+            _ => BTreeSet::new(),
+        },
+        pinned: b("pinned"),
+        hidden: b("hidden"),
+        lifted: b("lifted"),
+        is_discovery: b("is_discovery"),
+        index_form: IndexForm {
+            name: form_j.get("name")?.as_str()?.to_string(),
+            title: form_j
+                .get("title")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            summary_ref: form_j
+                .get("summary_ref")
+                .and_then(Json::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            namespace: form_j
+                .get("namespace")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            tags: match form_j.get("tags") {
+                Some(Json::Arr(ts)) => ts
+                    .iter()
+                    .filter_map(|t| t.as_str().map(str::to_string))
+                    .collect(),
+                _ => Vec::new(),
+            },
+            search_text_fields: fields,
+            search_text,
+        },
+        size_tokens: j.get("size_tokens")?.as_int()?.max(0) as u64,
+        estimator_ref: s("estimator_ref").unwrap_or_default(),
+        effect_summary: match j.get("effect_summary") {
+            Some(Json::Arr(es)) => es
+                .iter()
+                .filter_map(|e| e.as_str().map(str::to_string))
+                .collect(),
+            _ => Vec::new(),
+        },
+        permission_coverage: match s("permission_coverage")?.as_str() {
+            "covered" => PermissionCoverage::Covered,
+            "ask" => PermissionCoverage::Ask,
+            "uncovered" => PermissionCoverage::Uncovered,
+            "unknown" => PermissionCoverage::Unknown,
+            _ => return None,
+        },
+        label: s("label"),
+        availability: match j.get("availability") {
+            Some(Json::Str(a)) if a == "available" => Availability::Available,
+            Some(o) => match o.get("kind").and_then(Json::as_str) {
+                Some("unavailable") => {
+                    Availability::Unavailable(o.get("reason")?.as_str()?.to_string())
+                }
+                Some("stale") => Availability::Stale(o.get("epoch")?.as_int()?.max(0) as u64),
+                _ => return None,
+            },
+            _ => return None,
+        },
+    })
+}
+
+/// `source_state_json` — the `catalog.built` `sources[]` member spelling.
+pub fn source_state_json(s: &SourceState) -> Json {
+    Json::obj([
+        ("source_ref", Json::str(s.source_ref.clone())),
+        ("snapshot_hash", Json::str(s.snapshot_hash.clone())),
+        ("ttl", s.ttl.map_or(Json::Null, |t| Json::Int(t as i64))),
+        ("listened", Json::Bool(s.listened)),
+    ])
+}
+
+/// `action.tool.catalog.built` — the catalog record the driver appends when
+/// an exposure-aware run arms (R2.8): `{catalog_id, epoch, bundle_id,
+/// sources[], entries[], index_ref}` — the entries are the *full* entry
+/// records (the durable fold rebuilds the shadow catalog from this row —
+/// the projection rows (`name`/`namespace`/`lifted`) are inside the entry
+/// records).
+pub fn catalog_built_payload(catalog: &Catalog) -> Json {
+    Json::obj([
+        ("catalog_id", Json::str(catalog.catalog_id.clone())),
+        ("epoch", Json::Int(catalog.epoch as i64)),
+        ("bundle_id", Json::str(catalog.bundle_id.clone())),
+        (
+            "index_ref",
+            catalog.index_ref.clone().map_or(Json::Null, Json::str),
+        ),
+        (
+            "indexes",
+            Json::Arr(catalog.indexes.iter().map(index_decl_json).collect()),
+        ),
+        (
+            "sources",
+            Json::Arr(catalog.sources.iter().map(source_state_json).collect()),
+        ),
+        (
+            "entries",
+            Json::Arr(catalog.entries.iter().map(catalog_entry_json).collect()),
+        ),
+    ])
+}
+
+/// `catalog_built_from_payload` — the resume-fold read of
+/// [`catalog_built_payload`] (`None` on a malformed row — the caller folds
+/// only well-formed rows; a malformed durable row is a stop, never a
+/// guess).
+pub fn catalog_built_from_payload(j: &Json) -> Option<Catalog> {
+    let mut entries = Vec::new();
+    if let Some(Json::Arr(es)) = j.get("entries") {
+        for e in es {
+            entries.push(catalog_entry_from_json(e)?);
+        }
+    }
+    let mut sources = Vec::new();
+    if let Some(Json::Arr(ss)) = j.get("sources") {
+        for s in ss {
+            let g = |k: &str| s.get(k).and_then(Json::as_str).map(str::to_string);
+            sources.push(SourceState {
+                source_ref: g("source_ref")?,
+                snapshot_hash: g("snapshot_hash")?,
+                ttl: s.get("ttl").and_then(Json::as_int).map(|t| t.max(0) as u64),
+                listened: matches!(s.get("listened"), Some(Json::Bool(true))),
+            });
+        }
+    }
+    let mut indexes = Vec::new();
+    if let Some(Json::Arr(ds)) = j.get("indexes") {
+        for d in ds {
+            indexes.push(IndexDecl {
+                index: index_from_json(d.get("index")?)?,
+                granularity: IndexGranularity::parse(d.get("granularity")?.as_str()?)?,
+            });
+        }
+    }
+    Some(Catalog {
+        catalog_id: j.get("catalog_id")?.as_str()?.to_string(),
+        epoch: j.get("epoch")?.as_int()?.max(0) as u64,
+        bundle_id: j.get("bundle_id")?.as_str()?.to_string(),
+        sources,
+        entries,
+        indexes,
+        index_ref: j
+            .get("index_ref")
+            .and_then(Json::as_str)
+            .map(str::to_string),
+    })
+}
+
+/// `index_from_json` — the read half of [`index_json`].
+pub fn index_from_json(j: &Json) -> Option<CatalogIndex> {
+    match j.get("kind")?.as_str()? {
+        "exact_name" => Some(CatalogIndex::ExactName),
+        "static_allowlist" => {
+            let mut ids = BTreeSet::new();
+            if let Some(Json::Arr(xs)) = j.get("surface_ids") {
+                for x in xs {
+                    ids.insert(x.as_str()?.to_string());
+                }
+            }
+            Some(CatalogIndex::StaticAllowlist(ids))
+        }
+        "lexical_regex" => Some(CatalogIndex::LexicalRegex),
+        "bm25" => Some(CatalogIndex::Bm25),
+        "hierarchical" => Some(CatalogIndex::Hierarchical),
+        "embedding" => Some(CatalogIndex::Embedding {
+            similarity_threshold_ppm: j.get("similarity_threshold_ppm")?.as_int()?.max(0) as u64,
+        }),
+        "model_ranked" => Some(CatalogIndex::ModelRanked),
+        "filesystem" => Some(CatalogIndex::Filesystem),
+        _ => None,
+    }
+}
+
+/// `action.tool.catalog.epoch` payload — the `CatalogEpoch`'s durable
+/// spelling (extracted so `sync_source` and the driver share the row —
+/// CC1).
+pub fn catalog_epoch_payload(epoch: &CatalogEpoch) -> Json {
+    Json::obj([
+        ("epoch", Json::Int(epoch.epoch as i64)),
+        ("catalog_id_prev", Json::str(epoch.catalog_id_prev.clone())),
+        ("catalog_id", Json::str(epoch.catalog_id.clone())),
+        ("bundle_delta", epoch.bundle_delta.clone()),
+        (
+            "loss_report",
+            epoch.loss_report.clone().unwrap_or(Json::Null),
+        ),
+        ("adopted_by", Json::str(epoch.adopted_by.clone())),
+    ])
+}
+
+// ── Runtime event payloads (R2.8 — the §5d.3 §7 emitter half) ────────────────
+
+/// `action.tool.exposure.planned{model_call_id, plan_id, catalog_id,
+/// mode_changes[], omitted[], budget_estimate}` (§5d.3 §7; scope
+/// `context_assembly` — the driver's call scope carries it). `mode_changes[]`
+/// diffs `plan` against the prior call's `prev` — `{surface_id, mode_from,
+/// mode_to}` with the closed `ExposureMode` spellings; `none` names an
+/// absent leg (a surface that entered or left the plan).
+pub fn exposure_planned_payload(plan: &ExposurePlan, prev: Option<&ExposurePlan>) -> Json {
+    let prev_modes: BTreeMap<&str, ExposureMode> = prev
+        .map(|p| p.entries.iter().map(|(s, m)| (s.as_str(), *m)).collect())
+        .unwrap_or_default();
+    let cur_modes: BTreeMap<&str, ExposureMode> =
+        plan.entries.iter().map(|(s, m)| (s.as_str(), *m)).collect();
+    let mut mode_changes = Vec::new();
+    for (sid, mode) in &cur_modes {
+        let from = prev_modes.get(sid).copied();
+        if from != Some(*mode) {
+            mode_changes.push(Json::obj([
+                ("surface_id", Json::str(*sid)),
+                (
+                    "mode_from",
+                    from.map_or_else(|| Json::str("none"), |m| Json::str(m.as_str())),
+                ),
+                ("mode_to", Json::str(mode.as_str())),
+            ]));
+        }
+    }
+    for (sid, mode) in &prev_modes {
+        if !cur_modes.contains_key(sid) {
+            mode_changes.push(Json::obj([
+                ("surface_id", Json::str(*sid)),
+                ("mode_from", Json::str(mode.as_str())),
+                ("mode_to", Json::str("none")),
+            ]));
+        }
+    }
+    Json::obj([
+        ("model_call_id", Json::str(plan.model_call_id.clone())),
+        ("plan_id", Json::str(plan.plan_id.clone())),
+        ("catalog_id", Json::str(plan.catalog_id.clone())),
+        (
+            "budget_estimate",
+            Json::obj([
+                ("tokens", Json::Int(plan.budget_estimate.tokens as i64)),
+                (
+                    "estimator_ref",
+                    Json::str(plan.budget_estimate.estimator_ref.clone()),
+                ),
+            ]),
+        ),
+        ("mode_changes", Json::Arr(mode_changes)),
+        // `order` rides beside `mode_changes` — the resume fold's
+        // I-ORDER prefix input (the payload's audit members are the
+        // spec's; `order` is the fold's own record).
+        (
+            "order",
+            Json::Arr(plan.order.iter().map(|s| Json::str(s.clone())).collect()),
+        ),
+        (
+            "omitted",
+            Json::Arr(
+                plan.omitted
+                    .iter()
+                    .map(|o| {
+                        Json::obj([
+                            ("surface_id", Json::str(o.surface_id.clone())),
+                            ("reason", Json::str(o.reason.as_str())),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+/// `action.tool.discovery.searched{tool_call_id, query_form, query_hash,
+/// executed_by, variant_ref, hits[], truncated, cost}` (§5d.3 §7).
+/// `query_hash` is the idp/1 content address of the canonical
+/// `(form_kind, granularity, text)` triple — the query text itself never
+/// lands on the row (the hash is the join; ADR-0094 D6).
+pub fn discovery_searched_payload(
+    tool_call_id: &str,
+    query: &DiscoveryQuery,
+    index: &CatalogIndex,
+    result: &DiscoveryResult,
+) -> Json {
+    let query_hash = hh_identity::idp::idp_id(
+        "discovery_query",
+        format!(
+            "{}\n{}\n{}",
+            DiscoveryFormKind::of(&query.form).as_str(),
+            query.granularity.as_str(),
+            query.text,
+        )
+        .as_bytes(),
+    );
+    Json::obj([
+        ("tool_call_id", Json::str(tool_call_id)),
+        (
+            "query_form",
+            Json::str(DiscoveryFormKind::of(&query.form).as_str()),
+        ),
+        ("query_hash", Json::str(query_hash)),
+        ("executed_by", Json::str(result.executed_by.clone())),
+        ("variant_ref", Json::str(index_ref(index))),
+        (
+            "hits",
+            Json::Arr(
+                result
+                    .hits
+                    .iter()
+                    .map(|h| {
+                        let mut m = vec![
+                            ("surface_id", Json::str(h.surface_id.clone())),
+                            ("rank", Json::Int(h.rank as i64)),
+                        ];
+                        if let Some(s) = &h.score {
+                            m.push(("score", s.clone()));
+                        }
+                        Json::obj(m)
+                    })
+                    .collect(),
+            ),
+        ),
+        ("truncated", Json::Bool(result.truncated)),
+        ("cost", result.cost.clone().unwrap_or(Json::Null)),
+    ])
+}
+
+/// `action.tool.surface.revealed{surface_id, mode_from, mode_to, cause,
+/// retention}` (§5d.3 §7) — `mode_from` is the catalog mode the surface
+/// held before the reveal (`deferred`/`indexed`), `mode_to` is the mode it
+/// enters (`direct` — reveals land `direct` in the next plan).
+pub fn surface_revealed_payload(entry: &RevealedEntry, mode_from: ExposureMode) -> Json {
+    Json::obj([
+        ("surface_id", Json::str(entry.surface_id.clone())),
+        ("mode_from", Json::str(mode_from.as_str())),
+        ("mode_to", Json::str(entry.mode.as_str())),
+        ("cause", Json::str(entry.cause.as_str())),
+        ("retention", Json::str(entry.retention.as_str())),
+    ])
+}
+
+/// `action.tool.surface.evicted{surface_id, cause}` (§5d.3 §7).
+pub fn surface_evicted_payload(surface_id: &str, cause: EvictCause) -> Json {
+    Json::obj([
+        ("surface_id", Json::str(surface_id)),
+        ("cause", Json::str(cause.as_str())),
+    ])
+}
+
+/// `action.tool.call.refused{surface_id?, reason, hint}` (§5d.3 §7;
+/// ADR-0093 D7) — the refusal carries no definition: `surface_id` lands
+/// only when the catalog resolved the attempted name; `hint` names the
+/// `search`/`none` leg the model could take.
+pub fn call_refused_payload(refusal: &CallRefusal) -> Json {
+    match refusal {
+        CallRefusal::SurfaceNotRevealed { surface_id, hint } => Json::obj([
+            (
+                "surface_id",
+                surface_id.clone().map_or(Json::Null, Json::str),
+            ),
+            ("reason", Json::str("surface_not_revealed")),
+            (
+                "hint",
+                Json::str(match hint {
+                    RevealHint::Search => "search",
+                    RevealHint::None => "none",
+                }),
+            ),
+        ]),
+        CallRefusal::SurfaceUnavailable { reason } => Json::obj([
+            ("surface_id", Json::Null),
+            ("reason", Json::str("surface_unavailable")),
+            ("detail", Json::str(reason.clone())),
+            ("hint", Json::str("none")),
+        ]),
+    }
+}
+
+/// `discovery_query_from_args(args)` — the kernel `discover_surfaces`
+/// capability's argument grammar (R2.8): `{"query": string}` is required;
+/// `form ∈ {regex, natural_language, structured}` selects the form kind
+/// (default `natural_language`); `limit` bounds hits; `granularity` is the
+/// `IndexGranularity` spelling (default `surface`); the `structured` form
+/// reads `namespace`/`effect_filter`/`tags[]`/`source` off the same
+/// object. A malformed member is a `DiscoveryQueryInvalid` — the typed
+/// refusal, never a defaulted guess.
+pub fn discovery_query_from_args(args: &Json) -> Result<DiscoveryQuery, DiscoveryQueryInvalid> {
+    let text = match args.get("query").or_else(|| args.get("text")) {
+        Some(Json::Str(s)) => s.clone(),
+        _ => return Err(DiscoveryQueryInvalid::Empty),
+    };
+    if text.is_empty() {
+        return Err(DiscoveryQueryInvalid::Empty);
+    }
+    if text.chars().count() > 4096 {
+        return Err(DiscoveryQueryInvalid::TooLong);
+    }
+    let form = match args.get("form").and_then(Json::as_str) {
+        None | Some("natural_language") | Some("nl") => DiscoveryForm::NaturalLanguage,
+        Some("regex") => DiscoveryForm::Regex,
+        Some("structured") => DiscoveryForm::Structured(StructuredQuery {
+            namespace: args
+                .get("namespace")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            effect_filter: args
+                .get("effect_filter")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            tags: match args.get("tags") {
+                Some(Json::Arr(ts)) => ts
+                    .iter()
+                    .filter_map(|t| t.as_str().map(str::to_string))
+                    .collect(),
+                _ => Vec::new(),
+            },
+            source: args
+                .get("source")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+        }),
+        Some(_) => return Err(DiscoveryQueryInvalid::UnsupportedForm),
+    };
+    let granularity = match args.get("granularity").and_then(Json::as_str) {
+        None => IndexGranularity::Surface,
+        Some(g) => IndexGranularity::parse(g).ok_or(DiscoveryQueryInvalid::UnsupportedForm)?,
+    };
+    Ok(DiscoveryQuery {
+        form,
+        text,
+        limit: args
+            .get("limit")
+            .and_then(Json::as_int)
+            .map(|i| i.max(0) as u64),
+        granularity,
+    })
 }

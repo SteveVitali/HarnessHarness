@@ -222,10 +222,11 @@ impl TruncateDirection {
     }
 }
 
-/// `ResultRenderSpec.mode` — the C0 members `{full, truncate{max_lines,
-/// max_bytes, max_tokens, direction}}` (ADR-0146 stage note). `concise` and
-/// `offload` are the C1/Stage-5 row — declared spellings are refused at C0
-/// parse, never silently widened.
+/// `ResultRenderSpec.mode` — `{full, truncate{max_lines, max_bytes,
+/// max_tokens, direction}, concise{format_param}, offload{threshold_bytes,
+/// preview_lines ≤ threshold_bytes, artifact_kind}}`. `concise`/`offload`
+/// are the C1 members (S1.17/R2.8 — §5d.2's conditioned modes; each carries
+/// a debt record like every conditioned rule).
 #[derive(Debug, Clone, PartialEq)]
 pub enum RenderMode {
     /// `full` — the reference mode; every other mode is a conditioned rule
@@ -242,6 +243,27 @@ pub enum RenderMode {
         /// Which end is kept.
         direction: TruncateDirection,
     },
+    /// `concise{format_param}` — the concise rendering; `format_param` names
+    /// the *declared* format member the summary follows (closed spellings —
+    /// a free-text format is `BadMember`, never a prose slot).
+    Concise {
+        /// The declared format parameter.
+        format_param: String,
+    },
+    /// `offload{threshold_bytes, preview_lines, artifact_kind}` — results
+    /// over `threshold_bytes` land as a declared artefact (read through the
+    /// bound `read_artifact` capability — E6 leg); the surface keeps a
+    /// `preview_lines` head. `preview_lines ≤ threshold_bytes` is a
+    /// parse-time bound ([`RenderSpecParseError::OffloadBound`]).
+    Offload {
+        /// The offload threshold (result bytes).
+        threshold_bytes: u64,
+        /// The preview line count the surface retains.
+        preview_lines: u64,
+        /// The artefact kind the body lands under (a declared kind —
+        /// `result_body`, `transcript_segment`, …).
+        artifact_kind: String,
+    },
 }
 
 impl RenderMode {
@@ -250,9 +272,206 @@ impl RenderMode {
         match self {
             RenderMode::Full => "full",
             RenderMode::Truncate { .. } => "truncate",
+            RenderMode::Concise { .. } => "concise",
+            RenderMode::Offload { .. } => "offload",
+        }
+    }
+
+    /// `parse(kind, members)` — the shared mode parser (CC1 — the profile
+    /// params' flat shape and the codec's `mode{kind, …}` shape both read
+    /// members through this one grammar). Unknown spellings and malformed
+    /// members refuse typed, never silently widened.
+    pub fn parse(kind: &str, members: &Json) -> Result<RenderMode, RenderSpecParseError> {
+        let u64_member = |k: &str| -> Result<Option<u64>, RenderSpecParseError> {
+            match members.get(k) {
+                None | Some(Json::Null) => Ok(None),
+                Some(v) => v.as_int().map(|i| Some(i.max(0) as u64)).ok_or_else(|| {
+                    RenderSpecParseError::BadMember {
+                        mode: kind.to_string(),
+                        member: k.to_string(),
+                        reason: "expected a non-negative integer".to_string(),
+                    }
+                }),
+            }
+        };
+        let str_member = |k: &str| -> Result<Option<String>, RenderSpecParseError> {
+            match members.get(k) {
+                None | Some(Json::Null) => Ok(None),
+                Some(v) => v.as_str().map(|s| Some(s.to_string())).ok_or_else(|| {
+                    RenderSpecParseError::BadMember {
+                        mode: kind.to_string(),
+                        member: k.to_string(),
+                        reason: "expected a string".to_string(),
+                    }
+                }),
+            }
+        };
+        match kind {
+            "full" => Ok(RenderMode::Full),
+            "truncate" => Ok(RenderMode::Truncate {
+                max_lines: u64_member("max_lines")?,
+                max_bytes: u64_member("max_bytes")?,
+                max_tokens: u64_member("max_tokens")?,
+                direction: match str_member("direction")? {
+                    Some(d) => TruncateDirection::parse(&d).ok_or_else(|| {
+                        RenderSpecParseError::BadMember {
+                            mode: kind.to_string(),
+                            member: "direction".to_string(),
+                            reason: format!("direction ∈ {{head, tail}}; got {d}"),
+                        }
+                    })?,
+                    None => TruncateDirection::Head,
+                },
+            }),
+            "concise" => Ok(RenderMode::Concise {
+                format_param: str_member("format_param")?.ok_or_else(|| {
+                    RenderSpecParseError::MissingMember {
+                        mode: kind.to_string(),
+                        member: "format_param".to_string(),
+                    }
+                })?,
+            }),
+            "offload" => {
+                let threshold_bytes = u64_member("threshold_bytes")?.ok_or_else(|| {
+                    RenderSpecParseError::MissingMember {
+                        mode: kind.to_string(),
+                        member: "threshold_bytes".to_string(),
+                    }
+                })?;
+                let preview_lines = u64_member("preview_lines")?.ok_or_else(|| {
+                    RenderSpecParseError::MissingMember {
+                        mode: kind.to_string(),
+                        member: "preview_lines".to_string(),
+                    }
+                })?;
+                if preview_lines > threshold_bytes {
+                    return Err(RenderSpecParseError::OffloadBound {
+                        preview_lines,
+                        threshold_bytes,
+                    });
+                }
+                Ok(RenderMode::Offload {
+                    threshold_bytes,
+                    preview_lines,
+                    artifact_kind: str_member("artifact_kind")?.ok_or_else(|| {
+                        RenderSpecParseError::MissingMember {
+                            mode: kind.to_string(),
+                            member: "artifact_kind".to_string(),
+                        }
+                    })?,
+                })
+            }
+            other => Err(RenderSpecParseError::UnknownMode {
+                mode: other.to_string(),
+            }),
+        }
+    }
+
+    /// The codec's `mode{kind, …}` member body (canonical JSON).
+    pub fn mode_json(&self) -> Json {
+        match self {
+            RenderMode::Full => Json::obj([("kind", Json::str("full"))]),
+            RenderMode::Truncate {
+                max_lines,
+                max_bytes,
+                max_tokens,
+                direction,
+            } => {
+                let mut p = vec![
+                    ("kind", Json::str("truncate")),
+                    ("direction", Json::str(direction.as_str())),
+                ];
+                if let Some(v) = max_lines {
+                    p.push(("max_lines", Json::Int(*v as i64)));
+                }
+                if let Some(v) = max_bytes {
+                    p.push(("max_bytes", Json::Int(*v as i64)));
+                }
+                if let Some(v) = max_tokens {
+                    p.push(("max_tokens", Json::Int(*v as i64)));
+                }
+                Json::obj(p)
+            }
+            RenderMode::Concise { format_param } => Json::obj([
+                ("kind", Json::str("concise")),
+                ("format_param", Json::str(format_param.clone())),
+            ]),
+            RenderMode::Offload {
+                threshold_bytes,
+                preview_lines,
+                artifact_kind,
+            } => Json::obj([
+                ("kind", Json::str("offload")),
+                ("threshold_bytes", Json::Int(*threshold_bytes as i64)),
+                ("preview_lines", Json::Int(*preview_lines as i64)),
+                ("artifact_kind", Json::str(artifact_kind.clone())),
+            ]),
         }
     }
 }
+
+/// The `RenderMode::parse` refusal sum — closed, typed (§5d.2's
+/// `render_spec_parse` error column).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RenderSpecParseError {
+    /// A spelling outside `{full, truncate, concise, offload}`.
+    UnknownMode {
+        /// The spelling seen.
+        mode: String,
+    },
+    /// A declared-required member absent (`concise.format_param`,
+    /// `offload.{threshold_bytes, preview_lines, artifact_kind}`).
+    MissingMember {
+        /// The mode.
+        mode: String,
+        /// The member.
+        member: String,
+    },
+    /// A member present but mistyped/out-of-domain.
+    BadMember {
+        /// The mode.
+        mode: String,
+        /// The member.
+        member: String,
+        /// The reason.
+        reason: String,
+    },
+    /// `offload` with `preview_lines > threshold_bytes` — the declared
+    /// bound is violated (§5d.2 `preview_lines ≤ threshold_bytes`).
+    OffloadBound {
+        /// The declared preview.
+        preview_lines: u64,
+        /// The declared threshold.
+        threshold_bytes: u64,
+    },
+}
+
+impl std::fmt::Display for RenderSpecParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RenderSpecParseError::UnknownMode { mode } => {
+                write!(f, "render_spec_parse: unknown mode {mode}")
+            }
+            RenderSpecParseError::MissingMember { mode, member } => {
+                write!(f, "render_spec_parse: {mode} needs {member}")
+            }
+            RenderSpecParseError::BadMember {
+                mode,
+                member,
+                reason,
+            } => write!(f, "render_spec_parse: {mode}.{member}: {reason}"),
+            RenderSpecParseError::OffloadBound {
+                preview_lines,
+                threshold_bytes,
+            } => write!(
+                f,
+                "render_spec_parse: offload preview_lines {preview_lines} > threshold_bytes {threshold_bytes}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RenderSpecParseError {}
 
 /// `ResultRenderSpec{mode, declared_loss: truncated{retained_fields[]}?,
 /// validator_reads: [field]}` (§5d.2 §3; ADR-0092 D1) — the profile-owned
@@ -262,14 +481,76 @@ impl RenderMode {
 /// here).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResultRenderSpec {
-    /// The mode (`full | truncate` at C0).
+    /// The mode (`full | truncate | concise | offload` — C1 lands the last
+    /// two; S1.17/R2.8).
     pub mode: RenderMode,
-    /// The declared truncation loss — the `retained_fields` the truncated
-    /// rendering keeps (mandatory when `mode = truncate` and fields are
-    /// dropped; `None` on `full`).
+    /// The declared truncation loss — the `retained_fields` the conditioned
+    /// rendering keeps (mandatory when `mode` drops fields; `None` on
+    /// `full`).
     pub declared_loss: Option<Vec<String>>,
     /// The fields bound validators read — E6's static inclusion set.
     pub validator_reads: Vec<String>,
+}
+
+/// The `check_render_admissible` refusals (§5d.2 E6; R2.8) — closed sum.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RenderAdmissibilityError {
+    /// `validator_reads ⊄ retained_fields` — a bound validator reads a field
+    /// the conditioned rendering drops (the spec's E6 inclusion leg).
+    ValidatorReadsDropped {
+        /// The unretained fields.
+        fields: Vec<String>,
+    },
+    /// `offload` requires a `read_artifact` capability bound to the
+    /// surface — the body lands as an artefact a validator/consumer reads
+    /// back; without the read leg the offloaded body is unreachable (the
+    /// spec's offload admissibility row).
+    OffloadWithoutReadArtifact,
+}
+
+impl std::fmt::Display for RenderAdmissibilityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RenderAdmissibilityError::ValidatorReadsDropped { fields } => write!(
+                f,
+                "render_admissible: validator_reads {} not in retained_fields",
+                fields.join(",")
+            ),
+            RenderAdmissibilityError::OffloadWithoutReadArtifact => write!(
+                f,
+                "render_admissible: offload needs a bound read_artifact capability"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for RenderAdmissibilityError {}
+
+/// `check_render_admissible(spec, has_read_artifact)` — the §5d.2 E6 legs
+/// (R2.8): `offload` needs a bound `read_artifact` capability
+/// (`has_read_artifact` is the caller's binding-time fact, never a guess);
+/// `validator_reads ⊆ retained_fields` when the spec declares a retention
+/// set (`declared_loss`). `full`/`None` retention trivially retains every
+/// field.
+pub fn check_render_admissible(
+    spec: &ResultRenderSpec,
+    has_read_artifact: bool,
+) -> Result<(), RenderAdmissibilityError> {
+    if matches!(spec.mode, RenderMode::Offload { .. }) && !has_read_artifact {
+        return Err(RenderAdmissibilityError::OffloadWithoutReadArtifact);
+    }
+    if let Some(retained) = &spec.declared_loss {
+        let dropped: Vec<String> = spec
+            .validator_reads
+            .iter()
+            .filter(|r| !retained.contains(r))
+            .cloned()
+            .collect();
+        if !dropped.is_empty() {
+            return Err(RenderAdmissibilityError::ValidatorReadsDropped { fields: dropped });
+        }
+    }
+    Ok(())
 }
 
 // ── ErrorFormatSpec (ADR-0092 D6) ────────────────────────────────────────────

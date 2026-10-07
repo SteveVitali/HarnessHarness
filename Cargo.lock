@@ -87,6 +87,7 @@ name = "hh-bench"
 version = "0.0.1"
 dependencies = [
  "hh-budget",
+ "hh-compiler",
  "hh-context",
  "hh-control",
  "hh-eval",

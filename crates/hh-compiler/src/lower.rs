@@ -669,33 +669,13 @@ fn compile_error_spec(
 /// validator_reads?}`.
 fn compile_result_spec(params: Option<&Json>) -> Result<Option<ResultRenderSpec>, CompileError> {
     let Some(j) = params else { return Ok(None) };
-    let mode = match j.get("mode").and_then(Json::as_str).unwrap_or("full") {
-        "full" => RenderMode::Full,
-        "truncate" => RenderMode::Truncate {
-            max_lines: j
-                .get("max_lines")
-                .and_then(|v| v.as_int())
-                .map(|i| i as u64),
-            max_bytes: j
-                .get("max_bytes")
-                .and_then(|v| v.as_int())
-                .map(|i| i as u64),
-            max_tokens: j
-                .get("max_tokens")
-                .and_then(|v| v.as_int())
-                .map(|i| i as u64),
-            direction: j
-                .get("direction")
-                .and_then(Json::as_str)
-                .and_then(crate::surface::TruncateDirection::parse)
-                .unwrap_or(crate::surface::TruncateDirection::Head),
-        },
-        other => {
-            return Err(CompileError::InvalidModelProfile {
-                detail: format!("result_render.mode ∈ {{full, truncate}}; got {other}"),
-            })
-        }
-    };
+    // The profile params carry the mode flat (`mode: "truncate"` with the
+    // member siblings beside it) — `RenderMode::parse` is the one grammar
+    // (CC1; `concise`/`offload` land at C1 — S1.17/R2.8).
+    let mode = RenderMode::parse(j.get("mode").and_then(Json::as_str).unwrap_or("full"), j)
+        .map_err(|e| CompileError::InvalidModelProfile {
+            detail: e.to_string(),
+        })?;
     let str_vec = |k: &str| -> Vec<String> {
         match j.get(k) {
             Some(Json::Arr(items)) => items

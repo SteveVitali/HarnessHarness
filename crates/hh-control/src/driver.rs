@@ -13,6 +13,7 @@
 //! scripted ports (determinism: the logical clock and id allocator are
 //! `u64` counters the driver owns, never `Instant`/`random`).
 
+use hh_compiler::exposure as tool_exposure;
 use hh_ledger::effect::{fold_event, EffectFold, EffectPhase};
 use hh_ledger::event::{Event, EventEnvelope, Scope};
 use hh_ledger::manifest::EventRef;
@@ -548,6 +549,65 @@ pub struct RunResult {
     pub decision_events: Vec<String>,
 }
 
+/// The R2.8 exposure runtime binding (§5d.3; DF-S1.17-3) — `Some` arms the
+/// exposure-aware lane: per `propose`, `select_surfaces` runs ahead of
+/// `assemble` and `action.tool.exposure.planned` lands durable (the spec's
+/// `DecisionPoint = retrieve`); the plan's `direct` set becomes the
+/// delivered surface set G-INTERPRET/`validate` read; `check_callable`
+/// runs on every parsed call (`action.tool.call.refused` on a refusal);
+/// a call on the `discover_surfaces` capability executes in-kernel
+/// (`action.tool.discovery.searched` + `action.tool.surface.revealed` per
+/// hit — the kernel executor, never the effect gate); retention
+/// boundaries mint `action.tool.surface.evicted`; a host source sync
+/// (`list_changed`/TTL/`reconnect`/…) lands through
+/// `sync_exposure_source` (`catalog.delta`/`epoch`/`built`).
+/// `None` ⇒ the C0 lane — `config.surfaces` is the delivered set verbatim
+/// and no exposure row emits (a disarmed run is byte-identical to a
+/// pre-R2.8 run).
+pub struct ExposureRuntime {
+    /// The opening catalog — the compiled `SurfaceBinding`s projected at
+    /// `seal`. `adopt`ed epochs advance the run-state copy (the config
+    /// member is the epoch-0 opening, never mutated).
+    pub catalog: tool_exposure::Catalog,
+    /// The profile's admitted `definition_modes` (the meet's profile leg).
+    pub profile_modes: std::collections::BTreeSet<hh_hir::tools::ExposureMode>,
+    /// The MUST-data `ExposurePolicyParams` (ADR-0093 D3).
+    pub params: tool_exposure::ExposurePolicyParams,
+    /// The bound `tool_exposure_policy` rank leg — `None` ⇒ `direct_all`
+    /// (the kernel admit/enforce legs still run).
+    pub policy: Option<std::sync::Arc<dyn tool_exposure::ExposurePolicy>>,
+    /// The selection gates (the attestation leg — `index_unverified`).
+    pub gates: tool_exposure::SelectionGates,
+    /// The C2 index executor legs (`embedding`/`model_ranked`/`filesystem`
+    /// answer `ExecutorUnavailable` without one — never a fake ranking).
+    pub executor: tool_exposure::IndexExecutor,
+}
+
+impl std::fmt::Debug for ExposureRuntime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ExposureRuntime")
+            .field("catalog_id", &self.catalog.catalog_id)
+            .field("entries", &self.catalog.entries.len())
+            .field("policy", &self.policy.is_some())
+            .field("gates", &self.gates)
+            .field("executor", &self.executor)
+            .finish()
+    }
+}
+
+impl Clone for ExposureRuntime {
+    fn clone(&self) -> Self {
+        ExposureRuntime {
+            catalog: self.catalog.clone(),
+            profile_modes: self.profile_modes.clone(),
+            params: self.params.clone(),
+            policy: self.policy.clone(),
+            gates: self.gates,
+            executor: self.executor,
+        }
+    }
+}
+
 /// `DriverConfig` — the injected facts the driver needs that are not the
 /// strategy's or the policy's (the logical clock's start, the compiled
 /// surface set for G-INTERPRET, the gauge caps, the budget-conservation
@@ -556,6 +616,8 @@ pub struct RunResult {
 pub struct DriverConfig {
     /// The compiled surface set (`ModelSurface` projection — G-INTERPRET).
     pub surfaces: Vec<SurfaceSpec>,
+    /// The exposure runtime (R2.8) — `None` ⇒ the C0 all-direct lane.
+    pub exposure: Option<ExposureRuntime>,
     /// The gauge caps (`context.occupancy`, `delegation_depth`, `fan_out`).
     pub gauge_caps: crate::guards::GaugeCaps,
     /// `remaining(dimension)` — the caller-maintained budget view for
@@ -647,6 +709,7 @@ impl Default for DriverConfig {
     fn default() -> Self {
         DriverConfig {
             surfaces: vec![],
+            exposure: None,
             gauge_caps: crate::guards::GaugeCaps {
                 occupancy_ppm: 900_000,
                 delegation_depth: 4,
@@ -671,6 +734,34 @@ impl Default for DriverConfig {
             resume_set_heads: Vec::new(),
         }
     }
+}
+
+/// The exposure run state (R2.8) — the per-run fold the emitters read and
+/// `adopt` advances. `None` until the armed lane's first `propose`; the
+/// durable-fold twin is `fold_exposure_state` (resume-by-leaf rebuilds
+/// it from `catalog.built`/`delta`/`surface.revealed`/`evicted` rows —
+/// CC3: run state is the ledger's projection, never a second record).
+#[derive(Debug, Clone)]
+struct ExposureRunState {
+    /// The live catalog (the epoch-0 opening until `adopt` advances it).
+    catalog: tool_exposure::Catalog,
+    /// The revealed set (`action.tool.surface.revealed`/`evicted`'s fold).
+    revealed: tool_exposure::RevealedSet,
+    /// The last plan's `order` (I-ORDER's prefix input).
+    prior_order: Vec<String>,
+    /// The recent-call window (`turn_state.recent_calls`).
+    recent_calls: Vec<String>,
+    /// The last minted plan (`check_callable`'s plan-of-the-call read).
+    plan: Option<tool_exposure::ExposurePlan>,
+    /// `surface_id → delivery_id` — the `context.artefact.delivered{kind:
+    /// tool_surface}` rows minted this run (first delivery only; a
+    /// re-delivery of the same surface is not a new artefact row).
+    delivered: std::collections::BTreeMap<String, String>,
+    /// The plan's delivered `SurfaceSpec` set for the current call (the
+    /// `direct`-mode members resolved against `config.surfaces`).
+    delivered_surfaces: Vec<SurfaceSpec>,
+    /// Whether the opening `catalog.built` row is durable.
+    announced: bool,
 }
 
 /// The driver — owns the cue inbox, the logical clock, the id allocator
@@ -765,6 +856,11 @@ pub struct Driver<S: ControlStrategy> {
     /// The completion claims `emit_completion_claims` recorded on this
     /// `stop{completed}` (the gate reconciles them — S3.10).
     completion_claims: Vec<hh_verification::claims::Claim>,
+    /// The exposure run state (R2.8) — `Some` only when
+    /// `config.exposure` is armed; minted lazily at the first `propose`
+    /// by folding the durable prefix (`fold_exposure_state` — open,
+    /// resume and replay share the one init path).
+    exposure_state: Option<ExposureRunState>,
 }
 
 impl<S: ControlStrategy> Driver<S> {
@@ -839,6 +935,7 @@ impl<S: ControlStrategy> Driver<S> {
             kill_point: None,
             random_draws: 0,
             completion_claims: vec![],
+            exposure_state: None,
         })
     }
 
@@ -943,6 +1040,9 @@ impl<S: ControlStrategy> Driver<S> {
                 .filter(|e| e.class == "control.random.read")
                 .count() as u64,
             completion_claims: vec![],
+            // Re-folded lazily from the durable prefix at the first armed
+            // `propose` (`exposure_plan_call` — CC3).
+            exposure_state: None,
         };
         driver.resume(ctx, checkpoint, sink)?;
         Ok(driver)
@@ -1063,6 +1163,7 @@ impl<S: ControlStrategy> Driver<S> {
             kill_point: None,
             random_draws: 0,
             completion_claims: vec![],
+            exposure_state: None,
         })
     }
 
@@ -1932,6 +2033,11 @@ impl<S: ControlStrategy> Driver<S> {
                 context_request, ..
             } => {
                 let mc = self.alloc("mc");
+                // R2.8 — `select_surfaces → action.tool.exposure.planned`
+                // runs ahead of `assemble` (§5d.3: `DecisionPoint =
+                // retrieve`; durable-before-visible — the plan lands
+                // before the context it shapes).
+                self.exposure_plan_call(sink, &mc)?;
                 let assembled = assembler.assemble(
                     &AssembleInputs {
                         model_call_id: &mc,
@@ -2318,11 +2424,22 @@ impl<S: ControlStrategy> Driver<S> {
                 stop_reason: outcome.stop_reason,
                 text_empty: outcome.text_empty,
                 calls: outcome.calls.clone(),
-                surfaces: self.config.surfaces.clone(),
+                // R2.8 — the armed lane validates against the plan's
+                // `direct` set (a deferred/unrevealed name is
+                // `unknown_surface` to G-INTERPRET; `check_callable`'s
+                // `call.refused` row is the §5d.3 leg beside it).
+                surfaces: self.delivered_surfaces(),
             },
             &self.guard_ctx(sink.prefix()),
         );
         let mut proposed_tool_calls: Vec<String> = vec![];
+        // R2.8 — `check_callable` before the monitor (ADR-0093 D7): every
+        // parsed call on a surface that was not `direct` in this call's
+        // plan mints `action.tool.call.refused` — the §5d.3 row beside
+        // the interpret pipeline's `unknown_surface`/`surface_rejected`.
+        for c in &outcome.calls {
+            self.exposure_check_call(sink, &mc, c)?;
+        }
         // A `nudge` is advisory — the call still lands (the loop window
         // accumulates it; a `deny`/`stop`/format rejection suppresses it).
         let suppressed = match &interp {
@@ -2338,7 +2455,7 @@ impl<S: ControlStrategy> Driver<S> {
             // folds them into `pending_intents`.
             if let crate::output::ValidationVerdict::Pass { calls } = crate::output::validate(
                 &self.envelope.policy.output_validation,
-                &self.config.surfaces,
+                &self.delivered_surfaces(),
                 outcome.stop_reason,
                 outcome.text_empty,
                 &outcome.calls,
@@ -2390,6 +2507,11 @@ impl<S: ControlStrategy> Driver<S> {
                         ]),
                         Some(&mc),
                     )?;
+                    // AC-E3-7 / T-LCD-13 (R2.8): a call to a revealed
+                    // surface IS its `context.artefact.activated` —
+                    // `artefact_id = surface_id`, minted per call beside
+                    // `action.tool.proposed` (§5d.3 §7).
+                    self.exposure_emit_activation(sink, &mc, &c.surface_id, &c.tool_call_id)?;
                     // AC-R-2.7.1-9 — the deterministic `followed` pass: a
                     // validated call on a delivered `tool_surface` / an
                     // activated typed `procedure` emits
@@ -2400,6 +2522,12 @@ impl<S: ControlStrategy> Driver<S> {
                 }
             }
         }
+        // R2.8 — the `call` retention boundary: reveals whose retention
+        // ended with this model call mint `action.tool.surface.evicted`
+        // (ADR-0093 D6; `turn`/`run` retentions never end mid-run — the
+        // driver models one turn per run, so `TurnEnd` coincides with the
+        // projections' `RunEnd` fold).
+        self.exposure_expire(sink, tool_exposure::RevealBoundary::CallEnd, &mc)?;
         // The completed/failed row then the cue.
         match outcome.stop_reason {
             hh_gateway::vocab::StopReason::Error | hh_gateway::vocab::StopReason::Unknown => {
@@ -2863,7 +2991,16 @@ impl<S: ControlStrategy> Driver<S> {
                 &self.guard_ctx(sink.prefix()),
             );
             if matches!(pre, GuardVerdict::Pass { .. }) {
-                let out = gate.dispatch(&ef, 1, dispatch_intent);
+                // R2.8 — the kernel `discover_surfaces` capability
+                // executes in-kernel (never the effect gate): the driver
+                // runs `discover` over the armed catalog, mints
+                // `discovery.searched`, reveals the hits (`surface.
+                // revealed` per hit) and settles `observed` with the hit
+                // list as the tool result.
+                let out = match self.exposure_dispatch(sink, &ef, dispatch_intent)? {
+                    Some(out) => out,
+                    None => gate.dispatch(&ef, 1, dispatch_intent),
+                };
                 // The gate's dispatch-lifecycle rows land durable before
                 // the terminal — `decided`/`authorized`/`prepared`/
                 // `committed` in emit order (§5a.2; the sink stamps the
@@ -4696,10 +4833,27 @@ impl<S: ControlStrategy> Driver<S> {
                 effect_id: scope_id
                     .filter(|_| class.starts_with("action.effect."))
                     .map(String::from),
+                // The §5d.3 exposure classes are call-scoped rows — the
+                // `surface_rejected` dual (underscore spelling) predates
+                // R2.8 and keeps its unscoped shape (a landed row's scope
+                // set is append-only).
                 model_call_id: scope_id
-                    .filter(|_| class.starts_with("model.") || class == "action.tool.proposed")
+                    .filter(|_| {
+                        class.starts_with("model.")
+                            || class == "action.tool.proposed"
+                            || class == "action.tool.call.refused"
+                            || class.starts_with("action.tool.exposure.")
+                            || class.starts_with("action.tool.discovery.")
+                            || class.starts_with("action.tool.surface.")
+                            || class.starts_with("action.tool.catalog.")
+                    })
                     .map(String::from),
-                tool_call_id: if class == "action.tool.proposed" {
+                tool_call_id: if matches!(
+                    class,
+                    "action.tool.proposed"
+                        | "action.tool.call.refused"
+                        | "action.tool.discovery.searched"
+                ) {
                     payload
                         .get("tool_call_id")
                         .and_then(Json::as_str)
@@ -4750,10 +4904,27 @@ impl<S: ControlStrategy> Driver<S> {
                 effect_id: scope_id
                     .filter(|_| class.starts_with("action.effect."))
                     .map(String::from),
+                // The §5d.3 exposure classes are call-scoped rows — the
+                // `surface_rejected` dual (underscore spelling) predates
+                // R2.8 and keeps its unscoped shape (a landed row's scope
+                // set is append-only).
                 model_call_id: scope_id
-                    .filter(|_| class.starts_with("model.") || class == "action.tool.proposed")
+                    .filter(|_| {
+                        class.starts_with("model.")
+                            || class == "action.tool.proposed"
+                            || class == "action.tool.call.refused"
+                            || class.starts_with("action.tool.exposure.")
+                            || class.starts_with("action.tool.discovery.")
+                            || class.starts_with("action.tool.surface.")
+                            || class.starts_with("action.tool.catalog.")
+                    })
                     .map(String::from),
-                tool_call_id: if class == "action.tool.proposed" {
+                tool_call_id: if matches!(
+                    class,
+                    "action.tool.proposed"
+                        | "action.tool.call.refused"
+                        | "action.tool.discovery.searched"
+                ) {
                     payload
                         .get("tool_call_id")
                         .and_then(Json::as_str)
@@ -4805,10 +4976,27 @@ impl<S: ControlStrategy> Driver<S> {
                 effect_id: scope_id
                     .filter(|_| class.starts_with("action.effect."))
                     .map(String::from),
+                // The §5d.3 exposure classes are call-scoped rows — the
+                // `surface_rejected` dual (underscore spelling) predates
+                // R2.8 and keeps its unscoped shape (a landed row's scope
+                // set is append-only).
                 model_call_id: scope_id
-                    .filter(|_| class.starts_with("model.") || class == "action.tool.proposed")
+                    .filter(|_| {
+                        class.starts_with("model.")
+                            || class == "action.tool.proposed"
+                            || class == "action.tool.call.refused"
+                            || class.starts_with("action.tool.exposure.")
+                            || class.starts_with("action.tool.discovery.")
+                            || class.starts_with("action.tool.surface.")
+                            || class.starts_with("action.tool.catalog.")
+                    })
                     .map(String::from),
-                tool_call_id: if class == "action.tool.proposed" {
+                tool_call_id: if matches!(
+                    class,
+                    "action.tool.proposed"
+                        | "action.tool.call.refused"
+                        | "action.tool.discovery.searched"
+                ) {
                     payload
                         .get("tool_call_id")
                         .and_then(Json::as_str)
@@ -4854,6 +5042,699 @@ impl<S: ControlStrategy> Driver<S> {
             .map(|e| e.event_id.clone())
             .unwrap_or_else(|| hh_ledger::ids::ROOT_EVENT.to_string())
     }
+}
+
+// ── R2.8 — the exposure-aware turn loop (§5d.3; DF-S1.17-3) ─────────────────
+//
+// The armed lane (`config.exposure = Some`) runs the §5d.3 selection
+// contract inside the durable loop:
+//
+// - per `propose`, `select_surfaces` mints the `ExposurePlan` *before*
+//   `assemble` (`DecisionPoint = retrieve`; durable-before-visible — the
+//   `action.tool.exposure.planned` row lands ahead of the context it
+//   shaped), once-per-run `action.tool.catalog.built` opens the run;
+// - the plan's `direct` members are the delivered surface set —
+//   G-INTERPRET and `validate` read it (a name outside the plan is
+//   `unknown_surface` to the §5e.2 pipeline, and `check_callable`'s
+//   `action.tool.call.refused` is the §5d.3 row beside it — ADR-0093 D7);
+// - a validated call on the `discover_surfaces` capability executes
+//   in-kernel (`discovery.searched` + `surface.revealed` per hit, the
+//   hit list is the `action.effect.observed` outcome — the kernel
+//   capability, never the effect gate);
+// - `retention = call` reveals expire at each call's end
+//   (`surface.evicted{cause: policy}`; `turn`/`run` never end mid-run —
+//   the driver models a single turn, so `TurnEnd` coincides with the
+//   projections' `RunEnd` fold);
+// - a delivered `tool_surface` mints `context.artefact.delivered` once
+//   per run; a call to it mints `context.artefact.activated{artefact_id =
+//   surface_id, detector: deterministic, signal: invoked}` per call
+//   (AC-E3-7; T-LCD-13);
+// - `sync_exposure_source` is the host's mutable-source entry
+//   (`catalog.delta` always, `catalog.epoch` + `catalog.built` on
+//   `adopt`, `security.permission.requested` on `ask`).
+impl<S: ControlStrategy> Driver<S> {
+    /// The delivered surface set for the current call — the armed lane's
+    /// `direct`-plan members resolved against the compiled `SurfaceSpec`
+    /// table; the disarmed lane answers `config.surfaces` verbatim.
+    fn delivered_surfaces(&self) -> Vec<SurfaceSpec> {
+        match &self.exposure_state {
+            Some(st) => st.delivered_surfaces.clone(),
+            None => self.config.surfaces.clone(),
+        }
+    }
+
+    /// `exposure_plan_call` — the per-`propose` leg: lazy state init (the
+    /// durable fold on resume/replay — `fold_exposure_state`), the
+    /// once-per-run `catalog.built`, `select_surfaces` →
+    /// `action.tool.exposure.planned`, then the first-delivery
+    /// `context.artefact.delivered{kind: tool_surface}` rows for the
+    /// plan's `direct` members. A `SelectError` propagates as a typed
+    /// driver failure — the exposure meet refuses, it never degrades.
+    fn exposure_plan_call(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        mc: &str,
+    ) -> Result<(), DriverError> {
+        if self.config.exposure.is_none() {
+            return Ok(());
+        }
+        if self.exposure_state.is_none() {
+            let run_id = self.run_id.clone();
+            let opening = self.config.exposure.as_ref().map(|cfg| cfg.catalog.clone());
+            self.exposure_state = Some(fold_exposure_state(sink.prefix(), &run_id).unwrap_or_else(
+                || ExposureRunState {
+                    catalog: opening.clone().expect("armed"),
+                    revealed: tool_exposure::RevealedSet {
+                        run_id,
+                        entries: vec![],
+                    },
+                    prior_order: vec![],
+                    recent_calls: vec![],
+                    plan: None,
+                    delivered: std::collections::BTreeMap::new(),
+                    delivered_surfaces: vec![],
+                    announced: false,
+                },
+            ));
+        }
+        // The state comes out owned for the leg's duration — appends
+        // borrow `self` freely while `st` is a value (restored before
+        // every return).
+        let cfg = self.config.exposure.clone().expect("armed");
+        let mut st = self.exposure_state.take().expect("armed");
+        // The opening `catalog.built` — `catalog.epoch` rows mint only on
+        // `adopt` (the opening epoch is the built row's `epoch` member).
+        if !st.announced {
+            let payload = tool_exposure::catalog_built_payload(&st.catalog);
+            st.announced = true;
+            self.append(sink, "action.tool.catalog.built", payload, Some(mc))?;
+        }
+        let turn_state = tool_exposure::TurnState {
+            model_call_id: mc.to_string(),
+            revealed: st.revealed.clone(),
+            recent_calls: st.recent_calls.clone(),
+            goal_ref: Some(self.run_id.clone()),
+            window_cap: self.config.window_cap_tokens,
+            prior_order: st.prior_order.clone(),
+        };
+        let plan = match tool_exposure::select_surfaces_with(
+            &st.catalog,
+            &turn_state,
+            &cfg.profile_modes,
+            &cfg.params,
+            cfg.policy.as_deref(),
+            &cfg.gates,
+        ) {
+            Ok(p) => p,
+            Err(e) => {
+                self.exposure_state = Some(st);
+                return Err(DriverError::Port {
+                    port: "exposure",
+                    detail: e.to_string(),
+                });
+            }
+        };
+        let payload = tool_exposure::exposure_planned_payload(&plan, st.plan.as_ref());
+        // The delivered `SurfaceSpec` set — `direct` members resolved by
+        // the catalog's model-facing `name` against the compiled table.
+        let direct: std::collections::BTreeSet<&str> = plan
+            .entries
+            .iter()
+            .filter(|(_, m)| *m == hh_hir::tools::ExposureMode::Direct)
+            .map(|(sid, _)| sid.as_str())
+            .collect();
+        let delivered_specs: Vec<SurfaceSpec> = st
+            .catalog
+            .entries
+            .iter()
+            .filter(|e| direct.contains(e.surface_id.as_str()))
+            .filter_map(|e| {
+                self.config
+                    .surfaces
+                    .iter()
+                    .find(|s| s.surface_id == e.name || s.surface_id == e.surface_id)
+                    .cloned()
+            })
+            .collect();
+        let new_deliveries: Vec<(String, String)> = st
+            .catalog
+            .entries
+            .iter()
+            .filter(|e| {
+                direct.contains(e.surface_id.as_str()) && !st.delivered.contains_key(&e.name)
+            })
+            .map(|e| (e.name.clone(), e.surface_id.clone()))
+            .collect();
+        self.append(sink, "action.tool.exposure.planned", payload, Some(mc))?;
+        for (name, catalog_sid) in new_deliveries {
+            let delivery_id = self.alloc("del");
+            let mut payload = match hh_context::events::artefact_delivered_payload(
+                &name,
+                &delivery_id,
+                "tool_surface",
+                None,
+                false,
+            ) {
+                Json::Obj(m) => m,
+                other => {
+                    unreachable!("artefact_delivered_payload is an object: {other:?}")
+                }
+            };
+            // The catalog's identity half — `artefact_id` is the driver-
+            // plane `surface_id` (the model-facing name; T-LCD-13's join
+            // to the call), `catalog_surface_id` is the idp/1 binding id.
+            payload.insert("catalog_surface_id".to_string(), Json::str(catalog_sid));
+            self.append(
+                sink,
+                "context.artefact.delivered",
+                Json::Obj(payload),
+                Some(mc),
+            )?;
+            st.delivered.insert(name, delivery_id);
+        }
+        st.delivered_surfaces = delivered_specs;
+        st.prior_order = plan.order.clone();
+        st.plan = Some(plan);
+        self.exposure_state = Some(st);
+        Ok(())
+    }
+
+    /// `check_callable` on one parsed call (ADR-0093 D7 — the pre-monitor
+    /// gate): a refusal mints `action.tool.call.refused` scoped to the
+    /// producing call. Unarmed and plan-less calls mint nothing — the
+    /// C0 lane is unchanged.
+    fn exposure_check_call(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        mc: &str,
+        call: &ParsedCall,
+    ) -> Result<(), DriverError> {
+        let refusal = match &self.exposure_state {
+            Some(st) => match &st.plan {
+                // `plan_of(model_call_id)` — the producing call's plan
+                // only (a retried call re-reads its own plan — INV-5's
+                // shared identity).
+                Some(plan) if plan.model_call_id == mc => tool_exposure::check_callable(
+                    plan,
+                    &st.catalog,
+                    &tool_exposure::CallProposal {
+                        surface_name: call.surface.clone(),
+                        // `from_code = false` — every call reaching this
+                        // seam is a model-emitted call; program-originated
+                        // `code_mode` proposals arrive through the
+                        // plan-execute lane.
+                        from_code: false,
+                    },
+                ),
+                _ => return Ok(()),
+            },
+            None => return Ok(()),
+        };
+        if let Err(r) = refusal {
+            let mut payload = match tool_exposure::call_refused_payload(&r) {
+                Json::Obj(m) => m,
+                other => unreachable!("call_refused_payload is an object: {other:?}"),
+            };
+            payload.insert("tool_call_id".to_string(), Json::str(&call.tool_call_id));
+            self.append(
+                sink,
+                "action.tool.call.refused",
+                Json::Obj(payload),
+                Some(mc),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// AC-E3-7 — a call to a delivered `tool_surface` mints
+    /// `context.artefact.activated{artefact_id = surface_id, detector:
+    /// deterministic, signal: invoked}` (T-LCD-13; §5d.3 §7). The call
+    /// IS the activation evidence — `delivery_id` joins the surface's
+    /// `delivered` row; an undelivered surface mints nothing (the
+    /// `call.refused` leg already recorded it).
+    fn exposure_emit_activation(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        mc: &str,
+        surface_id: &str,
+        tool_call_id: &str,
+    ) -> Result<(), DriverError> {
+        let delivery_id = match self.exposure_state.as_mut() {
+            Some(st) => {
+                st.recent_calls.push(surface_id.to_string());
+                st.recent_calls.truncate(64);
+                st.delivered.get(surface_id).cloned()
+            }
+            None => None,
+        };
+        let Some(delivery_id) = delivery_id else {
+            return Ok(());
+        };
+        let mut payload = match hh_context::events::artefact_activated_payload(
+            surface_id,
+            &delivery_id,
+            "deterministic",
+            "invoked",
+        ) {
+            Json::Obj(m) => m,
+            other => unreachable!("artefact_activated_payload is an object: {other:?}"),
+        };
+        // `tool_call_id` is the call's join (the evidence ref — the same
+        // member `verification.artefact.followed` reads).
+        payload.insert("tool_call_id".to_string(), Json::str(tool_call_id));
+        self.append(
+            sink,
+            "context.artefact.activated",
+            Json::Obj(payload),
+            Some(mc),
+        )
+    }
+
+    /// The retention boundary fold — `expire_reveals` drops the reveals
+    /// whose `retention` ends at `boundary`; each dropped surface mints
+    /// `action.tool.surface.evicted{cause: policy}` (ADR-0093 D6 —
+    /// expiry is a policy decision the retention record declared; the
+    /// compactor's own evictions mint `compaction` at its call sites).
+    /// Pinned surfaces never expire (`expire_reveals`' kernel rule).
+    fn exposure_expire(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        boundary: tool_exposure::RevealBoundary,
+        mc: &str,
+    ) -> Result<(), DriverError> {
+        let expired = match self.exposure_state.as_mut() {
+            Some(st) => {
+                let (next, expired) =
+                    tool_exposure::expire_reveals(&st.revealed, &st.catalog, boundary);
+                st.revealed = next;
+                expired
+            }
+            None => vec![],
+        };
+        for sid in expired {
+            self.append(
+                sink,
+                "action.tool.surface.evicted",
+                tool_exposure::surface_evicted_payload(&sid, tool_exposure::EvictCause::Policy),
+                Some(mc),
+            )?;
+        }
+        Ok(())
+    }
+
+    /// The kernel `discover_surfaces` executor (§5d.3 §5; ADR-0094 D4):
+    /// when the dispatch intent's surface resolves to the catalog's
+    /// `is_discovery` entry the call executes in-kernel — `discover`
+    /// over the armed catalog at the query's granularity, the
+    /// `action.tool.discovery.searched` row, one
+    /// `action.tool.surface.revealed` per hit, and the hit list as the
+    /// `observed` outcome. `None` ⇒ not a discovery call — the effect
+    /// gate dispatches as usual.
+    fn exposure_dispatch(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        ef: &str,
+        intent: &Json,
+    ) -> Result<Option<GateOutcome>, DriverError> {
+        let surface = intent
+            .get("surface_id")
+            .or_else(|| intent.get("surface"))
+            .and_then(Json::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let armed = match &self.exposure_state {
+            Some(st) => st
+                .catalog
+                .entries
+                .iter()
+                .any(|e| e.is_discovery && (e.name == surface || e.surface_id == surface)),
+            None => false,
+        };
+        if !armed {
+            return Ok(None);
+        }
+        let tool_call_id = intent
+            .get("tool_call_id")
+            .and_then(Json::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let mc = self
+            .last_model_call_id
+            .clone()
+            .unwrap_or_else(|| ef.to_string());
+        let refused = |reason: String| -> Option<GateOutcome> {
+            Some(GateOutcome {
+                outcome: SettledOutcome::Refused,
+                submission_ref: None,
+                error_class: Some(reason),
+                emitted: vec![],
+            })
+        };
+        let args = intent.get("args").cloned().unwrap_or(Json::Null);
+        let query = match tool_exposure::discovery_query_from_args(&args) {
+            Ok(q) => q,
+            Err(e) => return Ok(refused(format!("discovery_query_invalid:{e:?}"))),
+        };
+        let cfg = self.config.exposure.clone().expect("armed");
+        let st = self.exposure_state.take().expect("armed");
+        // The serving decl — the bound index at the query's granularity
+        // that declares the form (the first matching decl wins; none ⇒
+        // the unbound `exact_name` surface-granularity default — the C0
+        // floor, §5d.2.8).
+        let decl = st
+            .catalog
+            .indexes
+            .iter()
+            .find(|d| {
+                d.granularity == query.granularity
+                    && tool_exposure::form_kinds(&d.index)
+                        .contains(&tool_exposure::DiscoveryFormKind::of(&query.form))
+            })
+            .or_else(|| {
+                st.catalog
+                    .indexes
+                    .iter()
+                    .find(|d| d.granularity == query.granularity)
+            })
+            .cloned()
+            .unwrap_or(tool_exposure::IndexDecl {
+                index: tool_exposure::CatalogIndex::ExactName,
+                granularity: tool_exposure::IndexGranularity::Surface,
+            });
+        let Some(plan) = st.plan.clone() else {
+            // No plan for the producing call — the discovery capability
+            // was never `direct` (unreachable through `check_callable`;
+            // the honest refusal anyway).
+            self.exposure_state = Some(st);
+            return Ok(refused("discovery_query_invalid:no_plan".to_string()));
+        };
+        let catalog = st.catalog.clone();
+        self.exposure_state = Some(st);
+        let result = match tool_exposure::discover_with(
+            &plan,
+            &decl,
+            &catalog,
+            &query,
+            &cfg.params,
+            &cfg.executor,
+        ) {
+            Ok(r) => r,
+            Err(e) => return Ok(refused(format!("discovery_query_invalid:{e:?}"))),
+        };
+        let payload =
+            tool_exposure::discovery_searched_payload(&tool_call_id, &query, &decl.index, &result);
+        self.append(sink, "action.tool.discovery.searched", payload, Some(&mc))?;
+        // Reveal the hits — `reveal` is the one entry into the revealed
+        // set (I-CLOSED membership is its check).
+        let ids: Vec<String> = result.hits.iter().map(|h| h.surface_id.clone()).collect();
+        let at_seq = sink.prefix().last().map(|e| e.seq).unwrap_or(0);
+        let mut st = self.exposure_state.take().expect("armed");
+        let before: std::collections::BTreeSet<String> = st
+            .revealed
+            .entries
+            .iter()
+            .map(|e| e.surface_id.clone())
+            .collect();
+        let next = match tool_exposure::reveal(
+            &st.revealed,
+            &catalog,
+            &ids,
+            tool_exposure::RevealCause::Discovery,
+            cfg.params.retention,
+            at_seq,
+        ) {
+            Ok(n) => n,
+            Err(_) => {
+                // `NotInCatalog` is unreachable — `discover` returns
+                // catalog members only; the honest refusal anyway (never
+                // a fabricated reveal).
+                self.exposure_state = Some(st);
+                return Ok(refused("reveal_failed:not_in_catalog".to_string()));
+            }
+        };
+        let fresh: Vec<tool_exposure::RevealedEntry> = next
+            .entries
+            .iter()
+            .filter(|e| !before.contains(&e.surface_id))
+            .cloned()
+            .collect();
+        st.revealed = next;
+        self.exposure_state = Some(st);
+        for e in &fresh {
+            let mode_from = plan
+                .entries
+                .iter()
+                .find(|(s, _)| *s == e.surface_id)
+                .map(|(_, m)| *m)
+                .unwrap_or(hh_hir::tools::ExposureMode::Deferred);
+            self.append(
+                sink,
+                "action.tool.surface.revealed",
+                tool_exposure::surface_revealed_payload(e, mode_from),
+                Some(&mc),
+            )?;
+        }
+        let outcome = Json::obj([
+            (
+                "hits",
+                Json::Arr(
+                    result
+                        .hits
+                        .iter()
+                        .map(|h| Json::str(h.surface_id.clone()))
+                        .collect(),
+                ),
+            ),
+            ("truncated", Json::Bool(result.truncated)),
+        ]);
+        Ok(Some(GateOutcome {
+            outcome: SettledOutcome::Observed {
+                outcome: outcome.to_canonical_string(),
+            },
+            submission_ref: None,
+            error_class: None,
+            emitted: vec![],
+        }))
+    }
+
+    /// `sync_exposure_source(source_ref, cause, listing, source_state)` —
+    /// the host's mutable-source entry (§5d.3 §2; `sync_source`): the
+    /// `action.tool.catalog.delta` row always lands (an empty delta is a
+    /// synchronization record), then the drift policy's outcome —
+    /// `freeze` marks removals `unavailable`, `adopt` mints the
+    /// `catalog.epoch` + rebuilt `catalog.built` rows, `ask` mints
+    /// `security.permission.requested` and the catalog stays (H7's grant
+    /// leg is the principal's answer, never a defaulted adoption).
+    /// Returns the adopted epoch when one minted. `Err` on an unarmed
+    /// lane — a sync without a catalog is a typed refusal, not a no-op.
+    pub fn sync_exposure_source(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        source_ref: &str,
+        cause: tool_exposure::SyncTrigger,
+        listing: &[tool_exposure::CatalogEntry],
+        source_state: &tool_exposure::SourceState,
+    ) -> Result<Option<u64>, DriverError> {
+        if self.config.exposure.is_none() {
+            return Err(DriverError::UnbackedPort { kind: "exposure" });
+        }
+        let drift = self
+            .config
+            .exposure
+            .as_ref()
+            .expect("armed")
+            .params
+            .drift_policy;
+        let out = match self.exposure_state.as_ref() {
+            Some(st) => tool_exposure::sync_source(
+                &st.catalog,
+                source_ref,
+                cause,
+                listing,
+                source_state,
+                drift,
+                "kernel",
+            ),
+            None => {
+                return Err(DriverError::Port {
+                    port: "exposure",
+                    detail: "sync before the first propose".to_string(),
+                })
+            }
+        };
+        let mc = self
+            .last_model_call_id
+            .clone()
+            .unwrap_or_else(|| "mc-0".to_string());
+        self.append(
+            sink,
+            "action.tool.catalog.delta",
+            out.delta_event.clone(),
+            Some(&mc),
+        )?;
+        match out.outcome {
+            Ok(tool_exposure::AdoptOutcome::Frozen { catalog }) => {
+                self.exposure_state.as_mut().expect("armed").catalog = catalog;
+                Ok(None)
+            }
+            Ok(tool_exposure::AdoptOutcome::Adopted { catalog, epoch }) => {
+                let epoch_no = epoch.epoch;
+                if let Some(p) = out.epoch_event {
+                    self.append(sink, "action.tool.catalog.epoch", p, Some(&mc))?;
+                }
+                // `adopt` rebuilds the index — `catalog.built` is the
+                // rebuilt catalog's durable row (§5d.3 §2).
+                let built = tool_exposure::catalog_built_payload(&catalog);
+                self.append(sink, "action.tool.catalog.built", built, Some(&mc))?;
+                self.exposure_state.as_mut().expect("armed").catalog = catalog;
+                Ok(Some(epoch_no))
+            }
+            Err(e) => {
+                // `ask` (and every drift refusal) mints the permission
+                // request — the principal's grant is the adoption leg.
+                let request = Json::obj([
+                    ("request_id", Json::str(self.alloc("perm"))),
+                    ("permission", Json::str("catalog_drift")),
+                    ("subject", Json::str(source_ref)),
+                    ("reason", Json::str(e.to_string())),
+                ]);
+                self.append(sink, "security.permission.requested", request, Some(&mc))?;
+                Ok(None)
+            }
+        }
+    }
+}
+
+/// `fold_exposure_state(prefix, run_id)` — the CC3 projection rebuilding
+/// the exposure run state from the durable prefix (resume-by-leaf): the
+/// live catalog is the last `catalog.built` row plus any later
+/// `catalog.delta` rows (freeze marks `removed` `unavailable`; adopted
+/// epochs re-emit `built`, so a delta applies its `removed` marks and its
+/// descriptor entries), the revealed set folds
+/// `surface.revealed`/`surface.evicted` in order, `delivered` folds the
+/// `tool_surface` deliveries, `prior_order` reads the last
+/// `exposure.planned`'s order member. `None` when no `catalog.built` is
+/// durable — the caller mints the opening state off the config catalog.
+fn fold_exposure_state(prefix: &[EventEnvelope], run_id: &str) -> Option<ExposureRunState> {
+    let mut catalog: Option<tool_exposure::Catalog> = None;
+    let mut revealed = tool_exposure::RevealedSet {
+        run_id: run_id.to_string(),
+        entries: vec![],
+    };
+    let mut prior_order: Vec<String> = Vec::new();
+    let mut recent_calls: Vec<String> = Vec::new();
+    let mut delivered: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
+    for e in prefix {
+        match e.class.as_str() {
+            "action.tool.catalog.built" => {
+                catalog = tool_exposure::catalog_built_from_payload(&e.payload);
+            }
+            "action.tool.catalog.delta" => {
+                if let Some(cat) = &mut catalog {
+                    if let Some(Json::Arr(removed)) = e.payload.get("removed") {
+                        for r in removed {
+                            if let Some(sid) = r.as_str() {
+                                if let Some(en) =
+                                    cat.entries.iter_mut().find(|en| en.surface_id == sid)
+                                {
+                                    en.availability = tool_exposure::Availability::Unavailable(
+                                        "removed".to_string(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    for member in ["added", "changed"] {
+                        if let Some(Json::Arr(items)) = e.payload.get(member) {
+                            for it in items {
+                                if let Some(en) = it
+                                    .get("entry")
+                                    .and_then(tool_exposure::catalog_entry_from_json)
+                                {
+                                    match cat
+                                        .entries
+                                        .iter_mut()
+                                        .find(|x| x.surface_id == en.surface_id)
+                                    {
+                                        Some(slot) => *slot = en,
+                                        None => cat.entries.push(en),
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    cat.entries.sort_by(|a, b| a.surface_id.cmp(&b.surface_id));
+                }
+            }
+            "action.tool.exposure.planned" => {
+                if let Some(Json::Arr(order)) = e.payload.get("order") {
+                    prior_order = order
+                        .iter()
+                        .filter_map(|s| s.as_str().map(str::to_string))
+                        .collect();
+                }
+            }
+            "action.tool.surface.revealed" => {
+                let p = &e.payload;
+                if let Some(sid) = p.get("surface_id").and_then(Json::as_str) {
+                    if !revealed.entries.iter().any(|x| x.surface_id == sid) {
+                        revealed.entries.push(tool_exposure::RevealedEntry {
+                            surface_id: sid.to_string(),
+                            mode: p
+                                .get("mode_to")
+                                .and_then(Json::as_str)
+                                .and_then(hh_hir::tools::ExposureMode::parse)
+                                .unwrap_or(hh_hir::tools::ExposureMode::Direct),
+                            revealed_at: e.seq,
+                            cause: p
+                                .get("cause")
+                                .and_then(Json::as_str)
+                                .and_then(tool_exposure::RevealCause::parse)
+                                .unwrap_or(tool_exposure::RevealCause::Discovery),
+                            retention: p
+                                .get("retention")
+                                .and_then(Json::as_str)
+                                .and_then(tool_exposure::Retention::parse)
+                                .unwrap_or(tool_exposure::Retention::Run),
+                        });
+                    }
+                }
+            }
+            "action.tool.surface.evicted" => {
+                if let Some(sid) = e.payload.get("surface_id").and_then(Json::as_str) {
+                    revealed.entries.retain(|x| x.surface_id != sid);
+                }
+            }
+            "context.artefact.delivered" => {
+                if e.payload.get("kind").and_then(Json::as_str) == Some("tool_surface") {
+                    if let (Some(a), Some(d)) = (
+                        e.payload.get("artefact_id").and_then(Json::as_str),
+                        e.payload.get("delivery_id").and_then(Json::as_str),
+                    ) {
+                        delivered.insert(a.to_string(), d.to_string());
+                    }
+                }
+            }
+            "action.tool.proposed" => {
+                if let Some(sid) = e.payload.get("surface_id").and_then(Json::as_str) {
+                    recent_calls.push(sid.to_string());
+                    recent_calls.truncate(64);
+                }
+            }
+            _ => {}
+        }
+    }
+    catalog.map(|cat| ExposureRunState {
+        catalog: cat,
+        revealed,
+        prior_order,
+        recent_calls,
+        plan: None,
+        delivered,
+        delivered_surfaces: vec![],
+        announced: true,
+    })
 }
 
 impl Driver<ReactMinimal> {
@@ -6915,5 +7796,694 @@ mod tests {
                 .and_then(Json::as_str),
             Some("rules")
         );
+    }
+
+    // ── R2.8 — the armed exposure lane's emitters (§5d.3; ADR-0093/0094/0095) ──
+
+    /// A catalog-entry fixture — `modes` is the definition's admitted
+    /// `definition_modes` (the select meet narrows it with the profile).
+    fn exposure_entry(
+        sid: &str,
+        name: &str,
+        modes: &[hh_hir::tools::ExposureMode],
+    ) -> tool_exposure::CatalogEntry {
+        tool_exposure::CatalogEntry {
+            surface_id: sid.into(),
+            capability: format!("cap:{name}"),
+            version_id: "v1".into(),
+            source: tool_exposure::CatalogSource::Harness(Some("test".into())),
+            name: name.into(),
+            namespace: None,
+            admitted_modes: modes.iter().copied().collect(),
+            pinned: false,
+            hidden: false,
+            index_form: tool_exposure::IndexForm {
+                name: name.into(),
+                title: None,
+                summary_ref: format!("sum:{name}"),
+                namespace: None,
+                tags: vec![],
+                search_text_fields: [
+                    tool_exposure::SearchTextField::Name,
+                    tool_exposure::SearchTextField::Description,
+                ]
+                .into_iter()
+                .collect(),
+                search_text: std::collections::BTreeMap::new(),
+            },
+            size_tokens: 8,
+            estimator_ref: "bytes_div_4".into(),
+            effect_summary: vec![],
+            permission_coverage: tool_exposure::PermissionCoverage::Unknown,
+            label: None,
+            availability: tool_exposure::Availability::Available,
+            is_discovery: false,
+            lifted: false,
+        }
+    }
+
+    /// The bound rank policy: `deep.search` stays `deferred` (the
+    /// discovery-served leg), everything else `direct`. `rank` receives
+    /// only admissible entries, and every returned mode is inside the
+    /// narrowed meet — the enforce leg has nothing to refuse.
+    struct DeferDeep;
+    impl tool_exposure::ExposurePolicy for DeferDeep {
+        fn rank(
+            &self,
+            entries: &[tool_exposure::CatalogEntry],
+            _admitted: &std::collections::BTreeMap<
+                String,
+                std::collections::BTreeSet<hh_hir::tools::ExposureMode>,
+            >,
+            turn_state: &tool_exposure::TurnState,
+            _params: &tool_exposure::ExposurePolicyParams,
+        ) -> Vec<(String, hh_hir::tools::ExposureMode)> {
+            entries
+                .iter()
+                .map(|e| {
+                    let revealed = turn_state
+                        .revealed
+                        .entries
+                        .iter()
+                        .any(|r| r.surface_id == e.surface_id);
+                    (
+                        e.surface_id.clone(),
+                        if e.surface_id == "surf:deep.search" && !revealed {
+                            hh_hir::tools::ExposureMode::Deferred
+                        } else {
+                            hh_hir::tools::ExposureMode::Direct
+                        },
+                    )
+                })
+                .collect()
+        }
+    }
+
+    /// The armed-lane config: `fs.read`/`pinned_tool`/`discover_surfaces`
+    /// direct, `deep.search` deferred+indexed (discovery-served),
+    /// `secret_probe` hidden. `retention` is the policy's default reveal
+    /// retention — the `call` spelling exercises `surface.evicted`.
+    fn exposure_config(retention: tool_exposure::Retention) -> DriverConfig {
+        let mut deep = exposure_entry(
+            "surf:deep.search",
+            "deep.search",
+            &[
+                hh_hir::tools::ExposureMode::Direct,
+                hh_hir::tools::ExposureMode::Indexed,
+                hh_hir::tools::ExposureMode::Deferred,
+            ],
+        );
+        deep.index_form.search_text.insert(
+            tool_exposure::SearchTextField::Description,
+            "deep semantic search".into(),
+        );
+        let mut hidden = exposure_entry(
+            "surf:secret.probe",
+            "secret_probe",
+            &[hh_hir::tools::ExposureMode::Deferred],
+        );
+        hidden.hidden = true;
+        let mut pinned = exposure_entry(
+            "surf:pinned.tool",
+            "pinned_tool",
+            &[hh_hir::tools::ExposureMode::Direct],
+        );
+        pinned.pinned = true;
+        let mut discover = exposure_entry(
+            "surf:kernel.discover",
+            "discover_surfaces",
+            &[hh_hir::tools::ExposureMode::Direct],
+        );
+        discover.source = tool_exposure::CatalogSource::Kernel;
+        discover.is_discovery = true;
+        let mut entries = vec![
+            exposure_entry(
+                "surf:fs.read",
+                "fs.read",
+                &[hh_hir::tools::ExposureMode::Direct],
+            ),
+            deep,
+            hidden,
+            pinned,
+            discover,
+        ];
+        entries.sort_by(|a, b| a.surface_id.cmp(&b.surface_id));
+        let catalog = tool_exposure::Catalog {
+            catalog_id: tool_exposure::catalog_id_of(&entries, 0, "bundle:r28"),
+            epoch: 0,
+            bundle_id: "bundle:r28".into(),
+            sources: vec![],
+            entries,
+            indexes: vec![tool_exposure::IndexDecl {
+                index: tool_exposure::CatalogIndex::LexicalRegex,
+                granularity: tool_exposure::IndexGranularity::Surface,
+            }],
+            index_ref: None,
+        };
+        // `discover_surfaces`'s SurfaceSpec declares the capability's
+        // argument grammar (closed-world — undeclared members are a
+        // `schema_violation`).
+        let discover_params: std::collections::BTreeMap<String, crate::output::ParamSpec> = [
+            "query",
+            "text",
+            "form",
+            "namespace",
+            "effect_filter",
+            "source",
+            "granularity",
+        ]
+        .iter()
+        .map(|n| {
+            (
+                (*n).to_string(),
+                crate::output::ParamSpec {
+                    required: *n == "query",
+                    kind: crate::output::ParamKind::Str,
+                    enum_values: vec![],
+                    domain: vec![],
+                },
+            )
+        })
+        .chain([(
+            "tags".to_string(),
+            crate::output::ParamSpec {
+                required: false,
+                kind: crate::output::ParamKind::Arr,
+                enum_values: vec![],
+                domain: vec![],
+            },
+        )])
+        .chain([(
+            "limit".to_string(),
+            crate::output::ParamSpec {
+                required: false,
+                kind: crate::output::ParamKind::Int,
+                enum_values: vec![],
+                domain: vec![],
+            },
+        )])
+        .collect();
+        let spec = |name: &str| SurfaceSpec {
+            surface_id: name.into(),
+            semantic_id: format!("sem/{name}"),
+            params: if name == "discover_surfaces" {
+                discover_params.clone()
+            } else {
+                Default::default()
+            },
+            risk_class: None,
+        };
+        DriverConfig {
+            surfaces: ["fs.read", "deep.search", "pinned_tool", "discover_surfaces"]
+                .iter()
+                .map(|s| spec(s))
+                .collect(),
+            exposure: Some(ExposureRuntime {
+                catalog,
+                profile_modes: [
+                    hh_hir::tools::ExposureMode::Direct,
+                    hh_hir::tools::ExposureMode::Indexed,
+                    hh_hir::tools::ExposureMode::Deferred,
+                ]
+                .into_iter()
+                .collect(),
+                params: tool_exposure::ExposurePolicyParams {
+                    retention,
+                    ..tool_exposure::ExposurePolicyParams::default()
+                },
+                policy: Some(std::sync::Arc::new(DeferDeep)),
+                gates: tool_exposure::SelectionGates::default(),
+                executor: tool_exposure::IndexExecutor::default(),
+            }),
+            window_cap_tokens: 1_000_000,
+            ..DriverConfig::default()
+        }
+    }
+
+    /// The scripted gate — every non-discovery dispatch settles
+    /// `observed` carrying `sub-1` (`stop_rule = submit` — the settle is
+    /// what completes the run; the in-kernel `discover_surfaces` outcome
+    /// declares no submission ref and never ends the run).
+    fn observing_gate() -> ScriptedGate {
+        ScriptedGate {
+            out: GateOutcome {
+                outcome: SettledOutcome::Observed {
+                    outcome: "ok".into(),
+                },
+                submission_ref: Some("sub-1".into()),
+                error_class: None,
+                emitted: vec![],
+            },
+            finish: None,
+        }
+    }
+
+    /// The fixture ctx with a raised format-error bound — the scenario
+    /// deliberately emits two `unknown_surface` rejections (the refused
+    /// calls' C0 leg) and a stale `model_completed` cue can add one more
+    /// streak count before `effects_settled` pops the submission; `8`
+    /// keeps the refusal run honest without tripping the streak bound.
+    fn exposure_ctx() -> ControlContext {
+        let mut c = ctx();
+        c.parameters.max_consecutive_format_errors = 8;
+        c
+    }
+
+    /// R2.8 AC — the §5d.3 emitters fire from a real `run`, not a
+    /// fixture-folded ledger: `catalog.built` once (the opening epoch), an
+    /// `exposure.planned` per `propose`, `call.refused{surface_not_
+    /// revealed, hint: search}` on the unrevealed `deep.search` call, the
+    /// kernel `discover_surfaces` call minting `discovery.searched` +
+    /// `surface.revealed` in that order, the revealed surface's first
+    /// `context.artefact.delivered{tool_surface}`, and its call minting
+    /// `context.artefact.activated{artefact_id = "deep.search"}` beside
+    /// `action.tool.proposed`. Under `run` retention no `surface.evicted`
+    /// fires mid-run.
+    #[test]
+    fn r2_8_exposure_emitters_fire_from_a_real_run() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        // The scenario deliberately emits `unknown_surface` rejections
+        // (the refused calls' C0 leg) and stale `model_completed` cues can
+        // pop further proposes before the submission's `effects_settled`
+        // lands — the envelope's declared bound is raised for the
+        // fixture, not bypassed.
+        let mut envelope = EnvelopePolicy::stage1_default("b-1");
+        envelope.output_validation.max_format_failures = 8;
+        let policy = envelope.seal().unwrap();
+        let mut driver = Driver::open_react(
+            &exposure_ctx(),
+            policy,
+            &mut sink,
+            exposure_config(tool_exposure::Retention::Run),
+        )
+        .unwrap();
+        let mut model = ScriptedModel {
+            script: [
+                // mc-1 — a call naming no catalog entry: `check_callable`
+                // refuses (`surface_not_revealed{surface_id: null,
+                // hint: none}`) and G-INTERPRET reads it `unknown_surface`
+                // off the delivered set — both rows, never a dispatch.
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-1".into(),
+                        surface: "nope.tool".into(),
+                        args_raw: "{}".into(),
+                    }],
+                ),
+                // mc-2 — the kernel `discover_surfaces` capability:
+                // `exposure_dispatch` runs `discover` in-kernel.
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-2".into(),
+                        surface: "discover_surfaces".into(),
+                        args_raw: r#"{"query":"deep","form":"regex"}"#.into(),
+                    }],
+                ),
+                // mc-3 — a call on the deferred surface ahead of the
+                // reveal (the mc-1 nudge's propose leg runs before the
+                // pending intent's `act`): `surface_not_revealed{
+                // hint: search}` beside the `unknown_surface` rejection.
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-3".into(),
+                        surface: "deep.search".into(),
+                        args_raw: "{}".into(),
+                    }],
+                ),
+                // mc-4 — the revealed surface is `direct` now: delivered,
+                // proposed, activated, dispatched (the `sub-1` settle
+                // completes the run). The `fs.read` tail absorbs any
+                // further `propose` a queued cue drives — every dispatch
+                // carries `sub-1`, so unspent entries are inert.
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-4".into(),
+                        surface: "deep.search".into(),
+                        args_raw: "{}".into(),
+                    }],
+                ),
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-5".into(),
+                        surface: "fs.read".into(),
+                        args_raw: "{}".into(),
+                    }],
+                ),
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-6".into(),
+                        surface: "fs.read".into(),
+                        args_raw: "{}".into(),
+                    }],
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = observing_gate();
+        let mut asm = NullAssembler;
+        let r = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        assert_eq!(r.report.stop_reason, StopReason::Completed);
+
+        let classes: Vec<&str> = sink.events.iter().map(|e| e.class.as_str()).collect();
+        // The opening `catalog.built` — exactly once per run.
+        assert_eq!(
+            classes
+                .iter()
+                .filter(|c| **c == "action.tool.catalog.built")
+                .count(),
+            1,
+            "one catalog.built row"
+        );
+        // `exposure.planned` once per propose (>= 3 model calls).
+        let planned: Vec<&EventEnvelope> = sink
+            .events
+            .iter()
+            .filter(|e| e.class == "action.tool.exposure.planned")
+            .collect();
+        assert!(planned.len() >= 3, "planned per propose: {planned:?}");
+        // The refused calls' `call.refused` rows — durable beside the
+        // interpret pipeline's rejection rows: tc-1 names no catalog
+        // entry (no `surface_id`, `hint: none` — the refusal leaks no
+        // schema, AC-R-2.5.3-1), tc-3 names the unrevealed deferred
+        // member (`hint: search` — the honest next step).
+        let refused_rows: Vec<&EventEnvelope> = sink
+            .events
+            .iter()
+            .filter(|e| e.class == "action.tool.call.refused")
+            .collect();
+        assert_eq!(refused_rows.len(), 2, "one refusal per refused call");
+        let refused_unknown = refused_rows[0];
+        assert_eq!(refused_unknown.payload.get("surface_id"), Some(&Json::Null));
+        assert_eq!(
+            refused_unknown.payload.get("reason").and_then(Json::as_str),
+            Some("surface_not_revealed")
+        );
+        assert_eq!(
+            refused_unknown.payload.get("hint").and_then(Json::as_str),
+            Some("none")
+        );
+        assert_eq!(
+            refused_unknown
+                .payload
+                .get("tool_call_id")
+                .and_then(Json::as_str),
+            Some("tc-1")
+        );
+        let refused = refused_rows[1];
+        assert_eq!(
+            refused.payload.get("surface_id").and_then(Json::as_str),
+            Some("surf:deep.search")
+        );
+        assert_eq!(
+            refused.payload.get("reason").and_then(Json::as_str),
+            Some("surface_not_revealed")
+        );
+        assert_eq!(
+            refused.payload.get("hint").and_then(Json::as_str),
+            Some("search")
+        );
+        assert_eq!(
+            refused.payload.get("tool_call_id").and_then(Json::as_str),
+            Some("tc-3")
+        );
+        // `discovery.searched` precedes `surface.revealed`; the hit is the
+        // deferred entry's surface id (the catalog idp id, not the name).
+        let searched = sink
+            .events
+            .iter()
+            .find(|e| e.class == "action.tool.discovery.searched")
+            .expect("discovery.searched emitted");
+        assert_eq!(
+            searched.payload.get("tool_call_id").and_then(Json::as_str),
+            Some("tc-2")
+        );
+        assert_eq!(
+            searched.payload.get("query_form").and_then(Json::as_str),
+            Some("regex")
+        );
+        assert_eq!(
+            searched.payload.get("executed_by").and_then(Json::as_str),
+            Some("kernel")
+        );
+        assert!(searched.payload.get("query_hash").is_some());
+        let revealed = sink
+            .events
+            .iter()
+            .find(|e| e.class == "action.tool.surface.revealed")
+            .expect("surface.revealed emitted");
+        assert!(revealed.seq > searched.seq, "revealed lands after searched");
+        assert_eq!(
+            revealed.payload.get("surface_id").and_then(Json::as_str),
+            Some("surf:deep.search")
+        );
+        assert_eq!(
+            revealed.payload.get("mode_to").and_then(Json::as_str),
+            Some("direct")
+        );
+        assert_eq!(
+            revealed.payload.get("cause").and_then(Json::as_str),
+            Some("discovery")
+        );
+        // The revealed surface's call mints `context.artefact.activated`
+        // with `artefact_id = surface_id` (the model-facing name).
+        let activated = sink
+            .events
+            .iter()
+            .find(|e| {
+                e.class == "context.artefact.activated"
+                    && e.payload.get("artefact_id").and_then(Json::as_str) == Some("deep.search")
+            })
+            .expect("artefact.activated emitted for the revealed surface");
+        assert_eq!(
+            activated.payload.get("tool_call_id").and_then(Json::as_str),
+            Some("tc-4")
+        );
+        // First-delivery `tool_surface` rows exist for the direct set and
+        // for the revealed surface once it joins `direct`.
+        let delivered: Vec<&str> = sink
+            .events
+            .iter()
+            .filter(|e| {
+                e.class == "context.artefact.delivered"
+                    && e.payload.get("kind").and_then(Json::as_str) == Some("tool_surface")
+            })
+            .filter_map(|e| e.payload.get("artefact_id").and_then(Json::as_str))
+            .collect();
+        assert!(delivered.contains(&"fs.read"));
+        assert!(delivered.contains(&"discover_surfaces"));
+        assert!(delivered.contains(&"deep.search"));
+        assert!(
+            !delivered.contains(&"secret_probe"),
+            "a hidden surface is never delivered"
+        );
+        // `run` retention: no mid-run eviction.
+        assert!(!classes.contains(&"action.tool.surface.evicted"));
+        // The hidden surface never appears in a plan's order.
+        for p in &planned {
+            let hidden_in_plan = match p.payload.get("order") {
+                Some(Json::Arr(order)) => order
+                    .iter()
+                    .any(|s| s.as_str() == Some("surf:secret.probe")),
+                _ => false,
+            };
+            assert!(!hidden_in_plan, "hidden surfaces never enter a plan");
+        }
+    }
+
+    /// `retention: call` — the reveal minted during the discovery call's
+    /// model round expires at its `CallEnd` boundary:
+    /// `surface.evicted{cause: policy}` lands after `surface.revealed`
+    /// inside the same model call (the durable rows, not memory, are the
+    /// revealed set).
+    #[test]
+    fn r2_8_call_retention_evicts_at_call_end() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver = Driver::open_react(
+            &ctx(),
+            policy,
+            &mut sink,
+            exposure_config(tool_exposure::Retention::Call),
+        )
+        .unwrap();
+        let mut model = ScriptedModel {
+            script: [
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-1".into(),
+                        surface: "discover_surfaces".into(),
+                        args_raw: r#"{"query":"deep","form":"regex"}"#.into(),
+                    }],
+                ),
+                // mc-2 — a delivered `fs.read` dispatch; its `sub-1`
+                // settle completes the run.
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-2".into(),
+                        surface: "fs.read".into(),
+                        args_raw: "{}".into(),
+                    }],
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = observing_gate();
+        let mut asm = NullAssembler;
+        let r = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        assert_eq!(r.report.stop_reason, StopReason::Completed);
+        let revealed = sink
+            .events
+            .iter()
+            .find(|e| e.class == "action.tool.surface.revealed")
+            .expect("surface.revealed emitted");
+        let evicted = sink
+            .events
+            .iter()
+            .find(|e| e.class == "action.tool.surface.evicted")
+            .expect("surface.evicted emitted at CallEnd");
+        assert_eq!(
+            evicted.payload.get("surface_id").and_then(Json::as_str),
+            Some("surf:deep.search")
+        );
+        assert_eq!(
+            evicted.payload.get("cause").and_then(Json::as_str),
+            Some("policy")
+        );
+        assert!(evicted.seq > revealed.seq, "eviction follows the reveal");
+    }
+
+    /// `sync_exposure_source` — the host-source sync seam (§5d.3 §6;
+    /// ADR-0095 D1/D2): a `list_changed` listing under `adopt` mints
+    /// `catalog.delta` then `catalog.epoch` (+ the rebuilt `catalog.built`)
+    /// in that order and the run state advances; under `ask` the same
+    /// listing mints `security.permission.requested` and adopts nothing
+    /// (no `catalog.epoch` — the principal's grant is the adoption leg).
+    #[test]
+    fn r2_8_source_sync_mints_delta_epoch_and_ask_refuses() {
+        for (drift, expect_epoch) in [
+            (tool_exposure::DriftPolicy::Adopt, true),
+            (tool_exposure::DriftPolicy::Ask, false),
+        ] {
+            let mut sink = MemSink {
+                events: vec![],
+                seq: 0,
+            };
+            let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+            let mut cfg = exposure_config(tool_exposure::Retention::Run);
+            cfg.exposure.as_mut().unwrap().params.drift_policy = drift;
+            let mut driver = Driver::open_react(&ctx(), policy, &mut sink, cfg).unwrap();
+            let mut model = ScriptedModel {
+                script: [outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-1".into(),
+                        surface: "fs.read".into(),
+                        args_raw: "{}".into(),
+                    }],
+                )]
+                .into_iter()
+                .collect(),
+            };
+            let mut gate = observing_gate();
+            let mut asm = NullAssembler;
+            // A first run seeds the exposure state (the sync seam needs
+            // the armed catalog — it refuses before the first propose).
+            let r = driver
+                .run(&mut model, &mut gate, &mut asm, &mut sink)
+                .unwrap();
+            assert_eq!(r.report.stop_reason, StopReason::Completed);
+            // The source's new listing: `deep.search` gone (the `removed`
+            // leg), `fresh_tool` added (the `added` leg) — the listing is
+            // the source's complete new set.
+            let mut fresh = exposure_entry(
+                "surf:fresh.tool",
+                "fresh_tool",
+                &[hh_hir::tools::ExposureMode::Deferred],
+            );
+            fresh.source = tool_exposure::CatalogSource::Harness(Some("test".into()));
+            let mut relisted_hidden = exposure_entry(
+                "surf:secret.probe",
+                "secret_probe",
+                &[hh_hir::tools::ExposureMode::Deferred],
+            );
+            relisted_hidden.hidden = true;
+            let mut relisted_pinned = exposure_entry(
+                "surf:pinned.tool",
+                "pinned_tool",
+                &[hh_hir::tools::ExposureMode::Direct],
+            );
+            relisted_pinned.pinned = true;
+            let listing = vec![
+                exposure_entry(
+                    "surf:fs.read",
+                    "fs.read",
+                    &[hh_hir::tools::ExposureMode::Direct],
+                ),
+                relisted_hidden,
+                relisted_pinned,
+                fresh,
+            ];
+            let epoch = driver
+                .sync_exposure_source(
+                    &mut sink,
+                    "harness:test",
+                    tool_exposure::SyncTrigger::ListChanged,
+                    &listing,
+                    &tool_exposure::SourceState {
+                        source_ref: "harness:test".into(),
+                        snapshot_hash: "snap:2".into(),
+                        ttl: None,
+                        listened: true,
+                    },
+                )
+                .unwrap();
+            let classes: Vec<&str> = sink.events.iter().map(|e| e.class.as_str()).collect();
+            assert!(classes.contains(&"action.tool.catalog.delta"));
+            if expect_epoch {
+                assert_eq!(epoch, Some(1), "adopt advances the epoch");
+                let delta = sink
+                    .events
+                    .iter()
+                    .find(|e| e.class == "action.tool.catalog.delta")
+                    .unwrap();
+                let epoch_row = sink
+                    .events
+                    .iter()
+                    .find(|e| e.class == "action.tool.catalog.epoch")
+                    .expect("catalog.epoch emitted on adopt");
+                assert!(epoch_row.seq > delta.seq, "epoch lands after delta");
+                assert_eq!(
+                    epoch_row.payload.get("epoch").and_then(Json::as_int),
+                    Some(1)
+                );
+            } else {
+                assert_eq!(epoch, None, "ask adopts nothing");
+                assert!(!classes.contains(&"action.tool.catalog.epoch"));
+                assert!(
+                    classes.contains(&"security.permission.requested"),
+                    "ask mints the permission request"
+                );
+            }
+        }
     }
 }
