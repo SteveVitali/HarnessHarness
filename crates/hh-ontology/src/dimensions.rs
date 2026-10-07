@@ -166,6 +166,10 @@ pub enum DimensionId {
     /// `time.human_wait_ms` — `pending → decided` for human targets (excluded from
     /// `time.working_ms`).
     TimeHumanWaitMs,
+    /// `message_human` — a `message_human` effect proposal reaching `committed`
+    /// (the §5i.1 org-policy budgeted dimension; Stage-6 additive registration —
+    /// S6.4/ADR-0207 D6, same growth path as `reconciliation.holds` at S1.21).
+    MessageHuman,
 
     // ---- environment counters (producer Stage 2) ----
     /// `env.active_ms` — environment held active.
@@ -208,9 +212,11 @@ pub enum DimensionId {
 }
 
 impl DimensionId {
-    /// The closed list — 24 kernel counters + 5 registered names + 4 gauges, in enum
-    /// (canonical) order. `reconciliation.holds` joined at S1.21 (ADR-0113 D4).
-    pub const ALL: [DimensionId; 33] = [
+    /// The closed list — 25 kernel counters + 5 registered names + 4 gauges, in enum
+    /// (canonical) order. `reconciliation.holds` joined at S1.21 (ADR-0113 D4);
+    /// `message_human` joined at S6.4 (ADR-0207 D6 — the §5i.1 org-policy
+    /// budgeted dimension).
+    pub const ALL: [DimensionId; 34] = [
         DimensionId::TokensInputUncached,
         DimensionId::TokensInputCacheRead,
         DimensionId::TokensInputCacheWrite,
@@ -231,6 +237,7 @@ impl DimensionId {
         DimensionId::TimeWorkingMs,
         DimensionId::TimeModelLatencyMs,
         DimensionId::TimeHumanWaitMs,
+        DimensionId::MessageHuman,
         DimensionId::EnvActiveMs,
         DimensionId::EnvReservedMs,
         DimensionId::EnvSuspendedMs,
@@ -269,6 +276,7 @@ impl DimensionId {
             DimensionId::TimeWorkingMs => "time.working_ms",
             DimensionId::TimeModelLatencyMs => "time.model_latency_ms",
             DimensionId::TimeHumanWaitMs => "time.human_wait_ms",
+            DimensionId::MessageHuman => "message_human",
             DimensionId::EnvActiveMs => "env.active_ms",
             DimensionId::EnvReservedMs => "env.reserved_ms",
             DimensionId::EnvSuspendedMs => "env.suspended_ms",
@@ -336,7 +344,8 @@ impl DimensionId {
             | DimensionId::ExtEffectsExternalIrreversible
             | DimensionId::FanOut
             | DimensionId::DelegationDepth
-            | DimensionId::ReconciliationHolds => "count",
+            | DimensionId::ReconciliationHolds
+            | DimensionId::MessageHuman => "count",
         }
     }
 
@@ -528,6 +537,7 @@ mod tests {
         "time.working_ms",
         "time.model_latency_ms",
         "time.human_wait_ms",
+        "message_human", // S6.4 — ADR-0207 D6 (the §5i.1 org-policy budgeted dimension)
         "env.active_ms",
         "env.reserved_ms",
         "env.suspended_ms",
@@ -549,9 +559,10 @@ mod tests {
 
     #[test]
     fn kernel_list_matches_the_spec_row_exactly() {
-        // §8.2 §3: 24 counters + 4 gauges + 5 registered = 33 names
-        // (`reconciliation.holds` joined at S1.21 — ADR-0113 D4).
-        assert_eq!(DimensionId::ALL.len(), 33);
+        // §8.2 §3: 25 counters + 4 gauges + 5 registered = 34 names
+        // (`reconciliation.holds` joined at S1.21 — ADR-0113 D4;
+        // `message_human` joined at S6.4 — ADR-0207 D6).
+        assert_eq!(DimensionId::ALL.len(), 34);
         let names: BTreeSet<&'static str> = DimensionId::ALL.iter().map(|d| d.as_str()).collect();
         assert_eq!(names.len(), DimensionId::ALL.len(), "duplicate spellings");
         let expected: BTreeSet<&'static str> = SPEC_COUNTERS

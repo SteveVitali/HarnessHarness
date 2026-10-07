@@ -343,6 +343,188 @@ impl DebtManager {
         Ok(report)
     }
 
+    /// `post_import_sweep(manager_id, snapshot_ref, sweep, entries, now_ms,
+    /// reserve)` — the S6.4 import-driven sweep (R-2.9.8 §2.3): the Lab's
+    /// `hh_lab::coevolution::post_import_sweep` partitions the scoped
+    /// debts (`covered`/`scheduled`/`unchanged`) — the manager mints the
+    /// durable half:
+    ///
+    /// - **covered** — every `model_version_change`-conditioned record
+    ///   whose `scope.model_selectors` covers the imported snapshot
+    ///   transitions `→ expiring{trigger: model_version_change}` (the
+    ///   import *is* the trigger — the snapshot ref rides
+    ///   `evidence_ref`/`causes`, never silently folded).
+    /// - **scheduled** — scoped records the snapshot does *not* cover
+    ///   run `schedule_removal_test` (the reverse-sweep side) under the
+    ///   same bound + instrument-budget check as `sweep`; the mint is
+    ///   `removal_test.scheduled`, the non-outcome `deferred{reason}`.
+    /// - `entries` is the caller's projection (`record.rule_id` keyed —
+    ///   the lab-side sweep's currency); a partition member with no
+    ///   projected entry lands in `deferred{entry_not_projected}`
+    ///   rather than vanishing.
+    /// - `sweep.completed` carries `kind: post_import` +
+    ///   `trigger_ref` so the audit fold attributes the sweep to the
+    ///   import, never to cadence.
+    #[allow(clippy::too_many_arguments)] // the op's record is the §2.3 sweep shape — the arity is the record's.
+    pub fn post_import_sweep(
+        &mut self,
+        store: &mut Store,
+        manager_id: &str,
+        snapshot_ref: &str,
+        sweep: &hh_lab::coevolution::PostImportSweep,
+        entries: &[SweepEntry],
+        now_ms: u64,
+        reserve: Option<&dyn Fn(&str) -> bool>,
+    ) -> Res<SweepReport> {
+        let mgr = self.manager(manager_id)?;
+        let policy = mgr.policy.clone();
+        let mut report = SweepReport {
+            sweep_seq: self.view.sweep_count + 1,
+            now_ms,
+            evaluated: (sweep.covered.len() + sweep.scheduled.len()) as u64,
+            transitions: Vec::new(),
+            probation_opened: Vec::new(),
+            scheduled: Vec::new(),
+            deferred: Vec::new(),
+            reflexive_verdict: None,
+        };
+        let by_rule = |rule_id: &str| entries.iter().find(|e| e.record.rule_id == rule_id);
+
+        // (1) covered — the `model_version_change` trigger fires on every
+        // scope-covered, version-conditioned record (the import is the
+        // version change; `evaluate_expiry`'s observable half fires at
+        // serve-time, this leg is the ledgered import-time half).
+        for rule_id in &sweep.covered {
+            let Some(e) = by_rule(rule_id) else {
+                report
+                    .deferred
+                    .push((rule_id.clone(), "entry_not_projected".into()));
+                continue;
+            };
+            let cur = self
+                .view
+                .status
+                .get(&e.debt_ref)
+                .copied()
+                .unwrap_or(e.record.status);
+            if e.record.expiry_condition.kind != ExpiryKind::ModelVersionChange
+                || matches!(cur, DebtStatus::Retired | DebtStatus::Expired)
+            {
+                continue; // not version-conditioned or already terminal.
+            }
+            let t = DebtTransition {
+                debt_ref: e.debt_ref.clone(),
+                from: cur,
+                to: DebtStatus::Expiring,
+                trigger: "model_version_change".to_string(),
+                evidence_ref: Some(snapshot_ref.to_string()),
+                causes: vec![format!("model_version_change:{snapshot_ref}")],
+            };
+            self.emit(store, "lifecycle.debt.status.changed", t.to_json(), vec![])?;
+            report.transitions.push(t);
+        }
+
+        // (2) scheduled — the reverse sweep: scope ∌ snapshot ⇒ the
+        // removal test schedules under the same bound + budget check
+        // `sweep` uses.
+        for rule_id in &sweep.scheduled {
+            let Some(e) = by_rule(rule_id) else {
+                report
+                    .deferred
+                    .push((rule_id.clone(), "entry_not_projected".into()));
+                continue;
+            };
+            let cur = self
+                .view
+                .status
+                .get(&e.debt_ref)
+                .copied()
+                .unwrap_or(e.record.status);
+            let entry = SchedulableEntry {
+                debt_ref: e.debt_ref.clone(),
+                current_status: cur,
+                evidence_grade: e.record.evidence_grade(),
+                used: !e.used_by.is_empty(),
+                probation_due: self
+                    .view
+                    .probation
+                    .get(&e.debt_ref)
+                    .map(|p| p.due_at_ms <= now_ms)
+                    .unwrap_or(false),
+                next_time_expiry_ms: e
+                    .record
+                    .expiry
+                    .as_ref()
+                    .and_then(|x| x.params.until)
+                    .or_else(|| {
+                        (e.record.expiry_condition.kind == ExpiryKind::Date)
+                            .then(|| e.record.expiry_condition.value.clone())
+                            .flatten()
+                            .and_then(|v| v.parse().ok())
+                    }),
+                removal_kind: e.record.removal_test.as_ref().map(|t| t.kind),
+            };
+            if cur == DebtStatus::Retired
+                || entry.removal_kind.is_none()
+                || self.view.is_test_open(&entry.debt_ref)
+            {
+                continue;
+            }
+            let ctx = ScheduleContext {
+                open_tests: self.view.open_test_count(),
+                reserve,
+                on_cadence: false, // import-driven — not the cadence leg.
+            };
+            match schedule_removal_test(&entry, &e.record, e.template.as_ref(), &policy, &ctx)? {
+                ScheduleOutcome::Scheduled {
+                    spec,
+                    priority_class: class,
+                } => {
+                    let kind = entry
+                        .removal_kind
+                        .unwrap_or(RemovalTestKind::RetirementExperiment);
+                    let test = ScheduledTest {
+                        debt_ref: entry.debt_ref.clone(),
+                        kind,
+                        experiment_id: spec.experiment_id.clone(),
+                        spec: *spec,
+                        priority_class: class,
+                    };
+                    self.emit(
+                        store,
+                        "lifecycle.debt.removal_test.scheduled",
+                        test.to_json(),
+                        vec![],
+                    )?;
+                    report.scheduled.push(test);
+                }
+                ScheduleOutcome::Deferred { reason } => {
+                    report
+                        .deferred
+                        .push((entry.debt_ref.clone(), reason.name()));
+                }
+            }
+        }
+
+        // (3) sweep.completed — attributed to the import, not cadence.
+        self.emit(
+            store,
+            "lifecycle.debt.sweep.completed",
+            Json::obj([
+                ("sweep_seq", Json::Int(report.sweep_seq as i64)),
+                ("kind", Json::str("post_import")),
+                ("trigger_ref", Json::str(snapshot_ref)),
+                ("now_ms", Json::Int(now_ms as i64)),
+                ("evaluated", Json::Int(report.evaluated as i64)),
+                ("transitions", Json::Int(report.transitions.len() as i64)),
+                ("scheduled", Json::Int(report.scheduled.len() as i64)),
+                ("deferred", Json::Int(report.deferred.len() as i64)),
+            ]),
+            vec![],
+        )?;
+        Ok(report)
+    }
+
     /// `settle(debt_ref, kind, report_ref, verdict, reason, now_ms)` —
     /// the settled-verdict op: `hh_lab::debt::settle_removal_test` derives
     /// the verdict + record-facing transitions; the verdict mints

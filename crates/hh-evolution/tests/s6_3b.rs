@@ -1245,7 +1245,7 @@ fn drive_to_active(
     .unwrap_or_else(|e| panic!("seal: {e}"));
     eng.canary(store, cid, "shadow", "int:counterfactual-1")
         .unwrap_or_else(|e| panic!("canary: {e}"));
-    eng.canary_settle(store, cid, "clean", "", &[])
+    eng.canary_settle(store, cid, "clean", "", &[], None)
         .unwrap_or_else(|e| panic!("canary_settle: {e}"));
     assert_eq!(eng.view.state_of(cid), Some("active"));
 }

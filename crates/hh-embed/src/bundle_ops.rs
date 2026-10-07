@@ -77,7 +77,7 @@ fn str_at<'a>(params: &'a Json, op: &str, key: &str) -> Result<&'a str, EmbedErr
 /// to `Decoded`. A path that is neither a readable directory nor an
 /// HHB1 container is the typed `Refused{bundle_unreadable}`, never a
 /// panic.
-fn decode_bundle_arg(params: &Json, op: &str) -> Result<Decoded, EmbedError> {
+pub(crate) fn decode_bundle_arg(params: &Json, op: &str) -> Result<Decoded, EmbedError> {
     let dir = params.get("path").and_then(Json::as_str);
     let container = params.get("container").and_then(Json::as_str);
     match (dir, container) {
@@ -97,7 +97,7 @@ fn decode_bundle_arg(params: &Json, op: &str) -> Result<Decoded, EmbedError> {
 
 /// `BundleError` → the contract's closed sum — `Refused{reason}`
 /// carrying the typed detail, never an `internal_error`.
-fn bundle_err(e: BundleError) -> EmbedError {
+pub(crate) fn bundle_err(e: BundleError) -> EmbedError {
     EmbedError::Refused {
         reason: format!("bundle: {e}"),
     }

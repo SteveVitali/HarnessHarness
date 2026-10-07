@@ -110,6 +110,12 @@ pub struct EmbedService {
     /// CC3). Tier-gated like `evolution_campaigns` (CC6).
     #[cfg(feature = "tier-c4")]
     pub(crate) debt_managers: BTreeMap<String, hh_debt::manager::DebtManager>,
+    /// Co-evolution cycle drivers held across `lab.coevolution.cycle_*`
+    /// calls (S6.4; `cycle_key → CycleDriver` — the LabDocs sidecar
+    /// re-folds from the deposit ref on `restore_ref`, CC3). Tier-gated
+    /// like `debt_managers` (CC6; AC-R-2.9.8-11).
+    #[cfg(feature = "tier-c4")]
+    pub(crate) coevolution_cycles: BTreeMap<String, hh_evolution::cycle::CycleDriver>,
     /// The removable Hosting Plane driver (S4.5a; `hosting_ops::HostingPlane`
     /// — a pure-Json seam keeping `hosting_edges = []`). `None` = the tier
     /// is absent; ops needing it refuse `hosting_plane_absent`, never fake.
@@ -351,6 +357,8 @@ impl EmbedService {
             evolution_campaigns: BTreeMap::new(),
             #[cfg(feature = "tier-c4")]
             debt_managers: BTreeMap::new(),
+            #[cfg(feature = "tier-c4")]
+            coevolution_cycles: BTreeMap::new(),
             results_subscriptions: BTreeMap::new(),
             binding_label: "embedded".to_string(),
         })
@@ -721,6 +729,9 @@ impl EmbedService {
             // `Unsupported{by: "tier-c4"}` — CC6).
             m if m.starts_with("lab.evolution.") => self.evolution_dispatch(m, &req.params),
             m if m.starts_with("fleet.") => self.fleet_dispatch(m, &req.params),
+            m if m.starts_with("lab.coevolution.") || m.starts_with("lab.org_policy.") => {
+                self.coevolution_dispatch(m, &req.params)
+            }
             // ── S3.3: `lab.eval.*` — the eval kernel boundary
             // (R-2.9.2/R-2.9.4⁰ᵇ; records-in/records-out).
             "lab.eval.catalogue" => self.lab_eval_catalogue(&req.params),
@@ -804,7 +815,10 @@ impl EmbedService {
             | "lab.debt.sweep"
             | "lab.debt.settle"
             | "lab.debt.retire"
-            | "lab.debt.propose" => self.debt_manager_dispatch(req.method.as_str(), &req.params),
+            | "lab.debt.propose"
+            | "lab.debt.post_import_sweep" => {
+                self.debt_manager_dispatch(req.method.as_str(), &req.params)
+            }
             "lab.model.snapshot_claim" => self.lab_model_snapshot_claim(&req.params),
             "lab.model.regression" => self.lab_model_regression(&req.params),
             "lab.analysis.component_targets" => self.lab_analysis_component_targets(&req.params),

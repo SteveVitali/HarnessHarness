@@ -295,6 +295,56 @@ mod imp {
                     ("transition", outcome.transition.to_json()),
                 ]))
             }
+            // `lab.debt.post_import_sweep{run_id, manager_id,
+            // snapshot_ref, covered[]?, scheduled[]?, entries[],
+            // now_ms?}` → `{report}` — the S6.4 import-driven sweep
+            // (§5h.8 §2.3): the Lab's `post_import_sweep` partition
+            // minted into the book of record — covered →
+            // `model_version_change` transitions; scheduled →
+            // `removal_test.scheduled`; the `sweep.completed` row is
+            // attributed `kind: post_import`, never cadence.
+            "lab.debt.post_import_sweep" => {
+                let run = req_str(params, "run_id")?.to_string();
+                let manager_id = req_str(params, "manager_id")?.to_string();
+                let snapshot_ref = req_str(params, "snapshot_ref")?.to_string();
+                let strs = |k: &str| -> Vec<String> {
+                    match params.get(k) {
+                        Some(Json::Arr(a)) => a
+                            .iter()
+                            .filter_map(Json::as_str)
+                            .map(str::to_string)
+                            .collect(),
+                        _ => Vec::new(),
+                    }
+                };
+                let sweep = hh_lab::coevolution::PostImportSweep {
+                    covered: strs("covered"),
+                    scheduled: strs("scheduled"),
+                    unchanged: strs("unchanged"),
+                };
+                let entries: Vec<SweepEntry> = match req(params, "entries")? {
+                    Json::Arr(a) => a.iter().map(sweep_entry).collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err(bad("/entries", "type_mismatch")),
+                };
+                let now_ms = params
+                    .get("now_ms")
+                    .and_then(Json::as_int)
+                    .map(|v| v as u64)
+                    .unwrap_or_else(|| svc.store.now_ms());
+                let mgr = manager(&mut svc.debt_managers, &svc.store, &run)?;
+                let report = mgr
+                    .post_import_sweep(
+                        &mut svc.store,
+                        &manager_id,
+                        &snapshot_ref,
+                        &sweep,
+                        &entries,
+                        now_ms,
+                        None,
+                    )
+                    .map_err(mgr_err)?;
+                Ok(sweep_report_json(&report))
+            }
             // `lab.debt.propose{run_id, debt_ref, rule_id, diff{…},
             // proposed_by}` → `{proposal}` — the evolution-origin gate;
             // `state: proposed`, never deployed.
