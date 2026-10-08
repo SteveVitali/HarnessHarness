@@ -3323,7 +3323,7 @@ fn collect_files(root: &str, out: &mut Vec<String>) {
 /// `blob_by_id(store, "sha256:<hex>")` — resolve a manifest content
 /// address through the ledger blob pool (`get_blob` rehashes — corruption
 /// surfaces as `BlobCorrupt`, never silent bytes).
-fn blob_by_id(store: &Store, ca: &str) -> Option<Vec<u8>> {
+pub(crate) fn blob_by_id(store: &Store, ca: &str) -> Option<Vec<u8>> {
     let digest = ca.strip_prefix("sha256:")?.to_string();
     let addr = hh_identity::idp::ContentAddress {
         idp: "idp/1",

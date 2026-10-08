@@ -1520,12 +1520,25 @@ impl CancelParams {
 /// ADR-0343 D1): the response carries a typed `amended_args` payload —
 /// the as-proposed effect is refused and the amendment may re-enter as
 /// a fresh narrowing-only request (the payload is data, never an
-/// authority widening).
+/// authority widening). `remedy` is the remedy-*consume* arm (R2.12;
+/// DF-S2.7-1b; ADR-0343 D4): the response names one `Remedy` (the
+/// canonical `{kind, …members}` record) drawn from the durable
+/// `pending.request.remedies` offer — the decided row stamps
+/// `remedy_taken` and the re-dispatched effect carries the attestation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PermissionOutcome {
-    Selected { option_id: String },
+    Selected {
+        option_id: String,
+    },
     Cancelled,
-    Modified { amended_args: Json },
+    Modified {
+        amended_args: Json,
+    },
+    /// The consumed remedy — the canonical `Remedy` record (`{kind,
+    /// …members}`; §5g.2 §3's closed sum).
+    Remedy {
+        remedy: Json,
+    },
 }
 
 impl PermissionOutcome {
@@ -1540,13 +1553,16 @@ impl PermissionOutcome {
                 ("kind", Json::str("modified")),
                 ("amended_args", amended_args.clone()),
             ]),
+            PermissionOutcome::Remedy { remedy } => {
+                Json::obj([("kind", Json::str("remedy")), ("remedy", remedy.clone())])
+            }
         }
     }
     pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
         let mut s = StrictObj::new(v, path)?;
         let kind = closed_str(
             s.req("kind")?,
-            &["selected", "cancelled", "modified"],
+            &["selected", "cancelled", "modified", "remedy"],
             &format!("{path}/kind"),
         )?;
         let out = match kind.as_str() {
@@ -1555,6 +1571,9 @@ impl PermissionOutcome {
             },
             "modified" => PermissionOutcome::Modified {
                 amended_args: s.req("amended_args")?.clone(),
+            },
+            "remedy" => PermissionOutcome::Remedy {
+                remedy: s.req("remedy")?.clone(),
             },
             _ => PermissionOutcome::Cancelled,
         };

@@ -385,6 +385,7 @@ fn dispatch_input<'a>(
         compensation_plan_id: Some("plan-1".to_string()),
         baseline_ref: None,
         flow: Default::default(),
+        remedy_taken: None,
     }
 }
 

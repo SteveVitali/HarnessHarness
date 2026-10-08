@@ -593,6 +593,35 @@ impl EmbedService {
         let irreversible = asked_risk
             .map(hh_monitor::approval::never_auto)
             .unwrap_or(false);
+        // The remedy-*ingress* echo (R-2.11; ADR-0343 D4): the offered
+        // `remedies` the durable `pending` folded in ride the `decided`
+        // row verbatim — captured before `respond` resolves the pending.
+        let pending_remedies = approvals
+            .pending
+            .get(&p.permission_id)
+            .map(|pend| pend.request.remedies.clone())
+            .unwrap_or_default();
+        // The remedy *consume* gate (R2.12; DF-S2.7-1b): the response's
+        // `remedy` must decode as the closed `Remedy` sum AND be a member
+        // of the durable offered set — the same `OptionNotOffered`
+        // discipline `selected`/`modified` answer over `options`.
+        let remedy_taken = match &p.outcome {
+            PermissionOutcome::Remedy { remedy } => {
+                let r = hh_provenance::flow::Remedy::from_json(remedy, "outcome.remedy").map_err(
+                    |e| EmbedError::SchemaViolation {
+                        path: "respond_permission/outcome.remedy".to_string(),
+                        code: format!("malformed_remedy:{}", e.detail),
+                    },
+                )?;
+                if !pending_remedies.iter().any(|o| o == &r) {
+                    return Err(EmbedError::OptionNotOffered {
+                        option_id: format!("remedy:{}", r.kind()),
+                    });
+                }
+                Some(r)
+            }
+            _ => None,
+        };
         // The wire option → the monitor's response choice. The session's
         // respond is the principal's answer — `human{authority: principal}`.
         let (choice, scope) = match &p.outcome {
@@ -627,10 +656,13 @@ impl EmbedService {
                 },
                 DecisionScope::Once,
             ),
+            // The consume arm (DF-S2.7-1b) — membership was already gated
+            // against the durable offer above.
+            PermissionOutcome::Remedy { .. } => (
+                ResponseChoice::Remedy(remedy_taken.clone().expect("remedy arm parsed")),
+                DecisionScope::Once,
+            ),
         };
-        // `allow_lease` mints over the pending's capability material — a
-        // pending without `request{subject_ref, capability_ref,
-        // args_canonical_hash}` cannot key a lease (never fabricated).
         if matches!(choice, ResponseChoice::AllowLease(_))
             && (pending.capability_ref.is_none()
                 || pending.args_canonical_hash.is_none()
@@ -656,14 +688,6 @@ impl EmbedService {
             grants: approvals.grants.values().cloned().collect(),
             denial_policy: None,
         };
-        // The remedy-*ingress* echo (R-2.11; ADR-0343 D4): the offered
-        // `remedies` the durable `pending` folded in ride the `decided`
-        // row verbatim — captured before `respond` resolves the pending.
-        let pending_remedies = approvals
-            .pending
-            .get(&p.permission_id)
-            .map(|pend| pend.request.remedies.clone())
-            .unwrap_or_default();
         let outcome = approvals
             .respond_with_ctx(
                 &ApprovalResponse {
@@ -775,9 +799,27 @@ impl EmbedService {
                 // serves the recorded terminal verbatim.
                 members.push(("amended_args", amended_args.clone()));
             }
+            PermissionOutcome::Remedy { .. } => {
+                // The consume row's refusal reason names the taken kind —
+                // the as-proposed args were refused *under* the remedy
+                // (non-`approval` takes decide `deny`; `approval` decides
+                // `allow`, so no `reason` member lands there).
+                if decision_tag == "deny" {
+                    if let Some(r) = &remedy_taken {
+                        members.push(("reason", Json::str(format!("remedy:{}", r.kind()))));
+                    }
+                }
+            }
             PermissionOutcome::Cancelled => {
                 members.push(("reason", Json::str("cancelled")));
             }
+        }
+        // The consume attestation (DF-S2.7-1b — the durable
+        // `remedies.taken`): the `decided` row carries the taken remedy;
+        // the re-dispatch's `remedy_taken_for` reads this record, never a
+        // session cache (CC3).
+        if let Some(r) = &remedy_taken {
+            members.push(("remedy_taken", r.to_json()));
         }
         // The offered `remedies` echo (the R-2.12 consume seam's durable
         // input — recorded on every decided arm, empty or not).
@@ -1029,6 +1071,31 @@ impl EmbedService {
         let irreversible = asked_risk
             .map(hh_monitor::approval::never_auto)
             .unwrap_or(false);
+        // The remedy consume gate (R2.12; DF-S2.7-1b) — identical to the
+        // session path's: the response's `remedy` must decode the closed
+        // sum and sit in the durable `pending.request.remedies` offer.
+        let pending_remedies = approvals
+            .pending
+            .get(permission_id)
+            .map(|pend| pend.request.remedies.clone())
+            .unwrap_or_default();
+        let remedy_taken = match outcome {
+            PermissionOutcome::Remedy { remedy } => {
+                let r = hh_provenance::flow::Remedy::from_json(remedy, "outcome.remedy").map_err(
+                    |e| EmbedError::SchemaViolation {
+                        path: "respond_permission/outcome.remedy".to_string(),
+                        code: format!("malformed_remedy:{}", e.detail),
+                    },
+                )?;
+                if !pending_remedies.iter().any(|o| o == &r) {
+                    return Err(EmbedError::OptionNotOffered {
+                        option_id: format!("remedy:{}", r.kind()),
+                    });
+                }
+                Some(r)
+            }
+            _ => None,
+        };
         let (choice, scope) = match outcome {
             PermissionOutcome::Cancelled => (
                 ResponseChoice::Deny {
@@ -1058,6 +1125,10 @@ impl EmbedService {
                 ResponseChoice::Modify {
                     amended_args: amended_args.clone(),
                 },
+                DecisionScope::Once,
+            ),
+            PermissionOutcome::Remedy { .. } => (
+                ResponseChoice::Remedy(remedy_taken.clone().expect("remedy arm parsed")),
                 DecisionScope::Once,
             ),
         };
@@ -1100,13 +1171,6 @@ impl EmbedService {
             grants: approvals.grants.values().cloned().collect(),
             denial_policy: None,
         };
-        // The remedy-*ingress* echo (R-2.11; ADR-0343 D4) — the folded
-        // pending's offered `remedies` ride the `decided` row verbatim.
-        let pending_remedies = approvals
-            .pending
-            .get(permission_id)
-            .map(|pend| pend.request.remedies.clone())
-            .unwrap_or_default();
         let outcome_res = approvals
             .respond_with_ctx(
                 &ApprovalResponse {
@@ -1202,9 +1266,21 @@ impl EmbedService {
             PermissionOutcome::Modified { amended_args } => {
                 members.push(("amended_args", amended_args.clone()));
             }
+            PermissionOutcome::Remedy { .. } => {
+                if decision_tag == "deny" {
+                    if let Some(r) = &remedy_taken {
+                        members.push(("reason", Json::str(format!("remedy:{}", r.kind()))));
+                    }
+                }
+            }
             PermissionOutcome::Cancelled => {
                 members.push(("reason", Json::str("cancelled")));
             }
+        }
+        // The consume attestation (DF-S2.7-1b) — `remedy_taken` durable on
+        // the decided row.
+        if let Some(r) = &remedy_taken {
+            members.push(("remedy_taken", r.to_json()));
         }
         if !pending_remedies.is_empty() {
             members.push((

@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:227f6cf3fcf7c8f1e603d4535afaaec31131bb9da4d5514d7130da4536044ddd";
+    "sha256:6942232b9796601647ebaae5d0aae414ad385d4f42811dbd5e42be2e51ae02d2";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -3636,6 +3636,7 @@ pub enum PermissionOutcome {
     Selected { option_id: String },
     Cancelled,
     Modified { amended_args: Json },
+    Remedy { remedy: Json },
 }
 
 impl PermissionOutcome {
@@ -3652,6 +3653,10 @@ impl PermissionOutcome {
             PermissionOutcome::Modified { amended_args } => {
                 pairs.push(("kind", Json::str("modified")));
                 pairs.push(("amended_args", amended_args.clone()));
+            }
+            PermissionOutcome::Remedy { remedy } => {
+                pairs.push(("kind", Json::str("remedy")));
+                pairs.push(("remedy", remedy.clone()));
             }
         }
         Json::obj(pairs)
@@ -3679,6 +3684,14 @@ impl PermissionOutcome {
                     let f = v
                         .get("amended_args")
                         .ok_or_else(|| format!("missing '{}'", "amended_args"))?;
+                    f.clone()
+                },
+            }),
+            "remedy" => Ok(PermissionOutcome::Remedy {
+                remedy: {
+                    let f = v
+                        .get("remedy")
+                        .ok_or_else(|| format!("missing '{}'", "remedy"))?;
                     f.clone()
                 },
             }),
