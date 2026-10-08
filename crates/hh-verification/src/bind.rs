@@ -18,7 +18,7 @@ use hh_wire::Json;
 
 use crate::claims::{binding_kinds, AuthoritativeHandle, Claim, CriterionState, HandleValue};
 use crate::gate::TaskContract;
-use crate::vocab::{ClaimKind, HandleKind};
+use crate::vocab::{ClaimKind, HandleKind, SubjectRef};
 
 /// `RowView` — the ledger-row projection the binder reads (`{seq, class,
 /// payload, authority}`). The caller stamps `authority` from the row's
@@ -81,6 +81,14 @@ pub struct EffectStateRow {
     pub outcome: String,
     /// The seq the latest state row landed at.
     pub seq: u64,
+    /// `Effect.postcondition_results[]` — the deterministic verdict ids the
+    /// terminal `action.effect.observed` row stamped (§5f
+    /// `Effect.postcondition_results: [EventRef]`; R2.15 — the claim
+    /// reconciler consumes the `ToolCapability.postconditions` binding by
+    /// resolving these refs to `VerdictRow`s, so a *failing* declared
+    /// postcondition on a claim-cited effect is visible to `bind_claim`
+    /// without the claim naming the verdict id).
+    pub postcondition_results: Vec<String>,
 }
 
 /// The terminal effect-state classes (ADR-0030's terminal set — `unknown`
@@ -137,6 +145,7 @@ pub fn fold_effect_states(rows: &[RowView]) -> BTreeMap<String, EffectStateRow> 
             refused: false,
             outcome: "intended".into(),
             seq: r.seq,
+            postcondition_results: Vec::new(),
         });
         entry.seq = r.seq;
         match r.class {
@@ -148,6 +157,18 @@ pub fn fold_effect_states(rows: &[RowView]) -> BTreeMap<String, EffectStateRow> 
                     .and_then(Json::as_str)
                     .unwrap_or("ok")
                     .to_string();
+                // The declared-postcondition verdict refs the `observed`
+                // row stamped (§5a.2 `observe`'s `postcondition_results`
+                // member; absent ⇒ `[]` — an additive member never
+                // fabricates results).
+                entry.postcondition_results = match r.payload.get("postcondition_results") {
+                    Some(Json::Arr(a)) => a
+                        .iter()
+                        .filter_map(Json::as_str)
+                        .map(str::to_string)
+                        .collect(),
+                    _ => Vec::new(),
+                };
             }
             "action.effect.refused" => {
                 entry.terminal = true;
@@ -365,12 +386,36 @@ pub fn bind_claim(
                 }
             }
             HandleKind::ValidatorVerdict => {
+                // R2.15 — the `ToolCapability.postconditions` consumer: a
+                // claim that names an effect (`subject = effect{…}` or an
+                // `effect:`-prefixed evidence ref) also binds the *declared*
+                // postcondition verdicts that effect's terminal `observed`
+                // row stamped. The claim need not know the verdict ids —
+                // the capability's `postconditions` binding produced them;
+                // reconciliation consumes the stamped refs (a failed
+                // declared postcondition on cited evidence is a
+                // `verified`/`achieved` claim's problem, never a silent
+                // pass).
+                let mut postcondition_ids: Vec<String> = Vec::new();
+                if let SubjectRef::Effect(id) = &claim.subject {
+                    if let Some(st) = effects.get(id.as_str()) {
+                        postcondition_ids.extend(st.postcondition_results.iter().cloned());
+                    }
+                }
+                for r in &claim.evidence_refs {
+                    let id = r.strip_prefix("effect:").unwrap_or(r.as_str());
+                    if let Some(st) = effects.get(id) {
+                        postcondition_ids.extend(st.postcondition_results.iter().cloned());
+                    }
+                }
                 for v in &verdicts {
                     let cited = claim.evidence_refs.iter().any(|r| {
                         r == &v.verdict_id
                             || Some(r.as_str()) == v.criterion_ref.as_deref()
                             || r == &format!("verdict:{}", v.verdict_id)
                     });
+                    let declared_postcondition =
+                        postcondition_ids.iter().any(|id| id == &v.verdict_id);
                     let in_contract = claim.kind == ClaimKind::Achieved
                         && contract.is_some_and(|c| {
                             v.contract_id.as_deref() == Some(c.contract_id.as_str())
@@ -378,7 +423,7 @@ pub fn bind_claim(
                                     Some(cr.criterion_id.as_str()) == v.criterion_ref.as_deref()
                                 })
                         });
-                    if cited || in_contract {
+                    if cited || in_contract || declared_postcondition {
                         push(
                             HandleKind::ValidatorVerdict,
                             format!("verdict:{}", v.verdict_id),
@@ -841,6 +886,108 @@ mod tests {
         assert!(handles.is_empty(), "F7 — a judged record never binds");
         let rec = reconcile_ledger_only(&cl, &handles, "hir/kernel/reconcile:0", 20, kprov());
         assert_eq!(rec.agreement, Agreement::Unverifiable);
+    }
+
+    /// R2.15 — the `ToolCapability.postconditions` consumer: a claim that
+    /// cites an effect (subject or `effect:` evidence ref) binds the
+    /// *declared* postcondition verdicts the terminal
+    /// `action.effect.observed` row stamped — the claim need not know the
+    /// verdict ids. A *failing* declared postcondition contradicts an
+    /// `achieved` claim (`unverified_verification`, never a silent pass).
+    #[test]
+    fn postcondition_verdicts_bind_through_the_cited_effect() {
+        let observed = Json::obj([
+            ("effect_id", Json::str("ef-1")),
+            ("outcome", Json::str("ok")),
+            (
+                "postcondition_results",
+                Json::Arr(vec![Json::str("v-post")]),
+            ),
+        ]);
+        let failing = Json::obj([
+            ("verdict_id", Json::str("v-post")),
+            ("status", Json::str("decided")),
+            ("value", Json::Bool(false)),
+            ("detector", Json::str("deterministic")),
+            ("phase", Json::str("local")),
+        ]);
+        let rows = [
+            RowView {
+                seq: 5,
+                class: "verification.validator.verdict",
+                payload: &failing,
+                authority: AuthorityClass::Kernel,
+                scope_effect_id: None,
+            },
+            RowView {
+                seq: 7,
+                class: "action.effect.observed",
+                payload: &observed,
+                authority: AuthorityClass::Kernel,
+                scope_effect_id: Some("ef-1"),
+            },
+        ];
+        // The claim cites the effect, never the verdict id.
+        let mut cl = claim(ClaimKind::Achieved, vec!["effect:ef-1".into()]);
+        cl.subject = SubjectRef::Effect("ef-1".into());
+        let handles = bind_claim(&rows, &cl, None);
+        assert!(
+            handles.iter().any(|h| matches!(
+                h.value,
+                Some(HandleValue::Verdict { affirmative: false })
+            ) && h.handle_ref == "verdict:v-post"),
+            "the declared postcondition verdict binds through the cited effect: {handles:?}"
+        );
+        let rec = reconcile_ledger_only(&cl, &handles, "hir/kernel/reconcile:0", 20, kprov());
+        assert_eq!(
+            rec.agreement,
+            Agreement::Diverge(DivergenceClass::UnverifiedVerification),
+            "a failed declared postcondition on cited evidence is a claimed verification the record contradicts"
+        );
+    }
+
+    /// R2.15 — the passing arm: an affirmative declared postcondition bound
+    /// through the cited effect does not diverge.
+    #[test]
+    fn postcondition_pass_does_not_diverge() {
+        let observed = Json::obj([
+            ("effect_id", Json::str("ef-1")),
+            ("outcome", Json::str("ok")),
+            (
+                "postcondition_results",
+                Json::Arr(vec![Json::str("v-post")]),
+            ),
+        ]);
+        let passing = Json::obj([
+            ("verdict_id", Json::str("v-post")),
+            ("status", Json::str("decided")),
+            ("value", Json::Bool(true)),
+            ("detector", Json::str("deterministic")),
+            ("phase", Json::str("local")),
+        ]);
+        let rows = [
+            RowView {
+                seq: 5,
+                class: "verification.validator.verdict",
+                payload: &passing,
+                authority: AuthorityClass::Kernel,
+                scope_effect_id: None,
+            },
+            RowView {
+                seq: 7,
+                class: "action.effect.observed",
+                payload: &observed,
+                authority: AuthorityClass::Kernel,
+                scope_effect_id: Some("ef-1"),
+            },
+        ];
+        let cl = claim(ClaimKind::Achieved, vec!["effect:ef-1".into()]);
+        let handles = bind_claim(&rows, &cl, None);
+        assert!(handles
+            .iter()
+            .any(|h| matches!(h.value, Some(HandleValue::Verdict { affirmative: true }))));
+        let rec = reconcile_ledger_only(&cl, &handles, "hir/kernel/reconcile:0", 20, kprov());
+        assert_eq!(rec.agreement, Agreement::Agree);
     }
 
     #[test]

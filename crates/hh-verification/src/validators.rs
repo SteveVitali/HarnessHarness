@@ -234,6 +234,131 @@ fn domain_name(d: &EffectDomain) -> String {
     format!("{d:?}")
 }
 
+/// `validator_kind_tag(k)` — the coarse `kind` tag on the declaration doc
+/// (`executable | schema | predicate | judge | human`); the judge profile
+/// tuple rides the HIR form, not the wire doc.
+fn validator_kind_tag(k: &ValidatorKind) -> &'static str {
+    match k {
+        ValidatorKind::Executable(_) => "executable",
+        ValidatorKind::Schema => "schema",
+        ValidatorKind::Predicate => "predicate",
+        ValidatorKind::Judge(_) => "judge",
+        ValidatorKind::Human => "human",
+    }
+}
+
+fn freshness_json(f: &Freshness) -> Json {
+    match f {
+        Freshness::Any => Json::str("any"),
+        Freshness::AfterLastEffectOnScope => Json::str("after_last_effect_on_scope"),
+        Freshness::AfterSeq(n) => Json::obj([("after_seq", Json::Int(*n as i64))]),
+    }
+}
+
+fn isolation_json(i: &Isolation) -> Json {
+    match i {
+        Isolation::Kernel => Json::str("kernel"),
+        Isolation::Sandbox(h) => Json::obj([("sandbox", Json::str(h.clone()))]),
+        Isolation::External => Json::str("external"),
+    }
+}
+
+/// `declaration_json(d)` — the canonical JSON render of a
+/// `ValidatorDeclaration` (the `declare` contract doc, ADR-0110 D1): the wire
+/// shape the out-of-process validator conformance suite asserts member by
+/// member (R-2.7.2b — the same doc a bound `bind` call hands back).
+pub fn declaration_json(d: &ValidatorDeclaration) -> Json {
+    Json::obj([
+        (
+            "validator_ref",
+            Json::obj([
+                ("version_id", Json::str(d.validator_ref.version_id.clone())),
+                (
+                    "semantic_id",
+                    d.validator_ref
+                        .semantic_id
+                        .as_ref()
+                        .map_or(Json::Null, |s| Json::str(s.clone())),
+                ),
+            ]),
+        ),
+        ("kind", Json::str(validator_kind_tag(&d.kind))),
+        ("oracle_class", Json::str(d.oracle_class.as_str())),
+        ("deterministic", Json::Bool(d.deterministic)),
+        (
+            "evidence_inputs",
+            Json::Arr(
+                d.evidence_inputs
+                    .iter()
+                    .map(|r| {
+                        Json::obj([
+                            ("kind", Json::str(r.kind.as_str())),
+                            ("min_authority", Json::str(r.min_authority.as_str())),
+                            ("freshness", freshness_json(&r.freshness)),
+                            ("integrity", Json::str(r.integrity.as_str())),
+                            (
+                                "scope",
+                                r.scope
+                                    .as_ref()
+                                    .map_or(Json::Null, |s| Json::str(s.clone())),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        (
+            "evidence_out",
+            Json::Arr(
+                d.evidence_out
+                    .iter()
+                    .map(|k| Json::str(k.as_str()))
+                    .collect(),
+            ),
+        ),
+        ("verdict_type", Json::str(d.verdict_type.as_str())),
+        (
+            "requires_observability",
+            Json::Arr(
+                d.requires_observability
+                    .iter()
+                    .map(|o| Json::str(o.as_str()))
+                    .collect(),
+            ),
+        ),
+        (
+            "cost_model",
+            d.cost_model
+                .as_ref()
+                .map_or(Json::Null, |c| Json::str(c.clone())),
+        ),
+        ("isolation", isolation_json(&d.isolation)),
+        (
+            "side_effects",
+            Json::Arr(d.side_effects.iter().map(|e| Json::str(e.name())).collect()),
+        ),
+        (
+            "profile_ref",
+            d.profile_ref
+                .as_ref()
+                .map_or(Json::Null, |p| Json::str(p.clone())),
+        ),
+        (
+            "calibration_ref",
+            d.calibration_ref
+                .as_ref()
+                .map_or(Json::Null, |c| Json::str(c.clone())),
+        ),
+        ("charged_to", Json::str(d.charged_to.name())),
+        (
+            "assumption_debt",
+            d.assumption_debt
+                .as_ref()
+                .map_or(Json::Null, |a| Json::str(a.clone())),
+        ),
+    ])
+}
+
 // ── Finding / Verdict ───────────────────────────────────────────────────────
 
 /// `Finding` — one typed finding on a verdict (`{code, severity, location?,
@@ -1626,6 +1751,43 @@ mod tests {
             declare(&d),
             Err(ValidatorError::IncompleteDeclaration { .. })
         ));
+    }
+
+    /// The declaration doc the OOP `declare` op serves carries every
+    /// contract member (R-2.7.2b) — a schema drift of the wire shape is
+    /// caught here, at the boundary the conformance suite asserts.
+    #[test]
+    fn declaration_json_carries_the_full_declaration() {
+        let d = decl(ValidatorKind::Schema);
+        let j = declaration_json(&d);
+        let vref = j.get("validator_ref").expect("validator_ref");
+        assert_eq!(
+            vref.get("version_id").and_then(Json::as_str),
+            Some(d.validator_ref.version_id.as_str())
+        );
+        assert_eq!(j.get("kind").and_then(Json::as_str), Some("schema"));
+        assert_eq!(
+            j.get("oracle_class").and_then(Json::as_str),
+            Some(d.oracle_class.as_str())
+        );
+        assert_eq!(j.get("deterministic"), Some(&Json::Bool(true)));
+        let inputs = match j.get("evidence_inputs") {
+            Some(Json::Arr(items)) => items,
+            _ => panic!("evidence_inputs is an array"),
+        };
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(
+            inputs[0].get("kind").and_then(Json::as_str),
+            Some(d.evidence_inputs[0].kind.as_str())
+        );
+        assert_eq!(
+            inputs[0].get("min_authority").and_then(Json::as_str),
+            Some(d.evidence_inputs[0].min_authority.as_str())
+        );
+        assert!(j.get("verdict_type").and_then(Json::as_str).is_some());
+        assert!(j.get("isolation").is_some());
+        assert!(j.get("side_effects").is_some());
+        assert!(j.get("charged_to").is_some());
     }
 
     #[test]
