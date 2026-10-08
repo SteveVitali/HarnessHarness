@@ -36,6 +36,7 @@ pub mod handle;
 pub mod leak;
 pub mod mint;
 pub mod monitor;
+pub mod ownership;
 pub mod policy;
 pub mod table;
 pub mod tcb;

@@ -426,6 +426,11 @@ const DECIDED_FIELDS: &[AuditField] = &[
     af("request_id"),
     // S2.7 (R-2.8.2; §5g.2 §3) — the `Remedy` a prior stage consumed.
     af("remedy_taken"),
+    // R-2.11 (ADR-0343 D1) — the C2 `modify` arm's recorded amendment:
+    // `decided{decision: modified}` carries `amended_args` so the fold
+    // restores `Decision::Modified` verbatim (bounded, never offloaded —
+    // the re-entry reads the row).
+    afb("amended_args", AUDIT_FIELD_LIST_BYTES),
     af("decision"),
     af("decision_scope"),
     af("origin_permission_id"),
@@ -1120,6 +1125,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("action.environment.uploaded", "hint"),
     ("action.environment.verdict.recorded", "hint"),
     ("action.environment.verified", "hint"),
+    // ── action:intent ──
+    ("action.intent.anchored", "hint"),
     // ── action:tool ──
     ("action.tool.call.refused", "tool.completed"),
     ("action.tool.catalog.built", "hint"),
@@ -1665,6 +1672,16 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // carries `scope.effect_id` (non-attribution is the fact recorded); the
     // effect.rs marker validator admits it scope-free and it mutates no fold.
     row_audit("action.effect.unattributed",O::Events, false, EFFECT_FIELDS, &[], None, None),
+    // `action.intent.anchored` — the R-2.11 intent anchor (ADR-0343 D2): the
+    // durable `EffectIntent` subject an `approval`-basis
+    // `security.label.endorsed` pins. Deliberately *not* audit-grade and
+    // provenance-mandatory — the row's own provenance is the intent's
+    // record (the proposal's folded label; the endorsement's `from`), and
+    // an audit-grade stamp would force `authority = kernel`, a label no
+    // endorsement may rise above. Minted beside `security.permission.pending`
+    // so the subject is durable before the respond-path's endorsement batch
+    // (append-time check-5 resolves `subject_ref` over the committed prefix).
+    row_prov("action.intent.anchored",   Led, O::Events, false, false, true, None, None),
     // The `action.tool.*` set — `proposed`/`started` are audit-grade (§5g.6 §3:
     // `started` carries `{execution_id, attribution_token_hash}` — CF-214);
     // `proposed` opens the tool_call scope, the three terminals close it; the two

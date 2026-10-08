@@ -68,10 +68,11 @@ impl ApprovalMode {
     }
 }
 
-/// `ApprovalOption` — `{id ∈ {allow_once, allow_lease, deny, more_info}, label}`
-/// (§5g.7 §3). The id set is closed at C0; a surface may render a subset but
-/// never invent an id (surfaces offer `allow_once`/`reject` only until OQ-246 —
-/// the Stage-4 surface work — adds the rest).
+/// `ApprovalOption` — `{id ∈ {allow_once, allow_lease, deny, more_info,
+/// modify}, label}` (§5g.7 §3 + the C2 `modify` arm; ADR-0070 D1;
+/// ADR-0343 D1). The id set is closed; a surface may render a subset but
+/// never invent an id (surfaces offer `allow_once`/`reject` only until
+/// OQ-246 — the Stage-4 surface work — adds the rest).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ApprovalOption {
     /// The option id.
@@ -92,6 +93,11 @@ pub enum ApprovalOptionId {
     Deny,
     /// Ask for more information.
     MoreInfo,
+    /// Amend the request — the C2 `modify` arm (ADR-0070 D1; R-2.11):
+    /// the response carries a typed `amended_args` payload; the
+    /// as-proposed effect is refused and the amendment re-enters as a
+    /// fresh (narrowing-only) request.
+    Modify,
 }
 
 impl ApprovalOptionId {
@@ -102,6 +108,7 @@ impl ApprovalOptionId {
             ApprovalOptionId::AllowLease => "allow_lease",
             ApprovalOptionId::Deny => "deny",
             ApprovalOptionId::MoreInfo => "more_info",
+            ApprovalOptionId::Modify => "modify",
         }
     }
 
@@ -112,6 +119,7 @@ impl ApprovalOptionId {
             "allow_lease" => Some(ApprovalOptionId::AllowLease),
             "deny" => Some(ApprovalOptionId::Deny),
             "more_info" => Some(ApprovalOptionId::MoreInfo),
+            "modify" => Some(ApprovalOptionId::Modify),
             _ => None,
         }
     }
@@ -192,10 +200,17 @@ pub struct ApprovalRequest {
     /// producing its own `decided` row and endorsement count; `irreversible`
     /// requests never carry one).
     pub batch_id: Option<String>,
+    /// The `remedies` the ask offers (§5g.2 §3's closed `Remedy` sum;
+    /// ADR-0343 D4 — the R-2.11 remedy-*ingress* surface): carried on the
+    /// durable `pending` row and folded back into the request so the
+    /// `decided` row can echo them verbatim — the R-2.12 consume path
+    /// (`remedies.taken`, remedy re-dispatch) reads the durable record,
+    /// never a session cache.
+    pub remedies: Vec<hh_provenance::flow::Remedy>,
 }
 
-/// `ResponseChoice` — `allow_once | allow_lease | deny | more_info`
-/// (§5g.7 §3 `ApprovalResponse.choice`).
+/// `ResponseChoice` — `allow_once | allow_lease | deny | more_info |
+/// modify` (§5g.7 §3 `ApprovalResponse.choice` + the C2 `modify` arm).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResponseChoice {
     /// Allow this request once.
@@ -209,6 +224,18 @@ pub enum ResponseChoice {
     },
     /// Ask for more information — the request stays pending.
     MoreInfo,
+    /// Amend the request (ADR-0070 D1 `modify`; ADR-0343 D1): the
+    /// recorded decision is `Decision::Modified{amended_args}` — the
+    /// as-proposed effect is refused and the amendment may re-enter as
+    /// a fresh narrowing-only request. A deciding response: the
+    /// principal/`ApproverGrant` legitimacy gate applies exactly as for
+    /// `allow*` (a modify a delegate voices would consume the owed
+    /// decision — fail closed).
+    Modify {
+        /// The typed amended-args payload (narrowing-only — never an
+        /// authority widening).
+        amended_args: Json,
+    },
 }
 
 /// `LeaseSpec` — the lease the `allow_lease` response mints:
@@ -2121,11 +2148,16 @@ impl ApprovalState {
             .ok_or_else(|| ApprovalError::UnknownPermission {
                 permission_id: response.permission_id.clone(),
             })?;
-        // The legitimacy gate — `allow*` requires `principal` or an
-        // ApproverGrant; a delegate endorser never confers (AC-3).
+        // The legitimacy gate — `allow*` and `modify` require `principal`
+        // or an ApproverGrant; a delegate endorser never confers nor
+        // decides the owed-decision row (AC-3; ADR-0343 D1 — a `modify`
+        // the human did not voice would burn the exactly-one slot, so the
+        // gate covers the deciding arms, not just the conferring ones).
         let allows = matches!(
             response.choice,
-            ResponseChoice::AllowOnce | ResponseChoice::AllowLease(_)
+            ResponseChoice::AllowOnce
+                | ResponseChoice::AllowLease(_)
+                | ResponseChoice::Modify { .. }
         );
         if allows {
             let legitimate = match &response.decided_by {
@@ -2236,6 +2268,17 @@ impl ApprovalState {
                 self.leases.insert(key.clone(), lease.clone());
                 (Decision::Allow, Some(lease))
             }
+            ResponseChoice::Modify { amended_args } => (
+                // The C2 `modify` arm (ADR-0070 D1): the decision is the
+                // terminal `modified` — the as-proposed effect is refused
+                // by the caller and `amended_args` re-enter as a fresh
+                // request. Narrowing-only by construction: this decision
+                // confers nothing; the re-proposal re-runs `authorize`.
+                Decision::Modified {
+                    amended_args: amended_args.clone(),
+                },
+                None,
+            ),
             ResponseChoice::Deny { reason } => (
                 Decision::Deny {
                     reason: DenyReason::PolicyDenied,
@@ -2488,6 +2531,28 @@ impl ApprovalState {
                                         .get("batch_id")
                                         .and_then(Json::as_str)
                                         .map(String::from),
+                                    // The remedy-ingress member folds with
+                                    // the request (ADR-0343 D4) — a
+                                    // malformed member decodes to nothing
+                                    // (the row offered no remedy, never a
+                                    // fabricated one).
+                                    remedies: rq
+                                        .get("remedies")
+                                        .and_then(|rs| match rs {
+                                            Json::Arr(items) => items
+                                                .iter()
+                                                .enumerate()
+                                                .map(|(i, r)| {
+                                                    hh_provenance::flow::Remedy::from_json(
+                                                        r,
+                                                        &format!("remedies[{i}]"),
+                                                    )
+                                                    .ok()
+                                                })
+                                                .collect::<Option<Vec<_>>>(),
+                                            _ => None,
+                                        })
+                                        .unwrap_or_default(),
                                 },
                                 requested_at: p
                                     .get("requested_at")
@@ -2516,6 +2581,12 @@ impl ApprovalState {
                     // pending (the final `decided{allow|deny}` for the same
                     // `permission_id` lands at respond/chain-terminal).
                     Some("ask") => return,
+                    // `modified` — the C2 `modify` arm's terminal (R-2.11;
+                    // ADR-0343 D1): the `amended_args` ride the row so a
+                    // replayed fold restores the recorded amendment.
+                    Some("modified") => Decision::Modified {
+                        amended_args: p.get("amended_args").cloned().unwrap_or(Json::Null),
+                    },
                     // `timed_out` is the kind-fixed permission terminal
                     // (TimeoutPolicy[permission].on_expiry; ADR-0070 D3 — a
                     // refusal record, folded as `deny{timed_out}`), never
@@ -2921,6 +2992,10 @@ fn choice_json(c: &ResponseChoice) -> Json {
             Json::obj([("deny", Json::obj([("reason", Json::str(reason.clone()))]))])
         }
         ResponseChoice::MoreInfo => Json::str("more_info"),
+        ResponseChoice::Modify { amended_args } => Json::obj([(
+            "modify",
+            Json::obj([("amended_args", amended_args.clone())]),
+        )]),
         ResponseChoice::AllowLease(spec) => Json::obj([(
             "allow_lease",
             Json::obj([
@@ -2959,6 +3034,11 @@ fn choice_from_json(j: &Json, path: &str) -> Result<ResponseChoice, String> {
                     scope: lease_scope_parse(&req_str(l, "scope", path)?, path)?,
                     max_uses: l.get("max_uses").and_then(Json::as_int).map(|i| i as u64),
                 }));
+            }
+            if let Some(md) = m.get("modify") {
+                return Ok(ResponseChoice::Modify {
+                    amended_args: md.get("amended_args").cloned().unwrap_or(Json::Null),
+                });
             }
             Err(format!("{path}: unknown choice"))
         }
@@ -3031,6 +3111,28 @@ pub fn pending_payload(r: &ApprovalRequest, effect_id: &str, requested_at: u64) 
                     Json::str(r.request.args_canonical_hash.clone()),
                 ),
                 ("reason", Json::str(r.request.reason.clone())),
+                // The R-2.11 remedy-*ingress* member (ADR-0343 D4): the
+                // ask's offered `remedies` ride the durable `pending` row
+                // so a folded `ApprovalRequest` — and the `decided` row
+                // the respond path mints — carries them verbatim.
+                (
+                    "remedies",
+                    Json::Arr(r.remedies.iter().map(|x| x.to_json()).collect()),
+                ),
+                // The offered option ids ride the durable row too
+                // (ADR-0343 D4): the surface answer path rebuilds the
+                // pending from this row — the `OptionNotOffered` gate is
+                // honest only if the offered set is durable, never the
+                // surface's say-so.
+                (
+                    "options",
+                    Json::Arr(
+                        r.options
+                            .iter()
+                            .map(|o| Json::str(o.id.as_str().to_string()))
+                            .collect(),
+                    ),
+                ),
                 (
                     "requested_grants",
                     Json::Arr(
@@ -3349,6 +3451,17 @@ pub fn request_from_payload(j: &Json, path: &str) -> Result<ApprovalRequest, Str
                 }),
         },
         batch_id: j.get("batch_id").and_then(Json::as_str).map(String::from),
+        remedies: match j.get("remedies") {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    hh_provenance::flow::Remedy::from_json(r, &format!("{path}.remedies[{i}]"))
+                        .map_err(|e| format!("{path}.remedies[{i}]: {}", e.detail))
+                })
+                .collect::<Result<Vec<_>, String>>()?,
+            _ => Vec::new(),
+        },
     })
 }
 
