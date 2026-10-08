@@ -292,10 +292,25 @@ fn open_scope_id(point: &MeasurementPoint, env: &EventEnvelope) -> Option<String
         ScopeKind::Compaction => member(env, "compaction_id")
             .map(str::to_string)
             .or_else(|| Some(env.event_id.clone())),
+        // M13 — the env rows name `env_handle` (`env_id` is the
+        // pre-registration spelling; both resolve so either row set
+        // closes the span).
         ScopeKind::EnvironmentOp => member(env, "env_id")
+            .or_else(|| member(env, "env_handle"))
             .map(str::to_string)
             .or_else(|| Some(env.event_id.clone())),
+        // M15 — `subscription_id` is the wakeup coordinate:
+        // `scheduled` nests it under `subscription`, the lifecycle
+        // terminals carry it top-level (R2.14 — the span closes on the
+        // subscription, never on the opener's event id).
         ScopeKind::Wakeup => member(env, "wakeup_id")
+            .or_else(|| member(env, "subscription_id"))
+            .or_else(|| {
+                env.payload
+                    .get("subscription")
+                    .and_then(|s| s.get("subscription_id"))
+                    .and_then(Json::as_str)
+            })
             .map(str::to_string)
             .or_else(|| Some(env.event_id.clone())),
         ScopeKind::ComponentCall => member(env, "invocation_id")
@@ -318,16 +333,28 @@ fn close_scope_id(point: &MeasurementPoint, env: &EventEnvelope) -> Option<Strin
     }
 }
 
+/// The measured value a `*_<unit>` member carries — a bare integer or the
+/// `measured_at`-stamped `{value, measured_at}` shape (the §2.6 stamping
+/// contract; both spellings land durable).
+pub fn measured_value(v: &Json) -> Option<i64> {
+    v.as_int().or_else(|| v.get("value").and_then(Json::as_int))
+}
+
 /// The measured duration a *closing* payload carries — the point's declared
 /// `DurationSource` (payload field or `Timing` pair; never a `ts` difference).
 fn duration_at_close(point: &MeasurementPoint, env: &EventEnvelope) -> Option<i64> {
     use crate::scope::DurationSource as DS;
     match point.duration {
-        DS::PayloadField(f) => env.payload.get(f)?.as_int(),
+        DS::PayloadField(f) => env.payload.get(f).and_then(measured_value),
         DS::TimingPair { start, end } => {
             let t = env.payload.get("timing")?;
             Some(t.get(end)?.as_int()? - t.get(start)?.as_int()?)
         }
+        DS::TimingMember(f) => env
+            .payload
+            .get("timing")
+            .and_then(|t| t.get(f))
+            .and_then(measured_value),
         DS::Unmeasured => None,
     }
 }
@@ -338,6 +365,7 @@ fn duration_source(point: &MeasurementPoint) -> &'static str {
     match point.duration {
         DS::PayloadField(_) => "payload_field",
         DS::TimingPair { .. } => "timing_pair",
+        DS::TimingMember(_) => "timing_member",
         DS::Unmeasured => "unmeasured",
     }
 }
@@ -1137,9 +1165,36 @@ fn nearest_rank(sorted: &[i64], q_ppm: i64) -> i64 {
 /// `requires_observability` the run doesn't meet renders `n/a{observability}`
 /// — never 0, never a proxy (T-LCD-15). `fold: NotComputed` rows render their
 /// declared `n/a{reason}`; the rest compute over the prefix.
+///
+/// The pre-R2.14 spelling delegates to [`metric_view_scoped`] with
+/// `ParticipantClass::Native` — a native run's `applies_to` gate is a
+/// no-op, so the output is byte-identical.
 pub fn metric_view(
     run_id: &str,
     root_run_id: &str,
+    declared: &BTreeSet<Observability>,
+    events: &[EventEnvelope],
+    until_seq: Option<u64>,
+) -> View {
+    metric_view_scoped(
+        run_id,
+        root_run_id,
+        hh_ontology::participant::ParticipantClass::Native,
+        declared,
+        events,
+        until_seq,
+    )
+}
+
+/// `metric_view_scoped(…, participant_class, …)` — the hosted `n/a` sweep
+/// (R2.14, DF-S1.14-2): a metric whose declared `applies_to` excludes the
+/// run's participant class renders `n/a{class}` — a hosted participant
+/// never receives a native-only reading as a computed value, and the
+/// `observability`/`fold` gates still apply within the admitted set.
+pub fn metric_view_scoped(
+    run_id: &str,
+    root_run_id: &str,
+    participant_class: hh_ontology::participant::ParticipantClass,
     declared: &BTreeSet<Observability>,
     events: &[EventEnvelope],
     until_seq: Option<u64>,
@@ -1153,7 +1208,9 @@ pub fn metric_view(
     let mut metrics = BTreeMap::new();
     for m in catalogue::PROCESS_METRICS {
         let required: BTreeSet<Observability> = m.requires_observability.iter().copied().collect();
-        let cell = if !required.is_subset(declared) {
+        let cell = if !m.applies_to.contains(&participant_class) {
+            na(NaReason::Class)
+        } else if !required.is_subset(declared) {
             na(NaReason::Observability)
         } else {
             match m.fold {
@@ -1176,6 +1233,7 @@ pub fn metric_view(
         ("kind", Json::str("metric_view")),
         ("run_id", Json::str(run_id)),
         ("root_run_id", Json::str(root_run_id)),
+        ("participant_class", Json::str(participant_class.as_str())),
         (
             "declared_observability",
             Json::Arr(declared.iter().map(|o| Json::str(obs_str(*o))).collect()),
@@ -1183,6 +1241,89 @@ pub fn metric_view(
         ("metrics", Json::Obj(metrics)),
     ]);
     View::stamped(run_id, ViewKind::MetricView, watermark, payload)
+}
+
+/// `catalogue_distributions(configuration_id, runs)` — the
+/// per-configuration catalogue half of DF-S1.14-2: fold each run's
+/// `metrics` member (the `metric_view` cells `{name: cell}`) into
+/// per-metric `{n, min, p50, p95, max}` distributions. Numeric cells join
+/// the distribution; `{"na":…}` cells count under `na{reason}` — never
+/// treated as 0, never dropped silently. The fold is pure and
+/// deterministic (callers pass the same cells in, get the same
+/// distribution out; `runs` order is normalized by sort).
+pub fn catalogue_distributions(configuration_id: &str, runs: &[(String, Json)]) -> Json {
+    let mut sorted: Vec<&(String, Json)> = runs.iter().collect();
+    sorted.sort_by(|a, b| a.0.cmp(&b.0));
+    // name → (samples, na counts)
+    let mut samples: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+    let mut nas: BTreeMap<String, BTreeMap<String, i64>> = BTreeMap::new();
+    for (_, metrics) in &sorted {
+        let Json::Obj(m) = metrics else { continue };
+        for (name, cell) in m {
+            // `belief_divergence`'s `provisional` wrapper carries its cell
+            // under `value` — the distribution reads the cell, never the
+            // wrapper.
+            let cell = cell.get("value").unwrap_or(cell);
+            if let Some(v) = cell.as_int() {
+                samples.entry(name.clone()).or_default().push(v);
+            } else if let Some(reason) = cell.get("na").and_then(Json::as_str) {
+                *nas.entry(name.clone())
+                    .or_default()
+                    .entry(reason.to_string())
+                    .or_insert(0) += 1;
+            } else {
+                // Non-scalar cells (TokenVector shapes, count maps,
+                // per-detector strata) are vector cells — out of this
+                // distribution's numeric scope; reported under
+                // `vector_cells` rather than silently skipped.
+                *nas.entry(name.clone())
+                    .or_default()
+                    .entry("vector_cell".to_string())
+                    .or_insert(0) += 1;
+            }
+        }
+    }
+    let mut out = BTreeMap::new();
+    let mut names: BTreeSet<String> = samples.keys().cloned().collect();
+    names.extend(nas.keys().cloned());
+    for name in names {
+        let mut row = BTreeMap::new();
+        if let Some(vals) = samples.get(&name) {
+            let mut v = vals.clone();
+            v.sort_unstable();
+            row.insert("n".to_string(), Json::Int(v.len() as i64));
+            row.insert("min".to_string(), Json::Int(v[0]));
+            row.insert(
+                "p50".to_string(),
+                Json::Int(nearest_rank(&v, hh_budget::quantity::PPM_SCALE / 2)),
+            );
+            row.insert(
+                "p95".to_string(),
+                Json::Int(nearest_rank(&v, hh_budget::quantity::PPM_SCALE * 95 / 100)),
+            );
+            row.insert("max".to_string(), Json::Int(v[v.len() - 1]));
+        } else {
+            row.insert("n".to_string(), Json::Int(0));
+        }
+        if let Some(counts) = nas.get(&name) {
+            row.insert(
+                "na".to_string(),
+                Json::Obj(
+                    counts
+                        .iter()
+                        .map(|(r, c)| (r.clone(), Json::Int(*c)))
+                        .collect(),
+                ),
+            );
+        }
+        out.insert(name, Json::Obj(row));
+    }
+    Json::obj([
+        ("kind", Json::str("catalogue_distributions")),
+        ("configuration_id", Json::str(configuration_id)),
+        ("run_count", Json::Int(sorted.len() as i64)),
+        ("metrics", Json::Obj(out)),
+    ])
 }
 
 fn payload_str<'a>(e: &'a EventEnvelope, member_name: &str) -> Option<&'a str> {

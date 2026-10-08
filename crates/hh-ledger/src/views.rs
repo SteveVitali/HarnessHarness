@@ -83,6 +83,11 @@ pub enum ViewKind {
     /// every dropped class. Optional and never the machine default — the
     /// identity CLI projection is `cli_stream_view` (§5a.1 §4).
     Compact,
+    /// `turn_phase_profile` — the M2 per-turn phase partition (§5h.1 §2.2;
+    /// ADR-0043 D3; R2.14): sampling/compaction/tool-blocking/permission-wait
+    /// intervals carved out of the turn's measured wall plus the surrounding
+    /// overhead buckets. Folded by `hh-telemetry`.
+    TurnPhaseProfile,
 }
 
 impl ViewKind {
@@ -104,6 +109,7 @@ impl ViewKind {
             ViewKind::BranchTree => "branch_tree",
             ViewKind::EffectsByKey => "effects_by_key",
             ViewKind::Compact => "compact",
+            ViewKind::TurnPhaseProfile => "turn_phase_profile",
         }
     }
 
@@ -125,6 +131,7 @@ impl ViewKind {
             "branch_tree" => Some(ViewKind::BranchTree),
             "effects_by_key" => Some(ViewKind::EffectsByKey),
             "compact" => Some(ViewKind::Compact),
+            "turn_phase_profile" => Some(ViewKind::TurnPhaseProfile),
             _ => None,
         }
     }

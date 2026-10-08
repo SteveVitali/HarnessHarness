@@ -176,6 +176,104 @@ pub fn propagation_unsupported_loss(target: &str) -> String {
     format!("propagation.{target}")
 }
 
+// ── R2.14 — the `_meta` carriers (§5h.1 §2.3's MCP/ACP legs; §03's minimum
+// carrier preserved through lowering) ─────────────────────────────────────
+
+/// The `_meta` slot key the propagation carrier rides on the MCP surface —
+/// the same `dev.cognition/*` namespace the HIR block uses
+/// (`dev.cognition/hir` — CC7, one namespace per dialect).
+pub const MCP_PROPAGATION_KEY: &str = "dev.cognition/propagation";
+
+/// The `_meta` carrier members (§5h.1 §2.3): `{traceparent, tracestate,
+/// baggage?}` — the outbound context rendered as preservation metadata.
+/// It is *context*, never authority — a receiver that lifts it resolves
+/// ledger coordinates only through the `hh` tracestate member
+/// ([`inbound_context`]'s rule).
+pub fn meta_carrier(ctx: &PropagationContext) -> hh_wire::json::Json {
+    let mut m = std::collections::BTreeMap::new();
+    m.insert(
+        "traceparent".to_string(),
+        hh_wire::json::Json::str(ctx.traceparent.clone()),
+    );
+    m.insert(
+        "tracestate".to_string(),
+        hh_wire::json::Json::str(ctx.tracestate.clone()),
+    );
+    if let Some(b) = &ctx.baggage {
+        m.insert("baggage".to_string(), hh_wire::json::Json::str(b.clone()));
+    }
+    hh_wire::json::Json::Obj(m)
+}
+
+/// The ACP `_meta.hh` members a propagation context contributes —
+/// `source_seq` already rides that slot (AC-R-2.5.4-5's convention);
+/// the carrier joins it as flat members (`traceparent`, `tracestate`,
+/// `configuration_id` — the baggage's `hh.configuration_id=` value
+/// under its own member name, the slot's one-namespace-flat rule).
+pub fn acp_hh_members(ctx: &PropagationContext) -> Vec<(String, hh_wire::json::Json)> {
+    let mut v = vec![
+        (
+            "traceparent".to_string(),
+            hh_wire::json::Json::str(ctx.traceparent.clone()),
+        ),
+        (
+            "tracestate".to_string(),
+            hh_wire::json::Json::str(ctx.tracestate.clone()),
+        ),
+    ];
+    if let Some(b) = &ctx.baggage {
+        if let Some(cid) = b.strip_prefix("hh.configuration_id=") {
+            v.push((
+                "configuration_id".to_string(),
+                hh_wire::json::Json::str(cid.to_string()),
+            ));
+        }
+    }
+    v
+}
+
+/// Read a `_meta` carrier member-set back — the lift half (§5h.1 §2.3's
+/// inbound rule): `traceparent` parses under [`inbound_context`]'s full
+/// honesty gate, `tracestate`'s `hh` member resolves the ledger
+/// coordinates, `baggage`/`configuration_id` restore the configuration
+/// alias. `None` when no `traceparent` member is present (not a
+/// propagation failure — an uninstrumented member is absent, not
+/// malformed); `Err` on a malformed `traceparent` (the caller logs the
+/// refusal, never grafts a foreign context).
+pub fn inbound_carrier(
+    members: &hh_wire::json::Json,
+) -> Result<Option<InboundLink>, TelemetryError> {
+    let Some(tp) = members
+        .get("traceparent")
+        .and_then(hh_wire::json::Json::as_str)
+    else {
+        return Ok(None);
+    };
+    let ts = members
+        .get("tracestate")
+        .and_then(hh_wire::json::Json::as_str);
+    let mut link = inbound_context(tp, ts)?;
+    link.configuration_id = members
+        .get("baggage")
+        .and_then(hh_wire::json::Json::as_str)
+        .and_then(|b| b.strip_prefix("hh.configuration_id="))
+        .or_else(|| {
+            members
+                .get("configuration_id")
+                .and_then(hh_wire::json::Json::as_str)
+        })
+        .map(str::to_string);
+    Ok(Some(link))
+}
+
+/// `carrier_loss(target, member)` — the `dropped_fields` spelling when a
+/// lowering's target cannot carry one propagation member
+/// (`propagation.<target>.<member>` — §5h.1 §5's loss-report shape,
+/// `PropagationUnsupported` per member, never a silent drop).
+pub fn carrier_loss(target: &str, member: &str) -> String {
+    format!("propagation.{target}.{member}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

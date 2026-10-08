@@ -384,6 +384,10 @@ const EFFECT_FIELDS: &[AuditField] = &[
     af("ordinal"),
     af("status"),
     af("error"),
+    // R2.14 (§5h.1 §2.6) — the producing-clock instant stamp the
+    // intended/terminal rows carry (`{value, measured_at}` — measured,
+    // never a `ts` read-back).
+    af("at_ms"),
     // S2.7 (R-2.8.2; ADR-0054 D1) — `observed{admission}`: the recorded
     // `AdmissionKind` for a `flow_contract` capability's result.
     af("admission"),

@@ -530,6 +530,80 @@ impl<T: Transport> McpClient<T> {
         }
     }
 
+    /// `call_tool_carried(name, arguments, request_state, target, meta)`
+    /// — the R2.14 carrier leg (§5h.1 §2.3): `meta`'s members merge into
+    /// `params._meta` byte-for-byte (the `dev.cognition/propagation`
+    /// carrier and/or a `dev.cognition/hir` block the caller supplies —
+    /// preservation metadata, never authority). The merge never
+    /// overwrites a member the fixture's `_meta` already carries — a
+    /// caller-supplied key wins only where the member is absent, and a
+    /// caller passing an unknown `dev.cognition/*` extension rides the
+    /// same preservation rule.
+    pub fn call_tool_carried(
+        &mut self,
+        name: &str,
+        arguments: &Json,
+        request_state: Option<&Json>,
+        target: Option<&str>,
+        meta: &Json,
+    ) -> Result<ToolOutcome, ClientError> {
+        let mut params = vec![
+            ("name", Json::str(name.to_string())),
+            ("arguments", arguments.clone()),
+        ];
+        if let Some(rs) = request_state {
+            params.push(("requestState", rs.clone()));
+        }
+        if let Some(t) = target {
+            params.push(("target", Json::str(t.to_string())));
+        }
+        if let Json::Obj(m) = meta {
+            if !m.is_empty() {
+                params.push(("_meta", meta.clone()));
+            }
+        }
+        let params = Json::Obj(
+            params
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect(),
+        );
+        match self.raw_request("tools/call", params)? {
+            Ok(result) => Ok(classify_call(&result)),
+            Err(ClientError::JsonRpc { code, message }) => {
+                Ok(ToolOutcome::ProtocolError { code, message })
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// `call_tool_propagated(…, ctx)` — the propagation-carrier
+    /// convenience: `ctx` (an `hh_telemetry` `PropagationContext`)
+    /// renders to `params._meta["dev.cognition/propagation"]`
+    /// (`{traceparent, tracestate, baggage?}` — §5h.1 §2.3). The wire
+    /// always carries the members `params._meta` admits; a target that
+    /// cannot hold a member is the *lowering's* loss to record
+    /// (`carrier_loss`), never this method's to hide.
+    pub fn call_tool_propagated(
+        &mut self,
+        name: &str,
+        arguments: &Json,
+        request_state: Option<&Json>,
+        target: Option<&str>,
+        ctx: &hh_telemetry::propagation::PropagationContext,
+    ) -> Result<ToolOutcome, ClientError> {
+        self.call_tool_carried(
+            name,
+            arguments,
+            request_state,
+            target,
+            &Json::obj([(
+                hh_telemetry::propagation::MCP_PROPAGATION_KEY,
+                hh_telemetry::propagation::meta_carrier(ctx),
+            )]),
+        )
+    }
+
     /// One request → one result. Notifications and mismatched ids are
     /// skipped (a stray line is never mistaken for an answer); EOF is
     /// `PeerUnreachable`. `_meta` rides on every request in the modern
@@ -958,5 +1032,47 @@ mod tests {
             c.call_tool("t", &Json::obj([]), None).unwrap(),
             ToolOutcome::Unknown { .. }
         ));
+    }
+
+    #[test]
+    fn call_tool_propagated_rides_the_meta_slot() {
+        // R2.14 (§5h.1 §2.3) — the propagation carrier leaves as
+        // `params._meta["dev.cognition/propagation"]` verbatim.
+        let discover = Json::obj([
+            ("protocol_version", Json::str(PINNED_MODERN)),
+            (
+                "supportedVersions",
+                Json::Arr(vec![Json::str(PINNED_MODERN)]),
+            ),
+            ("capabilities", Json::obj([("tools", Json::obj([]))])),
+        ]);
+        let init = Json::obj([
+            ("protocolVersion", Json::str(PINNED_MODERN)),
+            ("capabilities", Json::obj([("tools", Json::obj([]))])),
+            ("serverInfo", Json::obj([("name", Json::str("srv"))])),
+        ]);
+        let ok = result_frame(3, Json::obj([("content", Json::Arr(vec![]))]));
+        let s = Script::new(&[&result_frame(1, discover), &result_frame(2, init), &ok]);
+        let mut c = McpClient::connect(s).expect("connect");
+        let ctx = hh_telemetry::propagation::outbound_context(
+            "root-1",
+            "run-1",
+            "event-1",
+            Some("cfg-9"),
+        );
+        c.call_tool_propagated("t", &Json::obj([]), None, None, &ctx)
+            .unwrap();
+        let sent: Json = hh_wire::json::parse(&c.transport.sent[2]).unwrap();
+        let meta = sent
+            .get("params")
+            .and_then(|p| p.get("_meta"))
+            .and_then(|m| m.get(hh_telemetry::propagation::MCP_PROPAGATION_KEY))
+            .expect("carrier member");
+        let link = hh_telemetry::propagation::inbound_carrier(meta)
+            .unwrap()
+            .expect("carrier resolves");
+        assert_eq!(link.run_id.as_deref(), Some("run-1"));
+        assert_eq!(link.event_id.as_deref(), Some("event-1"));
+        assert_eq!(link.configuration_id.as_deref(), Some("cfg-9"));
     }
 }

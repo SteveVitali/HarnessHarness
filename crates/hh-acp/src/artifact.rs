@@ -34,6 +34,31 @@ impl SessionUpdate {
     /// The wire notification frame (`session/update` — params carry
     /// `sessionId` + `update{sessionUpdate, ...}`).
     pub fn to_notification(&self, session_id: &str) -> Json {
+        self.notification(session_id, None)
+    }
+
+    /// `to_notification_propagated(session_id, ctx)` — the R2.14
+    /// carrier leg (§5h.1 §2.3): the propagation context's
+    /// `{traceparent, tracestate, configuration_id?}` members join
+    /// `_meta.hh` flat (the slot's one-namespace rule — the carrier
+    /// shape is `hh_telemetry::propagation`'s single definition, CC1).
+    /// Preservation metadata, never authority: a receiver lifts the
+    /// ledger coordinates only through the `hh` tracestate member.
+    pub fn to_notification_propagated(
+        &self,
+        session_id: &str,
+        ctx: &hh_telemetry::propagation::PropagationContext,
+    ) -> Json {
+        self.notification(session_id, Some(ctx))
+    }
+
+    /// The shared frame builder — `ctx = None` is the pre-R2.14 shape
+    /// (byte-identical).
+    fn notification(
+        &self,
+        session_id: &str,
+        ctx: Option<&hh_telemetry::propagation::PropagationContext>,
+    ) -> Json {
         let mut update = BTreeMap::new();
         update.insert("sessionUpdate".to_string(), Json::str(self.kind.clone()));
         if let Json::Obj(m) = &self.params {
@@ -43,10 +68,16 @@ impl SessionUpdate {
         }
         // `trace_map` hook (AC-R-2.5.4-5): the durable source seq rides
         // `_meta.hh.source_seq` — an extension member, never authority,
-        // byte-preserved through dialects.
+        // byte-preserved through dialects. R2.14: the propagation
+        // carrier joins the same slot when supplied.
         {
             let mut hh = BTreeMap::new();
             hh.insert("source_seq".to_string(), Json::Int(self.source_seq as i64));
+            if let Some(ctx) = ctx {
+                for (k, v) in hh_telemetry::propagation::acp_hh_members(ctx) {
+                    hh.insert(k, v);
+                }
+            }
             let mut meta = match update.get("_meta") {
                 Some(Json::Obj(m)) => m.clone(),
                 _ => BTreeMap::new(),

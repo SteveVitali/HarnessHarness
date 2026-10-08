@@ -134,6 +134,12 @@ impl LedgerSink for KernelSink<'_> {
     fn prefix(&self) -> &[EventEnvelope] {
         self.store.events(&self.run_id).unwrap_or(&[])
     }
+    /// R2.14 (§5h.1 §2.6) — the `Store`'s clock is the producing clock
+    /// for the driver's stamped `*_ms` members (the measured wall the
+    /// phase fold/durations read back from the durable members).
+    fn now_ms(&self) -> Option<u64> {
+        Some(self.store.now_ms())
+    }
 }
 
 /// The `hh.submit` completion capability's surface id — the one
