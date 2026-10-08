@@ -1,0 +1,24 @@
+{
+ "pr": 120,
+ "head": "4a627eb",
+ "read_at": "2026-10-08",
+ "checks": [
+  {
+   "name": "build \u00b7 test \u00b7 fmt \u00b7 drift",
+   "state": "pass",
+   "event": "pull_request",
+   "run": 37747803685,
+   "duration": "11m8s",
+   "head": "4a627eb"
+  },
+  {
+   "name": "build \u00b7 test \u00b7 fmt \u00b7 drift",
+   "state": "pass",
+   "event": "push",
+   "run": 37747799832,
+   "duration": "10m53s",
+   "head": "4a627eb"
+  }
+ ],
+ "note": "ci-boundary/1 pass #120 \u2014 green at the closeout head 4a627eb (runs 37747803685 pull_request 11m8s + 37747799832 push 10m53s, both pass); the pair at the implementation head 7011aac (37747563618/37747549119) was cancelled by the closeout push, not failures. Local suite: cargo test --workspace 311 result blocks / 3,252 tests / 0 failures / 1 ignored (+3 blocks, +17 tests over R2.12's 308/3,235 \u2014 hh-ledger r2_13 11/11 + hh-embed r2_13 2/2). fmt clean; clippy clean on touched files; check-drift regenerated + in sync (lab.receipt.record member, schema hash 6942\u2192b636); check-removability OK; check-build-memory 0 violations / 7 pre-existing warnings. Offline-only / fixture-verified; PR #120 OPEN for operator merge (mergePolicy: OPERATOR)."
+}
