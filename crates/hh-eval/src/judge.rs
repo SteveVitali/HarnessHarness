@@ -38,7 +38,8 @@ use hh_ontology::eval::{
     ChargedTo, EvidenceKind, MetricValue, MetricValueKind, OracleClass, OracleDeclaration,
     OracleError,
 };
-use hh_verification::critics::IndependenceVector;
+use hh_verification::critic_rt::{calibration_status_at, CalibrationContext};
+use hh_verification::critics::{CalibrationRecord, IndependenceVector};
 use hh_verification::vocab::{
     CalibrationStatus, CapabilityIndependence, ContextIndependence, CriticUse, Optimization,
     ProvenanceIndependence, SnapshotIndependence,
@@ -90,6 +91,18 @@ pub enum JudgeError {
         /// The metric.
         metric: String,
     },
+    /// The run binds no `judge` model snapshot — the arm's
+    /// `profile_binding[judge]` role is absent from
+    /// `EvalRun::model_snapshots` (an unbound judge has no derivable
+    /// snapshot axis; the refusal is typed, never a skipped check).
+    UnboundJudge,
+    /// A consume-side recheck on a `MetricValue` whose `oracle_ref`/`detector`
+    /// does not name this oracle's judged emission — the row is not this
+    /// judge's verdict at all.
+    ForeignJudgedValue {
+        /// The row's `oracle_ref`.
+        oracle_ref: String,
+    },
 }
 
 impl std::fmt::Display for JudgeError {
@@ -109,6 +122,10 @@ impl std::fmt::Display for JudgeError {
             }
             JudgeError::OracleNotAdmitted { metric } => {
                 write!(f, "OracleNotAdmitted({metric})")
+            }
+            JudgeError::UnboundJudge => write!(f, "UnboundJudge"),
+            JudgeError::ForeignJudgedValue { oracle_ref } => {
+                write!(f, "ForeignJudgedValue({oracle_ref})")
             }
         }
     }
@@ -353,4 +370,90 @@ pub fn emit_judged(
         charged_to: ChargedTo::Instrument,
         calibration_ref: oracle.calibration_ref.clone(),
     })
+}
+
+// ── runtime derivation (R2.16; DF-S1.22-1's residual) ────────────────────────
+//
+// The halves above consume a `JudgeContext` the caller assembles; the
+// runtime residual is the *derivation* — the context is read off the run's
+// bound facts, never caller-asserted:
+//
+// - `judge_snapshot` is the run's `model_snapshots["judge"]` binding — the
+//   arm's `profile_binding[judge]` resolved snapshot sits beside the
+//   beneficiary roles in the bound profile (ADR-0121 D2); an absent binding
+//   refuses `UnboundJudge`.
+// - `beneficiary_snapshots` are every *other* bound role's snapshot — the
+//   subject coordinates the run's behaviour derives from.
+// - snapshot families resolve through the caller's `family_of` view (the
+//   snapshot registry's `family` member); an unresolved family is `None`,
+//   never a claimed `different_family`.
+// - `calibration` is *folded*, never supplied: the caller resolves the
+//   `CalibrationRecord` the oracle's `calibration_ref` names plus the
+//   fold's now-facts (`CalibrationContext` — wall clock and the declared
+//   recalibration period are caller facts); `calibration_status_at`
+//   computes the status. An unresolvable record is `calibration = None` —
+//   the honest `n/a{no_detector}`/`exploratory` path, identical to an
+//   `expired` fold.
+
+/// `judge_context_for(run, oracle, independence, use_, family_of,
+/// calibration)` — derive the admission context from the bound run
+/// (see the module note above). `calibration` is the resolved record plus
+/// the fold context; `None` resolves to `calibration = None`.
+pub fn judge_context_for(
+    run: &crate::runs::EvalRun,
+    independence: IndependenceVector,
+    use_: CriticUse,
+    family_of: &dyn Fn(&str) -> Option<String>,
+    calibration: Option<(&CalibrationRecord, &CalibrationContext)>,
+) -> Result<JudgeContext, JudgeError> {
+    let judge_snapshot = run
+        .model_snapshots
+        .get("judge")
+        .cloned()
+        .ok_or(JudgeError::UnboundJudge)?;
+    let beneficiary_snapshots: BTreeSet<String> = run
+        .model_snapshots
+        .iter()
+        .filter(|(role, _)| role.as_str() != "judge")
+        .map(|(_, s)| s.clone())
+        .collect();
+    let beneficiary_families: BTreeSet<String> = beneficiary_snapshots
+        .iter()
+        .filter_map(|s| family_of(s))
+        .collect();
+    Ok(JudgeContext {
+        judge_family: family_of(&judge_snapshot),
+        judge_snapshot,
+        beneficiary_snapshots,
+        beneficiary_families,
+        independence,
+        calibration: calibration.map(|(record, ctx)| calibration_status_at(record, ctx)),
+        use_,
+    })
+}
+
+/// `recheck_judged(run, value, oracle, …)` — the consume-side recheck a
+/// `detector = judged` row on the run survives: the row must name this
+/// oracle (`ForeignJudgedValue` otherwise — a judged row under another
+/// oracle is not this call's evidence), and admission re-runs against the
+/// run-derived context so a verdict emitted under a stale calibration or a
+/// drifted snapshot binding refuses instead of silently counting.
+/// `use_`/`independence`/`family_of`/`calibration` mirror
+/// [`judge_context_for`]'s arguments.
+pub fn recheck_judged(
+    run: &crate::runs::EvalRun,
+    value: &MetricValue,
+    oracle: &OracleDeclaration,
+    independence: IndependenceVector,
+    use_: CriticUse,
+    family_of: &dyn Fn(&str) -> Option<String>,
+    calibration: Option<(&CalibrationRecord, &CalibrationContext)>,
+) -> Result<JudgeAdmission, JudgeError> {
+    if value.detector != Detector::Judged || value.oracle_ref != oracle.oracle_id {
+        return Err(JudgeError::ForeignJudgedValue {
+            oracle_ref: value.oracle_ref.clone(),
+        });
+    }
+    let ctx = judge_context_for(run, independence, use_, family_of, calibration)?;
+    admit_judge(oracle, &ctx)
 }

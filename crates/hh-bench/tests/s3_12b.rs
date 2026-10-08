@@ -647,6 +647,7 @@ fn adapter_parity_legs_over_the_corpus() {
             benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
             held_out: true,
             family_size: None,
+            granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
         };
         // `artifact_benefit` — the real compare under the held-out +
         // zero-search-spend + split-predates-search preconditions.
@@ -752,6 +753,7 @@ fn parity_compare_refuses_unbudgeted_arm() {
         benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
+        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
     };
     assert!(matches!(
         compare(&input),

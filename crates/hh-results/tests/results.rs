@@ -277,6 +277,7 @@ fn ctx() -> EngineContext<'static> {
             Ok(ArmConfiguration {
                 configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
                 configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),
+                budget_ref: None,
             })
         })),
         min_replicates: 1,
@@ -2320,6 +2321,7 @@ fn ctx_tasks(n: usize) -> EngineContext<'static> {
             Ok(ArmConfiguration {
                 configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
                 configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),
+                budget_ref: None,
             })
         })),
         min_replicates: 1,

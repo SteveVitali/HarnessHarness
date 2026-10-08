@@ -168,6 +168,7 @@ fn ctx_exemplar(
             Ok(ArmConfiguration {
                 configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
                 configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),
+                budget_ref: None,
             })
         })),
         min_replicates: EXEMPLAR_REPLICATES,
@@ -718,6 +719,7 @@ fn exemplar_control_strategy_produces_comparison_report() {
         benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
+        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
     };
     match hh_eval::compare::compare(&input) {
         Err(hh_eval::compare::CompareError::Match(e)) => {
@@ -937,6 +939,7 @@ fn retirement_chain_is_engine_driven_end_to_end() {
         benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
+        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
     };
     let outcome = hh_eval::compare::compare(&input).expect("the removal-diff compare");
     assert_eq!(outcome.reports.len(), 1);

@@ -27,6 +27,7 @@ use hh_eval::scorecard::{render_scorecard, ScorecardInput};
 use hh_ontology::dimensions::DimensionKey;
 use hh_ontology::eval::{Design, MetricValueKind, PreRegistration};
 use hh_ontology::lab::{ContaminationStratum, EnvironmentFamily, SplitLabel};
+use hh_ontology::participant::Granularity;
 use hh_wire::json::Json;
 
 use crate::service::EmbedService;
@@ -112,8 +113,13 @@ pub(crate) fn decode_suites(j: &Json) -> Result<Vec<SuiteContext>, EmbedError> {
         .collect()
 }
 
-/// Decode one `arm_specs[]` member — `{match_spec, caps{dim→int}, native?}`;
-/// search/eval budgets are the same hard caps (the eval boundary's form).
+/// Decode one `arm_specs[]` member — `{match_spec, caps{dim→int}, native?,
+/// search_budget?}`; search/eval budgets are the same hard caps (the eval
+/// boundary's form). A hosted arm (`native: false`) may carry
+/// `"search_budget": "unknown"` — the first-class disclosure value
+/// (ADR-0046 D1, never a silent zero); the arm is then admissible only under
+/// a product-level comparison, which the report flags `search_unknown`.
+/// `unknown` on a native arm is a typed `bad_request`.
 fn decode_arms(j: &Json) -> Result<Vec<ArmSpec>, EmbedError> {
     arr(j, "arm_specs")?
         .iter()
@@ -135,16 +141,30 @@ fn decode_arms(j: &Json) -> Result<Vec<ArmSpec>, EmbedError> {
                 }
             }
             let budget = BudgetSpec::hard_caps(BudgetMode::Pool, &caps);
+            let enforcement = if matches!(a.get("native"), Some(Json::Bool(false))) {
+                BudgetEnforcement::hosted(&[])
+            } else {
+                BudgetEnforcement::native()
+            };
+            let search_budget = match a.get("search_budget") {
+                None => Some(budget.clone()),
+                Some(Json::Str(s)) if s == "unknown" => {
+                    if enforcement.native {
+                        return Err(bad(
+                            "/arm_specs/search_budget",
+                            "unknown requires a hosted arm",
+                        ));
+                    }
+                    None
+                }
+                Some(_) => return Err(bad("/arm_specs/search_budget", "expected \"unknown\"")),
+            };
             Ok(ArmSpec {
-                search_budget: Some(budget.clone()),
+                search_budget,
                 eval_budget: Some(budget),
                 inference_budget: None,
                 match_spec: Some(spec),
-                enforcement: if matches!(a.get("native"), Some(Json::Bool(false))) {
-                    BudgetEnforcement::hosted(&[])
-                } else {
-                    BudgetEnforcement::native()
-                },
+                enforcement,
                 spend_confidence: None,
                 coverage_ppm: None,
                 ensemble_k: None,
@@ -188,6 +208,17 @@ fn compare_input<'a>(
             .get("family_size")
             .and_then(Json::as_int)
             .map(|f| f as u32),
+        // The comparison granularity (R2.16): an explicit `granularity` param
+        // wins; absent it, a search-unknown arm forces `product-level` — the
+        // only granularity that admits the unknown — and otherwise the run is
+        // the default `configuration-level`.
+        granularity: opt_str(params, "granularity")
+            .and_then(|s| Granularity::parse(&s))
+            .unwrap_or(if arms.iter().any(|a| a.search_budget.is_none()) {
+                Granularity::ProductLevel
+            } else {
+                Granularity::ConfigurationLevel
+            }),
     })
 }
 

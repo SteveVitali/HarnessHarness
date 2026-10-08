@@ -497,6 +497,7 @@ fn lt14_brokered_vs_wrapped_compare_under_matchspec() {
         benefit_kind: BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
+        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
     })
     .expect("matched-budget brokered-vs-wrapped compare");
     let r = &out.reports[0];
@@ -564,6 +565,7 @@ fn ac_h4_11_four_arm_matched_budget_comparison() {
             benefit_kind: BenefitKind::ArtifactBenefit,
             held_out: true,
             family_size: Some(4),
+            granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
         })
         .unwrap_or_else(|e| panic!("mediated vs {other} compare: {e}"));
         let r = &out.reports[0];
