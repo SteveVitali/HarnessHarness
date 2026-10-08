@@ -84,6 +84,7 @@ fn pending_request(capability: &str) -> ApprovalRequest {
             model_justification: None,
         },
         batch_id: None,
+        remedies: Vec::new(),
     }
 }
 

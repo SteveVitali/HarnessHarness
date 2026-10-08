@@ -34,6 +34,18 @@ pub enum Decision {
         /// The closed `Remedy` set offered.
         remedies: Vec<Remedy>,
     },
+    /// The human amended the request — the C2 `modify` arm (§5g.7;
+    /// ADR-0070 D1; ADR-0343 D1). The as-proposed effect is refused
+    /// (`action.effect.refused{reason: modified}` — never an allow); the
+    /// `amended_args` are the typed replacement the host may re-submit as
+    /// a fresh request under the same proposer — never a widening, never
+    /// an authority conferral (the legitimacy gate treats it as the
+    /// allow-family decision it is).
+    Modified {
+        /// The amended request args (the narrowing-only re-proposal;
+        /// `Json::Null` when the response carried none).
+        amended_args: Json,
+    },
 }
 
 impl Decision {
@@ -43,6 +55,7 @@ impl Decision {
             Decision::Allow => "allow",
             Decision::Ask { .. } => "ask",
             Decision::Deny { .. } => "deny",
+            Decision::Modified { .. } => "modified",
         }
     }
 }
@@ -334,6 +347,9 @@ impl KernelDecision {
                     "remedies",
                     Json::Arr(remedies.iter().map(|r| r.to_json()).collect()),
                 ));
+            }
+            Decision::Modified { amended_args } => {
+                m.push(("amended_args", amended_args.clone()));
             }
             Decision::Allow => {}
         }

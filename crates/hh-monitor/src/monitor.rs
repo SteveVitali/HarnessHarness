@@ -1353,6 +1353,37 @@ impl Monitor {
                             assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
                         });
                     }
+                    // A recorded `modified` serves the same way — the
+                    // as-proposed effect is refused at the dispatch arm
+                    // (ADR-0343 D1); the amendment re-enters as a fresh
+                    // request, never a re-run of the refused effect.
+                    Decision::Modified { amended_args } => {
+                        let mut c = checks;
+                        c.push(CheckRecord {
+                            enforcement: hh_provenance::flow::EnforcementClass::Deterministic,
+                            step: 7,
+                            outcome: "fail",
+                            detail: format!("recorded_modified:{pid}"),
+                        });
+                        return Ok(KernelDecision {
+                            effect_id: p.effect_id.clone(),
+                            decision: Decision::Modified {
+                                amended_args: amended_args.clone(),
+                            },
+                            effective_authority: eff,
+                            taint,
+                            effective_risk_class: risk,
+                            handle_ids,
+                            policy_ref: self.policy.version_id.clone(),
+                            checks: c,
+                            decider: Decider::Human,
+                            decision_scope: DecisionScope::Once,
+                            cache_key: None,
+                            origin_permission_id: Some(pid.clone()),
+                            remedy_taken: None,
+                            assessment_inputs_ref: Some(assessment_inputs_ref(&p.inputs)),
+                        });
+                    }
                     Decision::Ask { .. } => {}
                 }
             }
@@ -1627,12 +1658,18 @@ fn parse_persistence_scope(s: &str) -> Option<PersistenceScope> {
 /// The Stage-1 `ask` options — ADR-0070 D1's `ApprovalOption.kind` set minus
 /// `modify` (C2): `{allow_once, allow_lease, deny_once, deny_lease, abort_run,
 /// escalate}`.
+/// The ask's offered `ApprovalOption.kind` spellings (ADR-0070 D1's C2
+/// sum + `modify` at R-2.11; ADR-0343 D1). The dispatcher maps the
+/// spellings through `ApprovalOptionId::parse` — an id the closed set
+/// doesn't carry is dropped from the surface-rendered options, never
+/// silently accepted at respond.
 fn stage1_ask_options() -> Vec<String> {
     [
         "allow_once",
         "allow_lease",
         "deny_once",
         "deny_lease",
+        "modify",
         "abort_run",
         "escalate",
     ]

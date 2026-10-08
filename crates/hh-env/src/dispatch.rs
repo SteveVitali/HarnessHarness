@@ -285,6 +285,13 @@ pub struct Dispatcher<'a> {
     /// composed host installs a live broker via `set_egress_broker` (the
     /// composed secret-source seam).
     egress_broker: CredentialBroker,
+    /// The declared ownership roots check 8 (`check_write`) folds at
+    /// `prepare` (§5e.5; ADR-0191 D5; R-2.11 ADR-0343 D3) — `(owner,
+    /// object)` seeds the host arms via `set_ownership_roots` (a run's own
+    /// workspace tree at open; grant/transfer rows fold over the store).
+    /// Empty ⇒ the ownership regime is unarmed and the check does not run
+    /// (a run with no ownership records writes virgin territory).
+    ownership_roots: Vec<(String, hh_monitor::ownership::OwnedObject)>,
 }
 
 impl<'a> Dispatcher<'a> {
@@ -314,7 +321,24 @@ impl<'a> Dispatcher<'a> {
                 Box::new(hh_secrets::DenyAllResolver),
                 format!("kernel-egress/{run_id}"),
             ),
+            ownership_roots: Vec::new(),
         }
+    }
+
+    /// `set_ownership_roots(roots)` — arm monitor check 8's ownership
+    /// projection for this run (R-2.11; ADR-0191 D5): the declared
+    /// `(owner, object)` seeds — a run owns its own workspace tree at
+    /// open — plus every `control.ownership.{granted,transferred,returned}`
+    /// row the store folds. With roots armed, every `fs_write` dispatch
+    /// runs `hh_monitor::ownership::check_write` at `prepare`: a `path`
+    /// under another holder's record is `NotOwner`, a superseded writer
+    /// generation `Fenced`, and the effect closes `refused` (never a
+    /// silent write).
+    pub fn set_ownership_roots(
+        &mut self,
+        roots: Vec<(String, hh_monitor::ownership::OwnedObject)>,
+    ) {
+        self.ownership_roots = roots;
     }
 
     /// `set_egress_broker(broker)` — install the composed credential broker
@@ -738,6 +762,9 @@ impl<'a> Dispatcher<'a> {
         let decision_tag = match &decision.decision {
             Decision::Allow => Some("allow"),
             Decision::Deny { .. } => Some("deny"),
+            // The `modify` terminal records `decision: modified` — a
+            // served re-dispatch restates it verbatim (ADR-0343 D1).
+            Decision::Modified { .. } => Some("modified"),
             Decision::Ask { .. } => None,
         };
         let already_recorded = match decision_tag {
@@ -776,6 +803,25 @@ impl<'a> Dispatcher<'a> {
                 Ok(ev)
             };
         match &decision.decision {
+            Decision::Modified { .. } => {
+                // The C2 `modify` terminal (ADR-0070 D1; ADR-0343 D1): the
+                // as-proposed effect refuses — `refused{reason: modified}`
+                // is the attempt's terminal and the tool-call's rejection;
+                // the amended args re-enter as a fresh request, never a
+                // re-dispatch of this effect.
+                let refused = self.minter_ev().mint_effect(
+                    "action.effect.refused",
+                    events::refused_payload("modified"),
+                    &effect_id,
+                    &input.chain,
+                )?;
+                let rejected = tool_rejected(&self.minter_ev(), "modified")?;
+                self.store
+                    .append(&self.run_id, lease, vec![refused, rejected])?;
+                return Ok(DispatchOutcome::Refused {
+                    reason: "modified".to_string(),
+                });
+            }
             Decision::Deny { reason, .. } => {
                 let refused = self.minter_ev().mint_effect(
                     "action.effect.refused",
@@ -1050,7 +1096,53 @@ impl<'a> Dispatcher<'a> {
                                 model_justification: None,
                             },
                             batch_id,
+                            // The remedy-*ingress* member (R-2.11;
+                            // ADR-0343 D4): the `ask` decision's offered
+                            // `remedies` ride the durable `pending` row
+                            // verbatim — the fold and the `decided` echo
+                            // read the record, never this construction.
+                            remedies: remedies.clone(),
                         };
+                        // R-2.11 (ADR-0343 D2) — the `action.intent.anchored`
+                        // subject the `label.endorsed{basis: approval}` row
+                        // pins at respond time. The anchor's own provenance
+                        // is the *intent's* record — the proposal's folded
+                        // label (`input.args_provenance`), never the kernel
+                        // stamp — so the endorsement's `from` is the honest
+                        // pre-approval label and the rise is the approval's
+                        // durable witness (§5g.1 §9; append-time check-5
+                        // resolves `subject_ref` over the committed prefix,
+                        // hence the anchor lands in this batch, before any
+                        // answer could).
+                        let mut anchor = self.minter_ev().mint_effect(
+                            "action.intent.anchored",
+                            Json::obj([
+                                ("permission_id", Json::str(pid.clone())),
+                                ("effect_id", Json::str(effect_id.clone())),
+                                ("subject_ref", Json::str(input.proposer.clone())),
+                                (
+                                    "capability_ref",
+                                    Json::obj([
+                                        (
+                                            "semantic_id",
+                                            Json::str(input.capability_ref.semantic_id.clone()),
+                                        ),
+                                        (
+                                            "version_id",
+                                            Json::str(input.capability_ref.version_id.clone()),
+                                        ),
+                                    ]),
+                                ),
+                                (
+                                    "args_canonical_hash",
+                                    Json::str(args_canonical_hash.clone()),
+                                ),
+                            ]),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        anchor.provenance = Some(input.args_provenance.clone());
+                        anchor.content_kind = Some(hh_provenance::ContentKind::EffectIntent);
                         let pending = self.minter_ev().mint_effect(
                             "security.permission.pending",
                             hh_monitor::approval::pending_payload(&request, &effect_id, asked_at),
@@ -1065,7 +1157,7 @@ impl<'a> Dispatcher<'a> {
                         )?;
                         let pending_event_id = pending.event_id.clone();
                         self.store
-                            .append(&self.run_id, lease, vec![pending, requested])?;
+                            .append(&self.run_id, lease, vec![anchor, pending, requested])?;
                         // The defer slice (§5a.3): the `permission_decided`
                         // subscription fires when `respond` mints `decided`;
                         // `suspend` records `awaiting_approval` (the writer
@@ -1094,7 +1186,6 @@ impl<'a> Dispatcher<'a> {
                             Json::obj([("on", Json::str("permission_decided"))]),
                             false,
                         )?;
-                        let _ = remedies;
                         return Ok(DispatchOutcome::Suspended { permission_id: pid });
                     }
                 }
@@ -1411,6 +1502,98 @@ impl<'a> Dispatcher<'a> {
         }
 
         // ── 3 prepare ──────────────────────────────────────────────────────
+        // Check 8 — `check_write` at `prepare` (§5e.5; ADR-0191 D5; R-2.11
+        // ADR-0343 D3): an `fs_write` effect whose canonical `path` member
+        // lands under a record another holder owns refuses `NotOwner`; a
+        // declared resource key held elsewhere (or under a superseded
+        // writer generation) refuses `NotOwner`/`Fenced` —
+        // the `security.policy.evaluated{check: ownership, verdict: deny}`
+        // audit row is the typed observation and the effect closes
+        // `refused` (the same shape `hh-subagent`'s merge path records).
+        // The projection folds the armed roots plus every
+        // `control.ownership.*` row across the store (a child sees the
+        // parent's grants to it); unarmed (no roots) ⇒ the ownership
+        // regime is not in play and the check does not run.
+        if !self.ownership_roots.is_empty() {
+            // The objects this effect may write: the canonical `path` of
+            // an `fs_write` plus every `Resources::Declared` key.
+            let mut write_objects: Vec<hh_monitor::ownership::OwnedObject> = Vec::new();
+            if input.declared.domain == EffectDomain::FsWrite {
+                if let Some(path) = canonical.params.get("path").and_then(Json::as_str) {
+                    write_objects.push(hh_monitor::ownership::OwnedObject::FsPathPrefix(
+                        path.to_string(),
+                    ));
+                }
+            }
+            if let hh_hir::records::Resources::Declared(keys) = &input.capability.resources {
+                write_objects.extend(
+                    keys.iter()
+                        .map(|k| hh_monitor::ownership::OwnedObject::ResourceKey(k.clone())),
+                );
+            }
+            if !write_objects.is_empty() {
+                let ownerships = hh_monitor::ownership::OwnershipTable::project(
+                    self.store,
+                    &self.store.run_ids(),
+                    self.ownership_roots.clone(),
+                )
+                .map_err(EnvError::Ledger)?;
+                for object in write_objects {
+                    let verdict = hh_monitor::ownership::check_write(
+                        self.store,
+                        &self.run_id,
+                        lease.generation,
+                        &object,
+                        &ownerships,
+                    )
+                    .map_err(EnvError::Ledger)?;
+                    if !matches!(verdict, hh_monitor::ownership::WriteVerdict::Ok) {
+                        let (detail, reason) = match &verdict {
+                            hh_monitor::ownership::WriteVerdict::NotOwner { owner } => (
+                                Json::obj([
+                                    ("reason", Json::str("not_owner")),
+                                    ("owner", Json::str(owner)),
+                                ]),
+                                format!("NotOwner{{owner: {owner}}}"),
+                            ),
+                            hh_monitor::ownership::WriteVerdict::Fenced { detail } => (
+                                Json::obj([
+                                    ("reason", Json::str("fenced")),
+                                    ("detail", Json::str(detail)),
+                                ]),
+                                format!("Fenced{{{detail}}}"),
+                            ),
+                            hh_monitor::ownership::WriteVerdict::Ok => unreachable!(),
+                        };
+                        let evaluated = self.minter_ev().mint_effect(
+                            "security.policy.evaluated",
+                            Json::obj([
+                                ("check", Json::str("ownership")),
+                                ("verdict", Json::str("deny")),
+                                ("effect_id", Json::str(effect_id.clone())),
+                                ("object", object.to_json()),
+                                ("detail", detail),
+                            ]),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let refused = self.minter_ev().mint_effect(
+                            "action.effect.refused",
+                            events::refused_payload(&reason),
+                            &effect_id,
+                            &input.chain,
+                        )?;
+                        let rejected = tool_rejected(&self.minter_ev(), &reason)?;
+                        self.store.append(
+                            &self.run_id,
+                            lease,
+                            vec![evaluated, refused, rejected],
+                        )?;
+                        return Ok(DispatchOutcome::Refused { reason });
+                    }
+                }
+            }
+        }
         // The attribution token — minted at the egress gate when mediation
         // ran (the `security.egress.*` trail attributes to it), else here.
         let token = match gate_token {
