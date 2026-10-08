@@ -430,6 +430,7 @@ fn input<'a>(
         compensation_plan_id: None,
         baseline_ref: None,
         flow: Default::default(),
+        remedy_taken: None,
     }
 }
 

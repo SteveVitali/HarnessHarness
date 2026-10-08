@@ -345,6 +345,11 @@ const EFFECT_FIELDS: &[AuditField] = &[
     // detached reconciliation's terminal marker (a `preserve_until` sweep
     // writes it for a reaped child).
     af("terminated"),
+    // R2.12 (DF-S2.7-1b; §5g.2 §3; ADR-0343 D4) — `authorized{remedy_taken}`
+    // restates the consumed `Remedy` the re-dispatch ran under (the effect-
+    // side consume record; the `decided` row's member is the take's
+    // attestation).
+    af("remedy_taken"),
     af("schedule_event_id"),
     af("not_before"),
     af("kind"),
@@ -1127,6 +1132,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("action.environment.verified", "hint"),
     // ── action:intent ──
     ("action.intent.anchored", "hint"),
+    // ── action:param ──
+    ("action.param.anchored", "hint"),
     // ── action:tool ──
     ("action.tool.call.refused", "tool.completed"),
     ("action.tool.catalog.built", "hint"),
@@ -1682,6 +1689,16 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // so the subject is durable before the respond-path's endorsement batch
     // (append-time check-5 resolves `subject_ref` over the committed prefix).
     row_prov("action.intent.anchored",   Led, O::Events, false, false, true, None, None),
+    // `action.param.anchored` — the R2.12 param anchor (DF-S2.7-1b; the
+    // sibling class ADR-0343's revisit trigger names for a non-
+    // `EffectIntent` endorsement subject): the durable provenance record a
+    // `validator`-basis `security.label.endorsed` pins. Same shape as the
+    // intent anchor — deliberately non-audit (its provenance is the
+    // param's label, `external`, and an audit-grade stamp would force
+    // `authority = kernel`) and provenance-mandatory. Minted beside the
+    // consume-time endorsement so the append-time subject lookup resolves
+    // `subject_ref` over the committed prefix.
+    row_prov("action.param.anchored",    Led, O::Events, false, false, true, None, None),
     // The `action.tool.*` set — `proposed`/`started` are audit-grade (§5g.6 §3:
     // `started` carries `{execution_id, attribution_token_hash}` — CF-214);
     // `proposed` opens the tool_call scope, the three terminals close it; the two
