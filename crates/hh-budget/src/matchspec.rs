@@ -31,6 +31,7 @@
 //! refuses `none` arms for reporting.
 
 use hh_ontology::dimensions::DimensionId;
+use hh_ontology::participant::Granularity;
 use hh_wire::json::Json;
 use std::collections::BTreeMap;
 
@@ -336,7 +337,32 @@ fn cross_model_admissible(d: DimensionId) -> bool {
 /// `validate_match(arms[]) → ok` (§8.2 §2; ADR-0041 D1–D7). The engine
 /// precondition at `register`/`launch`/`settle`/`close` — refusal, never a
 /// warning (T-LCD-14).
+///
+/// `validate_match` is the strict form — `search_budget` mandatory on every
+/// arm (component/configuration-level semantics). [`validate_match_at`]
+/// takes the comparison's declared granularity; at `product-level` an arm's
+/// `search_budget` may be **unknown** (`None` — the hosted default, §6.5's
+/// class-applicability matrix / ADR-0159 D6), never a silent zero.
 pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
+    validate_match_at(arms, Granularity::ConfigurationLevel)
+}
+
+/// `validate_match_at(arms[], granularity)` — the granularity-aware half
+/// (R2.16; DF-S1.22-2; ADR-0046 D1's "`search_budget` is complete or
+/// `unknown`" — `unknown` is legal only inside a `product-level`
+/// comparison, flagged `search_unknown` on the report). At
+/// `component-level`/`configuration-level` an absent `search_budget` is
+/// `UnbudgetedArm`, as always. At `product-level`:
+///
+/// - `search_budget = None` is admitted (the canonical `unknown`);
+/// - per-dimension cap/metering cross-checks run over the arms that
+///   *declare* a search budget — an unknown-search arm has no observable
+///   ceilings, and the check never fabricates one (T-LCD-07: unknown is
+///   never coerced);
+/// - per-dimension `budget_enforcement` checks still bind every arm;
+/// - `matched_total` still refuses an unknown search budget
+///   (`UnbudgetedArm` — a total over an unknown term cannot be formed).
+pub fn validate_match_at(arms: &[ArmSpec], granularity: Granularity) -> Result<(), MatchError> {
     // ── presence gates (per-arm) ──────────────────────────────────────────
     for (i, arm) in arms.iter().enumerate() {
         if arm.match_spec.is_none() {
@@ -345,7 +371,9 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
                 refusal: MatchRefusal::MissingMatchSpec,
             });
         }
-        if arm.search_budget.is_none() || arm.eval_budget.is_none() {
+        if arm.eval_budget.is_none()
+            || (arm.search_budget.is_none() && granularity != Granularity::ProductLevel)
+        {
             return Err(MatchError {
                 arm: Some(i),
                 refusal: MatchRefusal::UnbudgetedArm,
@@ -523,22 +551,19 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
             }
         }
         // Same MeteringFormula across arms (common rule) — read each arm's
-        // declared metering for the bound key from its search budget.
-        let metering0 = arms[0]
-            .search_budget
-            .as_ref()
-            .expect("checked")
-            .metering_map()
-            .get(dim.as_str())
-            .cloned();
+        // declared metering for the bound key from its search budget. An
+        // unknown-search arm (`product-level` only) declares no metering —
+        // it is skipped, never coerced (T-LCD-07).
+        let metering0 = arms
+            .iter()
+            .filter_map(|a| a.search_budget.as_ref())
+            .next()
+            .and_then(|b| b.metering_map().get(dim.as_str()).cloned());
         for (i, arm) in arms.iter().enumerate().skip(1) {
-            let m = arm
-                .search_budget
-                .as_ref()
-                .expect("checked")
-                .metering_map()
-                .get(dim.as_str())
-                .cloned();
+            let Some(sb) = arm.search_budget.as_ref() else {
+                continue;
+            };
+            let m = sb.metering_map().get(dim.as_str()).cloned();
             if m != metering0 {
                 return Err(MatchError {
                     arm: Some(i),
@@ -553,14 +578,16 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
         match spec0.mode {
             MatchMode::MatchedCap => {
                 // M1: identical hard ceilings on the matched dimensions; every
-                // arm's `budget_enforcement[d] = enforced`.
-                let cap0 = arms[0]
-                    .search_budget
-                    .as_ref()
-                    .expect("checked")
-                    .hard_caps_map()
-                    .get(dim.as_str())
-                    .copied();
+                // arm's `budget_enforcement[d] = enforced`. The reference cap
+                // is the first *declaring* arm's (a product-level
+                // unknown-search arm carries no caps — it still owes the
+                // enforcement level, but the cap comparison never fabricates
+                // a ceiling for it).
+                let cap0 = arms
+                    .iter()
+                    .filter_map(|a| a.search_budget.as_ref())
+                    .next()
+                    .and_then(|b| b.hard_caps_map().get(dim.as_str()).copied());
                 for (i, arm) in arms.iter().enumerate() {
                     let e = arm.enforcement.level(dim);
                     if e != EnforcementLevel::Enforced {
@@ -576,13 +603,10 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
                     if i == 0 {
                         continue;
                     }
-                    let cap = arm
-                        .search_budget
-                        .as_ref()
-                        .expect("checked")
-                        .hard_caps_map()
-                        .get(dim.as_str())
-                        .copied();
+                    let Some(sb) = arm.search_budget.as_ref() else {
+                        continue;
+                    };
+                    let cap = sb.hard_caps_map().get(dim.as_str()).copied();
                     let equal = match (cap0, cap) {
                         (Some(a), Some(b)) => {
                             // `tolerance` admits bounded slack: |a−b| ≤ tol × max.
@@ -669,13 +693,10 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
             .collect();
         let mut extra: Vec<String> = Vec::new();
         for arm in arms {
-            for k in arm
-                .search_budget
-                .as_ref()
-                .expect("checked")
-                .hard_caps_map()
-                .keys()
-            {
+            let Some(sb) = arm.search_budget.as_ref() else {
+                continue; // unknown search — no caps to extend the check with
+            };
+            for k in sb.hard_caps_map().keys() {
                 if !declared.contains(k) && !extra.contains(k) {
                     extra.push(k.clone());
                 }
@@ -684,13 +705,11 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
         extra.sort();
         for k in extra {
             let dim = DimensionId::parse(&k);
-            let cap0 = arms[0]
-                .search_budget
-                .as_ref()
-                .expect("checked")
-                .hard_caps_map()
-                .get(&k)
-                .copied();
+            let cap0 = arms
+                .iter()
+                .filter_map(|a| a.search_budget.as_ref())
+                .next()
+                .and_then(|b| b.hard_caps_map().get(&k).copied());
             for (i, arm) in arms.iter().enumerate() {
                 // The M1 enforceability bar extends to the searched dims a
                 // cap-matched arm declares — an unenforceable ceiling is no
@@ -711,13 +730,10 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
                 if i == 0 {
                     continue;
                 }
-                let cap = arm
-                    .search_budget
-                    .as_ref()
-                    .expect("checked")
-                    .hard_caps_map()
-                    .get(&k)
-                    .copied();
+                let Some(sb) = arm.search_budget.as_ref() else {
+                    continue;
+                };
+                let cap = sb.hard_caps_map().get(&k).copied();
                 let equal = match (cap0, cap) {
                     (Some(a), Some(b)) => {
                         let tol = (spec0.tolerance_ppm.max(0) as i128 * (a.max(b) as i128)
@@ -753,7 +769,11 @@ pub fn validate_match(arms: &[ArmSpec]) -> Result<(), MatchError> {
                     *t.entry(k).or_insert(0) += v;
                 }
             }
-            arm.inference_budget.as_ref()?; // M3 needs all three terms
+            // M3 needs all three terms — a `search_budget = unknown` arm
+            // (product-level) cannot form a total: `UnbudgetedArm`, never a
+            // sum that silently drops the unknown term.
+            arm.search_budget.as_ref()?;
+            arm.inference_budget.as_ref()?;
             Some(t)
         };
         let t0 = total(&arms[0]).ok_or(MatchError {

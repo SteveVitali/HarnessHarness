@@ -137,6 +137,7 @@ fn arm_cfg(
     Ok(ArmConfiguration {
         configuration_id: pinned(&format!("cfg.{}", a.arm_id)),
         configuration_version_id: pinned(&format!("cfgv.{}", a.arm_id)),
+        budget_ref: None,
     })
 }
 

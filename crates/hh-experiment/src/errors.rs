@@ -172,6 +172,7 @@ pub fn refusal_code(r: &ExperimentRefusal) -> &'static str {
         ExperimentRefusal::SplitUnassigned { .. } => "SplitUnassigned",
         ExperimentRefusal::LeakedSplit { .. } => "LeakedSplit",
         ExperimentRefusal::UnsealedArtifact { .. } => "UnsealedArtifact",
+        ExperimentRefusal::BudgetMismatchWithinArm { .. } => "BudgetMismatchWithinArm",
         ExperimentRefusal::InsufficientReplicates { .. } => "InsufficientReplicates",
         ExperimentRefusal::ResolutionInsufficient { .. } => "ResolutionInsufficient",
         ExperimentRefusal::ProfilePinnedAcrossProfiles { .. } => "ProfilePinnedAcrossProfiles",

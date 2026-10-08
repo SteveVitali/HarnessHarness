@@ -1623,6 +1623,7 @@ fn at_h1_15_pi_experiment_reports_matched_comparison() {
             benefit_kind: BenefitKind::ArtifactBenefit,
             held_out: true,
             family_size: None,
+            granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
         })
         .unwrap();
         assert_eq!(out.reports.len(), 1);
@@ -2480,6 +2481,7 @@ fn ac_h2_10_taint_gate_experiment_reports_and_decides_default() {
         benefit_kind: BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
+        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
     })
     .unwrap();
     let r = &out.reports[0];
@@ -2792,6 +2794,7 @@ fn ac_r_2_1_5_10_utility_measurement_is_matched() {
         benefit_kind: BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
+        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
     })
     .unwrap();
     assert_eq!(
