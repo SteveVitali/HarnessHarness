@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:6942232b9796601647ebaae5d0aae414ad385d4f42811dbd5e42be2e51ae02d2";
+    "sha256:b636f7388e32524d3873033ec0dd90ad5cbe5ce8089bd2f29d0be8de637053e6";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -7813,6 +7813,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.producer.record_analysis` → `json` (see the contract registry).
     pub fn lab_producer_record_analysis(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.producer.record_analysis", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.receipt.record` → `json` (see the contract registry).
+    pub fn lab_receipt_record(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.receipt.record", params.clone())?;
         Ok(raw)
     }
 

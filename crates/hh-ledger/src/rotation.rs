@@ -87,7 +87,23 @@ pub fn rotate(
     signer: &mut dyn AuditSigner,
     plan: &RotationPlan,
 ) -> Result<RotationReceipt, LedgerError> {
-    rotate_impl(store, run_id, lease, signer, plan, None)
+    rotate_impl(store, run_id, lease, signer, plan, None, &mut [])
+}
+
+/// `rotate` with witness cosignatures — the C2 pair (§5g.6 §2; S-320;
+/// ADR-0345 D1): the bridge record mints exactly as before; the rotation
+/// claim mints through [`Store::rotation_checkpoint_witnessed`], so each
+/// cosignature covers the post-rotation unsigned note (the claim's own
+/// `identity_profile`/`rehash` are part of the covered note).
+pub fn rotate_witnessed(
+    store: &mut Store,
+    run_id: &str,
+    lease: &Lease,
+    signer: &mut dyn AuditSigner,
+    plan: &RotationPlan,
+    witnesses: &mut [&mut dyn crate::audit::WitnessSigner],
+) -> Result<RotationReceipt, LedgerError> {
+    rotate_impl(store, run_id, lease, signer, plan, None, witnesses)
 }
 
 /// `rotate` with an explicit `links_run_ids` — the corpus driver's call.
@@ -98,6 +114,7 @@ fn rotate_impl(
     signer: &mut dyn AuditSigner,
     plan: &RotationPlan,
     links: Option<Vec<String>>,
+    witnesses: &mut [&mut dyn crate::audit::WitnessSigner],
 ) -> Result<RotationReceipt, LedgerError> {
     let (from, to) = plan.validate().map_err(rot_err)?;
     // The bridge record is minted first — the checkpoint's
@@ -138,8 +155,18 @@ fn rotate_impl(
     } else {
         (None, None)
     };
-    let checkpoint =
-        store.rotation_checkpoint(run_id, lease, signer, plan, bridge_event_id.as_deref())?;
+    let checkpoint = if witnesses.is_empty() {
+        store.rotation_checkpoint(run_id, lease, signer, plan, bridge_event_id.as_deref())?
+    } else {
+        store.rotation_checkpoint_witnessed(
+            run_id,
+            lease,
+            signer,
+            plan,
+            bridge_event_id.as_deref(),
+            witnesses,
+        )?
+    };
     let _ = from;
     Ok(RotationReceipt {
         checkpoint,
@@ -243,6 +270,7 @@ pub fn rotate_corpus(
             signer,
             plan,
             Some(links.clone()),
+            &mut [],
         )?);
     }
     Ok(receipts)

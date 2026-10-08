@@ -230,11 +230,15 @@ pub(crate) struct RunState {
 }
 
 /// The extra members only a rotation claim carries (`§5g.6 §2`,
-/// R-2.8.6): `rehash` (excluded from the signed preimage — it is derived
-/// data), `bridge_record_ref`/`attestation_ref` (signed claim content).
+/// R-2.8.6): `rotation_to` (the post-rotation `identity_profile`),
+/// `rehash` (excluded from the signed preimage — it is derived data),
+/// `bridge_record_ref`/`attestation_ref` (signed claim content).
 /// `none()` is what every ordinary `checkpoint` emits.
 #[derive(Debug, Default)]
 pub(crate) struct CheckpointExtras {
+    /// The post-rotation identity profile the claim digests under
+    /// (`to_idp`); absent on ordinary claims.
+    pub rotation_to: Option<String>,
     /// The `{idp', chain_hash', tree_head'}` recomputation (unsigned).
     pub rehash: Option<Json>,
     /// The `security.audit.bridge` event id the rotation minted.
@@ -2259,6 +2263,31 @@ impl Store {
                     }
                 }
             }
+            // Witness cosignatures (§5g.6 §2 C2; S-320; ADR-0345 D3) — the
+            // one shared check. Without a resolver the run is shape-plus-
+            // declaration-plus-quorum only (the honest posture the primary
+            // signatures take); with one, each cosignature's HMAC verifies
+            // and an unresolvable declared witness key is a custody gap —
+            // `SignerUnavailable`, never a fabricated pass.
+            crate::audit::check_witness_cosignatures(
+                &claim,
+                manifest.witness_policy.as_ref(),
+                keys,
+            )
+            .map_err(|d| match d {
+                crate::audit::WitnessDefect::KeyUnresolvable(detail) => {
+                    LedgerError::SignerUnavailable {
+                        run_id: run_id.to_string(),
+                        detail: format!(
+                            "witness key_id {detail} does not resolve through the                              supplied key resolver"
+                        ),
+                    }
+                }
+                crate::audit::WitnessDefect::QuorumUnmet { .. } => {
+                    tampered(env.seq, TamperedKind::CheckpointInvalid)
+                }
+                _ => tampered(env.seq, TamperedKind::BadSignature),
+            })?;
             // Cross-run anchors — each claim recomputes against the named
             // run's durable prefix. A contradiction is `fork_equivocation`;
             // a run this store does not hold is unresolvable — surfaced by
@@ -2370,13 +2399,52 @@ impl Store {
                 detail: "kind = rotation is minted through rotation_checkpoint".into(),
             });
         }
-        self.checkpoint_inner(run_id, lease, kind, signer, None, &CheckpointExtras::none())
+        self.checkpoint_inner(
+            run_id,
+            lease,
+            kind,
+            signer,
+            &mut [],
+            &CheckpointExtras::none(),
+        )
     }
 
-    /// The claim-emit core shared by [`Store::checkpoint`] and
-    /// [`Store::rotation_checkpoint`]. `rotation_to` overrides the claim's
-    /// `identity_profile` (the rotation claim digests under `to_idp`);
-    /// `extras` carries the rotation-only members (`rehash`,
+    /// `checkpoint` with witness cosignatures (§5g.6 §2 — the C2 witness
+    /// extension; S-320; ADR-0345 D1). Each supplied [`WitnessSigner`] mints a
+    /// `{witness_name, key_id, timestamp, sig}` entry over
+    /// `timestamp ‖ <the same unsigned note>` — witness custody is external
+    /// exactly like the primary signer's (OQ-170 stays open). When the run's
+    /// manifest declares `witness_policy`, the supplied witnesses must
+    /// satisfy it — a checkpoint below its own declared quorum is a signed
+    /// head the kernel cannot substantiate (`SignerUnavailable`, never
+    /// silently minted).
+    pub fn checkpoint_witnessed(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        kind: CheckpointKind,
+        signer: &mut dyn AuditSigner,
+        witnesses: &mut [&mut dyn crate::audit::WitnessSigner],
+    ) -> Result<EventEnvelope, LedgerError> {
+        if kind == CheckpointKind::Rotation {
+            return Err(LedgerError::SchemaViolation {
+                detail: "kind = rotation is minted through rotation_checkpoint_witnessed".into(),
+            });
+        }
+        self.checkpoint_inner(
+            run_id,
+            lease,
+            kind,
+            signer,
+            witnesses,
+            &CheckpointExtras::none(),
+        )
+    }
+
+    /// The claim-emit core shared by [`Store::checkpoint`] /
+    /// [`Store::checkpoint_witnessed`] and the rotation pair. `witnesses`
+    /// carries the C2 cosigners (empty for the pre-C2 ops); `extras`
+    /// carries the rotation-only members (`rotation_to`, `rehash`,
     /// `bridge_record_ref`, `attestation_ref`).
     fn checkpoint_inner(
         &mut self,
@@ -2384,7 +2452,7 @@ impl Store {
         lease: &Lease,
         kind: CheckpointKind,
         signer: &mut dyn AuditSigner,
-        rotation_to: Option<String>,
+        witnesses: &mut [&mut dyn crate::audit::WitnessSigner],
         extras: &CheckpointExtras,
     ) -> Result<EventEnvelope, LedgerError> {
         let rec = self.active_lease(run_id, lease)?;
@@ -2431,7 +2499,7 @@ impl Store {
         // ordinary checkpoint continues under the previous claim's
         // `identity_profile` (absent ⇒ the manifest's `idp` — every
         // pre-rotation claim is idp/1); a rotation claim digests under
-        // `to_idp` (`rotation_to` overrides). The leaf digests are
+        // `to_idp` (`extras.rotation_to` overrides). The leaf digests are
         // *recomputed* under the claim profile — stored hashes are never
         // rewritten; under `idp/1` `rehashed_leaves` returns exactly the
         // stored `hash` values (same construction, one path — CC1).
@@ -2448,7 +2516,8 @@ impl Store {
             .as_ref()
             .and_then(|c| c.identity_profile.clone())
             .unwrap_or_else(|| manifest.idp.clone());
-        let claim_profile_name = rotation_to
+        let claim_profile_name = extras
+            .rotation_to
             .clone()
             .unwrap_or_else(|| prev_profile_name.clone());
         let claim_profile =
@@ -2681,6 +2750,64 @@ impl Store {
                 run_id: run_id.to_string(),
                 detail: format!("signer {}: {e}", signer.key_id()),
             })?;
+        // ── witness cosignatures (§5g.6 §2; S-320; ADR-0345 D1). Each
+        // cosignature is `hmac-sha256(key, timestamp_ms ‖ <the same unsigned
+        // note>)` — `unsigned_checkpoint` excludes `witness_cosignatures`
+        // from the signed preimage, so the witness entries cover exactly
+        // the note the primary signer covered. When the manifest declares
+        // `witness_policy`, (a) every supplied `(witness_name, key_id)`
+        // must be a declared pair, and (b) the count of distinct supplied
+        // `key_id`s must reach `required` — the kernel refuses to mint a
+        // claim its own policy cannot substantiate (`SignerUnavailable`,
+        // the `InconsistentHead` posture).
+        let witness_cosignatures: Option<Json> =
+            if witnesses.is_empty() && manifest.witness_policy.is_none() {
+                None
+            } else {
+                if let Some(p) = &manifest.witness_policy {
+                    for w in witnesses.iter() {
+                        if !p.declares(w.witness_name(), w.key_id()) {
+                            return Err(LedgerError::SignerUnavailable {
+                                run_id: run_id.to_string(),
+                                detail: format!(
+                                    "witness ({}, {}) is not a manifest witness_policy pair",
+                                    w.witness_name(),
+                                    w.key_id()
+                                ),
+                            });
+                        }
+                    }
+                    let distinct: BTreeSet<&str> = witnesses.iter().map(|w| w.key_id()).collect();
+                    if distinct.len() < p.required as usize {
+                        return Err(LedgerError::SignerUnavailable {
+                            run_id: run_id.to_string(),
+                            detail: format!(
+                                "witness_policy requires {} distinct cosigners; {} supplied",
+                                p.required,
+                                distinct.len()
+                            ),
+                        });
+                    }
+                }
+                let mut cosignatures = Vec::with_capacity(witnesses.len());
+                for w in witnesses.iter_mut() {
+                    let ts_ms = self.clock.now_ms();
+                    let wpreimage = crate::tree::witness_sig_preimage(ts_ms, &unsigned);
+                    let wsig = w
+                        .sign(&wpreimage)
+                        .map_err(|e| LedgerError::SignerUnavailable {
+                            run_id: run_id.to_string(),
+                            detail: format!("witness {}: {e}", w.key_id()),
+                        })?;
+                    cosignatures.push(Json::obj([
+                        ("witness_name", Json::str(w.witness_name())),
+                        ("key_id", Json::str(w.key_id())),
+                        ("timestamp", Json::Int(ts_ms as i64)),
+                        ("sig", Json::str(crate::audit::render_sig(&wsig))),
+                    ]));
+                }
+                Some(Json::Arr(cosignatures))
+            };
         let mut members = match unsigned {
             Json::Obj(m) => m,
             _ => BTreeMap::new(),
@@ -2693,6 +2820,9 @@ impl Store {
                 ("sig", Json::str(crate::audit::render_sig(&sig_bytes))),
             ])]),
         );
+        if let Some(cosignatures) = witness_cosignatures {
+            members.insert("witness_cosignatures".to_string(), cosignatures);
+        }
         let idp = crate::tree::checkpoint_idp_in(claim_profile, &Json::Obj(members.clone()));
         members.insert("idp".to_string(), Json::str(idp));
         let payload = Json::Obj(members);
@@ -2766,6 +2896,7 @@ impl Store {
             });
         }
         let extras = CheckpointExtras {
+            rotation_to: Some(to.idp_id.to_string()),
             rehash: Some(crate::rotation::rehash_claim(
                 state.events.iter(),
                 from.idp_id,
@@ -2779,9 +2910,137 @@ impl Store {
             lease,
             CheckpointKind::Rotation,
             signer,
-            Some(to.idp_id.to_string()),
+            &mut [],
             &extras,
         )
+    }
+
+    /// `rotation_checkpoint` with witness cosignatures — the C2 pair to
+    /// [`Store::rotation_checkpoint`] (§5g.6 §2; S-320; ADR-0345 D1). A
+    /// rotation claim mints its cosignatures over the *post-rotation*
+    /// unsigned note (the claim's own `identity_profile`/`rehash` members
+    /// are part of the covered note), so witnessed rotation needs no
+    /// special case — the same preimage construction applies.
+    pub fn rotation_checkpoint_witnessed(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        signer: &mut dyn AuditSigner,
+        plan: &hh_identity::rotation::RotationPlan,
+        bridge_record_ref: Option<&str>,
+        witnesses: &mut [&mut dyn crate::audit::WitnessSigner],
+    ) -> Result<EventEnvelope, LedgerError> {
+        let (from, to) = plan.validate().map_err(|e| LedgerError::SchemaViolation {
+            detail: e.to_string(),
+        })?;
+        let state = self.run(run_id)?;
+        if state.finished {
+            return Err(LedgerError::RunFinished {
+                run_id: run_id.to_string(),
+            });
+        }
+        let current_profile = state
+            .events
+            .iter()
+            .rev()
+            .find(|e| e.class == "security.audit.checkpoint")
+            .and_then(|e| crate::tree::parse_checkpoint(&e.payload))
+            .and_then(|c| c.identity_profile)
+            .unwrap_or_else(|| state.manifest.idp.clone());
+        if current_profile != from.idp_id {
+            return Err(LedgerError::SchemaViolation {
+                detail: format!(
+                    "idp_not_writable: rotation plan names from_idp {} but the run's                      current claim profile is {current_profile}",
+                    from.idp_id
+                ),
+            });
+        }
+        let extras = CheckpointExtras {
+            rotation_to: Some(to.idp_id.to_string()),
+            rehash: Some(crate::rotation::rehash_claim(
+                state.events.iter(),
+                from.idp_id,
+                to,
+            )),
+            bridge_record_ref: bridge_record_ref.map(str::to_string),
+            attestation_ref: plan.attestation_ref.clone(),
+        };
+        self.checkpoint_inner(
+            run_id,
+            lease,
+            CheckpointKind::Rotation,
+            signer,
+            witnesses,
+            &extras,
+        )
+    }
+
+    /// `record_receipt(run, lease, receipt)` — the C2 receiver-receipt lift
+    /// (§5g.6 §2; S-324; ADR-0345 D4). Commits a kernel-origin
+    /// `lifecycle.ledger.receipt` row carrying the receiver-supplied record
+    /// *as supplied* — the row is the kernel fact "this receipt was
+    /// lifted"; the receipt's own claims keep `status = unverified` /
+    /// `external` (T-LCD-07 — the kernel never fabricates receiver
+    /// verification, and the fixed status member means no receipt row can
+    /// carry a verification claim the kernel did not make).
+    ///
+    /// Bindings (refused, never silently weakened): `effect_id` must name an
+    /// effect in the run's durable fold (`UnknownEffect`); `observed_ref`,
+    /// when carried, must name this run's `action.effect.observed` row for
+    /// that effect. `receipt_id` is the idempotence key — an identical
+    /// re-record returns the existing row; a same-id/different-members
+    /// record refuses.
+    pub fn record_receipt(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        receipt: &crate::receipt::Receipt,
+    ) -> Result<EventEnvelope, LedgerError> {
+        receipt
+            .validate()
+            .map_err(|detail| LedgerError::SchemaViolation { detail })?;
+        let state = self.run(run_id)?;
+        if !state.effects.contains_key(&receipt.effect_id) {
+            return Err(LedgerError::UnknownEffect {
+                effect_id: receipt.effect_id.clone(),
+            });
+        }
+        if let Some(obs) = &receipt.observed_ref {
+            let bound = state.events.iter().any(|e| {
+                e.event_id == *obs
+                    && e.class == "action.effect.observed"
+                    && e.scope.effect_id.as_deref() == Some(receipt.effect_id.as_str())
+            });
+            if !bound {
+                return Err(LedgerError::SchemaViolation {
+                    detail: format!(
+                        "receipt.observed_ref {obs} names no action.effect.observed row for                          effect {}",
+                        receipt.effect_id
+                    ),
+                });
+            }
+        }
+        let payload = receipt.to_json();
+        for e in state
+            .events
+            .iter()
+            .filter(|e| e.class == "lifecycle.ledger.receipt")
+        {
+            if e.payload.get("receipt_id").and_then(Json::as_str)
+                == Some(receipt.receipt_id.as_str())
+            {
+                if e.payload == payload {
+                    return Ok(e.clone());
+                }
+                return Err(LedgerError::SchemaViolation {
+                    detail: format!(
+                        "receipt_id {} already recorded with different members",
+                        receipt.receipt_id
+                    ),
+                });
+            }
+        }
+        self.emit_system(run_id, lease, "lifecycle.ledger.receipt", payload)
     }
 
     /// Mint a kernel-origin event on `run_id` — the bridge-row emit path
