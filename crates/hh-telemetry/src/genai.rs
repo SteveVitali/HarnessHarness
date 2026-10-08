@@ -25,6 +25,12 @@ use crate::export::{LossEntry, LOSS_REPORT_DOMAIN};
 /// A `(seq, event_class, payload)` durable-prefix row.
 pub type Envelope<'a> = (u64, &'a str, &'a Json);
 
+/// A `(seq, run_id, event_id, event_class, payload)` durable-prefix row —
+/// the liftable input (R2.14, DF-S1.14-2): each produced span carries the
+/// `hh.run_id`/`hh.event_id` attributes [`crate::lift::lift_span`]
+/// resolves back to the source `EventRef`.
+pub type RefEnvelope<'a> = (u64, &'a str, &'a str, &'a str, &'a Json);
+
 /// The GenAI attribute spellings the lowering emits (the OTel semantic
 /// conventions the spec names).
 pub mod attr {
@@ -457,24 +463,55 @@ pub fn lower_verdict(seq: u64, payload: &Json) -> (Json, Vec<LossEntry>) {
 /// loss. Non-`model.*` envelopes are outside this projection's scope and
 /// pass silently — the caller composes the run's other lowerings.
 pub fn lower_run(events: &[Envelope<'_>]) -> GenAiExport {
+    lower_run_gen(
+        events
+            .iter()
+            .map(|(seq, class, p)| (*seq, None, *class, *p)),
+    )
+}
+
+/// `lower_run_refs(envelopes)` — the liftable leg (R2.14, DF-S1.14-2):
+/// the same lowering, with each produced span stamped `hh.run_id` /
+/// `hh.event_id` so [`crate::lift::lift_span`] resolves the sink row back
+/// to its source `EventRef`. The loss rules are unchanged — the `hh.*`
+/// members are the carrier, not convention attributes.
+pub fn lower_run_refs(events: &[RefEnvelope<'_>]) -> GenAiExport {
+    lower_run_gen(
+        events
+            .iter()
+            .map(|(seq, run, ev, class, p)| (*seq, Some((*run, *ev)), *class, *p)),
+    )
+}
+
+/// The shared fold — `coords` is the `(run_id, event_id)` pair the
+/// liftable leg stamps (`None` keeps the pre-R2.14 byte shape).
+fn lower_run_gen<'a>(
+    it: impl Iterator<Item = (u64, Option<(&'a str, &'a str)>, &'a str, &'a Json)>,
+) -> GenAiExport {
     let mut spans = Vec::new();
     let mut loss = Vec::new();
     let mut lo = u64::MAX;
     let mut hi = 0u64;
-    for (seq, class, payload) in events {
+    for (seq, coords, class, payload) in it {
         if !class.starts_with("model.") {
             continue;
         }
-        lo = lo.min(*seq);
-        hi = hi.max(*seq);
-        match *class {
+        lo = lo.min(seq);
+        hi = hi.max(seq);
+        match class {
             "model.call.completed" => {
-                let (span, mut l) = lower_model_call(*seq, payload);
+                let (mut span, mut l) = lower_model_call(seq, payload);
+                if let Some((run, ev)) = coords {
+                    crate::lift::stamp_liftable(&mut span, run, ev);
+                }
                 spans.push(span);
                 loss.append(&mut l);
             }
             "model.call.failed" => {
-                let (span, mut l) = lower_call_failed(*seq, payload);
+                let (mut span, mut l) = lower_call_failed(seq, payload);
+                if let Some((run, ev)) = coords {
+                    crate::lift::stamp_liftable(&mut span, run, ev);
+                }
                 spans.push(span);
                 loss.append(&mut l);
             }
@@ -511,6 +548,6 @@ pub fn lower_run(events: &[Envelope<'_>]) -> GenAiExport {
     GenAiExport {
         spans,
         loss,
-        seq_range: if events.is_empty() { (0, 0) } else { (lo, hi) },
+        seq_range: if lo == u64::MAX { (0, 0) } else { (lo, hi) },
     }
 }

@@ -20,3 +20,6 @@ hh-mcp = { path = "../hh-mcp" }
 hh-compiler = { path = "../hh-compiler" }
 # `FixedSigner`/`KeyTable` for the A2A card signature fixture seam.
 hh-ledger = { path = "../hh-ledger" }
+# R2.14 — the propagation carrier's `_meta.hh` member set is
+# hh-telemetry's single definition (CC1).
+hh-telemetry = { path = "../hh-telemetry" }

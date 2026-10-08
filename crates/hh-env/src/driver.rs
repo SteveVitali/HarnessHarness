@@ -899,6 +899,13 @@ impl EnvDriver {
             })?;
         h.verify_environment()?;
         h.transition(HandleState::Detached, now)?;
+        // R2.14 (M13) — the attach→detach span measured on the store's
+        // clock (`session.attached_at_ms` is the recorded open), read
+        // before the session clears.
+        let env_ms = h
+            .session
+            .as_ref()
+            .map(|s| now.saturating_sub(s.attached_at_ms));
         h.session = None;
         // The helper session releases with the handle — the channel closes;
         // the helper's `preserve_until` keeps its journal so a later
@@ -908,7 +915,7 @@ impl EnvDriver {
         }
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.detached",
-            events::detached_payload(h, "released"),
+            events::detached_payload(h, "released", env_ms),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         // S4.13 (R-2.2.5¹) — provider detach semantics: `remote_persistent`
@@ -1050,6 +1057,10 @@ impl EnvDriver {
             env_handle_id: env_handle_id.to_string(),
             state: "no_adapter",
         })?;
+        // R2.14 (M13) — the hibernation take window measured on the
+        // store's clock (suspend + memory snapshot + the record's blob
+        // deposit).
+        let snap_t0 = store.now_ms();
         adapter.suspend(&ph)?;
         let remote_ref = match adapter.memory_snapshot(&ph) {
             Ok(r) => r,
@@ -1101,6 +1112,7 @@ impl EnvDriver {
             "action.environment.suspend.requested",
             events::suspend_requested_payload(h, Some("hibernate")),
         )?;
+        let snap_done = store.now_ms();
         let snap = EventMinter::new(store, &self.run_id).mint(
             "action.environment.snapshot",
             events::snapshot_payload(
@@ -1111,6 +1123,10 @@ impl EnvDriver {
                 Some(&manifest_ref),
                 rec.taken_by,
                 rec.quiesced,
+                h.session
+                    .as_ref()
+                    .map(|s| snap_done.saturating_sub(s.attached_at_ms)),
+                Some(snap_done.saturating_sub(snap_t0)),
             ),
         )?;
         let mut suspended_j = events::suspended_payload(h, Some("hibernate"));
@@ -2087,6 +2103,9 @@ impl EnvDriver {
         env_handle_id: &str,
         taken_by: TakenBy,
     ) -> Result<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot), EnvError> {
+        // R2.14 (M13) — the take window's measured open on the store's
+        // clock (`snapshot_ms` on the row).
+        let snap_t0 = store.now_ms();
         let (roots, image_base) = {
             let h = self
                 .handles
@@ -2147,6 +2166,7 @@ impl EnvDriver {
             .id();
         let h = self.handles.get_mut(env_handle_id).unwrap();
         h.snapshots.push(rec.snapshot_ref.clone());
+        let snap_done = store.now_ms();
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.snapshot",
             events::snapshot_payload(
@@ -2157,6 +2177,10 @@ impl EnvDriver {
                 Some(&manifest_ref),
                 rec.taken_by,
                 rec.quiesced,
+                h.session
+                    .as_ref()
+                    .map(|s| snap_done.saturating_sub(s.attached_at_ms)),
+                Some(snap_done.saturating_sub(snap_t0)),
             ),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
@@ -2259,6 +2283,8 @@ impl EnvDriver {
         env_handle_id: &str,
         taken_by: TakenBy,
     ) -> Result<SnapshotRecord, EnvError> {
+        // R2.14 (M13) — the take window's measured open (`snapshot_ms`).
+        let snap_t0 = store.now_ms();
         let h = self
             .handles
             .get(env_handle_id)
@@ -2329,6 +2355,7 @@ impl EnvDriver {
             .id();
         let h = self.handles.get_mut(env_handle_id).unwrap();
         h.snapshots.push(rec.snapshot_ref.clone());
+        let snap_done = store.now_ms();
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.snapshot",
             events::snapshot_payload(
@@ -2339,6 +2366,10 @@ impl EnvDriver {
                 Some(&manifest_ref),
                 rec.taken_by,
                 rec.quiesced,
+                h.session
+                    .as_ref()
+                    .map(|s| snap_done.saturating_sub(s.attached_at_ms)),
+                Some(snap_done.saturating_sub(snap_t0)),
             ),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
@@ -2822,6 +2853,8 @@ impl EnvDriver {
         lease: &Lease,
         env_handle_id: &str,
     ) -> Result<(SnapshotRecord, PathBaseline), EnvError> {
+        // R2.14 (M13) — the take window's measured open (`snapshot_ms`).
+        let snap_t0 = store.now_ms();
         let (roots, image_base) = {
             let h = self
                 .handles
@@ -2871,6 +2904,10 @@ impl EnvDriver {
                 None,
                 rec.taken_by,
                 rec.quiesced,
+                h.session
+                    .as_ref()
+                    .map(|s| store.now_ms().saturating_sub(s.attached_at_ms)),
+                Some(store.now_ms().saturating_sub(snap_t0)),
             ),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
@@ -3177,10 +3214,16 @@ impl EnvDriver {
         let now = store.now_ms();
         let h = self.handles.get_mut(env_handle_id).unwrap();
         h.transition(HandleState::Detached, now)?;
+        // R2.14 (M13) — the attach-age the row closes, read before the
+        // session clears.
+        let env_ms = h
+            .session
+            .as_ref()
+            .map(|s| now.saturating_sub(s.attached_at_ms));
         h.session = None;
         let detached = EventMinter::new(store, &self.run_id).mint(
             "action.environment.detached",
-            events::detached_payload(h, "replaced_by_successor"),
+            events::detached_payload(h, "replaced_by_successor", env_ms),
         )?;
         let restored = EventMinter::new(store, &self.run_id).mint(
             "action.environment.restored",

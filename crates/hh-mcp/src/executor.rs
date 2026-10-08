@@ -84,6 +84,11 @@ fn mcp_declaration() -> ExecutorDeclaration {
 pub struct McpExecutor<T: Transport> {
     client: McpClient<T>,
     declaration: ExecutorDeclaration,
+    /// R2.14 — when set, `execute`'s `tools/call` carries the
+    /// propagation context in `params._meta["dev.cognition/propagation"]`
+    /// (§5h.1 §2.3). `None` is the uninstrumented leg — absent, not
+    /// dropped (no loss is owed for a member that was never produced).
+    propagation: Option<hh_telemetry::propagation::PropagationContext>,
 }
 
 impl<T: Transport> McpExecutor<T> {
@@ -93,6 +98,7 @@ impl<T: Transport> McpExecutor<T> {
         Ok(McpExecutor {
             client: McpClient::connect(transport)?,
             declaration: mcp_declaration(),
+            propagation: None,
         })
     }
 
@@ -104,6 +110,14 @@ impl<T: Transport> McpExecutor<T> {
     /// The negotiated client, mutable (`drain_notifications` et al).
     pub fn client_mut(&mut self) -> &mut McpClient<T> {
         &mut self.client
+    }
+
+    /// `set_propagation(ctx)` — arm/clear the R2.14 carrier. The
+    /// context the driver stamps (run/event coordinates in the `hh`
+    /// tracestate member) rides every subsequent `tools/call` until
+    /// cleared — a *new* context replaces, `None` clears.
+    pub fn set_propagation(&mut self, ctx: Option<hh_telemetry::propagation::PropagationContext>) {
+        self.propagation = ctx;
     }
 
     /// One terminal report with the executor's honest hints.
@@ -133,17 +147,27 @@ impl<T: Transport> ToolExecutor for McpExecutor<T> {
     ) -> Result<TerminalReport, EnvError> {
         // `capability_ref.semantic_id` is the canonical tool name the
         // artefact's catalogue declared (`tools[i].name`).
-        let outcome = self
-            .client
-            .call_tool_keyed(
+        // The propagation-carrier leg (R2.14, §5h.1 §2.3): an armed
+        // context rides `params._meta`; an unarmed one takes the
+        // pre-R2.14 path byte-for-byte.
+        let outcome = match &self.propagation {
+            Some(ctx) => self.client.call_tool_propagated(
                 &request.capability_ref.0,
                 &request.args,
                 request.request_state.as_ref(),
                 Some(&request.idempotency_key),
-            )
-            .map_err(|e| EnvError::Transport {
-                detail: format!("mcp edge: {e}"),
-            })?;
+                ctx,
+            ),
+            None => self.client.call_tool_keyed(
+                &request.capability_ref.0,
+                &request.args,
+                request.request_state.as_ref(),
+                Some(&request.idempotency_key),
+            ),
+        }
+        .map_err(|e| EnvError::Transport {
+            detail: format!("mcp edge: {e}"),
+        })?;
         match outcome {
             ToolOutcome::Observed { result } => {
                 sink(ExecutorSignal {

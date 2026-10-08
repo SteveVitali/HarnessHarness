@@ -326,6 +326,15 @@ pub trait LedgerSink {
     fn append(&mut self, events: Vec<Event>) -> Result<(), String>;
     /// The durable prefix.
     fn prefix(&self) -> &[EventEnvelope];
+    /// The boundary's live clock (ms), when it carries one — R2.14
+    /// (§5h.1 §2.6): `KernelSink` answers the `Store`'s clock so the
+    /// driver's stamped `*_ms` members measure the runtime's wall; a
+    /// `None` answer falls back to the driver's deterministic tick
+    /// clock (the measured value lands durable either way — a replay
+    /// reads the member, never the clock).
+    fn now_ms(&self) -> Option<u64> {
+        None
+    }
 }
 
 /// The compaction boundary (R-2.4.2's `compact` driver — §5c.2; the S2.11
@@ -894,6 +903,17 @@ impl<S: ControlStrategy> Driver<S> {
             Json::obj([
                 ("turn_id", Json::str("turn-1")),
                 ("process_ref", Json::str(&ctx.process_ref)),
+                // R2.14 (§5h.1 §2.2) — the turn's member-stamped open:
+                // `turn_phase_profile`'s t0 and `turn_e2e_ms`'s base.
+                // `started_at_ms` is a measured instant (`ts` orders
+                // nothing — §2.6).
+                (
+                    "started_at_ms",
+                    Json::obj([
+                        ("value", Json::Int(sink.now_ms().unwrap_or(0) as i64)),
+                        ("measured_at", Json::str("runtime")),
+                    ]),
+                ),
             ]),
         )])
         .map_err(DriverError::Append)?;
@@ -2385,6 +2405,9 @@ impl<S: ControlStrategy> Driver<S> {
             requested_members.push(("profile_ref", Json::str(&d.selected.profile_ref)));
             requested_members.push(("route_decision_ref", Json::str(&d.decision_id)));
         }
+        // R2.14 — the M3 open boundary's member stamp (the phase
+        // profile's sampling intervals open here).
+        requested_members.push(("at_ms", self.stamp_ms(sink)));
         self.append(
             sink,
             "model.call.requested",
@@ -2497,6 +2520,7 @@ impl<S: ControlStrategy> Driver<S> {
                         )?;
                         continue;
                     }
+                    let proposed_at = self.stamp_ms(sink);
                     self.append(
                         sink,
                         "action.tool.proposed",
@@ -2504,6 +2528,9 @@ impl<S: ControlStrategy> Driver<S> {
                             ("tool_call_id", Json::str(&c.tool_call_id)),
                             ("surface_id", Json::str(&c.surface_id)),
                             ("loop_key", Json::str(&c.loop_key)),
+                            // R2.14 — the tool-blocking interval's open
+                            // stamp (the phase profile reads it).
+                            ("at_ms", proposed_at),
                         ]),
                         Some(&mc),
                     )?;
@@ -2550,6 +2577,7 @@ impl<S: ControlStrategy> Driver<S> {
                     if let Some(ms) = outcome.retry_after_ms {
                         failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
                     }
+                    failed_members.push(("at_ms", self.stamp_ms(sink)));
                     self.append(
                         sink,
                         "model.call.failed",
@@ -2669,6 +2697,8 @@ impl<S: ControlStrategy> Driver<S> {
                         Some(&mc),
                     )?;
                 }
+                // R2.14 — the M3 close boundary's member stamp.
+                completed_members.push(("at_ms", self.stamp_ms(sink)));
                 self.append(
                     sink,
                     "model.call.completed",
@@ -2757,6 +2787,7 @@ impl<S: ControlStrategy> Driver<S> {
                 if let Some(ms) = outcome.retry_after_ms {
                     failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
                 }
+                failed_members.push(("at_ms", self.stamp_ms(sink)));
                 self.append(
                     sink,
                     "model.call.failed",
@@ -2807,6 +2838,7 @@ impl<S: ControlStrategy> Driver<S> {
         if let Some(ms) = outcome.retry_after_ms {
             failed_members.push(("retry_after_ms", Json::Int(ms as i64)));
         }
+        failed_members.push(("at_ms", self.stamp_ms(sink)));
         self.append(
             sink,
             "model.call.failed",
@@ -2939,6 +2971,10 @@ impl<S: ControlStrategy> Driver<S> {
                 self.last_decision_ref.clone().into_iter().collect(),
                 Json::obj([
                     ("effect_id", Json::str(&ef)),
+                    // R2.14 — the effect open's member stamp (M9's
+                    // intended boundary; the phase profile's linked
+                    // tool-block open).
+                    ("at_ms", self.stamp_ms(sink)),
                     ("intent", intent.clone()),
                     (
                         "effect_class",
@@ -3039,6 +3075,9 @@ impl<S: ControlStrategy> Driver<S> {
                 // (the gate's error class when it named one).
                 let mut terminal_payload = crate::events::settled_outcome_json(&out.outcome);
                 if let Json::Obj(m) = &mut terminal_payload {
+                    // R2.14 — the effect terminal's member stamp (the
+                    // phase profile's linked tool-block close).
+                    m.insert("at_ms".to_string(), self.stamp_ms(sink));
                     m.insert("attempt_no".to_string(), Json::Int(1));
                     if matches!(out.outcome, SettledOutcome::Refused) {
                         m.insert(
@@ -3393,35 +3432,84 @@ impl<S: ControlStrategy> Driver<S> {
         reason: &str,
         for_call: Option<&str>,
     ) -> Result<(), DriverError> {
+        // R2.14 — the compaction window's measured open (one clock for
+        // both stamps — `t_close` lands beside the emitted rows below).
+        // Taken before the port borrow: the producing clock is the
+        // sink's when it carries one, the tick clock otherwise.
+        let comp_open = self.clock_ms(sink);
         match &mut self.compaction_port {
-            Some(port) => match port.compact(reason) {
-                Ok(done) => {
-                    // The port's `context.compaction.started`/`completed`
-                    // rows land durable in emit order, then the cue —
-                    // durable-before-visible, same convention as the
-                    // assembler's side bands (DF-S2.8-1: the rows are
-                    // minted from the loop, not a test-side stub).
-                    for (class, payload) in done.emitted {
-                        let payload = match (for_call, payload) {
-                            (Some(mc), Json::Obj(mut m)) => {
-                                m.insert("model_call_id".to_string(), Json::str(mc));
-                                Json::Obj(m)
-                            }
-                            (_, p) => p,
-                        };
-                        self.append(sink, &class, payload, None)?;
+            Some(port) => {
+                match port.compact(reason) {
+                    Ok(done) => {
+                        let t_close = self.clock_ms(sink);
+                        // The port's `context.compaction.started`/`completed`
+                        // rows land durable in emit order, then the cue —
+                        // durable-before-visible, same convention as the
+                        // assembler's side bands (DF-S2.8-1: the rows are
+                        // minted from the loop, not a test-side stub).
+                        for (class, payload) in done.emitted {
+                            let payload = match (for_call, payload) {
+                                (Some(mc), Json::Obj(mut m)) => {
+                                    m.insert("model_call_id".to_string(), Json::str(mc));
+                                    Json::Obj(m)
+                                }
+                                (_, p) => p,
+                            };
+                            // R2.14 (M6) — the runtime measures the port's
+                            // `compact` call on its own clock: `started`
+                            // carries `at_ms{comp_open}`, `completed`
+                            // carries `at_ms{close}` and the measured
+                            // `duration_ms{value, measured_at}` (§2.6's
+                            // stamped shape; the port's pure `duration_ms`
+                            // placeholder is replaced, never left as a
+                            // fabricated zero).
+                            let payload = match (class.as_str(), payload) {
+                                ("context.compaction.started", Json::Obj(mut m)) => {
+                                    m.insert(
+                                        "at_ms".to_string(),
+                                        Json::obj([
+                                            ("value", Json::Int(comp_open as i64)),
+                                            ("measured_at", Json::str("runtime")),
+                                        ]),
+                                    );
+                                    Json::Obj(m)
+                                }
+                                ("context.compaction.completed", Json::Obj(mut m)) => {
+                                    m.insert(
+                                        "at_ms".to_string(),
+                                        Json::obj([
+                                            ("value", Json::Int(t_close as i64)),
+                                            ("measured_at", Json::str("runtime")),
+                                        ]),
+                                    );
+                                    m.insert(
+                                        "duration_ms".to_string(),
+                                        Json::obj([
+                                            (
+                                                "value",
+                                                Json::Int(t_close.saturating_sub(comp_open) as i64),
+                                            ),
+                                            ("measured_at", Json::str("runtime")),
+                                        ]),
+                                    );
+                                    Json::Obj(m)
+                                }
+                                (_, p) => p,
+                            };
+                            self.append(sink, &class, payload, None)?;
+                        }
+                        self.inbox.push_back(Cue::CompactionCompleted {
+                            view_hash: done.view_hash,
+                        });
                     }
-                    self.inbox.push_back(Cue::CompactionCompleted {
-                        view_hash: done.view_hash,
-                    });
+                    Err(impossible) => {
+                        self.stop_pending = Some(StopReason::ContextExhausted {
+                            required_tokens: impossible.required_tokens,
+                            cap: impossible.cap,
+                        });
+                    }
                 }
-                Err(impossible) => {
-                    self.stop_pending = Some(StopReason::ContextExhausted {
-                        required_tokens: impossible.required_tokens,
-                        cap: impossible.cap,
-                    });
-                }
-            },
+            }
             None => {
                 // No compaction boundary is wired — the occupancy cap is
                 // the honest `stop{context_exhausted}` (the portable
@@ -4204,12 +4292,18 @@ impl<S: ControlStrategy> Driver<S> {
                 None,
             )?;
         }
-        self.append(
-            sink,
-            "lifecycle.turn.finished",
-            crate::events::turn_finished_payload(&final_reason),
-            None,
-        )?;
+        let mut turn_finished = crate::events::turn_finished_payload(&final_reason);
+        if let Json::Obj(m) = &mut turn_finished {
+            // R2.14 (§5h.1 §2.2) — M2's measured close: `turn_e2e_ms`
+            // reads the `started_at_ms` member the opener recorded on
+            // the same clock (a resume-path run without the stamp
+            // reports the typed `n/a`, never a guessed span).
+            m.insert(
+                "turn_e2e_ms".to_string(),
+                self.duration_stamp_ms(sink, "lifecycle.turn.started", "started_at_ms"),
+            );
+        }
+        self.append(sink, "lifecycle.turn.finished", turn_finished, None)?;
         let mut finished = crate::events::run_finished_payload(
             &run_status,
             &final_reason,
@@ -4232,6 +4326,16 @@ impl<S: ControlStrategy> Driver<S> {
                     Json::Arr(self.compute_records.iter().map(Json::str).collect()),
                 );
             }
+        }
+        // R2.14 — M1's `wall_ms` on the same producing clock as the
+        // turn's recorded open (the C0 runtime is single-turn — the
+        // turn-1 `started_at_ms` member is the run's measured open;
+        // an unstamped prefix reports `n/a{observability}`).
+        if let Json::Obj(m) = &mut finished {
+            m.insert(
+                "wall_ms".to_string(),
+                self.duration_stamp_ms(sink, "lifecycle.turn.started", "started_at_ms"),
+            );
         }
         self.append(sink, "lifecycle.run.finished", finished, None)?;
         Ok(FinishOutcome::Done(RunResult {
@@ -5021,6 +5125,59 @@ impl<S: ControlStrategy> Driver<S> {
             .collect();
         self.strategy.observe(&mut self.state, &tail);
         Ok(())
+    }
+
+    /// The producing clock for stamped `*_ms` members — the sink's live
+    /// clock when the boundary carries one (§5h.1 §2.6), the driver's
+    /// deterministic tick clock otherwise. One source per stamp pair —
+    /// a `turn_e2e_ms`/`wall_ms` reads the opener's recorded member off
+    /// the same clock (mixed-source arithmetic is the skew the flag
+    /// exists for, never a hidden subtraction).
+    fn clock_ms(&self, sink: &dyn LedgerSink) -> u64 {
+        sink.now_ms().unwrap_or(self.now_ms)
+    }
+
+    /// A `{value, measured_at: "runtime"}` member stamp on the producing
+    /// clock — the §2.6 shape the folds' `measured_value` reads.
+    fn stamp_ms(&self, sink: &dyn LedgerSink) -> Json {
+        Json::obj([
+            ("value", Json::Int(self.clock_ms(sink) as i64)),
+            ("measured_at", Json::str("runtime")),
+        ])
+    }
+
+    /// `now − <open class>.<member>.value` as a `{value, measured_at}`
+    /// duration — the opener's recorded member is the base, never a `ts`
+    /// difference. An unstamped opener (a pre-R2.14 row, a resume path)
+    /// yields the typed `{"na": "observability"}` — the duration is
+    /// honestly unmeasurable, never a fabricated zero.
+    fn duration_stamp_ms(&self, sink: &dyn LedgerSink, open_class: &str, member: &str) -> Json {
+        let open = sink.prefix().iter().find(|e| {
+            e.class == open_class
+                && e.payload
+                    .get(member)
+                    .and_then(|v| v.get("value"))
+                    .and_then(Json::as_int)
+                    .is_some()
+        });
+        match open {
+            Some(e) => {
+                let base = e
+                    .payload
+                    .get(member)
+                    .and_then(|v| v.get("value"))
+                    .and_then(Json::as_int)
+                    .unwrap_or(0);
+                Json::obj([
+                    (
+                        "value",
+                        Json::Int((self.clock_ms(sink) as i64).saturating_sub(base)),
+                    ),
+                    ("measured_at", Json::str("runtime")),
+                ])
+            }
+            None => Json::obj([("na", Json::str("observability"))]),
+        }
     }
 
     /// Derive a scope deadline from the `TimeoutPolicy` (`started_at = now`

@@ -203,12 +203,25 @@ pub fn ready_payload(h: &EnvHandle) -> Json {
     ])
 }
 
-/// `action.environment.detached{env_handle, reason}`.
-pub fn detached_payload(h: &EnvHandle, reason: &str) -> Json {
-    Json::obj([
+/// `action.environment.detached{env_handle, reason, env_ms?}` — `env_ms`
+/// is M13's measured span close (§5h.1 §2.5; R2.14): `now − session.
+/// attached_at_ms` on the env driver's store clock, stamped
+/// `{value, measured_at}` — `None` when no live session bounds it.
+pub fn detached_payload(h: &EnvHandle, reason: &str, env_ms: Option<u64>) -> Json {
+    let mut v = vec![
         ("env_handle", Json::str(h.env_handle_id.clone())),
         ("reason", Json::str(reason)),
-    ])
+    ];
+    if let Some(ms) = env_ms {
+        v.push((
+            "env_ms",
+            Json::obj([
+                ("value", Json::Int(ms as i64)),
+                ("measured_at", Json::str("runtime")),
+            ]),
+        ));
+    }
+    Json::obj(v)
 }
 
 /// `action.environment.unreachable{env_handle, last_contact_ms}` — contact
@@ -394,7 +407,9 @@ pub fn resumed_payload(h: &EnvHandle, cause: &str, suspended_ms: u64) -> Json {
 /// pre-S2.9 rows lack them and the chooser falls back to the row's seq);
 /// `taken_by`/`quiesced` landed at R2.4 (DF-S2.9-3 — the cadence/suspend
 /// producers name themselves on the row; a pre-R2.4 row folds `taken_by`
-/// as absent, never guessed).
+/// as absent, never guessed). `env_ms`/`snapshot_ms` landed at R2.14
+/// (M13's measured members).
+#[allow(clippy::too_many_arguments)]
 pub fn snapshot_payload(
     h: &EnvHandle,
     snapshot_ref: &str,
@@ -403,6 +418,8 @@ pub fn snapshot_payload(
     manifest_ref: Option<&str>,
     taken_by: crate::snapshot::TakenBy,
     quiesced: bool,
+    env_ms: Option<u64>,
+    snapshot_ms: Option<u64>,
 ) -> Json {
     use crate::snapshot::TakenBy;
     let mut m = BTreeMap::new();
@@ -423,6 +440,28 @@ pub fn snapshot_payload(
         }),
     );
     m.insert("quiesced".to_string(), Json::Bool(quiesced));
+    // R2.14 (M13) — the measured members: `env_ms` (attach-age on the
+    // store clock — the M13 span's duration source) and `snapshot_ms`
+    // (the take window the caller measured). `{value, measured_at}` —
+    // never a `ts` difference.
+    if let Some(ms) = env_ms {
+        m.insert(
+            "env_ms".to_string(),
+            Json::obj([
+                ("value", Json::Int(ms as i64)),
+                ("measured_at", Json::str("runtime")),
+            ]),
+        );
+    }
+    if let Some(ms) = snapshot_ms {
+        m.insert(
+            "snapshot_ms".to_string(),
+            Json::obj([
+                ("value", Json::Int(ms as i64)),
+                ("measured_at", Json::str("runtime")),
+            ]),
+        );
+    }
     Json::Obj(m)
 }
 
