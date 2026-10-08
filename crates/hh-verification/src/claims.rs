@@ -640,6 +640,13 @@ fn claim_contradicted(claim: &Claim, value: &HandleValue) -> bool {
             *terminal && (outcome == "error" || outcome == "abandoned")
         }
         (ClaimKind::Verified, HandleValue::Verdict { affirmative }) => !affirmative,
+        // R2.15 — an `achieved` claim citing a failed verdict (a declared
+        // `postcondition_results[]` verdict on a cited effect, or a
+        // directly cited non-affirmative verdict) is a claimed
+        // verification the record contradicts — `unverified_verification`,
+        // never a silent pass (the in-contract criterion path still reads
+        // `contract_gap` through the `Criterion` handle — bound first).
+        (ClaimKind::Achieved, HandleValue::Verdict { affirmative }) => !affirmative,
         (ClaimKind::Achieved, HandleValue::Criterion { status }) => !status.is_met(),
         (ClaimKind::Achieved, HandleValue::EffectState { terminal, .. }) => !terminal,
         (ClaimKind::Pending, HandleValue::EffectState { terminal, .. }) => *terminal,
@@ -661,7 +668,8 @@ fn c0_divergence_class(
     match (claim.kind, value) {
         (ClaimKind::Effected, HandleValue::EffectState { .. })
         | (ClaimKind::Effected, HandleValue::Value(_)) => Some(DivergenceClass::PhantomEffect),
-        (ClaimKind::Verified, HandleValue::Verdict { .. }) => {
+        (ClaimKind::Verified, HandleValue::Verdict { .. })
+        | (ClaimKind::Achieved, HandleValue::Verdict { .. }) => {
             Some(DivergenceClass::UnverifiedVerification)
         }
         (ClaimKind::Achieved, HandleValue::Criterion { status }) if !status.is_met() => {

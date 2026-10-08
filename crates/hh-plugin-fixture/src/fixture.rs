@@ -22,6 +22,20 @@ use hh_embed_schema::plugin_abi::{
     AbiError, BindFailure, BindParams, ConformanceParams, GuardParams, GuardVerdict, HelloParams,
     InvokeParams, Narrow, StreamParams, TriState,
 };
+use hh_hir::kinds::{EffectDomain, ValidatorKind};
+use hh_identity::kinds::RecordKind;
+use hh_identity::refs::VersionedRef;
+use hh_ontology::participant::Observability;
+use hh_provenance::authority::{AuthorityClass, PersistenceScope};
+use hh_provenance::origin::Origin;
+use hh_provenance::record::ProvenanceRecord;
+use hh_verification::events;
+use hh_verification::evidence::{build_bundle, bundle_json, EvidenceHandle};
+use hh_verification::validators::{self, EvidenceRequirement, ValidatorDeclaration, Verdict};
+use hh_verification::vocab::{
+    ChargedTo, CriterionRole, Detector, EvidenceKind, Freshness, Integrity, Isolation, OracleClass,
+    VerdictPhase, VerdictStatus, VerdictType, VerdictValue,
+};
 use hh_wire::json::Json;
 
 use crate::{PluginCtx, VariantLogic};
@@ -53,6 +67,17 @@ pub enum Mode {
     /// canonical `hh_control::wire` records — one registry, one codec on
     /// both sides of the process boundary (DF-S1.20-1).
     Control,
+    /// `validator` (R2.15) — the `Validator` component's contract battery
+    /// over `invoke` ops (`declare`/`bind`/`collect`/`check`, spec §5f.1;
+    /// ADR-0110): the stub runs the *real* `hh-verification` validators
+    /// (`validators::declare`/`bind`, `build_bundle`, the `Verdict`
+    /// contract + `events::validator_verdict` codec) so the class
+    /// conformance suite drives the true semantics out of process, not a
+    /// re-spelling of them (CC1/CC7). The `--validator-side-effects` and
+    /// `--validator-empty-evidence` flags doctor the canned declaration
+    /// so the suite's negative arms hit `ValidatorHasEffects` /
+    /// `IncompleteDeclaration` for real.
+    Validator,
 }
 
 /// The verdict spelling `--verdict` takes (`allow` is the forged arm —
@@ -134,6 +159,16 @@ pub struct FixtureLogic {
     /// `--variant <ref>` — the variant `semantic_id` `control` mode binds
     /// when `BindParams::variant` does not name one.
     control_variant: Option<String>,
+    /// `validator` mode — side-effect domains the canned declaration
+    /// carries (`--validator-side-effects <csv>`; any domain outside the
+    /// read-only set makes `bind` answer `ValidatorHasEffects`).
+    validator_side_effects: Vec<String>,
+    /// `validator` mode — declare with empty `evidence_inputs`
+    /// (`--validator-empty-evidence yes` → `IncompleteDeclaration` at
+    /// `declare`, the I-V1 negative arm).
+    validator_empty_evidence: bool,
+    /// `validator` mode — the bindings `bind` completed on.
+    validator_bound: std::collections::BTreeSet<String>,
 }
 
 impl FixtureLogic {
@@ -165,6 +200,9 @@ impl FixtureLogic {
             binds: 0,
             control: BTreeMap::new(),
             control_variant: None,
+            validator_side_effects: Vec::new(),
+            validator_empty_evidence: false,
+            validator_bound: std::collections::BTreeSet::new(),
         };
         let mut i = 0;
         while i < args.len() {
@@ -206,6 +244,7 @@ impl FixtureLogic {
                         "slow" => Mode::Slow,
                         "proposer" => Mode::Proposer,
                         "control" => Mode::Control,
+                        "validator" => Mode::Validator,
                         _ => Mode::Null,
                     };
                 }
@@ -250,6 +289,16 @@ impl FixtureLogic {
                 "--probe-peer-root" => f.probe_peer_root = Some(val(i)),
                 "--probe-peer-socket" => f.probe_peer_socket = Some(val(i)),
                 "--variant" => f.control_variant = Some(val(i)),
+                "--validator-side-effects" => {
+                    f.validator_side_effects = val(i)
+                        .split(',')
+                        .filter(|s| !s.is_empty())
+                        .map(str::to_string)
+                        .collect();
+                }
+                "--validator-empty-evidence" => {
+                    f.validator_empty_evidence = val(i) == "yes";
+                }
                 _ => {}
             }
             i += 2;
@@ -406,6 +455,290 @@ impl FixtureLogic {
                 match variant.restore(text.as_bytes(), &ctx) {
                     Ok(st) => Ok(vec![wire::state_to_json(&st)]),
                     Err(e) => Ok(vec![wire::restore_error_to_json(&e)]),
+                }
+            }
+            _ => Err(AbiError::UnhandledOperation),
+        }
+    }
+
+    /// The canned `ValidatorDeclaration` the `validator` mode serves —
+    /// a pinned `predicate` stub (`oracle_class = executable`,
+    /// `isolation = external`, `charged_to = instrument`; the fixture is
+    /// conformance *instrument* work, never subject spend). The
+    /// `--validator-*` flags doctor it so the suite's negative arms hit
+    /// the real `validators::declare`/`bind` refusals.
+    fn validator_decl(&self) -> ValidatorDeclaration {
+        let mut side_effects = std::collections::BTreeSet::new();
+        for d in &self.validator_side_effects {
+            if let Ok(dom) = EffectDomain::parse(d) {
+                side_effects.insert(dom);
+            }
+        }
+        let evidence_inputs = if self.validator_empty_evidence {
+            Vec::new()
+        } else {
+            vec![EvidenceRequirement {
+                kind: EvidenceKind::EffectRecord,
+                min_authority: AuthorityClass::Environment,
+                freshness: Freshness::Any,
+                integrity: Integrity::ChainVerified,
+                scope: None,
+            }]
+        };
+        ValidatorDeclaration {
+            validator_ref: VersionedRef::pinned(
+                RecordKind::Validator,
+                "validator/hh-plugin-fixture@1",
+                ProvenanceRecord::minted(
+                    Origin::Tool {
+                        capability: "hh-plugin-fixture/validator-stub".to_string(),
+                        invocation_ref: "fixture".to_string(),
+                        inner_source: None,
+                    },
+                    PersistenceScope::Run,
+                    0,
+                ),
+            )
+            .with_semantic("validator/hh-plugin-fixture"),
+            kind: ValidatorKind::Predicate,
+            oracle_class: OracleClass::Executable,
+            deterministic: true,
+            evidence_inputs,
+            evidence_out: vec![EvidenceKind::EffectRecord],
+            verdict_type: VerdictType::Bool,
+            requires_observability: {
+                let mut s = std::collections::BTreeSet::new();
+                s.insert(Observability::Ledger);
+                s
+            },
+            cost_model: None,
+            isolation: Isolation::External,
+            side_effects,
+            profile_ref: None,
+            calibration_ref: None,
+            charged_to: ChargedTo::Instrument,
+            assumption_debt: None,
+        }
+    }
+
+    /// A typed contract-error doc — the validator lane answers contract
+    /// failures *in* the result (a `ValidatorError`/`BundleError` kind,
+    /// never an `op_failed`: the contract battery distinguishes "the
+    /// validator refused" from "the plugin crashed").
+    fn validator_err(kind: &str, detail: String) -> Json {
+        Json::obj([(
+            "error",
+            Json::obj([
+                ("kind", Json::str(kind.to_string())),
+                ("detail", Json::str(detail)),
+            ]),
+        )])
+    }
+
+    fn validator_err_doc<E: std::fmt::Display>(e: &E) -> Json {
+        let text = e.to_string();
+        let kind = text.split(':').next().unwrap_or("error").to_string();
+        FixtureLogic::validator_err(&kind, text)
+    }
+
+    /// The `validator` invoke lane (R2.15; spec §5f.1 §3) — the four
+    /// contract ops over canonical documents, running the real
+    /// `hh-verification` semantics (`declare`/`bind` validation,
+    /// `build_bundle`, the `Verdict` contract):
+    ///
+    /// - `declare` → the declaration doc (`validators::declare` checked
+    ///   first — a doctored declaration answers `IncompleteDeclaration`).
+    /// - `bind{declaration}` → `validators::bind` on the declared stub;
+    ///   a `validator_ref` that is not the fixture's own pin answers
+    ///   `PayloadHashMismatch` (the bound-payload identity check).
+    /// - `collect{handles[], target}` → `build_bundle` over the handed
+    ///   handle docs (`{kind, ref, authority, produced_at_seq?}`) — typed
+    ///   `EvidenceUnauthoritative`/`ClaimOnlyEvidence` errors ride the
+    ///   result doc, the suite's negative arms.
+    /// - `check{bundle}` → a deterministic `decided` `Verdict` over the
+    ///   handed bundle, `validate()`d and rendered through
+    ///   `events::validator_verdict` (the `verification.validator.*`
+    ///   codec — CC7).
+    ///
+    /// `collect`/`check` before `bind` answer `UnboundFixture` — the
+    /// contract's ordering leg.
+    fn validator_invoke(&mut self, params: &InvokeParams) -> Result<Vec<Json>, AbiError> {
+        let decl = self.validator_decl();
+        match params.operation.as_str() {
+            "declare" => match validators::declare(&decl) {
+                Ok(()) => Ok(vec![validators::declaration_json(&decl)]),
+                Err(e) => Ok(vec![FixtureLogic::validator_err_doc(&e)]),
+            },
+            "bind" => {
+                if let Some(doc) = params.inputs.first() {
+                    let observed = doc
+                        .get("validator_ref")
+                        .and_then(|r| r.get("version_id"))
+                        .and_then(Json::as_str)
+                        .unwrap_or_default();
+                    if observed != decl.validator_ref.version_id {
+                        return Ok(vec![FixtureLogic::validator_err(
+                            "PayloadHashMismatch",
+                            format!(
+                                "bound declaration pins {observed}, fixture declares {}",
+                                decl.validator_ref.version_id
+                            ),
+                        )]);
+                    }
+                }
+                match validators::declare(&decl).and_then(|()| validators::bind(&decl)) {
+                    Ok(()) => {
+                        self.validator_bound.insert(params.binding_id.clone());
+                        Ok(vec![Json::obj([
+                            ("bound", Json::Bool(true)),
+                            (
+                                "validator_ref",
+                                Json::str(decl.validator_ref.version_id.clone()),
+                            ),
+                        ])])
+                    }
+                    Err(e) => Ok(vec![FixtureLogic::validator_err_doc(&e)]),
+                }
+            }
+            "collect" => {
+                if !self.validator_bound.contains(&params.binding_id) {
+                    return Ok(vec![FixtureLogic::validator_err(
+                        "UnboundFixture",
+                        format!("binding {} has no bound validator", params.binding_id),
+                    )]);
+                }
+                let doc = params.inputs.first().cloned().unwrap_or(Json::Null);
+                let Some(Json::Arr(handle_docs)) = doc.get("handles") else {
+                    return Err(AbiError::SchemaViolation);
+                };
+                let mut handles = Vec::new();
+                for h in handle_docs {
+                    let kind = h
+                        .get("kind")
+                        .and_then(Json::as_str)
+                        .and_then(EvidenceKind::parse)
+                        .ok_or(AbiError::SchemaViolation)?;
+                    let authority = h
+                        .get("authority")
+                        .and_then(Json::as_str)
+                        .and_then(AuthorityClass::parse)
+                        .ok_or(AbiError::SchemaViolation)?;
+                    let handle_ref = h
+                        .get("ref")
+                        .and_then(Json::as_str)
+                        .ok_or(AbiError::SchemaViolation)?
+                        .to_string();
+                    let produced_at_seq = h
+                        .get("produced_at_seq")
+                        .and_then(Json::as_int)
+                        .unwrap_or(0)
+                        .max(0) as u64;
+                    handles.push(EvidenceHandle {
+                        kind,
+                        handle_ref,
+                        authority,
+                        provenance: ProvenanceRecord::minted(
+                            Origin::Tool {
+                                capability: "hh-plugin-fixture/validator-stub".to_string(),
+                                invocation_ref: params.binding_id.clone(),
+                                inner_source: None,
+                            },
+                            PersistenceScope::Run,
+                            produced_at_seq,
+                        ),
+                        produced_at_seq,
+                        integrity: Integrity::ChainVerified,
+                    });
+                }
+                let target = doc
+                    .get("target")
+                    .and_then(Json::as_str)
+                    .unwrap_or("run")
+                    .to_string();
+                match build_bundle(
+                    handles,
+                    Vec::new(),
+                    Vec::new(),
+                    None,
+                    &target,
+                    &decl.validator_ref.version_id,
+                ) {
+                    Ok(b) => Ok(vec![bundle_json(&b)]),
+                    Err(e) => {
+                        let text = e.to_string();
+                        let kind = text
+                            .split(['(', ':'])
+                            .next()
+                            .unwrap_or("BundleError")
+                            .to_string();
+                        Ok(vec![FixtureLogic::validator_err(&kind, text)])
+                    }
+                }
+            }
+            "check" => {
+                if !self.validator_bound.contains(&params.binding_id) {
+                    return Ok(vec![FixtureLogic::validator_err(
+                        "UnboundFixture",
+                        format!("binding {} has no bound validator", params.binding_id),
+                    )]);
+                }
+                let bundle = params.inputs.first().cloned().unwrap_or(Json::Null);
+                let inputs_digest = bundle
+                    .get("inputs_digest")
+                    .and_then(Json::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let bundle_id = bundle
+                    .get("bundle_id")
+                    .and_then(Json::as_str)
+                    .map(str::to_string);
+                let target = bundle
+                    .get("target")
+                    .and_then(Json::as_str)
+                    .unwrap_or("run")
+                    .to_string();
+                let evidence_refs = match bundle.get("handles") {
+                    Some(Json::Arr(items)) => items
+                        .iter()
+                        .filter_map(|i| i.get("handle").and_then(Json::as_str))
+                        .map(str::to_string)
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                let verdict = Verdict {
+                    verdict_id: format!(
+                        "verdict:{}:{}",
+                        decl.validator_ref.version_id,
+                        &inputs_digest[..inputs_digest.len().min(24)]
+                    ),
+                    validator_ref: decl.validator_ref.clone(),
+                    oracle_class: decl.oracle_class,
+                    target,
+                    criterion_ref: None,
+                    contract_id: None,
+                    phase: VerdictPhase::Local,
+                    role: CriterionRole::Invariant,
+                    value: VerdictValue::Bool(true),
+                    status: VerdictStatus::Decided,
+                    detector: Detector::Deterministic,
+                    evidence_refs,
+                    inputs_digest,
+                    evidence_head_seq: 0,
+                    freshness_ok: true,
+                    findings: Vec::new(),
+                    cost_ppm: 0,
+                    charged_to: decl.charged_to,
+                    veto_tripped: Vec::new(),
+                    bundle_id,
+                    calibration_ref: None,
+                    independence_summary: None,
+                    uncited_findings: 0,
+                    provenance: ProvenanceRecord::kernel(decl.validator_ref.version_id.clone(), 0),
+                    measured_at: 0,
+                };
+                match verdict.validate() {
+                    Ok(()) => Ok(vec![events::validator_verdict(&verdict)]),
+                    Err(e) => Ok(vec![FixtureLogic::validator_err_doc(&e)]),
                 }
             }
             _ => Err(AbiError::UnhandledOperation),
@@ -804,6 +1137,12 @@ impl VariantLogic for FixtureLogic {
         // method set over canonical `hh_control::wire` documents.
         if self.mode == Mode::Control {
             return self.control_invoke(params);
+        }
+        // The `validator` lane (R2.15) — the `Validator` component's
+        // `declare`/`bind`/`collect`/`check` contract over canonical
+        // `hh-verification` documents.
+        if self.mode == Mode::Validator {
+            return self.validator_invoke(params);
         }
         // The class surface — only declared operations are legal.
         if !matches!(

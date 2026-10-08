@@ -673,6 +673,55 @@ mod tests {
             .all(|h| h.detector != LoopDetectorKind::Judged));
     }
 
+    // ── R2.15 — the recorded judge (offline `Validator{kind = judge}`
+    // binding over recorded `model_io`; DF-S1.21-3) ──────────────────
+
+    /// A recorded `judged` verdict replays as the port's answer — the
+    /// judge call ran over recorded model_io, never a fabricated live
+    /// judgment; an unbound `validator_ref` abstains (no hit, identical
+    /// to the `judge: None` arm).
+    #[test]
+    fn recorded_judge_replays_and_abstains() {
+        let p = judged_policy(1, 1, 500_000);
+        let verdict = Json::obj([
+            ("validator_ref", Json::str("validator:judge-v1")),
+            ("detector", Json::str("judged")),
+            ("value", Json::Int(900_000)),
+        ]);
+        let mut events = vec![ev(0, "model.call.completed", Json::Null)];
+        // A recorded judged verdict row on the prefix (the judge call's
+        // model_io record) — `verification.validator.verdict` at
+        // `detector = judged`.
+        let v = ev(1, "verification.validator.verdict", verdict);
+        events.push(v.clone());
+        let judge = RecordedJudge::from_prefix(&events);
+        assert!(judge.has_recording("validator:judge-v1"));
+        let hits = detect_with_judge(&events, &p, Some(&judge));
+        let hit = hits
+            .iter()
+            .find(|h| h.detector == LoopDetectorKind::Judged)
+            .expect("a recorded confident judgment replays as a hit");
+        assert_eq!(hit.confidence_ppm, Some(900_000));
+
+        // A deterministic verdict is never replayed as a judged answer.
+        let det = Json::obj([
+            ("validator_ref", Json::str("validator:judge-v1")),
+            ("detector", Json::str("deterministic")),
+            ("value", Json::Int(900_000)),
+        ]);
+        let judge = RecordedJudge::from_prefix(&[ev(1, "verification.validator.verdict", det)]);
+        assert!(!judge.has_recording("validator:judge-v1"));
+        assert!(detect_with_judge(&events, &p, Some(&judge))
+            .iter()
+            .all(|h| h.detector != LoopDetectorKind::Judged));
+
+        // A bound judge naming a ref with no recording abstains.
+        let judge = RecordedJudge::default();
+        assert!(detect_with_judge(&events, &p, Some(&judge))
+            .iter()
+            .all(|h| h.detector != LoopDetectorKind::Judged));
+    }
+
     #[test]
     fn judged_stop_rung_clamps_to_deny() {
         let p = judged_policy(1, 1, 500_000);
@@ -737,6 +786,79 @@ pub trait JudgePort: std::fmt::Debug {
     /// (`{seq, event_id, key, version_id, error, turn_without_act}` —
     /// data, never surface text).
     fn judge(&self, spec: &crate::policy::JudgedSpec, window: &[Json]) -> u64;
+}
+
+/// `RecordedJudge` — the offline `Validator{kind = judge}` binding (R2.15;
+/// DF-S1.21-3's honest half): a `JudgePort` whose answers *replay the
+/// recorded `model_io`* — the durable `verification.validator.verdict` /
+/// `verification.critic.verdict` rows at `detector = judged` the judge's
+/// prior call ledgered — never a fabricated live-model judgment
+/// (`offline-only` is the honesty ceiling). A `validator_ref` with no
+/// recorded judged verdict **abstains**: the port answers 0, which — like
+/// `judge: None` — mints no hit; an abstention is never rendered as a
+/// 0-confidence claim and nothing is emitted on its account.
+#[derive(Debug, Default)]
+pub struct RecordedJudge {
+    /// `validator_ref → confidence_ppm` — the latest recorded judged
+    /// verdict per bound validator.
+    answers: std::collections::BTreeMap<String, u64>,
+}
+
+impl RecordedJudge {
+    /// `from_prefix(events)` — fold the durable prefix for recorded judged
+    /// verdicts: `verification.validator.verdict`/`verification.critic.
+    /// verdict` rows carrying `detector = "judged"`. The replayed
+    /// confidence is the row's explicit `confidence` member, else a
+    /// graded `value` (ppm int); a bool/lattice value records nothing —
+    /// the judge's own recorded confidence is the answer, never an
+    /// inferred one.
+    pub fn from_prefix(events: &[EventEnvelope]) -> RecordedJudge {
+        let mut answers = std::collections::BTreeMap::new();
+        for e in events {
+            if !matches!(
+                e.class.as_str(),
+                "verification.validator.verdict" | "verification.critic.verdict"
+            ) {
+                continue;
+            }
+            if e.payload.get("detector").and_then(Json::as_str) != Some("judged") {
+                continue;
+            }
+            let Some(vr) = e
+                .payload
+                .get("validator_ref")
+                .or_else(|| e.payload.get("critic_ref"))
+                .and_then(Json::as_str)
+            else {
+                continue;
+            };
+            let confidence = e
+                .payload
+                .get("confidence")
+                .and_then(Json::as_int)
+                .or_else(|| e.payload.get("value").and_then(Json::as_int));
+            if let Some(c) = confidence {
+                answers.insert(vr.to_string(), c.max(0) as u64);
+            }
+        }
+        RecordedJudge { answers }
+    }
+
+    /// Whether a recorded judged verdict exists for `validator_ref` —
+    /// the binding surface (`spec.validator_ref`) names the judge the
+    /// replay answers for; an unbound ref abstains.
+    pub fn has_recording(&self, validator_ref: &str) -> bool {
+        self.answers.contains_key(validator_ref)
+    }
+}
+
+impl JudgePort for RecordedJudge {
+    fn judge(&self, spec: &crate::policy::JudgedSpec, _window: &[Json]) -> u64 {
+        // A recorded answer replays its recorded confidence; no recording
+        // ⇒ abstain (0 ⇒ below any admissible threshold ⇒ no hit —
+        // identical to the `judge: None` silent arm, never a guess).
+        self.answers.get(&spec.validator_ref).copied().unwrap_or(0)
+    }
 }
 
 /// `detect_with_judge(events, policy, judge)` — the Stage-4 admission of

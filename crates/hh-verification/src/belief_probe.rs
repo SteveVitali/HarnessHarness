@@ -12,6 +12,7 @@
 
 use std::collections::BTreeMap;
 
+use hh_identity::idp::idp_id;
 use hh_wire::json::Json;
 
 use crate::bind::RowView;
@@ -95,6 +96,190 @@ impl BeliefProbeRecord {
                 .unwrap_or("deterministic")
                 .to_string(),
         })
+    }
+}
+
+// ── The runtime emitter (R2.15; ADR-0316's revisit point) ────────────────────
+//
+// The `belief_probe` `ProfileRule` *is* the emitter: the driver decodes the
+// sealed profile's `rules[]` at `open`/`resume` and, per recorded
+// `model.call.completed`, fires each deterministic rule over the step's
+// declared belief fields (§5a.3.5's optional per-step belief-probe members —
+// they ride the recorded `calls[].args_raw`, so `requires_observability =
+// model_io` is satisfied only when the response's parsed calls are ledgered).
+
+/// `ProbeRule` — the decoded `ProfileRule{kind = belief_probe}` projection the
+/// emitter fires (`{rule_id, conditioned_on, field, detector}`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProbeRule {
+    /// The stable rule id (`rule_id` on the profile rule).
+    pub rule_id: String,
+    /// The profile coordinate the rule is conditioned on
+    /// (`profile_id@version` — `conditioned_on` on the emitted record).
+    pub conditioned_on: String,
+    /// The per-step elicitation member on each parsed call's args
+    /// (`params.field`, default `beliefs`).
+    pub field: String,
+    /// The record's `detector` stratum (`params.detector`, default
+    /// `deterministic`). A `judged` probe rule is *declared but never
+    /// fired* by this emitter — its comparison needs the critic leg
+    /// (DF-S1.21-3 stays OPEN under `offline-only`); the fold's judged
+    /// stratum honestly reports `n = 0` rather than a deterministic
+    /// comparison masquerading as a judged one.
+    pub detector: String,
+}
+
+/// A malformed `belief_probe` profile rule — a typed refusal at `open`,
+/// never a silently-dropped conditioned rule.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProbeRuleError {
+    /// A `belief_probe` rule without its mandatory assumption-debt record
+    /// (profile-owned rules carry debt records — §5f T-LCD-01/-05).
+    DebtMissing {
+        /// The offending rule.
+        rule_id: String,
+    },
+}
+
+impl std::fmt::Display for ProbeRuleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProbeRuleError::DebtMissing { rule_id } => {
+                write!(f, "belief_probe rule {rule_id} carries no debt record")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProbeRuleError {}
+
+/// `probe_rules(profile)` — decode the profile projection's `rules[]` for
+/// `kind = belief_probe` members. Rules of other kinds are ignored; a
+/// `belief_probe` rule missing its debt record is a typed refusal.
+pub fn probe_rules(profile: &Json) -> Result<Vec<ProbeRule>, ProbeRuleError> {
+    let conditioned_on = match (
+        profile.get("profile_id").and_then(Json::as_str),
+        profile.get("version").and_then(Json::as_str),
+    ) {
+        (Some(id), Some(v)) => format!("{id}@{v}"),
+        (Some(id), None) => id.to_string(),
+        _ => "profile/unbound".to_string(),
+    };
+    let mut out = Vec::new();
+    let Some(Json::Arr(rules)) = profile.get("rules") else {
+        return Ok(out);
+    };
+    for r in rules {
+        if r.get("kind").and_then(Json::as_str) != Some("belief_probe") {
+            continue;
+        }
+        let rule_id = r
+            .get("rule_id")
+            .and_then(Json::as_str)
+            .unwrap_or_default()
+            .to_string();
+        // The debt record is load-bearing (§5f: "profile-owned `ProfileRule`s
+        // with assumption-debt records") — absent ⇒ typed refusal.
+        match r.get("debt") {
+            Some(Json::Obj(m)) if !m.is_empty() => {}
+            _ => return Err(ProbeRuleError::DebtMissing { rule_id }),
+        }
+        let params = r.get("params").cloned().unwrap_or(Json::Null);
+        let field = params
+            .get("field")
+            .and_then(Json::as_str)
+            .unwrap_or("beliefs")
+            .to_string();
+        let detector = params
+            .get("detector")
+            .and_then(Json::as_str)
+            .unwrap_or("deterministic")
+            .to_string();
+        out.push(ProbeRule {
+            rule_id,
+            conditioned_on: conditioned_on.clone(),
+            field,
+            detector,
+        });
+    }
+    Ok(out)
+}
+
+/// `BeliefElicitation` — one parsed per-step belief item
+/// `{subject, member, value}`: `subject` names the handle the belief is
+/// asserted against (the closed spelling set is the emitter's — `effect:<id>`
+/// on an `action.effect.observed` row, `verdict:<id>` on a
+/// `verification.validator.verdict` row); `member` is the observed payload
+/// member the `value` is compared against.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BeliefElicitation {
+    /// The handle spelling (`effect:<id>` | `verdict:<id>`).
+    pub subject: String,
+    /// The payload member of the resolved row to compare.
+    pub member: String,
+    /// The elicited value.
+    pub value: Json,
+}
+
+/// `elicit(args, field)` — read the per-step belief-probe items off a parsed
+/// call's `args` (the recorded model_io). Absent/non-array ⇒ no items — the
+/// surface is optional; a malformed item (missing `subject`/`member`/`value`)
+/// yields no record — model-claimed text is never kernel evidence (F7).
+pub fn elicit(args: &Json, field: &str) -> Vec<BeliefElicitation> {
+    let mut out = Vec::new();
+    let Some(Json::Arr(items)) = args.get(field) else {
+        return out;
+    };
+    for item in items {
+        let (Some(subject), Some(member), Some(value)) = (
+            item.get("subject").and_then(Json::as_str),
+            item.get("member").and_then(Json::as_str),
+            item.get("value"),
+        ) else {
+            continue;
+        };
+        out.push(BeliefElicitation {
+            subject: subject.to_string(),
+            member: member.to_string(),
+            value: value.clone(),
+        });
+    }
+    out
+}
+
+/// The deterministic probe id (`probe:<rule_id>:<step>:<index>`).
+pub fn probe_id(rule_id: &str, step_ref: &str, index: usize) -> String {
+    format!("probe:{rule_id}:{step_ref}:{index}")
+}
+
+/// `fire` — mint the `BeliefProbeRecord` for one elicitation. `belief_ref`
+/// content-addresses the elicited value (`idp/1` over the canonical
+/// encoding — the answer is addressed, never inlined); `observed` is the
+/// resolver's `(member_value, handle_ref)` when the subject resolved against
+/// the durable prefix, `None` otherwise (an unresolved handle is *not* a
+/// divergence — `observed_ref` stays absent rather than fabricating a
+/// comparison).
+pub fn fire(
+    rule: &ProbeRule,
+    step_ref: &str,
+    index: usize,
+    item: &BeliefElicitation,
+    observed: Option<(Json, String)>,
+) -> BeliefProbeRecord {
+    let belief_ref = idp_id("belief", item.value.to_canonical_string().as_bytes());
+    let (divergent, observed_ref) = match observed {
+        Some((value, handle_ref)) => (value != item.value, Some(handle_ref)),
+        None => (false, None),
+    };
+    BeliefProbeRecord {
+        probe_id: probe_id(&rule.rule_id, step_ref, index),
+        rule_id: rule.rule_id.clone(),
+        conditioned_on: Some(rule.conditioned_on.clone()),
+        step_ref: step_ref.to_string(),
+        belief_ref,
+        observed_ref,
+        divergent,
+        detector: rule.detector.clone(),
     }
 }
 
@@ -223,6 +408,131 @@ mod tests {
         assert_eq!(det.get("arrival_ppm").and_then(Json::as_int), Some(500_000));
         let judged = v.get("by_detector").and_then(|m| m.get("judged")).unwrap();
         assert_eq!(judged.get("probes").and_then(Json::as_int), Some(1));
+    }
+
+    // ── R2.15 — the runtime emitter's decode/elicit/fire legs ────────────
+
+    fn profile_with_rules(rules: Json) -> Json {
+        Json::obj([
+            ("profile_id", Json::str("profile/test")),
+            ("version", Json::str("1")),
+            ("rules", rules),
+        ])
+    }
+
+    fn probe_rule(detector: &str) -> Json {
+        Json::obj([
+            ("kind", Json::str("belief_probe")),
+            ("rule_id", Json::str("rule/bp-1")),
+            ("debt", Json::obj([("id", Json::str("debt/bp-1"))])),
+            (
+                "params",
+                Json::obj([
+                    ("field", Json::str("beliefs")),
+                    ("detector", Json::str(detector)),
+                ]),
+            ),
+        ])
+    }
+
+    #[test]
+    fn probe_rules_decodes_belief_probe_members_only() {
+        let p = profile_with_rules(Json::Arr(vec![
+            probe_rule("deterministic"),
+            // A non-belief_probe rule is ignored, never decoded.
+            Json::obj([
+                ("kind", Json::str("loop_nudge")),
+                ("rule_id", Json::str("rule/other")),
+            ]),
+        ]));
+        let rules = probe_rules(&p).unwrap();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].rule_id, "rule/bp-1");
+        assert_eq!(rules[0].conditioned_on, "profile/test@1");
+        assert_eq!(rules[0].field, "beliefs");
+        assert_eq!(rules[0].detector, "deterministic");
+    }
+
+    #[test]
+    fn probe_rules_refuses_a_debtless_rule_typed() {
+        let p = profile_with_rules(Json::Arr(vec![Json::obj([
+            ("kind", Json::str("belief_probe")),
+            ("rule_id", Json::str("rule/naked")),
+        ])]));
+        assert_eq!(
+            probe_rules(&p),
+            Err(ProbeRuleError::DebtMissing {
+                rule_id: "rule/naked".into()
+            }),
+            "a conditioned rule without its assumption-debt record is a typed refusal, never a silent drop"
+        );
+    }
+
+    #[test]
+    fn elicit_reads_declared_items_and_skips_malformed() {
+        let args = Json::obj([(
+            "beliefs",
+            Json::Arr(vec![
+                Json::obj([
+                    ("subject", Json::str("effect:ef-1")),
+                    ("member", Json::str("outcome")),
+                    ("value", Json::str("ok")),
+                ]),
+                // Malformed — model-claimed text is never kernel evidence;
+                // the item is dropped, not guessed.
+                Json::obj([("subject", Json::str("effect:ef-2"))]),
+            ]),
+        )]);
+        let items = elicit(&args, "beliefs");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].subject, "effect:ef-1");
+        assert_eq!(items[0].member, "outcome");
+        // A different field name reads nothing.
+        assert!(elicit(&args, "priors").is_empty());
+    }
+
+    #[test]
+    fn fire_marks_divergence_only_on_a_resolved_mismatch() {
+        let rule = ProbeRule {
+            rule_id: "rule/bp-1".into(),
+            conditioned_on: "profile/test@1".into(),
+            field: "beliefs".into(),
+            detector: "deterministic".into(),
+        };
+        let item = BeliefElicitation {
+            subject: "effect:ef-1".into(),
+            member: "outcome".into(),
+            value: Json::str("ok"),
+        };
+        // Resolved and matching — not divergent.
+        let same = fire(
+            &rule,
+            "mc-1",
+            0,
+            &item,
+            Some((Json::str("ok"), "row:ev-9".into())),
+        );
+        assert!(!same.divergent);
+        assert_eq!(same.observed_ref.as_deref(), Some("row:ev-9"));
+        // Resolved and mismatched — divergent, citing the durable row.
+        let diff = fire(
+            &rule,
+            "mc-1",
+            1,
+            &item,
+            Some((Json::str("error"), "row:ev-9".into())),
+        );
+        assert!(diff.divergent);
+        // Unresolved — no observed_ref, never a fabricated divergence.
+        let unresolved = fire(&rule, "mc-1", 2, &item, None);
+        assert!(!unresolved.divergent);
+        assert!(unresolved.observed_ref.is_none());
+        assert_eq!(unresolved.probe_id, "probe:rule/bp-1:mc-1:2");
+        // `provisional` is constitutive on the emitted record.
+        assert_eq!(
+            unresolved.to_json().get("provisional"),
+            Some(&Json::Bool(true))
+        );
     }
 
     #[test]
