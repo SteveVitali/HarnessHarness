@@ -54,6 +54,71 @@ impl EmbedService {
         ))
     }
 
+    /// `lab.receipt.record{session_id, effect_id, observed_ref?,
+    /// receiver_ref, receipt_id, attested_at, attestation, claim_ref?}` —
+    /// the C2 receiver-receipt lift (§5g.6 §2; S-324; ADR-0345 D4). Lifts
+    /// the supplied record through `Store::record_receipt`: the durable
+    /// `lifecycle.ledger.receipt` row is the kernel fact "this receipt
+    /// was lifted"; the receipt's own claims stay `unverified`/`external`
+    /// (`status` is not a wire member — the codec fixes it, so no caller
+    /// can assert a verification the kernel did not make). `supplied_by`
+    /// is the *session holder*, kernel-derived — the lift's provenance is
+    /// never caller-asserted either.
+    pub(crate) fn lab_receipt_record(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let (run_id, lease) = self.writer_subject(params, "lab.receipt.record")?;
+        let missing = |path: &str| EmbedError::SchemaViolation {
+            path: format!("lab.receipt.record/{path}"),
+            code: "missing".to_string(),
+        };
+        let receipt = hh_ledger::receipt::Receipt {
+            effect_id: params
+                .get("effect_id")
+                .and_then(Json::as_str)
+                .ok_or_else(|| missing("effect_id"))?
+                .to_string(),
+            observed_ref: params
+                .get("observed_ref")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+            receiver_ref: params
+                .get("receiver_ref")
+                .and_then(Json::as_str)
+                .ok_or_else(|| missing("receiver_ref"))?
+                .to_string(),
+            receipt_id: params
+                .get("receipt_id")
+                .and_then(Json::as_str)
+                .ok_or_else(|| missing("receipt_id"))?
+                .to_string(),
+            attested_at: params
+                .get("attested_at")
+                .and_then(Json::as_int)
+                .map(|v| v.max(0) as u64)
+                .unwrap_or(0),
+            attestation: params
+                .get("attestation")
+                .cloned()
+                .ok_or_else(|| missing("attestation"))?,
+            supplied_by: lease.holder.clone(),
+            claim_ref: params
+                .get("claim_ref")
+                .and_then(Json::as_str)
+                .map(str::to_string),
+        };
+        let env = self
+            .store
+            .record_receipt(&run_id, &lease, &receipt)
+            .map_err(ledger_err)?;
+        Ok(Json::obj([
+            ("event_id", Json::str(&env.event_id)),
+            ("seq", Json::Int(env.seq as i64)),
+            (
+                "status",
+                Json::str(hh_ledger::receipt::RECEIPT_STATUS_UNVERIFIED),
+            ),
+        ]))
+    }
+
     /// `branch.open{session_id, kind?, read_only?, policy?,
     /// budget_slice_id?, fork_seq?, permissions?}` — the C2 intra-run
     /// branch (§5a.4 `fork` intra arm; ADR-0133/0134): a coherent fork

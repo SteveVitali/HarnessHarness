@@ -40,6 +40,7 @@ pub mod hosted;
 pub mod ids;
 pub mod leases;
 pub mod manifest;
+pub mod receipt;
 pub mod recovery;
 pub mod replay;
 pub mod retention;
@@ -53,8 +54,8 @@ pub mod views;
 pub mod wakeup;
 
 pub use audit::{
-    AuditIndex, AuditIndexEntry, AuditObligation, BlobStatus, ObligationQuantifier, Unmet,
-    DEFERRED_OBLIGATIONS, OBLIGATIONS,
+    AuditIndex, AuditIndexEntry, AuditObligation, BlobStatus, NamedSigner, ObligationQuantifier,
+    Unmet, WitnessDefect, WitnessSigner, DEFERRED_OBLIGATIONS, OBLIGATIONS,
 };
 pub use branch::{
     BranchInfo, BranchKind, BranchRecord, CompensationEntry, EnvBinding, ForkOpts, NavigateTarget,

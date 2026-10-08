@@ -854,6 +854,7 @@ impl EmbedService {
             "lab.hosting.describe" => self.lab_hosting_describe(&req.params),
             "lab.hosting.probe" => self.lab_hosting_probe(&req.params),
             "lab.hosting.attach" => self.lab_hosting_attach(&req.params),
+            "lab.receipt.record" => self.lab_receipt_record(&req.params),
             // ── S5.4: `lab.debt.*` (the live all-home evaluator +
             // DebtIndex + the health-report/notifier surface —
             // R-2.9.6¹), `lab.model.*` (synthetic provider-drift claims +

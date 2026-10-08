@@ -529,6 +529,13 @@ pub struct CheckpointClaim {
     pub idp: Option<String>,
     /// `[{key_id, alg_ref, sig}]`.
     pub signatures: Vec<Json>,
+    /// `witness_cosignatures[{witness_name, key_id, timestamp, sig}]` — the
+    /// C2SP tlog-cosignature entries (§5g.6 §2; S-320): each is a
+    /// timestamped signature over the same checkpoint note (the
+    /// `signatures` preimage) by a manifest-declared witness. Outside the
+    /// claim's `idp`/`signatures` preimage — witnesses attest the claim
+    /// as-signed, never perturb it (ADR-0345 D1).
+    pub witness_cosignatures: Vec<Json>,
     /// The run's `audit_policy_ref` echoed into the claim.
     pub audit_policy_ref: Option<String>,
     /// The identity profile the claim's digests (`tree_head`,
@@ -562,6 +569,10 @@ pub fn parse_checkpoint(payload: &Json) -> Option<CheckpointClaim> {
         Some(Json::Arr(items)) => items.clone(),
         _ => Vec::new(),
     };
+    let witness_cosignatures = match payload.get("witness_cosignatures") {
+        Some(Json::Arr(items)) => items.clone(),
+        _ => Vec::new(),
+    };
     Some(CheckpointClaim {
         kind,
         origin,
@@ -581,6 +592,7 @@ pub fn parse_checkpoint(payload: &Json) -> Option<CheckpointClaim> {
             .and_then(|j| j.as_str())
             .map(str::to_string),
         signatures,
+        witness_cosignatures,
         audit_policy_ref: payload
             .get("audit_policy_ref")
             .and_then(|j| j.as_str())
@@ -655,6 +667,16 @@ pub fn checkpoint_sig_preimage(payload: &Json) -> Vec<u8> {
     unsigned_checkpoint(payload)
         .to_canonical_string()
         .into_bytes()
+}
+
+/// The canonical byte string a *witness cosignature* covers: the witness's
+/// timestamp (big-endian milliseconds) prepended to the checkpoint
+/// signature preimage — the C2SP `timestamp ‖ note` construction (§5g.6 §2;
+/// S-320; ADR-0345 D1). One construction shared by mint and verify (CC1).
+pub fn witness_sig_preimage(timestamp_ms: u64, claim_payload: &Json) -> Vec<u8> {
+    let mut out = timestamp_ms.to_be_bytes().to_vec();
+    out.extend_from_slice(&checkpoint_sig_preimage(claim_payload));
+    out
 }
 
 #[cfg(test)]

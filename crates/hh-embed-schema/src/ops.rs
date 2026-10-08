@@ -1206,6 +1206,11 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.hosting.describe", "L", "json", "json"),
         labi("lab.hosting.probe", "L", "json", "json"),
         labi("lab.hosting.attach", "L", "json", "json"),
+        // §5g.6 §2 C2 (R-2.8.6; ADR-0345 D4; S-324): the receiver-receipt
+        // lift — `record` commits the boundary-supplied receipt as a
+        // kernel-origin `lifecycle.ledger.receipt` row (`status` fixed
+        // `unverified`/`external`; bound to the run's effect fold).
+        labi("lab.receipt.record", "L", "json", "json"),
         // ── S5.4 (R-2.9.6¹/R-2.9.8¹/R-2.9.7¹): the debt-manager surface
         // (`evaluate` = the live all-home trigger fold; `index`/`report` =
         // the DebtIndex + DebtReport/notifier projections — records-in/

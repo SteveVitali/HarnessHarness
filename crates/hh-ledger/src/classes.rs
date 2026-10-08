@@ -885,6 +885,26 @@ const GC_FIELDS: &[AuditField] = &[
     af("retained_until"),
 ];
 
+/// `lifecycle.ledger.receipt` — the receiver-receipt lift row (§5g.6 §2's
+/// C2 receiver-attested receipts; S-324; ADR-0345 D4):
+/// `{effect_id, observed_ref, receiver_ref, receipt_id, attested_at,
+/// attestation{key_id, alg_ref, sig}, status, supplied_by}` + the optional
+/// `claim_ref` content ref (the receiver's claim document lives blob-side —
+/// the row stays content-free). The row is a kernel fact — "the kernel
+/// recorded this receipt"; the receipt's own claims keep their
+/// `unverified`/`external` status on the `status` member (T-LCD-07 — the
+/// receiver's authority never exceeds `external`).
+const RECEIPT_FIELDS: &[AuditField] = &[
+    af("effect_id"),
+    af("observed_ref"),
+    af("receiver_ref"),
+    af("receipt_id"),
+    af("attested_at"),
+    afb("attestation", AUDIT_FIELD_LIST_BYTES),
+    af("status"),
+    af("supplied_by"),
+];
+
 /// `lifecycle.ledger.tier_transition` — the retention-scheduler row
 /// (R-2.2.1; ADR-0068 R4; ADR-0333): `{address, from_tier, to_tier,
 /// policy_ref, at_ms, compressed}`. `from_tier = "none"` marks the
@@ -1284,6 +1304,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("lifecycle.lease.renewed", "none"),
     // ── lifecycle:ledger ──
     ("lifecycle.ledger.gc", "none"),
+    ("lifecycle.ledger.receipt", "none"),
     ("lifecycle.ledger.redacted", "none"),
     ("lifecycle.ledger.tier_transition", "none"),
     // ── lifecycle:registry ──
@@ -1530,6 +1551,11 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("lifecycle.ledger.redacted", O::Events, true,  REDACTED_FIELDS, &[], None, None),
     row_audit("lifecycle.ledger.gc",       O::Events, true,  GC_FIELDS, &[], None, None),
     row_audit("lifecycle.ledger.tier_transition", O::Events, true, TIER_TRANSITION_FIELDS, &[], None, None),
+    // `lifecycle.ledger.receipt` — the receiver-attestation lift row
+    // (§5g.6 §2 C2; S-324; ADR-0345 D4): audit-grade (the row is the
+    // kernel fact that a receipt was lifted), content-free members, the
+    // receiver's claim document rides the `claim_ref` content ref.
+    row_audit("lifecycle.ledger.receipt",  O::Events, true,  RECEIPT_FIELDS, &["claim_ref"], None, None),
     // `lifecycle.escalation.{raised,resolved}` — audit-grade per the §5g.6 §3 list;
     // the emitters land at Stage 2 (the §05e F2/B2 escalation path).
     row_audit("lifecycle.escalation.raised",   O::Events, true,  OPEN_AUDIT, &[], None, None),
