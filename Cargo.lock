@@ -746,6 +746,17 @@ name = "hh-wire"
 version = "0.0.1"
 
 [[package]]
+name = "hh-xcheck"
+version = "0.0.1"
+dependencies = [
+ "hh-identity",
+ "hh-ledger",
+ "hh-plugin",
+ "hh-registry",
+ "hh-wire",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.189"
 source = "registry+https://github.com/rust-lang/crates.io-index"

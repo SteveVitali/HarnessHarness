@@ -1,0 +1,21 @@
+[package]
+name = "hh-xcheck"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The cross-implementation replay/checker packaging (spec §10.7; ticket R2.21; ADR-0353): the committed golden corpora exported as a language-neutral `hh-xcheck-bundle/1` replay bundle — identity trees/records (DF-S1.2-2), the ledger WAL transcript (DF-S1.5-3), the registry snapshot corpus (DF-S1.8-1), the plugin-manifest corpus (DF-S1.27-1) and a 16/64 KiB canonical-parse corpus (DF-S0.3-2's far-side timing input) — plus the E1 self-check over it and the `verify` comparator a foreign implementation's answers are checked against when HUMAN-H3's environment lands. Hermetic, offline; no foreign-toolchain claim is made or minted here."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "hh-xcheck"
+path = "src/bin/xcheck.rs"
+
+[dependencies]
+hh-wire = { path = "../hh-wire" }
+hh-identity = { path = "../hh-identity" }
+hh-ledger = { path = "../hh-ledger" }
+hh-plugin = { path = "../hh-plugin" }
+hh-registry = { path = "../hh-registry" }

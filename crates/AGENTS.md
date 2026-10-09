@@ -62,6 +62,7 @@ below; the root AGENTS.md has the layering narrative.
 | `hh-tracker-fixture` | the packaged reference tracker variant — the honest fixture proxy for HUMAN-H2 |
 | `hh-evolution` | the C5 evolution pipeline: S0–S10 candidate state machine over durable rows |
 | `hh-debt` | the C4 assumption-debt manager service (sweep/settle/retire, `tier-c4` on `hh-embed`) |
+| `hh-xcheck` | the cross-implementation replay/checker packaging (spec §10.7, R2.21, ADR-0353): `hh-xcheck-bundle/1` export + E1 self-check + foreign-answers `verify`; `hh-xcheck` binary |
 
 ## Build & Test
 

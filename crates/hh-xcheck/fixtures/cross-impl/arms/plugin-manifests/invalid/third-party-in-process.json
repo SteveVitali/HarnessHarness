@@ -1,0 +1,58 @@
+{
+  "claims": {},
+  "conformance_claims": [],
+  "contributions": [
+    {
+      "declaration": {
+        "class_id": "control_strategy"
+      },
+      "executable": {
+        "code_pointer": {
+          "algorithm": "sha256",
+          "digest": "0000000000000000000000000000000000000000000000000000000000000000",
+          "media_type": "application/octet-stream",
+          "size": 10
+        },
+        "isolation": "subprocess_confined",
+        "placement_preference": "in_process"
+      },
+      "kind": "variant",
+      "path_or_locator": "v.json"
+    }
+  ],
+  "depends_on": [],
+  "identity": {
+    "name": "corpus-bad",
+    "namespace": "local"
+  },
+  "requests": {
+    "effects": [],
+    "egress": [],
+    "env_keys": [],
+    "fs_roots": [],
+    "hot_path_operations": []
+  },
+  "requires": {
+    "contracts": [],
+    "hir_dialect": "1",
+    "plugin_abi": "1",
+    "records": [],
+    "registry_dialect": "1"
+  },
+  "summary": {
+    "authority": "external",
+    "content_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "owner": "corpus",
+    "provenance": {
+      "authority": "external",
+      "created_at": 0,
+      "origin": {
+        "author_ref": "corpus",
+        "kind": "human",
+        "role": "author"
+      },
+      "scope": "run"
+    }
+  },
+  "tier": "C0"
+}

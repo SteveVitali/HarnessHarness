@@ -1,0 +1,1 @@
+{"a":{"bytes_hex":"31","exec":false,"kind":"file"},"b":{"bytes_hex":"32","exec":true,"kind":"file"},"c":{"kind":"symlink","target":"a"},"d":{"entries":{},"kind":"dir"}}
