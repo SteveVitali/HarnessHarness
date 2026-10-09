@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS        # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R2.1
-lastCompleted:   DOC.2
+nextTicket:      R2.2
+lastCompleted:   R2.1
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/spec-amend-a1-a3  # amended-spec tip — carries the A-1..A-3 fold on top of doc.2; R2.1 forks here
+chainTip:        svitali/harnessharness-r2.1  # R2.1 tip — parity-flake fix + doctor ruling (ADR-0332) + BL-29 flips; R2.2 forks here
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -48,6 +48,12 @@ updatedAt:       2026-10-06
   difference at `.payload.assembly_ms.value`; a sibling run on the same SHA passed. The comparison's
   allowlist omits the measured-wall `assembly_ms.{value,measured_at}` fields a sibling parity test
   already excludes. Timing-sensitive, not semantic; assigned to R2.1 with the run URL. Not a block.
+  **Repaired 2026-10-06 (R2.1):** the ac5 allowlist now carries
+  `assembly_ms.{value,measured_at}` under the sibling comparison's `ends_with` convention —
+  semantic differences still reject; only the measured-wall members are allowlisted. Failing run:
+  https://github.com/SteveVitali/HarnessHarness/actions/runs/37482844398 (sibling run
+  `37482834486` at the same SHA passed). Root cause: CAP.3 added the fields to one allowlist; the
+  ac5 sibling comparison was missed.
 
 ## GATE DECISIONS
 
@@ -236,3 +242,4 @@ updatedAt:       2026-10-06
   `docs/build/planning/2026-10-06_round2-decomposition.md`. `projectStatus: DONE → IN_PROGRESS`;
   `round: 1 → 2`; `nextTicket: R2.1`; `chainTip` → `svitali/spec-amend-a1-a3` so Round-2 tickets fork
   over the amended spec (A-1..A-3). lastCompleted stays `DOC.2`; Round-1 history unchanged.
+- 2026-10-06 · R2.1 done — branch `svitali/harnessharness-r2.1` · PR https://github.com/SteveVitali/HarnessHarness/pull/107 · base `svitali/round2-decompose` (@978a104). Round-2 hygiene: **(1) parity flake** — `ac5_attended_and_unattended_share_one_configuration` allowlists `assembly_ms.{value,measured_at}` (measured wall, sibling `ends_with` convention); root cause of the #104 CI failure on run 37482844398 — repair noted on the open finding with the run URL. **(2) DF-DOC.1-1 ruled + fixed (ADR-0332)** — `KernelDescriptor.version` is the SemVer-class label (the `kernel_version_id` tail); one canonical extraction `hh_embed_schema::kernel_version_label` shared by `EmbedService::build` + `hh-kernel doctor`'s `doctor_identity_ok` (CC1); doctor exits 0 clean, all 5 mismatch legs stay loud, `hh doctor` boundary green; AGENTS.md gotcha 3 corrected. **(3) BL-29 verification flips — all four DONE with dated 2026-10-06 evidence:** DF-S1.3-2 (vouched mint landed S4.5a), DF-S1.9-4 (rung retcon landed; 116/116 ADRs), DF-S1.26-2 (closing pass — the in-process `detached:"parked" member assertion landed + green vs amended §7.1), DF-DOC.1-1; BL-29 → `closed` in BACKLOG.csv; ADR-0332's quiet trigger placed at BL-42. **Verify:** `cargo test --workspace` 281 blocks / 3030 tests / 0 failures / 2 ignored; in_process 69/69; fmt clean; clippy 0 warnings touched crates; check-drift in sync; check-removability green; check-backlog exit 0 (147 sources); check-build-memory 0 violations / 7 pre-existing warnings; ci-boundary/1 pass #107@0e25bf8 (record docs/build/logs/ci-R2.1.json). **Deferrals:** closed the four above; none opened. **ADRs:** ADR-0332. chainTip → svitali/harnessharness-r2.1 · next → R2.2 (manifest row 108).

@@ -140,21 +140,7 @@ fn doctor() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    // The hello result's kernel descriptor must report this kernel's
-    // identity — version id, contract major, schema hash (the
-    // negotiated identity the client pins, I4).
-    let kernel = resp.get("result").and_then(|r| r.get("kernel"));
-    let ok = kernel.and_then(|k| k.get("version")).and_then(Json::as_str)
-        == Some(id.kernel_version_id.as_str())
-        && kernel
-            .and_then(|k| k.get("schema_hash"))
-            .and_then(Json::as_str)
-            == Some(id.schema_hash.as_str())
-        && kernel
-            .and_then(|k| k.get("contract_major"))
-            .and_then(Json::as_int)
-            == Some(id.contract_major);
-    if ok {
+    if doctor_identity_ok(&resp, &id) {
         let _ = writeln!(
             io::stderr(),
             "doctor: ok — {} schema_hash={}",
@@ -167,6 +153,27 @@ fn doctor() -> ExitCode {
         eprintln!("doctor: identity mismatch: {resp_line}");
         ExitCode::FAILURE
     }
+}
+
+/// The doctor's identity check over one `hello` response — the kernel
+/// descriptor must report this kernel's negotiated identity (I4):
+/// `version` is the SemVer-class label ([`embed::kernel_version_label`]
+/// of `kernel_version_id` — the stored field's contract, ADR-0332 D1,
+/// DF-DOC.1-1), plus `contract_major` and `schema_hash`. A mismatch is
+/// a loud failure, never a pass. Factored out so the mismatch legs are
+/// unit-testable without a second binary.
+fn doctor_identity_ok(resp: &Json, id: &embed::ContractIdentity) -> bool {
+    let kernel = resp.get("result").and_then(|r| r.get("kernel"));
+    kernel.and_then(|k| k.get("version")).and_then(Json::as_str)
+        == Some(embed::kernel_version_label(&id.kernel_version_id))
+        && kernel
+            .and_then(|k| k.get("schema_hash"))
+            .and_then(Json::as_str)
+            == Some(id.schema_hash.as_str())
+        && kernel
+            .and_then(|k| k.get("contract_major"))
+            .and_then(Json::as_int)
+            == Some(id.contract_major)
 }
 
 /// `--flag <value>` or `--flag=<value>` — the serve-mode flag forms.
@@ -188,4 +195,56 @@ fn print_help() {
         io::stderr(),
         "hh-kernel <export-schema|serve [--http <addr> [--token <t>] [--token-file <path>]]|hello|version|doctor>"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The `hello` result envelope `doctor` checks — `kernel` carrying
+    /// `version`/`schema_hash`/`contract_major`.
+    fn hello_response(version: &str, schema_hash: &str, contract_major: i64) -> Json {
+        Json::obj([(
+            "result",
+            Json::obj([(
+                "kernel",
+                Json::obj([
+                    ("version", Json::str(version)),
+                    ("schema_hash", Json::str(schema_hash)),
+                    ("contract_major", Json::Int(contract_major)),
+                ]),
+            )]),
+        )])
+    }
+
+    /// DF-DOC.1-1 / ADR-0332 D1 — the self-check accepts the SemVer-class
+    /// label the boundary reports (`kernel_version_label` of the id) and
+    /// still fails loudly on any identity mismatch: a full-id `version`,
+    /// a foreign label, a wrong schema hash, a wrong contract major, or
+    /// a missing descriptor. Never weakened to always-pass.
+    #[test]
+    fn doctor_identity_check_accepts_the_label_and_refuses_mismatch() {
+        let id = kernel_identity();
+        let label = embed::kernel_version_label(&id.kernel_version_id);
+        assert_eq!(label, env!("CARGO_PKG_VERSION"));
+        assert!(doctor_identity_ok(
+            &hello_response(label, &id.schema_hash, id.contract_major),
+            &id
+        ));
+        for bad in [
+            // The defect's own shape: the full `hh-kernel/<ver>` id where
+            // the label belongs.
+            hello_response(&id.kernel_version_id, &id.schema_hash, id.contract_major),
+            // A foreign version label.
+            hello_response("9.9.9", &id.schema_hash, id.contract_major),
+            // A wrong schema hash.
+            hello_response(label, "sha256:00", id.contract_major),
+            // A wrong contract major.
+            hello_response(label, &id.schema_hash, id.contract_major + 1),
+            // No kernel descriptor at all.
+            Json::obj([("result", Json::obj([]))]),
+        ] {
+            assert!(!doctor_identity_ok(&bad, &id), "mismatch accepted: {bad:?}");
+        }
+    }
 }

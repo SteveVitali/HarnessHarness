@@ -251,6 +251,13 @@ build) · `dormant` (trigger exists but its subject is inert) · `superseded`
 Sweep tally: **55 fired-unanswered · 30 fired-answered · 28 quiet · 2 dormant ·
 0 superseded** (115 total — REC.2 appended ADR-0331, 2026-10-06).
 
+*Update 2026-10-06 (R2.1):* **ADR-0332** (doctor-identity ruling —
+`KernelDescriptor.version` is the SemVer-class label) classified **quiet** —
+its revisit trigger fires only on a `hh-embed/2` dialect bump; sources cell at
+BL-42 (standing conditions 30 → 31; total 116). **BL-29 closed** — the
+bookkeeping flips landed this ticket: DF-S1.3-2, DF-S1.9-4, DF-S1.26-2 and
+DF-DOC.1-1 are all DONE with dated evidence in `DEFERRALS.md`.
+
 ## Coverage sums — recomputed 2026-10-06 vs the CAP.3 headline
 
 Recomputed from `COVERAGE_MATRIX.csv` (66 scoped requirement rows):
