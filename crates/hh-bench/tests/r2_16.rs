@@ -142,6 +142,7 @@ fn paired_design(suite: &BenchSuite) -> Design {
             analysis_plan_ref: "plan-1".into(),
             task_split_hash: suite.manifest.split_hash.clone(),
             interactions: vec![],
+            dead_weight_purpose: false,
         },
         registry_snapshot_id: None,
         generators: None,

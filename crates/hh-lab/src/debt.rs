@@ -934,7 +934,16 @@ pub struct ProfileChange {
     pub kind: ProfileChangeKind,
     /// Whether `DebtPolicy.grace_period_ms` has elapsed since the change
     /// (the caller timestamps it — `DebtObservables` holds no clock).
+    /// When `changed_at_ms` is also carried the evaluator derives the
+    /// elapsed leg itself under the operative policy — the caller's flag
+    /// and the derived leg are OR-ed (R2.17).
     pub grace_elapsed: bool,
+    /// The transaction time the change occurred (ms), when the caller can
+    /// project it — `evaluate_debt` derives the grace leg as
+    /// `changed_at_ms + policy.grace_period_ms <= now_ms` (the
+    /// `grace_period_ms` runtime consumer; R2.17). The live-trigger seam
+    /// (`hh-embed::evaluate_debt_on_lifecycle`) stamps it.
+    pub changed_at_ms: Option<u64>,
     /// The profile ref the change names.
     pub profile_ref: String,
 }
@@ -1079,7 +1088,15 @@ pub fn evaluate_debt(
     if profile_home {
         if let Some(pc) = &obs.profile_change {
             let cause = format!("profile_change:{}", pc.kind.name());
-            if pc.kind == ProfileChangeKind::Retired && pc.grace_elapsed {
+            // `grace_period_ms` (R2.17) — the hard leg fires when the
+            // caller flags `grace_elapsed` OR the carried `changed_at_ms`
+            // is at least `policy.grace_period_ms` behind `now_ms`.
+            let grace_elapsed = pc.grace_elapsed
+                || pc
+                    .changed_at_ms
+                    .map(|t| t.saturating_add(policy.grace_period_ms) <= now_ms)
+                    .unwrap_or(false);
+            if pc.kind == ProfileChangeKind::Retired && grace_elapsed {
                 hard_causes.push(cause);
             } else {
                 warn_causes.push(cause);

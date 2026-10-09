@@ -102,6 +102,10 @@ pub(crate) fn observables(j: Option<&Json>) -> Result<hh_lab::debt::DebtObservab
         obs.profile_change = Some(hh_lab::debt::ProfileChange {
             kind,
             grace_elapsed: matches!(pc.get("grace_elapsed"), Some(Json::Bool(true))),
+            changed_at_ms: pc
+                .get("changed_at_ms")
+                .and_then(Json::as_int)
+                .map(|v| v.max(0) as u64),
             profile_ref: pc
                 .get("profile_ref")
                 .and_then(Json::as_str)
@@ -519,15 +523,21 @@ impl EmbedService {
         };
         let debt = hh_hir::debt_from_json(member, &format!("/{kind}.{}", home.field))
             .map_err(|e| bad("/debt", &format!("{e:?}")))?;
+        let now_ms = self.store.now_ms();
         let obs = hh_lab::debt::DebtObservables {
             profile_change: Some(hh_lab::debt::ProfileChange {
                 kind: change,
                 grace_elapsed: false,
+                // Stamp the change time — a later evaluation under the
+                // operative policy derives the grace leg itself
+                // (`changed_at_ms + grace_period_ms <= now`), so the
+                // `retired`-grace hard transition is a policy fact, never
+                // a caller-supplied flag alone (R2.17).
+                changed_at_ms: Some(now_ms),
                 profile_ref: version_id.to_string(),
             }),
             ..Default::default()
         };
-        let now_ms = self.store.now_ms();
         let policy = DebtPolicy::default();
         let debt_ref = format!("debt:{}:{version_id}:{}", home.id, debt.rule_id);
         let transitions =

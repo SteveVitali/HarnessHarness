@@ -57,6 +57,21 @@ impl DebtManagerRecord {
         if self.manager_id.trim().is_empty() {
             return Err(bad("manager_id is empty"));
         }
+        // The policy members the manager actually executes must be
+        // declared at admission (AC-R-2.9.6-12): `schedule` is the
+        // standing-monitor cadence spelling the sweep's durable row
+        // attributes, and `priority` must be a spelling the scheduler
+        // implements — fail fast at `register`, never at the sweep.
+        if self.policy.schedule.trim().is_empty() {
+            return Err(bad("policy.schedule is empty — the check cadence spelling"));
+        }
+        if !crate::schedule::PRIORITY_SPELLINGS.contains(&self.policy.priority.as_str()) {
+            return Err(bad(format!(
+                "policy.priority `{}` is not in {:?}",
+                self.policy.priority,
+                crate::schedule::PRIORITY_SPELLINGS
+            )));
+        }
         hh_hir::debt::validate_for_home(
             &self.reflexive_debt,
             "assumption_debt_manager",
@@ -174,6 +189,10 @@ pub struct SchedulableEntry {
     pub next_time_expiry_ms: Option<u64>,
     /// The removal-test kind, when the record carries one.
     pub removal_kind: Option<RemovalTestKind>,
+    /// The `DebtHomes/1` home id, when the caller projects it (R2.17 —
+    /// the schedule leg resolves it to the `DebtHome` row so the
+    /// `validate_removal_test` context checks can name the home).
+    pub home: Option<u8>,
 }
 
 /// `SweepReport` — the sweep's outcome (rides

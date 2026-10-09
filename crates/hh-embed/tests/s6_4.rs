@@ -673,7 +673,10 @@ mod c4 {
         hh_debt::records::DebtManagerRecord {
             manager_id: manager_id.to_string(),
             maturity: "instrument-grade".into(),
-            policy: hh_ontology::debt::DebtPolicy::default(),
+            policy: hh_ontology::debt::DebtPolicy {
+                notice_sinks: vec!["sink:ops".into()],
+                ..hh_ontology::debt::DebtPolicy::default()
+            },
             reflexive_debt: reflexive,
         }
         .to_json()

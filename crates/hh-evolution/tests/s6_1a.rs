@@ -1229,6 +1229,7 @@ fn stage_spec(
                 analysis_plan_ref: "analysis:plan".into(),
                 task_split_hash: "sha256:cc33".into(),
                 interactions: vec![],
+                dead_weight_purpose: false,
             },
             registry_snapshot_id: None,
             generators: None,

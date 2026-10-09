@@ -229,6 +229,7 @@ impl DebtManager {
                             .and_then(|v| v.parse().ok())
                     }),
                 removal_kind: e.record.removal_test.as_ref().map(|t| t.kind),
+                home: e.home,
             };
             if *cur != DebtStatus::Retired && entry.removal_kind.is_some() {
                 schedulable.push((entry, e));
@@ -314,12 +315,17 @@ impl DebtManager {
             }
         }
 
-        // (5) sweep.completed — the durable report row.
+        // (5) sweep.completed — the durable report row. `cadence` carries
+        // the operative `DebtPolicy.schedule` spelling (AC-R-2.9.6-12 —
+        // the record's check-cadence member; R2.17 makes it load-bearing
+        // on the durable row, never a carried-but-unread field).
         self.emit(
             store,
             "lifecycle.debt.sweep.completed",
             Json::obj([
                 ("sweep_seq", Json::Int(report.sweep_seq as i64)),
+                ("kind", Json::str("cadence")),
+                ("cadence", Json::str(&policy.schedule)),
                 ("now_ms", Json::Int(now_ms as i64)),
                 ("evaluated", Json::Int(report.evaluated as i64)),
                 ("transitions", Json::Int(report.transitions.len() as i64)),
@@ -463,6 +469,7 @@ impl DebtManager {
                             .and_then(|v| v.parse().ok())
                     }),
                 removal_kind: e.record.removal_test.as_ref().map(|t| t.kind),
+                home: e.home,
             };
             if cur == DebtStatus::Retired
                 || entry.removal_kind.is_none()

@@ -85,6 +85,7 @@ fn profile_change_rebound_warns_on_a_profile_home() {
             kind: ProfileChangeKind::Rebound,
             grace_elapsed: false,
             profile_ref: "profile:p-2".into(),
+            changed_at_ms: None,
         }),
         ..Default::default()
     };
@@ -104,6 +105,7 @@ fn retired_profile_past_grace_expires() {
             kind: ProfileChangeKind::Retired,
             grace_elapsed: true,
             profile_ref: "profile:p-1".into(),
+            changed_at_ms: None,
         }),
         ..Default::default()
     };
@@ -121,6 +123,7 @@ fn retired_profile_inside_grace_warns_not_expires() {
             kind: ProfileChangeKind::Retired,
             grace_elapsed: false,
             profile_ref: "profile:p-1".into(),
+            changed_at_ms: None,
         }),
         ..Default::default()
     };
@@ -139,6 +142,7 @@ fn profile_change_does_not_fire_off_profile_homes() {
             kind: ProfileChangeKind::SupersededL2,
             grace_elapsed: false,
             profile_ref: "profile:p-2".into(),
+            changed_at_ms: None,
         }),
         ..Default::default()
     };
@@ -274,6 +278,7 @@ fn hard_trigger_subsumes_warn_and_folds_causes() {
             kind: ProfileChangeKind::SupersededL2,
             grace_elapsed: false,
             profile_ref: "profile:p-2".into(),
+            changed_at_ms: None,
         }),
         ..Default::default()
     };

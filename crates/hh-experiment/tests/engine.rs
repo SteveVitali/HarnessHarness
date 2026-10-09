@@ -118,6 +118,7 @@ fn pre_registration() -> PreRegistration {
         analysis_plan_ref: pinned("analysis"),
         task_split_hash: pinned("split.hash"),
         interactions: vec![],
+        dead_weight_purpose: false,
     }
 }
 
