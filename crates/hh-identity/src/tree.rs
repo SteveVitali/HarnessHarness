@@ -80,6 +80,23 @@ impl Tree {
         self
     }
 
+    /// The entries of this tree (the logical input behind [`Self::address`]) —
+    /// exposed so the cross-implementation replay bundle (hh-xcheck, R2.21)
+    /// serializes the *inputs* a second implementation must address
+    /// identically (DF-S1.2-2). Read-only; mutation is only through the
+    /// builders so the one tree rule holds by construction.
+    pub fn entries(&self) -> &BTreeMap<String, Entry> {
+        &self.entries
+    }
+
+    /// The canonical JSON of this tree — the exact preimage `address` hashes
+    /// (the foreign-side intermediate check for DF-S1.2-2: a second
+    /// implementation proves its canonical serialization agrees, not only the
+    /// final id).
+    pub fn canonical_json(&self) -> Json {
+        self.canonical()
+    }
+
     /// The canonical JSON of this tree under the one tree rule: each entry rendered by its kind,
     /// files by their blob `ContentAddress` id, symlinks by target, subdirs by their tree id.
     /// Sorted keys (BTreeMap) make it deterministic.
