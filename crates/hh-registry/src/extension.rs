@@ -12,9 +12,10 @@
 //!   OQ-162 is open, C1 — Stage 1 works with hash pins);
 //! - install procedures / UX / revocation propagation — S4.14a;
 //! - the MCP discover/lift-and-pin driver and the `hh-mcp` bridge — S1.24/S2.5;
-//! - event emission of the `security.extension.*` family (classes land in
-//!   `hh-ledger::classes`; `loaded` already emits — S1.18; the rest land with their
-//!   producers).
+//! - the `security.extension.*` emitters append through the caller's fenced
+//!   writer — the lifecycle layer mints the payloads (S4.14a + R2.20: the
+//!   `resolved`/`quarantined`/`sealed`/`loaded` producers land in
+//!   `lifecycle`); the classes live in `hh-ledger::classes`.
 
 use std::collections::BTreeMap;
 
@@ -155,6 +156,44 @@ impl DeclaredSource {
             DeclaredSource::Archive { .. } => "archive",
             DeclaredSource::McpEndpoint { .. } => "mcp_endpoint",
             DeclaredSource::InstructionFiles { .. } => "instruction_files",
+        }
+    }
+}
+
+// ── MergePolicy ───────────────────────────────────────────────────────────────
+
+/// The extension merge policy (§5g.5 §3; S1.23): how two sources' candidates
+/// combine under one name. `exact_only` is the default — a ref binds exactly
+/// one pinned record and a second candidate for the same `(name, kind)` is a
+/// collision (`NameCollision`, never silent last-wins); `disjoint` declares
+/// that the sources bind disjoint namespaces. The enum lives at this layer
+/// because the declared-source scanners (`lifecycle::scan_declared_sources`)
+/// apply it when enumerating members into `ExtensionRef`s; the assembly
+/// grammar re-exports it (one spelling — CC1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MergePolicy {
+    /// Exact-only merge (the default).
+    #[default]
+    ExactOnly,
+    /// Declared disjoint namespaces.
+    Disjoint,
+}
+
+impl MergePolicy {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            MergePolicy::ExactOnly => "exact_only",
+            MergePolicy::Disjoint => "disjoint",
+        }
+    }
+
+    /// Parse a spelling; `None`/`exact_only` is the default.
+    pub fn parse(s: Option<&str>) -> Option<MergePolicy> {
+        match s {
+            None | Some("exact_only") => Some(MergePolicy::ExactOnly),
+            Some("disjoint") => Some(MergePolicy::Disjoint),
+            _ => None,
         }
     }
 }
@@ -611,6 +650,82 @@ impl DeclaredClaimKind {
     }
 }
 
+/// The manifest member spellings the claim lift recognises (§5g.5 §3 —
+/// `declared_claims` lift from `allowed-tools`, tool annotations and declared
+/// permission manifests; the spellings cover the native plugin manifest
+/// (`requests`, `claims`) and the MCP/foreign conventions the import adapter
+/// already honours — one vocabulary, one lift (CC1)).
+const CLAIM_LIFT_MEMBERS: &[(&[&str], DeclaredClaimKind)] = &[
+    (
+        &["allowed_tools", "allowed-tools", "allowedTools"],
+        DeclaredClaimKind::AllowedTools,
+    ),
+    (
+        &["tool_annotations", "tool-annotations", "annotations"],
+        DeclaredClaimKind::ToolAnnotation,
+    ),
+    (
+        &[
+            "permissions",
+            "permission_manifest",
+            "permission-manifest",
+            "requests",
+        ],
+        DeclaredClaimKind::PermissionManifest,
+    ),
+    (&["claims"], DeclaredClaimKind::Other),
+];
+
+/// True when a claim's value carries a pin/grant shape — `version_id` /
+/// `version-id` / `grant` / `grants` / `pin` members at the top level (a claim
+/// dressed as a conferral is the L3 leg crossing, §5g.5 §2.3).
+fn claim_is_grant_shaped(value: &Json) -> bool {
+    if let Json::Obj(m) = value {
+        for k in ["version_id", "version-id", "grant", "grants", "pin"] {
+            if m.contains_key(k) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// `lift_declared_claims(manifest)` — the L3 claim lift the resolve/install
+/// paths run (R2.20): the manifest's machine-usable claim members become
+/// `DeclaredClaim`s under `trust.declared_claims` — the *only* home claims may
+/// occupy. A claim value carrying a pin/grant shape refuses `LegCrossing`
+/// (the claim is pretending to confer — a declared `allowed-tools` list is a
+/// claim, never a `VersionedRef<Permission>`). Unknown members are not claims
+/// and never lift (a manifest member this lift does not recognise stays in
+/// `manifest`, verbatim).
+pub fn lift_declared_claims(manifest: &Json) -> Result<Vec<DeclaredClaim>, RegistryError> {
+    let Json::Obj(m) = manifest else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for (spellings, kind) in CLAIM_LIFT_MEMBERS {
+        for sp in *spellings {
+            if let Some(v) = m.get(*sp) {
+                let claim = DeclaredClaim {
+                    kind: *kind,
+                    value: v.clone(),
+                };
+                if claim_is_grant_shaped(&claim.value) {
+                    return Err(RegistryError::SchemaViolation {
+                        path: format!("manifest.{sp}"),
+                        detail: format!(
+                            "LegCrossing: claim member `{sp}` carries a pin/grant shape — \
+                             declared claims never confer (§5g.5 L3)"
+                        ),
+                    });
+                }
+                out.push(claim);
+            }
+        }
+    }
+    Ok(out)
+}
+
 // ── ExtensionTrustRecord ─────────────────────────────────────────────────────
 
 /// `ExtensionTrustRecord` (§5g.5 §3): the trust facts the resolver + verifier
@@ -970,16 +1085,13 @@ pub fn validate_extension_record(r: &ExtensionRecord) -> Result<(), RegistryErro
             });
         }
     }
-    // L3: a claim carrying a pin-shaped value pretends to be a grant.
+    // L3: a claim carrying a pin/grant-shaped value pretends to be a grant.
     for c in &r.trust.declared_claims {
-        if let Json::Obj(m) = &c.value {
-            if m.contains_key("version_id") || m.contains_key("grant") {
-                return Err(RegistryError::SchemaViolation {
-                    path: format!("{path}.trust.declared_claims"),
-                    detail: "LegCrossing: a declared_claim may not carry a pin/grant shape"
-                        .to_string(),
-                });
-            }
+        if claim_is_grant_shaped(&c.value) {
+            return Err(RegistryError::SchemaViolation {
+                path: format!("{path}.trust.declared_claims"),
+                detail: "LegCrossing: a declared_claim may not carry a pin/grant shape".to_string(),
+            });
         }
     }
     Ok(())

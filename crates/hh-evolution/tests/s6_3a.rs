@@ -1346,6 +1346,7 @@ fn install_plan_is_bounded_by_the_experiments_authority_cap() {
         hash_only_ceiling: AuthorityClass::External,
         max_age: None,
         model_install: ModelInstallRule::AllowAttenuated,
+        scanner_policy: hh_registry::extension::lifecycle::ScannerPolicy::Advisory,
         live_policy_ids: vec![],
     };
     let base = base_doc();

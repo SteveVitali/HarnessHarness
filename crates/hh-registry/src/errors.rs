@@ -252,6 +252,14 @@ pub enum RegistryError {
         /// What would have widened.
         detail: String,
     },
+    /// A declared-source scan refused the listing — an entry escapes its
+    /// declared root (`directory_scan`/`instruction_files` containment), or
+    /// the live `scanner_policy` posture `deny` refuses a flagged/unavailable
+    /// `TextHygieneReport` (§5g.5 §2 error column; R2.20).
+    ScanDenied {
+        /// What the scan refused.
+        detail: String,
+    },
 }
 
 impl RegistryError {
@@ -298,6 +306,7 @@ impl RegistryError {
             RegistryError::StalePin { .. } => "StalePin",
             RegistryError::ModelInstallDenied { .. } => "ModelInstallDenied",
             RegistryError::AuthorityWidening { .. } => "AuthorityWidening",
+            RegistryError::ScanDenied { .. } => "ScanDenied",
         }
     }
 }
@@ -361,6 +370,7 @@ impl std::fmt::Display for RegistryError {
             }
             RegistryError::ModelInstallDenied { detail } => write!(f, ": {detail}"),
             RegistryError::AuthorityWidening { detail } => write!(f, ": {detail}"),
+            RegistryError::ScanDenied { detail } => write!(f, ": {detail}"),
             _ => Ok(()),
         }
     }
