@@ -1,0 +1,1 @@
+{"arm":"record","canonical_full":{"kind":"hir.node","refs":[],"semantic":{"event":"lifecycle.run.opened","seq":0},"surface":{}},"canonical_semantic":{"kind":"hir.node","semantic":{"event":"lifecycle.run.opened","seq":0}},"domain_tag":"hir.node"}
