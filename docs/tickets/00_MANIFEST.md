@@ -16,8 +16,8 @@ req_id_pattern: R-2\.[0-9]+\.[0-9]+[a-z]?
 
 ## How to build
 Stacked-PR chain. Rules: (1) go in table order; (2) between tickets, stay on the previous
-ticket's branch so PRs stack; (3) STOP at every GATE row (GATE-G1/G2/G3, GATE-ACCEPT) until the
-operator reads it out — never guessed past; (4) HUMAN rows (HUMAN-H1/H2) are operator work —
+ticket's branch so PRs stack; (3) STOP at every GATE row (GATE-G1/G2/G3, GATE-ACCEPT, GATE-G4) until the
+operator reads it out — never guessed past; (4) HUMAN rows (HUMAN-H1/H2, Round-2's H3/H4) are operator work —
 start them when the table reaches them and never let a code ticket silently block on one (open a
 `DEFERRALS.md` row and continue). Run line, per row:
 `implement-spec spec=docs/tickets/<file> <per-ticket flags>`. `orchestrate-build` drives this from
@@ -31,6 +31,15 @@ subsystem seam. Ordering follows the §4.4 topological order (`tier_violations=[
 **HUMAN-H1 — Bind the surface (E3) ecosystem for generated clients (OQ-130 / WS-K2)** (Stage 4). Blocks: S4.10 (read-only web instrument), S5.7 (web-surface editing), S5.8 (surface ecosystem + compat). A code ticket reaching these before the binding records a `DEFERRALS.md` row (proxy = the SDK generated client) and reports 'gate pending' — never a failure. Exit: The surface ecosystem is bound (an ADR-0050 amendment-log row exists) and the read-only web instrument's generated clients build under the drift check.
 
 **HUMAN-H2 — Provision a real issue-tracker + signed webhook for the Stage-5 fleet adapter** (Stage 5). Blocks: S5.6 (fleet adapters). If not provisioned, S5.6 runs against the Stage-4 fixture adapter and opens a `DEFERRALS.md` row (proxy = fixture adapter) — never a fabricated pass. Exit: The real tracker + signed webhook are provisioned and the fleet adapter's capability probe succeeds; credentials are broker-held (never in a ledger).
+
+**HUMAN-H3 — Provision the foreign-verification environment** (Round 2). Blocks: R2.21's foreign
+cells only (the offline packaging proceeds regardless). If unprovisioned when the chain reaches row
+129, R2.21 lands its offline half and the named DF rows carry dated 'environment pending' notes —
+the foreign-verification claims stay withheld, never fabricated.
+
+**HUMAN-H4 — R2 cross-camp reviewer signature** (Round 2). Blocks: the DF-S0.3-3 residual (BL-02);
+gates no code ticket. Carried through GATE-ACCEPT's accepted-deviations set — a second deferral
+needs the operator's explicit words; dispositioned at GATE-G4.
 
 ## The chain
 
@@ -145,6 +154,46 @@ subsystem seam. Ordering follows the §4.4 topological order (`tier_violations=[
 | 105 | `105_DOC.1__repo-docs-refresh.md` | docs | docs | repo-docs refresh | — |
 | 106 | `106_DOC.2__agent-docs-refresh.md` | docs | docs | agent-docs refresh | — |
 
+### Round 2 — 2026-10-06 · carried-forward backlog discharge (decompose-spec mode=extend)
+
+Rows 107–136 append below Round-1 history unchanged. Sources: `docs/build/planning/2026-10-06_decision-memo.md`,
+`docs/build/BACKLOG.csv` (BL-01…BL-43), `docs/tickets/DEFERRALS.md` open/residual set. The ten
+GATE-ACCEPT signed deviations are accepted, not owed — out of scope. `DF-S2.8-1`'s steer-delivery leg
+is assigned to R2.6 (single owner of the durable steer-cue seam; `*` on row 111).
+
+| # | file | phase | kind | scope | gate |
+|---|---|---|---|---|---|
+| 107 | `107_R2.1__round2-hygiene.md` | Round 2 | ticket | Round-2 hygiene: fix the `assembly_ms` ledger-parity flake, rule + fix `hh-kernel doctor` (DF-DOC.1-1), verify-and-flip unflipped discharges (DF-S1.3-2/-9-4/-26-2; BL-29) | — |
+| 108 | `108_R2.2__ledger-retention-gc.md` | Round 2 | ticket | Ledger producer legs: tiered retention (hot/warm/cold), compression at rest, gc/escalation emitters (DF-S1.5-1, DF-S2.9-1; BL-11) | — |
+| 109 | `109_R2.3__durable-execution-legs.md` | Round 2 | ticket | Durable-execution producers: suspend/compensate/heal entry points, healing_policy_ref, remaining wakeup producers (DF-S2.3-1; BL-12) | — |
+| 110 | `110_R2.4__env-ops-snapshot-cadence.md` | Round 2 | ticket | Environment lifecycle boundary ops + automatic fs_tree/memory snapshot cadence (DF-S2.9-3, DF-S2.10-1; BL-13) | — |
+| 111 | `111_R2.5__context-memory-producers.md` | Round 2 | ticket | Context/memory producer legs + §5c battery: driver call sites, resume_set consumers, detectors, OOP corpus (DF-S2.8-1*, DF-S1.19-1/-2; BL-15) | — |
+| 112 | `112_R2.6__control-steer-interpreters.md` | Round 2 | ticket | Control-plane legs: durable steer-cue transport (OQ-316 arm), queue_next_turn, steerable/plan_execute interpreters, OOP suite, env kill (DF-S2.11-1, DF-S1.20-1; BL-14) | — |
+| 113 | `113_R2.7__model-plane-legs.md` | Round 2 | ticket | Model-plane producer legs (machine cells): model.* emitters, non-static routing arms, WireDialect corpus, K4/K5 (DF-S1.18-1; BL-31 partial) | — |
+| 114 | `114_R2.8__tool-exposure-residual.md` | Round 2 | ticket | Tool-exposure residual: C1 bindings/ids/indexes/renderers, C2 control + runtime emitters, ≥200-surface battery (DF-S1.17-1/-2/-3; BL-16) | — |
+| 115 | `115_R2.9__egress-containment-legs.md` | Round 2 | ticket | Egress/containment residual: amend(), T-CON members, tls.terminate enforcement + inspect_hooks, ask-endorsement ingress, fork rebind, leak-scan surfaces (DF-S1.12-*, DF-S2.4-1/-3; BL-18) | — |
+| 116 | `116_R2.10__credential-broker-legs.md` | Round 2 | ticket | Credential-broker legs: audience sender-constraint verify, honest dpop, canary channel in every Stage-3 env image (DF-S1.13-1/-3; BL-19) | — |
+| 117 | `117_R2.11__approvals-monitor-acceptance.md` | Round 2 | ticket | Approval UX + Π acceptance: ApprovalOption.modify, ApproverGrant + label.endorsed call site, check_write@prepare, depth-3 (DF-S1.23-1, DF-S1.11-2; BL-22+23) | — |
+| 118 | `118_R2.12__ifc-residual.md` | Round 2 | ticket | IFC residual: labels_leaves per-leaf walk, remedy-ingress consume path, shape_endorsed produce-time caller (DF-S2.7-1; BL-20) | — |
+| 119 | `119_R2.13__audit-residual.md` | Round 2 | ticket | Audit residual: witness cosignatures, receiver receipts, gc/redaction emitters (DF-S1.15-3, DF-S1.15-1 non-custody; BL-21) | — |
+| 120 | `120_R2.14__telemetry-exporter-seam.md` | Round 2 | ticket | Telemetry emitters + live exporter seam: M5/M6/M13-15 classes, turn_phase_profile, subscriber runtime + egress-mediated sinks (DF-S1.14-1/-2/-4; BL-24) | — |
+| 121 | `121_R2.15__verification-plane-legs.md` | Round 2 | ticket | Verification-plane legs: postconditions, diff_sanity, OOP validator suite, computed metrics, judge binding, belief probes (DF-S1.21-*; BL-17) | — |
+| 122 | `122_R2.16__eval-residual-battery.md` | Round 2 | ticket | Eval residual ops + fault battery: declare_* semantics, combined-failure fixture, unknown budget, LeakedSplit, HAL levels (DF-S1.22-1/-2; BL-25) | — |
+| 123 | `123_R2.17__bench-measurement-legs.md` | Round 2 | ticket | Bench/measurement legs: resolver-backed validate_removal_test, DebtPolicy consumers, task_id round-trip (DF-S1.24-1/-2 machine cells; BL-26) | — |
+| 124 | `124_R2.18__assembly-residual.md` | Round 2 | ticket | Assembly residual: §5b profile_binding constraint grammar, C2 organisation layers, AC-CC-11 corpus gate (DF-S1.9-2; BL-10) | — |
+| 125 | `125_R2.19__embed-mcp-surface-legs.md` | Round 2 | ticket | Embed/MCP surface: DefinitionInput::Ref publishing, Streamable-HTTP SSE (GET /mcp, push, Last-Event-ID), WS-H3 credential mediator seam (DF-S1.25-1, DF-S4.11-1/-2; BL-27) | — |
+| 126 | `126_R2.20__extension-trust-producers.md` | Round 2 | ticket | Extension-trust producers: DeclaredSource scanners, LegCrossing/L3 runtime checks, TextHygieneReport consumers (DF-S1.23-2; BL-28) | — |
+| 127 | `127_HUMAN-H3__foreign-verification-env.md` | Round 2 | human | Provision the foreign-verification environment — E2/E3 toolchains, online corpus + budget (blocks R2.21's foreign cells) | — |
+| 128 | `128_HUMAN-H4__r2-cross-camp-signature.md` | Round 2 | human | R2 cross-camp reviewer signature on the Stage-0 measurement sheet (DF-S0.3-3 residual; BL-02) | — |
+| 129 | `129_R2.21__cross-impl-verification.md` | Round 2 | ticket | Cross-implementation verification: golden-corpus/transcript/plugin/snapshot replays vs E2/E3, polyglot-CI leg, live foreign-manifest import + LT-03 live arm (BL-01) — Live stage: operator-gated on H3 | — |
+| 130 | `130_R2.22__revalidate-adr-0212-0216.md` | Round 2 | reconcile | Register revalidation: ADR-0212 Stage 0–1 + ADR-0216 fixer packages (12 OQs + ADR-0242 legs; OQ-465/467/468; BL-35, BL-39) | — |
+| 131 | `131_R2.23__revalidate-adr-0213.md` | Round 2 | reconcile | Register revalidation: ADR-0213 Stage 2–3 package (23 OQs + ADR-0278's OQ-363; BL-36) | — |
+| 132 | `132_R2.24__revalidate-adr-0214.md` | Round 2 | reconcile | Register revalidation: ADR-0214 Stage 4–6 package (34 OQs + ADR-0306; BL-37) | — |
+| 133 | `133_R2.25__spec-debt-first-sweep.md` | Round 2 | reconcile | Spec-debt register first revalidation — RK-06 sweep over 216 AssumptionDebtRecords (BL-40) | — |
+| 134 | `134_R2.26__round2-closure.md` | Round 2 | reconcile | Round-2 closure: backlog refresh, coverage recompute, OPERATIONAL_READINESS, carried-set accounting for the gate (BL-30/-41/-42/-43) | — |
+| 135 | `135_GATE-G4__round2-discharge.md` | Round 2 | gate | Round-2 discharge review — operator dispositions every still-OPEN scoped row | STOP |
+| 136 | `136_R2.27__round2-docs-refresh.md` | Round 2 | docs | Round-2 docs refresh — repo docs + agent docs honest-status pass (combined DOC template) | — |
+
 ## Milestone gates
 **GATE-G1 — Stage-0 acceptance & ecosystem-decision revalidation** (Stage 0). Criterion (verbatim): S1/S2 gates pass and the revalidation rule is evaluated: any C5/C7/C12 score outside the assumed ±1 band, or a gate failure on the winning candidate, re-runs ADR-0009 steps 5–7 (§10.6; OQ-131).
 
@@ -159,6 +208,14 @@ Thresholds: §10.7 automated gates + executable tests (T-LCD-03/-04/-11/-13 exec
 Thresholds: Every precondition above is demonstrably met (each cites its landed ticket/AC). No evolution claim runs until all hold; every Stage-6 claim is a `ComparisonReport{benefit_kind: artifact_benefit, label: confirmatory}` at `matched_total` with a complete `SearchBudgetRecord`, `transfer` with sign and interval, no veto regression, `retention` within margin (§10.2 gates 1–6).
 
 **GATE-ACCEPT — operator signs the accepted-deviations list** (capstone). Every row in the CAP.3 ACCEPTED-deviations list is signed or returned to closure; no proposed deviation is left unsigned.
+
+**GATE-G4 — Round-2 discharge review** (Round 2). Criterion: every DEFERRALS row and backlog source
+the Round-2 tickets were chartered to discharge is DONE with dated evidence, or carried forward with
+an explicit operator disposition (carry / accept / waive by ADR). The environment-gated and human
+rows are dispositioned as a named set — 'gate pending' is a valid recorded state, a silent drop is
+not. Thresholds: zero undispositioned OPEN scoped rows; check-build-memory 0 violations;
+check-backlog exit 0; R2.26's carried-set accounting exists; the 10 GATE-ACCEPT deviations
+re-confirmed unchanged.
 
 ## Phase gates & ownership notes
 - **Removability** (CC6): from Stage 2, every stage gate runs `removability(0…3)` — the build with
@@ -220,67 +277,67 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
 |---|---|
 | `R-2.1.1` | S1.1 |
 | `R-2.1.2` | S0.2, S1.4, S3.2 |
-| `R-2.1.3` | S1.10, S3.2, S4.5b |
-| `R-2.1.4` | S1.9, S3.2, S5.1 |
+| `R-2.1.3` | S1.10, S3.2, S4.5b, R2.18 |
+| `R-2.1.4` | S1.9, S3.2, S5.1, R2.18 |
 | `R-2.1.5` | S0.2, S1.3, S3.11a, S4.14b |
 | `R-2.1.6` | S0.2, S1.6, S4.6, S6.1a |
-| `R-2.2.1` | S1.5, S2.9, S3.6, S4.13 |
-| `R-2.2.2` | S1.7, S2.3, S3.6, S4.13 |
-| `R-2.2.3` | S1.7, S2.3, S3.6, S4.13, S5.8 |
-| `R-2.2.4` | S2.9, S3.6, S4.13 |
-| `R-2.2.5` | S0.2, S0.3, S1.16, S2.1, S4.13, S5.8 |
-| `R-2.3.1` | S0.2, S1.18, S3.7 |
-| `R-2.3.2` | S0.2, S3.7, S4.16a, S5.1 |
-| `R-2.3.3` | S1.18, S5.1 |
-| `R-2.3.4` | S1.18, S2.10, S2.12, S3.7, S4.16a, S5.1 |
-| `R-2.4.1` | S0.2, S1.19, S2.8, S3.8, S5.2, S6.2 |
-| `R-2.4.2` | S2.8, S4.16b, S5.2, S6.2 |
-| `R-2.4.3` | S1.19, S2.8, S4.16b, S5.2 |
-| `R-2.4.4` | S1.19, S2.8, S4.16b, S6.2 |
-| `R-2.4.5` | S2.8, S3.8, S4.16b, S5.2 |
-| `R-2.5.1` | S1.17, S2.11 |
-| `R-2.5.2` | S1.17, S3.9, S5.2 |
-| `R-2.5.3` | S1.17, S2.10, S3.9 |
-| `R-2.5.4` | S3.9, S4.5b |
+| `R-2.2.1` | S1.5, S2.9, S3.6, S4.13, R2.2 |
+| `R-2.2.2` | S1.7, S2.3, S3.6, S4.13, R2.3 |
+| `R-2.2.3` | S1.7, S2.3, S3.6, S4.13, S5.8, R2.3 |
+| `R-2.2.4` | S2.9, S3.6, S4.13, R2.2 |
+| `R-2.2.5` | S0.2, S0.3, S1.16, S2.1, S4.13, S5.8, R2.4 |
+| `R-2.3.1` | S0.2, S1.18, S3.7, R2.7 |
+| `R-2.3.2` | S0.2, S3.7, S4.16a, S5.1, R2.7 |
+| `R-2.3.3` | S1.18, S5.1, R2.7 |
+| `R-2.3.4` | S1.18, S2.10, S2.12, S3.7, S4.16a, S5.1, R2.7 |
+| `R-2.4.1` | S0.2, S1.19, S2.8, S3.8, S5.2, S6.2, R2.5 |
+| `R-2.4.2` | S2.8, S4.16b, S5.2, S6.2, R2.5 |
+| `R-2.4.3` | S1.19, S2.8, S4.16b, S5.2, R2.5 |
+| `R-2.4.4` | S1.19, S2.8, S4.16b, S6.2, R2.5 |
+| `R-2.4.5` | S2.8, S3.8, S4.16b, S5.2, R2.5 |
+| `R-2.5.1` | S1.17, S2.11, R2.8 |
+| `R-2.5.2` | S1.17, S3.9, S5.2, R2.8 |
+| `R-2.5.3` | S1.17, S2.10, S3.9, R2.8 |
+| `R-2.5.4` | S3.9, S4.5b, R2.8 |
 | `R-2.5.5` | S0.2, S0.3, S1.16, S2.1 |
-| `R-2.6.1` | S0.2, S1.20, S2.11, S3.10, S6.1a |
-| `R-2.6.2` | S0.2, S1.20, S2.11, S3.10, S4.8, S5.5 |
+| `R-2.6.1` | S0.2, S1.20, S2.11, S3.10, S6.1a, R2.6 |
+| `R-2.6.2` | S0.2, S1.20, S2.11, S3.10, S4.8, S5.5, R2.6 |
 | `R-2.6.3` | S4.6, S5.5 |
 | `R-2.6.4` | S4.7, S5.5, S6.2 |
 | `R-2.6.5` | S4.8, S5.5, S6.2 |
-| `R-2.7.1` | S1.21, S2.11, S3.10, S4.16c |
-| `R-2.7.2a` | S1.21, S3.10 |
-| `R-2.7.2b` | S4.16c |
-| `R-2.7.3` | S1.21, S3.10, S4.16c, S6.3b |
-| `R-2.8.1` | S1.11, S2.6, S3.11a, S4.14b |
-| `R-2.8.2` | S2.7, S3.11a, S4.14b |
-| `R-2.8.3` | S0.2, S1.13, S2.4, S3.11b, S4.14b |
-| `R-2.8.4` | S1.12, S2.4, S3.11b, S4.14b |
-| `R-2.8.5` | S1.23, S3.11b, S4.14a, S6.3a |
-| `R-2.8.6` | S1.15, S2.5, S3.11b, S4.14b |
-| `R-2.8.7` | S1.23, S2.6, S3.11b, S4.14a |
-| `R-2.9.1` | S0.2, S1.14, S4.15 |
-| `R-2.9.2` | S1.22, S3.3, S4.15 |
+| `R-2.7.1` | S1.21, S2.11, S3.10, S4.16c, R2.15 |
+| `R-2.7.2a` | S1.21, S3.10, R2.15 |
+| `R-2.7.2b` | S4.16c, R2.15 |
+| `R-2.7.3` | S1.21, S3.10, S4.16c, S6.3b, R2.15 |
+| `R-2.8.1` | S1.11, S2.6, S3.11a, S4.14b, R2.11 |
+| `R-2.8.2` | S2.7, S3.11a, S4.14b, R2.9, R2.12 |
+| `R-2.8.3` | S0.2, S1.13, S2.4, S3.11b, S4.14b, R2.9, R2.10 |
+| `R-2.8.4` | S1.12, S2.4, S3.11b, S4.14b, R2.9 |
+| `R-2.8.5` | S1.23, S3.11b, S4.14a, S6.3a, R2.11, R2.20 |
+| `R-2.8.6` | S1.15, S2.5, S3.11b, S4.14b, R2.13 |
+| `R-2.8.7` | S1.23, S2.6, S3.11b, S4.14a, R2.11 |
+| `R-2.9.1` | S0.2, S1.14, S4.15, R2.14 |
+| `R-2.9.2` | S1.22, S3.3, S4.15, R2.16 |
 | `R-2.9.3` | S3.1, S4.2, S5.4 |
-| `R-2.9.4` | S1.24, S3.3, S4.15, S6.1a |
+| `R-2.9.4` | S1.24, S3.3, S4.15, S6.1a, R2.17 |
 | `R-2.9.5` | S6.1a, S6.2, S6.3a, S6.4 |
 | `R-2.9.6` | S1.24, S3.12, S5.4, S6.1b, S6.4 |
 | `R-2.9.7` | S5.4, S6.3b |
-| `R-2.9.8` | S1.24, S5.4, S6.4 |
+| `R-2.9.8` | S1.24, S5.4, S6.4, R2.17 |
 | `R-2.10.1` | S3.5, S4.5a, S5.3 |
-| `R-2.10.2` | S1.8, S2.12, S3.4a, S4.1, S5.3 |
-| `R-2.10.3` | S1.24, S3.4a, S4.2, S4.5a, S5.3, S6.1a, S6.2 |
+| `R-2.10.2` | S1.8, S2.12, S3.4a, S4.1, S5.3, R2.19 |
+| `R-2.10.3` | S1.24, S3.4a, S4.2, S4.5a, S5.3, S6.1a, S6.2, R2.17 |
 | `R-2.10.4` | S1.24, S3.4c, S4.3, S5.3, S6.3b |
 | `R-2.10.5` | S1.24, S3.4b, S4.3, S4.4, S5.3 |
 | `R-2.10.6` | S3.4d, S4.5a, S5.3 |
-| `R-2.11.1` | S0.2, S1.26, S2.12, S3.1, S4.5a, S4.12 |
+| `R-2.11.1` | S0.2, S1.26, S2.12, S3.1, S4.5a, S4.12, R2.1 |
 | `R-2.11.2` | S4.10, S5.7, S6.1a |
-| `R-2.11.3` | S3.1, S4.11, S5.7 |
-| `R-2.11.4` | S0.1, S0.2, S1.25, S3.1, S4.12, S5.8 |
-| `R-2.12.1` | S1.2, S2.12, S3.12, S4.15, S5.4, S6.3b |
-| `R-2.12.2` | S1.27, S2.2, S3.12, S4.14a, S6.1a |
-| `R-2.12.3` | S0.1, S0.3 — program/toolchain slice; language/ecosystem *selection* ratified by ADR-0050, revalidated at GATE-G1 |
-| `R-2.12.6` | S4.9, S5.6, S6.4 |
+| `R-2.11.3` | S3.1, S4.11, S5.7, R2.19 |
+| `R-2.11.4` | S0.1, S0.2, S1.25, S3.1, S4.12, S5.8, R2.4, R2.19 |
+| `R-2.12.1` | S1.2, S2.12, S3.12, S4.15, S5.4, S6.3b, R2.21 |
+| `R-2.12.2` | S1.27, S2.2, S3.12, S4.14a, S6.1a, R2.20, R2.21 |
+| `R-2.12.3` | S0.1, S0.3 — program/toolchain slice; language/ecosystem *selection* ratified by ADR-0050, revalidated at GATE-G1 · R2.21 (Round-2 verification leg) |
+| `R-2.12.6` | S4.9, S5.6, S6.4, R2.21 |
 | `R-2.12.4` | deferred(ADR-0210) — out of build scope (WS-L6) |
 | `R-2.12.5` | program-level (novelty/naming thesis, §1); no code |
 
@@ -334,6 +391,73 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
 
 - 2026-09-25 · **inserted** `059a_S3.12b__gate-g2-gap-closure.md` (id `S3.12b`, row `59a`) between S3.12 and GATE-G2. Reason: the operator's GATE-G2 Reading-1 disposition (PENDING) authorized a gap-closure ticket to close the machine-achievable cells — the hermetic `benchmarkSet` + deferred real-suite legs (AC-I2-6, AC-I4-3/-11), the exemplar→`ComparisonReport` wiring, the hosting-absent native-suite run, and the Stage-3-scoped DEFERRALS sweep. Foreign-toolchain rows and the R2 human signature are explicitly NOT pulled in. GATE-G2 stays PENDING until S3.12b lands and the operator re-reads the evidence.
 
+### Round 2 — 2026-10-06 (decompose-spec mode=extend)
+
+- **Grain:** one ticket per owed-work *package* on subsystem seams — the round discharges carried
+  backlog, not a build ladder. Each ticket must fit one non-compacting fresh-context subagent run;
+  the two largest (R2.9 egress/containment, R2.15 verification) carry pre-recorded split seams
+  (`R2.9a/b`, `R2.15a/b`) for run-time splitting via `## Plan extensions`.
+- **BL-05 is dissolved, not scheduled:** its gate-accepted bundle members distribute to their owning
+  subsystems (canary/env-image → R2.10; audit emitters → R2.13; exposure battery → R2.8;
+  verification cells → R2.15; eval ops → R2.16; measurement → R2.17; exporter seam → R2.14; the
+  live-corpus/foreign legs → R2.21). No shared-decision ticket needed — each member's home subsystem
+  owns it.
+- **Shared-decision rulings made here:** (1) the durable steer-cue transport (OQ-316 admission arm +
+  `queue_next_turn` durability) has ONE owner — **R2.6**; DF-S2.8-1(a)'s steer leg is reassigned
+  there, R2.5 keeps `mark_scope_ended` sequencing + the emitters. (2) The remedy-ingress/approval-
+  consumption surface is owned by **R2.11**; R2.12 consumes it. (3) The `postconditions` binding is
+  R2.8's (tool surface); the reconciliation *consumer* is R2.15's. (4) DF-S1.18-1 splits along its
+  own seam: offline-decidable machine cells → **R2.7**; live transports/adapters stay BL-31.
+- **Environment-gated posture:** R2.21 is a real ticket (its offline packaging + E1 self-check are
+  landable hermetically) with Live stage `operator-gated` on HUMAN-H3 — if the environment is absent
+  it lands the packaging and re-records the DF rows 'environment pending'; nothing fabricates a
+  foreign pass. `tls.terminate` (R2.9) enforces-or-refuses without a TLS stack; `dpop` (R2.10) and
+  oauth/mTLS (R2.19) take the same enforce-or-refuse posture.
+- **Not scheduled this round (deferral-backed, recorded):** BL-31's live cells (real provider
+  transports, DF-S2.4-2 TLS transport — needs endpoints + a TLS stack decision); BL-32 (remote fetch
+  + foreign vocabularies DF-S4.2-1/-2 — WS-L6 trust fields); BL-33/BL-34/BL-38 (the WS-L6
+  program-resume window — the operator reopens it); BL-30's ruling legs (OQ-170 signer custody,
+  OQ-388 ratification, CF-476/CF-487 — named workstreams own, R2.23/R2.24/R2.26 re-validate but never
+  re-decide); BL-41 (standing debt — re-issued, never closed); BL-42/BL-43 (ADR revisit triggers —
+  they fire on future tickets, not schedulable). HUMAN-H1/H2 persist as chain rows 61/82.
+- **Already-DONE rows excluded:** DF-S1.3-2 (vouched mint landed S4.5a — flip verify at R2.1),
+  DF-S1.13-4 (S4.14b), DF-S1.26-1 (S2.10), DF-S3.5-1 (S4.12), DF-S4.11-3 (CAP.3), DF-S5.4-1
+  (S6.1b), DF-S1.24-3 (REC.2/ADR-0331), DF-S3.9-1, DF-S2.9-2, DF-S2.10-2, DF-S3.12b-1/-2.
+- **Ordering:** chain order is the dependency spine; specific backward edges — R2.10 after R2.9
+  (mediator seam), R2.11 after R2.9 (ingress plumbing), R2.12 after R2.11 (remedy ingress), R2.13
+  after R2.2 (gc machinery), R2.14 after R2.2+R2.9 (`read` tail, mediated sinks), R2.15 after R2.8
+  (postconditions binding), R2.21 after HUMAN-H3 + the corpus-owning rows, revalidation rows
+  (R2.22–25) after all implementation rows (they re-check landed state), R2.26 after all, GATE-G4
+  after closure, R2.27 after the gate.
+- **Phase-4 adversarial review record (explicit reread-and-argue pass, 2026-10-06 — no fresh-context
+  subagent was invoked; the decomposer re-read the registers and argued the plan down):**
+  **Fragmented decisions found + fixed:** the durable steer-cue seam was claimed by both DF-S2.8-1
+  and DF-S2.11-1 → single-owner ruling above; the "turn-loop call-site" residual appeared in four
+  source rows (DF-S2.8-1, DF-S1.19-1, DF-S1.17-3, DF-S1.20-1) → verified the driver loop already
+  exists (`EmbedService::drive` + `AssemblerPort` landed), so each residual is a subsystem-specific
+  emission/consumer leg, not a shared new decision — distributed by owning plane with the ownership
+  notes above. **Overflow risk:** R2.9 and R2.15 are L-sized; both carry pre-registered split seams
+  (Notes fields) so a run-time split does not re-decompose the round. **Orphan seams audited:** the
+  custody-gated audit cells (DF-S2.5-1), TLS transport (DF-S2.4-2), and WS-L6 packages are NOT
+  orphaned — they are deferral-backed with named external triggers, re-validated by R2.22–R2.26.
+  **Coverage check:** every OPEN/PARTIAL DEFERRALS row and every machine-achievable BL row maps to
+  exactly one R2 owner or to the not-scheduled list above; the `hh-kernel doctor` defect
+  (DF-DOC.1-1, post-dates BACKLOG.csv) and the CI flake found on PR #104's failing run are R2.1's.
+  **Double-ownership check:** DF-S1.20-1 and DF-S2.8-1 each split across two tickets with named
+  members per side; no cell is claimed by two tickets. **Ordering check:** every Depends-on points
+  backward; no cycles; gates never pre-answered (GATE-G4's criterion is a review, not a result).
+  **Over-factoring check:** BL-22+BL-23 merged (same hh-monitor decide-path working set);
+  BL-35+BL-39 merged (two small register packages); BL-28 kept standalone (distinct seam — merging
+  with assembly would bundle unrelated subsystems). **External prerequisites:** HUMAN-H3/H4 are
+  markers, not tickets; R2.21's honest withhold posture is written into its ACs.
+  **Verdict:** the 30-row partition is dependency-clean and honesty-preserving; residual risk is
+  ticket-level overflow on R2.9/R2.15, mitigated by the pre-registered splits.
+
 ## Plan extensions
 (append-only: inserts `NNa_…`, splits `<ID>a`/`<ID>b` with the original marked superseded-by-split, rounds)
 - 2026-09-15 · **inserted** `003a_S0.3b__cross-candidate-online-spike.md` (id `S0.3b`, row `3a`) between S0.3 and GATE-G1. Reason: the operator's GATE-G1 disposition authorized an **online** spike budget to close the machine-achievable cells of DF-S0.3-1 (MCP/ACP official SDK round-trip + cross-candidate G1 byte-identity) and DF-S0.3-3 (E2/E3 cross-candidate scoring + E5b/E5c splits). The R2 human cross-camp reviewer signature and the Stage-3 polyglot CI (DF-S0.3-2) are explicitly NOT pulled into this ticket. GATE-G1 stays PENDING until S0.3b lands and the operator re-reads the extended sheet.
+- 2026-10-06 · **round 2 appended** — rows 107–136 (`R2.1`…`R2.27`, `HUMAN-H3`, `HUMAN-H4`,
+  `GATE-G4`) by `decompose-spec mode=extend` over the Round-1 closeout. Sources: the 2026-10-06
+  decision memo + `docs/build/BACKLOG.csv` (BL-01…BL-43) + the OPEN/PARTIAL DEFERRALS set. Round-1
+  rows 1–106 unchanged. See `## Decomposition decisions → Round 2` for the partition and the
+  not-scheduled set; `docs/build/planning/2026-10-06_round2-decomposition.md` for the full record.
