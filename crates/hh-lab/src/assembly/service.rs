@@ -555,6 +555,7 @@ impl<'a> AssemblyService<'a> {
                     base,
                     self.registry,
                     Some(snapshot_id.as_str()),
+                    ResolveMode::Audit,
                 ) {
                     let (ops, class) = hh_hir::diff::ops_between(&b.document, &sealed.document);
                     let va = versioned_of(&b, &self.kernel);

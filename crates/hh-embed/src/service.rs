@@ -61,6 +61,11 @@ pub struct EmbedService {
     /// resolver through `set_credential_resolver`; a sentinel never
     /// resolves against an absent source.
     pub(crate) credential_broker: hh_secrets::CredentialBroker,
+    /// `audience → CredentialBinding id` for caller-auth tokens minted
+    /// by `surface_mint_caller_token` (R2.19; DF-S4.11-2 — the kernel's
+    /// authorization-server arm: one `bound` row per audience, one
+    /// `used` row per mint).
+    pub(crate) caller_auth_bindings: BTreeMap<String, String>,
     pub(crate) hello_done: bool,
     pub(crate) experimental: bool,
     pub(crate) client_caps: HostCapabilities,
@@ -349,6 +354,7 @@ impl EmbedService {
                 Box::new(hh_secrets::DenyAllResolver),
                 "hh-embed/credentials",
             ),
+            caller_auth_bindings: BTreeMap::new(),
             hello_done: false,
             experimental: false,
             client_caps: HostCapabilities::default(),
@@ -1933,7 +1939,208 @@ impl EmbedService {
     pub fn surface_ts_now(&self) -> String {
         self.store.ts_now()
     }
+
+    // ── R2.19 — the caller-credential mediation seam (DF-S4.11-2;
+    //   WS-H3). A surface never sees credential material beyond the
+    //   presented token itself: the kernel broker's `minted_scoped` leg
+    //   verifies audience + MAC + expiry + binding liveness and the
+    //   mint path ledgeres `granted`/`decided`/`bound`/`used` rows —
+    //   durable before the token answers (SV-5). ──
+
+    /// Verify a presented caller credential against `audience` — the
+    /// WS-H3 mediator's check (spec §5g.3; DF-S4.11-2). The verdict is
+    /// the broker's typed `MintedVerdict` (`Valid` | `Invalid` |
+    /// `Expired` | `Revoked`) — a token the kernel never minted is
+    /// `Invalid`, never a resolved subject.
+    pub fn surface_verify_caller_token(&self, token: &str, audience: &str) -> MintedVerdict {
+        self.credential_broker
+            .verify_minted(token, audience, self.store.now_ms())
+    }
+
+    /// Mint a caller credential token bound to `audience` — the
+    /// kernel's own `minted_scoped` issue path (the authorization
+    /// server's real leg at this slice; DF-S4.11-2). Every row lands
+    /// durable before the token answers: the channel registers once,
+    /// the per-audience binding runs
+    /// `security.permission.granted` → `decided{allow}` →
+    /// `security.credential.bound` under the contract run's fenced
+    /// writer (the PDP gate `bind` re-verifies the recorded decision),
+    /// and `mint` lands `security.credential.used` before the token is
+    /// visible. The returned string is the credential — it goes to the
+    /// caller, never into a ledger or record.
+    pub fn surface_mint_caller_token(
+        &mut self,
+        audience: &str,
+        ttl_ms: u64,
+    ) -> Result<String, EmbedError> {
+        use hh_monitor::assess::SecretTransport;
+        use hh_secrets::{
+            AccessClass, AuthCarrier, BindRequest, CredentialKind, DestinationBinding,
+            SecretChannelSpec, SecretSource, SenderConstraint,
+        };
+        const CHANNEL: &str = "caller_auth";
+        const HOLDER: &str = "kernel.caller_auth";
+        let (run_id, lease) = self.ensure_contract_run()?;
+        // The channel — registered once; the source is a coordinate
+        // only (a `minted_scoped` token carries no secret material, so
+        // no resolver read ever happens). `ChannelExists` on re-entry
+        // is the idempotent case.
+        let prov = self.kernel_prov.clone();
+        let spec = SecretChannelSpec {
+            kind: CredentialKind::ApiKey,
+            source: SecretSource::OperatorVault {
+                vault_ref: "vault:caller_auth".to_string(),
+            },
+            destinations: vec![DestinationBinding {
+                scheme: "mcp".to_string(),
+                host_pattern: "mcp://*".to_string(),
+                port: None,
+                path_prefix: None,
+                revocation_path: None,
+                auth_carrier: AuthCarrier::Header {
+                    name: "Authorization".to_string(),
+                    prefix: Some("Bearer ".to_string()),
+                },
+            }],
+            allowed_env_names: None,
+            delivery_modes: [SecretTransport::MintedScoped].into_iter().collect(),
+            max_lifetime_ms: None,
+            rotation_policy: None,
+            sender_constraint: SenderConstraint::Audience,
+            constraints: Default::default(),
+            bindable: true,
+            access_class: AccessClass::Broker,
+            canary: false,
+            description: "surface caller-auth tokens (the kernel's own AS leg)".to_string(),
+        };
+        match self.credential_broker.register_channel(CHANNEL, spec, prov) {
+            Ok(_) | Err(hh_secrets::BrokerError::ChannelExists { .. }) => {}
+            Err(e) => {
+                return Err(EmbedError::Refused {
+                    reason: format!("caller_auth_channel: {e:?}"),
+                })
+            }
+        }
+        // The per-audience binding — the fence `mint` re-checks (a
+        // token can only ever claim an audience its binding names).
+        if !self.caller_auth_bindings.contains_key(audience) {
+            let holder = HOLDER.to_string();
+            let handle_id = self.store.alloc_id("hnd");
+            let granted = Json::obj([
+                ("handle_id", Json::str(handle_id.clone())),
+                (
+                    "permission_ref",
+                    Json::obj([
+                        ("semantic_id", Json::str("perm.caller_auth")),
+                        (
+                            "version_id",
+                            Json::str(format!("sha256:{}", "0".repeat(64))),
+                        ),
+                    ]),
+                ),
+                ("holder", Json::str(holder.clone())),
+                ("issuer", self.kernel_prov.to_json()),
+                (
+                    "grants",
+                    Json::Arr(vec![Json::obj([
+                        (
+                            "effect",
+                            Json::obj([("domain", Json::str("secret_access"))]),
+                        ),
+                        ("scope", Json::str(format!("secret:{CHANNEL}"))),
+                        ("constraints", Json::obj([])),
+                        ("delegable", Json::Bool(false)),
+                    ])]),
+                ),
+                ("ceiling", Json::str("principal")),
+                (
+                    "validity",
+                    Json::obj([
+                        ("issued_at", Json::str(self.store.ts_now())),
+                        ("expires_at", Json::Null),
+                    ]),
+                ),
+                ("parent_handle", Json::Null),
+                ("delegable", Json::Bool(false)),
+                ("origin_basis", Json::str("approval")),
+                ("basis_ref", Json::str("perm.caller_auth")),
+                ("budget_ref", Json::Null),
+                ("authority_delta", Json::str("none")),
+            ]);
+            self.mint(&run_id, &lease, "security.permission.granted", granted)?;
+            let decided = EventMinter::new(&self.store, &run_id)
+                .mint(
+                    "security.permission.decided",
+                    Json::obj([
+                        ("effect_id", Json::str(format!("eff-{handle_id}"))),
+                        ("decision", Json::str("allow")),
+                        ("effective_authority", Json::str("principal")),
+                        (
+                            "effective_risk_class",
+                            Json::obj([
+                                ("reversibility", Json::str("reversible")),
+                                ("repeat_safety", Json::str("idempotent")),
+                                ("scope", Json::str("ephemeral")),
+                            ]),
+                        ),
+                        ("handle_ids", Json::Arr(vec![Json::str(handle_id.clone())])),
+                        ("policy_ref", Json::str("pi/1")),
+                        ("decider", Json::str("policy")),
+                        ("attempt_no", Json::Int(1)),
+                        ("proposal", Json::str("caller-auth-mint")),
+                        ("taint", Json::Arr(vec![])),
+                    ]),
+                )
+                .map_err(ledger_err)?;
+            let decided_id = decided.event_id.clone();
+            self.store
+                .append(&run_id, &lease, vec![decided])
+                .map_err(ledger_err)?;
+            let binding = self
+                .credential_broker
+                .bind(
+                    &mut self.store,
+                    &run_id,
+                    &lease,
+                    BindRequest {
+                        channel_id: CHANNEL.to_string(),
+                        holder,
+                        env_handle_ref: "caller-surface".to_string(),
+                        env_isolation: hh_containment::policy::IsolationClass::ProcessSandbox,
+                        mode: SecretTransport::MintedScoped,
+                        monitor_decision_ref: decided_id,
+                        destinations: [audience.to_string()].into_iter().collect(),
+                    },
+                )
+                .map_err(|e| EmbedError::Refused {
+                    reason: format!("caller_auth_bind: {e:?}"),
+                })?;
+            self.caller_auth_bindings
+                .insert(audience.to_string(), binding.binding_id);
+        }
+        let binding_id = self.caller_auth_bindings[audience].clone();
+        let minted = self
+            .credential_broker
+            .mint(
+                &mut self.store,
+                &run_id,
+                &lease,
+                &binding_id,
+                audience,
+                ttl_ms,
+            )
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("caller_auth_mint: {e:?}"),
+            })?;
+        Ok(minted.token)
+    }
 }
+
+/// The caller-token verdict the surface seam answers — re-exported
+/// through the kernel boundary so a surface (`hh-mcp-lab`) consumes the
+/// broker's own closed sum without a direct `hh-secrets` edge
+/// (removability: surfaces reach the kernel only; R2.19/DF-S4.11-2).
+pub use hh_secrets::MintedVerdict;
 
 /// Map a `LedgerError` to the contract's typed surface — the ledger's
 /// words, never a stringy catch-all (I-H7: `Fenced` on a writer
