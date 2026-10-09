@@ -42,8 +42,55 @@ pub enum ProfileBinding {
     Unbound,
     /// A pinned (or selector-carrying, authored) `ProfileRef` — `non_portable`.
     Pinned(ProfileRef),
-    /// A `ProfileConstraint` — the §5b-owned shape (C1/Stage 5); carried opaquely here.
-    Constraint(Json),
+    /// A `ProfileConstraint` — the §5b narrowed-binding grammar (R2.18;
+    /// ADR-…): the definition *constrains* the admissible profile set without
+    /// pinning one — it stays portable (T-LCD-04); satisfaction is checked
+    /// where profiles bind (`link`, `C-LINK-4`).
+    Constraint(ProfileConstraint),
+}
+
+/// `ProfileConstraint{selector?, required_capabilities?, fallback_profile?}` —
+/// the §5b narrowed-binding grammar (ADR-0023 D4: a definition may *constrain*
+/// the admissible profile set). Every declared member narrows: the bound
+/// profile's `selector` must satisfy [`ConstraintSelector`], every
+/// `required_capabilities` axis must read `declared | probed` on the bound
+/// profile, and `fallback_profile` is the document-side spelling of the
+/// ADR-0124 §5 escape (`link` consults it when no profile is bound).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ProfileConstraint {
+    /// The selector narrowing (all-optional members).
+    pub selector: ConstraintSelector,
+    /// Capability ids the bound profile must declare `declared | probed`.
+    pub required_capabilities: Vec<String>,
+    /// The document-side `fallback_profile` coordinate (ADR-0124 §5).
+    pub fallback_profile: Option<String>,
+}
+
+/// `ConstraintSelector{provider_api_family?, model_family?, version_pattern?,
+/// roles_admitted?}` — the constraint's narrowing over the bound profile's
+/// `selector` members, spelled with the profile record's own member names
+/// (CC7). Absent members constrain nothing.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ConstraintSelector {
+    /// Bound `selector.provider_api_family` must equal this family.
+    pub provider_api_family: Option<String>,
+    /// Bound `selector.model_family` must equal this family.
+    pub model_family: Option<String>,
+    /// The bound `selector.version_pattern` must admit only versions this
+    /// pattern admits (subsumption over the closed `Pattern` grammar).
+    pub version_pattern: Option<hh_ontology::eval::VersionPattern>,
+    /// The bound `selector.roles_admitted` must cover these roles.
+    pub roles_admitted: Vec<hh_ontology::eval::ModelRole>,
+}
+
+impl ConstraintSelector {
+    /// `true` when no member narrows anything (a vacuous selector).
+    pub fn is_vacuous(&self) -> bool {
+        self.provider_api_family.is_none()
+            && self.model_family.is_none()
+            && self.version_pattern.is_none()
+            && self.roles_admitted.is_empty()
+    }
 }
 
 impl ProfileBinding {
@@ -731,23 +778,91 @@ fn profile_binding_json(p: &ProfileBinding) -> Json {
             ("profile_ref", Json::str(&pr.profile)),
             ("pinned", Json::Bool(pr.pinned)),
         ]),
-        ProfileBinding::Constraint(c) => Json::obj([("constraint", c.clone())]),
+        ProfileBinding::Constraint(c) => Json::obj([("constraint", profile_constraint_json(c))]),
     }
 }
 
-fn profile_binding_from_json(j: &Json) -> Result<ProfileBinding, String> {
+/// The canonical JSON of a `ProfileConstraint` (`{"selector"?, "required_capabilities"?,
+/// "fallback_profile"?}` — members appear only when they narrow).
+fn profile_constraint_json(c: &ProfileConstraint) -> Json {
+    let mut pairs = Vec::new();
+    if let Some(f) = &c.fallback_profile {
+        pairs.push(("fallback_profile", Json::str(f.clone())));
+    }
+    if !c.required_capabilities.is_empty() {
+        pairs.push((
+            "required_capabilities",
+            Json::Arr(c.required_capabilities.iter().map(Json::str).collect()),
+        ));
+    }
+    if !c.selector.is_vacuous() {
+        pairs.push(("selector", constraint_selector_json(&c.selector)));
+    }
+    Json::obj(pairs)
+}
+
+fn constraint_selector_json(s: &ConstraintSelector) -> Json {
+    let mut pairs = Vec::new();
+    if let Some(f) = &s.provider_api_family {
+        pairs.push(("provider_api_family", Json::str(f.clone())));
+    }
+    if let Some(f) = &s.model_family {
+        pairs.push(("model_family", Json::str(f.clone())));
+    }
+    if !s.roles_admitted.is_empty() {
+        pairs.push((
+            "roles_admitted",
+            Json::Arr(
+                s.roles_admitted
+                    .iter()
+                    .map(|r| Json::str(r.name()))
+                    .collect(),
+            ),
+        ));
+    }
+    if let Some(v) = &s.version_pattern {
+        pairs.push((
+            "version_pattern",
+            hh_ontology::eval::version_pattern_json(v),
+        ));
+    }
+    Json::obj(pairs)
+}
+
+/// Parse a `profile_binding` member (`unbound | {profile_ref, pinned?} |
+/// {constraint: ProfileConstraint}`) — the codec's read direction, exported
+/// for `hh-lab`'s override grammar (CC7: the one decoder).
+pub fn profile_binding_from_json(j: &Json) -> Result<ProfileBinding, String> {
     match j {
         Json::Str(s) if s == "unbound" => Ok(ProfileBinding::Unbound),
         Json::Str(s) => Err(format!("unknown profile_binding spelling `{s}`")),
         Json::Obj(m) => {
-            if let Some(c) = m.get("constraint") {
-                return Ok(ProfileBinding::Constraint(c.clone()));
+            for k in m.keys() {
+                if !matches!(k.as_str(), "constraint" | "profile_ref" | "pinned") {
+                    return Err(format!("`profile_binding.{k}`: unknown member"));
+                }
+            }
+            if m.contains_key("constraint") {
+                if m.contains_key("profile_ref") || m.contains_key("pinned") {
+                    return Err(
+                        "`profile_binding` carries both `constraint` and a pin — `profile_binding ∈ {unbound | ProfileRef | ProfileConstraint}` is exclusive"
+                            .into(),
+                    );
+                }
+                return Ok(ProfileBinding::Constraint(profile_constraint_from_json(
+                    m.get("constraint").expect("checked"),
+                    "/assembly/profile_binding/constraint",
+                )?));
             }
             let profile = m
                 .get("profile_ref")
                 .and_then(Json::as_str)
                 .ok_or("`profile_binding` object must carry `profile_ref` or `constraint`")?;
-            let pinned = matches!(m.get("pinned"), Some(Json::Bool(true)));
+            let pinned = match m.get("pinned") {
+                None | Some(Json::Bool(false)) => false,
+                Some(Json::Bool(true)) => true,
+                Some(_) => return Err("`profile_binding.pinned` must be a boolean".into()),
+            };
             Ok(ProfileBinding::Pinned(ProfileRef {
                 profile: profile.to_string(),
                 pinned,
@@ -755,6 +870,99 @@ fn profile_binding_from_json(j: &Json) -> Result<ProfileBinding, String> {
         }
         _ => Err("`profile_binding` must be a string or object".into()),
     }
+}
+
+fn profile_constraint_from_json(j: &Json, path: &str) -> Result<ProfileConstraint, String> {
+    let m = match j {
+        Json::Obj(m) => m,
+        _ => return Err(format!("{path} must be an object")),
+    };
+    for k in m.keys() {
+        if !matches!(
+            k.as_str(),
+            "selector" | "required_capabilities" | "fallback_profile"
+        ) {
+            return Err(format!("{path}.{k}: unknown ProfileConstraint member"));
+        }
+    }
+    let str_list = |k: &str| -> Result<Vec<String>, String> {
+        match m.get(k) {
+            None => Ok(Vec::new()),
+            Some(Json::Arr(items)) => items
+                .iter()
+                .map(|i| {
+                    i.as_str()
+                        .map(str::to_string)
+                        .ok_or_else(|| format!("{path}.{k} members must be strings"))
+                })
+                .collect(),
+            Some(_) => Err(format!("{path}.{k} must be a list of strings")),
+        }
+    };
+    let selector = match m.get("selector") {
+        None => ConstraintSelector::default(),
+        Some(s) => constraint_selector_from_json(s, &format!("{path}.selector"))?,
+    };
+    let fallback_profile = match m.get("fallback_profile") {
+        None => None,
+        Some(Json::Str(s)) => Some(s.clone()),
+        Some(_) => return Err(format!("{path}.fallback_profile must be a string")),
+    };
+    Ok(ProfileConstraint {
+        selector,
+        required_capabilities: str_list("required_capabilities")?,
+        fallback_profile,
+    })
+}
+
+fn constraint_selector_from_json(j: &Json, path: &str) -> Result<ConstraintSelector, String> {
+    let m = match j {
+        Json::Obj(m) => m,
+        _ => return Err(format!("{path} must be an object")),
+    };
+    for k in m.keys() {
+        if !matches!(
+            k.as_str(),
+            "provider_api_family" | "model_family" | "version_pattern" | "roles_admitted"
+        ) {
+            return Err(format!("{path}.{k}: unknown ConstraintSelector member"));
+        }
+    }
+    let opt_str = |k: &str| -> Result<Option<String>, String> {
+        match m.get(k) {
+            None => Ok(None),
+            Some(Json::Str(s)) => Ok(Some(s.clone())),
+            Some(_) => Err(format!("{path}.{k} must be a string")),
+        }
+    };
+    let roles_admitted = match m.get("roles_admitted") {
+        None => Vec::new(),
+        Some(Json::Arr(items)) => items
+            .iter()
+            .map(|i| {
+                i.as_str()
+                    .ok_or_else(|| format!("{path}.roles_admitted members must be strings"))
+                    .and_then(|s| {
+                        hh_ontology::eval::ModelRole::parse(s)
+                            .ok_or_else(|| format!("{path}.roles_admitted: unknown role `{s}`"))
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+        Some(_) => return Err(format!("{path}.roles_admitted must be a list of roles")),
+    };
+    let version_pattern = match m.get("version_pattern") {
+        None => None,
+        Some(v) => Some(hh_ontology::eval::version_pattern_from_json(
+            v,
+            &format!("{path}.version_pattern"),
+        )?),
+    };
+    Ok(ConstraintSelector {
+        provider_api_family: opt_str("provider_api_family")?,
+        model_family: opt_str("model_family")?,
+        version_pattern,
+        roles_admitted,
+    })
 }
 
 pub(crate) fn parameter_spec_json(p: &ParameterSpec) -> Json {
