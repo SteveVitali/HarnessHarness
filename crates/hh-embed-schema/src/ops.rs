@@ -1141,6 +1141,9 @@ pub fn registry() -> Vec<OpSpec> {
         labi("lab.extension.update", "L", "json", "json"),
         labi("lab.extension.revoke", "L", "json", "json"),
         labi("lab.extension.install", "L", "json", "json"),
+        labi("lab.extension.scan", "L", "json", "json"),
+        labi("lab.extension.seal", "L", "json", "json"),
+        labi("lab.extension.activate", "L", "json", "json"),
         labi("lab.extension.import_plugin", "L", "json", "json"),
         labi("lab.extension.export_plugin", "L", "json", "json"),
         // §5g.7 §4 (ADR-0070; OQ-177's interim): the `ApproverGrant`
