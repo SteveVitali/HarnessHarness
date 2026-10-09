@@ -20,14 +20,16 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::io::{BufRead, Write};
 
-use hh_embed::service::EmbedService;
+use hh_embed::service::{EmbedService, MintedVerdict};
 use hh_embed_schema::errors::EmbedError;
 use hh_mcp::artifact::ServedArtifact;
 use hh_mcp::protocol::{PINNED_MODERN, PINNED_VERSIONS};
 use hh_mcp::server::ServeError;
 use hh_wire::json::Json;
 
-use crate::binding::{BindingTable, CallerAuth, CallerBinding};
+use crate::binding::{
+    BindingTable, CallerAuth, CallerBinding, CallerCredential, CredentialRefusal,
+};
 use crate::exposure::{self, ExposureDef};
 use crate::session::SurfaceSession;
 
@@ -35,6 +37,29 @@ use crate::session::SurfaceSession;
 pub const SERVER_NAME: &str = "hh-mcp-lab";
 /// The package version.
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// One server→client notification — a single entry in the sequenced
+/// push log `GET /mcp` (the SSE arm; DF-S4.11-1) serves. `seq` is the
+/// stream position the `id:` header carries and `Last-Event-ID`
+/// resumes from; `binding_id` scopes delivery to the caller binding
+/// the notification was minted for; `frame` is the `{method, params}`
+/// notification body (the same `{method, params}` the
+/// `subscriptions/listen` drain answers — one mint, both consumers).
+#[derive(Debug, Clone)]
+pub struct ServerEvent {
+    /// The stream position (`id:`) — the `Last-Event-ID` resume key.
+    pub seq: u64,
+    /// The caller binding this notification belongs to.
+    pub binding_id: String,
+    /// The `{method, params}` notification body.
+    pub frame: Json,
+}
+
+/// The retained SSE backlog — `Last-Event-ID` resumes inside it. A
+/// cursor older than the retained head means the tail was evicted:
+/// resume starts at the head (no duplicates — the caller re-reads the
+/// resource/task views for any evicted tail).
+pub const EVENT_LOG_CAP: usize = 4096;
 
 /// The live server.
 pub struct LabServer {
@@ -54,6 +79,13 @@ pub struct LabServer {
     /// The notification queue (`subscriptions/listen` drains it) —
     /// `notifications/resources/updated` + `notifications/tasks`.
     pub pending: VecDeque<Json>,
+    /// The sequenced, binding-scoped push log the SSE arm (`GET /mcp`)
+    /// serves and `Last-Event-ID` resumes against — the one mint
+    /// [`LabServer::push_notification`] appends to alongside `pending`
+    /// (DF-S4.11-1: the same notification reaches both consumers).
+    pub events: VecDeque<ServerEvent>,
+    /// The next `ServerEvent::seq` — monotonic for the server's life.
+    pub next_event_seq: u64,
     /// `binding_id → subscribed resource URIs` — a subscription is
     /// bound to its caller binding and cancelled on change/expiry
     /// (ADR-0175 D2).
@@ -90,6 +122,8 @@ impl LabServer {
             sessions: BTreeMap::new(),
             dedup: BTreeMap::new(),
             pending: VecDeque::new(),
+            events: VecDeque::new(),
+            next_event_seq: 0,
             subscriptions: BTreeMap::new(),
             client_tasks: std::collections::BTreeSet::new(),
             tasks: BTreeMap::new(),
@@ -108,6 +142,71 @@ impl LabServer {
     /// `401` challenge.
     pub fn resolve_bearer(&self, token: &str) -> Option<CallerBinding> {
         self.bindings.resolve(token)
+    }
+
+    /// Mint one server→client notification — the single mint every
+    /// push leg shares (DF-S4.11-1): the frame lands in the sequenced
+    /// binding-scoped `events` log `GET /mcp` (SSE) streams and
+    /// `Last-Event-ID` resumes against, AND in the `pending` queue
+    /// `subscriptions/listen` drains for the POST/stdio arm. One mint,
+    /// both consumers — the same notification, never a second spelling.
+    pub fn push_notification(&mut self, binding_id: &str, frame: Json) {
+        let seq = self.next_event_seq;
+        self.next_event_seq += 1;
+        self.events.push_back(ServerEvent {
+            seq,
+            binding_id: binding_id.to_string(),
+            frame: frame.clone(),
+        });
+        while self.events.len() > EVENT_LOG_CAP {
+            self.events.pop_front();
+        }
+        self.pending.push_back(frame);
+    }
+
+    /// The WS-H3 credential mediator (R2.19 — DF-S4.11-2): the grant
+    /// table selects *which* sealed binding the token may act as; the
+    /// mediator then verifies the credential itself under the
+    /// binding's declared kind —
+    ///
+    /// - `stdio_launch` — the launch is the grant's own evidence (the
+    ///   OS identity the deployment declared; no exchange exists to
+    ///   verify);
+    /// - `oauth{audience}` — the presented token must verify through
+    ///   the kernel broker's `minted_scoped` leg under the binding's
+    ///   declared `audience` (`surface_verify_caller_token`): a table
+    ///   entry alone never resolves an OAuth grant — a token the
+    ///   kernel never minted, minted for a different audience, expired
+    ///   or revoked answers its typed refusal;
+    /// - `mtls` — no TLS handshake exists at this slice, so the
+    ///   binding refuses `transport_absent` (BL-31 — environment-gated,
+    ///   never a fabricated subject).
+    pub fn resolve_credential(&self, token: &str) -> Result<CallerBinding, CredentialRefusal> {
+        let binding = self
+            .bindings
+            .resolve(token)
+            .ok_or(CredentialRefusal::NoGrant)?;
+        match &binding.credential {
+            CallerCredential::StdioLaunch { .. } => Ok(binding),
+            CallerCredential::OAuth { audience, .. } => {
+                match self.svc.surface_verify_caller_token(token, audience) {
+                    MintedVerdict::Valid => Ok(binding),
+                    MintedVerdict::Invalid => Err(CredentialRefusal::CredentialInvalid),
+                    MintedVerdict::Expired => Err(CredentialRefusal::CredentialExpired),
+                    MintedVerdict::Revoked => Err(CredentialRefusal::CredentialRevoked),
+                }
+            }
+            CallerCredential::Mtls { .. } => Err(CredentialRefusal::TransportAbsent),
+        }
+    }
+
+    /// Mint a caller-auth token for `audience` through the kernel's
+    /// own `minted_scoped` issue leg (the authorization-server arm —
+    /// DF-S4.11-2). The returned string is the credential: it goes to
+    /// the caller, never into a record. Tests + deployments grant it
+    /// to a binding whose `oauth{audience}` matches, then present it.
+    pub fn mint_caller_token(&mut self, audience: &str, ttl_ms: u64) -> Result<String, EmbedError> {
+        self.svc.surface_mint_caller_token(audience, ttl_ms)
     }
 
     /// The shipped `hh-lab/1` default over `svc` — tests + the binary.

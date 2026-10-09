@@ -1974,8 +1974,9 @@ impl EmbedService {
 
     /// Resolve → validate → seal a `DefinitionInput` — the full
     /// `hh-assembly` pipeline (a `document` parses + resolves inside the
-    /// embedded registry's snapshot; a `ref` has no publish path at the
-    /// embed boundary at Stage 1 → `UnresolvedRef`, DF-S1.25-1).
+    /// embedded registry's snapshot; a `ref` resolves through the
+    /// registry-backed fetch — DF-S1.25-1 closed at R2.19, see
+    /// [`EmbedService::resolve_ref_definition`]).
     /// The run's persisted sealed definition (DF-S1.25-3; S2.3). Open
     /// deposits `artifacts/<version_id>` — a redirect to the blob-pool
     /// address of the sealed document's canonical bytes — so the
@@ -2048,9 +2049,11 @@ impl EmbedService {
         let doc_json = match definition {
             DefinitionInput::Document(j) => j.clone(),
             DefinitionInput::Ref(r) => {
-                return Err(EmbedError::UnresolvedRef {
-                    reference: r.clone(),
-                })
+                // DF-S1.25-1 (R2.19): the registry-backed path — blob
+                // fetch for a version spelling the service already
+                // sealed, else the embedded registry's
+                // `sealed_definition` resolve under `Execute` mode.
+                return self.resolve_ref_definition(r);
             }
         };
         let bytes = doc_json.to_canonical_string().into_bytes();
@@ -2112,6 +2115,93 @@ impl EmbedService {
         let blob_addr = self
             .store
             .put_blob(&sealed.canonical_bytes(), "application/x-hir-sealed")
+            .map_err(ledger_err)?;
+        let dir = self.store.root().join("artifacts");
+        std::fs::create_dir_all(&dir).map_err(|e| EmbedError::Refused {
+            reason: format!("artifact_store_unavailable: {e}"),
+        })?;
+        let dst = dir.join(&sealed.definition_ref.version_id);
+        if !dst.exists() {
+            let tmp = dir.join(format!("{}.tmp", sealed.definition_ref.version_id));
+            std::fs::write(&tmp, blob_addr.id()).map_err(|e| EmbedError::Refused {
+                reason: format!("artifact_store_unavailable: {e}"),
+            })?;
+            std::fs::rename(&tmp, &dst).map_err(|e| EmbedError::Refused {
+                reason: format!("artifact_store_unavailable: {e}"),
+            })?;
+        }
+        // DF-S1.25-1 (R2.19): the sealed definition registers into the
+        // embedded registry — `DefinitionInput::Ref` resolves it later
+        // through the one `registry::base_definition` grammar
+        // (`version:<vid>` / bare version id / `ns/name[@label]`).
+        // Re-registering the same version is the store's idempotent
+        // hit; a real failure refuses the open — the durable path is
+        // the point (CC3).
+        let kernel_prov = self.kernel_prov.clone();
+        self.registry
+            .register(
+                hh_registry::records::RegistryRecord::SealedDefinition(sealed.clone()),
+                &kernel_prov,
+                None,
+            )
+            .map_err(|e| EmbedError::Refused {
+                reason: format!("definition_register: {e:?}"),
+            })?;
+        Ok(sealed)
+    }
+
+    /// `DefinitionInput::Ref` — the registry-backed definition path
+    /// (R2.19; DF-S1.25-1 closed). The sealed definition resolves from:
+    ///
+    ///   1. the **local blob pool** — a prior open deposited
+    ///      `artifacts/<version_id>` (`persisted_definition` verifies
+    ///      the blob hash + the document's own pinned root id — CC3);
+    ///      tried for the `version:<vid>`/bare-id spellings — the
+    ///      common case is a ref to a definition this service already
+    ///      sealed;
+    ///   2. the **embedded registry** — `base_definition` under
+    ///      `ResolveMode::Execute` (the stricter mode — a revoked or
+    ///      below-floor version never opens: the resolved definition
+    ///      is the one the session runs).
+    ///
+    /// An unresolvable spelling answers the typed `UnresolvedRef` —
+    /// never a document-parse fallback, never a guess. A registry hit
+    /// deposits its canonical bytes into the blob pool + `sealed_defs`
+    /// through the same path a `document` open takes — the
+    /// content-addressed artifact chain stays one (CC1).
+    fn resolve_ref_definition(
+        &mut self,
+        reference: &str,
+    ) -> Result<hh_hir::document::SealedDefinition, EmbedError> {
+        // (1) — the durable local fetch (version-id spellings only).
+        let version_key = reference.strip_prefix("version:").unwrap_or(reference);
+        if !version_key.contains('/') {
+            if let Ok(sealed) = self.persisted_definition(version_key) {
+                self.sealed_defs.insert(
+                    sealed.definition_ref.version_id.clone(),
+                    sealed.canonical_bytes(),
+                );
+                return Ok(sealed);
+            }
+        }
+        // (2) — the registry resolve under `Execute` (the resolved
+        // definition is the one the session runs — the stricter gates
+        // apply: revoked admission, the conformance floor).
+        let sealed = hh_lab::assembly::desugar::base_definition(
+            reference,
+            &self.registry,
+            None,
+            ResolveMode::Execute,
+        )
+        .map_err(|_| EmbedError::UnresolvedRef {
+            reference: reference.to_string(),
+        })?;
+        let bytes = sealed.canonical_bytes();
+        self.sealed_defs
+            .insert(sealed.definition_ref.version_id.clone(), bytes.clone());
+        let blob_addr = self
+            .store
+            .put_blob(&bytes, "application/x-hir-sealed")
             .map_err(ledger_err)?;
         let dir = self.store.root().join("artifacts");
         std::fs::create_dir_all(&dir).map_err(|e| EmbedError::Refused {

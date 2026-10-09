@@ -314,10 +314,16 @@ pub fn notify_after_call(
                         || crate::handles::handle_alias(crate::handles::HandleKind::Run, t) == named
                 });
                 if hit && kind.starts_with("run-") {
-                    srv.pending.push_back(Json::obj([
-                        ("method", Json::str("notifications/resources/updated")),
-                        ("params", Json::obj([("uri", Json::str(uri.clone()))])),
-                    ]));
+                    // The one `push_notification` mint — the SSE log
+                    // (scoped to this subscribing binding) + the
+                    // `pending` drain both see it (DF-S4.11-1).
+                    srv.push_notification(
+                        &binding.binding_id,
+                        Json::obj([
+                            ("method", Json::str("notifications/resources/updated")),
+                            ("params", Json::obj([("uri", Json::str(uri.clone()))])),
+                        ]),
+                    );
                 }
             }
         }
