@@ -497,6 +497,7 @@ fn parity_design() -> Design {
             analysis_plan_ref: "plan:parity".into(),
             task_split_hash: String::new(),
             interactions: vec![],
+            dead_weight_purpose: false,
         },
         registry_snapshot_id: None,
         generators: None,

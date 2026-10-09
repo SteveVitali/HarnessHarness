@@ -168,6 +168,7 @@ fn pre_registration() -> PreRegistration {
         analysis_plan_ref: "analysis:plan".into(),
         task_split_hash: "sha256:cc33".into(),
         interactions: vec![],
+        dead_weight_purpose: false,
     }
 }
 
@@ -290,6 +291,7 @@ fn sched_entry(debt_ref: &str, status: DebtStatus, used: bool) -> SchedulableEnt
         probation_due: false,
         next_time_expiry_ms: None,
         removal_kind: Some(RemovalTestKind::RetirementExperiment),
+        home: None,
     }
 }
 
@@ -308,8 +310,18 @@ fn manager_record(manager_id: &str) -> DebtManagerRecord {
     DebtManagerRecord {
         manager_id: manager_id.to_string(),
         maturity: "instrument-grade".to_string(),
-        policy: DebtPolicy::default(),
+        policy: policy(),
         reflexive_debt: reflexive,
+    }
+}
+
+/// The fixture manager policy — `notice_sinks` declares `sink:ops` so the
+/// fixture records' `owner.reach_via` resolves (R2.17 binds the sink table
+/// at the schedule point).
+fn policy() -> DebtPolicy {
+    DebtPolicy {
+        notice_sinks: vec!["sink:ops".into()],
+        ..DebtPolicy::default()
     }
 }
 
@@ -359,7 +371,7 @@ fn priority_classes_order_as_specified() {
 fn schedule_produces_an_instrument_charged_retirement_spec() {
     let record = rule_debt("r1", 10, EvidenceKind::Source);
     let entry = sched_entry("debt:r1", DebtStatus::Expired, true);
-    let policy = DebtPolicy::default();
+    let policy = policy();
     let ctx = ScheduleContext::default();
     let out =
         schedule_removal_test(&entry, &record, Some(&template_spec("r1")), &policy, &ctx).unwrap();
@@ -401,7 +413,7 @@ fn schedule_defers_at_the_open_test_bound() {
     let entry = sched_entry("debt:r1", DebtStatus::Expired, true);
     let policy = DebtPolicy {
         max_open_removal_tests: 2,
-        ..DebtPolicy::default()
+        ..policy()
     };
     let ctx = ScheduleContext {
         open_tests: 2,
@@ -429,14 +441,8 @@ fn schedule_defers_when_the_instrument_budget_wont_reserve() {
         reserve: Some(&|_| false),
         on_cadence: false,
     };
-    let out = schedule_removal_test(
-        &entry,
-        &record,
-        Some(&template_spec("r1")),
-        &DebtPolicy::default(),
-        &ctx,
-    )
-    .unwrap();
+    let out = schedule_removal_test(&entry, &record, Some(&template_spec("r1")), &policy(), &ctx)
+        .unwrap();
     assert!(matches!(
         out,
         ScheduleOutcome::Deferred {
@@ -451,7 +457,7 @@ fn schedule_defers_when_the_instrument_budget_wont_reserve() {
 /// defers `template_unresolved`.
 #[test]
 fn schedule_defers_static_unexecutable_and_unresolved() {
-    let policy = DebtPolicy::default();
+    let policy = policy();
     let ctx = ScheduleContext::default();
     let mut record = rule_debt("r1", 10, EvidenceKind::Source);
     let entry = sched_entry("debt:r1", DebtStatus::Expired, true);
@@ -501,7 +507,7 @@ fn schedule_refuses_an_unknown_priority_spelling() {
     let entry = sched_entry("debt:r1", DebtStatus::Expired, true);
     let policy = DebtPolicy {
         priority: "most_recent".into(),
-        ..DebtPolicy::default()
+        ..policy()
     };
     let out = schedule_removal_test(
         &entry,
@@ -533,7 +539,7 @@ fn batch_folds_shared_base_into_one_spec() {
     // the removal arm differs per rule.
     let t1 = template_spec("r1");
     let t2 = template_spec("r2");
-    let spec = schedule_batch(&[(&e1, &r1, &t1), (&e2, &r2, &t2)], &DebtPolicy::default()).unwrap();
+    let spec = schedule_batch(&[(&e1, &r1, &t1), (&e2, &r2, &t2)], &policy()).unwrap();
     assert_eq!(spec.kind, ExperimentKind::RetirementBatch);
     assert_eq!(spec.arms.len(), 3); // base + r1-removal + r2-removal
     assert_eq!(
@@ -567,12 +573,12 @@ fn batch_refuses_incompatible_members() {
     let t1 = template_spec("r1");
     let mut t2 = template_spec("r2");
     t2.arms[0].hypothesis = "a different base".into();
-    let out = schedule_batch(&[(&e1, &r1, &t1), (&e2, &r2, &t2)], &DebtPolicy::default());
+    let out = schedule_batch(&[(&e1, &r1, &t1), (&e2, &r2, &t2)], &policy());
     assert!(matches!(
         out,
         Err(DebtManagerError::Refusal(Refusal::BatchIncompatible { .. }))
     ));
-    let out = schedule_batch(&[(&e1, &r1, &t1)], &DebtPolicy::default());
+    let out = schedule_batch(&[(&e1, &r1, &t1)], &policy());
     assert!(matches!(
         out,
         Err(DebtManagerError::Refusal(Refusal::BatchIncompatible { .. }))

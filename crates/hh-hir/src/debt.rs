@@ -183,6 +183,23 @@ pub fn validate_removal_test(
     home: &DebtHome,
     ctx: &RemovalTestContext<'_>,
 ) -> Result<(), DebtError> {
+    validate_removal_test_at(record, Some(home), ctx)
+}
+
+/// `validate_removal_test` where the caller cannot name the record's
+/// `DebtHome` (the debt-manager sweep — `SweepEntry.home` is
+/// caller-projected and may be absent). Identical checks; only the
+/// refusal *detail* text degrades to the home-free spelling when `home`
+/// is `None` — never the verdict (R2.17).
+pub fn validate_removal_test_at(
+    record: &AssumptionDebtRecord,
+    home: Option<&DebtHome>,
+    ctx: &RemovalTestContext<'_>,
+) -> Result<(), DebtError> {
+    let home_desc = || {
+        home.map(|h| format!("{}.{}", h.record_kind, h.field))
+            .unwrap_or_else(|| "the debt record".to_string())
+    };
     // `missing_snapshot_scope` — an evolution-origin record or an explicitly
     // `model_conditioned` debt must carry `scope.model_selectors` (the G4
     // conditioned-on rule; AC-R-2.9.6-2). The home's `needs_model_scope`
@@ -204,9 +221,9 @@ pub fn validate_removal_test(
             return Err(DebtError::UnexecutableRemovalTest {
                 reason: UnexecutableReason::MissingSnapshotScope,
                 detail: format!(
-                    "{}.{} is model-conditioned/evolution-origin but carries no \
+                    "{} is model-conditioned/evolution-origin but carries no \
                      scope.model_selectors",
-                    home.record_kind, home.field
+                    home_desc()
                 ),
             });
         }
@@ -226,9 +243,9 @@ pub fn validate_removal_test(
             return Err(DebtError::UnexecutableRemovalTest {
                 reason: UnexecutableReason::MissingSnapshotScope,
                 detail: format!(
-                    "{}.{} is model-conditioned/evolution-origin but carries no \
+                    "{} is model-conditioned/evolution-origin but carries no \
                      model_version_change expiry",
-                    home.record_kind, home.field
+                    home_desc()
                 ),
             });
         }

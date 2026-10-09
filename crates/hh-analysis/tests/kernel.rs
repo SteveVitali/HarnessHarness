@@ -92,6 +92,7 @@ fn prereg(primary: &[&str]) -> PreRegistration {
         analysis_plan_ref: "plan-1".into(),
         task_split_hash: "sha256:split-1".into(),
         interactions: vec![],
+        dead_weight_purpose: false,
     }
 }
 
@@ -947,6 +948,7 @@ fn equivalence_requires_preregistration() {
     // Drop the pre-registration — equivalence must refuse.
     fx.pre_registration = PreRegistration {
         equivalence_margin: None,
+        dead_weight_purpose: false,
         ..prereg(&["task_success"])
     };
     let sp = spec(

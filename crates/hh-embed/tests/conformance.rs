@@ -3892,6 +3892,7 @@ fn eval_compare_params() -> Json {
             analysis_plan_ref: "plan-1".into(),
             task_split_hash: "sha256:split-1".into(),
             interactions: vec![],
+            dead_weight_purpose: false,
         },
         registry_snapshot_id: None,
         generators: None,
@@ -4095,6 +4096,7 @@ fn s34c_spec() -> hh_lab::experiment::ExperimentSpec {
         analysis_plan_ref: "analysis:plan".into(),
         task_split_hash: "sha256:cc33".into(),
         interactions: vec![],
+        dead_weight_purpose: false,
     };
     let mut s = ExperimentSpec {
         experiment_id: String::new(),
