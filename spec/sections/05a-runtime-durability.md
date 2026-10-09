@@ -127,7 +127,7 @@ Consumes: canonical IR encoding and content addressing (R-2.1.2, ADR-0015; R-2.1
 | AC-R-2.2.1-13 | **Interchange identifiability.** Imported rows carry `provenance = imported{format, source}` and `participant_class = hosted`; exported runs round-trip `RunId`, `configuration_id`, lineage and `observability_level` (AC-B1-13; T-LCD-06/-10). | C0/S3 |
 | AC-R-2.2.1-14 | **Canonical-form byte equality.** Two independent implementations agree byte-for-byte on the shared golden corpus of IR documents, events and context items (ADR-0029 §1; WS-A3 AC-6 extended). | C0/S1 |
 | AC-R-2.2.1-15 | **Audit rules at append.** A non-kernel producer of an audit-grade class, a `Text` leaf in `audit_fields`, and an unmet obligation are refused/reported exactly as ADR-0066 Rules C/P/O state; `audit_completeness` renders per-component `n/a{reason}` (ADR-0068 §6; T-LCD-15). | C0/S2–S3 |
-| AC-R-2.2.1-16 | **Derived-index query latency** at Stage 4 per the ADR-0171 viewer requirements (OQ-388; CF-360). | C1/S4 |
+| AC-R-2.2.1-16 | **Derived-index query latency** at Stage 4 per the ADR-0171 viewer requirements (OQ-388; CF-360). Measured at S4.13 (2026-09-28; ADR-0305 D1): `by_event_id`/`by_class`/`ir_index` incremental at append (rebuild-identical), every other projection a shared-fold rebuild, a 100-of-10⁵ filtered `read` at ≈15 ms under `ac_r_2_2_1_16_latency_1e5_fixture` (CI-enforced) — confirming the result-proportional shape; ratification of the bound value and the policy remains the WS-B1/WS-K2 act the register names (ADR-0331 D4). | C1/S4 |
 
 T-LCD tests applying: T-LCD-06, -10, -12, -13, -15 (ADR-0026/0027 statements); T-LCD-08 and -15 for the replay capability (ADR-0028); T-LCD-10, -11, -12 for the canonical form (ADR-0029).
 
