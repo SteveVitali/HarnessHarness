@@ -28,9 +28,12 @@
 - `accepted` rows are not forgotten: they carry a recorded deviation signed at
   GATE-ACCEPT or a discharged answer; they stay on the register so a future
   reconcile round re-arms their triggers.
-- The 39 discharged DEFERRALS rows (latest cell `DONE`) are **not** owed and are
-  not gathered, per `modes/backlog.md`; the two bookkeeping rows whose work is
-  done but whose status cell was never flipped are BL-29.
+- The 72 discharged DEFERRALS rows (a dated `**DONE**` marker in the status
+  cell) are **not** owed and are not gathered, per `modes/backlog.md`.
+  Discharge is read from the dated marker, not the leading status token —
+  17 discharged cells still begin `OPEN` (the GATE-G4 G4-4 bookkeeping wart;
+  a flip-the-prefix pass is a round-3 chore). BL-29's two unflipped cells
+  were flipped at R2.1 and BL-29 is closed.
 
 ## The backlog by landing
 
