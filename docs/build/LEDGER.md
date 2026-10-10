@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS        # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R2.26   # manifest row 134 (round-2 closure; BL-30/-41/-42/-43); rows 127/128 remain HUMAN-H3/H4 (operator work, non-blocking)
-lastCompleted:   R2.25
+nextTicket:      R2.27   # manifest row 136 — round-2 docs refresh (final row); rows 127/128 remain HUMAN-H3/H4 (operator work)
+lastCompleted:   GATE-G4
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,12 +23,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r2.25  # R2.25 tip — spec-debt sweep-1 dated (21 confirmed / 193 interim / 2 fired-unanswered -> CF-491; CF-490 header note; BL-40 closed; RK-06 stays open); docs-only; R2.26 forks here
+chainTip:        svitali/harnessharness-r2.26  # R2.26 tip — round-2 closure: backlog re-swept exit 0 (156 sources), 9 PARTIAL->MET flips -> 47/66 both sums, readiness refreshed, GATE-G4 carried set enumerated; docs-only; GATE-G4 reads here
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           2
-updatedAt:       2026-10-09
+updatedAt:       2026-10-10
 ```
 
 ## OPEN FINDINGS
@@ -55,6 +55,17 @@ updatedAt:       2026-10-09
   `37482834486` at the same SHA passed). Root cause: CAP.3 added the fields to one allowlist; the
   ac5 sibling comparison was missed.
 
+- 2026-10-10 · **CI flake on #133 — ac5 parity test, new signature.** PR #133's push run
+  `38020320703` failed once on `ac5_attended_and_unattended_share_one_configuration` — an
+  unexpected ledger difference at `.payload.derived_from.view_hash`; the sibling pull_request
+  run `38020310848` on the same SHA (`e377a4a`) passed, and the failed-job rerun went green.
+  Same parity test as the 2026-10-06 #104 flake (`assembly_ms.value`, repaired at R2.1) but a
+  different member — `derived_from.view_hash` apparently carries a run-varying input the
+  allowlist doesn't cover. Timing/derivation-sensitive, not semantic (docs-only diff; sibling
+  green). Recorded for the next code-touching ticket to adjudicate the allowlist vs the
+  derivation input — assigned to the round-3 backlog, not a block on R2.26. Failing run:
+  https://github.com/SteveVitali/HarnessHarness/actions/runs/38020320703
+
 ## GATE DECISIONS
 
 | date | ticket | gate | item | answer | consequence |
@@ -77,6 +88,7 @@ updatedAt:       2026-10-09
 | 2026-10-02 | GATE-ACCEPT | operator signs the accepted-deviations list | disposition (reading 1) | **PASSED** — blanket acceptance, all 10 rows signed | every ACCEPTED row in CAPSTONE_CLOSURE.md §ACCEPTED-deviations signed; no SEND-BACKs; readouts/GATE-ACCEPT.md §4 recorded per-row; carry-forward inventory classified (37 REC.1 / 4 REC.2 / 4 REC.3 / 3 human rows on the accepted list); suite 280 blocks / 3028 tests / 0 failures. `projectStatus: DONE` unblocked pending REC.1–3 + DOC.1–2; nextTicket → REC.1. |
 
 | 2026-09-27 | S4.10 | Live stage: web instrument + security battery (operator-gated) | instrument + battery scope | authorized — hermetic/offline only; the full V1–V11 instrument + security battery lands in-worktree with no external spend or egress; legs bound to the unbound E3 surface ecosystem (HUMAN-H1) record DEFERRALS rows and report 'gate pending' per manifest, never a failure | runs the read-only web instrument + full security battery (not deferrable) over binding (c); generated-client legs gated on HUMAN-H1 deferred to the owning rows |
+| 2026-10-10 | GATE-G4 | Round-2 discharge review | disposition (reading 1) | **PASSED** — blanket acceptance, all 28 carried rows dispositioned | every §9 row dispositioned per its reason code (human/env/in-build/dep/window → CARRY; accepted/ruling/standing → ACCEPT); no SEND-BACKs; readouts/GATE-G4.md §9 recorded; zero unlanded R2-chartered rows; check-build-memory 0 violations; check-backlog exit 0; 10 GATE-ACCEPT deviations unchanged; named-set human/env rows gate-pending. R2.27 released (nextTicket → R2.27). |
 
 ## RETURN PASS
 
@@ -306,3 +318,7 @@ updatedAt:       2026-10-09
 - 2026-10-09 · R2.24 ci (terminal head) — `ci-boundary/1` **pass** on the closeout tip `c47a76d` (runs 38008297410 pull_request + 38008294338 push, both pass — no flake on this tip). ci-R2.24.json records this read; the cab15d3 read stands in the line above. PR #131 OPEN for operator merge (mergePolicy: OPERATOR).
 - 2026-10-09 · R2.25 done — branch `svitali/harnessharness-r2.25` · PR https://github.com/SteveVitali/HarnessHarness/pull/132 · base `svitali/harnessharness-r2.24` (@59199e8). Register revalidation, manifest row 133 (**BL-40 discharged — closed**): the first RK-06 sweep of `spec-debt.md` — all 216 active AssumptionDebtRecords carry dated in-cell `Revalidated 2026-10-09 (R2.25, BL-40)` grades (**confirmed 21** — in-build legs verifiably landed incl. OQ-045/-056/-076/-083, the ADR-0050 re-measurement set, ADR-0301 binding-(c) auth; **still-valid-interim 193** — external-standing clauses + owed legs on named OQs, T4-fired-and-answered round-2/amendment-log dependants annotated; **fired-unanswered 2** — ADR-0183/-0208 closure-before-stage clauses did not hold literally → CF-491; **superseded 0**). CF-490 records the header's misidentified hypothesized row (ADR-0202, not ADR-0049). RK-06 gains the disposition (stays open — cadence standing via OQ-445/BL-33); RK-03 records its retirement precondition ran. No code/schema/deferral/coverage changes. Verify: check-backlog 33 issues identical to base; check-build-memory 0 violations / 7 warnings; fmt clean; `^||` empty; prefix-check 216/216 verbatim. run `docs/build/runs/R2.25.md`, body `docs/build/pr/R2.25.md`. chainTip → svitali/harnessharness-r2.25 · next → R2.26 (manifest row 134 — round-2 closure; BL-30/-41/-42/-43) · layer: fixture-verified.
 - 2026-10-09 · R2.25 ci (terminal head) — `ci-boundary/1` **pass** on the closeout tip `c7be5d0` (runs 38013901685 push + 38013904205 pull_request, both pass after a failed-job rerun). The push run's first attempt flaked on the known `hh-mcp-lab r2_19 credential_mediator_oauth_resolves_and_refuses` timing leg (the same flake family recorded at the R2.19/R2.21/R2.22/R2.23 closeouts — unrelated to this docs-only diff); the rerun went green. ci-R2.25.json records the terminal read; the `666657e` pass stands in the run ledger. PR #132 OPEN for operator merge (mergePolicy: OPERATOR).
+- 2026-10-10 · R2.26 done — branch `svitali/harnessharness-r2.26` · PR https://github.com/SteveVitali/HarnessHarness/pull/133 · base `svitali/harnessharness-r2.25` (@d8fd2e4). Round-2 closure, manifest row 134 (BL-30/-41/-42/-43): `reconcile-build mode=backlog` over the landed round — check-backlog **33 issues → exit 0** (156 expected sources; 29 home-closed re-homed, ADR-0343 deduped, ADR-0345/0347/0348 homed); **9 closure PARTIAL→MET flips** (R-2.2.4/-2.2.5/-2.4.1/-2.4.2/-2.8.2/-2.9.1/-2.9.2/-2.11.1/-2.11.4) → **47/66 both sums** (41 MET + 6 MET-DIFFERENTLY; R1 baseline 35/66); **BL-44/45/46 minted** (DF-S2.3-1 producers, audit AEAD residual, DF-DOC.1-1 id); BL-30 stays open (gains CF-488–491 + R-2.2.1); BL-41 accepted re-issued, BL-42 44 quiet/dormant, BL-43 45 fired-answered — all 137 revisit triggers carry dated verdicts in BACKLOG.md; OPERATIONAL_READINESS rewritten (fixture-verified ceiling kept); round-2 accounting + 28-row GATE-G4 carried set with reason codes appended to the decomposition doc; risks Round-2 review. **Verify:** check-backlog exit 0; check-build-memory 0 violations / 7 pre-existing warnings; fmt clean; `^||` empty; docs-only (no cargo suite — catalogue precedent). run `docs/build/runs/R2.26.md`, body `docs/build/pr/R2.26.md`. chainTip → svitali/harnessharness-r2.26 · next → GATE-G4 (manifest row 135 — round-2 discharge review; STOP) · layer: fixture-verified.
+- 2026-10-10 · R2.26 ci (terminal head) — `ci-boundary/1` **pass** on `e377a4a` (runs 38020320703 push + 38020310848 pull_request, both pass). The push run's first attempt flaked on `ac5_attended_and_unattended_share_one_configuration` (`.payload.derived_from.view_hash` — a new signature of the parity test whose `assembly_ms` leg was repaired at R2.1; OPEN FINDINGS entry records it) and the rerun's first attempt flaked on the known `hh-mcp-lab r2_19 credential_mediator_oauth_resolves_and_refuses` timing leg (the R2.19/21/22/23/25 flake family — unrelated to this docs-only diff); the second rerun went green; the sibling pull_request run passed on the same SHA first try. ci-R2.26.json records the terminal read. PR #133 OPEN for operator merge (mergePolicy: OPERATOR).
+- 2026-10-10 · R2.26 ci (terminal head) — `ci-boundary/1` **pass** on the closeout tip `4c5351a` (runs 38021977049 pull_request + 38021974031 push, both pass). The pull_request run's first attempt flaked on the known `hh-mcp-lab r2_19 credential_mediator_oauth_resolves_and_refuses` timing leg (the R2.19/21/22/23/25 flake family — unrelated to this docs-only diff); the failed-job rerun went green; the push run passed first try. ci-R2.26.json records this read; the `e377a4a` pass stands in the line above. PR #133 OPEN for operator merge (mergePolicy: OPERATOR).
+- 2026-10-10 · GATE-G4 PASSED — operator blanket acceptance (reading 1). All 28 §9 carried rows dispositioned per reason code: human/env/in-build/dep/window → CARRY; accepted/ruling/standing → ACCEPT; no SEND-BACKs. Thresholds green: zero unlanded R2-chartered rows, check-build-memory 0 violations, check-backlog exit 0 (156 sources, 47/66), `^||` empty, 10 GATE-ACCEPT deviations re-confirmed. Named set (HUMAN-H1/H2/H3/H4 + foreign cells) recorded gate-pending. Readout `docs/build/readouts/GATE-G4.md` signed; GATE DECISIONS row appended; nextTicket → R2.27.
