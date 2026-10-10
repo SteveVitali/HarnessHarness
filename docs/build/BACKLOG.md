@@ -258,6 +258,18 @@ BL-42 (standing conditions 30 → 31; total 116). **BL-29 closed** — the
 bookkeeping flips landed this ticket: DF-S1.3-2, DF-S1.9-4, DF-S1.26-2 and
 DF-DOC.1-1 are all DONE with dated evidence in `DEFERRALS.md`.
 
+*Update 2026-10-10 (R2.25):* **BL-40 discharged** — the first RK-06
+revalidation of `research/registers/spec-debt.md` ran: all 216 active
+AssumptionDebtRecords carry dated in-cell first-sweep grades (**21
+confirmed · 193 still-valid-interim · 2 fired-unanswered · 0
+superseded**); the fired-unanswered pair (ADR-0183/ADR-0208 — recorded
+closure-before-stage clauses that did not hold literally) is recorded as
+CF-491, and the register's header misidentification of its sole
+`hypothesized` row (ADR-0202, not ADR-0049) as CF-490. RK-06 gains the
+disposition note in `risks.md`; the revalidation cadence stays a standing
+obligation (the `evidence_max_age` default rides OQ-445 → BL-33's WS-L6
+window).
+
 ## Coverage sums — recomputed 2026-10-06 vs the CAP.3 headline
 
 Recomputed from `COVERAGE_MATRIX.csv` (66 scoped requirement rows):
