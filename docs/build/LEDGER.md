@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r2.24  # R2.24 tip — register revalidation: ADR-0214 Stage-4/5/6 package dated re-checked (1 answered — OQ-177 by ADR-0306 D1; 26 narrowed; 7 open; CF-489 opened for the OQ-441 DebtPolicy divergence; CF-476/487 still pending); no code; R2.25 forks here
+chainTip:        svitali/harnessharness-r2.24  # R2.24 tip — ADR-0214 revalidation dated (OQ-177 answered via ADR-0306 D1; 26 narrowed; 7 open; CF-489 opened; CF-476/487 pending); docs-only; R2.25 forks here
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
