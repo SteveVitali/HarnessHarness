@@ -258,7 +258,7 @@ BL-42 (standing conditions 30 → 31; total 116). **BL-29 closed** — the
 bookkeeping flips landed this ticket: DF-S1.3-2, DF-S1.9-4, DF-S1.26-2 and
 DF-DOC.1-1 are all DONE with dated evidence in `DEFERRALS.md`.
 
-*Update 2026-10-10 (R2.25):* **BL-40 discharged** — the first RK-06
+*Update 2026-10-09 (R2.25):* **BL-40 discharged** — the first RK-06
 revalidation of `research/registers/spec-debt.md` ran: all 216 active
 AssumptionDebtRecords carry dated in-cell first-sweep grades (**21
 confirmed · 193 still-valid-interim · 2 fired-unanswered · 0
