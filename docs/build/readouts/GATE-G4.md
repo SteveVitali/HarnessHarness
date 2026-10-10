@@ -278,34 +278,34 @@ BL-01/BL-26 cells below.*
 
 | BL | Carried work | Reason | Disposition (CARRY \| ACCEPT \| WAIVE) | What would accept it (if WAIVE/SEND-BACK) |
 |---|---|---|---|---|
-| BL-01 | E2/E3 cross-impl conformance cells | `env` + `accepted` |  |  |
-| BL-02 | R2 cross-camp human reviewer signature (HUMAN-H4) | `human` |  |  |
-| BL-03 | HUMAN-H1 E3 surface-ecosystem binding | `human` |  |  |
-| BL-04 | HUMAN-H2 real tracker + signed webhook | `human` |  |  |
-| BL-05 | Gate-accepted battery arms (item 10) | `accepted` |  |  |
-| BL-10 | Emitter-vs-exemption adjudication (DF-S1.9-2) | `in-build` |  |  |
-| BL-14 | DF-S1.20-1 legs | `in-build` |  |  |
-| BL-15 | §5c battery residuals (DF-S1.19-1/-2) | `in-build` |  |  |
-| BL-16 | DF-S1.17-1 members + sync_source/retrieval_eval legs | `in-build` |  |  |
-| BL-17 | Judge binding + live-judge admissibility | `env` |  |  |
-| BL-19 | dpop + wrapped_long_lived (credential broker) | `dep` |  |  |
-| BL-26 | Live foreign-manifest import | `env` |  |  |
-| BL-27 | oauth/mtls mediator legs | `env` |  |  |
-| BL-30 | Spec/governance rulings (OQ-170, OQ-388, 6 CFs, R-2.2.1 verdict cell) | `ruling` |  |  |
-| BL-31 | Live provider transports + TLS-terminating transport | `env` |  |  |
-| BL-32 | Remote fetch transports + foreign vocabularies | `env` |  |  |
-| BL-33 | WS-L6 package (R-2.12.4 + 13 OQs) | `window` |  |  |
-| BL-34 | ADR-0211 ratified deferrals D-1..D-6 + OQ-461/462/463 | `window` |  |  |
-| BL-35 | ADR-0212 register package — remaining open OQs | `window` |  |  |
-| BL-36 | ADR-0213 register package — remaining open OQs | `window` |  |  |
-| BL-37 | ADR-0214 register package — remaining open OQs | `window` |  |  |
-| BL-38 | ADR-0215 program candidates + OQ-440 | `window` |  |  |
-| BL-39 | ADR-0216 fixer deferrals | `window` |  |  |
-| BL-41 | Ledger OPEN-FINDINGS standing rules | `standing` |  |  |
-| BL-42 | 44 quiet/dormant ADR triggers | `standing` |  |  |
-| BL-43 | 45 fired-and-answered ADR triggers | `standing` |  |  |
-| BL-44 | DF-S2.3-1 residual producers | `in-build` |  |  |
-| BL-45 | Audit per-event encryption + R-2.8.6 legs | `dep` |  |  |
+| BL-01 | E2/E3 cross-impl conformance cells | `env` + `accepted` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-02 | R2 cross-camp human reviewer signature (HUMAN-H4) | `human` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-03 | HUMAN-H1 E3 surface-ecosystem binding | `human` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-04 | HUMAN-H2 real tracker + signed webhook | `human` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-05 | Gate-accepted battery arms (item 10) | `accepted` | ACCEPT | standing/accepted as recorded |
+| BL-10 | Emitter-vs-exemption adjudication (DF-S1.9-2) | `in-build` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-14 | DF-S1.20-1 legs | `in-build` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-15 | §5c battery residuals (DF-S1.19-1/-2) | `in-build` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-16 | DF-S1.17-1 members + sync_source/retrieval_eval legs | `in-build` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-17 | Judge binding + live-judge admissibility | `env` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-19 | dpop + wrapped_long_lived (credential broker) | `dep` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-26 | Live foreign-manifest import | `env` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-27 | oauth/mtls mediator legs | `env` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-30 | Spec/governance rulings (OQ-170, OQ-388, 6 CFs, R-2.2.1 verdict cell) | `ruling` | ACCEPT | standing/accepted as recorded |
+| BL-31 | Live provider transports + TLS-terminating transport | `env` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-32 | Remote fetch transports + foreign vocabularies | `env` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-33 | WS-L6 package (R-2.12.4 + 13 OQs) | `window` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-34 | ADR-0211 ratified deferrals D-1..D-6 + OQ-461/462/463 | `window` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-35 | ADR-0212 register package — remaining open OQs | `window` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-36 | ADR-0213 register package — remaining open OQs | `window` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-37 | ADR-0214 register package — remaining open OQs | `window` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-38 | ADR-0215 program candidates + OQ-440 | `window` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-39 | ADR-0216 fixer deferrals | `window` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-41 | Ledger OPEN-FINDINGS standing rules | `standing` | ACCEPT | standing/accepted as recorded |
+| BL-42 | 44 quiet/dormant ADR triggers | `standing` | ACCEPT | standing/accepted as recorded |
+| BL-43 | 45 fired-and-answered ADR triggers | `standing` | ACCEPT | standing/accepted as recorded |
+| BL-44 | DF-S2.3-1 residual producers | `in-build` | CARRY | env/human/later-round provisioning or the next workstream |
+| BL-45 | Audit per-event encryption + R-2.8.6 legs | `dep` | CARRY | env/human/later-round provisioning or the next workstream |
 
 ### Operator reminder — what this disposition releases
 
@@ -315,13 +315,13 @@ advance is the operator's act on disposition, not this readout's.
 
 ### Verdict — pending operator signature
 
-- [ ] PASSED — every still-OPEN scoped row dispositioned
+- [x] PASSED — every still-OPEN scoped row dispositioned (blanket acceptance, no SEND-BACKs)
 - [ ] NOT PASSABLE — what would pass it: ____________________
 - [ ] SKIPPED-BY-OPERATOR
 
-**Date:** ____________________
+**Date:** 2026-10-10
 
 ### Operator disposition line — FOR THE OPERATOR
 
-- [ ] Disposition recorded: ____________________ (operator signature / initials, date, and the
+- [x] Disposition recorded: operator acceptance 2026-10-10 (orchestrate-build records the GATE DECISIONS row + ledger advance) (operator signature / initials, date, and the
   LEDGER `GATE DECISIONS` row reference once `orchestrate-build` records it)
