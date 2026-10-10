@@ -38,18 +38,7 @@ updatedAt:       2026-10-10
 - 2026-09-16 · **Residual concurrent-writer risk (S1.9 landed around it).** The unidentified second writer from the S1.9 block was still intermittently rewriting files during the landing run (a test-file edit was observed reverted then stable; `claude` agent processes remain live on this host). The landed S1.9 state is committed and verified (`dabe59a`/`59aa310`, 529 tests green), so the *ticket* is not at risk — but the operator should confirm the other agent is stopped (or quarantine the worktree) **before dispatching S1.10**, or the next ticket's dirty tree may mix authors again. Not reopening S1.9.
   - *Resolved 2026-09-16 (orchestrator post-close audit):* the second writer is identified — it was the Devin `run_subagent` worker `de74abac` for S1.9, whose `kill_shell` detached the monitor handle without stopping the in-process task; it woke during the headless run and completed the ticket (commits `dabe59a`/`59aa310`/`adbf3e7` are its work). The "reverted edit" it observed was the headless worker's overlapping writes (14:47–15:00 window). Post-completion sweep: `git status` clean, no worktree writes since close, other `devin acp` processes belong to other repos, prior session's subagents died with their session. **No writer remains — the S1.10 precondition in this finding is satisfied.** Corollary for future runs: a wedged `run_subagent` is not dead — it may execute later; prefer headless dispatch or confirm process death before dispatching a second worker on the same ticket.
 
-- 2026-09-18 · **File-mutation anomaly confirmed (orchestrator + S1.23 worker) — tool-cache, not a second writer.** The S1.23 worker's `edit`-tool writes to `LEDGER.md` reported success but were absent at commit; the orchestrator then reproduced it: an `edit` reported success (insert before `- 2026-10-10 · **CI flake on #133 — ac5 parity test, new signature.** PR #133's push run
-  `38020320703` failed once on `ac5_attended_and_unattended_share_one_configuration` — an
-  unexpected ledger difference at `.payload.derived_from.view_hash`; the sibling pull_request
-  run `38020310848` on the same SHA (`e377a4a`) passed, and the failed-job rerun went green.
-  Same parity test as the 2026-10-06 #104 flake (`assembly_ms.value`, repaired at R2.1) but a
-  different member — `derived_from.view_hash` apparently carries a run-varying input the
-  allowlist doesn't cover. Timing/derivation-sensitive, not semantic (docs-only diff; sibling
-  green). Recorded for the next code-touching ticket to adjudicate the allowlist vs the
-  derivation input — assigned to the round-3 backlog, not a block on R2.26. Failing run:
-  https://github.com/SteveVitali/HarnessHarness/actions/runs/38020320703
-
-## GATE DECISIONS`) yet `git status` stayed clean, and a subsequent `edit` failed `String not found` on a line `tail` proved present — the edit tool is serving a stale view of this file (cached from before the workers rewrote it), so its writes vanish. Shell writes (echo/python) persist normally. Unlike S1.9 there is no foreign content and no wholesale file replacement — not an external writer. **Operational rule going forward (upgraded 2026-09-18 after the S2.2 worker hit it a third time — same stale-view signature, no foreign content):** build-memory writes (`LEDGER.md`/`DEFERRALS.md`/`BUILD_INDEX.md`) MUST go through shell/python, and every such write is verified by `git diff` before commit; the `edit` tool is not to be used on those files. If foreign content or reverted files appear, re-open the concurrent-writer investigation.
+- 2026-09-18 · **File-mutation anomaly confirmed (orchestrator + S1.23 worker) — tool-cache, not a second writer.** The S1.23 worker's `edit`-tool writes to `LEDGER.md` reported success but were absent at commit; the orchestrator then reproduced it: an `edit` reported success (insert before `## GATE DECISIONS`) yet `git status` stayed clean, and a subsequent `edit` failed `String not found` on a line `tail` proved present — the edit tool is serving a stale view of this file (cached from before the workers rewrote it), so its writes vanish. Shell writes (echo/python) persist normally. Unlike S1.9 there is no foreign content and no wholesale file replacement — not an external writer. **Operational rule going forward (upgraded 2026-09-18 after the S2.2 worker hit it a third time — same stale-view signature, no foreign content):** build-memory writes (`LEDGER.md`/`DEFERRALS.md`/`BUILD_INDEX.md`) MUST go through shell/python, and every such write is verified by `git diff` before commit; the `edit` tool is not to be used on those files. If foreign content or reverted files appear, re-open the concurrent-writer investigation.
 
 - 2026-09-18 · **Foreign-writer sweep after S2.4 worker flag — clear.** The S2.4 worker saw live `claude --dangerously-skip-permissions` processes and non-persisting `edit` writes. Orchestrator sweep: all claude cwds resolve to other repos (Episteme ×4, Eleutheria, agent-discourse, Rhēma, `$HOME`, and the *main* MetaHarness checkout — none in `MetaHarness-harnessharness`); only `hh-helper` pid 4853 holds a cwd in the build worktree (a test-spawned leftover, not a writer). The non-persisting writes are the established `edit`-tool stale-view anomaly — rule already in force (shell/python + `git diff` for build-memory files).
 
@@ -65,6 +54,17 @@ updatedAt:       2026-10-10
   https://github.com/SteveVitali/HarnessHarness/actions/runs/37482844398 (sibling run
   `37482834486` at the same SHA passed). Root cause: CAP.3 added the fields to one allowlist; the
   ac5 sibling comparison was missed.
+
+- 2026-10-10 · **CI flake on #133 — ac5 parity test, new signature.** PR #133's push run
+  `38020320703` failed once on `ac5_attended_and_unattended_share_one_configuration` — an
+  unexpected ledger difference at `.payload.derived_from.view_hash`; the sibling pull_request
+  run `38020310848` on the same SHA (`e377a4a`) passed, and the failed-job rerun went green.
+  Same parity test as the 2026-10-06 #104 flake (`assembly_ms.value`, repaired at R2.1) but a
+  different member — `derived_from.view_hash` apparently carries a run-varying input the
+  allowlist doesn't cover. Timing/derivation-sensitive, not semantic (docs-only diff; sibling
+  green). Recorded for the next code-touching ticket to adjudicate the allowlist vs the
+  derivation input — assigned to the round-3 backlog, not a block on R2.26. Failing run:
+  https://github.com/SteveVitali/HarnessHarness/actions/runs/38020320703
 
 ## GATE DECISIONS
 
