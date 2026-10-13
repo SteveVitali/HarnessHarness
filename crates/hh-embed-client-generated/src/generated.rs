@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:95be8e853aa18b90efaa19374e51d25c4c7fb15ceacf7d99b5aaee697ccd9848";
+    "sha256:986168f1b524816f57f67eae83b0016f0610204cbe0587052b3608c958d200a4";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -1046,6 +1046,48 @@ impl CoherentForkPointsParams {
             },
             to_seq: match v.get("to_seq") {
                 Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompensateParams {
+    pub session_id: String,
+    pub after_seq: Option<i64>,
+    pub outcomes: Option<Json>,
+}
+
+impl CompensateParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.after_seq {
+            pairs.push(("after_seq", Json::Int(v.clone())));
+        }
+        if let Some(v) = &self.outcomes {
+            pairs.push(("outcomes", v.clone()));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<CompensateParams, String> {
+        Ok(CompensateParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            after_seq: match v.get("after_seq") {
+                Some(f) => Some(f.as_int().ok_or_else(|| "expected integer".to_string())?),
+                None => None,
+            },
+            outcomes: match v.get("outcomes") {
+                Some(f) => Some(f.clone()),
                 None => None,
             },
         })
@@ -2206,6 +2248,52 @@ impl HeadParams {
                 f.as_str()
                     .map(|s| s.to_string())
                     .ok_or_else(|| "expected string".to_string())?
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HealParams {
+    pub session_id: String,
+    pub policy_ref: Option<String>,
+    pub policy: Option<Json>,
+}
+
+impl HealParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        if let Some(v) = &self.policy_ref {
+            pairs.push(("policy_ref", Json::str(v.clone())));
+        }
+        if let Some(v) = &self.policy {
+            pairs.push(("policy", v.clone()));
+        }
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<HealParams, String> {
+        Ok(HealParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            policy_ref: match v.get("policy_ref") {
+                Some(f) => Some(
+                    f.as_str()
+                        .map(|s| s.to_string())
+                        .ok_or_else(|| "expected string".to_string())?,
+                ),
+                None => None,
+            },
+            policy: match v.get("policy") {
+                Some(f) => Some(f.clone()),
+                None => None,
             },
         })
     }
@@ -5647,6 +5735,92 @@ impl Supplies {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SuspendParams {
+    pub session_id: String,
+    pub reasons: Vec<Json>,
+    pub subscription_ids: Vec<String>,
+    pub resume_policy: Option<Json>,
+    pub release_lease: bool,
+}
+
+impl SuspendParams {
+    pub fn to_json(&self) -> Json {
+        let mut pairs: Vec<(&'static str, Json)> = Vec::new();
+        pairs.push(("session_id", Json::str(self.session_id.clone())));
+        pairs.push((
+            "reasons",
+            Json::Arr(self.reasons.iter().map(|x| x.clone()).collect()),
+        ));
+        pairs.push((
+            "subscription_ids",
+            Json::Arr(
+                self.subscription_ids
+                    .iter()
+                    .map(|x| Json::str(x.clone()))
+                    .collect(),
+            ),
+        ));
+        if let Some(v) = &self.resume_policy {
+            pairs.push(("resume_policy", v.clone()));
+        }
+        pairs.push(("release_lease", Json::Bool(self.release_lease)));
+        Json::obj(pairs)
+    }
+
+    pub fn from_json(v: &Json) -> Result<SuspendParams, String> {
+        Ok(SuspendParams {
+            session_id: {
+                let f = v
+                    .get("session_id")
+                    .ok_or_else(|| format!("missing '{}'", "session_id"))?;
+                f.as_str()
+                    .map(|s| s.to_string())
+                    .ok_or_else(|| "expected string".to_string())?
+            },
+            reasons: {
+                let f = v
+                    .get("reasons")
+                    .ok_or_else(|| format!("missing '{}'", "reasons"))?;
+                match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x.clone());
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                }
+            },
+            subscription_ids: match v.get("subscription_ids") {
+                Some(f) => match f {
+                    Json::Arr(a) => a
+                        .iter()
+                        .map(|x| {
+                            let r: Result<_, String> = Ok(x
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .ok_or_else(|| "expected string".to_string())?);
+                            r
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err("expected array".to_string()),
+                },
+                None => Vec::new(),
+            },
+            resume_policy: match v.get("resume_policy") {
+                Some(f) => Some(f.clone()),
+                None => None,
+            },
+            release_lease: match v.get("release_lease") {
+                Some(Json::Bool(b)) => *b,
+                _ => false,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifyParams {
     pub session_id: String,
     pub until_seq: Option<i64>,
@@ -6474,6 +6648,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `compensate` → `json` (see the contract registry).
+    pub fn compensate(&mut self, params: &CompensateParams) -> Result<Json, ClientError> {
+        let raw = self.call("compensate", params.to_json())?;
+        Ok(raw)
+    }
+
     /// `continue_goal` → `json` (see the contract registry).
     pub fn continue_goal(&mut self, params: &ContinueGoalParams) -> Result<Json, ClientError> {
         let raw = self.call("continue_goal", params.to_json())?;
@@ -6745,6 +6925,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     pub fn head(&mut self, params: &HeadParams) -> Result<Head, ClientError> {
         let raw = self.call("head", params.to_json())?;
         Head::from_json(&raw).map_err(ClientError::Transport)
+    }
+
+    /// `heal` → `json` (see the contract registry).
+    pub fn heal(&mut self, params: &HealParams) -> Result<Json, ClientError> {
+        let raw = self.call("heal", params.to_json())?;
+        Ok(raw)
     }
 
     /// `hello` → `HelloResult` (see the contract registry).
@@ -7913,6 +8099,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `subscribe` → `json` (see the contract registry).
     pub fn subscribe(&mut self, params: &SubscribeParams) -> Result<Json, ClientError> {
         let raw = self.call("subscribe", params.to_json())?;
+        Ok(raw)
+    }
+
+    /// `suspend` → `json` (see the contract registry).
+    pub fn suspend(&mut self, params: &SuspendParams) -> Result<Json, ClientError> {
+        let raw = self.call("suspend", params.to_json())?;
         Ok(raw)
     }
 

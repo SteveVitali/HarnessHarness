@@ -604,7 +604,7 @@ impl EmbedService {
             let ws = self.workspace_root().display().to_string();
             environment_spec(environment, &ws)?
         };
-        let (_, _, env_policy, _, env_attestation) = &env_spec;
+        let (_, _, env_policy, env_info, env_attestation) = &env_spec;
         // S4.14b (R-2.8.4¹) — the backend is *selected* by the policy's
         // `proc.isolation_class` (`for_policy`), never hard-coded to the
         // EP2 model; attesting classes need the binding's declared
@@ -759,6 +759,15 @@ impl EmbedService {
             AttendanceValue::parse(&attendance.value).unwrap_or(AttendanceValue::Async),
             AttendanceSource::parse(&attendance.source).unwrap_or(AttendanceSource::Declared),
         );
+        // R2.3 (DF-S2.3-1) — `connection_info{healing_policy_ref}` stamps
+        // the manifest's `healing_policy_ref` member (§5a.1 §3): the
+        // `heal` boundary op resolves it through the one `RegistryStore`
+        // — an unresolvable ref is the typed refusal at heal time, never
+        // a fabricated default.
+        manifest.healing_policy_ref = env_info
+            .get("healing_policy_ref")
+            .and_then(Json::as_str)
+            .map(str::to_string);
         manifest.budget = budget.map(|_| budget_input);
         manifest.overrides_layer_id = overrides_layer_id.clone();
         // S4.11 — the surface-declared launch-causality citation
@@ -2050,6 +2059,21 @@ impl EmbedService {
                 reason: format!("containment_backend:{e:?}"),
             }
         })?;
+        // R2.3 (DF-S2.3-1) — `connection_info{on_loss}` is the binding's
+        // declared loss posture (§5a.5 `on_loss`; ADR-0136 §6). The
+        // Stage-1 default `fail_run` is preserved verbatim — the heal
+        // ladder's `replace` rung opens only for a declared
+        // `replace_from_image|replace_from_snapshot`.
+        let on_loss = match info.get("on_loss").and_then(Json::as_str) {
+            None | Some("fail_run") => OnLoss::FailRun,
+            Some("replace_from_image") => OnLoss::ReplaceFromImage,
+            Some("replace_from_snapshot") => OnLoss::ReplaceFromSnapshot,
+            Some(other) => {
+                return Err(EmbedError::EnvironmentUnavailable {
+                    reason: format!("on_loss:{other}"),
+                })
+            }
+        };
         let driver = self
             .env_drivers
             .entry(run_id.to_string())
@@ -2061,7 +2085,7 @@ impl EmbedService {
                 &record,
                 roots,
                 PolicySlot::Inline(Box::new(policy)),
-                OnLoss::FailRun,
+                on_loss,
             )
             .map_err(env_err)?;
         driver

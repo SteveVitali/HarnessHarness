@@ -715,6 +715,69 @@ pub fn registry() -> Vec<OpSpec> {
                 true,
             )
         },
+        // ── R2.3 (§5a.3; ADR-0131/0132; DF-S2.3-1): the durable-execution
+        // protocol entry points — `suspend` (S-1 enforced;
+        // `lifecycle.run.suspended` + `lifecycle.lease.released`),
+        // `compensate` (the compensation saga over applied+compensable
+        // effects; caller-declared `outcomes` are the host dispatch), and
+        // `heal` (the policy-bound environment heal —
+        // `healing_policy_ref` resolves through the one RegistryStore).
+        // Writer sessions only; attach is `session_is_read_only`.
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "suspend",
+                "W",
+                "SuspendParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "compensate",
+                "W",
+                "CompensateParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
+        OpSpec {
+            tier: Tier::Experimental,
+            ..call(
+                "heal",
+                "W",
+                "HealParams",
+                "json",
+                &[
+                    "UnknownField",
+                    "SchemaViolation",
+                    "ExperimentalRequired",
+                    "UnknownSession",
+                    "EnvironmentUnavailable",
+                    "Refused",
+                ],
+                Tier::Experimental,
+                true,
+            )
+        },
         // ── S3.6: `replay`/`counterfactual` land implemented
         // (R-2.2.4⁰ᵇ; §5a.4) — the staged shape's `from_seq`/`edits`
         // placeholders are replaced by the contract's params.

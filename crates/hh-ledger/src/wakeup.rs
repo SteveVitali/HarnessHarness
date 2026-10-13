@@ -797,6 +797,17 @@ impl Store {
     /// occurrences (`control.wakeup.occurred` — durable first), then fires
     /// each under the W-1 claim discipline. Idempotent: a `deliver_wakeup`
     /// after a crash rediscovers `occurred`-not-`fired` rows (KP-11).
+    ///
+    /// The producer pass (R2.3; DF-S2.3-1) runs first: the durable
+    /// producing rows mint the subscriptions the occurrence synthesis
+    /// then reads — a `control.retry.scheduled` row produces a
+    /// `retry_due` subscription (the non-fleet leg of the fleet
+    /// reconciler's own machinery — one pass, CC1), and a `fired`
+    /// occurrence withheld by `deliver_after` produces the
+    /// `effect_terminal` subscription that re-cues the run when the
+    /// blocking effect folds terminal (W-3's wake leg). The
+    /// `control.wakeup.scheduled` rows are durable before any occurrence
+    /// they can synthesize — durable-before-visible holds.
     pub fn deliver_wakeup(
         &mut self,
         run_id: &str,
@@ -804,6 +815,7 @@ impl Store {
         now_ms: u64,
     ) -> Result<Vec<FireOutcome>, LedgerError> {
         self.tier_c1("deliver_wakeup")?;
+        self.wakeup_producers(run_id, lease)?;
         // ── synthesize occurrences (durable before any fire) ──────────
         let due = self.wakeup_due(run_id, now_ms)?;
         for (sub_id, key, _payload_ref) in &due {
@@ -1034,6 +1046,119 @@ impl Store {
         run_id: &str,
     ) -> Result<Vec<WakeupSubscription>, LedgerError> {
         Ok(self.run(run_id)?.wakeups.values().cloned().collect())
+    }
+
+    /// The producer legs (R2.3; DF-S2.3-1) — the durable rows that own a
+    /// kernel-internal wake mint the subscription that carries it, under
+    /// the caller's writer lease:
+    ///
+    /// * **`retry_due`** — every `control.retry.scheduled{scope_id}` row
+    ///   produces one `retry_due` subscription per scope (`created_by` =
+    ///   the scheduled row); a cancelled/expired subscription is
+    ///   replaced, a live one is deduplicated — one sub per scope, never
+    ///   per schedule (a re-scheduled scope rides the same durable
+    ///   promise).
+    /// * **`effect_terminal`** — a `fired` occurrence withheld by
+    ///   `deliver_after` (W-3) produces the subscription that re-cues
+    ///   the run when the blocking committed effect folds terminal —
+    ///   `created_by` = the `fired` row itself.
+    ///
+    /// A minted subscription is durable before [`Store::wakeup_due`] can
+    /// synthesize an occurrence from it (the pass runs first, in this
+    /// same call); a `SubscriptionLimit`/`TriggerUnsupported` surfaces
+    /// typed — the producing rows stay durable, the refusal is the
+    /// record of the failed leg.
+    fn wakeup_producers(&mut self, run_id: &str, lease: &Lease) -> Result<(), LedgerError> {
+        let now = self.now_ms();
+        // A subscription is *live cover* for a producing row while it is
+        // not cancelled/folded-expired and its policy expiry has not
+        // passed — anything less means the durable producer has no wake
+        // leg and a fresh one must mint.
+        let live_cover = |s: &WakeupSubscription, trigger: &Trigger| {
+            !matches!(
+                s.state,
+                SubscriptionState::Cancelled | SubscriptionState::Expired
+            ) && s.policy.expires_at_ms.is_none_or(|e| now < e)
+                && &s.trigger == trigger
+        };
+        // `retry_due` — first scheduled row per scope is the producer.
+        let mut retry_scopes: BTreeMap<String, String> = BTreeMap::new();
+        for e in self.events(run_id)?.iter() {
+            if e.class == "control.retry.scheduled" {
+                if let Some(scope_id) = e.payload.get("scope_id").and_then(Json::as_str) {
+                    retry_scopes
+                        .entry(scope_id.to_string())
+                        .or_insert_with(|| e.event_id.clone());
+                }
+            }
+        }
+        for (scope_id, event_id) in retry_scopes {
+            let covered = self.run(run_id)?.wakeups.values().any(|s| {
+                live_cover(
+                    s,
+                    &(Trigger::RetryDue {
+                        scope_id: scope_id.clone(),
+                    }),
+                )
+            });
+            if !covered {
+                self.wakeup_subscribe(
+                    run_id,
+                    lease,
+                    Trigger::RetryDue { scope_id },
+                    WakeupPolicy::default_policy(),
+                    &EventRef {
+                        run_id: run_id.to_string(),
+                        event_id,
+                    },
+                )?;
+            }
+        }
+        // `effect_terminal` — every `fired` occurrence still withheld by
+        // `deliver_after` produces the wake leg for its blocking effect.
+        let st = self.run(run_id)?;
+        let mut blocked: BTreeMap<String, String> = BTreeMap::new();
+        for s in st.wakeups.values() {
+            for o in s.occurrences.values() {
+                if o.state != OccurrenceState::Fired {
+                    continue;
+                }
+                let Some(eid) = &o.deliver_after else {
+                    continue;
+                };
+                let still_blocked = st.effects.get(eid).is_some_and(|f| !f.is_terminal());
+                if still_blocked {
+                    if let Some(fired_id) = &o.fired_event_id {
+                        blocked
+                            .entry(eid.clone())
+                            .or_insert_with(|| fired_id.clone());
+                    }
+                }
+            }
+        }
+        for (effect_id, fired_event_id) in blocked {
+            let covered = self.run(run_id)?.wakeups.values().any(|s| {
+                live_cover(
+                    s,
+                    &(Trigger::EffectTerminal {
+                        effect_id: effect_id.clone(),
+                    }),
+                )
+            });
+            if !covered {
+                self.wakeup_subscribe(
+                    run_id,
+                    lease,
+                    Trigger::EffectTerminal { effect_id },
+                    WakeupPolicy::default_policy(),
+                    &EventRef {
+                        run_id: run_id.to_string(),
+                        event_id: fired_event_id,
+                    },
+                )?;
+            }
+        }
+        Ok(())
     }
 
     /// The claim discipline — shared by `wakeup_fire` and `deliver_wakeup`.
