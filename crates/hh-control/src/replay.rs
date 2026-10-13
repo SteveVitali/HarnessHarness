@@ -232,6 +232,8 @@ pub fn extract_recorded(
                     outcome,
                     submission_ref: None,
                     error_class: None,
+
+                    emitted: Vec::new(),
                 },
             );
         }
@@ -539,6 +541,7 @@ impl EffectGate for ReplayGate {
                         },
                         submission_ref: None,
                         error_class: None,
+                        emitted: Vec::new(),
                     });
                 out.submission_ref = submission_ref;
                 out
@@ -560,6 +563,7 @@ impl EffectGate for ReplayGate {
                     },
                     submission_ref: None,
                     error_class: Some("replay_diverged".to_string()),
+                    emitted: Vec::new(),
                 }
             }
         }
@@ -919,6 +923,7 @@ mod tests {
                 },
                 submission_ref: (tc == "tc-2").then(|| format!("sub-{ef}")),
                 error_class: None,
+                emitted: Vec::new(),
             }
         }
         fn finish_record(&self) -> Option<Json> {
@@ -933,6 +938,7 @@ mod tests {
                 request: Json::Null,
                 assembled_payload: None,
                 side_events: Vec::new(),
+                pre_events: Vec::new(),
             }
         }
     }
@@ -969,11 +975,15 @@ mod tests {
                     )]
                     .into_iter()
                     .collect(),
+
+                    risk_class: None,
                 },
                 crate::output::SurfaceSpec {
                     surface_id: "hh.submit".into(),
                     semantic_id: "sem/hh.submit".into(),
                     params: Default::default(),
+
+                    risk_class: None,
                 },
             ],
             ..DriverConfig::default()

@@ -215,6 +215,10 @@ pub(crate) struct SessionState {
     pub pending_steer: Option<String>,
     pub env_json: Json,
     pub env_handle_id: Option<String>,
+    /// The run's shared context/memory fold (R2.5 / DF-S2.8-1) — the
+    /// `KernelAssembler`/`KernelMemory`/`KernelCompaction` ports share
+    /// it; `None` on sessions armed before the fold existed.
+    pub mem_ctx: Option<std::rc::Rc<std::cell::RefCell<crate::runtime::KernelContext>>>,
     pub host_caps: Vec<HostCap>,
     pub turn_active: bool,
     pub active_turn: String,
@@ -1315,11 +1319,19 @@ impl EmbedService {
                 .ok_or_else(|| EmbedError::Refused {
                     reason: "no_driver".to_string(),
                 })?;
-        let host_surfaces: BTreeSet<String> = self
+        let host_surfaces: BTreeMap<String, crate::runtime::HostDecl> = self
             .session(sess_id)?
             .host_caps
             .iter()
-            .map(|c| c.surface_id.clone())
+            .map(|c| {
+                (
+                    c.surface_id.clone(),
+                    crate::runtime::HostDecl {
+                        risk_class: c.risk_class,
+                        requires_approval: c.requires_approval,
+                    },
+                )
+            })
             .collect();
         let invoke = self.session(sess_id)?.next_invoke.clone();
         let completion = self.session(sess_id)?.next_completion.clone();
@@ -1367,6 +1379,11 @@ impl EmbedService {
         // fire the declared take *inside* the sink so the row lands before
         // `lifecycle.run.finished` can seal the store.
         let env_handle = self.session(sess_id)?.env_handle_id.clone();
+        // R2.5 / DF-S2.8-1 — the memory + compaction boundaries wire when
+        // the session carries a context fold (open/continue arms build
+        // it; legacy sessions without one run the pre-R2.5 shape — a
+        // retrieve decision there still fails `UnbackedPort`, honestly).
+        let mem_ctx = self.session(sess_id)?.mem_ctx.clone();
         let mut sink = KernelSink {
             store: &mut self.store,
             run_id: run_id.clone(),
@@ -1384,7 +1401,14 @@ impl EmbedService {
             host_surfaces,
             host_asks: Vec::new(),
         };
-        let mut asm = KernelAssembler;
+        let mut asm = KernelAssembler {
+            ctx: mem_ctx.clone(),
+        };
+        if let Some(ctx) = &mem_ctx {
+            driver.set_memory_port(Box::new(crate::runtime::KernelMemory::new(ctx.clone())));
+            driver
+                .set_compaction_port(Box::new(crate::runtime::KernelCompaction::new(ctx.clone())));
+        }
         let outcome = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
         // R2.4 — `on_idle`: a parked drive (inbox emptied mid-turn) is the
         // env's idle boundary; the declared cadence take lands durable

@@ -120,6 +120,13 @@ pub struct SurfaceSpec {
     pub semantic_id: String,
     /// The declared params.
     pub params: BTreeMap<String, ParamSpec>,
+    /// The surface's declared `risk_class` (the `{reversibility,
+    /// repeat_safety, scope}` record — supplies/compiled declarations).
+    /// `None` reads `UNKNOWN` at `action.effect.intended` (ADR-0031 §2 —
+    /// undeclared is the most dangerous point, never a guessed-safe
+    /// class). The member rides the surface record so `leaf.arm`
+    /// persistence re-arms the same classes on resume.
+    pub risk_class: Option<hh_ontology::risk::RiskClass>,
 }
 
 /// A parsed tool call out of the gateway's response record — the driver
@@ -388,6 +395,7 @@ mod tests {
                     domain: vec![],
                 },
             )]),
+            risk_class: None,
         }
     }
 

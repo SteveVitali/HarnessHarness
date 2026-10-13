@@ -222,6 +222,8 @@ fn surface_from_json(j: &Json) -> Option<SurfaceSpec> {
         surface_id,
         semantic_id,
         params,
+
+        risk_class: None,
     })
 }
 
@@ -901,6 +903,41 @@ impl EmbedService {
             approval_mode,
             Some(&role_table),
         );
+        // R2.5 / DF-S2.8-1 — the run's shared context/memory fold:
+        // `supplies.procedures[]` ingest as `procedure_pointer` writes
+        // (durable `context.memory.written` rows + the blob-pool bytes),
+        // bound `session:<member>` so the assembler's selection leg, a
+        // `trigger`/`by_name` read and a `resume_set` head all resolve
+        // against one store (CC1).
+        let mut mem_ctx = crate::runtime::KernelContext::new(&run_id);
+        if let Some(sup) = supplies {
+            if !sup.procedures.is_empty() {
+                let supply_map: BTreeMap<String, Json> = sup
+                    .procedures
+                    .iter()
+                    .enumerate()
+                    .map(|(i, r)| {
+                        let name = r
+                            .get("semantic_id")
+                            .or_else(|| r.get("id"))
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                            .unwrap_or_else(|| format!("procedures.{i}"));
+                        (name, r.clone())
+                    })
+                    .collect();
+                crate::runtime::ingest_supplies(
+                    &mut self.store,
+                    &lease,
+                    &mut mem_ctx,
+                    &supply_map,
+                    hh_context::MemoryKind::ProcedurePointer,
+                )
+                .map_err(|e| EmbedError::Refused {
+                    reason: format!("supplies_ingest: {e}"),
+                })?;
+            }
+        }
         let head = self.store.head(&run_id).map_err(ledger_err)?;
 
         let sess = SessionState {
@@ -910,6 +947,7 @@ impl EmbedService {
             manifest_ref: manifest_ref.clone(),
             realized: realized.clone(),
             driver: Some(driver),
+            mem_ctx: Some(std::rc::Rc::new(std::cell::RefCell::new(mem_ctx))),
             env_json,
             env_handle_id,
             host_caps: cap_decl.clone(),
@@ -1502,6 +1540,15 @@ impl EmbedService {
             manifest_mode,
             None,
         );
+        // R2.5 — the resumed arm rebuilds the context fold from the
+        // durable `context.memory.written` prefix (I-FOLD — the ledger
+        // is the record; the store is its pure projection). Carried
+        // `resume_set` heads resolve against the rebound name history.
+        let mem_ctx = crate::runtime::KernelContext::fold(
+            run_id,
+            self.store.events(run_id).map_err(ledger_err)?,
+            self.store.now_ms(),
+        );
         let head = self.store.head(run_id).map_err(ledger_err)?;
         let sess = SessionState {
             run_id: run_id.to_string(),
@@ -1513,6 +1560,7 @@ impl EmbedService {
                 .unwrap_or_else(|| sess_manifest_ref(&manifest)),
             realized: realized.clone(),
             driver: Some(rt.driver),
+            mem_ctx: Some(std::rc::Rc::new(std::cell::RefCell::new(mem_ctx))),
             steering: steering_for(&rt.leaf_arm.control_variant),
             pending_steer: None,
             env_json: rt.env_json,
@@ -1613,6 +1661,7 @@ impl EmbedService {
         let sess = SessionState {
             run_id: run_id.to_string(),
             attach: true,
+            mem_ctx: None,
             lease: None,
             manifest_ref: sess_manifest_ref(&manifest),
             realized: realized.clone(),
@@ -2200,6 +2249,8 @@ impl EmbedService {
                 surface_id: hh_control::plan_exec::PLAN_SURFACE_ID.to_string(),
                 semantic_id: "hh/plan-execute/plan-surface".to_string(),
                 params: BTreeMap::new(),
+
+                risk_class: None,
             });
         }
         let mut parameters = StrategyParams::default();
@@ -2420,6 +2471,23 @@ impl EmbedService {
                 compute_policy_ref: arm.compute_variant.clone(),
                 compute_facts,
                 compute_rules,
+                // §5a.3 `carried.resume_set_heads` (R2.5 / DF-S2.8-1 b) —
+                // the manifest's durable `carried` member is the record;
+                // the driver drains the set through `MemoryPort` on the
+                // first `run` (`context.memory.read` rows, never a
+                // silent skip — `UnbackedPort` without the boundary).
+                resume_set_heads: manifest
+                    .extra
+                    .get("carried")
+                    .and_then(|c| c.get("resume_set_heads"))
+                    .map(|a| match a {
+                        Json::Arr(v) => v
+                            .iter()
+                            .filter_map(|x| x.as_str().map(str::to_string))
+                            .collect(),
+                        _ => Vec::new(),
+                    })
+                    .unwrap_or_default(),
                 ..DriverConfig::default()
             },
         )
@@ -2584,6 +2652,7 @@ pub(crate) fn submit_surface_spec() -> SurfaceSpec {
         surface_id: crate::runtime::SUBMIT_SURFACE.to_string(),
         semantic_id: format!("{}/1", crate::runtime::SUBMIT_SURFACE),
         params: std::collections::BTreeMap::new(),
+        risk_class: Some(crate::runtime::SUBMIT_RISK),
     }
 }
 
@@ -2818,6 +2887,7 @@ pub(crate) fn driver_surfaces(caps: &[HostCap]) -> Vec<SurfaceSpec> {
             surface_id: c.surface_id.clone(),
             semantic_id: c.capability_id.clone(),
             params: std::collections::BTreeMap::new(),
+            risk_class: c.risk_class,
         });
     }
     v

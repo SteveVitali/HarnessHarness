@@ -153,6 +153,14 @@ pub enum SettledOutcome {
     },
     /// `action.effect.abandoned` — terminal; listed in `unresolved_effects[]`.
     Abandoned,
+    /// Not a terminal — the gate dispatched the intent to an out-of-loop
+    /// executor (a host capability): the §5a.2 write-ahead rows landed and
+    /// the effect stays open until `report_host_effect` settles it. A
+    /// pending outcome never mints a terminal class (the staged
+    /// `unknown{awaiting_host}` shorthand is not a legal `unknown` cause
+    /// under the real ledger — the open `committed` row *is* the record;
+    /// CF-372, ADR-0177 D3).
+    Pending,
 }
 
 impl SettledOutcome {
@@ -163,6 +171,7 @@ impl SettledOutcome {
             SettledOutcome::Refused => "refused",
             SettledOutcome::Unknown { .. } => "unknown",
             SettledOutcome::Abandoned => "abandoned",
+            SettledOutcome::Pending => "pending",
         }
     }
 
@@ -197,6 +206,22 @@ pub enum HumanInput {
     },
     /// `interrupt` — the principal's cancel.
     Interrupt,
+    /// `artefact_mark{artefact_id, delivery_id, signal}` — the `human`
+    /// `activated`/`followed` detector leg (DF-S2.8-1 e): the principal
+    /// asserts a delivered artefact was exercised. The driver mints
+    /// `context.artefact.activated{detector: human}` — gated on a durable
+    /// `context.artefact.delivered` for `delivery_id` — and the cue still
+    /// reaches `decide` (a mark is also input). The row never enters the
+    /// deterministic `followed` fold — human evidence stays
+    /// `detector: human`, never laundered into a gate fact.
+    ArtefactMark {
+        /// The artefact the mark names.
+        artefact_id: String,
+        /// The `delivered` row's `delivery_id` the mark reads.
+        delivery_id: String,
+        /// The signal spelling (`cited`, `applied`, …).
+        signal: String,
+    },
 }
 
 /// `envelope_signal{…}` — the F2 seam's feedback sum (a refused `check`

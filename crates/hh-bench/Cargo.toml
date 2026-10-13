@@ -30,3 +30,7 @@ hh-eval = { path = "../hh-eval" }
 # crate itself never depends on the control plane; CC10/CC6).
 hh-control = { path = "../hh-control" }
 hh-gateway = { path = "../hh-gateway" }
+# R2.5 / DF-S1.19-2: the §5c corpus legs (labelled corpora, resume_set,
+# environment_epoch providers, conflict fixtures) run the real
+# `MemoryStore`/retrieval pipeline over `benchset.stage3.v1` members.
+hh-context = { path = "../hh-context" }

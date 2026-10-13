@@ -145,6 +145,8 @@ impl ScriptedGate {
                 },
                 submission_ref: None,
                 error_class: None,
+
+                emitted: Vec::new(),
             },
             finish: None,
         }
@@ -160,6 +162,8 @@ impl ScriptedGate {
                 },
                 submission_ref: Some("sub-1".into()),
                 error_class: None,
+
+                emitted: Vec::new(),
             },
         );
         self
@@ -194,6 +198,7 @@ impl AssemblerPort for NullAssembler {
             request: req.clone(),
             assembled_payload: Some(Json::obj([("context_request", req.clone())])),
             side_events: Vec::new(),
+            pre_events: Vec::new(),
         }
     }
 }
@@ -249,6 +254,7 @@ fn plan_surface() -> SurfaceSpec {
         )]
         .into_iter()
         .collect(),
+        risk_class: None,
     }
 }
 
@@ -267,6 +273,7 @@ fn fs_read() -> SurfaceSpec {
         )]
         .into_iter()
         .collect(),
+        risk_class: None,
     }
 }
 
@@ -285,6 +292,7 @@ fn submit_surface() -> SurfaceSpec {
         )]
         .into_iter()
         .collect(),
+        risk_class: None,
     }
 }
 
@@ -482,6 +490,8 @@ fn gate_hold_loops_then_exhausts_reconciliation_holds() {
             },
             submission_ref: None,
             error_class: None,
+
+            emitted: Vec::new(),
         },
     );
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
@@ -768,6 +778,7 @@ fn gate_abandoned_effect_is_success_with_veto() {
             outcome: SettledOutcome::Abandoned,
             submission_ref: None,
             error_class: None,
+            emitted: Vec::new(),
         },
     );
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));
@@ -1230,6 +1241,7 @@ impl AssemblerPort for ItemAssembler {
                 ),
             ])),
             side_events: Vec::new(),
+            pre_events: Vec::new(),
         }
     }
 }
@@ -1573,6 +1585,8 @@ fn ac_f2_04_timeouts_record_and_replay() {
                 },
                 submission_ref: None,
                 error_class: None,
+
+                emitted: Vec::new(),
             },
         ),
         DriverConfig {
@@ -1680,6 +1694,8 @@ fn ac_f2_07_termination_poisoning_changes_nothing() {
             },
             submission_ref: None,
             error_class: None,
+
+            emitted: Vec::new(),
         },
     );
     let (c, p, config) = cfg();
@@ -1967,6 +1983,7 @@ fn bound_reconciler_emits_d7_and_kernel_notice() {
         outcome: SettledOutcome::Refused,
         submission_ref: None,
         error_class: None,
+        emitted: Vec::new(),
     };
 
     let run_once =
@@ -2127,6 +2144,8 @@ fn r221_unknown_effect_at_finish_is_escalated() {
             },
             submission_ref: None,
             error_class: None,
+
+            emitted: Vec::new(),
         },
     );
     gate.finish = Some(Json::obj([("completion", Json::str("achieved"))]));

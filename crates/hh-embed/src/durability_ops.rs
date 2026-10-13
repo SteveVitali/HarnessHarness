@@ -1052,6 +1052,7 @@ mod r2_3_tests {
                     },
                 },
                 driver: None,
+                mem_ctx: None,
                 steering: (
                     hh_control::strategy::SteerMode::QueueNextTurn,
                     hh_control::strategy::ConcurrentInput::QueueOnly,

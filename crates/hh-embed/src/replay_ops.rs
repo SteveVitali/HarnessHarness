@@ -103,7 +103,7 @@ impl EmbedService {
                 let policy = policy.map_err(|e| EmbedError::Refused {
                     reason: format!("envelope_policy: {e:?}"),
                 })?;
-                let mut assembler = KernelAssembler;
+                let mut assembler = KernelAssembler::default();
                 let outcome = hh_control::replay::deterministic_replay(
                     strategy_for(&variant),
                     &ctx,
@@ -449,7 +449,7 @@ impl EmbedService {
                 let (report, outcome_json) = if variant_declares {
                     let (ctx, policy, config) =
                         self.replay_driver_env(&arm_run, &parent, arm.as_ref());
-                    let mut assembler = KernelAssembler;
+                    let mut assembler = KernelAssembler::default();
                     let policy = match policy {
                         Ok(p) => p,
                         Err(e) => {

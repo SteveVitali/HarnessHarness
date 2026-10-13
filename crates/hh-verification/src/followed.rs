@@ -85,13 +85,40 @@ pub fn followed_payload(
     evidence_ref: &str,
     kind: &str,
 ) -> Json {
+    followed_payload_det(
+        artefact_id,
+        delivery_id,
+        "deterministic",
+        detector_ref,
+        verdict,
+        1_000_000,
+        evidence_ref,
+        kind,
+    )
+}
+
+/// `followed_payload` parameterised over `detector`/`confidence_ppm` — the
+/// `judged`/`human` members of §02's closed detector sum (DF-S2.8-1 e).
+/// A `judged` row carries the verdict's confidence, never `1_000_000` —
+/// judged evidence keeps its grade.
+#[allow(clippy::too_many_arguments)]
+pub fn followed_payload_det(
+    artefact_id: &str,
+    delivery_id: &str,
+    detector: &str,
+    detector_ref: &str,
+    verdict: bool,
+    confidence_ppm: u64,
+    evidence_ref: &str,
+    kind: &str,
+) -> Json {
     Json::obj([
         ("artefact_id", Json::str(artefact_id)),
         ("delivery_id", Json::str(delivery_id)),
-        ("detector", Json::str("deterministic")),
+        ("detector", Json::str(detector)),
         ("detector_ref", Json::str(detector_ref)),
         ("verdict", Json::Bool(verdict)),
-        ("confidence_ppm", Json::Int(1_000_000)),
+        ("confidence_ppm", Json::Int(confidence_ppm as i64)),
         ("evidence_ref", Json::str(evidence_ref)),
         ("kind", Json::str(kind)),
     ])
