@@ -13,6 +13,7 @@
 //! scripted ports (determinism: the logical clock and id allocator are
 //! `u64` counters the driver owns, never `Instant`/`random`).
 
+use hh_ledger::effect::{fold_event, EffectFold, EffectPhase};
 use hh_ledger::event::{Event, EventEnvelope, Scope};
 use hh_ledger::manifest::EventRef;
 use hh_ontology::control::{CancelledBy, DecisionPoint, Owner, StopReason};
@@ -2602,6 +2603,57 @@ impl<S: ControlStrategy> Driver<S> {
                 Json::obj([("cause", Json::str("drain_timeout"))]),
                 Some(ef),
             )?;
+        }
+        // R-2.2.1 (`unknown_escalated`; ADR-0333 D6) — every effect in
+        // `unknown` phase at `finished` gets a `lifecycle.escalation.
+        // raised` naming it (drain-timeout + `worker_lost` stragglers).
+        // The fold reads the post-drain prefix; already-named effects
+        // are skipped so a `Held`-completion re-entry never duplicates.
+        {
+            let mut effects: std::collections::BTreeMap<String, EffectFold> =
+                std::collections::BTreeMap::new();
+            let mut covered: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+            let mut unknown_cause: std::collections::BTreeMap<String, String> =
+                std::collections::BTreeMap::new();
+            for e in sink.prefix() {
+                fold_event(&mut effects, e);
+                if e.class == "lifecycle.escalation.raised" {
+                    if let Some(id) = e.payload.get("effect_id").and_then(Json::as_str) {
+                        covered.insert(id.to_string());
+                    }
+                }
+                if e.class == "action.effect.unknown" {
+                    if let (Some(id), Some(c)) = (
+                        e.scope.effect_id.as_deref(),
+                        e.payload.get("cause").and_then(Json::as_str),
+                    ) {
+                        unknown_cause.insert(id.to_string(), c.to_string());
+                    }
+                }
+            }
+            let open_unknown: Vec<String> = effects
+                .values()
+                .filter(|f| f.phase == EffectPhase::Unknown && !covered.contains(&f.effect_id))
+                .map(|f| f.effect_id.clone())
+                .collect();
+            for ef in open_unknown {
+                let cause = unknown_cause
+                    .get(&ef)
+                    .cloned()
+                    .unwrap_or_else(|| "open_at_finished".to_string());
+                self.append_prov(
+                    sink,
+                    "lifecycle.escalation.raised",
+                    Json::obj([
+                        ("subject", Json::str(&ef)),
+                        ("effect_id", Json::str(&ef)),
+                        ("kind", Json::str("effect_unknown")),
+                        ("reason", Json::str(&cause)),
+                    ]),
+                    None,
+                    ProvenanceRecord::kernel("hh-control/driver", self.now_ms),
+                )?;
+            }
         }
         // S3.10 — the completion gate (§5f.2's `proposed → reconciled →
         // gate.evaluated → decided → finished` chain). The gate reads the

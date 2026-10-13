@@ -268,6 +268,11 @@ pub struct Store {
     /// `audit_view`'s accounting both consult it — a deleted blob is a
     /// recorded fact, never an unexplained hole (ADR-0068 R3).
     tombstones: BTreeMap<String, MissingReason>,
+    /// Per-address residency class — folded at `load_all` from every run's
+    /// `lifecycle.ledger.tier_transition` rows (the durable fact, never a
+    /// cache — ADR-0068 R4; ADR-0333). `evaluate_retention` is the only
+    /// writer; restart replays the rows to the same map.
+    tiers: BTreeMap<String, crate::retention::TierEntry>,
     /// The audit-signature key resolver — the seam custody hangs off
     /// (R-2.8.3 `kernel_use` answers a `FixedSigner`; a broker-backed
     /// resolver can replace it without touching the ledger). `None` ⇒
@@ -444,6 +449,7 @@ impl Store {
             blob_max_bytes,
             runs: BTreeMap::new(),
             tombstones: BTreeMap::new(),
+            tiers: BTreeMap::new(),
             audit_keys: None,
             fault_appends: 0,
             fault_restore_after: None,
@@ -681,6 +687,13 @@ impl Store {
         // durable facts, so their targets survive restart (ADR-0068 R3).
         for state in self.runs.values() {
             for env in &state.events {
+                // The tier fold (R-2.2.1; ADR-0333) — `at_ms` is the
+                // residency clock; rebuild lands the same map the live
+                // store held.
+                if env.class == "lifecycle.ledger.tier_transition" {
+                    crate::retention::fold_tier_row(&mut self.tiers, &env.payload);
+                    continue;
+                }
                 let (member, reason) = match env.class.as_str() {
                     "lifecycle.ledger.redacted" => ("targets", MissingReason::Redacted),
                     "lifecycle.ledger.gc" => ("addresses", MissingReason::Gc),
@@ -1860,6 +1873,24 @@ impl Store {
                 event: Box::new(e.clone()),
             });
             last = e.seq;
+            // A replayed `head.moved` row answers the spec'd rewind frame
+            // (§5a.1 §4 — the same `Rewind` live subscribers get via
+            // `notify_rewind`), so a `subscribe` replayed across a
+            // compacted/moved prefix sees the honest head-move record —
+            // never a fabricated frame (R-2.2.1 AC-3).
+            if e.class == "lifecycle.head.moved" {
+                if let (Some(Json::Int(to_seq)), Some(to_id), Some(reason)) = (
+                    e.payload.get("to_seq"),
+                    e.payload.get("to_event_id").and_then(Json::as_str),
+                    e.payload.get("reason").and_then(Json::as_str),
+                ) {
+                    replay.push_back(EventFrame::Rewind {
+                        to_seq: *to_seq as u64,
+                        to_event_id: to_id.to_string(),
+                        reason: reason.to_string(),
+                    });
+                }
+            }
         }
         replay.push_back(EventFrame::Sync { at_seq: last });
         let state = self.runs.get_mut(run_id).unwrap();
@@ -1922,10 +1953,21 @@ impl Store {
                 });
             }
         };
-        if hh_identity::idp::idp_digest("blob", &bytes) != address.digest {
+        // Cold-tier bytes are `HHZ1`-framed (ADR-0333): decompress, then
+        // verify — the content address covers the *plaintext* either way.
+        // A frame that cannot decode is `BlobCorrupt`, never a fabricated
+        // body (CC3 — same as a digest mismatch).
+        let raw = if crate::retention::is_compressed(&bytes) {
+            crate::retention::decompress(&bytes).map_err(|_| LedgerError::BlobCorrupt {
+                address: id.clone(),
+            })?
+        } else {
+            bytes
+        };
+        if hh_identity::idp::idp_digest("blob", &raw) != address.digest {
             return Err(LedgerError::BlobCorrupt { address: id });
         }
-        Ok(bytes)
+        Ok(raw)
     }
 
     // ── verify / project / lineage ───────────────────────────────────────
@@ -2888,6 +2930,16 @@ impl Store {
                 continue;
             }
             for env in &state.events {
+                // A `tier_transition` row *names* its subject — the
+                // scheduler's audit fact is not a content dependency.
+                // Letting it pin would fence every retention-managed
+                // blob against `gc` forever, which inverts the design
+                // (cold is the last rung *before* collection — ADR-0333
+                // D3). `gc`/`redacted` rows stay in the walk: a recorded
+                // tombstone naming an address is a real dependency.
+                if env.class == "lifecycle.ledger.tier_transition" {
+                    continue;
+                }
                 if env
                     .refs
                     .iter()
@@ -2944,11 +2996,45 @@ impl Store {
         tier: &str,
         retained_until: Option<u64>,
     ) -> Result<EventEnvelope, LedgerError> {
+        self.gc_bounded(
+            run_id,
+            lease,
+            addresses,
+            policy_ref,
+            tier,
+            retained_until,
+            &BTreeSet::new(),
+        )
+    }
+
+    /// `gc` plus the caller-declared *bound set* (R-2.2.1; CF-347;
+    /// ADR-0333 D4) — the retained-bundle / leaderboard citation ids the
+    /// Lab side knows and the store cannot see. A bound address refuses
+    /// `Pinned{bound_by_retention_policy}` exactly like a live fork prefix
+    /// pin — atomic over the whole requested set, durable row only after
+    /// every pin check clears.
+    #[allow(clippy::too_many_arguments)]
+    pub fn gc_bounded(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        addresses: Vec<String>,
+        policy_ref: &str,
+        tier: &str,
+        retained_until: Option<u64>,
+        bound: &BTreeSet<String>,
+    ) -> Result<EventEnvelope, LedgerError> {
         let rec = self.active_lease(run_id, lease)?;
         for a in &addresses {
             if !is_pinned_id(a) {
                 return Err(LedgerError::SchemaViolation {
                     detail: format!("gc address {a} is not an idp/1 id"),
+                });
+            }
+            if bound.contains(a) {
+                return Err(LedgerError::Pinned {
+                    address: a.clone(),
+                    reason: "bound_by_retention_policy".to_string(),
                 });
             }
             if let Some(reason) = self.pin_reason(a, run_id) {
@@ -3002,6 +3088,206 @@ impl Store {
             self.tombstones.insert(a.clone(), MissingReason::Gc);
         }
         Ok(env)
+    }
+
+    /// `evaluate_retention(run, lease, policy, bound) → RetentionReport` —
+    /// the tiered-retention scheduler (R-2.2.1; ADR-0068 R4; ADR-0333).
+    /// One pass classifies the blob pool plus every folded tier subject:
+    /// *bound* bytes (`bound` — caller-declared bundle/leaderboard
+    /// citations — or a store-visible pin) hold `warm` for
+    /// `bundle_retention_ms`; *unbound* bytes are `hot` and cool to `cold`
+    /// at `blob_residency_ms`; `cold` is absorbing at rest (D2). Every
+    /// transition commits its `lifecycle.ledger.tier_transition` row in
+    /// one batch **before** any byte moves — a crash between row and file
+    /// is repaired idempotently by the next pass, and `get_blob` reads
+    /// either form.
+    #[allow(clippy::too_many_lines)]
+    pub fn evaluate_retention(
+        &mut self,
+        run_id: &str,
+        lease: &Lease,
+        policy: &crate::retention::RetentionPolicy,
+        bound: &BTreeSet<String>,
+    ) -> Result<crate::retention::RetentionReport, LedgerError> {
+        use crate::retention::{RetentionTier as T, TierEntry};
+        let rec = self.active_lease(run_id, lease)?;
+        policy.validate()?;
+        let now = self.clock.now_ms();
+        let blob_dir = self.root.join("blobs");
+
+        // Candidates — every pool file plus every folded subject (a
+        // tombstoned/fileless subject is retired already; `get_blob`
+        // reports its typed `Missing`).
+        let mut addrs: BTreeSet<String> = BTreeSet::new();
+        if let Ok(rd) = fs::read_dir(&blob_dir) {
+            for e in rd.flatten() {
+                if !e.path().is_file() {
+                    continue;
+                }
+                let name = e.file_name().to_string_lossy().to_string();
+                let id = format!("{}:{}", hh_identity::idp::IDP_1.hash_algorithm, name);
+                if hh_identity::idp::parse_id(&id).is_ok() {
+                    addrs.insert(id);
+                }
+            }
+        }
+        for a in self.tiers.keys() {
+            addrs.insert(a.clone());
+        }
+
+        // Classify — desired tier per address (monotone cooling; the
+        // bound set lifts `hot → warm` and delays `warm → cold`).
+        let mut plan: Vec<(String, &'static str, T)> = Vec::new();
+        for id in &addrs {
+            if self.tombstones.contains_key(id) {
+                continue;
+            }
+            let Ok(parsed) = hh_identity::idp::parse_id(id) else {
+                continue;
+            };
+            if !blob_dir.join(&parsed.digest_hex).exists() {
+                continue;
+            }
+            let is_bound = bound.contains(id) || self.pin_reason(id, run_id).is_some();
+            let cur = self.tiers.get(id).copied();
+            let from: &'static str = cur
+                .map(|t| t.tier.as_str())
+                .unwrap_or(crate::retention::UNTRACKED_TIER);
+            let entered = cur.map(|t| t.entered_ms).unwrap_or(now);
+            let aged = now.saturating_sub(entered);
+            let desired = if is_bound {
+                match cur.map(|t| t.tier) {
+                    None | Some(T::Hot) => T::Warm,
+                    Some(T::Warm) => {
+                        if aged >= policy.bundle_retention_ms {
+                            T::Cold
+                        } else {
+                            T::Warm
+                        }
+                    }
+                    Some(T::Cold) => T::Cold,
+                }
+            } else {
+                match cur.map(|t| t.tier) {
+                    None | Some(T::Hot) => {
+                        if aged >= policy.blob_residency_ms {
+                            T::Cold
+                        } else {
+                            T::Hot
+                        }
+                    }
+                    Some(T::Warm) => {
+                        if aged >= policy.bundle_retention_ms {
+                            T::Cold
+                        } else {
+                            T::Hot
+                        }
+                    }
+                    Some(T::Cold) => T::Cold,
+                }
+            };
+            if cur.map(|t| t.tier) != Some(desired) {
+                plan.push((id.clone(), from, desired));
+            }
+        }
+
+        // Commit every transition row first — one atomic batch — then
+        // mutate bytes. `compressed` records the at-rest intent; a crash
+        // before the file write is repaired by the next pass below.
+        let mut report = crate::retention::RetentionReport {
+            policy_ref: policy.policy_ref.clone(),
+            evaluated: addrs.len(),
+            transitions: Vec::new(),
+            compressed: 0,
+        };
+        {
+            let state = self.runs.get_mut(run_id).unwrap();
+            let mut seq = wal_tip_seq(state);
+            let mut prev = wal_tip_hash(state);
+            let mut staged = Vec::new();
+            for (id, from, to) in &plan {
+                let env = system_event(
+                    &*self.ids,
+                    &*self.clock,
+                    state,
+                    seq,
+                    "lifecycle.ledger.tier_transition",
+                    crate::retention::transition_payload(
+                        id,
+                        from,
+                        *to,
+                        &policy.policy_ref,
+                        now,
+                        *to == T::Cold && policy.compress_cold,
+                    ),
+                    &prev,
+                    rec.generation,
+                    KERNEL_LEDGER,
+                );
+                seq += 1;
+                prev = env.hash.clone();
+                report.transitions.push(crate::retention::TierTransition {
+                    address: id.clone(),
+                    from_tier: from.parse().unwrap_or(T::Hot),
+                    from_tracked: *from != crate::retention::UNTRACKED_TIER,
+                    to_tier: *to,
+                    event_id: env.event_id.clone(),
+                });
+                staged.push(Staged::Durable(env));
+            }
+            if !staged.is_empty() {
+                commit_envelopes(state, staged, now)?;
+            }
+        }
+        // The durable facts landed — update the fold, apply at-rest
+        // effects, and repair crash-gaps (`cold` row over a raw file).
+        for (id, _from, to) in &plan {
+            self.tiers.insert(
+                id.clone(),
+                TierEntry {
+                    tier: *to,
+                    entered_ms: now,
+                },
+            );
+        }
+        for id in &addrs {
+            let cold = self.tiers.get(id).map(|t| t.tier) == Some(T::Cold);
+            let compressed = self.set_blob_compressed(id, cold && policy.compress_cold)?;
+            if compressed {
+                report.compressed += 1;
+            }
+        }
+        Ok(report)
+    }
+
+    /// Compress/decompress one blob file at rest (`HHZ1` frame ⇄ raw —
+    /// tmp-write + rename + dir sync, same durability rule as
+    /// `put_blob`). Idempotent: returns `true` only when bytes moved.
+    fn set_blob_compressed(&self, address: &str, compress: bool) -> Result<bool, LedgerError> {
+        let Ok(parsed) = hh_identity::idp::parse_id(address) else {
+            return Ok(false);
+        };
+        let path = self.root.join("blobs").join(&parsed.digest_hex);
+        let bytes = match fs::read(&path) {
+            Ok(b) => b,
+            Err(_) => return Ok(false),
+        };
+        let want = if compress {
+            if crate::retention::is_compressed(&bytes) {
+                return Ok(false);
+            }
+            crate::retention::compress(&bytes)
+        } else {
+            if !crate::retention::is_compressed(&bytes) {
+                return Ok(false);
+            }
+            crate::retention::decompress(&bytes)?
+        };
+        let tmp = path.with_extension("tmp");
+        fs::write(&tmp, &want).map_err(io_err)?;
+        fs::rename(&tmp, &path).map_err(io_err)?;
+        sync_dir(&self.root.join("blobs")).map_err(io_err)?;
+        Ok(true)
     }
 
     /// `redact(run, lease, targets, reason_code, endorser, basis)` — the

@@ -637,7 +637,22 @@ impl<'a> Account<'a> {
                 triggered_by.cloned().into_iter().collect(),
             )?);
         }
+        // R-2.2.1 (`budget_hard_escalated`; ADR-0333 D6) — a hard-bound
+        // exhaustion raises `lifecycle.escalation.raised` before the stop
+        // decision, in the same atomic batch (`budget_id` + the
+        // `kind = budget_hard` spelling the obligation accepts).
         let first = outermost.clone();
+        evs.push(self.mint(
+            "lifecycle.escalation.raised",
+            Json::obj([
+                ("subject", Json::str(&node_id)),
+                ("budget_id", Json::str(&node_id)),
+                ("kind", Json::str("budget_hard")),
+                ("reason", Json::str(first.dimension.as_str())),
+            ]),
+            Scope::default(),
+            vec![],
+        )?);
         evs.push(self.mint(
             events::CLASS_DECISION,
             events::decision_payload(
