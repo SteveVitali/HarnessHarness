@@ -10,7 +10,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hh_hir::records::AssumptionDebtRecord;
+use hh_hir::records::{AssumptionDebtRecord, ToolSurface};
 use hh_wire::json::Json;
 
 use crate::equiv::{ArgMapEntry, ArgTransform, EvidenceVerdict, Inclusion, SurfaceBinding};
@@ -905,6 +905,169 @@ pub fn shim_metering(caller_role: &str) -> ShimMetering {
 /// `BindingMapping::PlanMap` carries (`idp("plan_map.1", canonical)`).
 pub fn plan_map_ref(map: &PlanMap) -> String {
     hh_identity::idp::idp_id("plan_map.1", map_json(map).to_canonical_string().as_bytes())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// C1 producers (R2.8 — DF-S1.17-2): the `bind_*` halves that mint real
+// `SurfaceBinding`s under the extension modes. Each mints the binding then
+// re-derives `surface_id` over the full record (CC1 — the identity basis
+// covers `mapping`/`exposure_mode`/`capability_refs`; `surface.rs` is the
+// one spelling).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `bind_composite(surface, home, plan, allowed_capabilities,
+/// capability_effects)` — the `PlanMap` producer (§5d.2 §3 `mapping =
+/// PlanMap(pinned Procedure version_id)`; R2.8). The check is
+/// `check_plan_map` (steps ⊆ {Branch, Invoke, Verify}; invokes ⊆
+/// `allowed_capabilities`) plus the declared-effects join: every invoked
+/// capability must carry a declared effect entry and the composite's
+/// `effects_bound = ∪ branches` — `compose(verify(execute(x)))` leaves no
+/// effect path outside the declared bound (an undeclared-effects invoke is
+/// `UncheckableSurface`, never a silent widening).
+///
+/// `surface` is the authored `ToolSurface` declaration (name, argument
+/// order, dialect narrowing, authored run-time modes); `home` is the node
+/// the composite is declared on (the `Procedure` — `capability_ref` pins
+/// it); `capability_effects` maps each invoked capability's semantic id to
+/// its declared effect-domain spellings.
+pub fn bind_composite(
+    surface: &ToolSurface,
+    home: &hh_hir::Node,
+    plan: &PlanMap,
+    allowed_capabilities: &BTreeSet<String>,
+    capability_effects: &BTreeMap<String, BTreeSet<String>>,
+) -> Result<SurfaceBinding, CompileError> {
+    check_plan_map(plan, allowed_capabilities)?;
+    let invoked = capabilities_invoked(plan);
+    if invoked.is_empty() {
+        return Err(CompileError::UncheckableSurface {
+            surface: surface.name.clone(),
+            reason: "a composite binds ≥1 capability — the PlanMap has no Invoke".to_string(),
+        });
+    }
+    let mut effects: BTreeSet<String> = BTreeSet::new();
+    for cap in &invoked {
+        match capability_effects.get(cap.as_str()) {
+            Some(e) => effects.extend(e.iter().cloned()),
+            // An invoke without a declared effect set is an unverifiable
+            // effect path — fail closed (S1/E1).
+            None => {
+                return Err(CompileError::UncheckableSurface {
+                    surface: surface.name.clone(),
+                    reason: format!(
+                        "PlanMap invoke {cap} has no declared effect entry — an unverified effect path"
+                    ),
+                });
+            }
+        }
+    }
+    let mut b = crate::equiv::bind_surface(home, surface, &Json::Null);
+    b.exposure_mode = CompileExposureMode::Composite;
+    b.mapping = BindingMapping::PlanMap(plan_map_ref(plan));
+    b.capability_refs = invoked.into_iter().collect();
+    b.effects_bound = effects.into_iter().collect();
+    b.surface_id = crate::surface::surface_id(&b);
+    Ok(b)
+}
+
+/// `bind_freeform(surface, home, spec)` — the `freeform` producer
+/// (ADR-0090 D7): the surface's single argument parses through the declared
+/// grammar — the `arg_map` is [`freeform_map`] verbatim.
+pub fn bind_freeform(
+    surface: &ToolSurface,
+    home: &hh_hir::Node,
+    spec: &FreeformSpec,
+) -> SurfaceBinding {
+    let mut b = crate::equiv::bind_surface(home, surface, &Json::Null);
+    b.exposure_mode = CompileExposureMode::Freeform;
+    b.arg_map = freeform_map(spec);
+    b.surface_id = crate::surface::surface_id(&b);
+    b
+}
+
+/// `ShimSpec{surface_arg, capability_param, table_ref}` — the `shim`
+/// producer's declaration (ADR-0090 D1): the model writes `surface_arg`
+/// text; the interpreter's `resolve_name` runs it through the *exact* name
+/// table `table_ref` (a `Ref` to the compiled table — never a best-effort
+/// match; a miss is `SurfaceFailure::UnknownSurface` — S4).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShimSpec {
+    /// The surface arg carrying the model's text.
+    pub surface_arg: String,
+    /// The capability parameter the resolved call binds.
+    pub capability_param: String,
+    /// The compiled `resolve_name` table ref.
+    pub table_ref: String,
+}
+
+/// `bind_shim(surface, home, spec)` — the `shim` producer: the arg_map's
+/// defining entry is `resolve_name(table_ref)` (the table pin rides the
+/// `arg_map` — it is in the `surface_id` basis, so a table change is a new
+/// surface identity — E7).
+pub fn bind_shim(surface: &ToolSurface, home: &hh_hir::Node, spec: &ShimSpec) -> SurfaceBinding {
+    let mut b = crate::equiv::bind_surface(home, surface, &Json::Null);
+    b.exposure_mode = CompileExposureMode::Shim;
+    b.arg_map = [(
+        spec.surface_arg.clone(),
+        ArgMapEntry {
+            capability_param: spec.capability_param.clone(),
+            transform: ArgTransform::ResolveName {
+                table_ref: spec.table_ref.clone(),
+            },
+            narrowing: None,
+        },
+    )]
+    .into_iter()
+    .collect();
+    b.surface_id = crate::surface::surface_id(&b);
+    b
+}
+
+/// `bind_code_mode(surface, home)` — the `code_mode` producer (ADR-0090
+/// D7): the binding's *compile-time* mode is `code_mode`; the authored
+/// run-time admission carries `ExposureMode::CodeMode` (the run-time leg —
+/// `check_callable` admits program-originated calls only on that mode — is
+/// `hh_compiler::exposure::check_callable`, unchanged).
+pub fn bind_code_mode(surface: &ToolSurface, home: &hh_hir::Node) -> SurfaceBinding {
+    let mut b = crate::equiv::bind_surface(home, surface, &Json::Null);
+    b.exposure_mode = CompileExposureMode::CodeMode;
+    b.surface_id = crate::surface::surface_id(&b);
+    b
+}
+
+/// `bind_variant(binding, family, variant)` — stamp the identity-bearing
+/// family/variant coordinates the selected variant renders under
+/// (§5d.2 §3's `family_id`/`variant_id` members; ADR-0090 D2/D3). The
+/// variant's `rule_ids` join the binding's shaping-record list; the
+/// compile-time `exposure_mode` re-mints under the variant's mode. The
+/// `surface_id` basis does **not** cover `family_id`/`variant_id` — they
+/// are provenance members on the one surface record (the basis is fixed —
+/// append-only; ADR records the decision).
+pub fn bind_variant(
+    binding: &SurfaceBinding,
+    family: &SurfaceFamily,
+    variant: &SurfaceVariant,
+) -> Result<SurfaceBinding, CompileError> {
+    if !family
+        .variants
+        .iter()
+        .any(|v| v.variant_id == variant.variant_id)
+    {
+        return Err(CompileError::UncheckableSurface {
+            surface: binding.surface_name.clone(),
+            reason: format!(
+                "variant {} is not a member of family {}",
+                variant.variant_id, family.family_id
+            ),
+        });
+    }
+    let mut b = binding.clone();
+    b.family_id = Some(family.family_id.clone());
+    b.variant_id = Some(variant.variant_id.clone());
+    b.rule_ids.extend(variant.rule_ids.iter().cloned());
+    b.exposure_mode = variant.exposure_mode;
+    b.surface_id = crate::surface::surface_id(&b);
+    Ok(b)
 }
 
 /// The canonical JSON of a `PlanMap` (the pin preimage + ledger record).

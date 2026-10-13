@@ -34,3 +34,9 @@ hh-gateway = { path = "../hh-gateway" }
 # environment_epoch providers, conflict fixtures) run the real
 # `MemoryStore`/retrieval pipeline over `benchset.stage3.v1` members.
 hh-context = { path = "../hh-context" }
+# R2.8 / DF-S1.17-1: the §5d.3 corpus leg — the exposure-metric
+# computations (`retrieval_eval` recall@k/nDCG@k over labelled queries the
+# recorded `model_io` surfaces label) run the real exposure machinery over
+# `benchset.stage3.v1` members (dev-only — the bench crate itself never
+# depends on the compiler).
+hh-compiler = { path = "../hh-compiler" }

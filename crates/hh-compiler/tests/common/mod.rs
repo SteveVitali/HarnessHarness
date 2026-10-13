@@ -651,6 +651,7 @@ pub fn profile_with(id: &str, version: &str, rules: Vec<ProfileRule>) -> ModelPr
 }
 
 /// A `ProfileRule` — `kind`, `owned_fields`, `params`, debt as supplied.
+#[allow(dead_code)]
 pub fn rule(
     rule_id: &str,
     kind: ProfileRuleKind,
@@ -685,6 +686,7 @@ impl MapProfileView {
     /// (AC-R-2.3.3-13). This is fixture plumbing: it exists so tests that are
     /// not about the gate can bind profiles; the gate itself is exercised by
     /// `untested`/`with_report` views and the `test_profile` suite.
+    #[allow(dead_code)]
     pub fn of(profiles: Vec<ModelProfile>) -> MapProfileView {
         let mut m = BTreeMap::new();
         let mut reports = BTreeMap::new();

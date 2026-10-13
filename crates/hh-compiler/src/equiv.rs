@@ -452,7 +452,9 @@ pub fn check_equivalence(
         }
         Some(spec) => match &spec.mode {
             crate::surface::RenderMode::Full => EvidenceVerdict::pass(),
-            crate::surface::RenderMode::Truncate { .. } => {
+            crate::surface::RenderMode::Truncate { .. }
+            | crate::surface::RenderMode::Concise { .. }
+            | crate::surface::RenderMode::Offload { .. } => {
                 let retained = spec.declared_loss.clone().unwrap_or_default();
                 match spec
                     .validator_reads
