@@ -2600,7 +2600,13 @@ fn env_set_phase_refuses_without_a_sealed_schedule() {
 #[test]
 fn env_unsupported_verbs_refuse_stage_pending() {
     let mut b = ServiceBoundary::new("env-pending");
-    let (class, out, _err) = hh(&mut b, &["env", "upload", "run-x"], NO_TTY, None, &[]);
+    // R2.4 (DF-S2.10-1) implemented the full §5a env verb set —
+    // `open`/`attach`/`close`/`snapshot`/`diff`/`restore`/`upload`/
+    // `download`/`status`/`meters`/`set-phase`/`list-detached`/`derive`/
+    // `suspend`/`resume` all dispatch to boundary ops. What remains
+    // `stage_pending` is a verb the surface never declared — `env splice`
+    // names no spec row; the refusal is honest, never faked.
+    let (class, out, _err) = hh(&mut b, &["env", "splice", "run-x"], NO_TTY, None, &[]);
     assert_eq!(class, ExitClass::InvocationError, "{out}");
     assert!(out.contains("stage_pending"), "{out}");
 }

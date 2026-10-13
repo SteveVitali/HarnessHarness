@@ -640,6 +640,17 @@ impl EmbedService {
             "env.snapshot" => self.env_snapshot(&req.params),
             "env.derive" => self.env_derive(&req.params),
             "env.set_phase" => self.env_set_phase(&req.params),
+            // R2.4 (DF-S2.10-1) — the lifecycle family: every verb routes
+            // through the driver's declared capabilities; refusals stay
+            // typed (`Unsupported`/`UnknownCapability`/`InvalidState`),
+            // never faked.
+            "env.open" => self.env_open(&req.params),
+            "env.attach" => self.env_attach(&req.params),
+            "env.close" => self.env_close(&req.params),
+            "env.diff" => self.env_diff(&req.params),
+            "env.restore" => self.env_restore(&req.params),
+            "env.upload" => self.env_upload(&req.params),
+            "env.download" => self.env_download(&req.params),
             "env.suspend" => self.env_suspend(&req.params),
             "env.resume" => self.env_resume(&req.params),
             "branch.open" => self.branch_open(&req.params),
@@ -1351,10 +1362,17 @@ impl EmbedService {
         if let Some(payload_ref) = self.session_mut(sess_id)?.pending_steer.take() {
             driver.submit(Cue::HumanInput(HumanInput::Steer { payload_ref }));
         }
+        // R2.4 (DF-S2.9-3) — the sink's cadence tail: the run's env driver
+        // + the session's env handle. `turn.finished`/effect-settled appends
+        // fire the declared take *inside* the sink so the row lands before
+        // `lifecycle.run.finished` can seal the store.
+        let env_handle = self.session(sess_id)?.env_handle_id.clone();
         let mut sink = KernelSink {
             store: &mut self.store,
             run_id: run_id.clone(),
             lease: lease.clone(),
+            envs: self.env_drivers.get_mut(&run_id),
+            env_handle,
         };
         let mut model = EmbedModel {
             invoke,
@@ -1368,6 +1386,10 @@ impl EmbedService {
         };
         let mut asm = KernelAssembler;
         let outcome = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+        // R2.4 — `on_idle`: a parked drive (inbox emptied mid-turn) is the
+        // env's idle boundary; the declared cadence take lands durable
+        // below while the run is still open.
+        let parked = matches!(&outcome, Err(DriverError::Port { .. }));
         let asks = std::mem::take(&mut gate.host_asks);
         let s = self.session_mut(sess_id)?;
         s.driver = Some(driver);
@@ -1402,6 +1424,20 @@ impl EmbedService {
                 return Err(EmbedError::Refused {
                     reason: format!("driver: {e:?}"),
                 })
+            }
+        }
+        if parked {
+            let env_handle = self.session(sess_id)?.env_handle_id.clone();
+            if let (Some(drv), Some(env_id)) =
+                (self.env_drivers.get_mut(&run_id), env_handle.as_deref())
+            {
+                drv.cadence_take(
+                    &mut self.store,
+                    &lease,
+                    env_id,
+                    hh_env::driver::SnapshotTrigger::Idle,
+                )
+                .map_err(crate::open::env_err)?;
             }
         }
         // Persist the resume-by-leaf pair (S2.3; DF-S1.25-2) — the leaf

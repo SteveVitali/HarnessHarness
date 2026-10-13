@@ -63,13 +63,19 @@ impl SnapshotKind {
 
 /// `TakenBy` — who took the snapshot (`subject` = the run's workload;
 /// `instrument` = the measurement harness — an instrument snapshot is never
-/// charged to the subject).
+/// charged to the subject; `cadence` = the declared `snapshot_cadence`
+/// producer (DF-S2.9-3); `suspend` = the `suspend{on_idle:"hibernate"}`
+/// batch's checkpoint leg — S5.8).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TakenBy {
     /// The run's workload.
     Subject,
     /// The measurement instrument.
     Instrument,
+    /// The declared cadence producer (checkpoint/turn-boundary takes).
+    Cadence,
+    /// The `suspend{on_idle:"hibernate"}` durable batch's memory checkpoint.
+    Suspend,
 }
 
 /// `SnapshotRecord` — the content-addressed state record (ADR-0137 §3).
@@ -132,6 +138,8 @@ impl SnapshotRecord {
                 Json::str(match self.taken_by {
                     TakenBy::Subject => "subject",
                     TakenBy::Instrument => "instrument",
+                    TakenBy::Cadence => "cadence",
+                    TakenBy::Suspend => "suspend",
                 }),
             ),
             ("size_bytes", Json::Int(self.size_bytes as i64)),
@@ -153,6 +161,8 @@ impl SnapshotRecord {
         let taken_by = match j.get("taken_by")?.as_str()? {
             "subject" => TakenBy::Subject,
             "instrument" => TakenBy::Instrument,
+            "cadence" => TakenBy::Cadence,
+            "suspend" => TakenBy::Suspend,
             _ => return None,
         };
         let mut rec = SnapshotRecord {

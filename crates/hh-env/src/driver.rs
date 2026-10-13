@@ -837,10 +837,10 @@ impl EnvDriver {
             )]),
             roots_covered: h.roots.workspace_roots.clone(),
             quiesced: true,
-            // The recovery/hygiene leg took this snapshot (OQ-318's
-            // interim accounting — recovery snapshots charge to the
-            // subject's instance).
-            taken_by: TakenBy::Subject,
+            // The suspend batch took this snapshot — `TakenBy::Suspend`
+            // (the §5a.3 hibernation checkpoint leg, S5.8; DF-S2.9-3's
+            // `taken_by` member names the producer on the row).
+            taken_by: TakenBy::Suspend,
             size_bytes: 0,
             expires_at_ms: None,
         };
@@ -861,7 +861,15 @@ impl EnvDriver {
         )?;
         let snap = EventMinter::new(store, &self.run_id).mint(
             "action.environment.snapshot",
-            events::snapshot_payload(h, &rec.snapshot_ref, "memory", at_seq, Some(&manifest_ref)),
+            events::snapshot_payload(
+                h,
+                &rec.snapshot_ref,
+                "memory",
+                at_seq,
+                Some(&manifest_ref),
+                rec.taken_by,
+                rec.quiesced,
+            ),
         )?;
         let mut suspended_j = events::suspended_payload(h, Some("hibernate"));
         if let Json::Obj(m) = &mut suspended_j {
@@ -1888,7 +1896,15 @@ impl EnvDriver {
         h.snapshots.push(rec.snapshot_ref.clone());
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.snapshot",
-            events::snapshot_payload(h, &rec.snapshot_ref, "fs_tree", at_seq, Some(&manifest_ref)),
+            events::snapshot_payload(
+                h,
+                &rec.snapshot_ref,
+                "fs_tree",
+                at_seq,
+                Some(&manifest_ref),
+                rec.taken_by,
+                rec.quiesced,
+            ),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok((rec, tree))
@@ -2062,7 +2078,15 @@ impl EnvDriver {
         h.snapshots.push(rec.snapshot_ref.clone());
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.snapshot",
-            events::snapshot_payload(h, &rec.snapshot_ref, "memory", at_seq, Some(&manifest_ref)),
+            events::snapshot_payload(
+                h,
+                &rec.snapshot_ref,
+                "memory",
+                at_seq,
+                Some(&manifest_ref),
+                rec.taken_by,
+                rec.quiesced,
+            ),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok(rec)
@@ -2586,32 +2610,447 @@ impl EnvDriver {
         h.snapshots.push(rec.snapshot_ref.clone());
         let ev = EventMinter::new(store, &self.run_id).mint(
             "action.environment.snapshot",
-            events::snapshot_payload(h, &rec.snapshot_ref, "path_baseline", at_seq, None),
+            events::snapshot_payload(
+                h,
+                &rec.snapshot_ref,
+                "path_baseline",
+                at_seq,
+                None,
+                rec.taken_by,
+                rec.quiesced,
+            ),
         )?;
         store.append(&self.run_id, lease, vec![ev])?;
         Ok((rec, baseline))
     }
-}
 
-/// Canonicalize a path (lexical `.`/`..` resolution + symlink resolution when
-/// the path exists — symlink escapes resolve *before* the root check, F1).
-fn canonicalize(path: &str) -> String {
-    match std::fs::canonicalize(path) {
-        Ok(p) => p.to_string_lossy().to_string(),
-        Err(_) => {
-            let mut out = Vec::new();
-            for seg in path.split('/') {
-                match seg {
-                    "" | "." => {}
-                    ".." => {
-                        out.pop();
-                    }
-                    s => out.push(s),
-                }
+    // ── R2.4 — the declared-cadence producer (DF-S2.9-3) + the boundary
+    // lifecycle verbs (DF-S2.10-1) ───────────────────────────────────────
+
+    /// `set_cadence(env_handle_id, cadence)` — the binding's declared
+    /// `connection_info{snapshot_cadence}` lands on the handle at
+    /// provision (`Never` stays the default — a cadence is opted into,
+    /// never assumed).
+    pub fn set_cadence(
+        &mut self,
+        env_handle_id: &str,
+        cadence: SnapshotCadence,
+    ) -> Result<(), EnvError> {
+        let h = self
+            .handles
+            .get_mut(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?;
+        h.snapshot_cadence = cadence;
+        Ok(())
+    }
+
+    /// `settled_effects_since_last_snapshot(store)` — the durable count
+    /// `every_n_effects` fires on: terminal `action.effect.*` rows since
+    /// the newest `action.environment.snapshot` row (or run start).
+    /// Derived from the prefix — pure fold, no shadow counters.
+    fn settled_effects_since_last_snapshot(&self, store: &Store) -> Result<u64, EnvError> {
+        const SETTLED: &[&str] = &[
+            "action.effect.observed",
+            "action.effect.refused",
+            "action.effect.unknown",
+            "action.effect.abandoned",
+        ];
+        let events = store.events(&self.run_id).map_err(EnvError::Ledger)?;
+        let last_take = events
+            .iter()
+            .rev()
+            .find(|e| e.class == "action.environment.snapshot")
+            .map(|e| e.seq);
+        Ok(events
+            .iter()
+            .filter(|e| SETTLED.contains(&e.class.as_str()))
+            .filter(|e| last_take.is_none_or(|s| e.seq > s))
+            .count() as u64)
+    }
+
+    /// `cadence_take(store, lease, env_handle_id, trigger)` — the DF-S2.9-3
+    /// producer: at a declared boundary the driver's own snapshot runs —
+    /// `taken_by:"cadence"` on the `action.environment.snapshot` row, no
+    /// instrument call in the loop. The *kind* is capability-led:
+    /// `memory` only where the class declares `snapshot.memory =
+    /// supported` AND the handle is `suspended` (the quiesced kind);
+    /// `fs_tree` where declared `supported` and the handle is `ready`.
+    /// A boundary where no declared kind is takeable skips — `Ok(None)`
+    /// (never a fabricated row, never a guessed kind).
+    ///
+    /// A take that *attempts* and fails mints
+    /// `action.environment.failed{op:"snapshot.cadence"}` — the durable
+    /// failure record, never a silent swallow; the run is not failed for
+    /// its bookkeeping.
+    pub fn cadence_take(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        trigger: SnapshotTrigger,
+    ) -> Result<Option<SnapshotRecord>, EnvError> {
+        let Some(h) = self.handles.get(env_handle_id) else {
+            return Ok(None);
+        };
+        let fire = match h.snapshot_cadence {
+            SnapshotCadence::Never => false,
+            SnapshotCadence::OnTurnEnd => matches!(trigger, SnapshotTrigger::TurnBoundary),
+            SnapshotCadence::OnIdle => matches!(trigger, SnapshotTrigger::Idle),
+            SnapshotCadence::EveryNEffects(n) => {
+                matches!(trigger, SnapshotTrigger::EffectSettled)
+                    && self.settled_effects_since_last_snapshot(store)? >= n
             }
-            format!("/{}", out.join("/"))
+        };
+        if !fire {
+            return Ok(None);
+        }
+        let h = self.handles.get(env_handle_id).unwrap().clone();
+        let memory_takeable = h.state == HandleState::Suspended
+            && matches!(
+                h.capabilities.snapshot.get("memory"),
+                Some(crate::handle::Tri::Supported)
+            );
+        let fs_takeable = h.state == HandleState::Ready
+            && matches!(
+                h.capabilities.snapshot.get("fs_tree"),
+                Some(crate::handle::Tri::Supported)
+            );
+        if !memory_takeable && !fs_takeable {
+            // The boundary is state-ineligible for every kind the class
+            // declared (e.g. a `ready` provider env whose only declared
+            // kind is `memory` needs quiesce). A skip is honest — the
+            // declaration is satisfiable elsewhere; the unsatisfiable
+            // case is refused at provision.
+            return Ok(None);
+        }
+        let attempt = if memory_takeable {
+            self.memory_snapshot(store, lease, env_handle_id, TakenBy::Cadence)
+        } else {
+            self.fs_tree_snapshot_as(store, lease, env_handle_id, TakenBy::Cadence)
+                .map(|(rec, _)| rec)
+        };
+        match attempt {
+            Ok(rec) => Ok(Some(rec)),
+            Err(e) => {
+                // The attempted take failed — record it durably, never
+                // silently (the `failed` row is the audit; a mint/append
+                // failure inside the row itself still propagates).
+                let h = self.handles.get(env_handle_id).unwrap();
+                let ev = EventMinter::new(store, &self.run_id).mint(
+                    "action.environment.failed",
+                    events::failed_payload(h, &format!("snapshot.cadence: {e}")),
+                )?;
+                store.append(&self.run_id, lease, vec![ev])?;
+                Ok(None)
+            }
         }
     }
+
+    /// `load_fs_tree_snapshot(store, env_handle_id, snapshot_ref)` —
+    /// resolve a *named* `fs_tree` snapshot row on this run (the `diff`/
+    /// `restore` operand — distinct from `snapshot_for`'s at-or-below
+    /// chooser: the caller names the baseline). The snapshot_ref is a
+    /// run-scoped content address — a baseline taken on an earlier
+    /// (replaced/detached) handle is a legal operand for `diff`/`restore`
+    /// (positional addressing compares covered *content*, never the root
+    /// path; AC-R-2.2.5-4). A ref that names no `fs_tree` row, a gone
+    /// blob, or a malformed record is the typed `SnapshotMissing`/`Blob`
+    /// refusal — never a fabricated baseline.
+    fn load_fs_tree_snapshot(
+        &self,
+        store: &Store,
+        _env_handle_id: &str,
+        snapshot_ref: &str,
+    ) -> Result<(SnapshotRecord, hh_helper::fstree::FsTreeSnapshot), EnvError> {
+        let rows = store
+            .env_snapshots(&self.run_id)
+            .map_err(EnvError::Ledger)?;
+        let (_, _, _, manifest_ref) = rows
+            .iter()
+            .find(|(_, sr, kind, _)| sr == snapshot_ref && kind == "fs_tree")
+            .ok_or_else(|| EnvError::SnapshotMissing {
+                snapshot_ref: snapshot_ref.to_string(),
+            })?;
+        let manifest_ref = manifest_ref
+            .clone()
+            .ok_or_else(|| EnvError::SnapshotMissing {
+                snapshot_ref: snapshot_ref.to_string(),
+            })?;
+        let bytes = blob_by_id(store, &manifest_ref).ok_or_else(|| EnvError::SnapshotMissing {
+            snapshot_ref: snapshot_ref.to_string(),
+        })?;
+        let text = String::from_utf8(bytes)
+            .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
+        let j = hh_wire::json::parse(&text)
+            .map_err(|e| EnvError::Blob(format!("snapshot record {manifest_ref}: {e}")))?;
+        let rec = SnapshotRecord::from_json(&j).ok_or_else(|| {
+            EnvError::Blob(format!(
+                "snapshot record {manifest_ref}: malformed member form"
+            ))
+        })?;
+        let tree = hh_helper::fstree::FsTreeSnapshot::from_manifest_json(&rec.content).ok_or_else(
+            || EnvError::Blob(format!("snapshot {snapshot_ref}: malformed manifest")),
+        )?;
+        Ok((rec, tree))
+    }
+
+    /// `fs_tree_diff(store, env_handle_id, snapshot_ref)` — the
+    /// `env.diff` operand (§5a.2 S2): reload the named `fs_tree` baseline
+    /// and re-walk the live roots — the deterministic change-set, sorted
+    /// `(root, relpath)`. Gates: `ready` + declared `snapshot.fs_tree`
+    /// (the baseline kind must be one the class can take).
+    pub fn fs_tree_diff(
+        &self,
+        store: &Store,
+        env_handle_id: &str,
+        snapshot_ref: &str,
+    ) -> Result<Vec<hh_helper::fstree::FsTreeDiffEntry>, EnvError> {
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?;
+        h.verify_environment()?;
+        h.capabilities.snapshot_supported(SnapshotKind::FsTree)?;
+        let (_rec, mut baseline) =
+            self.load_fs_tree_snapshot(store, env_handle_id, snapshot_ref)?;
+        let live_roots = h.roots.workspace_roots.clone();
+        // Positional addressing (AC-R-2.2.5-4): when the baseline covered
+        // the same root *count*, compare covered content positionally —
+        // a successor restore's workspace lives at a different path than
+        // the baseline's and the honest diff is empty. A different root
+        // count falls back to path-keyed union (the roots genuinely
+        // differ — every member reports).
+        if baseline.roots.len() == live_roots.len() {
+            let remap: std::collections::BTreeMap<&String, &String> =
+                baseline.roots.iter().zip(live_roots.iter()).collect();
+            baseline.manifest = baseline
+                .manifest
+                .into_iter()
+                .map(|(r, m)| {
+                    let k = remap.get(&r).map(|s| (*s).clone()).unwrap_or(r);
+                    (k, m)
+                })
+                .collect();
+        }
+        let now = hh_helper::fstree::walk(&live_roots)
+            .map_err(|e| EnvError::Blob(format!("fs_tree walk: {e}")))?;
+        Ok(hh_helper::fstree::diff(&baseline, &now))
+    }
+
+    /// `restore_successor(store, lease, env_handle_id, snapshot_ref)` —
+    /// the §5a.2 S2 *successor* restore: a fresh workspace materialised
+    /// from the named `fs_tree` snapshot's blob-pool content (the parent
+    /// may have moved past the snapshot), attached and verified, then the
+    /// durable pair — `action.environment.restored{to_env_handle_id,
+    /// snapshot_ref, verified, mode:"successor"}` + `replaced{old→new}`
+    /// (the parent goes terminal `replaced`). No `restore_in_place`
+    /// capability is needed — the successor path needs none (the spec's
+    /// default); `memory` snapshots restore in place only (the provider
+    /// mechanism owns them).
+    pub fn restore_successor(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        snapshot_ref: &str,
+    ) -> Result<EnvHandle, EnvError> {
+        let (rec, snap) = self.load_fs_tree_snapshot(store, env_handle_id, snapshot_ref)?;
+        let parent = self
+            .handles
+            .get(env_handle_id)
+            .cloned()
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?;
+        if parent.provider.is_some() || parent.hosted.is_some() {
+            // Provider-class handles restore through the adapter — the
+            // kernel-side fs-tree materialisation is a local-class path.
+            return Err(EnvError::UnknownCapability {
+                capability: "restore.successor".to_string(),
+            });
+        }
+        let child = self.derive_from_snapshot(store, lease, &parent, &snap)?;
+        // Attach the successor under the same backend derivation the
+        // provision path uses (the policy slot's own policy; attesting
+        // classes need the binding's attestation — `for_policy` refuses
+        // `attestation_missing` honestly, never a silent none-backend).
+        let backend = hh_containment::backend::for_policy(child.containment.policy(), None)
+            .map_err(|e| EnvError::Unsupported {
+                capability: "attach.backend",
+                detail: format!("{e:?}"),
+            })?;
+        let child_id = child.env_handle_id.clone();
+        self.attach(
+            store,
+            lease,
+            &child_id,
+            Some(&*backend),
+            AttachMode::FailClosed,
+            false,
+            &[],
+        )?;
+        // The verify leg (§5a.1 S3 — "restore verifies the address"): the
+        // successor's re-walked tree address must equal the snapshot's —
+        // positional addressing makes this honest across the two paths.
+        let child_roots = self
+            .handles
+            .get(&child_id)
+            .unwrap()
+            .roots
+            .workspace_roots
+            .clone();
+        let walked = hh_helper::fstree::walk(&child_roots)
+            .map_err(|e| EnvError::Blob(format!("restore verify walk: {e}")))?;
+        let verified = walked.tree_address == snap.tree_address;
+        if !verified {
+            return Err(EnvError::Blob(format!(
+                "restore_mismatch: successor tree {} != snapshot {}",
+                walked.tree_address, snap.tree_address
+            )));
+        }
+        // Parent → `detached` (the ADR-0136 machine admits `replaced`
+        // only from `unreachable` — the heal ladder's rung; a live
+        // parent being superseded is *detached*, retained for
+        // inspection via `list-detached`, never claimed unreachable).
+        // `restored{to_env_handle_id,…}` + `detached{reason:"replaced_
+        // by_successor"}` land in one batch.
+        let now = store.now_ms();
+        let h = self.handles.get_mut(env_handle_id).unwrap();
+        h.transition(HandleState::Detached, now)?;
+        h.session = None;
+        let detached = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.detached",
+            events::detached_payload(h, "replaced_by_successor"),
+        )?;
+        let restored = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.restored",
+            Json::obj([
+                ("env_handle", Json::str(env_handle_id)),
+                ("to_env_handle_id", Json::str(&child_id)),
+                ("snapshot_ref", Json::str(&rec.snapshot_ref)),
+                ("mode", Json::str("successor")),
+                ("verified", Json::Bool(verified)),
+            ]),
+        )?;
+        store.append(&self.run_id, lease, vec![restored, detached])?;
+        Ok(self.handles.get(&child_id).unwrap().clone())
+    }
+
+    /// `env_upload(store, lease, env_handle_id, path, source)` — §5a.2's
+    /// `upload(tree | bytes → path)` (the spec direction — the driver's
+    /// `download`/`fs_write` lowering): `source` is inline utf-8 `bytes`
+    /// or a blob-pool `content_address`; the bytes land in a writable
+    /// root AND the blob pool (content-addressed both ways), then the
+    /// `action.environment.uploaded` audit row mints. Provider-class
+    /// handles refuse `fs.upload` as `UnknownCapability` — the kernel fs
+    /// surface does not reach remote environments.
+    pub fn env_upload(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        path: &str,
+        content: Option<&[u8]>,
+        content_address: Option<&str>,
+    ) -> Result<(hh_identity::idp::ContentAddress, u64), EnvError> {
+        if self
+            .handles
+            .get(env_handle_id)
+            .map(|h| h.provider.is_some() || h.hosted.is_some())
+            .unwrap_or(false)
+        {
+            return Err(EnvError::UnknownCapability {
+                capability: "fs.upload".to_string(),
+            });
+        }
+        let bytes: Vec<u8> = match (content, content_address) {
+            (Some(b), None) => b.to_vec(),
+            (None, Some(addr)) => blob_by_id(store, addr).ok_or_else(|| {
+                EnvError::Blob(format!("content_address {addr}: not in the blob pool"))
+            })?,
+            _ => {
+                return Err(EnvError::Blob(
+                    "env_upload: exactly one of content|content_address".to_string(),
+                ))
+            }
+        };
+        self.fs_write(env_handle_id, path, &bytes)?;
+        let ca = store
+            .put_blob(&bytes, "application/octet-stream")
+            .map_err(EnvError::Ledger)?;
+        let h = self.handles.get(env_handle_id).unwrap();
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.uploaded",
+            events::uploaded_payload(h, path, &ca.id(), bytes.len() as u64),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok((ca, bytes.len() as u64))
+    }
+
+    /// `env_download(store, lease, env_handle_id, path)` — §5a.2's
+    /// `download(path → ContentAddress)`: the readable path's bytes move
+    /// into the blob pool and the `action.environment.downloaded` audit
+    /// row mints; the caller gets the `ContentAddress` (never raw bytes
+    /// over the boundary — content is addressed, K-2).
+    pub fn env_download(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+        path: &str,
+    ) -> Result<(hh_identity::idp::ContentAddress, u64), EnvError> {
+        if self
+            .handles
+            .get(env_handle_id)
+            .map(|h| h.provider.is_some() || h.hosted.is_some())
+            .unwrap_or(false)
+        {
+            return Err(EnvError::UnknownCapability {
+                capability: "fs.download".to_string(),
+            });
+        }
+        let bytes = self.fs_read(env_handle_id, path)?;
+        let ca = store
+            .put_blob(&bytes, "application/octet-stream")
+            .map_err(EnvError::Ledger)?;
+        let h = self.handles.get(env_handle_id).unwrap();
+        let ev = EventMinter::new(store, &self.run_id).mint(
+            "action.environment.downloaded",
+            events::downloaded_payload(h, path, &ca.id(), bytes.len() as u64),
+        )?;
+        store.append(&self.run_id, lease, vec![ev])?;
+        Ok((ca, bytes.len() as u64))
+    }
+}
+
+/// `SnapshotTrigger` — the durable boundary a declared `snapshot_cadence`
+/// fires on (DF-S2.9-3): the appended `lifecycle.turn.finished` row (a
+/// turn boundary), a parked drive (the env idle — inbox emptied
+/// mid-turn), or a settled `action.effect.*` terminal row (the
+/// `every_n_effects` count).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotTrigger {
+    /// `lifecycle.turn.finished` landed.
+    TurnBoundary,
+    /// The drive parked — the environment went idle mid-run.
+    Idle,
+    /// An `action.effect.{observed|refused|unknown|abandoned}` row landed.
+    EffectSettled,
+}
+
+/// Canonicalize a path — `handle::canonicalize_path` (CC1): lexical
+/// `.`/`..` resolution + symlink resolution on the deepest existing
+/// ancestor (symlink escapes resolve *before* the root check, F1; a
+/// not-yet-created leaf still lands on the resolved prefix).
+fn canonicalize(path: &str) -> String {
+    crate::handle::canonicalize_path(path)
 }
 
 /// Recursively collect regular-file paths under `root`.
