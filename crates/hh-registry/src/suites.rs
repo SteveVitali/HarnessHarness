@@ -142,6 +142,71 @@ pub fn context_policy_class() -> ClassRecord {
     }
 }
 
+/// `routing_policy` — the §5b.2 router class (R-2.7; DF-S1.18-1). The
+/// bound variant carries the sealed `RoutingPolicy` document in its slot
+/// `params` (`policy` member); the kernel's scripted boundary interprets
+/// the offline-decidable arms (`static`/`role_table`/`fallback_chain` +
+/// the `error_actions` consult) and answers typed refusals for
+/// live-signal-dependent arms — never a fabricated route.
+pub fn routing_policy_class() -> ClassRecord {
+    ClassRecord {
+        class_id: "routing_policy".to_string(),
+        contract: vec![
+            ContractOperation {
+                name: "select".to_string(),
+                inputs: Json::obj([
+                    ("request", Json::str("RoutingRequest")),
+                    ("profile_env", Json::str("SelectorView")),
+                ]),
+                outputs: Json::obj([("decision", Json::str("RoutingDecision"))]),
+                invariants: vec![
+                    "reserve-before-return (G-4)".to_string(),
+                    "every candidate carries a verdict (R-3)".to_string(),
+                    "deterministic for the same inputs".to_string(),
+                ],
+                failure_modes: vec!["refuse".to_string()],
+            },
+            ContractOperation {
+                name: "on_attempt_failed".to_string(),
+                inputs: Json::obj([
+                    ("error", Json::str("ModelErrorClass")),
+                    ("attempts", Json::str("AttemptState")),
+                ]),
+                outputs: Json::obj([("disposition", Json::str("AttemptDisposition"))]),
+                invariants: vec![
+                    "the action reads the sealed error_actions table — never message text"
+                        .to_string(),
+                ],
+                failure_modes: vec!["refuse".to_string()],
+            },
+        ],
+        cardinality: crate::kinds::Cardinality::Optional,
+        required_inputs: BTreeSet::from([
+            "ModelProfile".to_string(),
+            "ResourceAccount".to_string(),
+        ]),
+        base_param_schema: BTreeMap::new(),
+        hot_path: true,
+        dialect_introduced: "registry/1".to_string(),
+        contract_version: "1.0".to_string(),
+        home: "kernel".to_string(),
+        declaration_schema: Json::obj([
+            ("properties", Json::obj([("deterministic", Json::Null)])),
+            ("additionalProperties", Json::Bool(false)),
+            ("required", Json::Arr(vec![Json::str("deterministic")])),
+        ]),
+        conformance_suite_ref: None,
+        decision_points: vec!["control.route".to_string()],
+        metrics_declared: vec!["refusals".to_string()],
+        slot_key: "router".to_string(),
+        tier: "C0".to_string(),
+        depends_on: vec![
+            hh_plugin::ContractRef::dialect("hir/1", "*"),
+            hh_plugin::ContractRef::dialect("registry/1", "*"),
+        ],
+    }
+}
+
 /// `validator` — the verification-plane `Validator` component class
 /// (spec §5f.1; ADR-0110/0111; S1.21). Ordered-many: several validators may
 /// bind at once (the kernel local checks (a)–(c) ride the reference

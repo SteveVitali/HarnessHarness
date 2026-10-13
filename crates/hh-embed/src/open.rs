@@ -57,7 +57,20 @@ struct CarriedRuntime {
     /// The resume-by-leaf arm record — carried across an in-process
     /// takeover, re-read from `leaf.arm` on a durable resume.
     leaf_arm: LeafArm,
+    /// The `router` slot's unconsumed `model_fail` script (R-2.7) — an
+    /// in-process takeover carries the remainder; a durable resume
+    /// re-arms the declared script whole (the staged plan is process
+    /// staging — the durable attempt rows are the record).
+    model_fail_plan: std::collections::VecDeque<crate::runtime::StagedCall>,
 }
+
+/// The resumed-leaf arm product — the driver, its `leaf.arm` record,
+/// and the router slot's unconsumed `model_fail` script (R-2.7).
+type ResumeArm = (
+    Driver<Box<dyn ControlStrategy>>,
+    LeafArm,
+    std::collections::VecDeque<crate::runtime::StagedCall>,
+);
 
 /// The `leaf.arm` record (S2.3) — the arm-time driver config a durable
 /// resume re-reads (`leaf.checkpoint` restores the leaf *state*; `leaf.arm`
@@ -887,7 +900,7 @@ impl EmbedService {
             .unwrap_or_else(|| REACT_MINIMAL_VARIANT.to_string());
         let compute_variant =
             compute_slot_variant(&sealed.document).unwrap_or_else(|| "static".to_string());
-        let driver = self.arm_driver(
+        let mut driver = self.arm_driver(
             &run_id,
             &lease,
             &surfaces,
@@ -897,6 +910,34 @@ impl EmbedService {
             &compute_variant,
             Some(&sealed.document),
         )?;
+        // R-2.7 — the bound `router` slot (§5b.2/§5b.4; DF-S1.18-1's
+        // machine cells): `router_arm_from_params` decodes the lane, the
+        // declared probes mint their `model.profile.probed`/
+        // `model.profile.status.changed` rows durable *before* the first
+        // drive (durable-before-visible, CC3), the K5 `response_cache`
+        // store leg binds when declared, and `model_fail` stages into the
+        // session's script. No slot ⇒ the legacy scripted lane.
+        let mut model_fail_plan = std::collections::VecDeque::new();
+        if let Some(params) = router_slot_params(&sealed.document) {
+            let arm = self
+                .arm_routing_lane(
+                    &params,
+                    &role_table,
+                    &manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
+                    &configuration_version_id,
+                )
+                .map_err(|e| EmbedError::Refused {
+                    reason: format!("router_slot: {e}"),
+                })?;
+            for (class, payload) in arm.probe_rows {
+                self.mint(&run_id, &lease, &class, payload)?;
+            }
+            driver.set_routing_port(Box::new(arm.routing));
+            if let Some(c) = arm.cache {
+                driver.set_cache_port(Box::new(c));
+            }
+            model_fail_plan = arm.model_fail;
+        }
         let realized = realized_settings(
             self.workspace_root(),
             attendance,
@@ -976,6 +1017,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            model_fail_plan,
             client: client.cloned(),
             contract_json: contract_json.cloned(),
             sink_seq: head.seq as i64,
@@ -1263,6 +1305,7 @@ impl EmbedService {
                     budget_ceiling: std::mem::take(&mut s.budget_ceiling),
                     delivered_wokens: std::mem::take(&mut s.delivered_wokens),
                     leaf_arm: std::mem::take(&mut s.leaf_arm),
+                    model_fail_plan: std::mem::take(&mut s.model_fail_plan),
                 });
             }
         };
@@ -1389,7 +1432,7 @@ impl EmbedService {
                 let bytes = std::fs::read(&ckpt).map_err(|_| EmbedError::Refused {
                     reason: "resume_checkpoint_unavailable".to_string(),
                 })?;
-                let (driver, leaf_arm) =
+                let (driver, leaf_arm, model_fail_plan) =
                     self.arm_resume_driver(run_id, &lease, &bytes, &manifest)?;
                 // The owed-permission table rebuilds from the durable
                 // `security.permission.pending` rows the restore surfaced —
@@ -1521,6 +1564,7 @@ impl EmbedService {
                     idem: BTreeMap::new(),
                     budget_ceiling: BTreeMap::new(),
                     leaf_arm,
+                    model_fail_plan,
                 }
             }
         };
@@ -1593,6 +1637,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            model_fail_plan: rt.model_fail_plan,
             client: None,
             contract_json: None,
             sink_seq: head.seq as i64,
@@ -1685,6 +1730,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            model_fail_plan: Default::default(),
             client: client.cloned(),
             contract_json: contract_json.cloned(),
             sink_seq: head.seq as i64,
@@ -2351,7 +2397,7 @@ impl EmbedService {
         lease: &hh_ledger::store::Lease,
         checkpoint: &[u8],
         manifest: &RunManifest,
-    ) -> Result<(Driver<Box<dyn ControlStrategy>>, LeafArm), EmbedError> {
+    ) -> Result<ResumeArm, EmbedError> {
         let arm_path = self.store.root().join("runs").join(run_id).join("leaf.arm");
         let arm = std::fs::read_to_string(&arm_path)
             .ok()
@@ -2495,7 +2541,63 @@ impl EmbedService {
         .map_err(|e| EmbedError::Refused {
             reason: format!("driver_resume: {e:?}"),
         })?;
-        Ok((driver, arm))
+        // R-2.7 — re-arm the routed lane over the *manifest's* realized
+        // `profile_binding` (the open-time table is the durable record —
+        // re-derived scripted bindings are byte-identical by construction)
+        // and the persisted definition's `router` slot params. Probe rows
+        // do NOT re-mint (they landed durable at open — a resume re-folds,
+        // never re-records); the `model_fail` script re-arms whole.
+        let mut model_fail_plan = std::collections::VecDeque::new();
+        let mut driver = driver;
+        if let Some(sealed) = &sealed_def {
+            if let Some(params) = router_slot_params(&sealed.document) {
+                let table = role_table_from_manifest(manifest);
+                let arm = self
+                    .arm_routing_lane(
+                        &params,
+                        &table,
+                        &ctx.budget_ref,
+                        manifest
+                            .configuration_version_id
+                            .clone()
+                            .unwrap_or_default()
+                            .as_str(),
+                    )
+                    .map_err(|e| EmbedError::Refused {
+                        reason: format!("router_resume: {e}"),
+                    })?;
+                driver.set_routing_port(Box::new(arm.routing));
+                if let Some(c) = arm.cache {
+                    driver.set_cache_port(Box::new(c));
+                }
+                model_fail_plan = arm.model_fail;
+            }
+        }
+        Ok((driver, arm, model_fail_plan))
+    }
+
+    /// `arm_routing_lane(params, table, budget_id, cfg_version_id)` —
+    /// the R-2.7 `router` slot's arm: the lane decodes under
+    /// `router_arm_from_params` over the registry's `registered()`
+    /// snapshot (CF-046's snapshot-confined read — the arm reads the
+    /// records, never a live registry) and the arm-time `now_ms`.
+    fn arm_routing_lane(
+        &self,
+        params: &Json,
+        table: &hh_gateway::router::ModelRoleTable,
+        budget_id: &str,
+        configuration_version_id: &str,
+    ) -> Result<crate::runtime::RouterArm, String> {
+        use hh_compiler::profile::SelectorView;
+        let profiles = crate::bundle_ops::RegistryProfiles(&self.registry).registered();
+        crate::runtime::router_arm_from_params(
+            params,
+            table,
+            budget_id,
+            configuration_version_id,
+            profiles,
+            self.store.now_ms(),
+        )
     }
 
     /// Persist the resume-by-leaf pair (S2.3) — `leaf.checkpoint` (the
@@ -2806,6 +2908,58 @@ pub(crate) fn compute_rules_for(
         }
     }
     None
+}
+
+/// The sealed `router` slot's params (R-2.7) — `None` when the slot is
+/// unbound (the legacy scripted lane runs byte-identical). The params
+/// record decodes under `router_arm_from_params` — a malformed member
+/// fails the open loudly, never a default policy.
+fn router_slot_params(doc: &hh_hir::document::HirDocument) -> Option<Json> {
+    for n in &doc.nodes {
+        if let KindRecord::AgentProcess(a) = &n.semantic {
+            if let AgentProcessBody::Native(np) = &a.body {
+                match np.slots.get("router") {
+                    Some(SlotBindings::One(b)) => return Some(Json::Obj(b.params.clone())),
+                    Some(SlotBindings::Many(v)) => {
+                        return v.first().map(|b| Json::Obj(b.params.clone()))
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Rebuild the realized `ModelRoleTable` from the manifest's durable
+/// `profile_binding.roles` projection (S2.3 resume; CF-313): each role's
+/// recorded `profile_ref` re-binds the scripted route candidate — the
+/// open-time construction's honest re-derivation (an expired binding's
+/// `intent_ref` gate already ran at open; the durable
+/// `model.profile.expired_used` rows are the record).
+fn role_table_from_manifest(manifest: &RunManifest) -> hh_gateway::router::ModelRoleTable {
+    let mut table = hh_gateway::router::ModelRoleTable::default();
+    if let Some(Json::Obj(roles)) = manifest
+        .extra
+        .get("profile_binding")
+        .and_then(|pb| pb.get("roles"))
+    {
+        for (role, b) in roles {
+            let Some(profile_ref) = b.get("profile_ref").and_then(Json::as_str) else {
+                continue;
+            };
+            table.roles.insert(
+                role.clone(),
+                hh_gateway::router::RoleBinding {
+                    primary: scripted_route_candidate(profile_ref),
+                    alternates: Vec::new(),
+                    policy_ref: "hh-embed/scripted".to_string(),
+                    profile_ref: profile_ref.to_string(),
+                },
+            );
+        }
+    }
+    table
 }
 
 /// The strategy instance the bound `control_strategy` variant selects —

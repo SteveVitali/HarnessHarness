@@ -1818,6 +1818,7 @@ impl EmbedService {
             next_invoke: None,
             next_completion: String::new(),
             next_response_ref: String::new(),
+            model_fail_plan: Default::default(),
             client: None,
             contract_json: None,
             sink_seq: head.seq as i64,

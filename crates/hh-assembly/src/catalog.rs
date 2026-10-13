@@ -45,6 +45,9 @@ impl Stage1Catalog {
             hh_registry::suites::validator_class(),
             hh_registry::suites::execution_alignment_class(),
             hh_registry::suites::compaction_strategy_class(),
+            // R-2.7 — the `router` slot's `routing_policy` class
+            // (DF-S1.18-1; optional, never required).
+            hh_registry::suites::routing_policy_class(),
         ] {
             classes.insert(c.class_id.clone(), c);
         }
