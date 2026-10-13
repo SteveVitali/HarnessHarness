@@ -50,6 +50,7 @@ pub mod stop;
 pub mod strategy;
 pub mod views;
 pub mod vocab;
+pub mod wire;
 
 pub use driver::{
     AssembleInputs, AssemblerPort, Driver, DriverConfig, EffectGate, ModelOutcome, ModelPort,

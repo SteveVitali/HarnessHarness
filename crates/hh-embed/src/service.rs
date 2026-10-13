@@ -209,10 +209,6 @@ pub(crate) struct SessionState {
     /// (`steer` honours it — `Unsupported{by: control_strategy}` only when
     /// the declaration says so, AC-R-2.6.1-10).
     pub steering: (SteerMode, ConcurrentInput),
-    /// A `steer` delivered under `queue_next_turn` — the artefact ref the
-    /// next `drive` submits as the `steer` cue (§5e: the delivery is a
-    /// ledgered cue, never a UI-side note).
-    pub pending_steer: Option<String>,
     pub env_json: Json,
     pub env_handle_id: Option<String>,
     /// The run's shared context/memory fold (R2.5 / DF-S2.8-1) — the
@@ -398,6 +394,18 @@ impl EmbedService {
                         "steer_mode".to_string(),
                         Json::str("interrupt_at_decision_point"),
                     ),
+                    ("concurrent_input".to_string(), Json::str("steer")),
+                ]),
+            ),
+            (
+                hh_registry::suites::control_strategy_class(),
+                // R2.6: the `queue_next_turn` declaration — the same
+                // `ReactSteerable` interpreter (`variant_for`), a
+                // different steer-mode declaration (the durable wakeup
+                // seam is the queue — DF-S2.11-1).
+                "react-steerable-queue",
+                BTreeMap::from([
+                    ("steer_mode".to_string(), Json::str("queue_next_turn")),
                     ("concurrent_input".to_string(), Json::str("steer")),
                 ]),
             ),
@@ -1369,11 +1377,13 @@ impl EmbedService {
             driver.submit(woken_cue(&w));
             self.session_mut(sess_id)?.delivered_wokens.insert(key);
         }
-        // `steer_mode = queue_next_turn` — the steer accepted earlier
-        // enters the inbox now (the next decision point of the new turn).
-        if let Some(payload_ref) = self.session_mut(sess_id)?.pending_steer.take() {
-            driver.submit(Cue::HumanInput(HumanInput::Steer { payload_ref }));
-        }
+        // `steer_mode = queue_next_turn` steer deliveries arrive through
+        // the same drain — the `steer{mode: next_turn}` op mints a
+        // `manual`+`steer` occurrence (`control.wakeup.occurred`,
+        // durable-first), `deliver_wakeup` fires it, and the `Cue::Woken
+        // {delivery_mode: steer}` submitted here is the cue (R2.6;
+        // DF-S2.11-1 — the wakeup table is the one durable steer record;
+        // a restart re-folds the same rows).
         // R2.4 (DF-S2.9-3) — the sink's cadence tail: the run's env driver
         // + the session's env handle. `turn.finished`/effect-settled appends
         // fire the declared take *inside* the sink so the row lands before

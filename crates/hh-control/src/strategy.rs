@@ -81,6 +81,46 @@ pub enum ConcurrentInput {
     Steer,
 }
 
+impl SteerMode {
+    /// The canonical `capability_declaration.steer_mode` spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SteerMode::InterruptAtDecisionPoint => "interrupt_at_decision_point",
+            SteerMode::QueueNextTurn => "queue_next_turn",
+            SteerMode::Unsupported => "unsupported",
+        }
+    }
+
+    /// Parse a canonical spelling.
+    pub fn parse(s: &str) -> Option<SteerMode> {
+        Some(match s {
+            "interrupt_at_decision_point" => SteerMode::InterruptAtDecisionPoint,
+            "queue_next_turn" => SteerMode::QueueNextTurn,
+            "unsupported" => SteerMode::Unsupported,
+            _ => return None,
+        })
+    }
+}
+
+impl ConcurrentInput {
+    /// The canonical `capability_declaration.concurrent_input` spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ConcurrentInput::QueueOnly => "queue_only",
+            ConcurrentInput::Steer => "steer",
+        }
+    }
+
+    /// Parse a canonical spelling.
+    pub fn parse(s: &str) -> Option<ConcurrentInput> {
+        Some(match s {
+            "queue_only" => ConcurrentInput::QueueOnly,
+            "steer" => ConcurrentInput::Steer,
+            _ => return None,
+        })
+    }
+}
+
 /// `ControlContext` — `open`'s input (§5e.1): `{process_ref, plan:
 /// RuntimePlan.control, boundary, profile, account, budget, envelope,
 /// parameters, capabilities_available}`.
@@ -317,7 +357,12 @@ pub struct FinalReport {
 /// `decide` is total (must return `stop` when `cursor.bound` is exhausted;
 /// may not return `act` while `open_effects ≠ ∅` unless
 /// `capabilities.parallel_effects`).
-pub trait ControlStrategy {
+///
+/// `Send`: a binding is a pure fold over plain data — the out-of-process
+/// host leg (R2.6, `hh-plugin-fixture`'s `control` mode) moves bound
+/// variants onto the protocol thread, so thread-affinity would be a
+/// defect, not a capability.
+pub trait ControlStrategy: Send {
     /// `capabilities(variant)` — the declared set.
     fn capabilities(&self) -> &ControlCapabilities;
 

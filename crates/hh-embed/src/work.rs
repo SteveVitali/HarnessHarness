@@ -14,8 +14,9 @@ use hh_embed_schema::strict::StrictObj;
 use hh_embed_schema::types::*;
 use hh_ledger::branch::{BranchKind, EnvBinding, ForkOpts, NavigateTarget, ReplayMode};
 use hh_ledger::event::{Cursor, Direction as ReadDir};
-use hh_ledger::manifest::{RunKind, RunManifest};
+use hh_ledger::manifest::{EventRef, RunKind, RunManifest};
 use hh_ledger::views::ViewKind;
+use hh_ledger::wakeup::{Coalesce, SubscriptionState, Trigger, WakeupPolicy};
 use hh_provenance::ProvenanceRecord;
 use hh_wire::json::Json;
 use std::collections::BTreeMap;
@@ -195,12 +196,16 @@ impl EmbedService {
 
     /// `steer` — honoured per the bound control strategy's declared
     /// `steer_mode` (AC-R-2.6.1-10): `interrupt_at_decision_point`
-    /// submits the `steer` cue and drives; `queue_next_turn` records the
-    /// delivery and holds the cue for the next turn's first decision
-    /// point (`Accepted{queued_at}` reports which); `unsupported` is the
-    /// honest `Unsupported{by: control_strategy}`. The input is ledgered
-    /// (`context.artefact.delivered`) before any admission — steering is
-    /// a ledger fact, never UI state.
+    /// submits the `steer` cue and drives; `queue_next_turn` writes the
+    /// *durable* steer record — a `control.wakeup.occurred` on the run's
+    /// `manual{holder}` + `delivery_mode = steer` subscription — that
+    /// `deliver_wakeup`/`wakeup_drain` then delivers as
+    /// `Cue::Woken{steer}` at the next decision point, restart included
+    /// (R2.6; DF-S2.11-1 — the wakeup seam is the one durable cue
+    /// channel; `Accepted{queued_at}` reports which);
+    /// `unsupported` is the honest `Unsupported{by: control_strategy}`.
+    /// The input is ledgered (`context.artefact.delivered`) before any
+    /// admission — steering is a ledger fact, never UI state.
     pub(crate) fn steer(&mut self, params: &Json) -> Result<Json, EmbedError> {
         inject::refuse_secrets(params)?;
         let p = SteerParams::from_json(params)?;
@@ -248,7 +253,7 @@ impl EmbedService {
             }
             hh_control::strategy::SteerMode::QueueNextTurn => {
                 let payload_ref = self.stage_input(&p.session_id, &p.input)?;
-                self.session_mut(&p.session_id)?.pending_steer = Some(payload_ref);
+                self.queue_steer(&p.session_id, &payload_ref)?;
                 let turn = self.session(&p.session_id)?.active_turn.clone();
                 let out = Json::obj([
                     ("turn_id", Json::str(turn)),
@@ -260,6 +265,89 @@ impl EmbedService {
                 Ok(out)
             }
         }
+    }
+
+    /// `steer{mode: next_turn}`'s durable leg (R2.6; DF-S2.11-1; the
+    /// OQ-316 steer arm): the queued cue is a `control.wakeup.occurred`
+    /// row carrying the staged artefact's `payload_ref`, recorded on the
+    /// run's `manual{holder}` + `delivery_mode = steer` subscription —
+    /// minted lazily on first steer (one subscription per run+principal
+    /// — the steer queue is per-principal, never per-cue).
+    /// `occurrence_key = steer:<input_id>` is unique per staged artefact;
+    /// `coalesce = none` keeps every admitted steer — superseding a
+    /// principal instruction was the defect this closes. The `occurred`
+    /// row is durable before any `fired` (durable-before-visible); a
+    /// restart re-delivers through the same `wakeup_drain` → `Cue::Woken`
+    /// path the in-process run uses.
+    fn queue_steer(&mut self, sess_id: &str, payload_ref: &str) -> Result<(), EmbedError> {
+        let (run_id, lease) = {
+            let s = self.writer_session(sess_id)?;
+            (
+                s.run_id.clone(),
+                s.lease.clone().ok_or(EmbedError::Refused {
+                    reason: "session_is_read_only".to_string(),
+                })?,
+            )
+        };
+        let sub_id = {
+            let subs = self
+                .store
+                .wakeup_subscriptions(&run_id)
+                .map_err(ledger_err)?;
+            subs.iter()
+                .find(|w| {
+                    w.state == SubscriptionState::Active
+                        && w.policy.delivery_mode == hh_ledger::wakeup::DeliveryMode::Steer
+                        && matches!(
+                            &w.trigger,
+                            Trigger::Manual { principal } if principal == &lease.holder
+                        )
+                })
+                .map(|w| w.subscription_id.clone())
+        };
+        let sub_id = match sub_id {
+            Some(id) => id,
+            None => {
+                // `created_by` names the durable head the subscription
+                // follows — the `context.artefact.delivered` rows the
+                // steer staged are already appended (order holds).
+                let created_by = EventRef {
+                    run_id: run_id.clone(),
+                    event_id: self.store.head(&run_id).map_err(ledger_err)?.event_id,
+                };
+                self.store
+                    .wakeup_subscribe(
+                        &run_id,
+                        &lease,
+                        Trigger::Manual {
+                            principal: lease.holder.clone(),
+                        },
+                        WakeupPolicy {
+                            delivery_mode: hh_ledger::wakeup::DeliveryMode::Steer,
+                            coalesce: Coalesce::None,
+                            max_pending: 16,
+                            expires_at_ms: None,
+                            attendance_required: None,
+                            occurrence_key_fn: None,
+                        },
+                        &created_by,
+                    )
+                    .map_err(ledger_err)?
+            }
+        };
+        let occurrence_key = format!("steer:{payload_ref}");
+        let now = self.store.now_ms();
+        self.store
+            .wakeup_occurred(
+                &run_id,
+                &lease,
+                &sub_id,
+                &occurrence_key,
+                Some(payload_ref),
+                now,
+            )
+            .map_err(ledger_err)?;
+        Ok(())
     }
 
     /// `set_coordinate{session_id, coordinate, value, idempotency_key?}`
@@ -1701,7 +1789,6 @@ impl EmbedService {
                 hh_control::strategy::SteerMode::Unsupported,
                 hh_control::strategy::ConcurrentInput::QueueOnly,
             ),
-            pending_steer: None,
             env_json: Json::Null,
             env_handle_id: child_env_handle,
             host_caps: Vec::new(),

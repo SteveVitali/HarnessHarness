@@ -919,6 +919,34 @@ impl ControlStrategy for ReactSteerable {
             Cue::HumanInput(HumanInput::FollowUp { payload_ref }) => {
                 self.steered_propose(state, "follow_up_ref", payload_ref)
             }
+            // The durable steer (R2.6; the OQ-316 steer arm) — a
+            // `woken{delivery_mode: steer, payload_ref}` occurrence is the
+            // `steer{mode: next_turn}` op's queued delivery; it joins the
+            // in-turn `human_input{steer}` interpretation (one durable
+            // record, one decide path — the cue names the ref either way,
+            // I7). A forged woken-steer without a payload ref falls
+            // through to the shared table's plain `propose`.
+            Cue::Woken {
+                delivery_mode: crate::vocab::DeliveryMode::Steer,
+                payload_ref,
+                ..
+            } if self.steer_mode != crate::strategy::SteerMode::Unsupported
+                && !payload_ref.is_empty() =>
+            {
+                self.steered_propose(state, "steer_ref", payload_ref)
+            }
+            // A `woken{delivery_mode: follow_up}` carrying a payload ref is
+            // the follow-up leg's durable carrier — same interpretation
+            // as `human_input{follow_up}` (`{follow_up_ref}`).
+            Cue::Woken {
+                delivery_mode: crate::vocab::DeliveryMode::FollowUp,
+                payload_ref,
+                ..
+            } if self.steer_mode != crate::strategy::SteerMode::Unsupported
+                && !payload_ref.is_empty() =>
+            {
+                self.steered_propose(state, "follow_up_ref", payload_ref)
+            }
             // Compaction routing — the react β preset owns `compact` to
             // code; the decision still passes `envelope.check` like every
             // other (F2).
@@ -1025,15 +1053,39 @@ impl ControlStrategy for StagedVariant {
         }
     }
 
-    fn decide(&self, state: &mut ControlState, _cue: &Cue) -> ControlDecision {
-        // Staged: the variant's interpreter lands at its build stage — the
-        // run parks on principal input rather than fabricating steps (the
-        // envelope's ceilings still bound it — I4).
-        let d = ControlDecision {
-            stamp: stamp_for(state, DecisionPoint::Act, None),
-            kind: DecisionKind::Wait {
-                until: WaitUntil::CueKind {
-                    cue_kind: "human_input".into(),
+    fn decide(&self, state: &mut ControlState, cue: &Cue) -> ControlDecision {
+        // Staged — but the stop protocol still answers: an `interrupt` /
+        // `cancel_requested` is the envelope's cancel path, never a step
+        // the variant improvises (R2.6 — a parked run must still be
+        // cancellable; `stop` is code-owned in both staged presets).
+        let d = match cue {
+            Cue::HumanInput(HumanInput::Interrupt) => ControlDecision {
+                stamp: stamp_for(state, DecisionPoint::Stop, None),
+                kind: DecisionKind::Stop {
+                    proposed_reason: StopReason::Cancelled {
+                        by: CancelledBy::Principal,
+                    },
+                    submission_ref: None,
+                },
+            },
+            Cue::EnvelopeSignal(EnvelopeSignal::CancelRequested { by }) => ControlDecision {
+                stamp: stamp_for(state, DecisionPoint::Stop, None),
+                kind: DecisionKind::Stop {
+                    proposed_reason: StopReason::Cancelled {
+                        by: CancelledBy::parse(by).unwrap_or(CancelledBy::Principal),
+                    },
+                    submission_ref: None,
+                },
+            },
+            // The variant's interpreter lands at its build stage — the
+            // run parks on principal input rather than fabricating steps
+            // (the envelope's ceilings still bound it — I4).
+            _ => ControlDecision {
+                stamp: stamp_for(state, DecisionPoint::Act, None),
+                kind: DecisionKind::Wait {
+                    until: WaitUntil::CueKind {
+                        cue_kind: "human_input".into(),
+                    },
                 },
             },
         };
@@ -1135,6 +1187,50 @@ pub fn registry() -> Vec<Box<dyn ControlStrategy>> {
         Box::new(StagedVariant::new("hh/workflow@1", workflow)),
         Box::new(StagedVariant::new("hh/program@1", program)),
     ]
+}
+
+/// The `hh/workflow@1`/`hh/program@1` staged presets (the `registry()`
+/// caps — the β preset is the boundary the staged variant enforces even
+/// parked: every point `code` but `escalate` → `human`).
+fn staged_caps() -> ControlCapabilities {
+    let mut b = ControlBoundary::default();
+    for p in DecisionPoint::ALL {
+        b.assignments.insert(p, Owner::Code);
+    }
+    b.assignments.insert(DecisionPoint::Escalate, Owner::Human);
+    ControlCapabilities {
+        deterministic_replay: true,
+        steering: false,
+        follow_up: false,
+        parallel_effects: true,
+        delegation: true,
+        model_emitted_plan: false,
+        resumable_mid_effect: true,
+        decision_points_owned: vec![],
+        boundary_preset: b,
+        requires: VariantRequires {
+            goal: true,
+            procedure: true,
+        },
+    }
+}
+
+/// `variant_for(ref)` — the registered strategy instance a variant ref
+/// binds (the registry record's implementation — CC1: embed arms, the OOP
+/// fixture, and the family registry all bind through this one table).
+/// `hh/react-steerable-queue@1` shares the `ReactSteerable` interpreter —
+/// `queue_next_turn` is a *steer-mode declaration* the boundary op reads,
+/// not a second interpreter (R2.6). `None` = no registered impl — the
+/// caller answers a typed refusal, never a silent `react/minimal`.
+pub fn variant_for(variant_ref: &str) -> Option<Box<dyn ControlStrategy>> {
+    match variant_ref.trim_end_matches("@1") {
+        "hh/react-minimal" => Some(Box::new(ReactMinimal::new())),
+        "hh/react-steerable" | "hh/react-steerable-queue" => Some(Box::new(ReactSteerable::new())),
+        "hh/plan-execute" => Some(Box::new(crate::plan_exec::PlanExecute::new())),
+        "hh/workflow" => Some(Box::new(StagedVariant::new("hh/workflow@1", staged_caps()))),
+        "hh/program" => Some(Box::new(StagedVariant::new("hh/program@1", staged_caps()))),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

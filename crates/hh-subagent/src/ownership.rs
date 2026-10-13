@@ -270,6 +270,7 @@ pub fn record_write_refusal(
 /// ownerships)` — the §5e.5 verb: `from` must currently hold `object`
 /// (an `NotOwned` refusal otherwise); emits
 /// `control.ownership.transferred{object, from, to, basis}`.
+#[allow(clippy::too_many_arguments)]
 pub fn transfer_ownership(
     store: &mut Store,
     run_id: &str,

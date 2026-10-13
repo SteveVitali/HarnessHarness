@@ -708,7 +708,7 @@ fn o3_o4_transfer_and_return_fold() {
         .any(|e| e.event_id == ev && e.class == "control.ownership.transferred"));
     // The fold sees the child as owner (nearest covering record wins).
     let folded = OwnershipTable::project(&p.store, &[p.run_id.clone()], vec![]).unwrap();
-    assert_eq!(folded.owner_of(&obj).as_deref(), Some("run-child-a"));
+    assert_eq!(folded.owner_of(&obj), Some("run-child-a"));
     // Transfer from a non-holder refuses typed (no silent reassign).
     let err = transfer_ownership(
         &mut p.store,
@@ -741,7 +741,7 @@ fn o3_o4_transfer_and_return_fold() {
         .iter()
         .any(|e| e.class == "control.ownership.returned"));
     let folded = OwnershipTable::project(&p.store, &[p.run_id.clone()], vec![]).unwrap();
-    assert_eq!(folded.owner_of(&obj).as_deref(), Some(p.run_id.as_str()));
+    assert_eq!(folded.owner_of(&obj), Some(p.run_id.as_str()));
 }
 
 // ── G-1/G-2 — `three_way_text{line}` ────────────────────────────────────────
@@ -926,6 +926,7 @@ impl MergeValidator for Abstain {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn conflicted_input(
     child: &str,
 ) -> (

@@ -963,8 +963,7 @@ impl EmbedService {
             host_asks: BTreeMap::new(),
             idem: BTreeMap::new(),
             budget_ceiling: budget_dimensions(budget).0,
-            steering: steering_for(&control_variant),
-            pending_steer: None,
+            steering: steering_for(&self.registry, &control_variant),
             leaf_arm: LeafArm {
                 surfaces: surfaces.clone(),
                 budget_ceiling: budget_dimensions(budget).0,
@@ -1561,8 +1560,7 @@ impl EmbedService {
             realized: realized.clone(),
             driver: Some(rt.driver),
             mem_ctx: Some(std::rc::Rc::new(std::cell::RefCell::new(mem_ctx))),
-            steering: steering_for(&rt.leaf_arm.control_variant),
-            pending_steer: None,
+            steering: steering_for(&self.registry, &rt.leaf_arm.control_variant),
             env_json: rt.env_json,
             env_handle_id: rt.env_handle_id,
             host_caps: rt.host_caps,
@@ -1667,7 +1665,6 @@ impl EmbedService {
             realized: realized.clone(),
             driver: None,
             steering: (SteerMode::Unsupported, ConcurrentInput::QueueOnly),
-            pending_steer: None,
             env_json: Json::Null,
             env_handle_id: None,
             host_caps: Vec::new(),
@@ -2281,7 +2278,7 @@ impl EmbedService {
             envelope_ref: "env-1".to_string(),
             parameters,
             capabilities_available: surfaces.iter().map(|s| s.surface_id.clone()).collect(),
-            steering: steering_for(control_variant),
+            steering: steering_for(&self.registry, control_variant),
         };
         // ADR-0168 D6 — `interactive` attendance escalates on every
         // budgeted ceiling; anything else stops `budget_exhausted`.
@@ -2317,7 +2314,9 @@ impl EmbedService {
             env_handle: None,
         };
         Driver::open(
-            strategy_for(control_variant),
+            strategy_for(control_variant).ok_or_else(|| EmbedError::Refused {
+                reason: format!("unknown_control_variant: {control_variant}"),
+            })?,
             &ctx,
             policy,
             &mut sink,
@@ -2397,7 +2396,7 @@ impl EmbedService {
             envelope_ref: "env-1".to_string(),
             parameters,
             capabilities_available: arm.surfaces.iter().map(|s| s.surface_id.clone()).collect(),
-            steering: steering_for(&arm.control_variant),
+            steering: steering_for(&self.registry, &arm.control_variant),
         };
         let interactive = manifest.attendance.0 == AttendanceValue::Interactive;
         let mut policy = EnvelopePolicy::stage1_default(
@@ -2455,7 +2454,9 @@ impl EmbedService {
         let mut ceiling = arm.budget_ceiling.clone();
         let mut remaining = arm.remaining.clone();
         let driver = Driver::resume_from(
-            strategy_for(&arm.control_variant),
+            strategy_for(&arm.control_variant).ok_or_else(|| EmbedError::Refused {
+                reason: format!("unknown_control_variant: {}", arm.control_variant),
+            })?,
             &ctx,
             policy,
             checkpoint,
@@ -2844,13 +2845,18 @@ pub(crate) fn project_task_contract(
     })
 }
 
-/// registered binding resolves to the canonical `react/minimal`
-/// interpreter (the family is one loop under presets — ADR-0103 D6).
-pub(crate) fn strategy_for(variant_id: &str) -> Box<dyn ControlStrategy> {
+/// `hh/round_robin` is the Stage-1 seeded name for the canonical
+/// `react/minimal` interpreter (the family is one loop under presets —
+/// ADR-0103 D6). Every other registered ref resolves through
+/// `hh_control::react::variant_for` — the one binding table (CC1, shared
+/// with the OOP conformance lane). An unknown variant is `None` — the
+/// caller turns it into a typed refusal, never a silent `react/minimal`
+/// arm (a bound strategy is a ledgered fact; the armed interpreter must
+/// be the one the definition named).
+pub(crate) fn strategy_for(variant_id: &str) -> Option<Box<dyn ControlStrategy>> {
     match variant_id.trim_end_matches("@1") {
-        "hh/react-steerable" => Box::new(hh_control::react::ReactSteerable::new()),
-        "hh/plan-execute" => Box::new(hh_control::plan_exec::PlanExecute::new()),
-        _ => Box::new(ReactMinimal::new()),
+        "hh/round_robin" => Some(Box::new(ReactMinimal::new())),
+        _ => hh_control::react::variant_for(variant_id),
     }
 }
 
@@ -2865,15 +2871,66 @@ pub(crate) fn leaf_arm_for(store: &Store, run_id: &str) -> Option<LeafArm> {
         .and_then(|j| LeafArm::from_json(&j))
 }
 
-/// The `(steer_mode, concurrent_input)` the bound variant's declared
-/// capabilities admit — `capabilities().steering` ⇒ interrupt-at-
-/// decision-point under `steer` concurrent input; anything else declines
-/// honestly (`Unsupported{by: control_strategy}`, AC-R-2.6.1-10).
-pub(crate) fn steering_for(variant_id: &str) -> (SteerMode, ConcurrentInput) {
-    if strategy_for(variant_id).capabilities().steering {
-        (SteerMode::InterruptAtDecisionPoint, ConcurrentInput::Steer)
-    } else {
-        (SteerMode::Unsupported, ConcurrentInput::QueueOnly)
+/// The `(steer_mode, concurrent_input)` the bound variant's *registered
+/// declaration* names — `steer_mode`/`concurrent_input` are ClassRecord
+/// declarations (§5e.1; ADR-0176), read off the `VariantRecord`'s
+/// `capability_declaration` so `queue_next_turn` binds by record, not by
+/// impl (R2.6: the durable steer seam selects on the declaration). A
+/// variant with no registered declaration falls back to the impl's
+/// `steering` capability (declared ⇒ the `interrupt_at_decision_point`
+/// default — the mode the S2.11 seeds carried); a non-steering impl is
+/// `Unsupported{by: control_strategy}` (AC-R-2.6.1-10).
+pub(crate) fn steering_for(
+    registry: &hh_registry::store::RegistryStore,
+    variant_id: &str,
+) -> (SteerMode, ConcurrentInput) {
+    let decl = registry
+        .query(&hh_registry::store::QueryPredicate {
+            clauses: vec![hh_registry::store::QueryClause {
+                field: "variant_id".into(),
+                op: hh_registry::store::QueryOp::Eq,
+                value: variant_id.trim_end_matches("@1").to_string(),
+            }],
+            snapshot_id: None,
+        })
+        .ok()
+        .and_then(|rs| rs.into_iter().next())
+        .and_then(|r| match r.record {
+            hh_registry::records::RegistryRecord::Variant(v) => Some(v.capability_declaration),
+            _ => None,
+        });
+    let mode = decl
+        .as_ref()
+        .and_then(|d| d.get("steer_mode"))
+        .and_then(Json::as_str)
+        .and_then(SteerMode::parse);
+    let ci = decl
+        .as_ref()
+        .and_then(|d| d.get("concurrent_input"))
+        .and_then(Json::as_str)
+        .and_then(ConcurrentInput::parse);
+    match (mode, ci) {
+        (Some(m), c) => (
+            m,
+            // `concurrent_input` defaults to `steer` when the mode admits
+            // steering (a steerable declaration accepts mid-turn input;
+            // `submit`'s `queue_only` rule is a separate member).
+            c.unwrap_or(if m == SteerMode::Unsupported {
+                ConcurrentInput::QueueOnly
+            } else {
+                ConcurrentInput::Steer
+            }),
+        ),
+        (None, _) => {
+            if strategy_for(variant_id)
+                .map(|s| s.capabilities().steering)
+                .unwrap_or(false)
+            {
+                (SteerMode::InterruptAtDecisionPoint, ConcurrentInput::Steer)
+            } else {
+                (SteerMode::Unsupported, ConcurrentInput::QueueOnly)
+            }
+        }
     }
 }
 

@@ -12,13 +12,17 @@
 //! already_claimed}` — at most one fire per `(subscription, occurrence)`;
 //! every skip reason (`expired`, `subscription_cancelled`, `run_finished`,
 //! `duplicate_occurrence`, `already_claimed`, `coalesced`, `over_max_pending`)
-//! is audited as `control.wakeup.skipped`; `steer` delivery is refused — the
-//! OQ-316 ratified default admits `follow_up` only (ADR-0132).
+//! is audited as `control.wakeup.skipped`. `delivery_mode = steer` (R2.6; the
+//! OQ-316 steer arm — ADR-0132's deferred leg) is admitted on
+//! `manual{principal}` only: the `steer{mode: next_turn}` boundary op mints a
+//! `manual` subscription whose occurrences carry the staged steer payload ref;
+//! every other trigger keeps the typed `WakeupPolicyUnsupported` refusal.
 //!
-//! `deliver_after` (W-3): a `follow_up` fire while an effect is `committed`
-//! records `deliver_after = effect_id` — [`Store::wakeup_drain`] withholds it
+//! `deliver_after` (W-3): a fire while an effect is `committed` records
+//! `deliver_after = effect_id` — [`Store::wakeup_drain`] withholds it
 //! until the effect reaches a terminal, so the `Cue.woken` lands at a decision
-//! point, never mid-effect.
+//! point, never mid-effect. The rule is shared by `follow_up` and `steer`
+//! (R2.6 — only the strategy's interpretation differs).
 //!
 //! Stage-4 admission (S4.13; §5a.3 extension line "schedule and external
 //! triggers via registered ingress adapters"): `schedule` and `external` are
@@ -31,7 +35,8 @@
 //! record except through it). Both refuse `attendance = interactive` unless
 //! the policy names a reachable principal (`attendance_required`) — the
 //! unattended wakeups never park on a TTY that cannot answer (ADR-0131 §4).
-//! `manual` stays fleet-bound (S4.9's `run_kind = fleet` boundary) and
+//! `manual` stays fleet-bound for `follow_up` (S4.9's `run_kind = fleet`
+//! boundary) and gains the R2.6 `steer` carrier on any run kind;
 //! `environment_ready` parses but is refused `TriggerUnsupported` — honest,
 //! never silently swallowed (ADR-0131 §4 stage table).
 
@@ -313,13 +318,14 @@ impl Trigger {
     }
 }
 
-/// `DeliveryMode` — `follow_up` is the only admissible value at this stage
-/// (OQ-316's ratified default; `steer` refuses at `subscribe`).
+/// `DeliveryMode` — `follow_up` (OQ-316's ratified default) plus `steer`
+/// (R2.6's admitted leg: `manual` trigger only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeliveryMode {
     /// Delivered at the next decision point, never mid-effect.
     FollowUp,
-    /// Steer delivery (deferred — the Stage-4 surface).
+    /// Steer delivery — the `steer{mode: next_turn}` op's durable queue;
+    /// `manual{principal}` subscriptions only (OQ-316 steer arm).
     Steer,
 }
 
@@ -380,7 +386,7 @@ impl Coalesce {
 /// attendance_required, occurrence_key_fn}` (§5a.3).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WakeupPolicy {
-    /// The delivery mode (`steer` is refused at `subscribe` at this stage).
+    /// The delivery mode (`steer` admits only `manual` subscriptions — R2.6).
     pub delivery_mode: DeliveryMode,
     /// The coalescing rule.
     pub coalesce: Coalesce,
@@ -567,16 +573,16 @@ pub struct WokenDelivery {
     pub trigger: Trigger,
     /// The payload ref, when carried.
     pub payload_ref: Option<String>,
-    /// The delivery mode (`follow_up` at this stage).
+    /// The delivery mode (`follow_up` or the R2.6-admitted `steer`).
     pub delivery_mode: DeliveryMode,
 }
 
 impl Store {
     /// `subscribe(owner, trigger, policy, created_by)` — the durable
     /// `control.wakeup.scheduled` row; the subscription id is allocated.
-    /// Refusals: non-admitted trigger ⇒ `TriggerUnsupported`; `steer` ⇒
-    /// `WakeupPolicyUnsupported`; over [`MAX_WAKEUP_SUBSCRIPTIONS`] ⇒
-    /// `SubscriptionLimit`.
+    /// Refusals: non-admitted trigger ⇒ `TriggerUnsupported`; `steer` on a
+    /// non-`manual` trigger ⇒ `WakeupPolicyUnsupported`; over
+    /// [`MAX_WAKEUP_SUBSCRIPTIONS`] ⇒ `SubscriptionLimit`.
     pub fn wakeup_subscribe(
         &mut self,
         run_id: &str,
@@ -601,6 +607,13 @@ impl Store {
         created_by: &EventRef,
     ) -> Result<String, LedgerError> {
         self.tier_c1("wakeup_subscribe")?;
+        // R2.6 steer leg (OQ-316 steer arm): `manual` is also admissible on
+        // any run kind when the policy's `delivery_mode = steer` — the
+        // `steer{mode: next_turn}` boundary op's durable queue. The
+        // principal steers the steered run itself; the S4.9 fleet boundary
+        // below keeps covering `manual` + `follow_up`.
+        let steer_leg = matches!(trigger, Trigger::Manual { .. })
+            && policy.delivery_mode == DeliveryMode::Steer;
         if !trigger.admissible() {
             // S4.9 fleet boundary — `manual` is admissible *only* on a
             // `run_kind = fleet` activation (§5i.1 #2; the attended-
@@ -614,7 +627,7 @@ impl Store {
                     .manifest(run_id)
                     .map(|m| m.run_kind == crate::manifest::RunKind::Fleet)
                     .unwrap_or(false);
-            if !fleet_boundary {
+            if !fleet_boundary && !steer_leg {
                 return Err(LedgerError::TriggerUnsupported {
                     trigger: trigger.type_name().to_string(),
                     stage: 4,
@@ -666,10 +679,16 @@ impl Store {
                 });
             }
         }
-        if policy.delivery_mode == DeliveryMode::Steer {
+        // OQ-316 steer arm (R2.6): `delivery_mode = steer` is admitted only on
+        // `manual{principal}` — a steer is the principal's queued instruction,
+        // minted by the `steer{mode: next_turn}` op. Any other trigger keeps
+        // the typed refusal; the admissibility check above has already refused
+        // `manual`+`steer` nowhere it does not belong.
+        if policy.delivery_mode == DeliveryMode::Steer && !matches!(trigger, Trigger::Manual { .. })
+        {
             return Err(LedgerError::WakeupPolicyUnsupported {
-                detail: "delivery_mode = steer — OQ-316 ratifies follow_up only \
-                         at this stage"
+                detail: "delivery_mode = steer admits only the manual trigger \
+                         (a steer is the principal's queued instruction)"
                     .into(),
             });
         }
@@ -1245,17 +1264,16 @@ impl Store {
         if live > sub.policy.max_pending {
             skip!("over_max_pending");
         }
-        // W-3: `follow_up` while an effect is `committed` — the fire lands but
-        // the delivery waits on the effect's terminal.
-        let deliver_after = if sub.policy.delivery_mode == DeliveryMode::FollowUp {
-            self.run(run_id)?
-                .effects
-                .values()
-                .find(|f| f.phase == crate::effect::EffectPhase::Committed)
-                .map(|f| f.effect_id.clone())
-        } else {
-            None
-        };
+        // W-3: a fire while an effect is `committed` lands but the delivery
+        // waits on the effect's terminal — the committed window is not a
+        // decision point, so neither `follow_up` nor `steer` delivers into it
+        // (R2.6: the rule is shared, only the cue's interpretation differs).
+        let deliver_after = self
+            .run(run_id)?
+            .effects
+            .values()
+            .find(|f| f.phase == crate::effect::EffectPhase::Committed)
+            .map(|f| f.effect_id.clone());
         // W-5: `coalesce = latest|all` — older pending occurrences are
         // `skipped{coalesced}`; `all` additionally coalesces a fired-but-
         // blocked occurrence into this one.

@@ -59,8 +59,9 @@ impl EmbedService {
             .as_ref()
             .map(|a| a.control_variant.clone())
             .unwrap_or_default();
-        let variant_declares =
-            !variant.is_empty() && strategy_for(&variant).capabilities().deterministic_replay;
+        let variant_declares = strategy_for(&variant)
+            .map(|s| s.capabilities().deterministic_replay)
+            .unwrap_or(false);
 
         hh_ledger::replay::replay_started(&mut self.store, &target, driver_mode, until)
             .map_err(ledger_err)?;
@@ -104,8 +105,14 @@ impl EmbedService {
                     reason: format!("envelope_policy: {e:?}"),
                 })?;
                 let mut assembler = KernelAssembler::default();
+                // The bound variant must resolve to a registered impl — a
+                // replayed run's strategy is the one the ledger named;
+                // unknown is a typed refusal, never `react/minimal`.
+                let strategy = strategy_for(&variant).ok_or_else(|| EmbedError::Refused {
+                    reason: format!("unknown_control_variant: {variant}"),
+                })?;
                 let outcome = hh_control::replay::deterministic_replay(
-                    strategy_for(&variant),
+                    strategy,
                     &ctx,
                     policy,
                     config,
@@ -177,7 +184,7 @@ impl EmbedService {
             envelope_ref: "env-1".to_string(),
             parameters: StrategyParams::default(),
             capabilities_available: surfaces.iter().map(|s| s.surface_id.clone()).collect(),
-            steering: steering_for(&control_variant),
+            steering: steering_for(&self.registry, &control_variant),
         };
         let policy = EnvelopePolicy::stage1_default(
             &manifest.budget.clone().unwrap_or_else(|| "b-1".to_string()),
@@ -431,8 +438,9 @@ impl EmbedService {
                 .as_ref()
                 .map(|a| a.control_variant.clone())
                 .unwrap_or_default();
-            let variant_declares =
-                !variant.is_empty() && strategy_for(&variant).capabilities().deterministic_replay;
+            let variant_declares = strategy_for(&variant)
+                .map(|s| s.capabilities().deterministic_replay)
+                .unwrap_or(false);
             for arm_entry in &factual {
                 let arm_run = arm_entry
                     .get("run_id")
@@ -487,8 +495,46 @@ impl EmbedService {
                             continue;
                         }
                     };
+                    let Some(strategy) = strategy_for(&variant) else {
+                        // An unregistered variant is a typed `invalid`
+                        // verdict — never a silent skip (the `started` row
+                        // is already durable; the pair must close) and
+                        // never a `react/minimal` substitute.
+                        let report = hh_ledger::replay::validity(
+                            &self.store,
+                            &arm_run,
+                            &ValidityInput {
+                                variant_declares: true,
+                                reproduced: Some(false),
+                                diverged: Some((
+                                    0,
+                                    "drive".into(),
+                                    format!("unknown_control_variant: {variant}"),
+                                )),
+                                ..Default::default()
+                            },
+                        )
+                        .map_err(ledger_err)?;
+                        hh_ledger::replay::replay_finished(
+                            &mut self.store,
+                            &arm_run,
+                            ReplayDriverMode::Deterministic,
+                            &report,
+                        )
+                        .map_err(ledger_err)?;
+                        dispersion.push(Json::obj([
+                            (
+                                "run_id",
+                                arm_entry.get("run_id").cloned().unwrap_or(Json::Null),
+                            ),
+                            ("mode", Json::str(report.mode.as_str())),
+                            ("report_ref", Json::str(report.content_ref())),
+                            ("outcome", Json::Null),
+                        ]));
+                        continue;
+                    };
                     match hh_control::replay::deterministic_replay(
-                        strategy_for(&variant),
+                        strategy,
                         &ctx,
                         policy,
                         config,
