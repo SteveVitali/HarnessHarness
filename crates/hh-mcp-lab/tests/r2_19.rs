@@ -299,6 +299,13 @@ fn credential_mediator_oauth_resolves_and_refuses() {
     let dead = srv
         .mint_caller_token("mcp://lab", 0)
         .expect("a zero-ttl mint lands");
+    // A zero-ttl mint's `expires_at_ms` is the mint's own millisecond,
+    // and the broker's expiry is `now_ms > expires_at_ms` — a resolve
+    // landing in that same wall-clock millisecond still verifies (the
+    // CI flake: `unwrap_err()` on an `Ok`). Let the store clock pass
+    // the expiry so the token is genuinely expired before it is
+    // presented; the assertion itself is unchanged.
+    std::thread::sleep(Duration::from_millis(2));
     srv.grant_bearer(&dead, oauth_binding("bind-oauth-4", "mcp://lab"));
     assert_eq!(
         srv.resolve_credential(&dead).unwrap_err(),
