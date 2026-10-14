@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.1   # round-3 chain (rows 137-149); amended 2026-10-14: 144-146 un-gated to tickets (H5=ext crate via R3.7 dep-ADR; CF-489=conform code); 127/128 stay HUMAN-H3/H4
-lastCompleted:   R2.27
+nextTicket:      R3.2   # round-3 chain (rows 137-149); row 138 = DF-S2.3-1 residual producers (BL-44); 127/128 stay HUMAN-H3/H4
+lastCompleted:   R3.1
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r2.27  # R2.27 tip — round-3 rows fork from here; the 136-row round-1/2 chain is complete
+chainTip:        svitali/harnessharness-r3.1  # R3.1 tip — PR against svitali/round3-decompose (the round-3 manifest base); operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -65,6 +65,34 @@ updatedAt:       2026-10-14
   green). Recorded for the next code-touching ticket to adjudicate the allowlist vs the
   derivation input — assigned to the round-3 backlog, not a block on R2.26. Failing run:
   https://github.com/SteveVitali/HarnessHarness/actions/runs/38020320703
+  **Adjudicated + repaired-closed 2026-10-14 (R3.1):** root cause identified — `context.assembled`
+  is an observation-plane row, so a later assembly's `payload.derived_from.view_hash` is the
+  `idp/1` stamp of the `context_view` fold over the durable prefix, which *includes* the earlier
+  rows' measured `assembly_ms.value` wall. When one leg's assembly crosses a millisecond
+  boundary the downstream view_hash diverges mechanically — a derived consequence of the
+  already-allowlisted member, not an independent input. Adjudication: the member joined the
+  existing `ends_with` allowlist (`derived_from.view_hash`) with the derivation input named in
+  the test comment (`crates/hh-cli/tests/in_process.rs`); making the `context_view` projection
+  exclude measured walls would weaken the AC-R-2.2.1-3 rebuild contract, so the allowlist is the
+  honest shape. 25/25 local runs green post-change.
+
+- 2026-10-14 · **R3.1 flake-family repairs — both resolved, both real defects.** *(a) G4-1 oauth
+  leg:* `hh-secrets::CredentialBroker::verify_minted` compared `now_ms > expires_at_ms`, letting a
+  zero-TTL mint (`mint_caller_token(aud, 0)` in
+  `hh-mcp-lab/tests/r2_19.rs::credential_mediator_oauth_resolves_and_refuses`) verify `Valid` for
+  the whole same-millisecond window — the intermittent `CredentialExpired`/`Valid` race across
+  six recorded CI firings (R2.22 `dc7061d`, R2.23 `cb6db76`, R2.25 `d8fd2e4`, R2.26 `e377a4a` +
+  `9ad4e60`). The expiry instant is dead (`now < exp`, matching `CallerBinding::live_at` and the
+  `mediate` path's `expires_at <= ts_now` convention): `>` → `>=` in
+  `crates/hh-secrets/src/broker.rs`, boundary regression test
+  `r2_10_minted_token_expires_at_the_expiry_instant` pins both sides. 25/25 local runs green.
+  *(b) G4-7 loopback leg:* the `hh-embed/tests/r2_14.rs` fixture sink stopped reading at
+  `\r\n\r\n` while `LocalHttpTransport` writes head+body in two `write_all` calls — a split
+  segment left the body in flight when the sink answered and dropped the socket → RST → client
+  `read_to_end` reported `Connection reset` (the `52e46d4` firing at R2.21). Both loopback
+  fixtures (`r2_14.rs`, `hh-env/tests/egress_mediation.rs`) now consume the declared
+  `Content-Length` body before responding — protocol-correct, deterministic; 25/25 local runs
+  green. No retries added anywhere.
 
 ## GATE DECISIONS
 

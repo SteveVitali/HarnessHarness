@@ -132,6 +132,43 @@ fn open_scopes(store: &mut Store, run: &str, lease: &Lease) -> (String, String, 
     (eid, tok.token, tm.resolver())
 }
 
+/// Read a full request: head + the declared `Content-Length` body.
+/// The transport writes head and body in two `write_all` calls; a sink
+/// that stops at `\r\n\r\n` and then replies + drops the socket can close
+/// with the body still inbound — the kernel RSTs the connection and the
+/// client's `read_to_end` reports `Connection reset` (the r2_14 loopback
+/// flake, run R2.21 `52e46d4`; R3.1 repair — the fixture consumes the
+/// declared request before answering).
+fn read_request(s: &mut std::net::TcpStream) -> Vec<u8> {
+    let mut buf = Vec::new();
+    let mut chunk = [0u8; 8192];
+    loop {
+        match s.read(&mut chunk) {
+            Ok(0) | Err(_) => break,
+            Ok(n) => {
+                buf.extend_from_slice(&chunk[..n]);
+                if let Some(head_end) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let declared: usize = String::from_utf8_lossy(&buf[..head_end])
+                        .split("\r\n")
+                        .skip(1)
+                        .find_map(|l| {
+                            let (k, v) = l.split_once(':')?;
+                            k.trim()
+                                .eq_ignore_ascii_case("content-length")
+                                .then(|| v.trim().parse().ok())
+                                .flatten()
+                        })
+                        .unwrap_or(0);
+                    if buf.len() >= head_end + 4 + declared {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    buf
+}
+
 /// The loopback fixture sink — captures the raw POST, answers 200.
 /// Returns (port, captured).
 fn fixture_sink() -> (u16, Arc<Mutex<Vec<String>>>) {
@@ -151,20 +188,7 @@ fn fixture_sink() -> (u16, Arc<Mutex<Vec<String>>>) {
             served += 1;
             s.set_read_timeout(Some(std::time::Duration::from_secs(5)))
                 .ok();
-            let mut buf = Vec::new();
-            let mut chunk = [0u8; 8192];
-            loop {
-                match s.read(&mut chunk) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        buf.extend_from_slice(&chunk[..n]);
-                        if buf.windows(4).any(|w| w == b"\r\n\r\n") {
-                            break;
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
+            let buf = read_request(&mut s);
             cap.lock()
                 .unwrap()
                 .push(String::from_utf8_lossy(&buf).to_string());

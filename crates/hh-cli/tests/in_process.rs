@@ -1876,6 +1876,18 @@ fn ac5_attended_and_unattended_share_one_configuration() {
     // CAP.3 added it there, this leg was missed — the #104 CI flake,
     // run 37482844398). The measurement is derived content, never a
     // semantic difference.
+    // `derived_from.view_hash` (R3.1 — the #133 CI flake, run
+    // 38020320703) is a *derived consequence of that same measured
+    // wall*, not an independent input: `context.assembled` is an
+    // observation-plane row, so a later assembly's `derived_from` is
+    // the `idp/1` stamp of the `context_view` fold over the durable
+    // prefix — which includes the earlier rows' `assembly_ms.value`.
+    // The derivation input is named: the measured `assembly_ms.value`
+    // wall on a prior `context.assembled` row. When one leg's assembly
+    // crosses a millisecond boundary the next row's view_hash diverges
+    // mechanically; making the view exclude measured walls would weaken
+    // the projection contract, so the derived member joins the
+    // allowlist under the same `ends_with` convention.
     for d in &diffs {
         assert!(
             d == ".hash"
@@ -1886,7 +1898,8 @@ fn ac5_attended_and_unattended_share_one_configuration() {
                 || d.ends_with("decider")
                 || d.ends_with("reason")
                 || d.ends_with("assembly_ms.value")
-                || d.ends_with("assembly_ms.measured_at"),
+                || d.ends_with("assembly_ms.measured_at")
+                || d.ends_with("derived_from.view_hash"),
             "unexpected ledger difference at {d}"
         );
     }
