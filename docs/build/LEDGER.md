@@ -375,35 +375,29 @@ updatedAt:       2026-10-14
 
 - 2026-10-14 · **R3.1 done** — branch `svitali/harnessharness-r3.1` · PR
   https://github.com/SteveVitali/HarnessHarness/pull/137 · base
-  `svitali/round3-decompose` (@75d61ab — the round-3 manifest base, not the
-  r2.27 chain tip; the ticket's `base_branch: current checkout`). Round-3
-  hygiene sweep — three recorded CI flake legs root-caused and repaired, no
-  retries: **G4-1** `verify_minted` `>`→`>=` (the `now < exp` reading; a
-  zero-TTL mint verified `Valid` inside the same-ms window — six recorded
-  firings R2.22–R2.26; `hh-secrets` r2_10 boundary regression pins both
-  sides; 25/25 green). **G4-2** ac5 `derived_from.view_hash` adjudicated —
-  a derived consequence of the allowlisted measured `assembly_ms.value`
-  wall inside the `context_view` fold prefix, not an independent input;
-  joined the existing `ends_with` convention with the derivation input
-  named (25/25 post-change; semantic diffs still reject). **G4-7** r2_14
-  loopback `Connection reset` — both fixtures stopped reading at
-  `\r\n\r\n` while the transport writes head+body in two `write_all`s;
-  now consume the declared `Content-Length` before answering (r2_14 +
-  hh-env egress_mediation; 25/25 green). **G4-4/5/6** bookkeeping: 16
-  discharged DEFERRALS cells flipped `OPEN`/`PARTIAL`→`DONE` leads (dated
-  `**DONE**` evidence preserved; DF-S0.3-3 keeps PARTIAL — the R2
-  human-signature residual is genuinely open); DF-S2.4-2 dated residual
-  note naming BL-31 (`env`, stays OPEN); BACKLOG.md counts → 72/25/3;
-  BL-42 homes ADR-0354 (45 triggers). Plus three pre-existing hh-env test
-  clippy lints repaired (newer toolchain) so the touched crate is clean
-  under `-D warnings`. Verification: `cargo test --workspace` 331 blocks /
-  3,400 tests / 0 failed / 1 ignored; fmt clean; clippy clean on the four
-  touched crates; check-backlog exit 0 (157 sources); check-build-memory 0
-  violations / 7 pre-existing warnings; check-drift in sync;
-  check-removability green; `^||` empty. ADR-0354 (accepted). Fixture-
-  verified ceiling — no staging/live claims. Ledger advanced
+  `svitali/round3-decompose` (@75d61ab — the round-3 manifest base; the
+  ticket's `base_branch: current checkout`). Three recorded CI flake legs
+  root-caused and repaired, no retries: **G4-1** `verify_minted` `>`→`>=`
+  (the `now < exp` reading; a zero-TTL mint verified `Valid` inside the
+  same-ms window — six firings R2.22–R2.26; r2_10 boundary regression;
+  25/25 green). **G4-2** ac5 `derived_from.view_hash` adjudicated — a
+  derived consequence of the allowlisted measured `assembly_ms.value` wall
+  inside the `context_view` fold prefix; joined the `ends_with` convention
+  with the input named (25/25; semantic diffs still reject). **G4-7** r2_14
+  loopback `Connection reset` — fixtures stopped reading at `\r\n\r\n`
+  while the transport writes head+body in two `write_all`s; both now drain
+  the declared `Content-Length` first (r2_14 + egress_mediation; 25/25).
+  **G4-4/5/6**: 16 discharged DEFERRALS cells' stale leads → `DONE` (dated
+  evidence preserved; DF-S0.3-3 keeps `PARTIAL` — human-signature residual
+  genuinely open); DF-S2.4-2 dated note naming BL-31 (`env`, stays OPEN);
+  BACKLOG counts → 72/25/3; BL-42 homes ADR-0354 (45 triggers); three
+  pre-existing hh-env test lints repaired for `-D warnings`. Workspace:
+  331 blocks / 3,400 tests / 0 failed / 1 ignored; fmt + scoped clippy
+  clean; check-backlog exit 0 (157); check-build-memory 0 violations / 7
+  pre-existing warnings; drift in sync; removability green; `^||` empty.
+  ADR-0354 accepted. Fixture-verified ceiling. Ledger advanced
   `lastCompleted: R3.1`, `nextTicket: R3.2`, `chainTip:
-  svitali/harnessharness-r3.1`. Operator merges (mergePolicy: OPERATOR).
+  svitali/harnessharness-r3.1`. Operator merges.
 
 - 2026-10-14 · **R3.1 ci (terminal head)** — `ci-boundary/1` **pass** on
   `77d5335`: push run `38610288697` + pull_request run `38610295628`,
