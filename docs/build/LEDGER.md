@@ -404,3 +404,11 @@ updatedAt:       2026-10-14
   verified ceiling — no staging/live claims. Ledger advanced
   `lastCompleted: R3.1`, `nextTicket: R3.2`, `chainTip:
   svitali/harnessharness-r3.1`. Operator merges (mergePolicy: OPERATOR).
+
+- 2026-10-14 · **R3.1 ci (terminal head)** — `ci-boundary/1` **pass** on
+  `77d5335`: push run `38610288697` + pull_request run `38610295628`,
+  both green first attempt — no firings on the repaired flake legs. The
+  two runs queued on the first push `63c60f2` (`38609945366`,
+  `38609963681`) were superseded-cancelled by the closeout-docs push —
+  a queue mechanic, not a failure. Record: `docs/build/logs/ci-R3.1.json`
+  (gitignored subtree, force-added). PR #137 open, awaiting operator merge.
