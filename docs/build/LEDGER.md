@@ -10,8 +10,8 @@
 ## CURRENT STATE
 
 ```
-projectStatus:   DONE        # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      DONE   # the 136-row chain is complete — no nextTicket remains; rows 127/128 stay HUMAN-H3/H4 (operator work, carried per GATE-G4)
+projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
+nextTicket:      R3.1   # round-3 chain (rows 137-149); amended 2026-10-14: 144-146 un-gated to tickets (H5=ext crate via R3.7 dep-ADR; CF-489=conform code); 127/128 stay HUMAN-H3/H4
 lastCompleted:   R2.27
 blockedOn:       (none)
 pauseRequested:  false
@@ -23,12 +23,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r2.27  # R2.27 tip — round-2 docs refresh to post-G4 truth; docs-only; the 136-row chain is complete
+chainTip:        svitali/harnessharness-r2.27  # R2.27 tip — round-3 rows fork from here; the 136-row round-1/2 chain is complete
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
-round:           2
-updatedAt:       2026-10-10
+round:           3
+updatedAt:       2026-10-14
 ```
 
 ## OPEN FINDINGS
@@ -89,6 +89,9 @@ updatedAt:       2026-10-10
 
 | 2026-09-27 | S4.10 | Live stage: web instrument + security battery (operator-gated) | instrument + battery scope | authorized — hermetic/offline only; the full V1–V11 instrument + security battery lands in-worktree with no external spend or egress; legs bound to the unbound E3 surface ecosystem (HUMAN-H1) record DEFERRALS rows and report 'gate pending' per manifest, never a failure | runs the read-only web instrument + full security battery (not deferrable) over binding (c); generated-client legs gated on HUMAN-H1 deferred to the owning rows |
 | 2026-10-10 | GATE-G4 | Round-2 discharge review | disposition (reading 1) | **PASSED** — blanket acceptance, all 28 carried rows dispositioned | every §9 row dispositioned per its reason code (human/env/in-build/dep/window → CARRY; accepted/ruling/standing → ACCEPT); no SEND-BACKs; readouts/GATE-G4.md §9 recorded; zero unlanded R2-chartered rows; check-build-memory 0 violations; check-backlog exit 0; 10 GATE-ACCEPT deviations unchanged; named-set human/env rows gate-pending. R2.27 released (nextTicket → R2.27). |
+| 2026-10-14 | HUMAN-H5 | crypto-dependency posture ruling (R3.7/R3.8 gate) | disposition | **RULED** — disposition (b): a vetted external crypto crate (ring/aws-lc/rustls family) is admitted | the dep-choice ADR lives inside R3.7's contract (names the crate + a version published ≥7 days before selection + admitted scope; amends the hermetic-deps note — never a silent Cargo.toml edit); R3.7 (BL-19 `dpop` + `wrapped_long_lived`) and R3.8 (BL-45 per-event AEAD + R-2.8.6 legs) un-gated skeleton → ticket; R3.7→R3.8 is a real dependency edge (the pin); 143 keeps the ruling record |
+| 2026-10-14 | R3.9 | CF-489 direction (WS-I6/OQ-441 interim) | direction ruling | **CONFORM CODE TO SPEC** — `DebtPolicy::default()` → §5h.6's proposed 60 d runway / 30 d warn | R3.9 un-gated skeleton → ticket: constants + fidelity comment + caller/test sweep + dated CF-489 resolution note; the `[[DEFERRED ADR-0214: OQ-441]]` markers stand for WS-I6's Stage-5 re-pin; BL-30/BL-37 get dated progress notes, stay open on their other rulings |
+| 2026-10-14 | round-3 plan | environment provisioning path | statement | HUMAN-H1/H2/H3 are provisionable (operator) | env-gated rows (BL-01/17/26/27/31/32 + dependents) stay excluded until provisioning lands; they unblock on the H-rows and a future mode=extend round schedules them; recorded in `## Decomposition decisions → Round 3` |
 
 ## RETURN PASS
 
@@ -324,3 +327,20 @@ updatedAt:       2026-10-10
 - 2026-10-10 · GATE-G4 PASSED — operator blanket acceptance (reading 1). All 28 §9 carried rows dispositioned per reason code: human/env/in-build/dep/window → CARRY; accepted/ruling/standing → ACCEPT; no SEND-BACKs. Thresholds green: zero unlanded R2-chartered rows, check-build-memory 0 violations, check-backlog exit 0 (156 sources, 47/66), `^||` empty, 10 GATE-ACCEPT deviations re-confirmed. Named set (HUMAN-H1/H2/H3/H4 + foreign cells) recorded gate-pending. Readout `docs/build/readouts/GATE-G4.md` signed; GATE DECISIONS row appended; nextTicket → R2.27.
 - 2026-10-10 · R2.27 done — branch `svitali/harnessharness-r2.27` · PR https://github.com/SteveVitali/HarnessHarness/pull/134 · base `svitali/harnessharness-r2.26` (@6e71d01). Round-2 docs refresh (final manifest row): `refresh-repo-docs` + `agent-docs` to closeout — detectors green pre+post (761 repo docs / 0 broken refs; 2 agent docs / 0 issues). README: 51 crates, hh-xcheck binary (17 `[[bin]]`), 3,399-test baseline (R2.21), stale "SSE owed — DF-S4.11-1" line removed (DONE at R2.19), `hh env` +7 R2.4 verbs, Build-state para (GATE-G4 PASSED, 47/66, fixture-verified ceiling). docs/README build/ row names round-2 artifacts; BACKLOG.md G4-6 fix (72 discharged, dated-marker convention, 17 stale `OPEN`-prefix cells = G4-4 wart, round-3 chore); OPERATIONAL_READINESS gate line → PASSED + head r2.27. AGENTS.md/crates map: 51-crate, `hh-xcheck-bundle/1` bullet + binary, gotcha 4 → every-write shell/python rule, new gotchas (logs `git add -f`, DF status-token + env-pending, stale hh-helper). **Verify:** docs-only; fmt clean; check-build-memory 0 violations / 7 pre-existing warnings; `^||` empty. **Deferrals/ADRs:** none. **Closing act:** 130 index rows cover every non-gate/non-human manifest row, all five gates PASSED, no nextTicket remains → `projectStatus: DONE`. chainTip → svitali/harnessharness-r2.27 · next → DONE (the 136-row chain is complete) · layer: fixture-verified · ci: pass #134@ca61592 (build · test · fmt · drift 38025908568; build · test · fmt · drift 38025905846) · harness: devin-cli (worker subagent).
 - 2026-10-10 · R2.27 ci (terminal head) — `ci-boundary/1` **pass** on the closeout tip `cb96d99` (runs 38026618971 pull_request + 38026616876 push, both pass on the first attempt — no flake family fired). ci-R2.27.json records this read; the `ca61592` pass stands in the line above. PR #134 OPEN for operator merge (mergePolicy: OPERATOR).
+
+### Round 3
+
+- 2026-10-14 · **round 3 seeded** — `decompose-spec mode=extend`: rows 137–149 appended to the
+  manifest (8 runnable rows R3.1–R3.6 + R3.10–R3.11, 1 HUMAN marker H5, 3 skeletons R3.7–R3.9,
+  1 gate GATE-G5); partition + Phase-4 review in `## Decomposition decisions → Round 3` and
+  `docs/build/planning/2026-10-14_round3-decomposition.md`. `projectStatus: DONE → IN_PROGRESS`;
+  `round: 2 → 3`; `nextTicket: R3.1`; `chainTip` stays `svitali/harnessharness-r2.27` so
+  Round-3 tickets fork from the round-2 tip. lastCompleted stays `R2.27`; Round-1/2 history
+  unchanged.
+- 2026-10-14 · **round 3 amended (operator rulings)** — same-day amend pass on the seeded
+  partition: HUMAN-H5 answered (disposition (b) — external crypto crate admitted; the dep-choice
+  ADR + ≥7-day pin rule live inside R3.7) and CF-489 directed (conform code to spec — 60 d/30 d).
+  Rows 144/145/146 flipped skeleton → ticket (full contracts); row 143 records the ruling; the
+  env-path statement (H1/H2/H3 provisionable) is on the record without scheduling env rows.
+  Manifest rows/kind cells, GATE-G5 criterion, R3.10/R3.11 texts and GATE DECISIONS updated;
+  `nextTicket` stays `R3.1`. No code touched — planning records only.
