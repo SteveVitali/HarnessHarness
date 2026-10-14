@@ -99,9 +99,13 @@ pub use backend::{
     BackendCaps, ContainmentBackend, Ep2Model, GateVerdict, Syscall, UnsupportedBackend,
 };
 pub use egress::{
-    decide_egress, effective_addrs, is_non_public, recheck_resolved, ApprovalCache, CacheEntry,
-    CacheScope, EgressDecision, EgressReason, EgressRequest, EgressSource, EgressVerdict,
+    approved_host_body_check, decide_egress, effective_addrs, is_non_public, recheck_resolved,
+    ApprovalCache, CacheEntry, CacheScope, EgressDecision, EgressReason, EgressRequest,
+    EgressSource, EgressVerdict,
 };
 pub use meet::{effective, ContainmentWidening, MeetError};
 pub use policy::{kernel_default, ContainmentPolicy, PolicyError, KERNEL_DENY, KERNEL_PROTECTED};
-pub use report::{ContainmentReport, EnforcementEvidence, FieldGroup, LossItem, ProbeResult};
+pub use report::{
+    ContainmentReport, EnforcementEvidence, FieldGroup, LossConsequence, LossItem, LossKind,
+    LoweringLoss, ProbeResult,
+};

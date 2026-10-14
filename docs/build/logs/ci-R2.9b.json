@@ -1,0 +1,24 @@
+{
+  "pr": 116,
+  "head": "be9d95d",
+  "read_at": "2026-10-07",
+  "checks": [
+    {
+      "name": "build · test · fmt · drift",
+      "state": "pass",
+      "event": "pull_request",
+      "run": 37666470865,
+      "duration": "11m17s",
+      "head": "be9d95d"
+    },
+    {
+      "name": "build · test · fmt · drift",
+      "state": "pass",
+      "event": "push",
+      "run": 37666465691,
+      "duration": "10m29s",
+      "head": "be9d95d"
+    }
+  ],
+  "note": "ci-boundary/1 pass #116 — green at the closeout head be9d95d (runs 37666470865 pull_request + 37666465691 push, both pass). The 05f8066 runs (37666192613 / 37666210359) were cancelled by the closeout-records push, not failures. Local suite: cargo test --workspace 303 blocks / 3,198 tests / 0 failures / 1 ignored (+3 blocks, +24 tests over R2.9a's 300/3,174 — containment r2_9b 7/7 + env r2_9b 6/6 + secrets r2_9b 4/4 + security_metrics 5/5 + settle_emits 2/2). No R2.9b-introduced failure; stack walk shows only the known inherited reds. PR #116 remains OPEN for operator merge (mergePolicy: OPERATOR)."
+}

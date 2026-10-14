@@ -2574,3 +2574,206 @@ fn successive_halving_records_the_bracket_and_prunes() {
     };
     assert_eq!(second, first, "the bracket assignment is replay-stable");
 }
+
+// ── R2.9b: DF-S1.12-4 — the security process metrics emit at settle ────────
+
+/// Append the subject run's durable `security.*` rows before its finish row.
+fn seed_subject_security(store: &mut Store, run_id: &str, writer: &Lease) {
+    let decided = |decision: &str, source: &str, reason: &str| {
+        Json::obj([
+            ("request_ref", Json::str("req-1")),
+            ("token_hash", Json::str("th-1")),
+            ("effect_id", Json::str("eff-1")),
+            ("tool_call_id", Json::str("tc-1")),
+            ("env_handle", Json::str("env-1")),
+            ("protocol", Json::str("https_connect")),
+            ("host_raw", Json::str("api.example.com")),
+            ("host_norm", Json::str("api.example.com")),
+            ("port", Json::Int(443)),
+            ("method", Json::str("POST")),
+            ("policy_version_id", Json::str("pv-1")),
+            ("decision", Json::str(decision)),
+            ("source", Json::str(source)),
+            ("decided_by", Json::str("mediator")),
+            ("reason", Json::str(reason)),
+        ])
+    };
+    let mut batch = vec![
+        mint(
+            store,
+            run_id,
+            "security.egress.decided",
+            decided("allow", "allow_rule", ""),
+        ),
+        mint(
+            store,
+            run_id,
+            "security.egress.decided",
+            decided("ask", "default_unmatched", ""),
+        ),
+        mint(
+            store,
+            run_id,
+            "security.egress.decided",
+            decided("ask", "default_unmatched", ""),
+        ),
+        mint(
+            store,
+            run_id,
+            "security.egress.decided",
+            decided("deny", "deny_rule", "rule_deny"),
+        ),
+        mint(
+            store,
+            run_id,
+            "security.containment.applied",
+            Json::obj([
+                ("env_handle", Json::str("env-1")),
+                ("policy_version_id", Json::str("pv-1")),
+                ("backend", Json::str("mediated")),
+                (
+                    "lowering_loss_fields",
+                    Json::Arr(vec![Json::str("proc.env")]),
+                ),
+            ]),
+        ),
+        mint(
+            store,
+            run_id,
+            "security.containment.applied",
+            Json::obj([
+                ("env_handle", Json::str("env-2")),
+                ("policy_version_id", Json::str("pv-1")),
+                ("backend", Json::str("kernel_default")),
+                ("lowering_loss_fields", Json::Arr(vec![])),
+            ]),
+        ),
+        mint(
+            store,
+            run_id,
+            "security.containment.violated",
+            Json::obj([
+                ("policy_version_id", Json::str("pv-1")),
+                ("kind", Json::str("egress")),
+            ]),
+        ),
+        mint(
+            store,
+            run_id,
+            "security.credential.denied",
+            Json::obj([
+                ("channel_id", Json::str("github")),
+                ("decision", Json::str("deny")),
+                ("reason", Json::str("revoked")),
+            ]),
+        ),
+        mint(
+            store,
+            run_id,
+            "security.credential.denied",
+            Json::obj([
+                ("channel_id", Json::str("github")),
+                ("decision", Json::str("deny")),
+                ("reason", Json::str("revoked")),
+            ]),
+        ),
+    ];
+    let mut parent = store.head_event_id(run_id).unwrap();
+    for e in &mut batch {
+        e.parent_event_id = parent.clone();
+        parent = e.event_id.clone();
+    }
+    store.append(run_id, writer, batch).unwrap();
+}
+
+/// The four declared security metrics emit `measurement.metric.emitted`
+/// rows at settle, `applies_to` the subject run, values ppm/count — and the
+/// rows carry the folded truth, never a fabricated zero.
+#[test]
+fn settle_emits_the_security_metric_folds() {
+    let mut r = rig("sec-metrics", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let (rpid, l) = launch_one(&mut r, &eid);
+    seed_subject_security(&mut r.store, &l.run_id, &l.subject_writer);
+    finish_subject(
+        &mut r.store,
+        &l.run_id,
+        &l.subject_writer,
+        StopReason::Completed,
+        &[(DimensionId::ModelCalls, 10)],
+    );
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    assert!(eng.settle(&rpid).unwrap().accepted);
+    drop(eng);
+
+    let emitted: Vec<&Json> = r
+        .store
+        .events(&run_id)
+        .unwrap()
+        .iter()
+        .filter(|e| e.class == "measurement.metric.emitted")
+        .map(|e| &e.payload)
+        .collect();
+    let value_of = |name: &str| -> i64 {
+        emitted
+            .iter()
+            .find(|p| p.get("metric_ref").and_then(Json::as_str) == Some(name))
+            .and_then(|p| p.get("value"))
+            .and_then(|v| v.get("decimal"))
+            .and_then(Json::as_int)
+            .unwrap_or_else(|| panic!("no emitted row for {name}: {emitted:?}"))
+    };
+    // 2 asks / 4 decisions; 1 violation / 2 applied; 1 proxy-surface / 2
+    // applied; 2 revoked continuations denied.
+    assert_eq!(value_of("egress.ask_rate"), 500_000);
+    assert_eq!(value_of("containment.violation_rate"), 500_000);
+    assert_eq!(value_of("proxy.hijack_attempt_rate"), 500_000);
+    assert_eq!(value_of("session.revoked_continuation_denied"), 2);
+    for p in &emitted {
+        assert_eq!(
+            p.get("applies_to").and_then(Json::as_str),
+            Some(l.run_id.as_str()),
+        );
+    }
+}
+
+/// A subject that produced no `security.*` rows emits no security metric
+/// row — `None` stays unemitted (the typed `n/a{not_run}` half), never 0.
+#[test]
+fn settle_emits_nothing_when_security_never_ran() {
+    let mut r = rig("sec-metrics-na", 0);
+    let s = spec(ExperimentKind::Comparative);
+    let (eid, run_id) = open(&mut r, &s);
+    let (rpid, l) = launch_one(&mut r, &eid);
+    finish_subject(
+        &mut r.store,
+        &l.run_id,
+        &l.subject_writer,
+        StopReason::Completed,
+        &[(DimensionId::ModelCalls, 10)],
+    );
+    let mut eng = ExperimentEngine::new(&mut r.store, r.docs.clone(), ctx());
+    eng.attach(&eid).unwrap();
+    assert!(eng.settle(&rpid).unwrap().accepted);
+    drop(eng);
+
+    const SECURITY: &[&str] = &[
+        "egress.ask_rate",
+        "containment.violation_rate",
+        "proxy.hijack_attempt_rate",
+        "session.revoked_continuation_denied",
+    ];
+    let leaked: Vec<String> = r
+        .store
+        .events(&run_id)
+        .unwrap()
+        .iter()
+        .filter(|e| e.class == "measurement.metric.emitted")
+        .filter_map(|e| e.payload.get("metric_ref").and_then(Json::as_str))
+        .filter(|n| SECURITY.contains(n))
+        .map(str::to_string)
+        .collect();
+    assert!(leaked.is_empty(), "n/a metrics must not emit: {leaked:?}");
+}

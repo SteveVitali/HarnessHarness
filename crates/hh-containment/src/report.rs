@@ -5,7 +5,8 @@
 //! {policy_version_id, backend, isolation_class,
 //!  enforcement_evidence: map<field_group ∈ {fs, net, proc, resources},
 //!                            attested | reported | probed | unknown>,
-//!  lowering_loss: [LossItem{field, backend, reason}],
+//!  lowering_loss: [LoweringLoss{field, backend, reason, kind,
+//!                               consequence}],
 //!  probes: [ProbeResult{kind, expected, observed, evidence_kind}]}
 //! ```
 //!
@@ -81,16 +82,99 @@ impl EnforcementEvidence {
     }
 }
 
-/// `LossItem{field, backend, reason}` — a field the backend cannot enforce
-/// (ADR-0062 D2; T-LCD-11's analogue for containment).
+/// `LoweringLoss.kind ∈ {no_slot, hint_only, untyped_slot, narrowed,
+/// truncated}` — the §3.2.5 `LossClass` closed set, spelled locally
+/// (ADR-0341 D1: the dependency order forbids `hh-containment →
+/// hh-compiler`; the vocabulary is the spec's, the codec is each layer's).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LossKind {
+    /// The member exists; the backend has no enforcement slot for it.
+    NoSlot,
+    /// The member travels as a hint only — never an enforcement claim
+    /// (`upstream_proxy`/proxy env vars "counting as mediation").
+    HintOnly,
+    /// The member is accepted but its type/grammar is unchecked.
+    UntypedSlot,
+    /// The member is enforced against a narrowed interpretation.
+    Narrowed,
+    /// The member is truncated (a bounded rendering, not the full value).
+    Truncated,
+}
+
+impl LossKind {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LossKind::NoSlot => "no_slot",
+            LossKind::HintOnly => "hint_only",
+            LossKind::UntypedSlot => "untyped_slot",
+            LossKind::Narrowed => "narrowed",
+            LossKind::Truncated => "truncated",
+        }
+    }
+}
+
+/// `LoweringLoss.consequence ∈ {fail_closed, stratified}` — what the loss
+/// does to the run (ADR-0341 D2): `FailClosed` — a relied-on group carrying
+/// the loss refuses at attach (the member was *required*); `Stratified` —
+/// the loss is recorded and the run stratifies on it, never silently
+/// upgraded (a `upstream_proxy`/proxy-env claim is a stratifier — "recorded
+/// as `lowering_loss`; the run is stratified; never counts as `mediated`",
+/// §5g.4 §5's threat row — attach proceeds, the loss rides the record).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LossConsequence {
+    /// The loss on a relied-on group fails attach.
+    FailClosed,
+    /// The loss is recorded; the run stratifies on it.
+    Stratified,
+}
+
+impl LossConsequence {
+    /// The canonical spelling.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LossConsequence::FailClosed => "fail_closed",
+            LossConsequence::Stratified => "stratified",
+        }
+    }
+}
+
+/// `LoweringLoss{field, backend, reason, kind, consequence}` — a field the
+/// backend cannot enforce (ADR-0062 D2; T-LCD-11's analogue for
+/// containment; DF-S1.12-4's typed per-backend report row — the
+/// `{declared_field, kind, consequence}` reading of §5g.4 §3).
 #[derive(Debug, Clone, PartialEq)]
-pub struct LossItem {
-    /// The policy field.
-    pub field: String,
+pub struct LoweringLoss {
+    /// The policy field the row names (`declared_field`).
+    pub declared_field: String,
     /// The backend that cannot enforce it.
     pub backend: String,
-    /// The closed reason tag.
+    /// The closed reason tag (why the slot is absent).
     pub reason: String,
+    /// The §3.2.5 loss class.
+    pub kind: LossKind,
+    /// What the loss does to the run.
+    pub consequence: LossConsequence,
+}
+
+/// `LossItem` — the pre-R2.9b row shape's name (kept as the alias so
+/// pre-R2.9b readers name the same type; the canonical name is
+/// [`LoweringLoss`]).
+pub type LossItem = LoweringLoss;
+
+impl LoweringLoss {
+    /// The canonical member form — `{field, backend, reason, kind,
+    /// consequence}` (the spec'd `{field, backend, reason}` members
+    /// preserved verbatim; `kind`/`consequence` are the R2.9b additions).
+    pub fn to_json(&self) -> Json {
+        Json::obj([
+            ("field", Json::str(self.declared_field.clone())),
+            ("backend", Json::str(self.backend.clone())),
+            ("reason", Json::str(self.reason.clone())),
+            ("kind", Json::str(self.kind.as_str())),
+            ("consequence", Json::str(self.consequence.as_str())),
+        ])
+    }
 }
 
 /// The probe battery's kind set (ADR-0062 D2 + the §5g.4 §5 `none`-mode row;
@@ -267,7 +351,7 @@ pub struct ContainmentReport {
     /// `enforcement_evidence` per field group.
     pub enforcement_evidence: BTreeMap<FieldGroup, EnforcementEvidence>,
     /// The relied-on losses the backend declared.
-    pub lowering_loss: Vec<LossItem>,
+    pub lowering_loss: Vec<LoweringLoss>,
     /// The probe-battery results.
     pub probes: Vec<ProbeResult>,
 }
@@ -315,13 +399,7 @@ impl ContainmentReport {
                 Json::Arr(
                     self.lowering_loss
                         .iter()
-                        .map(|l| {
-                            Json::obj([
-                                ("field", Json::str(l.field.clone())),
-                                ("backend", Json::str(l.backend.clone())),
-                                ("reason", Json::str(l.reason.clone())),
-                            ])
-                        })
+                        .map(LoweringLoss::to_json)
                         .collect(),
                 ),
             ),

@@ -1223,7 +1223,7 @@ fn ac10_lowering_loss_names_every_unenforceable_relied_field() {
     p.compute_ids();
     let b = Ep2Model::reference();
     let loss = b.lowering_loss(&p);
-    let fields: BTreeSet<&str> = loss.iter().map(|l| l.field.as_str()).collect();
+    let fields: BTreeSet<&str> = loss.iter().map(|l| l.declared_field.as_str()).collect();
     for f in [
         "resources.cpu_ms",
         "resources.network_calls",
@@ -1273,7 +1273,8 @@ fn ac10_lowering_loss_names_every_unenforceable_relied_field() {
     assert!(report
         .lowering_loss
         .iter()
-        .any(|l| l.field == "net.upstream_proxy" && l.reason == "proxy_env_is_not_mediation"));
+        .any(|l| l.declared_field == "net.upstream_proxy"
+            && l.reason == "proxy_env_is_not_mediation"));
 }
 
 // ── AC-R-2.8.4-14 — the authorize precondition (the monitor seam) ────────────

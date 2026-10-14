@@ -37,6 +37,7 @@ use std::collections::BTreeMap;
 use std::net::IpAddr;
 
 use hh_identity::idp::idp_id;
+use hh_provenance::authority::ReaderSet;
 use hh_wire::json::Json;
 
 use crate::policy::{
@@ -84,6 +85,12 @@ pub struct EgressRequest {
     /// The request body (content-free to the decision — the C0 claim is
     /// destination/credential/method bounding only).
     pub body: Option<String>,
+    /// The body parameter's recorded readers (`readers(body)` — the R-2.8.2
+    /// label the `approved_host_body` closer checks, R2.9b). `None` = no
+    /// label was recorded for the body's canonical arg — under a declared
+    /// `approved_host_body` residual that is *unproven coverage*, so the
+    /// closer refuses closed (ADR-0341 D6).
+    pub body_readers: Option<ReaderSet>,
     /// Explicitly tagged sentinel spellings (in addition to any
     /// `mh_secret:`-prefixed header values the mediator scans for).
     pub credential_sentinels: Vec<String>,
@@ -139,6 +146,17 @@ impl EgressRequest {
         if let Some(b) = &self.body {
             m.insert("body".to_string(), Json::str(b.clone()));
         }
+        if let Some(r) = &self.body_readers {
+            m.insert(
+                "body_readers".to_string(),
+                match r {
+                    ReaderSet::Public => Json::str("public"),
+                    ReaderSet::Restricted(rs) => {
+                        Json::Arr(rs.iter().map(|x| Json::str(x.clone())).collect())
+                    }
+                },
+            );
+        }
         m.insert(
             "credential_sentinels".to_string(),
             Json::Arr(
@@ -183,8 +201,9 @@ impl EgressVerdict {
 }
 
 /// `source ∈ {mode_guard, unattributed, deny_rule, non_public_guard,
-/// protocol_guard, allow_rule, approval_cache, default_unmatched, monitor}`
-/// (§5g.4 §3 `EgressDecision.source`).
+/// protocol_guard, allow_rule, approval_cache, default_unmatched, monitor,
+/// flow_guard, tls_guard, inspect_hook}` (§5g.4 §3 `EgressDecision.source`;
+/// the last three are the C2 post-allow guards — R2.9b; ADR-0341 D3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EgressSource {
     /// Step 1 — the mode guard.
@@ -205,6 +224,14 @@ pub enum EgressSource {
     DefaultUnmatched,
     /// The monitor's endorsement resolved an ask.
     Monitor,
+    /// The `approved_host_body` closer — the body's readers do not cover the
+    /// approved destination (R-2.8.2's reader-set check; §5g.4 C2 row).
+    FlowGuard,
+    /// `tls.terminate` was declared but the transport cannot terminate —
+    /// enforce-or-refuse, never silently unterminated.
+    TlsGuard,
+    /// A declared `inspect_hooks` member's verdict (or its absence).
+    InspectHook,
 }
 
 impl EgressSource {
@@ -220,13 +247,18 @@ impl EgressSource {
             EgressSource::ApprovalCache => "approval_cache",
             EgressSource::DefaultUnmatched => "default_unmatched",
             EgressSource::Monitor => "monitor",
+            EgressSource::FlowGuard => "flow_guard",
+            EgressSource::TlsGuard => "tls_guard",
+            EgressSource::InspectHook => "inspect_hook",
         }
     }
 }
 
 /// `reason ∈ {denied, not_allowed, not_allowed_local, method_not_allowed,
 /// port_not_allowed, protocol_not_allowed, mode_none, unattributed,
-/// budget_exhausted}` — the closed deny-reason sum (§5g.4 §3).
+/// budget_exhausted, reader_coverage, tls_terminate_unsupported,
+/// inspect_hook_denied, inspect_hook_unavailable}` — the closed deny-reason
+/// sum (§5g.4 §3; the last four are the C2 members — R2.9b; ADR-0341 D3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EgressReason {
     /// A deny rule fired.
@@ -247,6 +279,17 @@ pub enum EgressReason {
     Unattributed,
     /// A required budget refused (`network.calls` or `approvals.requested`).
     BudgetExhausted,
+    /// `readers(body)` does not cover the approved destination — the
+    /// `approved_host_body` closer (a body with no recorded readers is
+    /// unproven coverage and denies closed).
+    ReaderCoverage,
+    /// `tls.terminate` was declared but the transport cannot terminate.
+    TlsTerminateUnsupported,
+    /// A declared `inspect_hooks` member denied the request.
+    InspectHookDenied,
+    /// A declared `inspect_hooks` member is not registered — the declared
+    /// mechanism cannot be honoured, so the request refuses closed.
+    InspectHookUnavailable,
 }
 
 impl EgressReason {
@@ -262,6 +305,10 @@ impl EgressReason {
             EgressReason::ModeNone => "mode_none",
             EgressReason::Unattributed => "unattributed",
             EgressReason::BudgetExhausted => "budget_exhausted",
+            EgressReason::ReaderCoverage => "reader_coverage",
+            EgressReason::TlsTerminateUnsupported => "tls_terminate_unsupported",
+            EgressReason::InspectHookDenied => "inspect_hook_denied",
+            EgressReason::InspectHookUnavailable => "inspect_hook_unavailable",
         }
     }
 }
@@ -289,6 +336,10 @@ pub struct EgressDecision {
     pub credential_binding_candidates: Vec<String>,
     /// The matched allow/deny rule's index (canonical-order coordinate).
     pub rule_index: Option<usize>,
+    /// The C2 guard's coordinate — the declared `inspect_hooks` ref that
+    /// produced the verdict (`inspect_hook` source only; a closed
+    /// policy-declared ref, never content — R2.9b; ADR-0341 D3).
+    pub guard_detail: Option<String>,
 }
 
 impl EgressDecision {
@@ -300,6 +351,7 @@ impl EgressDecision {
             reason: Some(reason),
             credential_binding_candidates: vec![],
             rule_index: None,
+            guard_detail: None,
         }
     }
 
@@ -316,6 +368,26 @@ impl EgressDecision {
             reason: Some(reason),
             credential_binding_candidates: vec![],
             rule_index: Some(index),
+            guard_detail: None,
+        }
+    }
+
+    /// A C2-guard denial carrying the guard's coordinate (`guard_detail` —
+    /// the declared hook ref / guard name; the decided row records *which*
+    /// mechanism refused, never the content it saw).
+    pub fn deny_guard(
+        source: EgressSource,
+        reason: EgressReason,
+        detail: Option<String>,
+    ) -> EgressDecision {
+        EgressDecision {
+            decision: EgressVerdict::Deny,
+            source,
+            rule_ref: None,
+            reason: Some(reason),
+            credential_binding_candidates: vec![],
+            rule_index: None,
+            guard_detail: detail,
         }
     }
 
@@ -329,6 +401,9 @@ impl EgressDecision {
         }
         if let Some(r) = &self.reason {
             m.insert("reason".to_string(), Json::str(r.as_str()));
+        }
+        if let Some(d) = &self.guard_detail {
+            m.insert("guard_detail".to_string(), Json::str(d.clone()));
         }
         Json::Obj(m)
     }
@@ -778,8 +853,14 @@ pub fn decide_egress(
         // (6) allow — the first covering rule whose extent admits the
         // request wins; its declared `credential_bindings` are the
         // substitution candidates (the mediator applies only sentinels
-        // whose *own* binding names `host_norm` — anti-laundering).
+        // whose *own* binding names `host_norm` — anti-laundering). The
+        // `approved_host_body` closer rides on every allow — a declared
+        // body channel stays refused until `readers(body)` covers the
+        // destination (AC-H4-05 (iv)).
         if let Some((i, r)) = port_admits.first() {
+            if let Some(d) = approved_host_body_check(policy, req) {
+                return d;
+            }
             return EgressDecision {
                 decision: EgressVerdict::Allow,
                 source: EgressSource::AllowRule,
@@ -787,13 +868,21 @@ pub fn decide_egress(
                 reason: None,
                 credential_binding_candidates: r.credential_bindings.clone(),
                 rule_index: Some(*i),
+                guard_detail: None,
             };
         }
     }
 
     // (7) approval_cache — narrowing-only, version-pinned, and only when the
-    // policy opts into session caching (`amendment.session_cache`).
+    // policy opts into session caching (`amendment.session_cache`). The key
+    // is `(host_norm, port, protocol, method, scope)` — the body is *not* a
+    // key member, so the `approved_host_body` closer re-runs on a hit: an
+    // approval for one body never silently covers another (the DF-S1.12-1
+    // `approved_host_body` cache-scope member).
     if policy.amendment.session_cache && cache.lookup(&policy.version_id, req).is_some() {
+        if let Some(d) = approved_host_body_check(policy, req) {
+            return d;
+        }
         return EgressDecision {
             decision: EgressVerdict::Allow,
             source: EgressSource::ApprovalCache,
@@ -801,6 +890,7 @@ pub fn decide_egress(
             reason: None,
             credential_binding_candidates: vec![],
             rule_index: None,
+            guard_detail: None,
         };
     }
 
@@ -816,7 +906,47 @@ pub fn decide_egress(
             reason: None,
             credential_binding_candidates: vec![],
             rule_index: None,
+            guard_detail: None,
         },
+    }
+}
+
+/// `approved_host_body_check` — the R-2.8.2 reader-set closer for the
+/// declared `approved_host_body` residual (I-C6; AC-H4-05 (iv); R2.9b,
+/// ADR-0341 D6). Runs on provisional allows: when the policy declares the
+/// channel and the request carries a body, `readers(body)` must cover the
+/// destination — `Public` passes; a `Restricted` set must contain
+/// `host_norm`; an unlabeled body (`body_readers = None`) is *unproven
+/// coverage* and refuses closed. A body flowing under a policy that never
+/// declared the channel is a declaration/readiness gap (the C0 assertion
+/// (iii) is a policy-text claim, T-LCD-05's shape) — the mediator closes
+/// declared channels, it does not invent them. `Some(deny)` supersedes the
+/// allow; `None` stands.
+pub fn approved_host_body_check(
+    policy: &ContainmentPolicy,
+    req: &EgressRequest,
+) -> Option<EgressDecision> {
+    if req.body.is_none()
+        || !policy
+            .residual_channels
+            .iter()
+            .any(|c| c.kind == crate::policy::ResidualKind::ApprovedHostBody)
+    {
+        return None;
+    }
+    let covered = match &req.body_readers {
+        Some(ReaderSet::Public) => true,
+        Some(ReaderSet::Restricted(rs)) => rs.contains(&req.host_norm()),
+        None => false,
+    };
+    if covered {
+        None
+    } else {
+        Some(EgressDecision::deny_guard(
+            EgressSource::FlowGuard,
+            EgressReason::ReaderCoverage,
+            Some("approved_host_body".to_string()),
+        ))
     }
 }
 
@@ -926,6 +1056,7 @@ mod tests {
             path: None,
             headers: vec![],
             body: None,
+            body_readers: None,
             credential_sentinels: vec![],
         }
     }

@@ -416,6 +416,8 @@ fn is_ident(b: u8) -> bool {
 pub enum ScanTarget {
     /// A ledger event (`event_id` when known).
     Event(Option<String>),
+    /// The run manifest — the immutable seq-0 record (R2.9b; DF-S2.4-3).
+    Manifest(String),
     /// A blob (its content address).
     Blob(String),
     /// A staged request view (what the mediator would put on the wire).
@@ -434,6 +436,7 @@ impl ScanTarget {
     pub fn as_str(&self) -> &'static str {
         match self {
             ScanTarget::Event(_) => "event",
+            ScanTarget::Manifest(_) => "manifest",
             ScanTarget::Blob(_) => "blob",
             ScanTarget::RequestView => "request_view",
             ScanTarget::Definition(_) => "definition",
@@ -446,6 +449,7 @@ impl ScanTarget {
     pub fn location(&self) -> String {
         let detail = match self {
             ScanTarget::Event(id) => id.clone().unwrap_or_default(),
+            ScanTarget::Manifest(m) => m.clone(),
             ScanTarget::Blob(a) => a.clone(),
             ScanTarget::RequestView => String::new(),
             ScanTarget::Definition(d) => d.clone(),

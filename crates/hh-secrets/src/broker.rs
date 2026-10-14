@@ -1784,16 +1784,29 @@ impl CredentialBroker {
     /// run's committed event payloads (the `event` target) with the detector
     /// set and report every leak. `leak_scan(run) = ∅` is LT-01's verdict.
     /// **A test/verifier path** — never called on a live boundary.
+    ///
+    /// The Stage-3 surfaces (DF-S2.4-3; R2.9b): the scan domain is the run's
+    /// committed events **plus** the run manifest (the immutable seq-0
+    /// record — `manifest` target), the whole blob pool (`blob` target —
+    /// bundle members, reports and exported artefacts are pool-staged at
+    /// assemble, so a delivered `redaction = none` sink's bytes are the
+    /// pool's bytes), and every `measurement.export.delivered` row re-tagged
+    /// under its `sink_delivery` surface so a leak attributes to the
+    /// delivery leg, not only the event coordinate. One detector composes
+    /// over every surface — no second detector (CC1).
     pub fn leak_scan_run(
         &self,
         store: &Store,
         run_id: &str,
         detectors: &DetectorSet,
     ) -> Result<Vec<Leak>, BrokerError> {
-        let events = store.events(run_id).map_err(|e| BrokerError::Ledger {
-            detail: format!("events fold: {e}"),
-        })?;
-        let items: Vec<(ScanTarget, String)> = events
+        let ledger = |detail: &str| BrokerError::Ledger {
+            detail: detail.to_string(),
+        };
+        let events = store
+            .events(run_id)
+            .map_err(|e| ledger(&format!("events fold: {e}")))?;
+        let mut items: Vec<(ScanTarget, String)> = events
             .iter()
             .map(|e| {
                 (
@@ -1802,6 +1815,51 @@ impl CredentialBroker {
                 )
             })
             .collect();
+        // The manifest — the seq-0 record carries refs and declared
+        // coordinates a secret must never reach either.
+        let manifest = store
+            .manifest(run_id)
+            .map_err(|e| ledger(&format!("manifest fold: {e}")))?;
+        items.push((
+            ScanTarget::Manifest(run_id.to_string()),
+            manifest.to_json().to_canonical_string(),
+        ));
+        // The blob pool — every pool object the store holds (content is
+        // arbitrary bytes; the detectors run over the lossy text form).
+        for digest in store.blob_digests() {
+            let addr = hh_identity::idp::ContentAddress {
+                idp: "idp/1",
+                algorithm: "sha256",
+                digest: digest.clone(),
+                media_type: String::new(),
+                size: 0,
+            };
+            let bytes = store
+                .get_blob(&addr)
+                .map_err(|e| ledger(&format!("blob {digest}: {e}")))?;
+            items.push((
+                ScanTarget::Blob(digest),
+                String::from_utf8_lossy(&bytes).into_owned(),
+            ));
+        }
+        // `measurement.export.delivered` — the row is already scanned as an
+        // `event`; re-tag it under the sink's delivery surface so a leak in
+        // a delivered payload attributes to the leg that carried it.
+        for e in events
+            .iter()
+            .filter(|e| e.class == "measurement.export.delivered")
+        {
+            let sink = e
+                .payload
+                .get("sink_id")
+                .and_then(Json::as_str)
+                .unwrap_or(&e.event_id)
+                .to_string();
+            items.push((
+                ScanTarget::SinkDelivery(sink),
+                e.payload.to_canonical_string(),
+            ));
+        }
         let refs: Vec<(ScanTarget, &str)> =
             items.iter().map(|(t, s)| (t.clone(), s.as_str())).collect();
         Ok(leak_scan(&refs, detectors))

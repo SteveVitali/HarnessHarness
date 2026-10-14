@@ -594,6 +594,9 @@ const CONTAINMENT_FIELDS: &[AuditField] = &[
     af("effect_id"),
     af("field_group"),
     af("reason"),
+    // R2.9b (ADR-0341 D5) — the applied row's declared-loss field spellings
+    // (closed content-free tags; the proxy-surface metric reads them).
+    afb("lowering_loss_fields", AUDIT_FIELD_LIST_BYTES),
 ];
 const CONTAINMENT_REFS: &[&str] = &["lowering_loss_ref", "probes_ref", "evidence_ref"];
 
@@ -640,6 +643,11 @@ const EGRESS_DECIDED_FIELDS: &[AuditField] = &[
     af("checked_addrs"),
     af("credential_binding_applied"),
     af("latency_ms"),
+    // R2.9b (ADR-0341 D3) — the C2 guard members: which hook/guard produced
+    // a post-allow refusal (`guard_detail` = the declared hook ref), and
+    // whether the forwarded leg ran through a TLS-terminating transport.
+    af("guard_detail"),
+    af("tls_terminated"),
 ];
 
 /// `security.containment.amended` — the §5g.4 `amend` audit row (ADR-0062
