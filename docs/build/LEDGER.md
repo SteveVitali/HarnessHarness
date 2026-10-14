@@ -11,7 +11,7 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.1   # round-3 chain seeded (rows 137-149); rows 143-146 stay HUMAN-H5/skeleton (gated), 127/128 stay HUMAN-H3/H4 (operator work, carried per GATE-G4)
+nextTicket:      R3.1   # round-3 chain (rows 137-149); amended 2026-10-14: 144-146 un-gated to tickets (H5=ext crate via R3.7 dep-ADR; CF-489=conform code); 127/128 stay HUMAN-H3/H4
 lastCompleted:   R2.27
 blockedOn:       (none)
 pauseRequested:  false
@@ -89,6 +89,9 @@ updatedAt:       2026-10-14
 
 | 2026-09-27 | S4.10 | Live stage: web instrument + security battery (operator-gated) | instrument + battery scope | authorized — hermetic/offline only; the full V1–V11 instrument + security battery lands in-worktree with no external spend or egress; legs bound to the unbound E3 surface ecosystem (HUMAN-H1) record DEFERRALS rows and report 'gate pending' per manifest, never a failure | runs the read-only web instrument + full security battery (not deferrable) over binding (c); generated-client legs gated on HUMAN-H1 deferred to the owning rows |
 | 2026-10-10 | GATE-G4 | Round-2 discharge review | disposition (reading 1) | **PASSED** — blanket acceptance, all 28 carried rows dispositioned | every §9 row dispositioned per its reason code (human/env/in-build/dep/window → CARRY; accepted/ruling/standing → ACCEPT); no SEND-BACKs; readouts/GATE-G4.md §9 recorded; zero unlanded R2-chartered rows; check-build-memory 0 violations; check-backlog exit 0; 10 GATE-ACCEPT deviations unchanged; named-set human/env rows gate-pending. R2.27 released (nextTicket → R2.27). |
+| 2026-10-14 | HUMAN-H5 | crypto-dependency posture ruling (R3.7/R3.8 gate) | disposition | **RULED** — disposition (b): a vetted external crypto crate (ring/aws-lc/rustls family) is admitted | the dep-choice ADR lives inside R3.7's contract (names the crate + a version published ≥7 days before selection + admitted scope; amends the hermetic-deps note — never a silent Cargo.toml edit); R3.7 (BL-19 `dpop` + `wrapped_long_lived`) and R3.8 (BL-45 per-event AEAD + R-2.8.6 legs) un-gated skeleton → ticket; R3.7→R3.8 is a real dependency edge (the pin); 143 keeps the ruling record |
+| 2026-10-14 | R3.9 | CF-489 direction (WS-I6/OQ-441 interim) | direction ruling | **CONFORM CODE TO SPEC** — `DebtPolicy::default()` → §5h.6's proposed 60 d runway / 30 d warn | R3.9 un-gated skeleton → ticket: constants + fidelity comment + caller/test sweep + dated CF-489 resolution note; the `[[DEFERRED ADR-0214: OQ-441]]` markers stand for WS-I6's Stage-5 re-pin; BL-30/BL-37 get dated progress notes, stay open on their other rulings |
+| 2026-10-14 | round-3 plan | environment provisioning path | statement | HUMAN-H1/H2/H3 are provisionable (operator) | env-gated rows (BL-01/17/26/27/31/32 + dependents) stay excluded until provisioning lands; they unblock on the H-rows and a future mode=extend round schedules them; recorded in `## Decomposition decisions → Round 3` |
 
 ## RETURN PASS
 
@@ -334,3 +337,10 @@ updatedAt:       2026-10-14
   `round: 2 → 3`; `nextTicket: R3.1`; `chainTip` stays `svitali/harnessharness-r2.27` so
   Round-3 tickets fork from the round-2 tip. lastCompleted stays `R2.27`; Round-1/2 history
   unchanged.
+- 2026-10-14 · **round 3 amended (operator rulings)** — same-day amend pass on the seeded
+  partition: HUMAN-H5 answered (disposition (b) — external crypto crate admitted; the dep-choice
+  ADR + ≥7-day pin rule live inside R3.7) and CF-489 directed (conform code to spec — 60 d/30 d).
+  Rows 144/145/146 flipped skeleton → ticket (full contracts); row 143 records the ruling; the
+  env-path statement (H1/H2/H3 provisionable) is on the record without scheduling env rows.
+  Manifest rows/kind cells, GATE-G5 criterion, R3.10/R3.11 texts and GATE DECISIONS updated;
+  `nextTicket` stays `R3.1`. No code touched — planning records only.

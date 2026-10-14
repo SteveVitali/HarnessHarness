@@ -47,6 +47,11 @@ an asymmetric verifier / AEAD construction the pure-std workspace lacks; the rul
 in-workspace construction, a deps-contract amendment (by ADR), or permanently typed-refused.
 Withheld until ruled: any proof-of-possession or encryption claim — the typed refusals stand as
 the honest answer. Exit: a recorded disposition; the skeletons fleshed or dispositioned.
+**RULED 2026-10-14 (operator): disposition (b) — a vetted external crypto crate
+(ring/aws-lc/rustls family) is admitted.** The dep-choice ADR lives inside R3.7's contract
+(names the crate + a ≥7-days-published pinned version + the admitted scope); R3.8 consumes or
+extends by sibling ADR. R3.7/R3.8 fleshed to real tickets same-day; this marker is the ruling's
+record, no longer a pending gate.
 
 ## The chain
 
@@ -205,8 +210,11 @@ is assigned to R2.6 (single owner of the durable steer-cue seam; `*` on row 111)
 
 Rows 137–149 append below Round-2 history unchanged. Scope: the GATE-G4 `in-build`/`dep`-coded
 carried rows — BL-44, BL-14, BL-15, BL-16, BL-10 plus the LEDGER flake findings and the G4
-bookkeeping flags. `dep` rows are skeletons gated on HUMAN-H5 (the crypto-dependency ruling);
-CF-489's conform is a skeleton gated on the WS-I6/OQ-441 ruling (BL-30). Environment (`env`),
+bookkeeping flags. `dep` rows were seeded as skeletons gated on HUMAN-H5 (the crypto-dependency
+ruling) and CF-489's conform as a skeleton gated on the WS-I6/OQ-441 ruling (BL-30);
+**amended same-day 2026-10-14 by operator rulings — H5 answered (external crypto crate
+admitted; R3.7/R3.8 fleshed to real tickets) and CF-489 directed (conform code to spec;
+R3.9 fleshed)** — the three rows now run as ordinary tickets in chain order. Environment (`env`),
 `human`, `ruling`, `window`, `standing`, and gate-`accepted` rows are NOT scheduled — they carry
 forward on their GATE-G4 dispositions. Sources: `docs/build/readouts/GATE-G4.md` §2/§8/§9,
 `docs/build/BACKLOG.csv` (BL-01…BL-46), `docs/tickets/DEFERRALS.md` owed set, LEDGER OPEN
@@ -220,12 +228,12 @@ FINDINGS.
 | 140 | `140_R3.4__context-memory-residual.md` | Round 3 | ticket | §5c residuals: DF-S1.19-1 producer/wiring members + DF-S1.19-2 battery cells (BL-15) — pre-registered split R3.4a/b in its Notes | — |
 | 141 | `141_R3.5__tool-exposure-residual.md` | Round 3 | ticket | DF-S1.17-1 members: `provider_tool_api` flags, `surface_rejection_rate` computation, ADR-0272 `sync_source`/`retrieval_eval` legs (BL-16) | — |
 | 142 | `142_R3.6__assembly-emitter-adjudication.md` | Round 3 | ticket | BL-10: emitter-vs-exemption adjudication for the 11 no-producer diagnostic codes (DF-S1.9-2 residual) | — |
-| 143 | `143_HUMAN-H5__crypto-dependency-ruling.md` | Round 3 | human | Rule the crypto-dependency posture — asymmetric verifier (`dpop`) + AEAD (per-event encryption): in-workspace construction, deps-contract amendment, or permanently refused | — |
-| 144 | `144_R3.7__credential-broker-dep-legs.md` | Round 3 | skeleton | BL-19: `dpop` verify + `wrapped_long_lived` delivery (DF-S1.13-1/-4) — gated on HUMAN-H5 | — |
-| 145 | `145_R3.8__audit-event-encryption.md` | Round 3 | skeleton | BL-45: per-event blob encryption (AEAD) + R-2.8.6 residual legs (DF-S1.15-3) — gated on HUMAN-H5 | — |
-| 146 | `146_R3.9__debtpolicy-cf489-conform.md` | Round 3 | skeleton | CF-489 conform: `DebtPolicy::default()` vs §5h.6 proposed text — gated on the WS-I6/OQ-441 ruling (BL-30) | — |
+| 143 | `143_HUMAN-H5__crypto-dependency-ruling.md` | Round 3 | human | Crypto-dependency posture — RULED 2026-10-14 (operator): disposition (b), external vetted crypto crate admitted; dep-choice ADR owned inside R3.7 | — |
+| 144 | `144_R3.7__credential-broker-dep-legs.md` | Round 3 | ticket | BL-19: dep-choice ADR (crate+version pin, deps-contract amendment) + `dpop` verify + `wrapped_long_lived` delivery (DF-S1.13-1/-4) | — |
+| 145 | `145_R3.8__audit-event-encryption.md` | Round 3 | ticket | BL-45: per-event blob encryption (AEAD, consumes R3.7's pinned crate or sibling ADR) + R-2.8.6 residual legs (DF-S1.15-3) | — |
+| 146 | `146_R3.9__debtpolicy-cf489-conform.md` | Round 3 | ticket | CF-489 conform: `DebtPolicy::default()` → §5h.6 proposed 60d/30d (operator ruling — code conforms to spec; constants + comment + caller/test sweep + dated CF note) | — |
 | 147 | `147_R3.10__round3-closure.md` | Round 3 | reconcile | Round-3 closure: backlog refresh, coverage recompute, OPERATIONAL_READINESS, carried-set accounting for GATE-G5 | — |
-| 148 | `148_GATE-G5__round3-discharge.md` | Round 3 | gate | Round-3 discharge review — operator dispositions every still-OPEN scoped row + the gated set | STOP |
+| 148 | `148_GATE-G5__round3-discharge.md` | Round 3 | gate | Round-3 discharge review — operator dispositions every still-OPEN scoped row + the carried set | STOP |
 | 149 | `149_R3.11__round3-docs-refresh.md` | Round 3 | docs | Round-3 docs refresh — repo docs + agent docs honest-status pass | — |
 
 ## Milestone gates
@@ -254,8 +262,9 @@ re-confirmed unchanged.
 **GATE-G5 — Round-3 discharge review** (Round 3). Criterion: every DEFERRALS row and backlog
 source the Round-3 tickets were chartered to discharge is DONE with dated evidence, or carried
 forward with an explicit operator disposition (carry to Round 4 / accept / waive by ADR). The
-gated set — HUMAN-H5 and the R3.7/R3.8/R3.9 skeletons — plus the still-open human/env rows are
-dispositioned as a named set: 'gate pending' is a valid recorded state, a silent drop is not.
+carried set — HUMAN-H5's record (ruled 2026-10-14, disposition (b)) and whatever residual the
+un-gated R3.7/R3.8/R3.9 tickets report — plus the still-open human/env rows are dispositioned as
+a named set: 'gate pending' is a valid recorded state, a silent drop is not.
 Thresholds: zero undispositioned R3-chartered OPEN rows; the three flake families repaired or
 adjudicated; the G4-4/5/6 bookkeeping swept; check-build-memory 0 violations; check-backlog
 exit 0; R3.10's carried-set accounting exists; the 10 GATE-ACCEPT deviations + GATE-G4
@@ -557,6 +566,24 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   R3.4's size, mitigated by the pre-registered split. The plan is a starting point, not a
   contract in stone — `orchestrate-build` may split/merge at run time and write the change back
   here.
+- **Amendment — operator rulings applied 2026-10-14 (same-day, post-seed commit `89584c8`):**
+  (1) **HUMAN-H5 ruled — disposition (b): a vetted external crypto crate (ring/aws-lc/rustls
+  family) is admitted.** R3.7 and R3.8 flip skeleton → ticket (full contracts, Run lines, size
+  budgets); the crate+version choice is owned by the dep-choice ADR inside R3.7 (≥7-days-published
+  supply-chain rule; ADR-0050 C11 vetting posture; hermetic-deps note amended by the ADR, never
+  silently). The R3.7 → R3.8 edge is now a real dependency — R3.8 consumes the pinned crate for
+  its AEAD surface where the ADR's scope covers it, else authors a sibling ADR. (2) **CF-489
+  direction ruled — conform code to spec:** `DebtPolicy::default()` goes to §5h.6's proposed
+  60 d/30 d; R3.9 flips skeleton → ticket (constants + comment + caller/test sweep + dated CF
+  resolution; the OQ-441 deferred markers stand for WS-I6's re-pin — the conform removes the
+  divergence, it does not retire the question). (3) **Environment path is live:** the operator
+  states HUMAN-H1/H2/H3 are provisionable — the env-gated rows (BL-01/17/26/27/31/32) stay
+  excluded/skeleton-coded *until provisioning lands*; they unblock on the H-rows completing, and a
+  future `mode=extend` round schedules them once the environment exists.
+  **Ordering (recorded call):** rows keep positions 144–146 — renumbering would break the
+  filename convention; R3.7→R3.8 is the only new ordering edge (the dep pin); R3.9 has no code
+  coupling and stays a small ticket ahead of closure; R3.1 hygiene-first and R3.2→R3.3 unchanged.
+  Row numbering stable; no row deleted; the skeleton texts stand as history in commit `89584c8`.
 
 ## Plan extensions
 (append-only: inserts `NNa_…`, splits `<ID>a`/`<ID>b` with the original marked superseded-by-split, rounds)
@@ -588,3 +615,10 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   standing/accepted rows carry forward on their G4 dispositions. See `## Decomposition decisions →
   Round 3` for the partition and the not-scheduled set;
   `docs/build/planning/2026-10-14_round3-decomposition.md` for the full record.
+- 2026-10-14 · **round-3 amend pass** — same-day operator rulings applied in place: HUMAN-H5
+  answered (disposition (b) — external crypto crate admitted; dep-choice ADR inside R3.7),
+  CF-489 direction ruled (conform code to spec — `DebtPolicy::default()` → §5h.6's 60 d/30 d), and
+  the env-path statement (H1/H2/H3 provisionable; env rows unblock on provisioning). Rows
+  144/145/146 flipped `skeleton → ticket` (kind cells + full contracts); row 143 records the
+  ruling; no rows renumbered or deleted. See `## Decomposition decisions → Round 3` amendment
+  block and `docs/build/planning/2026-10-14_round3-decomposition.md` §Amendment.

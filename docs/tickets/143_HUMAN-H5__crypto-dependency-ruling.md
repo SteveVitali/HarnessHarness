@@ -23,10 +23,11 @@
 > implement against a forbidden dep or fabricate the claims.
 
 ## Checklist
-- [ ] Disposition chosen and recorded (ADR for (a)/(b); a dated ruling note + `## Spec amendments
-      applied` line where the spec text needs conforming for (c))
-- [ ] If (a)/(b): the skeletons fleshed by a `decompose-spec mode=extend` insert naming the
-      admitted construction
+- [x] Disposition chosen and recorded — **(b), ruled by the operator 2026-10-14** (see below;
+      the crate-naming ADR is chartered inside R3.7's contract — it lands with the code, not in
+      this marker)
+- [x] The skeletons fleshed — done same-day 2026-10-14 by `decompose-spec` amend pass
+      (rows 144/145 rewritten as full contracts; the ADR inside R3.7 names the construction)
 - [ ] If (c): BL-19/BL-45 dispositioned `ACCEPT`/`WAIVE` at the next gate with the refusal
       posture cited as the answer
 
@@ -39,3 +40,20 @@ event blobs stay unencrypted-at-rest with the honest reason — a recorded state
 A ticket that depends on this row but runs before it is ticked opens a `D-<TICKET>-<n>` row in
 `DEFERRALS.md` (why deferred = "HUMAN-H5 pending · withholds: proof-of-possession / encryption
 claims", unblocked-by = "HUMAN-H5", how-to-verify) and reports "gate pending" — never a failure.
+
+## Ruling — landed 2026-10-14 (operator)
+
+**Disposition (b): the deps-contract amendment path.** The operator permits a vetted external
+crypto crate (ring/aws-lc/rustls family). Neither in-workspace construction (a) nor permanent
+typed refusal (c) was chosen. Consequences:
+
+- Rows 144 (R3.7 / BL-19) and 145 (R3.8 / BL-45) are un-gated — rewritten the same day as full
+  executable contracts with Run lines, acceptance criteria and size budgets.
+- The specific crate + version choice is owned by the **dep-choice ADR inside R3.7's contract** —
+  the ADR names the crate, pins a version **published ≥ 7 days before selection** (the operator's
+  supply-chain rule), states the admitted scope, and amends the hermetic-deps note. R3.8 consumes
+  the pin for its AEAD surface where the ADR's scope covers it, else authors a sibling ADR.
+- Ledger GATE DECISIONS + PHASE LOG carry the dated rows; the manifest's `## Decomposition
+  decisions → Round 3` block records the amendment.
+
+This marker stays in the chain as the ruling's record — history, not a pending gate.

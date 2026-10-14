@@ -95,3 +95,41 @@ Ledger resumed: `projectStatus: IN_PROGRESS`, `nextTicket: R3.1`, `round: 3`,
 ## Round-3 accounting — appended at closure (R3.10)
 
 *(to be appended by R3.10 — landed vs carried, with the carried set enumerated for GATE-G5.)*
+
+## Amendment — operator rulings applied (2026-10-14, same-day, post-seed commit `89584c8`)
+
+Three rulings arrived after the partition was seeded; the records below are the conform edits.
+Row numbering is stable — no row was renumbered, moved or deleted; the skeleton texts stand as
+history in the seed commit.
+
+**1. HUMAN-H5 answered — disposition (b): external crypto crate admitted.** The operator permits
+a vetted crate from the ring/aws-lc/rustls family. Consequences: `144_R3.7` and `145_R3.8` were
+rewritten from skeletons into full contracts (Run lines, ACs, size budgets 1200 lines each). The
+crate+version choice is owned by the **dep-choice ADR inside R3.7** — it names the crate, pins a
+version **published ≥ 7 days before selection** (the operator's supply-chain rule), states the
+admitted scope, and amends the workspace's hermetic-deps note (Cargo.toml header + AGENTS.md
+clauses land behind the ADR in the same PR; vetting posture per ADR-0050 C11 — lockfile-pinned,
+audit/vet, offline-reproducible build preserved). R3.8 consumes the pinned crate for its AEAD
+surface where the ADR scopes it, else authors a sibling dep ADR under the same rules — so the
+R3.7 → R3.8 Depends-on is now a *real* dependency edge, not only chain position.
+
+**2. CF-489 direction ruled — conform code to spec.** `DebtPolicy::default()` moves to §5h.6's
+proposed 60 d `min_runway` / 30 d `warn_within` (the other two placeholders already matched).
+`146_R3.9` was rewritten into a small executable ticket (≤300 lines: constants + fidelity comment
++ caller/test sweep across hh-ontology/hh-debt/hh-embed/hh-lab/hh-hir + dated CF-489 resolution
+note). The `[[DEFERRED ADR-0214: OQ-441]]` spec markers are NOT retired — WS-I6 (with
+WS-C3/WS-I2) still owns the final Stage-5 `DebtIndex` re-pin; the conform removes the recorded
+divergence, it does not answer the question. BL-30/BL-37 receive dated progress notes and stay
+open on their other named-workstream rulings.
+
+**3. Environment path is live.** The operator states HUMAN-H1/H2/H3 are provisionable. The
+env-gated rows (BL-01/17/26/27/31/32 and their dependents) stay *excluded* this round — nothing
+is provisioned yet — but they are no longer a dead partition: they unblock when the H-rows land,
+and a future `mode=extend` round schedules them against the provisioned environment. Recorded
+here and in the manifest's Round-3 block so the exclusion is a reasoned carry, not a silent drop.
+
+**Ordering re-check (recorded call):** positions 144–146 retained — renumbering would break the
+filename convention and no edge requires moving them. New ordering edge: R3.7 → R3.8 (the dep
+pin). R3.9 has no code coupling; it stays a small ticket ahead of closure. R3.1 hygiene-first and
+R3.2 → R3.3 (the R-2.6.3 substrate) are unchanged. The round is now **9 implementable tickets
+(R3.1–R3.9) + H5's ruling record + R3.10 closure + GATE-G5 + R3.11 docs**.

@@ -10,9 +10,11 @@
 ## Criterion (verbatim from the round's terms)
 Every DEFERRALS row and backlog source the Round-3 tickets were chartered to discharge is DONE
 with dated evidence, or carried forward with an explicit operator disposition (carry to Round 4 /
-accept as standing deviation / waive by ADR). The gated rows — the HUMAN-H5 dependency ruling and
-the R3.7/R3.8/R3.9 skeletons — plus the still-open human and environment rows (HUMAN-H1/H2/H3/H4,
-the foreign-verification cells) are dispositioned as a named set — 'gate pending' is a valid
+accept as standing deviation / waive by ADR). The named set — HUMAN-H5's record (ruled
+2026-10-14, disposition (b): external crypto crate admitted; dep-choice ADR inside R3.7),
+whatever residual the un-gated R3.7/R3.8/R3.9 tickets report, and the still-open human and
+environment rows (HUMAN-H1/H2/H3/H4 — provisionable per the operator's 2026-10-14 statement, the
+foreign-verification cells) — is dispositioned as a named set: 'gate pending' is a valid
 recorded state; a silent drop is not.
 
 ## Pre-registered thresholds
@@ -36,3 +38,8 @@ R3.11 (docs refresh runs after the gate so the docs state the round's outcome).
 - [ ] Operator disposition recorded in `docs/build/LEDGER.md` GATE DECISIONS and in
       `docs/build/readouts/GATE-G5.md` as PASSED | SKIPPED-BY-OPERATOR | NOT PASSABLE (+ what would
       pass it).
+
+## Amendment — 2026-10-14
+The seed text named HUMAN-H5 + R3.7/R3.8/R3.9 as the *gated* set; the operator's same-day
+rulings un-gated all four (H5 answered (b); R3.7/8/9 are executable tickets). The criterion
+above reads current truth; this note preserves the amendment record.
