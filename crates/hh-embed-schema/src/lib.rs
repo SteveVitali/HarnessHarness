@@ -676,6 +676,7 @@ fn types_schema() -> Json {
         tagged(&[
             ("selected", &[("option_id", "string", true)]),
             ("cancelled", &[]),
+            ("modified", &[("amended_args", "json", true)]),
         ]),
     );
     m.insert(

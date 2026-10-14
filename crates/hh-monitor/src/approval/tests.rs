@@ -38,6 +38,7 @@ fn request(args_hash: &str) -> ApprovalRequest {
             model_justification: None,
         },
         batch_id: None,
+        remedies: Vec::new(),
     }
 }
 

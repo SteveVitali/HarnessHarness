@@ -1,0 +1,40 @@
+{
+  "pr": 118,
+  "head": "99a23fd",
+  "read_at": "2026-10-08",
+  "checks": [
+    {
+      "name": "build · test · fmt · drift",
+      "state": "pass",
+      "event": "pull_request",
+      "run": 37709664965,
+      "duration": "10m39s",
+      "head": "99a23fd"
+    },
+    {
+      "name": "build · test · fmt · drift",
+      "state": "pass",
+      "event": "push",
+      "run": 37709660999,
+      "duration": "9m51s",
+      "head": "99a23fd"
+    },
+    {
+      "name": "build · test · fmt · drift",
+      "state": "pass",
+      "event": "pull_request",
+      "run": 37708423798,
+      "duration": "10m51s",
+      "head": "f255465"
+    },
+    {
+      "name": "build · test · fmt · drift",
+      "state": "pass",
+      "event": "push",
+      "run": 37708418407,
+      "duration": "10m41s",
+      "head": "f255465"
+    }
+  ],
+  "note": "ci-boundary/1 pass #118 — green at the ci-record head 99a23fd (runs 37709664965 pull_request 10m39s + 37709660999 push 9m51s, both pass) and at the closeout head f255465 (runs 37708423798 pull_request 10m51s + 37708418407 push 10m41s, both pass); the earlier pair at implementation head d925b5d (37708382770 pull_request + 37708374394 push) was cancelled by the closeout push, not failures. Local suite: cargo test --workspace 307 result blocks / 3,225 tests / 0 failures / 1 ignored (+2 blocks, +13 tests over R2.10's 305/3,212 — hh-env r2_11 8/8 + hh-embed r2_11 5/5). Scoped: hh-monitor/hh-subagent/hh-ledger/hh-env/hh-embed all result blocks 0 failures; fmt clean; check-drift regenerated + in sync (PermissionOutcome.Modified member, CC7); check-build-memory 0 violations / 7 pre-existing warnings. PR #118 remains OPEN for operator merge (mergePolicy: OPERATOR)."
+}

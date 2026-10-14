@@ -1516,11 +1516,16 @@ impl CancelParams {
 
 /// The `respond_permission` outcome sum — `cancelled` ledgeres
 /// `security.permission.decided{decision:cancelled}`, never a silent
-/// missing option.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// missing option. `modified` is the C2 `modify` arm (ADR-0070 D1;
+/// ADR-0343 D1): the response carries a typed `amended_args` payload —
+/// the as-proposed effect is refused and the amendment may re-enter as
+/// a fresh narrowing-only request (the payload is data, never an
+/// authority widening).
+#[derive(Debug, Clone, PartialEq)]
 pub enum PermissionOutcome {
     Selected { option_id: String },
     Cancelled,
+    Modified { amended_args: Json },
 }
 
 impl PermissionOutcome {
@@ -1531,18 +1536,25 @@ impl PermissionOutcome {
                 ("option_id", Json::str(option_id.clone())),
             ]),
             PermissionOutcome::Cancelled => Json::obj([("kind", Json::str("cancelled"))]),
+            PermissionOutcome::Modified { amended_args } => Json::obj([
+                ("kind", Json::str("modified")),
+                ("amended_args", amended_args.clone()),
+            ]),
         }
     }
     pub fn from_json(v: &Json, path: &str) -> Result<Self, EmbedError> {
         let mut s = StrictObj::new(v, path)?;
         let kind = closed_str(
             s.req("kind")?,
-            &["selected", "cancelled"],
+            &["selected", "cancelled", "modified"],
             &format!("{path}/kind"),
         )?;
         let out = match kind.as_str() {
             "selected" => PermissionOutcome::Selected {
                 option_id: s.req_str("option_id")?,
+            },
+            "modified" => PermissionOutcome::Modified {
+                amended_args: s.req("amended_args")?.clone(),
             },
             _ => PermissionOutcome::Cancelled,
         };
@@ -1551,8 +1563,9 @@ impl PermissionOutcome {
     }
 }
 
-/// `respond_permission` params.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// `respond_permission` params. (`PartialEq` only — the `modified` arm's
+/// `amended_args` member is `Json`, which has no `Eq`.)
+#[derive(Debug, Clone, PartialEq)]
 pub struct RespondPermissionParams {
     pub session_id: String,
     pub permission_id: String,

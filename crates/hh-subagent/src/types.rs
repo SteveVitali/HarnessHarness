@@ -828,60 +828,13 @@ impl SubagentSpec {
 // Ownership (ADR-0191 O-1…O-6; `OwnershipRecord` is `no-precedent`)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// `OwnedObject` — a coordination object an ownership record names. The closed
-/// sum at this slice: `{fs_path_prefix | resource_key}` — environment writes
-/// merge against `fs_path_prefix` ownership (the `NotOwner` check); declared
-/// resource keys cover `reserved_keys` objects.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum OwnedObject {
-    /// A workspace path prefix (merge/NotOwner territory).
-    FsPathPrefix(String),
-    /// A named resource key (share/reservation territory).
-    ResourceKey(String),
-}
-
-impl OwnedObject {
-    /// The canonical JSON.
-    pub fn to_json(&self) -> Json {
-        match self {
-            OwnedObject::FsPathPrefix(p) => Json::obj([
-                ("kind", Json::str("fs_path_prefix")),
-                ("key", Json::str(p.clone())),
-            ]),
-            OwnedObject::ResourceKey(k) => Json::obj([
-                ("kind", Json::str("resource_key")),
-                ("key", Json::str(k.clone())),
-            ]),
-        }
-    }
-
-    /// From canonical JSON.
-    pub fn from_json(j: &Json) -> Option<OwnedObject> {
-        let key = str_of(j.get("key")?)?.to_string();
-        Some(match str_of(j.get("kind")?)? {
-            "fs_path_prefix" => OwnedObject::FsPathPrefix(key),
-            "resource_key" => OwnedObject::ResourceKey(key),
-            _ => return None,
-        })
-    }
-
-    /// Whether `self` covers `other` (`⊆` — a prefix owns its descendants).
-    pub fn covers(&self, other: &OwnedObject) -> bool {
-        match (self, other) {
-            (OwnedObject::FsPathPrefix(a), OwnedObject::FsPathPrefix(b)) => {
-                a == "/" || a.is_empty() || b == a || {
-                    let mut p = a.clone();
-                    if !p.ends_with('/') {
-                        p.push('/');
-                    }
-                    b.starts_with(&p)
-                }
-            }
-            (OwnedObject::ResourceKey(a), OwnedObject::ResourceKey(b)) => a == b,
-            _ => false,
-        }
-    }
-}
+/// `OwnedObject` — a coordination object an ownership record names (the
+/// closed sum `{fs_path_prefix | resource_key}`). The implementation lives
+/// in `hh_monitor::ownership` (R-2.11; ADR-0343 D3): the prepare-time
+/// `check_write` monitor check is a Π component the seven-stage
+/// dispatcher (`hh-env`) must reach without depending on this crate —
+/// one implementation, re-exported here (CC1).
+pub use hh_monitor::ownership::OwnedObject;
 
 /// `OwnershipRecord` — the ledger-side record: an `OwnedObject`, the owning
 /// holder (a `Ref<AgentProcess>` — the run's process ref), and the basis

@@ -537,6 +537,7 @@ fn at_h1_01_injected_context_never_allows() {
             model_justification: None,
         },
         batch_id: None,
+        remedies: Vec::new(),
     };
     let req = state.request_approval(req, false, "e1", 1).unwrap();
     let resp = ApprovalResponse {

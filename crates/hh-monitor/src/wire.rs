@@ -773,6 +773,10 @@ fn decision_json(d: &Decision) -> Json {
                 Json::Arr(remedies.iter().map(|r| r.to_json()).collect()),
             ),
         ]),
+        Decision::Modified { amended_args } => Json::obj([
+            ("tag", Json::str("modified")),
+            ("amended_args", amended_args.clone()),
+        ]),
     }
 }
 
@@ -830,6 +834,9 @@ fn decision_from_json(j: &Json, path: &str) -> Result<Decision, String> {
             reason: deny_reason_parse(&req_str(j, "reason").map_err(|e| format!("{path}.{e}"))?)
                 .map_err(|e| format!("{path}.{e}"))?,
             remedies,
+        }),
+        "modified" => Ok(Decision::Modified {
+            amended_args: j.get("amended_args").cloned().unwrap_or(Json::Null),
         }),
         other => Err(format!("{path}.tag unknown {other}")),
     }

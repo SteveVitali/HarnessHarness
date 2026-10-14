@@ -49,6 +49,7 @@ use hh_ledger::manifest::EventRef;
 use hh_ledger::store::{Lease, Store};
 use hh_monitor::approval::{self, ApprovalRequest, ApprovalResponse, ResponseChoice};
 use hh_ontology::dimensions::DimensionId;
+use hh_provenance::origin::Origin;
 use hh_provenance::{PersistenceScope, ProvenanceRecord};
 use hh_secrets::{CredentialBroker, MediationOutcome, Placeholder, RefusedCode, RequestDescriptor};
 use hh_wire::json::Json;
@@ -697,8 +698,8 @@ impl<'a> EgressMediator<'a> {
             permission_id: permission_id.clone(),
             request: approval::PermissionRequest {
                 subject_ref: self.participant_ref.clone(),
-                capability_ref: cap,
-                args_canonical_hash: args_hash,
+                capability_ref: cap.clone(),
+                args_canonical_hash: args_hash.clone(),
                 reason: format!("egress ask: {}", req.host_norm()),
                 requested_grants: Vec::new(),
             },
@@ -724,8 +725,52 @@ impl<'a> EgressMediator<'a> {
                 model_justification: None,
             },
             batch_id: None,
+            // A mediator ask carries no offered remedies (the R-2.11
+            // ingress member — empty, never fabricated).
+            remedies: Vec::new(),
         };
         let asked_at = self.store.now_ms();
+        // R-2.11 (ADR-0343 D2) — the `action.intent.anchored` subject the
+        // respond path's `label.endorsed{basis: approval}` pins. The
+        // egress ask's intent is the *participant's* proposal — the
+        // anchor's provenance is the participant's record (the
+        // endorsement's `from`), minted durable before the pending so the
+        // append-time check-5 subject lookup resolves.
+        {
+            let mut anchor = EventMinter::new(self.store, &self.run_id)
+                .mint_effect(
+                    "action.intent.anchored",
+                    Json::obj([
+                        ("permission_id", Json::str(permission_id.clone())),
+                        ("effect_id", Json::str(effect_id.to_string())),
+                        ("subject_ref", Json::str(self.participant_ref.clone())),
+                        (
+                            "capability_ref",
+                            Json::obj([
+                                ("semantic_id", Json::str(cap.semantic_id.clone())),
+                                ("version_id", Json::str(cap.version_id.clone())),
+                            ]),
+                        ),
+                        ("args_canonical_hash", Json::str(args_hash.clone())),
+                    ]),
+                    effect_id,
+                    chain,
+                )
+                .map_err(|e| EgressError::Ledger {
+                    detail: format!("mint action.intent.anchored: {e}"),
+                })?;
+            anchor.provenance = Some(ProvenanceRecord::minted(
+                Origin::participant(self.participant_ref.clone(), "hh.hosting/1"),
+                PersistenceScope::Run,
+                asked_at,
+            ));
+            anchor.content_kind = Some(hh_provenance::ContentKind::EffectIntent);
+            self.store
+                .append(&self.run_id, self.lease, vec![anchor])
+                .map_err(|e| EgressError::Ledger {
+                    detail: format!("append action.intent.anchored: {e}"),
+                })?;
+        }
         self.emit(
             "security.permission.pending",
             approval::pending_payload(&request, effect_id, asked_at),
@@ -797,6 +842,37 @@ impl<'a> EgressMediator<'a> {
         let mut amended_policy = None;
         match &response.choice {
             ResponseChoice::Deny { .. } | ResponseChoice::MoreInfo => {
+                let deny = EgressDecision {
+                    decision: EgressVerdict::Deny,
+                    source: EgressSource::Monitor,
+                    rule_ref: None,
+                    reason: Some(EgressReason::Denied),
+                    credential_binding_candidates: vec![],
+                    rule_index: None,
+                    guard_detail: None,
+                };
+                let ev = self.decide_row(
+                    req,
+                    &deny,
+                    DecidedBy::Monitor,
+                    &[],
+                    &[],
+                    &effect_id,
+                    started,
+                    chain,
+                    false,
+                )?;
+                return Ok(GateOutcome::Terminal(MediatedOutcome::Refused {
+                    request_ref: request_ref(req),
+                    decided_ref: ev.event_id,
+                    reason: EgressReason::Denied,
+                }));
+            }
+            ResponseChoice::Modify { .. } => {
+                // The C2 `modify` arm (ADR-0343 D1): the as-proposed
+                // egress request is refused — the amendment re-enters as
+                // a fresh request under a new ask, never an in-place
+                // allow.
                 let deny = EgressDecision {
                     decision: EgressVerdict::Deny,
                     source: EgressSource::Monitor,

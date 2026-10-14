@@ -545,6 +545,17 @@ impl EmbedService {
                     });
                 }
             }
+            // The C2 `modify` arm (ADR-0343 D1): `modified` is admissible
+            // only where the `modify` option was offered (the same
+            // `OptionNotOffered` gate `selected` answers).
+            if matches!(p.outcome, PermissionOutcome::Modified { .. })
+                && !pending.options.is_empty()
+                && !pending.options.iter().any(|o| o == "modify")
+            {
+                return Err(EmbedError::OptionNotOffered {
+                    option_id: "modify".to_string(),
+                });
+            }
             (
                 s.run_id.clone(),
                 s.lease.clone().ok_or(EmbedError::Refused {
@@ -610,6 +621,12 @@ impl EmbedService {
                     DecisionScope::Once,
                 ),
             },
+            PermissionOutcome::Modified { amended_args } => (
+                ResponseChoice::Modify {
+                    amended_args: amended_args.clone(),
+                },
+                DecisionScope::Once,
+            ),
         };
         // `allow_lease` mints over the pending's capability material — a
         // pending without `request{subject_ref, capability_ref,
@@ -639,6 +656,14 @@ impl EmbedService {
             grants: approvals.grants.values().cloned().collect(),
             denial_policy: None,
         };
+        // The remedy-*ingress* echo (R-2.11; ADR-0343 D4): the offered
+        // `remedies` the durable `pending` folded in ride the `decided`
+        // row verbatim — captured before `respond` resolves the pending.
+        let pending_remedies = approvals
+            .pending
+            .get(&p.permission_id)
+            .map(|pend| pend.request.remedies.clone())
+            .unwrap_or_default();
         let outcome = approvals
             .respond_with_ctx(
                 &ApprovalResponse {
@@ -680,6 +705,7 @@ impl EmbedService {
         let decision_tag = match &outcome.decision {
             Decision::Allow => "allow",
             Decision::Deny { .. } => "deny",
+            Decision::Modified { .. } => "modified",
             Decision::Ask { .. } => unreachable!("ask handled above"),
         };
         let mut members = vec![
@@ -736,12 +762,30 @@ impl EmbedService {
                 ),
             ));
         }
-        if let PermissionOutcome::Selected { option_id } = &p.outcome {
-            if decision_tag == "deny" {
-                members.push(("reason", Json::str(option_id.clone())));
+        match &p.outcome {
+            PermissionOutcome::Selected { option_id } => {
+                if decision_tag == "deny" {
+                    members.push(("reason", Json::str(option_id.clone())));
+                }
             }
-        } else {
-            members.push(("reason", Json::str("cancelled")));
+            PermissionOutcome::Modified { amended_args } => {
+                // The `modify` arm's recorded amendment (ADR-0343 D1) —
+                // the fold restores `Decision::Modified{amended_args}`
+                // from this member; a re-dispatch of the refused effect
+                // serves the recorded terminal verbatim.
+                members.push(("amended_args", amended_args.clone()));
+            }
+            PermissionOutcome::Cancelled => {
+                members.push(("reason", Json::str("cancelled")));
+            }
+        }
+        // The offered `remedies` echo (the R-2.12 consume seam's durable
+        // input — recorded on every decided arm, empty or not).
+        if !pending_remedies.is_empty() {
+            members.push((
+                "remedies",
+                Json::Arr(pending_remedies.iter().map(|r| r.to_json()).collect()),
+            ));
         }
         if let Some(l) = &outcome.lease {
             members.push(("cache_key", Json::str(l.key_hash.clone())));
@@ -837,6 +881,20 @@ impl EmbedService {
                     )
                     .map_err(ledger_err)?,
             );
+            // The `label.endorsed{basis: approval}` produce-time row
+            // (ADR-0343 D2) — appended in the same batch; its
+            // `action.intent.anchored` subject was durable beside
+            // `pending`, before any answer could land.
+            if let Some(ev) = approval_endorsement(
+                &self.store,
+                &run_id,
+                &events,
+                &p.permission_id,
+                &mint_in.issuer,
+                ctx.grant_authority,
+            )? {
+                batch.push(ev);
+            }
         }
         self.store
             .append(&run_id, &lease, batch)
@@ -848,6 +906,13 @@ impl EmbedService {
                 Json::obj([
                     ("kind", Json::str("selected")),
                     ("decision", Json::str(decision_tag)),
+                    (
+                        "amended_args",
+                        match &p.outcome {
+                            PermissionOutcome::Modified { amended_args } => amended_args.clone(),
+                            _ => Json::Null,
+                        },
+                    ),
                 ]),
             );
             s.pendings.remove(&p.permission_id);
@@ -941,6 +1006,14 @@ impl EmbedService {
                 });
             }
         }
+        if matches!(outcome, PermissionOutcome::Modified { .. })
+            && !pending.options.is_empty()
+            && !pending.options.iter().any(|o| o == "modify")
+        {
+            return Err(EmbedError::OptionNotOffered {
+                option_id: "modify".to_string(),
+            });
+        }
         let head_seq = events.last().map(|e| e.seq).unwrap_or(0);
         let mut approvals = ApprovalState::project(&events, head_seq);
         let asked_risk = events
@@ -981,6 +1054,12 @@ impl EmbedService {
                     DecisionScope::Once,
                 ),
             },
+            PermissionOutcome::Modified { amended_args } => (
+                ResponseChoice::Modify {
+                    amended_args: amended_args.clone(),
+                },
+                DecisionScope::Once,
+            ),
         };
         if matches!(choice, ResponseChoice::AllowLease(_))
             && (pending.capability_ref.is_none()
@@ -1021,6 +1100,13 @@ impl EmbedService {
             grants: approvals.grants.values().cloned().collect(),
             denial_policy: None,
         };
+        // The remedy-*ingress* echo (R-2.11; ADR-0343 D4) — the folded
+        // pending's offered `remedies` ride the `decided` row verbatim.
+        let pending_remedies = approvals
+            .pending
+            .get(permission_id)
+            .map(|pend| pend.request.remedies.clone())
+            .unwrap_or_default();
         let outcome_res = approvals
             .respond_with_ctx(
                 &ApprovalResponse {
@@ -1054,6 +1140,7 @@ impl EmbedService {
         let decision_tag = match &outcome_res.decision {
             Decision::Allow => "allow",
             Decision::Deny { .. } => "deny",
+            Decision::Modified { .. } => "modified",
             Decision::Ask { .. } => unreachable!("ask handled above"),
         };
         let mut members = vec![
@@ -1106,12 +1193,24 @@ impl EmbedService {
                 ),
             ));
         }
-        if let PermissionOutcome::Selected { option_id } = outcome {
-            if decision_tag == "deny" {
-                members.push(("reason", Json::str(option_id.clone())));
+        match outcome {
+            PermissionOutcome::Selected { option_id } => {
+                if decision_tag == "deny" {
+                    members.push(("reason", Json::str(option_id.clone())));
+                }
             }
-        } else {
-            members.push(("reason", Json::str("cancelled")));
+            PermissionOutcome::Modified { amended_args } => {
+                members.push(("amended_args", amended_args.clone()));
+            }
+            PermissionOutcome::Cancelled => {
+                members.push(("reason", Json::str("cancelled")));
+            }
+        }
+        if !pending_remedies.is_empty() {
+            members.push((
+                "remedies",
+                Json::Arr(pending_remedies.iter().map(|r| r.to_json()).collect()),
+            ));
         }
         if let Some(l) = &outcome_res.lease {
             members.push(("cache_key", Json::str(l.key_hash.clone())));
@@ -1216,6 +1315,18 @@ impl EmbedService {
                     )
                     .map_err(ledger_err)?,
             );
+            // The `label.endorsed{basis: approval}` produce-time row
+            // (ADR-0343 D2) — same seam as the session-bound path.
+            if let Some(ev) = approval_endorsement(
+                &self.store,
+                run_id,
+                &events,
+                permission_id,
+                &mint_in.issuer,
+                ctx.grant_authority,
+            )? {
+                batch.push(ev);
+            }
         }
         self.store
             .append(run_id, lease, batch)
@@ -2821,12 +2932,24 @@ fn pending_ask_from_row(e: &hh_ledger::event::EventEnvelope) -> PendingAsk {
         })
         .unwrap_or(0);
     PendingAsk {
-        options: vec![
-            "allow_once".to_string(),
-            "allow_lease".to_string(),
-            "deny".to_string(),
-            "more_info".to_string(),
-        ],
+        // The offered set folds from the durable `request.options` the
+        // R-2.11 pending payload records (ADR-0343 D4) — the
+        // `OptionNotOffered` gate reads the row, never a default, when the
+        // member exists. A pre-R2.11/supply row without it falls back to
+        // the canonical four (`modify` is *not* assumed — an unrecorded
+        // offer can never admit the arm).
+        options: match req.get("options") {
+            Some(Json::Arr(rows)) => rows
+                .iter()
+                .filter_map(|o| o.as_str().map(String::from))
+                .collect(),
+            _ => vec![
+                "allow_once".to_string(),
+                "allow_lease".to_string(),
+                "deny".to_string(),
+                "more_info".to_string(),
+            ],
+        },
         proposal: req
             .get("reason")
             .and_then(Json::as_str)
@@ -2855,4 +2978,70 @@ fn pending_ask_from_row(e: &hh_ledger::event::EventEnvelope) -> PendingAsk {
             .and_then(Json::as_int)
             .map(|t| requested_at.saturating_add(t.max(0) as u64)),
     }
+}
+
+/// R-2.11 (ADR-0343 D2; §5g.1 §9; §5g.6 §3 CF-150) — the
+/// `security.label.endorsed{basis: approval, basis_ref: permission_id}`
+/// row minted at the produce-time call site: an `allow` IS a label
+/// endorsement of one `(effect_id, args_canonical_hash)` — the row is the
+/// move-toward-allow's monotonicity witness (I-H8). The subject is the
+/// `action.intent.anchored` row minted beside `security.permission.pending`
+/// (its provenance is the intent's own record — the endorsement's `from`;
+/// the rise runs to the responder's authority, never past it). Returns
+/// `Ok(None)` when no anchor exists or the label cannot legitimately rise
+/// ("only when a label actually rises" — CF-150); a mintable-but-
+/// illegitimate endorsement is a typed refusal, never a silently dropped
+/// row. One helper, both respond paths (CC1).
+fn approval_endorsement(
+    store: &hh_ledger::store::Store,
+    run_id: &str,
+    events: &[hh_ledger::event::EventEnvelope],
+    permission_id: &str,
+    endorser: &ProvenanceRecord,
+    to_authority: hh_provenance::AuthorityClass,
+) -> Result<Option<hh_ledger::event::Event>, EmbedError> {
+    let Some(anchor) = events.iter().rev().find(|e| {
+        e.class == "action.intent.anchored"
+            && e.payload.get("permission_id").and_then(Json::as_str) == Some(permission_id)
+    }) else {
+        return Ok(None);
+    };
+    let Some(subject) = anchor.provenance.as_ref() else {
+        return Ok(None);
+    };
+    let mut to = subject.label();
+    to.authority = to_authority;
+    let endorsed = match hh_provenance::endorse(
+        subject,
+        anchor.event_id.clone(),
+        &to,
+        endorser,
+        hh_provenance::EndorsementBasis::Approval,
+        Some(permission_id.to_string()),
+        hh_provenance::ContentKind::EffectIntent,
+    ) {
+        Ok(e) => e,
+        Err(hh_provenance::EndorsementError::NoLabelIncrease) => return Ok(None),
+        Err(e) => {
+            return Err(EmbedError::Refused {
+                reason: format!("approval_endorsement: {e:?}"),
+            })
+        }
+    };
+    let mut payload = endorsed.to_json();
+    if let Json::Obj(m) = &mut payload {
+        // The `{endorser, basis_ref}` members `to_json` omits — the
+        // append-time `check_endorsement` re-reads them (§8.1 #3).
+        m.insert("endorser".to_string(), endorsed.endorser.to_json());
+        if let Some(b) = &endorsed.basis_ref {
+            m.insert("basis_ref".to_string(), Json::str(b.clone()));
+        }
+    }
+    let mut ev = hh_env::events::EventMinter::new(store, run_id)
+        .mint("security.label.endorsed", payload)
+        .map_err(ledger_err)?;
+    // `approval` applies only to effect intents — the append-time check
+    // re-reads the stamp off the envelope, never a payload claim.
+    ev.content_kind = Some(hh_provenance::ContentKind::EffectIntent);
+    Ok(Some(ev))
 }
