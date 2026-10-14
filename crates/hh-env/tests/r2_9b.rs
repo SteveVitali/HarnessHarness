@@ -225,6 +225,7 @@ fn req(
     }
 }
 
+#[allow(clippy::too_many_arguments)] // the arity is the mediator constructor's.
 fn mediated<'a>(
     store: &'a mut Store,
     run: &str,
@@ -350,8 +351,10 @@ fn tls_terminate_with_a_tls_path_forwards_and_records() {
     let mut p = mediated_policy(vec![allow_rule("svc.example")]);
     p.net.tls.terminate = true;
     p.compute_ids();
-    let mut t = CaptureTransport::default();
-    t.terminates = true;
+    let t = CaptureTransport {
+        terminates: true,
+        ..Default::default()
+    };
     let transport = t.clone();
     let mut med = mediated(
         &mut store,
