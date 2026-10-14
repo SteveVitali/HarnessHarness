@@ -80,6 +80,7 @@ pub fn project_row(
     let mut checkpoint_ref: Option<String> = None;
     let mut discontinuities: Vec<Json> = Vec::new();
     let mut catalog_epochs: Vec<Json> = Vec::new();
+    let mut containment_amended: Vec<Json> = Vec::new();
     let mut experiment_id_from_bound: Option<String> = None;
 
     for e in &events {
@@ -139,6 +140,42 @@ pub fn project_row(
             // leaderboard's read, not the row's judgement).
             "action.tool.catalog.epoch" => {
                 catalog_epochs.push(e.payload.clone());
+            }
+            // R2.9a (DF-S1.12-2) — a containment `amend()` (an
+            // `allow_lease`'s `AddEgressAllow`, a delegated tightening)
+            // lands `security.containment.amended` rows; the row folds
+            // them into `annotations_from_ledger.containment_amended[]`
+            // so a scored run's policy never silently moved mid-run.
+            "security.containment.amended" => {
+                containment_amended.push(Json::obj([
+                    ("seq", Json::Int(e.seq as i64)),
+                    (
+                        "from_version_id",
+                        e.payload
+                            .get("from_version_id")
+                            .cloned()
+                            .unwrap_or(Json::Null),
+                    ),
+                    (
+                        "to_version_id",
+                        e.payload
+                            .get("to_version_id")
+                            .cloned()
+                            .unwrap_or(Json::Null),
+                    ),
+                    (
+                        "basis",
+                        e.payload.get("basis").cloned().unwrap_or(Json::Null),
+                    ),
+                    (
+                        "scope",
+                        e.payload.get("scope").cloned().unwrap_or(Json::Null),
+                    ),
+                    (
+                        "effect_id",
+                        e.payload.get("effect_id").cloned().unwrap_or(Json::Null),
+                    ),
+                ]));
             }
             "security.audit.checkpoint" => {
                 checkpoint_ref = Some(hh_ledger::tree::checkpoint_idp(&e.payload));
@@ -467,6 +504,9 @@ pub fn project_row(
     }
     let annotations_from_ledger = {
         let mut a = vec![("discontinuities", Json::Arr(discontinuities))];
+        if !containment_amended.is_empty() {
+            a.push(("containment_amended", Json::Arr(containment_amended)));
+        }
         if !catalog_epochs.is_empty() {
             a.push(("catalog_epochs", Json::Arr(catalog_epochs.clone())));
             // `configuration_drift` — the flag ADR-0161 D5 sets when any

@@ -54,6 +54,13 @@ pub struct EmbedService {
     pub(crate) registry: RegistryStore,
     pub(crate) catalog: hh_assembly::catalog::Stage1Catalog,
     pub(crate) env_drivers: BTreeMap<String, EnvDriver>,
+    /// The kernel-held credential broker custody (R2.9a; DF-S2.4-1c) —
+    /// owns the binding table a fork's `rebind_credentials_for_fork`
+    /// virtualizes from and the egress sentinel seam fronts. Fail-closed
+    /// by default (`DenyAllResolver`) — a composed host installs its
+    /// resolver through `set_credential_resolver`; a sentinel never
+    /// resolves against an absent source.
+    pub(crate) credential_broker: hh_secrets::CredentialBroker,
     pub(crate) hello_done: bool,
     pub(crate) experimental: bool,
     pub(crate) client_caps: HostCapabilities,
@@ -338,6 +345,10 @@ impl EmbedService {
             registry,
             catalog: hh_assembly::catalog::Stage1Catalog::stage1(),
             env_drivers: BTreeMap::new(),
+            credential_broker: hh_secrets::CredentialBroker::new(
+                Box::new(hh_secrets::DenyAllResolver),
+                "hh-embed/credentials",
+            ),
             hello_done: false,
             experimental: false,
             client_caps: HostCapabilities::default(),
@@ -371,6 +382,15 @@ impl EmbedService {
     /// session rows stamp `binding: local_network`.
     pub fn set_binding_label(&mut self, label: &str) {
         self.binding_label = label.to_string();
+    }
+
+    /// Install the composed credential-broker resolver (R2.9a; DF-S2.4-1c)
+    /// — the default `DenyAllResolver` is fail-closed, so a sentinel/
+    /// rebind against an unwired host answers the broker's typed refusal,
+    /// never a fabricated claim.
+    pub fn set_credential_resolver(&mut self, resolver: Box<dyn hh_secrets::SecretSourceResolver>) {
+        self.credential_broker =
+            hh_secrets::CredentialBroker::new(resolver, "hh-embed/credentials");
     }
 
     /// Seed the embedded registry with the kernel's Stage-1 suite — the

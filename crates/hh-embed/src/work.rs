@@ -695,8 +695,20 @@ impl EmbedService {
                 Json::Int(now.saturating_sub(pending.requested_at) as i64),
             ),
         ];
+        // DF-S2.4-1b (R2.9a) — an egress-capability ask's answer is an
+        // *endorsement* of the `net_egress` pending, not the effect's gate
+        // decision: the `decided` row omits `effect_id` so it never claims
+        // the `(effect_id, attempt)` slot the monitor's own `decided`
+        // already holds (§5g.1 I-H7 — `DuplicateDecision` would refuse the
+        // append). The effect link stays on the `pending` row and the
+        // `permission_decided` wakeup; the mediator's
+        // `security.egress.decided` is the egress verdict record.
+        let egress_pending =
+            pending.capability_ref.as_ref().map(|(sid, _)| sid.as_str()) == Some("net_egress");
         if let Some(ef) = &pending.effect_id {
-            members.push(("effect_id", Json::str(ef.clone())));
+            if !egress_pending {
+                members.push(("effect_id", Json::str(ef.clone())));
+            }
         }
         // S4.10 (R-2.11.2 P12; ADR-0301 D4) — the surface's responder
         // declaration is stamped durable: `responder_provenance` names the
@@ -1057,8 +1069,20 @@ impl EmbedService {
                 Json::Int(now.saturating_sub(pending.requested_at) as i64),
             ),
         ];
+        // DF-S2.4-1b (R2.9a) — an egress-capability ask's answer is an
+        // *endorsement* of the `net_egress` pending, not the effect's gate
+        // decision: the `decided` row omits `effect_id` so it never claims
+        // the `(effect_id, attempt)` slot the monitor's own `decided`
+        // already holds (§5g.1 I-H7 — `DuplicateDecision` would refuse the
+        // append). The effect link stays on the `pending` row and the
+        // `permission_decided` wakeup; the mediator's
+        // `security.egress.decided` is the egress verdict record.
+        let egress_pending =
+            pending.capability_ref.as_ref().map(|(sid, _)| sid.as_str()) == Some("net_egress");
         if let Some(ef) = &pending.effect_id {
-            members.push(("effect_id", Json::str(ef.clone())));
+            if !egress_pending {
+                members.push(("effect_id", Json::str(ef.clone())));
+            }
         }
         // P12 — the responder declaration stamps durable on every
         // surface write: the human's subject ref + the surface session
@@ -1749,6 +1773,21 @@ impl EmbedService {
             let ch = cdrv
                 .derive_from_snapshot(&mut self.store, &lease, &parent_handle, tree)
                 .map_err(crate::open::env_err)?;
+            // R2.9a (DF-S2.4-1c; LT-09) — fork credential custody: re-bind
+            // the parent's live bindings onto the child with **fresh**
+            // placeholders (`security.credential.bound` rows land in the
+            // child's ledger; expiry ceilings are preserved, never
+            // extended — SV-6). The parent's nonce never crosses (SV-10);
+            // a parent with no live bindings rebinds to none —
+            // deny-by-default.
+            cdrv.rebind_credentials_for_fork(
+                &mut self.store,
+                &lease,
+                &mut self.credential_broker,
+                &parent_handle,
+                &ch.env_handle_id,
+            )
+            .map_err(crate::open::env_err)?;
             child_env_handle = Some(ch.env_handle_id.clone());
         }
         // `lifecycle.surface.invoked` — a fork opens a child run.

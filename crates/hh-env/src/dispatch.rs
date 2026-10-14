@@ -41,7 +41,7 @@ use hh_monitor::events::decided_payload;
 use hh_monitor::monitor::{FlowInputs, Monitor, Proposal};
 use hh_ontology::risk::{RiskClass, RiskReversibility};
 use hh_provenance::flow;
-use hh_provenance::origin::Origin;
+use hh_provenance::origin::{HumanRole, Origin};
 use hh_provenance::{Label, PersistenceScope, ProvenanceRecord};
 use hh_secrets::redact::{redact, DetectorSet};
 use hh_secrets::CredentialBroker;
@@ -438,7 +438,7 @@ impl<'a> Dispatcher<'a> {
         // ── 1 resolve ──────────────────────────────────────────────────────
         // The per-use environment gate (DF-S1.12-3): a non-ready handle or a
         // stale report refuses before any work.
-        let handle = driver
+        let mut handle = driver
             .handle(&input.env_handle_id)
             .ok_or_else(|| EnvError::Unavailable {
                 env_handle_id: input.env_handle_id.clone(),
@@ -727,7 +727,29 @@ impl<'a> Dispatcher<'a> {
         // `DuplicateDecision` (§5g.1 I-H7 — exactly one per attempt cycle).
         let recorded_served = decision.decider == hh_monitor::decision::Decider::Human
             && decision.origin_permission_id.is_some();
-        if !recorded_served {
+        // R2.9a (DF-S2.4-1b) — the egress-ask resume re-enters at
+        // `authorize` with the monitor's verdict *already durable*: the
+        // containment-layer ask suspended the effect *after* its
+        // `decided{allow}` landed, so the re-derived verdict restates the
+        // recorded row. Minting a second final decided for `(effect_id,
+        // attempt)` is `DuplicateDecision` — the identical verdict skips
+        // the mint. A *contradicting* verdict is never skipped: it appends
+        // and the fold's duplicate rule is the honest failure.
+        let decision_tag = match &decision.decision {
+            Decision::Allow => Some("allow"),
+            Decision::Deny { .. } => Some("deny"),
+            Decision::Ask { .. } => None,
+        };
+        let already_recorded = match decision_tag {
+            Some(tag) => self.store.events(&self.run_id)?.iter().any(|e| {
+                e.class == "security.permission.decided"
+                    && e.payload.get("effect_id").and_then(Json::as_str) == Some(effect_id.as_str())
+                    && e.payload.get("attempt_no").and_then(Json::as_int) == Some(1)
+                    && e.payload.get("decision").and_then(Json::as_str) == Some(tag)
+            }),
+            None => false,
+        };
+        if !(recorded_served || already_recorded) {
             let decided = self
                 .minter_ev()
                 .mint("security.permission.decided", decided_payload)?;
@@ -1120,7 +1142,16 @@ impl<'a> Dispatcher<'a> {
         // `recheck → sentinels → decided{allow} → wire → charge` is deferred
         // to the wire point in `execute_capture_observe` (post-`committed`,
         // pre-executor) — the write-ahead precedes the wire.
-        let mut pending_egress: Option<(EgressRequest, crate::egress::GateAllow)> = None;
+        //
+        // DF-S2.4-1b (R2.9a) — the resume leg: an earlier dispatch that
+        // suspended behind the mediator's `pending`/`decided{ask}` trail
+        // re-enters here with a durable `security.permission.decided` row
+        // answering the ask (the respond surface mints it — DF-S4.11-3).
+        // The verdict then reaches the mediator through `endorse_gate` —
+        // never a second `requested`/ask trail — and an `allow_lease`'s
+        // amended policy is written back to the handle so subsequent
+        // dispatches decide under the new version.
+        let mut pending_egress: Option<(EgressRequest, Box<crate::egress::GateAllow>)> = None;
         let mut gate_token: Option<crate::tokens::AttributionToken> = None;
         if input.declared.domain == EffectDomain::NetEgress
             && handle.containment.policy().net.mode == NetMode::Mediated
@@ -1145,6 +1176,43 @@ impl<'a> Dispatcher<'a> {
                     return Ok(DispatchOutcome::Refused { reason });
                 }
             };
+            // An *unanswered* egress ask re-suspends — `more_info`/`escalate`
+            // never mint a final row, so the pending stays open and the run
+            // waits again (§5g.7 §5; no second `requested`/ask trail).
+            // Read once — the mediator borrows `store` mutably below.
+            let ask_state = egress_ask_state(self.store, &self.run_id, &effect_id);
+            if let EgressAskState::Pending {
+                permission_id,
+                anchor_event_id,
+            } = &ask_state
+            {
+                let permission_id = permission_id.clone();
+                let anchor_event_id = anchor_event_id.clone();
+                self.minter.expire(&effect_id, 1);
+                let sub = self.store.wakeup_subscribe(
+                    &self.run_id,
+                    lease,
+                    hh_ledger::wakeup::Trigger::PermissionDecided {
+                        permission_id: permission_id.clone(),
+                    },
+                    hh_ledger::wakeup::WakeupPolicy::default_policy(),
+                    &hh_ledger::manifest::EventRef {
+                        run_id: self.run_id.clone(),
+                        event_id: anchor_event_id,
+                    },
+                )?;
+                self.store.suspend(
+                    &self.run_id,
+                    lease,
+                    &[hh_ledger::suspend::SuspendReason::AwaitingApproval {
+                        permission_id: permission_id.clone(),
+                    }],
+                    &[sub],
+                    Json::obj([("on", Json::str("permission_decided"))]),
+                    false,
+                )?;
+                return Ok(DispatchOutcome::Suspended { permission_id });
+            }
             let gate_outcome = {
                 let mut mediator = crate::egress::EgressMediator {
                     store: &mut *self.store,
@@ -1159,10 +1227,33 @@ impl<'a> Dispatcher<'a> {
                     resolver: Box::new(crate::egress::SystemResolver),
                     transport: Box::new(crate::egress::LocalHttpTransport::default()),
                 };
-                mediator.gate(&request, &input.chain)
+                match ask_state {
+                    EgressAskState::Decided { response, endorser } => mediator.endorse_gate(
+                        &request,
+                        response.as_ref(),
+                        endorser.as_ref(),
+                        &input.chain,
+                    ),
+                    // `None` — the ordinary `decide_egress` pass;
+                    // `Pending` was handled above.
+                    _ => mediator.gate(&request, &input.chain),
+                }
             };
             match gate_outcome {
                 Ok(crate::egress::GateOutcome::Allowed(g)) => {
+                    // `allow_lease`'s amendment — already durable
+                    // (`security.containment.amended` minted inside
+                    // `endorse_gate`); write it back to the handle so the
+                    // wire-point mediator and every later dispatch decide
+                    // under the new `version_id` (CC3 — the record and the
+                    // live policy never diverge).
+                    if let Some(amended) = g.amended_policy.clone() {
+                        driver
+                            .apply_amended_containment(&input.env_handle_id, amended.clone())
+                            .map_err(|e| EnvError::Blob(format!("apply_amended: {e:?}")))?;
+                        handle.containment =
+                            hh_containment::attach::PolicySlot::Inline(Box::new(amended));
+                    }
                     gate_token = Some(token);
                     pending_egress = Some((request, g));
                 }
@@ -1588,7 +1679,7 @@ impl<'a> Dispatcher<'a> {
         // The `gate`-allowed mediated egress (DF-S2.4-1) — `Some` only on the
         // dispatch path for a `net_egress` effect under a `mediated` policy;
         // its recheck/wire/charge leg runs at the wire point below.
-        pending_egress: Option<(EgressRequest, crate::egress::GateAllow)>,
+        pending_egress: Option<(EgressRequest, Box<crate::egress::GateAllow>)>,
     ) -> Result<DispatchOutcome, EnvError> {
         let effect_id = effect_id.to_string();
         let key = idem_key.to_string();
@@ -1691,7 +1782,7 @@ impl<'a> Dispatcher<'a> {
                 mediator.forward(
                     &ereq,
                     &allow.decision,
-                    hh_containment::events::DecidedBy::Policy,
+                    allow.decided_by,
                     &allow.effect_id,
                     allow.started,
                     &input.chain,
@@ -2926,6 +3017,153 @@ fn dispatch_world_open(input: &DispatchInput) -> bool {
 /// `args` the executor receives).
 fn canonical_json(canonical: &CanonicalArgs) -> Json {
     Json::Obj(canonical.params.clone())
+}
+
+/// `EgressAskState` — the resume leg's read of the durable ask trail for a
+/// `net_egress` effect (DF-S2.4-1b): the mediator's `pending` is still owed,
+/// or the respond surface's `security.permission.decided` answered it.
+enum EgressAskState {
+    /// No egress ask on record for this effect — the ordinary `gate` runs.
+    None,
+    /// The ask is still owed (unanswered, or a non-final `more_info`/
+    /// `escalate` cycle) — the dispatch re-suspends behind the same wakeup;
+    /// no second `requested`/ask trail is minted.
+    Pending {
+        /// The pending ask's `permission_id`.
+        permission_id: String,
+        /// The pending row's event id — the wakeup subscription's anchor.
+        anchor_event_id: String,
+    },
+    /// A final `decided{allow|deny}` row answered the ask — reconstructed
+    /// into the `ApprovalResponse` `endorse_gate` consumes.
+    Decided {
+        /// The reconstructed response (decision + scope + endorser) —
+        /// boxed: the variant is 400+ bytes against `Pending`'s 48
+        /// (clippy `large_enum_variant`).
+        response: Box<hh_monitor::approval::ApprovalResponse>,
+        /// The endorser declaration (`responder_provenance.subject_ref`
+        /// minted as a `human{principal}` record).
+        endorser: Box<ProvenanceRecord>,
+    },
+}
+
+/// `egress_ask_state(store, run_id, effect_id)` — scan the durable prefix
+/// for the mediator's egress ask on this effect (`pending` naming the fixed
+/// `net_egress` capability ref — §5g.4 §2) and the *final* decided row that
+/// answers it (`decision ∈ {allow, deny}` — the monitor's own
+/// `decided{ask}` and the respond surface's non-final `more_info` cycles
+/// never resolve a pending).
+fn egress_ask_state(
+    store: &hh_ledger::store::Store,
+    run_id: &str,
+    effect_id: &str,
+) -> EgressAskState {
+    let events = match store.events(run_id) {
+        Ok(e) => e,
+        Err(_) => return EgressAskState::None,
+    };
+    let pending = events.iter().find(|e| {
+        e.class == "security.permission.pending"
+            && e.payload.get("effect_id").and_then(Json::as_str) == Some(effect_id)
+            && e.payload
+                .get("request")
+                .and_then(|r| r.get("capability_ref"))
+                .and_then(|c| c.get("semantic_id"))
+                .and_then(Json::as_str)
+                == Some("net_egress")
+    });
+    let Some(pending) = pending else {
+        return EgressAskState::None;
+    };
+    let permission_id = pending
+        .payload
+        .get("permission_id")
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let anchor_event_id = pending.event_id.clone();
+    // The *final* decided row answering this pending — the respond surface
+    // mints `decision ∈ {allow, deny}`; anything else (`ask`, a non-final
+    // cycle) leaves the pending open.
+    let decided = events.iter().rev().find(|e| {
+        e.class == "security.permission.decided"
+            && e.payload.get("permission_id").and_then(Json::as_str) == Some(permission_id.as_str())
+            && matches!(
+                e.payload.get("decision").and_then(Json::as_str),
+                Some("allow" | "deny")
+            )
+    });
+    let Some(decided) = decided else {
+        return EgressAskState::Pending {
+            permission_id,
+            anchor_event_id,
+        };
+    };
+    let decision = decided
+        .payload
+        .get("decision")
+        .and_then(Json::as_str)
+        .unwrap_or("deny");
+    let scope_tag = decided
+        .payload
+        .get("decision_scope")
+        .and_then(Json::as_str)
+        .unwrap_or("once");
+    let scope = hh_monitor::decision::DecisionScope::parse(scope_tag)
+        .unwrap_or(hh_monitor::decision::DecisionScope::Once);
+    let choice = if decision == "deny" {
+        hh_monitor::approval::ResponseChoice::Deny {
+            reason: decided
+                .payload
+                .get("reason")
+                .and_then(Json::as_str)
+                .unwrap_or("denied")
+                .to_string(),
+        }
+    } else if scope == hh_monitor::decision::DecisionScope::Once {
+        hh_monitor::approval::ResponseChoice::AllowOnce
+    } else {
+        // `session`/`persisted` — a lease grant; `endorse_gate`'s
+        // `amend(AddEgressAllow)` runs at the lease's scope bound.
+        let lease_scope = if scope == hh_monitor::decision::DecisionScope::Session {
+            hh_provenance::PersistenceScope::Run
+        } else {
+            hh_provenance::PersistenceScope::Session
+        };
+        hh_monitor::approval::ResponseChoice::AllowLease(hh_monitor::approval::LeaseSpec {
+            pattern: None,
+            scope: lease_scope,
+            max_uses: None,
+        })
+    };
+    let subject_ref = decided
+        .payload
+        .get("responder_provenance")
+        .and_then(|r| r.get("subject_ref"))
+        .and_then(Json::as_str)
+        .or_else(|| decided.payload.get("decider_ref").and_then(Json::as_str))
+        .unwrap_or("human:principal")
+        .to_string();
+    let endorser = ProvenanceRecord::minted(
+        Origin::human(subject_ref.clone(), HumanRole::Principal),
+        PersistenceScope::Run,
+        store.now_ms(),
+    );
+    EgressAskState::Decided {
+        response: Box::new(hh_monitor::approval::ApprovalResponse {
+            permission_id,
+            choice,
+            scope,
+            max_uses: None,
+            justification: None,
+            decided_by: hh_monitor::approval::EndorserRef::Human {
+                subject_ref,
+                authority: hh_provenance::AuthorityClass::Principal,
+            },
+            decided_at: store.now_ms(),
+        }),
+        endorser: Box::new(endorser),
+    }
 }
 
 /// `egress_request(input, canonical, token, effect_id)` — the
