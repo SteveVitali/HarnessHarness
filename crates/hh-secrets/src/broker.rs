@@ -663,8 +663,10 @@ impl CredentialBroker {
     /// `DecisionMissing`, AC-R-2.8.3-13); the mode must be in the channel's
     /// `delivery_modes_allowed` (`ModeNotAllowed`); `wrapped_long_lived`
     /// requires isolation ≥ `process_sandbox` (`EnvironmentNotIsolated`); a
-    /// `minted_scoped` bind on a `sender_constraint`-declaring channel is
-    /// `SenderConstraintUnmet` (Stage 1 has no verifier); a canary channel is
+    /// `dpop`-declaring channel refuses `SenderConstraintUnmet` on every
+    /// mode (no pure-std proof-of-possession verifier); `audience` verifies
+    /// (destination scope for injected modes, the minted token's audience
+    /// binding + `verify_minted` for `minted_scoped`); a canary channel is
     /// `Canary` + `leak_detected`; the channel must be `bindable` and live
     /// (`NotBindable`/`Revoked`). The `security.credential.bound` row is
     /// durable **before** the binding is visible (`AuditUnavailable` on append
@@ -735,17 +737,23 @@ impl CredentialBroker {
                 ),
             ));
         }
-        // A declared sender constraint cannot be verified at Stage 1 — the
-        // verifier lands with `minted_scoped` at Stage 2 (fail closed).
-        if req.mode == SecretTransport::MintedScoped
-            && ch.spec.sender_constraint != SenderConstraint::None
-        {
+        // A declared sender constraint must *verify* — never silently admit
+        // one the runtime cannot check (R2.10; DF-S1.13-1):
+        //   `audience` — verifiable offline. A `minted_scoped` bind admits:
+        //     the minted token binds the audience (`mint` scopes it to the
+        //     binding's declared destinations; `verify_minted` checks it
+        //     destination-side). Injected modes admit: the audience *is*
+        //     the destination, fenced by the scope check below.
+        //   `dpop` — proof-of-possession needs an asymmetric signature
+        //     verification pure-std does not have; it refuses on **every**
+        //     delivery mode, never a fabricated accept.
+        if ch.spec.sender_constraint == SenderConstraint::Dpop {
             return Err(Refused::new(
                 RefusedCode::SenderConstraintUnmet,
                 format!(
-                    "channel {}'s sender_constraint {} cannot be verified",
-                    req.channel_id,
-                    ch.spec.sender_constraint.as_str()
+                    "channel {}'s sender_constraint dpop cannot be verified — \
+                     pure-std has no asymmetric proof-of-possession verifier",
+                    req.channel_id
                 ),
             ));
         }
@@ -1088,9 +1096,11 @@ impl CredentialBroker {
     /// durable before the token is returned (SV-5 — minting *is* the use).
     ///
     /// A `sender_constraint = dpop` channel still refuses
-    /// `SenderConstraintUnmet` (proof-of-possession machinery is not this
-    /// ticket's); `audience`/`none` admit — the token *is* the audience
-    /// binding.
+    /// `SenderConstraintUnmet` (pure-std has no asymmetric
+    /// proof-of-possession verifier — DF-S1.13-1's residual). `audience`
+    /// channels verify: the requested audience must sit inside the
+    /// binding's declared destinations (`out_of_scope` otherwise) — the
+    /// token *is* the audience binding `verify_minted` checks.
     pub fn mint(
         &mut self,
         store: &mut Store,
@@ -1144,6 +1154,20 @@ impl CredentialBroker {
             return Err(BrokerError::Refused(Refused::new(
                 RefusedCode::Canary,
                 format!("channel {} is a canary — never minted", binding.channel_id),
+            )));
+        }
+        // R2.10 (DF-S1.13-1) — `sender_constraint = audience` is verified:
+        // the requested audience must sit inside the binding's declared
+        // destination set (`bind` already fenced it ⊆ the channel's
+        // `destinations`). Minting a token for an audience the binding
+        // cannot deliver to would mint an unverifiable claim — refused
+        // `out_of_scope`, never silently scoped.
+        if ch.spec.sender_constraint == SenderConstraint::Audience
+            && !binding.destinations.contains(audience)
+        {
+            return Err(BrokerError::Refused(Refused::new(
+                RefusedCode::OutOfScope,
+                format!("audience {audience} is outside binding {binding_id}'s destinations"),
             )));
         }
         let expires_at_ms = store.now_ms().saturating_add(ttl_ms);

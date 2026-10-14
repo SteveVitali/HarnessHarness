@@ -1607,6 +1607,7 @@ mod r2_3_tests {
             unpinned: Default::default(),
             ext: Default::default(),
             image_attestation: None,
+            canary_channels: vec![],
         };
         let roots = Roots {
             workspace_roots: vec![ws.clone()],
@@ -1628,6 +1629,7 @@ mod r2_3_tests {
                     hh_containment::policy::kernel_default(0),
                 )),
                 OnLoss::FailRun,
+                Some(&mut s.credential_broker),
             )
             .unwrap();
         s.sessions.get_mut(sid).unwrap().env_handle_id = Some(handle.env_handle_id.clone());

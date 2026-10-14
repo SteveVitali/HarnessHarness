@@ -109,6 +109,83 @@ pub fn resource_budget_spec(
     ))
 }
 
+/// `check_canary_manifest(record, broker_present) → registered-id list` —
+/// the R2.10 (DF-S1.13-3; §5g.3 §9) image-manifest admission check shared by
+/// `provision`/`provision_hosted`: a `needs_adapter` (Stage-3) class MUST
+/// declare ≥1 `canary_channels` member; every member must be `canary: true`
+/// (a non-canary entry in the tripwire list is a lie); any declared canary
+/// requires a broker to register against. `CanaryManifest`, fail-closed.
+fn check_canary_manifest(
+    record: &EnvironmentRecord,
+    broker_present: bool,
+) -> Result<Vec<String>, EnvError> {
+    for c in &record.canary_channels {
+        if !c.spec.canary {
+            return Err(EnvError::CanaryManifest {
+                detail: format!(
+                    "non_canary: canary_channels member {} is not canary:true",
+                    c.channel_id
+                ),
+            });
+        }
+    }
+    if record.class.needs_adapter() && record.canary_channels.is_empty() {
+        return Err(EnvError::CanaryManifest {
+            detail: format!(
+                "missing: class {} image manifest declares no canary channel",
+                record.class.as_str()
+            ),
+        });
+    }
+    if !record.canary_channels.is_empty() && !broker_present {
+        return Err(EnvError::CanaryManifest {
+            detail: "broker_absent: declared canary_channels need a credential broker to register against".into(),
+        });
+    }
+    Ok(record
+        .canary_channels
+        .iter()
+        .map(|c| c.channel_id.clone())
+        .collect())
+}
+
+/// `register_declared_canaries(broker, record, now_ms)` — register each
+/// declared canary channel on the run's broker (R2.10). `ChannelExists`
+/// under an *identical* `canary: true` spec is satisfied — a same-image
+/// re-provision or a derived child on the shared broker; under a different
+/// spec it is a manifest conflict and refuses `CanaryManifest`.
+fn register_declared_canaries(
+    broker: &mut hh_secrets::CredentialBroker,
+    record: &EnvironmentRecord,
+    now_ms: u64,
+) -> Result<(), EnvError> {
+    let prov = hh_provenance::ProvenanceRecord::kernel("hh-env:image-manifest", now_ms);
+    for c in &record.canary_channels {
+        match broker.register_channel(c.channel_id.clone(), c.spec.clone(), prov.clone()) {
+            Ok(_) => {}
+            Err(hh_secrets::BrokerError::ChannelExists { .. }) => {
+                match broker.channel(&c.channel_id) {
+                    Some(ch) if ch.spec == c.spec && ch.spec.canary => {}
+                    _ => {
+                        return Err(EnvError::CanaryManifest {
+                            detail: format!(
+                                "register:{}: channel id already registered under a different spec",
+                                c.channel_id
+                            ),
+                        })
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(EnvError::CanaryManifest {
+                    detail: format!("register:{}: {e:?}", c.channel_id),
+                })
+            }
+        }
+    }
+    Ok(())
+}
+
 impl EnvDriver {
     /// A driver for `run_id`.
     pub fn new(run_id: &str) -> Self {
@@ -253,11 +330,22 @@ impl EnvDriver {
         Ok(())
     }
 
-    /// `provision(record, roots, containment, on_loss) → EnvHandle` —
-    /// `resolve` the image (UnresolvedRef on an unpinned tag), `identify` the
-    /// record (the `environment_ref`), mint the handle, append `declared` +
-    /// `provisioning` + `provisioned`. The handle lands in `provisioning`;
-    /// `attach` completes the path to `ready`.
+    /// `provision(record, roots, containment, on_loss, canary_broker) →
+    /// EnvHandle` — `resolve` the image (UnresolvedRef on an unpinned tag),
+    /// `identify` the record (the `environment_ref`), mint the handle, append
+    /// `declared` + `provisioning` + `provisioned`. The handle lands in
+    /// `provisioning`; `attach` completes the path to `ready`.
+    ///
+    /// `canary_broker` (R2.10; DF-S1.13-3; §5g.3 §9): a `needs_adapter`
+    /// (Stage-3) class's image manifest MUST declare ≥1 `canary_channels`
+    /// member and provision registers each on the run's credential broker
+    /// before the `provisioned` row lands — the tripwire exists from first
+    /// use, not by host convention. Any declared canary (on any class)
+    /// requires `Some` broker — a manifest member is never silently dropped.
+    /// Failures are `CanaryManifest` (`missing` | `non_canary` |
+    /// `broker_absent` | `register:<detail>`) — fail-closed, before any
+    /// durable row.
+    #[allow(clippy::too_many_arguments)] // the provision record's fields are the arity's.
     pub fn provision(
         &mut self,
         store: &mut Store,
@@ -266,6 +354,7 @@ impl EnvDriver {
         roots: Roots,
         containment: PolicySlot,
         on_loss: OnLoss,
+        canary_broker: Option<&mut hh_secrets::CredentialBroker>,
     ) -> Result<EnvHandle, EnvError> {
         if !record.class.provisionable() && !record.class.needs_adapter() {
             return Err(EnvError::Unsupported {
@@ -275,6 +364,15 @@ impl EnvDriver {
                     record.class.as_str()
                 ),
             });
+        }
+        let canary_channels = check_canary_manifest(record, canary_broker.is_some())?;
+        // Register the manifest's canary channels on the run's broker before
+        // the adapter stands a remote up — a `register:` refusal must not
+        // leave an unrecorded provisioned substrate. The `provisioned`
+        // payload records the ids (in-memory broker state; the registration
+        // precedes the durable row that records it).
+        if let Some(broker) = canary_broker {
+            register_declared_canaries(broker, record, store.now_ms())?;
         }
         let image = record.resolve()?;
         let identity = record.identify()?;
@@ -346,6 +444,7 @@ impl EnvDriver {
             containment,
             report: None,
             credential_bindings: vec![],
+            canary_channels,
             roots,
             limits: record.limits.clone(),
             budget_node_refs,
@@ -408,6 +507,7 @@ impl EnvDriver {
         participant_ref: &str,
         hosting_mechanism: &str,
         unobserved: &[&str],
+        canary_broker: Option<&mut hh_secrets::CredentialBroker>,
     ) -> Result<EnvHandle, EnvError> {
         if !record.class.needs_adapter() {
             return Err(EnvError::Unsupported {
@@ -417,6 +517,12 @@ impl EnvDriver {
                     record.class.as_str()
                 ),
             });
+        }
+        // DF-S1.13-3 — the hosted path is a Stage-3-class provision: the
+        // same canary-manifest admission + broker registration applies.
+        let canary_channels = check_canary_manifest(record, canary_broker.is_some())?;
+        if let Some(broker) = canary_broker {
+            register_declared_canaries(broker, record, store.now_ms())?;
         }
         let image = record.resolve()?;
         let identity = record.identify()?;
@@ -453,6 +559,7 @@ impl EnvDriver {
             containment,
             report: None,
             credential_bindings: vec![],
+            canary_channels,
             roots,
             limits: record.limits.clone(),
             budget_node_refs,
@@ -1914,6 +2021,7 @@ impl EnvDriver {
             containment: parent.containment.clone(),
             report: None,
             credential_bindings: vec![],
+            canary_channels: parent.canary_channels.clone(),
             roots,
             limits: parent.limits.clone(),
             budget_node_refs,

@@ -39,8 +39,10 @@ pub enum RefusedCode {
     /// `mediate`: the request path is ambiguous (dot-segments, encoded
     /// separators, backslashes — LT-02).
     AmbiguousPath,
-    /// The channel's `sender_constraint` cannot be verified (Stage 1 has no
-    /// sender-verification machinery — `dpop`/`audience` fail closed).
+    /// The channel's `sender_constraint` cannot be verified — `dpop`
+    /// proof-of-possession needs an asymmetric signature verifier pure-std
+    /// does not have, so it fails closed on every delivery mode (R2.10;
+    /// `audience` verifies — it never reaches this code).
     SenderConstraintUnmet,
     /// A canary channel presented to `bind`/`mediate`/`kernel_use` — the broker
     /// never injects a canary (ADR-0059 D3; the `leak_detected` row is appended

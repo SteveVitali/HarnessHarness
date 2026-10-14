@@ -659,6 +659,12 @@ pub struct EnvHandle {
     /// The credential bindings — **placeholder spellings only** (L7/SV-4: no
     /// value ever enters the handle).
     pub credential_bindings: Vec<String>,
+    /// The canary channel ids the image manifest registered on the run's
+    /// credential broker at `provision` (R2.10; DF-S1.13-3; §5g.3 §9 — the
+    /// §05h I3 `environment` member). A derived child inherits the parent's
+    /// set — the same run's broker already holds them (re-registration is
+    /// idempotent on an identical spec).
+    pub canary_channels: Vec<String>,
     /// The workspace roots.
     pub roots: Roots,
     /// The declared resource bounds.

@@ -31,7 +31,9 @@ use hh_env::errors::EnvError;
 use hh_env::events::EventMinter;
 use hh_env::handle::{EnvCapabilityDeclaration, HandleState, OnLoss, Roots, SnapshotCadence, Tri};
 use hh_env::provider::{ProviderAdapter, ProviderHandle, ProvisionRequest};
-use hh_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
+use hh_env::record::{
+    CanaryChannel, EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe,
+};
 use hh_env::snapshot::{SnapshotKind, TakenBy};
 use hh_identity::idp::address;
 use hh_ledger::ids::{ManualClock, SeqIds};
@@ -80,7 +82,50 @@ fn test_record(class: EnvironmentClass) -> EnvironmentRecord {
         unpinned: BTreeSet::new(),
         image_attestation: None,
         ext: BTreeMap::new(),
+        canary_channels: canary_channels_for(class),
     }
+}
+
+/// R2.10 (DF-S1.13-3) — a Stage-3-class (`needs_adapter`) image manifest
+/// MUST declare ≥1 canary channel; `provision`/`provision_hosted` register
+/// each on the run's credential broker (the §5g.3 §9 tripwire — the broker
+/// never injects it; any use is `leak_detected` + `Refused{canary}`).
+fn test_canary(channel_id: &str) -> CanaryChannel {
+    CanaryChannel {
+        channel_id: channel_id.to_string(),
+        spec: hh_secrets::SecretChannelSpec {
+            kind: hh_secrets::CredentialKind::ApiKey,
+            source: hh_secrets::SecretSource::OperatorVault {
+                vault_ref: format!("canary:{channel_id}"),
+            },
+            destinations: vec![],
+            allowed_env_names: None,
+            delivery_modes: std::collections::BTreeSet::new(),
+            max_lifetime_ms: None,
+            rotation_policy: None,
+            sender_constraint: hh_secrets::SenderConstraint::None,
+            constraints: Default::default(),
+            bindable: false,
+            access_class: hh_secrets::AccessClass::KernelOnly,
+            canary: true,
+            description: "image-manifest tripwire".into(),
+        },
+    }
+}
+
+fn canary_channels_for(class: EnvironmentClass) -> Vec<CanaryChannel> {
+    if class.needs_adapter() {
+        vec![test_canary("img.canary")]
+    } else {
+        vec![]
+    }
+}
+
+fn test_broker() -> hh_secrets::CredentialBroker {
+    hh_secrets::CredentialBroker::new(
+        Box::new(hh_secrets::StaticVault::default()),
+        "canary-test-key",
+    )
 }
 
 /// A workspace with one file already in it — `fs_tree` walks real bytes.
@@ -130,6 +175,7 @@ fn provision_local(
             roots,
             PolicySlot::Inline(Box::new(pol)),
             OnLoss::FailRun,
+            None,
         )
         .unwrap();
     let backend = hh_containment::backend::Ep2Model::reference();
@@ -191,6 +237,9 @@ impl ProviderAdapter for MemProvider {
 
 fn provision_remote(s: &mut Store, lease: &Lease, d: &mut EnvDriver, tag: &str) -> String {
     let (roots, _) = roots_with_seed(tag);
+    // R2.10 — Stage-3-class provisions register the manifest's canary on
+    // the run's broker.
+    let mut broker = test_broker();
     let h = d
         .provision(
             s,
@@ -199,6 +248,7 @@ fn provision_remote(s: &mut Store, lease: &Lease, d: &mut EnvDriver, tag: &str) 
             roots,
             PolicySlot::Inline(Box::new(hh_containment::policy::kernel_default(1_000))),
             OnLoss::FailRun,
+            Some(&mut broker),
         )
         .unwrap();
     let id = h.env_handle_id.clone();
