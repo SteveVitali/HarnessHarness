@@ -814,6 +814,7 @@ fn submit_surface() -> SurfaceSpec {
         .into_iter()
         .collect(),
         risk_class: None,
+        family: None,
     }
 }
 
@@ -1229,6 +1230,7 @@ fn trigger_path_touched_runs_retrieval() {
                     .collect(),
 
                     risk_class: None,
+                    family: None,
                 },
                 submit_surface(),
             ],
@@ -1406,6 +1408,7 @@ fn judged_verify_mints_judged_activation_not_deterministic() {
                     .collect(),
 
                     risk_class: None,
+                    family: None,
                 },
                 submit_surface(),
             ],

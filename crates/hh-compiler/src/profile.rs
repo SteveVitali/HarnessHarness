@@ -1136,6 +1136,14 @@ pub fn minimal_profiles() -> (ModelProfile, ModelProfile) {
             capabilities: ProfileCapabilities {
                 native_function_calling: CapabilityState::Declared,
                 strict_schema_dialect: CapabilityState::Declared,
+                // The `provider_tool_api` deferral flags, named on the record
+                // (R3.5 / DF-S1.17-1): `unknown` — the fail-closed C0 spelling
+                // of unsupported, never a guessed `supported`. The provider
+                // target lowering carries the pair as the artefact's
+                // `deferral` block and declares the deferred leg's loss under
+                // an unestablished capability.
+                deferred_tools: CapabilityState::Unknown,
+                tool_search: CapabilityState::Unknown,
                 ..Default::default()
             },
             rules,

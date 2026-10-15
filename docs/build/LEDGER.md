@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.5   # round-3 chain (rows 137-149); row 141 = tool-exposure residual (BL-16: provider_tool_api flags, surface_rejection_rate, ADR-0272 legs); 127/128 stay HUMAN-H3/H4
-lastCompleted:   R3.4
+nextTicket:      R3.6   # round-3 chain (rows 137-149); row 142 = assembly-emitter adjudication (BL-10); 127/128 stay HUMAN-H3/H4
+lastCompleted:   R3.5
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.4  # R3.4 tip — stacked PR #140 against svitali/harnessharness-r3.3; operator merges
+chainTip:        svitali/harnessharness-r3.5  # R3.5 tip — stacked PR against svitali/harnessharness-r3.4; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -498,3 +498,41 @@ updatedAt:       2026-10-15
   (build · test · fmt · drift 38749748833 / 38749739748; 2/2 green
   on the closeout head — the implementation head 53ce7f2 also
   passed, 38747631657 / 38747617073). Operator merges.
+
+- 2026-10-15 · **R3.5 done** — branch `svitali/harnessharness-r3.5` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/141 · base
+  `svitali/harnessharness-r3.4` (@1ddd2ba). **DF-S1.17-1 discharged
+  DONE; BL-16 closed; R-2.5.3 re-verdicted MET; ADR-0272's four
+  revisit legs fired-answered → BL-43** — the tool-exposure
+  residual: both minimal profiles declare `deferred_tools`/
+  `tool_search` = `unknown` (fail-closed C0, codec round-trip);
+  `lower_provider` emits `deferral{…}` verbatim + per-tool
+  `deferrable`, and a deferred-admitting surface under an
+  unestablished capability declares `no_slot`/`narrowed` loss;
+  `surface_rejection_rate` computes in the one telemetry fold —
+  `surface_rejected ÷ model-emitted calls` deduped on the
+  `tool_call` scope, strata `{profile}|{family}` (`unknown` honest,
+  `n/a{estimator_undefined}` empty, `n/a{class}` hosted); `family`
+  rides `action.tool.{proposed,surface_rejected}` off
+  `binding.family_id` through dispatch/driver/guards/`leaf.arm`;
+  leg (a) `sync_source`→`adopt` over a real delta (epoch +1 at
+  `unverified`, both `catalog.*` rows emit); leg (b)
+  `retrieval_eval` over `benchset.stage3.v1` — `exact_name` floor
+  re-verified at recall@8 = nDCG@8 = 1.0000, all variants 1.0000, no
+  underperformance; (c)/(d) re-checked fired-answered (c at R2.4 —
+  DF-S2.9-3's cadence rides `KernelSink`, D6 stands; d at S2.12 —
+  `emit_result` gates `hh compact`, typed tombstone +
+  `loss_report.dropped[]` enumeration). **Verify:** workspace 340
+  blocks / 3,469 / 0 failed / 1 ignored; r3_5 batteries 12/12 +
+  hh-embed arm round-trip 1/1; clippy `-D warnings` clean on the
+  seven touched crates; fmt clean; drift in sync; removability all
+  stanzas; check-backlog exit 0 (155 sources, 52/66 both sums);
+  check-build-memory 0 violations / 7 pre-existing warnings;
+  `^||` empty. Size flag (R3.3 precedent): ~1,528 source lines vs
+  the 1,000 budget — recorded in ADR-0357, flagged for operator
+  adjudication. Fixture-verified ceiling. Ledger advanced
+  `lastCompleted: R3.5`, `nextTicket: R3.6`, `chainTip:
+  svitali/harnessharness-r3.5`. CI pass #141@1024cbd (build ·
+  test · fmt · drift 38807021330 / 38807030595; 2/2 green on the
+  closeout head; the implementation-head runs were
+  superseded-cancelled). Operator merges.

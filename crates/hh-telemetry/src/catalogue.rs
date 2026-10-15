@@ -252,7 +252,7 @@ pub const PROCESS_METRICS: &[ProcessMetric] = &[
         computed_from: &["control.wakeup.skipped"], unit: MetricUnit::CountMap, fold: C },
     ProcessMetric { name: "surface_rejection_rate", dimension: Dimension::Reliability, direction: Direction::Lower, requires_observability: &[EV, LG], applies_to: &[N_],
         computed_from: &["action.tool.surface_rejected", "action.tool.proposed"],
-        unit: MetricUnit::Ppm, fold: N(NA::Capability) }, // per (profile, family) — C0/S3
+        unit: MetricUnit::Ppm, fold: C }, // per (profile, family) — computed at R3.5 (DF-S1.17-1)
     // ── exposure (ADR-0094 D6; §5d.3 §5) — declarations land at C0/S1;
     // computation is C0/S3 (fixtures + the per-plan fold) ─────────────────
     ProcessMetric { name: "tool_surface_tokens", dimension: Dimension::Grounding, direction: Direction::Lower, requires_observability: &[EV], applies_to: &[N_],
