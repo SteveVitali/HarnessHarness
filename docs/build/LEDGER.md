@@ -498,3 +498,38 @@ updatedAt:       2026-10-15
   (build · test · fmt · drift 38749748833 / 38749739748; 2/2 green
   on the closeout head — the implementation head 53ce7f2 also
   passed, 38747631657 / 38747617073). Operator merges.
+
+- 2026-10-15 · **R3.5 done** — branch `svitali/harnessharness-r3.5` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/141 · base
+  `svitali/harnessharness-r3.4` (@1ddd2ba). **DF-S1.17-1 discharged
+  DONE; BL-16 closed; R-2.5.3 re-verdicted MET; ADR-0272's four
+  revisit legs fired-answered → BL-43** — the tool-exposure
+  residual: both minimal profiles declare `deferred_tools`/
+  `tool_search` = `unknown` (fail-closed C0, codec round-trip);
+  `lower_provider` emits `deferral{…}` verbatim + per-tool
+  `deferrable`, and a deferred-admitting surface under an
+  unestablished capability declares `no_slot`/`narrowed` loss;
+  `surface_rejection_rate` computes in the one telemetry fold —
+  `surface_rejected ÷ model-emitted calls` deduped on the
+  `tool_call` scope, strata `{profile}|{family}` (`unknown` honest,
+  `n/a{estimator_undefined}` empty, `n/a{class}` hosted); `family`
+  rides `action.tool.{proposed,surface_rejected}` off
+  `binding.family_id` through dispatch/driver/guards/`leaf.arm`;
+  leg (a) `sync_source`→`adopt` over a real delta (epoch +1 at
+  `unverified`, both `catalog.*` rows emit); leg (b)
+  `retrieval_eval` over `benchset.stage3.v1` — `exact_name` floor
+  re-verified at recall@8 = nDCG@8 = 1.0000, all variants 1.0000, no
+  underperformance; (c)/(d) re-checked fired-answered (c at R2.4 —
+  DF-S2.9-3's cadence rides `KernelSink`, D6 stands; d at S2.12 —
+  `emit_result` gates `hh compact`, typed tombstone +
+  `loss_report.dropped[]` enumeration). **Verify:** workspace 340
+  blocks / 3,469 / 0 failed / 1 ignored; r3_5 batteries 12/12 +
+  hh-embed arm round-trip 1/1; clippy `-D warnings` clean on the
+  seven touched crates; fmt clean; drift in sync; removability all
+  stanzas; check-backlog exit 0 (155 sources, 52/66 both sums);
+  check-build-memory 0 violations / 7 pre-existing warnings;
+  `^||` empty. Size flag (R3.3 precedent): ~1,528 source lines vs
+  the 1,000 budget — recorded in ADR-0357, flagged for operator
+  adjudication. Fixture-verified ceiling. Ledger advanced
+  `lastCompleted: R3.5`, `nextTicket: R3.6`, `chainTip:
+  svitali/harnessharness-r3.5`. Operator merges.
