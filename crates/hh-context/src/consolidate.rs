@@ -96,13 +96,17 @@ impl Default for ConsolidationGuards {
     }
 }
 
-/// `ConsolidationRule{rule_id, cadence, guards}` — the declared rule the
-/// driver executes (a `HarnessRule` projection at the call site — the
-/// driver receives the resolved rule, never the rule store).
+/// `ConsolidationRule{rule_id, scope, cadence, guards, consolidator,
+/// retention?}` — the declared rule the driver executes (a `HarnessRule{
+/// action: consolidate_memories}` projection at the call site — the driver
+/// receives the resolved rule, never the rule store; R3.4).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConsolidationRule {
     /// The rule's identity (`HarnessRule` id at the call site).
     pub rule_id: String,
+    /// The scope the rule consolidates (declared — never a call-site
+    /// choice; the driver reads it off the rule, one source of truth).
+    pub scope: PersistenceScope,
     /// The declared cadence.
     pub cadence: ConsolidationCadence,
     /// The declared guards.
@@ -111,6 +115,12 @@ pub struct ConsolidationRule {
     /// stale version's names onto its live replacement; model consolidators
     /// are C2 and ride the same watermarks/lease rules).
     pub consolidator: ConsolidatorKind,
+    /// `retention` — the R-2.2 `RetentionPolicy` the rule's memory-body
+    /// reclamation leg runs under (R3.4 / DF-S1.19-1): when declared, the
+    /// consolidation boundary also classifies the memory blob pool under
+    /// the `memory_usage` fold — the landed `evaluate_retention`
+    /// scheduler, never a second mechanism (CC1).
+    pub retention: Option<hh_ledger::retention::RetentionPolicy>,
 }
 
 /// `ConsolidatorKind` — the closed set of consolidation mechanics. `Dedupe`
@@ -219,9 +229,10 @@ impl std::fmt::Display for ConsolidateError {
 }
 impl std::error::Error for ConsolidateError {}
 
-/// `consolidate(store, scope, rule, ctx, last_success_watermark)` — the C1
-/// driver. Order: cadence gate → lease guard → `stale_candidates` →
-/// conflict guard → `max_versions` → rebind (`dedupe`) → record.
+/// `consolidate(store, rule, ctx, last_success_watermark)` — the C1
+/// driver over the rule's declared `scope`. Order: cadence gate → lease
+/// guard → `stale_candidates` → conflict guard → `max_versions` → rebind
+/// (`dedupe`) → record.
 ///
 /// Returns `Ok(None)` when the cadence gate is closed (a typed skip — the
 /// caller does not advance `last_success_watermark`); `Ok(Some(record))`
@@ -232,11 +243,11 @@ impl std::error::Error for ConsolidateError {}
 /// §5c.3 C1 "out-of-process stores").
 pub fn consolidate(
     store: &mut dyn MemoryStorePort,
-    scope: PersistenceScope,
     rule: &ConsolidationRule,
     ctx: &WriteContext,
     last_success_watermark: Option<u64>,
 ) -> Result<Option<ConsolidationRecord>, ConsolidateError> {
+    let scope = rule.scope;
     let input_watermark = store.applied_seq();
 
     // (1) Cadence gate — a closed gate skips without a record (the caller
@@ -419,4 +430,119 @@ pub fn consolidate(
         deferred,
         usage,
     }))
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The `consolidate_memories` action codec (R3.4; DF-S1.19-1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `rule_from_action(rule_id, action)` — decode the
+/// `HarnessRule{action: consolidate_memories}` payload into the resolved
+/// `ConsolidationRule` the driver executes (OQ-205's rule-inventory home:
+/// the definition declares `{scope, cadence, guards?, consolidator?,
+/// retention?}`; the runtime executes the resolved rule, never invents a
+/// cadence). Malformed members fail typed — a rule the codec cannot read
+/// is never silently dropped.
+pub fn rule_from_action(rule_id: &str, action: &Json) -> Result<ConsolidationRule, String> {
+    let m = match action {
+        Json::Obj(m) => m,
+        other => return Err(format!("consolidate_memories: not an object: {other:?}")),
+    };
+    let scope = match m.get("scope") {
+        None | Some(Json::Null) => PersistenceScope::Session,
+        Some(Json::Str(name)) => PersistenceScope::parse(name)
+            .ok_or_else(|| format!("consolidate_memories{rule_id}: unknown scope {name:?}"))?,
+        Some(_) => {
+            return Err(format!(
+                "consolidate_memories{rule_id}: scope must be a string"
+            ))
+        }
+    };
+    let cadence = match m.get("cadence") {
+        Some(Json::Str(c)) => match c.as_str() {
+            "session_start" => ConsolidationCadence::SessionStart,
+            "idle" => ConsolidationCadence::Idle,
+            other => {
+                return Err(format!(
+                    "consolidate_memories{rule_id}: unknown cadence {other:?}"
+                ))
+            }
+        },
+        Some(Json::Obj(c)) => match c.get("rate_limit") {
+            Some(rl) => {
+                let floor = rl
+                    .get("floor_per_seq")
+                    .and_then(Json::as_int)
+                    .ok_or_else(|| {
+                        format!("consolidate_memories{rule_id}: rate_limit missing floor_per_seq")
+                    })?;
+                if floor <= 0 {
+                    return Err(format!(
+                        "consolidate_memories{rule_id}: rate_limit floor_per_seq must be > 0"
+                    ));
+                }
+                ConsolidationCadence::RateLimit {
+                    floor_per_seq: floor as u64,
+                }
+            }
+            _ => {
+                return Err(format!(
+                    "consolidate_memories{rule_id}: unknown cadence record"
+                ))
+            }
+        },
+        _ => return Err(format!("consolidate_memories{rule_id}: missing cadence")),
+    };
+    let mut guards = ConsolidationGuards::default();
+    if let Some(Json::Obj(g)) = m.get("guards") {
+        for k in g.keys() {
+            if !matches!(
+                k.as_str(),
+                "require_current_lease" | "skip_conflicted" | "max_versions"
+            ) {
+                return Err(format!(
+                    "consolidate_memories{rule_id}: unknown guards member {k}"
+                ));
+            }
+        }
+        if let Some(b) = g.get("require_current_lease").and_then(bool_json) {
+            guards.require_current_lease = b;
+        }
+        if let Some(b) = g.get("skip_conflicted").and_then(bool_json) {
+            guards.skip_conflicted = b;
+        }
+        if let Some(n) = g.get("max_versions").and_then(Json::as_int) {
+            guards.max_versions = Some(n.max(0) as u64);
+        }
+    }
+    let consolidator = match m.get("consolidator").and_then(Json::as_str) {
+        None | Some("dedupe") => ConsolidatorKind::Dedupe,
+        Some(other) => {
+            return Err(format!(
+                "consolidate_memories{rule_id}: unknown consolidator {other:?}"
+            ))
+        }
+    };
+    let retention = match m.get("retention") {
+        None | Some(Json::Null) => None,
+        Some(j) => Some(
+            hh_ledger::retention::RetentionPolicy::from_json(j)
+                .map_err(|e| format!("consolidate_memories{rule_id}: retention: {e}"))?,
+        ),
+    };
+    Ok(ConsolidationRule {
+        rule_id: rule_id.to_string(),
+        scope,
+        cadence,
+        guards,
+        consolidator,
+        retention,
+    })
+}
+
+fn bool_json(j: &Json) -> Option<bool> {
+    match j {
+        Json::Bool(b) => Some(*b),
+        _ => None,
+    }
 }

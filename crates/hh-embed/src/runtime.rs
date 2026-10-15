@@ -23,7 +23,10 @@
 //!   canonical plan record.
 
 use hh_context::compact::{CompactInput, CompactionTrigger, EvictOldest};
+use hh_context::consolidate::{ConsolidationCadence, ConsolidationRule};
 use hh_context::events::memory_invalidated_payload;
+use hh_context::policy::ContextPolicy;
+use hh_context::retrieve::{lexical_index, retrieve_indexed, structural_index, RetrievalIndexes};
 use hh_context::{
     default_layout, lifecycle_state, AssemblyRequest, Candidate, CandidateKind, CandidateState,
     CollectSink, ContextBudget, ContextPlan, DefaultPolicy, DerivedFrom, Estimate,
@@ -34,7 +37,7 @@ use hh_context::{
 use hh_control::driver::{
     AssembleInputs, AssembledRequest, AssemblerPort, CacheBinding, CacheResolution, CompactionDone,
     CompactionImpossible, CompactionPort, EffectGate, GateOutcome, LedgerSink, MemoryPort,
-    ModelOutcome, ModelPort, ResponseCachePort, RoutingLane, RoutingPort, ServedEntry,
+    ModelOutcome, ModelPort, ResponseCachePort, RoutingLane, RoutingPort, ServedEntry, StoreSeam,
 };
 use hh_control::output::ParsedCall;
 use hh_control::vocab::SettledOutcome;
@@ -523,7 +526,8 @@ impl AssemblerPort for KernelAssembler {
         if let Some(ctx) = &self.ctx {
             let entries = {
                 let c = ctx.borrow();
-                procedure_index_entries(&c.store, c.store.applied_seq())
+                let mirror = c.store.mirror();
+                procedure_index_entries(mirror, mirror.applied_seq())
             };
             if !entries.is_empty() {
                 let mut sel_sink = CollectSink::default();
@@ -568,7 +572,18 @@ impl AssemblerPort for KernelAssembler {
             policy_params: Json::Null,
             demotion_wrappers: Vec::new(),
         };
-        let policy = DefaultPolicy::default();
+        // The §5c `context_policy` slot's runtime binding (R3.4;
+        // DF-S1.19-1): the arm resolved the sealed slot's variant into
+        // the fold's `policy` (`policy_for_variant` — the only mapping;
+        // a `context.assembled` row's `policy_ref` member is the
+        // variant's own `declare().variant_id`). Replay/legacy arms
+        // without a fold keep the C0 `DefaultPolicy` (the pre-R3.4
+        // shape — their durable rows already record that policy).
+        let policy: Rc<dyn ContextPolicy> = self
+            .ctx
+            .as_ref()
+            .map(|c| c.borrow().policy.clone())
+            .unwrap_or_else(|| Rc::new(DefaultPolicy::default()));
         // `assembly_ms` is the measured wall the record stamps — measured
         // on a discarded run so the stamped value is true; `assemble` is
         // pure (I-DET) so `plan_id` is identical across the pair.
@@ -576,7 +591,7 @@ impl AssemblerPort for KernelAssembler {
         let t0 = std::time::Instant::now();
         let _ = hh_context::assemble(
             &req,
-            &policy,
+            policy.as_ref(),
             ASSEMBLER_LAYOUT_REF,
             "none",
             0,
@@ -586,7 +601,7 @@ impl AssemblerPort for KernelAssembler {
         let mut sink = CollectSink::default();
         match hh_context::assemble(
             &req,
-            &policy,
+            policy.as_ref(),
             ASSEMBLER_LAYOUT_REF,
             "none",
             assembly_ms,
@@ -626,13 +641,20 @@ impl AssemblerPort for KernelAssembler {
                     assembled_payload,
                     side_events,
                     pre_events,
+                    overflow: None,
                 }
             }
             Err(err) => {
                 // The port is infallible — an assembly error is recorded
-                // on the row, never hidden, and the turn proceeds on the
-                // raw context request. (Routing `ContextWindowExceeded`
-                // into a `stop` outcome is the remaining DF-S2.8-1 half.)
+                // on the row, never hidden. A `ContextWindowExceeded`
+                // carries the typed `CompactionRequired` signal the
+                // driver routes to `stop{context_exhausted}` (§5c §9's
+                // "`→ stop`" clause, DF-S1.19-2 — `stage01_disposition`
+                // is the one mapping, CC1); every other error leaves the
+                // turn on the raw context request as before.
+                let overflow = hh_context::stage01_disposition(&err).map(|o| match o {
+                    hh_context::Stage01Outcome::Stop { signal } => signal,
+                });
                 AssembledRequest {
                     request: Json::obj([("context_request", context_request.clone())]),
                     assembled_payload: Some(Json::obj([
@@ -642,6 +664,7 @@ impl AssemblerPort for KernelAssembler {
                     ])),
                     side_events: Vec::new(),
                     pre_events,
+                    overflow,
                 }
             }
         }
@@ -653,17 +676,89 @@ impl AssemblerPort for KernelAssembler {
 // memory boundary, the compaction port, and the supplies ingest.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// `KernelStore` — the memory plane's two placements (R3.4; DF-S1.19-1's
+/// "hosted/proxy memory halves"). `Local` is the C0 in-process
+/// `MemoryStore`; `Remote` is the `memory_store` slot's proxy half —
+/// `RemoteStore` over a `plugin_abi/1` `StoreChannel` (the packaged
+/// `hh-memory-store` variant's session adapter, or the in-process
+/// loopback in fixtures). Mutations route remote-first through the port;
+/// reads serve the deterministic mirror — the mirror *is* the client's
+/// coherent projection (divergence latches the channel fault, never a
+/// guessed answer).
+pub enum KernelStore {
+    /// The in-process fold-store.
+    Local(MemoryStore),
+    /// The out-of-process `memory_store` binding (remote-first writes,
+    /// mirror-served reads).
+    Remote(hh_context::memory_abi::RemoteStore<Box<dyn hh_context::memory_abi::StoreChannel>>),
+}
+
+impl KernelStore {
+    /// The deterministic mirror every owner-projected view
+    /// (`lexical_index`/`structural_index`/`memory_usage`/`stale_index`,
+    /// `lifecycle_state`) folds over.
+    pub fn mirror(&self) -> &MemoryStore {
+        match self {
+            KernelStore::Local(s) => s,
+            KernelStore::Remote(r) => r.mirror(),
+        }
+    }
+
+    /// The mirror, mutably — the indexed retrieval pipeline's
+    /// `record_read` stamp and the fold's `rehydrate`/`put_artifact`
+    /// projections. Mutations that are *remote state* route through
+    /// [`KernelStore::port`] instead (remote-first); the mirror-mut leg
+    /// is only for state the client projects itself (reads, artifacts).
+    pub fn mirror_mut(&mut self) -> &mut MemoryStore {
+        match self {
+            KernelStore::Local(s) => s,
+            KernelStore::Remote(r) => r.mirror_mut(),
+        }
+    }
+
+    /// The `MemoryStorePort` surface — `put`/`bind`/`revoke`/
+    /// `mark_scope_ended`/`consolidate`'s `stale_candidates` route
+    /// remote-first on the remote arm, in-process on the local arm.
+    pub fn port(&mut self) -> &mut dyn hh_context::memory::MemoryStorePort {
+        match self {
+            KernelStore::Local(s) => s,
+            KernelStore::Remote(r) => r,
+        }
+    }
+
+    /// A retrieval read stamp — `Local` records directly; `Remote` ships
+    /// the stamp the indexed pipeline already folded into the mirror
+    /// (one `record_read` per side, never a double count).
+    pub fn record_read(&mut self, version_id: &str, seq: u64) {
+        match self {
+            KernelStore::Local(s) => s.record_read(version_id, seq),
+            KernelStore::Remote(r) => r.forward_read(version_id, seq),
+        }
+    }
+
+    /// The fold watermark (`applied_seq` — the read-your-writes bound).
+    pub fn applied_seq(&self) -> u64 {
+        self.mirror().applied_seq()
+    }
+}
+
 /// `KernelContext` — the run's shared context/memory fold (R-2.4.3;
 /// DF-S2.8-1). One `Rc<RefCell<…>>` instance is shared by the run's three
 /// producer ports — `KernelAssembler` (the §5c.5 selection leg + plan
-/// stash), `KernelMemory` (retrieve/trigger/resume_set/mark_scope_ended)
-/// and `KernelCompaction` (the last assembled plan is its input) — so the
-/// store the assembler selects over is the store the reader reads
-/// (CC1: one memory plane, never a shadow copy).
-#[derive(Default)]
+/// stash), `KernelMemory` (retrieve/trigger/resume_set/mark_scope_ended/
+/// consolidate) and `KernelCompaction` (the last assembled plan is its
+/// input) — so the store the assembler selects over is the store the
+/// reader reads (CC1: one memory plane, never a shadow copy).
+///
+/// R3.4 (DF-S1.19-1) — the fold also carries the sealed `context_policy`
+/// slot's resolved variant (`policy_ref`/`policy` — the assembler leg
+/// runs it verbatim, never re-minted mid-run), the pool-address map
+/// (`content_refs` — the `MemoryUsage`-fed reclamation leg's bound-set
+/// substrate) and the consolidation watermarks (the `session_start`/
+/// `rate_limit` gates' durable-derived state).
 pub struct KernelContext {
-    /// The fold-store (§5c.4's memory plane — `hh_context::MemoryStore`).
-    pub store: MemoryStore,
+    /// The fold-store (§5c.4's memory plane — in-process or proxied).
+    pub store: KernelStore,
     /// The last assembled `ContextPlan` — the compaction port's input.
     pub last_plan: Option<ContextPlan>,
     /// `last_plan`'s candidate set (`candidate_id → Candidate`) — the
@@ -674,33 +769,135 @@ pub struct KernelContext {
     pub window_cap: u64,
     /// The run this fold belongs to.
     pub run_id: String,
+    /// The sealed `context_policy` slot's bound variant ref —
+    /// `context_policy/default` for an unbound slot (the C0 floor).
+    pub policy_ref: String,
+    /// The slot's resolved `ContextPolicy` — one instance per arm, the
+    /// no-widen seam's runtime half (R3.4; `policy_for_variant` is the
+    /// only mapping — a variant the table doesn't name refuses at arm,
+    /// never silently substitutes `default`). `Rc` so the assembler leg
+    /// clones the half and drops the fold's borrow before the builder
+    /// mutates the context (RefCell discipline, not aliasing).
+    pub policy: Rc<dyn ContextPolicy>,
+    /// `version_id → blob-pool content_ref` — the pool addresses the
+    /// `context.memory.written{content_ref}` rows recorded (the
+    /// reclamation leg's bound-set substrate; remote-arm versions carry
+    /// no pool address — their residency is the far side's).
+    pub content_refs: std::collections::BTreeMap<String, String>,
+    /// `rule_id → last_success_watermark` — the consolidation cadence
+    /// state, fold-derived from the durable `context.memory.consolidated`
+    /// prefix on resume and advanced per applied run (the durable row is
+    /// the record; the map is the projection).
+    pub consolidation_watermarks: std::collections::BTreeMap<String, u64>,
+}
+
+impl Default for KernelContext {
+    fn default() -> Self {
+        Self::for_policy("", hh_context::policy_family::DEFAULT_POLICY_REF)
+            .expect("the declared default variant always resolves")
+    }
 }
 
 impl KernelContext {
-    /// A fresh fold for `run_id`.
+    /// A fresh fold for `run_id` under the default policy (the C0 floor).
     pub fn new(run_id: &str) -> Self {
-        KernelContext {
-            store: MemoryStore::new("kernel-memory"),
+        Self::for_policy(run_id, hh_context::policy_family::DEFAULT_POLICY_REF)
+            .expect("the declared default variant always resolves")
+    }
+
+    /// A fresh fold for `run_id` under the sealed `context_policy` slot's
+    /// bound variant — `policy_for_variant` is the only runtime binding
+    /// (R3.4; DF-S1.19-1's non-`default` `ContextPolicy` wiring). An
+    /// unresolvable variant ref is the typed refusal the arm propagates
+    /// (`Refused`, never a silent `default` substitution).
+    pub fn for_policy(run_id: &str, policy_ref: &str) -> Result<Self, String> {
+        let policy: Rc<dyn ContextPolicy> =
+            Rc::from(hh_context::policy_family::policy_for_variant(policy_ref).ok_or_else(|| {
+            format!(
+                "context_policy variant {policy_ref:?} names no first-party binding                  (declared: default|priority_eviction|world_state_diff|jit_handles|                 recency_plus_pins|retrieval_augmented)"
+            )})?);
+        Ok(KernelContext {
+            store: KernelStore::Local(MemoryStore::new("kernel-memory")),
             last_plan: None,
             last_candidates: BTreeMap::new(),
             window_cap: 0,
             run_id: run_id.to_string(),
-        }
+            policy_ref: policy_ref.to_string(),
+            policy,
+            content_refs: std::collections::BTreeMap::new(),
+            consolidation_watermarks: std::collections::BTreeMap::new(),
+        })
     }
 
-    /// `fold(prefix)` — the resume arm (§5c.4's replay rule: the store is
-    /// a pure fold over the durable `context.memory.written` prefix, never
-    /// re-minted). The durable row carries the *record* (version, kind,
-    /// scope, semantic_id) — the content plane is the store's own; a
-    /// folded version is a skeleton (metadata only, `""` index text) whose
-    /// `by_name` resolution and lifecycle fold are honest, and whose thin
-    /// `index_text` is exactly what the durable row records. Name
-    /// bindings re-derive `scope:semantic_id` → `version_id` (the
-    /// `put_artifact` convention — the name history is a projection of
-    /// the write rows, not a second channel).
-    pub fn fold(run_id: &str, prefix: &[EventEnvelope], now_ms: u64) -> Self {
+    /// Rebind the policy — the resumed arm's declared variant re-
+    /// resolves against `policy_for_variant` (the fold reconstructs the
+    /// *memory* plane; the policy binding re-derives from the sealed
+    /// slot, never from a durable-row guess). Same typed refusal as
+    /// `for_policy` — an unresolvable ref is `Refused`, never a silent
+    /// `default` substitution.
+    pub fn rebind_policy(&mut self, policy_ref: &str) -> Result<(), String> {
+        let policy: Rc<dyn ContextPolicy> =
+            Rc::from(hh_context::policy_family::policy_for_variant(policy_ref).ok_or_else(|| {
+                format!(
+                    "context_policy variant {policy_ref:?} names no first-party binding                      (declared: default|priority_eviction|world_state_diff|jit_handles|                     recency_plus_pins|retrieval_augmented)"
+                )
+            })?);
+        self.policy = policy;
+        self.policy_ref = policy_ref.to_string();
+        Ok(())
+    }
+
+    /// A fresh fold for `run_id` over the `memory_store` slot's proxy
+    /// binding — the packaged `hh-memory-store` variant's `plugin_abi/1`
+    /// session (or the in-process loopback in fixtures). Mutations route
+    /// remote-first; reads serve the deterministic mirror (R3.4;
+    /// DF-S1.19-1's "hosted/proxy memory halves" — the conformance
+    /// battery covers the same `MemoryStorePort` surface both sides).
+    pub fn new_remote(
+        run_id: &str,
+        policy_ref: &str,
+        channel: Box<dyn hh_context::memory_abi::StoreChannel>,
+    ) -> Result<Self, String> {
+        let mut ctx = Self::for_policy(run_id, policy_ref)?;
+        ctx.store = KernelStore::Remote(hh_context::memory_abi::RemoteStore::new(channel));
+        Ok(ctx)
+    }
+
+    /// `fold(prefix, ledger)` — the resume arm (§5c.4's replay rule: the
+    /// store is a pure fold over the durable `context.memory.written`
+    /// prefix, never re-minted). The durable row carries the *record*
+    /// (version, kind, scope, semantic_id) plus `content_ref` — the
+    /// blob-pool address of the version's canonical bytes. A resolvable
+    /// `content_ref` rehydrates the *full* version (the body the lexical
+    /// index and retrieval surface read — R3.4; DF-S1.19-1's indexed
+    /// retrieval is honest across a resume); an absent `content_ref` (a
+    /// row written before the member landed, or a remote-plane body) or a
+    /// missing blob folds a skeleton (metadata only, `""` index text) —
+    /// the honest projection of exactly what the durable prefix records,
+    /// never a fabricated body. Name bindings re-derive
+    /// `scope:semantic_id` → `version_id` (the `put_artifact` convention
+    /// — the name history is a projection of the write rows, not a second
+    /// channel); `context.memory.consolidated` rows re-derive the
+    /// per-rule watermarks; `content_ref`s re-derive the pool-address
+    /// map; every written row re-registers the artifact-layer projection
+    /// the `by_run` and `structural` queries enumerate.
+    pub fn fold(run_id: &str, prefix: &[EventEnvelope], ledger: &Store, now_ms: u64) -> Self {
         let mut ctx = Self::new(run_id);
         for e in prefix {
+            // The consolidation watermark fold — the durable row's
+            // `rule_id`/`input_watermark` pair re-derives the cadence
+            // gate's last-success state (the record is the ledger; the
+            // map is the projection — R3.4's resume discipline).
+            if e.class == "context.memory.consolidated" {
+                if let (Some(rule), Some(wm)) = (
+                    e.payload.get("rule_id").and_then(Json::as_str),
+                    e.payload.get("input_watermark").and_then(Json::as_int),
+                ) {
+                    ctx.consolidation_watermarks
+                        .insert(rule.to_string(), wm as u64);
+                }
+                continue;
+            }
             if e.class != "context.memory.written" {
                 continue;
             }
@@ -732,15 +929,52 @@ impl KernelContext {
                 continue;
             }
             let prov = hh_provenance::ProvenanceRecord::kernel("hh-embed/memory-fold", now_ms);
-            // The fold restores a *skeleton* under the durable row's own
+            // The body plane (R3.4): the row's `content_ref` names the
+            // canonical bytes' pool address — a resolvable ref rehydrates
+            // the full `MemoryContent` (Structured when the bytes parse,
+            // Text otherwise — the same decode `put_artifact` writes
+            // under, one convention, CC1). The fold keeps the skeleton
+            // for an unresolvable/absent ref — the durable row's own
             // `version_id` (`rehydrate` — identity is never re-minted).
-            // The row carries `contract_hash` but not the contract, so the
-            // skeleton declares the empty contract + no validity members —
-            // `lifecycle_state` reads `unknown` (the fold cannot re-verify
-            // the original contract — honest, never a fabricated `valid`).
-            // The label's `authority`/`readers` members do round-trip and
-            // are reconstructed (taint has no codec — a C2 member the
-            // skeleton leaves empty).
+            // The row carries `contract_hash` but not the contract, so
+            // the skeleton declares the empty contract + no validity
+            // members — `lifecycle_state` reads `unknown` (the fold
+            // cannot re-verify the original contract — honest, never a
+            // fabricated `valid`). The label's `authority`/`readers`
+            // members do round-trip and are reconstructed (taint has no
+            // codec — a C2 member the skeleton leaves empty).
+            let content_ref = e
+                .payload
+                .get("content_ref")
+                .and_then(Json::as_str)
+                .map(str::to_string);
+            let body: Option<MemoryContent> = content_ref
+                .as_deref()
+                .and_then(|r| hh_identity::idp::parse_id(r).ok())
+                .and_then(|pid| {
+                    ledger
+                        .get_blob(&hh_identity::idp::ContentAddress {
+                            idp: "idp/1",
+                            algorithm: "sha256",
+                            digest: pid.digest_hex,
+                            media_type: String::new(),
+                            size: 0,
+                        })
+                        .ok()
+                })
+                .map(|bytes| {
+                    std::str::from_utf8(&bytes)
+                        .ok()
+                        .and_then(|t| hh_wire::json::parse(t).ok())
+                        .map(MemoryContent::Structured)
+                        .unwrap_or_else(|| {
+                            MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+                                String::from_utf8_lossy(&bytes).into_owned(),
+                                "hh-embed/memory-fold",
+                                prov.clone(),
+                            )))
+                        })
+                });
             let authority = e
                 .payload
                 .get("label")
@@ -764,11 +998,13 @@ impl KernelContext {
                 semantic_id: semantic_id.clone(),
                 kind,
                 subject_key: None,
-                content: MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
-                    "",
-                    "hh-embed/memory-fold",
-                    prov.clone(),
-                ))),
+                content: body.unwrap_or_else(|| {
+                    MemoryContent::Text(Box::new(hh_hir::leaves::Text::new(
+                        "",
+                        "hh-embed/memory-fold",
+                        prov.clone(),
+                    )))
+                }),
                 contract: hh_context::InvalidationContract {
                     dependencies: Vec::new(),
                     cache_hint: hh_context::CacheHint::Cacheable,
@@ -793,10 +1029,36 @@ impl KernelContext {
                 conflict_set_ref: None,
                 validator_endorsed: false,
             };
-            ctx.store.rehydrate(version);
+            let index_text = version.content.index_text();
+            ctx.store.mirror_mut().rehydrate(version);
             let _ = ctx
                 .store
+                .port()
                 .bind(scope, &semantic_id, &version_id, None, "fold", e.seq);
+            // The artifact-layer projection — every written memory is a
+            // `Layer::Artifact` entry the `by_run{run_id, classes}` and
+            // `structural` queries enumerate (R3.4; the content address
+            // is the artifact id, `context.memory.written` the deriving
+            // class — a folded row re-registers the same projection,
+            // never a second channel).
+            if let Some(cref) = content_ref {
+                let canonical = index_text;
+                ctx.store
+                    .mirror_mut()
+                    .put_artifact(hh_context::ArtifactVersion {
+                        artifact_id: cref.clone(),
+                        path: semantic_id.clone(),
+                        created_at: e.seq,
+                        label: hh_provenance::label::Label::at(
+                            hh_provenance::AuthorityClass::Principal,
+                        ),
+                        run_id: e.run_id.clone(),
+                        classes: ["context.memory.written".to_string()].into_iter().collect(),
+                        tokens: ((canonical.len() / 4) as u64).max(1),
+                        index_text: canonical,
+                    });
+                ctx.content_refs.insert(version_id.clone(), cref);
+            }
         }
         ctx
     }
@@ -883,18 +1145,48 @@ impl KernelContext {
             // lease — the fenced-write check reads `store.lease(scope)`
             // (the kernel is the store's sole writer; generation 0 when
             // the scope lease was never taken).
-            lease_generation: self.store.lease(scope),
+            lease_generation: self.store.port().lease(scope),
             at_seq,
             run_id: self.run_id.clone(),
         };
         let outcome = self
             .store
+            .port()
             .put(draft, &wctx)
             .map_err(|e| format!("memory_put: {e:?}"))?;
         let version_id = outcome.version.version_id.clone();
         self.store
+            .port()
             .bind(scope, name, &version_id, None, "supply", at_seq)
             .map_err(|e| format!("memory_bind: {e:?}"))?;
+        // The artifact-layer projection (R3.4; DF-S1.19-1's `by_run`
+        // producer path): the write registers a `Layer::Artifact` entry
+        // — `by_run{run_id, classes:["context.memory.written"]}` and the
+        // `structural`/`lexical` indexes enumerate it — and the pool
+        // address joins the bound-set substrate the `retention`
+        // reclamation leg reads (the blob already landed above — the
+        // map records the join, never a second copy).
+        {
+            let index_text = outcome.version.content.index_text();
+            self.store
+                .mirror_mut()
+                .put_artifact(hh_context::ArtifactVersion {
+                    artifact_id: format!("{}:{}", addr.algorithm, addr.digest),
+                    path: name.to_string(),
+                    created_at: at_seq,
+                    label: hh_provenance::label::Label::at(
+                        hh_provenance::AuthorityClass::Principal,
+                    ),
+                    run_id: self.run_id.clone(),
+                    classes: ["context.memory.written".to_string()].into_iter().collect(),
+                    tokens: ((index_text.len() / 4) as u64).max(1),
+                    index_text,
+                });
+            self.content_refs.insert(
+                version_id.clone(),
+                format!("{}:{}", addr.algorithm, addr.digest),
+            );
+        }
         // The durable record — `context.memory.written` lands under the
         // run's writer lease. The store minted the row itself
         // (`PutOutcome.event` — the producer's own payload, CC1); we add
@@ -1056,7 +1348,7 @@ impl KernelMemory {
         let at = (ctx.run_id.clone(), ctx.store.applied_seq());
         let req = RetrievalRequest {
             model_call_id: model_call_id.to_string(),
-            at,
+            at: at.clone(),
             layers: [
                 hh_context::Layer::Artifact,
                 hh_context::Layer::Episodic,
@@ -1090,8 +1382,59 @@ impl KernelMemory {
             mode: hh_identity::names::ResolveMode::Execute,
         };
         let mut sink = CollectSink::default();
-        hh_context::retrieve::retrieve(&mut ctx.store, &req, &mut sink, None, || 0)
-            .map_err(|e| format!("retrieve: {e:?}"))?;
+        // §5c.3's materialized indexes (R3.4; DF-S1.19-1's "non-`lexical`
+        // indexes"): the pipeline runs `retrieve_indexed` over the
+        // fold-store's *owner-projected* `lexical` + `structural` views —
+        // `structural{anchors, mentioned_idents}` queries serve the
+        // stamped `StructuralIndex` instead of the on-the-fly fold, and
+        // `by_run` enumerates the artifact-layer projection every write
+        // registers. The remote arm folds the same views over the
+        // client's deterministic mirror, then ships each recorded read
+        // to the far side (`forward_read` — one `record_read` stamp per
+        // side, `memory_usage` agrees across the channel).
+        match &mut ctx.store {
+            KernelStore::Local(store) => {
+                let lex = lexical_index(store, at.1);
+                let structural = structural_index(store, at.1);
+                retrieve_indexed(
+                    store,
+                    &req,
+                    &mut sink,
+                    &RetrievalIndexes {
+                        lexical: Some(&lex),
+                        structural: Some(&structural),
+                        embedder: None,
+                    },
+                    || 0,
+                )
+            }
+            KernelStore::Remote(remote) => {
+                let lex = lexical_index(remote.mirror(), at.1);
+                let structural = structural_index(remote.mirror(), at.1);
+                match retrieve_indexed(
+                    remote.mirror_mut(),
+                    &req,
+                    &mut sink,
+                    &RetrievalIndexes {
+                        lexical: Some(&lex),
+                        structural: Some(&structural),
+                        embedder: None,
+                    },
+                    || 0,
+                ) {
+                    Ok((items, report)) => {
+                        for item in &items {
+                            if item.semantic_id.is_some() {
+                                remote.forward_read(&item.address, at.1);
+                            }
+                        }
+                        Ok((items, report))
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+        }
+        .map_err(|e| format!("retrieve: {e:?}"))?;
         Ok(sink.events)
     }
 }
@@ -1148,6 +1491,7 @@ impl MemoryPort for KernelMemory {
                 .into_iter()
                 .find(|scope| {
                     ctx.store
+                        .mirror()
                         .resolve(
                             *scope,
                             Some(head),
@@ -1185,17 +1529,19 @@ impl MemoryPort for KernelMemory {
         // re-mint nothing.
         let expired: Vec<String> = ctx
             .store
+            .mirror()
             .version_order()
             .iter()
             .filter(|vid| {
                 ctx.store
+                    .mirror()
                     .version(vid)
                     .map(|v| v.scope == scope)
                     .unwrap_or(false)
             })
             .filter(|vid| {
                 !matches!(
-                    lifecycle_state(&ctx.store, vid, at_seq).kind(),
+                    lifecycle_state(ctx.store.mirror(), vid, at_seq).kind(),
                     LifecycleStateKind::Revoked
                         | LifecycleStateKind::Superseded
                         | LifecycleStateKind::Expired
@@ -1203,7 +1549,7 @@ impl MemoryPort for KernelMemory {
             })
             .cloned()
             .collect();
-        ctx.store.mark_scope_ended(scope);
+        ctx.store.port().mark_scope_ended(scope);
         let prov = hh_provenance::ProvenanceRecord::kernel("hh-embed/memory", at_seq);
         expired
             .into_iter()
@@ -1238,9 +1584,10 @@ impl MemoryPort for KernelMemory {
             .or_else(|| artefact_id.strip_prefix("procedure_body:"))
             .unwrap_or(artefact_id);
         ctx.store
+            .mirror()
             .version_order()
             .iter()
-            .filter_map(|vid| ctx.store.version(vid))
+            .filter_map(|vid| ctx.store.mirror().version(vid))
             .find(|v| {
                 v.kind == MemoryKind::ProcedurePointer
                     && (v.semantic_id == semantic
@@ -1260,6 +1607,134 @@ impl MemoryPort for KernelMemory {
                     }),
                 _ => None,
             })
+    }
+
+    fn consolidate(
+        &mut self,
+        rules: &[ConsolidationRule],
+        boundary: &str,
+        mut seam: Option<StoreSeam<'_>>,
+    ) -> Result<Vec<(String, Json)>, String> {
+        let mut ctx = self.ctx.borrow_mut();
+        let mut events: Vec<(String, Json)> = Vec::new();
+        let mut seam = seam.take();
+        for rule in rules {
+            let last = ctx.consolidation_watermarks.get(&rule.rule_id).copied();
+            // `session_start` runs once per session — the durable
+            // `context.memory.consolidated` row IS the record it ran;
+            // a resumed arm re-derives the watermark from the prefix and
+            // never re-fires the same session's start (a second run
+            // would mint a second "start" — the row would lie).
+            if matches!(rule.cadence, ConsolidationCadence::SessionStart) && last.is_some() {
+                continue;
+            }
+            let wctx = hh_context::WriteContext {
+                context_label: hh_provenance::label::Label::at(
+                    hh_provenance::AuthorityClass::Kernel,
+                ),
+                lease_generation: ctx.store.port().lease(rule.scope),
+                at_seq: ctx.store.applied_seq(),
+                run_id: ctx.run_id.clone(),
+            };
+            let Some(rec) =
+                hh_context::consolidate::consolidate(ctx.store.port(), rule, &wctx, last)
+                    .map_err(|e| format!("consolidate:{}: {e}", rule.rule_id))?
+            else {
+                // Cadence-closed — the gate's typed skip mints no row and
+                // the watermark stands (a `rate_limit` inside its floor).
+                continue;
+            };
+            // The `retention` leg (R3.4; DF-S1.19-1's `MemoryUsage`-fed
+            // reclamation): a declared `RetentionPolicy` runs the landed
+            // `evaluate_retention` scheduler over the fenced store. The
+            // bound set is memory-scoped — a stale body stays bound while
+            // it was read after the rule's last watermark; every pool
+            // member outside the memory fold holds `bound` (the rule
+            // reclaims *memory bodies*, never reclassifies non-memory
+            // bytes). A seam-less sink (replay/recorder) runs the
+            // consolidation fold only — the row reports `n/a` by
+            // absence, never a fabricated count.
+            let mut reclaim: Option<(&str, usize, usize)> = None;
+            if let Some(policy) = &rule.retention {
+                if let Some(seam) = seam.as_mut() {
+                    let tip = ctx.store.applied_seq();
+                    let usage = hh_context::lifecycle::memory_usage(ctx.store.mirror(), tip);
+                    let stale = hh_context::lifecycle::stale_index(ctx.store.mirror(), tip);
+                    let reclaimable: std::collections::BTreeSet<String> = usage
+                        .iter()
+                        .filter(|u| stale.entries.contains_key(&u.version_id))
+                        .filter(|u| {
+                            u.last_read_at
+                                .map(|s| s <= last.unwrap_or(0))
+                                .unwrap_or(true)
+                        })
+                        .filter_map(|u| ctx.content_refs.get(&u.version_id).cloned())
+                        .collect();
+                    let mut bound: std::collections::BTreeSet<String> = seam
+                        .store
+                        .blob_digests()
+                        .iter()
+                        .map(|d| format!("{}:{}", hh_identity::idp::IDP_1.hash_algorithm, d))
+                        .collect();
+                    for r in &reclaimable {
+                        bound.remove(r);
+                    }
+                    let report = seam
+                        .store
+                        .evaluate_retention(&ctx.run_id, seam.lease, policy, &bound)
+                        .map_err(|e| format!("retention:{}: {e:?}", rule.rule_id))?;
+                    reclaim = Some((
+                        policy.policy_ref.as_str(),
+                        bound.len(),
+                        report.transitions.len(),
+                    ));
+                }
+            }
+            // The rebind diff lands first (producer emit order), the
+            // watermark row last — durable-before-visible (CC3); the
+            // durable row is the record the next cadence gate reads.
+            for (class, payload) in ctx.store.port().drain_events() {
+                // A rebind's `context.memory.written` row names the same
+                // content-addressed `version_id` — the port stamps the
+                // blob-pool `content_ref` it already recorded so the
+                // durable row stays self-describing (the fold's body
+                // plane resolves it exactly like a `put_artifact` row,
+                // CC1 — never a silent skeleton).
+                let payload = if class == "context.memory.written" {
+                    let cref = payload
+                        .get("version_id")
+                        .and_then(Json::as_str)
+                        .and_then(|v| ctx.content_refs.get(v))
+                        .cloned();
+                    match (payload, cref) {
+                        (Json::Obj(mut m), Some(cref)) => {
+                            m.insert("content_ref".to_string(), Json::str(cref));
+                            Json::Obj(m)
+                        }
+                        (p, _) => p,
+                    }
+                } else {
+                    payload
+                };
+                events.push((class, payload));
+            }
+            let store_id = ctx.store.mirror().store_id.clone();
+            let lease_generation = ctx.store.port().lease(rule.scope);
+            events.push((
+                "context.memory.consolidated".to_string(),
+                hh_context::events::memory_consolidated_payload(
+                    &rec,
+                    rule,
+                    &store_id,
+                    lease_generation,
+                    boundary,
+                    reclaim,
+                ),
+            ));
+            ctx.consolidation_watermarks
+                .insert(rule.rule_id.clone(), rec.input_watermark);
+        }
+        Ok(events)
     }
 }
 

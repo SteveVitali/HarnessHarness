@@ -314,6 +314,12 @@ pub struct AssembledRequest {
     /// assembly; R2.5 / DF-S2.8-1). The driver appends them first, under
     /// the same call scope, preserving the producer's emit order.
     pub pre_events: Vec<(String, Json)>,
+    /// The Stage-0/1 overflow signal — `Some(CompactionRequired)` iff the
+    /// builder answered `ContextWindowExceeded` (§5c §9's "`→ stop`"
+    /// clause; R3.4 / DF-S1.19-2). The driver appends the recorded rows
+    /// then stops `context_exhausted` — the model call never fires on a
+    /// request the window cannot hold (never a silent proceed).
+    pub overflow: Option<hh_context::CompactionRequired>,
 }
 
 /// Durability — the sink the driver appends through (the `hh-ledger`
@@ -430,6 +436,26 @@ pub trait MemoryPort {
     /// is not a store-backed procedure (the activation row still lands —
     /// capless, so no `followed` can mint from it).
     fn procedure_capabilities(&self, artefact_id: &str) -> Option<Vec<String>>;
+    /// The §5c.3 consolidation boundary (R3.4; DF-S1.19-1) — run each
+    /// declared `ConsolidationRule` that admits at `boundary` (`"open"` —
+    /// once per arm, before the first `decide`; `"finish"` — the run's
+    /// idle terminal, after the scope floors so the just-expired versions
+    /// rebind). The port owns the memory store, the per-rule watermarks
+    /// and the rebind diff; the driver owns the appends — every returned
+    /// `(class, payload)` lands in emit order with the rule's
+    /// `context.memory.consolidated` watermark row last (CC3 durable-
+    /// before-visible). `seam` binds the fenced ledger store — a rule's
+    /// declared `retention` runs the `evaluate_retention` scheduler
+    /// through the same writer lease (its `lifecycle.ledger.
+    /// tier_transition` rows commit before the watermark row reports
+    /// them). `Err` is the port's typed refusal — a fenced consolidation
+    /// fails the boundary, never writes around the lease.
+    fn consolidate(
+        &mut self,
+        rules: &[hh_context::consolidate::ConsolidationRule],
+        boundary: &str,
+        seam: Option<StoreSeam<'_>>,
+    ) -> Result<Vec<(String, Json)>, String>;
 }
 
 /// `CompactionImpossible{required_tokens, cap}` — the exhausted ladder's
@@ -801,6 +827,20 @@ pub struct DriverConfig {
     /// memory boundary fails `UnbackedPort{kind: "resume_set"}`, never a
     /// silent skip.
     pub resume_set_heads: Vec<String>,
+    /// The §5c.3 consolidation rules — the definition's
+    /// `HarnessRule{action: consolidate_memories}` declarations resolved
+    /// at `open`/`resume` (the rule inventory is a definition fact —
+    /// OQ-205; the driver executes declared rules, never invents a
+    /// cadence). `session_start`/`rate_limit` evaluate at the `open`
+    /// boundary (once per arm, before the first `decide`);
+    /// `idle`/`rate_limit` at the `finish` boundary (after the scope
+    /// floors, inside the closing turn scope). The port's watermark fold
+    /// decides whether a rule actually runs — a `session_start` rule's
+    /// durable `context.memory.consolidated` row is the record it already
+    /// ran, so a resumed arm never re-fires it. Non-empty with no memory
+    /// boundary is `UnbackedPort{kind: "consolidate"}` at the boundary —
+    /// a declared rule never silently skips.
+    pub consolidation_rules: Vec<hh_context::consolidate::ConsolidationRule>,
 }
 
 impl Default for DriverConfig {
@@ -831,6 +871,7 @@ impl Default for DriverConfig {
             judge: None,
             reconciler: None,
             resume_set_heads: Vec::new(),
+            consolidation_rules: Vec::new(),
         }
     }
 }
@@ -1954,6 +1995,11 @@ impl<S: ControlStrategy> Driver<S> {
                     self.append(sink, &class, payload, None)?;
                 }
             }
+            // §5c.3 `open` boundary (R3.4) — `session_start`/`rate_limit`
+            // rules evaluate once per arm, durable-before-visible ahead
+            // of the first `decide` (the port's watermark fold decides
+            // whether the rule actually runs).
+            self.consolidation_round(sink, "open")?;
         }
         loop {
             let cue = match self.inbox.pop_front() {
@@ -2244,6 +2290,19 @@ impl<S: ControlStrategy> Driver<S> {
                 for (class, payload) in assembled.side_events {
                     self.append(sink, &class, payload, Some(&mc))?;
                 }
+                // DF-S1.19-2 (R3.4) — `ContextWindowExceeded → stop`: the
+                // builder's typed overflow is durable on the assembled
+                // row above; the run stops `context_exhausted` — the one
+                // closed spelling the compaction floor shares (CC1) —
+                // and the model call never fires on a request the
+                // window cannot hold.
+                if let Some(signal) = &assembled.overflow {
+                    self.stop_pending = Some(StopReason::ContextExhausted {
+                        required_tokens: signal.required_tokens,
+                        cap: signal.cap,
+                    });
+                    return Ok(());
+                }
                 self.model_round(sink, model, &assembled.request, Some((mc, 1)))?;
             }
             DecisionKind::Act { intents, .. } => {
@@ -2255,16 +2314,33 @@ impl<S: ControlStrategy> Driver<S> {
                 not_before,
             } => {
                 if let crate::vocab::RetryTarget::ModelCall { model_call_id } = target {
-                    let mut request = assembler
-                        .assemble(
-                            &AssembleInputs {
-                                model_call_id: &model_call_id,
-                                prefix: sink.prefix(),
-                                window_cap_tokens: self.config.window_cap_tokens,
-                            },
-                            &Json::Null,
-                        )
-                        .request;
+                    let assembled = assembler.assemble(
+                        &AssembleInputs {
+                            model_call_id: &model_call_id,
+                            prefix: sink.prefix(),
+                            window_cap_tokens: self.config.window_cap_tokens,
+                        },
+                        &Json::Null,
+                    );
+                    // `ContextWindowExceeded → stop` on the retry path too
+                    // (DF-S1.19-2): the overflow's record lands durable
+                    // before the stop — a re-assembly that cannot fit is
+                    // the same `context_exhausted`, never a re-issued
+                    // unholdable call.
+                    if let Some(signal) = &assembled.overflow {
+                        if let Some(p) = assembled.assembled_payload {
+                            self.append(sink, "context.assembled", p, Some(&model_call_id))?;
+                        }
+                        for (class, payload) in assembled.side_events {
+                            self.append(sink, &class, payload, Some(&model_call_id))?;
+                        }
+                        self.stop_pending = Some(StopReason::ContextExhausted {
+                            required_tokens: signal.required_tokens,
+                            cap: signal.cap,
+                        });
+                        return Ok(());
+                    }
+                    let mut request = assembled.request;
                     let next_attempt = crate::retry::attempt_no(sink.prefix(), &model_call_id) + 1;
                     // R-2.7 — the routed lane's reroute execution: a
                     // pending `model.route.decided` (the failure consult's
@@ -4466,6 +4542,55 @@ impl<S: ControlStrategy> Driver<S> {
     /// `gate.evaluated` → `completion.decided`; a `hold` queues the
     /// `completion_refused` cue and returns [`FinishOutcome::Held`] — the
     /// strategy is re-invoked, never silently passed.
+    /// §5c.3 consolidation (R3.4; DF-S1.19-1): the declared
+    /// `consolidate_memories` rules fire at the run's durable boundaries —
+    /// `open` (once per arm, ahead of the first `decide`) and `finish`
+    /// (the idle terminal, after the scope floors expire the ending
+    /// scopes so the just-stale versions rebind). `rate_limit` evaluates
+    /// at both; the port's cadence/watermark gate is the semantic half —
+    /// a rule's durable `context.memory.consolidated` row is the record
+    /// it already ran, so `session_start` never re-fires across arms.
+    /// An armed rule with no memory boundary is the typed
+    /// `UnbackedPort{kind: "consolidate"}` refusal, never a silent skip.
+    fn consolidation_round(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        boundary: &str,
+    ) -> Result<(), DriverError> {
+        use hh_context::consolidate::ConsolidationCadence as C;
+        let eligible: Vec<hh_context::consolidate::ConsolidationRule> = self
+            .config
+            .consolidation_rules
+            .iter()
+            .filter(|r| {
+                matches!(
+                    (&r.cadence, boundary),
+                    (C::SessionStart, "open")
+                        | (C::Idle, "finish")
+                        | (C::RateLimit { .. }, "open" | "finish")
+                )
+            })
+            .cloned()
+            .collect();
+        if eligible.is_empty() {
+            return Ok(());
+        }
+        let port = self.memory_port.as_mut().ok_or(DriverError::UnbackedPort {
+            kind: "consolidate",
+        })?;
+        let seam = sink.store_seam();
+        for (class, payload) in port
+            .consolidate(&eligible, boundary, seam)
+            .map_err(|detail| DriverError::Port {
+                port: "consolidate",
+                detail,
+            })?
+        {
+            self.append(sink, &class, payload, None)?;
+        }
+        Ok(())
+    }
+
     fn finish(
         &mut self,
         sink: &mut dyn LedgerSink,
@@ -4610,6 +4735,11 @@ impl<S: ControlStrategy> Driver<S> {
                 self.append(sink, &class, payload, None)?;
             }
         }
+        // §5c.3 `finish` boundary (R3.4) — `idle`/`rate_limit` rules
+        // evaluate after the scope floors so the just-expired versions
+        // are the candidates they rebind; the rows land inside the
+        // closing turn scope, ahead of `lifecycle.turn.finished`.
+        self.consolidation_round(sink, "finish")?;
         // AC-F2-03 — an `invariant_violation` stop quarantines: the
         // `security.audit.checkpoint{kind: quarantine}` row lands durable
         // before `run.finished`, naming the violated invariant + the
@@ -6736,6 +6866,7 @@ mod tests {
                 assembled_payload: None,
                 side_events: Vec::new(),
                 pre_events: Vec::new(),
+                overflow: None,
             }
         }
     }
@@ -7584,6 +7715,7 @@ mod tests {
                 )])),
                 side_events: Vec::new(),
                 pre_events: Vec::new(),
+                overflow: None,
             }
         }
     }

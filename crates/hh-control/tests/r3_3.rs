@@ -392,6 +392,7 @@ impl AssemblerPort for FakeAssembler {
             assembled_payload: None,
             side_events: vec![],
             pre_events: vec![],
+            overflow: None,
         }
     }
 }

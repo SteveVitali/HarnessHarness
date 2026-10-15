@@ -939,6 +939,7 @@ mod tests {
                 assembled_payload: None,
                 side_events: Vec::new(),
                 pre_events: Vec::new(),
+                overflow: None,
             }
         }
     }

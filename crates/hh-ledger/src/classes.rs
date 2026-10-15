@@ -1005,6 +1005,41 @@ const MEMORY_REFS: &[&str] = &["conflict_set_ref", "content_ref"];
 /// `{version_id, reason ∈ {not_human, validity_not_valid}, endorser}`.
 const PROMOTION_REFUSED_FIELDS: &[AuditField] = &[af("version_id"), af("reason"), af("endorser")];
 
+/// `context.memory.consolidated` — the §5c.3 consolidation watermark record
+/// (R3.4; DF-S1.19-1): `{consolidation_id, rule_id, consolidator, scope,
+/// store, lease_generation, cadence, trigger, input_watermark,
+/// last_success_watermark, applied[], skipped_conflicted[],
+/// skipped_no_replacement[], deferred[], usage[]}` — ids, closed spellings,
+/// seq integers and bounded version-id lists only; the durable watermark the
+/// next cadence leg reads (I-FOLD — consolidation state reconstructs from
+/// the durable prefix, never a shadow copy).
+const CONSOLIDATED_FIELDS: &[AuditField] = &[
+    af("consolidation_id"),
+    af("rule_id"),
+    af("consolidator"),
+    af("scope"),
+    af("store"),
+    af("lease_generation"),
+    af("cadence"),
+    af("trigger"),
+    af("input_watermark"),
+    af("last_success_watermark"),
+    afb("applied", AUDIT_FIELD_LIST_BYTES),
+    afb("skipped_conflicted", AUDIT_FIELD_LIST_BYTES),
+    afb("skipped_no_replacement", AUDIT_FIELD_LIST_BYTES),
+    afb("deferred", AUDIT_FIELD_LIST_BYTES),
+    afb("usage", AUDIT_FIELD_LIST_BYTES),
+    // The memory-body reclamation leg (R3.4; DF-S1.19-1 `MemoryUsage`-fed
+    // reclamation): the declared `retention` policy ref, the bound-set size
+    // and the tier transitions the `evaluate_retention` pass committed
+    // (each `lifecycle.ledger.tier_transition` row lands durable first —
+    // the consolidated row only *reports* the count).
+    af("retention_policy_ref"),
+    af("bound"),
+    af("reclaimed"),
+    af("by"),
+];
+
 /// `measurement.export.delivered` — `{sink_id, view_kind, seq_range,
 /// content_classes, loss_report_ref}` (the loss report is the one content ref).
 const EXPORT_FIELDS: &[AuditField] = &[
@@ -1187,6 +1222,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("context.compaction.completed", "compaction.observed"),
     ("context.compaction.started", "compaction.observed"),
     // ── context:memory ──
+    ("context.memory.consolidated", "hint"),
     ("context.memory.invalidated", "hint"),
     ("context.memory.promotion_refused", "hint"),
     ("context.memory.read", "hint"),
@@ -1955,6 +1991,12 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // ledgered refusal of an induced (`origin = evolution`) promotion
     // attempt; audit-grade like the lifecycle rows it guards.
     row_audit("context.memory.promotion_refused", O::Events, true, PROMOTION_REFUSED_FIELDS, &[], None, None),
+    // `context.memory.consolidated` (R3.4; DF-S1.19-1; §5c.3 D5) — the
+    // consolidation run's durable watermark: which rule fired, at which input
+    // seq, which binds applied, which versions were skipped/deferred. Audit-
+    // grade like the lifecycle rows it sits beside — consolidation is
+    // consequential supersession under the writer lease, never housekeeping.
+    row_audit("context.memory.consolidated",  O::Events, true, CONSOLIDATED_FIELDS, &[], None, None),
 
     // ── control (P3) — the budget/accounting classes (§8.2; ADR-0039/0040/0041)
     // and the audit-grade decision row. Every `control.*` row is kernel-origin +

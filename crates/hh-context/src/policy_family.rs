@@ -52,6 +52,37 @@ fn declared() -> Vec<ConditionedRule> {
     Vec::new()
 }
 
+/// `context_policy/default` — the C0 variant's registry coordinate (the
+/// `hh/full_window` kernel-side binding normalizes to it at arm).
+pub const DEFAULT_POLICY_REF: &str = "context_policy/default";
+
+/// `policy_for_variant(variant_id)` — the runtime binding of the sealed
+/// `context_policy` slot's declared variant (R3.4; DF-S1.19-1): maps the
+/// kernel's first-party spellings to their `ContextPolicy` halves. `None`
+/// ⇒ the ref names no first-party variant — the call site's typed
+/// refusal (`Refused` at arm; `assembly_error` on the assembled row),
+/// never a silent `default` substitution.
+pub fn policy_for_variant(variant_id: &str) -> Option<Box<dyn ContextPolicy>> {
+    // One normalization table — the registry-facing `hh/<name>` spelling
+    // (what a sealed `context_policy` slot binds; `seed_registry`
+    // publishes them) and the kernel-side `context_policy/<name>`
+    // coordinate resolve to the same first-party half. The `@1`
+    // contract-version suffix is tolerated, never required.
+    match variant_id
+        .trim_end_matches("@1")
+        .trim_start_matches("hh/")
+        .trim_start_matches("context_policy/")
+    {
+        "default" | "full_window" => Some(Box::new(DefaultPolicy::default())),
+        "priority_eviction" => Some(Box::new(PriorityEviction)),
+        "world_state_diff" => Some(Box::new(WorldStateDiff)),
+        "jit_handles" => Some(Box::new(JitHandles)),
+        "recency_plus_pins" => Some(Box::new(RecencyPlusPins)),
+        "retrieval_augmented" => Some(Box::new(RetrievalAugmented)),
+        _ => None,
+    }
+}
+
 fn inputs() -> BTreeSet<String> {
     REQUIRED_POLICY_INPUTS
         .iter()

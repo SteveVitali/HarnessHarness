@@ -1327,6 +1327,7 @@ fn action_json(a: &RuleAction, semantic: bool) -> Json {
         )]),
         RuleAction::PreAuthorize(r) => Json::obj([("pre_authorize", r.clone())]),
         RuleAction::AutoReview(r) => Json::obj([("auto_review", r.clone())]),
+        RuleAction::ConsolidateMemories(r) => Json::obj([("consolidate_memories", r.clone())]),
     }
 }
 
@@ -1383,6 +1384,9 @@ fn action_from_json(j: &Json, path: &str) -> Result<RuleAction, HirError> {
     }
     if let Some(r) = j.get("auto_review") {
         return Ok(RuleAction::AutoReview(r.clone()));
+    }
+    if let Some(r) = j.get("consolidate_memories") {
+        return Ok(RuleAction::ConsolidateMemories(r.clone()));
     }
     Err(HirError::SchemaViolation {
         detail: format!("{path}: unknown rule action"),

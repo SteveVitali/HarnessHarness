@@ -444,6 +444,37 @@ impl EmbedService {
                 "full_window",
                 BTreeMap::new(),
             ),
+            // R3.4 (DF-S1.19-1) — the §5c `context_policy` family's
+            // non-`default` variants publish under `hh/` so a sealed
+            // slot binds them through `resolve` like any other variant;
+            // the runtime half is `policy_for_variant`'s one mapping
+            // (`hh/<name>` → the kernel's first-party `ContextPolicy` —
+            // `full_window`/`default` stay the C0 floor).
+            (
+                hh_registry::suites::context_policy_class(),
+                "priority_eviction",
+                BTreeMap::new(),
+            ),
+            (
+                hh_registry::suites::context_policy_class(),
+                "world_state_diff",
+                BTreeMap::new(),
+            ),
+            (
+                hh_registry::suites::context_policy_class(),
+                "jit_handles",
+                BTreeMap::new(),
+            ),
+            (
+                hh_registry::suites::context_policy_class(),
+                "recency_plus_pins",
+                BTreeMap::new(),
+            ),
+            (
+                hh_registry::suites::context_policy_class(),
+                "retrieval_augmented",
+                BTreeMap::new(),
+            ),
             (
                 // R-2.7 — the `router` slot's scripted-lane variant: the
                 // arm decodes the slot's sealed `policy` document and

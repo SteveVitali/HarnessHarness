@@ -479,3 +479,77 @@ pub fn compaction_completed(record: &crate::compact::CompactionRecord) -> Json {
     }
     Json::obj(v)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `context.memory.consolidated` (R3.4; DF-S1.19-1 — the §5c.3 watermark row)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `context.memory.consolidated` — `{consolidation_id, rule_id,
+/// consolidator, scope, store, lease_generation, cadence, trigger,
+/// input_watermark, last_success_watermark, applied[],
+/// skipped_conflicted[], skipped_no_replacement[], deferred[], usage,
+/// retention_policy_ref, bound, reclaimed, by}` — the durable,
+/// audit-grade watermark of one `ConsolidationRule` execution (R3.4;
+/// DF-S1.19-1). The `dedupe` run's rebinds are the store's own `bind`
+/// mutations; this row is the *record* of the run — the watermark the
+/// next cadence gate reads, the accounting fold, and (when the rule
+/// declares `retention`) the memory-body reclamation report whose
+/// `lifecycle.ledger.tier_transition` rows already landed durable.
+///
+/// `reclaim` carries `(policy_ref, bound_count, transitions)` when the
+/// rule's `retention` leg ran — `None`/absent members when the rule
+/// declares no retention (the members stay absent, never a fabricated
+/// zero-policy row).
+pub fn memory_consolidated_payload(
+    rec: &crate::consolidate::ConsolidationRecord,
+    rule: &crate::consolidate::ConsolidationRule,
+    store_id: &str,
+    lease_generation: u64,
+    trigger: &str,
+    reclaim: Option<(&str, usize, usize)>,
+) -> Json {
+    let obj_list = |ids: &[String]| Json::Arr(ids.iter().map(|v| Json::str(v.clone())).collect());
+    let mut m = vec![
+        ("consolidation_id", Json::str(rec.consolidation_id.clone())),
+        ("rule_id", Json::str(rec.rule_id.clone())),
+        ("consolidator", Json::str(rec.consolidator.clone())),
+        ("scope", Json::str(rule.scope.as_str())),
+        ("store", Json::str(store_id)),
+        ("lease_generation", Json::Int(lease_generation as i64)),
+        ("cadence", Json::str(rule.cadence.as_str())),
+        ("trigger", Json::str(trigger)),
+        ("input_watermark", Json::Int(rec.input_watermark as i64)),
+        (
+            "applied",
+            Json::Arr(
+                rec.binds
+                    .iter()
+                    .map(|b| {
+                        Json::obj([
+                            ("name", Json::str(b.name.clone())),
+                            ("from_version", Json::str(b.from_version.clone())),
+                            ("to_version", Json::str(b.to_version.clone())),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        ("skipped_conflicted", obj_list(&rec.skipped_conflicted)),
+        (
+            "skipped_no_replacement",
+            obj_list(&rec.skipped_no_replacement),
+        ),
+        ("deferred", obj_list(&rec.deferred)),
+        ("usage", rec.usage.clone()),
+        ("by", Json::str("hh-embed/memory")),
+    ];
+    if let Some(wm) = rec.last_success_watermark {
+        m.push(("last_success_watermark", Json::Int(wm as i64)));
+    }
+    if let Some((policy_ref, bound, transitions)) = reclaim {
+        m.push(("retention_policy_ref", Json::str(policy_ref)));
+        m.push(("bound", Json::Int(bound as i64)));
+        m.push(("reclaimed", Json::Int(transitions as i64)));
+    }
+    Json::obj(m)
+}
