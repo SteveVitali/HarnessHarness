@@ -494,6 +494,7 @@ updatedAt:       2026-10-15
   warnings; `^||` empty. Size ~1,260 source lines vs the 1,500 budget
   — the pre-registered R3.4a/b split was not needed. Fixture-verified
   ceiling. Ledger advanced `lastCompleted: R3.4`, `nextTicket: R3.5`,
-  `chainTip: svitali/harnessharness-r3.4`. CI pass #140@53ce7f2
-  (build · test · fmt · drift 38747631657 / 38747617073; 2/2 green
-  first attempt). Operator merges.
+  `chainTip: svitali/harnessharness-r3.4`. CI pass #140@719eb2d
+  (build · test · fmt · drift 38749748833 / 38749739748; 2/2 green
+  on the closeout head — the implementation head 53ce7f2 also
+  passed, 38747631657 / 38747617073). Operator merges.
