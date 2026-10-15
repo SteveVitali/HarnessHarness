@@ -459,5 +459,8 @@ updatedAt:       2026-10-14
   pre-existing warnings; `^||` empty. Size flag: ~1,410 source lines vs
   the 1,200 budget — recorded in ADR-0355, operator adjudicates.
   Fixture-verified ceiling. Ledger advanced `lastCompleted: R3.3`,
-  `nextTicket: R3.4`, `chainTip: svitali/harnessharness-r3.3`. Operator
-  merges.
+  `nextTicket: R3.4`, `chainTip: svitali/harnessharness-r3.3`. One CI
+  flake firing — ac5 parity `plan_id` (the third member of the
+  measured-wall derivation chain; allowlisted at b5f2f4f, 25/25
+  stress). CI pass #139@b5f2f4f (build · test · fmt · drift
+  38704072695 / 38704067175; both green). Operator merges.
