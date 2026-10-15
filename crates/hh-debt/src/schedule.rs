@@ -11,9 +11,13 @@
 //! a run, never applies a diff; every executable removal test is an
 //! ordinary §06 experiment under the removal match shape.
 
+use std::collections::BTreeSet;
+
+use hh_hir::debt::{validate_removal_test_at, DebtError, RemovalTestContext, TemplateView};
 use hh_hir::records::AssumptionDebtRecord;
 use hh_lab::experiment::{ExperimentKind, ExperimentSpec};
-use hh_ontology::debt::{DebtPolicy, DebtStatus, RemovalTestKind};
+use hh_ontology::debt::{DebtPolicy, DebtStatus, RemovalTestKind, UnexecutableReason, DEBT_HOMES};
+use hh_ontology::eval::is_pinned_version_id;
 use hh_wire::json::Json;
 
 use crate::errors::{DebtManagerError, Refusal};
@@ -62,6 +66,33 @@ pub enum DeferredReason {
         /// The unresolved `template_ref`.
         template_ref: String,
     },
+    /// The `validate_removal_test` context battery refused under the
+    /// production resolvers — the `UnexecutableReason` spelling carries
+    /// through (`unexecutable:<reason>`; R2.17 — a test that cannot
+    /// instantiate never schedules; the reason is data, never a drop).
+    Unexecutable {
+        /// The `UnexecutableReason` name.
+        reason: String,
+    },
+    /// `InsufficientRunway` under the operative `DebtPolicy.min_runway_ms`
+    /// (the policy binds at the schedule point — R2.17).
+    InsufficientRunway {
+        /// The record's runway (ms).
+        runway_ms: u64,
+        /// The policy minimum (ms).
+        min_ms: u64,
+    },
+    /// `OwnerUnreachable` under the operative `DebtPolicy.notice_sinks`
+    /// table (R2.17).
+    OwnerUnreachable {
+        /// The unreachable owner id.
+        owner_id: String,
+    },
+    /// The resolved template's `Design` declares dead-weight purpose
+    /// (`PreRegistration.dead_weight_purpose`) and the operative
+    /// `DebtPolicy.dead_weight_designs_allowed` is `false` (§5h.6 §3;
+    /// R2.17).
+    DeadWeightDisallowed,
 }
 
 impl DeferredReason {
@@ -76,6 +107,10 @@ impl DeferredReason {
             DeferredReason::StaticKind { .. } => "static_kind".to_string(),
             DeferredReason::NotExecutable { .. } => "not_executable".to_string(),
             DeferredReason::TemplateUnresolved { .. } => "template_unresolved".to_string(),
+            DeferredReason::Unexecutable { reason } => format!("unexecutable:{reason}"),
+            DeferredReason::InsufficientRunway { .. } => "insufficient_runway".to_string(),
+            DeferredReason::OwnerUnreachable { .. } => "owner_unreachable".to_string(),
+            DeferredReason::DeadWeightDisallowed => "dead_weight_design_disallowed".to_string(),
         }
     }
 }
@@ -194,6 +229,104 @@ pub fn instantiate(
     template
 }
 
+/// The context-parameterized half of `hh_hir::debt::validate_removal_test`
+/// under the resolvers the schedule point honestly binds (R2.17 — the
+/// DF-S1.24-1 rowed members):
+///
+/// - `policy` — the operative `DebtPolicy` (`InsufficientRunway` binds
+///   `min_runway_ms`);
+/// - `declared_sinks` — the policy's `notice_sinks` table (`OwnerUnreachable`;
+///   the same set `hh_lab::debt::route_notices` intersects);
+/// - `resolve_template` — the caller-resolved `ExperimentSpec` (records-in:
+///   the boundary resolves `template_ref` through `LabDocs`/`hh-registry`);
+/// - `split_assigned`/`artifact_sealed` — derived from the resolved
+///   template's own members (the suite's `split_assignment_ref`; every
+///   arm's `artifact_ref.version_id` pinned under the one §5h.2 §2
+///   spelling `hh_ontology::eval::is_pinned_version_id`).
+///
+/// Absent resolvers stay skipped (the `RemovalTestContext` contract):
+/// `probe_ref_known`/`zero_use_scope_resolved` gate kinds that defer
+/// `static_kind` before ever scheduling, and `diff_removed_rules` is the
+/// settle/propose-side check.
+///
+/// `None` ⇒ the record's test instantiates under this context; `Some(_)`
+/// ⇒ the `DeferredReason` the sweep reports — a removal test that cannot
+/// instantiate never schedules and never goes silently stale.
+fn instantiate_check(
+    record: &AssumptionDebtRecord,
+    home: Option<u8>,
+    template: Option<&ExperimentSpec>,
+    policy: &DebtPolicy,
+) -> Option<DeferredReason> {
+    let sinks: BTreeSet<String> = policy.notice_sinks.iter().cloned().collect();
+    let home_row = home.and_then(|id| DEBT_HOMES.iter().find(|h| h.id == id));
+    let view = template.map(|t| TemplateView {
+        experiment_ref: if t.experiment_id.is_empty() {
+            record
+                .removal_test
+                .as_ref()
+                .and_then(|t| t.template_ref.clone())
+                .unwrap_or_default()
+        } else {
+            t.experiment_id.clone()
+        },
+        has_match_spec: t.arms.iter().all(|a| a.match_spec.is_some()),
+    });
+    let resolve_template = move |_: &str| -> Option<TemplateView> { view.clone() };
+    let mut rctx: RemovalTestContext<'_> = RemovalTestContext::member_level();
+    rctx.policy = Some(policy);
+    rctx.resolve_template = Some(&resolve_template);
+    rctx.split_assigned = template.map(|t| t.suite.split_assignment_ref.is_some());
+    rctx.artifact_sealed = template.map(|t| {
+        t.arms
+            .iter()
+            .all(|a| is_pinned_version_id(&a.artifact_ref.version_id))
+    });
+    rctx.declared_sinks = Some(&sinks);
+    if let Err(e) = validate_removal_test_at(record, home_row, &rctx) {
+        return Some(match e {
+            DebtError::UnexecutableRemovalTest {
+                reason: UnexecutableReason::UnresolvedTemplate,
+                ..
+            } => DeferredReason::TemplateUnresolved {
+                template_ref: record
+                    .removal_test
+                    .as_ref()
+                    .and_then(|t| t.template_ref.clone())
+                    .unwrap_or_default(),
+            },
+            DebtError::UnexecutableRemovalTest { reason, .. } => DeferredReason::Unexecutable {
+                reason: reason.name().to_string(),
+            },
+            DebtError::InsufficientRunway { runway_ms, min_ms } => {
+                DeferredReason::InsufficientRunway { runway_ms, min_ms }
+            }
+            DebtError::OwnerUnreachable { owner_id } => {
+                DeferredReason::OwnerUnreachable { owner_id }
+            }
+            other => DeferredReason::NotExecutable {
+                reason: format!("{other:?}"),
+            },
+        });
+    }
+    // `dead_weight_designs_allowed` — the `Design` declares dead-weight
+    // purpose in `PreRegistration.dead_weight_purpose`; admissible only
+    // under a policy that allows the declaration (§5h.6 §3; R2.17).
+    let dead_weight = template
+        .map(|t| {
+            t.design.pre_registration.dead_weight_purpose
+                || t.pre_registration
+                    .as_ref()
+                    .map(|p| p.dead_weight_purpose)
+                    .unwrap_or(false)
+        })
+        .unwrap_or(false);
+    if dead_weight && !policy.dead_weight_designs_allowed {
+        return Some(DeferredReason::DeadWeightDisallowed);
+    }
+    None
+}
+
 /// `schedule_removal_test(debt_ref, entry, record, policy, ctx)` —
 /// the §5h.6 §2 op: a `Scheduled{spec}` on admission or
 /// `Deferred{reason}`.
@@ -240,6 +373,14 @@ pub fn schedule_removal_test(
                 ),
             },
         });
+    }
+    // The production resolver-backed `validate_removal_test` context
+    // checks (R2.17; DF-S1.24-1) — the operative policy binds the runway
+    // and notice-sink checks; the caller-resolved template binds
+    // template/match-spec/split/artifact legs; a dead-weight design binds
+    // `dead_weight_designs_allowed`.
+    if let Some(reason) = instantiate_check(record, entry.home, template, policy) {
+        return Ok(ScheduleOutcome::Deferred { reason });
     }
     // The schedule bound and the instrument-budget reservation — both are
     // `Deferred`, never a refusal (§5h.6 §5's failure row: a rule without
@@ -333,7 +474,6 @@ pub fn schedule_batch(
     let suite = &first_template.suite;
     let budgets = &first_template.budgets;
     for (entry, record, template) in &entries[1..] {
-        let _ = entry;
         if template.arms.len() != 2 {
             return Err(incompatible("a batch member template is not a 2-arm spec"));
         }
@@ -352,6 +492,17 @@ pub fn schedule_batch(
             return Err(incompatible(
                 "a batch member's removal test is not executable",
             ));
+        }
+        // The same production-resolver `validate_removal_test` battery
+        // `schedule_removal_test` runs — a member whose test cannot
+        // instantiate under the operative policy makes the batch
+        // inadmissible (the caller re-batches without it; R2.17).
+        if let Some(reason) = instantiate_check(record, entry.home, Some(template), policy) {
+            return Err(incompatible(&format!(
+                "batch member {} cannot instantiate its removal test: {}",
+                entry.debt_ref,
+                reason.name()
+            )));
         }
     }
     let mut spec = instantiate(

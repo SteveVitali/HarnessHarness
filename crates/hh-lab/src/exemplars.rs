@@ -152,6 +152,7 @@ fn pre_registration(
         analysis_plan_ref: pins.analysis_plan_ref.clone(),
         task_split_hash: pins.task_split_hash.clone(),
         interactions: interactions.iter().map(|s| s.to_string()).collect(),
+        dead_weight_purpose: false,
     }
 }
 

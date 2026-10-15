@@ -527,6 +527,7 @@ fn compare_arms(
         analysis_plan_ref: String::new(),
         task_split_hash: String::new(),
         interactions: vec![],
+        dead_weight_purpose: false,
     });
     let input = AnalysisInput {
         rows: &p.rows,
@@ -781,6 +782,7 @@ fn retirement_spec(rule_id: &str) -> ExperimentSpec {
         analysis_plan_ref: pinned("retirement.analysis"),
         task_split_hash: pinned("retirement.split_hash"),
         interactions: vec![],
+        dead_weight_purpose: false,
     };
     let arm = |id: &str, level: &str| ArmSpec {
         inference_budget: None,

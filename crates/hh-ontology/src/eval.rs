@@ -1683,6 +1683,12 @@ pub struct PreRegistration {
     /// The pre-registered interaction terms (`["a:b", …]`; S3.4a — the
     /// `ResolutionInsufficient` check's input).
     pub interactions: Vec<String>,
+    /// Whether the design declares dead-weight purpose (§5h.6 §3 — an
+    /// `expired_used` run may headline a `ComparisonReport` only when the
+    /// design declares the purpose; ADR-0126; R2.17 — additive, defaults
+    /// `false`). Admissibility under the operative `DebtPolicy` is the
+    /// manager's gate (`dead_weight_designs_allowed` — `hh-debt`).
+    pub dead_weight_purpose: bool,
 }
 
 /// `Design{id, kind, factors[], blocking, replicates_per_cell, pairing,
@@ -1961,8 +1967,10 @@ pub enum ArmError {
 }
 
 /// Whether `version_id` is a pinned content address (`<algorithm>:<hex>` —
-/// the idp/N form). A selector or display name is unsealed.
-fn is_pinned_version_id(version_id: &str) -> bool {
+/// the idp/N form). A selector or display name is unsealed. (CC1 — the one
+/// spelling of the §5h.2 §2 pin check; `hh-debt` reuses it for the
+/// `artifact_sealed` context member, R2.17.)
+pub fn is_pinned_version_id(version_id: &str) -> bool {
     match version_id.split_once(':') {
         Some((algo, digest)) => !algo.is_empty() && !digest.is_empty(),
         None => false,
@@ -2106,6 +2114,9 @@ impl PreRegistration {
                 Json::Arr(self.interactions.iter().map(Json::str).collect()),
             );
         }
+        if self.dead_weight_purpose {
+            m.insert("dead_weight_purpose".into(), Json::Bool(true));
+        }
         Json::Obj(m)
     }
 
@@ -2124,6 +2135,7 @@ impl PreRegistration {
                 "analysis_plan_ref",
                 "task_split_hash",
                 "interactions",
+                "dead_weight_purpose",
             ],
             REC,
         )?;
@@ -2152,6 +2164,16 @@ impl PreRegistration {
                     return Err(EvalError::SchemaViolation {
                         member: "interactions".into(),
                         detail: "must be an array of effect spellings".into(),
+                    })
+                }
+            },
+            dead_weight_purpose: match m.get("dead_weight_purpose") {
+                None | Some(Json::Null) => false,
+                Some(Json::Bool(b)) => *b,
+                Some(_) => {
+                    return Err(EvalError::SchemaViolation {
+                        member: "dead_weight_purpose".into(),
+                        detail: "must be a bool".into(),
                     })
                 }
             },

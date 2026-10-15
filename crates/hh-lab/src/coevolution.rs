@@ -1004,6 +1004,7 @@ pub fn export_regression_suite(
         analysis_plan_ref: pins.analysis_plan_ref.clone(),
         task_split_hash: pins.task_split_hash.clone(),
         interactions: vec![],
+        dead_weight_purpose: false,
     };
     let match_spec = hh_budget::matchspec::MatchSpec {
         // The snapshot pair crosses models by construction — the

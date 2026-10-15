@@ -71,6 +71,7 @@ fn mgr_err(e: hh_debt::errors::DebtManagerError) -> EmbedError {
 #[cfg(feature = "tier-c4")]
 mod imp {
     use super::{bad, mgr_err, opt_str, req, req_str};
+    use crate::service::EmbedService;
     use hh_debt::manager::DebtManager;
     use hh_debt::propose::ProposalDiff;
     use hh_debt::records::{DebtManagerRecord, SweepEntry};
@@ -155,6 +156,58 @@ mod imp {
         crate::debt_ops::observables(Some(j))
     }
 
+    /// `template_ref` → the registered `ExperimentSpec` — the production
+    /// resolver (R2.17; DF-S1.24-1): `LabDocs`'s content-addressed specs
+    /// first (`lab.experiment.*` registration's `put_spec`), then the
+    /// named deposit (`put_named(kind::SPEC, name)` — e.g.
+    /// `spec:lab/org-policy-v1` from `lab.org_policy.default_removal_tests`).
+    /// A ref the store does not carry stays `None` — the schedule leg
+    /// answers `Deferred{template_unresolved}`; a doc that fails decode
+    /// is a schema violation, never a fabricated spec.
+    fn resolve_template(
+        svc: &EmbedService,
+        template_ref: &str,
+    ) -> Result<Option<hh_lab::experiment::ExperimentSpec>, EmbedError> {
+        let docs = svc.lab_docs()?;
+        if let Some(spec) = docs
+            .spec(template_ref)
+            .map_err(|e| bad("/entries/template_ref", &format!("{e:?}")))?
+        {
+            return Ok(Some(spec));
+        }
+        match docs
+            .get_named(hh_experiment::docs::kind::SPEC, template_ref)
+            .map_err(|e| bad("/entries/template_ref", &format!("{e:?}")))?
+        {
+            Some(j) => hh_lab::experiment::ExperimentSpec::from_json(&j)
+                .map(Some)
+                .map_err(|e| bad("/entries/template_ref", &format!("{e:?}"))),
+            None => Ok(None),
+        }
+    }
+
+    /// Fill each entry's `template` from the production resolver when the
+    /// caller did not project it (records-in stays authoritative — a
+    /// supplied `template` wins over the store lookup).
+    fn resolve_entry_templates(
+        svc: &EmbedService,
+        entries: &mut [SweepEntry],
+    ) -> Result<(), EmbedError> {
+        for e in entries.iter_mut() {
+            if e.template.is_none() {
+                if let Some(tref) = e
+                    .record
+                    .removal_test
+                    .as_ref()
+                    .and_then(|t| t.template_ref.as_deref())
+                {
+                    e.template = resolve_template(svc, tref)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// The `lab.debt.manager_*`/`lab.debt.{sweep,settle,retire,propose}`
     /// dispatch (tier-c4 build).
     pub(crate) fn dispatch(
@@ -198,10 +251,14 @@ mod imp {
             "lab.debt.sweep" => {
                 let run = req_str(params, "run_id")?.to_string();
                 let manager_id = req_str(params, "manager_id")?.to_string();
-                let entries: Vec<SweepEntry> = match req(params, "entries")? {
+                let mut entries: Vec<SweepEntry> = match req(params, "entries")? {
                     Json::Arr(a) => a.iter().map(sweep_entry).collect::<Result<Vec<_>, _>>()?,
                     _ => return Err(bad("/entries", "type_mismatch")),
                 };
+                // `template_ref` resolution through `LabDocs` — the
+                // production store (R2.17); callers that already project
+                // the template keep it.
+                resolve_entry_templates(svc, &mut entries)?;
                 let now_ms = params
                     .get("now_ms")
                     .and_then(Json::as_int)
@@ -322,10 +379,11 @@ mod imp {
                     scheduled: strs("scheduled"),
                     unchanged: strs("unchanged"),
                 };
-                let entries: Vec<SweepEntry> = match req(params, "entries")? {
+                let mut entries: Vec<SweepEntry> = match req(params, "entries")? {
                     Json::Arr(a) => a.iter().map(sweep_entry).collect::<Result<Vec<_>, _>>()?,
                     _ => return Err(bad("/entries", "type_mismatch")),
                 };
+                resolve_entry_templates(svc, &mut entries)?;
                 let now_ms = params
                     .get("now_ms")
                     .and_then(Json::as_int)

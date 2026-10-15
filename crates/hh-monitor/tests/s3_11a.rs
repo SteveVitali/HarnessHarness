@@ -1439,6 +1439,7 @@ mod compare_fixtures {
                 analysis_plan_ref: "plan-1".into(),
                 task_split_hash: "sha256:split-1".into(),
                 interactions: vec![],
+                dead_weight_purpose: false,
             },
             registry_snapshot_id: None,
             generators: None,
