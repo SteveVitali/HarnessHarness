@@ -451,6 +451,7 @@ fn input<'a>(
         compensation_plan_id: None,
         baseline_ref: None,
         flow: Default::default(),
+        remedy_taken: None,
     }
 }
 
@@ -864,7 +865,7 @@ fn ac_r_2_5_5_2_commit_without_allow_is_refused_and_tokens_are_checked() {
         let authorized = m
             .mint_effect(
                 "action.effect.authorized",
-                hh_env::events::authorized_payload(&risk),
+                hh_env::events::authorized_payload(&risk, None),
                 &eid,
                 &chain2,
             )

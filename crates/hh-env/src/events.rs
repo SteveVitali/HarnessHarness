@@ -475,11 +475,21 @@ pub fn intended_payload(
     Json::Obj(m)
 }
 
-/// `action.effect.authorized{effective_risk_class?}` — the decision was
-/// `allow` (the `security.permission.decided` row is the gate's record; this
-/// is the effect-side mirror — raise-only on the class).
-pub fn authorized_payload(effective: &hh_ontology::risk::RiskClass) -> Json {
-    Json::obj([("effective_risk_class", effective.to_json())])
+/// `action.effect.authorized{effective_risk_class?, remedy_taken?}` — the
+/// decision was `allow` (the `security.permission.decided` row is the gate's
+/// record; this is the effect-side mirror — raise-only on the class).
+/// `remedy_taken` (§5g.2 §3; DF-S2.7-1b) restates the consumed remedy the
+/// re-dispatch ran under — the effect-side record of the take (absent,
+/// never nulled, when no remedy was consumed).
+pub fn authorized_payload(
+    effective: &hh_ontology::risk::RiskClass,
+    remedy_taken: Option<&hh_provenance::flow::Remedy>,
+) -> Json {
+    let mut m = vec![("effective_risk_class", effective.to_json())];
+    if let Some(r) = remedy_taken {
+        m.push(("remedy_taken", r.to_json()));
+    }
+    Json::obj(m)
 }
 
 /// `control.decision{kind: "ask", decision_point: "protocol_input_required",
@@ -612,20 +622,24 @@ pub fn observed_payload(
 }
 
 /// `context.observation.recorded{kind: "tool_observation", effect_id,
-/// capability_ref, capture_manifest_ref, outcome, admission, label}` — the
-/// observation-plane record of a `flow_contract` capability's admitted
-/// result (§5g.2 §3's payload extension; §5d.5 observe's second output).
-/// `kind` discriminates the reminder rows (`budget_reminder`) the class
-/// also carries; `admission`/`label` are the recorded admission kind and
-/// the admitted `L(r)` — content-free (ids, enums, the label triple).
+/// capability_ref, capture_manifest_ref, outcome, admission, label,
+/// leaves?}` — the observation-plane record of a `flow_contract`
+/// capability's admitted result (§5g.2 §3's payload extension; §5d.5
+/// observe's second output). `kind` discriminates the reminder rows
+/// (`budget_reminder`) the class also carries; `admission`/`label` are the
+/// recorded admission kind and the admitted `L(r)` — content-free (ids,
+/// enums, the label triple). R2.12 (DF-S2.7-1a): a `labels_leaves`
+/// contract's per-leaf records ride `leaves[{path, admission, label}]` —
+/// the leaf path is a schema position (structural, never value bytes).
 pub fn observation_recorded_payload(
     effect_id: &str,
     capability_semantic_id: &str,
     manifest_ref: &str,
     outcome: &crate::observe::EffectOutcome,
     admission: &hh_provenance::flow::Admission,
+    leaves: &[Json],
 ) -> Json {
-    Json::obj([
+    let mut m = vec![
         ("kind", Json::str("tool_observation")),
         ("effect_id", Json::str(effect_id.to_string())),
         (
@@ -639,6 +653,40 @@ pub fn observation_recorded_payload(
             "label",
             hh_provenance::flow::label_json_full(&admission.label),
         ),
+    ];
+    // Absent-not-null (CC8): a contract without `labels_leaves` mints the
+    // row identically to the pre-R2.12 shape.
+    if !leaves.is_empty() {
+        m.push(("leaves", Json::Arr(leaves.to_vec())));
+    }
+    Json::Obj(m.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+}
+
+/// `context.observation.recorded{kind: "tool_observation", …, admission:
+/// "leaf_refused", leaf, reason}` — the `labels_leaves` refusal record
+/// (DF-S2.7-1a): a non-admissible leaf (uncovered position, unreadable
+/// grammar, missing/malformed result, budget) means the result carries no
+/// admitted label — the `label` member is honestly absent and `leaf`
+/// names the failing position.
+pub fn observation_refused_payload(
+    effect_id: &str,
+    capability_semantic_id: &str,
+    manifest_ref: &str,
+    outcome: &crate::observe::EffectOutcome,
+    failure: &crate::leaf_admission::LeafWalkFailure,
+) -> Json {
+    let kind = failure.kind();
+    Json::obj([
+        ("kind", Json::str("tool_observation")),
+        ("effect_id", Json::str(effect_id.to_string())),
+        (
+            "capability_ref",
+            Json::str(capability_semantic_id.to_string()),
+        ),
+        ("capture_manifest_ref", Json::str(manifest_ref.to_string())),
+        ("outcome", Json::str(outcome.as_str())),
+        ("admission", Json::str("leaf_refused")),
+        ("leaf", Json::str(kind)),
     ])
 }
 

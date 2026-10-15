@@ -27,6 +27,7 @@ pub mod events;
 pub mod executor;
 pub mod handle;
 pub mod helper;
+pub mod leaf_admission;
 pub mod local;
 pub mod observe;
 pub mod protocol;

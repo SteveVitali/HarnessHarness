@@ -164,6 +164,13 @@ pub struct DispatchInput<'a> {
     /// on a declared contract (its checks degrade to `EvaluationError`
     /// where a required label is unrecorded).
     pub flow: FlowInputs,
+    /// The remedy take this dispatch consumes (§5g.2 §3 `remedy_taken`;
+    /// DF-S2.7-1b; ADR-0343 D4) — set by the caller re-dispatching under a
+    /// remedy a durable `security.permission.decided{remedy_taken}` row
+    /// attests. The dispatcher re-verifies the claim against the record
+    /// before `authorized` — an unattested or replayed claim is a typed
+    /// refusal (CC3: remedy consumption is ledgered, never invisible).
+    pub remedy_taken: Option<flow::Remedy>,
 }
 
 /// `DispatchOutcome` — what `dispatch` settled to.
@@ -700,6 +707,99 @@ impl<'a> Dispatcher<'a> {
         // The containment gate — the recorded verdict `authorize` consumes.
         let admit = admit_input(input.declared.domain, input.scope_bindings, &canonical);
         let gate = floor_gate(handle.containment.policy(), handle.report.as_ref(), &admit);
+        // ── produce-time flow stamps (§5g.2 §3; DF-S2.7-1 (b)/(c);
+        // ADR-0343 D4) — both read the durable record, never a session
+        // cache (CC3: remedy consumption is ledgered, never invisible).
+        let events_now = self
+            .store
+            .events(&self.run_id)
+            .map_err(EnvError::Ledger)?
+            .to_vec();
+        // (c) `shape_endorsed`: a `validator`-basis `security.label.endorsed`
+        // row discharges its `robustness_inputs[]` params for D-ROBUST —
+        // the fold re-checks `capacity_bits <= cap_max` rather than
+        // trusting the emitter's word (the record is the authority).
+        let mut flow = input.flow.clone();
+        if input.capability.flow_contract.is_some() {
+            flow.shape_endorsed
+                .extend(shape_endorsed_params(&events_now, &args_canonical_hash));
+        }
+        // (b) `remedy_taken`: the caller's claim is admitted only when a
+        // durable `decided` row attests the same take and no *other*
+        // effect already consumed it — a remedy is consumed exactly once.
+        let remedy_taken =
+            match remedy_taken_for(&events_now, &effect_id, input.remedy_taken.as_ref()) {
+                Ok(r) => r,
+                Err(reason) => {
+                    let refused = self.minter_ev().mint_effect(
+                        "action.effect.refused",
+                        events::refused_payload(&reason),
+                        &effect_id,
+                        &input.chain,
+                    )?;
+                    let mut rejected = self.minter_ev().mint(
+                        "action.tool.rejected",
+                        events::tool_rejected_payload("authorize", &reason),
+                    )?;
+                    rejected.scope = hh_ledger::event::Scope {
+                        turn_id: Some(input.chain.turn_id.clone()),
+                        model_call_id: Some(input.chain.model_call_id.clone()),
+                        tool_call_id: Some(input.chain.tool_call_id.clone()),
+                        ..Default::default()
+                    };
+                    self.store
+                        .append(&self.run_id, lease, vec![refused, rejected])?;
+                    return Ok(DispatchOutcome::Refused { reason });
+                }
+            };
+        // The `shape_endorse` take's consume-side emitter (§5g.2 §2.2):
+        // the verified remedy mints the `validator`-basis
+        // `security.label.endorsed` row durable-first, and the stamp the
+        // row discharges lands on this same proposal's `flow`.
+        if let Some(flow::Remedy::ShapeEndorse {
+            validator_ref,
+            param,
+        }) = &remedy_taken
+        {
+            match self.emit_shape_endorsement(
+                input,
+                lease,
+                &effect_id,
+                validator_ref.as_deref(),
+                param,
+                &args_canonical_hash,
+            ) {
+                Ok(to) => {
+                    // The endorsement's flow effect on this proposal: the
+                    // param reads at its endorsed label (the durable row
+                    // attests the rise — never a caller claim) and the
+                    // param discharges D-ROBUST.
+                    flow.shape_endorsed.insert(param.clone());
+                    flow.param_labels.insert(param.clone(), to);
+                }
+                Err(reason) => {
+                    let refused = self.minter_ev().mint_effect(
+                        "action.effect.refused",
+                        events::refused_payload(&reason),
+                        &effect_id,
+                        &input.chain,
+                    )?;
+                    let mut rejected = self.minter_ev().mint(
+                        "action.tool.rejected",
+                        events::tool_rejected_payload("authorize", &reason),
+                    )?;
+                    rejected.scope = hh_ledger::event::Scope {
+                        turn_id: Some(input.chain.turn_id.clone()),
+                        model_call_id: Some(input.chain.model_call_id.clone()),
+                        tool_call_id: Some(input.chain.tool_call_id.clone()),
+                        ..Default::default()
+                    };
+                    self.store
+                        .append(&self.run_id, lease, vec![refused, rejected])?;
+                    return Ok(DispatchOutcome::Refused { reason });
+                }
+            }
+        }
         let proposal = Proposal {
             effect_id: effect_id.clone(),
             attempt_no: 1,
@@ -713,8 +813,8 @@ impl<'a> Dispatcher<'a> {
             inputs,
             requested_grants: input.requested_grants.clone(),
             containment: gate.clone(),
-            flow: input.flow.clone(),
-            remedy_taken: None,
+            flow,
+            remedy_taken: remedy_taken.clone(),
             at: self.store.now_ms(),
         };
         let decision = self
@@ -1453,7 +1553,7 @@ impl<'a> Dispatcher<'a> {
 
         let authorized = self.minter_ev().mint_effect(
             "action.effect.authorized",
-            events::authorized_payload(&risk),
+            events::authorized_payload(&risk, remedy_taken.as_ref()),
             &effect_id,
             &input.chain,
         )?;
@@ -1681,6 +1781,7 @@ impl<'a> Dispatcher<'a> {
             pre_baseline,
             &token,
             commit_evidence,
+            &proposal.flow,
             pending_egress,
         )
     }
@@ -1836,6 +1937,7 @@ impl<'a> Dispatcher<'a> {
             pre_baseline,
             &token,
             commit_evidence,
+            &input.flow,
             None,
         )
     }
@@ -1862,6 +1964,13 @@ impl<'a> Dispatcher<'a> {
         pre_baseline: PathBaseline,
         token: &crate::tokens::AttributionToken,
         commit_evidence: crate::helper::CommitEvidence,
+        // The produce-time-stamped flow inputs (DF-S2.7-1c) — the
+        // proposal's own `flow` (endorsement-lifted param labels +
+        // `shape_endorsed`), so the admitted `L(r)` reads the stamped
+        // labels, never the pre-endorsement caller claims. The resume path
+        // re-passes `input.flow` (its stamps landed on the original
+        // dispatch — the re-entry mints none).
+        flow_inputs: &FlowInputs,
         // The `gate`-allowed mediated egress (DF-S2.4-1) — `Some` only on the
         // dispatch path for a `net_egress` effect under a `mediated` policy;
         // its recheck/wire/charge leg runs at the wire point below.
@@ -2327,33 +2436,81 @@ impl<'a> Dispatcher<'a> {
         // tool admits `unverified`, `taint = {tool}`, readers from the
         // declared `reads`; the recorded `admission` member is the kind,
         // never a class read from the payload.
-        let admission = input
+        let contract = input
             .capability
             .flow_contract
             .as_ref()
-            .and_then(|fc| flow::FlowContract::from_json(fc).ok())
-            .map(|contract| {
-                let l_plus = flow::prospective_label(
-                    &input.context_label,
-                    input.flow.param_labels.values().cloned(),
-                    &contract.contribution,
-                    &input.capability_ref.semantic_id,
-                );
-                flow::admit(
-                    None,
-                    &contract,
-                    &l_plus,
-                    &input.capability_ref.semantic_id,
-                    dispatch_world_open(input),
-                )
-            });
+            .and_then(|fc| flow::FlowContract::from_json(fc).ok());
+        let admission = contract.as_ref().map(|contract| {
+            let l_plus = flow::prospective_label(
+                &input.context_label,
+                flow_inputs.param_labels.values().cloned(),
+                &contract.contribution,
+                &input.capability_ref.semantic_id,
+            );
+            flow::admit(
+                None,
+                contract,
+                &l_plus,
+                &input.capability_ref.semantic_id,
+                dispatch_world_open(input),
+            )
+        });
+        // ── labels_leaves (§5g.2 §2; DF-S2.7-1a; R-2.8.2) ──────────────
+        // A `labels_leaves` contract admits the result *per leaf*: the
+        // declared `output_schema` enumerates the leaf positions the
+        // shaped `structured_result` value must sit under, and every leaf
+        // carries the contract's admitted `L(r)` on the recorded row's
+        // `leaves[]` member. Only an `ok` terminal's shaped result is
+        // walked — an errored report never produced one.
+        let mut leaf_failure: Option<crate::leaf_admission::LeafWalkFailure> = None;
+        let mut leaf_records: Vec<Json> = Vec::new();
+        if let (Some(contract), Some(adm)) = (contract.as_ref(), admission.as_ref()) {
+            if contract.labels_leaves && matches!(status, ObservedStatus::Ok) {
+                match self.walk_shaped_leaves(input, &manifest) {
+                    Ok(paths) => {
+                        leaf_records = paths
+                            .iter()
+                            .map(|p| {
+                                Json::obj([
+                                    ("path", Json::str(p.clone())),
+                                    ("admission", Json::str(adm.kind.as_str())),
+                                    ("label", flow::label_json_full(&adm.label)),
+                                ])
+                            })
+                            .collect();
+                    }
+                    Err(f) => leaf_failure = Some(f),
+                }
+            }
+        }
+        // A leaf the walk cannot admit is a `conflict{admission_leaf:*}`
+        // typed refusal — post-`committed` refusal is lifecycle-illegal
+        // (the leaf lifecycle rule), so the refusal rides the observation
+        // plane's error class, the channel `conflict{schema}` already
+        // owns: `observed{status: error}` drops the `admission` member and
+        // `context.observation.recorded` carries `admission: leaf_refused`
+        // with the failing position/kind.
+        let status = match &leaf_failure {
+            Some(f) => ObservedStatus::Error {
+                class: ErrorClass::Conflict { kind: f.kind() },
+                origin: ErrorOrigin::Tool,
+                detail_ref: None,
+                retryable: false,
+            },
+            None => status,
+        };
         let obs = Observation {
             outcome,
             status,
             exit_status: report.exit_status,
             manifest_ref,
             completeness,
-            admission: admission.clone(),
+            admission: if leaf_failure.is_some() {
+                None
+            } else {
+                admission.clone()
+            },
         };
         // Compute the local-check + declared-postcondition verdicts *before*
         // minting `observed` — `postcondition_results[]` points at the
@@ -2427,17 +2584,30 @@ impl<'a> Dispatcher<'a> {
         // `completed` in the batch — `completed` closes the `tool_call`
         // scope this row's scope members name.
         let mut batch = vec![observed];
-        if let Some(adm) = &admission {
-            let mut recorded = self.minter_ev().mint(
-                "context.observation.recorded",
+        let recorded_payload = if let Some(f) = &leaf_failure {
+            Some(events::observation_refused_payload(
+                &effect_id,
+                &input.capability_ref.semantic_id,
+                &obs.manifest_ref,
+                &obs.outcome,
+                f,
+            ))
+        } else {
+            admission.as_ref().map(|adm| {
                 events::observation_recorded_payload(
                     &effect_id,
                     &input.capability_ref.semantic_id,
                     &obs.manifest_ref,
                     &obs.outcome,
                     adm,
-                ),
-            )?;
+                    &leaf_records,
+                )
+            })
+        };
+        if let Some(payload) = recorded_payload {
+            let mut recorded = self
+                .minter_ev()
+                .mint("context.observation.recorded", payload)?;
             recorded.scope = hh_ledger::event::Scope {
                 turn_id: Some(input.chain.turn_id.clone()),
                 model_call_id: Some(input.chain.model_call_id.clone()),
@@ -2756,6 +2926,146 @@ impl<'a> Dispatcher<'a> {
         )?;
         self.store.append(&self.run_id, lease, vec![ev])?;
         Ok(())
+    }
+
+    /// The `labels_leaves` walk's inputs (§5g.2 §2; DF-S2.7-1a): the
+    /// declared `output_schema` against the shaped result — the
+    /// `structured_result` capture item's `value_ref` blob holds the
+    /// canonical value bytes. A `labels_leaves` contract with no shaped
+    /// result is `NoShapedResult` — the leaf grammar has nothing to bind
+    /// (never a guess, never a truncation).
+    fn walk_shaped_leaves(
+        &self,
+        input: &DispatchInput,
+        manifest: &EffectCaptureManifest,
+    ) -> Result<Vec<String>, crate::leaf_admission::LeafWalkFailure> {
+        use crate::leaf_admission::LeafWalkFailure;
+        let Some(schema) = &input.capability.output_schema else {
+            return Err(LeafWalkFailure::NoLeafGrammar);
+        };
+        let value_ref = manifest
+            .items
+            .iter()
+            .find_map(|i| match &i.kind {
+                CaptureKind::StructuredResult { value_ref, .. } => Some(value_ref.clone()),
+                _ => None,
+            })
+            .ok_or(LeafWalkFailure::NoShapedResult)?;
+        let bytes = crate::driver::blob_by_id(self.store, &value_ref)
+            .ok_or(LeafWalkFailure::MalformedResult)?;
+        let text = String::from_utf8(bytes).map_err(|_| LeafWalkFailure::MalformedResult)?;
+        let value = hh_wire::json::parse(&text).map_err(|_| LeafWalkFailure::MalformedResult)?;
+        crate::leaf_admission::walk_result_leaves(schema, &value)
+    }
+
+    /// The `shape_endorse` remedy's consume-side emitter (§5g.2 §2.2;
+    /// DF-S2.7-1 (b)/(c)): a verified `shape_endorse{validator_ref, param}`
+    /// take mints the `validator`-basis `security.label.endorsed` row the
+    /// produce-time fold (`shape_endorsed_params`) reads — `capacity_bits`
+    /// is kernel-computed over the param's declared
+    /// `input_schema.properties[param]` node, never the caller's claim, and
+    /// `cap_max` is the declared default (a per-capability override is not
+    /// declared at this stage).
+    ///
+    /// The endorsement's subject is the *param's* provenance — the durable
+    /// `action.param.anchored` row carries it (the sibling class ADR-0343's
+    /// revisit trigger names for a non-`EffectIntent` subject kind: the
+    /// append-time `check_endorsement` resolves `subject_ref` over the
+    /// committed prefix, so the anchor appends first — two appends, anchor
+    /// then endorsed). A param with no recorded `param_labels` entry has
+    /// no honest `from` — the take is inapplicable, never guessed.
+    /// `Err` is the take's inapplicability (capacity over `cap_max`, an
+    /// unbounded schema, a non-`external` subject, or a param needing no
+    /// rise — the remedy's fix didn't happen, so the consume refuses) —
+    /// the caller refuses typed `remedy_inapplicable`.
+    fn emit_shape_endorsement(
+        &mut self,
+        input: &DispatchInput,
+        lease: &Lease,
+        effect_id: &str,
+        validator_ref: Option<&str>,
+        param: &str,
+        args_canonical_hash: &str,
+    ) -> Result<hh_provenance::Label, String> {
+        let schema_node = input
+            .capability
+            .input_schema
+            .get("properties")
+            .and_then(|p| p.get(param))
+            .cloned()
+            .unwrap_or(Json::Null);
+        let Some(l) = input.flow.param_labels.get(param) else {
+            return Err(format!("remedy_inapplicable:param {param} unlabeled"));
+        };
+        let mut subject = input.args_provenance.clone();
+        subject.authority = l.authority;
+        subject.taint = l.taint.clone();
+        subject.readers = l.readers.clone();
+        let validator = ProvenanceRecord::kernel(events::COMPONENT, self.store.now_ms());
+        // The param anchor — durable first so the endorsed row's
+        // `subject_ref` resolves over the committed prefix (ADR-0343 D2's
+        // committed-prefix rule, the sibling-class arm of its revisit
+        // trigger). The anchor's provenance is the param's record; its
+        // `content_kind` is the closed-schema kind `validator` raises.
+        let mut anchor = self
+            .minter_ev()
+            .mint_effect(
+                "action.param.anchored",
+                Json::obj([
+                    ("effect_id", Json::str(effect_id.to_string())),
+                    (
+                        "args_canonical_hash",
+                        Json::str(args_canonical_hash.to_string()),
+                    ),
+                    ("param", Json::str(param.to_string())),
+                    ("anchor_kind", Json::str("shape_endorse")),
+                ]),
+                effect_id,
+                &input.chain,
+            )
+            .map_err(|e| format!("remedy_inapplicable:{e}"))?;
+        anchor.provenance = Some(subject.clone());
+        anchor.content_kind = Some(hh_provenance::ContentKind::ClosedSchemaValue);
+        let end = match hh_provenance::endorse::shape_endorse(
+            &subject,
+            anchor.event_id.clone(),
+            &schema_node,
+            flow::CAP_MAX_DEFAULT,
+            &validator,
+            validator_ref.map(str::to_string),
+            vec![param.to_string()],
+        ) {
+            Ok(end) => end,
+            Err(hh_provenance::endorse::EndorsementError::NoLabelIncrease) => {
+                // The take attested a rise the param doesn't need — the
+                // remedy's fix didn't happen, so the consume is refused
+                // rather than recorded as a take-with-no-effect.
+                return Err("remedy_inapplicable:no_label_increase".to_string());
+            }
+            Err(e) => return Err(format!("remedy_inapplicable:{e:?}")),
+        };
+        let mut payload = end.to_json();
+        if let Json::Obj(m) = &mut payload {
+            // The `{endorser, basis_ref}` members `to_json` omits — the
+            // append-time `check_endorsement` re-reads them (§8.1 #3; the
+            // same patch `approval_endorsement` applies, CC1).
+            m.insert("endorser".to_string(), end.endorser.to_json());
+            if let Some(b) = &end.basis_ref {
+                m.insert("basis_ref".to_string(), Json::str(b.clone()));
+            }
+        }
+        let mut endorsed = self
+            .minter_ev()
+            .mint_effect("security.label.endorsed", payload, effect_id, &input.chain)
+            .map_err(|e| format!("remedy_inapplicable:{e}"))?;
+        endorsed.content_kind = Some(hh_provenance::ContentKind::ClosedSchemaValue);
+        self.store
+            .append(&self.run_id, lease, vec![anchor])
+            .map_err(|e| format!("remedy_inapplicable:{e}"))?;
+        self.store
+            .append(&self.run_id, lease, vec![endorsed])
+            .map_err(|e| format!("remedy_inapplicable:{e}"))?;
+        Ok(end.to)
     }
 
     /// The S1.21/S2.11 local-check fold: build the `TerminalCapture` and run
@@ -3186,6 +3496,90 @@ fn classify_command(args: &Json) -> ParseOutcome {
 /// `world = open` for the dispatched effect — the declared attributes or
 /// the capability's declared attributes for the domain (the same source
 /// the monitor's flow stage reads — one definition of "open").
+/// `shape_endorsed_params(events, args_canonical_hash)` — the produce-time
+/// fold (§5g.2 §3; DF-S2.7-1c): a `validator`-basis
+/// `security.label.endorsed` row discharges its `robustness_inputs[]`
+/// params for D-ROBUST *for the args shape it endorsed* — the row's
+/// `subject_ref` resolves to the durable `action.param.anchored` record
+/// whose `args_canonical_hash` must equal this dispatch's (a param-name-
+/// only binding would launder the endorsement across re-supplied args —
+/// never a guess). The fold also re-checks the recorded
+/// `capacity_bits ≤ CAP_MAX_DEFAULT` — the durable record is the
+/// authority, and a row claiming an over-capacity shape never stamps.
+pub fn shape_endorsed_params(
+    events: &[hh_ledger::event::EventEnvelope],
+    args_canonical_hash: &str,
+) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    for e in events {
+        if e.class != "security.label.endorsed" {
+            continue;
+        }
+        let p = &e.payload;
+        if p.get("basis").and_then(Json::as_str) != Some("validator") {
+            continue;
+        }
+        let bounded = matches!(p.get("capacity_bits"), Some(Json::Int(b)) if *b >= 0 && (*b as u64) <= flow::CAP_MAX_DEFAULT);
+        if !bounded {
+            continue;
+        }
+        let subject_ref = p.get("subject_ref").and_then(Json::as_str);
+        let covered = subject_ref
+            .and_then(|sr| {
+                events
+                    .iter()
+                    .find(|a| a.class == "action.param.anchored" && a.event_id == sr)
+            })
+            .and_then(|a| a.payload.get("args_canonical_hash").and_then(Json::as_str))
+            .map(|h| h == args_canonical_hash)
+            .unwrap_or(false);
+        if !covered {
+            continue;
+        }
+        if let Some(Json::Arr(inputs)) = p.get("robustness_inputs") {
+            for name in inputs.iter().filter_map(|i| i.as_str()) {
+                out.insert(name.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// `remedy_taken_for(events, effect_id, claimed)` — the consume-side
+/// verification (DF-S2.7-1b; ADR-0343 D4): a claimed `remedy_taken` is
+/// admitted only when a durable `security.permission.decided` row carries
+/// the canonically-identical take — the ingress surface's consume record
+/// — and no *other* effect already consumed it (the `authorized` row is
+/// the consume record: an identical take on a different effect is a
+/// replay — a remedy is consumed exactly once). A re-dispatch of the same
+/// `effect_id` re-claiming its own take is the idempotent retry, not a
+/// replay (its own `authorized` row names the same effect).
+fn remedy_taken_for(
+    events: &[hh_ledger::event::EventEnvelope],
+    effect_id: &str,
+    claimed: Option<&flow::Remedy>,
+) -> Result<Option<flow::Remedy>, String> {
+    let Some(r) = claimed else { return Ok(None) };
+    let want = r.to_json();
+    for e in events {
+        if e.class != "action.effect.authorized" {
+            continue;
+        }
+        if e.payload.get("remedy_taken") == Some(&want)
+            && e.scope.effect_id.as_deref() != Some(effect_id)
+        {
+            return Err(format!("remedy_replayed:{}", r.kind()));
+        }
+    }
+    let attested = events.iter().any(|e| {
+        e.class == "security.permission.decided" && e.payload.get("remedy_taken") == Some(&want)
+    });
+    if !attested {
+        return Err(format!("remedy_not_attested:{}", r.kind()));
+    }
+    Ok(Some(r.clone()))
+}
+
 fn dispatch_world_open(input: &DispatchInput) -> bool {
     let declared_attrs = match &input.capability.effects {
         hh_hir::kinds::ToolEffects::Pure => None,

@@ -1,0 +1,40 @@
+{
+ "pr": 119,
+ "head": "e01d4ff",
+ "read_at": "2026-10-08",
+ "checks": [
+  {
+   "name": "build \u00b7 test \u00b7 fmt \u00b7 drift",
+   "state": "pass",
+   "event": "pull_request",
+   "run": 37725859796,
+   "duration": "8m25s",
+   "head": "e01d4ff"
+  },
+  {
+   "name": "build \u00b7 test \u00b7 fmt \u00b7 drift",
+   "state": "pass",
+   "event": "push",
+   "run": 37725855891,
+   "duration": "10m25s",
+   "head": "e01d4ff"
+  },
+  {
+   "name": "build \u00b7 test \u00b7 fmt \u00b7 drift",
+   "state": "pass",
+   "event": "pull_request",
+   "run": 37724944119,
+   "duration": "8m4s",
+   "head": "b135265"
+  },
+  {
+   "name": "build \u00b7 test \u00b7 fmt \u00b7 drift",
+   "state": "pass",
+   "event": "push",
+   "run": 37724939961,
+   "duration": "8m15s",
+   "head": "b135265"
+  }
+ ],
+ "note": "ci-boundary/1 pass #119 \u2014 green at the ci-record head e01d4ff (runs 37725859796 pull_request ~8m25s + 37725855891 push ~10m25s, both pass) and at the closeout head b135265 (runs 37724944119 pull_request ~8m4s + 37724939961 push ~8m15s, both pass); the pair at the implementation head 0bb8cca (37724863953/37724855552) was cancelled by the closeout push, not failures. Local suite: cargo test --workspace 308 result blocks / 3,235 tests / 0 failures (+1 block, +10 tests over R2.11's 307/3,225 \u2014 hh-env r2_12 10/10 + hh-embed r2_12 4/4). fmt clean; clippy clean on touched files; check-drift regenerated + in sync (PermissionOutcome.remedy member); check-build-memory 0 violations / 7 pre-existing warnings. Offline-only / fixture-verified; PR #119 OPEN for operator merge (mergePolicy: OPERATOR)."
+}

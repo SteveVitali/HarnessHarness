@@ -27,6 +27,7 @@ use std::collections::BTreeMap;
 use hh_compiler::plan::PinnedRef;
 use hh_identity::idp;
 use hh_provenance::authority::AuthorityClass;
+use hh_provenance::flow::Remedy;
 use hh_wire::json::Json;
 
 use crate::decision::{CheckRecord, Decision, DecisionScope, DenyReason};
@@ -236,6 +237,16 @@ pub enum ResponseChoice {
         /// authority widening).
         amended_args: Json,
     },
+    /// Consume one of the pending's offered remedies (§5g.2 §3
+    /// `remedy_taken`; ADR-0343 D4; DF-S2.7-1b — R2.12's consume arm).
+    /// A *deciding* response — the same legitimacy gate `allow*`/`modify`
+    /// answer (a delegate-voiced take would burn the owed decision).
+    /// `approval`-kind takes decide `allow` (the approval endorses only
+    /// that `effect_id` — I-F6 R4); every other kind decides `deny` —
+    /// the as-proposed effect refuses and the remedy's re-dispatch
+    /// re-enters as a fresh effect carrying the durable `remedy_taken`
+    /// attestation (the `modified` arm's shape — ADR-0343 D1).
+    Remedy(Remedy),
 }
 
 /// `LeaseSpec` — the lease the `allow_lease` response mints:
@@ -2158,6 +2169,7 @@ impl ApprovalState {
             ResponseChoice::AllowOnce
                 | ResponseChoice::AllowLease(_)
                 | ResponseChoice::Modify { .. }
+                | ResponseChoice::Remedy(_)
         );
         if allows {
             let legitimate = match &response.decided_by {
@@ -2279,6 +2291,34 @@ impl ApprovalState {
                 },
                 None,
             ),
+            ResponseChoice::Remedy(remedy) => match remedy {
+                // `approval{effect_id}` *is* the human's allow for that
+                // one effect — the take endorses the effect, never a
+                // class (I-F6 R4); the same scope rule `allow_once`
+                // answers applies.
+                Remedy::Approval { .. } => {
+                    if response.scope != DecisionScope::Once {
+                        self.pending.insert(response.permission_id.clone(), pending);
+                        return Err(ApprovalError::ScopeMismatch {
+                            detail: "remedy approval requires scope = once".to_string(),
+                        });
+                    }
+                    (Decision::Allow, None)
+                }
+                // Every other remedy kind refuses the as-proposed args —
+                // the take is durable (`decided{remedy_taken}`) and the
+                // remedy's re-supplied dispatch re-enters under the
+                // attestation as a fresh effect (the `modified` arm's
+                // shape, ADR-0343 D1). The offered set rides the Deny so
+                // the served refusal restates it.
+                _ => (
+                    Decision::Deny {
+                        reason: DenyReason::PolicyDenied,
+                        remedies: pending.request.remedies.clone(),
+                    },
+                    None,
+                ),
+            },
             ResponseChoice::Deny { reason } => (
                 Decision::Deny {
                     reason: DenyReason::PolicyDenied,
@@ -2996,6 +3036,7 @@ fn choice_json(c: &ResponseChoice) -> Json {
             "modify",
             Json::obj([("amended_args", amended_args.clone())]),
         )]),
+        ResponseChoice::Remedy(r) => Json::obj([("remedy", r.to_json())]),
         ResponseChoice::AllowLease(spec) => Json::obj([(
             "allow_lease",
             Json::obj([
@@ -3039,6 +3080,12 @@ fn choice_from_json(j: &Json, path: &str) -> Result<ResponseChoice, String> {
                 return Ok(ResponseChoice::Modify {
                     amended_args: md.get("amended_args").cloned().unwrap_or(Json::Null),
                 });
+            }
+            if let Some(r) = m.get("remedy") {
+                return Ok(ResponseChoice::Remedy(
+                    Remedy::from_json(r, &format!("{path}.remedy"))
+                        .map_err(|e| format!("{path}.remedy: {}", e.detail))?,
+                ));
             }
             Err(format!("{path}: unknown choice"))
         }

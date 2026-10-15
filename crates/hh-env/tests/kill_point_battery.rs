@@ -681,6 +681,7 @@ fn input<'a>(
         compensation_plan_id: (tool == ProbeTool::Compensable).then(|| "plan-1".to_string()),
         baseline_ref: None,
         flow: Default::default(),
+        remedy_taken: None,
     }
 }
 

@@ -677,6 +677,11 @@ fn types_schema() -> Json {
             ("selected", &[("option_id", "string", true)]),
             ("cancelled", &[]),
             ("modified", &[("amended_args", "json", true)]),
+            // R2.12 (DF-S2.7-1b) — the remedy-consume arm: `remedy` is the
+            // canonical `Remedy` record (`{kind, …members}` — §5g.2 §3's
+            // closed sum; the kernel decodes it against `hh_provenance`,
+            // the boundary schema keeps it an opaque `json` member).
+            ("remedy", &[("remedy", "json", true)]),
         ]),
     );
     m.insert(
