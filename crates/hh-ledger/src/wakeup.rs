@@ -1334,6 +1334,20 @@ impl Store {
             ),
             ("holder".to_string(), Json::str(&lease.holder)),
         ]);
+        // R2.14 (M15, §5h.1 §2.5) — the measured sleep: `fired` on the
+        // store's clock minus the `scheduled` row's recorded
+        // `created_at_ms` (the subscription fold's own stamp — same
+        // clock, never a `ts` difference).
+        fired_payload.insert(
+            "sleep_ms".to_string(),
+            Json::obj([
+                (
+                    "value",
+                    Json::Int(now.saturating_sub(sub.created_ms) as i64),
+                ),
+                ("measured_at", Json::str("runtime")),
+            ]),
+        );
         if let Some(eid) = &deliver_after {
             fired_payload.insert("deliver_after".to_string(), Json::str(eid));
         }

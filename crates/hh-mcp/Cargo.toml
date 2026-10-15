@@ -24,6 +24,9 @@ hh-bundle = { path = "../hh-bundle" }
 hh-env = { path = "../hh-env" }
 hh-hir = { path = "../hh-hir" }
 hh-containment = { path = "../hh-containment" }
+# R2.14 — the propagation carrier's `_meta` shape (`dev.cognition/
+# propagation`) is hh-telemetry's single definition (CC1).
+hh-telemetry = { path = "../hh-telemetry" }
 
 [dev-dependencies]
 # The paused-arm integration fixture (DF-S3.9-1): a real Dispatcher over a

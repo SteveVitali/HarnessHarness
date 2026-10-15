@@ -3786,6 +3786,7 @@ impl Store {
             ViewKind::TraceView
             | ViewKind::CostView
             | ViewKind::MetricView
+            | ViewKind::TurnPhaseProfile
             | ViewKind::LexicalIndex
             | ViewKind::StructuralIndex
             | ViewKind::MemoryStaleIndex

@@ -36,6 +36,9 @@ pub mod errors;
 pub mod events;
 pub mod export;
 pub mod genai;
+pub mod lift;
+pub mod openinfer;
+pub mod phase;
 pub mod propagation;
 pub mod scope;
 pub mod sinks;
@@ -48,11 +51,15 @@ pub use clocks::{
 pub use errors::{CodecError, TelemetryError};
 pub use events::{export_delivered_payload, metric_emitted_payload, ExportDelivered, Timing};
 pub use export::{deliver, export_events, export_view, ExportBatch, LossEntry};
+pub use phase::turn_phase_profile;
 pub use propagation::{
-    inbound_context, outbound_context, propagation_unsupported_loss, subprocess_env,
-    PropagationContext, BAGGAGE_ENV, TRACEPARENT_ENV, TRACESTATE_ENV,
+    acp_hh_members, carrier_loss, inbound_carrier, inbound_context, meta_carrier, outbound_context,
+    propagation_unsupported_loss, subprocess_env, InboundLink, PropagationContext, BAGGAGE_ENV,
+    MCP_PROPAGATION_KEY, TRACEPARENT_ENV, TRACESTATE_ENV,
 };
 pub use scope::{MeasurementPoint, ScopeKind, MEASUREMENT_POINTS};
 pub use sinks::{ContentClass, RateLimit, Redaction, Sampling, SamplingMode, SinkPolicy};
 pub use tokens::{normalize_usage, usage_from_json, ProviderUsage, TokenVector};
-pub use views::{cost_view, metric_view, sink_deliveries, trace_view, Span, SpanStatus};
+pub use views::{
+    cost_view, measured_value, metric_view, sink_deliveries, trace_view, Span, SpanStatus,
+};

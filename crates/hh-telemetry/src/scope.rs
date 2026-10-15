@@ -120,6 +120,9 @@ pub enum DurationSource {
         /// The end stamp member inside `timing`.
         end: &'static str,
     },
+    /// The terminal event's `timing{<field>}` member itself is the measured
+    /// duration (M3's `timing.latency_ms` — the gateway's logical-call span).
+    TimingMember(&'static str),
     /// No single payload duration is declared (the measured members are
     /// per-phase — the span reports `duration_ms: absent`, an honest omission,
     /// never a `ts` difference).
@@ -165,7 +168,7 @@ pub const MEASUREMENT_POINTS: &[MeasurementPoint] = &[
     MeasurementPoint { id: "M3", scope: Some(ScopeKind::ModelCall),
         opens: &["model.call.requested"],
         closes: &["model.call.completed", "model.call.failed"],
-        duration: DurationSource::PayloadField("latency_ms"),
+        duration: DurationSource::TimingMember("latency_ms"),
         measured: &["TokenVector", "Money", "latency_ms", "attempts", "stop_reason", "error.class", "rerouted?"],
         producer: "gateway (§05b) / router", stage: "C0/S1" },
     MeasurementPoint { id: "M4", scope: Some(ScopeKind::ModelAttempt),
@@ -182,7 +185,7 @@ pub const MEASUREMENT_POINTS: &[MeasurementPoint] = &[
         producer: "context builder (§05c)", stage: "C0/S2" },
     MeasurementPoint { id: "M6", scope: Some(ScopeKind::Compaction),
         opens: &["context.compaction.started"], closes: &["context.compaction.completed"],
-        duration: DurationSource::PayloadField("compaction_ms"),
+        duration: DurationSource::PayloadField("duration_ms"),
         measured: &["compaction_ms", "tokens_before/after", "model calls consumed (harness_overhead.compaction)", "variant ref"],
         producer: "compaction variant (§05c)", stage: "C0/S2" },
     MeasurementPoint { id: "M7", scope: Some(ScopeKind::ToolCall),
@@ -209,7 +212,7 @@ pub const MEASUREMENT_POINTS: &[MeasurementPoint] = &[
         // (`decided.proposal` = the proposing event's id).
         opens: &["action.tool.proposed", "action.effect.intended"],
         closes: &["security.permission.decided"],
-        duration: DurationSource::PayloadField("approval_wait_ms"),
+        duration: DurationSource::PayloadField("wait_ms"),
         measured: &["approval_wait_ms", "decider", "cached?", "monitor decision latency"],
         producer: "reference monitor (§05g)", stage: "C0/S1" },
     MeasurementPoint { id: "M11", scope: Some(ScopeKind::Validation),

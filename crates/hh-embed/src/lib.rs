@@ -53,6 +53,7 @@ pub(crate) mod replay_ops;
 pub mod runtime;
 pub mod service;
 pub mod stdio;
+pub mod subscriber;
 pub mod work;
 
 pub use service::{EmbedService, ServiceConfig};

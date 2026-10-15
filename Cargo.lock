@@ -49,6 +49,7 @@ dependencies = [
  "hh-identity",
  "hh-ledger",
  "hh-mcp",
+ "hh-telemetry",
  "hh-wire",
 ]
 
@@ -492,6 +493,7 @@ dependencies = [
  "hh-ontology",
  "hh-provenance",
  "hh-secrets",
+ "hh-telemetry",
  "hh-wire",
 ]
 
