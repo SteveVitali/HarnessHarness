@@ -532,4 +532,7 @@ updatedAt:       2026-10-15
   the 1,000 budget — recorded in ADR-0357, flagged for operator
   adjudication. Fixture-verified ceiling. Ledger advanced
   `lastCompleted: R3.5`, `nextTicket: R3.6`, `chainTip:
-  svitali/harnessharness-r3.5`. Operator merges.
+  svitali/harnessharness-r3.5`. CI pass #141@1024cbd (build ·
+  test · fmt · drift 38807021330 / 38807030595; 2/2 green on the
+  closeout head; the implementation-head runs were
+  superseded-cancelled). Operator merges.
