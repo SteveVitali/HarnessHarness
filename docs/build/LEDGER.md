@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.2   # round-3 chain (rows 137-149); row 138 = DF-S2.3-1 residual producers (BL-44); 127/128 stay HUMAN-H3/H4
-lastCompleted:   R3.1
+nextTicket:      R3.3   # round-3 chain (rows 137-149); row 139 = DF-S1.20-1 control/delegation legs (BL-14); 127/128 stay HUMAN-H3/H4
+lastCompleted:   R3.2
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.1  # R3.1 tip — PR against svitali/round3-decompose (the round-3 manifest base); operator merges
+chainTip:        svitali/harnessharness-r3.2  # R3.2 tip — stacked PR #138 against svitali/harnessharness-r3.1; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -406,3 +406,30 @@ updatedAt:       2026-10-14
   `38609963681`) were superseded-cancelled by the closeout-docs push —
   a queue mechanic, not a failure. Record: `docs/build/logs/ci-R3.1.json`
   (gitignored subtree, force-added). PR #137 open, awaiting operator merge.
+
+- 2026-10-14 · **R3.2 done** — branch `svitali/harnessharness-r3.2` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/138 · base
+  `svitali/harnessharness-r3.1` (@e2a6d42). **DF-S2.3-1 discharged DONE;
+  BL-44 closed** — the five residual producer legs landed or verified:
+  `resume_set` (`ViewKind::ResumeSet` pure fold over
+  `context.memory.written`/`invalidated`; `Store::resume_set_heads`
+  feeds `continue_goal`'s omitted carried set, explicit `[]` honoured;
+  checkpoint member); `defer` verified landed since S2.6
+  (`permission_decided` subscription; `ac_r_2_8_7_*`); child-lease
+  verified landed since S4.6/S4.8 (`child_terminal` subs + `resource:*`
+  release); non-fleet ingress (`connection_info.ingress_adapters`
+  validated+stamped to `manifest.extra`, `wakeup_subscribe` declaration
+  gate — undeclared = `TriggerUnsupported` stage-4,
+  `hh_fleet::observe_run` producer with audited replay dedup);
+  `heal(env_handle)` (`EnvDriver::heal_handle` ladder — suspended →
+  resume, unreachable → reattach-if-live, dead → replace per `on_loss`,
+  `fail_run` ⇒ durable `failed`; policy heal composes). **ADR-0265
+  re-check dated** — second revisit arm fired, answer recorded: D4
+  stands (no durable home for woken dedup); D2/D7 quiet. Verify:
+  r3_2 batteries 20/20 (ledger 7 / embed 5 / env 4 / fleet 4);
+  workspace count in `runs/R3.2.md`; fmt clean; clippy `-D warnings`
+  clean on the four touched crates; drift in sync; removability green;
+  check-backlog exit 0 (157); check-build-memory 0 violations / 7
+  warnings; `^||` empty. Fixture-verified ceiling. Ledger advanced
+  `lastCompleted: R3.2`, `nextTicket: R3.3`, `chainTip:
+  svitali/harnessharness-r3.2`. Operator merges.
