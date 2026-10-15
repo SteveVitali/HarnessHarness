@@ -2822,6 +2822,16 @@ impl<S: ControlStrategy> Driver<S> {
                         continue;
                     }
                     let proposed_at = self.stamp_ms(sink);
+                    // R3.5 — the surface's shape family (`family_id`)
+                    // rides the proposed row so `surface_rejection_rate`
+                    // stratifies per (profile, family); `null` when the
+                    // surface carries none — never guessed.
+                    let family = self
+                        .config
+                        .surfaces
+                        .iter()
+                        .find(|s| s.surface_id == c.surface_id)
+                        .and_then(|s| s.family.clone());
                     self.append(
                         sink,
                         "action.tool.proposed",
@@ -2829,6 +2839,7 @@ impl<S: ControlStrategy> Driver<S> {
                             ("tool_call_id", Json::str(&c.tool_call_id)),
                             ("surface_id", Json::str(&c.surface_id)),
                             ("loop_key", Json::str(&c.loop_key)),
+                            ("family", family.map_or(Json::Null, Json::str)),
                             // R2.14 — the tool-blocking interval's open
                             // stamp (the phase profile reads it).
                             ("at_ms", proposed_at),
@@ -6925,6 +6936,7 @@ mod tests {
                     .collect(),
 
                     risk_class: None,
+                    family: None,
                 }],
                 ..DriverConfig::default()
             },
@@ -7018,6 +7030,7 @@ mod tests {
                     .collect(),
 
                     risk_class: None,
+                    family: None,
                 }],
                 ..DriverConfig::default()
             },
@@ -7262,6 +7275,7 @@ mod tests {
             .into_iter()
             .collect(),
             risk_class: None,
+            family: None,
         }
     }
 
@@ -8114,6 +8128,7 @@ mod tests {
                     .into_iter()
                     .collect(),
                     risk_class: None,
+                    family: None,
                 }],
                 ..DriverConfig::default()
             },
@@ -9050,6 +9065,7 @@ mod tests {
                 Default::default()
             },
             risk_class: None,
+            family: None,
         };
         DriverConfig {
             surfaces: ["fs.read", "deep.search", "pinned_tool", "discover_surfaces"]

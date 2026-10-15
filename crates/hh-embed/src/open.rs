@@ -158,7 +158,7 @@ impl LeafArm {
 }
 
 fn surface_json(s: &SurfaceSpec) -> Json {
-    Json::obj([
+    let mut m = vec![
         ("surface_id", Json::str(s.surface_id.clone())),
         ("semantic_id", Json::str(s.semantic_id.clone())),
         (
@@ -170,7 +170,11 @@ fn surface_json(s: &SurfaceSpec) -> Json {
                     .collect(),
             ),
         ),
-    ])
+    ];
+    if let Some(f) = &s.family {
+        m.push(("family", Json::str(f.clone())));
+    }
+    Json::obj(m)
 }
 
 fn param_json(p: &ParamSpec) -> Json {
@@ -237,6 +241,10 @@ fn surface_from_json(j: &Json) -> Option<SurfaceSpec> {
         params,
 
         risk_class: None,
+        // The shape family rides the surface record verbatim when the
+        // caller declares it (R3.5 — `surface_rejection_rate`'s
+        // (profile, family) stratum); absent → `None`, never guessed.
+        family: j.get("family").and_then(Json::as_str).map(str::to_string),
     })
 }
 
@@ -2499,6 +2507,7 @@ impl EmbedService {
                 params: BTreeMap::new(),
 
                 risk_class: None,
+                family: None,
             });
         }
         let mut parameters = StrategyParams::default();
@@ -3018,6 +3027,7 @@ pub(crate) fn submit_surface_spec() -> SurfaceSpec {
         semantic_id: format!("{}/1", crate::runtime::SUBMIT_SURFACE),
         params: std::collections::BTreeMap::new(),
         risk_class: Some(crate::runtime::SUBMIT_RISK),
+        family: None,
     }
 }
 
@@ -3406,6 +3416,7 @@ pub(crate) fn driver_surfaces(caps: &[HostCap]) -> Vec<SurfaceSpec> {
             semantic_id: c.capability_id.clone(),
             params: std::collections::BTreeMap::new(),
             risk_class: c.risk_class,
+            family: None,
         });
     }
     v
@@ -3820,4 +3831,45 @@ fn native_profile_pin(doc: &hh_hir::document::HirDocument) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// R3.5 — the `SurfaceSpec.family` member round-trips the `leaf.arm`
+    /// record verbatim; an absent member restores `None`, never a guess.
+    #[test]
+    fn r3_5_surface_family_round_trips_the_arm_record() {
+        let spec = SurfaceSpec {
+            surface_id: "surf:fs.write".to_string(),
+            semantic_id: "cap:fs.write/1".to_string(),
+            params: BTreeMap::new(),
+            risk_class: None,
+            family: Some("native_fc".to_string()),
+        };
+        let j = surface_json(&spec);
+        assert_eq!(
+            j.get("family").and_then(Json::as_str),
+            Some("native_fc"),
+            "family rides the arm record"
+        );
+        let back = surface_from_json(&j).expect("surface decodes");
+        assert_eq!(back.family, Some("native_fc".to_string()));
+        assert_eq!(back.surface_id, "surf:fs.write");
+
+        // `None` omits the member — the arm record stays byte-clean for
+        // unshaped primitives, and an absent member restores `None`.
+        let unshaped = SurfaceSpec {
+            family: None,
+            ..spec.clone()
+        };
+        let j = surface_json(&unshaped);
+        assert!(
+            j.get("family").is_none(),
+            "no family member on an unshaped primitive"
+        );
+        let back = surface_from_json(&j).expect("surface decodes");
+        assert_eq!(back.family, None);
+    }
 }

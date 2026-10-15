@@ -365,6 +365,7 @@ fn delegate_surface() -> hh_control::output::SurfaceSpec {
         .into_iter()
         .collect(),
         risk_class: None,
+        family: None,
     }
 }
 

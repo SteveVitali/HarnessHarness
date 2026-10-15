@@ -270,6 +270,7 @@ fn surface(id: &str, params: &[&str]) -> SurfaceSpec {
             })
             .collect(),
         risk_class: None,
+        family: None,
     }
 }
 

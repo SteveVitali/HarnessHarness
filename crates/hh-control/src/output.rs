@@ -127,6 +127,10 @@ pub struct SurfaceSpec {
     /// class). The member rides the surface record so `leaf.arm`
     /// persistence re-arms the same classes on resume.
     pub risk_class: Option<hh_ontology::risk::RiskClass>,
+    /// The surface's shape family (the binding's `family_id` —
+    /// `surface_rejection_rate`'s per-(profile, family) stratum; R3.5).
+    /// `None` on an unshaped primitive — `unknown`, never guessed.
+    pub family: Option<String>,
 }
 
 /// A parsed tool call out of the gateway's response record — the driver
@@ -396,6 +400,7 @@ mod tests {
                 },
             )]),
             risk_class: None,
+            family: None,
         }
     }
 

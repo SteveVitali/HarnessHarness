@@ -570,6 +570,15 @@ fn interpret(
                     )
                 })
                 .unwrap_or_else(|| "sha256:unavailable".to_string());
+            // R3.5 — the rejected call's shape family (`family_id` off the
+            // surface record) feeds `surface_rejection_rate`'s
+            // (profile, family) stratum; `null` when the attempted name
+            // never bound — a parser reject has no family, never a guess.
+            let family = surfaces
+                .iter()
+                .find(|s| s.surface_id == attempted)
+                .and_then(|s| s.family.clone())
+                .map_or(Json::Null, Json::str);
             let mut sr = std::collections::BTreeMap::from([
                 ("surface_id".to_string(), Json::str(attempted.clone())),
                 ("binding_ref".to_string(), Json::str(attempted)),
@@ -577,6 +586,7 @@ fn interpret(
                 ("raw_call_hash".to_string(), Json::str(raw_call_hash)),
                 ("model_call_id".to_string(), Json::str(model_call_id)),
                 ("rendering_ref".to_string(), Json::Null),
+                ("family".to_string(), family),
             ]);
             if let Some(tc) = tool_call_id {
                 sr.insert("tool_call_id".to_string(), Json::str(tc.clone()));

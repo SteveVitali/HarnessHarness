@@ -506,6 +506,7 @@ impl<'a> Dispatcher<'a> {
             events::tool_proposed_payload(
                 &input.capability_ref.semantic_id,
                 &input.capability_ref.version_id,
+                input.binding.family_id.as_deref(),
             ),
         )?;
         proposed.scope = hh_ledger::event::Scope {
@@ -550,6 +551,7 @@ impl<'a> Dispatcher<'a> {
                         &raw_call_hash,
                         &input.chain.model_call_id,
                         None,
+                        input.binding.family_id.as_deref(),
                     ),
                 )?;
                 rejected.scope = hh_ledger::event::Scope {
@@ -2347,7 +2349,7 @@ impl<'a> Dispatcher<'a> {
             let mh_id = Store::effect_id(&self.run_id, &mh_chain.model_call_id, &tc_elic, 0);
             let mut mh_proposed = self.minter_ev().mint(
                 "action.tool.proposed",
-                events::tool_proposed_payload("hh:message_human", "elicitation"),
+                events::tool_proposed_payload("hh:message_human", "elicitation", None),
             )?;
             mh_proposed.scope = hh_ledger::event::Scope {
                 turn_id: Some(mh_chain.turn_id.clone()),

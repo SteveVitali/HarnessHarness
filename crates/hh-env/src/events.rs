@@ -764,15 +764,26 @@ pub fn unattributed_payload(signal_kind: &str, evidence_ref: &str, detection: &s
 
 // ── tool call rows ───────────────────────────────────────────────────────────
 
-/// `action.tool.proposed{capability_ref}` — opens the tool_call scope.
-pub fn tool_proposed_payload(capability_semantic_id: &str, capability_version: &str) -> Json {
-    Json::obj([(
-        "capability_ref",
+/// `action.tool.proposed{capability_ref, family?}` — opens the tool_call
+/// scope. `family` is the binding's `family_id` (the shape family —
+/// `surface_rejection_rate`'s per-(profile, family) stratum; R3.5).
+pub fn tool_proposed_payload(
+    capability_semantic_id: &str,
+    capability_version: &str,
+    family: Option<&str>,
+) -> Json {
+    let mut m = BTreeMap::new();
+    m.insert(
+        "capability_ref".to_string(),
         Json::obj([
             ("semantic_id", Json::str(capability_semantic_id)),
             ("version_id", Json::str(capability_version)),
         ]),
-    )])
+    );
+    if let Some(f) = family {
+        m.insert("family".to_string(), Json::str(f));
+    }
+    Json::Obj(m)
 }
 
 /// `action.tool.started{execution_id, attribution_token_hash}` (CF-214 — the
@@ -831,11 +842,13 @@ pub fn tool_rejected_payload(source: &str, reason: &str) -> Json {
 }
 
 /// `action.tool.surface_rejected{surface_id, binding_ref, failure_class,
-/// raw_call_hash, model_call_id, rendering_ref?}` — a `SurfaceFailure`
-/// detected by the parser or the reference monitor before dispatch (§5d.2;
-/// ADR-0092 D5): no executor runs, no `Effect` exists. The call itself is
-/// content-addressed by `raw_call_hash` — never the bytes (ADR-0066 Rule
-/// C).
+/// raw_call_hash, model_call_id, rendering_ref?, family?}` — a
+/// `SurfaceFailure` detected by the parser or the reference monitor before
+/// dispatch (§5d.2; ADR-0092 D5): no executor runs, no `Effect` exists.
+/// The call itself is content-addressed by `raw_call_hash` — never the
+/// bytes (ADR-0066 Rule C). `family` is the binding's `family_id` — the
+/// shape family `surface_rejection_rate` stratifies on (R3.5); absent on
+/// an unresolved call, never guessed.
 pub fn surface_rejected_payload(
     surface_id: &str,
     binding_ref: &str,
@@ -843,6 +856,7 @@ pub fn surface_rejected_payload(
     raw_call_hash: &str,
     model_call_id: &str,
     rendering_ref: Option<&str>,
+    family: Option<&str>,
 ) -> Json {
     let mut m = BTreeMap::from([
         ("surface_id".to_string(), Json::str(surface_id)),
@@ -853,6 +867,9 @@ pub fn surface_rejected_payload(
     ]);
     if let Some(r) = rendering_ref {
         m.insert("rendering_ref".to_string(), Json::str(r));
+    }
+    if let Some(f) = family {
+        m.insert("family".to_string(), Json::str(f));
     }
     Json::Obj(m)
 }
