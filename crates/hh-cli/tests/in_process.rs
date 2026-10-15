@@ -1888,6 +1888,11 @@ fn ac5_attended_and_unattended_share_one_configuration() {
     // mechanically; making the view exclude measured walls would weaken
     // the projection contract, so the derived member joins the
     // allowlist under the same `ends_with` convention.
+    // `plan_id` (R3.3 — the #139 CI flake, run 38703040017) is the same
+    // chain one link further down: the assembled `ContextPlan`'s
+    // content address over `derived_from{seq, view_hash}` — the sibling
+    // comparison's `MECHANICAL` list carries it under that exact name
+    // (CAP.3 / DF-S2.8-1); this leg was missed a second time.
     for d in &diffs {
         assert!(
             d == ".hash"
@@ -1899,7 +1904,8 @@ fn ac5_attended_and_unattended_share_one_configuration() {
                 || d.ends_with("reason")
                 || d.ends_with("assembly_ms.value")
                 || d.ends_with("assembly_ms.measured_at")
-                || d.ends_with("derived_from.view_hash"),
+                || d.ends_with("derived_from.view_hash")
+                || d.ends_with("plan_id"),
             "unexpected ledger difference at {d}"
         );
     }
