@@ -144,10 +144,16 @@ fn dwarn(
 
 /// Resolve a `DefinitionRef` spelling to a registered sealed definition:
 /// `version:<vid>`, a bare `<sha…>` version id, or `ns/name[@label]`.
+/// `mode` is the registry's resolve contract — `Audit` for
+/// authoring-time reads (the `base:` desugar below), `Execute` when the
+/// resolved definition is the one a session will run (the stricter
+/// gates — revoked admission, conformance floor — apply; R2.19's
+/// `DefinitionInput::Ref` resolution passes `Execute`).
 pub fn base_definition(
     base: &str,
     registry: &RegistryStore,
     snapshot_id: Option<&str>,
+    mode: ResolveMode,
 ) -> Result<hh_hir::document::SealedDefinition, String> {
     let input = if let Some(v) = base.strip_prefix("version:") {
         ResolveInput::Version(v.to_string())
@@ -169,7 +175,7 @@ pub fn base_definition(
         ResolveInput::Version(base.to_string())
     };
     let resolved = registry
-        .resolve(&input, ResolveMode::Audit, &ResolveRequest::default())
+        .resolve(&input, mode, &ResolveRequest::default())
         .map_err(|e| format!("base `{base}` does not resolve: {e:?}"))?;
     match &resolved.record {
         RegistryRecord::SealedDefinition(s) => Ok(s.clone()),
@@ -1464,7 +1470,7 @@ pub fn desugar(
     let mut layers: Vec<Layer> = Vec::new();
     let mut base_doc: Option<hh_hir::document::SealedDefinition> = None;
     if let Some(b) = &source.base {
-        match base_definition(b, registry, snapshot_id) {
+        match base_definition(b, registry, snapshot_id, ResolveMode::Audit) {
             Ok(sealed) => {
                 let (frag, mut fdiags) = base_fragment(&sealed, kernel);
                 // Re-tag decode diags to the desugar stage's read of the

@@ -443,3 +443,44 @@ impl CallerAuth for BindingTable {
         self.grants.get(bearer).cloned()
     }
 }
+
+/// The credential-mediator's typed refusal (R2.19 — DF-S4.11-2;
+/// spec §5g.3's WS-H3 refusal family at the caller edge). The transport
+/// collapses every variant to the `401` challenge; the code rides the
+/// refusal so the reason stays observable — a refused credential never
+/// resolves to a guessed subject.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CredentialRefusal {
+    /// No grant names the presented credential at all — the token is
+    /// unknown to the binding table (`401`, no detail).
+    NoGrant,
+    /// The grant's declared credential failed verification — for
+    /// `oauth`, the kernel broker's `minted_scoped` leg answered
+    /// `Invalid` (a spelling the kernel never minted, or minted for a
+    /// different audience).
+    CredentialInvalid,
+    /// The credential verified but is past its expiry
+    /// (`MintedVerdict::Expired` — the caller re-authenticates).
+    CredentialExpired,
+    /// The credential's backing binding is dead — revoked, expired or
+    /// rotated (`MintedVerdict::Revoked`).
+    CredentialRevoked,
+    /// The credential kind has no exchange at this slice — `mtls` needs
+    /// the TLS handshake's peer identity, which the loopback transport
+    /// never runs (BL-31; environment-gated, never fabricated).
+    TransportAbsent,
+}
+
+impl CredentialRefusal {
+    /// The canonical spelling (the `401` response's `refusal` member —
+    /// observable, never a fabricated identity).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CredentialRefusal::NoGrant => "no_grant",
+            CredentialRefusal::CredentialInvalid => "credential_invalid",
+            CredentialRefusal::CredentialExpired => "credential_expired",
+            CredentialRefusal::CredentialRevoked => "credential_revoked",
+            CredentialRefusal::TransportAbsent => "transport_absent",
+        }
+    }
+}

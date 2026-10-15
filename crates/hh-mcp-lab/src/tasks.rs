@@ -306,12 +306,23 @@ pub fn task_status_of(srv: &mut LabServer, binding: &CallerBinding, record: &Tas
 /// Push one narrowed `notifications/tasks` — the `taskId` only (the
 /// client re-reads `tasks/get`; the same `narrowed` discipline
 /// `notifications/resources/updated` follows, and the caller runs this
-/// only after the underlying row is durable — ADR-0175 D3).
+/// only after the underlying row is durable — ADR-0175 D3). The mint
+/// lands in the sequenced SSE log (scoped to the task's owner binding)
+/// *and* the `pending` drain — the one `push_notification` mint
+/// (DF-S4.11-1).
 pub fn push_task_notification(srv: &mut LabServer, task_id: &str) {
-    srv.pending.push_back(Json::obj([
-        ("method", Json::str("notifications/tasks")),
-        ("params", Json::obj([("taskId", Json::str(task_id))])),
-    ]));
+    let owner = srv
+        .tasks
+        .get(task_id)
+        .map(|rec| rec.owner_binding.clone())
+        .unwrap_or_default();
+    srv.push_notification(
+        &owner,
+        Json::obj([
+            ("method", Json::str("notifications/tasks")),
+            ("params", Json::obj([("taskId", Json::str(task_id))])),
+        ]),
+    );
 }
 
 /// Push `notifications/tasks` for every task the calling binding owns

@@ -808,7 +808,11 @@ fn s_resume_unknown_run_and_attach_missing() {
 fn s_open_ref_definition_unresolved_and_bad_attendance() {
     let mut svc = service();
     hello(&mut svc);
-    // `ref` definitions have no publish path at Stage 1 → UnresolvedRef.
+    // A `ref` nothing resolves — no blob deposit, no registered
+    // `sealed_definition` — stays the typed `UnresolvedRef` (never a
+    // document-parse fallback; the resolve legs below land the positive
+    // half in `s_open_ref_definition_resolves`).
+
     let e = call(
         &mut svc,
         "open_session",
@@ -910,6 +914,128 @@ fn s_open_ref_definition_unresolved_and_bad_attendance() {
         Json::obj(vec![("spec", spec), ("idempotency_key", Json::str("k4"))]),
     );
     assert_eq!(err_kind(&e), "InvalidDefinition");
+}
+
+#[test]
+fn s_open_ref_definition_resolves() {
+    // DF-S1.25-1 (R2.19) — `open_session{definition: {kind:"ref"}}`
+    // resolves through the registry-backed definition path to the same
+    // pinned sealed definition a `document` open sealed + registered.
+    let mut svc = service();
+    lab_hello(&mut svc);
+    let s = open_new(&mut svc);
+    let vid = s
+        .get("manifest_ref")
+        .and_then(Json::as_str)
+        .expect("open pins harness_def_ref")
+        .to_string();
+    assert!(vid.starts_with("sha256:"), "{vid}");
+
+    // (a) A bare version id — the blob-pool fetch leg
+    //     (`artifacts/<vid>` verifies the blob hash + the pinned root
+    //     id — CC3).
+    let mut spec = new_spec(None);
+    if let Json::Obj(m) = &mut spec {
+        m.insert(
+            "definition".into(),
+            Json::obj(vec![
+                ("kind", Json::str("ref")),
+                ("ref", Json::str(vid.clone())),
+            ]),
+        );
+    }
+    let r = call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![("spec", spec), ("idempotency_key", Json::str("r1"))]),
+    );
+    let opened = ok(&r);
+    assert_eq!(
+        opened.get("manifest_ref").and_then(Json::as_str),
+        Some(vid.as_str()),
+        "the ref opens the same pinned sealed definition: {}",
+        r.to_canonical_string()
+    );
+
+    // (b) `version:<vid>` — the registry resolve leg under
+    //     `ResolveMode::Execute` (the opened definition is the one the
+    //     session runs).
+    let mut spec = new_spec(None);
+    if let Json::Obj(m) = &mut spec {
+        m.insert(
+            "definition".into(),
+            Json::obj(vec![
+                ("kind", Json::str("ref")),
+                ("ref", Json::str(format!("version:{vid}"))),
+            ]),
+        );
+    }
+    let r = call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![("spec", spec), ("idempotency_key", Json::str("r2"))]),
+    );
+    let opened = ok(&r);
+    assert_eq!(
+        opened.get("manifest_ref").and_then(Json::as_str),
+        Some(vid.as_str())
+    );
+
+    // (c) `ns/name` — the publishing path: a `publish` under `local/`
+    //     names the registered sealed definition; the selector ref
+    //     resolves to the same pin.
+    let r = call(
+        &mut svc,
+        "lab.registry.publish",
+        Json::obj([
+            ("namespace", Json::str("local")),
+            ("name", Json::str("ref_open_def")),
+            ("version_id", Json::str(vid.clone())),
+            ("registrar", registrar()),
+        ]),
+    );
+    ok(&r);
+    let mut spec = new_spec(None);
+    if let Json::Obj(m) = &mut spec {
+        m.insert(
+            "definition".into(),
+            Json::obj(vec![
+                ("kind", Json::str("ref")),
+                ("ref", Json::str("local/ref_open_def")),
+            ]),
+        );
+    }
+    let r = call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![("spec", spec), ("idempotency_key", Json::str("r3"))]),
+    );
+    let opened = ok(&r);
+    assert_eq!(
+        opened.get("manifest_ref").and_then(Json::as_str),
+        Some(vid.as_str()),
+        "the selector ref resolves to the pinned sealed definition: {}",
+        r.to_canonical_string()
+    );
+
+    // (d) A `ref` naming nothing — no deposit, no registration —
+    //     stays `UnresolvedRef` (never a guess).
+    let mut spec = new_spec(None);
+    if let Json::Obj(m) = &mut spec {
+        m.insert(
+            "definition".into(),
+            Json::obj(vec![
+                ("kind", Json::str("ref")),
+                ("ref", Json::str("local/no_such_def@latest")),
+            ]),
+        );
+    }
+    let e = call(
+        &mut svc,
+        "open_session",
+        Json::obj(vec![("spec", spec), ("idempotency_key", Json::str("r4"))]),
+    );
+    assert_eq!(err_kind(&e), "UnresolvedRef");
 }
 
 // ── Group W — work ops ──────────────────────────────────────────────────────
