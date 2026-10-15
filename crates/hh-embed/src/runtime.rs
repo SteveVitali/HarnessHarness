@@ -140,6 +140,17 @@ impl LedgerSink for KernelSink<'_> {
     fn now_ms(&self) -> Option<u64> {
         Some(self.store.now_ms())
     }
+    /// R3.3 — the delegation seam hands the wired `DelegatePort` the
+    /// same store + writer lease the sink appends under (one fenced
+    /// writer, CC3: the spawn's rows land durable before the driver's
+    /// next decision). The live sink answers `Some`; the replay/arm
+    /// sinks (`LedgerSink`'s default `None`) refuse `UnbackedPort`.
+    fn store_seam(&mut self) -> Option<hh_control::driver::StoreSeam<'_>> {
+        Some(hh_control::driver::StoreSeam {
+            store: self.store,
+            lease: &self.lease,
+        })
+    }
 }
 
 /// The `hh.submit` completion capability's surface id — the one

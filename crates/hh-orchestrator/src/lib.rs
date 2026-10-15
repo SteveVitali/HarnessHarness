@@ -20,9 +20,11 @@
 //! (nothing below depends on it).
 
 pub mod coordination;
+pub mod delegate;
 pub mod lab;
 pub mod orchestrator;
 pub mod topology;
 
+pub use delegate::SpawnDelegatePort;
 pub use orchestrator::{Orchestrator, ParentBinding, SpawnedShallow, TopologyRun};
 pub use topology::{TopologyPreset, WaitPolicy, TOPOLOGY_PRESETS};

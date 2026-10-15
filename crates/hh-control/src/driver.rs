@@ -335,6 +335,27 @@ pub trait LedgerSink {
     fn now_ms(&self) -> Option<u64> {
         None
     }
+    /// The fenced-writer seam a `DelegatePort` needs (R3.3): the run's
+    /// store + writer lease. The child-lease substrate mints *child runs*
+    /// (`open_run`) — an op `append` cannot express — so the spawn seam
+    /// hands the port the same store/lease the sink appends under (one
+    /// fenced writer, CC3 ordering preserved: the port's rows land durable
+    /// before the driver's next decision). `None` (the default — replay
+    /// sinks and recorders without a live store) means an admitted
+    /// `delegate` decision fails `UnbackedPort{kind: "delegate"}` — a
+    /// typed refusal, never a silent skip.
+    fn store_seam(&mut self) -> Option<StoreSeam<'_>> {
+        None
+    }
+}
+
+/// The fenced-writer half of `LedgerSink` — the run's store + the writer
+/// lease every spawned row commits under.
+pub struct StoreSeam<'a> {
+    /// The run's store.
+    pub store: &'a mut hh_ledger::store::Store,
+    /// The parent's writer lease.
+    pub lease: &'a hh_ledger::store::Lease,
 }
 
 /// The compaction boundary (R-2.4.2's `compact` driver — §5c.2; the S2.11
@@ -436,6 +457,56 @@ pub trait VerifyPort {
         validator_refs: &[String],
         subject: &Json,
     ) -> Vec<hh_verification::validators::Verdict>;
+}
+
+/// The decision-point delegation boundary (R-2.6.3; R3.3) — the admitted
+/// `delegate` decision's execution seam. The port binds the child-lease
+/// substrate (`hh-subagent`'s `spawn` through the holder's `ParentBinding`)
+/// — it owns no model/env handles itself; everything it confers is
+/// attenuated from the parent's live authority (CC2: the decision *asks*,
+/// the lease *confers*). The driver hands the port the `control.decision`
+/// row's `EventRef` (the idempotency key's decision half) and the
+/// decision's owner stamp (`model` ⇒ `delegation_reason` is a
+/// `model_claim`); the port answers the outcome it actually produced —
+/// spawned rows or the typed refusal — durable-before-visible through the
+/// [`StoreSeam`].
+pub trait DelegatePort {
+    /// Execute `delegate{spec, budget_slice, permissions}` under the
+    /// parent's writer lease. The port parses `spec` through the one
+    /// canonical `SubagentSpec` codec and spawns; a malformed ask or a
+    /// substrate refusal is [`DelegateOutcome::Refused`] — the run
+    /// continues and β owns the next decision.
+    fn delegate(
+        &mut self,
+        seam: StoreSeam<'_>,
+        decision_ref: &EventRef,
+        owner: Owner,
+        spec: &Json,
+        budget_slice: &Json,
+        permissions: &Json,
+    ) -> DelegateOutcome;
+}
+
+/// What `DelegatePort::delegate` produced.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DelegateOutcome {
+    /// `control.subagent.spawned` + the child-lease rows landed durable;
+    /// `child_run_id` is the minted child scope (the `child_terminal`
+    /// subscription is the substrate's own step).
+    Spawned {
+        /// The minted child run.
+        child_run_id: String,
+    },
+    /// The typed refusal (the `SpawnRefused` class spelling or a typed
+    /// parse failure like `malformed_subagent_spec` — the ask is recorded
+    /// on the decision row; the refusal returns to β as
+    /// `envelope_signal{refused}`).
+    Refused {
+        /// The refusal class spelling.
+        class: String,
+        /// The bounded detail the refusal carries.
+        detail: String,
+    },
 }
 
 /// A guard-fired nudge `HarnessRule` awaiting its T-LCD-13 `followed` row —
@@ -678,6 +749,13 @@ pub struct DriverConfig {
     /// The plan-schema validator ref (`control.plan.emitted`'s
     /// `schema_validator_ref` member).
     pub plan_schema_ref: String,
+    /// The declared delegation surface (R-2.6.3; R3.3): a validated call
+    /// on this surface is a model-emitted delegation *ask* — the driver
+    /// ledgers `control.delegate.proposed{tool_call_id, spec}` (the
+    /// `hh.plan`/`control.plan.emitted` analogue) and the steerable
+    /// interpreter folds it into the `delegate` decision it owns. `None`
+    /// ⇒ no delegation surface is declared.
+    pub delegate_surface_id: Option<String>,
     /// Whether the binding declares the R-2.6.3 delegation capability
     /// (ADR-0186 D4; the `capabilities_available` binding — `false` ⇒ a
     /// `delegate` decision refuses `DelegationUnavailable`, T0). Default
@@ -745,6 +823,7 @@ impl Default for DriverConfig {
             holds_cap: hh_verification::gate::DEFAULT_HOLDS_CAP,
             plan_surface_id: None,
             plan_schema_ref: crate::plan_exec::PLAN_SCHEMA_REF.to_string(),
+            delegate_surface_id: None,
             delegation_available: false,
             compute_policy_ref: "static".to_string(),
             compute_facts: crate::compute::ComputeFacts::default(),
@@ -837,6 +916,11 @@ pub struct Driver<S: ControlStrategy> {
     /// `None` ⇒ a `verify` decision fails `DriverError::UnbackedPort` — a
     /// declared verification never silently passes).
     verify_port: Option<Box<dyn VerifyPort>>,
+    /// The delegation boundary (R-2.6.3; R3.3) — `set_delegate_port` wires
+    /// it. `None` ⇒ an admitted `delegate` decision fails
+    /// `UnbackedPort{kind: "delegate"}` (a declared spawn never silently
+    /// resolves).
+    delegate_port: Option<Box<dyn DelegatePort>>,
     /// The memory/context producer port (R-2.4.3 — `retrieve{query}`,
     /// `trigger{path_touched}`, `resume_set` consumption and
     /// `mark_scope_ended` at the run's end). `None` ⇒ a `retrieve`
@@ -973,6 +1057,7 @@ impl<S: ControlStrategy> Driver<S> {
             last_model_call_id: None,
             compaction_port: None,
             verify_port: None,
+            delegate_port: None,
             memory_port: None,
             routing_port: None,
             cache_port: None,
@@ -1089,6 +1174,7 @@ impl<S: ControlStrategy> Driver<S> {
             last_model_call_id: None,
             compaction_port: None,
             verify_port: None,
+            delegate_port: None,
             memory_port: None,
             routing_port: None,
             cache_port: None,
@@ -1230,6 +1316,7 @@ impl<S: ControlStrategy> Driver<S> {
             last_model_call_id,
             compaction_port: None,
             verify_port: None,
+            delegate_port: None,
             memory_port: None,
             routing_port: None,
             cache_port: None,
@@ -1628,6 +1715,14 @@ impl<S: ControlStrategy> Driver<S> {
     /// passes).
     pub fn set_verify_port(&mut self, port: Box<dyn VerifyPort>) {
         self.verify_port = Some(port);
+    }
+
+    /// `set_delegate_port` — wire the delegation boundary (R-2.6.3; R3.3).
+    /// Same contract as `verify`: the driver's admitted `delegate`
+    /// decision dispatches to the port; absent, the decision fails
+    /// `UnbackedPort{kind: "delegate"}`.
+    pub fn set_delegate_port(&mut self, port: Box<dyn DelegatePort>) {
+        self.delegate_port = Some(port);
     }
 
     /// `set_memory_port` — wire the context/memory producer boundary
@@ -2391,9 +2486,49 @@ impl<S: ControlStrategy> Driver<S> {
                 }
                 self.inbox.push_back(Cue::RetrievalCompleted);
             }
-            DecisionKind::Delegate { .. } => {
-                // C1+ decision kinds — no Stage-2 variant emits them; a
-                // staged variant parks before this point.
+            DecisionKind::Delegate {
+                spec,
+                budget_slice,
+                permissions,
+                ..
+            } => {
+                // R3.3 — the admitted `delegate` dispatches to the
+                // delegation boundary: the port runs the child-lease
+                // substrate under the same fenced writer (`store_seam`),
+                // landing `control.subagent.spawned` + the grant rows
+                // durable-before-visible (CC2/CC3). No wired port or no
+                // `store_seam` ⇒ `UnbackedPort`; a typed refusal returns
+                // to β as `envelope_signal{refused}` — the strategy owns
+                // the next decision (F2).
+                let owner = decision.stamp.owner;
+                let decision_ref = self.last_decision_ref.clone().unwrap_or_else(|| EventRef {
+                    run_id: self.run_id.clone(),
+                    event_id: String::new(),
+                });
+                let Some(seam) = sink.store_seam() else {
+                    return Err(DriverError::UnbackedPort { kind: "delegate" });
+                };
+                let port = self
+                    .delegate_port
+                    .as_mut()
+                    .ok_or(DriverError::UnbackedPort { kind: "delegate" })?;
+                match port.delegate(
+                    seam,
+                    &decision_ref,
+                    owner,
+                    &spec,
+                    &budget_slice,
+                    &permissions,
+                ) {
+                    DelegateOutcome::Spawned { .. } => {}
+                    DelegateOutcome::Refused { class, detail } => {
+                        self.inbox
+                            .push_back(Cue::EnvelopeSignal(EnvelopeSignal::Refused {
+                                decision_ref: decision_ref.event_id.clone(),
+                                reason: format!("{class}:{detail}"),
+                            }));
+                    }
+                }
             }
             DecisionKind::Stop { .. } => {
                 // Handled in `run` before `execute`.
@@ -2578,6 +2713,34 @@ impl<S: ControlStrategy> Driver<S> {
                                 &steps,
                                 reason,
                             ),
+                            Some(&mc),
+                        )?;
+                        continue;
+                    }
+                    // A call on the declared delegation surface is a
+                    // model-emitted delegation *ask*, not an effect
+                    // intent — the driver ledgers the bounded `spec`
+                    // (`control.delegate.proposed` — the
+                    // `hh.plan`/`control.plan.emitted` analogue, R3.3)
+                    // and the steerable fold turns it into the `delegate`
+                    // decision the model owns. The args ARE the ask
+                    // (the spec record, bounded at the wire); the spawn
+                    // kernel's `SubagentSpec` parse is the authoritative
+                    // validation — the row records what was asked, never
+                    // a kernel-guessed shape.
+                    if self
+                        .config
+                        .delegate_surface_id
+                        .as_deref()
+                        .is_some_and(|p| p == c.surface_id.as_str())
+                    {
+                        self.append(
+                            sink,
+                            "control.delegate.proposed",
+                            Json::obj([
+                                ("tool_call_id", Json::str(&c.tool_call_id)),
+                                ("spec", c.args.clone()),
+                            ]),
                             Some(&mc),
                         )?;
                         continue;
