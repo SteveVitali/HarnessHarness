@@ -589,7 +589,12 @@ version = "0.0.1"
 dependencies = [
  "hh-control",
  "hh-embed-schema",
+ "hh-hir",
+ "hh-identity",
+ "hh-ontology",
+ "hh-provenance",
  "hh-varhost",
+ "hh-verification",
  "hh-wire",
 ]
 

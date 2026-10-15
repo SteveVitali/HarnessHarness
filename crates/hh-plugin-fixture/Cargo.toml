@@ -15,3 +15,8 @@ hh-wire = { path = "../hh-wire" }
 hh-embed-schema = { path = "../hh-embed-schema" }
 hh-varhost = { path = "../hh-varhost" }
 hh-control = { path = "../hh-control" }
+hh-verification = { path = "../hh-verification" }
+hh-provenance = { path = "../hh-provenance" }
+hh-identity = { path = "../hh-identity" }
+hh-hir = { path = "../hh-hir" }
+hh-ontology = { path = "../hh-ontology" }

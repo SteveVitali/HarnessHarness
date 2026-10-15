@@ -489,6 +489,14 @@ pub enum DriverError {
         /// The kill point that fired.
         at: String,
     },
+    /// A `belief_probe` `ProfileRule` on the sealed profile is malformed
+    /// (R2.15/ADR-0316 — a declared probe without its assumption-debt
+    /// record refuses `open`/`resume` typed; the rule is never silently
+    /// dropped).
+    MalformedProfileRule {
+        /// The offending rule.
+        rule_id: String,
+    },
 }
 
 impl std::fmt::Display for DriverError {
@@ -501,6 +509,9 @@ impl std::fmt::Display for DriverError {
             DriverError::Restore(e) => write!(f, "restore{{{e}}}"),
             DriverError::UnbackedPort { kind } => write!(f, "unbacked_port{{{kind}}}"),
             DriverError::FaultInjected { at } => write!(f, "fault_injected{{{at}}}"),
+            DriverError::MalformedProfileRule { rule_id } => {
+                write!(f, "malformed_profile_rule{{{rule_id}}}")
+            }
         }
     }
 }
@@ -865,6 +876,14 @@ pub struct Driver<S: ControlStrategy> {
     /// The completion claims `emit_completion_claims` recorded on this
     /// `stop{completed}` (the gate reconciles them — S3.10).
     completion_claims: Vec<hh_verification::claims::Claim>,
+    /// The decoded `belief_probe` `ProfileRule`s off the sealed profile
+    /// projection (R2.15/ADR-0316 — the rule *is* the emitter: each
+    /// `model.call.completed` fires the deterministic rules over the
+    /// recorded `calls[].args_raw` belief fields; judged rules are
+    /// declared-only here — the judged stratum needs the critic leg,
+    /// DF-S1.21-3). A malformed rule refuses `open` typed, never a
+    /// silent drop.
+    belief_probe_rules: Vec<hh_verification::belief_probe::ProbeRule>,
     /// The exposure run state (R2.8) — `Some` only when
     /// `config.exposure` is armed; minted lazily at the first `propose`
     /// by folding the durable prefix (`fold_exposure_state` — open,
@@ -885,6 +904,19 @@ impl<S: ControlStrategy> Driver<S> {
         let (envelope, envelope_state) =
             Envelope::arm(policy, sink.prefix()).map_err(|e| DriverError::Arm(e.to_string()))?;
         let state = strategy.open(ctx).map_err(DriverError::Open)?;
+        // R2.15 (ADR-0316) — decode the profile's `belief_probe` rules once;
+        // a malformed rule refuses the constructor typed (a conditioned
+        // rule is never silently dropped).
+        let belief_probe_rules =
+            hh_verification::belief_probe::probe_rules(&ctx.profile).map_err(|e| {
+                DriverError::MalformedProfileRule {
+                    rule_id: match e {
+                        hh_verification::belief_probe::ProbeRuleError::DebtMissing { rule_id } => {
+                            rule_id
+                        }
+                    },
+                }
+            })?;
         let mut inbox = std::collections::VecDeque::new();
         inbox.push_back(Cue::RunOpened {
             goal_ref: ctx.process_ref.clone(),
@@ -955,6 +987,7 @@ impl<S: ControlStrategy> Driver<S> {
             kill_point: None,
             random_draws: 0,
             completion_claims: vec![],
+            belief_probe_rules,
             exposure_state: None,
         })
     }
@@ -976,6 +1009,20 @@ impl<S: ControlStrategy> Driver<S> {
     ) -> Result<Driver<S>, DriverError> {
         // A placeholder state — `resume` overwrites it from the checkpoint.
         let state = strategy.open(ctx).map_err(DriverError::Open)?;
+        // R2.15 (ADR-0316) — decode the profile's `belief_probe` rules once;
+        // a malformed rule refuses the constructor typed (a conditioned
+        // rule is never silently dropped).
+        let belief_probe_rules =
+            hh_verification::belief_probe::probe_rules(&ctx.profile).map_err(|e| {
+                DriverError::MalformedProfileRule {
+                    rule_id: match e {
+                        hh_verification::belief_probe::ProbeRuleError::DebtMissing { rule_id } => {
+                            rule_id
+                        }
+                    },
+                }
+            })?;
+
         let (envelope, envelope_state) = Envelope::arm(policy.clone(), sink.prefix())
             .map_err(|e| DriverError::Arm(e.to_string()))?;
         // The emitted compute records — re-folded from the prefix so a
@@ -1060,6 +1107,7 @@ impl<S: ControlStrategy> Driver<S> {
                 .filter(|e| e.class == "control.random.read")
                 .count() as u64,
             completion_claims: vec![],
+            belief_probe_rules,
             // Re-folded lazily from the durable prefix at the first armed
             // `propose` (`exposure_plan_call` — CC3).
             exposure_state: None,
@@ -1145,6 +1193,19 @@ impl<S: ControlStrategy> Driver<S> {
                     .and_then(Json::as_str)
                     .map(str::to_string)
             });
+        // R2.15 (ADR-0316) — decode the profile's `belief_probe` rules once;
+        // a malformed rule refuses the constructor typed (a conditioned
+        // rule is never silently dropped).
+        let belief_probe_rules =
+            hh_verification::belief_probe::probe_rules(&ctx.profile).map_err(|e| {
+                DriverError::MalformedProfileRule {
+                    rule_id: match e {
+                        hh_verification::belief_probe::ProbeRuleError::DebtMissing { rule_id } => {
+                            rule_id
+                        }
+                    },
+                }
+            })?;
         Ok(Driver {
             envelope,
             envelope_state,
@@ -1183,6 +1244,7 @@ impl<S: ControlStrategy> Driver<S> {
             kill_point: None,
             random_draws: 0,
             completion_claims: vec![],
+            belief_probe_rules,
             exposure_state: None,
         })
     }
@@ -2705,6 +2767,12 @@ impl<S: ControlStrategy> Driver<S> {
                     Json::obj(completed_members),
                     Some(&mc),
                 )?;
+                // R2.15 (ADR-0316) — the `belief_probe` ProfileRule firing:
+                // the step's declared belief fields ride the *recorded*
+                // model_io (`calls[].args_raw` on the completed row), so
+                // `requires_observability = model_io` holds exactly when
+                // the parsed calls are ledgered — which they are here.
+                self.emit_belief_probes(sink, &mc, &outcome)?;
                 // K5 — a completed call writes its served artifacts under
                 // the key (idempotent — the canonical key fixes the value;
                 // a served hit never re-records).
@@ -2732,6 +2800,114 @@ impl<S: ControlStrategy> Driver<S> {
         }
         let _ = proposed_tool_calls;
         Ok(())
+    }
+
+    /// R2.15 (ADR-0316) — the `belief_probe` emitter: fire each decoded
+    /// deterministic probe rule over the step's recorded `calls[].args_raw`
+    /// belief fields and append one `verification.belief.probe` row per
+    /// elicitation (`provisional` is constitutive on the record;
+    /// `charged_to = subject` — the elicitation rides the model's own
+    /// output). `judged` probe rules are skipped here — their comparison
+    /// needs the critic leg (DF-S1.21-3); a run without probe rules mints
+    /// nothing (the class stays ablatable).
+    fn emit_belief_probes(
+        &mut self,
+        sink: &mut dyn LedgerSink,
+        mc: &str,
+        outcome: &ModelOutcome,
+    ) -> Result<(), DriverError> {
+        use hh_verification::belief_probe as probes;
+        if self
+            .belief_probe_rules
+            .iter()
+            .all(|r| r.detector != "deterministic")
+        {
+            return Ok(());
+        }
+        // Rules are cloned up front so `self` is free for the appends.
+        let rules: Vec<probes::ProbeRule> = self
+            .belief_probe_rules
+            .iter()
+            .filter(|r| r.detector == "deterministic")
+            .cloned()
+            .collect();
+        let mut index = 0usize;
+        for call in &outcome.calls {
+            let Ok(args) = hh_wire::json::parse(&call.args_raw) else {
+                continue;
+            };
+            for rule in &rules {
+                for item in probes::elicit(&args, &rule.field) {
+                    let observed =
+                        Self::resolve_belief_subject(sink.prefix(), &item.subject, &item.member);
+                    let rec = probes::fire(rule, mc, index, &item, observed);
+                    index += 1;
+                    self.append(sink, probes::BELIEF_PROBE_CLASS, rec.to_json(), Some(mc))?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Resolve a probe `subject` spelling against the durable prefix —
+    /// `effect:<id>` → the latest `action.effect.observed` row scoped to
+    /// the effect; `call:<tool_call_id>` → the same, two hops through the
+    /// call's `intended`/`committed` `intent.tool_call_id` join (the model
+    /// knows the call id it minted, never the kernel's `ef-N`); `verdict:
+    /// <id>` → the latest `verification.validator.verdict` row naming the
+    /// id. The resolved handle is the durable *row* (`row:<event_id>` —
+    /// kernel-authoritative, never model text, F7); the compared value is
+    /// `payload[member]`. Unknown spellings, unmatched rows and absent
+    /// members all resolve `None` — an unresolved handle is no divergence
+    /// (the record's `observed_ref` stays absent rather than fabricating a
+    /// comparison).
+    fn resolve_belief_subject(
+        prefix: &[EventEnvelope],
+        subject: &str,
+        member: &str,
+    ) -> Option<(Json, String)> {
+        let observed_for = |effect_id: &str| {
+            prefix.iter().rev().find(|e| {
+                e.class == "action.effect.observed"
+                    && e.scope.effect_id.as_deref() == Some(effect_id)
+            })
+        };
+        let row = if let Some(id) = subject.strip_prefix("effect:") {
+            observed_for(id)
+        } else if let Some(id) = subject.strip_prefix("call:") {
+            let effect_id = prefix
+                .iter()
+                .rev()
+                .find(|e| {
+                    matches!(
+                        e.class.as_str(),
+                        "action.effect.intended" | "action.effect.committed"
+                    ) && e
+                        .payload
+                        .get("intent")
+                        .and_then(|i| i.get("tool_call_id"))
+                        .and_then(Json::as_str)
+                        == Some(id)
+                })
+                .and_then(|e| {
+                    e.scope.effect_id.clone().or_else(|| {
+                        e.payload
+                            .get("effect_id")
+                            .and_then(Json::as_str)
+                            .map(str::to_string)
+                    })
+                })?;
+            observed_for(&effect_id)
+        } else if let Some(id) = subject.strip_prefix("verdict:") {
+            prefix.iter().rev().find(|e| {
+                e.class == "verification.validator.verdict"
+                    && e.payload.get("verdict_id").and_then(Json::as_str) == Some(id)
+            })
+        } else {
+            None
+        }?;
+        let value = row.payload.get(member)?.clone();
+        Some((value, format!("row:{}", row.event_id)))
     }
 
     /// The routed lane's failure consult (R-2.7; ADR-0122 d.1–d.3): the
@@ -4337,12 +4513,87 @@ impl<S: ControlStrategy> Driver<S> {
                 self.duration_stamp_ms(sink, "lifecycle.turn.started", "started_at_ms"),
             );
         }
+        // R2.15 (DF-S1.21-2) — computed metrics emit on the live run: the
+        // deterministic per-run fold (`evalfold::compute` over the durable
+        // prefix — claim/reconciled/gate/decided rows all landed by now)
+        // appends one `measurement.metric.emitted` per registered ADR-0114
+        // D1 metric in the typed `MetricValue` form, `n/a{reason}`
+        // first-class (AC-R-2.7.2a-7 — never a silent zero).
+        // `detector = deterministic`, `oracle_ref = oracle/evalfold`,
+        // `applies_to` the run; the rows precede `run.finished` so the
+        // finished row stays the run's terminal.
+        self.emit_computed_metrics(sink)?;
         self.append(sink, "lifecycle.run.finished", finished, None)?;
         Ok(FinishOutcome::Done(RunResult {
             report,
             drain,
             decision_events: self.decision_events.clone(),
         }))
+    }
+
+    /// R2.15 (DF-S1.21-2) — the live-run computed-metric emission: fold the
+    /// durable prefix through `hh_verification::evalfold::compute` and append
+    /// one `measurement.metric.emitted` per registered metric (the typed
+    /// `hh_ontology::eval::MetricValue` — `n/a{reason}` is a recorded value,
+    /// not an omission). `Profile` folds render as `vector` values; the
+    /// evalfold's free-form NA reasons map onto the closed `NaReason` sum
+    /// (`observability`/`no_evidence` → `observability` — the evidence
+    /// observability the metric required was absent on this run).
+    fn emit_computed_metrics(&mut self, sink: &mut dyn LedgerSink) -> Result<(), DriverError> {
+        use hh_ontology::compliance::NaReason;
+        use hh_ontology::eval::{MetricValue, MetricValueKind};
+        use hh_verification::evalfold;
+        let rows: Vec<hh_verification::bind::RowView> = sink
+            .prefix()
+            .iter()
+            .map(|e| hh_verification::bind::RowView {
+                seq: e.seq,
+                class: e.class.as_str(),
+                payload: &e.payload,
+                authority: e
+                    .provenance
+                    .as_ref()
+                    .map(|p| p.authority)
+                    .unwrap_or_else(|| {
+                        if e.producer.component_class == hh_ledger::event::KERNEL_COMPONENT {
+                            hh_provenance::authority::AuthorityClass::Kernel
+                        } else {
+                            hh_provenance::authority::AuthorityClass::Unverified
+                        }
+                    }),
+                scope_effect_id: e.scope.effect_id.as_deref(),
+            })
+            .collect();
+        let run_ref = format!("run:{}", self.ledger_run_id);
+        for m in evalfold::compute(&rows) {
+            let value = match &m.value {
+                evalfold::MetricValue::Ppm(p) => MetricValueKind::Decimal(*p),
+                evalfold::MetricValue::Count(c) => MetricValueKind::Decimal(*c as i64),
+                evalfold::MetricValue::Profile(prof) => {
+                    let mut m = std::collections::BTreeMap::new();
+                    for (k, v) in prof {
+                        m.insert(k.clone(), Json::Int(*v));
+                    }
+                    MetricValueKind::Vector(Json::Obj(m))
+                }
+                evalfold::MetricValue::NA(reason) => {
+                    MetricValueKind::Na(NaReason::parse(reason).unwrap_or(NaReason::Observability))
+                }
+            };
+            let emitted = MetricValue {
+                metric_ref: m.name.clone(),
+                value,
+                applies_to: run_ref.clone(),
+                oracle_ref: "oracle/evalfold".to_string(),
+                detector: hh_ontology::compliance::Detector::Deterministic,
+                confidence: None,
+                evidence_ref: None,
+                calibration_ref: None,
+                exploratory: None,
+            };
+            self.append(sink, "measurement.metric.emitted", emitted.to_json(), None)?;
+        }
+        Ok(())
     }
 
     /// The completion gate call site (§5f.2 §3; DF-S1.21-1's emitter half —
@@ -5072,7 +5323,13 @@ impl<S: ControlStrategy> Driver<S> {
                 // the turn chain, not inside it (`run.finished` lands after
                 // `turn.finished` closed the turn scope, so a `turn_id`
                 // stamp would trip the ledger's `ScopeNotOpen` gate).
-                turn_id: if class.starts_with("lifecycle.run.") {
+                // `measurement.metric.emitted` is the same case — the
+                // computed fold emits at `finish`, after the turn scope
+                // closed (the class is registered unscoped; `applies_to`
+                // carries the run ref, not the scope set).
+                turn_id: if class.starts_with("lifecycle.run.")
+                    || class == "measurement.metric.emitted"
+                {
                     None
                 } else {
                     Some("turn-1".into())
@@ -7477,6 +7734,355 @@ mod tests {
             stop_row.payload.get("decider").and_then(Json::as_str),
             Some("envelope")
         );
+    }
+
+    // ── R2.15 — belief-probe emitters (ADR-0316) + live-run metrics ──────
+
+    fn profile_with_belief_probe(detector: &str, debt: bool) -> Json {
+        let mut rule = vec![
+            ("kind", Json::str("belief_probe")),
+            ("rule_id", Json::str("rule/bp-1")),
+            (
+                "params",
+                Json::obj([
+                    ("field", Json::str("beliefs")),
+                    ("detector", Json::str(detector)),
+                ]),
+            ),
+        ];
+        if debt {
+            rule.push(("debt", Json::obj([("id", Json::str("debt/bp-1"))])));
+        }
+        Json::obj([
+            ("profile_id", Json::str("profile/test")),
+            ("version", Json::str("1")),
+            (
+                "rules",
+                Json::Arr(vec![Json::Obj(
+                    rule.into_iter().map(|(k, v)| (k.to_string(), v)).collect(),
+                )]),
+            ),
+        ])
+    }
+
+    fn probe_ctx(profile: Json) -> ControlContext {
+        let mut c = ctx();
+        c.profile = profile;
+        c
+    }
+
+    /// ADR-0316 — a `belief_probe` `ProfileRule` fires on the recorded
+    /// `model_io`: the step's elicited beliefs resolve against the durable
+    /// prefix and emit `verification.belief.probe` rows (`provisional`
+    /// constitutive). A resolved mismatch is `divergent`; an unresolved
+    /// handle carries no `observed_ref` — never a fabricated comparison.
+    #[test]
+    fn belief_probe_rules_emit_rows_over_recorded_model_io() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver = Driver::open_react(
+            &probe_ctx(profile_with_belief_probe("deterministic", true)),
+            policy,
+            &mut sink,
+            DriverConfig {
+                surfaces: vec![SurfaceSpec {
+                    surface_id: "fs.read".into(),
+                    semantic_id: "sem/fs.read".into(),
+                    params: [
+                        (
+                            "path".into(),
+                            crate::output::ParamSpec {
+                                required: true,
+                                kind: crate::output::ParamKind::Str,
+                                enum_values: vec![],
+                                domain: vec![],
+                            },
+                        ),
+                        // The per-step belief-probe field is a *declared*
+                        // surface member (profile-owned `ProfileRule`s
+                        // compile onto the surface — §5f §2's claim-surface
+                        // row); an undeclared member is a schema violation,
+                        // never silently elicited.
+                        (
+                            "beliefs".into(),
+                            crate::output::ParamSpec {
+                                required: false,
+                                kind: crate::output::ParamKind::Arr,
+                                enum_values: vec![],
+                                domain: vec![],
+                            },
+                        ),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    risk_class: None,
+                }],
+                ..DriverConfig::default()
+            },
+        )
+        .unwrap();
+        // Call 1: a real tool call plus beliefs that *cannot* resolve yet
+        // (the probe fires at `model.call.completed`, before `ef-1` is
+        // observed — `observed_ref` absent, never a fabricated comparison).
+        // Call 2 — after `ef-1`'s `observed{outcome: applied}` landed —
+        // asserts a *mismatched* member (divergent, citing the durable
+        // row). Call 3 ends the turn.
+        let early = r#"{"path":"/a","beliefs":[
+            {"subject":"effect:ef-1","member":"outcome","value":"ok"},
+            {"subject":"effect:none","member":"outcome","value":"ok"}
+        ]}"#;
+        let late = r#"{"path":"/b","beliefs":[
+            {"subject":"call:tc-1","member":"outcome","value":"error"}
+        ]}"#;
+        let mut model = ScriptedModel {
+            script: [
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-1".into(),
+                        surface: "fs.read".into(),
+                        args_raw: early.into(),
+                    }],
+                ),
+                outcome(
+                    hh_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-2".into(),
+                        surface: "fs.read".into(),
+                        args_raw: late.into(),
+                    }],
+                ),
+                outcome(hh_gateway::vocab::StopReason::EndTurn, vec![]),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        // `submission_ref: None` — the observed effects never complete the
+        // run; the scripted `EndTurn` owns the stop so all three calls
+        // reach the probe emitter.
+        let mut gate = ScriptedGate {
+            out: GateOutcome {
+                outcome: SettledOutcome::Observed {
+                    outcome: "applied".into(),
+                },
+                submission_ref: None,
+                error_class: None,
+                emitted: Vec::new(),
+            },
+            finish: None,
+        };
+        let mut asm = NullAssembler;
+        let _ = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        let probes: Vec<&Json> = sink
+            .events
+            .iter()
+            .filter(|e| e.class == "verification.belief.probe")
+            .map(|e| &e.payload)
+            .collect();
+        assert_eq!(probes.len(), 3, "one row per elicited belief item");
+        let divergent = probes
+            .iter()
+            .find(|p| p.get("divergent") == Some(&Json::Bool(true)))
+            .expect("the mismatched elicitation resolves divergent");
+        assert_eq!(
+            divergent.get("rule_id").and_then(Json::as_str),
+            Some("rule/bp-1")
+        );
+        assert_eq!(
+            divergent.get("conditioned_on").and_then(Json::as_str),
+            Some("profile/test@1")
+        );
+        assert_eq!(
+            divergent.get("detector").and_then(Json::as_str),
+            Some("deterministic")
+        );
+        assert!(
+            divergent
+                .get("observed_ref")
+                .and_then(Json::as_str)
+                .is_some_and(|r| r.starts_with("row:")),
+            "a resolved probe cites the durable row, never model text"
+        );
+        let unresolved: Vec<&&Json> = probes
+            .iter()
+            .filter(|p| p.get("divergent") == Some(&Json::Bool(false)))
+            .collect();
+        assert_eq!(
+            unresolved.len(),
+            2,
+            "the pre-observation and absent-handle items emit unresolved"
+        );
+        for u in &unresolved {
+            assert_eq!(
+                u.get("observed_ref"),
+                Some(&Json::Null),
+                "an unresolved handle fabricates no comparison — observed_ref stays null"
+            );
+        }
+        for p in &probes {
+            assert_eq!(
+                p.get("provisional"),
+                Some(&Json::Bool(true)),
+                "provisional is constitutive"
+            );
+        }
+    }
+
+    /// A `belief_probe` rule without its assumption-debt record refuses
+    /// `open` typed — a conditioned rule is never silently dropped.
+    #[test]
+    fn a_debtless_belief_probe_rule_refuses_open() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let r = Driver::open_react(
+            &probe_ctx(profile_with_belief_probe("deterministic", false)),
+            policy,
+            &mut sink,
+            DriverConfig::default(),
+        );
+        assert!(
+            matches!(
+                r,
+                Err(DriverError::MalformedProfileRule { ref rule_id })
+                    if rule_id == "rule/bp-1"
+            ),
+            "got {:?}",
+            r.map(|_| ())
+        );
+    }
+
+    /// A `judged` probe rule is declared but never fired by the
+    /// deterministic emitter (DF-S1.21-3's honest stratum) — the run
+    /// completes with zero `verification.belief.probe` rows.
+    #[test]
+    fn a_judged_probe_rule_is_declared_not_fired() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver = Driver::open_react(
+            &probe_ctx(profile_with_belief_probe("judged", true)),
+            policy,
+            &mut sink,
+            DriverConfig::default(),
+        )
+        .unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(
+                hh_gateway::vocab::StopReason::EndTurn,
+                vec![ParsedCall {
+                    tool_call_id: "tc-1".into(),
+                    surface: "fs.read".into(),
+                    args_raw: r#"{"beliefs":[{"subject":"effect:x","member":"o","value":1}]}"#
+                        .into(),
+                }],
+            )]
+            .into_iter()
+            .collect(),
+        };
+        let mut gate = ScriptedGate {
+            out: GateOutcome {
+                outcome: SettledOutcome::Observed {
+                    outcome: "applied".into(),
+                },
+                submission_ref: Some("sub-1".into()),
+                error_class: None,
+                emitted: Vec::new(),
+            },
+            finish: None,
+        };
+        let mut asm = NullAssembler;
+        let _ = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        assert!(
+            sink.events
+                .iter()
+                .all(|e| e.class != "verification.belief.probe"),
+            "a judged probe never fires deterministically"
+        );
+    }
+
+    /// R2.15 (DF-S1.21-2) — computed metrics emit on a live run: the
+    /// deterministic `evalfold` fold appends `measurement.metric.emitted`
+    /// rows in the typed `MetricValue` form before `run.finished` —
+    /// `n/a{reason}` recorded, never a silent zero.
+    #[test]
+    fn a_finished_run_emits_computed_metrics() {
+        let mut sink = MemSink {
+            events: vec![],
+            seq: 0,
+        };
+        let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+        let mut driver =
+            Driver::open_react(&ctx(), policy, &mut sink, DriverConfig::default()).unwrap();
+        let mut model = ScriptedModel {
+            script: [outcome(hh_gateway::vocab::StopReason::EndTurn, vec![])]
+                .into_iter()
+                .collect(),
+        };
+        let mut gate = observed_gate();
+        let mut asm = NullAssembler;
+        let _ = driver
+            .run(&mut model, &mut gate, &mut asm, &mut sink)
+            .unwrap();
+        let metrics: Vec<&Json> = sink
+            .events
+            .iter()
+            .filter(|e| e.class == "measurement.metric.emitted")
+            .map(|e| &e.payload)
+            .collect();
+        assert!(
+            !metrics.is_empty(),
+            "the registered ADR-0114 D1 metrics emit on the live run"
+        );
+        for m in &metrics {
+            assert!(m.get("metric_ref").and_then(Json::as_str).is_some());
+            assert_eq!(
+                m.get("detector").and_then(Json::as_str),
+                Some("deterministic")
+            );
+            assert_eq!(
+                m.get("oracle_ref").and_then(Json::as_str),
+                Some("oracle/evalfold")
+            );
+            let value = m.get("value").expect("typed value");
+            assert!(
+                value.get("kind").and_then(Json::as_str).is_some(),
+                "the typed MetricValue form — never a bare number: {m:?}"
+            );
+        }
+        // The honest absence: a metric with no evidence emits the typed
+        // `n/a` cell, never zero.
+        assert!(
+            metrics.iter().any(|m| {
+                m.get("value")
+                    .and_then(|v| v.get("kind"))
+                    .and_then(Json::as_str)
+                    == Some("na")
+            }),
+            "a bare run carries n/a metrics — recorded, not silent"
+        );
+        // The metric rows precede the run's terminal.
+        let finished_pos = sink
+            .events
+            .iter()
+            .position(|e| e.class == "lifecycle.run.finished")
+            .expect("run.finished");
+        assert!(sink
+            .events
+            .iter()
+            .take(finished_pos)
+            .any(|e| e.class == "measurement.metric.emitted"));
     }
 
     /// AC-R-2.7.1 — `verify{validator_refs, subject}` runs the port and
