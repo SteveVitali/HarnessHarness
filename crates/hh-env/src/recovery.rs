@@ -229,6 +229,30 @@ pub enum HealOutcome {
     },
 }
 
+/// What `heal_handle` did — the env-handle-level outcome (R-2.5.5's
+/// `heal(env_handle)`; ADR-0136 §6's `reattach → resume → replace per
+/// on_loss` ladder; R3.2).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HandleHealOutcome {
+    /// The reattach rung: `unreachable` → `reattached` → `ready`
+    /// (`action.environment.reattached`).
+    Reattached,
+    /// The resume rung: `suspended` → `ready`
+    /// (`action.environment.resumed`).
+    Resumed,
+    /// The replace rung: the binding's `on_loss` posture minted a
+    /// successor handle — carries its `env_handle_id` (the corpse is
+    /// `replaced`, terminal).
+    Replaced {
+        /// The successor's `env_handle_id`.
+        to: String,
+    },
+    /// `on_loss = fail_run` — the handle landed `failed`
+    /// (`action.environment.failed`); the caller composes the run-level
+    /// `stop{infrastructure_failure{environment_lost}}` (ADR-0132 §2).
+    Failed,
+}
+
 /// One detached child's reconciliation (AC-R-2.2.3-14).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetachedReconciliation {
@@ -324,6 +348,107 @@ impl EnvDriver {
         Ok(verdict)
     }
 
+    /// `heal(env_handle)` — the env-handle-level heal procedure (R-2.5.5's
+    /// surface; ADR-0136 §6; R3.2): the `reattach → resume → replace per
+    /// on_loss` ladder the §5a.3 `heal(run, lease, handle, policy)` op
+    /// composes over. Every rung mints its `action.environment.*` row under
+    /// the run's writer lease through the real path (`heal`/`resume`/
+    /// `replace` — CC1, durable-before-visible).
+    ///
+    /// - `suspended` → `resume` (the handle was deliberately parked —
+    ///   hibernation is not loss).
+    /// - `unreachable` + a live session → `heal`'s reattach rung; a dead
+    ///   in-process channel with a recorded session tries `resume_helper`
+    ///   first (kernel death ≠ environment death — the preserved helper
+    ///   session still answers `hello(resume_session_id)`).
+    /// - `unreachable` + no session → `replace` per `on_loss`
+    ///   (`replace_from_image`/`replace_from_snapshot`); `fail_run` runs
+    ///   `heal`'s fail leg — the handle lands `failed` with its
+    ///   `action.environment.failed` row, never a silent corpse.
+    /// - `ready`/`provisioning`/`detached`/`failed`/`replaced` → typed
+    ///   `InvalidState` (`detached` has its own reconciliation path —
+    ///   `list_detached`/`reconcile_detached`, R-2.5.5).
+    pub fn heal_handle(
+        &mut self,
+        store: &mut Store,
+        lease: &Lease,
+        env_handle_id: &str,
+    ) -> Result<HandleHealOutcome, EnvError> {
+        let h = self
+            .handles
+            .get(env_handle_id)
+            .ok_or(EnvError::Unavailable {
+                env_handle_id: env_handle_id.to_string(),
+                state: "missing",
+            })?
+            .clone();
+        match h.state {
+            HandleState::Suspended => {
+                self.resume(store, lease, env_handle_id, "heal")?;
+                Ok(HandleHealOutcome::Resumed)
+            }
+            HandleState::Unreachable => {
+                // The reattach rung — the live-channel predicate the
+                // ladder has always used: only a live `HelperClient`
+                // reattaches (kernel death ≠ environment death is a
+                // *helper-class* arm — a surviving helper keeps the exec
+                // table under `preserve_until`). `local_host`'s recorded
+                // `EnvSession` is the in-process executor — it is a
+                // *verdict* input (`Reattachable`), never a reattach
+                // channel: a workspace-lost `local_host` replaces per
+                // `on_loss`, it does not reattach into a missing tree.
+                let live = self
+                    .sessions
+                    .get_mut(env_handle_id)
+                    .map(|c| c.is_live())
+                    .unwrap_or(false);
+                // The kernel-restart arm — a dead in-process channel with
+                // a recorded helper session may still be preserved on the
+                // surviving helper (`hello(resume_session_id)`).
+                if !live
+                    && h.class != crate::record::EnvironmentClass::LocalHost
+                    && h.session.is_some()
+                    && !self.sessions.contains_key(env_handle_id)
+                {
+                    let _ = self.resume_helper(store, env_handle_id);
+                }
+                let live = live
+                    || self
+                        .sessions
+                        .get_mut(env_handle_id)
+                        .map(|c| c.is_live())
+                        .unwrap_or(false);
+                if live {
+                    self.heal(store, lease, env_handle_id, true)?;
+                    return Ok(HandleHealOutcome::Reattached);
+                }
+                match h.on_loss {
+                    crate::handle::OnLoss::FailRun => {
+                        // The binding declares fail_run — `heal`'s fail leg
+                        // lands `failed` + `action.environment.failed`; the
+                        // returned `WindowLapsed` is the expected posture,
+                        // not an error to mask the row.
+                        match self.heal(store, lease, env_handle_id, false) {
+                            Ok(()) => Ok(HandleHealOutcome::Reattached),
+                            Err(EnvError::WindowLapsed { .. }) => Ok(HandleHealOutcome::Failed),
+                            Err(e) => Err(e),
+                        }
+                    }
+                    _ => {
+                        let succ = self.replace(store, lease, env_handle_id)?;
+                        Ok(HandleHealOutcome::Replaced {
+                            to: succ.env_handle_id,
+                        })
+                    }
+                }
+            }
+            other => Err(EnvError::InvalidState {
+                op: "heal",
+                state: other.as_str(),
+            }),
+        }
+    }
+
     /// `heal(run, lease, handle, policy)` — the policy-bound heal (§5a.3;
     /// ADR-0132 §2). `heal_no` is counted from the ledger's
     /// `action.environment.healed` rows for this handle — never from process
@@ -412,8 +537,15 @@ impl EnvDriver {
                 )
                 .map_err(EnvError::Ledger)?;
 
-            // The heal: reattach when the session still answers (kernel death ≠
-            // environment death), else `replace` per `on_loss` — a reprovision.
+            // The heal: the env-handle-level ladder (R-2.5.5's
+            // `heal(env_handle)` — `heal_handle`, one implementation, CC1):
+            // reattach when the session still answers (kernel death ≠
+            // environment death — `resume_helper` reconnects the preserved
+            // session when the in-process channel is gone), resume a
+            // suspended handle, else `replace` per `on_loss` — a
+            // reprovision. `fail_run` binds refuse as the spec's
+            // `refused{reason}` arm — the `action.environment.failed` row
+            // is already durable.
             let h = self
                 .handles
                 .get(env_handle_id)
@@ -422,27 +554,29 @@ impl EnvDriver {
                     state: "missing",
                 })?
                 .clone();
-            let session_live = self
-                .sessions
-                .get_mut(env_handle_id)
-                .map(|c| c.is_live())
-                .unwrap_or(false);
-            let (new_handle, restored) = if session_live && h.state == HandleState::Unreachable {
-                self.heal(store, lease, env_handle_id, true)?;
-                (env_handle_id.to_string(), "full".to_string())
-            } else {
-                let succ = self.replace(store, lease, env_handle_id)?;
-                let restored = if policy.on_lost == OnLost::SnapshotRestoreThenReprovision
-                    && !h.snapshots.is_empty()
-                {
-                    format!(
-                        "snapshot:{}",
-                        h.snapshots.last().cloned().unwrap_or_default()
-                    )
-                } else {
-                    "none".to_string()
-                };
-                (succ.env_handle_id.clone(), restored)
+            let outcome = self.heal_handle(store, lease, env_handle_id)?;
+            let (new_handle, restored) = match outcome {
+                HandleHealOutcome::Reattached | HandleHealOutcome::Resumed => {
+                    (env_handle_id.to_string(), "full".to_string())
+                }
+                HandleHealOutcome::Replaced { to } => {
+                    let restored = if policy.on_lost == OnLost::SnapshotRestoreThenReprovision
+                        && !h.snapshots.is_empty()
+                    {
+                        format!(
+                            "snapshot:{}",
+                            h.snapshots.last().cloned().unwrap_or_default()
+                        )
+                    } else {
+                        "none".to_string()
+                    };
+                    (to, restored)
+                }
+                HandleHealOutcome::Failed => {
+                    return Ok(HealOutcome::Refused {
+                        reason: "environment binding on_loss = fail_run".to_string(),
+                    });
+                }
             };
             // `action.environment.healed{from_handle, to_handle, cause, restored,
             // heal_no, verification_verdict}` — audit-grade (§5g.6 §3).

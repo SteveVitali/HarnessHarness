@@ -66,6 +66,26 @@ fn open(tag: &str) -> (Store, String, Lease) {
     (s, run, lease)
 }
 
+/// An agent manifest declaring the `ingress:github` `external` adapter —
+/// R3.2 (R-2.12.6) makes the S4.13 registration explicit: a non-fleet
+/// `external` subscription is admitted only where the manifest declares
+/// the adapter (`extra.ingress_adapters[]`, stamped from
+/// `connection_info.ingress_adapters` at `open_session`).
+fn manifest_with_external_ingress() -> RunManifest {
+    let mut m = RunManifest::minimal(RunKind::Agent);
+    m.extra.insert(
+        "ingress_adapters".to_string(),
+        Json::Arr(vec![Json::obj([
+            ("source_ref", Json::str("ingress:github")),
+            (
+                "triggers",
+                Json::Arr(vec![Json::str("external"), Json::str("manual")]),
+            ),
+        ])]),
+    );
+    m
+}
+
 fn row(id: &str, class: &str, payload: Json) -> Event {
     Event {
         event_id: id.to_string(),
@@ -465,7 +485,13 @@ fn ac_r_2_2_3_10_continuation_chain_and_inbox() {
 
 #[test]
 fn s4_13_schedule_external_peer_message_subscribe_occurred() {
-    let (mut s, run, lease) = open("wakes413");
+    let mut s = open_store("wakes413");
+    // The run declares its ingress adapter — R-2.12.6 admits non-fleet
+    // `external` only where `extra.ingress_adapters[]` names it (an
+    // undeclared run's subscription could never produce).
+    let (run, lease) = s
+        .open_run(manifest_with_external_ingress(), "writer-a")
+        .unwrap();
     let created = EventRef {
         run_id: run.clone(),
         event_id: s.head(&run).unwrap().event_id,
@@ -508,8 +534,9 @@ fn s4_13_schedule_external_peer_message_subscribe_occurred() {
         matches!(bad, Err(LedgerError::SchemaViolation { .. })),
         "malformed schedule must refuse: {bad:?}"
     );
-    // `external` — admitted on every run kind at S4.13 (`source_ref` names
-    // the registered ingress adapter; `filter` rides verbatim).
+    // `external` — S4.13 left the fleet boundary; R3.2 (R-2.12.6) admits it
+    // where the manifest declares the adapter (`source_ref` names the
+    // registered ingress; `filter` rides verbatim).
     let sub_ext = s
         .wakeup_subscribe(
             &run,

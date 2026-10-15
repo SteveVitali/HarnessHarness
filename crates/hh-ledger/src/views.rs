@@ -88,6 +88,12 @@ pub enum ViewKind {
     /// intervals carved out of the turn's measured wall plus the surrounding
     /// overhead buckets. Folded by `hh-telemetry`.
     TurnPhaseProfile,
+    /// `resume_set` — the layer-S heads by name (§5c.3's materialized-view
+    /// table; §05a.3 `carried.resume_set_heads`; R3.2's R-2.4.3 producer
+    /// leg): the session-scope `context.memory.written` name bindings, a
+    /// pure fold over the durable prefix (`deriver = kernel`, rebuildable
+    /// to equal `view_hash` — AC-R-2.4.3-7).
+    ResumeSet,
 }
 
 impl ViewKind {
@@ -110,6 +116,7 @@ impl ViewKind {
             ViewKind::EffectsByKey => "effects_by_key",
             ViewKind::Compact => "compact",
             ViewKind::TurnPhaseProfile => "turn_phase_profile",
+            ViewKind::ResumeSet => "resume_set",
         }
     }
 
@@ -132,6 +139,7 @@ impl ViewKind {
             "effects_by_key" => Some(ViewKind::EffectsByKey),
             "compact" => Some(ViewKind::Compact),
             "turn_phase_profile" => Some(ViewKind::TurnPhaseProfile),
+            "resume_set" => Some(ViewKind::ResumeSet),
             _ => None,
         }
     }
@@ -674,8 +682,105 @@ pub fn checkpoint(run_id: &str, events: &[EventEnvelope], until: Option<u64>) ->
             "pending_permissions".to_string(),
             Json::Arr(pending_permissions),
         ),
+        // `resume_set_heads[]` — the ADR-0130 §1 member: the layer-S names
+        // the next activation resolves (`resume_set`'s consumer side reads
+        // these names `by_name` — §5c.4); the fold is the `resume_set`
+        // view's own (one producer, CC1).
+        (
+            "resume_set_heads".to_string(),
+            Json::Arr(
+                resume_set_head_names(events, until)
+                    .into_iter()
+                    .map(Json::str)
+                    .collect(),
+            ),
+        ),
     ]));
     View::build(run_id, ViewKind::Checkpoint, watermark, payload)
+}
+
+// ── resume_set (R3.2 — the R-2.4.3 producer leg; §5c.3 view table) ──────
+
+/// The layer-S head fold — one implementation the `resume_set` view, the
+/// `checkpoint` member and `Store::resume_set_heads` all share (CC1).
+/// Returns `(name, head_version_id)` pairs in canonical name order. A
+/// session-scope name is a head while its *latest* written version is not
+/// invalidated — `context.memory.invalidated` rows name the version, so a
+/// superseded-then-invalidated name still resolves its live head (the
+/// fold follows the durable write order, never process state).
+fn resume_set_fold(events: &[EventEnvelope], until: Option<u64>) -> Vec<(String, String)> {
+    let mut latest: BTreeMap<String, String> = BTreeMap::new();
+    let mut invalidated: BTreeSet<String> = BTreeSet::new();
+    for e in events {
+        if let Some(u) = until {
+            if e.seq > u {
+                continue;
+            }
+        }
+        match e.class.as_str() {
+            "context.memory.written" => {
+                let is_session = e.payload.get("scope").and_then(Json::as_str) == Some("session");
+                let name = e.payload.get("memory_id").and_then(Json::as_str);
+                let version = e.payload.get("version_id").and_then(Json::as_str);
+                if is_session {
+                    if let (Some(n), Some(v)) = (name, version) {
+                        latest.insert(n.to_string(), v.to_string());
+                    }
+                }
+            }
+            "context.memory.invalidated" => {
+                if let Some(v) = e.payload.get("version_id").and_then(Json::as_str) {
+                    invalidated.insert(v.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+    latest
+        .into_iter()
+        .filter(|(_, v)| !invalidated.contains(v))
+        .collect()
+}
+
+/// `resume_set_heads(events)` — the layer-S head *names* (the carried
+/// `resume_set_heads[]` spelling — names, not version ids: the name
+/// history is the binding table and the next activation resolves each
+/// name against it, §5c.4).
+pub fn resume_set_head_names(events: &[EventEnvelope], until: Option<u64>) -> Vec<String> {
+    resume_set_fold(events, until)
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect()
+}
+
+/// `project(resume_set)` — the §5c.3 `resume_set` materialized view:
+/// layer-S heads by name, `deriver = kernel`, rebuildable to equal
+/// `view_hash` (AC-R-2.4.3-7).
+pub fn resume_set(run_id: &str, events: &[EventEnvelope], until: Option<u64>) -> View {
+    let mut watermark = None;
+    for e in events {
+        if let Some(u) = until {
+            if e.seq > u {
+                continue;
+            }
+        }
+        watermark = Some(e.seq);
+    }
+    let heads: Vec<Json> = resume_set_fold(events, until)
+        .into_iter()
+        .map(|(name, version_id)| {
+            Json::Obj(BTreeMap::from([
+                ("name".to_string(), Json::str(name)),
+                ("version_id".to_string(), Json::str(version_id)),
+                ("scope".to_string(), Json::str("session")),
+            ]))
+        })
+        .collect();
+    let payload = Json::Obj(BTreeMap::from([
+        ("kind".to_string(), Json::str("resume_set")),
+        ("heads".to_string(), Json::Arr(heads)),
+    ]));
+    View::build(run_id, ViewKind::ResumeSet, watermark, payload)
 }
 
 /// `branch_tree` — the per-run slice of the derived branch index (§5a.1 §5;

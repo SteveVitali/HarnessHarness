@@ -301,8 +301,10 @@ impl Trigger {
     /// ADR-0191 D6–D8; `send_message` records an occurrence on the receiver's
     /// `peer_message` subscription) plus `schedule`/`external` (S4.13:
     /// registered ingress adapters; the `interactive` attendance refusal is
-    /// `wakeup_subscribe`'s). `manual`/`environment_ready` still parse and
-    /// refuse typed at `subscribe` (`manual` behind the S4.9 fleet boundary).
+    /// `wakeup_subscribe`'s, and R3.2's declaration gate is
+    /// [`ingress_declared`]). `manual`/`environment_ready` still parse and
+    /// refuse typed at `subscribe` (`manual` behind the S4.9 fleet boundary
+    /// as generalized by R3.2's ingress declaration).
     pub fn admissible(&self) -> bool {
         matches!(
             self,
@@ -327,6 +329,44 @@ pub enum DeliveryMode {
     /// Steer delivery — the `steer{mode: next_turn}` op's durable queue;
     /// `manual{principal}` subscriptions only (OQ-316 steer arm).
     Steer,
+}
+
+/// `ingress_declared(manifest, trigger)` — the run's declared ingress
+/// adapters (R3.2; R-2.12.6): `manifest.extra["ingress_adapters"]` is a
+/// `[{source_ref, triggers: ["external" | "manual"]}]` list, stamped
+/// from the environment binding's `connection_info.ingress_adapters` at
+/// `open_session` (the same channel `healing_policy_ref` rides). An entry
+/// covers `external` when its `triggers` names `external` and the
+/// subscription's `source_ref` matches (`entry.source_ref` equal, `"*"`,
+/// or the subscription naming none covers any declared external
+/// adapter); `manual` coverage is kind-level — the principal is the
+/// caller's claim, not the adapter's.
+pub fn ingress_declared(manifest: &crate::manifest::RunManifest, trigger: &Trigger) -> bool {
+    let Some(Json::Arr(entries)) = manifest.extra.get("ingress_adapters") else {
+        return false;
+    };
+    let (kind, source_ref) = match trigger {
+        Trigger::External { source_ref, .. } => ("external", source_ref.as_deref()),
+        Trigger::Manual { .. } => ("manual", None),
+        _ => return false,
+    };
+    entries.iter().any(|entry| {
+        let covers_kind = match entry.get("triggers") {
+            Some(Json::Arr(ts)) => ts.iter().filter_map(|t| t.as_str()).any(|t| t == kind),
+            _ => false,
+        };
+        if !covers_kind {
+            return false;
+        }
+        match (
+            kind,
+            source_ref,
+            entry.get("source_ref").and_then(Json::as_str),
+        ) {
+            ("external", Some(want), Some(have)) => have == want || have == "*",
+            _ => true,
+        }
+    })
 }
 
 impl DeliveryMode {
@@ -615,24 +655,48 @@ impl Store {
         let steer_leg = matches!(trigger, Trigger::Manual { .. })
             && policy.delivery_mode == DeliveryMode::Steer;
         if !trigger.admissible() {
-            // S4.9 fleet boundary — `manual` is admissible *only* on a
-            // `run_kind = fleet` activation (§5i.1 #2; the attended-
-            // `resume`/`escalate` surface rides `manual`). `external` left
-            // the boundary at S4.13 (admissible on every run kind). Every
-            // other unadmitted trigger keeps the typed Stage-4 refusal —
-            // checked against the durable manifest, never caller assertion
-            // (CC3).
-            let fleet_boundary = matches!(trigger, Trigger::Manual { .. })
+            // S4.9 fleet boundary, generalized at R3.2 (R-2.12.6) — `manual`
+            // is admissible on a `run_kind = fleet` activation (§5i.1 #2;
+            // the attended-`resume`/`escalate` surface rides `manual`) or
+            // on a manifest that declares `manual` ingress coverage
+            // (`extra.ingress_adapters[]`). Every other unadmitted trigger
+            // keeps the typed Stage-4 refusal — checked against the durable
+            // manifest, never caller assertion (CC3).
+            let ingress_boundary = matches!(trigger, Trigger::Manual { .. })
                 && self
                     .manifest(run_id)
-                    .map(|m| m.run_kind == crate::manifest::RunKind::Fleet)
+                    .map(|m| {
+                        m.run_kind == crate::manifest::RunKind::Fleet
+                            || ingress_declared(m, &trigger)
+                    })
                     .unwrap_or(false);
-            if !fleet_boundary && !steer_leg {
+            if !ingress_boundary && !steer_leg {
                 return Err(LedgerError::TriggerUnsupported {
                     trigger: trigger.type_name().to_string(),
                     stage: 4,
                 });
             }
+        }
+        // R3.2 (R-2.12.6) — `external` stays vocabulary-admissible (it left
+        // the fleet-only boundary at S4.13), but a subscription nothing can
+        // produce is refused at admission: non-fleet `external` ingress is
+        // admitted only where the manifest declares the adapter
+        // (`extra.ingress_adapters[]` — occurrences enter only through the
+        // registered ingress, so an undeclared run's subscription could
+        // never produce; the typed refusal beats a parked subscription).
+        // Fleet manifests declare through the FleetSpec's own trigger set.
+        let external_undeclared = matches!(trigger, Trigger::External { .. })
+            && self
+                .manifest(run_id)
+                .map(|m| {
+                    m.run_kind != crate::manifest::RunKind::Fleet && !ingress_declared(m, &trigger)
+                })
+                .unwrap_or(true);
+        if external_undeclared {
+            return Err(LedgerError::TriggerUnsupported {
+                trigger: trigger.type_name().to_string(),
+                stage: 4,
+            });
         }
         // §5a.3 (S4.13): an unattended wakeup (`schedule`/`external`) on an
         // `attendance = interactive` run refuses unless the policy names a

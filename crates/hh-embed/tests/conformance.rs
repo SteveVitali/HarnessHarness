@@ -6177,6 +6177,42 @@ fn writer_session(svc: &mut EmbedService) -> String {
         .to_string()
 }
 
+/// A writer session whose `connection_info` declares the `ing:ci`
+/// `external`/`manual` ingress adapter — R3.2 (R-2.12.6) admits non-fleet
+/// `external`/`manual` only where the manifest declares it.
+fn writer_session_with_ingress(svc: &mut EmbedService) -> String {
+    let mut spec = new_spec(None);
+    if let Json::Obj(m) = &mut spec {
+        if let Some(Json::Obj(env)) = m.get_mut("environment") {
+            if let Some(Json::Obj(ci)) = env.get_mut("connection_info") {
+                ci.insert(
+                    "ingress_adapters".to_string(),
+                    Json::Arr(vec![Json::obj(vec![
+                        ("source_ref", Json::str("ing:ci")),
+                        (
+                            "triggers",
+                            Json::Arr(vec![Json::str("external"), Json::str("manual")]),
+                        ),
+                    ])]),
+                );
+            }
+        }
+    }
+    let r = call(
+        svc,
+        "open_session",
+        Json::obj(vec![
+            ("spec", spec),
+            ("idempotency_key", Json::str("open-1")),
+        ]),
+    );
+    ok(&r)
+        .get("session_id")
+        .and_then(Json::as_str)
+        .unwrap()
+        .to_string()
+}
+
 #[test]
 fn s4_13_branch_lifecycle_over_the_boundary() {
     let mut svc = service();
@@ -6276,10 +6312,12 @@ fn s4_13_branch_lifecycle_over_the_boundary() {
 fn s4_13_wakeup_subscribe_and_idempotent_occurrence() {
     let mut svc = service();
     hello_experimental(&mut svc);
-    let id = writer_session(&mut svc);
+    // R3.2 (R-2.12.6) — `external` rides the declared `ing:ci` adapter.
+    let id = writer_session_with_ingress(&mut svc);
 
-    // `external` is admissible on every run kind at Stage 4 (§5a.3 — it left
-    // the fleet-only boundary at S4.13).
+    // `external` is admissible where the manifest declares the adapter
+    // (§5a.3 — it left the fleet-only boundary at S4.13; R-2.12.6's
+    // declaration gate refuses a subscription nothing could produce).
     let sub = ok(&call(
         &mut svc,
         "subscribe",

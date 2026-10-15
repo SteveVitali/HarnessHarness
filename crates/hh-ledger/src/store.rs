@@ -3783,6 +3783,10 @@ impl Store {
             // durable prefix (R-2.2.4⁰ᵇ; S3.6) — the commit path's
             // durable-side consult.
             ViewKind::EffectsByKey => views::effects_by_key_view(run_id, &state.events, until),
+            // `resume_set` — the layer-S heads by name over the durable
+            // `context.memory.written`/`invalidated` rows (§5c.3's view
+            // table; R3.2's R-2.4.3 producer leg — `deriver = kernel`).
+            ViewKind::ResumeSet => views::resume_set(run_id, &state.events, until),
             ViewKind::TraceView
             | ViewKind::CostView
             | ViewKind::MetricView
@@ -3856,6 +3860,18 @@ impl Store {
     /// `audit_policy_ref`/`signer_key_ids` live here).
     pub fn manifest(&self, run_id: &str) -> Result<&RunManifest, LedgerError> {
         Ok(&self.run(run_id)?.manifest)
+    }
+
+    /// `resume_set_heads(run_id)` — the layer-S head names of the §5c
+    /// `resume_set` view (R3.2's R-2.4.3 producer leg): a pure fold of
+    /// the durable `context.memory.written`/`invalidated` prefix — the
+    /// `continue_goal` producer reads it when the caller carries no
+    /// explicit set (§5a.3 `carried.resume_set_heads`).
+    pub fn resume_set_heads(&self, run_id: &str) -> Result<Vec<String>, LedgerError> {
+        Ok(crate::views::resume_set_head_names(
+            &self.run(run_id)?.events,
+            None,
+        ))
     }
 
     /// The run's currently-open scopes (`id → kind`) — `audit_view`'s

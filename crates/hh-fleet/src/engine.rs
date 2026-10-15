@@ -419,24 +419,10 @@ impl FleetEngine {
 
     /// The `Trigger` a source occurrence maps to — `external`/`manual`/
     /// `timer` only (the fixture's closed set; anything else was refused
-    /// at `FixtureAdapter::from_doc`).
+    /// at `FixtureAdapter::from_doc`). One implementation — the non-fleet
+    /// `observe_run` producer maps with the same rule (CC1).
     fn trigger_for_occurrence(&self, occ: &SourceOccurrence) -> Trigger {
-        match occ.trigger_kind.as_str() {
-            "external" => Trigger::External {
-                kind: occ
-                    .external_kind
-                    .clone()
-                    .unwrap_or_else(|| "occurrence".to_string()),
-                source_ref: None,
-                filter: None,
-            },
-            "manual" => Trigger::Manual {
-                principal: "fixture".to_string(),
-            },
-            _ => Trigger::Timer {
-                at_ms: occ.observed_at_ms,
-            },
-        }
+        occurrence_trigger(occ)
     }
 
     /// Find (or lazily subscribe) the subscription covering a trigger —
@@ -3342,4 +3328,186 @@ fn fleet_totals_json(account: Option<&Account>, view: &FleetView) -> Json {
         out.insert(group_name, Json::Obj(gm));
     }
     Json::Obj(out)
+}
+
+/// `occurrence_trigger(occ)` — the one source-occurrence → `Trigger`
+/// mapping the fleet `observe` and the non-fleet `observe_run` producers
+/// share (CC1).
+fn occurrence_trigger(occ: &SourceOccurrence) -> Trigger {
+    match occ.trigger_kind.as_str() {
+        "external" => Trigger::External {
+            kind: occ
+                .external_kind
+                .clone()
+                .unwrap_or_else(|| "occurrence".to_string()),
+            source_ref: None,
+            filter: None,
+        },
+        "manual" => Trigger::Manual {
+            principal: "fixture".to_string(),
+        },
+        _ => Trigger::Timer {
+            at_ms: occ.observed_at_ms,
+        },
+    }
+}
+
+// ── the non-fleet ingress producer (R3.2; R-2.12.6; DF-S2.3-1) ─────────
+
+/// `observe_run(store, run_id, lease, adapter, now_ms)` — the non-fleet
+/// ingress-adapter producer: the same adapter→durable seam
+/// [`FleetEngine::observe`] runs, on a `run_kind != fleet` run whose
+/// manifest declares the adapter (`extra.ingress_adapters[]` — stamped
+/// from `connection_info.ingress_adapters`; `wakeup_subscribe` admits
+/// nothing undeclared, so every covering subscription already names a
+/// declared trigger).
+///
+/// Each adapter occurrence mints `context.observation.recorded` then
+/// `control.wakeup.occurred` on the covering subscription — durable
+/// before `deliver_wakeup` fires the pending set (CC3); a replayed
+/// occurrence hits the dedup `skipped` row, never a second fire.
+/// Undeclared manifests refuse typed; `run_kind = fleet` runs route to
+/// `FleetEngine::observe` (one producer per run kind — CC10).
+pub fn observe_run<A: WorkSourceAdapter>(
+    store: &mut Store,
+    run_id: &str,
+    lease: &Lease,
+    adapter: &mut A,
+    now_ms: u64,
+) -> Result<Vec<String>, FleetError> {
+    let manifest = store.manifest(run_id).map_err(FleetError::Store)?.clone();
+    if manifest.run_kind == RunKind::Fleet {
+        return Err(FleetError::Unsupported {
+            op: "observe_run",
+            reason: "fleet_activation_uses_fleet_engine_observe".to_string(),
+        });
+    }
+    if !manifest.extra.contains_key("ingress_adapters") {
+        return Err(FleetError::Unsupported {
+            op: "observe_run",
+            reason: "no_declared_ingress_adapter".to_string(),
+        });
+    }
+    if let Some(source) = adapter.fault() {
+        return Err(FleetError::SourceUnavailable { source });
+    }
+    // Already-observed occurrence ids — folded from the durable
+    // `context.observation.recorded` rows (replay-safe: the second
+    // delivery rides `wakeup_occurred`'s audited dedup, never a second
+    // observation row).
+    let observed: std::collections::BTreeSet<String> = store
+        .events(run_id)
+        .map_err(FleetError::Store)?
+        .iter()
+        .filter(|e| e.class == "context.observation.recorded")
+        .filter_map(|e| {
+            e.payload
+                .get("trigger")
+                .and_then(|t| t.get("occurrence_id"))
+                .and_then(Json::as_str)
+                .map(str::to_string)
+        })
+        .collect();
+    // Covering subscriptions — the run's active wakeup subscriptions;
+    // `external` coverage matches `kind` (`*` wildcard), `manual` matches
+    // `manual` (the principal is the caller's claim).
+    let covers = |subs: &[hh_ledger::wakeup::WakeupSubscription], trigger: &Trigger| {
+        subs.iter()
+            .filter(|s| s.state == hh_ledger::wakeup::SubscriptionState::Active)
+            .find(|s| {
+                std::mem::discriminant(&s.trigger) == std::mem::discriminant(trigger)
+                    && match (&s.trigger, trigger) {
+                        (Trigger::External { kind: a, .. }, Trigger::External { kind: b, .. }) => {
+                            a == b || a == "*"
+                        }
+                        _ => true,
+                    }
+            })
+            .map(|s| s.subscription_id.clone())
+    };
+    let mut out = Vec::new();
+    for occ in adapter.occurrences(None) {
+        let trigger = occurrence_trigger(&occ);
+        let subs = store
+            .wakeup_subscriptions(run_id)
+            .map_err(FleetError::Store)?;
+        let Some(sub_id) = covers(&subs, &trigger) else {
+            // No declared subscription covers this occurrence kind —
+            // recorded (CC3) but never fired: the trigger set is the
+            // contract.
+            store
+                .commit_kernel_row_for(
+                    COMPONENT,
+                    run_id,
+                    "context.observation.recorded",
+                    payloads::observation_payload(
+                        &occ.trigger_kind,
+                        occ.external_kind.as_deref(),
+                        &occ.occurrence_id,
+                        &occ.item,
+                        occ.observed_at_ms,
+                        &occ.actor,
+                        &identity::source_ref(run_id, source_id_of(&occ.item)),
+                    ),
+                    vec![],
+                    vec![],
+                )
+                .map_err(FleetError::Store)?;
+            continue;
+        };
+        if !observed.contains(&occ.occurrence_id) {
+            let obs = store
+                .commit_kernel_row_for(
+                    COMPONENT,
+                    run_id,
+                    "context.observation.recorded",
+                    payloads::observation_payload(
+                        &occ.trigger_kind,
+                        occ.external_kind.as_deref(),
+                        &occ.occurrence_id,
+                        &occ.item,
+                        occ.observed_at_ms,
+                        &occ.actor,
+                        &identity::source_ref(run_id, source_id_of(&occ.item)),
+                    ),
+                    vec![],
+                    vec![],
+                )
+                .map_err(FleetError::Store)?;
+            let key = identity::occurrence_key(&occ.trigger_kind, &occ.occurrence_id);
+            store
+                .wakeup_occurred(
+                    run_id,
+                    lease,
+                    &sub_id,
+                    &key,
+                    Some(&obs.event_id),
+                    occ.observed_at_ms.max(now_ms),
+                )
+                .map_err(FleetError::Store)?;
+            out.push(occ.occurrence_id.clone());
+        } else {
+            // A duplicate delivery still routes through `wakeup_occurred`
+            // — the audited `skipped{duplicate_occurrence}` row lands,
+            // never a silent drop (OQ-313; W-1 idempotence).
+            let key = identity::occurrence_key(&occ.trigger_kind, &occ.occurrence_id);
+            store
+                .wakeup_occurred(
+                    run_id,
+                    lease,
+                    &sub_id,
+                    &key,
+                    None,
+                    occ.observed_at_ms.max(now_ms),
+                )
+                .map_err(FleetError::Store)?;
+        }
+    }
+    // Fire the pending set — `deliver_wakeup` synthesizes kernel
+    // occurrences and claims every pending row under W-1's lease+fired
+    // batch.
+    store
+        .deliver_wakeup(run_id, lease, now_ms)
+        .map_err(FleetError::Store)?;
+    Ok(out)
 }
