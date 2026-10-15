@@ -81,8 +81,8 @@ pub use errors::{
     BudgetError, EnforcementLevel, MatchError, MatchRefusal, RefusalReason, SpendError, UsageError,
 };
 pub use matchspec::{
-    validate_match, ArmSpec, BudgetEnforcement, CachePolicy, Enforcement, MatchMode, MatchSpec,
-    ModelScope, ResultsRowFields, ResultsSpend,
+    validate_match, validate_match_at, ArmSpec, BudgetEnforcement, CachePolicy, Enforcement,
+    MatchMode, MatchSpec, ModelScope, ResultsRowFields, ResultsSpend,
 };
 pub use pricing::{
     attribute_spend, price, Confidence, CostProvenance, Derivation, PricingRow, PricingTable,

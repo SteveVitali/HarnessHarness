@@ -171,6 +171,14 @@ impl Bag {
                         ArmConfiguration {
                             configuration_id: cid.to_string(),
                             configuration_version_id: cvid.to_string(),
+                            // The sealed configuration's `budget_vector` ref
+                            // (optional — when supplied, `expand` enforces
+                            // `declare_arm`'s `BudgetMismatchWithinArm`
+                            // precondition against `arm.eval_budget`).
+                            budget_ref: v
+                                .get("budget_ref")
+                                .and_then(Json::as_str)
+                                .map(str::to_string),
                         },
                     );
                 }

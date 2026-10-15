@@ -131,6 +131,9 @@ pub fn critic_experiment(
         benefit_kind: input.benefit_kind,
         held_out: input.held_out,
         family_size: Some(CRITIC_EXPERIMENT_METRICS.len() as u32),
+        // A critic on/off contrast is a native component-level comparison —
+        // `search_budget` mandatory (unknown is product-level only).
+        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
     })?;
     Ok(CriticExperimentOutcome {
         reports: out.reports,

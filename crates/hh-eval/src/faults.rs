@@ -17,7 +17,13 @@ use hh_wire::Json;
 
 use crate::json_util::*;
 
-/// The closed fault-class sum (the `faults[]` element kind).
+/// The closed fault-class sum (the `faults[]` element kind). The first
+/// fourteen members are the Stage-3 home vocabulary; the last seven are the
+/// **HAL-class** spellings (§5h.4's fault-injection point list: `timeout`,
+/// `error_response`, `partial_failure`, `rate_limit`, `network_error`,
+/// `invalid_response`, `empty_response` — R2.16; DF-S1.22-2) so a profile can
+/// carry the foreign harness's own vocabulary verbatim, never a re-spelled
+/// approximation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FaultType {
     /// `tool_timeout` — a tool call exceeds its deadline.
@@ -48,11 +54,26 @@ pub enum FaultType {
     InterleavedInvalidation,
     /// `partial_write` — an effect's output is truncated/partial.
     PartialWrite,
+    // ── HAL-class levels (§5h.4; R2.16) ─────────────────────────────
+    /// `timeout` — HAL: an attempt exceeds its allotted time.
+    HalTimeout,
+    /// `error_response` — HAL: the provider/tool returns an error response.
+    HalErrorResponse,
+    /// `partial_failure` — HAL: the call partially fails (incomplete work).
+    HalPartialFailure,
+    /// `rate_limit` — HAL: the call is rate-limited.
+    HalRateLimit,
+    /// `network_error` — HAL: a network-layer failure.
+    HalNetworkError,
+    /// `invalid_response` — HAL: a syntactically invalid response.
+    HalInvalidResponse,
+    /// `empty_response` — HAL: an empty response.
+    HalEmptyResponse,
 }
 
 impl FaultType {
     /// The full closed set.
-    pub const ALL: [FaultType; 14] = [
+    pub const ALL: [FaultType; 21] = [
         FaultType::ToolTimeout,
         FaultType::ToolErrorClass,
         FaultType::Model5xx,
@@ -67,6 +88,13 @@ impl FaultType {
         FaultType::ToolResponseDrift,
         FaultType::InterleavedInvalidation,
         FaultType::PartialWrite,
+        FaultType::HalTimeout,
+        FaultType::HalErrorResponse,
+        FaultType::HalPartialFailure,
+        FaultType::HalRateLimit,
+        FaultType::HalNetworkError,
+        FaultType::HalInvalidResponse,
+        FaultType::HalEmptyResponse,
     ];
 
     /// The canonical spelling.
@@ -86,6 +114,13 @@ impl FaultType {
             FaultType::ToolResponseDrift => "tool_response_drift",
             FaultType::InterleavedInvalidation => "interleaved_invalidation",
             FaultType::PartialWrite => "partial_write",
+            FaultType::HalTimeout => "timeout",
+            FaultType::HalErrorResponse => "error_response",
+            FaultType::HalPartialFailure => "partial_failure",
+            FaultType::HalRateLimit => "rate_limit",
+            FaultType::HalNetworkError => "network_error",
+            FaultType::HalInvalidResponse => "invalid_response",
+            FaultType::HalEmptyResponse => "empty_response",
         }
     }
 
@@ -347,7 +382,52 @@ pub fn stage3_fault_profiles() -> Vec<FaultProfile> {
             }],
             provenance_ref: None,
         },
+        // ── HAL-class levels (§5h.4; R2.16; DF-S1.22-2) — one profile
+        //    per HAL fault spelling, each a selectable environment-factor
+        //    level over the same suites. `rate_ppm` declares the injection
+        //    probability (the injection itself is the environment's job).
+        hal_profile("f/hal-timeout-p25", FaultType::HalTimeout, 250_000),
+        hal_profile(
+            "f/hal-error-response-p10",
+            FaultType::HalErrorResponse,
+            100_000,
+        ),
+        hal_profile(
+            "f/hal-partial-failure-p10",
+            FaultType::HalPartialFailure,
+            100_000,
+        ),
+        hal_profile("f/hal-rate-limit-p25", FaultType::HalRateLimit, 250_000),
+        hal_profile(
+            "f/hal-network-error-p10",
+            FaultType::HalNetworkError,
+            100_000,
+        ),
+        hal_profile(
+            "f/hal-invalid-response-p05",
+            FaultType::HalInvalidResponse,
+            50_000,
+        ),
+        hal_profile(
+            "f/hal-empty-response-p05",
+            FaultType::HalEmptyResponse,
+            50_000,
+        ),
     ]
+}
+
+/// A one-fault HAL-class level — the profile is data (`rate_ppm` declares the
+/// injection probability at `effect`); the injection is the environment's job.
+fn hal_profile(profile_id: &str, fault_type: FaultType, rate_ppm: i64) -> FaultProfile {
+    FaultProfile {
+        profile_id: profile_id.into(),
+        faults: vec![FaultSpec {
+            fault_type,
+            rate_ppm,
+            at: "provider_call".into(),
+        }],
+        provenance_ref: None,
+    }
 }
 
 /// The canonical Stage-3 perturbation profiles (F-class over A/D).

@@ -50,13 +50,23 @@ pub struct ExpandTask {
 
 /// The resolved arm configuration — the assembly chain's output projected to
 /// ADR-0036's seedless `configuration_id` and the exact-bytes
-/// `configuration_version_id`.
+/// `configuration_version_id`, plus the configuration's `budget_vector` ref
+/// where the resolver exposes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArmConfiguration {
     /// The seedless configuration id.
     pub configuration_id: String,
     /// The seeded exact-bytes version id.
     pub configuration_version_id: String,
+    /// The sealed configuration's `budget_vector` ref — the `declare_arm`
+    /// engine precondition (§5h.2 §2; ADR-0046 D1: "every configuration's
+    /// `budget_vector` equals `eval_budget` — identity equality on the
+    /// pinned vector") is checkable at expand only when the resolver
+    /// supplies it; `Some` ≠ `arm.eval_budget` refuses
+    /// `BudgetMismatchWithinArm`. `None` = the resolver carries only the
+    /// configuration ids (the check defers to the record-level
+    /// `Arm::validate` gate).
+    pub budget_ref: Option<String>,
 }
 
 /// The resolver view `expand` runs against — every context-parameterized
@@ -468,7 +478,25 @@ pub fn expand(
     // `compose(layers + experiment layer) → … → seal` chain produced.
     let mut configs: Vec<ArmConfiguration> = Vec::with_capacity(spec.arms.len());
     for arm in &spec.arms {
-        configs.push((ctx.arm_config)(arm)?);
+        let cfg = (ctx.arm_config)(arm)?;
+        // `declare_arm`'s engine precondition (§5h.2 §2; ADR-0046 D1;
+        // CF-099): the sealed configuration's `budget_vector` must be the
+        // arm's `eval_budget` by pinned-ref identity — a resolver that
+        // exposes the budget ref and names another vector refuses
+        // `BudgetMismatchWithinArm`. `None` defers to the record-level
+        // `Arm::validate` gate (the resolver carried only the config ids).
+        if let Some(budget_ref) = &cfg.budget_ref {
+            if *budget_ref != arm.eval_budget {
+                return Err(ExpandError::Refusal(
+                    ExperimentRefusal::BudgetMismatchWithinArm {
+                        arm: arm.arm_id.clone(),
+                        configuration_budget: budget_ref.clone(),
+                        eval_budget: arm.eval_budget.clone(),
+                    },
+                ));
+            }
+        }
+        configs.push(cfg);
     }
 
     let mut cells = Vec::new();

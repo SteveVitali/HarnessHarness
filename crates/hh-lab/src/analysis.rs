@@ -730,9 +730,12 @@ impl BudgetMatchStatus {
     }
 }
 
-/// `budget_match{limits_equal, consumption_imbalance, tolerance, status}` —
-/// the comparison's budget-match record (§6.4 A2: status from consumption
-/// medians vs `MatchSpec.tolerance`).
+/// `budget_match{limits_equal, consumption_imbalance, tolerance, status,
+/// search_unknown}` — the comparison's budget-match record (§6.4 A2: status
+/// from consumption medians vs `MatchSpec.tolerance`). `search_unknown`
+/// (R2.16; ADR-0046 D1/ADR-0159 D6) marks a product-level comparison whose
+/// arm(s) carry `search_budget = unknown` — first-class, never a silent
+/// zero, legal only at `product-level` (`validate_match_at`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct BudgetMatch {
     /// Whether the declared limits were dimension-wise equal.
@@ -743,6 +746,9 @@ pub struct BudgetMatch {
     pub tolerance_ppm: u64,
     /// The verdict.
     pub status: BudgetMatchStatus,
+    /// `search_unknown` — the comparison includes an arm whose search budget
+    /// is `unknown` (product-level comparisons only).
+    pub search_unknown: bool,
 }
 
 /// `paired_effect{point, interval, method}` — the paired Δ estimate (§6.4
@@ -1045,6 +1051,9 @@ impl ComparisonReport {
             Json::Int(self.budget_match.tolerance_ppm as i64),
         );
         bm.insert("status".into(), Json::str(self.budget_match.status.name()));
+        if self.budget_match.search_unknown {
+            bm.insert("search_unknown".into(), Json::Bool(true));
+        }
         m.insert("budget_match".into(), Json::Obj(bm));
         m.insert("benefit_kind".into(), Json::str(self.benefit_kind.name()));
         m.insert("held_out".into(), Json::Bool(self.held_out));
@@ -1142,6 +1151,7 @@ impl ComparisonReport {
                 "consumption_imbalance",
                 "tolerance",
                 "status",
+                "search_unknown",
             ],
             "BudgetMatch",
         )?;
@@ -1185,6 +1195,10 @@ impl ComparisonReport {
                 tolerance_ppm: int_at(bm, "tolerance", "BudgetMatch")? as u64,
                 status: BudgetMatchStatus::parse(str_at(bm, "status", "BudgetMatch")?)
                     .ok_or_else(|| SchemaError::v("status", "unknown budget-match status"))?,
+                search_unknown: bm
+                    .get("search_unknown")
+                    .map(|v| matches!(v, Json::Bool(true)))
+                    .unwrap_or(false),
             },
             benefit_kind: BenefitKind::parse(str_at(m, "benefit_kind", REC)?)
                 .ok_or_else(|| SchemaError::v("benefit_kind", "unknown benefit kind"))?,

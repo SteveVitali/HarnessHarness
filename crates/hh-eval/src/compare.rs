@@ -37,6 +37,7 @@ use hh_ontology::eval::{
     LatticeValue, MetricValueKind, Pairing, ReplicateReducer, RoutingPolicy,
 };
 use hh_ontology::lab::{ContaminationStratum, SplitLabel};
+use hh_ontology::participant::Granularity;
 use hh_wire::Json;
 
 use hh_lab::analysis::{
@@ -181,6 +182,12 @@ pub struct CompareInput<'a> {
     pub held_out: bool,
     /// The family size for `multiplicity` (defaults to `metrics.len()`).
     pub family_size: Option<u32>,
+    /// The comparison's declared granularity (R2.16; DF-S1.22-2). At
+    /// `product-level` an arm's `search_budget` may be `unknown` (`None`) —
+    /// the report carries `budget_match.search_unknown`; at
+    /// `component-level`/`configuration-level` an absent `search_budget`
+    /// refuses `UnbudgetedArm` (the pre-R2.16 behaviour).
+    pub granularity: Granularity,
 }
 
 /// One per-task effect row (`{task_id, a, b, delta | n/a{reason}, c, n}`).
@@ -391,7 +398,11 @@ fn factor_member(varied: Option<&str>, field: &str) -> bool {
 /// `compare` — the matched-budget paired comparison (§5h.2 §2.1).
 pub fn compare(input: &CompareInput) -> Result<CompareOutcome, CompareError> {
     // ── 1. declared-match validation (hh-budget is the single source) ────
-    hh_budget::matchspec::validate_match(input.arm_specs).map_err(CompareError::Match)?;
+    //      The comparison's declared granularity gates the `search_budget =
+    //      unknown` admission (product-level only — ADR-0046 D1/ADR-0159 D6).
+    hh_budget::matchspec::validate_match_at(input.arm_specs, input.granularity)
+        .map_err(CompareError::Match)?;
+    let search_unknown = input.arm_specs.iter().any(|a| a.search_budget.is_none());
     let spec0 = input.arm_specs[0]
         .match_spec
         .clone()
@@ -838,6 +849,7 @@ pub fn compare(input: &CompareInput) -> Result<CompareOutcome, CompareError> {
                 },
                 tolerance_ppm: tolerance,
                 status,
+                search_unknown,
             },
             benefit_kind: input.benefit_kind,
             held_out: input.held_out,

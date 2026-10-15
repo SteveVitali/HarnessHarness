@@ -433,6 +433,7 @@ fn stub_report(metric: &str, a: &str, b: &str) -> ComparisonReport {
             consumption_imbalance: None,
             tolerance_ppm: 0,
             status: BudgetMatchStatus::Matched,
+            search_unknown: false,
         },
         benefit_kind: BenefitKind::ArtifactBenefit,
         held_out: true,

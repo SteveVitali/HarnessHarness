@@ -514,6 +514,7 @@ fn parity_report_requires_artifact_benefit() {
             consumption_imbalance: None,
             tolerance_ppm: 100_000,
             status: BudgetMatchStatus::Matched,
+            search_unknown: false,
         },
         benefit_kind: kind,
         held_out: true,

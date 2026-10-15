@@ -1309,6 +1309,7 @@ fn comparison(benefit: BenefitKind, held_out: bool, interval: Json) -> Compariso
             consumption_imbalance: None,
             tolerance_ppm: 50_000,
             status: BudgetMatchStatus::Matched,
+            search_unknown: false,
         },
         benefit_kind: benefit,
         held_out,

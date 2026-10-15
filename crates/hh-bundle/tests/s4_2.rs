@@ -801,3 +801,55 @@ fn harbor_trial_dir_lifts_to_a_hosted_unverified_bundle() {
         Ok(_) => panic!("unknown format lifted"),
     }
 }
+
+// ── OQ-377 (R2.16): the imported-experiment interim rule ────────────────────
+
+/// A foreign lift mints **no experiment binding** — the imported job's
+/// bundle subject carries an empty `experiment` map and the import record
+/// names none. Rows lifted from it stay unbound, and `hh-results`' L6 gate
+/// excludes them `undisclosed` under `require_experiment`
+/// (`hh-results/tests/results.rs::disclosure_summary_counts_and_marks_
+/// undisclosed` covers the leaderboard half; OQ-377's Stage-4/C2 question —
+/// whether imports should mint `provenance = imported` experiment runs —
+/// stays open, this is the ratified interim rule).
+#[test]
+fn foreign_import_mints_no_experiment_binding() {
+    let rig = rig("oq377");
+    let files: BTreeMap<String, Vec<u8>> =
+        [("trial/traj.json".to_string(), b"{\"steps\":[]}".to_vec())]
+            .into_iter()
+            .collect();
+    let lift = hh_bundle::import::lift_foreign(
+        &rig.store,
+        &rig.other,
+        &files,
+        "harbor_trial_dir",
+        ProvenanceRecord::kernel("s42.test", 0).to_json(),
+        "2026-01-01T00:00:00.000Z".into(),
+        "sha256:kernel",
+        0,
+    )
+    .unwrap();
+    // The bundle's subject section binds no experiment — `experiment` is
+    // the empty map, not a fabricated foreign-experiment ref.
+    assert!(
+        lift.bundle.manifest.subject.experiment.is_empty(),
+        "the interim rule: no experiment binding is minted at import"
+    );
+    // The import record names no experiment either.
+    assert!(lift.import_record.get("experiment").is_none());
+    assert!(lift.import_record.get("experiment_run_id").is_none());
+    // And the lift's provenance stays `unverified` + `import` — the two
+    // marks the leaderboard's L6 gate reads as `undisclosed`.
+    let prov = lift.import_record.get("provenance").unwrap();
+    assert_eq!(
+        prov.get("authority").and_then(Json::as_str),
+        Some("unverified")
+    );
+    assert_eq!(
+        prov.get("origin")
+            .and_then(|o| o.get("kind"))
+            .and_then(Json::as_str),
+        Some("import")
+    );
+}

@@ -162,6 +162,7 @@ fn input<'a>(
         benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: true,
         family_size: None,
+        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
     }
 }
 

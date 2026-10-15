@@ -251,6 +251,8 @@ fn run_tier(
         benefit_kind: input.benefit_kind,
         held_out: input.held_out,
         family_size: Some(INTERVENTIONS_METRICS.len() as u32),
+        // Native component-level comparison — `search_budget` mandatory.
+        granularity: hh_ontology::participant::Granularity::ConfigurationLevel,
     })?)
 }
 

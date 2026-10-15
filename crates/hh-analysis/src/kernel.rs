@@ -423,6 +423,14 @@ fn compare_input<'i>(
         benefit_kind: hh_lab::analysis::BenefitKind::ArtifactBenefit,
         held_out: false,
         family_size: None,
+        // The pair's comparison granularity (R2.16): a search-unknown arm is
+        // admissible only under a product-level comparison (the report flags
+        // `search_unknown`); all-known pairs run the strict form.
+        granularity: if arms.iter().any(|a| a.search_budget.is_none()) {
+            hh_ontology::participant::Granularity::ProductLevel
+        } else {
+            hh_ontology::participant::Granularity::ConfigurationLevel
+        },
     }
 }
 

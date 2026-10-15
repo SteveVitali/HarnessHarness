@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 use hh_budget::{
-    validate_match, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, CachePolicy,
+    validate_match_at, ArmSpec as BudgetArmSpec, BudgetEnforcement, BudgetSpec, CachePolicy,
     MatchError, MatchMode, MatchRefusal, MatchSpec,
 };
 use hh_identity::idp::{identify_bytes, idp_id};
@@ -949,6 +949,20 @@ pub enum ExperimentRefusal {
         /// The offending artifact ref.
         artifact_ref: String,
     },
+    /// The sealed configuration's `budget_vector` is not the arm's
+    /// `eval_budget` — the `declare_arm` engine precondition (§5h.2 §2;
+    /// ADR-0046 D1; CF-099; the record-level mirror is
+    /// `hh_ontology::eval::ArmError::BudgetMismatchWithinArm`). Surfaces at
+    /// `expand` when the `arm_config` resolver supplies the configuration's
+    /// `budget_ref` and it differs from `arm.eval_budget` by identity.
+    BudgetMismatchWithinArm {
+        /// The offending arm.
+        arm: String,
+        /// The configuration's declared `budget_vector` ref.
+        configuration_budget: String,
+        /// The arm's declared `eval_budget` ref.
+        eval_budget: String,
+    },
     /// `replicates_per_cell` below the context's floor (engine default 5 for
     /// Stage-3 exemplars; the schema floor is 1 — the context supplies the
     /// policy floor).
@@ -1750,14 +1764,27 @@ impl ExperimentSpec {
 
     fn check_arms(&self, ctx: &SpecContext<'_>) -> Result<(), ExperimentRefusal> {
         let factor_names: BTreeSet<&str> = self.factors.iter().map(|f| f.name.as_str()).collect();
+        // `arm → hosted` — the arm assigns at least one hosted level (the
+        // class the `search_budget = unknown` admission keys on — §6.5 §2.5's
+        // A6 row / ADR-0159 D6). Undeclared level ids resolve `native` here;
+        // the assignment check below owns that refusal.
+        let hosted = |arm: &ArmSpec| {
+            arm.level_assignment.values().any(|lid| {
+                self.factors
+                    .iter()
+                    .flat_map(|f| f.levels.iter())
+                    .any(|l| &l.level_id == lid && l.class == ParticipantClass::Hosted)
+            })
+        };
         for arm in &self.arms {
             // `UnbudgetedArm` — `eval_budget` always mandatory; `search_budget`
-            // mandatory on matched kinds (exploratory arms may be search-less;
-            // a product-level-only arm's absence is still flagged by the
-            // engine — the schema half flags the missing eval budget and the
-            // missing search budget on matched kinds).
+            // mandatory on matched kinds except on a hosted arm, where
+            // `unknown` is the first-class disclosure value (ADR-0046 D1 —
+            // never a silent zero): the arm then appears only in
+            // product-level comparisons flagged `search_unknown`
+            // (`validate_match_at` in `check_match` owns the group half).
             if arm.eval_budget.is_empty()
-                || (self.kind.requires_match() && arm.search_budget.is_none())
+                || (self.kind.requires_match() && arm.search_budget.is_none() && !hosted(arm))
             {
                 return Err(ExperimentRefusal::UnbudgetedArm {
                     arm: arm.arm_id.clone(),
@@ -1923,7 +1950,17 @@ impl ExperimentSpec {
         }
         for group in groups.values() {
             let specs: Vec<BudgetArmSpec> = group.iter().map(|(_, s)| s.clone()).collect();
-            validate_match(&specs).map_err(|e: MatchError| {
+            // The group's comparison granularity (R2.16; ADR-0046 D1): an
+            // arm carrying `search_budget = unknown` (a hosted arm —
+            // `check_arms` admits the absence only there) is admissible only
+            // under a product-level comparison, which the report flags
+            // `search_unknown`. All-known groups run the strict form.
+            let granularity = if specs.iter().any(|s| s.search_budget.is_none()) {
+                Granularity::ProductLevel
+            } else {
+                Granularity::ConfigurationLevel
+            };
+            validate_match_at(&specs, granularity).map_err(|e: MatchError| {
                 let arm_id = |i: Option<usize>| {
                     i.and_then(|i| group.get(i))
                         .map(|(a, _)| a.arm_id.clone())

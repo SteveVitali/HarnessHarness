@@ -60,7 +60,10 @@ pub use faults::{
     stage3_fault_profiles, stage3_perturbation_profiles, FaultProfile, FaultSpec, FaultType,
     PerturbationKind, PerturbationProfile, PerturbationSpec,
 };
-pub use judge::{admit_judge, emit_judged, JudgeAdmission, JudgeContext, JudgeError};
+pub use judge::{
+    admit_judge, emit_judged, judge_context_for, recheck_judged, JudgeAdmission, JudgeContext,
+    JudgeError,
+};
 pub use loss::{export_bundle_losses, export_loss_report};
 pub use opacity::{is_typed_kind, opacity_dynamic, per_call_opacity};
 pub use oracle::{run_oracle, OracleFailure, OracleRequest, OracleVerdict};
