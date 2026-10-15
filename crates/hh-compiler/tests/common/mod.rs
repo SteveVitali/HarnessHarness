@@ -234,6 +234,7 @@ pub fn agent_node(
     )
 }
 
+#[allow(dead_code)]
 pub fn tool_node(id: &str, seq: u64) -> Node {
     sid(
         node(
@@ -265,6 +266,7 @@ pub fn tool_node(id: &str, seq: u64) -> Node {
 }
 
 /// A tool carrying a `Tool` surface (the compiled-surface path).
+#[allow(dead_code)]
 pub fn surfaced_tool_node(id: &str, name: &str, args: &[&str], seq: u64) -> Node {
     let mut n = tool_node(id, seq);
     n.surface = Some(SurfaceRecord::Tool(Box::new(ToolSurface {

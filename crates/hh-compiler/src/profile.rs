@@ -386,39 +386,10 @@ impl Default for ProfileCapabilities {
 }
 
 /// `version_pattern ∈ {exact | prefix | range | any}` (§3.2.3) — the closed
-/// `Pattern` grammar: `exact(id) | prefix(id) | range(family, lo?, hi?) | any`.
-/// Never a regex or a substring test outside this grammar (AC-R-2.3.3-2).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum VersionPattern {
-    /// An exact model version.
-    Exact(String),
-    /// A version prefix.
-    Prefix(String),
-    /// `range(family, lo?, hi?)` — a half-open `[lo, hi)` version window over
-    /// the named family; an absent bound is unbounded.
-    Range {
-        /// The family the range scopes (empty = the selector's `model_family`).
-        family: String,
-        /// Inclusive lower bound (`None` = unbounded below).
-        lo: Option<String>,
-        /// Exclusive upper bound (`None` = unbounded above).
-        hi: Option<String>,
-    },
-    /// Any version.
-    Any,
-}
-
-impl VersionPattern {
-    /// Specificity for tie-breaking — `exact > range > prefix > any`.
-    pub fn specificity(&self) -> u8 {
-        match self {
-            VersionPattern::Exact(_) => 3,
-            VersionPattern::Range { .. } => 2,
-            VersionPattern::Prefix(_) => 1,
-            VersionPattern::Any => 0,
-        }
-    }
-}
+/// `Pattern` grammar. The canonical definition lives in `hh-ontology::eval`
+/// (R2.18 — the document-side `ProfileConstraint` narrowing spells the same
+/// grammar; one spelling, CC7 — same convention as `ModelRole` below).
+pub use hh_ontology::eval::VersionPattern;
 
 /// The selector (§3.2.3): `{provider_api_family, model_family, version_pattern,
 /// precedence, successor_ref?, retirement_at?, roles_admitted}`.

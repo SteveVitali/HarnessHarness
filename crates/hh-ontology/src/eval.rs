@@ -1112,6 +1112,172 @@ impl ModelRole {
     }
 }
 
+/// `version_pattern ∈ {exact | prefix | range | any}` (§3.2.3) — the closed
+/// `Pattern` grammar: `exact(id) | prefix(id) | range(family, lo?, hi?) | any`.
+/// Never a regex or a substring test outside this grammar (AC-R-2.3.3-2).
+/// The canonical definition moved here at R2.18 (the document-side
+/// `ProfileConstraint` narrowing spells the same grammar — `hh-compiler`
+/// re-exports it; one spelling, CC7).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VersionPattern {
+    /// An exact model version.
+    Exact(String),
+    /// A version prefix.
+    Prefix(String),
+    /// `range(family, lo?, hi?)` — a half-open `[lo, hi)` version window over
+    /// the named family; an absent bound is unbounded.
+    Range {
+        /// The family the range scopes (empty = the selector's `model_family`).
+        family: String,
+        /// Inclusive lower bound (`None` = unbounded below).
+        lo: Option<String>,
+        /// Exclusive upper bound (`None` = unbounded above).
+        hi: Option<String>,
+    },
+    /// Any version.
+    Any,
+}
+
+impl VersionPattern {
+    /// Specificity for tie-breaking — `exact > range > prefix > any`.
+    pub fn specificity(&self) -> u8 {
+        match self {
+            VersionPattern::Exact(_) => 3,
+            VersionPattern::Range { .. } => 2,
+            VersionPattern::Prefix(_) => 1,
+            VersionPattern::Any => 0,
+        }
+    }
+}
+
+/// The canonical JSON of a `version_pattern` (§3.2.3): `{"exact": v}` |
+/// `{"prefix": v}` | `{"family": f, "lo"?: l, "hi"?: h}` | `"any"`.
+/// `hh-compiler::schema` delegates to this pair — one codec (CC7).
+pub fn version_pattern_json(p: &VersionPattern) -> Json {
+    match p {
+        VersionPattern::Exact(v) => Json::obj([("exact", Json::str(v.clone()))]),
+        VersionPattern::Prefix(v) => Json::obj([("prefix", Json::str(v.clone()))]),
+        VersionPattern::Range { family, lo, hi } => {
+            let mut m = std::collections::BTreeMap::new();
+            m.insert("family".to_string(), Json::str(family.clone()));
+            if let Some(lo) = lo {
+                m.insert("lo".to_string(), Json::str(lo.clone()));
+            }
+            if let Some(hi) = hi {
+                m.insert("hi".to_string(), Json::str(hi.clone()));
+            }
+            Json::Obj(m)
+        }
+        VersionPattern::Any => Json::str("any"),
+    }
+}
+
+/// `pattern_subsumes(outer, inner, outer_family, inner_family)` — `true` when
+/// `inner` admits only versions `outer` admits (the document-side narrowing
+/// check a `ProfileConstraint.selector.version_pattern` runs against the bound
+/// profile's own `version_pattern`; §5b, R2.18). `outer_family`/`inner_family`
+/// resolve the empty `range.family` spelling ("the selector's `model_family`")
+/// — callers pass each side's effective `model_family`. Subsumption is
+/// *conservative*: a narrowing the closed grammar cannot prove (a `range`
+/// inside a `prefix`, `any` inside anything narrower) is `false` — never
+/// silently admitted.
+pub fn pattern_subsumes(
+    outer: &VersionPattern,
+    inner: &VersionPattern,
+    outer_family: &str,
+    inner_family: &str,
+) -> bool {
+    fn eff<'a>(pat_family: &'a str, sel_family: &'a str) -> &'a str {
+        if pat_family.is_empty() {
+            sel_family
+        } else {
+            pat_family
+        }
+    }
+    match (outer, inner) {
+        (VersionPattern::Any, _) => true,
+        (_, VersionPattern::Any) => false,
+        (VersionPattern::Exact(v), VersionPattern::Exact(w)) => v == w,
+        (VersionPattern::Exact(_), _) => false,
+        (VersionPattern::Prefix(p), VersionPattern::Exact(v)) => v.starts_with(p.as_str()),
+        (VersionPattern::Prefix(p), VersionPattern::Prefix(q)) => q.starts_with(p.as_str()),
+        (VersionPattern::Prefix(_), _) => false,
+        (VersionPattern::Range { family: fo, lo, hi }, VersionPattern::Exact(v)) => {
+            eff(fo, outer_family) == inner_family
+                && lo.as_ref().is_none_or(|l| v.as_str() >= l.as_str())
+                && hi.as_ref().is_none_or(|h| v.as_str() < h.as_str())
+        }
+        (
+            VersionPattern::Range { family: fo, lo, hi },
+            VersionPattern::Range {
+                family: fi,
+                lo: lo2,
+                hi: hi2,
+            },
+        ) => {
+            eff(fo, outer_family) == eff(fi, inner_family)
+                && match lo {
+                    None => true,
+                    Some(l) => lo2.as_ref().is_some_and(|l2| l2.as_str() >= l.as_str()),
+                }
+                && match hi {
+                    None => true,
+                    Some(h) => hi2.as_ref().is_some_and(|h2| h2.as_str() <= h.as_str()),
+                }
+        }
+        (VersionPattern::Range { .. }, _) => false,
+    }
+}
+
+/// Parse a `version_pattern` (the codec's read direction — strict member set):
+/// `"any"` | `{"exact": v}` | `{"prefix": v}` | `{"family"?, "lo"?, "hi"?}`.
+/// The `{lo, hi}`-without-`family` legacy spelling reads `family = ""` (the
+/// selector's own `model_family` at check time).
+pub fn version_pattern_from_json(j: &Json, path: &str) -> Result<VersionPattern, String> {
+    match j {
+        Json::Str(s) if s == "any" => Ok(VersionPattern::Any),
+        Json::Obj(m) => {
+            for k in m.keys() {
+                if !matches!(k.as_str(), "exact" | "prefix" | "family" | "lo" | "hi") {
+                    return Err(format!("{path}.{k}: unknown version_pattern member"));
+                }
+            }
+            if let Some(v) = j.get("exact") {
+                let v = v
+                    .as_str()
+                    .ok_or_else(|| format!("{path}.exact must be a string"))?;
+                return Ok(VersionPattern::Exact(v.to_string()));
+            }
+            if let Some(v) = j.get("prefix") {
+                let v = v
+                    .as_str()
+                    .ok_or_else(|| format!("{path}.prefix must be a string"))?;
+                return Ok(VersionPattern::Prefix(v.to_string()));
+            }
+            if j.get("family").is_some() || j.get("lo").is_some() || j.get("hi").is_some() {
+                let str_or = |k: &str| -> Result<Option<String>, String> {
+                    match j.get(k) {
+                        None => Ok(None),
+                        Some(Json::Str(s)) => Ok(Some(s.clone())),
+                        Some(_) => Err(format!("{path}.{k} must be a string")),
+                    }
+                };
+                return Ok(VersionPattern::Range {
+                    family: str_or("family")?.unwrap_or_default(),
+                    lo: str_or("lo")?,
+                    hi: str_or("hi")?,
+                });
+            }
+            Err(format!(
+                "{path}: not a closed-set member (exact|prefix|range|any)"
+            ))
+        }
+        _ => Err(format!(
+            "{path} must be a version_pattern object or \"any\""
+        )),
+    }
+}
+
 /// `FactorKind` — the kind axis of a declared experimental factor
 /// (`kind ∈ {model_snapshot, harness, environment, task, budget, replicate}`;
 /// spec §5h.2 §3). `replicate` is the seed axis — seed material (harness RNG
@@ -3223,6 +3389,94 @@ mod tests {
         assert!(refusal.refusal_is_failure());
         let eff = OutcomeClassPolicy::for_efficiency();
         assert!(!eff.in_denominator(OutcomeClass::BudgetExhausted));
+    }
+
+    #[test]
+    fn version_pattern_codec_round_trips_the_closed_grammar() {
+        // §3.2.3 `version_pattern ∈ {exact | prefix | range | any}` — the
+        // canonical definition lives here (R2.18; the compiler re-exports it).
+        for p in [
+            VersionPattern::Exact("1.0".into()),
+            VersionPattern::Prefix("1.".into()),
+            VersionPattern::Range {
+                family: "gpt".into(),
+                lo: Some("1.0".into()),
+                hi: Some("2.0".into()),
+            },
+            VersionPattern::Range {
+                family: String::new(),
+                lo: None,
+                hi: None,
+            },
+            VersionPattern::Any,
+        ] {
+            assert_eq!(
+                version_pattern_from_json(&version_pattern_json(&p), "/vp").as_ref(),
+                Ok(&p),
+                "{p:?}"
+            );
+        }
+        // Malformed spellings refuse typed.
+        assert!(version_pattern_from_json(&Json::str("regex.*"), "/vp").is_err());
+        assert!(version_pattern_from_json(&Json::Int(4), "/vp").is_err());
+        assert!(version_pattern_from_json(&Json::obj([("bogus", Json::Int(1))]), "/vp").is_err());
+    }
+
+    #[test]
+    fn pattern_subsumes_is_conservative_over_the_closed_grammar() {
+        use VersionPattern::*;
+        let sub = |o: &VersionPattern, i: &VersionPattern| pattern_subsumes(o, i, "fam", "fam");
+        // `any` admits everything; nothing narrower admits `any`.
+        assert!(sub(&Any, &Any));
+        assert!(sub(&Any, &Exact("1.0".into())));
+        assert!(!sub(&Exact("1.0".into()), &Any));
+        assert!(!sub(&Prefix("1.".into()), &Any));
+        // exact ⊆ exact only on equality.
+        assert!(sub(&Exact("1.0".into()), &Exact("1.0".into())));
+        assert!(!sub(&Exact("1.0".into()), &Exact("1.1".into())));
+        // prefix admits exacts/prefixes beneath it; an exact admits nothing wider.
+        assert!(sub(&Prefix("1.".into()), &Exact("1.0".into())));
+        assert!(sub(&Prefix("1.".into()), &Prefix("1.2".into())));
+        assert!(!sub(&Exact("1.0".into()), &Prefix("1.".into())));
+        assert!(!sub(&Prefix("1.2".into()), &Prefix("1.".into())));
+        // range admits members inside the window; an *unprovable* narrowing
+        // (a range inside a prefix, an exact outside the window) is refused.
+        let win = Range {
+            family: "fam".into(),
+            lo: Some("1.0".into()),
+            hi: Some("2.0".into()),
+        };
+        assert!(sub(&win, &Exact("1.5".into())));
+        assert!(!sub(&win, &Exact("2.0".into())), "hi is exclusive");
+        assert!(!sub(&win, &Exact("0.9".into())));
+        assert!(!sub(&Prefix("1.".into()), &win));
+        assert!(!sub(&win, &Prefix("1.".into())));
+        // Range ⊆ range requires equal effective family + contained bounds.
+        let narrow = Range {
+            family: "fam".into(),
+            lo: Some("1.2".into()),
+            hi: Some("1.8".into()),
+        };
+        assert!(sub(&win, &narrow));
+        assert!(!sub(&narrow, &win));
+        let other_family = Range {
+            family: "other".into(),
+            lo: Some("1.2".into()),
+            hi: Some("1.8".into()),
+        };
+        assert!(
+            !sub(&win, &other_family),
+            "a different family never subsumes"
+        );
+        // The empty `family` spelling resolves against each side's selector
+        // `model_family` — mismatched effective families refuse.
+        let famless = Range {
+            family: String::new(),
+            lo: None,
+            hi: None,
+        };
+        assert!(pattern_subsumes(&famless, &famless, "fam", "fam"));
+        assert!(!pattern_subsumes(&famless, &famless, "fam", "other"));
     }
 
     #[test]

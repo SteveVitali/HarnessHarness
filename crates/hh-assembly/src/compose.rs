@@ -7,6 +7,12 @@
 //! `/slots/*/enabled`), equal-precedence disagreement is `C-COMP-2
 //! LayerConflict`, never silent last-wins.
 //!
+//! Organisation layers (the C2 slice, §3.3.13) execute through the same
+//! per-field policies, plus the declared `organisation > user > project`
+//! cap ordering: a lower-authority kind's `authority_cap` may not outrank an
+//! organisation cap on the same subject (`C-COMP-1`), and a fragment may not
+//! author the derived `layers[]`/`resolved` members (`C-COMP-4`).
+//!
 //! The composed document carries `layers[]` — every input layer's
 //! `LayerProvenance`, precedence-ordered — and each composed constraint's
 //! `source` names its authoring layer, so attribution (and `source_layer` on
@@ -63,6 +69,26 @@ pub fn compose(
     order.sort_by_key(|l| l.provenance.precedence);
 
     let mut out = Assembly::empty();
+
+    // ── Derived members are never layer-settable — `layers[]`/`resolved` are
+    // computed by `compose`/`resolve` (`forbidden-below` every precedence); a
+    // fragment authoring one refuses typed rather than silently dropping it.
+    for l in &order {
+        if l.fragment.layers.is_some() || l.fragment.resolved.is_some() {
+            diags.push(comp_diag(
+                Code::CompForbiddenBelow,
+                "/assembly",
+                &l.provenance.id,
+                &format!(
+                    "layer `{}` authors `layers`/`resolved` — derived members are never layer-settable",
+                    l.provenance.id
+                ),
+                "remove `layers`/`resolved` from the fragment — `compose`/`resolve` computes them",
+                kernel,
+                Some(&l.provenance),
+            ));
+        }
+    }
 
     // ── `/dialect` — ForbiddenBelow(u64::MAX): the grammar dialect is not a
     // layer-settable field; a layer naming a different dialect is a conflict.
@@ -269,6 +295,15 @@ pub fn compose(
             out.slots.insert(k, sb);
         }
     }
+
+    // ── Organisation layers (C2 — §3.3.13's "organisation-level layers";
+    // §5g.4's `organisation > user > project` ordering): an
+    // `organisation`-authored `authority_cap` is a ceiling lower-authority
+    // kinds may only *narrow* — a `user`/`project`/`experiment`/`session` cap
+    // outranking an org cap on the same subject is the inversion the ordering
+    // forbids (`C-COMP-1` naming the inverted layer). `packaged-default` is
+    // kernel-authored, not user authority — it is outside the ordering.
+    check_org_cap_ordering(&order, &mut diags, kernel);
 
     // ── `/constraints` — AppendSet; every constraint is stamped with its
     // authoring layer; then the authority-cap monotone check. ─────────────────
@@ -545,6 +580,90 @@ fn check_authority_caps(
                         }
                         _ => {}
                     }
+                }
+            }
+        }
+    }
+}
+
+/// The C2 organisation-layer ordering (§3.3.13; §5g.4 "organisation > user >
+/// project may only narrow"): an `organisation` layer's `authority_cap` on a
+/// subject bounds every lower-authority kind — a `user`, `project`,
+/// `experiment` or `session` cap at equal-or-higher precedence over the same
+/// `of` subject is `C-COMP-1 AuthorityViolation` naming the inverted layer.
+/// `packaged-default` is kernel-authored — outside the user-authority ordering.
+fn check_org_cap_ordering(
+    order: &[&Layer],
+    diags: &mut Vec<AssemblyDiagnostic>,
+    kernel: &ProvenanceRecord,
+) {
+    use crate::grammar::LayerSourceKind;
+    let bounded_kinds = |k: LayerSourceKind| {
+        matches!(
+            k,
+            LayerSourceKind::User
+                | LayerSourceKind::Project
+                | LayerSourceKind::Experiment
+                | LayerSourceKind::Session
+        )
+    };
+    // The lowest precedence at which an organisation cap holds each subject —
+    // a lower-authority cap must sit strictly below it.
+    let mut org_caps: BTreeMap<String, i64> = BTreeMap::new();
+    for l in order {
+        if l.provenance.source_kind != LayerSourceKind::Organisation {
+            continue;
+        }
+        for c in &l.fragment.constraints {
+            if c.kind != ConstraintKind::AuthorityCap {
+                continue;
+            }
+            let subject = c
+                .subject
+                .get("of")
+                .and_then(Json::as_str)
+                .unwrap_or("<unspecified>")
+                .to_string();
+            org_caps
+                .entry(subject)
+                .and_modify(|p| *p = (*p).min(l.provenance.precedence))
+                .or_insert(l.provenance.precedence);
+        }
+    }
+    if org_caps.is_empty() {
+        return;
+    }
+    for l in order {
+        if !bounded_kinds(l.provenance.source_kind) {
+            continue;
+        }
+        for (i, c) in l.fragment.constraints.iter().enumerate() {
+            if c.kind != ConstraintKind::AuthorityCap {
+                continue;
+            }
+            let subject = c
+                .subject
+                .get("of")
+                .and_then(Json::as_str)
+                .unwrap_or("<unspecified>")
+                .to_string();
+            if let Some(&org_prec) = org_caps.get(&subject) {
+                if l.provenance.precedence >= org_prec {
+                    diags.push(comp_diag(
+                        Code::CompAuthorityViolation,
+                        &format!("/assembly/constraints/{i}/subject"),
+                        &subject,
+                        &format!(
+                            "layer `{}` (source_kind `{}`, precedence {}) sets an `authority_cap` over `{subject}` at or above the `organisation` layer's precedence {} — organisation > user > project may only narrow",
+                            l.provenance.id,
+                            l.provenance.source_kind.as_str(),
+                            l.provenance.precedence,
+                            org_prec
+                        ),
+                        "place the cap below the organisation layer's precedence",
+                        kernel,
+                        Some(&l.provenance),
+                    ));
                 }
             }
         }

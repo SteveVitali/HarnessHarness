@@ -939,17 +939,21 @@ fn declaration_requires(decl: &Json) -> bool {
 /// variant's `dialect_range` must admit the document dialect. Declaration-level
 /// only — no compilation (6b owns the compiled-surface check at C1/Stage 5).
 /// The stage-6 coordinate set — `assembly.profile_binding`'s pinned ref ∪
-/// the root's pinned `native.profile` (a `ProfileConstraint` is opaque here;
-/// §5b owns its semantics). Stage 6a sweeps declarations against it; the
+/// a `ProfileConstraint`'s `fallback_profile` ∪ the root's pinned
+/// `native.profile`. Stage 6a sweeps declarations against it; the
 /// plan-time stage 6b (C-PROF-2) binds the same coordinates — one
 /// definition, CC7.
 pub fn bound_profile_coordinates(doc: &HirDocument, assembly: Option<&Assembly>) -> Vec<String> {
     let mut named: Vec<String> = Vec::new();
     if let Some(a) = assembly {
-        if let ProfileBinding::Pinned(r) = &a.profile_binding {
-            if !r.is_unbound() {
-                named.push(r.profile.clone());
+        match &a.profile_binding {
+            ProfileBinding::Pinned(r) if !r.is_unbound() => named.push(r.profile.clone()),
+            ProfileBinding::Constraint(c) => {
+                if let Some(f) = &c.fallback_profile {
+                    named.push(f.clone());
+                }
             }
+            _ => {}
         }
     }
     if let Some(root) = doc.node(&doc.root.semantic_id) {

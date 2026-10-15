@@ -817,11 +817,16 @@ fn apply_path(
             }
         }
         "profile_binding" => {
-            match value.as_str() {
-                Some("unbound") => a.profile_binding = hh_assembly::grammar::ProfileBinding::Unbound,
-                _ => {
-                    a.profile_binding = hh_assembly::grammar::ProfileBinding::Constraint(value.clone())
-                }
+            match hh_assembly::grammar::profile_binding_from_json(value) {
+                Ok(b) => a.profile_binding = b,
+                Err(e) => diags.push(ddiag(
+                    Code::LoadParse,
+                    path,
+                    "profile_binding",
+                    &format!("profile_binding override fails the grammar: {e}"),
+                    "author `unbound`, `{profile_ref, pinned?}` or `{constraint: {selector?, required_capabilities?, fallback_profile?}}`",
+                    kernel,
+                )),
             }
         }
         "constraints" => {

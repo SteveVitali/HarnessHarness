@@ -287,6 +287,7 @@ pub fn stage1_assembly() -> Assembly {
 
 // ── registry fixtures ─────────────────────────────────────────────────────────
 
+#[allow(dead_code)]
 pub fn dir(tag: &str) -> PathBuf {
     let d = std::env::temp_dir().join(format!("hh-assembly-test-{}-{}", std::process::id(), tag));
     let _ = std::fs::remove_dir_all(&d);
@@ -295,6 +296,7 @@ pub fn dir(tag: &str) -> PathBuf {
 
 /// A `ClassRecord` carrying the §3.3.3 invariants (non-empty contract
 /// invariants/failure-modes, the two mandatory required inputs).
+#[allow(dead_code)]
 pub fn class_record(id: &str) -> ClassRecord {
     ClassRecord {
         class_id: id.to_string(),
@@ -331,6 +333,7 @@ pub fn class_record(id: &str) -> ClassRecord {
 
 /// A `VariantRecord` of `class_ref` named `variant_id` (`<ns>/<name>`), placed
 /// in-process by default.
+#[allow(dead_code)]
 pub fn variant_record(class_ref: &str, variant_id: &str, placement: Placement) -> VariantRecord {
     VariantRecord {
         variant_id: variant_id.to_string(),
@@ -361,6 +364,7 @@ pub fn variant_record(class_ref: &str, variant_id: &str, placement: Placement) -
 /// A seeded store: the two Stage-1 classes plus one in-process variant per
 /// class, published under `hh/<name>` (`round_robin` / `full_window`).
 /// Returns `(store, {slot → variant_version_id})`.
+#[allow(dead_code)]
 pub fn seeded_store(tag: &str) -> (RegistryStore, BTreeMap<String, String>) {
     let mut s = RegistryStore::open(dir(tag), &kernel()).unwrap();
     let mut vids = BTreeMap::new();

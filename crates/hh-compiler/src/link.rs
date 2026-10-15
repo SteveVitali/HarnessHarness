@@ -19,8 +19,8 @@ use hh_wire::json::Json;
 
 use crate::errors::{CompileError, LinkErrorKind};
 use crate::profile::{
-    owned_fields, profile_coordinate, resolve_chain, DebtStatus, ExtBlock, ModelProfile,
-    ProfileRule, ProfileView,
+    owned_fields, profile_coordinate, resolve_chain, CapabilityState, DebtStatus, ExtBlock,
+    ModelProfile, ProfileRule, ProfileView,
 };
 
 /// A `TargetSpec` — the bound compilation target (§3.2.2: `target_refs[]` bind at link;
@@ -250,8 +250,17 @@ pub fn link(
     }
 
     // ── Profile binding ──────────────────────────────────────────────────────────
+    // The definition's `profile_binding` constraint (§5b narrowed binding —
+    // R2.18): its `fallback_profile` member is the document-side spelling of
+    // the ADR-0124 §5 escape; the bound head must satisfy every declared
+    // narrowing member below (C-LINK-4).
+    let constraint = definition_profile_constraint(doc, kernel)?;
+    let fallback_coord: Option<String> = match fallback_profile {
+        Some(f) => Some(f.to_string()),
+        None => constraint.as_ref().and_then(|c| c.fallback_profile.clone()),
+    };
     let chain = if profile_refs.is_empty() {
-        match fallback_profile {
+        match fallback_coord.as_deref() {
             Some(coord) => {
                 let p = profiles
                     .profile(coord)
@@ -310,6 +319,13 @@ pub fn link(
                 )],
             });
         }
+    }
+
+    // The definition's `ProfileConstraint` narrows the admissible profile set —
+    // the bound head must satisfy it or the link refuses `C-LINK-4` (the same
+    // class a definition pin the chain doesn't contain raises).
+    if let Some(c) = &constraint {
+        check_profile_constraint(c, chain.last().expect("non-empty chain"), kernel)?;
     }
 
     // Chain merge: a child's overrides must touch only its owned fields (per-field merge
@@ -785,6 +801,113 @@ pub fn link(
             _ => Vec::new(),
         },
     })
+}
+
+/// The definition's `ProfileConstraint`, when `assembly.profile_binding` is
+/// the §5b narrowed-binding form — decoded through the grammar codec (CC7).
+/// A decode failure propagates the codec's typed `C-LOAD-*` diagnostics —
+/// a malformed constraint reaching link is refused, never skipped.
+fn definition_profile_constraint(
+    doc: &hh_hir::HirDocument,
+    kernel: &ProvenanceRecord,
+) -> Result<Option<hh_assembly::grammar::ProfileConstraint>, CompileError> {
+    use hh_assembly::grammar::{Assembly, ProfileBinding};
+    let Some(j) = &doc.assembly else {
+        return Ok(None);
+    };
+    let mut diags = Vec::new();
+    let Some(a) = Assembly::from_json(j, "/assembly", kernel, &mut diags) else {
+        return Err(CompileError::LinkError {
+            kind: LinkErrorKind::VersionConflict,
+            detail: "the sealed assembly fails its grammar decode at link".to_string(),
+            diagnostics: diags,
+        });
+    };
+    Ok(match a.profile_binding {
+        ProfileBinding::Constraint(c) => Some(c),
+        _ => None,
+    })
+}
+
+/// The bound head must satisfy every declared member of the definition's
+/// `ProfileConstraint` (§5b narrowed binding): `provider_api_family` /
+/// `model_family` are equality tests; `version_pattern` is conservative
+/// subsumption over the closed `Pattern` grammar (unprovable → refused);
+/// `roles_admitted` must cover the declaration; every `required_capabilities`
+/// axis must read `declared | probed` (`unknown`/unrecognised never coerces —
+/// the same rule the router's G-2 applies).
+fn check_profile_constraint(
+    c: &hh_assembly::grammar::ProfileConstraint,
+    head: &ModelProfile,
+    kernel: &ProvenanceRecord,
+) -> Result<(), CompileError> {
+    let unsat = |what: String| -> CompileError {
+        CompileError::LinkError {
+            kind: LinkErrorKind::VersionConflict,
+            detail: format!("profile_constraint unsatisfied: {what}"),
+            diagnostics: vec![diag(
+                Code::LinkVersionConflict,
+                Severity::Error,
+                "/assembly/profile_binding/constraint",
+                &profile_coordinate(head),
+                &format!(
+                    "bound profile {} violates the definition's profile_constraint: {what}",
+                    profile_coordinate(head)
+                ),
+                "bind a profile satisfying the constraint (or relax the declaration)",
+                kernel,
+            )],
+        }
+    };
+    let s = &c.selector;
+    if let Some(f) = &s.provider_api_family {
+        if *f != head.selector.provider_api_family {
+            return Err(unsat(format!(
+                "provider_api_family `{f}` ≠ bound `{}`",
+                head.selector.provider_api_family
+            )));
+        }
+    }
+    if let Some(f) = &s.model_family {
+        if *f != head.selector.model_family {
+            return Err(unsat(format!(
+                "model_family `{f}` ≠ bound `{}`",
+                head.selector.model_family
+            )));
+        }
+    }
+    if let Some(p) = &s.version_pattern {
+        if !hh_ontology::eval::pattern_subsumes(
+            p,
+            &head.selector.version_pattern,
+            s.model_family.as_deref().unwrap_or(""),
+            &head.selector.model_family,
+        ) {
+            return Err(unsat(format!(
+                "version_pattern {:?} is not subsumed by the constraint's pattern {:?}",
+                head.selector.version_pattern, p
+            )));
+        }
+    }
+    for r in &s.roles_admitted {
+        if !head.selector.roles_admitted.contains(r) {
+            return Err(unsat(format!(
+                "role `{}` is outside the bound profile's roles_admitted",
+                r.name()
+            )));
+        }
+    }
+    for cap in &c.required_capabilities {
+        match head.capabilities.capability_state(cap) {
+            Some(CapabilityState::Declared) | Some(CapabilityState::Probed) => {}
+            _ => {
+                return Err(unsat(format!(
+                    "required capability `{cap}` is not `declared | probed` on the bound profile"
+                )))
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The definition's pinned profile coordinate, when `native.profile` or
