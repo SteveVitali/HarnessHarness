@@ -30,8 +30,8 @@ pub mod work_item;
 
 pub use capabilities::{AdapterCapabilities, CapState, CAPABILITY_NAMES};
 pub use engine::{
-    AdmitOutcome, FleetEngine, ReconcileReport, COMPONENT, ISSUES, OUTCOMES, RESOLUTION_KINDS,
-    RUN_KIND,
+    observe_run, AdmitOutcome, FleetEngine, ReconcileReport, COMPONENT, ISSUES, OUTCOMES,
+    RESOLUTION_KINDS, RUN_KIND,
 };
 pub use errors::FleetError;
 pub use identity::{

@@ -783,6 +783,30 @@ impl EmbedService {
             .get("healing_policy_ref")
             .and_then(Json::as_str)
             .map(str::to_string);
+        // R3.2 (DF-S2.3-1; R-2.12.6) — `connection_info{ingress_adapters}`
+        // stamps the manifest's `extra.ingress_adapters` declaration: the
+        // non-fleet `external`/`manual` wakeup boundary reads it at
+        // `wakeup_subscribe` (an undeclared run's subscription could never
+        // produce — the typed refusal beats a parked subscription). The
+        // shape is validated here: a malformed declaration is a schema
+        // error at open, never a silent non-declaration.
+        if let Some(ads) = env_info.get("ingress_adapters") {
+            let ok = matches!(ads, Json::Arr(es) if es.iter().all(|e| {
+                e.get("source_ref").and_then(Json::as_str).is_some()
+                    && matches!(e.get("triggers"), Some(Json::Arr(ts))
+                        if ts.iter().filter_map(|t| t.as_str())
+                            .all(|t| t == "external" || t == "manual"))
+            }));
+            if !ok {
+                return Err(EmbedError::SchemaViolation {
+                    path: "environment.connection_info.ingress_adapters".into(),
+                    code: "invalid_declaration".into(),
+                });
+            }
+            manifest
+                .extra
+                .insert("ingress_adapters".to_string(), ads.clone());
+        }
         manifest.budget = budget.map(|_| budget_input);
         manifest.overrides_layer_id = overrides_layer_id.clone();
         // S4.11 — the surface-declared launch-causality citation

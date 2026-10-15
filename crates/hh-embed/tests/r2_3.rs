@@ -464,7 +464,28 @@ fn r2_3_suspend_gates_and_typed_refusals() {
 fn r2_3_suspend_mints_producing_subscriptions_then_suspends() {
     let mut svc = service();
     hello_experimental(&mut svc);
-    let s = open_new(&mut svc);
+    // R3.2 (R-2.12.6): non-fleet `external` rides a declared ingress
+    // adapter — `connection_info{ingress_adapters}` stamps the manifest.
+    let s = ok(&call(
+        &mut svc,
+        "open_session",
+        Json::obj([
+            (
+                "spec",
+                new_spec_with(
+                    local_host_env(BTreeMap::from([(
+                        "ingress_adapters".to_string(),
+                        Json::Arr(vec![Json::obj([
+                            ("source_ref", Json::str("ing:ci")),
+                            ("triggers", Json::Arr(vec![Json::str("external")])),
+                        ])]),
+                    )])),
+                    None,
+                ),
+            ),
+            ("idempotency_key", Json::str("open-1")),
+        ]),
+    ));
     let sid = session_id(&s);
     let run = run_id(&s);
 
