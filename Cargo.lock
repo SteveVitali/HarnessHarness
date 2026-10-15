@@ -562,6 +562,7 @@ dependencies = [
  "hh-control",
  "hh-env",
  "hh-experiment",
+ "hh-gateway",
  "hh-hir",
  "hh-identity",
  "hh-lab",

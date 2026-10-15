@@ -12,10 +12,12 @@
 //!   Under `steer_mode = unsupported` a forged woken-steer falls through
 //!   to the shared table (never a steer interpretation the declaration
 //!   did not admit).
-//! - **stop protocol on the staged variants** — `hh/workflow` /
-//!   `hh/program` park every cue on `human_input`, but `interrupt` /
-//!   `cancel_requested` still answer `stop{cancelled}` — a parked run
-//!   stays cancellable, and the decision is code-owned, not improvised.
+//! - **stop protocol on the compiled-plan variants** — `hh/workflow` /
+//!   `hh/program` interpret `RuntimePlan/1.control` (R3.3's `PlanWalker`
+//!   — the staged `wait{human_input}` park is retired): `interrupt` /
+//!   `cancel_requested` still answer `stop{cancelled}`, and a state
+//!   without the walk record terminates `stop{completed}`, never a
+//!   parked improvisation.
 //! - **`plan_execute`'s explicit legs** — `interrupt` / `cancel_requested`
 //!   are typed `stop{cancelled}` answers mid-plan; a stray `woken{steer}`
 //!   parks rather than improvising a re-plan.
@@ -102,9 +104,10 @@ fn is_stop_cancelled(d: &ControlDecision, by: CancelledBy) -> bool {
     )
 }
 
-/// A `ControlState` standing in for a staged variant's opened state —
-/// `open` requires a `plan` (the procedure), which these `decide`-level
-/// cells do not exercise (the parked/stop arms read no plan).
+/// A `ControlState` standing in for a variant's opened state — `open`
+/// requires a `plan` (the procedure), which these `decide`-level cells
+/// do not exercise (the stop-protocol arms read no plan; the walk
+/// record is absent → `stop{completed}`).
 fn staged_state(variant_ref: &str) -> ControlState {
     ControlState {
         variant_ref: variant_ref.into(),
@@ -159,9 +162,9 @@ fn variant_for_unknown_is_none_never_a_substitute() {
 }
 
 #[test]
-fn workflow_and_program_bind_staged_not_minimal() {
-    // The staged presets are *not* ReactMinimal in disguise — a run bound
-    // to `hh/workflow` must never silently act like `react/minimal`.
+fn workflow_and_program_bind_the_plan_walker_not_minimal() {
+    // The compiled-plan presets are *not* ReactMinimal in disguise — a run
+    // bound to `hh/workflow` must never silently act like `react/minimal`.
     let w = react::variant_for("hh/workflow@1").unwrap();
     let p = react::variant_for("hh/program@1").unwrap();
     assert!(!w.capabilities().steering, "workflow is not steerable");
@@ -273,10 +276,14 @@ fn steerable_woken_steer_records_the_plan_point() {
     assert_eq!(st.variant_ref, REACT_STEERABLE_REF);
 }
 
-// ── staged variants — parked, still cancellable ─────────────────────────
+// ── compiled-plan variants — interpreted, still cancellable ────────────
 
 #[test]
-fn staged_variant_parks_non_protocol_cues() {
+fn plan_walker_state_without_walk_record_stops_completed() {
+    // R3.3 — the `PlanWalker` replaced the staged park: a `decide` whose
+    // state carries no `walk` record has no position to walk — the
+    // terminal is `stop{completed}` (the honest end of an exhausted
+    // plan), never a `wait{human_input}` stand-in.
     let v = react::variant_for("hh/workflow@1").unwrap();
     let mut st = staged_state("hh/workflow@1");
     let d = v.decide(
@@ -287,15 +294,17 @@ fn staged_variant_parks_non_protocol_cues() {
         },
     );
     match &d.kind {
-        DecisionKind::Wait {
-            until: hh_control::vocab::WaitUntil::CueKind { cue_kind },
-        } => assert_eq!(cue_kind, "human_input"),
-        other => panic!("staged variant must park, got {other:?}"),
+        DecisionKind::Stop {
+            proposed_reason, ..
+        } => {
+            assert!(matches!(proposed_reason, StopReason::Completed), "{d:?}")
+        }
+        other => panic!("an exhausted walk must stop{{completed}}, got {other:?}"),
     }
 }
 
 #[test]
-fn staged_variant_interrupt_is_a_typed_stop() {
+fn plan_walker_interrupt_is_a_typed_stop() {
     for r in ["hh/workflow@1", "hh/program@1"] {
         let v = react::variant_for(r).unwrap();
         let mut st = staged_state(r);
@@ -310,7 +319,7 @@ fn staged_variant_interrupt_is_a_typed_stop() {
 }
 
 #[test]
-fn staged_variant_cancel_requested_is_a_typed_stop() {
+fn plan_walker_cancel_requested_is_a_typed_stop() {
     let v = react::variant_for("hh/program@1").unwrap();
     let mut st = staged_state("hh/program@1");
     let d = v.decide(
@@ -323,9 +332,9 @@ fn staged_variant_cancel_requested_is_a_typed_stop() {
 }
 
 #[test]
-fn staged_variant_open_without_procedure_is_missing_procedure() {
-    // `requires.procedure` is real — a staged preset with no plan refuses
-    // `MissingProcedure`, not a fabricated state.
+fn plan_walker_open_without_procedure_is_missing_procedure() {
+    // `requires.procedure` is real — a plan-required variant with no
+    // `ctx.plan` refuses `MissingProcedure`, not a fabricated state.
     let mut v = react::variant_for("hh/workflow@1").unwrap();
     let c = ctx_with_steering((SteerMode::Unsupported, ConcurrentInput::QueueOnly));
     let err = v.open(&c).unwrap_err();

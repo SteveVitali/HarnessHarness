@@ -23,6 +23,7 @@ hh-control = { path = "../hh-control" }
 hh-subagent = { path = "../hh-subagent" }
 
 [dev-dependencies]
+hh-gateway = { path = "../hh-gateway" }
 hh-compiler = { path = "../hh-compiler" }
 hh-lab = { path = "../hh-lab" }
 hh-experiment = { path = "../hh-experiment" }

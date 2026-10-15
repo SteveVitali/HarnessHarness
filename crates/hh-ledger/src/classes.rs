@@ -1215,6 +1215,8 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("control.critic.gated", "none"),
     // ── control:decision ──
     ("control.decision", "none"),
+    // ── control:delegate ──
+    ("control.delegate.proposed", "none"),
     // ── control:guard ──
     ("control.guard.fired", "hint"),
     // ── control:invariant ──
@@ -2063,6 +2065,15 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // lands at Stage 3 with `plan_execute` — the class is declared now so the
     // dialect table is complete.
     row_audit("control.plan.emitted",      O::Events, true,  OPEN_AUDIT, &[], None, None),
+    // `control.delegate.proposed{tool_call_id, spec}` — the model-emitted
+    // delegation *ask* (R-2.6.1/R-2.6.3; R3.3): a validated call on the
+    // declared delegation surface lifts its bounded `spec` member durable
+    // (the `hh.plan`/`control.plan.emitted` analogue — the strategy folds
+    // it into the `delegate` decision it owns; the spawn kernel's
+    // `SubagentSpec` parse is the authoritative validation, never this
+    // row's). The ask rides MUST-data (the `spec` Json, bounded at the
+    // wire) — never a content ref the audit cannot read.
+    row_audit("control.delegate.proposed", O::Events, true,  OPEN_AUDIT, &[], None, None),
     // `control.compute.decided{ComputeDecisionRecord}` — §5e.4's bind record:
     // "not audit-grade but citable by `audit_ref`" (the emitter lands with the
     // compute policy at C3/Stage 4 — R-2.6.4).

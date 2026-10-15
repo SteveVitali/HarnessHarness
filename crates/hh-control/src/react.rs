@@ -48,7 +48,7 @@ use crate::strategy::{
 };
 use crate::vocab::{
     ActMode, ControlDecision, Cue, DecisionKind, EnvelopeSignal, EscalateAsk, ExpectedOutput,
-    HumanInput, OnPartial, RetryTarget, SettledOutcome, WaitUntil,
+    HumanInput, OnPartial, RetryTarget, SettledOutcome, WaitUntil, WokenTrigger,
 };
 
 /// The `react/minimal` variant ref (`hh/` namespace — the kernel-shipped
@@ -114,6 +114,9 @@ mod ext {
     pub const CX_GUARD_SEQ: &str = "cx_guard_seq";
     /// The seq of the `compaction_required` row before the latest.
     pub const CX_PREV_GUARD_SEQ: &str = "cx_prev_guard_seq";
+    /// `react/steerable` — the folded `control.delegate.proposed` asks
+    /// (`[{tool_call_id, spec}]` in response order; R3.3).
+    pub const PENDING_DELEGATES: &str = "pending_delegates";
     /// How many `compaction_required` signals this run has seen (I4 bound).
     pub const CX_GUARD_COUNT: &str = "cx_guard_count";
     /// The seq of the latest `context.compaction.completed` row.
@@ -798,7 +801,11 @@ impl ReactSteerable {
                 steering: true,
                 follow_up: true,
                 parallel_effects: false,
-                delegation: false,
+                // R3.3 — the model-emitted `hh.delegate` leg is landed:
+                // `delegate = model` is a real ask through the child-lease
+                // substrate, never a staged claim (CC2 — the lease
+                // confers, the variant only asks).
+                delegation: true,
                 model_emitted_plan: false,
                 resumable_mid_effect: true,
                 decision_points_owned: vec![
@@ -837,6 +844,68 @@ impl ReactSteerable {
                 expected_output: ExpectedOutput::Free,
             },
         }
+    }
+
+    /// `propose{plan, context_request{peer_message_ref, from}}` — the
+    /// peer-message leg (R3.3): a `woken{trigger: peer_message{from}}`
+    /// is a delivered *artefact*, distinct from a steer/follow-up
+    /// directive — its interpretation asks the model's next plan under
+    /// the delivery (`peer_message_ref` + the sender run id; never the
+    /// bytes — I7, and M-1's context-only semantics: a peer message can
+    /// never widen authority, budget or satisfy a validator).
+    fn peer_message_propose(
+        &self,
+        state: &ControlState,
+        from: &str,
+        payload_ref: &str,
+    ) -> ControlDecision {
+        ControlDecision {
+            stamp: stamp_for(state, DecisionPoint::Plan, None),
+            kind: DecisionKind::Propose {
+                decision_point: DecisionPoint::Plan,
+                context_request: Json::obj([
+                    ("peer_message_ref", Json::str(payload_ref)),
+                    ("from", Json::str(from)),
+                ]),
+                expected_output: ExpectedOutput::Free,
+            },
+        }
+    }
+
+    /// The folded delegation asks — `[{tool_call_id, spec}]` in response
+    /// order (`control.delegate.proposed` rows; a `tool_call_id` is
+    /// unique per call — INV-5's uniqueness at the intent level).
+    fn pending_delegates(state: &ControlState) -> Vec<(String, Json)> {
+        match state.extension.get(ext::PENDING_DELEGATES) {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .filter_map(|i| {
+                    Some((
+                        i.get("tool_call_id")?.as_str()?.to_string(),
+                        i.get("spec")?.clone(),
+                    ))
+                })
+                .collect(),
+            _ => vec![],
+        }
+    }
+
+    fn set_pending_delegates(state: &mut ControlState, pending: &[(String, Json)]) {
+        ReactMinimal::set_ext(
+            state,
+            ext::PENDING_DELEGATES,
+            Json::Arr(
+                pending
+                    .iter()
+                    .map(|(tc, spec)| {
+                        Json::obj([
+                            ("tool_call_id", Json::str(tc.clone())),
+                            ("spec", spec.clone()),
+                        ])
+                    })
+                    .collect(),
+            ),
+        );
     }
 
     /// `guard_fired{compaction_required}` → `compact{reason}` — bounded by
@@ -903,7 +972,35 @@ impl ControlStrategy for ReactSteerable {
     }
 
     fn observe(&self, state: &mut ControlState, events: &[EventEnvelope]) {
-        self.inner.observe(state, events)
+        let before = state.last_cue_seq;
+        self.inner.observe(state, events);
+        // The delegation-ask fold (R3.3): a `control.delegate.proposed`
+        // row the driver minted at G-INTERPRET joins the pending set —
+        // `decide` emits the `delegate` decision for it (the same
+        // records-in/records-out rule `action.tool.proposed`→`act` runs
+        // under — the strategy never reads call args itself, I2).
+        for ev in events {
+            if ev.seq <= before {
+                continue;
+            }
+            if ev.class == "control.delegate.proposed" {
+                let tc = ev
+                    .payload
+                    .get("tool_call_id")
+                    .and_then(Json::as_str)
+                    .unwrap_or_default()
+                    .to_string();
+                let spec = ev.payload.get("spec").cloned().unwrap_or(Json::Null);
+                if tc.is_empty() {
+                    continue;
+                }
+                let mut pending = Self::pending_delegates(state);
+                if !pending.iter().any(|(id, _)| *id == tc) {
+                    pending.push((tc, spec));
+                    Self::set_pending_delegates(state, &pending);
+                }
+            }
+        }
     }
 
     fn decide(&self, state: &mut ControlState, cue: &Cue) -> ControlDecision {
@@ -919,6 +1016,17 @@ impl ControlStrategy for ReactSteerable {
             Cue::HumanInput(HumanInput::FollowUp { payload_ref }) => {
                 self.steered_propose(state, "follow_up_ref", payload_ref)
             }
+            // The peer-message leg (R3.3; the DF's distinct
+            // interpretation — AC-10's one `woken` member): a delivered
+            // `peer_message{from}` is a context *artefact*, not a steer
+            // or follow-up directive. The arm precedes the delivery-mode
+            // arms — the trigger's content class, not the subscription's
+            // lane, selects the interpretation.
+            Cue::Woken {
+                trigger: WokenTrigger::PeerMessage { from },
+                payload_ref,
+                ..
+            } => self.peer_message_propose(state, from, payload_ref),
             // The durable steer (R2.6; the OQ-316 steer arm) — a
             // `woken{delivery_mode: steer, payload_ref}` occurrence is the
             // `steer{mode: next_turn}` op's queued delivery; it joins the
@@ -946,6 +1054,34 @@ impl ControlStrategy for ReactSteerable {
                 && !payload_ref.is_empty() =>
             {
                 self.steered_propose(state, "follow_up_ref", payload_ref)
+            }
+            // The model-emitted delegation ask (R-2.6.3; R3.3): a folded
+            // `control.delegate.proposed` becomes the `delegate` decision
+            // the react preset's `delegate = model` point owns — the
+            // spec's own `budget`/`requested_grants`/`delegation_reason`
+            // members ride the audit row (a missing reason refuses
+            // `missing_delegation_reason` at `check` — never a default,
+            // never a kernel guess). `open_effects` non-empty still
+            // parks on `effects_settled` through the shared table (I4).
+            Cue::ModelCompleted {
+                stop_reason: hh_gateway::vocab::StopReason::ToolUse,
+                ..
+            } if state.open_effects.is_empty() && !Self::pending_delegates(state).is_empty() => {
+                let mut pending = Self::pending_delegates(state);
+                let (_tc, spec) = pending.remove(0);
+                Self::set_pending_delegates(state, &pending);
+                ControlDecision {
+                    stamp: stamp_for(state, DecisionPoint::Delegate, None),
+                    kind: DecisionKind::Delegate {
+                        spec: spec.clone(),
+                        budget_slice: spec.get("budget").cloned().unwrap_or(Json::Null),
+                        permissions: spec
+                            .get("requested_grants")
+                            .cloned()
+                            .unwrap_or(Json::Arr(vec![])),
+                        delegation_reason: spec.get("delegation_reason").cloned(),
+                    },
+                }
             }
             // Compaction routing — the react β preset owns `compact` to
             // code; the decision still passes `envelope.check` like every
@@ -1009,7 +1145,11 @@ pub struct StagedVariant {
 }
 
 impl StagedVariant {
-    fn new(variant_ref: &str, caps: ControlCapabilities) -> Self {
+    /// Construct the staged variant for `variant_ref` with `caps` — the
+    /// family registry no longer binds it (R3.3's `PlanWalker` interprets
+    /// `hh/workflow@1`/`hh/program@1`); retained for staged halves that
+    /// land before their interpreter does.
+    pub fn new(variant_ref: &str, caps: ControlCapabilities) -> Self {
         StagedVariant {
             variant_ref: variant_ref.into(),
             caps,
@@ -1136,63 +1276,25 @@ impl ControlStrategy for StagedVariant {
 /// points, never a fifth variant). Stage-1 registers all four with their
 /// presets; `decide` lands per stage.
 pub fn registry() -> Vec<Box<dyn ControlStrategy>> {
-    let workflow = {
-        let mut b = ControlBoundary::default();
-        for p in DecisionPoint::ALL {
-            b.assignments.insert(p, Owner::Code);
-        }
-        b.assignments.insert(DecisionPoint::Escalate, Owner::Human);
-        ControlCapabilities {
-            deterministic_replay: true,
-            steering: false,
-            follow_up: false,
-            parallel_effects: true,
-            delegation: true,
-            model_emitted_plan: false,
-            resumable_mid_effect: true,
-            decision_points_owned: vec![],
-            boundary_preset: b,
-            requires: VariantRequires {
-                goal: true,
-                procedure: true,
-            },
-        }
-    };
-    let program = {
-        let mut b = ControlBoundary::default();
-        for p in DecisionPoint::ALL {
-            b.assignments.insert(p, Owner::Code);
-        }
-        b.assignments.insert(DecisionPoint::Escalate, Owner::Human);
-        ControlCapabilities {
-            deterministic_replay: true,
-            steering: false,
-            follow_up: false,
-            parallel_effects: true,
-            delegation: true,
-            model_emitted_plan: false,
-            resumable_mid_effect: true,
-            decision_points_owned: vec![],
-            boundary_preset: b,
-            requires: VariantRequires {
-                goal: true,
-                procedure: true,
-            },
-        }
-    };
     vec![
         Box::new(ReactMinimal::new()),
         Box::new(ReactSteerable::new()),
         Box::new(crate::plan_exec::PlanExecute::new()),
-        Box::new(StagedVariant::new("hh/workflow@1", workflow)),
-        Box::new(StagedVariant::new("hh/program@1", program)),
+        Box::new(crate::walk::PlanWalker::new(
+            "hh/workflow@1",
+            crate::walk::plan_walker_caps(),
+        )),
+        Box::new(crate::walk::PlanWalker::new(
+            "hh/program@1",
+            crate::walk::plan_walker_caps(),
+        )),
     ]
 }
 
 /// The `hh/workflow@1`/`hh/program@1` staged presets (the `registry()`
 /// caps — the β preset is the boundary the staged variant enforces even
 /// parked: every point `code` but `escalate` → `human`).
-fn staged_caps() -> ControlCapabilities {
+pub fn staged_caps() -> ControlCapabilities {
     let mut b = ControlBoundary::default();
     for p in DecisionPoint::ALL {
         b.assignments.insert(p, Owner::Code);
@@ -1227,8 +1329,14 @@ pub fn variant_for(variant_ref: &str) -> Option<Box<dyn ControlStrategy>> {
         "hh/react-minimal" => Some(Box::new(ReactMinimal::new())),
         "hh/react-steerable" | "hh/react-steerable-queue" => Some(Box::new(ReactSteerable::new())),
         "hh/plan-execute" => Some(Box::new(crate::plan_exec::PlanExecute::new())),
-        "hh/workflow" => Some(Box::new(StagedVariant::new("hh/workflow@1", staged_caps()))),
-        "hh/program" => Some(Box::new(StagedVariant::new("hh/program@1", staged_caps()))),
+        "hh/workflow" => Some(Box::new(crate::walk::PlanWalker::new(
+            "hh/workflow@1",
+            crate::walk::plan_walker_caps(),
+        ))),
+        "hh/program" => Some(Box::new(crate::walk::PlanWalker::new(
+            "hh/program@1",
+            crate::walk::plan_walker_caps(),
+        ))),
         _ => None,
     }
 }

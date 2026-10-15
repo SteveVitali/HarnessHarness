@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.3   # round-3 chain (rows 137-149); row 139 = DF-S1.20-1 control/delegation legs (BL-14); 127/128 stay HUMAN-H3/H4
-lastCompleted:   R3.2
+nextTicket:      R3.4   # round-3 chain (rows 137-149); row 140 = §5c context/memory residuals (BL-15, pre-registered split R3.4a/b); 127/128 stay HUMAN-H3/H4
+lastCompleted:   R3.3
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.2  # R3.2 tip — stacked PR #138 against svitali/harnessharness-r3.1; operator merges
+chainTip:        svitali/harnessharness-r3.3  # R3.3 tip — stacked PR #139 against svitali/harnessharness-r3.2; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -435,3 +435,32 @@ updatedAt:       2026-10-14
   svitali/harnessharness-r3.2`. CI pass #138@40d82f8 (build ·
   test · fmt · drift 38673643360 / 38673639965; 4/4 green first
   attempt). Operator merges.
+
+- 2026-10-14 · **R3.3 done** — branch `svitali/harnessharness-r3.3` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/139 · base
+  `svitali/harnessharness-r3.2` (@43e0fe1). **DF-S1.20-1 discharged DONE;
+  BL-14 closed** — the three residual control-plane legs landed:
+  `react/steerable` delegation on a real run (`control.delegate.proposed`
+  durable before execution — CC3; `delegation_reason` enforced at check;
+  `DelegatePort`/`StoreSeam` + `SpawnDelegatePort` over the R-2.6.3
+  child-lease substrate — CC2; substrate refusals return to β as
+  `EnvelopeSignal::Refused`); `woken{peer_message}` interpreted by
+  trigger, never delivery lane (a peer-message context artefact, never a
+  steer cue — CC1); `hh/workflow@1`/`hh/program@1` real runs under
+  `compute_policy = static` through the one `PlanWalker`
+  (`hh-control/src/walk.rs`; staged park retired — ADR-0256 D6
+  superseded). `ctx.plan` re-derives at arm via `link`→`lower_native`
+  (ADR-0355 — no second persisted plan copy). **R-2.2.3 + R-2.6.1
+  re-verdicted PARTIAL → MET.** Verify: r3_3 batteries 20/20 (control 14
+  + orchestrator 6); r2_6 19/19; workspace 337 blocks / 3,443 / 0
+  failed / 1 ignored; fmt clean; clippy `-D warnings` clean on the four
+  touched crates; drift in sync; removability green; check-backlog exit
+  0 (156 sources, 49/66); check-build-memory 0 violations / 7
+  pre-existing warnings; `^||` empty. Size flag: ~1,410 source lines vs
+  the 1,200 budget — recorded in ADR-0355, operator adjudicates.
+  Fixture-verified ceiling. Ledger advanced `lastCompleted: R3.3`,
+  `nextTicket: R3.4`, `chainTip: svitali/harnessharness-r3.3`. One CI
+  flake firing — ac5 parity `plan_id` (the third member of the
+  measured-wall derivation chain; allowlisted at b5f2f4f, 25/25
+  stress). CI pass #139@b5f2f4f (build · test · fmt · drift
+  38704072695 / 38704067175; both green). Operator merges.
