@@ -419,6 +419,7 @@ impl EmbedService {
         let mut expired_rows: Vec<(String, String)> = Vec::new();
         let mut primary_semantic: Option<String> = None;
         let mut primary_record_ref: Option<String> = None;
+        let mut primary_context_window: Option<u64> = None;
         for (role, (coord, intent)) in declared {
             // Canonicalise through the registry: the recorded
             // `profile_ref` is the resolved profile's canonical
@@ -449,6 +450,12 @@ impl EmbedService {
             if role == "primary" {
                 primary_semantic = semantic;
                 primary_record_ref = record_ref;
+                // §5c.1 — the bound record's declared `context_window`
+                // is the run's `window_cap` (a declared measured bound,
+                // never a substituted default).
+                primary_context_window = resolved
+                    .as_ref()
+                    .and_then(|(_, p)| p.capabilities.context_window);
             }
             table.roles.insert(
                 role,
@@ -464,6 +471,7 @@ impl EmbedService {
             table,
             primary_identity: primary_semantic,
             primary_record_ref,
+            primary_context_window,
             expired_rows,
         })
     }
@@ -578,6 +586,7 @@ impl EmbedService {
             table: role_table,
             primary_identity: primary_semantic,
             primary_record_ref,
+            primary_context_window,
             expired_rows,
         } = self.realized_role_table(&sealed, profile_binding)?;
         // The realized configuration pair — content-addressed through
@@ -736,6 +745,17 @@ impl EmbedService {
         // ref that resolves — the declared coordinate stays legible on
         // `profile_binding.roles.primary.profile_ref`, never widened).
         manifest.model_profile_ref = primary_record_ref;
+        // §5c.1 (R3.4; DF-S1.19-2) — `window_cap` is the primary
+        // profile's declared `context_window`: the durable
+        // `model_context_window` member carries the realized value
+        // (`arm_driver`/`arm_resume_driver` read it into
+        // `DriverConfig.window_cap_tokens`); absent = unbounded (the
+        // coordinate resolved no record — never a fabricated cap).
+        if let Some(w) = primary_context_window {
+            manifest
+                .extra
+                .insert("model_context_window".to_string(), Json::Int(w as i64));
+        }
         // `expired_used` — the `{profile_ref, intent_ref}` rows the run
         // opens under (the manifest's record of the
         // `model.profile.expired_used` events minted below; absent when
@@ -974,7 +994,21 @@ impl EmbedService {
         // bound `session:<member>` so the assembler's selection leg, a
         // `trigger`/`by_name` read and a `resume_set` head all resolve
         // against one store (CC1).
-        let mut mem_ctx = crate::runtime::KernelContext::new(&run_id);
+        // R3.4 (DF-S1.19-1) — the sealed `context_policy` slot binds the
+        // fold's policy (`policy_for_variant`; `hh/full_window` and an
+        // unbound slot normalize to `context_policy/default`). An
+        // unresolvable variant is the typed `Refused` — never a silent
+        // `default` substitution.
+        let context_policy_ref = context_policy_slot(&sealed.document)
+            .map(|v| match v.as_str() {
+                "hh/full_window" => hh_context::policy_family::DEFAULT_POLICY_REF.to_string(),
+                other => other.to_string(),
+            })
+            .unwrap_or_else(|| hh_context::policy_family::DEFAULT_POLICY_REF.to_string());
+        let mut mem_ctx = crate::runtime::KernelContext::for_policy(&run_id, &context_policy_ref)
+            .map_err(|e| EmbedError::Refused {
+            reason: format!("context_policy: {e}"),
+        })?;
         if let Some(sup) = supplies {
             if !sup.procedures.is_empty() {
                 let supply_map: BTreeMap<String, Json> = sup
@@ -1611,11 +1645,32 @@ impl EmbedService {
         // durable `context.memory.written` prefix (I-FOLD — the ledger
         // is the record; the store is its pure projection). Carried
         // `resume_set` heads resolve against the rebound name history.
-        let mem_ctx = crate::runtime::KernelContext::fold(
-            run_id,
-            self.store.events(run_id).map_err(ledger_err)?,
-            self.store.now_ms(),
-        );
+        let mem_ctx = {
+            // R3.4 (DF-S1.19-1) — the fold resolves `content_ref`s
+            // against the same pool `put_blob` wrote (full-body
+            // rehydrate; a missing ref folds the honest skeleton), and
+            // re-binds the sealed `context_policy` slot's variant — the
+            // arm's declared binding, not a durable guess.
+            let mut c = crate::runtime::KernelContext::fold(
+                run_id,
+                self.store.events(run_id).map_err(ledger_err)?,
+                &self.store,
+                self.store.now_ms(),
+            );
+            if let Some(sealed) = manifest
+                .harness_def_ref
+                .as_deref()
+                .and_then(|r| self.persisted_definition(r).ok())
+            {
+                let policy_ref = context_policy_slot(&sealed.document)
+                    .unwrap_or_else(|| hh_context::policy_family::DEFAULT_POLICY_REF.to_string());
+                c.rebind_policy(&policy_ref)
+                    .map_err(|e| EmbedError::Refused {
+                        reason: format!("context_policy: {e}"),
+                    })?;
+            }
+            c
+        };
         let head = self.store.head(run_id).map_err(ledger_err)?;
         let sess = SessionState {
             run_id: run_id.to_string(),
@@ -2535,6 +2590,25 @@ impl EmbedService {
                 compute_policy_ref: compute_variant.to_string(),
                 compute_facts,
                 compute_rules: doc.and_then(compute_rules_for),
+                // §5c.3 consolidation rules (R3.4) — the sealed
+                // `consolidate_memories` declarations resolved at arm;
+                // a malformed rule is `Refused`, never a silent drop.
+                consolidation_rules: doc
+                    .map(consolidation_rules_for)
+                    .transpose()
+                    .map_err(|e| EmbedError::Refused {
+                        reason: format!("consolidation_rules: {e}"),
+                    })?
+                    .unwrap_or_default(),
+                // §5c.1 (R3.4) — `window_cap` is the manifest's realized
+                // `model_context_window` (the primary profile's declared
+                // `context_window`); absent = 0 = unbounded.
+                window_cap_tokens: manifest
+                    .extra
+                    .get("model_context_window")
+                    .and_then(Json::as_int)
+                    .map(|v| v.max(0) as u64)
+                    .unwrap_or(0),
                 ..DriverConfig::default()
             },
         )
@@ -2686,6 +2760,17 @@ impl EmbedService {
                 compute_policy_ref: arm.compute_variant.clone(),
                 compute_facts,
                 compute_rules,
+                // §5c.3 consolidation rules (R3.4) — re-resolved from the
+                // persisted sealed definition (the arm's declared rule
+                // inventory, never a durable-side re-derivation).
+                consolidation_rules: sealed_def
+                    .as_ref()
+                    .map(|sealed| consolidation_rules_for(&sealed.document))
+                    .transpose()
+                    .map_err(|e| EmbedError::Refused {
+                        reason: format!("consolidation_rules: {e}"),
+                    })?
+                    .unwrap_or_default(),
                 // §5a.3 `carried.resume_set_heads` (R2.5 / DF-S2.8-1 b) —
                 // the manifest's durable `carried` member is the record;
                 // the driver drains the set through `MemoryPort` on the
@@ -2703,6 +2788,15 @@ impl EmbedService {
                         _ => Vec::new(),
                     })
                     .unwrap_or_default(),
+                // §5c.1 (R3.4) — `window_cap` re-read from the durable
+                // manifest's `model_context_window` (the resume arm
+                // binds the open-time value, never a re-derived one).
+                window_cap_tokens: manifest
+                    .extra
+                    .get("model_context_window")
+                    .and_then(Json::as_int)
+                    .map(|v| v.max(0) as u64)
+                    .unwrap_or(0),
                 ..DriverConfig::default()
             },
         )
@@ -2949,6 +3043,51 @@ fn control_slot_variant(doc: &hh_hir::document::HirDocument) -> Option<String> {
         }
     }
     None
+}
+
+/// The sealed `context_policy` slot's bound variant id (§5c; R3.4 —
+/// DF-S1.19-1's non-`default` `ContextPolicy` runtime wiring): read off
+/// the root `NativeProcess.slots` like the sibling slot helpers; `None`
+/// ⇒ the slot is unbound and the fold binds `context_policy/default`.
+fn context_policy_slot(doc: &hh_hir::document::HirDocument) -> Option<String> {
+    for n in &doc.nodes {
+        if let KindRecord::AgentProcess(a) = &n.semantic {
+            if let AgentProcessBody::Native(np) = &a.body {
+                match np.slots.get("context_policy") {
+                    Some(SlotBindings::One(b)) => return Some(b.variant.variant_id.clone()),
+                    Some(SlotBindings::Many(v)) => {
+                        return v.first().map(|b| b.variant.variant_id.clone())
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    None
+}
+
+/// `consolidation_rules_for` — project the sealed definition's
+/// `HarnessRule{action: consolidate_memories}` records into the resolved
+/// `ConsolidationRule`s the driver schedules (R3.4; OQ-205's rule
+/// inventory is a definition fact — the runtime executes the resolved
+/// rule, never invents a cadence). A malformed member is the typed
+/// decode error the arm surfaces as `Refused` — a declared rule is never
+/// silently dropped.
+fn consolidation_rules_for(
+    doc: &hh_hir::document::HirDocument,
+) -> Result<Vec<hh_context::consolidate::ConsolidationRule>, String> {
+    let mut rules = Vec::new();
+    for n in &doc.nodes {
+        if let KindRecord::HarnessRule(rule) = &n.semantic {
+            if let hh_hir::records::RuleAction::ConsolidateMemories(action) = &rule.action {
+                rules.push(hh_context::consolidate::rule_from_action(
+                    &rule.rule_id,
+                    action,
+                )?);
+            }
+        }
+    }
+    Ok(rules)
 }
 
 /// The sealed `compute_policy` slot's bound variant spelling (§5e.4) —
@@ -3605,6 +3744,11 @@ struct RealizedRoles {
     table: hh_gateway::router::ModelRoleTable,
     primary_identity: Option<String>,
     primary_record_ref: Option<String>,
+    /// §5c.1 — the `primary` profile's declared `context_window` (the
+    /// `ContextBudget.window_cap` source; R3.4 / DF-S1.19-2). `None` =
+    /// the coordinate resolved no record and the assembler stays
+    /// unbounded — never a guessed cap.
+    primary_context_window: Option<u64>,
     expired_rows: Vec<(String, String)>,
 }
 

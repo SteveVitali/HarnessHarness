@@ -1401,6 +1401,17 @@ impl From<CodecError> for ChannelFault {
 /// store and returns `outputs[]` verbatim (refusal envelopes included —
 /// `RemoteStore` decodes them). Implementations: the `plugin_abi/1` session
 /// adapter (`hh-memory-store`'s counterpart) and test loopbacks.
+///
+/// `Box<dyn StoreChannel>` implements the trait so `RemoteStore` can hold a
+/// type-erased binding — the kernel's `memory_store` slot wires the
+/// loopback (fixture) or the varhost session adapter (packaged plugin)
+/// behind the same generic half.
+impl StoreChannel for Box<dyn StoreChannel> {
+    fn invoke(&mut self, operation: &str, inputs: Vec<Json>) -> Result<Vec<Json>, ChannelFault> {
+        (**self).invoke(operation, inputs)
+    }
+}
+
 pub trait StoreChannel {
     /// `invoke(operation, inputs)` → the op's `outputs[]`.
     fn invoke(&mut self, operation: &str, inputs: Vec<Json>) -> Result<Vec<Json>, ChannelFault>;
@@ -1481,6 +1492,31 @@ impl<C: StoreChannel> RemoteStore<C> {
     /// The local projection (read-only — for inspection/tests).
     pub fn mirror(&self) -> &crate::memory::MemoryStore {
         &self.mirror
+    }
+
+    /// The mirror, mutably — the owner-projected views
+    /// (`lexical_index`/`structural_index`/`memory_usage`/`stale_index`)
+    /// fold over the client's coherent projection and the indexed
+    /// retrieval pipeline stamps its reads through
+    /// `MemoryStore::record_read`. The far side learns the same read
+    /// through [`RemoteStore::forward_read`] — one stamp per side, never
+    /// a double-counted mirror read (R3.4; DF-S1.19-1).
+    pub fn mirror_mut(&mut self) -> &mut crate::memory::MemoryStore {
+        &mut self.mirror
+    }
+
+    /// Ship a read stamp to the far side without re-stamping the mirror —
+    /// the indexed pipeline already recorded it on the mirror; the remote
+    /// records the same `{version_id, seq}` pair so the `memory_usage`
+    /// fold agrees on both sides of the channel.
+    pub fn forward_read(&mut self, version_id: &str, seq: u64) {
+        self.fire(
+            "record_read",
+            vec![Json::obj([
+                ("version_id", Json::str(version_id)),
+                ("seq", Json::Int(seq as i64)),
+            ])],
+        );
     }
 
     /// A channel fault a `()`-returning op could not report, when latched.

@@ -218,6 +218,7 @@ impl AssemblerPort for FakeAssembler {
                 .iter()
                 .map(|p| ("context.procedure.selected".to_string(), p.clone()))
                 .collect(),
+            overflow: None,
         }
     }
 }
@@ -227,12 +228,17 @@ impl AssemblerPort for FakeAssembler {
 /// event capture is a sink buffer (the driver owns the appends).
 struct FakeMemory {
     store: MemoryStore,
+    /// `rule_id → last_success_watermark` — the consolidation cadence
+    /// state (the durable `context.memory.consolidated` row is the
+    /// record; the map is the projection).
+    watermarks: BTreeMap<String, u64>,
 }
 
 impl FakeMemory {
     fn new() -> Self {
         FakeMemory {
             store: MemoryStore::new("test-memory"),
+            watermarks: BTreeMap::new(),
         }
     }
     /// Seed a named version — the write a prior activation's supply or
@@ -469,6 +475,57 @@ impl MemoryPort for FakeMemory {
                     }),
                 _ => None,
             })
+    }
+    fn consolidate(
+        &mut self,
+        rules: &[hh_context::consolidate::ConsolidationRule],
+        boundary: &str,
+        _seam: Option<hh_control::driver::StoreSeam<'_>>,
+    ) -> Result<Vec<(String, Json)>, String> {
+        // The fixture runs the real consolidation driver over its seeded
+        // store — the same `context.memory.consolidated` watermark row
+        // shape the kernel port emits (the `retention` leg needs the
+        // live ledger seam; the vec sink carries none — honest absence).
+        let mut events = Vec::new();
+        for rule in rules {
+            let last = self.watermarks.get(&rule.rule_id).copied();
+            if matches!(
+                rule.cadence,
+                hh_context::consolidate::ConsolidationCadence::SessionStart
+            ) && last.is_some()
+            {
+                continue;
+            }
+            let wctx = hh_context::WriteContext {
+                context_label: hh_provenance::label::Label::at(
+                    hh_provenance::AuthorityClass::Kernel,
+                ),
+                lease_generation: self.store.lease(rule.scope),
+                at_seq: self.store.applied_seq(),
+                run_id: "run".to_string(),
+            };
+            let Some(rec) =
+                hh_context::consolidate::consolidate(&mut self.store, rule, &wctx, last)
+                    .map_err(|e| format!("consolidate:{}: {e}", rule.rule_id))?
+            else {
+                continue;
+            };
+            events.extend(self.store.drain_events());
+            events.push((
+                "context.memory.consolidated".to_string(),
+                hh_context::events::memory_consolidated_payload(
+                    &rec,
+                    rule,
+                    &self.store.store_id,
+                    self.store.lease(rule.scope),
+                    boundary,
+                    None,
+                ),
+            ));
+            self.watermarks
+                .insert(rule.rule_id.clone(), rec.input_watermark);
+        }
+        Ok(events)
     }
 }
 

@@ -801,9 +801,11 @@ fn memory_store_port_conformance_remote_loopback() {
 fn rule() -> ConsolidationRule {
     ConsolidationRule {
         rule_id: "rule/consolidate-1".into(),
+        scope: PersistenceScope::Run,
         cadence: ConsolidationCadence::SessionStart,
         guards: ConsolidationGuards::default(),
         consolidator: ConsolidatorKind::Dedupe,
+        retention: None,
     }
 }
 
@@ -833,7 +835,7 @@ fn consolidate_dedupe_rebinds_names_to_live_replacement() {
         )
         .unwrap();
     // v1 is stale (superseded) → the consolidation rebinds "facts/a" to v2.
-    let rec = consolidate(&mut store, PersistenceScope::Run, &rule(), &ctx2, None)
+    let rec = consolidate(&mut store, &rule(), &ctx2, None)
         .unwrap()
         .expect("applied");
     assert_eq!(rec.binds.len(), 1);
@@ -865,8 +867,7 @@ fn consolidate_lease_fence_and_cadence_gate() {
         at_seq: 5,
         run_id: "run1".into(),
     };
-    let err =
-        consolidate(&mut store, PersistenceScope::Run, &rule(), &stale_ctx, None).unwrap_err();
+    let err = consolidate(&mut store, &rule(), &stale_ctx, None).unwrap_err();
     assert!(
         matches!(err, ConsolidateError::Fenced { .. }),
         "expected Fenced, got {err}"
@@ -881,7 +882,6 @@ fn consolidate_lease_fence_and_cadence_gate() {
     let applied_at = store.applied_seq();
     let skipped = consolidate(
         &mut store,
-        PersistenceScope::Run,
         &rl,
         &ctx,
         Some(applied_at), // just ran
@@ -894,7 +894,6 @@ fn consolidate_lease_fence_and_cadence_gate() {
     // After the floor elapses the gate opens.
     let open = consolidate(
         &mut store,
-        PersistenceScope::Run,
         &rl,
         &ctx,
         Some(0), // long ago
@@ -903,7 +902,7 @@ fn consolidate_lease_fence_and_cadence_gate() {
     assert!(open.is_some());
     // session_start always admits.
     let ctx2 = ctx_at(&mut store, 3);
-    let out = consolidate(&mut store, PersistenceScope::Run, &rule(), &ctx2, Some(0)).unwrap();
+    let out = consolidate(&mut store, &rule(), &ctx2, Some(0)).unwrap();
     assert!(out.is_some());
 }
 
@@ -1006,7 +1005,7 @@ fn consolidate_conflict_guard_and_max_versions() {
             5,
         )
         .unwrap();
-    let rec = consolidate(&mut store, PersistenceScope::Run, &rule(), &ctx, None)
+    let rec = consolidate(&mut store, &rule(), &ctx, None)
         .unwrap()
         .expect("applied");
     // cva is stale+conflicted → skipped under the guard.
@@ -1024,7 +1023,7 @@ fn consolidate_conflict_guard_and_max_versions() {
     // max_versions: defer the tail deterministically.
     let mut r = rule();
     r.guards.max_versions = Some(1);
-    let rec2 = consolidate(&mut store, PersistenceScope::Run, &r, &ctx, None)
+    let rec2 = consolidate(&mut store, &r, &ctx, None)
         .unwrap()
         .expect("applied");
     assert_eq!(rec2.binds.len() + rec2.skipped_no_replacement.len(), 1);
