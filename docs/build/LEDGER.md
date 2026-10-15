@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.4   # round-3 chain (rows 137-149); row 140 = §5c context/memory residuals (BL-15, pre-registered split R3.4a/b); 127/128 stay HUMAN-H3/H4
-lastCompleted:   R3.3
+nextTicket:      R3.5   # round-3 chain (rows 137-149); row 141 = tool-exposure residual (BL-16: provider_tool_api flags, surface_rejection_rate, ADR-0272 legs); 127/128 stay HUMAN-H3/H4
+lastCompleted:   R3.4
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,12 +23,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.3  # R3.3 tip — stacked PR #139 against svitali/harnessharness-r3.2; operator merges
+chainTip:        svitali/harnessharness-r3.4  # R3.4 tip — stacked PR #140 against svitali/harnessharness-r3.3; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           3
-updatedAt:       2026-10-14
+updatedAt:       2026-10-15
 ```
 
 ## OPEN FINDINGS
@@ -464,3 +464,36 @@ updatedAt:       2026-10-14
   measured-wall derivation chain; allowlisted at b5f2f4f, 25/25
   stress). CI pass #139@b5f2f4f (build · test · fmt · drift
   38704072695 / 38704067175; both green). Operator merges.
+
+- 2026-10-15 · **R3.4 done** — branch `svitali/harnessharness-r3.4` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/140 · base
+  `svitali/harnessharness-r3.3` (@d1be1b1). **DF-S1.19-1 + DF-S1.19-2
+  discharged DONE; BL-15 closed** — the six residual producer/wiring
+  members landed on real paths: `RuleAction::ConsolidateMemories` +
+  audit-grade `context.memory.consolidated` watermarks fired through
+  `MemoryPort::consolidate` at the open/finish boundaries
+  (`session_start`/`idle`/`rate_limit`; `UnbackedPort` refusal on an
+  armed-unbacked rule; the folded `last_success_watermark` resume-gates
+  refire — CC3/I-FOLD); non-`default` `ContextPolicy` arm binding via
+  `policy_for_variant` (typed refusal on unknown, never silent
+  `default`); `by_run` artifact projection + `structural_index`
+  non-lexical `retrieve_indexed`; `KernelStore::Remote` over the
+  packaged `hh-memory-store` `plugin_abi/1` channel (one mirror fold,
+  `forward_read` read stamps, typed `ChannelFault`); `MemoryUsage`-fed
+  `evaluate_retention` reclamation on the landed R-2.2 scheduler (CC1);
+  fold `content_ref` rehydration (missing/corrupt blob = honest
+  skeleton, never fabricated text); `ContextWindowExceeded → stop` —
+  `AssembledRequest.overflow` → `context_exhausted{required_tokens,
+  cap}` durable-first, no model call. **R-2.4.3 + R-2.4.4 re-verdicted
+  PARTIAL → MET.** Verify: r3_4 battery 13/13; workspace 338 blocks /
+  3,456 / 0 failed / 1 ignored; fmt clean; clippy `-D warnings` clean
+  on hh-control/hh-embed; drift in sync; removability all stanzas
+  serial green (stale tier-off helper rebuilt first — the documented
+  gotcha, not a defect); check-backlog exit 0 (155 sources, 51/66
+  both sums); check-build-memory 0 violations / 7 pre-existing
+  warnings; `^||` empty. Size ~1,260 source lines vs the 1,500 budget
+  — the pre-registered R3.4a/b split was not needed. Fixture-verified
+  ceiling. Ledger advanced `lastCompleted: R3.4`, `nextTicket: R3.5`,
+  `chainTip: svitali/harnessharness-r3.4`. CI pass #140@53ce7f2
+  (build · test · fmt · drift 38747631657 / 38747617073; 2/2 green
+  first attempt). Operator merges.
