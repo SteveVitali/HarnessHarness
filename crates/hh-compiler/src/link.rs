@@ -171,7 +171,7 @@ pub struct LinkedGraph {
     pub expired_used: Vec<Json>,
 }
 
-fn diag(
+pub(crate) fn diag(
     code: Code,
     severity: Severity,
     path: &str,
@@ -288,7 +288,31 @@ pub fn link(
             }
         }
     } else {
-        resolve_chain(profile_refs, profiles)?
+        // A selector tie is `C-LINK-8` (R3.6; ADR-0350 revisit): the refusal
+        // carries the minted diagnostic — the `LinkError{diagnostics}`
+        // carriage convention, the caller's kernel stamping `detail`.
+        resolve_chain(profile_refs, profiles).map_err(|e| match e {
+            CompileError::AmbiguousSelector {
+                detail,
+                diagnostics,
+            } => CompileError::AmbiguousSelector {
+                diagnostics: if diagnostics.is_empty() {
+                    vec![diag(
+                        Code::LinkAmbiguousSelector,
+                        Severity::Error,
+                        "/assembly/profile_binding",
+                        "profile_binding",
+                        &detail,
+                        "break the tie — `extends` chains are never ambiguous; otherwise give one bound profile a higher `selector.precedence` or a more specific `version_pattern`",
+                        kernel,
+                    )]
+                } else {
+                    diagnostics
+                },
+                detail,
+            },
+            other => other,
+        })?
     };
     let is_fallback = profile_refs.is_empty();
 
@@ -646,11 +670,21 @@ pub fn link(
                 .and_then(Json::as_str)
             {
                 if !admitted_dialects.contains(d) {
+                    let detail = format!(
+                        "surface on {} narrows to dialect {d} which no bound profile's schema_dialect rule admits",
+                        node.semantic_id()
+                    );
                     return Err(CompileError::DialectNarrowingUndeclared {
-                        detail: format!(
-                            "surface on {} narrows to dialect {d} which no bound profile's schema_dialect rule admits",
-                            node.semantic_id()
-                        ),
+                        diagnostics: vec![diag(
+                            Code::LinkDialectNarrowing,
+                            Severity::Error,
+                            "/assembly",
+                            &node.semantic_id(),
+                            &detail,
+                            "declare the narrowing under a bound profile's `schema_dialect` rule (a narrowing must be profile-admitted) or publish the surface at an admitted dialect",
+                            kernel,
+                        )],
+                        detail,
                     });
                 }
             }

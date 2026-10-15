@@ -337,10 +337,17 @@ fn ac_r_2_5_2_5_dialect_narrowing_must_be_declared() {
             narrowed: vec!["enum_members_dropped".to_string()],
         }],
     };
-    assert!(matches!(
-        check_dialect_transform(&t, &cap_schema, &wide),
-        Err(CompileError::DialectNarrowingUndeclared { .. })
-    ));
+    match check_dialect_transform(&t, &cap_schema, &wide) {
+        Err(CompileError::DialectNarrowingUndeclared { diagnostics, .. }) => {
+            // R3.6 — the refusal carries the minted `C-LINK-9` diagnostic even
+            // outside the link pipeline (the compiler's own provenance stamps
+            // the detail leaf).
+            assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+            assert_eq!(diagnostics[0].code.code(), "C-LINK-9");
+            assert_eq!(diagnostics[0].stage, hh_assembly::Stage::Link);
+        }
+        other => panic!("expected DialectNarrowingUndeclared, got {other:?}"),
+    }
     // A narrowing with no declared effect refuses.
     let narrow = Json::obj([
         ("type", Json::str("string")),

@@ -234,6 +234,62 @@ fn stage6b_diags(
                 diagnostics
             }
         }
+        // R3.6 — the minted `C-LINK-8`/`C-LINK-9` rows pass through
+        // verbatim (the compiler mints them with the caller's kernel); a
+        // refusal raised outside the link pipeline (`resolve_chain`
+        // standalone, `check_dialect_transform` with no caller) still spells
+        // the code — 6b translates it, never the `C-PLAN-1` floor.
+        CompileError::AmbiguousSelector {
+            detail,
+            diagnostics,
+        } => {
+            if diagnostics.is_empty() {
+                vec![sdiag(
+                    Code::LinkAmbiguousSelector,
+                    Stage::Validate(6),
+                    "/assembly/profile_binding",
+                    "profile_binding",
+                    &detail,
+                    "break the selector tie — bind `extends` chains or distinct precedence/specificity",
+                    kernel,
+                )]
+            } else {
+                diagnostics
+            }
+        }
+        CompileError::DialectNarrowingUndeclared {
+            detail,
+            diagnostics,
+        } => {
+            if diagnostics.is_empty() {
+                vec![sdiag(
+                    Code::LinkDialectNarrowing,
+                    Stage::Validate(6),
+                    "/assembly",
+                    "surface",
+                    &detail,
+                    "declare the narrowing under a bound profile's `schema_dialect` rule",
+                    kernel,
+                )]
+            } else {
+                diagnostics
+            }
+        }
+        // `SealError{non_canonical}` is defect-gated — the stage-5
+        // re-encode self-check only fires when the compiler's own output
+        // fails to round-trip; when it does, the refusal spells `C-SEAL-1`
+        // (the stage-6b check's producing stage, per this function's
+        // convention — §3.3.8's closed stage set carries no `seal` spelling,
+        // CF-492).
+        CompileError::SealError { detail } => vec![sdiag(
+            Code::SealNonCanonical,
+            Stage::Validate(6),
+            "/assembly",
+            "seal",
+            &format!("stage-5 seal refused: {detail}"),
+            "the bundle must re-encode to its hashed bytes — this is a compiler defect",
+            kernel,
+        )],
         other => vec![sdiag(
             Code::PlanRefusal,
             Stage::Validate(6),

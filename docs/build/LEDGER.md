@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.6   # round-3 chain (rows 137-149); row 142 = assembly-emitter adjudication (BL-10); 127/128 stay HUMAN-H3/H4
-lastCompleted:   R3.5
+nextTicket:      R3.7   # round-3 chain (rows 137-149); row 144 = credential-broker dep legs (BL-19; HUMAN-H5 ruled); 143 is the human row itself
+lastCompleted:   R3.6
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.5  # R3.5 tip — stacked PR against svitali/harnessharness-r3.4; operator merges
+chainTip:        svitali/harnessharness-r3.6  # R3.6 tip — stacked PR against svitali/harnessharness-r3.5; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
