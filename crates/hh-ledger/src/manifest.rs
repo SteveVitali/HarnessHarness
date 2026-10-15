@@ -12,6 +12,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 use hh_wire::json::Json;
 
@@ -329,6 +330,47 @@ pub struct EventRef {
     pub event_id: String,
 }
 
+/// A declared checkpoint witness — `{witness_name, key_id}` (§5g.6 §2
+/// `witness_policy.witnesses[]`; the C2SP tlog-cosignature shape, S-320).
+/// `key_id` names the witness's verification key — custody is external
+/// exactly like `signer_key_ids` (ADR-0331 D3; OQ-170): the manifest
+/// declares the pair, the `AuditKeyResolver` seam resolves it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WitnessDecl {
+    /// The witness's declared name (its identity in the cosignature entry).
+    pub witness_name: String,
+    /// The key id the witness signs under.
+    pub key_id: String,
+}
+
+/// `witness_policy{required, witnesses[]}` — the run's declared checkpoint
+/// cosignature quorum (§5g.6 §2 `AuditPolicy.witness_policy`; R-2.8.6 C2;
+/// ADR-0345 D2). `required` counts *distinct* `witnesses[].key_id`s whose
+/// cosignature must verify on every `security.audit.checkpoint`; `witnesses`
+/// binds each admissible `{witness_name, key_id}` pair. Optional: absent
+/// declares no witness requirement (pre-C2 manifests are unaffected).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WitnessPolicy {
+    /// Distinct witness key_ids whose cosignature must verify per checkpoint.
+    pub required: u64,
+    /// The admissible `{witness_name, key_id}` pairs.
+    pub witnesses: Vec<WitnessDecl>,
+}
+
+impl WitnessPolicy {
+    /// `true` when `key_id` is declared under `witness_name` (the pair binds).
+    pub fn declares(&self, witness_name: &str, key_id: &str) -> bool {
+        self.witnesses
+            .iter()
+            .any(|w| w.witness_name == witness_name && w.key_id == key_id)
+    }
+
+    /// `true` when `key_id` appears in `witnesses[]` under any name.
+    pub fn declares_key(&self, key_id: &str) -> bool {
+        self.witnesses.iter().any(|w| w.key_id == key_id)
+    }
+}
+
 /// The manifest — `{configuration_id, configuration_version_id, harness_def_ref,
 /// model_profile_ref, environment_ref, budget, seed, idp, participant_class,
 /// observability_level, hosting_mechanism?, capability_declaration_ref?,
@@ -412,6 +454,11 @@ pub struct RunManifest {
     /// sign-off (§5g.6 §9: the manifest declares the keys; checkpoint emission
     /// is Stage 2). Emitted only when non-empty.
     pub signer_key_ids: Vec<String>,
+    /// `witness_policy` — the declared checkpoint-cosignature quorum
+    /// (§5g.6 §2; ADR-0345 D2). Emitted only when `Some`; witness key
+    /// custody stays external — the manifest declares the policy, the
+    /// resolver resolves.
+    pub witness_policy: Option<WitnessPolicy>,
     /// The reattach grace window (ms).
     pub grace_ms: u64,
     /// The bound task coordinate.
@@ -467,6 +514,7 @@ impl RunManifest {
             },
             audit_policy_ref: None,
             signer_key_ids: Vec::new(),
+            witness_policy: None,
             grace_ms: 0,
             task_ref: None,
             experiment: None,
@@ -604,6 +652,30 @@ impl RunManifest {
         if self.signer_key_ids.iter().any(|k| k.is_empty()) {
             return Err(bad("signer_key_ids members must be non-empty".into()));
         }
+        if let Some(wp) = &self.witness_policy {
+            if wp.witnesses.is_empty() {
+                return Err(bad("witness_policy.witnesses must be non-empty".into()));
+            }
+            let mut seen: HashSet<&str> = HashSet::new();
+            for w in &wp.witnesses {
+                if w.witness_name.is_empty() || w.key_id.is_empty() {
+                    return Err(bad(
+                        "witness_policy.witnesses members must be non-empty".into()
+                    ));
+                }
+                if !seen.insert(w.key_id.as_str()) {
+                    return Err(bad(format!(
+                        "witness_policy.witnesses key_id {} declared twice",
+                        w.key_id
+                    )));
+                }
+            }
+            if wp.required as usize > seen.len() {
+                return Err(bad(
+                    "witness_policy.required exceeds the declared witnesses".into(),
+                ));
+            }
+        }
         // §5a.3 (S4.13): an inbox run is *a goal's* inbox — `goal_ref` is
         // required; it is a durable coordinate, never a content id, so no
         // pinning rule applies (it is spelled `goal:<ref>` by convention).
@@ -727,6 +799,28 @@ impl RunManifest {
             put(
                 "signer_key_ids",
                 Json::Arr(self.signer_key_ids.iter().map(Json::str).collect()),
+            );
+        }
+        if let Some(wp) = &self.witness_policy {
+            put(
+                "witness_policy",
+                Json::obj([
+                    ("required", Json::Int(wp.required as i64)),
+                    (
+                        "witnesses",
+                        Json::Arr(
+                            wp.witnesses
+                                .iter()
+                                .map(|w| {
+                                    Json::obj([
+                                        ("witness_name", Json::str(&w.witness_name)),
+                                        ("key_id", Json::str(&w.key_id)),
+                                    ])
+                                })
+                                .collect(),
+                        ),
+                    ),
+                ]),
             );
         }
         if let Some(seed) = self.seed {
@@ -968,6 +1062,43 @@ impl RunManifest {
                 .collect::<Result<Vec<_>, _>>()?,
             _ => return Err(bad("signer_key_ids not an array".into())),
         };
+        let witness_policy = match j.get("witness_policy") {
+            None | Some(Json::Null) => None,
+            Some(Json::Obj(m)) => {
+                let required = match m.get("required") {
+                    Some(Json::Int(n)) if *n >= 0 => *n as u64,
+                    _ => return Err(bad("witness_policy.required not a uint".into())),
+                };
+                let witnesses = match m.get("witnesses") {
+                    Some(Json::Arr(items)) => items
+                        .iter()
+                        .map(|w| {
+                            let Json::Obj(o) = w else {
+                                return Err(bad("witness not an object".into()));
+                            };
+                            let name = o
+                                .get("witness_name")
+                                .and_then(Json::as_str)
+                                .ok_or_else(|| bad("witness.witness_name missing".into()))?;
+                            let key_id = o
+                                .get("key_id")
+                                .and_then(Json::as_str)
+                                .ok_or_else(|| bad("witness.key_id missing".into()))?;
+                            Ok(WitnessDecl {
+                                witness_name: name.to_string(),
+                                key_id: key_id.to_string(),
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                    _ => return Err(bad("witness_policy.witnesses not an array".into())),
+                };
+                Some(WitnessPolicy {
+                    required,
+                    witnesses,
+                })
+            }
+            _ => return Err(bad("witness_policy not an object".into())),
+        };
         // Anything not in the typed vocabulary is preserved in `extra` (CC3).
         const TYPED: &[&str] = &[
             "activation_no",
@@ -1001,6 +1132,7 @@ impl RunManifest {
             "signer_key_ids",
             "spawn_event",
             "task_ref",
+            "witness_policy",
             "workspace_trust",
         ];
         let extra = match j {
@@ -1046,6 +1178,7 @@ impl RunManifest {
             grace_ms: req_int("grace_ms")?,
             audit_policy_ref: opt_str("audit_policy_ref"),
             signer_key_ids,
+            witness_policy,
             task_ref,
             experiment,
             registry_snapshot_id: opt_str("registry_snapshot_id"),

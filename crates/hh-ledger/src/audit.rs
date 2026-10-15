@@ -364,6 +364,149 @@ pub fn parse_sig(sig: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// A checkpoint witness — an [`AuditSigner`] that also names itself
+/// (`witness_cosignatures[{witness_name, key_id, timestamp, sig}]`, §5g.6 §2;
+/// the C2SP tlog-cosignature shape, S-320). Custody is external exactly like
+/// the primary-signer seam (ADR-0067 (e); ADR-0331 D3; OQ-170): the manifest's
+/// `witness_policy` declares the admissible `{witness_name, key_id}` pairs and
+/// the quorum `required`; this trait is only how witness key material reaches
+/// the mint path.
+pub trait WitnessSigner: AuditSigner {
+    /// The witness's declared name — must pair with `key_id` in the
+    /// manifest's `witness_policy.witnesses[]`.
+    fn witness_name(&self) -> &str;
+}
+
+/// A named fixture signer — the `FixedSigner` analogue for the witness seam
+/// (used by the boundary's resolved keys and by tests).
+#[derive(Debug, Clone)]
+pub struct NamedSigner {
+    witness_name: String,
+    inner: FixedSigner,
+}
+
+impl NamedSigner {
+    /// Wrap resolved key bytes under `(witness_name, key_id)`.
+    pub fn new(
+        witness_name: impl Into<String>,
+        key_id: impl Into<String>,
+        key: impl Into<Vec<u8>>,
+    ) -> Self {
+        Self {
+            witness_name: witness_name.into(),
+            inner: FixedSigner::new(key_id, key),
+        }
+    }
+}
+
+impl AuditSigner for NamedSigner {
+    fn key_id(&self) -> &str {
+        self.inner.key_id()
+    }
+
+    fn sign(&mut self, preimage: &[u8]) -> Result<Vec<u8>, String> {
+        self.inner.sign(preimage)
+    }
+}
+
+impl WitnessSigner for NamedSigner {
+    fn witness_name(&self) -> &str {
+        &self.witness_name
+    }
+}
+
+/// A defect the witness-cosignature check found on a claim — one shared
+/// vocabulary ([`check_witness_cosignatures`]) the three callers map onto
+/// their own: `verify_run` → `Tampered`, `Auditor` → `AuditFault`,
+/// `audit_view` → the per-checkpoint status lattice.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WitnessDefect {
+    /// A cosignature entry's shape is wrong (missing or mistyped members).
+    Malformed(String),
+    /// The `(witness_name, key_id)` pair is not declared by the run's
+    /// `witness_policy` — or no policy is declared at all.
+    Undeclared(String),
+    /// `key_id` is declared but does not resolve through the supplied
+    /// resolver — a custody gap, never a fabricated pass.
+    KeyUnresolvable(String),
+    /// The signature is malformed or the HMAC over
+    /// `timestamp ‖ <checkpoint note>` mismatches.
+    BadSignature(String),
+    /// Fewer distinct declared `key_id`s carry a well-formed (and, when a
+    /// resolver is held, verified) cosignature than `witness_policy.required`.
+    QuorumUnmet {
+        /// The declared quorum.
+        required: u64,
+        /// The count that satisfied it.
+        satisfied: usize,
+    },
+}
+
+/// Check the `witness_cosignatures[]` of a parsed claim against the run's
+/// declared `witness_policy` (§5g.6 §2; ADR-0345 D3):
+///
+/// * every entry carries `{witness_name, key_id, timestamp, sig}`;
+/// * `(witness_name, key_id)` must be a declared `witnesses[]` pair;
+/// * with a resolver held, each `sig` must be `hmac-sha256(key,
+///   timestamp_ms ‖ checkpoint_sig_preimage)` — the timestamped signature
+///   over the *same note* the kernel signer signed (S-320);
+/// * the count of distinct declared `key_id`s behind well-formed (and, when
+///   checked, verified) cosignatures must reach `witness_policy.required`.
+///
+/// Without a resolver the check is shape-plus-declaration only — the same
+/// honest posture the primary `signatures` take (never a fabricated "met").
+pub fn check_witness_cosignatures(
+    claim: &crate::tree::CheckpointClaim,
+    policy: Option<&crate::manifest::WitnessPolicy>,
+    keys: Option<&dyn AuditKeyResolver>,
+) -> Result<(), WitnessDefect> {
+    let mut satisfied: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for c in &claim.witness_cosignatures {
+        let (Some(name), Some(kid), Some(ts), Some(sig)) = (
+            c.get("witness_name").and_then(Json::as_str),
+            c.get("key_id").and_then(Json::as_str),
+            c.get("timestamp").and_then(Json::as_int),
+            c.get("sig").and_then(Json::as_str),
+        ) else {
+            return Err(WitnessDefect::Malformed(
+                "cosignature member missing witness_name/key_id/timestamp/sig".into(),
+            ));
+        };
+        if ts < 0 {
+            return Err(WitnessDefect::Malformed("cosignature timestamp < 0".into()));
+        }
+        let declared = policy.map(|p| p.declares(name, kid)).unwrap_or(false);
+        if !declared {
+            return Err(WitnessDefect::Undeclared(format!(
+                "witness ({name}, {kid}) is not a manifest witness_policy pair"
+            )));
+        }
+        let sig_bytes = parse_sig(sig)
+            .ok_or_else(|| WitnessDefect::BadSignature("cosignature sig malformed".into()))?;
+        if let Some(resolver) = keys {
+            let key = resolver
+                .verify_key(kid)
+                .ok_or_else(|| WitnessDefect::KeyUnresolvable(kid.to_string()))?;
+            let preimage = crate::tree::witness_sig_preimage(ts as u64, &claim.payload);
+            if hmac_sha256(&key, &preimage).to_vec() != sig_bytes {
+                return Err(WitnessDefect::BadSignature(format!(
+                    "witness {kid} cosignature mismatch"
+                )));
+            }
+        }
+        satisfied.insert(kid.to_string());
+    }
+    if let Some(p) = policy {
+        if satisfied.len() < p.required as usize {
+            return Err(WitnessDefect::QuorumUnmet {
+                required: p.required,
+                satisfied: satisfied.len(),
+            });
+        }
+    }
+    Ok(())
+}
+
 // ── the independent auditor (§5g.6 auditor model) ─────────────────────────
 
 /// A fault the auditor raises — the streaming counterpart of `verify`'s
@@ -706,6 +849,44 @@ impl Auditor {
                 });
             }
         }
+        // Witness cosignatures (§5g.6 §2 C2; S-320; ADR-0345 D3) — the
+        // auditor checks them against the *durable* `witness_policy` (the
+        // manifest rides the seq-0 `lifecycle.run.created` payload — a
+        // caller-supplied policy would let the verifier weaken the
+        // requirement, so the auditor reads its own folded record). The
+        // shared check's defects map onto the auditor's vocabulary.
+        let witness_policy = self
+            .events
+            .first()
+            .filter(|e| e.class == "lifecycle.run.created")
+            .and_then(|e| RunManifest::from_json(&e.payload).ok())
+            .and_then(|m| m.witness_policy);
+        check_witness_cosignatures(&claim, witness_policy.as_ref(), keys).map_err(|d| {
+            let detail = match &d {
+                WitnessDefect::Malformed(d) => format!("cosignature malformed: {d}"),
+                WitnessDefect::Undeclared(d) => format!("cosignature undeclared: {d}"),
+                WitnessDefect::KeyUnresolvable(kid) => {
+                    format!("witness key_id {kid} unresolvable")
+                }
+                WitnessDefect::BadSignature(d) => format!("cosignature bad: {d}"),
+                WitnessDefect::QuorumUnmet {
+                    required,
+                    satisfied,
+                } => {
+                    format!("witness quorum unmet: {satisfied}/{required}")
+                }
+            };
+            match d {
+                WitnessDefect::Malformed(_) => AuditFault::Malformed {
+                    at_seq: seq,
+                    detail,
+                },
+                _ => AuditFault::BadSignature {
+                    at_seq: seq,
+                    detail,
+                },
+            }
+        })?;
         self.held_heads
             .push((seq, claim.tree_head.clone().unwrap_or_default()));
         self.claims.push((seq, claim));
@@ -1333,6 +1514,33 @@ pub fn audit_view(
                 status = if shape_ok { "unverified" } else { "failed" };
             }
         }
+        // Witness cosignatures (§5g.6 §2 C2; S-320; ADR-0345 D3) — the
+        // shared check against the durable `witness_policy`: `verified`
+        // (resolver held, HMACs pass), `unverified` (shape + declaration +
+        // quorum only), `failed`, or `n/a` when the run declares no policy
+        // and no cosignatures ride the claim. An unverifiable-but-
+        // admissible cosignature set degrades `verified` to `unverified` —
+        // never a fabricated "met".
+        let witness_status =
+            if manifest.witness_policy.is_none() && claim.witness_cosignatures.is_empty() {
+                Json::obj([("n/a", Json::str("no witness_policy declared"))])
+            } else {
+                match check_witness_cosignatures(&claim, manifest.witness_policy.as_ref(), keys) {
+                    Ok(()) => {
+                        if keys.is_some() {
+                            Json::str("verified")
+                        } else {
+                            Json::str("unverified")
+                        }
+                    }
+                    Err(_) => Json::str("failed"),
+                }
+            };
+        if witness_status == Json::str("failed") {
+            status = "failed";
+        } else if witness_status == Json::str("unverified") && status == "verified" {
+            status = "unverified";
+        }
         if claim.kind == "final" {
             final_seen = true;
         }
@@ -1358,6 +1566,11 @@ pub fn audit_view(
                     .unwrap_or(Json::Null),
             ),
             ("signatures", Json::Arr(claim.signatures.clone())),
+            (
+                "witness_cosignatures",
+                Json::Arr(claim.witness_cosignatures.clone()),
+            ),
+            ("witness_status", witness_status),
             ("verification_status", Json::str(status)),
         ]));
         prev_claim = Some((e.seq, claim));
@@ -1498,6 +1711,72 @@ pub fn audit_view(
         }
     };
 
+    // receipts — every `lifecycle.ledger.receipt` row (the C2 receiver-
+    // attestation lift; S-324; ADR-0345 D4). The fold re-parses the row and
+    // recomputes its bindings against the durable prefix: `effect_id` must
+    // name an effect the run's `action.effect.*` rows carry, and a carried
+    // `observed_ref` must name this run's `action.effect.observed` row for
+    // that effect. The row's `status` member is the fixed `unverified` —
+    // the receipt is external evidence; the fold never upgrades it.
+    let effect_ids: BTreeSet<&str> = events
+        .iter()
+        .filter(|e| e.class.starts_with("action.effect."))
+        .filter_map(|e| e.scope.effect_id.as_deref())
+        .collect();
+    let mut receipts_ok = true;
+    let receipts: Vec<Json> = events
+        .iter()
+        .filter(|e| e.class == "lifecycle.ledger.receipt")
+        .map(|e| {
+            let parsed = crate::receipt::Receipt::from_json(&e.payload);
+            let binding_ok = parsed
+                .as_ref()
+                .map(|r| {
+                    effect_ids.contains(r.effect_id.as_str())
+                        && r.observed_ref
+                            .as_deref()
+                            .map(|obs| {
+                                events.iter().any(|ev| {
+                                    ev.event_id == obs
+                                        && ev.class == "action.effect.observed"
+                                        && ev.scope.effect_id.as_deref()
+                                            == Some(r.effect_id.as_str())
+                                })
+                            })
+                            .unwrap_or(true)
+                })
+                .unwrap_or(false);
+            if !binding_ok {
+                receipts_ok = false;
+            }
+            let get = |k: &str| e.payload.get(k).cloned().unwrap_or(Json::Null);
+            Json::obj([
+                ("event_id", Json::str(&e.event_id)),
+                ("seq", Json::Int(e.seq as i64)),
+                ("effect_id", get("effect_id")),
+                ("observed_ref", get("observed_ref")),
+                ("receiver_ref", get("receiver_ref")),
+                ("receipt_id", get("receipt_id")),
+                ("attested_at", get("attested_at")),
+                ("attestation", get("attestation")),
+                ("status", get("status")),
+                ("supplied_by", get("supplied_by")),
+                ("claim_ref", get("claim_ref")),
+                (
+                    "binding_status",
+                    Json::str(if binding_ok { "bound" } else { "unbound" }),
+                ),
+            ])
+        })
+        .collect();
+    let receipts_component = if ledger_blind {
+        na("observability")
+    } else if receipts.is_empty() {
+        na("no receipts recorded")
+    } else {
+        Json::Bool(receipts_ok)
+    };
+
     // extensions — the AC-H5-10 provenance fold (§5g.5 §6 audit obligation +
     // §7 AC-R-2.8.5-10): for every effect in the run, the extensions whose
     // text was in the proposing call's context and whose code produced the
@@ -1618,6 +1897,7 @@ pub fn audit_view(
         ("producers_ok", Json::Bool(producer_violations.is_empty())),
         ("coverage_ok", Json::Bool(unmet.is_empty())),
         ("cross_run_ok", cross_run_component.clone()),
+        ("receipts_ok", receipts_component.clone()),
         (
             "headline",
             Json::Bool(
@@ -1627,7 +1907,8 @@ pub fn audit_view(
                     && producer_violations.is_empty()
                     && unmet.is_empty()
                     && checkpoints_component != Json::Bool(false)
-                    && cross_run_component != Json::Bool(false),
+                    && cross_run_component != Json::Bool(false)
+                    && receipts_component != Json::Bool(false),
             ),
         ),
     ]);
@@ -1677,6 +1958,7 @@ pub fn audit_view(
             },
         ),
         ("redactions", Json::Arr(redaction_rows)),
+        ("receipts", Json::Arr(receipts)),
         ("sink_deliveries", Json::Arr(sink_deliveries)),
         // AC-H5-10 — the extension provenance component: the run's declared
         // extension ids plus the per-effect context/producer answer.

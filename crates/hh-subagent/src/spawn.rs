@@ -1484,6 +1484,10 @@ fn finish_child_open(
         // its parent: it may mint final checkpoints under the declared key
         // ids (custody stays outside the manifest).
         signer_key_ids: parent_manifest.signer_key_ids.clone(),
+        // The child inherits the parent's declared witness quorum — the
+        // manifest is the durable declaration vehicle (ADR-0345 D2); a
+        // spawned run under a witnessed parent carries the same policy.
+        witness_policy: parent_manifest.witness_policy.clone(),
         grace_ms: parent_manifest.grace_ms,
         task_ref: None,
         experiment: None,
