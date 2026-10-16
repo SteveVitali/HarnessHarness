@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.7   # round-3 chain (rows 137-149); row 144 = credential-broker dep legs (BL-19; HUMAN-H5 ruled); 143 is the human row itself
-lastCompleted:   R3.6
+nextTicket:      R3.8   # round-3 chain (rows 137-149); row 145 = audit-event encryption (BL-45; per-event AEAD — consumes ADR-0359's ring pin for aead/rand or authors a sibling ADR); 143 is the human row itself
+lastCompleted:   R3.7
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.6  # R3.6 tip — stacked PR against svitali/harnessharness-r3.5; operator merges
+chainTip:        svitali/harnessharness-r3.7  # R3.7 tip — stacked PR #143 against svitali/harnessharness-r3.6; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -572,3 +572,58 @@ updatedAt:       2026-10-15
   `nextTicket: R3.7` (row 144; 143 is the human row — HUMAN-H5
   RULED), `chainTip: svitali/harnessharness-r3.6`. Operator merges.
 
+- 2026-10-16 · **R3.7 done** — branch `svitali/harnessharness-r3.7` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/143 · base
+  `svitali/harnessharness-r3.6` (@9256944). Discharged the
+  credential-broker dependency legs (manifest row 144; BL-19 closed):
+  **ADR-0359 (dep choice, first deliverable before any Cargo.toml
+  edit)** — `ring =0.17.14` pinned (published 2025-03-11, ≥7 days
+  before the 2026-10-15 selection; aws-lc-rs/rustls rejected — larger
+  C/TLS surface than needed; admitted scope = `signature` verify +
+  test-time fixture signing; `aead`/`rand` reserved for R3.8 or a
+  sibling ADR); the hermetic-deps contract amended explicitly in
+  `Cargo.toml`, `AGENTS.md`, `crates/AGENTS.md`, `README.md` (HUMAN-H5
+  disposition (b) consumed). **DF-S1.13-1 → DONE — real DPoP verify
+  (ADR-0360):** `hh-secrets/src/dpop.rs` is the one construction
+  (CC1) — closed `DpopAlg{Ed25519,Es256}` sum, proof envelope
+  `{alg, public_key, signature}` over `hh.dpop.v1` verb-framed
+  canonical preimages (U+001F-separated; cross-verb replay refused);
+  the bound key is pinned on `CredentialBinding.sender_key` at `bind`
+  and required at `mediate`/`mediate_sentinel`/`mint`/
+  `verify_minted`/`deliver_wrapped` — absent/malformed/wrong-key/
+  wrong-context/invalid proofs all refuse `SenderConstraintUnmet`
+  with the `denied` row durable; the egress-mediator `dpop_proof:
+  None` call site keeps its fail-closed posture honestly. **DF-S1.13-4
+  → DONE — `wrapped_long_lived` delivery:** `deliver_wrapped` gates
+  isolation ≥ `ProcessSandbox`, checks revocation/mode/destination/
+  canary/sender-constraint/PDP before any visible delivery, and
+  appends `security.credential.wrapped` + `security.credential.used`
+  in one durable append (wrap_id + deterministic
+  `compensation_plan_id` derived from the channel's revocation paths —
+  no secret bytes in the ledger); `probe_wrapped` folds
+  `undeterminable` → `applied` → `not_applied` across `RevokeIntent`
+  revocation (ADR-0032's prepare hook reused). Fixture-verified
+  ceiling — signatures are real `ring` verifications over keys
+  generated at test time; no custody/issuer/network claim.
+  **Verify:** `cargo test --workspace --no-fail-fast` 342 blocks /
+  3,482 passed / 0 failed / 1 ignored (pre-existing
+  `ac_r_2_2_1_16` latency fixture — the cosmetic
+  `FixtureKey::sender_key` no-throwaway-sign cleanup postdates the
+  run's compile and was re-verified scoped 11/11 on the final tree);
+  hh-secrets 48/0/0 (r3_7 11/11), hh-ledger 223/0/1i, hh-env +
+  hh-embed all-green; fmt clean; clippy `--all-targets` clean on the
+  touched crates; `cargo fetch --locked` clean (lockfile-pinned dep
+  per the amended contract); check-drift in sync;
+  check-removability all stanzas green after the helper deadline
+  env-override seam repair (`HH_HELPER_{SPAWN,CONNECT}_DEADLINE_MS` —
+  defaults unchanged); check-backlog exit 0 (156 sources, 54/66
+  engineering-closed); check-build-memory 0 violations / 7
+  pre-existing warnings; `^||` empty. **ci:** pass #143@a2c6e82
+  (build · test · fmt · drift 38843938825 pull_request; 38843927314
+  push), logs/ci-R3.7.json. **Deferrals:** DF-S1.13-1, DF-S1.13-4 →
+  DONE; none opened. **Backlog:** BL-19 closed; BL-42 sources +=
+  ADR-0359/ADR-0360 (+ADR-0342); BL-43 sources += ADR-0244.
+  **ADRs:** ADR-0359, ADR-0360. Ledger advanced `lastCompleted: R3.7`,
+  `nextTicket: R3.8` (row 145 — audit-event AEAD; consumes the
+  ADR-0359 pin or authors a sibling), `chainTip:
+  svitali/harnessharness-r3.7`. Operator merges.

@@ -200,9 +200,11 @@ pub mod fixture {
 
     impl FixtureKey {
         /// The bound-key coordinate (`DpopProof::sender_key` of every
-        /// proof this key makes).
+        /// proof this key makes) — derived directly, no throwaway
+        /// signature.
         pub fn sender_key(&self) -> String {
-            self.proof_for("").sender_key()
+            let digest = super::sha256_hex(&self.public_key);
+            format!("dpop:{}:{}", self.alg.as_str(), &digest[..32])
         }
 
         /// Sign `preimage` and package the proof.
