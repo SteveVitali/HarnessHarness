@@ -1,9 +1,11 @@
 # OPERATIONAL READINESS — capability picture at end of Round 3 (R3.10, 2026-10-16)
 
 > R3.10's honest account of how far each capability climbed by the close of
-> Round 3 (R3.1–R3.10 landed on the stacked chain; **GATE-G5 is pending** —
-> the operator's readout `docs/build/readouts/GATE-G5.md` dispositions it;
-> nothing here pre-answers the gate). Status vocabulary:
+> Round 3 (R3.1–R3.10 landed on the stacked chain; **GATE-G5 dispositioned
+> PASSED 2026-10-16** — operator verbatim "passed, proceed"; the dated
+> Signature block of `docs/build/readouts/GATE-G5.md` records 16 carried
+> rows CARRY to Round 4, 5 ACCEPT, 0 WAIVE over the 21-row set; the 19 owed
+> DEFERRALS rows inherit their BL home's disposition). Status vocabulary:
 > `engineered` → `fixture-verified` → `staging-verified` → `live-executed` →
 > `public`; `human-completed` marks rows whose only remaining step is a
 > person. **One evidence class exists between nothing and the in-tree runs:
@@ -18,12 +20,11 @@
 
 ## Live read of record
 
-- **ci-boundary/1** · `docs/build/logs/ci-R3.9.json` · read_at
-  `2026-10-16T13:23:09Z` · result **pass**: PR #145 @ `fa35119`
-  (build · test · fmt · drift — runs 38903919373 push, 38903937321
-  pull_request). R3.10's own boundary read is recorded at its closeout
-  (`logs/ci-R3.10.json` when a run exists); this row names the latest
-  landed-chain read of the code chain.
+- **ci-boundary/1** · `docs/build/logs/ci-R3.10.json` · read_at
+  `2026-10-16T20:09:09Z` · result **pass**: PR #146 @ `bdc0a9b`
+  (build · test · fmt · drift; the stack read at the GATE-G5
+  disposition head — #137–#146 + #135 all OPEN, all `pass`). This row
+  names the latest landed-chain read of the code chain.
 - Round-3 head of chain: branch `svitali/harnessharness-r3.10` stacked on
   `svitali/harnessharness-r3.9` (R3.10 is docs/records-only); the verified
   ceiling across the stack stays `fixture-verified` — no live read above it
@@ -117,8 +118,15 @@ The ordering is the dependency chain, not a schedule.
   credential entered a ledger).
 - The environment-bound rows (BL-01, BL-02, BL-03, BL-04, BL-26, BL-27,
   BL-31) are honest carried debt, not defects: each names its provisioning
-  precondition. The round-3 round-closure set — the discharged rows
+  precondition — they read *excluded pending HUMAN-H1/H2/H3 provisioning*
+  (the paths are live, nothing is provisioned yet), never a fabricated
+  pass. The round-3 round-closure set — the discharged rows
   BL-10/14/15/16/19/44/45, the rulings on BL-30, the env/human/accepted
-  residuals, and the standing rows BL-41/42/43 — is enumerated for GATE-G5
-  with reason codes in the round-3 accounting
-  (`planning/2026-10-14_round3-decomposition.md`).
+  residuals, and the standing rows BL-41/42/43 — was enumerated with
+  reason codes in the round-3 accounting
+  (`planning/2026-10-14_round3-decomposition.md`) and dispositioned at
+  GATE-G5 (2026-10-16: 16 CARRY / 5 ACCEPT / 0 WAIVE).
+
+*Amended in place 2026-10-16 (R3.11):* the GATE-G5 outcome and the
+latest ci-boundary read are now recorded above; every capability row
+otherwise stands as written at R3.10.
