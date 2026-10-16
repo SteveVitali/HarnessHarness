@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.11   # manifest row 149 — round-3 docs refresh (final row); rows 61/82/127/128 remain HUMAN-H1/H2/H3/H4 (operator work)
-lastCompleted:   GATE-G5
+nextTicket:      DONE   # 149-row chain complete — no row remains; the G5 carried set (16 BL + 15 DF CARRY; 5 BL + 4 DF ACCEPT) parks for operator round-4 decomp; projectStatus IN_PROGRESS — DONE flip is the operator's (row-149 note)
+lastCompleted:   R3.11
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.10  # R3.10 tip — stacked PR against svitali/harnessharness-r3.9; operator merges
+chainTip:        svitali/harnessharness-r3.11  # R3.11 tip — stacked PR #147 against svitali/harnessharness-r3.10; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -763,3 +763,57 @@ updatedAt:       2026-10-16
   operator readout decides), `chainTip: svitali/harnessharness-r3.10`.
   Operator merges.
 - 2026-10-16 · GATE-G5 PASSED — operator blanket acceptance (reading 1): verbatim "passed, proceed" (Devin CLI session, received 19:54Z). All 21 §9 carried backlog rows dispositioned per reason code (human/env/dep+env/window → CARRY ×16: BL-01/02/03/04/17/26/27/31/32/33–39; accepted/ruling/standing → ACCEPT ×5: BL-05/30/41/42/43); the 19 owed DEFERRALS rows inherit their home's disposition (ACCEPT: DF-S1.15-1, DF-S1.21-2, DF-S2.5-1, DF-S4.13-1; the rest CARRY); no SEND-BACKs. Thresholds green: zero unlanded R3-chartered rows; check-build-memory 0 violations / 7 warnings (honest flag G5-1: operator pre-check reported 51 — not reproducible under any tested invocation, recorded not hidden); check-backlog exit 0 (156 sources, 55/66 eng · 53/66 req); `^||` empty; 10 GATE-ACCEPT deviations re-confirmed unchanged; GATE-G4 §9 not re-litigated. Named set (HUMAN-H1–H4 + foreign-verification cells) recorded gate-pending; HUMAN-H5 discharged under ruling (b); foreign-run-verified evidence (PR #136) kept distinct from the fixture-verified readiness ceiling. Readout `docs/build/readouts/GATE-G5.md` dispositioned via dated Signature block (Reading-1 block frozen, sha256:85a016814722); GATE DECISIONS row appended; nextTicket → R3.11.
+- 2026-10-16 · **R3.11 done** — branch `svitali/harnessharness-r3.11` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/147 · base
+  `svitali/harnessharness-r3.10` (@`c45196b`). Round-3 docs refresh
+  (final manifest row, 149 of 149 — `refresh-repo-docs` +
+  `agent-docs` to closeout, live_verification=false, docs-only):
+  README toolchain/layout/status paragraphs now state the
+  hermetic-modulo-ADR-0359 truth (`ring =0.17.14` — DPoP + the
+  blob-pool AEAD R3.8 landed under ADR-0361), the 3,505-test count,
+  `foreign-run-verified` (PR #136) as a class distinct from the
+  fixture-verified ceiling, env rows "excluded pending
+  HUMAN-H1/H2/H3 provisioning" (paths live, nothing provisioned),
+  and the Build-state paragraph gains Round 3 — R3.1–R3.10 landed as
+  the open stacked chain #137–#146 (operator merges); GATE-G5 PASSED
+  2026-10-16, operator verbatim "passed, proceed" (received 19:54Z);
+  16 CARRY / 5 ACCEPT / 0 WAIVE over the 21-row carried set; the 19
+  owed DEFERRALS rows inherit (15 CARRY / 4 ACCEPT); coverage 47 MET
+  / 11 PARTIAL / 6 MET-DIFFERENTLY / 2 MET-ENGINEERED — 55/66
+  engineering-closed, 53/66 requirement-satisfied.
+  OPERATIONAL_READINESS preamble records the G5 disposition with the
+  dated Signature block cited verbatim, the live-read row advanced to
+  `ci-R3.10.json` (#146@bdc0a9b, stack all pass), the env rows re-read
+  as excluded-pending-provisioning, and a dated in-place amendment
+  note. AGENTS.md: ring dep scope completed; hh-xcheck bullet gains
+  the E2 foreign-run-verified note; ~3.4k → ~3.5k tests; gotcha 5
+  gains the distinct evidence class; gotcha 8's stale "~17 discharged
+  cells still begin `OPEN`" claim replaced by the swept truth (16 + 5
+  cells swept at R3.1/R3.10; DF-S0.3-3's `PARTIAL` lead genuinely
+  scoped; LEDGER-OF-6's standing re-sweep rule, BL-41); new gotcha 10
+  — loaded-host helper-spawn stalls + the documented
+  `HH_HELPER_{SPAWN,CONNECT}_DEADLINE_MS` overrides (earned at
+  R3.7–R3.10, verified in `hh-env/src/helper.rs`); terminology table
+  gains `foreign-run-verified`. crates/AGENTS.md: `hh-secrets` gains
+  DPoP + AEAD `ring` scope; `hh-ledger` gains `BlobCipher`/`HHBE`
+  (ADR-0361); `hh-ir-op` added to the thin-binaries list (verified
+  present: `crates/hh-hir/src/bin/hh-ir-op.rs`). docs/README,
+  CLAUDE.md, docs/build/README, spikes/README audited — no drift.
+  **Verify:** repo-docs detector 782 docs / 0 broken refs / 0 stale
+  suspects post-run; agent-docs detector 2 docs / 0 issues;
+  check-backlog exit 0 (156 sources, 55/66 eng + 53/66 req);
+  check-build-memory 0 violations / 7 pre-existing warnings; fmt
+  clean; drift in sync; `^||` empty; cargo test n/a — docs-only, no
+  behaviour changed (suite last green R3.9: 344 blocks / 3,505 / 0
+  failed / 1 ignored). **Deferrals/ADRs:** none opened or closed; no
+  ADR owed (docs refresh — no owned decision or deviation).
+  **Closing state:** the 149-row chain is complete — nextTicket →
+  DONE parked on the GATE-G5 carried set (16 BL + 15 DF inherit
+  CARRY; 5 BL + 4 DF ACCEPTED; HUMAN-H1–H4 stay operator work);
+  projectStatus stays **IN_PROGRESS** — the DONE precondition is the
+  operator's decision per the row-149 note, surfaced here not decided
+  by the agent. chainTip → svitali/harnessharness-r3.11 · layer:
+  fixture-verified (docs-only; detectors + records) · ci: pass
+  #147@05cf266 (build · test · fmt · drift 38964427534;
+  38964415856 — stack #137–#146 + #135 all pass) · harness: devin-cli
+  (worker subagent). Operator merges.
