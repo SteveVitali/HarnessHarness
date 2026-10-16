@@ -297,6 +297,7 @@ fn bound_binding(
             run_id,
             lease,
             BindRequest {
+                dpop_proof: None,
                 channel_id: channel_id.into(),
                 holder: "agent.main".into(),
                 env_handle_ref: env_handle.into(),
@@ -1658,10 +1659,11 @@ fn lt05_revoke_fences_replay_minted_and_destination() {
             &binding.binding_id,
             "127.0.0.1",
             60_000,
+            None,
         )
         .unwrap();
     assert_eq!(
-        broker.verify_minted(&minted.token, "127.0.0.1", store.now_ms()),
+        broker.verify_minted(&minted.token, "127.0.0.1", store.now_ms(), None),
         MintedVerdict::Valid
     );
 
@@ -1747,7 +1749,7 @@ fn lt05_revoke_fences_replay_minted_and_destination() {
     // The minted token died with its binding.
     assert_eq!(
         med.broker
-            .verify_minted(&minted.token, "127.0.0.1", store_now(&med)),
+            .verify_minted(&minted.token, "127.0.0.1", store_now(&med), None),
         MintedVerdict::Revoked
     );
 
@@ -1794,15 +1796,18 @@ fn lt05_revoke_fences_replay_minted_and_destination() {
             &binding2.binding_id,
             "127.0.0.1",
             5,
+            None,
         )
         .unwrap();
     assert_eq!(
-        med.broker.verify_minted(&short.token, "127.0.0.1", now + 6),
+        med.broker
+            .verify_minted(&short.token, "127.0.0.1", now + 6, None),
         MintedVerdict::Expired
     );
     // Wrong audience ⇒ invalid.
     assert_eq!(
-        med.broker.verify_minted(&short.token, "other.host", now),
+        med.broker
+            .verify_minted(&short.token, "other.host", now, None),
         MintedVerdict::Invalid
     );
 }

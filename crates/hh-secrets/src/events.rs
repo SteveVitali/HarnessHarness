@@ -20,9 +20,11 @@ use crate::redact::{Leak, RedactionTombstone};
 use crate::types::ProvidedSecret;
 
 /// `security.credential.bound{binding_id, env_handle, channel_id, mode,
-/// expires_at, holder, channel_revision, decision_ref}` — the PDP decision the
-/// bind relied on is pinned by `decision_ref` (the `security.permission.
-/// decided` event id; SV-8's audit trail).
+/// expires_at, holder, channel_revision, decision_ref, sender_key?}` — the
+/// PDP decision the bind relied on is pinned by `decision_ref` (the
+/// `security.permission.decided` event id; SV-8's audit trail); a
+/// `dpop`-constrained bind records the verified bound-key coordinate
+/// `sender_key` (`Null` otherwise — R3.7).
 #[allow(clippy::too_many_arguments)]
 pub fn bound_payload(
     binding_id: &str,
@@ -33,6 +35,7 @@ pub fn bound_payload(
     mode: &str,
     decision_ref: &str,
     expires_at: &str,
+    sender_key: Option<&str>,
 ) -> Json {
     Json::obj([
         ("binding_id", Json::str(binding_id)),
@@ -43,6 +46,10 @@ pub fn bound_payload(
         ("holder", Json::str(holder)),
         ("channel_revision", Json::Int(channel_revision as i64)),
         ("decision_ref", Json::str(decision_ref)),
+        (
+            "sender_key",
+            sender_key.map(Json::str).unwrap_or(Json::Null),
+        ),
     ])
 }
 
@@ -98,6 +105,43 @@ pub fn denied_payload(
             channel_id.map(Json::str).unwrap_or(Json::Null),
         ),
         ("effect_id", effect_id.map(Json::str).unwrap_or(Json::Null)),
+    ])
+}
+
+/// `security.credential.wrapped{wrap_id, binding_id, channel_id,
+/// destination, effect_id, mode, expires_at, sender_key?,
+/// compensation_plan_id}` — the `wrapped_long_lived` delivery registration
+/// (R3.7; ADR-0032's `prepare` hook at the credential plane): the
+/// compensating-revocation plan coordinate is durable **before** the
+/// wrapped value crosses — `revoke`'s `RevokeIntent`s are the compensator
+/// the plan names. Content-free coordinates only (SV-2 — the wrap itself
+/// never appears).
+#[allow(clippy::too_many_arguments)]
+pub fn wrapped_payload(
+    wrap_id: &str,
+    binding_id: &str,
+    channel_id: &str,
+    channel_revision: u64,
+    destination: &str,
+    effect_id: &str,
+    expires_at: &str,
+    sender_key: Option<&str>,
+    compensation_plan_id: &str,
+) -> Json {
+    Json::obj([
+        ("wrap_id", Json::str(wrap_id)),
+        ("binding_id", Json::str(binding_id)),
+        ("channel_id", Json::str(channel_id)),
+        ("channel_revision", Json::Int(channel_revision as i64)),
+        ("destination", Json::str(destination)),
+        ("effect_id", Json::str(effect_id)),
+        ("mode", Json::str("wrapped_long_lived")),
+        ("expires_at", Json::str(expires_at)),
+        (
+            "sender_key",
+            sender_key.map(Json::str).unwrap_or(Json::Null),
+        ),
+        ("compensation_plan_id", Json::str(compensation_plan_id)),
     ])
 }
 

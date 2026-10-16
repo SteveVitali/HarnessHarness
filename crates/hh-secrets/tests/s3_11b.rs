@@ -220,6 +220,7 @@ fn bound_binding(
             run_id,
             lease,
             BindRequest {
+                dpop_proof: None,
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
@@ -239,6 +240,7 @@ fn req(effect: &str, dest: &str, path: Option<&str>) -> RequestDescriptor {
         destination: dest.into(),
         method: Some("GET".into()),
         path: path.map(str::to_string),
+        dpop_proof: None,
     }
 }
 
@@ -386,6 +388,7 @@ fn lt03_canary_presented_lands_leak_detected() {
         &run_id,
         &lease,
         BindRequest {
+            dpop_proof: None,
             channel_id: "tripwire".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),

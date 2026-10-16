@@ -1988,7 +1988,7 @@ impl EmbedService {
     /// `Invalid`, never a resolved subject.
     pub fn surface_verify_caller_token(&self, token: &str, audience: &str) -> MintedVerdict {
         self.credential_broker
-            .verify_minted(token, audience, self.store.now_ms())
+            .verify_minted(token, audience, self.store.now_ms(), None)
     }
 
     /// Mint a caller credential token bound to `audience` — the
@@ -2137,6 +2137,7 @@ impl EmbedService {
                     &run_id,
                     &lease,
                     BindRequest {
+                        dpop_proof: None,
                         channel_id: CHANNEL.to_string(),
                         holder,
                         env_handle_ref: "caller-surface".to_string(),
@@ -2162,6 +2163,7 @@ impl EmbedService {
                 &binding_id,
                 audience,
                 ttl_ms,
+                None,
             )
             .map_err(|e| EmbedError::Refused {
                 reason: format!("caller_auth_mint: {e:?}"),
