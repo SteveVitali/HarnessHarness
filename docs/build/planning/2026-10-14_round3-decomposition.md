@@ -94,7 +94,131 @@ Ledger resumed: `projectStatus: IN_PROGRESS`, `nextTicket: R3.1`, `round: 3`,
 
 ## Round-3 accounting — appended at closure (R3.10)
 
-*(to be appended by R3.10 — landed vs carried, with the carried set enumerated for GATE-G5.)*
+*Dated 2026-10-16 · branch `svitali/harnessharness-r3.10` (stacked on
+`svitali/harnessharness-r3.9` @ `9af8ae4`) · reconcile-build mode=backlog.*
+
+### Landed vs carried — sources
+
+Round 3 discharged seven backlog rows, each exactly once, with dated evidence:
+
+| BL | Discharged at | What landed |
+|---|---|---|
+| BL-44 | R3.2 | DF-S2.3-1's five residual producer legs (resume_set / defer / child-lease / non-fleet ingress / heal(env_handle)) — landed or verified-landed; R-2.2.3's first flip leg |
+| BL-14 | R3.3 | DF-S1.20-1's interpreter/delegation legs — R-2.6.1 + R-2.6.3 flipped MET |
+| BL-15 | R3.4 | DF-S1.19-1/-2 — the six + five §5c residual members over the real port; R-2.4.1/2.4.2/2.4.3/2.4.4 flipped MET (ADR-0356) |
+| BL-16 | R3.5 | DF-S1.17-1 — provider deferral flags + `surface_rejection_rate` fold (ADR-0357); R-2.5.3 flipped MET |
+| BL-10 | R3.6 | DF-S1.9-2 — emitter-vs-exemption adjudication over the 11 no-producer codes (ADR-0358; CF-492 registered); R-2.1.4 flipped MET |
+| BL-19 | R3.7 | DF-S1.13-1/-4 — `dpop` verification over `ring = 0.17.14` + `wrapped_long_lived` delivery (ADR-0359/0360, HUMAN-H5 disposition (b)); R-2.8.3 → MET-ENGINEERED(DF-S2.4-2) |
+| BL-45 | R3.8 | DF-S1.15-3 — per-event blob encryption (`HHBE` frame + `BlobCipher`/`RingBlobCipher`, ADR-0361) |
+
+Bookkeeping cells accounted at this closure (R3.10): five stale status leads
+swept to `DONE` — DF-S1.13-1, DF-S1.13-4, DF-S1.19-1, DF-S1.19-2 (the ticket's
+named four) **+ DF-S1.17-1** (discharged at R3.5; the inline `|` characters in
+its cell hid it from the naive lead scan — LEDGER-OF-6 records the class).
+DF-S2.4-2 gained a dated residual re-confirmation (still `OPEN`, env-gated on
+BL-31). No cell rewritten; all dated DONE markers preserved.
+
+### Coverage movement
+
+`docs/build/COVERAGE_MATRIX.csv` recomputed (66 scoped requirement rows):
+
+- **engineering closed = MET + MET-DIFFERENTLY + MET-ENGINEERED:**
+  47 + 6 + 0 = 47/66 (R2.26) → **47 + 6 + 2 = 55/66**
+- **requirement satisfied = MET + MET-DIFFERENTLY:**
+  41 + 6 = 47/66 (R2.26) → **47 + 6 = 53/66**
+
+Round-3 PARTIAL→MET flips, stated exactly: **R-2.2.3** (R3.2+R3.3),
+**R-2.4.1 / R-2.4.2 / R-2.4.3 / R-2.4.4** (R3.4), **R-2.5.3** (R3.5),
+**R-2.6.1 / R-2.6.3** (R3.3), **R-2.1.4** (R3.6). Re-verdicted at this
+closure: **R-2.8.4 → MET-ENGINEERED(DF-S2.4-2)** — every §5g.4 engineering
+leg landed (mediated dispatch CAP.3; ask-endorsement ingress + fork-rebind
+R2.9a; the dpop residual closed by R3.7's preserved typed-refusal), the sole
+owed leg is the env-gated TLS transport on BL-31 — the same residual its
+sibling R-2.8.3 already carries. **11 PARTIAL remain** (R-2.2.1, R-2.7.1,
+R-2.7.2b, R-2.8.6, R-2.9.3, R-2.9.4, R-2.9.6, R-2.10.3, R-2.10.5, R-2.11.3,
+R-2.12.1) — each re-checked 2026-10-16 with a dated note; none owes an
+in-build leg.
+
+### Backlog movement
+
+- Closed at R3.2–R3.8: BL-44, BL-14, BL-15, BL-16, BL-10, BL-19, BL-45.
+- BL-30 (`ruling`, open): += CF-492 (the §3.3.8 `seal`-stage taxonomy gap)
+  + CF-493 (the `hh-xcheck-bundle/1` `pending_cells[]`/`arms[].status`
+  format gap — no spelling for a partially-foreign-discharged cell);
+  CF-489 resolved at R3.9 (code→spec conform); the custody/OQ-388/
+  CF-476/487/488/490/491 rulings stand.
+- BL-41 (`standing`, accepted): += LEDGER-OF-6 — status-marker drift is a
+  recurring class; the dated lead/format sweep is a standing closure rule.
+- BL-42: 56 quiet/dormant standing conditions (+= ADR-0240 re-home +
+  ADR-0255/0342 partially-fired + the nine new round-3 quiet conditionals
+  ADR-0354…ADR-0361 + ADR-0265 re-home). BL-43: 49 fired-answered
+  (+= ADR-0254, ADR-0272, ADR-0350, ADR-0244).
+- BL-01 stays `accepted`/`env` — re-checked 2026-10-16: the E2 legs now
+  carry foreign-run-verified evidence (PR #136, 49/49 over six arms);
+  the record cannot express partial discharge in-bundle (CF-493).
+- `check-backlog.sh` exit 0 — 156 expected sources (145 ADR + 11 owed
+  matrix rows), complete, non-duplicating, verdict-consistent.
+
+### New findings this round
+
+- **CF-492** (R3.6) — §3.3.8 closed `stage` set has no `seal` spelling for
+  `C-SEAL-1`'s producer; interim rule recorded, owner ruling owed → BL-30.
+- **CF-493** (R3.10) — the `hh-xcheck-bundle/1` status vocabulary cannot
+  express E2-verified/E3-pending; a per-candidate discharge member is owed
+  before the next bundle mint → BL-30.
+- **LEDGER-OF-6** (R3.10) — status-marker drift recurs each round (16 cells
+  swept at R3.1, five at R3.10); standing sweep rule → BL-41.
+- R3.7's loaded-host helper-spawn repair is already a recorded OPEN
+  FINDINGS resolution (env overrides `HH_HELPER_SPAWN_DEADLINE_MS`/
+  `HH_HELPER_CONNECT_DEADLINE_MS`; defaults unchanged) — no new row.
+
+### The carried set for GATE-G5 — per-row reason codes
+
+Reason codes: `human` — a person's act is the only remaining leg · `env` —
+needs a provisioned environment (foreign toolchain, live provider, TLS
+endpoint, live judge) · `dep` — blocked on a primitive/dependency the
+hermetic build lacks (or on a dependency-side ruling such as WS-L6 trust
+fields) · `in-build` — machine-achievable residual carried on capacity ·
+`accepted` — gate-accepted at GATE-ACCEPT; arms execute when their
+environments exist · `ruling` — spec/governance ruling owed, not code ·
+`window` — scheduled to the WS-L6 program window · `standing` — perpetual
+ledger row, re-issued never closed.
+
+The GATE-G4 28-row set minus the seven round-3 discharges
+(BL-10/14/15/16/19/44/45) = **21 rows carried to GATE-G5**:
+
+| BL | Carried work | Reason |
+|---|---|---|
+| BL-01 | E3 replay, the HIR/ledger-corpus extension, the two-toolchain C12 cells (E2 legs foreign-run-verified per PR #136 — a partial discharge the bundle cannot yet spell, CF-493) | `env` + `accepted` |
+| BL-02 | R2 cross-camp human reviewer signature (DF-S0.3-3's scoped residual) | `human` |
+| BL-03 | HUMAN-H1 — E3 surface-ecosystem binding (DF-S4.10-1; provisionable per the operator's 2026-10-14 statement, unprovisioned) | `human` |
+| BL-04 | HUMAN-H2 — real tracker + signed webhook (DF-S5.6-1; unprovisioned) | `human` |
+| BL-05 | Gate-accepted battery arms (item 10 — incl. DF-S1.15-1's custody-riding halves and DF-S1.21-2's arms) | `accepted` |
+| BL-17 | Judge binding + live-judge admissibility (DF-S1.21-3; R-2.7.1/R-2.7.2b's residual) | `env` |
+| BL-26 | Live foreign-manifest import (DF-S1.24-2; R-2.9.4/R-2.9.6's residual; HUMAN-H3) | `env` |
+| BL-27 | oauth/mtls CallerCredential mediator legs (DF-S4.11-2; R-2.11.3's residual; WS-H3) | `env` |
+| BL-30 | Spec/governance rulings — signer custody (OQ-170/DF-S2.5-1), OQ-388 ratification (DF-S4.13-1), CF-476/487/488/490/491 + CF-492/CF-493, R-2.2.1/R-2.8.6 verdict residuals, ADR-0345 trigger (b), the OQ-441/WS-I6 re-pin marker | `ruling` |
+| BL-31 | Live provider transports + the TLS-terminating transport (DF-S2.4-2 — the residual R-2.8.3/R-2.8.4 both carry as MET-ENGINEERED legs; DF-S1.18-1 live variants; TLS/live-sink-bound triggers ADR-0266/0340/0341/0346) | `env` |
+| BL-32 | Remote fetch transports + foreign import/export vocabularies (DF-S4.2-1/-2 — dep-gated on WS-L6 trust fields; R-2.9.3/R-2.10.3/R-2.10.5 residuals) | `dep` + `env` |
+| BL-33 | WS-L6 package (R-2.12.4 + 13 OQs) | `window` |
+| BL-34 | ADR-0211 ratified deferrals D-1..D-6 + OQ-461/462/463 | `window` |
+| BL-35 | ADR-0212 register package — remaining open OQs | `window` |
+| BL-36 | ADR-0213 register package — remaining open OQs | `window` |
+| BL-37 | ADR-0214 register package — remaining open OQs (incl. the OQ-441 Stage-5 re-pin) | `window` |
+| BL-38 | ADR-0215 program candidates + OQ-440 | `window` |
+| BL-39 | ADR-0216 fixer deferrals | `window` |
+| BL-41 | Ledger OPEN-FINDINGS standing rules (incl. LEDGER-OF-6's status-marker sweep) | `standing` |
+| BL-42 | 56 quiet/dormant ADR triggers | `standing` |
+| BL-43 | 49 fired-and-answered ADR triggers | `standing` |
+
+And the three pending cells the bundle still lists but no foreign run has
+discharged — `polyglot-ci.two-toolchain` (DF-S0.3-2 → BL-01),
+`bench-manifest.live-import` (DF-S1.24-2 → BL-26), `lt-03.live-corpus-arm`
+(DF-S1.13-3 → BL-05) — plus the format-gap decision (CF-493 → BL-30) the
+partially-discharged record now needs. HUMAN-H5's record is discharged
+(ruled 2026-10-14, disposition (b); ADR-0359 owns the admitted scope) and
+HUMAN-H1/H2/H3/H4 stay `gate pending` rows on their BL homes — provisionable
+per the operator's 2026-10-14 statement, none provisioned in-build.
 
 ## Amendment — operator rulings applied (2026-10-14, same-day, post-seed commit `89584c8`)
 
