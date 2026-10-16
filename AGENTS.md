@@ -93,7 +93,9 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 - **Pure std, hermetic — modulo ADR-0359.** No external runtime crates
   except (a) the `tempfile` dev-dep of `hh-varhost` tests and (b) the
   `ring =0.17.14` dep of `hh-secrets` admitted by ADR-0359 for the closed
-  DPoP-verifier scope (`ring::aead`/`ring::rand` reserved for R3.8). Do
+  DPoP-verifier scope plus `ring::aead`/`ring::rand`, consumed by R3.8's
+  blob-pool AEAD (ADR-0361 — `hh-ledger`'s `BlobCipher` seam, the producer
+  stays in `hh-secrets`). Do
   not add dependencies — any further crate or `ring` surface is its own ADR.
 - **CC1 — one canonical implementation.** Reuse the existing codec, store,
   canonicalizer or class table; a second spelling of a contract is a defect.

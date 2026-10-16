@@ -27,7 +27,8 @@ hh-containment = { path = "../hh-containment" }
 # The ADR-0359 dep admission — the workspace's one external runtime crate:
 # `ring =0.17.14`, scoped to `src/dpop.rs`'s verification construction
 # (`signature::{UnparsedPublicKey, ED25519, ECDSA_P256_SHA256_ASN1}` plus the
-# test-fixture signing half + `rand::SystemRandom`; `aead`/`rand` are reserved
-# for R3.8 under the same ADR). Nothing else in the crate — and no other
-# member — may name it.
+# test-fixture signing half + `rand::SystemRandom`) and `src/aead.rs`'s
+# blob-pool AEAD (`aead::AES_256_GCM` + `rand::SystemRandom` — the ADR's
+# R3.8 reservation consumed under ADR-0361). Nothing else in the crate —
+# and no other member — may name it.
 ring = "=0.17.14"

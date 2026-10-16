@@ -1488,6 +1488,10 @@ fn finish_child_open(
         // manifest is the durable declaration vehicle (ADR-0345 D2); a
         // spawned run under a witnessed parent carries the same policy.
         witness_policy: parent_manifest.witness_policy.clone(),
+        // Same rule for the pool's encryption declaration (ADR-0361): the
+        // child's blobs live in the same sealed pool — the declaration
+        // follows the residency fact, never drops silently.
+        blob_encryption: parent_manifest.blob_encryption.clone(),
         grace_ms: parent_manifest.grace_ms,
         task_ref: None,
         experiment: None,

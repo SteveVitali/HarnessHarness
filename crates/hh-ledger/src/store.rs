@@ -34,6 +34,7 @@ use hh_wire::json::{self, Json};
 use crate::audit::{
     AuditFault, AuditKeyResolver, AuditSigner, Auditor, BlobStatus, CheckpointKind, CHECKPOINT_ALG,
 };
+use crate::cipher::{self, BlobCipher};
 use crate::classes::{self, Durability, ScopeKind};
 use crate::effect::{self, EffectCtx, EffectFold, EffectPhase};
 use crate::errors::{LedgerError, MissingReason, Tampered, TamperedKind};
@@ -282,6 +283,12 @@ pub struct Store {
     /// resolver can replace it without touching the ledger). `None` ⇒
     /// signatures verify shape-only (`unverified`), never fabricated ok.
     audit_keys: Option<Box<dyn AuditKeyResolver>>,
+    /// The blob-pool cipher — the AEAD seam custody hangs off (§5g.6 C2
+    /// "blob encryption with per-event keys"; ADR-0361). `None` ⇒ blobs
+    /// store plaintext and sealed frames read back
+    /// `Missing{key_unavailable}` — never silently decrypted, never a
+    /// fabricated plaintext body.
+    blob_cipher: Option<Box<dyn BlobCipher>>,
     /// Fault-injection seam (R-2.2.3⁰ᶜ; [`crate::fault`]) — the number of
     /// upcoming `append` calls that fail `Durability{injected}` before a
     /// byte is written (KP-9: the batch is absent as a unit). Armed only by
@@ -455,6 +462,7 @@ impl Store {
             tombstones: BTreeMap::new(),
             tiers: BTreeMap::new(),
             audit_keys: None,
+            blob_cipher: None,
             fault_appends: 0,
             fault_restore_after: None,
         };
@@ -473,6 +481,29 @@ impl Store {
     /// The installed resolver, if any.
     pub fn audit_key_resolver(&self) -> Option<&dyn AuditKeyResolver> {
         self.audit_keys.as_deref()
+    }
+
+    /// Install the blob-pool cipher (§5g.6 C2 per-event encryption; R3.8 /
+    /// ADR-0361) — the seam custody hangs off, exactly like
+    /// `set_audit_key_resolver`: the embed layer resolves key material
+    /// through `CredentialBroker::kernel_use` and wraps it in a
+    /// [`BlobCipher`]; the ledger sees `seal`/`open` and the content-free
+    /// `algorithm`/`key_id` coordinates only. Once installed every
+    /// `put_blob` seals and every `get_blob` on a sealed frame opens.
+    pub fn set_blob_cipher(&mut self, cipher: Box<dyn BlobCipher>) {
+        self.blob_cipher = Some(cipher);
+    }
+
+    /// Uninstall the cipher — the custody-loss posture: sealed frames stay
+    /// on disk and read back `Missing{key_unavailable}` (I-A8); plaintext
+    /// blobs keep reading.
+    pub fn clear_blob_cipher(&mut self) {
+        self.blob_cipher = None;
+    }
+
+    /// The installed cipher, if any.
+    pub fn blob_cipher(&self) -> Option<&dyn BlobCipher> {
+        self.blob_cipher.as_deref()
     }
 
     /// The store root.
@@ -1909,6 +1940,10 @@ impl Store {
 
     /// `put_blob(bytes) → ContentAddress` — content-addressed under `idp/1`'s blob
     /// domain; identical bytes deduplicate to the same address (and file).
+    /// When a [`BlobCipher`] is installed (`set_blob_cipher`) the stored bytes
+    /// are the sealed `HHBE` frame — the address still covers the *plaintext*
+    /// (§5g.6 I-A8). A sealing failure is `CipherFault` — never a silent
+    /// plaintext write under a declared seam (CC3; ADR-0361).
     pub fn put_blob(
         &mut self,
         bytes: &[u8],
@@ -1923,8 +1958,14 @@ impl Store {
         let addr = hh_identity::idp::address(bytes, media_type);
         let path = self.root.join("blobs").join(&addr.digest);
         if !path.exists() {
+            let stored = match self.blob_cipher.as_deref() {
+                Some(c) => c.seal(&addr, bytes).map_err(|e| LedgerError::CipherFault {
+                    detail: format!("blob seal under {}: {e}", c.key_id()),
+                })?,
+                None => bytes.to_vec(),
+            };
             let tmp = path.with_extension("tmp");
-            fs::write(&tmp, bytes).map_err(io_err)?;
+            fs::write(&tmp, &stored).map_err(io_err)?;
             fs::rename(&tmp, &path).map_err(io_err)?;
             sync_dir(&self.root.join("blobs")).map_err(io_err)?;
         }
@@ -1957,11 +1998,30 @@ impl Store {
                 });
             }
         };
-        // Cold-tier bytes are `HHZ1`-framed (ADR-0333): decompress, then
-        // verify — the content address covers the *plaintext* either way.
-        // A frame that cannot decode is `BlobCorrupt`, never a fabricated
-        // body (CC3 — same as a digest mismatch).
-        let raw = if crate::retention::is_compressed(&bytes) {
+        // A sealed `HHBE` frame opens first (ADR-0361): the cipher's `open` is
+        // bound to the *plaintext* address, and the digest check below still
+        // runs on what it yields. Structural decode failures are `BlobCorrupt`
+        // (the undecodable-`HHZ1` class); every open failure is
+        // `Missing{key_unavailable}` — never `Tampered` (§5g.6 I-A8). Cold-tier
+        // bytes are `HHZ1`-framed (ADR-0333): decompress, then verify — the
+        // content address covers the *plaintext* either way. A frame that
+        // cannot decode is `BlobCorrupt`, never a fabricated body (CC3 — same
+        // as a digest mismatch).
+        let raw = if cipher::is_sealed(&bytes) {
+            if cipher::parse_frame(&bytes).is_none() {
+                return Err(LedgerError::BlobCorrupt { address: id });
+            }
+            let Some(c) = self.blob_cipher.as_deref() else {
+                return Err(LedgerError::Missing {
+                    address: id,
+                    reason: MissingReason::KeyUnavailable,
+                });
+            };
+            c.open(address, &bytes).map_err(|_| LedgerError::Missing {
+                address: id.clone(),
+                reason: MissingReason::KeyUnavailable,
+            })?
+        } else if crate::retention::is_compressed(&bytes) {
             crate::retention::decompress(&bytes).map_err(|_| LedgerError::BlobCorrupt {
                 address: id.clone(),
             })?
@@ -3162,14 +3222,37 @@ impl Store {
     }
 
     /// The tombstone-aware blob lookup `audit_view` consumes — present /
-    /// tombstoned-with-reason / missing-with-no-audit-row. Public since
+    /// sealed-with-`key_id` / tombstoned-with-reason / missing-with-no-audit-
+    /// row. `Sealed` reads only the `HHBE` frame header (ADR-0361) — the
+    /// residency fact is honest without key material. Public since
     /// S3.4b: the results store's `verify_citation` resolves blob evidence
     /// through it (`Missing{redacted}` after a tombstone — §6.5 AC-12).
     pub fn blob_status(&self, address: &str) -> BlobStatus {
         let Ok(addr) = hh_identity::idp::parse_id(address) else {
             return BlobStatus::Missing;
         };
-        if self.root.join("blobs").join(&addr.digest_hex).exists() {
+        let path = self.root.join("blobs").join(&addr.digest_hex);
+        if path.exists() {
+            // Peek the header only — a blob can be snapshot-scale; the
+            // sealed-prefix check needs the frame head, never the body.
+            // Max header = 4 magic + 1 ver + 3 × (1 len + 255 member) = 773.
+            if let Ok(mut f) = fs::File::open(&path) {
+                use std::io::Read;
+                let mut head = [0u8; 773];
+                let n = f.read(&mut head).unwrap_or(0);
+                if cipher::is_sealed(&head[..n]) {
+                    let key_id = cipher::parse_frame(&head[..n])
+                        .map(|(h, _)| h.key_id)
+                        .or_else(|| {
+                            fs::read(&path)
+                                .ok()
+                                .and_then(|b| cipher::frame_header(&b))
+                                .map(|h| h.key_id)
+                        })
+                        .unwrap_or_default();
+                    return BlobStatus::Sealed { key_id };
+                }
+            }
             return BlobStatus::Present;
         }
         match self.tombstones.get(address) {
@@ -3531,6 +3614,13 @@ impl Store {
             Ok(b) => b,
             Err(_) => return Ok(false),
         };
+        // A sealed `HHBE` frame is not a residency-codec subject: ciphertext
+        // does not compress and the `HHZ1` toggle cannot reach inside the
+        // AEAD envelope (ADR-0361 D4) — the tier transition still records;
+        // the byte move honestly does not happen.
+        if cipher::is_sealed(&bytes) {
+            return Ok(false);
+        }
         let want = if compress {
             if crate::retention::is_compressed(&bytes) {
                 return Ok(false);
@@ -3756,6 +3846,7 @@ impl Store {
                     })
                 },
                 self.audit_keys.as_deref(),
+                self.blob_cipher.as_deref(),
             ),
             ViewKind::RunSummary => views::run_summary(
                 state.manifest.run_kind.as_str(),

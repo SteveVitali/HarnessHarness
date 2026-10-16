@@ -254,6 +254,7 @@ fn hosted_events_only_view_renders_ledger_components_na_observability() {
         &manifest,
         |_, _| None,
         Some(&keys()),
+        None,
     );
     let Json::Obj(p) = &view.payload else {
         panic!("audit_view payload not an object")

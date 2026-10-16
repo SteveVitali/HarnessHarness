@@ -157,7 +157,10 @@ pub fn verify_citation(store: &Store, audit_ref: &AuditRef) -> CitationVerdict {
     }
     for addr in &audit_ref.content_refs {
         match store.blob_status(addr) {
-            BlobStatus::Present => {}
+            // Sealed residency still holds the evidence — the custody
+            // coordinate rides the status; an unopenable frame fails at
+            // read time with `key_unavailable`, not here (ADR-0361).
+            BlobStatus::Present | BlobStatus::Sealed { .. } => {}
             BlobStatus::Tombstoned(reason) => {
                 return CitationVerdict::Missing { reason };
             }
