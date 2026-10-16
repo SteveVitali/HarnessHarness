@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.10  # round-3 chain (rows 137-149); row 147 = round-3 closure (backlog refresh, coverage recompute, OPERATIONAL_READINESS, carried-set accounting for GATE-G5); 143 is the human row itself
-lastCompleted:   R3.9
+nextTicket:      R3.11   # manifest row 149 — round-3 docs refresh (final row); rows 61/82/127/128 remain HUMAN-H1/H2/H3/H4 (operator work)
+lastCompleted:   GATE-G5
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.9  # R3.9 tip — stacked PR #145 against svitali/harnessharness-r3.8; operator merges
+chainTip:        svitali/harnessharness-r3.10  # R3.10 tip — stacked PR against svitali/harnessharness-r3.9; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -94,6 +94,17 @@ updatedAt:       2026-10-16
   `Content-Length` body before responding — protocol-correct, deterministic; 25/25 local runs
   green. No retries added anywhere.
 
+- 2026-10-16 · **LEDGER-OF-6 — status-marker drift is a recurring class (R3.10 finding,
+  standing).** The append-only DEFERRALS convention appends dated `**DONE**` markers but never
+  rewrites the leading status token, so discharged cells drift stale: the G4-4 sweep fixed 16 at
+  R3.1 and the R3.10 sweep found five more — DF-S1.13-1 + DF-S1.13-4 (discharged at R3.7),
+  DF-S1.19-1/-2 (R3.4), DF-S1.17-1 (R3.5; inline `|` characters in its cell text hid it from a
+  naive column split). Machine-readable pending sets drift the same way: `bundle.json`'s
+  `pending_cells[]`/`arms[].status` has no spelling for the E2-verified/E3-pending middle state
+  (the format-side ruling is CF-493, homed on BL-30). Standing rule — every round-closure
+  reconcile re-sweeps lead tokens and machine-readable pending sets against the dated markers
+  before reporting counts. Homed on **BL-41** (`accepted`, standing).
+
 ## GATE DECISIONS
 
 | date | ticket | gate | item | answer | consequence |
@@ -120,6 +131,7 @@ updatedAt:       2026-10-16
 | 2026-10-14 | HUMAN-H5 | crypto-dependency posture ruling (R3.7/R3.8 gate) | disposition | **RULED** — disposition (b): a vetted external crypto crate (ring/aws-lc/rustls family) is admitted | the dep-choice ADR lives inside R3.7's contract (names the crate + a version published ≥7 days before selection + admitted scope; amends the hermetic-deps note — never a silent Cargo.toml edit); R3.7 (BL-19 `dpop` + `wrapped_long_lived`) and R3.8 (BL-45 per-event AEAD + R-2.8.6 legs) un-gated skeleton → ticket; R3.7→R3.8 is a real dependency edge (the pin); 143 keeps the ruling record |
 | 2026-10-14 | R3.9 | CF-489 direction (WS-I6/OQ-441 interim) | direction ruling | **CONFORM CODE TO SPEC** — `DebtPolicy::default()` → §5h.6's proposed 60 d runway / 30 d warn | R3.9 un-gated skeleton → ticket: constants + fidelity comment + caller/test sweep + dated CF-489 resolution note; the `[[DEFERRED ADR-0214: OQ-441]]` markers stand for WS-I6's Stage-5 re-pin; BL-30/BL-37 get dated progress notes, stay open on their other rulings |
 | 2026-10-14 | round-3 plan | environment provisioning path | statement | HUMAN-H1/H2/H3 are provisionable (operator) | env-gated rows (BL-01/17/26/27/31/32 + dependents) stay excluded until provisioning lands; they unblock on the H-rows and a future mode=extend round schedules them; recorded in `## Decomposition decisions → Round 3` |
+| 2026-10-16 | GATE-G5 | Round-3 discharge review | disposition (reading 1) | **PASSED** — operator verbatim "passed, proceed" (Devin CLI session, received 2026-10-16T19:54Z); blanket acceptance, all 21 carried rows dispositioned | every §9 row dispositioned per its reason code (human/env/dep+env/window → CARRY; accepted/ruling/standing → ACCEPT); the 19 owed DEFERRALS rows inherit their BL home's disposition; no SEND-BACKs; readouts/GATE-G5.md dated decision block recorded (frozen Reading-1 agent-drafted block sha256:85a016814722 confirmed); zero unlanded R3-chartered rows; check-build-memory 0 violations; check-backlog exit 0; 10 GATE-ACCEPT deviations unchanged; GATE-G4 §9 not re-litigated; named-set human/env rows gate-pending; foreign-run-verified (PR #136) distinct from fixture-verified ceiling. R3.11 released (nextTicket → R3.11). |
 
 ## RETURN PASS
 
@@ -713,3 +725,41 @@ updatedAt:       2026-10-16
   `lastCompleted: R3.9`, `nextTicket: R3.10` (row 147 — round-3
   closure for GATE-G5), `chainTip: svitali/harnessharness-r3.9`.
   Operator merges.
+- 2026-10-16 · **R3.10 done** — branch `svitali/harnessharness-r3.10` · PR
+  stacked on `svitali/harnessharness-r3.9` (@9af8ae4) — the round-3 closure
+  reconcile (row 147; reconcile-build mode=backlog). **No runtime code;
+  records only.** Bookkeeping: five stale DEFERRALS leads swept
+  (DF-S1.13-1/-4, DF-S1.19-1/-2 discharged at R3.7/R3.4 + DF-S1.17-1 at
+  R3.5 — the inline-`|` case the naive scan missed); DF-S2.4-2 dated
+  residual re-confirmed (env → BL-31). Coverage recomputed: 47/66 →
+  **55/66 engineering-closed · 53/66 requirement-satisfied** — the
+  round's eight PARTIAL→MET flips stated (R-2.2.3; R-2.4.1–2.4.4;
+  R-2.5.3; R-2.6.1/2.6.3; R-2.1.4) + **R-2.8.4 →
+  MET-ENGINEERED(DF-S2.4-2)** at closure (the R-2.8.3 twin; sole owed leg
+  is the env-gated TLS transport on BL-31); 11 PARTIAL remain, each with
+  a dated re-check note and no in-build leg owed. Backlog: BL-30 +=
+  CF-492 + **CF-493** (new — the `hh-xcheck-bundle/1`
+  pending_cells[]/arms[].status vocabulary cannot express a
+  partially-foreign-discharged cell); BL-41 += **LEDGER-OF-6** (new —
+  status-marker drift is a recurring class; the dated lead/format sweep
+  is a standing closure rule); BL-01 re-checked (E2 legs carry
+  foreign-run-verified evidence — PR #136, 49/49 over six arms — a
+  distinct evidence class, never conflated with fixture-verified);
+  BL-42/BL-43 recounts 56/49. `OPERATIONAL_READINESS.md` rewritten to
+  post-R3 truth (ceiling stays `fixture-verified`; ring admission +
+  foreign-run-verified class stated; no live claims). Round-3 accounting
+  + the 21-row GATE-G5 carried set with per-row reason codes appended to
+  the decomposition record. **Verify:** check-backlog exit 0 (156
+  expected sources — 145 ADR + 11 owed matrix); check-build-memory 0
+  violations / 7 pre-existing warnings; `^||` empty; fmt clean; drift in
+  sync; removability green (see runs/R3.10.md for exact counts).
+  **ci:** pass #146@9c6cb74 (build · test · fmt · drift 38939044162
+  push; 38939058091 pull_request), logs/ci-R3.10.json.
+  **Conflicts:** CF-493 opened; CF-489 resolved at R3.9 — 7 open.
+  **Findings:** LEDGER-OF-6 → BL-41; CF-492/CF-493 → BL-30.
+  **Deferrals:** none opened; leads swept + one dated residual note.
+  **ADRs:** none (a records-only reconcile). Ledger advanced
+  `lastCompleted: R3.10`, `nextTicket: GATE-G5` (row 148 — STOP gate;
+  operator readout decides), `chainTip: svitali/harnessharness-r3.10`.
+  Operator merges.
+- 2026-10-16 · GATE-G5 PASSED — operator blanket acceptance (reading 1): verbatim "passed, proceed" (Devin CLI session, received 19:54Z). All 21 §9 carried backlog rows dispositioned per reason code (human/env/dep+env/window → CARRY ×16: BL-01/02/03/04/17/26/27/31/32/33–39; accepted/ruling/standing → ACCEPT ×5: BL-05/30/41/42/43); the 19 owed DEFERRALS rows inherit their home's disposition (ACCEPT: DF-S1.15-1, DF-S1.21-2, DF-S2.5-1, DF-S4.13-1; the rest CARRY); no SEND-BACKs. Thresholds green: zero unlanded R3-chartered rows; check-build-memory 0 violations / 7 warnings (honest flag G5-1: operator pre-check reported 51 — not reproducible under any tested invocation, recorded not hidden); check-backlog exit 0 (156 sources, 55/66 eng · 53/66 req); `^||` empty; 10 GATE-ACCEPT deviations re-confirmed unchanged; GATE-G4 §9 not re-litigated. Named set (HUMAN-H1–H4 + foreign-verification cells) recorded gate-pending; HUMAN-H5 discharged under ruling (b); foreign-run-verified evidence (PR #136) kept distinct from the fixture-verified readiness ceiling. Readout `docs/build/readouts/GATE-G5.md` dispositioned via dated Signature block (Reading-1 block frozen, sha256:85a016814722); GATE DECISIONS row appended; nextTicket → R3.11.
