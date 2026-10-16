@@ -19,11 +19,13 @@ pub struct GoldenItem {
     pub id: String,
 }
 
-/// The ≥ 20 directory trees of the golden corpus, each with its computed tree address. Covers:
-/// empty dirs, single/multi-file dirs, executables, symlinks (by target), nested dirs, non-ASCII
-/// names, and files whose bytes match another entry's (domain separation still distinguishes them).
-pub fn golden_trees() -> Vec<GoldenItem> {
-    let trees: Vec<(&str, Tree)> = vec![
+/// The tree *inputs* behind [`golden_trees`] — `(name, tree)` pairs, the same
+/// construction the golden-answer table pins. Exported so the
+/// cross-implementation replay bundle (`hh-xcheck`, R2.21 / DF-S1.2-2)
+/// serializes the corpus inputs a second implementation must address
+/// identically — never a re-derived copy (CC1).
+pub fn golden_tree_fixtures() -> Vec<(&'static str, Tree)> {
+    vec![
         ("empty", Tree::new()),
         ("one-file", Tree::new().file("a.txt", b"alpha")),
         (
@@ -97,8 +99,14 @@ pub fn golden_trees() -> Vec<GoldenItem> {
                 .file("y", b"dup")
                 .dir("z", Tree::new().file("x", b"dup")),
         ),
-    ];
-    trees
+    ]
+}
+
+/// The ≥ 20 directory trees of the golden corpus, each with its computed tree address. Covers:
+/// empty dirs, single/multi-file dirs, executables, symlinks (by target), nested dirs, non-ASCII
+/// names, and files whose bytes match another entry's (domain separation still distinguishes them).
+pub fn golden_trees() -> Vec<GoldenItem> {
+    golden_tree_fixtures()
         .into_iter()
         .map(|(name, t)| GoldenItem {
             name: name.to_string(),
@@ -107,40 +115,93 @@ pub fn golden_trees() -> Vec<GoldenItem> {
         .collect()
 }
 
+/// One record-fixture *input* behind [`golden_records`] — what the foreign
+/// implementation must identify identically (DF-S1.2-2). Exported so the
+/// cross-implementation replay bundle (`hh-xcheck`, R2.21) serializes the
+/// corpus inputs, never a re-derived copy (CC1).
+pub enum GoldenRecordInput {
+    /// `address(bytes, media_type)` — the blob arm.
+    Blob {
+        /// The content bytes.
+        bytes: &'static [u8],
+        /// The media type carried on the `ContentAddress`.
+        media_type: &'static str,
+    },
+    /// `identify_text(bytes)` — the `Text`-leaf arm.
+    Text {
+        /// The content bytes.
+        bytes: &'static [u8],
+    },
+    /// `identify(record)` — the typed-record arm (`version_id` +
+    /// `semantic_id` where the kind has a semantic projection).
+    Record(Record),
+}
+
+/// The record *inputs* behind [`golden_records`]: the shared canonical bytes
+/// (blob + `Text` leaf) and the two `HirNode` records.
+pub fn golden_record_fixtures() -> Vec<(&'static str, GoldenRecordInput)> {
+    let shared: &'static [u8] = b"{\"canonical\":\"bytes\",\"n\":1}";
+    vec![
+        (
+            "blob",
+            GoldenRecordInput::Blob {
+                bytes: shared,
+                media_type: "application/octet-stream",
+            },
+        ),
+        ("text-leaf", GoldenRecordInput::Text { bytes: shared }),
+        (
+            "hir-node",
+            GoldenRecordInput::Record(
+                Record::new(RecordKind::HirNode)
+                    .semantic("op", Json::str("map"))
+                    .semantic("n", Json::Int(1)),
+            ),
+        ),
+        (
+            "ledger-event",
+            GoldenRecordInput::Record(
+                Record::new(RecordKind::HirNode)
+                    .semantic("event", Json::str("lifecycle.run.opened"))
+                    .semantic("seq", Json::Int(0)),
+            ),
+        ),
+    ]
+}
+
 /// The HIR/ledger canonical-byte arm of the golden corpus: a blob, a `Text` leaf and an HIR node
 /// over identical canonical bytes (three distinct ids — N3/AC-2), plus a sealed definition and a
 /// run manifest with pinned refs.
 pub fn golden_records() -> Vec<GoldenItem> {
-    let shared = b"{\"canonical\":\"bytes\",\"n\":1}";
-    let mut items = vec![
-        GoldenItem {
-            name: "blob".into(),
-            id: address(shared, "application/octet-stream").id(),
-        },
-        GoldenItem {
-            name: "text-leaf".into(),
-            id: identify_text(shared),
-        },
-    ];
-    let node = Record::new(RecordKind::HirNode)
-        .semantic("op", Json::str("map"))
-        .semantic("n", Json::Int(1));
-    let node_id = identify(&node).unwrap();
-    items.push(GoldenItem {
-        name: "hir-node.version_id".into(),
-        id: node_id.version_id,
-    });
-    items.push(GoldenItem {
-        name: "hir-node.semantic_id".into(),
-        id: node_id.semantic_id.unwrap(),
-    });
-    let ledger_event = Record::new(RecordKind::HirNode)
-        .semantic("event", Json::str("lifecycle.run.opened"))
-        .semantic("seq", Json::Int(0));
-    items.push(GoldenItem {
-        name: "ledger-event.version_id".into(),
-        id: identify(&ledger_event).unwrap().version_id,
-    });
+    let mut items = Vec::new();
+    for (name, input) in golden_record_fixtures() {
+        match input {
+            GoldenRecordInput::Blob { bytes, media_type } => items.push(GoldenItem {
+                name: name.into(),
+                id: address(bytes, media_type).id(),
+            }),
+            GoldenRecordInput::Text { bytes } => items.push(GoldenItem {
+                name: name.into(),
+                id: identify_text(bytes),
+            }),
+            GoldenRecordInput::Record(record) => {
+                let id = identify(&record).unwrap();
+                items.push(GoldenItem {
+                    name: format!("{name}.version_id"),
+                    id: id.version_id,
+                });
+                // The golden table pins `semantic_id` only for the `hir-node`
+                // fixture — the ledger-event record's is derivable but
+                // unpinned (the table's shape is the contract).
+                if name == "hir-node" {
+                    items.push(GoldenItem {
+                        name: format!("{name}.semantic_id"),
+                        id: id.semantic_id.unwrap(),
+                    });
+                }
+            }
+        }
+    }
     items
 }
 

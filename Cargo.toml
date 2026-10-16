@@ -470,6 +470,18 @@ members = [
     # authors specs and proposals. Removable (CC6: only `hh-embed`
     # consumes it, under `tier-c4`).
     "crates/hh-debt",
+    # `crates/hh-xcheck` — the cross-implementation replay/checker packaging
+    # (spec §10.7; ticket R2.21; ADR-0353): the committed golden corpora
+    # exported as the language-neutral `hh-xcheck-bundle/1` replay bundle
+    # (identity trees/records, the ledger WAL transcript, the registry
+    # snapshot corpus, the plugin-manifest corpus, the 16/64 KiB
+    # canonical-parse payloads — the DF-S0.3-2/S1.2-2/S1.5-3/S1.8-1/S1.27-1
+    # far-side inputs), the hermetic E1 self-check over it, and the `verify`
+    # comparator a foreign implementation's `answers.json` is held to when
+    # HUMAN-H3's environment lands. Pure data + pure functions; the pending
+    # cells are enumerated in the bundle itself — no foreign-toolchain claim
+    # is made or minted here.
+    "crates/hh-xcheck",
     # `crates/hh-baseline` (the THROWAWAY Stage-0 baseline, doc 3 §11.0; ticket S0.2)
     # was deleted at S1.20 — the canonical `hh-control` lands the full control
     # strategy + envelope and the baseline's throwaway `StopReason` subset retired

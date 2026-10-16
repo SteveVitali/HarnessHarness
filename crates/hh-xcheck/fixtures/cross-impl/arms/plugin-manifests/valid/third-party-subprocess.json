@@ -1,0 +1,78 @@
+{
+  "claims": {
+    "type": "map",
+    "value": {}
+  },
+  "conformance_claims": [
+    {
+      "produced_by": "publisher_claim",
+      "suite_ref": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "verdict": "pass"
+    }
+  ],
+  "contributions": [
+    {
+      "declaration": {
+        "rule_id": "guard-narrow"
+      },
+      "executable": {
+        "code_pointer": {
+          "algorithm": "sha256",
+          "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "media_type": "application/wasm",
+          "size": 128
+        },
+        "host_requirements": {},
+        "isolation": "subprocess_confined",
+        "one_shot": true,
+        "placement_preference": "subprocess_confined"
+      },
+      "kind": "harness_rule",
+      "path_or_locator": "rules/guard.json"
+    }
+  ],
+  "depends_on": [],
+  "ext": {
+    "vendor": "example"
+  },
+  "identity": {
+    "name": "corpus-third-party",
+    "namespace": "local",
+    "version_label": "0.1.0"
+  },
+  "requests": {
+    "effects": [],
+    "egress": [],
+    "env_keys": [],
+    "fs_roots": [],
+    "hot_path_operations": []
+  },
+  "requires": {
+    "contracts": [],
+    "hir_dialect": "1",
+    "plugin_abi": ">=1",
+    "records": [
+      {
+        "kind": "suite",
+        "version_id": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    ],
+    "registry_dialect": "1"
+  },
+  "summary": {
+    "authority": "external",
+    "content_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "owner": "corpus",
+    "provenance": {
+      "authority": "external",
+      "created_at": 0,
+      "origin": {
+        "author_ref": "corpus",
+        "kind": "human",
+        "role": "author"
+      },
+      "scope": "run"
+    }
+  },
+  "tier": "C0"
+}

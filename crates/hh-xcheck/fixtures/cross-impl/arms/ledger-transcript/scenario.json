@@ -1,0 +1,1 @@
+{"clock_ms":1000,"events":[{"class":"context.observation.recorded","event_id":"evt-fixed","payload":"golden","ts":"2026-01-01T00:00:00.000Z"}],"id_source":"seq","run_kind":"agent","writer":"w"}

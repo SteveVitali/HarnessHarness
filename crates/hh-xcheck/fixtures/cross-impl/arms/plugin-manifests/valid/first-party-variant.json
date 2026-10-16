@@ -1,0 +1,71 @@
+{
+  "claims": {},
+  "conformance_claims": [],
+  "contributions": [
+    {
+      "contract_range": "1.0",
+      "declaration": {
+        "class_id": "control_strategy"
+      },
+      "executable": {
+        "code_pointer": {
+          "algorithm": "sha256",
+          "digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "media_type": "application/octet-stream",
+          "size": 64
+        },
+        "isolation": "in_process",
+        "placement_preference": "in_process"
+      },
+      "kind": "variant",
+      "path_or_locator": "variants/minimal.json"
+    }
+  ],
+  "depends_on": [
+    {
+      "id": "hir/1",
+      "kind": "dialect",
+      "version_range": "*"
+    }
+  ],
+  "identity": {
+    "name": "corpus-first-party",
+    "namespace": "hh"
+  },
+  "requests": {
+    "effects": [],
+    "egress": [],
+    "env_keys": [],
+    "fs_roots": [],
+    "hot_path_operations": []
+  },
+  "requires": {
+    "contracts": [
+      {
+        "id": "variant",
+        "kind": "record_kind",
+        "version_range": "*"
+      }
+    ],
+    "hir_dialect": "1",
+    "plugin_abi": "1",
+    "records": [],
+    "registry_dialect": "1"
+  },
+  "summary": {
+    "authority": "external",
+    "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "owner": "corpus",
+    "provenance": {
+      "authority": "external",
+      "created_at": 0,
+      "origin": {
+        "author_ref": "corpus",
+        "kind": "human",
+        "role": "author"
+      },
+      "scope": "run"
+    }
+  },
+  "tier": "C0"
+}
