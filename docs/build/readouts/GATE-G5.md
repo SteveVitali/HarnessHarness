@@ -403,3 +403,40 @@ on disposition, not this readout's. `mergePolicy: OPERATOR` — the 10 stacked r
      authority: the verbatim decision + receipt `date -u` + channel, the GATE DECISIONS row
      reference, the operator's confirmation of the agent-drafted text quoting sha256:<first 12>,
      and "Signed by: the operator. Recorded by <harness/model>, which does not sign." -->
+### 2026-10-16 — Operator disposition (Reading 1 → PASSED)
+
+**Operator's verbatim words:** "passed, proceed"
+**Received:** 2026-10-16T19:54Z (`date -u`) · **Channel:** interactive Devin CLI session
+(orchestrator↔operator chat)
+**Verdict:** **PASSED** — every still-OPEN scoped row dispositioned (blanket acceptance,
+no SEND-BACKs)
+**Reading-1 text confirmed:** agent-drafted block sha256:85a016814722 (quoted prefix
+`85a016814722` — the frozen audit text the operator answered against; the §9 cells and
+verdict box inside that block stay blank so the hash remains re-verifiable — this dated
+block is the disposition record)
+
+Per the GATE-G4 blanket-acceptance convention — a bare PASSED dispositions each row per its
+reason code (`human`/`env`/`dep`/`window` → CARRY; `accepted`/`ruling`/`standing` → ACCEPT)
+— the §9 dispositions record:
+
+**A · The 21 carried backlog rows**
+
+- **CARRY to Round 4 (16):** BL-01, BL-02, BL-03, BL-04, BL-17, BL-26, BL-27, BL-31, BL-32,
+  BL-33, BL-34, BL-35, BL-36, BL-37, BL-38, BL-39
+- **ACCEPT as standing deviation (5):** BL-05, BL-30, BL-41, BL-42, BL-43
+- **WAIVE by ADR (0):** —
+
+**B · The 19 still-owed DEFERRALS rows** (each inherits its BL home's disposition)
+
+- **CARRY (15):** DF-S0.3-2, DF-S0.3-3, DF-S1.2-2, DF-S1.5-3, DF-S1.8-1, DF-S1.18-1,
+  DF-S1.21-3, DF-S1.24-2, DF-S1.27-1, DF-S2.4-2, DF-S4.2-1, DF-S4.2-2, DF-S4.10-1,
+  DF-S4.11-2, DF-S5.6-1
+- **ACCEPT (4):** DF-S1.15-1, DF-S1.21-2, DF-S2.5-1, DF-S4.13-1 (homed on BL-05/BL-30)
+- **WAIVE by ADR (0):** —
+
+Recorded in `LEDGER.md` GATE DECISIONS (row dated 2026-10-16); `nextTicket → R3.11` —
+the operator's act on disposition. `mergePolicy: OPERATOR` unchanged — the stacked PRs
+remain the operator's to merge.
+
+Signed by: the operator. Recorded by Devin (SWE-2) on the operator's verbatim instruction,
+which does not sign.

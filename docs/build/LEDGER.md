@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      GATE-G5  # row 148 — round-3 discharge review; STOP gate, operator readout decides (never pre-answered); 143 is the human row itself
-lastCompleted:   R3.10
+nextTicket:      R3.11   # manifest row 149 — round-3 docs refresh (final row); rows 61/82/127/128 remain HUMAN-H1/H2/H3/H4 (operator work)
+lastCompleted:   GATE-G5
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -131,6 +131,7 @@ updatedAt:       2026-10-16
 | 2026-10-14 | HUMAN-H5 | crypto-dependency posture ruling (R3.7/R3.8 gate) | disposition | **RULED** — disposition (b): a vetted external crypto crate (ring/aws-lc/rustls family) is admitted | the dep-choice ADR lives inside R3.7's contract (names the crate + a version published ≥7 days before selection + admitted scope; amends the hermetic-deps note — never a silent Cargo.toml edit); R3.7 (BL-19 `dpop` + `wrapped_long_lived`) and R3.8 (BL-45 per-event AEAD + R-2.8.6 legs) un-gated skeleton → ticket; R3.7→R3.8 is a real dependency edge (the pin); 143 keeps the ruling record |
 | 2026-10-14 | R3.9 | CF-489 direction (WS-I6/OQ-441 interim) | direction ruling | **CONFORM CODE TO SPEC** — `DebtPolicy::default()` → §5h.6's proposed 60 d runway / 30 d warn | R3.9 un-gated skeleton → ticket: constants + fidelity comment + caller/test sweep + dated CF-489 resolution note; the `[[DEFERRED ADR-0214: OQ-441]]` markers stand for WS-I6's Stage-5 re-pin; BL-30/BL-37 get dated progress notes, stay open on their other rulings |
 | 2026-10-14 | round-3 plan | environment provisioning path | statement | HUMAN-H1/H2/H3 are provisionable (operator) | env-gated rows (BL-01/17/26/27/31/32 + dependents) stay excluded until provisioning lands; they unblock on the H-rows and a future mode=extend round schedules them; recorded in `## Decomposition decisions → Round 3` |
+| 2026-10-16 | GATE-G5 | Round-3 discharge review | disposition (reading 1) | **PASSED** — operator verbatim "passed, proceed" (Devin CLI session, received 2026-10-16T19:54Z); blanket acceptance, all 21 carried rows dispositioned | every §9 row dispositioned per its reason code (human/env/dep+env/window → CARRY; accepted/ruling/standing → ACCEPT); the 19 owed DEFERRALS rows inherit their BL home's disposition; no SEND-BACKs; readouts/GATE-G5.md dated decision block recorded (frozen Reading-1 agent-drafted block sha256:85a016814722 confirmed); zero unlanded R3-chartered rows; check-build-memory 0 violations; check-backlog exit 0; 10 GATE-ACCEPT deviations unchanged; GATE-G4 §9 not re-litigated; named-set human/env rows gate-pending; foreign-run-verified (PR #136) distinct from fixture-verified ceiling. R3.11 released (nextTicket → R3.11). |
 
 ## RETURN PASS
 
@@ -761,3 +762,4 @@ updatedAt:       2026-10-16
   `lastCompleted: R3.10`, `nextTicket: GATE-G5` (row 148 — STOP gate;
   operator readout decides), `chainTip: svitali/harnessharness-r3.10`.
   Operator merges.
+- 2026-10-16 · GATE-G5 PASSED — operator blanket acceptance (reading 1): verbatim "passed, proceed" (Devin CLI session, received 19:54Z). All 21 §9 carried backlog rows dispositioned per reason code (human/env/dep+env/window → CARRY ×16: BL-01/02/03/04/17/26/27/31/32/33–39; accepted/ruling/standing → ACCEPT ×5: BL-05/30/41/42/43); the 19 owed DEFERRALS rows inherit their home's disposition (ACCEPT: DF-S1.15-1, DF-S1.21-2, DF-S2.5-1, DF-S4.13-1; the rest CARRY); no SEND-BACKs. Thresholds green: zero unlanded R3-chartered rows; check-build-memory 0 violations / 7 warnings (honest flag G5-1: operator pre-check reported 51 — not reproducible under any tested invocation, recorded not hidden); check-backlog exit 0 (156 sources, 55/66 eng · 53/66 req); `^||` empty; 10 GATE-ACCEPT deviations re-confirmed unchanged; GATE-G4 §9 not re-litigated. Named set (HUMAN-H1–H4 + foreign-verification cells) recorded gate-pending; HUMAN-H5 discharged under ruling (b); foreign-run-verified evidence (PR #136) kept distinct from the fixture-verified readiness ceiling. Readout `docs/build/readouts/GATE-G5.md` dispositioned via dated Signature block (Reading-1 block frozen, sha256:85a016814722); GATE DECISIONS row appended; nextTicket → R3.11.
