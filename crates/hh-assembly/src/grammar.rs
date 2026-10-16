@@ -369,15 +369,11 @@ pub struct ResolvedInfo {
 /// The extension merge policy (§5g.5 §3; S1.23): how two sources' candidates
 /// combine under one name. `exact_only` is the default — a ref binds exactly
 /// one pinned record and a second candidate for the same name is a collision;
-/// `disjoint` declares that the sources bind disjoint namespaces.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum MergePolicy {
-    /// Exact-only merge (the default).
-    #[default]
-    ExactOnly,
-    /// Declared disjoint namespaces.
-    Disjoint,
-}
+/// `disjoint` declares that the sources bind disjoint namespaces. The enum's
+/// home is `hh_registry::extension` (R2.20 — the declared-source scanners
+/// apply it when enumerating `ExtensionRef`s); re-exported here so
+/// `grammar::MergePolicy` stays the spelling (CC1 — one enum, one owner).
+pub use hh_registry::extension::MergePolicy;
 
 /// The `extensions` member (§5g.5 §3; S1.23): `{sources, refs, merge_policy}` —
 /// the **declared** extension surface. Sources are declared, never implicit

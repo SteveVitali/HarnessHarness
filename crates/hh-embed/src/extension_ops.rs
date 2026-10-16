@@ -19,10 +19,12 @@ use std::collections::BTreeSet;
 use hh_embed_schema::errors::EmbedError;
 use hh_provenance::{Attestation, ProvenanceRecord};
 use hh_registry::extension::foreign_plugin::{self, ForeignPluginFormat};
-use hh_registry::extension::lifecycle::{self, ProposerContext, RunExtensionView};
+use hh_registry::extension::lifecycle::{
+    self, ProposerContext, RunExtensionView, ScanEntry, SurfaceDriftPolicy,
+};
 use hh_registry::extension::{
-    declared_source_from_json, Candidate, ExtensionKind, ExtensionRecord, FetchOutcome,
-    SourceLocator,
+    declared_source_from_json, extension_ref_json, Candidate, ExtensionKind, ExtensionRecord,
+    FetchOutcome, MergePolicy, SourceLocator,
 };
 use hh_registry::records::RegistryRecord;
 use hh_wire::json::Json;
@@ -273,7 +275,11 @@ impl EmbedService {
             &candidate,
             &outcome,
             &attestations,
-            None,
+            params
+                .get("payload")
+                .and_then(Json::as_str)
+                .map(|p| p.as_bytes()),
+            params.get("manifest"),
             registrar.origin.clone(),
             &view,
             now,
@@ -311,6 +317,7 @@ impl EmbedService {
                 "notes",
                 Json::Arr(report.notes.iter().map(|n| Json::str(n.clone())).collect()),
             ),
+            ("events", Json::Arr(report.events.clone())),
         ]))
     }
 
@@ -526,22 +533,27 @@ impl EmbedService {
             lifecycle::install_plan(&candidate, &outcome, requested_grants, &proposer, &view)
                 .map_err(reg_err)?;
         let now = self.store.now_ms();
-        let (record, completed_event) = lifecycle::install_completed(
+        let installed = lifecycle::install_completed(
             &candidate,
             &outcome,
             &attestations,
-            None,
+            params
+                .get("payload")
+                .and_then(Json::as_str)
+                .map(|p| p.as_bytes()),
+            params.get("manifest"),
             &proposer,
             &view,
             opt_str(params, "approved").as_deref(),
             now,
         )
         .map_err(reg_err)?;
-        let registrar = record.provenance.clone();
+        let registrar = installed.record.provenance.clone();
+        let events = installed.events.clone();
         let vref = self
             .registry
             .register(
-                RegistryRecord::Extension(record),
+                RegistryRecord::Extension(installed.record),
                 &registrar,
                 opt_str(params, "trust_record_ref"),
             )
@@ -556,7 +568,190 @@ impl EmbedService {
             ("version_id", Json::str(vref.version_id)),
             ("admission", Json::str(admission)),
             ("requires_approval", Json::Bool(plan.requires_approval)),
-            ("install_completed_event", completed_event),
+            (
+                "install_completed_event",
+                events.last().cloned().unwrap_or(Json::Null),
+            ),
+            ("events", Json::Arr(events)),
+        ]))
+    }
+
+    /// `lab.extension.scan` — `{scans[]: [{source{…}, entries[]: [{name,
+    /// kind, member{…}}]}], merge_policy?}` → `{refs[]}` — the
+    /// declared-source enumeration (R2.20; §5g.5 `discover(sources, policy)`
+    /// producer half): each declared source's caller-supplied listing folds
+    /// to `ExtensionRef`s under the live TrustView allowlist
+    /// (`SourceNotAllowed`), the declared-root containment check
+    /// (`ScanDenied`), the credential-free locator rule, and the declared
+    /// `merge_policy` (`exact_only` → `NameCollision`, never silent
+    /// last-wins). The produced refs are *declared* into
+    /// `extensions.refs[]` by the author — scanning never grows the
+    /// surface implicitly (CF-079).
+    pub(crate) fn lab_extension_scan(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let scans: Vec<(hh_registry::extension::DeclaredSource, Vec<ScanEntry>)> =
+            match req(params, "scans")? {
+                Json::Arr(items) => items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, sc)| {
+                        let path = format!("/scans[{i}]");
+                        let source = declared_source_from_json(
+                            req(sc, "source").map_err(|e| bad(&path, &format!("{e:?}")))?,
+                            &path,
+                        )
+                        .map_err(reg_err)?;
+                        let entries: Vec<ScanEntry> = match req(sc, "entries")
+                            .map_err(|e| bad(&path, &format!("{e:?}")))?
+                        {
+                            Json::Arr(es) => es
+                                .iter()
+                                .enumerate()
+                                .map(|(j, e)| {
+                                    Ok(ScanEntry {
+                                        name: req_str(e, "name")
+                                            .map_err(|er| {
+                                                bad(
+                                                    &format!("{path}/entries[{j}]"),
+                                                    &format!("{er:?}"),
+                                                )
+                                            })?
+                                            .to_string(),
+                                        kind: ExtensionKind::parse(req_str(e, "kind").map_err(
+                                            |er| {
+                                                bad(
+                                                    &format!("{path}/entries[{j}]"),
+                                                    &format!("{er:?}"),
+                                                )
+                                            },
+                                        )?),
+                                        member: e.get("member").cloned().unwrap_or(Json::obj([])),
+                                    })
+                                })
+                                .collect::<Result<_, EmbedError>>()?,
+                            _ => return Err(bad(&format!("{path}/entries"), "type_mismatch")),
+                        };
+                        Ok((source, entries))
+                    })
+                    .collect::<Result<_, EmbedError>>()?,
+                _ => return Err(bad("/scans", "type_mismatch")),
+            };
+        let merge_policy = MergePolicy::parse(opt_str(params, "merge_policy").as_deref())
+            .ok_or_else(|| {
+                bad(
+                    "/merge_policy",
+                    "unknown merge policy (exact_only|disjoint)",
+                )
+            })?;
+        let view = self.registry.trust_view();
+        let refs =
+            lifecycle::scan_declared_sources(&scans, &view, merge_policy).map_err(reg_err)?;
+        Ok(Json::obj([(
+            "refs",
+            Json::Arr(refs.iter().map(extension_ref_json).collect()),
+        )]))
+    }
+
+    /// `lab.extension.seal` — `{version_id, trust_snapshot_ref?,
+    /// authority_cap[]}` → the record-level seal gate (§5g.5 `seal` row;
+    /// R2.20): `status ≠ resolved`, an unpinned locator (L4), or
+    /// `grants ⊄ authority_cap` refuse typed; on success the sealed record
+    /// re-registers (a new version of the same extension) and the
+    /// `security.extension.sealed` payload rides the result for the
+    /// caller's fenced writer.
+    pub(crate) fn lab_extension_seal(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let version_id = req_str(params, "version_id")?;
+        let record = extension_record(self, version_id)?;
+        let authority_cap: BTreeSet<String> = match params.get("authority_cap") {
+            Some(Json::Arr(items)) => items
+                .iter()
+                .filter_map(|i| i.as_str().map(str::to_string))
+                .collect(),
+            _ => BTreeSet::new(),
+        };
+        let snapshot_ref = opt_str(params, "trust_snapshot_ref").unwrap_or_else(|| {
+            format!(
+                "trust-view:{}",
+                self.registry.trust_view().live_policy_ids.join(",")
+            )
+        });
+        let out = lifecycle::seal_extension(&record, version_id, &snapshot_ref, &authority_cap)
+            .map_err(reg_err)?;
+        let registrar = record.provenance.clone();
+        let vref = self
+            .registry
+            .register(
+                RegistryRecord::Extension(out.record),
+                &registrar,
+                opt_str(params, "trust_record_ref"),
+            )
+            .map_err(reg_err)?;
+        self.flush_registry_events()?;
+        Ok(Json::obj([
+            ("version_id", Json::str(vref.version_id)),
+            ("sealed_event", out.sealed_event),
+        ]))
+    }
+
+    /// `lab.extension.activate` — `{version_id, run_ref?, pinned_listing?,
+    /// live_listing?, drift_policy?}` → the run-time activation leg
+    /// (§5g.5 `activate` row; R2.20): revoked/quarantined statuses refuse
+    /// typed, an unpinned locator is `UnpinnedInSealedForm`, a
+    /// `surface_pin`ned record re-runs `check_surface` over the supplied
+    /// listings under `drift_policy` (`notify` loads with the changed/
+    /// added tools suppressed; `pause_surface`/`terminate` mint no
+    /// `loaded` row). Returns `{loaded_event?, drift?, decision?,
+    /// pin_check}` — payloads ride the result, the caller appends.
+    pub(crate) fn lab_extension_activate(&mut self, params: &Json) -> Result<Json, EmbedError> {
+        let version_id = req_str(params, "version_id")?;
+        let record = extension_record(self, version_id)?;
+        let drift_policy = opt_str(params, "drift_policy")
+            .as_deref()
+            .map(|d| {
+                SurfaceDriftPolicy::parse(d).ok_or_else(|| {
+                    bad(
+                        "/drift_policy",
+                        "unknown policy (notify|pause_surface|terminate)",
+                    )
+                })
+            })
+            .transpose()?
+            .unwrap_or(SurfaceDriftPolicy::Notify);
+        let observer = self.kernel_prov.clone();
+        let act = lifecycle::activate_extension(
+            &record,
+            version_id,
+            params.get("pinned_listing"),
+            params.get("live_listing"),
+            drift_policy,
+            &observer,
+            opt_str(params, "run_ref").as_deref(),
+        )
+        .map_err(reg_err)?;
+        let decision = act.decision.as_ref().map(|d| {
+            Json::obj([
+                ("policy", Json::str(d.policy.as_str())),
+                (
+                    "suppress",
+                    Json::Arr(d.suppress.iter().map(|t| Json::str(t.clone())).collect()),
+                ),
+                ("pause_surface", Json::Bool(d.pause_surface)),
+                ("terminate", Json::Bool(d.terminate)),
+            ])
+        });
+        Ok(Json::obj([
+            (
+                "loaded_event",
+                act.loaded_event.clone().unwrap_or(Json::Null),
+            ),
+            ("pin_check", Json::str(act.pin_check.clone())),
+            (
+                "drift",
+                act.drift
+                    .as_ref()
+                    .map(|d| d.event.clone())
+                    .unwrap_or(Json::Null),
+            ),
+            ("decision", decision.unwrap_or(Json::Null)),
         ]))
     }
 

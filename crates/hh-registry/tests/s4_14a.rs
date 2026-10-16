@@ -396,7 +396,7 @@ use hh_provenance::record::{Attestation, AttestationAnchor, AttestationKind};
 use hh_provenance::TaintTag;
 use hh_registry::errors::RegistryError;
 use hh_registry::extension::lifecycle::{
-    self, ProposerContext, RunExtensionView, SurfaceDriftPolicy, TrustView,
+    self, ProposerContext, RunExtensionView, ScannerPolicy, SurfaceDriftPolicy, TrustView,
 };
 use hh_registry::extension::{Candidate, FetchOutcome, SourceLocator, TrustStatus};
 use hh_registry::records::ModelInstallRule;
@@ -468,6 +468,7 @@ fn empty_view() -> TrustView {
         hash_only_ceiling: AuthorityClass::External,
         max_age: None,
         model_install: ModelInstallRule::Deny,
+        scanner_policy: ScannerPolicy::Advisory,
         live_policy_ids: vec![],
     }
 }
@@ -500,7 +501,16 @@ fn source_allowlist_gates_discover_and_resolve() {
         Err(RegistryError::SourceNotAllowed { .. })
     ));
     assert!(matches!(
-        lifecycle::resolve_extension(&off, &outcome(b"x", 7), &[], None, human(), &view, 100),
+        lifecycle::resolve_extension(
+            &off,
+            &outcome(b"x", 7),
+            &[],
+            None,
+            None,
+            human(),
+            &view,
+            100
+        ),
         Err(RegistryError::SourceNotAllowed { .. })
     ));
 }
@@ -514,19 +524,22 @@ fn signature_required_quarantines_until_verified() {
     let c = git_candidate("demo");
     let o = outcome(b"payload", 7);
 
-    let unsigned = lifecycle::resolve_extension(&c, &o, &[], None, human(), &view, 100).unwrap();
+    let unsigned =
+        lifecycle::resolve_extension(&c, &o, &[], None, None, human(), &view, 100).unwrap();
     assert!(unsigned.quarantined);
     assert_eq!(unsigned.record.trust.status, TrustStatus::Quarantined);
 
     // A signature the trust set does not know is evidence of nothing.
     view.accepted_signers = BTreeSet::from(["signer:trusted".to_string()]);
     let bad = sig_attestation(&o.content, "signer:rogue", 90);
-    let rep = lifecycle::resolve_extension(&c, &o, &[bad], None, human(), &view, 100).unwrap();
+    let rep =
+        lifecycle::resolve_extension(&c, &o, &[bad], None, None, human(), &view, 100).unwrap();
     assert!(rep.quarantined, "untrusted signer never lifts quarantine");
 
     // A verified signature under the accepted signer lifts the quarantine.
     let good = sig_attestation(&o.content, "signer:trusted", 90);
-    let rep = lifecycle::resolve_extension(&c, &o, &[good], None, human(), &view, 100).unwrap();
+    let rep =
+        lifecycle::resolve_extension(&c, &o, &[good], None, None, human(), &view, 100).unwrap();
     assert!(!rep.quarantined);
     assert!(rep.verified_kinds.contains("signature"));
     assert_eq!(rep.record.trust.text_authority, AuthorityClass::Definition);
@@ -551,6 +564,7 @@ fn required_predicates_and_stale_pin() {
             &o,
             std::slice::from_ref(&sig),
             None,
+            None,
             human(),
             &view,
             100
@@ -560,8 +574,9 @@ fn required_predicates_and_stale_pin() {
     // Cover the predicate → resolves (the pin anchors the same signer).
     view.required_predicates.insert("signature".to_string());
     let pin = pin_attestation_under(&o.content, "signer:trusted", 95);
-    let rep = lifecycle::resolve_extension(&c, &o, &[sig.clone(), pin], None, human(), &view, 100)
-        .unwrap();
+    let rep =
+        lifecycle::resolve_extension(&c, &o, &[sig.clone(), pin], None, None, human(), &view, 100)
+            .unwrap();
     assert!(!rep.quarantined);
 
     // Staleness — signature verified at 90, `max_age = 5`, now = 200 (the
@@ -569,7 +584,7 @@ fn required_predicates_and_stale_pin() {
     view.required_predicates.clear();
     view.max_age = Some(5);
     assert!(matches!(
-        lifecycle::resolve_extension(&c, &o, &[sig], None, human(), &view, 200),
+        lifecycle::resolve_extension(&c, &o, &[sig], None, None, human(), &view, 200),
         Err(RegistryError::StalePin { .. })
     ));
 }
@@ -587,6 +602,7 @@ fn hash_only_ceiling_quarantines() {
         &c,
         &o,
         &[pin_attestation(&o.content, 90)],
+        None,
         None,
         human(),
         &view,
@@ -750,7 +766,7 @@ fn update_assessment_lists_regressions_and_widening() {
     let view = empty_view();
     let c = git_candidate("demo");
     let o = outcome(b"v1", 7);
-    let mut old = lifecycle::resolve_extension(&c, &o, &[], None, human(), &view, 100)
+    let mut old = lifecycle::resolve_extension(&c, &o, &[], None, None, human(), &view, 100)
         .unwrap()
         .record;
     old.manifest = manifest(&["hooks/lint.sh"]);
@@ -815,7 +831,7 @@ fn model_install_procedure_gates_and_attenuates() {
         Some("security.extension.install_requested")
     );
     assert!(matches!(
-        lifecycle::install_completed(&c, &o, &[], None, &proposer, &view, None, 100),
+        lifecycle::install_completed(&c, &o, &[], None, None, &proposer, &view, None, 100),
         Err(RegistryError::SchemaViolation { .. })
     ));
 
@@ -828,8 +844,10 @@ fn model_install_procedure_gates_and_attenuates() {
 
     // allow_attenuated + in-set grants → the tainted, attenuated record.
     view.model_install = ModelInstallRule::AllowAttenuated;
-    let (rec, event) =
-        lifecycle::install_completed(&c, &o, &[], None, &proposer, &view, None, 100).unwrap();
+    let out =
+        lifecycle::install_completed(&c, &o, &[], None, None, &proposer, &view, None, 100).unwrap();
+    let rec = &out.record;
+    let event = out.events.last().unwrap();
     assert_eq!(rec.provenance.authority, AuthorityClass::External);
     assert!(
         rec.provenance
@@ -925,7 +943,7 @@ fn review_renders_the_advisory_plan() {
     let view = empty_view();
     let c = git_candidate("demo");
     let o = outcome(b"v1", 7);
-    let rec = lifecycle::resolve_extension(&c, &o, &[], None, human(), &view, 100)
+    let rec = lifecycle::resolve_extension(&c, &o, &[], None, None, human(), &view, 100)
         .unwrap()
         .record;
     let doc = lifecycle::review(&rec, None);

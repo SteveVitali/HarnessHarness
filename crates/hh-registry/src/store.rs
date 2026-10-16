@@ -1371,7 +1371,9 @@ impl RegistryStore {
     /// The C1 trust view `extension::lifecycle::{discover, resolve_extension,
     /// install_plan}` consult — derived, never stored (CC1; S4.14a).
     pub fn trust_view(&self) -> crate::extension::lifecycle::TrustView {
-        use crate::extension::lifecycle::{strictest_install, TrustView};
+        use crate::extension::lifecycle::{
+            strictest_install, strictest_scan, ScannerPolicy, TrustView,
+        };
         let mut view = TrustView {
             allowed_sources: BTreeSet::new(),
             accepted_signers: BTreeSet::new(),
@@ -1380,10 +1382,12 @@ impl RegistryStore {
             hash_only_ceiling: AuthorityClass::External,
             max_age: None,
             model_install: crate::records::ModelInstallRule::AllowAttenuated,
+            scanner_policy: ScannerPolicy::Advisory,
             live_policy_ids: Vec::new(),
         };
         let mut ceiling: Option<AuthorityClass> = None;
         let mut install: Option<crate::records::ModelInstallRule> = None;
+        let mut scanner: Option<ScannerPolicy> = None;
         for (env, rec) in self.records.values() {
             let RegistryRecord::TrustRootPolicy(t) = rec else {
                 continue;
@@ -1413,11 +1417,19 @@ impl RegistryStore {
                 Some(i) => strictest_install(i, t.model_install),
                 None => t.model_install,
             });
+            // R2.20 — the strictest declared scanner posture wins; an
+            // unrecognised spelling fails closed (`ScannerPolicy::parse`
+            // maps it to `Deny`).
+            scanner = Some(match scanner {
+                Some(sc) => strictest_scan(sc, ScannerPolicy::parse(&t.scanner_policy)),
+                None => ScannerPolicy::parse(&t.scanner_policy),
+            });
         }
         view.live_policy_ids.sort();
         view.live_policy_ids.dedup();
         view.hash_only_ceiling = ceiling.unwrap_or(AuthorityClass::External);
         view.model_install = install.unwrap_or(crate::records::ModelInstallRule::AllowAttenuated);
+        view.scanner_policy = scanner.unwrap_or(ScannerPolicy::Advisory);
         view
     }
 

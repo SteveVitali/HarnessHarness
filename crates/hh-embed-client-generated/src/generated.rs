@@ -17,7 +17,7 @@ pub const CONTRACT_MAJOR: i64 = 1;
 
 /// The schema content address this client was generated against.
 pub const EXPECTED_SCHEMA_HASH: &str =
-    "sha256:b636f7388e32524d3873033ec0dd90ad5cbe5ce8089bd2f29d0be8de637053e6";
+    "sha256:5090521a706d6829f1ad0bd0e5c84843ac02cd453674aa5db7aa71eee0ac7a2d";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Accepted {
@@ -7639,6 +7639,12 @@ impl<R: BufRead, W: Write> Client<R, W> {
         Ok(raw)
     }
 
+    /// `lab.extension.activate` → `json` (see the contract registry).
+    pub fn lab_extension_activate(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.activate", params.clone())?;
+        Ok(raw)
+    }
+
     /// `lab.extension.check_surface` → `json` (see the contract registry).
     pub fn lab_extension_check_surface(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.extension.check_surface", params.clone())?;
@@ -7684,6 +7690,18 @@ impl<R: BufRead, W: Write> Client<R, W> {
     /// `lab.extension.revoke` → `json` (see the contract registry).
     pub fn lab_extension_revoke(&mut self, params: &Json) -> Result<Json, ClientError> {
         let raw = self.call("lab.extension.revoke", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.scan` → `json` (see the contract registry).
+    pub fn lab_extension_scan(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.scan", params.clone())?;
+        Ok(raw)
+    }
+
+    /// `lab.extension.seal` → `json` (see the contract registry).
+    pub fn lab_extension_seal(&mut self, params: &Json) -> Result<Json, ClientError> {
+        let raw = self.call("lab.extension.seal", params.clone())?;
         Ok(raw)
     }
 
