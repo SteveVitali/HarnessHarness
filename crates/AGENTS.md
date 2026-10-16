@@ -17,10 +17,10 @@ below; the root AGENTS.md has the layering narrative.
 | `hh-identity` | idp/1 identity, `ContentAddress`, `VersionedRef`, the one canonicalizer (CC1 anchor), sameness ladder |
 | `hh-provenance` | the one `ProvenanceRecord` + `Label` lattice, seven-class `AuthorityClass` order, seal/endorse basis |
 | `hh-hir` | the HIR/1 IR: 13 entity kinds, validate/canonicalize/identity/seal/diff/apply/invert/classify |
-| `hh-ledger` | the event store / run ledger — append-only hash-chained log, fenced writer, WAL, blob pool, projections |
+| `hh-ledger` | the event store / run ledger — append-only hash-chained log, fenced writer, WAL, blob pool (+ per-event AEAD `BlobCipher`/`HHBE`, ADR-0361), projections |
 | `hh-budget` | resource economics: `ResourceQuantity`, `BudgetTree`, spend provenance, `MatchSpec` budgets |
 | `hh-registry` | the component-variation registry store (`hh/` + `local/` namespaces, closed `registry/1` kinds) |
-| `hh-secrets` | the credential broker — `SecretRef`/`SecretChannel`, mint/mediate/revoke, deny-by-default projection |
+| `hh-secrets` | the credential broker — `SecretRef`/`SecretChannel`, mint/mediate/revoke, deny-by-default projection; DPoP sender-constraint verify + AEAD over the ADR-0359 `ring` pin |
 | `hh-telemetry` | measurement points M1–M19, span/cost/metric views as pure folds, `TokenVector` |
 | `hh-monitor` | the Π reference monitor (TCB): `AuthorityHandle` table, `authorize`, delegation attenuation |
 | `hh-containment` | the containment floor — `ContainmentPolicy/1`, layered meet, fail-closed attach |
@@ -94,7 +94,8 @@ cargo build -p hh-embed --no-default-features    # tier-c4 off
   `hh-compile`, `hh-authorize`, `hh-bench-adapter`, `hh-eval-oracle`,
   `hh-gateway-stub`, `hh-plugin-check`, `hh-plugin-fixture`,
   `hh-compact-evict-oldest`, `hh-memory-store`, `hh-tracker-fixture`,
-  `hh-xcheck`.
+  `hh-xcheck` — plus `hh-ir-op` (the §3.1.7 ops driven out-of-process over
+  canonical bytes).
 
 ## Critical gotchas
 
