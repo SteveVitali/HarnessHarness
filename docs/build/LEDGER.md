@@ -814,6 +814,7 @@ updatedAt:       2026-10-16
   operator's decision per the row-149 note, surfaced here not decided
   by the agent. chainTip → svitali/harnessharness-r3.11 · layer:
   fixture-verified (docs-only; detectors + records) · ci: pass
-  #147@05cf266 (build · test · fmt · drift 38964427534;
-  38964415856 — stack #137–#146 + #135 all pass) · harness: devin-cli
-  (worker subagent). Operator merges.
+  #147@b0a2108 (build · test · fmt · drift 38966041555;
+  38966034126 — stack #137–#146 + #135 all pass; impl-head
+  05cf266 also pass) · harness: devin-cli (worker subagent).
+  Operator merges.
