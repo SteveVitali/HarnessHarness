@@ -47,3 +47,28 @@ does not re-rate).
 **Watch items kept.** RK-02 (untestable-absence residual), RK-05 (conditional
 novelty), RK-06 (never yet revalidated — BL-40), RK-09 (E2/E3 legs — BL-01).
 No risk fired during the build window; no row is re-rated by this catalogue.
+
+## Round 2 review
+
+*Sweep: R2.26 · 2026-10-10 · eleven rows re-checked against the landed
+round-2 record (R2.1–R2.25, PRs #110–#132) and the appended evidence on
+their deferral rows. No row re-rated; no risk fired during the round-2
+window.*
+
+| # | Rating | Round-2 disposition |
+|---|---|---|
+| RK-01 | medium | Standing — the DF-S4.12-1 §12.7 deferred-leg scan did not recur in-round; the rule that any new §-row with a deferred leg must be scanned remains in force. |
+| RK-02 | medium | Watch — the untestable-absence residual is unchanged: BL-15/BL-16 carry the in-build residual legs; the acceptance-layer dispositions landed at R2.11/R2.12 (AC-D7, ADR-0339). |
+| RK-03 | medium | Standing — the 2026-10-06 sweep + the R2.22–R2.25 register revalidations found no silently-answered question; OQ-402 and OQ-177 were answered explicitly in-register. |
+| RK-04 | medium | Standing — the OQ-170 signer-custody ruling is recorded external/workstream-reserved (ADR-0331 D3); the gate-accepted posture was re-confirmed, not weakened, by R2.23's re-check. |
+| RK-05 | medium | Watch — the conditional novelty claim is unchanged; R2.24 added CF-489/CF-490 (thesis + external-conformance claims) to the named-workstream set. |
+| RK-06 | medium | Discharged-in-part — the spec-debt register received its first revalidation (BL-40 → R2.25): 216 records graded dated (21 confirmed-obligation / 193 still-valid-interim / 2 fired-unanswered → CF-491). The cadence stays standing via OQ-445/BL-33, so the row stays medium. |
+| RK-07 | medium | Standing — the DF-S4.7-1 E0–E3 evidence surface was re-audited at R2.23 (ADR-0213 package); the three-cell gap posture is unchanged (E1/E2 cells still environment-pending, gate-accepted). |
+| RK-08 | medium | Standing — no new assumption-bearing code path landed outside a deferral row in-round; the register↔matrix traceability is now checker-enforced (`check-backlog.sh` exit 0 at R2.26). |
+| RK-09 | medium | Watch — E2/E3 legs stay environment-pending: BL-01 + the HUMAN-H1/H3 environment legs; R2.21 landed the foreign-toolchain bundle/self-check so the environment prerequisite is now fully specified. |
+| RK-10 | medium | Standing — no `staging-verified`/`live-executed` claim was written in-round; OPERATIONAL_READINESS.md was rewritten at R2.26 to keep the `fixture-verified` ceiling explicit. |
+| RK-11 | medium | Standing — every round-2 gate decision was recorded via an ADR or signed readout line (ADR-0332…ADR-0353); no informal verdicts were found in the run-ledger sweep. |
+
+*Net: register unchanged at 11/11 medium. The round-2 watch set is
+RK-02/RK-05/RK-09 (all bound to the carried environment/assembly residuals
+at GATE-G4); RK-06 recorded its first-sweep disposition.*

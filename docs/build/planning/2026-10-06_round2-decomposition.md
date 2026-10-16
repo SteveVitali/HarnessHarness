@@ -88,3 +88,102 @@ Ledger resumed: `projectStatus: IN_PROGRESS`, `nextTicket: R2.1`, `round: 2`,
 tickets verify against them), `lastCompleted: DOC.2` preserved, OPEN FINDINGS gained the CI-flake
 row, PHASE LOG gained the `### Round 2` heading + seed entry. `BUILD_INDEX.md` untouched — Round-2
 rows index as they land.
+
+## Round-2 accounting — appended at closure (R2.26 · 2026-10-10)
+
+*This section is the landed-vs-carried record the decomposition promised GATE-G4.
+Sources: `docs/build/BACKLOG.csv` (post-R2.26 sweep), `docs/build/COVERAGE_MATRIX.csv`,
+`docs/tickets/DEFERRALS.md`, the dated sweep in `docs/build/BACKLOG.md`.*
+
+### Coverage movement
+
+| Sum | R1 closeout (REC.1) | End of R2 (R2.26) |
+|---|---|---|
+| engineering closed (MET + MET-DIFFERENTLY + MET-ENGINEERED) | 35/66 (29+6+0) | **47/66 (41+6+0)** |
+| requirement satisfied (MET + MET-DIFFERENTLY) | 35/66 (29+6) | **47/66 (41+6)** |
+| PARTIAL | 31 | 19 |
+| MISSING / AT-RISK-INTEGRATION | 0 / 0 | 0 / 0 |
+
+The twelve in-round PARTIAL→MET flips, stated exactly: **R-2.5.2** (R2.8 — tool-exposure
+residual), **R-2.8.5** (R2.20 — extension-trust producers), **R-2.8.7** (R2.11 — approvals
+residual) recorded at their landing tickets; and nine re-verdicted at this closure with
+dated evidence: **R-2.2.4, R-2.2.5** (R2.4 — env backing ops + automatic snapshot cadence,
+ADR-0335), **R-2.4.1, R-2.4.2** (R2.5/R2.6 — DF-S2.8-1 members), **R-2.8.2** (R2.12 — IFC
+labels_leaves walk + reader-set legs), **R-2.9.1** (R2.14 — all three §5h.1 deferral rows),
+**R-2.9.2** (R2.16 — eval residual cells), **R-2.11.1** (R2.1 + R2.4 — parked-detach
+closing pass + env verbs; the closed-sum spec ruling stays a register obligation on
+BL-30/ADR-0274, not a requirement leg), **R-2.11.4** (R2.19 — definition-publishing
+surface). No MISSING and no AT-RISK-INTEGRATION row exists at closure.
+
+### Backlog movement
+
+- **14 rows discharged with dated evidence:** BL-11 (R2.2), BL-12 (R2.3), BL-13 (R2.4),
+  BL-22 + BL-23 (R2.11), BL-18 (R2.9a/b), BL-20 (R2.12), BL-21 (R2.13), BL-24 (R2.14),
+  BL-25 (R2.16), BL-28 (R2.20), BL-29 (R2.1), BL-40 (R2.25), BL-46 (bookkeeping —
+  DF-DOC.1-1's BL id, work discharged at R2.1).
+- **3 new rows minted at closure:** BL-44 (DF-S2.3-1 durable-execution residual
+  producers), BL-45 (audit per-event encryption + R-2.8.6 legs), BL-46 (DF-DOC.1-1
+  traceability).
+- **DEFERRALS:** 28 of 100 rows remain owed (25 OPEN + 3 PARTIAL); the append-only
+  cells carry the dated R2.x discharges.
+- **ADR sweep re-run over all 137 `## Revisit trigger` sections:** 45 fired-answered
+  (BL-43) · 44 quiet/dormant (BL-42) · 48 fired-unanswered on their open homes.
+  Round-2 movement: 15 fired-unanswered → fired-answered; 6 re-graded quiet; new
+  round-2 ADRs ADR-0332…0353 swept for the first time. Full per-ADR table in
+  `BACKLOG.md` §Revisit-trigger sweep 2026-10-10.
+- **Registers:** `conflicts.md` carries 6 open conflicts (CF-476/487 + CF-488/489/490/491)
+  → BL-30; `spec-debt.md`'s 216 records carry dated first-sweep grades (R2.25);
+  `risks.md` Round-2 review appended — no re-rates; `open-questions.md` packages
+  revalidated (R2.22–R2.24): 3 answered, 49 narrowed, remainder open with interim rules.
+
+### The carried set for GATE-G4 — per-row reason codes
+
+Reason codes: `human` — a person's act is the only remaining leg · `env` — needs a
+provisioned environment (foreign toolchain, live provider, TLS endpoint, live judge)
+· `dep` — blocked on a primitive/dependency the hermetic build lacks · `in-build` —
+machine-achievable residual carried on capacity · `accepted` — gate-accepted at
+GATE-ACCEPT; arms execute when their environments exist · `ruling` — spec/governance
+ruling owed, not code · `window` — scheduled to the WS-L6 program window · `standing` —
+perpetual ledger row, re-issued never closed.
+
+| BL | Carried work | Reason |
+|---|---|---|
+| BL-01 | E2/E3 cross-impl conformance cells | `env` + `accepted` |
+| BL-02 | R2 cross-camp human reviewer signature | `human` |
+| BL-03 | HUMAN-H1 E3 surface-ecosystem binding | `human` |
+| BL-04 | HUMAN-H2 real tracker + signed webhook | `human` |
+| BL-05 | Gate-accepted battery arms (item 10) | `accepted` |
+| BL-10 | Emitter-vs-exemption adjudication (11 no-document-path codes; DF-S1.9-2) | `in-build` |
+| BL-14 | DF-S1.20-1 legs (delegation_reason, workflow/program interpreters) | `in-build` |
+| BL-15 | §5c battery residuals (DF-S1.19-1/-2) | `in-build` |
+| BL-16 | DF-S1.17-1 members + sync_source/retrieval_eval fixture legs | `in-build` |
+| BL-17 | Judge binding + live-judge admissibility | `env` |
+| BL-19 | dpop + wrapped_long_lived (credential broker) | `dep` |
+| BL-26 | Live foreign-manifest import | `env` |
+| BL-27 | oauth/mtls mediator legs | `env` |
+| BL-30 | Spec/governance rulings (OQ-170 custody, OQ-388 ratification, 6 open CFs, R-2.2.1's verdict cell) | `ruling` |
+| BL-31 | Live provider transports + TLS-terminating transport | `env` |
+| BL-32 | Remote fetch transports + foreign import/export vocabularies | `env` |
+| BL-33 | WS-L6 package (R-2.12.4 + 13 OQs) | `window` |
+| BL-34 | ADR-0211 ratified deferrals D-1..D-6 + OQ-461/462/463 | `window` |
+| BL-35 | ADR-0212 register package — remaining open OQs | `window` |
+| BL-36 | ADR-0213 register package — remaining open OQs | `window` |
+| BL-37 | ADR-0214 register package — remaining open OQs | `window` |
+| BL-38 | ADR-0215 program candidates + OQ-440 | `window` |
+| BL-39 | ADR-0216 fixer deferrals | `window` |
+| BL-41 | Ledger OPEN-FINDINGS standing rules | `standing` |
+| BL-42 | 44 quiet/dormant ADR triggers | `standing` |
+| BL-43 | 45 fired-and-answered ADR triggers | `standing` |
+| BL-44 | DF-S2.3-1 residual producers (resume_set, defer, child-lease, non-fleet ingress, heal surface) | `in-build` |
+| BL-45 | Audit per-event encryption + R-2.8.6 legs | `dep` |
+
+### Honest-gate posture
+
+The decomposition's plan was: land every machine-achievable leg in-round, withhold
+rather than fabricate where environments or primitives are missing, and hand the
+operator an exact carried enumeration. That held: the 19 remaining PARTIAL rows are
+each homed on exactly one BL row above; nothing is un-homed, double-counted, or
+claimed above `fixture-verified`. The only departure from the seeded partition is
+the closure-time discovery that the DF-S2.3-1/DF-S1.15-3 residuals needed their own
+BL ids (BL-44/BL-45) — recorded here and in `BACKLOG.md` rather than silently
+folded into already-closed rows.
