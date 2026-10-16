@@ -25,7 +25,9 @@ ticket in `docs/build/BUILD_INDEX.md`.
 ## Toolchain
 
 `rust-toolchain.toml` pins Rust **1.94** (`rustfmt` component). The
-workspace is hermetic — no runtime crates are fetched; CI
+workspace is hermetic modulo ADR-0359's one admitted dep — `hh-secrets`
+pins `ring =0.17.14` for the DPoP verifier (CI fetches it via
+`cargo fetch --locked`; nothing else imports the crate); CI
 (`.github/workflows/ci.yml`) runs `cargo fmt --all --check`,
 `cargo build --workspace --all-targets`, `cargo test --workspace`, and
 `bash scripts/check-drift.sh`.

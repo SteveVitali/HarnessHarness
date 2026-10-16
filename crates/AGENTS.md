@@ -75,6 +75,11 @@ cargo build -p hh-embed --no-default-features    # tier-c4 off
 
 ## Code conventions
 
+- The workspace is dependency-free by contract **modulo ADR-0359**: only
+  `hh-secrets` may name the admitted `ring =0.17.14` pin, and only inside
+  the ADR's closed API scope (DPoP signature verification + test-time
+  fixture signing; `ring::aead`/`ring::rand` reserved for R3.8). Every
+  other crate and every other `ring` surface stays hermetic.
 - A crate's public contract is its `src/lib.rs` doc header — it names the spec
   section, the `R-2.*` slices, the ticket and the owning ADRs. Read it before
   editing the crate.

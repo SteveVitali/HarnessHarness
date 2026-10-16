@@ -1,7 +1,8 @@
 # HarnessHarness CI — the Stage-0 output that persists (ADR-0050 (e)).
 # Builds/tests the E1 workspace and enforces the schema-drift check (CC7: schema drift is a
-# build failure). The toolchain is pinned by rust-toolchain.toml; the workspace is pure
-# standard library, so no crates are fetched.
+# build failure). The toolchain is pinned by rust-toolchain.toml; the only fetched crates are
+# ADR-0359's `ring` graph (lockfile-pinned — `cargo fetch --locked` below) plus `hh-varhost`'s
+# `tempfile` dev-dep; everything else is pure standard library.
 name: ci
 
 on:
@@ -29,6 +30,10 @@ jobs:
 
       - name: Format check
         run: cargo fmt --all --check
+
+      # ADR-0359: the one admitted registry read, made explicit + locked.
+      - name: Fetch pinned dependencies
+        run: cargo fetch --locked
 
       - name: Build
         run: cargo build --workspace --all-targets
