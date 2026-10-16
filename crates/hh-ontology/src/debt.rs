@@ -1243,8 +1243,13 @@ impl UnexecutableReason {
 
 /// `DebtPolicy` — the assumption-debt policy record (§5h.6 §5): the tunable
 /// constants and per-home required-field table the manager enforces. Defaults
-/// are the proposed placeholder values the ADR-0214 deferral text records —
-/// the ratified values land with the manager (Stage 5).
+/// are the §5h.6/OQ-441 proposed starting points (the ADR-0214 deferral text
+/// records them as proposed) — conformed 2026-10-16 under the operator's
+/// CF-489 direction ruling (R3.9: `min_runway` 30 d → 60 d, `warn_within`
+/// 14 d → 30 d; `hypothesized_max_age`/`grace_period` already matched). The
+/// `[[DEFERRED ADR-0214: OQ-441]]` markers stand — the ratified values land
+/// with WS-I6's Stage-5 `DebtIndex` re-pin (joint with OQ-304 on
+/// `evidence_max_age`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct DebtPolicy {
     /// Per-home required-field overrides: `record_kind.field → field names`
@@ -1277,16 +1282,17 @@ pub struct DebtPolicy {
 }
 
 impl Default for DebtPolicy {
-    /// The proposed placeholder defaults (§5h.6 §5; the ADR-0214 deferral
-    /// records these as proposed — the ratified values land with the
-    /// manager's Stage-5 tuning).
+    /// The §5h.6/OQ-441 proposed placeholder defaults (the ADR-0214
+    /// deferral records them as proposed — the ratified values land with
+    /// WS-I6's Stage-5 `DebtIndex` re-pin). Conformed 2026-10-16 (R3.9,
+    /// CF-489 — operator ruling: code conforms to spec).
     fn default() -> DebtPolicy {
         DebtPolicy {
             required_fields_by_home: BTreeMap::new(),
-            min_runway_ms: 30 * 24 * 3600 * 1000, // 30 days
+            min_runway_ms: 60 * 24 * 3600 * 1000, // 60 days
             hypothesized_max_age_ms: 90 * 24 * 3600 * 1000, // 90 days
             evidence_max_age_ms: 180 * 24 * 3600 * 1000, // 180 days
-            warn_within_ms: 14 * 24 * 3600 * 1000, // 14 days
+            warn_within_ms: 30 * 24 * 3600 * 1000, // 30 days
             grace_period_ms: 30 * 24 * 3600 * 1000, // 30 days
             max_open_removal_tests: 64,
             priority: "expiry_urgency".into(),

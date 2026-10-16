@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.9   # round-3 chain (rows 137-149); row 146 = DebtPolicy CF-489 conform (60d/30d constants + caller/test sweep + dated CF note); 143 is the human row itself
-lastCompleted:   R3.8
+nextTicket:      R3.10  # round-3 chain (rows 137-149); row 147 = round-3 closure (backlog refresh, coverage recompute, OPERATIONAL_READINESS, carried-set accounting for GATE-G5); 143 is the human row itself
+lastCompleted:   R3.9
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.8  # R3.8 tip — stacked PR #144 against svitali/harnessharness-r3.7; operator merges
+chainTip:        svitali/harnessharness-r3.9  # R3.9 tip — stacked PR #145 against svitali/harnessharness-r3.8; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -671,3 +671,45 @@ updatedAt:       2026-10-16
   Ledger advanced `lastCompleted: R3.8`, `nextTicket: R3.9` (row
   146 — DebtPolicy CF-489 conform, 60d/30d), `chainTip:
   svitali/harnessharness-r3.8`. Operator merges.
+- 2026-10-16 · **R3.9 done** — branch `svitali/harnessharness-r3.9` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/145 · base
+  `svitali/harnessharness-r3.8` (@58a0152). Discharged CF-489's code
+  side under the operator's 2026-10-14 direction ruling (CONFORM CODE
+  TO SPEC): **`hh-ontology`** — `debt.rs` `impl Default for DebtPolicy`:
+  `min_runway_ms` 30 d → **60 d**, `warn_within_ms` 14 d → **30 d**
+  (`hypothesized_max_age_ms` 90 d + `grace_period_ms` 30 d already
+  matched §5h.6; `evidence_max_age_ms` 180 d untouched — OQ-304's
+  sibling). Both doc comments now state the dated R3.9 ruling
+  truthfully and keep the `[[DEFERRED ADR-0214: OQ-441]]` marker —
+  the conform removes the divergence, it does not ratify the values;
+  WS-I6 owns the Stage-5 `DebtIndex` re-pin. **Caller/test sweep —
+  clean:** every consumer reads the operative policy (`hh-debt`
+  InsufficientRunway/manager report, `hh-hir` ctx.policy runway leg,
+  `hh-embed` policy_of/evaluate_debt_on_lifecycle/debt.report, `hh-lab`
+  AssumptionDebtHealth/evaluate_debt, `hh-registry` conditioned-rule
+  validation); boundary tests pin explicit non-default values
+  (min_runway 1_000, warn_within 1_000, grace 30_000); no test asserts
+  the old defaults semantically or literally; `hh-lab`'s 7 d
+  DEFAULT_WARN_WITHIN_MS is a separate OQ-446/OQ-364 placeholder —
+  untouched. **Verify:** `cargo test --workspace --no-fail-fast` 344
+  blocks / 3,505 passed / 0 failed / 1 ignored (pre-existing latency
+  fixture; ~3.5 h wall under the host's `syspolicyd` first-exec
+  stall — green, not wedged; no new tests — a constants conform);
+  six consumer-crate batteries all green; fmt clean; clippy
+  `-p hh-ontology --all-targets -D warnings` clean; check-drift in
+  sync (no schema change); check-removability all stanzas green
+  under the documented loaded-host deadline overrides;
+  check-backlog exit 0 (157 sources, 54/66 engineering-closed,
+  53/66 requirement-satisfied — unchanged); check-build-memory 0
+  violations / 7 pre-existing warnings; `^||` empty. **ci:** pass
+  #145@fa35119 (build · test · fmt · drift 38903919373 push;
+  38903937321 pull_request), logs/ci-R3.9.json. **Conflicts:**
+  CF-489 → resolved (2026-10-16, R3.9); no new conflicts.
+  **Deferrals:** none opened; OQ-441 dated note appended (stays
+  outstanding on WS-I6). **Backlog:** BL-30 + BL-37 dated progress
+  notes — both stay open on their other named-workstream rulings.
+  **ADRs:** none (the ruling is recorded on the gate row + the CF
+  register row, per the contract). Ledger advanced
+  `lastCompleted: R3.9`, `nextTicket: R3.10` (row 147 — round-3
+  closure for GATE-G5), `chainTip: svitali/harnessharness-r3.9`.
+  Operator merges.
