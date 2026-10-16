@@ -1,7 +1,10 @@
 # OPERATIONAL READINESS — capability picture at end of Round 2 (R2.26, 2026-10-10)
 
 > R2.26's honest account of how far each capability climbed by the close of
-> Round 2 (R2.1–R2.26 landed; GATE-G4 is the operator's next read). Status
+> Round 2 (R2.1–R2.26 landed; **GATE-G4 PASSED** 2026-10-10 — operator
+> blanket acceptance, the 28-row carried set dispositioned, the named-set
+> human/env rows recorded gate-pending; R2.27's docs refresh states that
+> outcome). Status
 > vocabulary: `engineered` → `fixture-verified` → `staging-verified` →
 > `live-executed` → `public`; `human-completed` marks rows whose only
 > remaining step is a person. No production claim is made without a
@@ -15,11 +18,12 @@
 - **ci-boundary/1** · `docs/build/logs/ci-R2.25.json` · read_at
   `2026-10-10T01:52:45Z` · result **pass**: PR #132 @ `c7be5d0`
   (build · test · fmt · drift — runs 38013901685, 38013904205).
-  R2.26's own boundary read is recorded at closeout
-  (`logs/ci-R2.26.json`); this row names the latest landed-chain read.
-- Round-2 head of chain: branch `svitali/harnessharness-r2.26` stacked on
-  `svitali/harnessharness-r2.25`; the verified ceiling across the stack is
-  `fixture-verified` — no live read above it exists.
+  R2.26's and R2.27's own boundary reads are recorded at their
+  closeouts (`logs/ci-R2.26.json`, `logs/ci-R2.27.json`); this row names
+  the latest landed-chain read of the code chain.
+- Round-2 head of chain: branch `svitali/harnessharness-r2.27` stacked on
+  `svitali/harnessharness-r2.26` (R2.27 is docs-only); the verified ceiling
+  across the stack is `fixture-verified` — no live read above it exists.
 
 ## Capability table
 

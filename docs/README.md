@@ -26,7 +26,7 @@ by hand falsifies the record; only *living* docs are edited in place.
 | `3_MetaHarness_Meta_Plan_and_Research_Ledger.md` | frozen | "doc 3" — the meta-plan that produced the spec |
 | `adr/` | append-only | build decision records; `adr/README.md` is **generated** (`build-memory adr-index`) |
 | `tickets/` | historical | the contracts (what was owed); `DEFERRALS.md` is append-only |
-| `build/` | historical | the record of what happened (ledger, run ledgers, PR bodies, index, readouts) |
+| `build/` | historical | the record of what happened — `LEDGER.md`, `BUILD_INDEX.md`, `runs/`, `pr/`, `readouts/` (gates), `planning/` (decomposition + decision memos), `BACKLOG.md`/`.csv` + `COVERAGE_MATRIX.csv` (the owed-work registers), `OPERATIONAL_READINESS.md` (the capability account), `INTEGRATION_PLAN.md`, `CAPSTONE_*.md`; `logs/` is the one gitignored subtree (CI records land by `git add -f`) |
 | `README.md` | living | this map — edit in place when the tree changes |
 
 ## Adjacent doc surfaces (repo root, not under `docs/`)

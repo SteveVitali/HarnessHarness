@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The 50-member Cargo workspace that *is* the system: the E1 kernel, its Stage-1
+The 51-member Cargo workspace that *is* the system: the E1 kernel, its Stage-1
 service slices, the Lab (experiment/evaluation plane), the C3–C5 services, and
 the surfaces. Members are declared — with a one-line provenance comment each —
 in the root `Cargo.toml`. Dependency edges point downward through the layers
@@ -87,7 +87,8 @@ cargo build -p hh-embed --no-default-features    # tier-c4 off
   `hh-kernel`, `hh-helper`, `hh-web`, `hh-mcp-serve`, `hh-codegen`,
   `hh-compile`, `hh-authorize`, `hh-bench-adapter`, `hh-eval-oracle`,
   `hh-gateway-stub`, `hh-plugin-check`, `hh-plugin-fixture`,
-  `hh-compact-evict-oldest`, `hh-memory-store`, `hh-tracker-fixture`.
+  `hh-compact-evict-oldest`, `hh-memory-store`, `hh-tracker-fixture`,
+  `hh-xcheck`.
 
 ## Critical gotchas
 

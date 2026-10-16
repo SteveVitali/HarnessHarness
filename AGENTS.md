@@ -5,7 +5,7 @@
 The E1 reference build of the MetaHarness program: a kernel + Laboratory for
 *harness engineering* — durable, observable, model-conditioned runtimes for
 goal-directed agents, with provenance, budgets and governance carried as
-load-bearing contracts rather than conventions. The system is a 50-crate
+load-bearing contracts rather than conventions. The system is a 51-crate
 pure-std Rust workspace plus committed contract, spec and build records.
 Human-facing overview: `README.md`. The behavioural contract:
 `spec/CANONICAL_SPEC.md` (frozen — amend via an ADR + the manifest protocol).
@@ -42,6 +42,12 @@ Human-facing overview: `README.md`. The behavioural contract:
 - **Surfaces & plugins.** `hh-cli` (`hh`), `hh-web`, `hh-mcp`/`hh-mcp-lab`,
   `hh-acp`; packaged variants under `plugins/` run out of process through
   `hh-varhost` + `hh-helper` over `plugin_abi/1`.
+- **Cross-implementation replay.** `hh-xcheck` packages the committed
+  `hh-xcheck-bundle/1` corpus (six arms — identity trees/records, ledger
+  transcript+WAL, registry snapshot, plugin manifests, canonical-parse
+  frames) plus the E1 `self_check` and the foreign-answers `verify`
+  comparator (R2.21, ADR-0353). The foreign replay legs are
+  environment-pending on HUMAN-H3 — packaged, never claimed.
 
 Full per-crate map and workspace rules: `crates/AGENTS.md`.
 
@@ -51,7 +57,7 @@ Full per-crate map and workspace rules: `crates/AGENTS.md`.
 |---|---|
 | `Cargo.toml` | workspace `members` — annotated one-line-per-crate; the hermetic-deps note |
 | `rust-toolchain.toml` | pins Rust 1.94 (+ `rustfmt`); CI honors it |
-| `crates/` | the 50-member workspace — see `crates/AGENTS.md` |
+| `crates/` | the 51-member workspace — see `crates/AGENTS.md` |
 | `plugins/` | packaged first-party variants: `hh-compact-evict-oldest`, `hh-memory-store`, `hh-tracker-fixture` |
 | `schema/` | generated contract artifacts — regenerate via `scripts/check-drift.sh`, never hand-edit |
 | `scripts/` | `check-drift.sh` (CC7), `check-removability.sh` (CC6), spike runners |
@@ -66,7 +72,7 @@ Full per-crate map and workspace rules: `crates/AGENTS.md`.
 ```sh
 cargo build --workspace               # all crates + binaries
 cargo build --workspace --all-targets # what CI builds
-cargo test --workspace                # the full suite (~3k tests)
+cargo test --workspace                # the full suite (~3.4k tests)
 cargo test -p hh-<crate>              # one crate's tests
 cargo fmt --all --check               # CI gate
 cargo clippy -p hh-<crate> -- -D warnings   # convention: clean on touched crates
@@ -118,15 +124,29 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
    `kernel_version_id` tail via `hh_embed_schema::kernel_version_label`),
    never the full `hh-kernel/<ver>` id. `hh doctor` over the boundary
    answers the same facts. A real identity mismatch still fails loudly.
-4. **The `edit` tool drops writes on build-memory files** (overlay anomaly):
-   write `LEDGER.md`/`DEFERRALS.md`/`BUILD_INDEX.md` via shell/python and
-   verify with `git diff` before committing.
+4. **The `edit` tool can lose writes** (the overlay anomaly — confirmed on
+   the build-memory files, the standing rule covers every file): write via
+   shell/python and verify with `git diff` before committing —
+   `git show --stat` must list every file a commit claims.
 5. **Offline/hermetic by design.** The verified ceiling is fixture-verified —
    never write `staging-verified`, `live-executed` or `public` claims
    (`docs/build/OPERATIONAL_READINESS.md` is the capability account).
 6. **The manifest chain is a stack, not a queue:** work forks from the
    previous ticket's branch; append-only history; a gate is a pause, not a
    block; secrets never enter a ledger (`provided: yes/no` only).
+7. **`docs/build/logs/` is the one gitignored subtree** (`logs/.gitignore`:
+   `*` + `!.gitignore`) — CI-boundary records land via `git add -f`.
+8. **DEFERRALS status cells are token-led, marker-governed:** the cell opens
+   with a status token (`OPEN`/`PARTIAL`/…) and discharges append dated
+   `**DONE** — YYYY-MM-DD (ticket)` evidence. Read owed state from the dated
+   markers — ~17 discharged cells still begin `OPEN` (GATE-G4 flag G4-4, a
+   round-3 chore). Environment-gated legs carry dated
+   `environment-pending on HUMAN-*` notes — `gate pending` is a recorded
+   state, never a fabricated pass (the GATE-G4 named set stays carried).
+9. **A stale `hh-helper` binary lies to `helper_live`.** An interrupted
+   `check-removability.sh` can leave a tier-off `hh-helper` in
+   `target/debug`; `helper_live` then fails honestly on the `tier-c1`
+   absence. `cargo build -p hh-helper` restores the default binary.
 
 ## Terminology
 
