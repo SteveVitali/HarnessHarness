@@ -96,7 +96,10 @@ fn error_json(e: &CompileError) -> Json {
             diagnostics.clone(),
         ),
         CompileError::NoProfile { detail } => ("NoProfile", detail.clone(), vec![]),
-        CompileError::AmbiguousSelector { detail } => ("AmbiguousSelector", detail.clone(), vec![]),
+        CompileError::AmbiguousSelector {
+            detail,
+            diagnostics,
+        } => ("AmbiguousSelector", detail.clone(), diagnostics.clone()),
         CompileError::PlanError { node, detail } => {
             ("PlanError", format!("{node}: {detail}"), vec![])
         }
@@ -113,9 +116,14 @@ fn error_json(e: &CompileError) -> Json {
             ("UncheckableSurface", format!("{surface}: {reason}"), vec![])
         }
         CompileError::AuthorityWidening { detail } => ("AuthorityWidening", detail.clone(), vec![]),
-        CompileError::DialectNarrowingUndeclared { detail } => {
-            ("DialectNarrowingUndeclared", detail.clone(), vec![])
-        }
+        CompileError::DialectNarrowingUndeclared {
+            detail,
+            diagnostics,
+        } => (
+            "DialectNarrowingUndeclared",
+            detail.clone(),
+            diagnostics.clone(),
+        ),
         CompileError::TargetError { detail } => ("TargetError", detail.clone(), vec![]),
         CompileError::ProtocolVersionMismatch { detail } => {
             ("ProtocolVersionMismatch", detail.clone(), vec![])

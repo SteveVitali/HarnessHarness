@@ -242,10 +242,12 @@ pub enum Code {
     /// requirement with no `depends-on` edge to another `ToolCapability` (ADR-0087;
     /// **S1.10-owned**).
     LinkCapabilityRequires,
-    /// `C-LINK-8 AmbiguousSelector` — a profile-selector tie at link (**S1.10-owned**).
+    /// `C-LINK-8 AmbiguousSelector` — a profile-selector tie at link (minted by
+    /// `hh_compiler::link` at the `resolve_chain` call; R3.6).
     LinkAmbiguousSelector,
     /// `C-LINK-9 DialectNarrowingUndeclared` — a surface narrows the schema dialect
-    /// without the declaration the bound profile requires (**S1.10-owned**).
+    /// without the declaration the bound profile requires (minted by
+    /// `hh_compiler::link` and `hh_compiler::family::check_dialect_transform`; R3.6).
     LinkDialectNarrowing,
     // ── plan / resume / internal ─────────────────────────────────────────────────
     /// `C-PLAN-1 PlanRefusal` — the assembly service's `plan` refuses (§6; registered).
@@ -254,7 +256,9 @@ pub enum Code {
     /// (`PlanError{unsupported_construct}`; **S1.10-owned**).
     PlanUnsupportedConstruct,
     /// `C-SEAL-1 NonCanonical` — stage-5 seal: the bundle does not re-encode to the
-    /// hashed bytes (`SealError{non_canonical}`; **S1.10-owned**).
+    /// hashed bytes (`SealError{non_canonical}`; defect-gated — no authored
+    /// document reaches the self-check; the plan surface is armed to spell it,
+    /// and §3.3.8's stage set carries no `seal` spelling — CF-492).
     SealNonCanonical,
     /// `C-RES-1 Incompatible` — `verify_resume` refuses.
     ResIncompatible,

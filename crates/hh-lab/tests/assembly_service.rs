@@ -1537,6 +1537,71 @@ fn s5_1_stage6b_unexpressible_surface_is_c_prof_2_at_plan_time() {
 }
 
 #[test]
+fn r3_6_stage6b_ambiguous_selector_tie_mints_c_link_8() {
+    // R3.6 (ADR-0350 revisit) — two bound profiles at identical
+    // (precedence, specificity) tie in `resolve_chain`; the `C-LINK-8`
+    // diagnostic `link` mints rides the error and stage-6b reports it
+    // verbatim (the `LinkError{diagnostics}` carriage convention).
+    let (mut store, catalog) = seeded_store("r3_6-link8");
+    let pa = minimal_profile("test:tie-a", "1.0");
+    let pb = minimal_profile("test:tie-b", "1.0");
+    admit_profile(&mut store, &pa);
+    admit_profile(&mut store, &pb);
+    let coord_a = hh_compiler::profile::profile_coordinate(&pa);
+    let coord_b = hh_compiler::profile::profile_coordinate(&pb);
+
+    let mut s = valid_source();
+    // The native pin is B; `assembly.profile_binding` pins A — the stage-6
+    // coordinate set is {A, B} and neither extends the other.
+    s.document = Some(scaffold_with_profile(&coord_b));
+    let mut a = Assembly::empty();
+    a.slots.insert(
+        "control_strategy".into(),
+        SlotBindings::One(SlotBinding::of(ComponentVariantRef::selected(
+            "control_strategy",
+            "hh/round_robin",
+            "latest",
+        ))),
+    );
+    a.slots.insert(
+        "context_policy".into(),
+        SlotBindings::One(SlotBinding::of(ComponentVariantRef::selected(
+            "context_policy",
+            "hh/full_window",
+            "latest",
+        ))),
+    );
+    a.profile_binding = hh_assembly::grammar::ProfileBinding::Pinned(ProfileRef {
+        profile: coord_a.clone(),
+        pinned: true,
+    });
+    s.layers[0].fragment = a.to_json();
+
+    let r = svc(&mut store, &catalog).assemble(&s, None, AssembleMode::Plan);
+    assert_eq!(r.status, "error", "C-LINK-8 fails the plan");
+    let d = r
+        .report
+        .diagnostics
+        .iter()
+        .find(|d| d.code == Code::LinkAmbiguousSelector)
+        .unwrap_or_else(|| {
+            panic!(
+                "expected C-LINK-8, got {:?}",
+                r.report
+                    .diagnostics
+                    .iter()
+                    .map(|d| (d.code.code(), d.detail.content.clone()))
+                    .collect::<Vec<_>>()
+            )
+        });
+    // The compiler-minted row passes through verbatim — `stage: link`,
+    // not the 6b spelling a boundary translation would produce.
+    assert!(matches!(d.stage, Stage::Link), "minted at link verbatim");
+    assert_eq!(d.severity, Severity::Error, "an error, never a warning");
+    assert_eq!(d.path, "/assembly/profile_binding");
+}
+
+#[test]
 fn s5_1_stage6b_expressible_profile_leaves_plan_clean() {
     let (mut store, catalog) = seeded_store("s5_1-prof2-ok");
     // The C0-admissible mode compiles — `plan` stays `ok` and no C-PROF-*

@@ -333,10 +333,28 @@ impl EmbedService {
                     .map_err(ledger_err)?;
                 Ok(Json::obj([("status", Json::str("ok")), ("bundle", doc)]))
             }
-            Err(e) => Ok(Json::obj([
-                ("status", Json::str("error")),
-                ("compile_error", Json::str(format!("{e:?}"))),
-            ])),
+            Err(e) => {
+                // V-1 — the result record carries `diagnostics` (the
+                // `LinkError{diagnostics}`-convention members verbatim;
+                // `{compile_error}` keeps the Debug spelling).
+                let diags: Vec<hh_assembly::AssemblyDiagnostic> = match &e {
+                    hh_compiler::errors::CompileError::LinkError { diagnostics, .. }
+                    | hh_compiler::errors::CompileError::InvalidDefinition { diagnostics }
+                    | hh_compiler::errors::CompileError::AmbiguousSelector {
+                        diagnostics, ..
+                    }
+                    | hh_compiler::errors::CompileError::DialectNarrowingUndeclared {
+                        diagnostics,
+                        ..
+                    } => diagnostics.clone(),
+                    _ => Vec::new(),
+                };
+                Ok(Json::obj([
+                    ("status", Json::str("error")),
+                    ("compile_error", Json::str(format!("{e:?}"))),
+                    ("diagnostics", diagnostics_json(&diags)),
+                ]))
+            }
         }
     }
 }

@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R3.6   # round-3 chain (rows 137-149); row 142 = assembly-emitter adjudication (BL-10); 127/128 stay HUMAN-H3/H4
-lastCompleted:   R3.5
+nextTicket:      R3.7   # round-3 chain (rows 137-149); row 144 = credential-broker dep legs (BL-19; HUMAN-H5 ruled); 143 is the human row itself
+lastCompleted:   R3.6
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,7 +23,7 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.5  # R3.5 tip — stacked PR against svitali/harnessharness-r3.4; operator merges
+chainTip:        svitali/harnessharness-r3.6  # R3.6 tip — stacked PR against svitali/harnessharness-r3.5; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
@@ -536,3 +536,39 @@ updatedAt:       2026-10-15
   test · fmt · drift 38807021330 / 38807030595; 2/2 green on the
   closeout head; the implementation-head runs were
   superseded-cancelled). Operator merges.
+
+- 2026-10-15 · **R3.6 done** — branch `svitali/harnessharness-r3.6` · PR
+  https://github.com/SteveVitali/HarnessHarness/pull/142 · base
+  `svitali/harnessharness-r3.5` (@e13e3b4). **DF-S1.9-2 discharged
+  DONE; BL-10 closed; R-2.1.4 re-verdicted MET** — the
+  emitter-vs-exemption adjudication for the eleven no-producer
+  diagnostic codes: `C-LINK-8`/`-9` gained real emitters
+  (`CompileError` gained the `LinkError{diagnostics}` carriage on the
+  two standalone link-stage variants; `link` mints `C-LINK-8` at the
+  `resolve_chain` tie and `C-LINK-9` at the dialect-narrowing check,
+  `family::check_dialect_transform` mints `C-LINK-9` under compiler
+  provenance; stage-6b reports carried rows verbatim + spells codes
+  on diagnostics-empty refusals; `hh-compile` + `lab.assembly.compile`
+  surface the member; the rows move `U`→`X` — link-stage codes
+  cannot be `F`: the corpus driver's crate cannot depend upward);
+  `C-REF-2`/`-3` re-classified `X`→`U` (an existing error type is
+  not emission of the code); the seven remaining codes ruled `U`
+  with the owning producer + re-open precondition named
+  (`C-PROF-3` experiment-plane; `C-LCD-1` the closed `EdgeKind`
+  set; `C-LOC-1`/`C-TRUST-1` instantiate bind events; `C-RES-1`
+  verify_resume's boundary refusal; `C-SEAL-1` the defect-gated
+  seal self-check; `C-CLASS-7` registry admission). Map totals
+  unchanged 36F/49X/9U/1N over 95; the §3.3.8 stage-set `seal`
+  gap registered as CF-492. **Verify:** scoped suites green —
+  hh-assembly AC-CC-11 4/4 + acceptance 35 + r2_18 15 + s3_2 12;
+  hh-compiler 184 (incl. new C-LINK-8/-9 legs); hh-lab 126 (incl.
+  `r3_6_stage6b_ambiguous_selector_tie_mints_c_link_8`); hh-embed
+  suite green; workspace check clean; fmt clean; clippy
+  `-D warnings` clean on the four touched crates; drift in sync;
+  removability all stanzas; check-build-memory 0 violations /
+  7 pre-existing warnings (post adr-index regen); `^||` empty.
+  ADR-0358 + dated Re-check on ADR-0350 (append-only).
+  Fixture-verified ceiling. Ledger advanced `lastCompleted: R3.6`,
+  `nextTicket: R3.7` (row 144; 143 is the human row — HUMAN-H5
+  RULED), `chainTip: svitali/harnessharness-r3.6`. Operator merges.
+

@@ -691,6 +691,9 @@ pub fn resolve_chain(
                 b.selector.version_pattern.specificity(),
             );
             if ka == kb {
+                // `diagnostics` lands empty here — `resolve_chain` is a pure
+                // resolver with no kernel provenance; the link call site mints
+                // the `C-LINK-8` row with the caller's kernel (R3.6).
                 return Err(CompileError::AmbiguousSelector {
                     detail: format!(
                         "{} and {} tie at precedence {} / specificity {}",
@@ -699,6 +702,7 @@ pub fn resolve_chain(
                         a.selector.precedence,
                         a.selector.version_pattern.specificity()
                     ),
+                    diagnostics: Vec::new(),
                 });
             }
         }
