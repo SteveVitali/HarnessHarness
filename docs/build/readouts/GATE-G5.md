@@ -65,7 +65,7 @@ This readout presents the evidence and leaves every disposition cell blank for t
 
 ## 2026-10-16 — Reading 1 (orchestrator-authored evidence audit) → PENDING operator disposition
 
-<!-- agent-drafted:begin sha256=3952f982f9a877224e8f9d5ff1b144d251a0677e84aaef7dedfbe2d649c69734 -->
+<!-- agent-drafted:begin sha256=85a016814722cb95d80de9f7062104608b9c55b7c49298e5b5267bcbcf2332aa -->
 
 ### 1 · Chartered-vs-landed — every Round-3 row's chartered work, accounted
 
@@ -289,14 +289,15 @@ state, never a fabricated pass.
 - **G5-5 · LEDGER-OF-6 → BL-41 — and the append-only/history-mode consequence.** Status-marker
   drift recurred: 16 stale leads swept at R3.1, five at R3.10 (incl. the inline-`|` miss on
   DF-S1.17-1), plus the machine-readable `pending_cells[]` side (CF-493). The dated-marker-governed
-  sweep is the sanctioned repair — but `check-build-memory.sh . --range svitali/harnessharness-r3.9
-  ..HEAD` (history mode, run at this gate) flags **6 append-only hits** on DEFERRALS lines: the five
+  sweep is the sanctioned repair — but `check-build-memory.sh . --range
+  svitali/harnessharness-r3.9..HEAD` (history mode, run at this gate) flags **6 append-only hits** on DEFERRALS lines: the five
   deliberate lead-token rewrites plus DF-S2.4-2's in-line dated residual note (a markdown table row
   is one line, so an in-cell append reads as a line rewrite to the by-line check). This is the known
   LEDGER-OF-6 class in its second costume — the repair and the by-line append-only check are in
   tension; flagged so the operator sees it rather than discovering it at the next history audit.
-  (Tooling note: `check-history.sh` emitted `grep: out of memory` twice over the ~40-commit round
-  range — cosmetic, the judgements still printed.)
+  (Tooling note: `check-history.sh` emitted `grep: out of memory` twice over the
+  2-commit `r3.9..HEAD` range and five times over the ~40-commit round range — cosmetic,
+  the judgements still printed.)
 - **G5-6 · `foreign-run-verified` is a distinct evidence class — the readiness ceiling stays
   `fixture-verified`.** PR #136's e2-python replay (49/49 over six arms, 2026-10-14, HUMAN-H3
   material provided as a run record only) is a foreign toolchain's recorded run — **not** an in-tree
@@ -383,7 +384,7 @@ here so no scoped `OPEN` row is undispositioned, per DEFERRALS rule 4)*:
 After the operator dispositions, the chain holds exactly one row: **R3.11** (`docs/tickets/
 149_R3.11__round3-docs-refresh.md` — the round-3 docs refresh; repo + agent docs state the round's
 outcome; the last manifest row, 149 of 149). The ledger's `nextTicket` advance is the operator's act
-on disposition, not this readout's. `mergePolicy: OPERATOR` — the 11 stacked round-3 PRs
+on disposition, not this readout's. `mergePolicy: OPERATOR` — the 10 stacked round-3 PRs
 (#137–#146) plus the earlier stack remain the operator's to merge.
 
 ### Verdict — pending operator signature
