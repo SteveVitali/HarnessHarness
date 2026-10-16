@@ -700,6 +700,13 @@ const CREDENTIAL_FIELDS: &[AuditField] = &[
     afb("binding_ids", AUDIT_FIELD_LIST_BYTES),
     af("from_revision"),
     af("to_revision"),
+    // R3.7 (ADR-0359/0360) — `bound`/`wrapped` may carry the verified `dpop`
+    // bound-key coordinate (`sender_key`) and the wrap registration's
+    // coordinate + compensating-revocation plan (`wrap_id`,
+    // `compensation_plan_id`) — all content-free members.
+    af("sender_key"),
+    af("wrap_id"),
+    af("compensation_plan_id"),
 ];
 
 /// `security.secret.*` — tombstone summaries and scan verdicts, never bytes.
@@ -1464,6 +1471,7 @@ const HOSTED_LOWERING: &[(&str, &str)] = &[
     ("security.credential.revoked", "passthrough"),
     ("security.credential.rotated", "passthrough"),
     ("security.credential.used", "passthrough"),
+    ("security.credential.wrapped", "passthrough"),
     // ── security:egress ──
     ("security.egress.decided", "passthrough"),
     ("security.egress.requested", "passthrough"),
@@ -1931,6 +1939,12 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     row_audit("security.credential.denied",       O::Events, true, CREDENTIAL_FIELDS, &[], None, None),
     row_audit("security.credential.revoked",      O::Events, true, CREDENTIAL_FIELDS, &[], None, None),
     row_audit("security.credential.rotated",      O::Events, true, CREDENTIAL_FIELDS, &[], None, None),
+    // `security.credential.wrapped` — the R3.7 `wrapped_long_lived`
+    // delivery registration (DF-S1.13-4; ADR-0360): `{wrap_id, binding_id,
+    // channel_id, destination, effect_id, mode, expires_at, sender_key?,
+    // compensation_plan_id}` — the compensating-revocation plan is durable
+    // before the wrapped value crosses.
+    row_audit("security.credential.wrapped",      O::Events, true, CREDENTIAL_FIELDS, &[], None, None),
     row_audit("security.secret.redacted",         O::Events, true, SECRET_FIELDS, &[], None, None),
     row_audit("security.secret.leak_detected",    O::Events, true, SECRET_FIELDS, &[], None, None),
 
@@ -2479,14 +2493,15 @@ mod tests {
 
     #[test]
     fn credential_and_secret_families_are_audit_grade_and_provenance_mandatory() {
-        // §5g.3 §3 (R-2.8.3; S1.13): the seven rows are registered, audit-grade,
-        // kernel-origin and provenance-mandatory.
+        // §5g.3 §3 (R-2.8.3; S1.13 + R3.7's `wrapped`): the eight rows are
+        // registered, audit-grade, kernel-origin and provenance-mandatory.
         for c in [
             "security.credential.bound",
             "security.credential.used",
             "security.credential.denied",
             "security.credential.revoked",
             "security.credential.rotated",
+            "security.credential.wrapped",
             "security.secret.redacted",
             "security.secret.leak_detected",
         ] {

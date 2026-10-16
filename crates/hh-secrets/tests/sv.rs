@@ -212,6 +212,7 @@ fn bound_binding(
             run_id,
             lease,
             BindRequest {
+                dpop_proof: None,
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
@@ -231,6 +232,7 @@ fn req(effect: &str, dest: &str, path: Option<&str>) -> RequestDescriptor {
         destination: dest.into(),
         method: Some("GET".into()),
         path: path.map(str::to_string),
+        dpop_proof: None,
     }
 }
 
@@ -615,6 +617,7 @@ fn sv8_canary_never_injected() {
         &run_id,
         &lease,
         BindRequest {
+            dpop_proof: None,
             channel_id: "tripwire".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
@@ -656,6 +659,7 @@ fn sv8_kernel_use_audited_and_bind_refused() {
         &run_id,
         &lease,
         BindRequest {
+            dpop_proof: None,
             channel_id: "gw".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
@@ -717,6 +721,7 @@ fn sv9_mode_isolation_gates_and_typed_deferral() {
         &run_id,
         &lease,
         BindRequest {
+            dpop_proof: None,
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
@@ -737,6 +742,7 @@ fn sv9_mode_isolation_gates_and_typed_deferral() {
         &run_id,
         &lease,
         BindRequest {
+            dpop_proof: None,
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
@@ -753,7 +759,7 @@ fn sv9_mode_isolation_gates_and_typed_deferral() {
 
     // mint — now real (S2.4): an unknown binding refuses `Revoked`; a live
     // binding mints a verifiable token that fails after expiry (LT-05).
-    match broker.mint(&mut store, &run_id, &lease, "bnd-x", "aud", 60_000) {
+    match broker.mint(&mut store, &run_id, &lease, "bnd-x", "aud", 60_000, None) {
         Err(BrokerError::Refused(r)) => assert_eq!(r.code, RefusedCode::Revoked),
         _ => panic!("mint on an unknown binding must refuse"),
     }
@@ -784,6 +790,7 @@ fn sv9_sender_constraint_fails_closed() {
         &run_id,
         &lease,
         BindRequest {
+            dpop_proof: None,
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),

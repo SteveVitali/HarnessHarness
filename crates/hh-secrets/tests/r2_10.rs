@@ -210,6 +210,7 @@ fn bind_req(mode: SecretTransport, decision_ref: String) -> BindRequest {
         mode,
         monitor_decision_ref: decision_ref,
         destinations: ["api.github.com".into()].into_iter().collect(),
+        dpop_proof: None,
     }
 }
 
@@ -265,16 +266,17 @@ fn r2_10_audience_minted_scoped_bind_admits_and_token_verifies() {
             &binding.binding_id,
             "api.github.com",
             60_000,
+            None,
         )
         .expect("in-scope audience mints");
     let now = store.now_ms();
     assert_eq!(
-        broker.verify_minted(&minted.token, "api.github.com", now),
+        broker.verify_minted(&minted.token, "api.github.com", now, None),
         MintedVerdict::Valid,
         "the token verifies for the audience it was minted to"
     );
     assert_eq!(
-        broker.verify_minted(&minted.token, "evil.example.com", now),
+        broker.verify_minted(&minted.token, "evil.example.com", now, None),
         MintedVerdict::Invalid,
         "a different audience does not verify — the constraint is real"
     );
@@ -318,15 +320,21 @@ fn r2_10_minted_token_expires_at_the_expiry_instant() {
             &binding.binding_id,
             "api.github.com",
             60_000,
+            None,
         )
         .expect("in-scope audience mints");
     assert_eq!(
-        broker.verify_minted(&minted.token, "api.github.com", minted.expires_at_ms - 1),
+        broker.verify_minted(
+            &minted.token,
+            "api.github.com",
+            minted.expires_at_ms - 1,
+            None
+        ),
         MintedVerdict::Valid,
         "the instant before expiry still verifies"
     );
     assert_eq!(
-        broker.verify_minted(&minted.token, "api.github.com", minted.expires_at_ms),
+        broker.verify_minted(&minted.token, "api.github.com", minted.expires_at_ms, None),
         MintedVerdict::Expired,
         "the expiry instant itself is dead — never a grace ms"
     );
@@ -340,10 +348,11 @@ fn r2_10_minted_token_expires_at_the_expiry_instant() {
             &binding.binding_id,
             "api.github.com",
             0,
+            None,
         )
         .expect("a zero-ttl mint lands");
     assert_eq!(
-        broker.verify_minted(&dead.token, "api.github.com", dead.expires_at_ms),
+        broker.verify_minted(&dead.token, "api.github.com", dead.expires_at_ms, None),
         MintedVerdict::Expired,
         "a zero-TTL mint is expired at its own mint instant"
     );
@@ -379,6 +388,7 @@ fn r2_10_audience_mint_outside_binding_scope_refuses() {
         &binding.binding_id,
         "evil.example.com",
         60_000,
+        None,
     );
     assert_eq!(broker_refused_code(r), RefusedCode::OutOfScope);
 }
@@ -420,6 +430,7 @@ fn r2_10_audience_injected_delivery_fenced_by_destinations() {
             &lease,
             &binding.binding_id,
             &RequestDescriptor {
+                dpop_proof: None,
                 env_handle: "env-1".into(),
                 effect_id: "eff-1".into(),
                 destination: "api.github.com".into(),
@@ -444,6 +455,7 @@ fn r2_10_audience_injected_delivery_fenced_by_destinations() {
                 destination: "evil.example.com".into(),
                 method: Some("GET".into()),
                 path: None,
+                dpop_proof: None,
             },
         )
         .unwrap();

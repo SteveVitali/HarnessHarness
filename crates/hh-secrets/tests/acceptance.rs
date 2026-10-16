@@ -264,6 +264,7 @@ fn ac_r_2_8_3_1_environment_and_views_show_placeholders_only() {
             &run_id,
             &lease,
             BindRequest {
+                dpop_proof: None,
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
@@ -490,6 +491,7 @@ fn ac_r_2_8_3_10_fail_closed_no_env_fallback() {
             &run_id,
             &lease,
             BindRequest {
+                dpop_proof: None,
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
@@ -515,6 +517,7 @@ fn ac_r_2_8_3_10_fail_closed_no_env_fallback() {
                 destination: "api.github.com".into(),
                 method: Some("GET".into()),
                 path: Some("/repos/o/r".into()),
+                dpop_proof: None,
             },
         )
         .unwrap();
@@ -565,6 +568,7 @@ fn ac_r_2_8_3_10_fail_closed_no_env_fallback() {
         &run_id,
         &lease, // the fenced lease
         BindRequest {
+            dpop_proof: None,
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
@@ -603,6 +607,7 @@ fn ac_r_2_8_3_13_pdp_decides_broker_delivers() {
         &run_id,
         &lease,
         BindRequest {
+            dpop_proof: None,
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
@@ -646,6 +651,7 @@ fn ac_r_2_8_3_13_pdp_decides_broker_delivers() {
         &run_id,
         &lease,
         BindRequest {
+            dpop_proof: None,
             channel_id: "github".into(),
             holder: "agent.main".into(),
             env_handle_ref: "env-1".into(),
@@ -668,6 +674,7 @@ fn ac_r_2_8_3_13_pdp_decides_broker_delivers() {
             &run_id,
             &lease,
             BindRequest {
+                dpop_proof: None,
                 channel_id: "github".into(),
                 holder: "agent.main".into(),
                 env_handle_ref: "env-1".into(),
@@ -715,6 +722,7 @@ fn ac_r_2_8_3_13_pdp_decides_broker_delivers() {
                 destination: "api.github.com".into(),
                 method: None,
                 path: None,
+                dpop_proof: None,
             },
         )
         .unwrap();

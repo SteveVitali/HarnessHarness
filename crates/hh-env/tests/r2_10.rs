@@ -345,6 +345,7 @@ fn r2_10_stage3_provision_registers_canary_and_tripwire_fires() {
         &run,
         &lease,
         hh_secrets::BindRequest {
+            dpop_proof: None,
             channel_id: "img.canary".into(),
             holder: "agent.main".into(),
             env_handle_ref: h.env_handle_id.clone(),
