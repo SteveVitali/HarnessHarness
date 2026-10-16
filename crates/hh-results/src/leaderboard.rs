@@ -1050,7 +1050,12 @@ pub fn leaderboard(
                 .iter()
                 .flat_map(|c| c.evidence.iter())
                 .flat_map(|a| a.content_refs.iter())
-                .any(|r| !matches!(store.blob_status(r), hh_ledger::BlobStatus::Present));
+                .any(|r| {
+                    !matches!(
+                        store.blob_status(r),
+                        hh_ledger::BlobStatus::Present | hh_ledger::BlobStatus::Sealed { .. }
+                    )
+                });
             if evidence_missing {
                 flags_full.push("evidence_missing".to_string());
             }

@@ -895,12 +895,19 @@ impl Auditor {
 }
 
 /// How a blob address resolves for `audit_view`'s `content_refs` accounting —
-/// the store supplies it (present / tombstoned with the GC or redaction reason
-/// / absent with no audit row = `missing`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// the store supplies it (present / sealed / tombstoned with the GC or
+/// redaction reason / absent with no audit row = `missing`).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BlobStatus {
     /// Bytes exist at the address.
     Present,
+    /// Bytes exist as a sealed `HHBE` frame (§5g.6 C2; ADR-0361) — residency
+    /// is honest without key material; `key_id` is the frame's custody
+    /// coordinate, never key bytes.
+    Sealed {
+        /// The custody coordinate the frame header names.
+        key_id: String,
+    },
     /// No bytes, and no tombstone row accounts for it — the `missing` bucket.
     Missing,
     /// No bytes, but a `lifecycle.ledger.{redacted,gc}` row names it — the
@@ -1174,7 +1181,10 @@ fn eval_obligation(
 /// a cross-run anchor's claimed `{tree_size, tree_head}` against the named
 /// run's durable prefix (`None` = the run is not held — `unresolvable`, an
 /// honest status, not a failure); `keys`, when supplied, lets signature checks
-/// report `verified`/`failed` instead of `unverified`.
+/// report `verified`/`failed` instead of `unverified`; `cipher`, when a
+/// [`crate::cipher::BlobCipher`] is installed, lets the `encryption` member
+/// report the pool's actual sealing construction against the manifest's
+/// `blob_encryption` declaration.
 #[allow(clippy::too_many_arguments)]
 pub fn audit_view(
     run_id: &str,
@@ -1186,6 +1196,7 @@ pub fn audit_view(
     manifest: &RunManifest,
     other_head: impl Fn(&str, u64) -> Option<(u64, String)>,
     keys: Option<&dyn AuditKeyResolver>,
+    cipher: Option<&dyn crate::cipher::BlobCipher>,
 ) -> View {
     let events: Vec<&EventEnvelope> = events
         .iter()
@@ -1251,6 +1262,10 @@ pub fn audit_view(
     let mut refs_missing: BTreeSet<String> = BTreeSet::new();
     let mut refs_redacted: BTreeSet<String> = BTreeSet::new();
     let mut refs_gc: BTreeSet<String> = BTreeSet::new();
+    // R3.8/ADR-0361 — resident refs sealed under a named `key_id`
+    // (address → the frame's custody coordinate). A sealed ref is
+    // *present*; the encryption member below reports the coverage fact.
+    let mut refs_sealed: BTreeMap<String, String> = BTreeMap::new();
     let mut redaction_rows = Vec::new();
     for e in &events {
         if e.class == "lifecycle.ledger.redacted" {
@@ -1290,6 +1305,10 @@ pub fn audit_view(
                 match blob_status(a) {
                     BlobStatus::Present => {
                         refs_present.insert(a.to_string());
+                    }
+                    BlobStatus::Sealed { key_id } => {
+                        refs_present.insert(a.to_string());
+                        refs_sealed.insert(a.to_string(), key_id);
                     }
                     BlobStatus::Tombstoned(MissingReason::Redacted) => {
                         refs_redacted.insert(a.to_string());
@@ -1777,6 +1796,74 @@ pub fn audit_view(
         Json::Bool(receipts_ok)
     };
 
+    // encryption — the §5g.6 C2 residency claim, folded honestly (R-2.8.6;
+    // ADR-0361): the manifest's `blob_encryption{alg,key_id}` declaration
+    // vs what the pool actually holds. Declared + every resident ref sealed
+    // under the declared `key_id` ⇒ `enforced`; any resident plaintext ref,
+    // a sealed frame under a foreign `key_id`, or sealed residents with no
+    // declaration at all ⇒ `unenforced`/`undeclared` — the member is a
+    // residency fact, never a fabricated `enforced` (CC3; the honesty rule
+    // `BlobStatus::Sealed` carries the custody coordinate so the fold can
+    // check it without key material). No declaration and no sealed frames
+    // renders `n/a`, the same posture as the other inapplicable components.
+    let refs_unsealed: Vec<String> = refs_present
+        .iter()
+        .filter(|a| !refs_sealed.contains_key(*a))
+        .cloned()
+        .collect();
+    let foreign_seal = manifest
+        .blob_encryption
+        .as_ref()
+        .map(|d| refs_sealed.values().any(|k| k != &d.key_id))
+        .unwrap_or(false);
+    let encryption_status: Json = match &manifest.blob_encryption {
+        None if refs_sealed.is_empty() => na("no blob_encryption declared"),
+        None => Json::str("undeclared"),
+        Some(_) => {
+            if refs_unsealed.is_empty() && !foreign_seal {
+                Json::str("enforced")
+            } else {
+                Json::str("unenforced")
+            }
+        }
+    };
+    let encryption_component = match &encryption_status {
+        Json::Str(s) if s == "enforced" => Json::Bool(true),
+        Json::Str(_) => Json::Bool(false),
+        other => other.clone(),
+    };
+    let declared_json = manifest
+        .blob_encryption
+        .as_ref()
+        .map(|d| Json::obj([("alg", Json::str(&d.alg)), ("key_id", Json::str(&d.key_id))]))
+        .unwrap_or(Json::Null);
+    let installed_json = cipher
+        .map(|c| {
+            Json::obj([
+                ("alg", Json::str(c.algorithm())),
+                ("key_id", Json::str(c.key_id())),
+            ])
+        })
+        .unwrap_or(Json::Null);
+    let encryption = Json::obj([
+        ("declared", declared_json),
+        ("installed", installed_json),
+        (
+            "refs_sealed",
+            Json::Arr(
+                refs_sealed
+                    .iter()
+                    .map(|(a, k)| Json::obj([("address", Json::str(a)), ("key_id", Json::str(k))]))
+                    .collect(),
+            ),
+        ),
+        (
+            "refs_unsealed",
+            Json::Arr(refs_unsealed.iter().map(Json::str).collect()),
+        ),
+        ("status", encryption_status),
+    ]);
+
     // extensions — the AC-H5-10 provenance fold (§5g.5 §6 audit obligation +
     // §7 AC-R-2.8.5-10): for every effect in the run, the extensions whose
     // text was in the proposing call's context and whose code produced the
@@ -1898,6 +1985,7 @@ pub fn audit_view(
         ("coverage_ok", Json::Bool(unmet.is_empty())),
         ("cross_run_ok", cross_run_component.clone()),
         ("receipts_ok", receipts_component.clone()),
+        ("encryption_ok", encryption_component.clone()),
         (
             "headline",
             Json::Bool(
@@ -1908,7 +1996,8 @@ pub fn audit_view(
                     && unmet.is_empty()
                     && checkpoints_component != Json::Bool(false)
                     && cross_run_component != Json::Bool(false)
-                    && receipts_component != Json::Bool(false),
+                    && receipts_component != Json::Bool(false)
+                    && encryption_component != Json::Bool(false),
             ),
         ),
     ]);
@@ -1959,6 +2048,7 @@ pub fn audit_view(
         ),
         ("redactions", Json::Arr(redaction_rows)),
         ("receipts", Json::Arr(receipts)),
+        ("encryption", encryption),
         ("sink_deliveries", Json::Arr(sink_deliveries)),
         // AC-H5-10 — the extension provenance component: the run's declared
         // extension ids plus the per-effect context/producer answer.

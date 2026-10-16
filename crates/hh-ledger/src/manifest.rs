@@ -371,6 +371,27 @@ impl WitnessPolicy {
     }
 }
 
+/// `blob_encryption{alg, key_id}` — the run's declared blob-pool encryption
+/// construction (§5g.6's C2 row "blob encryption with per-event keys";
+/// R-2.8.6; DF-S1.15-3's last cell; ADR-0361). Rides the manifest — durable
+/// from seq 0 and inside every checkpoint's covered prefix — the same way
+/// `witness_policy` does (the ADR-0345 D2 precedent while `audit_policy_ref`
+/// names an external document the kernel does not parse).
+///
+/// `key_id` is a custody *coordinate*, never key bytes (OQ-170 — custody is
+/// external; key material reaches the pool only through the installed
+/// [`crate::cipher::BlobCipher`] seam). The declaration is a claim the
+/// `audit_view` `encryption` member checks honestly: declared-but-unsealed
+/// residency reports `unenforced`, never a fabricated `enforced`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlobEncryptionDecl {
+    /// The declared construction id (the cipher's `algorithm()` spelling —
+    /// e.g. `"aes-256-gcm.hh-blob.v1"`).
+    pub alg: String,
+    /// The key coordinate the frames bind to (`key_id`, never material).
+    pub key_id: String,
+}
+
 /// The manifest — `{configuration_id, configuration_version_id, harness_def_ref,
 /// model_profile_ref, environment_ref, budget, seed, idp, participant_class,
 /// observability_level, hosting_mechanism?, capability_declaration_ref?,
@@ -459,6 +480,11 @@ pub struct RunManifest {
     /// custody stays external — the manifest declares the policy, the
     /// resolver resolves.
     pub witness_policy: Option<WitnessPolicy>,
+    /// `blob_encryption` — the declared blob-pool encryption construction
+    /// (§5g.6 C2; R-2.8.6; ADR-0361). Emitted only when `Some`; key custody
+    /// stays external — the manifest declares `{alg, key_id}`, the
+    /// [`crate::cipher::BlobCipher`] seam seals.
+    pub blob_encryption: Option<BlobEncryptionDecl>,
     /// The reattach grace window (ms).
     pub grace_ms: u64,
     /// The bound task coordinate.
@@ -515,6 +541,7 @@ impl RunManifest {
             audit_policy_ref: None,
             signer_key_ids: Vec::new(),
             witness_policy: None,
+            blob_encryption: None,
             grace_ms: 0,
             task_ref: None,
             experiment: None,
@@ -676,6 +703,11 @@ impl RunManifest {
                 ));
             }
         }
+        if let Some(be) = &self.blob_encryption {
+            if be.alg.is_empty() || be.key_id.is_empty() {
+                return Err(bad("blob_encryption members must be non-empty".into()));
+            }
+        }
         // §5a.3 (S4.13): an inbox run is *a goal's* inbox — `goal_ref` is
         // required; it is a durable coordinate, never a content id, so no
         // pinning rule applies (it is spelled `goal:<ref>` by convention).
@@ -820,6 +852,15 @@ impl RunManifest {
                                 .collect(),
                         ),
                     ),
+                ]),
+            );
+        }
+        if let Some(be) = &self.blob_encryption {
+            put(
+                "blob_encryption",
+                Json::obj([
+                    ("alg", Json::str(&be.alg)),
+                    ("key_id", Json::str(&be.key_id)),
                 ]),
             );
         }
@@ -1099,11 +1140,30 @@ impl RunManifest {
             }
             _ => return Err(bad("witness_policy not an object".into())),
         };
+        let blob_encryption = match j.get("blob_encryption") {
+            None | Some(Json::Null) => None,
+            Some(Json::Obj(m)) => {
+                let alg = m
+                    .get("alg")
+                    .and_then(Json::as_str)
+                    .ok_or_else(|| bad("blob_encryption.alg missing".into()))?;
+                let key_id = m
+                    .get("key_id")
+                    .and_then(Json::as_str)
+                    .ok_or_else(|| bad("blob_encryption.key_id missing".into()))?;
+                Some(BlobEncryptionDecl {
+                    alg: alg.to_string(),
+                    key_id: key_id.to_string(),
+                })
+            }
+            _ => return Err(bad("blob_encryption not an object".into())),
+        };
         // Anything not in the typed vocabulary is preserved in `extra` (CC3).
         const TYPED: &[&str] = &[
             "activation_no",
             "audit_policy_ref",
             "attendance",
+            "blob_encryption",
             "budget",
             "capability_declaration_ref",
             "configuration_id",
@@ -1179,6 +1239,7 @@ impl RunManifest {
             audit_policy_ref: opt_str("audit_policy_ref"),
             signer_key_ids,
             witness_policy,
+            blob_encryption,
             task_ref,
             experiment,
             registry_snapshot_id: opt_str("registry_snapshot_id"),
