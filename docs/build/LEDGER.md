@@ -11,7 +11,7 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      DONE   # 149-row chain complete — no row remains; the G5 carried set (16 BL + 15 DF CARRY; 5 BL + 4 DF ACCEPT) parks for operator round-4 decomp; projectStatus IN_PROGRESS — DONE flip is the operator's (row-149 note)
+nextTicket:      R4.1   # round-4 chain seeded (rows 150-167); rows 155/158 stay skeleton (gated: H3 provisioning, BL-33 trust rulings + remote env), 128 stays HUMAN-H4 (reviewer pending); DONE flip remains the operator's
 lastCompleted:   R3.11
 blockedOn:       (none)
 pauseRequested:  false
@@ -23,12 +23,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.11  # R3.11 tip — stacked PR #147 against svitali/harnessharness-r3.10; operator merges
+chainTip:        svitali/harnessharness-r3.11  # R3.11 tip — round-4 rows fork from here; stacked PR #147 against svitali/harnessharness-r3.10; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
-round:           3
-updatedAt:       2026-10-16
+round:           4
+updatedAt:       2026-10-20
 ```
 
 ## OPEN FINDINGS
@@ -136,6 +136,12 @@ updatedAt:       2026-10-16
 | 2026-10-20 | HUMAN-H2 | real tracker + signed-webhook provisioning | direction ruling | **GitHub Issues + tunnel** (operator's verbatim selection: "GitHub Issues + tunnel" — same channel/time) | provisioning path fixed: this repo's GitHub Issues + signed webhooks over a cloudflared/ngrok-class tunnel to the local hh ingress; credentials broker-held (`provided: yes/no`); the fleet-adapter capability-probe legs (DF-S5.6-1/BL-04) schedulable — webhook registration + secret remain operator steps |
 | 2026-10-20 | HUMAN-H3 | foreign-verification environment | provisioning ruling | **Toolchains + online corpus** (operator's verbatim selection: "Toolchains + online corpus" — same channel/time) | the toolchain legs become buildable tickets (E3-TS foreign impl over the committed `hh-xcheck-bundle/1` arms, two-toolchain clean CI + far-side parse timing, HIR/ledger corpus extension); the online legs (LT-03 live corpus, DF-S1.24-2 live foreign-manifest import) are authorized for corpus access + verification budget — accounts/spend remain operator provisioning steps; DF-S0.3-2/-S1.2-2/-S1.5-3/-S1.8-1/-S1.27-1 and BL-01/BL-26 legs schedulable |
 | 2026-10-20 | HUMAN-H4 | R2 cross-camp signature | direction | **reviewer to be named** (operator's verbatim selection: "I'll name a reviewer" — same channel/time) | DF-S0.3-3/BL-02 stays OPEN pending the named reviewer's signature (or recorded decline) appended to the measurement-sheet readout with `date -u` + pointer; gates no code ticket |
+
+### Round 4
+
+| date | ticket | gate | item | answer (verbatim) | consequence | kind |
+|---|---|---|---|---|---|---|
+| 2026-10-20 | HUMAN-H3 | foreign-verification environment | H3 online legs — corpus access + verification budget | "Toolchains + online corpus" (Devin CLI structured question, received 2026-10-20T14:21Z) | scoped authorization — item ids: DF-S1.24-2 (live foreign-manifest import) + the LT-03 live-corpus arm (BL-05 member): corpus access + verification budget authorized in principle; accounts/keys and actual spend remain operator provisioning steps (skeleton R4.6 carries them); expires: GATE-G6 disposition · voided-by: the operator's recorded words | pre-authorization |
 
 ## RETURN PASS
 
@@ -823,3 +829,21 @@ updatedAt:       2026-10-16
   05cf266 also pass) · harness: devin-cli (worker subagent).
   Operator merges.
 - 2026-10-20 · Operator direction rulings for the round-4 carry set — four verbatim selections (Devin CLI structured questions, received 14:21Z): H1 → **TypeScript confirmed** as the E3 surface binding; H2 → **GitHub Issues + tunnel** webhook ingress; H3 → **toolchains + online corpus** (fullest discharge incl. corpus-access/budget authorization); H4 → **reviewer to be named** (DF-S0.3-3 stays OPEN). GATE DECISIONS rows appended. Env-gated CARRY rows (BL-01/03/04/26 + homed DF set) become schedulable engineering for the round-4 decomposition; BL-17/31 live-provider legs still need per-leg provisioning scope beyond the corpus authorization.
+
+### Round 4
+
+- 2026-10-20 · **round 4 seeded** — `decompose-spec mode=extend`: rows 150–167 appended
+  to the manifest (13 implementable rows R4.1–R4.5, R4.7, R4.8, R4.10–R4.15 + R4.16
+  closure + R4.17 docs; 2 skeletons R4.6 gated on H3 provisioning and R4.9 gated on the
+  BL-33 trust rulings + remote env; 1 gate GATE-G6); partition + Phase-4 review in
+  `## Decomposition decisions → Round 4` and
+  `docs/build/planning/2026-10-20_round4-decomposition.md`. Scope: the 2026-10-20 rulings
+  (H1 TypeScript bind → R4.2; H2 GitHub Issues + tunnel legs → R4.7; H3 toolchain legs →
+  R4.3–R4.5) + the reopened `window` packages (BL-33–BL-39 → R4.8–R4.14) + BL-30
+  adjudication prep → R4.15 + hygiene → R4.1. `round: 3 → 4`; `nextTicket: R4.1`;
+  `lastCompleted` stays `R3.11`; `chainTip` stays `svitali/harnessharness-r3.11` so
+  Round-4 tickets fork from the r3.11 tip. GATE DECISIONS gains `### Round 4` (7-column
+  form) with the scoped `pre-authorization` row for the H3 corpus/budget authorization
+  (expires: GATE-G6). The 19 owed DEFERRALS rows are mapped in the planning record —
+  12 to round-4 rows, 7 carried with fresh dated residual notes. Round-1/2/3 history
+  unchanged.

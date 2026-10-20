@@ -25,3 +25,13 @@ honestly — or the rows stay OPEN as environment-pending and are dispositioned 
 A ticket that depends on this row but runs before it is ticked opens a `D-<TICKET>-<n>` row in
 `DEFERRALS.md` (why deferred = "HUMAN-H3 pending · withholds: foreign-verification claims",
 unblocked-by = "HUMAN-H3", how-to-verify) and reports "gate pending" — never a failure.
+
+> **RULED 2026-10-20 (operator): "Toolchains + online corpus"** (LEDGER GATE DECISIONS,
+> verbatim; Devin CLI structured question, received 14:21Z). Effect on the checklist:
+> the **toolchain legs** are scheduled as real tickets — R4.3 (bundle extension arms),
+> R4.4 (`foreign/e3-typescript`), R4.5 (the verbatim `foreign/e2-python` import + the
+> two-toolchain C12 measurement); the **online/verification budget + corpus access** is
+> authorized in principle and recorded as a scoped `pre-authorization` row (expires:
+> GATE-G6) — the **accounts/keys and actual spend remain operator provisioning steps**,
+> carried by skeleton `155_R4.6__h3-online-live-legs.md` (the LT-03 live-corpus arm +
+> DF-S1.24-2 live foreign-manifest import). The checkbox stays the operator's.

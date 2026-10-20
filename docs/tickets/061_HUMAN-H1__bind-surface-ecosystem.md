@@ -19,3 +19,10 @@ The surface ecosystem is bound (an ADR-0050 amendment-log row exists) and the re
 A ticket that depends on this row but runs before it is ticked opens a `D-<TICKET>-<n>` row in
 `DEFERRALS.md` (why deferred = "HUMAN-H1 pending", unblocked-by = "HUMAN-H1", how-to-verify) and
 reports "gate pending" — never a failure, never a fabricated pass.
+
+> **RULED 2026-10-20 (operator): "Confirm TypeScript"** — E3 (the surface ecosystem) is bound
+> to TypeScript (LEDGER GATE DECISIONS, verbatim; Devin CLI structured question, received
+> 14:21Z). **R4.2** (`151_R4.2__e3-typescript-surface-bind.md`) lands the discharge: the
+> ADR-0050 amendment-log row + the schema-source TypeScript surface client under
+> `check-drift.sh` — this marker's exit criterion verbatim. The checkbox stays the
+> operator's to tick (BM-GATE-07).

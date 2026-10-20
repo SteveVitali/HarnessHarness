@@ -17,3 +17,8 @@
 ## Exit criterion
 The signature (or recorded decline) exists in the record; DF-S0.3-3 flips DONE or stays OPEN under
 the operator's disposition at GATE-G4.
+
+> **DIRECTION 2026-10-20 (operator): "I'll name a reviewer"** (LEDGER GATE DECISIONS,
+> verbatim; Devin CLI structured question, received 14:21Z). DF-S0.3-3/BL-02 stays
+> OPEN pending the named reviewer's signature (or recorded decline); the marker carries
+> forward through round 4 — it gates no code ticket.
