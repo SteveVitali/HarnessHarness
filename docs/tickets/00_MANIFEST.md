@@ -290,6 +290,7 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 149b | `149b_HUMAN-H6__live-provisioning.md` | Round 4 | human | Live-leg provisioning by NAME (provider keys, local model, sandbox token/secret, OAuth App client id, cloudflared, collector, `live-verify` Environment) — `provided: yes/no` only | — |
 | 150 | `150_R4.1__round4-hygiene.md` | Round 4 | ticket | Hygiene: context-economy tools (`bm-row.sh`, `deferrals-open.sh`, `spec-section.sh` + self-test) + tool-first read rule; ac5 class post-merge; helper-spawn machinery; G5-1 count | — |
 | 151 | `151_R4.2__e3-typescript-surface-bind.md` | Round 4 | ticket | H1 discharge: E3=TypeScript ADR-0050 row + generated TS client under drift + live E3 node smoke vs `hh-kernel serve --http` (DF-S4.10-1; BL-03; R-2.11.2) | — |
+| 151a | `151a_R4.2a__ci-fast-path-and-full-run-cadence.md` | Round 4 | ticket | CI cost/wait insert (phase 1): one `pull_request` run per head (branch `push` runs dropped), fail-closed docs-only fast path with repo-wide artifact anchors, S2 spike on `workflow_dispatch` full runs only, full run per gate + `full-run.sh` reader, step-mode lint; ADR (operator rows `CI insert` D1–D7) | — |
 | 152 | `152_R4.3__xcheck-bundle-extension-arms.md` | Round 4 | ticket | `hh-xcheck-bundle/1` HIR/ledger extension arms + checker + regenerated bundle (DF-S1.2-2/-S1.5-3 prerequisite legs; BL-01) | — |
 | 153 | `153_R4.4__e3-typescript-foreign-impl.md` | Round 4 | ticket | `foreign/e3-typescript` part 1 — core + identity/ledger/registry/canonical-parse arms + verify (DF-S1.5-3, DF-S1.8-1 E3 legs) | — |
 | 153a | `153a_R4.4a__e3-typescript-foreign-impl-part2.md` | Round 4 | ticket | `foreign/e3-typescript` part 2 — plugin-manifest + extension arms, full verify (DF-S1.2-2, DF-S1.27-1) | — |
@@ -880,3 +881,14 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   **inserted**: `164w_L4.6a` (live capstone part 2 — `hh-acp`, `hh-mcp-lab`, SDK/embed, packaged plugins; split from L4.6
   for the ≲100k working set; USD 0, no allocation change) — round 4 is now 50 rows. See
   `docs/build/planning/2026-10-20_round4-decomposition.md` §Amendment 2026-10-20 (b).
+- 2026-10-20 · **inserted** `151a_R4.2a__ci-fast-path-and-full-run-cadence.md` (id `R4.2a`, row `151a`) between R4.2 and
+  R4.3 — run-time insert (BM-MANIFEST-03): `decompose-spec mode=extend` scoped to this one ticket, Phase-4
+  fresh-context review recorded in `docs/build/planning/2026-10-20_R4.2a-insert-review.md`; operator rows LEDGER GATE
+  DECISIONS `### Round 4` `CI insert` D1–D7 (2026-10-20T23:07:26Z). Slot moved per the inject prompt's Case C — R4.2 was
+  in flight when the prompt arrived; the operator confirmed "Yes: 151a / R4.2a after R4.2". Reason: measured
+  2026-10-01..20 CI — 4,406 job-minutes, 46 % on `push` runs duplicating a PR run, 58 % on docs-only heads that
+  each ran the full ≈ 11-min job, ≈ 3.3 min of every full job in the non-gating S2 spike; projected −77 to
+  −80 % job-minutes and ≈ 1-min docs-only boundary heads. CI cadence from here (D4): one `workflow_dispatch`
+  full run on the chain tip at GATE-G7, at GATE-G6 and before HUMAN-H7's tag — never per ticket. Phase 2
+  (test-time levers) is a later, separately ordered insert. No file renamed; no row superseded; round 4 is
+  now 51 rows.
