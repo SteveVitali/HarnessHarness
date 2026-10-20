@@ -1876,23 +1876,23 @@ fn ac5_attended_and_unattended_share_one_configuration() {
     // CAP.3 added it there, this leg was missed — the #104 CI flake,
     // run 37482844398). The measurement is derived content, never a
     // semantic difference.
-    // `derived_from.view_hash` (R3.1 — the #133 CI flake, run
-    // 38020320703) is a *derived consequence of that same measured
-    // wall*, not an independent input: `context.assembled` is an
-    // observation-plane row, so a later assembly's `derived_from` is
-    // the `idp/1` stamp of the `context_view` fold over the durable
-    // prefix — which includes the earlier rows' `assembly_ms.value`.
-    // The derivation input is named: the measured `assembly_ms.value`
-    // wall on a prior `context.assembled` row. When one leg's assembly
-    // crosses a millisecond boundary the next row's view_hash diverges
-    // mechanically; making the view exclude measured walls would weaken
-    // the projection contract, so the derived member joins the
-    // allowlist under the same `ends_with` convention.
-    // `plan_id` (R3.3 — the #139 CI flake, run 38703040017) is the same
-    // chain one link further down: the assembled `ContextPlan`'s
-    // content address over `derived_from{seq, view_hash}` — the sibling
-    // comparison's `MECHANICAL` list carries it under that exact name
-    // (CAP.3 / DF-S2.8-1); this leg was missed a second time.
+    //
+    // Its cascade: `context.assembled` rides the observation plane, and
+    // `context_view` hashes every prior observation row's full payload —
+    // so once an earlier assembly's `assembly_ms` differs, every *later*
+    // assembly's `derived_from.view_hash` (and `plan_id`, the plan's
+    // content address over `derived_from{seq, view_hash}`) differs with
+    // it. Those two are admitted only when that upstream measured drift
+    // is present; every observation row the view covers is itself
+    // diffed above, so no attendance-driven content can hide behind them.
+    // (Flake history, per R4.0: R3.1 first admitted
+    // `derived_from.view_hash` for the #133 CI flake, run 38020320703;
+    // R3.3 added `plan_id` for the #139 CI flake, run 38703040017 — both
+    // under the older per-member allowlist this measured-drift gate,
+    // landed on main as eac030a/d9074a4, now supersedes.)
+    let measured_drift = diffs
+        .iter()
+        .any(|d| d.ends_with("assembly_ms.value") || d.ends_with("assembly_ms.measured_at"));
     for d in &diffs {
         assert!(
             d == ".hash"
@@ -1904,8 +1904,8 @@ fn ac5_attended_and_unattended_share_one_configuration() {
                 || d.ends_with("reason")
                 || d.ends_with("assembly_ms.value")
                 || d.ends_with("assembly_ms.measured_at")
-                || d.ends_with("derived_from.view_hash")
-                || d.ends_with("plan_id"),
+                || (measured_drift
+                    && (d.ends_with("derived_from.view_hash") || d.ends_with(".plan_id"))),
             "unexpected ledger difference at {d}"
         );
     }
