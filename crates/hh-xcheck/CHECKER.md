@@ -33,23 +33,37 @@ idp_id(tag, payload) = "sha256:" + hex(SHA256("idp/1" ‖ 0x1f ‖ tag ‖ 0x1f 
 `address(bytes, media_type)`: `id` = `idp_id("blob", bytes)` — the media
 type is carried alongside, never hashed.
 
-`identify_text(bytes)`: `idp_id("text", normalized)` where `normalized` is
-`bytes` with each `\r\n` and lone `\r` rewritten to `\n`.
+`identify_text(bytes)`: `idp_id("hir.text", bytes)` — the `hir.text` domain
+tag (the `Text` leaf's `RecordKind` tag) over the **verbatim** content bytes.
+No line-ending normalization is applied on the reference path; the committed
+corpus exercises no `\r` byte, so this spelling is pinned by contract, not by
+a fixture.
 
 ### `tree/1` addressing
 
-A tree is a manifest of named entries. Canonical tree document: a JSON
-object `{name: node}` where `node` is
+A tree is a manifest of named entries. The bundle's `<name>.input.json`
+members carry the **manifest input shape** — a JSON object `{name: node}`
+where `node` is
 
 - `{ "kind":"file", "bytes_hex":<hex>, "exec":<bool> }`
 - `{ "kind":"symlink", "target":<string> }`
 - `{ "kind":"dir", "entries":{…} }` — recurse
 
-— i.e. exactly this bundle's `<name>.input.json` shape. Tree address:
-`idp_id("tree", canonical(tree_doc))`. The `.canonical.json` members carry
-the implementation's own canonical rendering — the foreign fold must
-reproduce the *id*; the canonical document bytes are the E1 reference
-rendering.
+The manifest spelling is the input, not the hashed document. The canonical
+tree document is its **Merkelized rendering**: a file's `bytes_hex` content
+is replaced by `"content":<blob-id>` (the `address(content, media_type)` id
+over the raw bytes — the media type is never hashed), and a dir's `entries`
+object is replaced by `"tree":<subtree-id>`, the recursively computed tree
+address of that dir's rendered entries:
+
+- `{ "kind":"file", "content":<blob-id>, "exec":<bool> }`
+- `{ "kind":"symlink", "target":<string> }` — addressed by target, verbatim
+- `{ "kind":"dir", "tree":<subtree-id> }` — recurse at the manifest level
+
+Tree address: `idp_id("tree", canonical(tree_doc))` over the Merkelized
+document. Each `<name>.canonical.json` member is the E1 reference rendering
+of exactly this document — the foreign fold must reproduce the *id*; the
+committed canonical bytes pin the document that yields it.
 
 ### Ledger WAL (`events.wal`, DF-S1.5-3)
 
@@ -77,9 +91,22 @@ then `prev = hash`. The folded last `hash` is `head_hash`.
 ### Registry snapshot (DF-S1.8-1)
 
 `registry.json` is the canonical append-only registry log. Rebuild the
-store, then run `scenario.json`'s request vector over snapshot
-`snapshot_id`: resolve each `variant_version_ids` entry (Audit mode), the
-selectors and `query`/`slot_choices` enumerated in the scenario —
+store, then run the request vector over snapshot `snapshot_id`. The vector
+is **fixed corpus contract**, not enumerated by the scenario —
+`scenario.json` carries only `snapshot_id` + `variant_version_ids`. In
+order (the E1 driver is `hh-registry::corpus::outputs`):
+
+1. resolve each `variant_version_ids` entry — `ResolveMode::Audit`;
+2. resolve the six pinned selectors — namespace `hh` name
+   `control_strategy/control_strategy-v0`, namespace `local` name
+   `control_strategy/control_strategy-v1`, then the same `hh`-v0/`local`-v1
+   pair for `context_policy` and `export_sink` — `ResolveMode::Execute`,
+   snapshot-pinned (a refusal records `{"error":<reason>}`);
+3. `query` the single clause `kind = "variant"`, snapshot-pinned;
+4. `slot_choices` for the three pinned class ids `control_strategy`,
+   `context_policy`, `export_sink` — constraints `supports:∅`,
+   `contract_version:"1.0"`, snapshot-pinned.
+
 `expected-outputs.json` is the canonical byte target; answer its digest.
 
 ## Arm replay
