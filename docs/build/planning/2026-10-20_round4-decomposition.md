@@ -511,3 +511,60 @@ re-run a true fresh-context critic over this commit; findings would land as a da
 
 **Plan revisability:** the plan is a starting point — `orchestrate-build` may split an overflowing ticket (free letters are
 reserved) or merge trivial ones at run time via a scoped `mode=extend`, writing the change back to the manifest.
+
+### Amendment 2026-10-20 (b) — independent critic fixes
+
+**Mode:** same-round `decompose-spec mode=extend` amendment on `svitali/harnessharness-r3.11` (head `02e37fe`), records only;
+precedents `75d61ab` and `02e37fe` (no round-4 row has executed — unexecuted contracts edited in place with dated
+`> Amended 2026-10-20 (b)` banners; no ticket file renamed; no GATE DECISIONS row added). Input: an independent
+fresh-context critic's review of `02e37fe` (4 MAJOR + 8 MINOR findings — the true fresh-context pass P4's honesty note
+anticipated). Dates from `date -u` (2026-10-20T16:29Z–16:41Z).
+
+| # | finding | change (file — one line) |
+|---|---|---|
+| MAJOR-1(a) | crates.io names: the rename could collide after the fact | `164s_L4.4` — `rename-crates.sh` FIRST checks crates.io over the publish set derived from `cargo metadata --no-deps` (+ umbrella `hharness`), STOP-and-ask on any taken/inconclusive name before renaming anything; dated per-name output in the run ledger; new AC + Notes baseline |
+| MAJOR-1(b) | R4.8's market check named only "hharness/hharness-*" | `157_R4.8` — the full to-be-published set (umbrella + one `hharness-<x>` per `cargo metadata` package) enumerated in the brief with dated per-name HTTP results; new AC |
+| MAJOR-1(c) | L4.5 re-check outcome unspecified | `164t_L4.5` — run-time re-check kept; a collision is a STOP-and-ask, never a silent rename or quiet drop |
+| MAJOR-2 | repo already public; first evidence commits had no secret-scan gate | `154a_R4.5a` — deliverable 8: gitleaks over the staged diff before any evidence commit (refuse + stop-and-ask), one-off `gitleaks detect --log-opts=--all` baseline with the 7 fake fixture hits (`crates/hh-secrets/tests/{acceptance,sv}.rs`, `crates/hh-telemetry/tests/acceptance.rs`) allowlisted in a committed `.gitleaks.toml`; `164r_L4.3` — CI reuses that config (CC1); `167a_HUMAN-H7` — rotate-first on any finding, history-rewrite decision recorded verbatim before tagging |
+| MAJOR-3 | capstone missed `hh-acp`, `hh-mcp-lab`, SDK/embed, packaged plugins | **split:** new `164w_L4.6a` (row 45 of 50) carries the four leg families; `164u_L4.6` points to it; `165_R4.16` deliverable 4 + AC and `166_GATE-G6` threshold: EVERY public surface/binding/plugin `live-executed` with a cited record or an operator-recorded `n/a{reason}` |
+| MAJOR-4 | mid-drive main drift + post-merge main never verified | `167a_HUMAN-H7` — protect first, checks-required bottom-up merges only, wait for CI matrix + gitleaks green on `main` HEAD, record the merged-main SHA, tag that SHA; `167b_R4.18` records it and proves tag = SHA; `165_R4.16` deliverable 7 + `166_GATE-G6` threshold: `git merge-base --is-ancestor origin/main HEAD`, else merge (as R4.0 did) + re-verify, drift recorded |
+| MINOR-5 | DF-S1.15-1 "three members" assumed, not enumerated | `156f_R4.7f` — Goal qualified; its DF note enumerates the FULL scope-column membership against dated markers (land an unmarked hermetic member or STOP; "redaction endorsement rules" has no explicit marker at planning time); `164m_R4.15e` fleshing note — the same re-enumeration before writing DONE (last closer); `165_R4.16` deliverable 8 + `166` threshold |
+| MINOR-6 | no rustdoc gate / docs.rs readiness | `164r_L4.3` — `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` in CI; `164t_L4.5` — `package.metadata.docs.rs` where needed + a docs.rs-settings doc check |
+| MINOR-7 | `rust-version` undeclared policy | `164t_L4.5` — declared deliberately (pinned 1.94 unless an MSRV check proves lower); CI builds at exactly that version |
+| MINOR-8 | R4.17 docs edits could break the quickstart | `167_R4.17` — AC: L4.7's `check-quickstart.sh` re-runs green after the edits |
+| MINOR-9 | evidence not operator-auditable; spend authority unstated | `154a_R4.5a` — record carries provider request ids + allowlisted non-secret response headers; `SPEND.jsonl` is an estimate, console billing is the authority; `166_GATE-G6` — readout spot-audit line + console reconciliation |
+| MINOR-10 | no single pre-flight before the first live row | `149b_HUMAN-H6` — "Pre-flight before R4.5a" section with a literal names-only shell check (tested against a fake env file: empty/commented/quoted-empty → `provided: no`); `154a_R4.5a` adds `live-verify.sh --check-names`; manifest HUMAN-H6 paragraph carries the orchestrator note |
+| MINOR-11 | release target set unrecorded | `164t_L4.5` — release ADR records targets: macOS arm64 + x86_64 (x86_64 cross-built via `rustup target add` if no Intel runner), linux x86_64 + **aarch64 included** (GitHub-hosted `ubuntu-24.04-arm`, public repo, no new deps; unavailable → stop-and-ask), **Windows excluded** (helper backends are seatbelt/podman only — no containment floor on Windows; revisit trigger) |
+| MINOR-12 | R4.15d skeleton silent on live clauses | `164k_R4.15d` fleshing note — `live_verification=true`, `Live stage: operator-gated: USD 0`, the standard live clauses (stop-and-ask on missing NAME, evidence record, leak scan) |
+| secrets location | — | every contract naming `live.env` (14 live tickets' operating clause, the new 164w, `154a` Goal, `149b`, manifest H6 paragraph) now says it is a symlink to a gitignored `.env` in the operator's main checkout (names only; no value anywhere) |
+
+**crates.io baseline (planning-time, names only):** `GET https://crates.io/api/v1/crates/<name>` for `hharness` + the 51
+`hharness-<x>` names derived from `cargo metadata --no-deps` (every `hh-<x>` package) → **52/52 HTTP 404** between
+2026-10-20T16:31:51Z and 16:33:02Z (≥ 1 s spacing); the orchestrator's same-day check agrees. Binding checks remain L4.4's
+(pre-rename) and L4.5's (pre-publish); R4.8 records the dated R-2.12.5 evidence.
+
+**Split decision (MAJOR-3):** L4.6 already carried ~10 legs (3 providers × 3 bindings, sandboxed exec, judge, verify/replay,
+`hh-web`, `hh-mcp`, fleet webhook, bundle reproduce) at an 800-line budget. ACP + MCP-lab + SDK consumer + three
+out-of-process plugins need four more crates' surfaces in the working set (`hh-acp`, `hh-mcp-lab`, `hh-embed`/facade,
+`hh-varhost` + plugin manifests) — beyond one ≲100k-token subagent working set. No letter slot exists between `164u` and
+`164v`, so the insert is **`164w` = L4.6a** after L4.7 and before `165` (Depends-on backward: L4.7 chain position, L4.6).
+It runs entirely on the local model (USD 0) — the hosted-provider matrix stays L4.6's — so the R4.5a allocation table
+(R4.5d 5 · R4.5e 5 · R4.6 15 · R4.7b 5 · R4.7e 15 · L4.6 30 · reserve 25) is unchanged. ACP client: the planning
+expectation is the official ACP SDK (S0.3b precedent: python `agent-client-protocol` / node
+`@zed-industries/agent-client-protocol`, temp dir outside the repo); hh-acp's in-tree client over the real transport only
+as a stated fallback. MCP-lab via the official MCP SDK client likewise. `165_R4.16` now depends on `L4.6a`.
+
+**Row count:** round 4 is **50 rows** (149a–167b + 164w). Every round-4 contract's `Sequence` line now reads "of 50"; rows
+165/166/167/167a/167b renumber to 46/47/48/49/50. The `### Final row list (49 rows…)` table above is the amendment-(a)
+record and is not rewritten; add `| 164w | L4.6a | ticket | live capstone part 2 — surface & plugin sweep | 700 | live 0 |`
+after `164v` when reading it. R4.5a's size budget 700 → 800 (gitleaks gate + `--check-names`).
+
+**Qualification of deviation 7 (amendment (a)):** "the residual is 3 members, not the full Stage-2 list" stands only as
+far as the dated markers prove it (S2.5 checkpoints/proofs/anchors/auditor, S4.9 `fleet_anchor` + escalation emitters,
+S6.1a `evolution_link`, R2.13 gc/redact emitters). R4.7f, R4.15e and R4.16 now verify every scope member against its
+marker; an unmarked member (e.g. redaction endorsement rules) is landed or surfaced — never assumed.
+
+**Not changed:** no GATE DECISIONS row; LEDGER CURRENT STATE `updatedAt` only (the `nextTicket` comment's "49 rows" is
+left as written — the PHASE LOG entry records 50); DEFERRALS untouched (the duties live in the contracts); no ticket file
+renamed or deleted.
+

@@ -2,7 +2,7 @@
      (BM-TICKET-05, BM-GATE-03): no run line; executed by orchestrate-build; never guessed past; never pre-answered. -->
 # GATE-G7 — Round-4 rulings gate ("GATE-R4R")
 
-- **Kind:** gate · **Phase:** Round 4 · **Sequence:** 164a (round-4 row 32 of 49)
+- **Kind:** gate · **Phase:** Round 4 · **Sequence:** 164a (round-4 row 32 of 50)
 - **Readout:** `docs/build/readouts/GATE-G7.md` (from `templates/READOUT.md`)
 - **Alias:** the operator's 2026-10-20 "Mid-round rulings gate" — recorded as GATE-R4R in GATE DECISIONS; the marker id is
   `GATE-G7` because the build-memory id grammar admits only `GATE-G<n>` gate markers.

@@ -56,12 +56,18 @@ record, no longer a pending gate.
 **HUMAN-H4 — decline recorded 2026-10-20 (operator): "Record a decline instead"** — supersedes the 14:21Z
 "I'll name a reviewer"; R4.15 records the decline verbatim and closes DF-S0.3-3 / BL-02 waived-by-ADR.
 
-**HUMAN-H6 — Live-leg provisioning** (Round 4, row 149b). Blocks: every live leg (R4.5a…L4.7). Owner: operator; scheduled
-before R4.5a (ruling: provisioning "Now, interactively"). NAMES only in `~/.config/harnessharness/live.env`; records
+**HUMAN-H6 — Live-leg provisioning** (Round 4, row 149b). Blocks: every live leg (R4.5a…L4.6a). Owner: operator; scheduled
+before R4.5a (ruling: provisioning "Now, interactively"). NAMES only in `~/.config/harnessharness/live.env` (a symlink to a
+gitignored `.env` in the operator's main checkout); records
 say `provided: yes/no`. Round-4 override: a live ticket finding a NAME unprovisioned STOPS and asks — no D-row.
+**Orchestrator pre-flight (amend (b), 2026-10-20):** once H6 is ticked, before dispatching R4.5a the orchestrator runs one
+names-only yes/no check over every NAME the round needs — `scripts/live-verify.sh --check-names --all` if it exists, else
+the literal shell check spelled out in `149b_HUMAN-H6__live-provisioning.md` — and any `provided: no` stops and asks.
 
 **HUMAN-H7 — Public launch acts** (Round 4, row 167a). Blocks: R4.18. Trigger: R4.17 after GATE-G6 PASSED. Merge the
-stack, protect `main`, tag `v0.1.0` → release, `cargo publish` in order, repo metadata, the DONE flip.
+stack, protect `main`, tag `v0.1.0` → release, `cargo publish` in order, repo metadata, the DONE flip. Amend (b): protect
+first, merge bottom-up via checks-required merges only, wait for the full CI matrix + gitleaks green on `main` HEAD, record
+the merged-main SHA, then tag it; any gitleaks finding → rotate first, history-rewrite decision recorded verbatim.
 
 ## The chain
 
@@ -288,7 +294,7 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 153 | `153_R4.4__e3-typescript-foreign-impl.md` | Round 4 | ticket | `foreign/e3-typescript` part 1 — core + identity/ledger/registry/canonical-parse arms + verify (DF-S1.5-3, DF-S1.8-1 E3 legs) | — |
 | 153a | `153a_R4.4a__e3-typescript-foreign-impl-part2.md` | Round 4 | ticket | `foreign/e3-typescript` part 2 — plugin-manifest + extension arms, full verify (DF-S1.2-2, DF-S1.27-1) | — |
 | 154 | `154_R4.5__c12-polyglot-ci-measurement.md` | Round 4 | ticket | Two-toolchain CI leg + C12 measurement + ADR-0050 trigger-5 measured row (DF-S0.3-2; BL-01; GATE-ACCEPT 2/8/9) | — |
-| 154a | `154a_R4.5a__live-evidence-framework.md` | Round 4 | ticket | Live-evidence framework: `live-executed` class ADR, evidence records, $100 spend ledger + allocation, `live-verify.sh`, gating convention; local proof leg (live, USD 0) | — |
+| 154a | `154a_R4.5a__live-evidence-framework.md` | Round 4 | ticket | Live-evidence framework: `live-executed` class ADR, evidence records (+ provider request ids), $100 spend ledger + allocation, `live-verify.sh` (+ `--check-names`), gating convention, gitleaks staged-diff gate + full-history baseline (`.gitleaks.toml`, 7 fixture hits allowlisted); local proof leg (live, USD 0) | — |
 | 154b | `154b_R4.5b__gateway-model-port-local-live.md` | Round 4 | ticket | Gateway-backed `ModelPort` on the run path + one HTTP codec home + HTTP transport; first live run on local Ollama (DF-S1.18-1 member; live, USD 0) | — |
 | 154c | `154c_R4.5c__rustls-tls-transport.md` | Round 4 | ticket | rustls-over-ring admission ADR + HTTPS/mTLS + `tls.terminate` honoured + LT-02/05 over TLS (DF-S2.4-2; R-2.8.3/2.8.4; live, USD 0) | — |
 | 154d | `154d_R4.5d__provider-transports-anthropic-openai.md` | Round 4 | ticket | Anthropic + OpenAI dialects + live broker `CredentialPort` + AC-R-2.3.1-11 live OOP variant (DF-S1.18-1 members; live, USD 5) | — |
@@ -301,7 +307,7 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 156d | `156d_R4.7d__verification-reference-corpus-acs.md` | Round 4 | ticket | Verification reference-corpus AC fixture halves (DF-S1.21-2 hermetic remainder; BL-05) | — |
 | 156e | `156e_R4.7e__live-judge-binding.md` | Round 4 | ticket | Live judge binding at `link` + calibration + independence (DF-S1.21-3, DF-S1.21-2; BL-17; R-2.7.2b; live, USD 15) | — |
 | 156f | `156f_R4.7f__audit-link-obligations.md` | Round 4 | ticket | Audit `subagent_anchor` + `producer_resolution` obligations graduate (DF-S1.15-1 link members) | — |
-| 157 | `157_R4.8__bl33-ws-l6-package.md` | Round 4 | ticket | BL-33 brief: record the ruled launch postures (license, naming, distribution, provenance) + naming market check; final proposals for the rest + trust-field section | — |
+| 157 | `157_R4.8__bl33-ws-l6-package.md` | Round 4 | ticket | BL-33 brief: record the ruled launch postures (license, naming, distribution, provenance) + naming market check over the explicitly enumerated publish set (dated per-name); final proposals for the rest + trust-field section | — |
 | 158 | `158_R4.9__bl32-remote-fetch-foreign-vocab.md` | Round 4 | ticket | BL-32 hermetic half: four foreign import/export vocabularies (DF-S4.2-2); remote fetch moved to R4.15d | — |
 | 159 | `159_R4.10__bl34-adr-0211-package.md` | Round 4 | ticket | BL-34 brief: D-1..D-6 entry tests + OQ-461/462/463 — final proposals | — |
 | 160 | `160_R4.11__bl35-bl39-adr-0212-0216-packages.md` | Round 4 | ticket | BL-35+BL-39 brief: ADR-0212 (12 OQs) + ADR-0216 (3 OQs) + CF-488 note — final proposals | — |
@@ -319,16 +325,17 @@ permanent — then HUMAN-H7 and the launch record. The earlier paragraph above i
 | 164m | `164m_R4.15e__signer-key-custody.md` | Round 4 | skeleton | Signer-key custody per the adopted OQ-170 ruling (DF-S2.5-1, DF-S1.15-1 custody; R-2.8.6) — gated on GATE-G7 | — |
 | 164p | `164p_L4.1__oss-repo-files-licensing.md` | Round 4 | ticket | OSS files: LICENSE-MIT/APACHE + per-crate license + notices + SECURITY/CONTRIBUTING/CoC/CHANGELOG + templates + CODEOWNERS + living-doc scrub (R-2.12.4) | — |
 | 164q | `164q_L4.2__maintainer-policy.md` | Round 4 | ticket | MAINTAINING/GOVERNANCE + generated revisit-trigger catalogue; BL-41/42/43 closed converted-to-policy | — |
-| 164r | `164r_L4.3__ci-supply-chain-hardening.md` | Round 4 | ticket | CI: ubuntu+macOS matrix, cargo-deny, gitleaks + allowlist, dependabot, protected dispatch-only `live-verify` workflow | — |
-| 164s | `164s_L4.4__crate-rename-hharness.md` | Round 4 | ticket | Scripted crate rename `hh-*` → `hharness-*` (+ umbrella), binaries unchanged; lib-name + directory decision ADR | — |
-| 164t | `164t_L4.5__publish-readiness-release-workflow.md` | Round 4 | ticket | Publish readiness: metadata, `hharness` facade, publish=false set, dry-run order script, v0.1.0, release workflow (3 targets + checksums) | — |
-| 164u | `164u_L4.6__live-e2e-capstone.md` | Round 4 | ticket | Live E2E capstone: reference tasks via `hh` over (a)(b)(c) × local/Anthropic/OpenAI, sandboxed exec, judged, verify+replay, hh-web, MCP, fleet webhook, bundle reproduce (live, USD 30) | — |
+| 164r | `164r_L4.3__ci-supply-chain-hardening.md` | Round 4 | ticket | CI: ubuntu+macOS matrix, cargo-deny, gitleaks (reusing R4.5a's `.gitleaks.toml`), `cargo doc -D warnings`, dependabot, protected dispatch-only `live-verify` workflow | — |
+| 164s | `164s_L4.4__crate-rename-hharness.md` | Round 4 | ticket | Scripted crate rename `hh-*` → `hharness-*` (+ umbrella) behind a first-step crates.io availability check (stop-and-ask on collision), binaries unchanged; lib-name + directory decision ADR | — |
+| 164t | `164t_L4.5__publish-readiness-release-workflow.md` | Round 4 | ticket | Publish readiness: metadata (deliberate `rust-version`, CI-verified), `hharness` facade, publish=false set, dry-run order script (name collision = stop-and-ask), docs.rs readiness, v0.1.0, release workflow (ADR target set — macOS arm64/x86_64, linux x86_64/aarch64; Windows excluded — + checksums) | — |
+| 164u | `164u_L4.6__live-e2e-capstone.md` | Round 4 | ticket | Live E2E capstone: reference tasks via `hh` over (a)(b)(c) × local/Anthropic/OpenAI, sandboxed exec, judged, verify+replay, hh-web, MCP (`hh-mcp`), fleet webhook, bundle reproduce (live, USD 30); surface/plugin sweep split to L4.6a | — |
 | 164v | `164v_L4.7__clean-clone-quickstart.md` | Round 4 | ticket | Clean-clone quickstart: README quickstart executed verbatim as a CI test (+ local-model live block, USD 0) | — |
-| 165 | `165_R4.16__round4-closure.md` | Round 4 | reconcile | Round-4 closure: zero-deferral accounting, BL flips, coverage recompute, readiness, spend + GATE-ACCEPT discharge table | — |
+| 164w | `164w_L4.6a__live-e2e-surface-plugin-sweep.md` | Round 4 | ticket | Live E2E capstone part 2 — surface & plugin sweep: `hh-acp` via the official ACP SDK client (in-tree client fallback, stated), `hh-mcp-lab` Lab ops over MCP, SDK/embed library-API consumer (binding (a)), packaged plugins out of process (live, USD 0) | — |
+| 165 | `165_R4.16__round4-closure.md` | Round 4 | reconcile | Round-4 closure: zero-deferral accounting, BL flips, coverage recompute, readiness (every public surface/binding/plugin `live-executed` or operator `n/a{reason}`), origin/main containment, DF-S1.15-1 full enumeration, spend + GATE-ACCEPT discharge table | — |
 | 166 | `166_GATE-G6__round4-discharge.md` | Round 4 | gate | Round-4 discharge + launch-readiness review — the charter's zero-deferral / live / launch thresholds | STOP |
 | 167 | `167_R4.17__round4-docs-refresh.md` | Round 4 | docs | Public-facing docs final — README/docs/AGENTS refresh for launch (no conform leg) | — |
-| 167a | `167a_HUMAN-H7__launch.md` | Round 4 | human | Operator launch acts: merge the stack, protect main, tag v0.1.0 → release, `cargo publish` in order, repo metadata, DONE flip | — |
-| 167b | `167b_R4.18__launch-record.md` | Round 4 | reconcile | Launch record: release URL + published versions verified; OPERATIONAL_READINESS → public | — |
+| 167a | `167a_HUMAN-H7__launch.md` | Round 4 | human | Operator launch acts: protect main, checks-required bottom-up merges, main CI + gitleaks green → record merged-main SHA, tag v0.1.0 → release, `cargo publish` in order, repo metadata, DONE flip | — |
+| 167b | `167b_R4.18__launch-record.md` | Round 4 | reconcile | Launch record: merged-main SHA = tag commit, release URL + published versions verified; OPERATIONAL_READINESS → public | — |
 
 ## Milestone gates
 **GATE-G1 — Stage-0 acceptance & ecosystem-decision revalidation** (Stage 0). Criterion (verbatim): S1/S2 gates pass and the revalidation rule is evaluated: any C5/C7/C12 score outside the assumed ±1 band, or a gate failure on the winning candidate, re-runs ADR-0009 steps 5–7 (§10.6; OQ-131).
@@ -388,6 +395,11 @@ unchanged; the H3 pre-authorization row dispositioned.
 > CI matrix + cargo-deny + gitleaks + quickstart + publish dry-run + release dry-mode green; the ten GATE-ACCEPT deviations
 > discharged or confirmed permanent; validators clean. Ruling conforms are no longer carried here (GATE-G7). Full text:
 > `166_GATE-G6__round4-discharge.md`.
+>
+> Amended 2026-10-20 (b) (before the gated work): added thresholds — every public surface/binding/plugin `live-executed`
+> with a cited record or operator-recorded `n/a{reason}`; the chain tip contains origin/main (`git merge-base
+> --is-ancestor origin/main HEAD`); DF-S1.15-1 full-membership enumeration marked; readout spot-audit + console-billing
+> reconciliation.
 
 **GATE-G7 — Round-4 rulings gate ("GATE-R4R")** (Round 4, row 164a). Criterion (operator, verbatim): "Mid-round rulings
 gate". Thresholds: every brief file present with its batch-adoptable table; every in-scope OQ/CF/D-n/§10 minor carries one
@@ -858,3 +870,13 @@ Authoritative for coverage. Each base R-id maps to the ticket(s) that land its s
   at GATE-G7 — letters spaced so their splits have room), `164p`–`164v` (`L4.1`–`L4.7` launch track), `167a_HUMAN-H7`, `167b_R4.18`. No file renamed or deleted; no row
   superseded (every seed row keeps a live scope). See `## Decomposition decisions → Round 4 — amendment` and
   `docs/build/planning/2026-10-20_round4-decomposition.md` §Amendment (zero-deferral matrix, Phase-4 review).
+- 2026-10-20 · **round-4 amend (b) — independent critic fixes** (`decompose-spec mode=extend` same-round amendment;
+  precedents `75d61ab`, `02e37fe`): 4 MAJOR + 8 MINOR findings applied to unexecuted contracts in place (dated `> Amended
+  2026-10-20 (b)` banners; no file renamed): crates.io availability check first in L4.4 / enumerated in R4.8 / stop-and-ask
+  in L4.5 (planning baseline: `hharness` + 51 `hharness-<x>` → 404, 2026-10-20T16:31:51Z–16:33:02Z); gitleaks staged-diff
+  gate + full-history baseline + `.gitleaks.toml` owned by R4.5a, reused by L4.3; HUMAN-H7 checks-required merges + green
+  main SHA before tag, recorded by R4.18; R4.16/GATE-G6 surface-coverage, origin/main-containment and DF-S1.15-1
+  enumeration thresholds; L4.5 rust-version / docs.rs / target-set ADR; HUMAN-H6 names-only pre-flight. One suffix row
+  **inserted**: `164w_L4.6a` (live capstone part 2 — `hh-acp`, `hh-mcp-lab`, SDK/embed, packaged plugins; split from L4.6
+  for the ≲100k working set; USD 0, no allocation change) — round 4 is now 50 rows. See
+  `docs/build/planning/2026-10-20_round4-decomposition.md` §Amendment 2026-10-20 (b).

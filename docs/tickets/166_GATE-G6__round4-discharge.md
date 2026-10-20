@@ -3,11 +3,14 @@
      Amended 2026-10-20 (launch re-charter) before execution: criterion + thresholds rewritten to the operator's charter. -->
 # GATE-G6 — Round-4 discharge + launch-readiness review
 
-- **Sequence:** 166 (round-4 row 46 of 49) · **Kind:** gate · **Phase:** Round 4
+- **Sequence:** 166 (round-4 row 47 of 50) · **Kind:** gate · **Phase:** Round 4
 - **Readout:** `docs/build/readouts/GATE-G6.md`
 
 > Amended 2026-10-20 (launch re-charter): criterion rewritten before execution to the operator's charter (LEDGER GATE
 > DECISIONS `### Round 4`); seed text in commit 2f6f8a5. See `docs/tickets/00_MANIFEST.md` `## Plan extensions`.
+
+> Amended 2026-10-20 (b) (independent critic fixes, before execution): thresholds added before the gated work — every public surface/binding/plugin `live-executed` or operator-recorded `n/a{reason}` (MAJOR-3); the chain tip contains origin/main (MAJOR-4); readout spot-audit + console-billing reconciliation (MINOR-9). See
+> `docs/build/planning/2026-10-20_round4-decomposition.md` §Amendment 2026-10-20 (b).
 
 > **Milestone gate — NOT an `implement-spec` input.** The chain STOPS here until the operator dispositions the readout.
 > Never guessed past.
@@ -27,8 +30,22 @@ GitHub repo launch, with no remaining deferred work and deep end to end live ver
   per `docs/build/reports/live/SPEND.jsonl`; no secret value in any committed artifact (gitleaks clean).
 - **Launch hardening green:** CI matrix (ubuntu + macOS) green on the chain tip incl. cargo-deny, gitleaks, drift, foreign
   legs, quickstart; publish dry-run green; release-workflow dry-mode artifacts produced; license/notices/community files present.
+- **Surface coverage:** OPERATIONAL_READINESS shows EVERY public surface, binding and plugin (`hh` CLI, bindings
+  (a)/(b)/(c) incl. the SDK/embed library API, `hh-web`, `hh-mcp`, `hh-mcp-lab`, `hh-acp`, the TS client, the three
+  packaged plugins, every provider/live adapter) as `live-executed` with a cited evidence record, or an explicit
+  operator-recorded `n/a{reason}` — no silent gaps.
+- **Main containment:** the chain tip contains origin/main (`git merge-base --is-ancestor origin/main HEAD` exits 0); if
+  main moved mid-drive, R4.16 merged it (as R4.0 did) and re-verified — the drift is recorded, never silent.
+- **DF-S1.15-1:** R4.16's full-membership enumeration shows every scope member with a dated marker.
 - **GATE-ACCEPT:** each of the ten accepted deviations discharged by a named round-4 row or confirmed permanent (table in R4.16's accounting).
 - `check-build-memory.sh` 0 violations; `check-backlog.sh` exit 0; the two round-4 pre-authorizations dispositioned (consumed / expired).
+
+## Readout duties (amend (b))
+- Spot-audit checklist line: the readout lists ≥ 3 evidence records (at least one per hosted provider) with their
+  provider request ids for the operator to check against the provider consoles.
+- Spend reconciliation: `SPEND.jsonl` is an estimate; the provider consoles' billing is the authority — the operator
+  reconciles the ledger total against the consoles here and the readout records the reconciled figures (no values of any
+  credential).
 
 ## DEFERRALS rule
 This gate does not pass while any `OPEN` row in `docs/tickets/DEFERRALS.md` remains (DEFERRALS rule 4; the charter makes it total).
