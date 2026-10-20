@@ -11,7 +11,7 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R4.1   # round-4 chain seeded (rows 150-167); rows 155/158 stay skeleton (gated: H3 provisioning, BL-33 trust rulings + remote env), 128 stays HUMAN-H4 (reviewer pending); DONE flip remains the operator's
+nextTicket:      R4.0   # round 4 amended (launch re-charter): 49 rows 149a-167b; GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
 lastCompleted:   R3.11
 blockedOn:       (none)
 pauseRequested:  false
@@ -28,7 +28,7 @@ benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           4
-updatedAt:       2026-10-20
+updatedAt:       2026-10-20T16:16:49Z
 ```
 
 ## OPEN FINDINGS
@@ -867,3 +867,4 @@ updatedAt:       2026-10-20
   12 to round-4 rows, 7 carried with fresh dated residual notes. Round-1/2/3 history
   unchanged.
 - 2026-10-20 · Round-4 re-charter (launch round) — operator's verbatim charter + 15 structured rulings recorded in GATE DECISIONS ### Round 4 (received between 14:21Z and 15:30Z): rustls over ring; Anthropic+OpenAI+local; $100 live spend cap (pre-authorization, expires GATE-G6); MIT OR Apache-2.0; BL-41/42/43 → maintainer policy; keep provenance; crates.io publish under a new uniform prefix (prefix pending); live CI local + protected workflow_dispatch; H4 → decline (supersedes 14:21Z); GitHub OAuth App; mid-round rulings gate; provisioning now. Plan amendment of rows 150–167 follows.
+- 2026-10-20 — round-4 inserted — branch svitali/harnessharness-r3.11 · PR none (records-only amend on the chain tip) · base 2f6f8a5 · decompose-spec mode=extend amendment (launch re-charter, precedent 75d61ab): rows 150-167 rewritten before execution (R4.6/R4.9 skeleton→ticket, GATE-G6 → the charter's zero-deferral/live/launch thresholds, R4.17 conform leg dropped); 31 suffix rows inserted — R4.0 main→chain sync, HUMAN-H6, R4.4a, live track R4.5a-e + R4.7a-f, R4.12a/R4.13a pre-splits, GATE-G7 rulings gate (alias GATE-R4R), R4.15a-e conform skeletons, launch track L4.1-L4.7, HUMAN-H7, R4.18; zero-deferral matrix (19 DF rows / 21 BL ids / 18 non-MET reqs / 10 GATE-ACCEPT deviations — none unplaced) + Phase-4 review in docs/build/planning/2026-10-20_round4-decomposition.md §Amendment; $100 spend allocated (R4.5d 5 · R4.5e 5 · R4.6 15 · R4.7b 5 · R4.7e 15 · L4.6 30 · reserve 25) · **Verify:** check-build-memory 0 violations (7 baseline warnings) · **Deferrals:** opened none, closed none (10 dated amendment notes) · **Deviations:** GATE-R4R recorded as GATE-G7 (id grammar); evidence under docs/build/reports/live/ · chainTip → svitali/harnessharness-r3.11 (unchanged) · next → R4.0

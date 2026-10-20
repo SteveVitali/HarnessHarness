@@ -290,3 +290,224 @@ Findings and resolutions:
 
 R4.16 appends the dated landed-vs-carried accounting here; GATE-G6's readout
 reads it.
+
+## Amendment 2026-10-20 — launch re-charter
+
+**Mode:** `decompose-spec mode=extend` amendment of round 4 on `svitali/harnessharness-r3.11` (head `2f6f8a5`), records only,
+same-round precedent `75d61ab` (unexecuted bodies rewritten in place with dated `> Amended` banners; no ticket file renamed —
+BM-COMPAT-05; new rows are suffix-letter inserts). Executor: SWE-2, 256k context, dispatch=subagent (no compaction).
+
+### Inputs (re-read 2026-10-20)
+- LEDGER GATE DECISIONS `### Round 4` — the charter + every ruling row (read in full); CURRENT STATE; the round-4 PHASE LOG.
+- The 19 owed DEFERRALS rows (status cells + dated markers read per row); BACKLOG rows BL-01…BL-46 (open + accepted set);
+  COVERAGE_MATRIX non-MET rows; GATE-ACCEPT §3 (the ten deviations); the seed contracts 150–167; ADR-0346/0253/0266/0284
+  revisit triggers; `crates/hh-embed/src/runtime.rs` (`EmbedModel` — the only bound `ModelPort`), `hh-gateway` `Transport`/
+  `CredentialPort`, `hh-secrets` `LaunchEnvResolver`/`KERNEL_NONINHERITABLE`; the validator's id grammar.
+- **Facts verified:** repo `SteveVitali/HarnessHarness` is PUBLIC, `licenseInfo: null`; sandbox `SteveVitali/hh-live-sandbox`
+  PRIVATE; `git merge-tree --write-tree origin/main HEAD` → exactly one conflict (`crates/hh-cli/tests/in_process.rs`);
+  main-only commits `eac030a`/`d9074a4` (ac5), `958f675`/`cd7657c` (deflake), `5668d54` (ci), `0b56aa7`/`eb9a88d` (e2 +
+  CHECKER fix). **Correction to the brief:** main's ac5 rule is the derivation-aware one (admits `view_hash`/`plan_id` only
+  under upstream measured drift); the chain's is the per-member list → R4.0 resolves to main's (as `6392736` did).
+- **Provisioning observation (names only, 2026-10-20T15:55Z):** `live.env` present (0600) with `HH_LOCAL_BASE_URL`,
+  `HH_LOCAL_MODEL`, `HH_GITHUB_WEBHOOK_SECRET`, `HH_GITHUB_SANDBOX_REPO`; absent at that time: `ANTHROPIC_API_KEY`,
+  `OPENAI_API_KEY`, `HH_GITHUB_SANDBOX_TOKEN`, `HH_GITHUB_OAUTH_CLIENT_ID` (the operator is provisioning concurrently).
+  `qwen2.5:7b-instruct` pulled; cloudflared, gitleaks, node v25, python 3.14 present. Recorded on HUMAN-H6.
+
+### Round objective (stated as GATE-G6's criterion)
+At GATE-G6: zero OPEN DEFERRALS rows (DONE with dated evidence, or closed waived/descoped by an ADR carrying the operator's
+recorded ruling); zero open BL rows; every COVERAGE_MATRIX row MET, or MET-DIFFERENTLY only as a permanent design decision
+with its ADR; `live-executed` evidence on every live leg (spend ≤ USD 100); OSS launch hardening green; the ten GATE-ACCEPT
+deviations discharged by a named row or confirmed permanent. Then HUMAN-H7 and the launch record (R4.18).
+
+### Final row list (49 rows; budgets = changed non-mechanical lines)
+| # | id | kind | scope | budget | live / USD |
+|---|---|---|---|---|---|
+| 149a | R4.0 | ticket | main→chain merge; ac5 conflict → main's rule; regenerate; suite green | 300 | — |
+| 149b | HUMAN-H6 | human | live provisioning by NAME | — | operator |
+| 150 | R4.1 | ticket | context-economy tools + read rule; ac5 post-merge; helper-spawn; G5-1 | 800 | — |
+| 151 | R4.2 | ticket | E3=TS bind + generated TS client + node smoke vs `serve --http` | 900 | — |
+| 152 | R4.3 | ticket | xcheck HIR/ledger extension arms | 900 | — |
+| 153 | R4.4 | ticket | e3-ts part 1 (core + 4 arms) | 900 | — |
+| 153a | R4.4a | ticket | e3-ts part 2 (plugin + extension arms, full verify) | 900 | — |
+| 154 | R4.5 | ticket | two-toolchain CI + C12 + trigger-5 | 700 | — |
+| 154a | R4.5a | ticket | live-evidence ADR, records, spend ledger, `live-verify.sh` | 700 | live 0 |
+| 154b | R4.5b | ticket | gateway `ModelPort` + HTTP codec home; local Ollama run | 900 | live 0 |
+| 154c | R4.5c | ticket | rustls ADR + HTTPS/mTLS + `tls.terminate` | 900 | live 0 |
+| 154d | R4.5d | ticket | Anthropic + OpenAI transports + broker credentials | 900 | live 5 |
+| 154e | R4.5e | ticket | probe_profile + live-signal arms (closes DF-S1.18-1) | 800 | live 5 |
+| 155 | R4.6 | ticket | LT-03 live corpus + live foreign-manifest import | 800 | live 15 |
+| 156 | R4.7 | ticket | GitHub Issues adapter + signed webhook via tunnel (sandbox) | 900 | live 0 |
+| 156a | R4.7a | ticket | OAuth device flow + mTLS mediator (operator present) | 800 | live 0 |
+| 156b | R4.7b | ticket | Embedder/Summarizer/ProviderCompaction adapters | 800 | live 5 |
+| 156c | R4.7c | ticket | live observability sink (local collector) | 600 | live 0 |
+| 156d | R4.7d | ticket | verification reference-corpus AC halves (hermetic) | 800 | — |
+| 156e | R4.7e | ticket | live judge binding + calibration + independence | 900 | live 15 |
+| 156f | R4.7f | ticket | audit `subagent_anchor` + `producer_resolution` | 600 | — |
+| 157 | R4.8 | ticket | BL-33 brief + ruled-posture records + naming market check + trust fields | 700 | — |
+| 158 | R4.9 | ticket | DF-S4.2-2 four foreign vocabularies (hermetic) | 900 | — |
+| 159 | R4.10 | ticket | BL-34 brief | 600 | — |
+| 160 | R4.11 | ticket | BL-35+BL-39 brief | 800 | — |
+| 161 | R4.12 | ticket | BL-36 brief part 1 (12 OQs) | 600 | — |
+| 161a | R4.12a | ticket | BL-36 brief part 2 (11 OQs) | 600 | — |
+| 162 | R4.13 | ticket | BL-37 brief part 1 (17 OQs) | 700 | — |
+| 162a | R4.13a | ticket | BL-37 brief part 2 (17 OQs) | 700 | — |
+| 163 | R4.14 | ticket | BL-38 brief + 24 §10 minors | 800 | — |
+| 164 | R4.15 | ticket | BL-30 brief + OQ-170/OQ-388 proposals + H4 waiver + CF-490 | 700 | — |
+| 164a | GATE-G7 | gate | rulings gate ("GATE-R4R") | — | operator |
+| 164b | R4.15a | skeleton | records conform A (0210/0211/0212/0213/0216) | ≤900 at flesh | — |
+| 164e | R4.15b | skeleton | records conform B (0214/0215, BL-30 CFs, OQ-388) | ≤900 | — |
+| 164h | R4.15c | skeleton | code conform (CF-492, CF-493, adopted code legs) | ≤900 | — |
+| 164k | R4.15d | skeleton | remote fetch + trust fields (DF-S4.2-1) | ≤900 | live 0 |
+| 164m | R4.15e | skeleton | signer-key custody (DF-S2.5-1, DF-S1.15-1) | ≤900 | — |
+| 164p | L4.1 | ticket | OSS files + dual license + notices + scrub | 700 (+mechanical) | — |
+| 164q | L4.2 | ticket | MAINTAINING/GOVERNANCE; BL-41/42/43 closed | 600 | — |
+| 164r | L4.3 | ticket | CI matrix, cargo-deny, gitleaks, dependabot, live-verify workflow | 600 | dispatch-only |
+| 164s | L4.4 | ticket | scripted rename `hharness-*` + ADR | 400 (+mechanical) | — |
+| 164t | L4.5 | ticket | publish readiness + release workflow + v0.1.0 | 800 (+mechanical) | — |
+| 164u | L4.6 | ticket | live E2E capstone | 800 | live 30 |
+| 164v | L4.7 | ticket | clean-clone quickstart test | 400 | live 0 |
+| 165 | R4.16 | reconcile | zero-deferral closure accounting | 700 | — |
+| 166 | GATE-G6 | gate | discharge + launch readiness | — | operator |
+| 167 | R4.17 | docs | public docs final | 700 | — |
+| 167a | HUMAN-H7 | human | operator launch acts | — | operator |
+| 167b | R4.18 | reconcile | launch record | 300 | — |
+
+**Spend allocation (USD 100):** R4.5d 5 · R4.5e 5 · R4.6 15 · R4.7b 5 · R4.7e 15 · L4.6 30 · reserve 25 (reserve use needs
+the operator's words); every other live leg USD 0.
+
+### Zero-deferral coverage matrix (mandatory — no "carry")
+
+**(A) Owed DEFERRALS rows (19) → residual members → exactly one closing row**
+| DF row | residual member(s) (from dated markers) | owning row(s) — closer in bold |
+|---|---|---|
+| DF-S0.3-2 | two-toolchain CI, C12 timing, far-side parse timing, trigger-5 row | **R4.5** (R4.4/R4.4a supply E3 evidence) |
+| DF-S0.3-3 | R2 human signature | **R4.15** — closed waived-by-ADR on the operator's H4 decline |
+| DF-S1.2-2 | HIR/ledger corpus extension + foreign re-run | R4.3 (arms) → **R4.4a** |
+| DF-S1.5-3 | E3 ledger-transcript arm (E2 via R4.0) | **R4.4** |
+| DF-S1.8-1 | E3 registry arm | **R4.4** |
+| DF-S1.15-1 | (a) signer custody (OQ-170) · (b) `subagent_anchor` · (c) `producer_resolution` | (b)(c) R4.7f · (a) **R4.15e** (post GATE-G7) |
+| DF-S1.18-1 | (a) live Transport/CredentialPort · (b) AC-R-2.3.1-11 live OOP · (c) real-provider `probe_profile` · (d) live-signal arms | (a) R4.5b local + R4.5d hosted · (b) R4.5d · (c)(d) **R4.5e** |
+| DF-S1.21-2 | (a) reference-corpus AC fixture halves · (b) RedundantJudge/IndependenceVector on real bindings | (a) R4.7d · (b) **R4.7e** |
+| DF-S1.21-3 | live `CriticDeclaration{kind=judge}` at `link` | **R4.7e** |
+| DF-S1.24-2 | live foreign-manifest import | **R4.6** |
+| DF-S1.27-1 | E3 plugin-manifest arm | **R4.4a** |
+| DF-S2.4-2 | TLS-terminating transport | **R4.5c** |
+| DF-S2.5-1 | signer-custody ruling + implementation | R4.15 (proposal) → GATE-G7 → **R4.15e** |
+| DF-S4.2-1 | remote fetch with trust fields | R4.8 (trust-field proposal) → GATE-G7 → **R4.15d** |
+| DF-S4.2-2 | four foreign vocabularies | **R4.9** |
+| DF-S4.10-1 | E3 bind + in-ecosystem client | **R4.2** |
+| DF-S4.11-2 | OAuth exchange + mTLS peer→subject | **R4.7a** |
+| DF-S4.13-1 | OQ-388 ratification act | R4.15 (proposal) → GATE-G7 → **R4.15b** |
+| DF-S5.6-1 | real tracker + signed webhook live | **R4.7** |
+
+**(B) Open / accepted BL rows → members → row** (BL flips land at R4.16 except where noted)
+| BL | residual members | row(s) |
+|---|---|---|
+| BL-01 | DF-S0.3-2, DF-S1.2-2, DF-S1.5-3, DF-S1.8-1, DF-S1.27-1 | R4.3, R4.4, R4.4a, R4.5 |
+| BL-02 | DF-S0.3-3 | R4.15 (waived-by-ADR) |
+| BL-03 | DF-S4.10-1, ADR-0319 trigger | R4.2 |
+| BL-04 | DF-S5.6-1 | R4.7 |
+| BL-05 | LT-03 live corpus · DF-S1.21-2 · DF-S1.15-1 (DF-S1.13-3/-17-1/-22-1/-24-1/-14-4/S5.4-1 verified DONE) | R4.6 · R4.7d+R4.7e · R4.7f+R4.15e |
+| BL-17 | live judge (ADR-0347/0348/0300/0311) | R4.7e |
+| BL-26 | live foreign-manifest import (resolver leg DONE R2.17) | R4.6 |
+| BL-27 | oauth/mtls mediator (Ref + SSE DONE R2.19) | R4.7a |
+| BL-30 | CF-476/487/488/491 (records) · CF-492/493 (code) · CF-490 fix · OQ-170 · OQ-388 · debt.hypothesis + parked-detach (verify answered) | R4.15 → GATE-G7 → R4.15b · R4.15c · R4.15 · R4.15e · R4.15b · R4.15 |
+| BL-31 | DF-S1.18-1 · DF-S2.4-2/R-2.8.4/ADR-0266/0340/0341 · adapters (ADR-0253) · ADR-0284 arms · ADR-0346 live sink | R4.5b/d/e · R4.5c · R4.7b · R4.5e · R4.7c |
+| BL-32 | DF-S4.2-2 · DF-S4.2-1 | R4.9 · R4.15d |
+| BL-33 | R-2.12.4 + 13 OQs | R4.8 → GATE-G7 → R4.15a; implementation L4.1/L4.2/L4.3/L4.5 |
+| BL-34 | D-1..D-6 + OQ-461/462/463 | R4.10 → R4.15a |
+| BL-35 / BL-39 | 12 + 3 OQs | R4.11 → R4.15a |
+| BL-36 | 23 OQs | R4.12 + R4.12a → R4.15a |
+| BL-37 | 34 OQs | R4.13 + R4.13a → R4.15b |
+| BL-38 | 15 OQs (+ the 24 READINESS_REPORT §10 minors) | R4.14 → R4.15b |
+| BL-41 / BL-42 / BL-43 | standing rules + trigger catalogues | L4.2 (closed converted-to-policy) |
+
+**(C) Non-MET coverage rows → owner or permanent ADR**
+| requirement | verdict now | owner (closing evidence) |
+|---|---|---|
+| R-2.2.1 | PARTIAL | R4.15b (OQ-388 ratified) |
+| R-2.7.1 | PARTIAL | R4.7e (R4.7d prerequisite) |
+| R-2.7.2 | MET-DIFFERENTLY | **permanent** — ADR-0146 split (design decision; children carry verdicts) |
+| R-2.7.2b | PARTIAL | R4.7e |
+| R-2.8.3 / R-2.8.4 | MET-ENGINEERED(DF-S2.4-2) | R4.5c |
+| R-2.8.6 | PARTIAL | R4.15e (R4.7f prerequisite) |
+| R-2.9.3 | PARTIAL | R4.15d |
+| R-2.9.4 / R-2.9.6 | PARTIAL | R4.6 |
+| R-2.10.3 | PARTIAL | R4.15d (R4.9 prerequisite) |
+| R-2.10.5 | PARTIAL | R4.9 |
+| R-2.11.2 | MET-DIFFERENTLY (environment gap) | R4.2 → MET |
+| R-2.11.3 | PARTIAL | R4.7a |
+| R-2.12.1 | PARTIAL | R4.5 (R4.4a evidence + R4.15 waiver of the human cell) |
+| R-2.12.3 | MET-DIFFERENTLY | R4.5 (measured C12 + trigger 5) — R4.16 re-verdicts; if it stays MET-DIFFERENTLY it is the permanent ADR-0050 ecosystem decision |
+| R-2.12.4 | MET-DIFFERENTLY (environment gap — window now open) | L4.1 (+ R4.8 records, L4.2/L4.3/L4.5) → MET |
+| R-2.12.5 | MET-DIFFERENTLY | L4.4 (ruled scheme applied; R4.8 records the market check + the `harnessharness` collision) — program-level thesis stays ADR-0003/0006 if R4.16 keeps MET-DIFFERENTLY |
+| R-2.12.6 | MET-DIFFERENTLY (environment gap) | R4.7 → MET |
+
+**(D) GATE-ACCEPT deviations (10)**
+| # | deviation | disposition |
+|---|---|---|
+| 1 | R-2.7.2 split (ADR-0146) | permanent (design) |
+| 2 | R-2.12.3 foreign legs not executed | discharged by R4.4/R4.4a/R4.5 (+R4.0 e2) |
+| 3 | R-2.12.4 spec-level deferral | discharged by L4.1 (+R4.8, L4.2, L4.3, L4.5) |
+| 4 | R-2.12.5 naming thesis | discharged by R4.8 (market check) + L4.4 (scheme applied) |
+| 5 | R-2.11.2 E3 binding | discharged by R4.2 |
+| 6 | R-2.12.6 real tracker | discharged by R4.7 |
+| 7 | R2 human signature | discharged by the operator's H4 decline, recorded at R4.15 (waived-by-ADR) |
+| 8 | trigger 5 satisfied-by-analysis | discharged by R4.5's measurement |
+| 9 | foreign-toolchain cells | discharged by R4.4/R4.4a/R4.5 |
+| 10 | GATE-G2 recorded set | discharged by R4.6 (LT-03), R4.7d/R4.7e (DF-S1.21-2), R4.7f/R4.15e (DF-S1.15-1); the other members are DONE |
+
+**Counts:** 19/19 DF rows placed (28 residual members); 21 BL ids placed (BL-01/02/03/04/05/17/26/27/30/31/32/33/34/35/36/37/
+38/39/41/42/43); 18 non-MET requirement rows placed (1 permanent); 10/10
+deviations placed (1 permanent); 103 package OQs + D-1..D-6 + 7 CFs + 24 §10 minors routed to a brief → GATE-G7 → conform.
+**Members I could not place:** none. Conditional: if the operator declines a brief proposal at GATE-G7 without a replacement,
+that id has no landing — GATE-G7's text requires a replacement disposition at the same gate.
+
+### Deviations from the orchestrator's proposed restructure (each with reasoning)
+1. **R4.0 resolution reversed** — main's ac5 rule is the derivation-aware one; resolve to main's (the brief assumed the chain's).
+2. **"154d gateway hermetic remainder" dropped** — DF-S1.18-1's hermetic members already landed (S2.10/S3.7/R2.7); the
+   live track is R4.5a framework → R4.5b model port + local → R4.5c TLS → R4.5d providers → R4.5e probes/live arms.
+3. **Proof on Ollama split** — R4.5a proves the framework on a zero-spend reachability leg; the real `ModelPort`/`Transport`
+   proof is R4.5b (no gateway-backed `ModelPort` exists today — `EmbedModel` is scripted; that work is a ticket of its own).
+4. **Evidence path** `docs/build/reports/live/…` instead of `docs/build/evidence/live/…` — `evidence/` is not an allowed
+   build-memory root entry (BM-LAYOUT-01).
+5. **GATE-R4R → `GATE-G7`** marker id (validator grammar admits only `GATE-G<n>`); alias recorded; readout `GATE-G7.md`.
+6. **C2 detectors / Stage-3 batteries / OOP validator binding not scheduled as new engineering** — landed at S4.16c/S3.10/R2.15;
+   the remaining DF-S1.21-2 work is R4.7d (AC fixture halves) + R4.7e (judge consumption).
+7. **Audit Stage-2 halves = one hermetic ticket (R4.7f) + one post-ruling skeleton (R4.15e)** — the residual is 3 members, not
+   the full Stage-2 list.
+8. **R4.4 pre-split** (R4.4/R4.4a) — not in the brief; the foreign implementation exceeds the ≲900 budget in one ticket.
+9. **HUMAN-H6 inserted** (provisioning marker) with a round-4 override: an unprovisioned NAME stops-and-asks, never opens a D-row.
+10. **24 READINESS_REPORT §10 minors added to R4.14** — inherited spec-level deferrals the charter's "no remaining deferred
+    work" covers; not in the brief.
+11. **Two records-conform skeletons (R4.15a/b) + one code-conform (R4.15c)** instead of one records + one code — the
+    adopted set may span ~130 ids; split by ADR package pre-registered.
+12. **Launch ids `L4.1`–`L4.7`** for the launch track (suffix rows after 164) instead of `R4.15f…` — readability; grammar-valid.
+13. **No row superseded** — every seed row keeps a live scope (R4.9 narrows to the hermetic half; its remote half → R4.15d).
+14. **BL-26/BL-27 "remaining members"** reduce to R4.6/R4.7a (verified DONE elsewhere) — no extra rows.
+15. **Release workflow merged into L4.5** (needs final names, after the rename) rather than L4.3's CI ticket.
+
+### Phase 4 — fresh-context adversarial review (amendment)
+**Reviewer honesty:** the `subagent_explore` tool named in the brief is not available in this session's tool set, so the
+review used the skill's fallback discipline ("re-read the spec and plan from disk and argue each judgment from what is
+there") plus scripted mechanical checks over every round-4 contract (forward `Depends on`, Load-line whole-file reads,
+secret-shaped strings, skeleton run lines / fleshing notes, pre-answered gates, keep-open proposals). The orchestrator may
+re-run a true fresh-context critic over this commit; findings would land as a dated addendum here.
+
+| # | finding | resolution |
+|---|---|---|
+| P4-1 | **Overflow — large source files.** `hh-control/src/driver.rs` is 412 KB (~100k tokens), `router.rs` 127 KB, `runtime.rs` 107 KB, `broker.rs` 106 KB, `audit.rs` 87 KB, `egress.rs` 60 KB — several live contracts named them as plain Load entries. | Every one of the 40 executable contracts now carries a "large source files are never read whole — `grep -n` + `sed -n` ranges" bullet naming them. |
+| P4-2 | **No room for gate-time splits.** With R4.15a–e at 164b–164f and the launch track at 164g–164m, a split of any conform skeleton at GATE-G7 had no free filename letter (one letter per prefix). | Re-lettered (new, uncommitted files only): skeletons at 164b/164e/164h/164k/164m, launch track 164p–164v; free letters c,d,f,g,i,j,l,n,o,w–z. |
+| P4-3 | **R4.0 runs before the row tools exist** while AGENTS.md gotcha 1 and the LEDGER OPERATING MODE still say "read DEFERRALS first" (~78k tokens). | R4.0/R4.1 carry the literal-grep CTX block that explicitly forbids whole reads; R4.1 rewrites the rule (AGENTS.md + archived OPERATING MODE). Residual risk accepted for one ticket; this amendment does not edit AGENTS.md (planning-only scope). |
+| P4-4 | R4.16's Load used `awk -F,` over a CSV with quoted commas (fragile, may dump the file). | Replaced by an explicit `scripts/bm-row.sh` id list. |
+| P4-5 | R4.5e could self-mint a requirement verdict via a "price discovery" deviation ADR. | Notes added: the ADR is an engineering deviation only; any verdict change surfaces at GATE-G6 via R4.16 — never self-ruled. |
+| P4-6 | R4.6 would commit upstream corpus bytes without a license check. | Added: record upstream license; commit bytes only where redistribution is permitted (+ L4.1 notices), else commit fetch script + sha256 manifest. |
+| P4-7 | GATE-G7 decline-without-replacement would leave an id unplaced (violating zero-deferral). | GATE-G7 text requires a replacement disposition at the same gate; recorded as the matrix's only conditional. |
+| P4-8 | Live legs vs prerequisites. | Checked: no live leg precedes R4.5a; no HTTPS leg precedes R4.5c; hosted-provider legs follow R4.5d; R4.15d follows R4.5c; L4.6 follows every live row. |
+| P4-9 | Forward deps / skeleton run lines / pre-answered gates / secrets / keep-open proposals. | Scripted check: none found. |
+| P4-10 | Ticket that both engineers and rules. | None: R4.15 records only operator-issued rulings (H4 decline, CF-490) and proposes the rest; R4.8's closures cite GATE DECISIONS rows; L4.4's lib-name/directory choice is an engineering ADR the brief asked the ticket to decide. |
+| P4-11 | Provisioning gap: four NAMES absent at planning time (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `HH_GITHUB_SANDBOX_TOKEN`, `HH_GITHUB_OAUTH_CLIENT_ID`). | HUMAN-H6 records the observation (names only); live tickets stop-and-ask on `provided: no` — surfaced to the orchestrator for the operator. |
+| P4-12 | Double-mapping risk: DF-S1.18-1 spans R4.5b/d/e; R-2.12.1's owner R4.5 precedes the R4.15 waiver. | Members are disjoint and the closer is named per row; R4.16 re-verdicts R-2.12.1 after R4.15 — recorded in the matrix. |
+
+**Plan revisability:** the plan is a starting point — `orchestrate-build` may split an overflowing ticket (free letters are
+reserved) or merge trivial ones at run time via a scoped `mode=extend`, writing the change back to the manifest.
