@@ -1890,6 +1890,20 @@ fn ac5_attended_and_unattended_share_one_configuration() {
     // R3.3 added `plan_id` for the #139 CI flake, run 38703040017 — both
     // under the older per-member allowlist this measured-drift gate,
     // landed on main as eac030a/d9074a4, now supersedes.)
+    //
+    // 2026-10-20 (R4.1, G5-7 reconciliation): the merged-state predicate
+    // is the closed form of the class — every member derivable from a
+    // measured wall is named. `assembly_ms{value, measured_at}` is the
+    // measured source; `derived_from.view_hash` drifts on any later
+    // assembly exactly under measured drift because `context_view`
+    // hashes each prior observation row's full payload; `plan_id` is the
+    // content address over `derived_from{seq, view_hash}` and drifts
+    // with it. No further member is content-addressed over an
+    // observation-row payload, so the enumeration below — one
+    // `measured_drift` gate over the two downstream members — covers the
+    // cascade without per-member accretion; the loop still visits every
+    // diff, so a genuinely new member fails loudly rather than being
+    // silently admitted.
     let measured_drift = diffs
         .iter()
         .any(|d| d.ends_with("assembly_ms.value") || d.ends_with("assembly_ms.measured_at"));

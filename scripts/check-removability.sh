@@ -12,14 +12,60 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Saturated-spawn detection (AGENTS.md gotcha 10): on a loaded host the
+# `syspolicyd` first-exec assessment can stall a fresh `hh-helper` for
+# minutes, so a helper leg fails on the spawn/connect bound — the captured
+# output then carries `helper socket never appeared` (spawn deadline,
+# `HH_HELPER_SPAWN_DEADLINE_MS`, default 10 s) or `helper connect:` (connect
+# deadline, `HH_HELPER_CONNECT_DEADLINE_MS`, default 5 s). That is an
+# environment condition, not a removability defect: say so and print the
+# override recipe. The defaults stay the contract's — detection only.
+saturated_spawn_recipe() {
+  cat >&2 <<'RECIPE'
+check-removability: a helper leg timed out on the spawn/connect bound —
+the saturated-spawn class (AGENTS.md gotcha 10): on a loaded host the
+`syspolicyd` first-exec assessment can stall `hh-helper` past the
+contract's 10 s spawn / 5 s connect bounds. Rerun with the overrides
+raised before calling it a real failure:
+
+    HH_HELPER_SPAWN_DEADLINE_MS=120000 \
+    HH_HELPER_CONNECT_DEADLINE_MS=60000 \
+    bash scripts/check-removability.sh
+
+(the defaults stay the contract's — crates/hh-env/src/helper.rs)
+RECIPE
+}
+
+# run_helper_leg <log> <cmd…> — run one helper-spawning leg, stream its
+# output, and on failure check the capture for the saturated-spawn
+# signature (helper spawn/connect deadline) before propagating the exit.
+run_helper_leg() {
+  local log=$1; shift
+  set +e
+  "$@" 2>&1 | tee "$log"
+  local st=${PIPESTATUS[0]}
+  set -e
+  if [ "$st" -ne 0 ]; then
+    if grep -qE 'helper socket never appeared|helper connect:' "$log"; then
+      saturated_spawn_recipe
+      echo "check-removability: captured leg output in $log" >&2
+    fi
+    exit "$st"
+  fi
+}
+
+mkdir -p target/check-removability
+
 echo "== removability(0): hh-helper without tier-c1 =="
 cargo build -p hh-helper --no-default-features
-HH_REM0=1 HH_HELPER_BIN="$PWD/target/debug/hh-helper" \
+run_helper_leg target/check-removability/rem0-helper_live.log \
+    env HH_REM0=1 HH_HELPER_BIN="$PWD/target/debug/hh-helper" \
     cargo test -p hh-env --test helper_live ac_s2_removability0 -- --nocapture
 
 echo "== tier-c1 restore + the unchanged tier-1 suite =="
 cargo build -p hh-helper
-cargo test -p hh-env --test helper_live
+run_helper_leg target/check-removability/helper_live.log \
+    cargo test -p hh-env --test helper_live
 
 echo "check-removability: OK (tier-0 honest refusals verified; tier-1 suite green)"
 

@@ -124,7 +124,12 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
 
 1. **`docs/tickets/DEFERRALS.md` — read it first, every run.** Owed work lives
    there; if your change unblocks an `OPEN` row, closing it is part of the
-   run. A deferral not in the file did not happen. (See Build memory below.)
+   run. A deferral not in the file did not happen. **Read it row-wise, never
+   whole** (BM-ORIENT-01): `bash scripts/deferrals-open.sh` indexes every row
+   whose dated marker is not DONE/WONTFIX, `bash scripts/bm-row.sh DF-…`
+   prints one row (`--status` → `id | status | marker`, `--bl` → the BL
+   home), `bash scripts/spec-section.sh <anchor>` prints one spec section.
+   (See Build memory below.)
 2. **Generated files are never hand-edited:** `schema/*.json`,
    `crates/hh-embed-client-generated/src/generated.rs`, `docs/adr/README.md`
    (regenerate: `build-memory adr-index docs/adr`).
@@ -165,7 +170,9 @@ Smoke: `cargo build -p hh-cli -p hh-kernel` then
    absence. `cargo build -p hh-helper` restores the default binary.
 10. **A loaded host stalls helper spawns.** On a `syspolicyd`-saturated
     host each fresh test binary's first `exec` can block for minutes —
-    `check-removability.sh`'s `helper_live` legs then time out.
+    `check-removability.sh`'s `helper_live` legs then time out; the script
+    detects a saturated-spawn timeout in its captured leg output and prints
+    the override recipe verbatim.
     `HH_HELPER_SPAWN_DEADLINE_MS` / `HH_HELPER_CONNECT_DEADLINE_MS`
     stretch the bounds (defaults stay the contract's 10 s / 5 s —
     `hh-env/src/helper.rs`; recorded at R3.7–R3.10).
@@ -205,6 +212,9 @@ build ticket, read these first:
   hand from the manifest table).
 - **`docs/build/`** — the record of what happened: `runs/<ID>.md` (per-ticket run ledgers),
   `pr/<ID>.md` (PR bodies), `BUILD_INDEX.md` (one row per landed ticket), `readouts/` (gates).
+  Reach it row-wise: `scripts/bm-row.sh <id>` (DF-/BL-/OQ-/CF-/RK-/SD-/R- ids — `--status`,
+  `--bl`), `scripts/deferrals-open.sh` (`--bl` for the open BL set), `scripts/spec-section.sh
+  <anchor>` — a row or a section is the unit of read, never the whole file (BM-ORIENT-01).
 - **`docs/adr/`** — decision records; `README.md` is generated (`build-memory adr-index`) —
   never hand-edit it.
 
