@@ -271,20 +271,31 @@ impl EmbedService {
                 code: "missing".into(),
             })?
             .to_string();
+        // R3.2 (DF-S2.3-1; R-2.4.3) — the `resume_set` producer leg: an
+        // explicit `carried.resume_set_heads` rides verbatim, but an
+        // omitted member is *derived* — the kernel's own layer-S fold of
+        // the durable `context.memory.written` prefix names the session
+        // heads (a resume-set transition records what the ledger proves,
+        // never what the caller claims; CC3). `Some([])` is an explicit
+        // empty set, honoured — only absence derives.
+        let declared_heads = params
+            .get("carried")
+            .and_then(|c| c.get("resume_set_heads"))
+            .and_then(|v| match v {
+                Json::Arr(a) => Some(
+                    a.iter()
+                        .filter_map(Json::as_str)
+                        .map(str::to_string)
+                        .collect::<Vec<String>>(),
+                ),
+                _ => None,
+            });
+        let resume_set_heads = match declared_heads {
+            Some(h) => h,
+            None => self.store.resume_set_heads(&run_id).map_err(ledger_err)?,
+        };
         let carried = ContinueCarried {
-            resume_set_heads: params
-                .get("carried")
-                .and_then(|c| c.get("resume_set_heads"))
-                .and_then(|v| match v {
-                    Json::Arr(a) => Some(
-                        a.iter()
-                            .filter_map(Json::as_str)
-                            .map(str::to_string)
-                            .collect(),
-                    ),
-                    _ => None,
-                })
-                .unwrap_or_default(),
+            resume_set_heads,
             budget_id: params
                 .get("carried")
                 .and_then(|c| c.get("budget_id"))
@@ -1474,7 +1485,16 @@ mod r2_3_tests {
     #[test]
     fn r2_3_deliver_after_blocked_fire_produces_effect_terminal_sub() {
         let mut s = svc();
-        let (sid, run) = writer(&mut s);
+        // R3.2 (R-2.12.6): `external` needs a declared ingress adapter.
+        let mut m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+        m.extra.insert(
+            "ingress_adapters".to_string(),
+            Json::Arr(vec![Json::obj([
+                ("source_ref", Json::str("ing:test")),
+                ("triggers", Json::Arr(vec![Json::str("external")])),
+            ])]),
+        );
+        let (sid, run) = writer_manifest(&mut s, m);
         let lease = lease_of(&s, &sid);
         apply_effect(&mut s, &run, &lease, "eff-1", false, false);
         // A `follow_up` subscription whose fire withholds on the
@@ -1698,5 +1718,163 @@ mod r2_3_tests {
             )
             .unwrap();
         s.sessions.get_mut(sid).unwrap().env_handle_id = Some(handle.env_handle_id.clone());
+    }
+
+    // ── R3.2 — the `resume_set` producer leg's boundary half ─────────────
+    //
+    // `continue_goal` with no `carried.resume_set_heads` derives the set
+    // from `Store::resume_set_heads` — the kernel's layer-S fold of the
+    // durable `context.memory.written` prefix — and records it on the
+    // continuation manifest (R-2.4.3; the ledger records what it proves,
+    // never what the caller claims). An explicit set — `[]` included —
+    // rides verbatim.
+
+    /// A `context.memory.written` row as the `put_artifact` producer
+    /// emits it (the fold's read members; the real payload carries more).
+    fn mem_written(name: &str, version: &str, scope: &str) -> Event {
+        ev(
+            "context.memory.written",
+            None,
+            Json::obj([
+                ("memory_id", Json::str(name)),
+                ("version_id", Json::str(version)),
+                ("kind", Json::str("fact")),
+                ("scope", Json::str(scope)),
+                ("store", Json::str("memory")),
+            ]),
+        )
+    }
+
+    /// A finished goal-scoped writer run with `writes` appended under its
+    /// writer lease.
+    fn goal_run(s: &mut EmbedService, goal: &str, writes: Vec<Event>) -> (String, String) {
+        let mut m = hh_ledger::manifest::RunManifest::minimal(hh_ledger::manifest::RunKind::Agent);
+        m.goal_ref = Some(goal.to_string());
+        let (sid, run) = writer_manifest(s, m);
+        let lease = lease_of(s, &sid);
+        s.store.append(&run, &lease, writes).unwrap();
+        s.store
+            .append(
+                &run,
+                &lease,
+                vec![ev(
+                    "lifecycle.run.finished",
+                    None,
+                    Json::obj([("stop_reason", Json::str("completed"))]),
+                )],
+            )
+            .unwrap();
+        (sid, run)
+    }
+
+    fn carried_heads(s: &EmbedService, run: &str) -> Json {
+        s.store
+            .manifest(run)
+            .unwrap()
+            .extra
+            .get("carried")
+            .and_then(|c| c.get("resume_set_heads"))
+            .cloned()
+            .unwrap_or(Json::Null)
+    }
+
+    #[test]
+    fn r3_2_continue_goal_derives_resume_set_from_durable_writes() {
+        let mut s = svc();
+        let (sid, _run) = goal_run(
+            &mut s,
+            "goal-r32",
+            vec![
+                mem_written("ctx-1", "v1", "session"),
+                mem_written("plan-9", "v2", "session"),
+                mem_written("scratch", "v3", "run"),
+                mem_written("ctx-1", "v4", "session"),
+                mem_written("stale", "v5", "session"),
+                ev(
+                    "context.memory.invalidated",
+                    None,
+                    Json::obj([
+                        ("version_id", Json::str("v5")),
+                        ("reason", Json::str("revoked")),
+                        ("by", Json::str("kernel:test")),
+                    ]),
+                ),
+            ],
+        );
+        let out = ok(&call(
+            &mut s,
+            "continue_goal",
+            Json::obj([
+                ("session_id", Json::str(sid)),
+                ("goal_ref", Json::str("goal-r32")),
+            ]),
+        ));
+        let next = out.get("run_id").and_then(Json::as_str).unwrap();
+        // The derived set — session-scope heads only, latest live
+        // version wins, invalidation drops the head.
+        assert_eq!(
+            carried_heads(&s, next),
+            Json::Arr(vec![Json::str("ctx-1"), Json::str("plan-9")]),
+            "the continuation manifest records the derived set"
+        );
+    }
+
+    #[test]
+    fn r3_2_continue_goal_explicit_carried_rides_verbatim() {
+        let mut s = svc();
+        let (sid, _run) = goal_run(
+            &mut s,
+            "goal-r32x",
+            vec![mem_written("ctx-1", "v1", "session")],
+        );
+        // An explicit set — even one that names nothing durable — is the
+        // caller's declaration; the producer never second-guesses it.
+        let out = ok(&call(
+            &mut s,
+            "continue_goal",
+            Json::obj([
+                ("session_id", Json::str(sid)),
+                ("goal_ref", Json::str("goal-r32x")),
+                (
+                    "carried",
+                    Json::obj([(
+                        "resume_set_heads",
+                        Json::Arr(vec![Json::str("named-elsewhere")]),
+                    )]),
+                ),
+            ]),
+        ));
+        let next = out.get("run_id").and_then(Json::as_str).unwrap();
+        assert_eq!(
+            carried_heads(&s, next),
+            Json::Arr(vec![Json::str("named-elsewhere")])
+        );
+    }
+
+    #[test]
+    fn r3_2_continue_goal_explicit_empty_set_is_honoured() {
+        let mut s = svc();
+        let (sid, _run) = goal_run(
+            &mut s,
+            "goal-r32e",
+            vec![mem_written("ctx-1", "v1", "session")],
+        );
+        // `carried.resume_set_heads: []` is an explicit empty resume set —
+        // derivation only fires on *absence*; an empty carry means the
+        // next activation resolves nothing.
+        let out = ok(&call(
+            &mut s,
+            "continue_goal",
+            Json::obj([
+                ("session_id", Json::str(sid)),
+                ("goal_ref", Json::str("goal-r32e")),
+                (
+                    "carried",
+                    Json::obj([("resume_set_heads", Json::Arr(vec![]))]),
+                ),
+            ]),
+        ));
+        let next = out.get("run_id").and_then(Json::as_str).unwrap();
+        assert_eq!(carried_heads(&s, next), Json::Arr(vec![]));
     }
 }
