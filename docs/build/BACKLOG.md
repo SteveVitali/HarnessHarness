@@ -30,10 +30,14 @@
   reconcile round re-arms their triggers.
 - The 72 discharged DEFERRALS rows (a dated `**DONE**` marker in the status
   cell) are **not** owed and are not gathered, per `modes/backlog.md`.
-  Discharge is read from the dated marker, not the leading status token —
-  17 discharged cells still begin `OPEN` (the GATE-G4 G4-4 bookkeeping wart;
-  a flip-the-prefix pass is a round-3 chore). BL-29's two unflipped cells
-  were flipped at R2.1 and BL-29 is closed.
+  Discharge is read from the dated marker, not the leading status token.
+  The GATE-G4 G4-4 wart (17 discharged cells still leading `OPEN`/`PARTIAL`)
+  was swept at **R3.1 (2026-10-14)**: 16 cells flipped to `DONE` —
+  DF-S0.3-3's `PARTIAL` lead stays because its marker is scoped
+  (`**machine cells DONE**`; the R2 human-signature residual is genuinely
+  open — BL-02). Leading tokens and dated markers now agree: 72 DONE,
+  25 OPEN, 3 PARTIAL. BL-29's two unflipped cells were flipped at R2.1
+  and BL-29 is closed.
 
 ## The backlog by landing
 

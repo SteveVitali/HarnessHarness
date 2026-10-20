@@ -280,6 +280,75 @@ fn r2_10_audience_minted_scoped_bind_admits_and_token_verifies() {
     );
 }
 
+/// The expiry boundary is inclusive (R3.1 — the r2_19
+/// `credential_mediator_oauth_resolves_and_refuses` flake root-cause): a
+/// token dies *at* `expires_at_ms`, never a millisecond later. A strict
+/// `>` comparison let a zero-TTL mint verify `Valid` for the whole
+/// same-ms window the `mint → resolve` pair runs inside; the `now < exp`
+/// reading (RFC 7519; the binding `live_at`/`mediate` conventions agree)
+/// makes the dead mint deterministically `Expired`.
+#[test]
+fn r2_10_minted_token_expires_at_the_expiry_instant() {
+    let (mut store, run_id, lease) = open("aud-expiry");
+    let mut broker = broker();
+    broker
+        .register_channel(
+            "github",
+            constrained_spec(SenderConstraint::Audience, &[SecretTransport::MintedScoped]),
+            ProvenanceRecord::kernel("kernel:test", 1_000),
+        )
+        .unwrap();
+    grant_handle(&mut store, &run_id, &lease, "agent.main", "github", "hnd-1");
+    let dref = decide_allow(&mut store, &run_id, &lease, "eff-1", "hnd-1");
+    let binding = broker
+        .bind(
+            &mut store,
+            &run_id,
+            &lease,
+            bind_req(SecretTransport::MintedScoped, dref),
+        )
+        .unwrap();
+
+    // The boundary: valid strictly before `expires_at_ms`, expired at it.
+    let minted = broker
+        .mint(
+            &mut store,
+            &run_id,
+            &lease,
+            &binding.binding_id,
+            "api.github.com",
+            60_000,
+        )
+        .expect("in-scope audience mints");
+    assert_eq!(
+        broker.verify_minted(&minted.token, "api.github.com", minted.expires_at_ms - 1),
+        MintedVerdict::Valid,
+        "the instant before expiry still verifies"
+    );
+    assert_eq!(
+        broker.verify_minted(&minted.token, "api.github.com", minted.expires_at_ms),
+        MintedVerdict::Expired,
+        "the expiry instant itself is dead — never a grace ms"
+    );
+
+    // The zero-TTL leg the flake rode: born expired, expired at mint time.
+    let dead = broker
+        .mint(
+            &mut store,
+            &run_id,
+            &lease,
+            &binding.binding_id,
+            "api.github.com",
+            0,
+        )
+        .expect("a zero-ttl mint lands");
+    assert_eq!(
+        broker.verify_minted(&dead.token, "api.github.com", dead.expires_at_ms),
+        MintedVerdict::Expired,
+        "a zero-TTL mint is expired at its own mint instant"
+    );
+}
+
 /// `mint` for an audience outside the binding's declared destinations is
 /// `out_of_scope` — the audience constraint is *enforced*, not advisory.
 #[test]

@@ -410,7 +410,9 @@ pub struct MintedToken {
 pub enum MintedVerdict {
     /// The token verifies — carries the channel_id it is scoped to.
     Valid,
-    /// Past `expires_at_ms`.
+    /// At-or-past `expires_at_ms` — the expiry instant itself is dead
+    /// (the `now < exp` reading, RFC 7519's convention; a zero-TTL mint
+    /// is born expired — R3.1, the same-ms boundary the r2_19 flake hit).
     Expired,
     /// The backing binding is dead (revoked/expired/rotated).
     Revoked,
@@ -1237,7 +1239,14 @@ impl CredentialBroker {
         if rec.audience != audience {
             return MintedVerdict::Invalid;
         }
-        if now_ms > rec.expires_at_ms {
+        // `>=`, not `>`: the token dies *at* `expires_at_ms`, matching the
+        // binding-side convention (`live_at` is `now < expires`; the
+        // `mediate` path's `expires_at <= ts_now` string compare). A
+        // strict `>` let a zero-TTL mint verify `Valid` for the whole
+        // same-millisecond window — the r2_19
+        // `credential_mediator_oauth_resolves_and_refuses` flake (R3.1;
+        // six recorded CI firings R2.22–R2.26).
+        if now_ms >= rec.expires_at_ms {
             return MintedVerdict::Expired;
         }
         let live = self

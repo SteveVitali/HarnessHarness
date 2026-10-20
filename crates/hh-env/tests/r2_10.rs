@@ -164,7 +164,7 @@ fn provisioned_payload(s: &Store, run_id: &str) -> Json {
         .iter()
         .filter(|e| e.class == "action.environment.provisioned")
         .map(|e| e.payload.clone())
-        .last()
+        .next_back()
         .expect("a provisioned row")
 }
 
