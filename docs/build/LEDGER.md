@@ -11,8 +11,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R4.0   # round 4 amended (launch re-charter + critic fixes): 50 rows 149a-167b; GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
-lastCompleted:   R3.11
+nextTicket:      R4.1   # round 4 amended (launch re-charter + critic fixes): 50 rows 149a-167b; GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
+lastCompleted:   R4.0
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -23,12 +23,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r3.11  # R3.11 tip — round-4 rows fork from here; stacked PR #147 against svitali/harnessharness-r3.10; operator merges
+chainTip:        svitali/harnessharness-r4.0  # R4.0 tip (origin/main merged in) — round-4 rows fork from here; stacked PR #148 against svitali/harnessharness-r3.11; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           4
-updatedAt:       2026-10-20T16:42:03Z
+updatedAt:       2026-10-20T21:34:31Z
 ```
 
 ## OPEN FINDINGS
@@ -872,3 +872,4 @@ updatedAt:       2026-10-20T16:42:03Z
 - 2026-10-20 — round-4 amended (b) — branch svitali/harnessharness-r3.11 · PR none (records-only amend on the chain tip) · base 02e37fe · decompose-spec mode=extend same-round amendment (precedents 75d61ab, 02e37fe): independent critic's 4 MAJOR + 8 MINOR findings applied in place to unexecuted contracts (dated > Amended 2026-10-20 (b) banners; no file renamed) — crates.io availability check first in L4.4 (stop-and-ask), enumerated in R4.8, stop-and-ask in L4.5 (baseline hharness + 51 hharness-<x> → 404, 16:31Z–16:33Z); gitleaks staged-diff gate + full-history baseline + .gitleaks.toml in R4.5a, reused by L4.3; HUMAN-H7 checks-required merges + green main SHA before tag (R4.18 records it); R4.16/GATE-G6 thresholds: every public surface/binding/plugin live-executed or operator n/a{reason}, origin/main containment, DF-S1.15-1 full enumeration; L4.5 rust-version/docs.rs/target-set ADR; HUMAN-H6 names-only pre-flight; live.env = symlink to a gitignored .env in the operator's main checkout. One insert: 164w L4.6a (capstone part 2 — hh-acp, hh-mcp-lab, SDK/embed, packaged plugins; USD 0) — round 4 now 50 rows · **Verify:** check-build-memory 0 violations (7 baseline warnings) · **Deferrals:** opened none, closed none · chainTip → svitali/harnessharness-r3.11 (unchanged) · next → R4.0
 - 2026-10-20 · HUMAN-H6 confirmed complete (operator verbatim "Yes — H6 complete", 16:55Z): local Ollama, Anthropic, OpenAI, sandbox repo + scoped fine-grained token, webhook secret, OAuth App (device flow), cloudflared, node/python3/gitleaks, Jaeger 2.22.0 collector, GitHub Environment `live-verify` — all provided: yes (status-only verification, 149b table). ci-boundary pass #147@7502bc6 (39459846891/39459836833; stack #139–#146 pass). Round 4 = 50 rows; next R4.0.
 - 2026-10-20 · harness-switch — devin-cli/claude-opus-5.5-high (round-4 critique + planning session) → devin-cli/swe-2-high (round-4 implementation drive), at the R4.0 ticket boundary on the operator's words verbatim: "Switched back to SWE-2 High. Please proceed with the orchestrate-build drive as you suggest" (received 2026-10-20T17:15:19Z, channel: chat). Per BM-HARNESS-01 the first ticket after the switch re-runs orient + validator + the CI read before dispatch; worker run-ledger headers stamp harness: devin-cli/swe-2-high/subagent.
+- 2026-10-20 — R4.0 done — branch svitali/harnessharness-r4.0 · PR #148 · base svitali/harnessharness-r3.11 · merged origin/main (a3c7772) into the chain tip as merge commit 0ca04bb (precedent 6392736): the one conflict (crates/hh-cli/tests/in_process.rs ac5 leg) resolved to main's derivation-aware measured_drift rule — it subsumes the chain's per-member allowlist under a stricter condition; 5 comment lines retain the R3.1/R3.3 flake run ids; main's CHECKER.md/foreign/e2-python/r2_19-deflake/ci.yml taken verbatim (ci.yml keeps the chain's own ADR-0359 fetch block); bundle.json regenerated (only the CHECKER.md member hash moves, all 89 arm hashes identical) · **Verify:** fmt clean · build --all-targets green · cargo test --workspace 344 blocks / 3,505 passed / 0 failed / 1 ignored · in_process 69/0 · hh-xcheck selfcheck 55/0 · verify vs foreign/e2-python/answers.json 49/0 · check-drift in sync · **Deferrals:** opened none, closed none — dated 2026-10-20 (R4.0) progress notes appended to DF-S1.2-2, DF-S1.5-3, DF-S1.8-1, DF-S1.27-1, DF-S0.3-2 (rows stay OPEN; R4.4/R4.5 own them) · **Deviations:** none · chainTip → svitali/harnessharness-r4.0 · next → R4.1 · ci: pass #148@8a6b74b (build · test · fmt · drift 39499873992; build · test · fmt · drift 39499868150) · stack: #147 #146 #145 #144 #143 #142 #141 #140 #139 pass · layer: engineered · harness: devin-cli/swe-2-high/subagent
