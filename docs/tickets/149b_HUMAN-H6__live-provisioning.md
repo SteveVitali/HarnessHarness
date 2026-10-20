@@ -17,17 +17,17 @@
 > the record is `provided: yes/no` per NAME. An agent must not sign or assume silence is approval.
 
 ## Checklist
-- [ ] `HH_LOCAL_BASE_URL` + `HH_LOCAL_MODEL` — local OpenAI-compatible server (Ollama) serving `qwen2.5:7b-instruct`
-- [ ] `ANTHROPIC_API_KEY` — Anthropic Messages API key (spend counts against the $100 cap)
-- [ ] `OPENAI_API_KEY` — OpenAI API key (spend counts against the $100 cap)
-- [ ] `HH_GITHUB_SANDBOX_REPO` — the private sandbox repo (`SteveVitali/hh-live-sandbox`, exists)
-- [ ] `HH_GITHUB_SANDBOX_TOKEN` — fine-grained token scoped to the sandbox repo alone (Issues RW, Webhooks RW, Metadata R)
-- [ ] `HH_GITHUB_WEBHOOK_SECRET` — the webhook signing secret (registered by R4.7 at run time via the API)
-- [ ] `HH_GITHUB_OAUTH_CLIENT_ID` — a GitHub OAuth App with **device flow enabled** (R4.7a; the operator is present to enter the device code)
-- [ ] `cloudflared` on PATH (R4.7 quick-tunnel at run time); `node` ≥ 22 and `python3` on PATH (R4.2/R4.4/R4.5,
+- [x] `HH_LOCAL_BASE_URL` + `HH_LOCAL_MODEL` — local OpenAI-compatible server (Ollama) serving `qwen2.5:7b-instruct`
+- [x] `ANTHROPIC_API_KEY` — Anthropic Messages API key (spend counts against the $100 cap)
+- [x] `OPENAI_API_KEY` — OpenAI API key (spend counts against the $100 cap)
+- [x] `HH_GITHUB_SANDBOX_REPO` — the private sandbox repo (`SteveVitali/hh-live-sandbox`, exists)
+- [x] `HH_GITHUB_SANDBOX_TOKEN` — fine-grained token scoped to the sandbox repo alone (Issues RW, Webhooks RW, Metadata R)
+- [x] `HH_GITHUB_WEBHOOK_SECRET` — the webhook signing secret (registered by R4.7 at run time via the API)
+- [x] `HH_GITHUB_OAUTH_CLIENT_ID` — a GitHub OAuth App with **device flow enabled** (R4.7a; the operator is present to enter the device code)
+- [x] `cloudflared` on PATH (R4.7 quick-tunnel at run time); `node` ≥ 22 and `python3` on PATH (R4.2/R4.4/R4.5,
       L4.6a's temp-dir MCP/ACP SDK clients); `gitleaks` on PATH (R4.5a's secret-scan gate)
-- [ ] A local OpenTelemetry-compatible collector the operator can start on loopback (e.g. `otelcol-contrib` or Jaeger all-in-one) — R4.7c's live sink
-- [ ] GitHub Environment `live-verify` (secrets + required reviewer) — needed by L4.3's workflow_dispatch job; may be done at HUMAN-H7 if L4.3 lands the job dormant
+- [x] A local OpenTelemetry-compatible collector the operator can start on loopback (e.g. `otelcol-contrib` or Jaeger all-in-one) — R4.7c's live sink
+- [x] GitHub Environment `live-verify` (secrets + required reviewer) — needed by L4.3's workflow_dispatch job; may be done at HUMAN-H7 if L4.3 lands the job dormant
 
 ## Planning-time observation (names only — not a tick)
 2026-10-20T15:55Z, `sed 's/=.*//'` over `live.env`: present — `HH_LOCAL_BASE_URL`, `HH_LOCAL_MODEL`,
@@ -57,6 +57,29 @@ done
 Any `provided: no` / `absent` / `MISSING` line STOPS the drive and asks the operator (the collector and the
 `live-verify` Environment are confirmed by the operator's words, not by this check).
 
+## Provisioning verification — 2026-10-20T16:55Z (orchestrator-observed; names only — not a tick)
+
+Secrets live in `~/.config/harnessharness/live.env` → symlink to the operator's gitignored
+`.env` in the main checkout (mode 600; ignored via `.git/info/exclude`). Values were never printed,
+never entered a ledger or chat. Each check prints a presence bit or an HTTP status only.
+
+| Item | provided | Verification (status only) |
+|---|---|---|
+| `HH_LOCAL_BASE_URL` + `HH_LOCAL_MODEL` | yes | Ollama `/v1/models` 200; `qwen2.5:7b-instruct` chat completion answered (zero spend) |
+| `ANTHROPIC_API_KEY` | yes | `GET /v1/models` 200 (no spend) |
+| `OPENAI_API_KEY` | yes | `GET /v1/models` 200 (no spend) |
+| `HH_GITHUB_SANDBOX_REPO` | yes | `SteveVitali/hh-live-sandbox` exists, PRIVATE, issues enabled |
+| `HH_GITHUB_SANDBOX_TOKEN` | yes | fine-grained: sandbox `/issues` 200 + `/hooks` 200; public repo `/hooks` 403 (scoped to the sandbox alone); no expiration header returned |
+| `HH_GITHUB_WEBHOOK_SECRET` | yes | generated in place (`openssl rand -hex 32`), never displayed |
+| `HH_GITHUB_OAUTH_CLIENT_ID` | yes | device-code request issued a `device_code` after the operator enabled Device Flow (first probe: `device_flow_disabled`) |
+| `cloudflared` | yes | 2026.10.2 via brew — built 2026-10-20, newer than the ≥7-day rule (local tool, not a repo dep; R4.7 may pin an older release) |
+| `node` / `python3` / `gitleaks` | yes | node v25.2.1, Python 3.14.8, gitleaks on PATH |
+| OTel collector | yes | `jaegertracing/jaeger:2.22.0` (published 2026-10-06) pulled; loopback smoke: OTLP/HTTP `:4318` 200, UI `:16686` 200; container stopped (R4.7c starts it) |
+| GitHub Environment `live-verify` | yes | created on `SteveVitali/HarnessHarness`, required reviewer SteveVitali, secrets `ANTHROPIC_API_KEY` + `OPENAI_API_KEY` set (values piped, never printed) |
+
+The checklist boxes above remain the operator's to tick (BM-GATE-07); the operator's confirmation is
+recorded in LEDGER GATE DECISIONS when given.
+
 ## Exit criterion
 Every NAME above is `provided: yes` (or the operator's recorded words waive a leg — which then needs its own
 ADR/ruling, since the round's charter forbids carried deferrals), recorded in the readout and the LEDGER.
@@ -65,3 +88,5 @@ ADR/ruling, since the round's charter forbids carried deferrals), recorded in th
 Round-4 override of the template rule (operator charter: no remaining deferred work): a live ticket that finds a
 required NAME `provided: no` at dispatch does **not** open a `D-` row — it STOPS and the orchestrator pauses and asks
 the operator to provision (or to rule). Never a fabricated pass; never a silent skip of a live leg.
+
+> Ticked 2026-10-20T16:55Z on the operator's verbatim confirmation "Yes — H6 complete" (Devin CLI structured question); LEDGER GATE DECISIONS `### Round 4` confirmation row.
