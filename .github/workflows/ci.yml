@@ -91,6 +91,14 @@ jobs:
         if: steps.path.outputs.mode != 'fast'
         run: bash scripts/check-drift.sh
 
+      # R4.5 / DF-S0.3-2: E1 self-check + E2 (python3) + E3 (node >= 22)
+      # foreign verifies, answers regenerated at run time. Reads crates/ +
+      # foreign/ only — gated like the build legs; a toolchain absent on
+      # the runner exits 3 (honest red, never a silent skip in CI).
+      - name: Cross-implementation foreign replay (E1 + E2 + E3)
+        if: steps.path.outputs.mode != 'fast'
+        run: bash scripts/xcheck-foreign.sh
+
       # ci-mode: both — reads committed content under docs/ (DEFERRALS rows and
       # spec sections), so it runs on the fast path too.
       - name: Build-memory row-tool self-test (BM-ORIENT-01)
