@@ -17,8 +17,8 @@
 
 ```
 projectStatus:   IN_PROGRESS  # NOT_STARTED | IN_PROGRESS | BLOCKED | PAUSED | DONE
-nextTicket:      R4.5e  # round 4: 52 rows 149a-167b (R4.2a CI insert at 151a; R4.4a→a+b split at 153a/153b); GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
-lastCompleted:   R4.5d
+nextTicket:      R4.6   # round 4: 52 rows 149a-167b (R4.2a CI insert at 151a; R4.4a→a+b split at 153a/153b); GATE-G7 rulings gate at 164a, GATE-G6 at 166; HUMAN-H6 provisioning before R4.5a
+lastCompleted:   R4.5e
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -29,12 +29,12 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: svitali/harnessharness
 pinnedBaseSha:   85a3960640b5fcdc1c1627b04a50c005a7271f8e
-chainTip:        svitali/harnessharness-r4.5d  # R4.5d tip — round-4 rows fork from here; stacked PR #160 against svitali/harnessharness-r4.5c; operator merges
+chainTip:        svitali/harnessharness-r4.5e  # R4.5e tip — round-4 rows fork from here; stacked PR #161 against svitali/harnessharness-r4.5d; operator merges
 benchmarkSet:    benchset.stage3.v1  # crates/hh-bench/fixtures/benchset/stage3_v1 — hermetic recorded-model_io corpus, strata A/B/C/D/E/G (B validity-gated at S4.15, G smoke); created at S3.12b
 autonomy:        checkpoint
 mergePolicy:     OPERATOR           # NONE | OPERATOR | AUTO-BOTTOM-UP
 round:           4
-updatedAt:       2026-10-21T22:05:17Z
+updatedAt:       2026-10-21T22:54:00Z
 ```
 
 ## OPEN FINDINGS
