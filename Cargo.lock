@@ -778,6 +778,7 @@ version = "0.0.1"
 name = "hh-xcheck"
 version = "0.0.1"
 dependencies = [
+ "hh-hir",
  "hh-identity",
  "hh-ledger",
  "hh-plugin",

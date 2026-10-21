@@ -32,6 +32,7 @@
 pub mod check;
 pub mod export;
 pub mod hex;
+pub mod hir_replay;
 pub mod trees;
 
 /// The bundle format id — the `format` member of `bundle.json`.
@@ -69,6 +70,19 @@ pub const ARMS: &[ArmSpec] = &[
         df: "DF-S0.3-2",
         dir: "arms/canonical-parse",
     },
+    // R4.3 extension arms — DF-S1.2-2's "extend to the HIR/ledger corpus"
+    // leg: HIR/1 documents on the HIR side, additional transcript/WAL
+    // scenarios on the ledger side (DF-S1.5-3).
+    ArmSpec {
+        id: "hir-documents",
+        df: "DF-S1.2-2",
+        dir: "arms/hir-documents",
+    },
+    ArmSpec {
+        id: "ledger-scenarios",
+        df: "DF-S1.5-3",
+        dir: "arms/ledger-scenarios",
+    },
 ];
 
 /// One replay arm: id, the deferral row it discharges (foreign side), and
@@ -82,19 +96,37 @@ pub struct ArmSpec {
     pub dir: &'static str,
 }
 
-/// The cells this ticket does **not** close — every one needs the
-/// `HUMAN-H3` foreign-toolchain environment. Recorded in `bundle.json` as
-/// `pending_cells[]` so the packaging itself carries the honesty record.
-pub const PENDING_CELLS: &[(&str, &str)] = &[
-    ("identity-trees.foreign-replay", "DF-S1.2-2"),
-    ("identity-records.foreign-replay", "DF-S1.2-2"),
-    ("ledger-transcript.foreign-replay", "DF-S1.5-3"),
-    ("registry-snapshot.foreign-replay", "DF-S1.8-1"),
-    ("plugin-manifests.foreign-checker", "DF-S1.27-1"),
-    ("canonical-parse.foreign-timing", "DF-S0.3-2"),
-    ("polyglot-ci.two-toolchain", "DF-S0.3-2"),
-    ("bench-manifest.live-import", "DF-S1.24-2"),
-    ("lt-03.live-corpus-arm", "DF-S1.13-3"),
+/// The cells the bundle does **not** close — `(cell, df, needs)` triples.
+/// The `needs` member names the gating prerequisite: `HUMAN-H3` is the
+/// foreign-toolchain environment; `e2-tree arm extension` is the honest
+/// record (CF-493 vocabulary — `status` stays `environment-pending`,
+/// never a new member) that the committed `foreign/e2-python` tree
+/// answers only the six original arms — the R4.3 arms' E2 replay awaits
+/// the e2-tree extension R4.4a may land, their E3 replay the E3
+/// toolchain. Recorded in `bundle.json` as `pending_cells[]` so the
+/// packaging itself carries the honesty record.
+pub const PENDING_CELLS: &[(&str, &str, &str)] = &[
+    ("identity-trees.foreign-replay", "DF-S1.2-2", "HUMAN-H3"),
+    ("identity-records.foreign-replay", "DF-S1.2-2", "HUMAN-H3"),
+    ("ledger-transcript.foreign-replay", "DF-S1.5-3", "HUMAN-H3"),
+    ("registry-snapshot.foreign-replay", "DF-S1.8-1", "HUMAN-H3"),
+    ("plugin-manifests.foreign-checker", "DF-S1.27-1", "HUMAN-H3"),
+    ("canonical-parse.foreign-timing", "DF-S0.3-2", "HUMAN-H3"),
+    ("polyglot-ci.two-toolchain", "DF-S0.3-2", "HUMAN-H3"),
+    ("bench-manifest.live-import", "DF-S1.24-2", "HUMAN-H3"),
+    ("lt-03.live-corpus-arm", "DF-S1.13-3", "HUMAN-H3"),
+    (
+        "hir-documents.e2-replay",
+        "DF-S1.2-2",
+        "e2-tree arm extension",
+    ),
+    ("hir-documents.e3-replay", "DF-S1.2-2", "HUMAN-H3"),
+    (
+        "ledger-scenarios.e2-replay",
+        "DF-S1.5-3",
+        "e2-tree arm extension",
+    ),
+    ("ledger-scenarios.e3-replay", "DF-S1.5-3", "HUMAN-H3"),
 ];
 
 /// The one error type — a tagged string (the `JsonError` precedent).

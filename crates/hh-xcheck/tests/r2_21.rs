@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use hh_wire::json::{parse, Json};
-use hh_xcheck::check::{self_check, verify_answers};
+use hh_xcheck::check::{is_informational, self_check, verify_answers};
 use hh_xcheck::export::export_bundle;
 use hh_xcheck::trees::{manifest_to_tree, tree_manifest};
 use hh_xcheck::ARMS;
@@ -82,13 +82,7 @@ fn perfect_answers(bundle: &Path) -> Json {
         };
         let mut cases = BTreeMap::new();
         for (case, want) in &expected {
-            let informational = matches!(
-                (spec.id, case.as_str()),
-                ("registry-snapshot", "registry_sha256")
-                    | ("ledger-transcript", "wal_sha256")
-                    | ("ledger-transcript", "event_count")
-            );
-            if !informational {
+            if !is_informational(spec.id, case) {
                 cases.insert(case.clone(), want.clone());
             }
         }
@@ -186,9 +180,11 @@ fn verify_fails_named_on_missing_answer() {
         .any(|(arm, c, d)| *arm == "plugin-manifests" && *c == case && d.contains("missing")));
 }
 
-/// Honesty record: `bundle.json` declares the format, the six arms, and a
-/// non-empty `pending_cells[]` — every one `environment-pending` on
-/// `HUMAN-H3`. The bundle carries the "no foreign claim" record itself.
+/// Honesty record: `bundle.json` declares the format, every arm in the
+/// `ARMS` table, and a non-empty `pending_cells[]` — every one
+/// `environment-pending` (the R4.3 cells name their real `needs`: the
+/// e2-tree extension or `HUMAN-H3`). The bundle carries the "no foreign
+/// claim" record itself.
 #[test]
 fn bundle_manifest_carries_the_honesty_record() {
     let Json::Obj(m) = load(&bundle_dir().join("bundle.json")) else {
@@ -201,7 +197,11 @@ fn bundle_manifest_carries_the_honesty_record() {
     let Json::Arr(arms) = m.get("arms").unwrap() else {
         panic!("arms must be an array");
     };
-    assert_eq!(arms.len(), 6, "an arm went missing from bundle.json");
+    assert_eq!(
+        arms.len(),
+        hh_xcheck::ARMS.len(),
+        "an arm went missing from bundle.json"
+    );
     let Json::Arr(pending) = m.get("pending_cells").unwrap() else {
         panic!("pending_cells must be an array");
     };

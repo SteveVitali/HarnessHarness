@@ -254,6 +254,55 @@ pub enum HirError {
     },
 }
 
+impl HirError {
+    /// The stable kind spelling — the variant name, no detail — the
+    /// vocabulary a typed verdict (the `hh-xcheck` `hir-documents` arm's
+    /// `refuse:`/`invalid:` answers, R4.3) records.
+    /// `Display` spells `<kind_str>: <detail>` for every variant.
+    pub fn kind_str(&self) -> &'static str {
+        match self {
+            HirError::UnknownKind { .. } => "UnknownKind",
+            HirError::DialectUnsupported { .. } => "DialectUnsupported",
+            HirError::UnresolvedRef { .. } => "UnresolvedRef",
+            HirError::CycleDetected { .. } => "CycleDetected",
+            HirError::EffectUncovered { .. } => "EffectUncovered",
+            HirError::AuthorityWidening { .. } => "AuthorityWidening",
+            HirError::BudgetExceedsParent { .. } => "BudgetExceedsParent",
+            HirError::ConditionedRuleIncomplete { .. } => "ConditionedRuleIncomplete",
+            HirError::RemovalTestRefusal { .. } => "RemovalTestRefusal",
+            HirError::NonCanonicalInput { .. } => "NonCanonicalInput",
+            HirError::OpaqueWithoutInterface { .. } => "OpaqueWithoutInterface",
+            HirError::UnexpressibleSurface { .. } => "UnexpressibleSurface",
+            HirError::UnclassifiedKind { .. } => "UnclassifiedKind",
+            HirError::MissingProvenance { .. } => "MissingProvenance",
+            HirError::AuthorityExceedsOrigin { .. } => "AuthorityExceedsOrigin",
+            HirError::TextAboveExternal { .. } => "TextAboveExternal",
+            HirError::TaintedAboveExternal { .. } => "TaintedAboveExternal",
+            HirError::IllegitimateEndorsement { .. } => "IllegitimateEndorsement",
+            HirError::ScopeCeilingExceeded { .. } => "ScopeCeilingExceeded",
+            HirError::MigrationLoss { .. } => "MigrationLoss",
+            HirError::DialectIncompatible { .. } => "DialectIncompatible",
+            HirError::SchemaViolation { .. } => "SchemaViolation",
+            HirError::SecretValueInDefinition { .. } => "SecretValueInDefinition",
+            HirError::EmptyEffectSet => "EmptyEffectSet",
+            HirError::UnmappedParameter { .. } => "UnmappedParameter",
+            HirError::UnscopedParameter { .. } => "UnscopedParameter",
+            HirError::LiftedDeclarationsNotUnverified { .. } => "LiftedDeclarationsNotUnverified",
+            HirError::ExactCostUnmeasured { .. } => "ExactCostUnmeasured",
+            HirError::DerivedEffectsMismatch { .. } => "DerivedEffectsMismatch",
+            HirError::NoDiscoverySurface => "NoDiscoverySurface",
+            HirError::UnpinnedInSealedForm { .. } => "UnpinnedInSealedForm",
+            HirError::ContributionUndeclared { .. } => "ContributionUndeclared",
+            HirError::HandlerIncomplete { .. } => "HandlerIncomplete",
+            HirError::UnboundParameter { .. } => "UnboundParameter",
+            HirError::RenderTimeExecution { .. } => "RenderTimeExecution",
+            HirError::CompositionCycle { .. } => "CompositionCycle",
+            HirError::ProcedureUnverifiable { .. } => "ProcedureUnverifiable",
+            HirError::CapabilityNotAllowed { .. } => "CapabilityNotAllowed",
+        }
+    }
+}
+
 impl fmt::Display for HirError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
