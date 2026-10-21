@@ -1,22 +1,28 @@
 //! R4.4a acceptance battery — the `foreign/e3-typescript` part-2 replay
 //! (rescoped by the ticket's appended 2026-10-21 amendment): the
 //! plugin-manifests and ledger-scenarios arms over R4.4's shared `lib/`
-//! core, the committed seven-arm `answers.json`, and the split's label
-//! fixes (`scripts/xcheck-e3.sh`, `foreign.ts` header, `r4_4.rs`
-//! `COVERED_ARMS`). `hir-documents` is R4.4b's — its five cells stay
-//! `missing answer` pending cells, never claimed.
+//! core, the committed `answers.json`, and the split's label fixes
+//! (`scripts/xcheck-e3.sh`, `foreign.ts` header, `r4_4.rs`
+//! `COVERED_ARMS`).
 //!
-//! Invariants: the committed `answers.json` answers exactly the seven
-//! delivered arms; every delivered case verifies green and the five
-//! `hir-documents` cases fail only as `missing answer`; the typed
-//! verdict vocabulary is the corpus's (`admit:<id>` / `refuse:<Kind>`,
-//! `event_hashes`/`head_hash` folds); a corrupted new-arm answer fails
-//! `verify` by name (silence is not agreement); `xcheck-e3.sh` reports
-//! `pending (R4.4b) cells missing: 5` end-to-end; and the committed
-//! `foreign/e2-python` tree carries exactly the six original `arm_*`
-//! functions — the recorded e2 absence for the R4.3 extension arms
-//! (an e2-tree arm extension is its own operator-visible change; when
-//! it lands this record updates with it).
+//! **R4.4b (2026-10-21) update:** the eighth arm `hir-documents` landed —
+//! the pin set is now all eight arms and the pending-cell assertions are
+//! zero. The pre-R4.4b shape (seven delivered arms, five `missing
+//! answer` hir-documents cells) was the recorded state this battery
+//! pinned at landing; the assertions below track the current committed
+//! state per the convention (a landed battery pins current state, it is
+//! not history).
+//!
+//! Invariants: the committed `answers.json` answers exactly the eight
+//! delivered arms; every delivered case verifies green (57/0 — no cell
+//! left `missing answer`); the typed verdict vocabulary is the corpus's
+//! (`admit:<id>` / `refuse:<Kind>`, `event_hashes`/`head_hash` folds);
+//! a corrupted arm answer fails `verify` by name (silence is not
+//! agreement); `xcheck-e3.sh` reports `pending (R4.4b) cells missing: 0`
+//! end-to-end; and the committed `foreign/e2-python` tree carries
+//! exactly the six original `arm_*` functions — the recorded e2 absence
+//! for the extension arms (an e2-tree arm extension is its own
+//! operator-visible change; when it lands this record updates with it).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -43,8 +49,10 @@ fn committed_answers() -> Json {
     load(&root().join("foreign/e3-typescript/answers.json"))
 }
 
-/// The seven arms R4.4a delivers answers for (R4.4's five + this
-/// ticket's plugin-manifests and ledger-scenarios).
+/// The eight arms the E3 tree delivers answers for (R4.4's five +
+/// R4.4a's plugin-manifests and ledger-scenarios + R4.4b's
+/// hir-documents). (R4.4a pinned seven — `hir-documents` absent; its
+/// R4.4b arrival flipped this pin, as the doc-comment above records.)
 const DELIVERED_ARMS: &[&str] = &[
     "identity-trees",
     "identity-records",
@@ -53,14 +61,13 @@ const DELIVERED_ARMS: &[&str] = &[
     "plugin-manifests",
     "canonical-parse",
     "ledger-scenarios",
+    "hir-documents",
 ];
 
-/// The committed `answers.json` answers exactly the seven delivered
-/// arms — `hir-documents` absent (R4.4b lands it; its arrival turns the
-/// r4_4 battery's pending-arm assertion red, and this set-pin names the
-/// boundary in this ticket's own battery).
+/// The committed `answers.json` answers exactly the eight delivered
+/// arms — all bundle arms covered, nothing pending.
 #[test]
-fn answers_cover_exactly_the_seven_delivered_arms() {
+fn answers_cover_exactly_the_eight_delivered_arms() {
     let answers = committed_answers();
     assert_eq!(
         answers.get("candidate").and_then(Json::as_str),
@@ -76,37 +83,25 @@ fn answers_cover_exactly_the_seven_delivered_arms() {
     want.sort_unstable();
     assert_eq!(
         ids, want,
-        "the committed answers must carry exactly the seven delivered arms"
+        "the committed answers must carry exactly the eight delivered arms"
     );
 }
 
-/// Every delivered case verifies green; the sole failures are the five
-/// `hir-documents` cells reporting `missing answer` — the amended AC 1's
-/// pending-cell pattern (52 pass / 5 missing at authoring; the assertion
-/// is the *shape*, not a vacuous green).
+/// Every delivered case verifies green — R4.4b resolved the five
+/// `hir-documents` `missing answer` cells, so the report is 57/0 with
+/// zero failures of any kind (the R4.4a shape — 52 pass / 5 pending —
+/// is superseded; the assertion is still the *shape*, not vacuous green).
 #[test]
-fn verify_green_except_the_hir_documents_pending_cells() {
+fn verify_green_across_all_eight_arms() {
     let report = verify_answers(&bundle_dir(), &committed_answers()).unwrap();
-    let failures = report.failures();
-    for (arm, case, detail) in &failures {
-        assert_eq!(
-            (*arm, *detail),
-            ("hir-documents", "missing answer"),
-            "non-pending failure {arm} {case}: {detail}"
-        );
-    }
     assert_eq!(
-        failures.len(),
-        5,
-        "exactly the five hir-documents cases are pending: {failures:?}"
+        report.failures(),
+        Vec::<(&str, &str, &str)>::new(),
+        "no failures may remain — all eight arms answered"
     );
-    // Real coverage, never a vacuous green: the delivered arms account
-    // for every passing case.
+    // Real coverage, never a vacuous green: every bundle case passes.
     let (pass, _) = report.counts();
-    assert!(
-        pass >= 50,
-        "only {pass} passing cases — an arm went missing"
-    );
+    assert_eq!(pass, 57, "expected all 57 bundle cases green, got {pass}");
 }
 
 /// The plugin-manifests arm's fourteen verdicts verify green and spell
@@ -229,11 +224,12 @@ fn verify_fails_named_on_corrupted_new_arm_answer() {
 }
 
 /// `xcheck-e3.sh` end-to-end on a node-present PATH: the replay verifies
-/// and the pending-cell label names R4.4b (`hir-documents` is its arm —
-/// a label regressing to `(R4.4a)` or a covered-arm failure fails here).
-/// `skipped(node-absent)` is the honest report when node < 22 is absent.
+/// and the pending-cell count is zero (R4.4b answered `hir-documents` —
+/// a label regressing to a nonzero pending count or a covered-arm
+/// failure fails here). `skipped(node-absent)` is the honest report when
+/// node < 22 is absent.
 #[test]
-fn xcheck_e3_end_to_end_reports_r4_4b_pending_cells() {
+fn xcheck_e3_end_to_end_reports_zero_pending_cells() {
     match node_major() {
         Some(v) if v >= 22 => {}
         other => {
@@ -249,11 +245,11 @@ fn xcheck_e3_end_to_end_reports_r4_4b_pending_cells() {
     assert_eq!(
         out.status.code(),
         Some(0),
-        "xcheck-e3.sh must reconcile the pending cells:\n{stdout}"
+        "xcheck-e3.sh must reconcile cleanly:\n{stdout}"
     );
     assert!(
-        stdout.contains("covered-arm failures: 0; pending (R4.4b) cells missing: 5"),
-        "the pending-cell label must name R4.4b with five cells:\n{stdout}"
+        stdout.contains("covered-arm failures: 0; pending (R4.4b) cells missing: 0"),
+        "the pending-cell count must be zero — all eight arms answered:\n{stdout}"
     );
 }
 

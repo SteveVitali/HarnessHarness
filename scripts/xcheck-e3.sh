@@ -4,19 +4,18 @@
 # <answers>` then `hh-xcheck verify <bundle> <answers>` and reports the
 # covered vs pending cells.
 #
-# The E3 tree (R4.4 + R4.4a) answers seven of the eight bundle arms —
-# every arm but `hir-documents`; `verify` reports the R4.4b-owned cells
-# (hir-documents, five cases) `missing answer` by name — recorded
-# pending, never a fabricated pass. A FAIL naming an arm the E3 tree
-# *did* answer, or anything but `missing answer` on a pending arm, is a
-# real failure (exit 1).
+# The E3 tree (R4.4 + R4.4a + R4.4b) answers all eight bundle arms —
+# `verify` reports 57/0 and zero cells `missing answer`. A FAIL anywhere
+# is a real failure (exit 1); a `missing answer` could only come from a
+# bundle arm the tree has not answered, which the pending classification
+# still names honestly rather than fabricating a pass.
 #
 # Usage: xcheck-e3.sh [--answers PATH]
 #   --answers PATH   write the replayed answers here instead of a tempdir
 #
-# Exit 0 = every answered case verified and only pending-arm cells
-#          reported missing; 3 = skipped(node-absent) or node < 22 (the
-#          honest skip); 2 = hh-xcheck binary missing; 1 = a leg failed.
+# Exit 0 = every answered case verified and no unanswered-arm cells;
+#          3 = skipped(node-absent) or node < 22 (the honest skip);
+#          2 = hh-xcheck binary missing; 1 = a leg failed.
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel)"
@@ -73,8 +72,10 @@ if [ "$VERIFY_STATUS" -gt 1 ]; then
 fi
 
 # Every FAIL must be a `missing answer` on an arm the tree did NOT answer
-# (the pending R4.4b cells). A covered-arm fail, or a non-"missing answer"
-# fail anywhere, is a real failure.
+# — as of R4.4b all eight bundle arms are answered, so PENDING is 0 in a
+# healthy run (the classification stays for a future unanswered arm).
+# A covered-arm fail, or a non-"missing answer" fail anywhere, is a real
+# failure.
 FAILS=0
 PENDING=0
 while IFS= read -r line; do

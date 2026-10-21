@@ -108,3 +108,17 @@ failed. All six `*.foreign-*` bundle cells' evidence now exists; whether
 the ledger rows flip from `environment-pending` is a record-keeping call
 for the operator (the cells name the HUMAN-H3 toolchain leg this run is
 evidence for).
+
+### Dated note — 2026-10-21 (R4.4b)
+
+The R4.4b ticket (`docs/tickets/153b_R4.4b__e3-typescript-foreign-impl-part3.md`)
+delivered the E3-candidate `hir-documents` arm. This tree was checked for
+an existing `hir-documents` arm to port from: there is none — `foreign.py`
+still carries exactly its original six `arm_*` functions (the only `hir`
+spelling in the tree is the `hir.text`/`hir_dialect` identity surface the
+identity-records arm already used), so nothing here was ported. Per the
+ticket's boundary, the e2 tree is not edited to grow the arm — an e2
+extension, if wanted, is a separate operator-visible change — and the
+bundle's `hir-documents.e2-replay` cell stays `environment-pending`
+(its `needs` names the e2-tree arm extension). This note records the
+absence; `foreign.py` itself is unchanged.
