@@ -151,3 +151,4 @@ One row per ADR, numeric order. Regenerate with `build-memory adr-index`
 | [ADR-0359](ADR-0359-r3.7-crypto-dependency-choice-ring-0.17.14-for-the-dpop-verifier-and-the-reserved-aead-surface.md) | R3.7 crypto-dependency choice — `ring` =0.17.14 for the `dpop` verifier, `ring::aead` reserved for R3.8 | R3.7 | Accepted |
 | [ADR-0360](ADR-0360-r3.7-dpop-proof-wire-shape-and-wrapped-long-lived-delivery-registration.md) | R3.7 `dpop` proof wire-shape and the `wrapped_long_lived` delivery registration | R3.7 | Accepted |
 | [ADR-0361](ADR-0361-r3.8-blob-pool-aead-the-hhbe-frame-the-blobcipher-custody-seam-and-the-plaintext-address-rule.md) | R3.8 blob-pool AEAD — the `HHBE` frame, the `BlobCipher` custody seam, and the plaintext-address rule | R3.8 | Accepted |
+| [ADR-0362](ADR-0362-r4.2a-ci-docs-only-fast-path-artifact-anchor-and-full-run-cadence.md) | R4.2a — CI fast path (docs-only heads), artifact anchors, and the full-run cadence | R4.2a | Proposed |

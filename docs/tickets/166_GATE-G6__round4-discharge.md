@@ -15,6 +15,11 @@
 > **Milestone gate — NOT an `implement-spec` input.** The chain STOPS here until the operator dispositions the readout.
 > Never guessed past.
 
+> Amended 2026-10-20 (R4.2a, ADR-0362): the gate's CI evidence is the D4 `full-run:`
+> line in its PHASE LOG entry (the `workflow_dispatch` full run on the chain
+> tip, read by `gh run view <id> --json jobs,conclusion` until L4.3 lands
+> `scripts/ci/full-run.sh`).
+
 ## Criterion (the operator's charter, verbatim)
 "so that we can be certain that by the end of this next orchestrate-build drive we have a fully ready public open-source
 GitHub repo launch, with no remaining deferred work and deep end to end live verification and so on"
