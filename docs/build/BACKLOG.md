@@ -1,4 +1,4 @@
-# BACKLOG — deduplicated owed-work register (REC.1, 2026-10-06 · refreshed R2.26, 2026-10-10)
+# BACKLOG — deduplicated owed-work register (REC.1, 2026-10-06 · refreshed R2.26, 2026-10-10 · refreshed R3.10, 2026-10-16)
 
 > The single deduplicated register of everything the build left owed at
 > GATE-ACCEPT (2026-10-02, accepted). One row in `BACKLOG.csv` is one
@@ -10,17 +10,20 @@
 > no deferral cell.
 
 - **Mode:** `reconcile-build mode=backlog` · 2026-10-06 · branch `svitali/harnessharness-rec.1` ·
-  refreshed `reconcile-build mode=backlog` · 2026-10-10 (R2.26) · branch `svitali/harnessharness-r2.26`
+  refreshed `reconcile-build mode=backlog` · 2026-10-10 (R2.26) · branch `svitali/harnessharness-r2.26` ·
+  refreshed `reconcile-build mode=backlog` · 2026-10-16 (R3.10) · branch `svitali/harnessharness-r3.10`
 - **Machine form:** `docs/build/BACKLOG.csv` (42 rows; `check-backlog.sh` exit 0 — complete,
   non-duplicating, verdict-consistent; expected sources 156)
-- **Sources consumed (R2.26 re-sweep):** `docs/tickets/DEFERRALS.md` (28 owed rows of 100 — 25 OPEN +
-  3 PARTIAL) · `docs/build/COVERAGE_MATRIX.csv` (19 PARTIAL rows after the round-2 flips) ·
-  `docs/adr/` (137 `## Revisit trigger` sections, ADR-0217…ADR-0353) · `research/registers/open-questions.md`
-  (the ADR-0210…0216 deferred-question packages, revalidated at R2.22–R2.25) ·
-  `research/registers/scope.md` (R-2.12.4 `deferred(ADR-0210)`) ·
+- **Sources consumed (R3.10 re-sweep):** `docs/tickets/DEFERRALS.md` (19 owed rows of 100 — 18 OPEN +
+  1 PARTIAL) · `docs/build/COVERAGE_MATRIX.csv` (11 PARTIAL + 2 MET-ENGINEERED rows after the
+  round-3 flips) · `docs/adr/` (145 `## Revisit trigger` sections, ADR-0217…ADR-0361) ·
+  `research/registers/open-questions.md` (the ADR-0210…0216 deferred-question packages — unchanged
+  this round) · `research/registers/scope.md` (R-2.12.4 `deferred(ADR-0210)`) ·
   `research/registers/spec-debt.md` (216 active AssumptionDebtRecords, first sweep graded at R2.25) ·
-  `research/registers/conflicts.md` (6 open conflicts — CF-476/CF-487 + CF-488/489/490/491) ·
-  `docs/build/LEDGER.md` OPEN FINDINGS (5 entries) · `docs/build/readouts/GATE-ACCEPT.md` (10 signed deviations)
+  `research/registers/conflicts.md` (7 open conflicts — CF-476/CF-487 + CF-488/CF-490/CF-491 +
+  CF-492/CF-493; CF-489 resolved at R3.9) · `docs/build/LEDGER.md` OPEN FINDINGS (7 entries +
+  LEDGER-OF-6) · `docs/build/readouts/GATE-ACCEPT.md` (10 signed deviations) · the R3.1–R3.9 run
+  ledgers (the discharged round-3 rows: BL-10/BL-14/BL-15/BL-16/BL-19/BL-44/BL-45)
 
 ## How to read
 
@@ -28,15 +31,20 @@
 - `accepted` rows are not forgotten: they carry a recorded deviation signed at
   GATE-ACCEPT or a discharged answer; they stay on the register so a future
   reconcile round re-arms their triggers.
-- The 72 discharged DEFERRALS rows (a dated `**DONE**` marker in the status
+- The 81 discharged DEFERRALS rows (a dated `**DONE**` marker in the status
   cell) are **not** owed and are not gathered, per `modes/backlog.md`.
   Discharge is read from the dated marker, not the leading status token.
   The GATE-G4 G4-4 wart (17 discharged cells still leading `OPEN`/`PARTIAL`)
-  was swept at **R3.1 (2026-10-14)**: 16 cells flipped to `DONE` —
-  DF-S0.3-3's `PARTIAL` lead stays because its marker is scoped
-  (`**machine cells DONE**`; the R2 human-signature residual is genuinely
-  open — BL-02). Leading tokens and dated markers now agree: 72 DONE,
-  25 OPEN, 3 PARTIAL. BL-29's two unflipped cells were flipped at R2.1
+  was swept at **R3.1 (2026-10-14)**: 16 cells flipped to `DONE`; **R3.10
+  (2026-10-16)** swept the five that drifted stale again under the
+  append-only convention — DF-S1.13-1 + DF-S1.13-4 (R3.7), DF-S1.19-1 +
+  DF-S1.19-2 (R3.4), DF-S1.17-1 (R3.5; the `indexed|deferred`-style inline
+  pipes hid it from a naive split) — and DF-S0.3-3's `PARTIAL` lead stays
+  because its marker is scoped (`**machine cells DONE**`; the R2
+  human-signature residual is genuinely open — BL-02). Leading tokens and
+  dated markers now agree: **81 DONE · 18 OPEN · 1 PARTIAL** (the one
+  PARTIAL is DF-S0.3-3's scoped marker). LEDGER-OF-6 records the standing
+  sweep rule (BL-41). BL-29's two unflipped cells were flipped at R2.1
   and BL-29 is closed.
 
 ## The backlog by landing
@@ -49,7 +57,7 @@
 | BL-03 | HUMAN-H1 — E3 surface-ecosystem binding for generated clients (+ ADR-0319, homed at R2.26) | DF-S4.10-1, ADR-0218, ADR-0301, ADR-0302, ADR-0319 |
 | BL-04 | HUMAN-H2 — real issue tracker + signed webhook for the fleet adapter | DF-S5.6-1, ADR-0317 |
 
-### round-2 — discharged (14 rows, closed with dated evidence R2.1–R2.25)
+### round-2 — discharged (14 rows, closed with dated evidence R2.1–R2.25 · +7 round-3 closures)
 
 | BL | Item | Discharged at |
 |---|---|---|
@@ -68,28 +76,30 @@
 | BL-40 | spec-debt register first revalidation sweep | R2.25 |
 | BL-46 | DF-DOC.1-1 traceability id (DOC.2 owed a BL id to the next reconcile) | bookkeeping — the work discharged at R2.1 |
 | BL-45 | Audit residual — per-event blob encryption + R-2.8.6 emission legs | R3.8 (ADR-0361 — `BlobCipher`/`HHBE` seam + `RingBlobCipher`; ADR-0359 scope consumed; custody-riding legs stay on BL-30/BL-05) |
+| BL-44 | Durable-execution residual — DF-S2.3-1 remaining producer legs (resume_set / defer / child-lease / non-fleet ingress / heal surface) | R3.2 (all five producers landed or verified-landed; DF-S2.3-1 DONE) |
+| BL-14 | Control-plane residual — DF-S1.20-1 legs (delegation_reason real-run, workflow/program interpreters) | R3.3 (DF-S1.20-1 DONE; R-2.6.1/R-2.6.3 re-verdicted MET) |
+| BL-15 | Context/memory producer legs + §5c battery residuals | R3.4 (DF-S1.19-1/-2 DONE; the six + five residual members landed on real runtime paths) |
+| BL-16 | Tool-exposure residual — DF-S1.17-1 members + sync_source legs | R3.5 (DF-S1.17-1 DONE; ADR-0272 legs (a)/(b) fired-answered; R-2.5.3 → MET) |
+| BL-10 | Assembly residual — emitter-vs-exemption adjudication for the 11 no-document-path codes | R3.6 (ADR-0358 — DF-S1.9-2 DONE; C-LINK-8/-9 emitters landed; seven U-rows carry named owner conditions; CF-492 registered → BL-30) |
+| BL-19 | Credential-broker residual — dpop + wrapped_long_lived | R3.7 (ADR-0359/0360 — ring =0.17.14 admitted under HUMAN-H5 disposition (b); DF-S1.13-1/-4 DONE; the TLS transport leg stays on BL-31) |
 
-### round-2 — carried open (9 rows to GATE-G4 — BL-45 discharged at R3.8)
+### round-2 — carried open (5 rows still owed at GATE-G5)
 
 | BL | Item | Sources | Carried reason |
 |---|---|---|---|
-| BL-01 | Cross-impl conformance cells (gate-accepted, signed item 9) | R-2.12.1, DF-S0.3-2, DF-S1.2-2, DF-S1.5-3, DF-S1.8-1, DF-S1.27-1, ADR-0223, ADR-0239, ADR-0353 | `env` — foreign toolchain (HUMAN-H3) |
+| BL-01 | Cross-impl conformance cells (gate-accepted, signed item 9) — E2 half now foreign-run-verified (PR #136, 2026-10-14); E3 + C12 + corpus-extension legs remain | R-2.12.1, DF-S0.3-2, DF-S1.2-2, DF-S1.5-3, DF-S1.8-1, DF-S1.27-1, ADR-0223, ADR-0239, ADR-0353 | `env` — foreign toolchain (HUMAN-H3) |
 | BL-05 | Gate-accepted executable-battery arms (item 10) | DF-S1.13-3, DF-S1.15-1, DF-S1.17-1, DF-S1.21-2, DF-S1.22-1, DF-S1.24-1, DF-S1.14-4, ADR-0247, ADR-0287 | `accepted` — signed live-corpus/OOP arms |
-| BL-10 | Assembly residual — emitter-vs-exemption adjudication for the 11 no-document-path codes | R-2.1.4, DF-S1.9-2, ADR-0240, ADR-0350 | `in-build` — machine-achievable, round-2 capacity exhausted |
-| BL-14 | Control-plane residual — DF-S1.20-1 legs (delegation_reason real-run, workflow/program interpreters) | R-2.6.1, DF-S2.11-1, DF-S1.20-1 | `in-build` — carried residual |
-| BL-15 | Context/memory producer legs + §5c battery residuals | R-2.4.3, R-2.4.4, DF-S1.19-1, DF-S1.19-2, ADR-0254, ADR-0255 | `in-build` — carried residual |
-| BL-16 | Tool-exposure residual — DF-S1.17-1 members + sync_source legs | R-2.5.3, DF-S1.17-2, DF-S1.17-3, ADR-0272 | `in-build` — carried residual |
 | BL-17 | Verification-plane legs — judge binding + live-judge admissibility | R-2.7.1, R-2.7.2b, DF-S1.21-1, DF-S1.21-3, ADR-0300, ADR-0311, ADR-0347, ADR-0348 | `env` — offline-only ceiling (live judge not admissible) |
-| BL-19 | Credential-broker residual — dpop + wrapped_long_lived | R-2.8.3, DF-S1.13-1, DF-S1.13-4, ADR-0244, ADR-0342 | `dep` — pure-std AEAD/asymmetric-verifier absence |
 | BL-26 | Benchmark/measurement legs — live foreign-manifest import | R-2.9.4, R-2.9.6, DF-S1.24-2, ADR-0349 | `env` — foreign toolchain (HUMAN-H3) |
 | BL-27 | Embed/MCP residual — oauth/mtls CallerCredential exchange legs | R-2.11.3, DF-S4.11-2, ADR-0303, ADR-0351 | `env` — live provider leg |
-| BL-44 | Durable-execution residual — DF-S2.3-1 remaining producer legs (resume_set / defer / child-lease / non-fleet ingress / heal surface) | R-2.2.3, DF-S2.3-1, ADR-0265 | `in-build` — carried residual (new id at R2.26; the legs belong to rows whose requirement verdicts already landed — GATE-G4 dispositions) |
 
 ### REC.2 — 1 row (spec reconciliation; stays open)
 
-| BL-30 | Spec/governance rulings — signer custody (ADR-0213/OQ-170), OQ-388 latency ratification, conflicts CF-476/487 + CF-488/489/490/491; also carries R-2.2.1 (its residual is the OQ-388 leg) | DF-S2.5-1, DF-S4.13-1, DF-S1.24-3, DF-S1.26-2, CF-476, CF-487, CF-488, CF-489, CF-490, CF-491, R-2.2.1, ADR-0260, ADR-0261, ADR-0267, ADR-0274, ADR-0305, ADR-0331 |
+| BL-30 | Spec/governance rulings — signer custody (ADR-0213/OQ-170), OQ-388 latency ratification, conflicts CF-476/487 + CF-488/489/490/491 + CF-492/CF-493; also carries R-2.2.1 (its residual is the OQ-388 leg) and R-2.8.6 (custody legs) | DF-S2.5-1, DF-S4.13-1, DF-S1.24-3, DF-S1.26-2, CF-476, CF-487, CF-488, CF-489, CF-490, CF-491, CF-492, CF-493, R-2.2.1, R-2.8.6, ADR-0260, ADR-0261, ADR-0267, ADR-0274, ADR-0305, ADR-0331, ADR-0345 |
 
 *R2.26 read: the four ruling legs are answered as rulings but not discharged — OQ-170 custody stays external/workstream-reserved (ADR-0331 D3); OQ-388 has a measured fixture bound but the WS-B1/K2 ratification is owed; CF-476/CF-487 re-checked still-pending at R2.24; CF-488–CF-491 opened in-round (all named-workstream conformances). The row stays `open`.*
+
+*R3.10 read (2026-10-16): CF-489 discharged at R3.9 (code conformed to spec — 60 d/30 d); CF-492 (the §3.3.8 `seal`-stage taxonomy gap R3.6 registered) and CF-493 (the `hh-xcheck-bundle/1` pending_cells/arms-status format gap — the record cannot express a partially-foreign-discharged cell) join as named rulings; the custody/OQ-388/CF-476/CF-487/CF-488/CF-490/CF-491 rulings stay open. The row stays `open`.*
 
 ### REC.3 — 2 rows (integration)
 
@@ -111,9 +121,9 @@
 
 ### Standing — 3 rows (re-issued, never closed)
 
-| BL-41 | Ledger OPEN-FINDINGS dispositions — edit-tool stale-view standing rule honoured through R2.26 | accepted |
-| BL-42 | ADR revisit triggers — quiet/dormant (44 standing conditions after the round-2 sweep) | open |
-| BL-43 | ADR revisit triggers fired and answered during the build (45) | accepted |
+| BL-41 | Ledger OPEN-FINDINGS dispositions — write-integrity standing rule honoured through R3.10; += LEDGER-OF-6 (the status-marker-drift sweep is a standing obligation — lead tokens and machine-readable pending sets re-checked against dated markers at every round closure) | accepted |
+| BL-42 | ADR revisit triggers — quiet/dormant (56 standing conditions after the round-3 sweeps) | open |
+| BL-43 | ADR revisit triggers fired and answered during the build (49) | accepted |
 
 ## Themes
 
@@ -453,6 +463,21 @@ fired-unanswered on their open homes; the rest read in the table).
 | ADR-0352 | quiet | scanner-backend / vocabulary / dialect-bump / seal-semantics conditions unmet | BL-42 |
 | ADR-0353 | fired-unanswered | HUMAN-H3 environment unprovisioned; the bundle + self-check landed at R2.21 | BL-01 |
 
+**Round-3 sweep (R3.10, 2026-10-16).** The per-ticket sweeps R3.1–R3.9 are recorded
+in `BACKLOG.csv` landing cells (BL-42/BL-43 carry the dated detail); the closure
+read: **4 fired-answered → BL-43** (ADR-0254 at R3.4 — Stage-2 emitters landed,
+decision 6 stands verbatim; ADR-0272 at R3.5 — legs (a)/(b) landed, (c)/(d)
+re-checked standing; ADR-0350 at R3.6 — the eleven emitter adjudications;
+ADR-0244 at R3.7 — both arms landed); **11 quiet/dormant/partially-fired →
+BL-42** (ADR-0240 re-homed off closed BL-10 — HIR/2-constraint-node-kind arm
+stays a spec-amendment conditional; ADR-0265 re-homed off closed BL-44; ADR-0255
+partially fired at R3.4 — judge-probe arm quiet; and the nine new round-3 ADRs
+ADR-0354/0355/0356/0357/0358/0359/0360/0361 — all quiet conditionals with named
+re-fire conditions; ADR-0342 partially fired — arm 1 answered at R3.7,
+RFC-8707 + image-pipeline arms quiet; ADR-0345's live trigger (b) rides BL-30's
+custody ruling, trigger (a) fired-answered by ADR-0361). No trigger dropped;
+standing set is 56 quiet/dormant + 49 fired-answered.
+
 ## Coverage sums — recomputed 2026-10-06 vs the CAP.3 headline
 
 Recomputed from `COVERAGE_MATRIX.csv` (66 scoped requirement rows):
@@ -484,6 +509,27 @@ R-2.11.4 (R2.19: definition-publishing surface). **19 PARTIAL remain** —
 their owed legs are the carried set enumerated in the round-2 accounting
 (`docs/build/planning/2026-10-06_round2-decomposition.md` §Round-2 accounting).
 
+**Recomputed 2026-10-16 (R3.10) vs the R2.26 baseline.** The matrix moved
+47/66 → **55/66 engineering closed · 53/66 requirement satisfied**:
+
+- **engineering closed = MET + MET-DIFFERENTLY + MET-ENGINEERED = 47 + 6 + 2 = 55/66**
+- **requirement satisfied = MET + MET-DIFFERENTLY = 47 + 6 = 53/66**
+
+The round-3 PARTIAL→MET flips, stated exactly: **R-2.2.3** (R3.2+R3.3 — the
+last open producer legs discharged; DF-S2.3-1 + DF-S1.20-1 DONE),
+**R-2.4.1/R-2.4.2/R-2.4.3/R-2.4.4** (R3.4 — the §5c residual members landed;
+DF-S1.19-1/-2 DONE), **R-2.5.3** (R3.5 — DF-S1.17-1 DONE; ADR-0357),
+**R-2.6.1/R-2.6.3** (R3.3 — the delegation_reason/workflow-interpreter legs;
+DF-S1.20-1 DONE), **R-2.1.4** (R3.6 — the emitter adjudication; DF-S1.9-2 DONE;
+ADR-0358). Re-verdicted at this closure with dated evidence: **R-2.8.4 →
+MET-ENGINEERED(DF-S2.4-2)** — every §5g.4 engineering leg landed (mediated
+dispatch CAP.3; ask-endorsement ingress + fork rebind R2.9a; dpop residual
+closed by R3.7's kept typed-refusal); the sole owed leg is the env-gated
+TLS-terminating transport on BL-31, the same residual R-2.8.3 carries.
+**11 PARTIAL remain** — every one re-checked 2026-10-16 with a dated note
+naming its legs and homes; no in-build leg remains owed on any of them
+(the residual set is env / human / ruling / accepted only).
+
 ## Register review — dated 2026-10-06
 
 `research/registers/risks.md` received its first `## Round 1 review` section
@@ -502,6 +548,16 @@ now carries six open conflicts (CF-476/487 + CF-488/489/490/491) → all homed o
 BL-30. `spec-debt.md`'s 216 records carry dated first-sweep grades (21
 confirmed / 193 still-valid-interim / 2 fired-unanswered → CF-491).
 
+**Round-3 review appended 2026-10-16 (R3.10).** `conflicts.md` now carries
+**seven open conflicts** — CF-489 discharged at R3.9 (code conformed to spec);
+CF-492 (the §3.3.8 `seal`-stage taxonomy gap — registered at R3.6) and CF-493
+(the `hh-xcheck-bundle/1` `pending_cells[]`/`arms[].status` vocabulary gap —
+registered at this closure) joined the open set; all seven ride BL-30's
+ruling row. `risks.md`/`spec-debt.md` unchanged this round (no new risk fired;
+no register rows re-rated; the RK-06/OQ-445 cadence still rides BL-33's WS-L6
+window). `open-questions.md` unchanged — the OQ packages stay with their
+revalidation rows (BL-33/35/36/37/38/39).
+
 ## Findings mapping (LEDGER OPEN FINDINGS → BL-41)
 
 1. Edit-tool stale-view anomaly → **open, standing rule** (shell/python writes +
@@ -515,14 +571,25 @@ confirmed / 193 still-valid-interim / 2 fired-unanswered → CF-491).
 5. CC4 report-prose nit → **adjudicated out-of-scope** at CAP.3 (run-ledger
    prose, not a required record); the contextual-language sweep landed
    2026-09-29.
+6. **LEDGER-OF-6 — status-marker drift is a recurring class (R3.10 finding,
+   standing).** Dated discharge evidence repeatedly leaves lead markers stale:
+   the G4-4 sweep fixed 16 cells at R3.1 and R3.10 found five more
+   (DF-S1.13-1/-4 at R3.7, DF-S1.19-1/-2 at R3.4, DF-S1.17-1 at R3.5 — the
+   latter hidden from a naive `|`-split by inline pipes in cell text);
+   machine-readable pending sets drift the same way (`bundle.json`
+   `pending_cells[]`/`arms[].status` cannot express the E2-verified/E3-pending
+   middle state — the format-side ruling is CF-493 on BL-30). Standing rule:
+   every round-closure reconcile re-sweeps lead tokens and pending sets
+   against the dated markers before reporting counts.
 
 ## Hygiene notes
 
 - The checker `check-backlog.sh` gathers stable ids of the shapes `ADR-*`,
   `R-2.*` and `D-*`-family tokens; this repository's deferral ids are `DF-*`
   and are covered as free-form source tokens in the same cells. The 156
-  stable ids (137 ADR + 19 owed matrix) all appear exactly once at the R2.26
-  sweep; the 28 DF ids, the OQ ids, 6 CF ids, 5 LEDGER-OF ids, `D-1..D-6`,
+  stable ids (145 ADR + 11 owed matrix) all appear exactly once at the R3.10
+  sweep; the 19 owed DF ids, the OQ ids, 8 CF ids (7 open + resolved CF-489's
+  retained source token), 6 LEDGER-OF ids, `D-1..D-6`,
   `R-2.12.4` and the `spec-debt-ADR-*` range token are covered by eye per the
   checker's own reminder — every source identifier occurs in exactly one
   `sources` cell.
